@@ -464,6 +464,24 @@ async function main() {
         `Smoke test failed: expected If-Range(date) asset status 206, received ${ifRangeDateAsset.status}.`,
       );
     }
+    const parsedLastModifiedMs = Date.parse(assetLastModified);
+    if (!Number.isFinite(parsedLastModifiedMs)) {
+      throw new Error(
+        `Smoke test failed: expected parseable last-modified date, got ${assetLastModified}.`,
+      );
+    }
+    const staleIfRangeDate = new Date(parsedLastModifiedMs - 1_000).toUTCString();
+    const ifRangeStaleDateAsset = await fetch(assetUrl, {
+      headers: {
+        Range: `bytes=0-${rangeEnd}`,
+        "If-Range": staleIfRangeDate,
+      },
+    });
+    if (ifRangeStaleDateAsset.status !== 200) {
+      throw new Error(
+        `Smoke test failed: expected stale If-Range(date) asset status 200, received ${ifRangeStaleDateAsset.status}.`,
+      );
+    }
     const rangedModifiedSinceAsset = await fetch(assetUrl, {
       headers: {
         Range: `bytes=0-${rangeEnd}`,
