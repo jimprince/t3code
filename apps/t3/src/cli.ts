@@ -11,6 +11,8 @@ import { startRuntimeApiServer } from "./runtimeApiServer";
 const DEFAULT_BACKEND_PORT = 4317;
 const DEFAULT_WEB_PORT = 4318;
 const DEFAULT_CLI_VERSION = "0.1.0";
+const TRUTHY_BOOLEAN_VALUES = new Set(["1", "true", "yes", "on"]);
+const FALSY_BOOLEAN_VALUES = new Set(["0", "false", "no", "off"]);
 
 function parseExplicitPort(value: string, key: string): number {
   if (!/^\d+$/.test(value)) {
@@ -60,15 +62,15 @@ function parseBooleanEnvFlag(value: string | undefined): boolean {
   }
 
   const normalized = value.trim().toLowerCase();
-  return normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on";
+  return TRUTHY_BOOLEAN_VALUES.has(normalized);
 }
 
 function parseBooleanCliValue(value: string, key: string): boolean {
   const normalized = value.trim().toLowerCase();
-  if (normalized === "1" || normalized === "true" || normalized === "yes" || normalized === "on") {
+  if (TRUTHY_BOOLEAN_VALUES.has(normalized)) {
     return true;
   }
-  if (normalized === "0" || normalized === "false" || normalized === "no" || normalized === "off") {
+  if (FALSY_BOOLEAN_VALUES.has(normalized)) {
     return false;
   }
 
