@@ -89,6 +89,7 @@ Runtime command semantics:
 - Renderer now proactively resets the websocket after request send failures, rejects any in-flight requests, and reconnects cleanly on later requests.
 - Send-failure request errors now include non-Error payload details when available (for clearer diagnostics).
 - Runtime validates request payloads with shared Zod contracts.
+- Runtime and renderer both validate critical success payloads with shared contracts to prevent malformed envelope data from entering app state.
 - Runtime successful responses always include `result` (using `null` for void methods) to keep websocket envelopes schema-safe.
 - Websocket event envelopes are channel-typed (`provider:event`, `agent:output`, `agent:exit`) and validated against shared payload schemas.
 - Websocket protocol envelopes are strict (unexpected top-level fields are rejected) to keep RPC/event parsing deterministic.
