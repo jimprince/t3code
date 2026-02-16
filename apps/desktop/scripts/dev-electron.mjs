@@ -1,7 +1,6 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import net from "node:net";
-
-import waitOn from "wait-on";
 
 const port = Number(process.env.ELECTRON_RENDERER_PORT ?? 5173);
 const STARTUP_TIMEOUT_MS = Number(process.env.T3CODE_ELECTRON_STARTUP_TIMEOUT_MS ?? 120_000);
@@ -23,6 +22,34 @@ async function canConnect(host, probePort, timeoutMs = 1_000) {
     socket.once("timeout", () => finish(false));
     socket.once("error", () => finish(false));
     socket.connect(probePort, host);
+  });
+}
+
+function waitForDesktopBundles(timeoutMs) {
+  const startedAt = Date.now();
+  const bundleFiles = ["dist-electron/main.js", "dist-electron/preload.js", "../server/dist/index.mjs"];
+
+  return new Promise((resolve, reject) => {
+    const tick = () => {
+      const missing = bundleFiles.filter((filePath) => !fs.existsSync(filePath));
+      if (missing.length === 0) {
+        resolve();
+        return;
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(
+          new Error(
+            `[dev-electron] timed out after ${timeoutMs}ms waiting for bundles: ${missing.join(", ")}`,
+          ),
+        );
+        return;
+      }
+
+      setTimeout(tick, 250);
+    };
+
+    tick();
   });
 }
 
@@ -70,10 +97,7 @@ function waitForDevServer(probePort, timeoutMs) {
 }
 
 console.log("[dev-electron] waiting for desktop/server bundles");
-await waitOn({
-  resources: ["file:dist-electron/main.js", "file:dist-electron/preload.js", "file:../server/dist/index.mjs"],
-  timeout: STARTUP_TIMEOUT_MS,
-});
+await waitForDesktopBundles(STARTUP_TIMEOUT_MS);
 
 console.log(`[dev-electron] waiting for renderer dev server on port ${port}`);
 const devServerUrl = await waitForDevServer(port, STARTUP_TIMEOUT_MS);
