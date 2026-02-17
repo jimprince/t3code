@@ -82,6 +82,7 @@ jobs:
           T3CODE_PERF_MAX_LONG_DISPATCH_COUNT: "5"
           # Terminal PTY scripting is flaky in CI VMs; renderer perf checks remain enforced.
           T3CODE_DESKTOP_PERF_RUN_TERMINAL: "0"
+          # Keep only core renderer interactions in CI perf runs for lower variance.
           T3CODE_DESKTOP_PERF_RUN_OPTIONAL_RENDERER: "0"
           T3CODE_DESKTOP_PERF_RUN_BENCHMARK_SWEEP: "0"
           T3CODE_DESKTOP_PERF_BENCHMARK_FOLLOW_UP_PASSES: "0"

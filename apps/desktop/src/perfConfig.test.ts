@@ -213,6 +213,7 @@ describe("shouldRunBenchmarkThreadSweep", () => {
   it("defaults to enabled outside CI and disabled in CI", () => {
     expect(shouldRunBenchmarkThreadSweep({ CI: "false" })).toBe(true);
     expect(shouldRunBenchmarkThreadSweep({ CI: "true" })).toBe(false);
+    expect(shouldRunBenchmarkThreadSweep({ CI: "ON" })).toBe(false);
   });
 
   it("supports explicit env overrides", () => {
@@ -228,5 +229,26 @@ describe("shouldRunBenchmarkThreadSweep", () => {
         CI: "false",
       }),
     ).toBe(false);
+    expect(
+      shouldRunBenchmarkThreadSweep({
+        T3CODE_DESKTOP_PERF_RUN_BENCHMARK_SWEEP: "TRUE",
+        CI: "true",
+      }),
+    ).toBe(true);
+  });
+
+  it("falls back to CI default for unknown values", () => {
+    expect(
+      shouldRunBenchmarkThreadSweep({
+        T3CODE_DESKTOP_PERF_RUN_BENCHMARK_SWEEP: "maybe",
+        CI: "true",
+      }),
+    ).toBe(false);
+    expect(
+      shouldRunBenchmarkThreadSweep({
+        T3CODE_DESKTOP_PERF_RUN_BENCHMARK_SWEEP: "maybe",
+        CI: "false",
+      }),
+    ).toBe(true);
   });
 });
