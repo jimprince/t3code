@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - cursor/desktop-performance-ci-e9ce
 
 permissions:
   contents: read
