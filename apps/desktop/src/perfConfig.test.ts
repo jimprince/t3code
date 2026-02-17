@@ -140,6 +140,8 @@ describe("resolveBenchmarkFollowUpPassCount", () => {
   it("defaults to 1 outside CI", () => {
     expect(resolveBenchmarkFollowUpPassCount({ CI: "false" })).toBe(1);
     expect(resolveBenchmarkFollowUpPassCount({ CI: "0" })).toBe(1);
+    expect(resolveBenchmarkFollowUpPassCount({ CI: "maybe" })).toBe(1);
+    expect(resolveBenchmarkFollowUpPassCount({})).toBe(1);
   });
 
   it("defaults to 0 in CI", () => {
@@ -161,6 +163,12 @@ describe("resolveBenchmarkFollowUpPassCount", () => {
         CI: "false",
       }),
     ).toBe(0);
+    expect(
+      resolveBenchmarkFollowUpPassCount({
+        T3CODE_DESKTOP_PERF_BENCHMARK_FOLLOW_UP_PASSES: "3",
+        CI: "true",
+      }),
+    ).toBe(3);
   });
 
   it("caps explicit overrides to avoid runaway workload", () => {
@@ -182,6 +190,12 @@ describe("resolveBenchmarkFollowUpPassCount", () => {
         CI: "false",
       }),
     ).toBe(5);
+    expect(
+      resolveBenchmarkFollowUpPassCount({
+        T3CODE_DESKTOP_PERF_BENCHMARK_FOLLOW_UP_PASSES: "99",
+        CI: "true",
+      }),
+    ).toBe(5);
   });
 
   it("ignores malformed overrides and falls back to CI default", () => {
@@ -197,6 +211,12 @@ describe("resolveBenchmarkFollowUpPassCount", () => {
         CI: "false",
       }),
     ).toBe(1);
+    expect(
+      resolveBenchmarkFollowUpPassCount({
+        T3CODE_DESKTOP_PERF_BENCHMARK_FOLLOW_UP_PASSES: "",
+        CI: "true",
+      }),
+    ).toBe(0);
   });
 });
 
