@@ -11,3 +11,4 @@
 9. `09-event-state-test-expansion.md`
 10. `10-unify-process-session-abstraction.md`
 11. `11-centralized-sqlite-persistence-revamp.md`
+12. `12-remove-legacy-localstorage-migrations-and-cr-hardening.md`
