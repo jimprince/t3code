@@ -4,11 +4,12 @@ import {
   EventId,
   MessageId,
   ProjectId,
-  ProviderItemId,
   ProviderSessionId,
   ProviderThreadId,
-  ProviderTurnId,
+  RuntimeItemId,
+  RuntimeSessionId,
   ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 import { Effect, Exit, Layer, ManagedRuntime, PubSub, Scope, Stream } from "effect";
 import { afterEach, describe, expect, it } from "vitest";
@@ -33,8 +34,9 @@ const asProjectId = (value: string): ProjectId => ProjectId.makeUnsafe(value);
 const asSessionId = (value: string): ProviderSessionId => ProviderSessionId.makeUnsafe(value);
 const asProviderThreadId = (value: string): ProviderThreadId =>
   ProviderThreadId.makeUnsafe(value);
-const asProviderTurnId = (value: string): ProviderTurnId => ProviderTurnId.makeUnsafe(value);
-const asItemId = (value: string): ProviderItemId => ProviderItemId.makeUnsafe(value);
+const asRuntimeSessionId = (value: string): RuntimeSessionId => RuntimeSessionId.makeUnsafe(value);
+const asTurnId = (value: string): TurnId => TurnId.makeUnsafe(value);
+const asRuntimeItemId = (value: string): RuntimeItemId => RuntimeItemId.makeUnsafe(value);
 const asEventId = (value: string): EventId => EventId.makeUnsafe(value);
 const asMessageId = (value: string): MessageId => MessageId.makeUnsafe(value);
 
@@ -190,9 +192,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.started",
       eventId: asEventId("evt-turn-started"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-1"),
+      turnId: asTurnId("turn-1"),
+      payload: {},
     });
 
     await waitForThread(
@@ -204,11 +207,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.completed",
       eventId: asEventId("evt-turn-completed"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      turnId: asProviderTurnId("turn-1"),
-      status: "failed",
-      errorMessage: "turn failed",
+      turnId: asTurnId("turn-1"),
+      payload: { state: "failed", errorMessage: "turn failed" },
     });
 
     const thread = await waitForThread(
@@ -230,10 +232,11 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.started",
       eventId: asEventId("evt-turn-started-midturn-lifecycle"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      threadId: asProviderThreadId("provider-thread-1"),
-      turnId: asProviderTurnId("turn-midturn-lifecycle"),
+      threadId: ThreadId.makeUnsafe("provider-thread-1"),
+      turnId: asTurnId("turn-midturn-lifecycle"),
+      payload: {},
     });
 
     await waitForThread(
@@ -247,17 +250,19 @@ describe("ProviderRuntimeIngestion", () => {
       type: "thread.started",
       eventId: asEventId("evt-thread-started-midturn-lifecycle"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      threadId: asProviderThreadId("provider-thread-1"),
+      threadId: ThreadId.makeUnsafe("provider-thread-1"),
+      payload: { providerThreadId: asProviderThreadId("provider-thread-1") },
     });
     harness.emit({
       type: "session.started",
       eventId: asEventId("evt-session-started-midturn-lifecycle"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      threadId: asProviderThreadId("provider-thread-1"),
+      threadId: ThreadId.makeUnsafe("provider-thread-1"),
+      payload: {},
     });
 
     await Effect.runPromise(Effect.sleep("40 millis"));
@@ -270,11 +275,11 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.completed",
       eventId: asEventId("evt-turn-completed-midturn-lifecycle"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      threadId: asProviderThreadId("provider-thread-1"),
-      turnId: asProviderTurnId("turn-midturn-lifecycle"),
-      status: "completed",
+      threadId: ThreadId.makeUnsafe("provider-thread-1"),
+      turnId: asTurnId("turn-midturn-lifecycle"),
+      payload: { state: "completed" },
     });
 
     await waitForThread(
@@ -291,10 +296,11 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.started",
       eventId: asEventId("evt-turn-started-primary"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      threadId: asProviderThreadId("provider-thread-1"),
-      turnId: asProviderTurnId("turn-primary"),
+      threadId: ThreadId.makeUnsafe("provider-thread-1"),
+      turnId: asTurnId("turn-primary"),
+      payload: {},
     });
 
     await waitForThread(
@@ -307,11 +313,11 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.completed",
       eventId: asEventId("evt-turn-completed-aux"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      threadId: asProviderThreadId("provider-thread-aux"),
-      turnId: asProviderTurnId("turn-aux"),
-      status: "completed",
+      threadId: ThreadId.makeUnsafe("provider-thread-aux"),
+      turnId: asTurnId("turn-aux"),
+      payload: { state: "completed" },
     });
 
     await Effect.runPromise(Effect.sleep("40 millis"));
@@ -324,11 +330,11 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.completed",
       eventId: asEventId("evt-turn-completed-primary"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      threadId: asProviderThreadId("provider-thread-1"),
-      turnId: asProviderTurnId("turn-primary"),
-      status: "completed",
+      threadId: ThreadId.makeUnsafe("provider-thread-1"),
+      turnId: asTurnId("turn-primary"),
+      payload: { state: "completed" },
     });
 
     await waitForThread(
@@ -366,10 +372,11 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.started",
       eventId: asEventId("evt-turn-started-claude-placeholder"),
       provider: "claudeCode",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      threadId: asProviderThreadId("provider-thread-real"),
-      turnId: asProviderTurnId("turn-claude-placeholder"),
+      threadId: ThreadId.makeUnsafe("provider-thread-real"),
+      turnId: asTurnId("turn-claude-placeholder"),
+      payload: {},
     });
 
     await waitForThread(
@@ -383,11 +390,11 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.completed",
       eventId: asEventId("evt-turn-completed-claude-placeholder"),
       provider: "claudeCode",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      threadId: asProviderThreadId("provider-thread-real"),
-      turnId: asProviderTurnId("turn-claude-placeholder"),
-      status: "completed",
+      threadId: ThreadId.makeUnsafe("provider-thread-real"),
+      turnId: asTurnId("turn-claude-placeholder"),
+      payload: { state: "completed" },
     });
 
     await waitForThread(
@@ -404,9 +411,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.started",
       eventId: asEventId("evt-turn-started-guarded"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-guarded-main"),
+      turnId: asTurnId("turn-guarded-main"),
+      payload: {},
     });
 
     await waitForThread(
@@ -420,10 +428,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.completed",
       eventId: asEventId("evt-turn-completed-guarded-other"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      turnId: asProviderTurnId("turn-guarded-other"),
-      status: "completed",
+      turnId: asTurnId("turn-guarded-other"),
+      payload: { state: "completed" },
     });
 
     await Effect.runPromise(Effect.sleep("40 millis"));
@@ -436,10 +444,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.completed",
       eventId: asEventId("evt-turn-completed-guarded-main"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      turnId: asProviderTurnId("turn-guarded-main"),
-      status: "completed",
+      turnId: asTurnId("turn-guarded-main"),
+      payload: { state: "completed" },
     });
 
     await waitForThread(
@@ -453,33 +461,34 @@ describe("ProviderRuntimeIngestion", () => {
     const now = new Date().toISOString();
 
     harness.emit({
-      type: "message.delta",
+      type: "content.delta",
       eventId: asEventId("evt-message-delta-1"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-2"),
-      itemId: asItemId("item-1"),
-      delta: "hello",
+      turnId: asTurnId("turn-2"),
+      itemId: asRuntimeItemId("item-1"),
+      payload: { streamKind: "assistant_text", delta: "hello" },
     });
     harness.emit({
-      type: "message.delta",
+      type: "content.delta",
       eventId: asEventId("evt-message-delta-2"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-2"),
-      itemId: asItemId("item-1"),
-      delta: " world",
+      turnId: asTurnId("turn-2"),
+      itemId: asRuntimeItemId("item-1"),
+      payload: { streamKind: "assistant_text", delta: " world" },
     });
     harness.emit({
-      type: "message.completed",
+      type: "item.completed",
       eventId: asEventId("evt-message-completed"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-2"),
-      itemId: asItemId("item-1"),
+      turnId: asTurnId("turn-2"),
+      itemId: asRuntimeItemId("item-1"),
+      payload: { itemType: "assistant_message" },
     });
 
     const thread = await waitForThread(harness.engine, (entry) =>
@@ -498,9 +507,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.started",
       eventId: asEventId("evt-turn-started-buffered"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-buffered"),
+      turnId: asTurnId("turn-buffered"),
+      payload: {},
     });
     await waitForThread(
       harness.engine,
@@ -509,14 +519,14 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     harness.emit({
-      type: "message.delta",
+      type: "content.delta",
       eventId: asEventId("evt-message-delta-buffered"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-buffered"),
-      itemId: asItemId("item-buffered"),
-      delta: "buffer me",
+      turnId: asTurnId("turn-buffered"),
+      itemId: asRuntimeItemId("item-buffered"),
+      payload: { streamKind: "assistant_text", delta: "buffer me" },
     });
 
     await Effect.runPromise(Effect.sleep("30 millis"));
@@ -527,13 +537,14 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     harness.emit({
-      type: "message.completed",
+      type: "item.completed",
       eventId: asEventId("evt-message-completed-buffered"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-buffered"),
-      itemId: asItemId("item-buffered"),
+      turnId: asTurnId("turn-buffered"),
+      itemId: asRuntimeItemId("item-buffered"),
+      payload: { itemType: "assistant_message" },
     });
 
     const thread = await waitForThread(
@@ -573,9 +584,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.started",
       eventId: asEventId("evt-turn-started-streaming-mode"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-streaming-mode"),
+      turnId: asTurnId("turn-streaming-mode"),
+      payload: {},
     });
     await waitForThread(
       harness.engine,
@@ -585,14 +597,14 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     harness.emit({
-      type: "message.delta",
+      type: "content.delta",
       eventId: asEventId("evt-message-delta-streaming-mode"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-streaming-mode"),
-      itemId: asItemId("item-streaming-mode"),
-      delta: "hello live",
+      turnId: asTurnId("turn-streaming-mode"),
+      itemId: asRuntimeItemId("item-streaming-mode"),
+      payload: { streamKind: "assistant_text", delta: "hello live" },
     });
 
     const liveThread = await waitForThread(
@@ -611,13 +623,14 @@ describe("ProviderRuntimeIngestion", () => {
     expect(liveMessage?.streaming).toBe(true);
 
     harness.emit({
-      type: "message.completed",
+      type: "item.completed",
       eventId: asEventId("evt-message-completed-streaming-mode"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-streaming-mode"),
-      itemId: asItemId("item-streaming-mode"),
+      turnId: asTurnId("turn-streaming-mode"),
+      itemId: asRuntimeItemId("item-streaming-mode"),
+      payload: { itemType: "assistant_message" },
     });
 
     const finalThread = await waitForThread(
@@ -643,9 +656,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.started",
       eventId: asEventId("evt-turn-started-buffer-spill"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-buffer-spill"),
+      turnId: asTurnId("turn-buffer-spill"),
+      payload: {},
     });
     await waitForThread(
       harness.engine,
@@ -655,23 +669,24 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     harness.emit({
-      type: "message.delta",
+      type: "content.delta",
       eventId: asEventId("evt-message-delta-buffer-spill"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-buffer-spill"),
-      itemId: asItemId("item-buffer-spill"),
-      delta: oversizedText,
+      turnId: asTurnId("turn-buffer-spill"),
+      itemId: asRuntimeItemId("item-buffer-spill"),
+      payload: { streamKind: "assistant_text", delta: oversizedText },
     });
     harness.emit({
-      type: "message.completed",
+      type: "item.completed",
       eventId: asEventId("evt-message-completed-buffer-spill"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-buffer-spill"),
-      itemId: asItemId("item-buffer-spill"),
+      turnId: asTurnId("turn-buffer-spill"),
+      itemId: asRuntimeItemId("item-buffer-spill"),
+      payload: { itemType: "assistant_message" },
     });
 
     const thread = await waitForThread(
@@ -695,9 +710,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "turn.started",
       eventId: asEventId("evt-turn-started-for-complete-dedup"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-complete-dedup"),
+      turnId: asTurnId("turn-complete-dedup"),
+      payload: {},
     });
 
     await waitForThread(
@@ -708,32 +724,33 @@ describe("ProviderRuntimeIngestion", () => {
     );
 
     harness.emit({
-      type: "message.delta",
+      type: "content.delta",
       eventId: asEventId("evt-message-delta-for-complete-dedup"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-complete-dedup"),
-      itemId: asItemId("item-complete-dedup"),
-      delta: "done",
+      turnId: asTurnId("turn-complete-dedup"),
+      itemId: asRuntimeItemId("item-complete-dedup"),
+      payload: { streamKind: "assistant_text", delta: "done" },
     });
     harness.emit({
-      type: "message.completed",
+      type: "item.completed",
       eventId: asEventId("evt-message-completed-for-complete-dedup"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-complete-dedup"),
-      itemId: asItemId("item-complete-dedup"),
+      turnId: asTurnId("turn-complete-dedup"),
+      itemId: asRuntimeItemId("item-complete-dedup"),
+      payload: { itemType: "assistant_message" },
     });
     harness.emit({
       type: "turn.completed",
       eventId: asEventId("evt-turn-completed-for-complete-dedup"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-complete-dedup"),
-      status: "completed",
+      turnId: asTurnId("turn-complete-dedup"),
+      payload: { state: "completed" },
     });
 
     await waitForThread(
@@ -771,10 +788,10 @@ describe("ProviderRuntimeIngestion", () => {
       type: "runtime.error",
       eventId: asEventId("evt-runtime-error"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-3"),
-      message: "runtime exploded",
+      turnId: asTurnId("turn-3"),
+      payload: { message: "runtime exploded" },
     });
 
     const thread = await waitForThread(
@@ -796,29 +813,33 @@ describe("ProviderRuntimeIngestion", () => {
       type: "session.started",
       eventId: asEventId("evt-session-started"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      threadId: ProviderThreadId.makeUnsafe("provider-thread-1"),
-      message: "session started",
+      threadId: ThreadId.makeUnsafe("provider-thread-1"),
+      payload: { message: "session started" },
     });
     harness.emit({
       type: "thread.started",
       eventId: asEventId("evt-thread-started"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      threadId: ProviderThreadId.makeUnsafe("provider-thread-2"),
+      threadId: ThreadId.makeUnsafe("provider-thread-2"),
+      payload: { providerThreadId: ProviderThreadId.makeUnsafe("provider-thread-2") },
     });
     harness.emit({
-      type: "tool.started",
+      type: "item.started",
       eventId: asEventId("evt-tool-started"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-9"),
-      toolKind: "other",
-      title: "Read file",
-      detail: "/tmp/file.ts",
+      turnId: asTurnId("turn-9"),
+      payload: {
+        itemType: "command_execution",
+        status: "inProgress",
+        title: "Read file",
+        detail: "/tmp/file.ts",
+      },
     });
 
     const thread = await waitForThread(
@@ -838,24 +859,24 @@ describe("ProviderRuntimeIngestion", () => {
     const now = new Date().toISOString();
 
     harness.emit({
-      type: "message.delta",
+      type: "content.delta",
       eventId: asEventId("evt-invalid-delta"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: now,
-      turnId: asProviderTurnId("turn-invalid"),
-      itemId: asItemId("item-invalid"),
-      delta: undefined,
+      turnId: asTurnId("turn-invalid"),
+      itemId: asRuntimeItemId("item-invalid"),
+      payload: { streamKind: "assistant_text", delta: undefined },
     } as unknown as ProviderRuntimeEvent);
 
     harness.emit({
       type: "runtime.error",
       eventId: asEventId("evt-runtime-error-after-failure"),
       provider: "codex",
-      sessionId: asSessionId("sess-1"),
+      sessionId: asRuntimeSessionId("sess-1"),
       createdAt: new Date().toISOString(),
-      turnId: asProviderTurnId("turn-after-failure"),
-      message: "runtime still processed",
+      turnId: asTurnId("turn-after-failure"),
+      payload: { message: "runtime still processed" },
     });
 
     const thread = await waitForThread(

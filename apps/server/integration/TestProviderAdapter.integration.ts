@@ -10,6 +10,9 @@ import {
   ProviderThreadId,
   ProviderTurnId,
   ProviderTurnStartResult,
+  RuntimeSessionId,
+  ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 import { Effect, Queue, Stream } from "effect";
 
@@ -167,24 +170,28 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
 
       const assistantDeltas: string[] = [];
       const deferredTurnCompletedEvents: ProviderRuntimeEvent[] = [];
+      const runtimeSessionId = RuntimeSessionId.makeUnsafe(input.sessionId);
+      const runtimeThreadId = ThreadId.makeUnsafe(state.snapshot.threadId);
+      const runtimeTurnId = TurnId.makeUnsafe(turnId);
+
       for (const fixtureEvent of response.events) {
         const rawEvent: Record<string, unknown> = {
           ...(fixtureEvent as Record<string, unknown>),
           eventId: randomUUID(),
           provider,
-          sessionId: input.sessionId,
+          sessionId: runtimeSessionId,
           createdAt: nowIso(),
         };
         if (Object.hasOwn(rawEvent, "threadId")) {
-          rawEvent.threadId = state.snapshot.threadId;
+          rawEvent.threadId = runtimeThreadId;
         }
         if (Object.hasOwn(rawEvent, "turnId")) {
-          rawEvent.turnId = turnId;
+          rawEvent.turnId = runtimeTurnId;
         }
 
         const runtimeEvent = rawEvent as ProviderRuntimeEvent;
-        if (runtimeEvent.type === "message.delta") {
-          assistantDeltas.push(runtimeEvent.delta);
+        if (runtimeEvent.type === "content.delta") {
+          assistantDeltas.push(runtimeEvent.payload.delta);
         }
         if (runtimeEvent.type === "turn.completed") {
           deferredTurnCompletedEvents.push(runtimeEvent);
@@ -223,15 +230,21 @@ export const makeTestProviderAdapterHarness = (options?: MakeTestProviderAdapter
           type: "turn.completed",
           eventId: EventId.makeUnsafe(randomUUID()),
           provider,
-          sessionId: input.sessionId,
+          sessionId: runtimeSessionId,
           createdAt: nowIso(),
-          threadId: state.snapshot.threadId,
-          turnId,
-          status: "completed",
+          threadId: runtimeThreadId,
+          turnId: runtimeTurnId,
+          payload: { state: "completed" },
         });
       } else {
         for (const completedEvent of deferredTurnCompletedEvents) {
-          yield* emit(completedEvent);
+          yield* emit({
+            ...completedEvent,
+            eventId: EventId.makeUnsafe(randomUUID()),
+            sessionId: runtimeSessionId,
+            threadId: runtimeThreadId,
+            turnId: runtimeTurnId,
+          });
         }
       }
 
