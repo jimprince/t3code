@@ -34,7 +34,7 @@ import {
   ThreadId,
   TurnId,
 } from "@t3tools/contracts";
-import { Cause, DateTime, Deferred, Effect, Layer, Queue, Random, Ref, Stream } from "effect";
+import { Cause, DateTime, Deferred, Effect, Fiber, Layer, Queue, Random, Ref, Stream } from "effect";
 
 import {
   ProviderAdapterProcessError,
@@ -106,6 +106,7 @@ interface ClaudeSessionContext {
   lastAssistantUuid: string | undefined;
   lastThreadStartedId: string | undefined;
   stopped: boolean;
+  streamFiber: Fiber.Fiber<void, never> | undefined;
 }
 
 interface ClaudeQueryRuntime extends AsyncIterable<SDKMessage> {
@@ -142,10 +143,6 @@ function toMessage(cause: unknown, fallback: string): string {
 
 function asRuntimeItemId(value: string): RuntimeItemId {
   return RuntimeItemId.makeUnsafe(value);
-}
-
-function asCanonicalTurnId(value: TurnId): TurnId {
-  return value;
 }
 
 function asRuntimeRequestId(value: ApprovalRequestId): RuntimeRequestId {
@@ -505,7 +502,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
                 ...(typeof message.session_id === "string"
                   ? { providerThreadId: message.session_id }
                   : {}),
-                ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+                ...(context.turnState ? { turnId: context.turnState.turnId } : {}),
                 ...(itemId ? { itemId: ProviderItemId.makeUnsafe(itemId) } : {}),
                 payload: message,
               },
@@ -613,7 +610,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           provider: PROVIDER,
           createdAt: stamp.createdAt,
           threadId: context.session.threadId,
-          ...(turnState ? { turnId: asCanonicalTurnId(turnState.turnId) } : {}),
+          ...(turnState ? { turnId: turnState.turnId } : {}),
           payload: {
             message,
             class: "provider_error",
@@ -640,7 +637,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           provider: PROVIDER,
           createdAt: stamp.createdAt,
           threadId: context.session.threadId,
-          ...(turnState ? { turnId: asCanonicalTurnId(turnState.turnId) } : {}),
+          ...(turnState ? { turnId: turnState.turnId } : {}),
           payload: {
             message,
             ...(detail !== undefined ? { detail } : {}),
@@ -855,7 +852,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             provider: PROVIDER,
               createdAt: stamp.createdAt,
             threadId: context.session.threadId,
-            ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+            ...(context.turnState ? { turnId: context.turnState.turnId } : {}),
             itemId: asRuntimeItemId(tool.itemId),
             payload: {
               itemType: tool.itemType,
@@ -896,7 +893,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             provider: PROVIDER,
               createdAt: stamp.createdAt,
             threadId: context.session.threadId,
-            ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+            ...(context.turnState ? { turnId: context.turnState.turnId } : {}),
             itemId: asRuntimeItemId(tool.itemId),
             payload: {
               itemType: tool.itemType,
@@ -1006,7 +1003,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           provider: PROVIDER,
           createdAt: stamp.createdAt,
           threadId: context.session.threadId,
-          ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+          ...(context.turnState ? { turnId: context.turnState.turnId } : {}),
           providerRefs: {
             ...providerThreadRef(context),
             ...(context.turnState ? { providerTurnId: context.turnState.turnId } : {}),
@@ -1165,7 +1162,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           provider: PROVIDER,
           createdAt: stamp.createdAt,
           threadId: context.session.threadId,
-          ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+          ...(context.turnState ? { turnId: context.turnState.turnId } : {}),
           providerRefs: {
             ...providerThreadRef(context),
             ...(context.turnState ? { providerTurnId: context.turnState.turnId } : {}),
@@ -1295,6 +1292,11 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
 
         context.stopped = true;
 
+        if (context.streamFiber) {
+          yield* Fiber.interrupt(context.streamFiber);
+          context.streamFiber = undefined;
+        }
+
         for (const [requestId, pending] of context.pendingApprovals) {
           yield* Deferred.succeed(pending.decision, "cancel");
           const stamp = yield* makeEventStamp();
@@ -1304,7 +1306,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             provider: PROVIDER,
               createdAt: stamp.createdAt,
             threadId: context.session.threadId,
-            ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+            ...(context.turnState ? { turnId: context.turnState.turnId } : {}),
             requestId: asRuntimeRequestId(requestId),
             payload: {
               requestType: pending.requestType,
@@ -1442,7 +1444,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
                 provider: PROVIDER,
                       createdAt: requestedStamp.createdAt,
                 threadId: context.session.threadId,
-                ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+                ...(context.turnState ? { turnId: context.turnState.turnId } : {}),
                 requestId: asRuntimeRequestId(requestId),
                 payload: {
                   requestType,
@@ -1494,7 +1496,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
                 provider: PROVIDER,
                       createdAt: resolvedStamp.createdAt,
                 threadId: context.session.threadId,
-                ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+                ...(context.turnState ? { turnId: context.turnState.turnId } : {}),
                 requestId: asRuntimeRequestId(requestId),
                 payload: {
                   requestType,
@@ -1610,6 +1612,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           lastAssistantUuid: resumeState?.resumeSessionAt,
           lastThreadStartedId: undefined,
           stopped: false,
+          streamFiber: undefined,
         };
         yield* Ref.set(contextRef, context);
         sessions.set(threadId, context);
@@ -1658,7 +1661,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           providerRefs: {},
         });
 
-        Effect.runFork(runSdkStream(context));
+        context.streamFiber = yield* Effect.forkChild(runSdkStream(context));
 
         return {
           ...session,
