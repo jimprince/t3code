@@ -28,6 +28,7 @@ import {
   type ProviderRuntimeTurnStatus,
   type ProviderSendTurnInput,
   type ProviderSession,
+  type RuntimeContentStreamKind,
   RuntimeItemId,
   RuntimeRequestId,
   RuntimeTaskId,
@@ -48,6 +49,11 @@ import { ClaudeCodeAdapter, type ClaudeCodeAdapterShape } from "../Services/Clau
 import { type EventNdjsonLogger, makeEventNdjsonLogger } from "./EventNdjsonLogger.ts";
 
 const PROVIDER = "claudeCode" as const;
+type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
+type ClaudeToolResultStreamKind = Extract<
+  RuntimeContentStreamKind,
+  "command_output" | "file_change_output"
+>;
 
 type PromptQueueItem =
   | {
@@ -88,6 +94,9 @@ interface ToolInFlight {
   readonly toolName: string;
   readonly title: string;
   readonly detail?: string;
+  readonly input: Record<string, unknown>;
+  readonly partialInputJson: string;
+  readonly lastEmittedInputFingerprint?: string;
 }
 
 interface ClaudeSessionContext {
@@ -205,6 +214,9 @@ function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undef
 
 function classifyToolItemType(toolName: string): CanonicalItemType {
   const normalized = toolName.toLowerCase();
+  if (normalized.includes("agent")) {
+    return "collab_agent_tool_call";
+  }
   if (
     normalized.includes("bash") ||
     normalized.includes("command") ||
@@ -227,17 +239,37 @@ function classifyToolItemType(toolName: string): CanonicalItemType {
   if (normalized.includes("mcp")) {
     return "mcp_tool_call";
   }
+  if (normalized.includes("websearch") || normalized.includes("web search")) {
+    return "web_search";
+  }
+  if (normalized.includes("image")) {
+    return "image_view";
+  }
   return "dynamic_tool_call";
 }
 
-function classifyRequestType(toolName: string): CanonicalRequestType {
+function isReadOnlyToolName(toolName: string): boolean {
   const normalized = toolName.toLowerCase();
-  if (normalized === "read" || normalized.includes("read file") || normalized.includes("view")) {
+  return (
+    normalized === "read" ||
+    normalized.includes("read file") ||
+    normalized.includes("view") ||
+    normalized.includes("grep") ||
+    normalized.includes("glob") ||
+    normalized.includes("search")
+  );
+}
+
+function classifyRequestType(toolName: string): CanonicalRequestType {
+  if (isReadOnlyToolName(toolName)) {
     return "file_read_approval";
   }
-  return classifyToolItemType(toolName) === "command_execution"
+  const itemType = classifyToolItemType(toolName);
+  return itemType === "command_execution"
     ? "command_execution_approval"
-    : "file_change_approval";
+    : itemType === "file_change"
+      ? "file_change_approval"
+      : "dynamic_tool_call";
 }
 
 function summarizeToolRequest(toolName: string, input: Record<string, unknown>): string {
@@ -262,6 +294,12 @@ function titleForTool(itemType: CanonicalItemType): string {
       return "File change";
     case "mcp_tool_call":
       return "MCP tool call";
+    case "collab_agent_tool_call":
+      return "Agent task";
+    case "web_search":
+      return "Web search";
+    case "image_view":
+      return "Image view";
     case "dynamic_tool_call":
       return "Tool call";
     default:
@@ -312,7 +350,7 @@ function turnStatusFromResult(result: SDKResultMessage): ProviderRuntimeTurnStat
   return "failed";
 }
 
-function streamKindFromDeltaType(deltaType: string): "assistant_text" | "reasoning_text" {
+function streamKindFromDeltaType(deltaType: string): ClaudeTextStreamKind {
   return deltaType.includes("thinking") ? "reasoning_text" : "assistant_text";
 }
 
@@ -348,6 +386,109 @@ function extractAssistantText(message: SDKMessage): string {
   }
 
   return fragments.join("");
+}
+
+function extractTextContent(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => extractTextContent(entry)).join("");
+  }
+
+  if (!value || typeof value !== "object") {
+    return "";
+  }
+
+  const record = value as {
+    text?: unknown;
+    content?: unknown;
+  };
+
+  if (typeof record.text === "string") {
+    return record.text;
+  }
+
+  return extractTextContent(record.content);
+}
+
+function tryParseJsonRecord(value: string): Record<string, unknown> | undefined {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function toolInputFingerprint(input: Record<string, unknown>): string | undefined {
+  try {
+    return JSON.stringify(input);
+  } catch {
+    return undefined;
+  }
+}
+
+function toolResultStreamKind(itemType: CanonicalItemType): ClaudeToolResultStreamKind | undefined {
+  switch (itemType) {
+    case "command_execution":
+      return "command_output";
+    case "file_change":
+      return "file_change_output";
+    default:
+      return undefined;
+  }
+}
+
+function toolResultBlocksFromUserMessage(message: SDKMessage): Array<{
+  readonly toolUseId: string;
+  readonly block: Record<string, unknown>;
+  readonly text: string;
+  readonly isError: boolean;
+}> {
+  if (message.type !== "user") {
+    return [];
+  }
+
+  const content = (message.message as { content?: unknown } | undefined)?.content;
+  if (!Array.isArray(content)) {
+    return [];
+  }
+
+  const blocks: Array<{
+    readonly toolUseId: string;
+    readonly block: Record<string, unknown>;
+    readonly text: string;
+    readonly isError: boolean;
+  }> = [];
+
+  for (const entry of content) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const block = entry as Record<string, unknown>;
+    if (block.type !== "tool_result") {
+      continue;
+    }
+
+    const toolUseId = typeof block.tool_use_id === "string" ? block.tool_use_id : undefined;
+    if (!toolUseId) {
+      continue;
+    }
+
+    blocks.push({
+      toolUseId,
+      block,
+      text: extractTextContent(block.content),
+      isError: block.is_error === true,
+    });
+  }
+
+  return blocks;
 }
 
 function toSessionError(
@@ -433,6 +574,10 @@ function sdkNativeItemId(message: SDKMessage): string | undefined {
     return undefined;
   }
 
+  if (message.type === "user") {
+    return toolResultBlocksFromUserMessage(message)[0]?.toolUseId;
+  }
+
   if (message.type === "stream_event") {
     const event = message.event as {
       type?: unknown;
@@ -505,7 +650,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
               payload: message,
             },
           },
-          null,
+          context.session.threadId,
         );
       });
 
@@ -681,6 +826,40 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           return;
         }
 
+        for (const [index, tool] of context.inFlightTools.entries()) {
+          const toolStamp = yield* makeEventStamp();
+          yield* offerRuntimeEvent({
+            type: "item.completed",
+            eventId: toolStamp.eventId,
+            provider: PROVIDER,
+            createdAt: toolStamp.createdAt,
+            threadId: context.session.threadId,
+            turnId: turnState.turnId,
+            itemId: asRuntimeItemId(tool.itemId),
+            payload: {
+              itemType: tool.itemType,
+              status: status === "completed" ? "completed" : "failed",
+              title: tool.title,
+              ...(tool.detail ? { detail: tool.detail } : {}),
+              data: {
+                toolName: tool.toolName,
+                input: tool.input,
+              },
+            },
+            providerRefs: {
+              ...providerThreadRef(context),
+              providerTurnId: turnState.turnId,
+              providerItemId: ProviderItemId.makeUnsafe(tool.itemId),
+            },
+            raw: {
+              source: "claude.sdk.message",
+              method: "claude/result",
+              payload: result ?? { status },
+            },
+          });
+          context.inFlightTools.delete(index);
+        }
+
         if (!turnState.messageCompleted) {
           if (!turnState.emittedTextDelta && turnState.fallbackAssistantText.length > 0) {
             const deltaStamp = yield* makeEventStamp();
@@ -780,10 +959,18 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
 
         if (event.type === "content_block_delta") {
           if (
-            event.delta.type === "text_delta" &&
-            event.delta.text.length > 0 &&
+            (event.delta.type === "text_delta" || event.delta.type === "thinking_delta") &&
             context.turnState
           ) {
+            const deltaText =
+              event.delta.type === "text_delta"
+                ? event.delta.text
+                : typeof event.delta.thinking === "string"
+                  ? event.delta.thinking
+                  : "";
+            if (deltaText.length === 0) {
+              return;
+            }
             if (!context.turnState.emittedTextDelta) {
               context.turnState = {
                 ...context.turnState,
@@ -801,7 +988,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
               itemId: asRuntimeItemId(context.turnState.assistantItemId),
               payload: {
                 streamKind: streamKindFromDeltaType(event.delta.type),
-                delta: event.delta.text,
+                delta: deltaText,
               },
               providerRefs: {
                 ...providerThreadRef(context),
@@ -811,6 +998,77 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
               raw: {
                 source: "claude.sdk.message",
                 method: "claude/stream_event/content_block_delta",
+                payload: message,
+              },
+            });
+            return;
+          }
+
+          if (event.delta.type === "input_json_delta") {
+            const tool = context.inFlightTools.get(event.index);
+            if (!tool || typeof event.delta.partial_json !== "string") {
+              return;
+            }
+
+            const partialInputJson = tool.partialInputJson + event.delta.partial_json;
+            const parsedInput = tryParseJsonRecord(partialInputJson);
+            const detail = parsedInput
+              ? summarizeToolRequest(tool.toolName, parsedInput)
+              : tool.detail;
+            let nextTool: ToolInFlight = {
+              ...tool,
+              partialInputJson,
+              ...(parsedInput ? { input: parsedInput } : {}),
+              ...(detail ? { detail } : {}),
+            };
+
+            const nextFingerprint =
+              parsedInput && Object.keys(parsedInput).length > 0
+                ? toolInputFingerprint(parsedInput)
+                : undefined;
+            context.inFlightTools.set(event.index, nextTool);
+
+            if (
+              !parsedInput ||
+              !nextFingerprint ||
+              tool.lastEmittedInputFingerprint === nextFingerprint
+            ) {
+              return;
+            }
+
+            nextTool = {
+              ...nextTool,
+              lastEmittedInputFingerprint: nextFingerprint,
+            };
+            context.inFlightTools.set(event.index, nextTool);
+
+            const stamp = yield* makeEventStamp();
+            yield* offerRuntimeEvent({
+              type: "item.updated",
+              eventId: stamp.eventId,
+              provider: PROVIDER,
+              createdAt: stamp.createdAt,
+              threadId: context.session.threadId,
+              ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+              itemId: asRuntimeItemId(nextTool.itemId),
+              payload: {
+                itemType: nextTool.itemType,
+                status: "inProgress",
+                title: nextTool.title,
+                ...(nextTool.detail ? { detail: nextTool.detail } : {}),
+                data: {
+                  toolName: nextTool.toolName,
+                  input: nextTool.input,
+                },
+              },
+              providerRefs: {
+                ...providerThreadRef(context),
+                ...(context.turnState ? { providerTurnId: String(context.turnState.turnId) } : {}),
+                providerItemId: ProviderItemId.makeUnsafe(nextTool.itemId),
+              },
+              raw: {
+                source: "claude.sdk.message",
+                method: "claude/stream_event/content_block_delta/input_json_delta",
                 payload: message,
               },
             });
@@ -836,6 +1094,8 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
               : {};
           const itemId = block.id;
           const detail = summarizeToolRequest(toolName, toolInput);
+          const inputFingerprint =
+            Object.keys(toolInput).length > 0 ? toolInputFingerprint(toolInput) : undefined;
 
           const tool: ToolInFlight = {
             itemId,
@@ -843,6 +1103,9 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             toolName,
             title: titleForTool(itemType),
             detail,
+            input: toolInput,
+            partialInputJson: "",
+            ...(inputFingerprint ? { lastEmittedInputFingerprint: inputFingerprint } : {}),
           };
           context.inFlightTools.set(index, tool);
 
@@ -885,22 +1148,53 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
           if (!tool) {
             return;
           }
-          context.inFlightTools.delete(index);
+        }
+      });
 
-          const stamp = yield* makeEventStamp();
+    const handleUserMessage = (
+      context: ClaudeSessionContext,
+      message: SDKMessage,
+    ): Effect.Effect<void> =>
+      Effect.gen(function* () {
+        if (message.type !== "user") {
+          return;
+        }
+
+        if (context.turnState) {
+          context.turnState.items.push(message.message);
+        }
+
+        for (const toolResult of toolResultBlocksFromUserMessage(message)) {
+          const toolEntry = Array.from(context.inFlightTools.entries()).find(
+            ([, tool]) => tool.itemId === toolResult.toolUseId,
+          );
+          if (!toolEntry) {
+            continue;
+          }
+
+          const [index, tool] = toolEntry;
+          const itemStatus = toolResult.isError ? "failed" : "completed";
+          const toolData = {
+            toolName: tool.toolName,
+            input: tool.input,
+            result: toolResult.block,
+          };
+
+          const updatedStamp = yield* makeEventStamp();
           yield* offerRuntimeEvent({
-            type: "item.completed",
-            eventId: stamp.eventId,
+            type: "item.updated",
+            eventId: updatedStamp.eventId,
             provider: PROVIDER,
-            createdAt: stamp.createdAt,
+            createdAt: updatedStamp.createdAt,
             threadId: context.session.threadId,
             ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
             itemId: asRuntimeItemId(tool.itemId),
             payload: {
               itemType: tool.itemType,
-              status: "completed",
+              status: toolResult.isError ? "failed" : "inProgress",
               title: tool.title,
               ...(tool.detail ? { detail: tool.detail } : {}),
+              data: toolData,
             },
             providerRefs: {
               ...providerThreadRef(context),
@@ -909,10 +1203,68 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             },
             raw: {
               source: "claude.sdk.message",
-              method: "claude/stream_event/content_block_stop",
+              method: "claude/user",
               payload: message,
             },
           });
+
+          const streamKind = toolResultStreamKind(tool.itemType);
+          if (streamKind && toolResult.text.length > 0 && context.turnState) {
+            const deltaStamp = yield* makeEventStamp();
+            yield* offerRuntimeEvent({
+              type: "content.delta",
+              eventId: deltaStamp.eventId,
+              provider: PROVIDER,
+              createdAt: deltaStamp.createdAt,
+              threadId: context.session.threadId,
+              turnId: context.turnState.turnId,
+              itemId: asRuntimeItemId(tool.itemId),
+              payload: {
+                streamKind,
+                delta: toolResult.text,
+              },
+              providerRefs: {
+                ...providerThreadRef(context),
+                providerTurnId: context.turnState.turnId,
+                providerItemId: ProviderItemId.makeUnsafe(tool.itemId),
+              },
+              raw: {
+                source: "claude.sdk.message",
+                method: "claude/user",
+                payload: message,
+              },
+            });
+          }
+
+          const completedStamp = yield* makeEventStamp();
+          yield* offerRuntimeEvent({
+            type: "item.completed",
+            eventId: completedStamp.eventId,
+            provider: PROVIDER,
+            createdAt: completedStamp.createdAt,
+            threadId: context.session.threadId,
+            ...(context.turnState ? { turnId: asCanonicalTurnId(context.turnState.turnId) } : {}),
+            itemId: asRuntimeItemId(tool.itemId),
+            payload: {
+              itemType: tool.itemType,
+              status: itemStatus,
+              title: tool.title,
+              ...(tool.detail ? { detail: tool.detail } : {}),
+              data: toolData,
+            },
+            providerRefs: {
+              ...providerThreadRef(context),
+              ...(context.turnState ? { providerTurnId: String(context.turnState.turnId) } : {}),
+              providerItemId: ProviderItemId.makeUnsafe(tool.itemId),
+            },
+            raw: {
+              source: "claude.sdk.message",
+              method: "claude/user",
+              payload: message,
+            },
+          });
+
+          context.inFlightTools.delete(index);
         }
       });
 
@@ -1242,6 +1594,7 @@ function makeClaudeCodeAdapter(options?: ClaudeCodeAdapterLiveOptions) {
             yield* handleStreamEvent(context, message);
             return;
           case "user":
+            yield* handleUserMessage(context, message);
             return;
           case "assistant":
             yield* handleAssistantMessage(context, message);

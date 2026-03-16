@@ -331,8 +331,8 @@ describe("ClaudeCodeAdapterLive", () => {
           "thread.started",
           "content.delta",
           "item.started",
-          "item.completed",
           "item.updated",
+          "item.completed",
           "item.completed",
           "turn.completed",
         ],
@@ -362,6 +362,186 @@ describe("ClaudeCodeAdapterLive", () => {
       if (turnCompleted?.type === "turn.completed") {
         assert.equal(String(turnCompleted.turnId), String(turn.turnId));
         assert.equal(turnCompleted.payload.state, "completed");
+      }
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("maps Claude reasoning deltas, streamed tool inputs, and tool results", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeCodeAdapter;
+
+      const runtimeEventsFiber = yield* Stream.take(adapter.streamEvents, 12).pipe(
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeCode",
+        runtimeMode: "full-access",
+      });
+
+      const turn = yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "hello",
+        attachments: [],
+      });
+
+      harness.query.emit({
+        type: "stream_event",
+        session_id: "sdk-session-tool-streams",
+        uuid: "stream-thinking",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_delta",
+          index: 0,
+          delta: {
+            type: "thinking_delta",
+            thinking: "Let",
+          },
+        },
+      } as unknown as SDKMessage);
+
+      harness.query.emit({
+        type: "stream_event",
+        session_id: "sdk-session-tool-streams",
+        uuid: "stream-tool-start",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_start",
+          index: 1,
+          content_block: {
+            type: "tool_use",
+            id: "tool-grep-1",
+            name: "Grep",
+            input: {},
+          },
+        },
+      } as unknown as SDKMessage);
+
+      harness.query.emit({
+        type: "stream_event",
+        session_id: "sdk-session-tool-streams",
+        uuid: "stream-tool-input-1",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_delta",
+          index: 1,
+          delta: {
+            type: "input_json_delta",
+            partial_json: '{"pattern":"foo","path":"src"}',
+          },
+        },
+      } as unknown as SDKMessage);
+
+      harness.query.emit({
+        type: "stream_event",
+        session_id: "sdk-session-tool-streams",
+        uuid: "stream-tool-stop",
+        parent_tool_use_id: null,
+        event: {
+          type: "content_block_stop",
+          index: 1,
+        },
+      } as unknown as SDKMessage);
+
+      harness.query.emit({
+        type: "user",
+        session_id: "sdk-session-tool-streams",
+        uuid: "user-tool-result",
+        parent_tool_use_id: null,
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "tool-grep-1",
+              content: "src/example.ts:1:foo",
+            },
+          ],
+        },
+      } as unknown as SDKMessage);
+
+      harness.query.emit({
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        errors: [],
+        session_id: "sdk-session-tool-streams",
+        uuid: "result-tool-streams",
+      } as unknown as SDKMessage);
+
+      const runtimeEvents = Array.from(yield* Fiber.join(runtimeEventsFiber));
+      assert.deepEqual(
+        runtimeEvents.map((event) => event.type),
+        [
+          "session.started",
+          "session.configured",
+          "session.state.changed",
+          "turn.started",
+          "thread.started",
+          "content.delta",
+          "item.started",
+          "item.updated",
+          "item.updated",
+          "item.completed",
+          "item.completed",
+          "turn.completed",
+        ],
+      );
+
+      const reasoningDelta = runtimeEvents.find(
+        (event) => event.type === "content.delta" && event.payload.streamKind === "reasoning_text",
+      );
+      assert.equal(reasoningDelta?.type, "content.delta");
+      if (reasoningDelta?.type === "content.delta") {
+        assert.equal(reasoningDelta.payload.delta, "Let");
+        assert.equal(String(reasoningDelta.turnId), String(turn.turnId));
+      }
+
+      const toolStarted = runtimeEvents.find((event) => event.type === "item.started");
+      assert.equal(toolStarted?.type, "item.started");
+      if (toolStarted?.type === "item.started") {
+        assert.equal(toolStarted.payload.itemType, "dynamic_tool_call");
+      }
+
+      const toolInputUpdated = runtimeEvents.find(
+        (event) =>
+          event.type === "item.updated" &&
+          (event.payload.data as { input?: { pattern?: string; path?: string } } | undefined)?.input
+            ?.pattern === "foo",
+      );
+      assert.equal(toolInputUpdated?.type, "item.updated");
+      if (toolInputUpdated?.type === "item.updated") {
+        assert.deepEqual(toolInputUpdated.payload.data, {
+          toolName: "Grep",
+          input: {
+            pattern: "foo",
+            path: "src",
+          },
+        });
+      }
+
+      const toolResultUpdated = runtimeEvents.find(
+        (event) =>
+          event.type === "item.updated" &&
+          (event.payload.data as { result?: { tool_use_id?: string } } | undefined)?.result
+            ?.tool_use_id === "tool-grep-1",
+      );
+      assert.equal(toolResultUpdated?.type, "item.updated");
+      if (toolResultUpdated?.type === "item.updated") {
+        assert.equal(
+          (
+            toolResultUpdated.payload.data as {
+              result?: { content?: string };
+            }
+          ).result?.content,
+          "src/example.ts:1:foo",
+        );
       }
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
@@ -688,6 +868,79 @@ describe("ClaudeCodeAdapterLive", () => {
     );
   });
 
+  it.effect("classifies Agent tools and read-only Claude tools correctly for approvals", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeCodeAdapter;
+
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: "claudeCode",
+        runtimeMode: "approval-required",
+      });
+
+      yield* Stream.take(adapter.streamEvents, 3).pipe(Stream.runDrain);
+
+      const createInput = harness.getLastCreateQueryInput();
+      const canUseTool = createInput?.options.canUseTool;
+      assert.equal(typeof canUseTool, "function");
+      if (!canUseTool) {
+        return;
+      }
+
+      const agentPermissionPromise = canUseTool(
+        "Agent",
+        {},
+        {
+          signal: new AbortController().signal,
+          toolUseID: "tool-agent-1",
+        },
+      );
+
+      const agentRequested = yield* Stream.runHead(adapter.streamEvents);
+      assert.equal(agentRequested._tag, "Some");
+      if (agentRequested._tag !== "Some" || agentRequested.value.type !== "request.opened") {
+        return;
+      }
+      assert.equal(agentRequested.value.payload.requestType, "dynamic_tool_call");
+
+      yield* adapter.respondToRequest(
+        session.threadId,
+        ApprovalRequestId.makeUnsafe(String(agentRequested.value.requestId)),
+        "accept",
+      );
+      yield* Stream.runHead(adapter.streamEvents);
+      yield* Effect.promise(() => agentPermissionPromise);
+
+      const grepPermissionPromise = canUseTool(
+        "Grep",
+        { pattern: "foo", path: "src" },
+        {
+          signal: new AbortController().signal,
+          toolUseID: "tool-grep-approval-1",
+        },
+      );
+
+      const grepRequested = yield* Stream.runHead(adapter.streamEvents);
+      assert.equal(grepRequested._tag, "Some");
+      if (grepRequested._tag !== "Some" || grepRequested.value.type !== "request.opened") {
+        return;
+      }
+      assert.equal(grepRequested.value.payload.requestType, "file_read_approval");
+
+      yield* adapter.respondToRequest(
+        session.threadId,
+        ApprovalRequestId.makeUnsafe(String(grepRequested.value.requestId)),
+        "accept",
+      );
+      yield* Stream.runHead(adapter.streamEvents);
+      yield* Effect.promise(() => grepPermissionPromise);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
   it.effect("passes parsed resume cursor values to Claude query options", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
@@ -858,11 +1111,13 @@ describe("ClaudeCodeAdapterLive", () => {
         turnId?: string;
       };
     }> = [];
+    const nativeThreadIds: Array<string | null> = [];
     const harness = makeHarness({
       nativeEventLogger: {
         filePath: "memory://claude-native-events",
-        write: (event) => {
+        write: (event, threadId) => {
           nativeEvents.push(event as (typeof nativeEvents)[number]);
+          nativeThreadIds.push(threadId ?? null);
           return Effect.void;
         },
         close: () => Effect.void,
@@ -937,6 +1192,10 @@ describe("ClaudeCodeAdapterLive", () => {
         nativeEvents.some(
           (record) => record.event?.method === "claude/stream_event/content_block_delta/text_delta",
         ),
+        true,
+      );
+      assert.equal(
+        nativeThreadIds.every((threadId) => threadId === String(THREAD_ID)),
         true,
       );
     }).pipe(
