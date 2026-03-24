@@ -5,23 +5,63 @@ export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
 
   yield* sql`
+    ALTER TABLE projection_projects
+    ADD COLUMN default_provider TEXT
+  `;
+
+  yield* sql`
     UPDATE projection_projects
-    SET
-      default_provider = CASE
-        WHEN default_model IS NULL THEN NULL
-        WHEN lower(default_model) LIKE '%claude%' THEN 'claudeAgent'
+    SET default_provider = CASE
+      WHEN default_model IS NULL THEN NULL
+      WHEN lower(default_model) LIKE '%claude%' THEN 'claudeAgent'
+      ELSE 'codex'
+    END
+    WHERE default_provider IS NULL
+  `;
+
+  yield* sql`
+    ALTER TABLE projection_threads
+    ADD COLUMN provider TEXT
+  `;
+
+  yield* sql`
+    UPDATE projection_threads
+    SET provider = COALESCE(
+      (
+        SELECT provider_name
+        FROM projection_thread_sessions
+        WHERE projection_thread_sessions.thread_id = projection_threads.thread_id
+      ),
+      CASE
+        WHEN lower(model) LIKE '%claude%' THEN 'claudeAgent'
         ELSE 'codex'
       END,
+      'codex'
+    )
+    WHERE provider IS NULL
+  `;
+
+  yield* sql`
+    ALTER TABLE projection_projects
+    ADD COLUMN default_model_options_json TEXT
+  `;
+
+  yield* sql`
+    ALTER TABLE projection_threads
+    ADD COLUMN model_options_json TEXT
+  `;
+
+  yield* sql`
+    UPDATE projection_projects
+    SET
       default_model_options_json = CASE
         WHEN default_model_options_json IS NULL THEN NULL
         WHEN json_valid(default_model_options_json) = 0 THEN default_model_options_json
         WHEN json_type(default_model_options_json, '$.codex') IS NOT NULL
           OR json_type(default_model_options_json, '$.claudeAgent') IS NOT NULL
         THEN CASE
-          WHEN lower(default_model) LIKE '%claude%' THEN json_extract(
-            default_model_options_json,
-            '$.claudeAgent'
-          )
+          WHEN default_provider = 'claudeAgent'
+          THEN json_extract(default_model_options_json, '$.claudeAgent')
           ELSE json_extract(default_model_options_json, '$.codex')
         END
         ELSE default_model_options_json
@@ -32,17 +72,14 @@ export default Effect.gen(function* () {
   yield* sql`
     UPDATE projection_threads
     SET
-      provider = CASE
-        WHEN lower(model) LIKE '%claude%' THEN 'claudeAgent'
-        ELSE 'codex'
-      END,
       model_options_json = CASE
         WHEN model_options_json IS NULL THEN NULL
         WHEN json_valid(model_options_json) = 0 THEN model_options_json
         WHEN json_type(model_options_json, '$.codex') IS NOT NULL
           OR json_type(model_options_json, '$.claudeAgent') IS NOT NULL
         THEN CASE
-          WHEN lower(model) LIKE '%claude%' THEN json_extract(model_options_json, '$.claudeAgent')
+          WHEN provider = 'claudeAgent'
+          THEN json_extract(model_options_json, '$.claudeAgent')
           ELSE json_extract(model_options_json, '$.codex')
         END
         ELSE model_options_json
