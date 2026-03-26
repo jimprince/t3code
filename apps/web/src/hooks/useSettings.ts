@@ -11,18 +11,27 @@
  */
 import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ServerSettings, ServerSettingsPatch, ServerConfig } from "@t3tools/contracts";
+import {
+  ServerSettings,
+  ServerSettingsPatch,
+  ServerConfig,
+  ModelSelection,
+  ThreadEnvMode,
+} from "@t3tools/contracts";
 import { DEFAULT_SERVER_SETTINGS } from "@t3tools/contracts";
 import { serverConfigQueryOptions, serverQueryKeys } from "~/lib/serverReactQuery";
 import { ensureNativeApi } from "~/nativeApi";
 import { useLocalStorage } from "./useLocalStorage";
+import { normalizeCustomModelSlugs } from "~/modelSelection";
 import {
   ClientSettingsSchema,
   type ClientSettings,
   DEFAULT_CLIENT_SETTINGS,
   CLIENT_SETTINGS_STORAGE_KEY,
 } from "~/clientSettings";
-import { Struct } from "effect";
+import { Predicate, Schema, Struct } from "effect";
+import { DeepMutable } from "effect/Types";
+import { deepMerge } from "@t3tools/shared/Struct";
 
 // ── Unified type ─────────────────────────────────────────────────────
 
@@ -103,7 +112,7 @@ export function useUpdateSettings() {
           if (!old) return old;
           return {
             ...old,
-            settings: { ...old.settings, ...serverPatch },
+            settings: deepMerge(old.settings, serverPatch),
           };
         });
         // Fire-and-forget RPC — push will reconcile on success
@@ -133,8 +142,62 @@ export function useUpdateSettings() {
 
 // ── One-time migration from localStorage ─────────────────────────────
 
-const MIGRATION_FLAG_KEY = "t3code:settings-migrated:v1";
+const MIGRATION_FLAG_KEY = "t3code:settings-migrated";
 const OLD_SETTINGS_KEY = "t3code:app-settings:v1";
+
+export function buildLegacyServerSettingsMigrationPatch(legacySettings: Record<string, unknown>) {
+  const patch: DeepMutable<ServerSettingsPatch> = {};
+
+  if (Predicate.isBoolean(legacySettings.enableAssistantStreaming)) {
+    patch.enableAssistantStreaming = legacySettings.enableAssistantStreaming;
+  }
+
+  if (Schema.is(ThreadEnvMode)(legacySettings.defaultThreadEnvMode)) {
+    patch.defaultThreadEnvMode = legacySettings.defaultThreadEnvMode;
+  }
+
+  if (Schema.is(ModelSelection)(legacySettings.textGenerationModelSelection)) {
+    patch.textGenerationModelSelection = legacySettings.textGenerationModelSelection;
+  }
+
+  if (typeof legacySettings.codexBinaryPath === "string") {
+    patch.providers ??= {};
+    patch.providers.codex ??= {};
+    patch.providers.codex.binaryPath = legacySettings.codexBinaryPath;
+  }
+
+  if (typeof legacySettings.codexHomePath === "string") {
+    patch.providers ??= {};
+    patch.providers.codex ??= {};
+    patch.providers.codex.homePath = legacySettings.codexHomePath;
+  }
+
+  if (Array.isArray(legacySettings.customCodexModels)) {
+    patch.providers ??= {};
+    patch.providers.codex ??= {};
+    patch.providers.codex.customModels = normalizeCustomModelSlugs(
+      legacySettings.customCodexModels,
+      "codex",
+    );
+  }
+
+  if (Predicate.isString(legacySettings.claudeBinaryPath)) {
+    patch.providers ??= {};
+    patch.providers.claudeAgent ??= {};
+    patch.providers.claudeAgent.binaryPath = legacySettings.claudeBinaryPath;
+  }
+
+  if (Array.isArray(legacySettings.customClaudeModels)) {
+    patch.providers ??= {};
+    patch.providers.claudeAgent ??= {};
+    patch.providers.claudeAgent.customModels = normalizeCustomModelSlugs(
+      legacySettings.customClaudeModels,
+      "claudeAgent",
+    );
+  }
+
+  return patch;
+}
 
 /**
  * Call once on app startup. Migrates server-relevant settings from the
@@ -151,25 +214,24 @@ export function migrateLocalSettingsToServer(): void {
   }
 
   try {
-    const old = JSON.parse(raw) as Record<string, unknown>;
-    const serverPatch: Record<string, unknown> = {};
-    for (const key of SERVER_SETTINGS_KEYS) {
-      if (key in old && old[key] !== undefined) {
-        serverPatch[key] = old[key];
-      }
+    const old = JSON.parse(raw);
+    if (!Predicate.isObject(old)) return;
+
+    const api = ensureNativeApi();
+
+    const serverPatch = buildLegacyServerSettingsMigrationPatch(old);
+
+    if (Object.keys(serverPatch).length === 0) {
+      localStorage.setItem(MIGRATION_FLAG_KEY, "true");
+      return;
     }
 
-    if (Object.keys(serverPatch).length > 0) {
-      void ensureNativeApi()
-        .server.updateSettings(serverPatch as ServerSettingsPatch)
-        .then(() => {
-          localStorage.setItem(MIGRATION_FLAG_KEY, "true");
-        });
-    } else {
-      localStorage.setItem(MIGRATION_FLAG_KEY, "true");
-    }
-  } catch {
-    // If parsing fails, mark as migrated to avoid retrying
+    void api.server.updateSettings(serverPatch);
+    localStorage.setItem(MIGRATION_FLAG_KEY, "true");
+  } catch (error) {
+    console.error("[MIGRATION] Error migrating local settings to server:", error);
+  } finally {
+    // Mark as migrated no matter what to avoid retrying
     localStorage.setItem(MIGRATION_FLAG_KEY, "true");
   }
 }

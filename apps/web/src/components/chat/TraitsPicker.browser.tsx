@@ -114,7 +114,7 @@ async function mountClaudePicker(props?: {
       ? ({
           provider: "claudeAgent",
           model,
-          options: props.fallbackModelOptions ?? undefined,
+          ...(props.fallbackModelOptions ? { options: props.fallbackModelOptions } : {}),
         } satisfies ModelSelection)
       : null;
   const screen = await render(

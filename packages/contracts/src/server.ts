@@ -1,8 +1,12 @@
-import { Schema, Struct } from "effect";
+import { Schema } from "effect";
 import { IsoDateTime, TrimmedNonEmptyString } from "./baseSchemas";
 import { KeybindingRule, ResolvedKeybindingsConfig } from "./keybindings";
 import { EditorId } from "./editor";
-import { DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER } from "./model";
+import {
+  ClaudeModelOptions,
+  CodexModelOptions,
+  DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER,
+} from "./model";
 import { ModelSelection, ProviderKind } from "./orchestration";
 
 // ── Server Settings (server-authoritative) ───────────────────────────
@@ -45,7 +49,52 @@ export type ServerSettings = typeof ServerSettings.Type;
 
 export const DEFAULT_SERVER_SETTINGS: ServerSettings = Schema.decodeUnknownSync(ServerSettings)({});
 
-export const ServerSettingsPatch = ServerSettings.mapFields(Struct.map(Schema.optionalKey));
+const CodexModelOptionsPatch = Schema.Struct({
+  reasoningEffort: Schema.optionalKey(CodexModelOptions.fields.reasoningEffort),
+  fastMode: Schema.optionalKey(CodexModelOptions.fields.fastMode),
+});
+
+const ClaudeModelOptionsPatch = Schema.Struct({
+  thinking: Schema.optionalKey(ClaudeModelOptions.fields.thinking),
+  effort: Schema.optionalKey(ClaudeModelOptions.fields.effort),
+  fastMode: Schema.optionalKey(ClaudeModelOptions.fields.fastMode),
+});
+
+const ModelSelectionPatch = Schema.Union([
+  Schema.Struct({
+    provider: Schema.optionalKey(Schema.Literal("codex")),
+    model: Schema.optionalKey(TrimmedNonEmptyString),
+    options: Schema.optionalKey(CodexModelOptionsPatch),
+  }),
+  Schema.Struct({
+    provider: Schema.optionalKey(Schema.Literal("claudeAgent")),
+    model: Schema.optionalKey(TrimmedNonEmptyString),
+    options: Schema.optionalKey(ClaudeModelOptionsPatch),
+  }),
+]);
+
+const CodexSettingsPatch = Schema.Struct({
+  binaryPath: Schema.optionalKey(Schema.String),
+  homePath: Schema.optionalKey(Schema.String),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+const ClaudeSettingsPatch = Schema.Struct({
+  binaryPath: Schema.optionalKey(Schema.String),
+  customModels: Schema.optionalKey(Schema.Array(Schema.String)),
+});
+
+export const ServerSettingsPatch = Schema.Struct({
+  enableAssistantStreaming: Schema.optionalKey(Schema.Boolean),
+  defaultThreadEnvMode: Schema.optionalKey(ThreadEnvMode),
+  textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
+  providers: Schema.optionalKey(
+    Schema.Struct({
+      codex: Schema.optionalKey(CodexSettingsPatch),
+      claudeAgent: Schema.optionalKey(ClaudeSettingsPatch),
+    }),
+  ),
+});
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
