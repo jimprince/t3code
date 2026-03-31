@@ -206,7 +206,7 @@ function normalizeAppCandidates(
     }
   }
 
-  return candidates;
+  return candidates.length > 0 ? candidates : [undefined];
 }
 
 function isUriLikeTarget(target: string): boolean {
@@ -479,6 +479,8 @@ function toLaunchAttemptFailure(error: LaunchAttemptError): LaunchAttemptFailure
  * not expose `unref()`, which means it cannot provide true fire-and-forget
  * behavior for editor / file-manager launches.
  */
+const DETACHED_SPAWN_GRACE_MS = 500;
+
 function defaultSpawnDetached(
   input: DetachedSpawnInput,
   context: LaunchContext,
@@ -496,22 +498,50 @@ function defaultSpawnDetached(
   }).pipe(
     Effect.flatMap((childProcess) =>
       Effect.callback<void, DesktopLauncherSpawnError>((resume) => {
+        let graceTimer: ReturnType<typeof setTimeout> | undefined;
+
+        const onEarlyExit = (code: number | null) => {
+          if (graceTimer !== undefined) clearTimeout(graceTimer);
+          if (code !== null && code !== 0) {
+            resume(
+              Effect.fail(
+                makeSpawnError(
+                  context,
+                  input.command,
+                  input.args,
+                  new Error(`Process exited immediately with code ${code}`),
+                ),
+              ),
+            );
+          } else {
+            childProcess.unref();
+            resume(Effect.void);
+          }
+        };
+
         const onError = (error: Error) => {
           childProcess.off("spawn", onSpawn);
           resume(Effect.fail(makeSpawnError(context, input.command, input.args, error)));
         };
+
         const onSpawn = () => {
           childProcess.off("error", onError);
-          childProcess.unref();
-          resume(Effect.void);
+          childProcess.once("exit", onEarlyExit);
+          graceTimer = setTimeout(() => {
+            childProcess.off("exit", onEarlyExit);
+            childProcess.unref();
+            resume(Effect.void);
+          }, DETACHED_SPAWN_GRACE_MS);
         };
 
         childProcess.once("error", onError);
         childProcess.once("spawn", onSpawn);
 
         return Effect.sync(() => {
+          if (graceTimer !== undefined) clearTimeout(graceTimer);
           childProcess.off("error", onError);
           childProcess.off("spawn", onSpawn);
+          childProcess.off("exit", onEarlyExit);
         });
       }),
     ),
