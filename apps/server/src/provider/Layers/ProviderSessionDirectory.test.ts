@@ -133,6 +133,59 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
       }
     }));
 
+  it("decodes persisted opencode bindings and preserves pool reuse payload", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const runtimeRepository = yield* ProviderSessionRuntimeRepository;
+
+      const threadId = ThreadId.makeUnsafe("thread-opencode-runtime");
+
+      yield* runtimeRepository.upsert({
+        threadId,
+        providerName: "opencode",
+        adapterKey: "opencode:/tmp/project-root::/opt/opencode/bin/opencode",
+        runtimeMode: "approval-required",
+        status: "running",
+        lastSeenAt: new Date().toISOString(),
+        resumeCursor: {
+          sessionId: "sess-opencode-1",
+        },
+        runtimePayload: {
+          cwd: "/tmp/project-root/worktrees/a",
+          poolRoot: "/tmp/project-root",
+          binaryPath: "/opt/opencode/bin/opencode",
+          modelSelection: {
+            provider: "opencode",
+            model: "anthropic/claude-sonnet-4.5",
+          },
+        },
+      });
+
+      const binding = yield* directory.getBinding(threadId);
+      assert.equal(Option.isSome(binding), true);
+      if (Option.isSome(binding)) {
+        assert.deepEqual(binding.value, {
+          threadId,
+          provider: "opencode",
+          adapterKey: "opencode:/tmp/project-root::/opt/opencode/bin/opencode",
+          runtimeMode: "approval-required",
+          status: "running",
+          resumeCursor: {
+            sessionId: "sess-opencode-1",
+          },
+          runtimePayload: {
+            cwd: "/tmp/project-root/worktrees/a",
+            poolRoot: "/tmp/project-root",
+            binaryPath: "/opt/opencode/bin/opencode",
+            modelSelection: {
+              provider: "opencode",
+              model: "anthropic/claude-sonnet-4.5",
+            },
+          },
+        });
+      }
+    }));
+
   it("resets adapterKey to the new provider when provider changes without an explicit adapter key", () =>
     Effect.gen(function* () {
       const directory = yield* ProviderSessionDirectory;

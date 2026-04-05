@@ -4,12 +4,14 @@
  * request input.
  *
  * When `modelSelection.provider` is `"claudeAgent"` the request is forwarded to
- * the Claude layer; for any other value (including the default `undefined`) it
- * falls through to the Codex layer.
+ * the Claude layer; when it is `"codex"` the request is forwarded to the Codex
+ * layer. Unsupported providers fail at the routing boundary with a typed
+ * `TextGenerationError`.
  *
  * @module RoutingTextGeneration
  */
 import { Effect, Layer, ServiceMap } from "effect";
+import { TextGenerationError, type ProviderKind } from "@t3tools/contracts";
 
 import {
   TextGeneration,
@@ -39,15 +41,64 @@ const makeRoutingTextGeneration = Effect.gen(function* () {
   const codex = yield* CodexTextGen;
   const claude = yield* ClaudeTextGen;
 
-  const route = (provider?: TextGenerationProvider): TextGenerationShape =>
-    provider === "claudeAgent" ? claude : codex;
+  const unsupportedProvider = (
+    operation: TextGenerationError["operation"],
+    provider?: ProviderKind | TextGenerationProvider,
+  ) =>
+    new TextGenerationError({
+      operation,
+      detail: `Git text generation does not support provider "${provider ?? "unknown"}" yet.`,
+    });
 
   return {
-    generateCommitMessage: (input) =>
-      route(input.modelSelection.provider).generateCommitMessage(input),
-    generatePrContent: (input) => route(input.modelSelection.provider).generatePrContent(input),
-    generateBranchName: (input) => route(input.modelSelection.provider).generateBranchName(input),
-    generateThreadTitle: (input) => route(input.modelSelection.provider).generateThreadTitle(input),
+    generateCommitMessage: (input) => {
+      switch (input.modelSelection.provider) {
+        case "claudeAgent":
+          return claude.generateCommitMessage(input);
+        case "codex":
+          return codex.generateCommitMessage(input);
+        default:
+          return Effect.fail(
+            unsupportedProvider("generateCommitMessage", input.modelSelection.provider),
+          );
+      }
+    },
+    generatePrContent: (input) => {
+      switch (input.modelSelection.provider) {
+        case "claudeAgent":
+          return claude.generatePrContent(input);
+        case "codex":
+          return codex.generatePrContent(input);
+        default:
+          return Effect.fail(
+            unsupportedProvider("generatePrContent", input.modelSelection.provider),
+          );
+      }
+    },
+    generateBranchName: (input) => {
+      switch (input.modelSelection.provider) {
+        case "claudeAgent":
+          return claude.generateBranchName(input);
+        case "codex":
+          return codex.generateBranchName(input);
+        default:
+          return Effect.fail(
+            unsupportedProvider("generateBranchName", input.modelSelection.provider),
+          );
+      }
+    },
+    generateThreadTitle: (input) => {
+      switch (input.modelSelection.provider) {
+        case "claudeAgent":
+          return claude.generateThreadTitle(input);
+        case "codex":
+          return codex.generateThreadTitle(input);
+        default:
+          return Effect.fail(
+            unsupportedProvider("generateThreadTitle", input.modelSelection.provider),
+          );
+      }
+    },
   } satisfies TextGenerationShape;
 });
 

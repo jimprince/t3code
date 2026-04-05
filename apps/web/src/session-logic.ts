@@ -20,7 +20,7 @@ import type {
   TurnDiffSummary,
 } from "./types";
 
-export type ProviderPickerKind = ProviderKind | "cursor";
+export type ProviderPickerKind = ProviderKind;
 
 export const PROVIDER_OPTIONS: Array<{
   value: ProviderPickerKind;
@@ -29,7 +29,7 @@ export const PROVIDER_OPTIONS: Array<{
 }> = [
   { value: "codex", label: "Codex", available: true },
   { value: "claudeAgent", label: "Claude", available: true },
-  { value: "cursor", label: "Cursor", available: false },
+  { value: "opencode", label: "OpenCode", available: true },
 ];
 
 export interface WorkLogEntry {
@@ -270,15 +270,50 @@ function parseUserInputQuestions(
           };
         })
         .filter((option): option is UserInputQuestion["options"][number] => option !== null);
-      if (options.length === 0) {
+      const multiple =
+        typeof question.multiple === "boolean"
+          ? question.multiple
+          : typeof question.multiSelect === "boolean"
+            ? question.multiSelect
+            : undefined;
+      const custom = typeof question.custom === "boolean" ? question.custom : undefined;
+      if (options.length === 0 && custom !== true) {
         return null;
+      }
+      if (multiple !== undefined && custom !== undefined) {
+        return {
+          id: question.id,
+          header: question.header,
+          question: question.question,
+          options,
+          multiple,
+          custom,
+        } satisfies UserInputQuestion;
+      }
+      if (multiple !== undefined) {
+        return {
+          id: question.id,
+          header: question.header,
+          question: question.question,
+          options,
+          multiple,
+        } satisfies UserInputQuestion;
+      }
+      if (custom !== undefined) {
+        return {
+          id: question.id,
+          header: question.header,
+          question: question.question,
+          options,
+          custom,
+        } satisfies UserInputQuestion;
       }
       return {
         id: question.id,
         header: question.header,
         question: question.question,
         options,
-      };
+      } satisfies UserInputQuestion;
     })
     .filter((question): question is UserInputQuestion => question !== null);
   return parsed.length > 0 ? parsed : null;

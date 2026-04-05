@@ -1,4 +1,4 @@
-import { Option, Schema } from "effect";
+import { Schema, SchemaGetter } from "effect";
 import {
   EventId,
   IsoDateTime,
@@ -429,15 +429,40 @@ const UserInputQuestionOption = Schema.Struct({
 });
 export type UserInputQuestionOption = typeof UserInputQuestionOption.Type;
 
-export const UserInputQuestion = Schema.Struct({
+const UserInputQuestionWire = Schema.Struct({
   id: TrimmedNonEmptyStringSchema,
   header: TrimmedNonEmptyStringSchema,
   question: TrimmedNonEmptyStringSchema,
   options: Schema.Array(UserInputQuestionOption),
-  multiSelect: Schema.optional(Schema.Boolean).pipe(
-    Schema.withConstructorDefault(() => Option.some(false)),
-  ),
+  multiple: Schema.optional(Schema.Boolean),
+  custom: Schema.optional(Schema.Boolean),
+  multiSelect: Schema.optional(Schema.Boolean),
 });
+
+export const UserInputQuestion = UserInputQuestionWire.pipe(
+  Schema.decode({
+    decode: SchemaGetter.transform((question) => ({
+      id: question.id,
+      header: question.header,
+      question: question.question,
+      options: question.options,
+      ...(typeof question.multiple === "boolean"
+        ? { multiple: question.multiple }
+        : typeof question.multiSelect === "boolean"
+          ? { multiple: question.multiSelect }
+          : {}),
+      ...(typeof question.custom === "boolean" ? { custom: question.custom } : {}),
+    })),
+    encode: SchemaGetter.transform((question) => ({
+      id: question.id,
+      header: question.header,
+      question: question.question,
+      options: question.options,
+      ...(typeof question.multiple === "boolean" ? { multiple: question.multiple } : {}),
+      ...(typeof question.custom === "boolean" ? { custom: question.custom } : {}),
+    })),
+  }),
+);
 export type UserInputQuestion = typeof UserInputQuestion.Type;
 
 const UserInputRequestedPayload = Schema.Struct({

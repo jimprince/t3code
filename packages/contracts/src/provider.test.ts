@@ -68,6 +68,33 @@ describe("ProviderSessionStartInput", () => {
     expect(parsed.modelSelection.options?.fastMode).toBe(true);
     expect(parsed.runtimeMode).toBe("full-access");
   });
+
+  it("accepts opencode session recovery fields", () => {
+    const parsed = decodeProviderSessionStartInput({
+      threadId: "thread-1",
+      provider: "opencode",
+      cwd: "/tmp/worktree-a",
+      poolRoot: "/tmp/project-root",
+      modelSelection: {
+        provider: "opencode",
+        model: "openai/gpt-5.4",
+      },
+      providerOptions: {
+        opencode: {
+          binaryPath: "/opt/opencode/bin/opencode",
+        },
+      },
+      runtimeMode: "approval-required",
+    });
+
+    expect(parsed.provider).toBe("opencode");
+    expect(parsed.cwd).toBe("/tmp/worktree-a");
+    expect(parsed.poolRoot).toBe("/tmp/project-root");
+    expect(parsed.modelSelection?.provider).toBe("opencode");
+    expect(parsed.modelSelection?.model).toBe("openai/gpt-5.4");
+    expect(parsed.providerOptions?.opencode?.binaryPath).toBe("/opt/opencode/bin/opencode");
+    expect(parsed.runtimeMode).toBe("approval-required");
+  });
 });
 
 describe("ProviderSendTurnInput", () => {
@@ -112,5 +139,18 @@ describe("ProviderSendTurnInput", () => {
     }
     expect(parsed.modelSelection.options?.effort).toBe("ultrathink");
     expect(parsed.modelSelection.options?.fastMode).toBe(true);
+  });
+
+  it("accepts opencode modelSelection", () => {
+    const parsed = decodeProviderSendTurnInput({
+      threadId: "thread-1",
+      modelSelection: {
+        provider: "opencode",
+        model: "anthropic/claude-sonnet-4.5",
+      },
+    });
+
+    expect(parsed.modelSelection?.provider).toBe("opencode");
+    expect(parsed.modelSelection?.model).toBe("anthropic/claude-sonnet-4.5");
   });
 });

@@ -8,6 +8,9 @@ export const CLAUDE_CODE_EFFORT_OPTIONS = ["low", "medium", "high", "max", "ultr
 export type ClaudeCodeEffort = (typeof CLAUDE_CODE_EFFORT_OPTIONS)[number];
 export type ProviderReasoningEffort = CodexReasoningEffort | ClaudeCodeEffort;
 
+export const OpenCodeModelOptions = Schema.Struct({});
+export type OpenCodeModelOptions = typeof OpenCodeModelOptions.Type;
+
 export const CodexModelOptions = Schema.Struct({
   reasoningEffort: Schema.optional(Schema.Literals(CODEX_REASONING_EFFORT_OPTIONS)),
   fastMode: Schema.optional(Schema.Boolean),
@@ -25,6 +28,7 @@ export type ClaudeModelOptions = typeof ClaudeModelOptions.Type;
 export const ProviderModelOptions = Schema.Struct({
   codex: Schema.optional(CodexModelOptions),
   claudeAgent: Schema.optional(ClaudeModelOptions),
+  opencode: Schema.optional(OpenCodeModelOptions),
 });
 export type ProviderModelOptions = typeof ProviderModelOptions.Type;
 
@@ -54,6 +58,7 @@ export type ModelCapabilities = typeof ModelCapabilities.Type;
 export const DEFAULT_MODEL_BY_PROVIDER: Record<ProviderKind, string> = {
   codex: "gpt-5.4",
   claudeAgent: "claude-sonnet-4-6",
+  opencode: "openai/gpt-5.4",
 };
 
 export const DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
@@ -62,6 +67,7 @@ export const DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
 export const DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER: Record<ProviderKind, string> = {
   codex: "gpt-5.4-mini",
   claudeAgent: "claude-haiku-4-5",
+  opencode: "openai/gpt-5.4",
 };
 
 export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string, string>> = {
@@ -86,6 +92,7 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string,
     "claude-haiku-4.5": "claude-haiku-4-5",
     "claude-haiku-4-5-20251001": "claude-haiku-4-5",
   },
+  opencode: {},
 };
 
 // ── Provider display names ────────────────────────────────────────────
@@ -93,4 +100,5 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string,
 export const PROVIDER_DISPLAY_NAMES: Record<ProviderKind, string> = {
   codex: "Codex",
   claudeAgent: "Claude",
+  opencode: "OpenCode",
 };

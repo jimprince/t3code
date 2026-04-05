@@ -361,6 +361,68 @@ describe("ProviderModelPicker", () => {
     }
   });
 
+  it("shows saved custom models in the unlocked provider submenu", async () => {
+    const host = document.createElement("div");
+    document.body.append(host);
+    const onProviderModelChange = vi.fn();
+    const modelOptionsByProvider = getCustomModelOptionsByProvider(
+      {
+        ...DEFAULT_UNIFIED_SETTINGS,
+        providers: {
+          ...DEFAULT_UNIFIED_SETTINGS.providers,
+          codex: {
+            ...DEFAULT_UNIFIED_SETTINGS.providers.codex,
+            customModels: ["gpt-5.4-pro-custom"],
+          },
+        },
+      },
+      TEST_PROVIDERS,
+      "claudeAgent",
+      "claude-opus-4-6",
+    );
+    const screen = await render(
+      <ProviderModelPicker
+        provider="claudeAgent"
+        model="claude-opus-4-6"
+        lockedProvider={null}
+        providers={TEST_PROVIDERS}
+        modelOptionsByProvider={modelOptionsByProvider}
+        onProviderModelChange={onProviderModelChange}
+      />,
+      { container: host },
+    );
+
+    try {
+      await page.getByRole("button").click();
+      await page.getByRole("menuitem", { name: "Codex" }).hover();
+
+      await vi.waitFor(() => {
+        expect(document.body.textContent ?? "").toContain("gpt-5.4-pro-custom");
+      });
+    } finally {
+      await screen.unmount();
+      host.remove();
+    }
+  });
+
+  it("shows the current unsaved custom model in the locked provider list", async () => {
+    const mounted = await mountPicker({
+      provider: "claudeAgent",
+      model: "claude-custom-unsaved",
+      lockedProvider: "claudeAgent",
+    });
+
+    try {
+      await page.getByRole("button").click();
+
+      await vi.waitFor(() => {
+        expect(document.body.textContent ?? "").toContain("claude-custom-unsaved");
+      });
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
   it("shows disabled providers as non-selectable entries", async () => {
     const disabledProviders = TEST_PROVIDERS.slice();
     const claudeIndex = disabledProviders.findIndex(
@@ -389,6 +451,37 @@ describe("ProviderModelPicker", () => {
         expect(text).toContain("Claude");
         expect(text).toContain("Disabled");
         expect(text).not.toContain("Claude Sonnet 4.6");
+      });
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("keeps warning-state installed providers selectable", async () => {
+    const warningProviders: ReadonlyArray<ServerProvider> = [
+      TEST_PROVIDERS[0]!,
+      {
+        ...TEST_PROVIDERS[1]!,
+        status: "warning",
+        enabled: true,
+        installed: true,
+      },
+    ];
+    const mounted = await mountPicker({
+      provider: "codex",
+      model: "gpt-5-codex",
+      lockedProvider: null,
+      providers: warningProviders,
+    });
+
+    try {
+      await page.getByRole("button").click();
+
+      await vi.waitFor(() => {
+        const text = document.body.textContent ?? "";
+        expect(text).toContain("Claude");
+        expect(text).not.toContain("Unavailable");
+        expect(text).not.toContain("Disabled");
       });
     } finally {
       await mounted.cleanup();

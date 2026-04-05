@@ -1,12 +1,16 @@
 import {
+  DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER,
   EventId,
   MessageId,
   ThreadId,
   TurnId,
   type OrchestrationThreadActivity,
+  type ServerProvider,
 } from "@t3tools/contracts";
+import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 import { describe, expect, it } from "vitest";
 
+import { getCustomModelOptionsByProvider, resolveAppModelSelectionState } from "./modelSelection";
 import {
   deriveCompletionDividerBeforeEntryId,
   deriveActiveWorkStartedAt,
@@ -45,6 +49,54 @@ function makeActivity(overrides: {
     ...(overrides.sequence !== undefined ? { sequence: overrides.sequence } : {}),
   };
 }
+
+function makeServerProviderModel(slug: string, name = slug) {
+  return {
+    slug,
+    name,
+    isCustom: false,
+    capabilities: {
+      reasoningEffortLevels: [],
+      supportsFastMode: false,
+      supportsThinkingToggle: false,
+      contextWindowOptions: [],
+      promptInjectedEffortLevels: [],
+    },
+  };
+}
+
+const TEST_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [
+  {
+    provider: "codex",
+    enabled: true,
+    installed: true,
+    version: "0.116.0",
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-02-23T00:00:00.000Z",
+    models: [makeServerProviderModel("gpt-5.4", "GPT-5.4")],
+  },
+  {
+    provider: "claudeAgent",
+    enabled: true,
+    installed: true,
+    version: "1.0.0",
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-02-23T00:00:00.000Z",
+    models: [makeServerProviderModel("claude-haiku-4-5", "Claude Haiku 4.5")],
+  },
+  {
+    provider: "opencode",
+    enabled: true,
+    installed: true,
+    version: "1.2.24",
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-02-23T00:00:00.000Z",
+    models: [makeServerProviderModel("openai/gpt-5.4", "GPT-5.4")],
+  },
+];
 
 describe("derivePendingApprovals", () => {
   it("tracks open approvals and removes resolved ones", () => {
@@ -300,6 +352,165 @@ describe("derivePendingUserInputs", () => {
     ];
 
     expect(derivePendingUserInputs(activities)).toEqual([]);
+  });
+
+  it("preserves multiple/custom metadata and accepts custom-only questions", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "user-input-open-opencode",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "user-input.requested",
+        summary: "User input requested",
+        tone: "info",
+        payload: {
+          requestId: "req-user-input-opencode-1",
+          questions: [
+            {
+              id: "mode",
+              header: "Mode",
+              question: "Which modes should I use?",
+              options: [
+                {
+                  label: "fast",
+                  description: "Fast path",
+                },
+              ],
+              multiple: true,
+              custom: false,
+            },
+            {
+              id: "notes",
+              header: "Notes",
+              question: "Anything else to keep in mind?",
+              options: [],
+              custom: true,
+            },
+          ],
+        },
+      }),
+    ];
+
+    expect(derivePendingUserInputs(activities)).toEqual([
+      {
+        requestId: "req-user-input-opencode-1",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        questions: [
+          {
+            id: "mode",
+            header: "Mode",
+            question: "Which modes should I use?",
+            options: [
+              {
+                label: "fast",
+                description: "Fast path",
+              },
+            ],
+            multiple: true,
+            custom: false,
+          },
+          {
+            id: "notes",
+            header: "Notes",
+            question: "Anything else to keep in mind?",
+            options: [],
+            custom: true,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("maps legacy multiSelect metadata into multiple when multiple is absent", () => {
+    const activities: OrchestrationThreadActivity[] = [
+      makeActivity({
+        id: "user-input-open-legacy-multiselect",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        kind: "user-input.requested",
+        summary: "User input requested",
+        tone: "info",
+        payload: {
+          requestId: "req-user-input-legacy-multiselect-1",
+          questions: [
+            {
+              id: "mode",
+              header: "Mode",
+              question: "Which modes should I use?",
+              options: [
+                {
+                  label: "fast",
+                  description: "Fast path",
+                },
+              ],
+              multiSelect: true,
+              custom: false,
+            },
+          ],
+        },
+      }),
+    ];
+
+    expect(derivePendingUserInputs(activities)).toEqual([
+      {
+        requestId: "req-user-input-legacy-multiselect-1",
+        createdAt: "2026-02-23T00:00:01.000Z",
+        questions: [
+          {
+            id: "mode",
+            header: "Mode",
+            question: "Which modes should I use?",
+            options: [
+              {
+                label: "fast",
+                description: "Fast path",
+              },
+            ],
+            multiple: true,
+            custom: false,
+          },
+        ],
+      },
+    ]);
+  });
+});
+
+describe("OpenCode model selection", () => {
+  it("resolves OpenCode text-generation defaults without falling back", () => {
+    expect(
+      resolveAppModelSelectionState(
+        {
+          ...DEFAULT_UNIFIED_SETTINGS,
+          textGenerationModelSelection: {
+            provider: "opencode",
+            model: DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER.opencode,
+          },
+        },
+        TEST_SERVER_PROVIDERS,
+      ),
+    ).toEqual({
+      provider: "opencode",
+      model: DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER.opencode,
+    });
+  });
+
+  it("includes OpenCode custom models in provider model options", () => {
+    expect(
+      getCustomModelOptionsByProvider(
+        {
+          ...DEFAULT_UNIFIED_SETTINGS,
+          providers: {
+            ...DEFAULT_UNIFIED_SETTINGS.providers,
+            opencode: {
+              ...DEFAULT_UNIFIED_SETTINGS.providers.opencode,
+              customModels: ["anthropic/claude-sonnet-4.5"],
+            },
+          },
+        },
+        TEST_SERVER_PROVIDERS,
+      ).opencode,
+    ).toEqual([
+      { slug: "openai/gpt-5.4", name: "GPT-5.4" },
+      { slug: "anthropic/claude-sonnet-4.5", name: "anthropic/claude-sonnet-4.5" },
+    ]);
   });
 });
 
@@ -1161,23 +1372,23 @@ describe("deriveActiveWorkStartedAt", () => {
 });
 
 describe("PROVIDER_OPTIONS", () => {
-  it("advertises Claude as available while keeping Cursor as a placeholder", () => {
+  it("advertises OpenCode as a real selectable provider", () => {
     const claude = PROVIDER_OPTIONS.find((option) => option.value === "claudeAgent");
-    const cursor = PROVIDER_OPTIONS.find((option) => option.value === "cursor");
+    const opencode = PROVIDER_OPTIONS.find((option) => option.value === "opencode");
     expect(PROVIDER_OPTIONS).toEqual([
       { value: "codex", label: "Codex", available: true },
       { value: "claudeAgent", label: "Claude", available: true },
-      { value: "cursor", label: "Cursor", available: false },
+      { value: "opencode", label: "OpenCode", available: true },
     ]);
     expect(claude).toEqual({
       value: "claudeAgent",
       label: "Claude",
       available: true,
     });
-    expect(cursor).toEqual({
-      value: "cursor",
-      label: "Cursor",
-      available: false,
+    expect(opencode).toEqual({
+      value: "opencode",
+      label: "OpenCode",
+      available: true,
     });
   });
 });

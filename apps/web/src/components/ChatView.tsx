@@ -61,6 +61,7 @@ import {
   buildPendingUserInputAnswers,
   derivePendingUserInputProgress,
   setPendingUserInputCustomAnswer,
+  setPendingUserInputSelectedOption,
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
 import { useStore } from "../store";
@@ -123,7 +124,7 @@ import {
   resolveSelectableProvider,
 } from "../providerModels";
 import { useSettings } from "../hooks/useSettings";
-import { resolveAppModelSelection } from "../modelSelection";
+import { getAppModelOptions, resolveAppModelSelection } from "../modelSelection";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import {
   type ComposerImageAttachment,
@@ -172,20 +173,29 @@ import { ProviderStatusBanner } from "./chat/ProviderStatusBanner";
 import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
+  buildProviderModelOptionsWithRememberedSelections,
+  buildNextProviderModelSelection,
   buildExpiredTerminalContextToastCopy,
   buildLocalDraftThread,
   buildTemporaryWorktreeBranchName,
+  canAdvancePendingUserInput,
   cloneComposerImageForRetry,
+  collectRetryableUserInputRespondFailedRequestIds,
   collectUserMessageBlobPreviewUrls,
   createLocalDispatchSnapshot,
-  deriveComposerSendState,
   hasServerAcknowledgedLocalDispatch,
+  derivePendingComposerPromptState,
+  derivePendingPromptOwnershipTransition,
+  deriveComposerSendState,
+  isComposerPromptDisabled,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
   type LocalDispatchSnapshot,
   PullRequestDialogState,
   readFileAsDataUrl,
   reconcileMountedTerminalThreadIds,
+  reconcileRespondingUserInputRequestIds,
+  resolveProviderForModelPickerChange,
   revokeBlobPreviewUrl,
   revokeUserMessagePreviewUrls,
   threadHasStarted,
@@ -1047,6 +1057,22 @@ export default function ChatView({ threadId }: ChatViewProps) {
     () => derivePendingUserInputs(threadActivities),
     [threadActivities],
   );
+  const retryableUserInputRespondFailedRequestIds = useMemo(
+    () => collectRetryableUserInputRespondFailedRequestIds(threadActivities),
+    [threadActivities],
+  );
+  useEffect(() => {
+    setRespondingUserInputRequestIds((existing) => {
+      const next = reconcileRespondingUserInputRequestIds(
+        existing,
+        pendingUserInputs,
+        retryableUserInputRespondFailedRequestIds,
+      );
+      return next.length === existing.length && next.every((id, index) => id === existing[index])
+        ? existing
+        : next;
+    });
+  }, [pendingUserInputs, retryableUserInputRespondFailedRequestIds]);
   const activePendingUserInput = pendingUserInputs[0] ?? null;
   const activePendingDraftAnswers = useMemo(
     () =>
@@ -1070,6 +1096,15 @@ export default function ChatView({ threadId }: ChatViewProps) {
         : null,
     [activePendingDraftAnswers, activePendingQuestionIndex, activePendingUserInput],
   );
+  const activePendingQuestionAllowsCustomAnswer =
+    activePendingProgress?.activeQuestion?.custom !== false;
+  const isPendingUserInputComposerState = activePendingProgress?.activeQuestion != null;
+  const activePendingCustomAnswer = activePendingProgress
+    ? activePendingQuestionAllowsCustomAnswer
+      ? activePendingProgress.customAnswer
+      : ""
+    : undefined;
+  const activePendingQuestionId = activePendingProgress?.activeQuestion?.id;
   const activePendingResolvedAnswers = useMemo(
     () =>
       activePendingUserInput
@@ -1131,6 +1166,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
     localDispatchStartedAt,
   );
   const isComposerApprovalState = activePendingApproval !== null;
+  const composerPromptDisabled =
+    isComposerPromptDisabled({
+      isConnecting,
+      isComposerApprovalState,
+      activePendingIsResponding,
+    }) ||
+    (activePendingProgress !== null && !activePendingQuestionAllowsCustomAnswer);
   const hasComposerHeader =
     isComposerApprovalState ||
     pendingUserInputs.length > 0 ||
@@ -1163,17 +1205,30 @@ export default function ChatView({ threadId }: ChatViewProps) {
     questionId: string | null;
   } | null>(null);
   useEffect(() => {
-    const nextCustomAnswer = activePendingProgress?.customAnswer;
-    if (typeof nextCustomAnswer !== "string") {
-      lastSyncedPendingInputRef.current = null;
+    const ownershipTransition = derivePendingPromptOwnershipTransition({
+      hasActivePendingProgress: activePendingCustomAnswer !== undefined,
+      lastSyncedPendingInput: lastSyncedPendingInputRef.current,
+    });
+    const pendingPromptOwnership = ownershipTransition.ownership;
+    const pendingPromptState = derivePendingComposerPromptState({
+      draftPrompt: prompt,
+      promptRefValue: promptRef.current,
+      pendingPromptOwnership,
+      activePendingCustomAnswer: activePendingCustomAnswer ?? null,
+    });
+    if (pendingPromptOwnership === "inactive") {
+      lastSyncedPendingInputRef.current = ownershipTransition.nextLastSyncedPendingInput;
       return;
     }
+    if (activePendingCustomAnswer === undefined) {
+      lastSyncedPendingInputRef.current = ownershipTransition.nextLastSyncedPendingInput;
+    }
     const nextRequestId = activePendingUserInput?.requestId ?? null;
-    const nextQuestionId = activePendingProgress?.activeQuestion?.id ?? null;
+    const nextQuestionId = activePendingQuestionId ?? null;
     const questionChanged =
       lastSyncedPendingInputRef.current?.requestId !== nextRequestId ||
       lastSyncedPendingInputRef.current?.questionId !== nextQuestionId;
-    const textChangedExternally = promptRef.current !== nextCustomAnswer;
+    const textChangedExternally = pendingPromptState.shouldSyncPromptRef;
 
     lastSyncedPendingInputRef.current = {
       requestId: nextRequestId,
@@ -1181,23 +1236,37 @@ export default function ChatView({ threadId }: ChatViewProps) {
     };
 
     if (!questionChanged && !textChangedExternally) {
+      if (pendingPromptState.shouldSyncDraftPrompt) {
+        setPrompt(pendingPromptState.nextPrompt);
+      }
       return;
     }
 
-    promptRef.current = nextCustomAnswer;
-    const nextCursor = collapseExpandedComposerCursor(nextCustomAnswer, nextCustomAnswer.length);
+    promptRef.current = pendingPromptState.nextPrompt;
+    if (pendingPromptState.shouldSyncDraftPrompt) {
+      setPrompt(pendingPromptState.nextPrompt);
+    }
+    const nextCursor = collapseExpandedComposerCursor(
+      pendingPromptState.nextPrompt,
+      pendingPromptState.nextPrompt.length,
+    );
     setComposerCursor(nextCursor);
     setComposerTrigger(
-      detectComposerTrigger(
-        nextCustomAnswer,
-        expandCollapsedComposerCursor(nextCustomAnswer, nextCursor),
-      ),
+      isPendingUserInputComposerState
+        ? null
+        : detectComposerTrigger(
+            pendingPromptState.nextPrompt,
+            expandCollapsedComposerCursor(pendingPromptState.nextPrompt, nextCursor),
+          ),
     );
     setComposerHighlightedItemId(null);
   }, [
-    activePendingProgress?.customAnswer,
+    isPendingUserInputComposerState,
+    prompt,
+    activePendingCustomAnswer,
     activePendingUserInput?.requestId,
-    activePendingProgress?.activeQuestion?.id,
+    activePendingQuestionId,
+    setPrompt,
   ]);
   useEffect(() => {
     attachmentPreviewHandoffByMessageIdRef.current = attachmentPreviewHandoffByMessageId;
@@ -1389,7 +1458,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
         worktreePath: activeThread?.worktreePath ?? null,
       })
     : null;
-  const composerTriggerKind = composerTrigger?.kind ?? null;
+  const composerTriggerKind = isPendingUserInputComposerState
+    ? null
+    : (composerTrigger?.kind ?? null);
   const pathTriggerQuery = composerTrigger?.kind === "path" ? composerTrigger.query : "";
   const isPathTrigger = composerTriggerKind === "path";
   const [debouncedPathQuery, composerPathQueryDebouncer] = useDebouncedValue(
@@ -1402,12 +1473,37 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const keybindings = useServerKeybindings();
   const availableEditors = useServerAvailableEditors();
   const modelOptionsByProvider = useMemo(
-    () => ({
-      codex: providerStatuses.find((provider) => provider.provider === "codex")?.models ?? [],
-      claudeAgent:
-        providerStatuses.find((provider) => provider.provider === "claudeAgent")?.models ?? [],
-    }),
-    [providerStatuses],
+    () =>
+      buildProviderModelOptionsWithRememberedSelections({
+        baseOptionsByProvider: {
+          codex: getAppModelOptions(
+            settings,
+            providerStatuses,
+            "codex",
+            selectedProvider === "codex" ? selectedModelForPicker : null,
+          ),
+          claudeAgent: getAppModelOptions(
+            settings,
+            providerStatuses,
+            "claudeAgent",
+            selectedProvider === "claudeAgent" ? selectedModelForPicker : null,
+          ),
+          opencode: getAppModelOptions(
+            settings,
+            providerStatuses,
+            "opencode",
+            selectedProvider === "opencode" ? selectedModelForPicker : null,
+          ),
+        },
+        rememberedSelectionsByProvider: composerDraft.modelSelectionByProvider,
+      }),
+    [
+      composerDraft.modelSelectionByProvider,
+      providerStatuses,
+      selectedModelForPicker,
+      selectedProvider,
+      settings,
+    ],
   );
   const selectedModelForPickerWithCustomFallback = useMemo(() => {
     const currentOptions = modelOptionsByProvider[selectedProvider];
@@ -1432,6 +1528,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
       ),
     [lockedProvider, modelOptionsByProvider],
   );
+  const canSubmitOrAdvancePendingUserInput = canAdvancePendingUserInput({
+    hasProgress: activePendingProgress !== null,
+    isResponding: activePendingIsResponding,
+    canAdvance: activePendingProgress?.canAdvance ?? false,
+    isLastQuestion: activePendingProgress?.isLastQuestion ?? false,
+    hasResolvedAnswers: activePendingResolvedAnswers !== null,
+  });
   const workspaceEntriesQuery = useQuery(
     projectSearchEntriesQueryOptions({
       cwd: gitCwd,
@@ -1442,7 +1545,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
   );
   const workspaceEntries = workspaceEntriesQuery.data?.entries ?? EMPTY_PROJECT_ENTRIES;
   const composerMenuItems = useMemo<ComposerCommandItem[]>(() => {
-    if (!composerTrigger) return [];
+    if (isPendingUserInputComposerState || !composerTrigger) return [];
     if (composerTrigger.kind === "path") {
       return workspaceEntries.map((entry) => ({
         id: `path:${entry.kind}:${entry.path}`,
@@ -1503,8 +1606,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
         label: name,
         description: `${providerLabel} · ${slug}`,
       }));
-  }, [composerTrigger, searchableModelOptions, workspaceEntries]);
-  const composerMenuOpen = Boolean(composerTrigger);
+  }, [composerTrigger, isPendingUserInputComposerState, searchableModelOptions, workspaceEntries]);
+  const composerMenuOpen = !isPendingUserInputComposerState && Boolean(composerTrigger);
   const activeComposerMenuItem = useMemo(
     () =>
       composerMenuItems.find((item) => item.id === composerHighlightedItemId) ??
@@ -2848,7 +2951,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
     const api = readNativeApi();
     if (!api || !activeThread || isSendBusy || isConnecting || sendInFlightRef.current) return;
     if (activePendingProgress) {
-      onAdvanceActivePendingUserInput();
+      if (canSubmitOrAdvancePendingUserInput) {
+        onAdvanceActivePendingUserInput();
+      }
       return;
     }
     const promptForSend = promptRef.current;
@@ -3181,12 +3286,12 @@ export default function ChatView({ threadId }: ChatViewProps) {
           createdAt: new Date().toISOString(),
         })
         .catch((err: unknown) => {
+          setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
           setStoreThreadError(
             activeThreadId,
             err instanceof Error ? err.message : "Failed to submit user input.",
           );
         });
-      setRespondingUserInputRequestIds((existing) => existing.filter((id) => id !== requestId));
     },
     [activeThreadId, setStoreThreadError],
   );
@@ -3209,19 +3314,23 @@ export default function ChatView({ threadId }: ChatViewProps) {
       if (!activePendingUserInput) {
         return;
       }
+      const question = activePendingUserInput.questions.find((entry) => entry.id === questionId);
       setPendingUserInputAnswersByRequestId((existing) => ({
         ...existing,
         [activePendingUserInput.requestId]: {
           ...existing[activePendingUserInput.requestId],
-          [questionId]: {
-            selectedOptionLabel: optionLabel,
-            customAnswer: "",
-          },
+          [questionId]: setPendingUserInputSelectedOption(
+            existing[activePendingUserInput.requestId]?.[questionId],
+            optionLabel,
+            question?.multiple === true,
+          ),
         },
       }));
-      promptRef.current = "";
-      setComposerCursor(0);
-      setComposerTrigger(null);
+      if (!question?.multiple) {
+        promptRef.current = "";
+        setComposerCursor(0);
+        setComposerTrigger(null);
+      }
     },
     [activePendingUserInput],
   );
@@ -3231,13 +3340,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
       questionId: string,
       value: string,
       nextCursor: number,
-      expandedCursor: number,
-      cursorAdjacentToMention: boolean,
+      _expandedCursor: number,
+      _cursorAdjacentToMention: boolean,
     ) => {
       if (!activePendingUserInput) {
         return;
       }
       promptRef.current = value;
+      setPrompt(value);
       setPendingUserInputAnswersByRequestId((existing) => ({
         ...existing,
         [activePendingUserInput.requestId]: {
@@ -3249,15 +3359,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
         },
       }));
       setComposerCursor(nextCursor);
-      setComposerTrigger(
-        cursorAdjacentToMention ? null : detectComposerTrigger(value, expandedCursor),
-      );
+      setComposerTrigger(null);
     },
-    [activePendingUserInput],
+    [activePendingUserInput, setPrompt],
   );
 
   const onAdvanceActivePendingUserInput = useCallback(() => {
-    if (!activePendingUserInput || !activePendingProgress) {
+    if (!activePendingUserInput || !activePendingProgress || !canSubmitOrAdvancePendingUserInput) {
       return;
     }
     if (activePendingProgress.isLastQuestion) {
@@ -3268,6 +3376,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     }
     setActivePendingUserInputQuestionIndex(activePendingProgress.questionIndex + 1);
   }, [
+    canSubmitOrAdvancePendingUserInput,
     activePendingProgress,
     activePendingResolvedAnswers,
     activePendingUserInput,
@@ -3536,28 +3645,36 @@ export default function ChatView({ threadId }: ChatViewProps) {
         scheduleComposerFocus();
         return;
       }
-      const resolvedProvider = resolveSelectableProvider(providerStatuses, provider);
+      const resolvedProvider = resolveProviderForModelPickerChange({
+        requestedProvider: provider,
+        lockedProvider,
+        selectableProvider: resolveSelectableProvider(providerStatuses, provider),
+      });
       const resolvedModel = resolveAppModelSelection(
         resolvedProvider,
         settings,
         providerStatuses,
         model,
       );
-      const nextModelSelection: ModelSelection = {
+      const nextModelSelection = buildNextProviderModelSelection({
         provider: resolvedProvider,
         model: resolvedModel,
-      };
+        existingSelection: selectedModelSelection,
+        sameProviderSelection: composerDraft.modelSelectionByProvider[resolvedProvider],
+      });
       setComposerDraftModelSelection(activeThread.id, nextModelSelection);
       setStickyComposerModelSelection(nextModelSelection);
       scheduleComposerFocus();
     },
     [
       activeThread,
+      composerDraft.modelSelectionByProvider,
       lockedProvider,
       scheduleComposerFocus,
       setComposerDraftModelSelection,
       setStickyComposerModelSelection,
       providerStatuses,
+      selectedModelSelection,
       settings,
     ],
   );
@@ -3612,6 +3729,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
       replacement: string,
       options?: { expectedText?: string },
     ): boolean => {
+      const activePendingQuestion = activePendingProgress?.activeQuestion;
+      if (
+        activePendingQuestion &&
+        activePendingUserInput &&
+        activePendingQuestion.custom === false
+      ) {
+        return false;
+      }
       const currentText = promptRef.current;
       const safeStart = Math.max(0, Math.min(currentText.length, rangeStart));
       const safeEnd = Math.max(safeStart, Math.min(currentText.length, rangeEnd));
@@ -3624,7 +3749,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
       const next = replaceTextRange(promptRef.current, rangeStart, rangeEnd, replacement);
       const nextCursor = collapseExpandedComposerCursor(next.text, next.cursor);
       promptRef.current = next.text;
-      const activePendingQuestion = activePendingProgress?.activeQuestion;
       if (activePendingQuestion && activePendingUserInput) {
         setPendingUserInputAnswersByRequestId((existing) => ({
           ...existing,
@@ -3674,11 +3798,17 @@ export default function ChatView({ threadId }: ChatViewProps) {
     trigger: ComposerTrigger | null;
   } => {
     const snapshot = readComposerSnapshot();
+    if (isPendingUserInputComposerState) {
+      return {
+        snapshot,
+        trigger: null,
+      };
+    }
     return {
       snapshot,
       trigger: detectComposerTrigger(snapshot.value, snapshot.expandedCursor),
     };
-  }, [readComposerSnapshot]);
+  }, [isPendingUserInputComposerState, readComposerSnapshot]);
 
   const onSelectComposerItem = useCallback(
     (item: ComposerCommandItem) => {
@@ -3786,6 +3916,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
       terminalContextIds: string[],
     ) => {
       if (activePendingProgress?.activeQuestion && activePendingUserInput) {
+        if (!activePendingQuestionAllowsCustomAnswer) {
+          return;
+        }
         onChangeActivePendingUserInputCustomAnswer(
           activePendingProgress.activeQuestion.id,
           nextPrompt,
@@ -3810,6 +3943,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
     },
     [
       activePendingProgress?.activeQuestion,
+      activePendingQuestionAllowsCustomAnswer,
       activePendingUserInput,
       composerTerminalContexts,
       onChangeActivePendingUserInputCustomAnswer,
@@ -4057,7 +4191,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
                     <div className="rounded-t-[19px] border-b border-border/65 bg-muted/20">
                       <ComposerPendingUserInputPanel
                         pendingUserInputs={pendingUserInputs}
-                        respondingRequestIds={respondingRequestIds}
+                        respondingRequestIds={respondingUserInputRequestIds}
                         answers={activePendingDraftAnswers}
                         questionIndex={activePendingQuestionIndex}
                         onSelectOption={onSelectActivePendingUserInputOption}
@@ -4167,7 +4301,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
                         isComposerApprovalState
                           ? ""
                           : activePendingProgress
-                            ? activePendingProgress.customAnswer
+                            ? activePendingQuestionAllowsCustomAnswer
+                              ? activePendingProgress.customAnswer
+                              : ""
                             : prompt
                       }
                       cursor={composerCursor}
@@ -4185,14 +4321,16 @@ export default function ChatView({ threadId }: ChatViewProps) {
                           ? (activePendingApproval?.detail ??
                             "Resolve this approval request to continue")
                           : activePendingProgress
-                            ? "Type your own answer, or leave this blank to use the selected option"
+                            ? activePendingQuestionAllowsCustomAnswer
+                              ? "Type your own answer, or clear it to choose an option instead"
+                              : "Choose one of the options above to continue"
                             : showPlanFollowUpPrompt && activeProposedPlan
                               ? "Add feedback to refine the plan, or leave this blank to implement it"
                               : phase === "disconnected"
                                 ? "Ask for follow-up changes or attach images"
                                 : "Ask anything, @tag files/folders, or use / to show available commands"
                       }
-                      disabled={isConnecting || isComposerApprovalState}
+                      disabled={composerPromptDisabled}
                     />
                   </div>
 

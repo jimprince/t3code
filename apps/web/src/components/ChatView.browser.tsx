@@ -569,11 +569,59 @@ function createSnapshotWithPendingUserInput(): OrchestrationReadModel {
                   ],
                 },
                 turnId: null,
-                sequence: 1,
                 createdAt: isoAt(1_000),
               },
             ],
             updatedAt: isoAt(1_000),
+          })
+        : thread,
+    ),
+  };
+}
+
+function createSnapshotWithOptionOnlyPendingUserInput(): OrchestrationReadModel {
+  const snapshot = createSnapshotForTargetUser({
+    targetMessageId: "msg-user-pending-option-only" as MessageId,
+    targetText: "pending option only target",
+  });
+
+  return {
+    ...snapshot,
+    threads: snapshot.threads.map((thread) =>
+      thread.id === THREAD_ID
+        ? Object.assign({}, thread, {
+            activities: [
+              {
+                id: EventId.makeUnsafe("activity-user-input-option-only"),
+                kind: "user-input.requested",
+                summary: "User input requested",
+                tone: "info",
+                payload: {
+                  requestId: "req-user-input-option-only",
+                  questions: [
+                    {
+                      id: "mode",
+                      header: "Mode",
+                      question: "Which mode should I use?",
+                      options: [
+                        {
+                          label: "fast",
+                          description: "Fast path",
+                        },
+                        {
+                          label: "careful",
+                          description: "More checks",
+                        },
+                      ],
+                      custom: false,
+                    },
+                  ],
+                },
+                turnId: null,
+                createdAt: isoAt(100),
+              },
+            ],
+            updatedAt: isoAt(101),
           })
         : thread,
     ),
@@ -617,6 +665,51 @@ function createSnapshotWithPlanFollowUpPrompt(): OrchestrationReadModel {
               updatedAt: isoAt(1_010),
             },
             updatedAt: isoAt(1_010),
+          })
+        : thread,
+    ),
+  };
+}
+
+function createSnapshotWithCustomPendingUserInput(): OrchestrationReadModel {
+  const snapshot = createSnapshotForTargetUser({
+    targetMessageId: "msg-user-pending-custom" as MessageId,
+    targetText: "pending custom target",
+  });
+
+  return {
+    ...snapshot,
+    threads: snapshot.threads.map((thread) =>
+      thread.id === THREAD_ID
+        ? Object.assign({}, thread, {
+            activities: [
+              {
+                id: EventId.makeUnsafe("activity-user-input-custom"),
+                kind: "user-input.requested",
+                summary: "User input requested",
+                tone: "info",
+                payload: {
+                  requestId: "req-user-input-custom",
+                  questions: [
+                    {
+                      id: "notes",
+                      header: "Notes",
+                      question: "Anything else to keep in mind?",
+                      options: [
+                        {
+                          label: "none",
+                          description: "No extra notes",
+                        },
+                      ],
+                      custom: true,
+                    },
+                  ],
+                },
+                turnId: null,
+                createdAt: isoAt(110),
+              },
+            ],
+            updatedAt: isoAt(111),
           })
         : thread,
     ),
@@ -2302,6 +2395,125 @@ describe("ChatView timeline estimator parity (full app)", () => {
         },
         { timeout: 8_000, interval: 16 },
       );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("disables the composer for option-only pending user-input questions", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotWithOptionOnlyPendingUserInput(),
+    });
+
+    try {
+      await expect.element(page.getByText("Which mode should I use?")).toBeInTheDocument();
+
+      const composerEditor = await waitForElement(
+        () => document.querySelector<HTMLElement>('[data-testid="composer-editor"]'),
+        "Unable to find composer editor.",
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(composerEditor.getAttribute("contenteditable")).toBe("false");
+          expect(document.body.textContent ?? "").toContain(
+            "Choose one of the options above to continue",
+          );
+          expect(document.body.textContent ?? "").not.toContain(
+            "Type your own answer, or leave this blank to use the selected option",
+          );
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      await page.getByRole("button", { name: "fast" }).click();
+
+      await vi.waitFor(
+        () => {
+          const dispatchRequest = wsRequests.find(
+            (request) => request._tag === ORCHESTRATION_WS_METHODS.dispatchCommand,
+          );
+          expect(dispatchRequest).toMatchObject({
+            _tag: ORCHESTRATION_WS_METHODS.dispatchCommand,
+            command: {
+              type: "thread.user-input.respond",
+              threadId: THREAD_ID,
+              requestId: "req-user-input-option-only",
+              answers: {
+                mode: "fast",
+              },
+            },
+          });
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("treats pending custom answers as literal text instead of composer commands", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotWithCustomPendingUserInput(),
+    });
+
+    try {
+      await expect.element(page.getByText("Anything else to keep in mind?")).toBeInTheDocument();
+
+      const composerEditor = await waitForComposerEditor();
+      await page.getByTestId("composer-editor").click();
+      document.execCommand("insertText", false, "/plan");
+
+      await vi.waitFor(
+        () => {
+          expect((composerEditor.textContent ?? "").includes("/plan")).toBe(true);
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      await vi.waitFor(
+        () => {
+          expect(
+            (document.body.textContent ?? "").includes("Switch this thread into plan mode"),
+          ).toBe(false);
+          expect((document.body.textContent ?? "").includes("/model")).toBe(false);
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      composerEditor.dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "Enter",
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+
+      await vi.waitFor(
+        () => {
+          const dispatchRequest = wsRequests.find(
+            (request) => request._tag === ORCHESTRATION_WS_METHODS.dispatchCommand,
+          );
+          expect(dispatchRequest).toMatchObject({
+            _tag: ORCHESTRATION_WS_METHODS.dispatchCommand,
+            command: {
+              type: "thread.user-input.respond",
+              threadId: THREAD_ID,
+              requestId: "req-user-input-custom",
+              answers: {
+                notes: "/plan",
+              },
+            },
+          });
+        },
+        { timeout: 8_000, interval: 16 },
+      );
+
+      expect(
+        useStore.getState().threads.find((thread) => thread.id === THREAD_ID)?.interactionMode,
+      ).toBe("default");
     } finally {
       await mounted.cleanup();
     }

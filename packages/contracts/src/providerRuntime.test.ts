@@ -56,7 +56,7 @@ describe("ProviderRuntimeEvent", () => {
     const parsed = decodeRuntimeEvent({
       type: "user-input.requested",
       eventId: "event-2",
-      provider: "claudeAgent",
+      provider: "opencode",
       sessionId: "runtime-session-2",
       createdAt: "2026-02-28T00:00:01.000Z",
       threadId: "thread-2",
@@ -77,6 +77,8 @@ describe("ProviderRuntimeEvent", () => {
                 description: "Allow unrestricted access",
               },
             ],
+            multiple: true,
+            custom: false,
           },
         ],
       },
@@ -88,6 +90,92 @@ describe("ProviderRuntimeEvent", () => {
     }
     expect(parsed.payload.questions[0]?.id).toBe("sandbox_mode");
     expect(parsed.payload.questions[0]?.options).toHaveLength(2);
+    expect(parsed.payload.questions[0]?.multiple).toBe(true);
+    expect(parsed.payload.questions[0]?.custom).toBe(false);
+  });
+
+  it("decodes custom-only user-input questions without predefined options", () => {
+    const parsed = decodeRuntimeEvent({
+      type: "user-input.requested",
+      eventId: "event-custom-question-1",
+      provider: "opencode",
+      createdAt: "2026-02-28T00:00:01.000Z",
+      threadId: "thread-2",
+      requestId: "request-custom-1",
+      payload: {
+        questions: [
+          {
+            id: "details",
+            header: "Details",
+            question: "Describe the exact behavior you want.",
+            options: [],
+            custom: true,
+          },
+        ],
+      },
+    });
+
+    expect(parsed.type).toBe("user-input.requested");
+    if (parsed.type !== "user-input.requested") {
+      throw new Error("expected user-input.requested");
+    }
+    expect(parsed.payload.questions).toEqual([
+      {
+        id: "details",
+        header: "Details",
+        question: "Describe the exact behavior you want.",
+        options: [],
+        custom: true,
+      },
+    ]);
+  });
+
+  it("normalizes legacy multiSelect questions to canonical multiple", () => {
+    const parsed = decodeRuntimeEvent({
+      type: "user-input.requested",
+      eventId: "event-legacy-question-1",
+      provider: "opencode",
+      createdAt: "2026-02-28T00:00:01.000Z",
+      threadId: "thread-2",
+      requestId: "request-legacy-1",
+      payload: {
+        questions: [
+          {
+            id: "sandbox_mode",
+            header: "Sandbox",
+            question: "Which mode should be used?",
+            options: [
+              {
+                label: "workspace-write",
+                description: "Allow edits in workspace only",
+              },
+            ],
+            multiSelect: true,
+            custom: false,
+          },
+        ],
+      },
+    });
+
+    expect(parsed.type).toBe("user-input.requested");
+    if (parsed.type !== "user-input.requested") {
+      throw new Error("expected user-input.requested");
+    }
+    expect(parsed.payload.questions).toEqual([
+      {
+        id: "sandbox_mode",
+        header: "Sandbox",
+        question: "Which mode should be used?",
+        options: [
+          {
+            label: "workspace-write",
+            description: "Allow edits in workspace only",
+          },
+        ],
+        multiple: true,
+        custom: false,
+      },
+    ]);
   });
 
   it("decodes user-input.resolved with answer map", () => {

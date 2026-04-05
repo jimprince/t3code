@@ -77,11 +77,12 @@ export class ServerSettingsService extends ServiceMap.Service<
         return {
           start: Effect.void,
           ready: Effect.void,
-          getSettings: Ref.get(currentSettingsRef),
+          getSettings: Ref.get(currentSettingsRef).pipe(Effect.map(resolveTextGenerationProvider)),
           updateSettings: (patch) =>
             Ref.get(currentSettingsRef).pipe(
               Effect.map((currentSettings) => deepMerge(currentSettings, patch)),
               Effect.tap((nextSettings) => Ref.set(currentSettingsRef, nextSettings)),
+              Effect.map(resolveTextGenerationProvider),
             ),
           streamChanges: Stream.empty,
         } satisfies ServerSettingsShape;
@@ -94,20 +95,24 @@ const ServerSettingsJson = fromLenientJson(ServerSettings);
 const PROVIDER_ORDER: readonly ProviderKind[] = ["codex", "claudeAgent"];
 
 /**
- * Ensure the `textGenerationModelSelection` points to an enabled provider.
- * If the selected provider is disabled, fall back to the first enabled
- * provider with its default model.  This is applied at read-time so the
- * persisted preference is preserved for when a provider is re-enabled.
+ * Ensure `textGenerationModelSelection` points to a Git-supported provider.
+ * If the selected provider is unsupported or disabled, fall back to the first
+ * enabled supported provider. If none are enabled, leave the selection as-is
+ * and let callers handle the unsupported state.
  */
 function resolveTextGenerationProvider(settings: ServerSettings): ServerSettings {
   const selection = settings.textGenerationModelSelection;
-  if (settings.providers[selection.provider].enabled) {
+
+  if (
+    (selection.provider === "codex" || selection.provider === "claudeAgent") &&
+    settings.providers[selection.provider].enabled
+  ) {
     return settings;
   }
 
-  const fallback = PROVIDER_ORDER.find((p) => settings.providers[p].enabled);
+  const fallback = PROVIDER_ORDER.find((provider) => settings.providers[provider].enabled);
+
   if (!fallback) {
-    // No providers enabled — return as-is; callers will report the error.
     return settings;
   }
 

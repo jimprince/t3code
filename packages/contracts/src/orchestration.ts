@@ -1,5 +1,5 @@
 import { Option, Schema, SchemaIssue, Struct } from "effect";
-import { ClaudeModelOptions, CodexModelOptions } from "./model";
+import { ClaudeModelOptions, CodexModelOptions, OpenCodeModelOptions } from "./model";
 import {
   ApprovalRequestId,
   CheckpointRef,
@@ -23,7 +23,11 @@ export const ORCHESTRATION_WS_METHODS = {
   replayEvents: "orchestration.replayEvents",
 } as const;
 
-export const ProviderKind = Schema.Literals(["codex", "claudeAgent"]);
+export const ORCHESTRATION_WS_CHANNELS = {
+  domainEvent: "orchestration.domainEvent",
+} as const;
+
+export const ProviderKind = Schema.Literals(["codex", "claudeAgent", "opencode"]);
 export type ProviderKind = typeof ProviderKind.Type;
 export const ProviderApprovalPolicy = Schema.Literals([
   "untrusted",
@@ -41,6 +45,28 @@ export type ProviderSandboxMode = typeof ProviderSandboxMode.Type;
 
 export const DEFAULT_PROVIDER_KIND: ProviderKind = "codex";
 
+export const CodexProviderStartOptions = Schema.Struct({
+  binaryPath: Schema.optional(TrimmedNonEmptyString),
+  homePath: Schema.optional(TrimmedNonEmptyString),
+});
+
+export const ClaudeProviderStartOptions = Schema.Struct({
+  binaryPath: Schema.optional(TrimmedNonEmptyString),
+  permissionMode: Schema.optional(TrimmedNonEmptyString),
+  maxThinkingTokens: Schema.optional(NonNegativeInt),
+});
+
+export const OpenCodeProviderStartOptions = Schema.Struct({
+  binaryPath: Schema.optional(TrimmedNonEmptyString),
+});
+
+export const ProviderStartOptions = Schema.Struct({
+  codex: Schema.optional(CodexProviderStartOptions),
+  claudeAgent: Schema.optional(ClaudeProviderStartOptions),
+  opencode: Schema.optional(OpenCodeProviderStartOptions),
+});
+export type ProviderStartOptions = typeof ProviderStartOptions.Type;
+
 export const CodexModelSelection = Schema.Struct({
   provider: Schema.Literal("codex"),
   model: TrimmedNonEmptyString,
@@ -55,7 +81,18 @@ export const ClaudeModelSelection = Schema.Struct({
 });
 export type ClaudeModelSelection = typeof ClaudeModelSelection.Type;
 
-export const ModelSelection = Schema.Union([CodexModelSelection, ClaudeModelSelection]);
+export const OpenCodeModelSelection = Schema.Struct({
+  provider: Schema.Literal("opencode"),
+  model: TrimmedNonEmptyString,
+  options: Schema.optionalKey(OpenCodeModelOptions),
+});
+export type OpenCodeModelSelection = typeof OpenCodeModelSelection.Type;
+
+export const ModelSelection = Schema.Union([
+  CodexModelSelection,
+  ClaudeModelSelection,
+  OpenCodeModelSelection,
+]);
 export type ModelSelection = typeof ModelSelection.Type;
 
 export const RuntimeMode = Schema.Literals(["approval-required", "full-access"]);

@@ -227,6 +227,7 @@ jobs:
     name: Publish CLI to npm
     needs: [preflight, build]
     runs-on: ubuntu-24.04
+    if: ${{ github.repository == 'pingdotgg/t3code' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6

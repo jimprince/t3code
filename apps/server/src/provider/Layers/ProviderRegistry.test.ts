@@ -30,13 +30,35 @@ import {
   readCodexConfigModelProvider,
 } from "./CodexProvider";
 import { checkClaudeProviderStatus, parseClaudeAuthStatusFromOutput } from "./ClaudeProvider";
-import { haveProvidersChanged, ProviderRegistryLive } from "./ProviderRegistry";
+import { checkOpenCodeProviderStatus, OpenCodeProviderLive } from "./OpenCodeProvider";
+import {
+  haveProvidersChanged,
+  makeProviderRegistryLive,
+  ProviderRegistryLive,
+} from "./ProviderRegistry";
+import {
+  OpenCodeServerPool,
+  type OpenCodeServerPoolShape,
+} from "../Services/OpenCodeServerPool.ts";
+import { ProviderAdapterRequestError } from "../Errors.ts";
+import { OpenCodeProvider } from "../Services/OpenCodeProvider";
 import { ServerSettingsService, type ServerSettingsShape } from "../../serverSettings";
 import { ProviderRegistry } from "../Services/ProviderRegistry";
 
 // ── Test helpers ────────────────────────────────────────────────────
 
 const encoder = new TextEncoder();
+
+const unusedOpenCodeServerPool: OpenCodeServerPoolShape = {
+  acquire: () => Effect.die(new Error("unexpected OpenCode server acquisition in registry test")),
+  loadProviderCatalog: () =>
+    Effect.succeed({
+      defaultModel: "openai/gpt-5.4",
+      models: [],
+    }),
+  stopAll: () => Effect.void,
+  streamEvents: Stream.empty,
+};
 
 function mockHandle(result: { stdout: string; stderr: string; code: number }) {
   return ChildProcessSpawner.makeHandle({
@@ -94,6 +116,11 @@ function failingSpawnerLayer(description: string) {
       ),
     ),
   );
+}
+
+function withoutCheckedAt(provider: ServerProvider) {
+  const { checkedAt: _checkedAt, ...snapshot } = provider;
+  return snapshot;
 }
 
 function makeMutableServerSettingsService(
@@ -507,10 +534,84 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
             version: "1.0.0",
             models: [],
           },
+          {
+            provider: "opencode",
+            status: "ready",
+            enabled: true,
+            installed: true,
+            auth: { status: "unknown" },
+            checkedAt: "2026-03-25T00:00:00.000Z",
+            version: "1.2.27",
+            message: "OpenCode runtime auth is managed inside OpenCode providers.",
+            models: [
+              {
+                slug: "anthropic/claude-sonnet-4.5",
+                name: "Claude Sonnet 4.5",
+                isCustom: false,
+                capabilities: null,
+              },
+            ],
+          },
         ] as const satisfies ReadonlyArray<ServerProvider>;
 
         assert.strictEqual(haveProvidersChanged(providers, [...providers]), false);
       });
+
+      it.effect("exposes opencode in provider snapshots alongside codex and claudeAgent", () =>
+        Effect.gen(function* () {
+          const registryLayerWithStubbedOpenCode = makeProviderRegistryLive({
+            openCodeProvider: {
+              getSnapshot: Effect.succeed({
+                provider: "opencode",
+                enabled: true,
+                installed: true,
+                version: "1.2.27",
+                status: "ready",
+                auth: { status: "unknown" },
+                checkedAt: "2026-03-25T00:00:00.000Z",
+                message: "OpenCode runtime auth is managed inside OpenCode providers.",
+                models: [
+                  {
+                    slug: "anthropic/claude-sonnet-4.5",
+                    name: "Claude Sonnet 4.5",
+                    isCustom: false,
+                    capabilities: null,
+                  },
+                  {
+                    slug: "openai/gpt-5.4",
+                    name: "GPT-5.4",
+                    isCustom: false,
+                    capabilities: null,
+                  },
+                ],
+              } satisfies ServerProvider),
+              refresh: Effect.die("unused"),
+              streamChanges: Stream.empty,
+            },
+          }).pipe(Layer.provideMerge(Layer.succeed(OpenCodeServerPool, unusedOpenCodeServerPool)));
+
+          const providers = yield* Effect.gen(function* () {
+            const registry = yield* ProviderRegistry;
+            return yield* registry.getProviders;
+          }).pipe(Effect.provide(registryLayerWithStubbedOpenCode));
+
+          assert.deepEqual(
+            providers.map((provider) => provider.provider),
+            ["codex", "claudeAgent", "opencode"],
+          );
+          const opencode = providers.find((provider) => provider.provider === "opencode");
+          assert.equal(opencode?.installed, true);
+          assert.equal(opencode?.auth.status, "unknown");
+          assert.equal(
+            opencode?.message,
+            "OpenCode runtime auth is managed inside OpenCode providers.",
+          );
+          assert.deepEqual(
+            opencode?.models.map((model) => model.slug),
+            ["anthropic/claude-sonnet-4.5", "openai/gpt-5.4"],
+          );
+        }).pipe(Effect.provide(NodeServices.layer)),
+      );
 
       it.effect("reruns codex health when codex provider settings change", () =>
         Effect.gen(function* () {
@@ -518,6 +619,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
           const providerRegistryLayer = ProviderRegistryLive.pipe(
+            Layer.provideMerge(Layer.succeed(OpenCodeServerPool, unusedOpenCodeServerPool)),
             Layer.provideMerge(Layer.succeed(ServerSettingsService, serverSettings)),
             Layer.provideMerge(
               mockCommandSpawnerLayer((command, args) => {
@@ -597,6 +699,104 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest()))(
           assert.strictEqual(status.installed, false);
           assert.strictEqual(status.message, "Codex is disabled in T3 Code settings.");
         }),
+      );
+    });
+
+    describe("checkOpenCodeProviderStatus", () => {
+      it.effect("returns an unavailable snapshot when opencode is missing from PATH", () =>
+        Effect.gen(function* () {
+          const status = yield* checkOpenCodeProviderStatus();
+          assert.strictEqual(typeof status.checkedAt, "string");
+          assert.deepStrictEqual(withoutCheckedAt(status), {
+            provider: "opencode",
+            enabled: true,
+            installed: false,
+            version: null,
+            status: "error",
+            auth: { status: "unknown" },
+            message: "OpenCode CLI (`opencode`) is not installed or not on PATH.",
+            models: [],
+          });
+        }).pipe(Effect.provide(failingSpawnerLayer("spawn opencode ENOENT"))),
+      );
+
+      it.effect(
+        "returns an unavailable snapshot when the configured OpenCode binary is invalid",
+        () =>
+          Effect.gen(function* () {
+            const status = yield* checkOpenCodeProviderStatus();
+            assert.strictEqual(typeof status.checkedAt, "string");
+            assert.deepStrictEqual(withoutCheckedAt(status), {
+              provider: "opencode",
+              enabled: true,
+              installed: false,
+              version: null,
+              status: "error",
+              auth: { status: "unknown" },
+              message:
+                "OpenCode CLI (`/opt/opencode/bin/opencode`) is not installed or not executable.",
+              models: [],
+            });
+          }).pipe(
+            Effect.provide(
+              Layer.mergeAll(
+                ServerSettingsService.layerTest({
+                  providers: {
+                    opencode: {
+                      binaryPath: "/opt/opencode/bin/opencode",
+                    },
+                  },
+                }),
+                failingSpawnerLayer("spawn /opt/opencode/bin/opencode ENOENT"),
+              ),
+            ),
+          ),
+      );
+    });
+
+    describe("OpenCodeProviderLive", () => {
+      it.effect(
+        "keeps installed true when provider discovery fails after a successful CLI probe",
+        () =>
+          Effect.gen(function* () {
+            const provider = yield* OpenCodeProvider;
+            const snapshot = yield* provider.getSnapshot;
+
+            assert.strictEqual(snapshot.provider, "opencode");
+            assert.strictEqual(snapshot.installed, true);
+            assert.strictEqual(snapshot.status, "error");
+            assert.strictEqual(
+              snapshot.message,
+              "OpenCode provider discovery failed. Provider adapter request failed (opencode) for providers/list: catalog exploded",
+            );
+          }).pipe(
+            Effect.provide(
+              OpenCodeProviderLive.pipe(
+                Layer.provideMerge(
+                  Layer.succeed(OpenCodeServerPool, {
+                    ...unusedOpenCodeServerPool,
+                    loadProviderCatalog: () =>
+                      Effect.fail(
+                        new ProviderAdapterRequestError({
+                          provider: "opencode",
+                          method: "providers/list",
+                          detail: "catalog exploded",
+                        }),
+                      ),
+                  } satisfies OpenCodeServerPoolShape),
+                ),
+                Layer.provideMerge(
+                  mockSpawnerLayer((args) => {
+                    const joined = args.join(" ");
+                    if (joined === "--version") {
+                      return { stdout: "opencode 1.2.27\n", stderr: "", code: 0 };
+                    }
+                    throw new Error(`Unexpected args: ${joined}`);
+                  }),
+                ),
+              ),
+            ),
+          ),
       );
     });
 

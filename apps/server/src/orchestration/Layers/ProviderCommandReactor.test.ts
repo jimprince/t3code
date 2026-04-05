@@ -1540,6 +1540,121 @@ describe("ProviderCommandReactor", () => {
     expect(resolvedActivity).toBeUndefined();
   });
 
+  it("normalizes stale OpenCode question-request failures for pending user-input recovery", async () => {
+    const harness = await createHarness({
+      threadModelSelection: { provider: "opencode", model: "anthropic/claude-sonnet-4.5" },
+    });
+    const now = new Date().toISOString();
+    harness.respondToUserInput.mockImplementation(() =>
+      Effect.fail(
+        new ProviderAdapterRequestError({
+          provider: "opencode",
+          method: "question.reply",
+          detail: "Unknown pending OpenCode question request 'user-input-request-opencode-1'.",
+        }),
+      ),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.makeUnsafe("cmd-session-set-for-opencode-user-input-error"),
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        session: {
+          threadId: ThreadId.makeUnsafe("thread-1"),
+          status: "running",
+          providerName: "opencode",
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.activity.append",
+        commandId: CommandId.makeUnsafe("cmd-user-input-requested-opencode"),
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        activity: {
+          id: EventId.makeUnsafe("activity-user-input-requested-opencode"),
+          tone: "info",
+          kind: "user-input.requested",
+          summary: "User input requested",
+          payload: {
+            requestId: "user-input-request-opencode-1",
+            questions: [
+              {
+                id: "sandbox_mode",
+                header: "Sandbox",
+                question: "Which mode should be used?",
+                options: [
+                  {
+                    label: "workspace-write",
+                    description: "Allow workspace writes only",
+                  },
+                ],
+              },
+            ],
+          },
+          turnId: null,
+          createdAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.user-input.respond",
+        commandId: CommandId.makeUnsafe("cmd-user-input-respond-stale-opencode"),
+        threadId: ThreadId.makeUnsafe("thread-1"),
+        requestId: asApprovalRequestId("user-input-request-opencode-1"),
+        answers: {
+          sandbox_mode: "workspace-write",
+        },
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(async () => {
+      const readModel = await Effect.runPromise(harness.engine.getReadModel());
+      const thread = readModel.threads.find(
+        (entry) => entry.id === ThreadId.makeUnsafe("thread-1"),
+      );
+      if (!thread) return false;
+      return thread.activities.some(
+        (activity) => activity.kind === "provider.user-input.respond.failed",
+      );
+    });
+
+    const readModel = await Effect.runPromise(harness.engine.getReadModel());
+    const thread = readModel.threads.find((entry) => entry.id === ThreadId.makeUnsafe("thread-1"));
+    expect(thread).toBeDefined();
+
+    const failureActivity = thread?.activities.find(
+      (activity) => activity.kind === "provider.user-input.respond.failed",
+    );
+    expect(failureActivity).toBeDefined();
+    expect(failureActivity?.payload).toMatchObject({
+      requestId: "user-input-request-opencode-1",
+      detail: expect.stringContaining(
+        "Stale pending user-input request: user-input-request-opencode-1",
+      ),
+    });
+
+    const resolvedActivity = thread?.activities.find(
+      (activity) =>
+        activity.kind === "user-input.resolved" &&
+        typeof activity.payload === "object" &&
+        activity.payload !== null &&
+        (activity.payload as Record<string, unknown>).requestId === "user-input-request-opencode-1",
+    );
+    expect(resolvedActivity).toBeUndefined();
+  });
+
   it("reacts to thread.session.stop by stopping provider session and clearing thread session state", async () => {
     const harness = await createHarness();
     const now = new Date().toISOString();

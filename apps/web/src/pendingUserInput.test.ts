@@ -7,6 +7,7 @@ import {
   findFirstUnansweredPendingUserInputQuestionIndex,
   resolvePendingUserInputAnswer,
   setPendingUserInputCustomAnswer,
+  setPendingUserInputSelectedOption,
 } from "./pendingUserInput";
 
 describe("resolvePendingUserInputAnswer", () => {
@@ -27,6 +28,28 @@ describe("resolvePendingUserInputAnswer", () => {
     ).toBe("Scaffold only");
   });
 
+  it("returns all selected options for multi-select drafts", () => {
+    expect(
+      resolvePendingUserInputAnswer({
+        selectedOptionLabels: ["fast", "careful"],
+      }),
+    ).toEqual(["fast", "careful"]);
+  });
+
+  it("rejects custom text for questions that do not allow custom answers", () => {
+    expect(
+      resolvePendingUserInputAnswer(
+        {
+          customAnswer: "typed freeform answer",
+        },
+        {
+          multiple: false,
+          custom: false,
+        },
+      ),
+    ).toBeNull();
+  });
+
   it("clears the preset selection when a custom answer is entered", () => {
     expect(
       setPendingUserInputCustomAnswer(
@@ -38,6 +61,67 @@ describe("resolvePendingUserInputAnswer", () => {
     ).toEqual({
       selectedOptionLabel: undefined,
       customAnswer: "doesn't matter",
+    });
+  });
+
+  it("preserves multi-select choices when a custom answer is entered", () => {
+    expect(
+      setPendingUserInputCustomAnswer(
+        {
+          selectedOptionLabels: ["repo", "tests"],
+        },
+        "docs",
+      ),
+    ).toEqual({
+      selectedOptionLabels: ["repo", "tests"],
+      customAnswer: "docs",
+    });
+  });
+
+  it("toggles multi-select options while preserving the custom answer", () => {
+    expect(
+      setPendingUserInputSelectedOption(
+        {
+          selectedOptionLabels: ["repo"],
+          customAnswer: "docs",
+        },
+        "tests",
+        true,
+      ),
+    ).toEqual({
+      selectedOptionLabels: ["repo", "tests"],
+      customAnswer: "docs",
+    });
+  });
+
+  it("removes a multi-select option when it is already selected", () => {
+    expect(
+      setPendingUserInputSelectedOption(
+        {
+          selectedOptionLabels: ["repo", "tests"],
+        },
+        "repo",
+        true,
+      ),
+    ).toEqual({
+      selectedOptionLabels: ["tests"],
+      customAnswer: "",
+    });
+  });
+
+  it("treats single-select questions as exclusive", () => {
+    expect(
+      setPendingUserInputSelectedOption(
+        {
+          selectedOptionLabel: "repo",
+          customAnswer: "docs",
+        },
+        "tests",
+        false,
+      ),
+    ).toEqual({
+      selectedOptionLabel: "tests",
+      customAnswer: "",
     });
   });
 });
@@ -105,6 +189,106 @@ describe("buildPendingUserInputAnswers", () => {
       ),
     ).toBeNull();
   });
+
+  it("returns array answers for multi-select questions and accepts custom-only prompts", () => {
+    expect(
+      buildPendingUserInputAnswers(
+        [
+          {
+            id: "mode",
+            header: "Mode",
+            question: "Which modes should be enabled?",
+            options: [
+              {
+                label: "fast",
+                description: "Fast path",
+              },
+              {
+                label: "careful",
+                description: "More checks",
+              },
+            ],
+            multiple: true,
+            custom: false,
+          },
+          {
+            id: "details",
+            header: "Details",
+            question: "Describe the desired behavior.",
+            options: [],
+            custom: true,
+          },
+        ],
+        {
+          mode: {
+            selectedOptionLabels: ["fast", "careful"],
+          },
+          details: {
+            customAnswer: "Keep the fix scoped to the current turn",
+          },
+        },
+      ),
+    ).toEqual({
+      mode: ["fast", "careful"],
+      details: "Keep the fix scoped to the current turn",
+    });
+  });
+
+  it("appends a custom answer to multi-select responses when both are present", () => {
+    expect(
+      buildPendingUserInputAnswers(
+        [
+          {
+            id: "mode",
+            header: "Mode",
+            question: "Which modes should be enabled?",
+            options: [
+              {
+                label: "fast",
+                description: "Fast path",
+              },
+            ],
+            multiple: true,
+            custom: true,
+          },
+        ],
+        {
+          mode: {
+            selectedOptionLabels: ["fast"],
+            customAnswer: "careful",
+          },
+        },
+      ),
+    ).toEqual({
+      mode: ["fast", "careful"],
+    });
+  });
+
+  it("returns null when an option-only question only has custom text", () => {
+    expect(
+      buildPendingUserInputAnswers(
+        [
+          {
+            id: "scope",
+            header: "Scope",
+            question: "What scope should I use?",
+            options: [
+              {
+                label: "repo",
+                description: "Repository root",
+              },
+            ],
+            custom: false,
+          },
+        ],
+        {
+          scope: {
+            customAnswer: "single file",
+          },
+        },
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("pending user input question progress", () => {
@@ -141,6 +325,66 @@ describe("pending user input question progress", () => {
         },
       }),
     ).toBe(1);
+  });
+
+  it("counts multi-select answers as completed", () => {
+    expect(
+      countAnsweredPendingUserInputQuestions(
+        [
+          {
+            id: "mode",
+            header: "Mode",
+            question: "Which modes should be enabled?",
+            options: [
+              {
+                label: "fast",
+                description: "Fast path",
+              },
+            ],
+            multiple: true,
+            custom: false,
+          },
+          {
+            id: "details",
+            header: "Details",
+            question: "Describe the desired behavior.",
+            options: [],
+            custom: true,
+          },
+        ],
+        {
+          mode: {
+            selectedOptionLabels: ["fast"],
+          },
+        },
+      ),
+    ).toBe(1);
+  });
+
+  it("does not count freeform text as answered when custom answers are disabled", () => {
+    expect(
+      countAnsweredPendingUserInputQuestions(
+        [
+          {
+            id: "scope",
+            header: "Scope",
+            question: "What scope should I use?",
+            options: [
+              {
+                label: "repo",
+                description: "Repository root",
+              },
+            ],
+            custom: false,
+          },
+        ],
+        {
+          scope: {
+            customAnswer: "single file",
+          },
+        },
+      ),
+    ).toBe(0);
   });
 
   it("finds the first unanswered question", () => {
@@ -187,6 +431,83 @@ describe("pending user input question progress", () => {
       isLastQuestion: false,
       isComplete: false,
       canAdvance: true,
+    });
+  });
+
+  it("derives progress for multi-select questions", () => {
+    expect(
+      derivePendingUserInputProgress(
+        [
+          {
+            id: "mode",
+            header: "Mode",
+            question: "Which modes should be enabled?",
+            options: [
+              {
+                label: "fast",
+                description: "Fast path",
+              },
+              {
+                label: "careful",
+                description: "More checks",
+              },
+            ],
+            multiple: true,
+            custom: true,
+          },
+        ],
+        {
+          mode: {
+            selectedOptionLabels: ["fast"],
+            customAnswer: "careful",
+          },
+        },
+        0,
+      ),
+    ).toMatchObject({
+      questionIndex: 0,
+      selectedOptionLabel: undefined,
+      selectedOptionLabels: ["fast"],
+      customAnswer: "careful",
+      resolvedAnswer: ["fast", "careful"],
+      usingCustomAnswer: true,
+      answeredQuestionCount: 1,
+      isLastQuestion: true,
+      isComplete: true,
+      canAdvance: true,
+    });
+  });
+
+  it("does not allow advance from custom text when the question is option-only", () => {
+    expect(
+      derivePendingUserInputProgress(
+        [
+          {
+            id: "scope",
+            header: "Scope",
+            question: "What scope should I use?",
+            options: [
+              {
+                label: "repo",
+                description: "Repository root",
+              },
+            ],
+            custom: false,
+          },
+        ],
+        {
+          scope: {
+            customAnswer: "single file",
+          },
+        },
+        0,
+      ),
+    ).toMatchObject({
+      customAnswer: "single file",
+      resolvedAnswer: null,
+      answeredQuestionCount: 0,
+      isComplete: false,
+      canAdvance: false,
     });
   });
 });

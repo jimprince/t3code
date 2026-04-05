@@ -60,28 +60,41 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
   const progress = derivePendingUserInputProgress(prompt.questions, answers, questionIndex);
   const activeQuestion = progress.activeQuestion;
   const autoAdvanceTimerRef = useRef<number | null>(null);
+  const onAdvanceRef = useRef(onAdvance);
+
+  useEffect(() => {
+    onAdvanceRef.current = onAdvance;
+  }, [onAdvance]);
+
+  const clearAutoAdvanceTimer = useCallback(() => {
+    if (autoAdvanceTimerRef.current !== null) {
+      window.clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+  }, []);
 
   // Clear auto-advance timer on unmount
   useEffect(() => {
-    return () => {
-      if (autoAdvanceTimerRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimerRef.current);
-      }
-    };
-  }, []);
+    return clearAutoAdvanceTimer;
+  }, [clearAutoAdvanceTimer]);
+
+  useEffect(() => {
+    clearAutoAdvanceTimer();
+  }, [clearAutoAdvanceTimer, prompt.requestId, activeQuestion?.id, questionIndex, isResponding]);
 
   const selectOptionAndAutoAdvance = useCallback(
     (questionId: string, optionLabel: string) => {
       onSelectOption(questionId, optionLabel);
-      if (autoAdvanceTimerRef.current !== null) {
-        window.clearTimeout(autoAdvanceTimerRef.current);
+      if (activeQuestion?.multiple) {
+        return;
       }
+      clearAutoAdvanceTimer();
       autoAdvanceTimerRef.current = window.setTimeout(() => {
         autoAdvanceTimerRef.current = null;
-        onAdvance();
+        onAdvanceRef.current();
       }, 200);
     },
-    [onSelectOption, onAdvance],
+    [activeQuestion?.multiple, clearAutoAdvanceTimer, onSelectOption],
   );
 
   // Keyboard shortcut: number keys 1-9 select corresponding option and auto-advance.
@@ -136,7 +149,9 @@ const ComposerPendingUserInputCard = memo(function ComposerPendingUserInputCard(
       <p className="mt-1.5 text-sm text-foreground/90">{activeQuestion.question}</p>
       <div className="mt-3 space-y-1">
         {activeQuestion.options.map((option, index) => {
-          const isSelected = progress.selectedOptionLabel === option.label;
+          const isSelected = activeQuestion.multiple
+            ? progress.selectedOptionLabels.includes(option.label)
+            : progress.selectedOptionLabel === option.label;
           const shortcutKey = index < 9 ? index + 1 : null;
           return (
             <button

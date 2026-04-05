@@ -407,7 +407,7 @@ function shouldRemoveDraft(draft: ComposerThreadDraftState): boolean {
 }
 
 function normalizeProviderKind(value: unknown): ProviderKind | null {
-  return value === "codex" || value === "claudeAgent" ? value : null;
+  return value === "codex" || value === "claudeAgent" || value === "opencode" ? value : null;
 }
 
 function normalizeProviderModelOptions(
@@ -424,6 +424,8 @@ function normalizeProviderModelOptions(
     candidate?.claudeAgent && typeof candidate.claudeAgent === "object"
       ? (candidate.claudeAgent as Record<string, unknown>)
       : null;
+  const hasOpenCodeCandidate =
+    candidate !== null && Object.prototype.hasOwnProperty.call(candidate, "opencode");
 
   const codexReasoningEffort: CodexReasoningEffort | undefined =
     codexCandidate?.reasoningEffort === "low" ||
@@ -492,12 +494,13 @@ function normalizeProviderModelOptions(
         }
       : undefined;
 
-  if (!codex && !claude) {
+  if (!codex && !claude && !hasOpenCodeCandidate) {
     return null;
   }
   return {
     ...(codex ? { codex } : {}),
     ...(claude ? { claudeAgent: claude } : {}),
+    ...(hasOpenCodeCandidate ? { opencode: {} } : {}),
   };
 }
 
@@ -528,7 +531,12 @@ function normalizeModelSelection(
     provider,
     provider === "codex" ? legacy?.legacyCodex : undefined,
   );
-  const options = provider === "codex" ? modelOptions?.codex : modelOptions?.claudeAgent;
+  const options =
+    provider === "codex"
+      ? modelOptions?.codex
+      : provider === "claudeAgent"
+        ? modelOptions?.claudeAgent
+        : modelOptions?.opencode;
   return {
     provider,
     model,
@@ -594,9 +602,9 @@ function legacyToModelSelectionByProvider(
   const result: Partial<Record<ProviderKind, ModelSelection>> = {};
   // Add entries from the options bag (for non-active providers)
   if (modelOptions) {
-    for (const provider of ["codex", "claudeAgent"] as const) {
+    for (const provider of ["codex", "claudeAgent", "opencode"] as const) {
       const options = modelOptions[provider];
-      if (options && Object.keys(options).length > 0) {
+      if (options !== undefined) {
         result[provider] = {
           provider,
           model:
@@ -626,11 +634,15 @@ export function deriveEffectiveComposerModelState(input: {
   projectModelSelection: ModelSelection | null | undefined;
   settings: UnifiedSettings;
 }): EffectiveComposerModelState {
+  const fallbackSelection =
+    input.threadModelSelection?.provider === input.selectedProvider
+      ? input.threadModelSelection
+      : input.projectModelSelection?.provider === input.selectedProvider
+        ? input.projectModelSelection
+        : null;
   const baseModel =
-    normalizeModelSlug(
-      input.threadModelSelection?.model ?? input.projectModelSelection?.model,
-      input.selectedProvider,
-    ) ?? getDefaultServerModel(input.providers, input.selectedProvider);
+    normalizeModelSlug(fallbackSelection?.model, input.selectedProvider) ??
+    getDefaultServerModel(input.providers, input.selectedProvider);
   const activeSelection = input.draft?.modelSelectionByProvider?.[input.selectedProvider];
   const selectedModel = activeSelection?.model
     ? resolveAppModelSelection(
@@ -889,9 +901,9 @@ function normalizePersistedDraftsByThreadId(
       typeof draftCandidate.modelSelectionByProvider === "object"
     ) {
       // v3 format
-      modelSelectionByProvider = draftCandidate.modelSelectionByProvider as Partial<
-        Record<ProviderKind, ModelSelection>
-      >;
+      modelSelectionByProvider = normalizePersistedModelSelectionByProvider(
+        draftCandidate.modelSelectionByProvider,
+      );
       activeProvider = normalizeProviderKind(draftCandidate.activeProvider);
     } else {
       // v2 or legacy format: migrate
@@ -948,6 +960,23 @@ function normalizePersistedDraftsByThreadId(
   }
 
   return nextDraftsByThreadId;
+}
+
+function normalizePersistedModelSelectionByProvider(
+  value: unknown,
+): Partial<Record<ProviderKind, ModelSelection>> {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const normalized: Partial<Record<ProviderKind, ModelSelection>> = {};
+  for (const provider of ["codex", "claudeAgent", "opencode"] as const) {
+    const selection = normalizeModelSelection((value as Record<string, unknown>)[provider]);
+    if (selection?.provider === provider) {
+      normalized[provider] = selection;
+    }
+  }
+  return normalized;
 }
 
 function migratePersistedComposerDraftStoreState(
@@ -1072,10 +1101,9 @@ function normalizeCurrentPersistedComposerDraftStoreState(
     normalizedPersistedState.stickyModelSelectionByProvider &&
     typeof normalizedPersistedState.stickyModelSelectionByProvider === "object"
   ) {
-    stickyModelSelectionByProvider =
-      normalizedPersistedState.stickyModelSelectionByProvider as Partial<
-        Record<ProviderKind, ModelSelection>
-      >;
+    stickyModelSelectionByProvider = normalizePersistedModelSelectionByProvider(
+      normalizedPersistedState.stickyModelSelectionByProvider,
+    );
     stickyActiveProvider = normalizeProviderKind(normalizedPersistedState.stickyActiveProvider);
   } else {
     // Legacy migration path
@@ -1238,7 +1266,7 @@ function toHydratedThreadDraft(
 ): ComposerThreadDraftState {
   // The persisted draft is already in v3 shape (migration handles older formats)
   const modelSelectionByProvider: Partial<Record<ProviderKind, ModelSelection>> =
-    persistedDraft.modelSelectionByProvider ?? {};
+    normalizePersistedModelSelectionByProvider(persistedDraft.modelSelectionByProvider);
   const activeProvider = normalizeProviderKind(persistedDraft.activeProvider) ?? null;
 
   return {
@@ -1676,16 +1704,16 @@ export const useComposerDraftStore = create<ComposerDraftStoreState>()(
           }
           const base = existing ?? createEmptyThreadDraft();
           const nextMap = { ...base.modelSelectionByProvider };
-          for (const provider of ["codex", "claudeAgent"] as const) {
+          for (const provider of ["codex", "claudeAgent", "opencode"] as const) {
             // Only touch providers explicitly present in the input
             if (!normalizedOpts || !(provider in normalizedOpts)) continue;
             const opts = normalizedOpts[provider];
             const current = nextMap[provider];
-            if (opts) {
+            if (opts !== undefined) {
               nextMap[provider] = {
                 provider,
                 model: current?.model ?? DEFAULT_MODEL_BY_PROVIDER[provider],
-                options: opts,
+                ...(Object.keys(opts).length > 0 ? { options: opts } : {}),
               };
             } else if (current?.options) {
               // Remove options but keep the selection

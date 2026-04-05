@@ -141,6 +141,66 @@ it.layer(NodeServices.layer)("server settings", (it) => {
     }).pipe(Effect.provide(makeServerSettingsLayer())),
   );
 
+  it.effect("falls back to a supported provider when text generation is set to opencode", () =>
+    Effect.gen(function* () {
+      const serverSettings = yield* ServerSettingsService;
+
+      const next = yield* serverSettings.updateSettings({
+        textGenerationModelSelection: {
+          provider: "opencode",
+          model: "openai/gpt-5.4",
+        },
+      });
+
+      assert.deepEqual(next.textGenerationModelSelection, {
+        provider: "codex",
+        model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
+      });
+
+      const current = yield* serverSettings.getSettings;
+
+      assert.deepEqual(current.textGenerationModelSelection, {
+        provider: "codex",
+        model: DEFAULT_SERVER_SETTINGS.textGenerationModelSelection.model,
+      });
+    }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
+  it.effect(
+    "does not rewrite unsupported text generation provider when no git-capable providers are enabled",
+    () =>
+      Effect.gen(function* () {
+        const serverSettings = yield* ServerSettingsService;
+
+        const next = yield* serverSettings.updateSettings({
+          providers: {
+            codex: {
+              enabled: false,
+            },
+            claudeAgent: {
+              enabled: false,
+            },
+          },
+          textGenerationModelSelection: {
+            provider: "opencode",
+            model: "openai/gpt-5.4",
+          },
+        });
+
+        assert.deepEqual(next.textGenerationModelSelection, {
+          provider: "opencode",
+          model: "openai/gpt-5.4",
+        });
+
+        const current = yield* serverSettings.getSettings;
+
+        assert.deepEqual(current.textGenerationModelSelection, {
+          provider: "opencode",
+          model: "openai/gpt-5.4",
+        });
+      }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("trims provider path settings when updates are applied", () =>
     Effect.gen(function* () {
       const serverSettings = yield* ServerSettingsService;

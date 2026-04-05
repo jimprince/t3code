@@ -227,6 +227,10 @@ function makeFakeCodexAdapter(provider: ProviderKind = "codex") {
   };
 }
 
+function makeFakeProviderAdapter(provider: ProviderKind) {
+  return makeFakeCodexAdapter(provider);
+}
+
 const sleep = (ms: number) =>
   Effect.promise(() => new Promise<void>((resolve) => setTimeout(resolve, ms)));
 
@@ -244,14 +248,17 @@ const hasMetricSnapshot = (
 function makeProviderServiceLayer() {
   const codex = makeFakeCodexAdapter();
   const claude = makeFakeCodexAdapter("claudeAgent");
+  const opencode = makeFakeProviderAdapter("opencode");
   const registry: typeof ProviderAdapterRegistry.Service = {
     getByProvider: (provider) =>
       provider === "codex"
         ? Effect.succeed(codex.adapter)
         : provider === "claudeAgent"
           ? Effect.succeed(claude.adapter)
-          : Effect.fail(new ProviderUnsupportedError({ provider })),
-    listProviders: () => Effect.succeed(["codex", "claudeAgent"]),
+          : provider === "opencode"
+            ? Effect.succeed(opencode.adapter)
+            : Effect.fail(new ProviderUnsupportedError({ provider })),
+    listProviders: () => Effect.succeed(["codex", "claudeAgent", "opencode"]),
   };
 
   const providerAdapterLayer = Layer.succeed(ProviderAdapterRegistry, registry);
@@ -278,6 +285,7 @@ function makeProviderServiceLayer() {
   return {
     codex,
     claude,
+    opencode,
     layer,
   };
 }
@@ -747,6 +755,73 @@ routing.layer("ProviderServiceLive routing", (it) => {
     }),
   );
 
+  it.effect(
+    "recovers stale opencode sessions using persisted cwd, poolRoot, binaryPath, and modelSelection",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService;
+
+        const initial = yield* provider.startSession(asThreadId("thread-opencode-send-turn"), {
+          provider: "opencode",
+          threadId: asThreadId("thread-opencode-send-turn"),
+          cwd: "/tmp/project-root/worktrees/opencode-a",
+          poolRoot: "/tmp/project-root",
+          modelSelection: {
+            provider: "opencode",
+            model: "anthropic/claude-sonnet-4.5",
+          },
+          providerOptions: {
+            opencode: {
+              binaryPath: "/opt/opencode/bin/opencode",
+            },
+          },
+          runtimeMode: "approval-required",
+        });
+
+        yield* routing.opencode.stopAll();
+        routing.opencode.startSession.mockClear();
+        routing.opencode.sendTurn.mockClear();
+
+        yield* provider.sendTurn({
+          threadId: initial.threadId,
+          input: "resume with opencode",
+          attachments: [],
+        });
+
+        assert.equal(routing.opencode.startSession.mock.calls.length, 1);
+        const resumedStartInput = routing.opencode.startSession.mock.calls[0]?.[0];
+        assert.equal(typeof resumedStartInput === "object" && resumedStartInput !== null, true);
+        if (resumedStartInput && typeof resumedStartInput === "object") {
+          const startPayload = resumedStartInput as {
+            provider?: string;
+            cwd?: string;
+            poolRoot?: string;
+            providerOptions?: unknown;
+            modelSelection?: unknown;
+            resumeCursor?: unknown;
+            runtimeMode?: string;
+            threadId?: string;
+          };
+          assert.equal(startPayload.provider, "opencode");
+          assert.equal(startPayload.cwd, "/tmp/project-root/worktrees/opencode-a");
+          assert.equal(startPayload.poolRoot, "/tmp/project-root");
+          assert.deepEqual(startPayload.providerOptions, {
+            opencode: {
+              binaryPath: "/opt/opencode/bin/opencode",
+            },
+          });
+          assert.deepEqual(startPayload.modelSelection, {
+            provider: "opencode",
+            model: "anthropic/claude-sonnet-4.5",
+          });
+          assert.deepEqual(startPayload.resumeCursor, initial.resumeCursor);
+          assert.equal(startPayload.runtimeMode, "approval-required");
+          assert.equal(startPayload.threadId, initial.threadId);
+        }
+        assert.equal(routing.opencode.sendTurn.mock.calls.length, 1);
+      }),
+  );
+
   it.effect("lists no sessions after adapter runtime clears", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService;
@@ -764,6 +839,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
 
       yield* routing.codex.stopAll();
       yield* routing.claude.stopAll();
+      yield* routing.opencode.stopAll();
 
       const remaining = yield* provider.listSessions();
       assert.equal(remaining.length, 0);

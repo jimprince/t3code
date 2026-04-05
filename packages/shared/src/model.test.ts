@@ -67,6 +67,10 @@ describe("resolveModelSlug", () => {
     expect(resolveModelSlugForProvider("claudeAgent", undefined)).toBe(
       DEFAULT_MODEL_BY_PROVIDER.claudeAgent,
     );
+
+    expect(resolveModelSlugForProvider("opencode", undefined)).toBe(
+      DEFAULT_MODEL_BY_PROVIDER.opencode,
+    );
   });
 
   it("preserves normalized unknown models", () => {
@@ -226,6 +230,12 @@ describe("resolveApiModelId", () => {
 
   it("returns the model as-is for Codex selections", () => {
     expect(resolveApiModelId({ provider: "codex", model: "gpt-5.4" })).toBe("gpt-5.4");
+  });
+
+  it("returns the model as-is for OpenCode selections", () => {
+    expect(resolveApiModelId({ provider: "opencode", model: "openai/gpt-5.4" })).toBe(
+      "openai/gpt-5.4",
+    );
   });
 });
 

@@ -1,9 +1,11 @@
 import * as Schema from "effect/Schema";
 import {
+  DEFAULT_MODEL_BY_PROVIDER,
   ProjectId,
   ThreadId,
   type ModelSelection,
   type ProviderModelOptions,
+  type ServerProvider,
 } from "@t3tools/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -12,6 +14,7 @@ import {
   clearPromotedDraftThread,
   clearPromotedDraftThreads,
   type ComposerImageAttachment,
+  deriveEffectiveComposerModelState,
   useComposerDraftStore,
 } from "./composerDraftStore";
 import { removeLocalStorageItem, setLocalStorageItem } from "./hooks/useLocalStorage";
@@ -21,6 +24,8 @@ import {
   type TerminalContextDraft,
 } from "./lib/terminalContext";
 import { createDebouncedStorage } from "./lib/storage";
+import { MODEL_PROVIDER_SETTINGS } from "./modelSelection";
+import { DEFAULT_UNIFIED_SETTINGS } from "@t3tools/contracts/settings";
 
 function makeImage(input: {
   id: string;
@@ -80,7 +85,7 @@ function resetComposerDraftStore() {
 }
 
 function modelSelection(
-  provider: "codex" | "claudeAgent",
+  provider: "codex" | "claudeAgent" | "opencode",
   model: string,
   options?: ModelSelection["options"],
 ): ModelSelection {
@@ -94,6 +99,39 @@ function modelSelection(
 function providerModelOptions(options: ProviderModelOptions): ProviderModelOptions {
   return options;
 }
+
+const TEST_SERVER_PROVIDERS: ReadonlyArray<ServerProvider> = [
+  {
+    provider: "codex",
+    enabled: true,
+    installed: true,
+    version: "0.116.0",
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-03-17T12:00:00.000Z",
+    models: [],
+  },
+  {
+    provider: "claudeAgent",
+    enabled: true,
+    installed: true,
+    version: "1.0.0",
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-03-17T12:00:00.000Z",
+    models: [],
+  },
+  {
+    provider: "opencode",
+    enabled: true,
+    installed: true,
+    version: "1.2.24",
+    status: "ready",
+    auth: { status: "authenticated" },
+    checkedAt: "2026-03-17T12:00:00.000Z",
+    models: [],
+  },
+];
 
 describe("composerDraftStore addImages", () => {
   const threadId = ThreadId.makeUnsafe("thread-dedupe");
@@ -700,6 +738,20 @@ describe("composerDraftStore modelSelection", () => {
     );
   });
 
+  it("keeps OpenCode selections and active provider in the draft", () => {
+    const store = useComposerDraftStore.getState();
+
+    store.setModelSelection(threadId, modelSelection("opencode", "openai/gpt-5.4"));
+
+    expect(
+      useComposerDraftStore.getState().draftsByThreadId[threadId]?.modelSelectionByProvider
+        .opencode,
+    ).toEqual(modelSelection("opencode", "openai/gpt-5.4"));
+    expect(useComposerDraftStore.getState().draftsByThreadId[threadId]?.activeProvider).toBe(
+      "opencode",
+    );
+  });
+
   it("keeps default-only model selections on the draft", () => {
     const store = useComposerDraftStore.getState();
     store.setModelSelection(threadId, modelSelection("codex", "gpt-5.4"));
@@ -843,6 +895,26 @@ describe("composerDraftStore modelSelection", () => {
     expect(draft?.modelSelectionByProvider.claudeAgent?.options).toEqual({ effort: "max" });
   });
 
+  it("stores OpenCode provider options without disturbing other providers", () => {
+    const store = useComposerDraftStore.getState();
+
+    store.setModelOptions(
+      threadId,
+      providerModelOptions({
+        codex: { fastMode: true },
+        opencode: {},
+      }),
+    );
+
+    const draft = useComposerDraftStore.getState().draftsByThreadId[threadId];
+    expect(draft?.modelSelectionByProvider.codex).toEqual(
+      modelSelection("codex", "gpt-5.4", { fastMode: true }),
+    );
+    expect(draft?.modelSelectionByProvider.opencode).toEqual(
+      modelSelection("opencode", "openai/gpt-5.4"),
+    );
+  });
+
   it("preserves other provider options when switching the active model selection", () => {
     const store = useComposerDraftStore.getState();
 
@@ -961,6 +1033,38 @@ describe("composerDraftStore sticky composer settings", () => {
     expect(useComposerDraftStore.getState().stickyActiveProvider).toBe("codex");
   });
 
+  it("stores sticky OpenCode selections", () => {
+    const store = useComposerDraftStore.getState();
+
+    store.setStickyModelSelection(modelSelection("opencode", "openai/gpt-5.4"));
+
+    expect(useComposerDraftStore.getState().stickyModelSelectionByProvider.opencode).toEqual(
+      modelSelection("opencode", "openai/gpt-5.4"),
+    );
+    expect(useComposerDraftStore.getState().stickyActiveProvider).toBe("opencode");
+  });
+
+  it("preserves provider options when a sticky selection switches models", () => {
+    const store = useComposerDraftStore.getState();
+
+    store.setStickyModelSelection(
+      modelSelection("claudeAgent", "claude-opus-4-6", {
+        effort: "max",
+      }),
+    );
+    store.setStickyModelSelection(
+      modelSelection("claudeAgent", "claude-sonnet-4-6", {
+        effort: "max",
+      }),
+    );
+
+    expect(useComposerDraftStore.getState().stickyModelSelectionByProvider.claudeAgent).toEqual(
+      modelSelection("claudeAgent", "claude-sonnet-4-6", {
+        effort: "max",
+      }),
+    );
+  });
+
   it("normalizes empty sticky model options by dropping selection options", () => {
     const store = useComposerDraftStore.getState();
 
@@ -984,6 +1088,117 @@ describe("composerDraftStore sticky composer settings", () => {
         claudeAgent: modelSelection("claudeAgent", "claude-opus-4-6"),
       },
       activeProvider: "claudeAgent",
+    });
+  });
+
+  it("drops malformed nested persisted model selections during merge hydration", () => {
+    const persistApi = useComposerDraftStore.persist as unknown as {
+      getOptions: () => {
+        merge: (
+          persistedState: unknown,
+          currentState: ReturnType<typeof useComposerDraftStore.getState>,
+        ) => ReturnType<typeof useComposerDraftStore.getState>;
+      };
+    };
+    const threadId = ThreadId.makeUnsafe("thread-hydrated-invalid");
+    const mergedState = persistApi.getOptions().merge(
+      {
+        draftsByThreadId: {
+          [threadId]: {
+            prompt: "keep this draft",
+            attachments: [],
+            modelSelectionByProvider: {
+              codex: {
+                provider: "codex",
+                model: { nope: true },
+              },
+              claudeAgent: {
+                provider: "claudeAgent",
+                model: "claude-opus-4-6",
+                options: { effort: "max" },
+              },
+            },
+            activeProvider: "claudeAgent",
+          },
+        },
+        draftThreadsByThreadId: {},
+        projectDraftThreadIdByProjectId: {},
+        stickyModelSelectionByProvider: {
+          opencode: {
+            provider: "opencode",
+            model: 42,
+          },
+          claudeAgent: {
+            provider: "claudeAgent",
+            model: "claude-sonnet-4-6",
+            options: { effort: "max" },
+          },
+        },
+        stickyActiveProvider: "claudeAgent",
+      },
+      useComposerDraftStore.getInitialState(),
+    );
+
+    expect(mergedState.draftsByThreadId[threadId]?.modelSelectionByProvider).toEqual({
+      claudeAgent: modelSelection("claudeAgent", "claude-opus-4-6", { effort: "max" }),
+    });
+    expect(mergedState.stickyModelSelectionByProvider).toEqual({
+      claudeAgent: modelSelection("claudeAgent", "claude-sonnet-4-6", { effort: "max" }),
+    });
+  });
+});
+
+describe("MODEL_PROVIDER_SETTINGS", () => {
+  it("exposes the OpenCode custom model placeholder and example", () => {
+    expect(MODEL_PROVIDER_SETTINGS.find((config) => config.provider === "opencode")).toEqual({
+      provider: "opencode",
+      title: "OpenCode",
+      description: "Save additional OpenCode model slugs for the picker and `/model` command.",
+      placeholder: "provider/model-slug",
+      example: "anthropic/claude-sonnet-4.5",
+    });
+  });
+});
+
+describe("deriveEffectiveComposerModelState", () => {
+  it("does not reuse a thread model from a different provider after fallback", () => {
+    expect(
+      deriveEffectiveComposerModelState({
+        draft: null,
+        providers: TEST_SERVER_PROVIDERS,
+        selectedProvider: "opencode",
+        threadModelSelection: {
+          provider: "claudeAgent",
+          model: "claude-opus-4-6",
+        },
+        projectModelSelection: null,
+        settings: DEFAULT_UNIFIED_SETTINGS,
+      }),
+    ).toEqual({
+      selectedModel: DEFAULT_MODEL_BY_PROVIDER.opencode,
+      modelOptions: null,
+    });
+  });
+
+  it("reuses a base model only when the source selection matches the effective provider", () => {
+    expect(
+      deriveEffectiveComposerModelState({
+        draft: null,
+        providers: TEST_SERVER_PROVIDERS,
+        selectedProvider: "opencode",
+        threadModelSelection: {
+          provider: "opencode",
+          model: "anthropic/claude-sonnet-4.5",
+        },
+        projectModelSelection: {
+          provider: "claudeAgent",
+          model: "claude-opus-4-6",
+        },
+        settings: DEFAULT_UNIFIED_SETTINGS,
+      }),
+    ).toEqual({
+      selectedModel: "anthropic/claude-sonnet-4.5",
+      modelOptions: null,
     });
   });
 });
@@ -1010,6 +1225,31 @@ describe("composerDraftStore provider-scoped option updates", () => {
     );
     expect(draft?.modelSelectionByProvider.claudeAgent?.options).toEqual({ effort: "max" });
     expect(draft?.activeProvider).toBe("codex");
+  });
+
+  it("keeps provider options when switching to another model on the same provider", () => {
+    const store = useComposerDraftStore.getState();
+    store.setModelSelection(
+      threadId,
+      modelSelection("claudeAgent", "claude-opus-4-6", {
+        effort: "max",
+      }),
+    );
+    store.setModelSelection(
+      threadId,
+      modelSelection("claudeAgent", "claude-sonnet-4-6", {
+        effort: "max",
+      }),
+    );
+
+    expect(
+      useComposerDraftStore.getState().draftsByThreadId[threadId]?.modelSelectionByProvider
+        .claudeAgent,
+    ).toEqual(
+      modelSelection("claudeAgent", "claude-sonnet-4-6", {
+        effort: "max",
+      }),
+    );
   });
 });
 

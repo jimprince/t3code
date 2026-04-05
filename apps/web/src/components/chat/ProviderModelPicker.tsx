@@ -18,7 +18,7 @@ import {
   MenuSubTrigger,
   MenuTrigger,
 } from "../ui/menu";
-import { ClaudeAI, CursorIcon, Gemini, Icon, OpenAI, OpenCodeIcon } from "../Icons";
+import { ClaudeAI, Gemini, Icon, OpenAI, OpenCodeIcon } from "../Icons";
 import { cn } from "~/lib/utils";
 import { getProviderSnapshot } from "../../providerModels";
 
@@ -33,15 +33,12 @@ function isAvailableProviderOption(option: (typeof PROVIDER_OPTIONS)[number]): o
 const PROVIDER_ICON_BY_PROVIDER: Record<ProviderPickerKind, Icon> = {
   codex: OpenAI,
   claudeAgent: ClaudeAI,
-  cursor: CursorIcon,
+  opencode: OpenCodeIcon,
 };
 
 export const AVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter(isAvailableProviderOption);
 const UNAVAILABLE_PROVIDER_OPTIONS = PROVIDER_OPTIONS.filter((option) => !option.available);
-const COMING_SOON_PROVIDER_OPTIONS = [
-  { id: "opencode", label: "OpenCode", icon: OpenCodeIcon },
-  { id: "gemini", label: "Gemini", icon: Gemini },
-] as const;
+const COMING_SOON_PROVIDER_OPTIONS = [{ id: "gemini", label: "Gemini", icon: Gemini }] as const;
 
 function providerIconClassName(
   provider: ProviderKind | ProviderPickerKind,
@@ -151,7 +148,13 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
               const liveProvider = props.providers
                 ? getProviderSnapshot(props.providers, option.value)
                 : undefined;
-              if (liveProvider && liveProvider.status !== "ready") {
+              if (
+                liveProvider &&
+                (!liveProvider.enabled ||
+                  !liveProvider.installed ||
+                  liveProvider.status === "disabled" ||
+                  liveProvider.status === "error")
+              ) {
                 const unavailableLabel = !liveProvider.enabled
                   ? "Disabled"
                   : !liveProvider.installed
@@ -222,7 +225,8 @@ export const ProviderModelPicker = memo(function ProviderModelPicker(props: {
                 </MenuItem>
               );
             })}
-            {UNAVAILABLE_PROVIDER_OPTIONS.length === 0 && <MenuDivider />}
+            {(UNAVAILABLE_PROVIDER_OPTIONS.length > 0 ||
+              COMING_SOON_PROVIDER_OPTIONS.length > 0) && <MenuDivider />}
             {COMING_SOON_PROVIDER_OPTIONS.map((option) => {
               const OptionIcon = option.icon;
               return (

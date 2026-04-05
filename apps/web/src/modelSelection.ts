@@ -45,6 +45,13 @@ const PROVIDER_CUSTOM_MODEL_CONFIG: Record<ProviderKind, ProviderCustomModelConf
     placeholder: "your-claude-model-slug",
     example: "claude-sonnet-5-0",
   },
+  opencode: {
+    provider: "opencode",
+    title: "OpenCode",
+    description: "Save additional OpenCode model slugs for the picker and `/model` command.",
+    placeholder: "provider/model-slug",
+    example: "anthropic/claude-sonnet-4.5",
+  },
 };
 
 export const MODEL_PROVIDER_SETTINGS = Object.values(PROVIDER_CUSTOM_MODEL_CONFIG);
@@ -152,18 +159,21 @@ export function getCustomModelOptionsByProvider(
   selectedProvider?: ProviderKind | null,
   selectedModel?: string | null,
 ): Record<ProviderKind, ReadonlyArray<{ slug: string; name: string }>> {
+  const toCustomModelOptions = (provider: ProviderKind, model: string | null | undefined) =>
+    getAppModelOptions(settings, providers, provider, model).map(({ slug, name }) => ({
+      slug,
+      name,
+    }));
+
   return {
-    codex: getAppModelOptions(
-      settings,
-      providers,
-      "codex",
-      selectedProvider === "codex" ? selectedModel : undefined,
-    ),
-    claudeAgent: getAppModelOptions(
-      settings,
-      providers,
+    codex: toCustomModelOptions("codex", selectedProvider === "codex" ? selectedModel : undefined),
+    claudeAgent: toCustomModelOptions(
       "claudeAgent",
       selectedProvider === "claudeAgent" ? selectedModel : undefined,
+    ),
+    opencode: toCustomModelOptions(
+      "opencode",
+      selectedProvider === "opencode" ? selectedModel : undefined,
     ),
   };
 }
