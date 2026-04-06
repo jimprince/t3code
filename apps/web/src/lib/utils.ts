@@ -53,12 +53,7 @@ export const resolveServerUrl = (options?: {
   pathname?: string | undefined;
   searchParams?: Record<string, string> | undefined;
 }): string => {
-  const rawUrl = firstNonEmptyString(
-    options?.url,
-    resolvePrimaryEnvironmentBootstrapUrl(),
-    import.meta.env.VITE_WS_URL,
-    window.location.origin,
-  );
+  const rawUrl = firstNonEmptyString(options?.url, resolvePrimaryEnvironmentBootstrapUrl());
 
   const parsedUrl = new URL(rawUrl);
   if (options?.protocol) {

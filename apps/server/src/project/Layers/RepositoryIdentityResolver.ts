@@ -115,12 +115,14 @@ export const makeRepositoryIdentityResolver = Effect.gen(function* () {
     }
 
     const resolved = yield* Effect.promise(() => resolveRepositoryIdentity(cwd));
-    yield* Ref.update(cacheRef, (current) => {
-      const next = new Map(current);
-      next.set(cwd, resolved.identity);
-      next.set(resolved.cacheKey, resolved.identity);
-      return next;
-    });
+    if (resolved.identity !== null) {
+      yield* Ref.update(cacheRef, (current) => {
+        const next = new Map(current);
+        next.set(cwd, resolved.identity);
+        next.set(resolved.cacheKey, resolved.identity);
+        return next;
+      });
+    }
     return resolved.identity;
   });
 
