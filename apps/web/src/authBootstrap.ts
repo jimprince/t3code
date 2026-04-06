@@ -122,6 +122,7 @@ export async function submitServerAuthCredential(credential: string): Promise<vo
   }
 
   await exchangeBootstrapCredential(resolvePrimaryEnvironmentHttpBaseUrl(), trimmedCredential);
+  bootstrapPromise = Promise.resolve({ status: "authenticated" } satisfies ServerAuthGateState);
   stripPairingTokenFromUrl();
 }
 
