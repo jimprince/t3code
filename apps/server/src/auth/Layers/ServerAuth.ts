@@ -1,7 +1,6 @@
 import { type AuthBootstrapResult, type AuthSessionState } from "@t3tools/contracts";
-import { DateTime, Effect, Layer, Option } from "effect";
+import { DateTime, Effect, Layer } from "effect";
 import type * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
-import { HttpServerRequest as HttpServerRequestModule } from "effect/unstable/http";
 
 import { BootstrapCredentialServiceLive } from "./BootstrapCredentialService.ts";
 import { ServerAuthPolicyLive } from "./ServerAuthPolicy.ts";
@@ -16,6 +15,11 @@ import {
 } from "../Services/ServerAuth.ts";
 import { SessionCredentialService } from "../Services/SessionCredentialService.ts";
 
+type BootstrapExchangeResult = {
+  readonly response: AuthBootstrapResult;
+  readonly sessionToken: string;
+};
+
 const AUTHORIZATION_PREFIX = "Bearer ";
 
 function parseBearerToken(request: HttpServerRequest.HttpServerRequest): string | null {
@@ -25,15 +29,6 @@ function parseBearerToken(request: HttpServerRequest.HttpServerRequest): string 
   }
   const token = header.slice(AUTHORIZATION_PREFIX.length).trim();
   return token.length > 0 ? token : null;
-}
-
-function parseQueryToken(request: HttpServerRequest.HttpServerRequest): string | null {
-  const url = HttpServerRequestModule.toURL(request);
-  if (Option.isNone(url)) {
-    return null;
-  }
-  const token = url.value.searchParams.get("token");
-  return token && token.length > 0 ? token : null;
 }
 
 export const makeServerAuth = Effect.gen(function* () {
@@ -61,8 +56,7 @@ export const makeServerAuth = Effect.gen(function* () {
   const authenticateRequest = (request: HttpServerRequest.HttpServerRequest) => {
     const cookieToken = request.cookies[sessions.cookieName];
     const bearerToken = parseBearerToken(request);
-    const queryToken = parseQueryToken(request);
-    const credential = cookieToken ?? bearerToken ?? queryToken;
+    const credential = cookieToken ?? bearerToken;
     if (!credential) {
       return Effect.fail(
         new AuthError({
@@ -112,11 +106,13 @@ export const makeServerAuth = Effect.gen(function* () {
       Effect.map(
         (session) =>
           ({
-            authenticated: true,
-            sessionMethod: session.method,
+            response: {
+              authenticated: true,
+              sessionMethod: session.method,
+              expiresAt: DateTime.toUtc(session.expiresAt),
+            } satisfies AuthBootstrapResult,
             sessionToken: session.token,
-            expiresAt: DateTime.toUtc(session.expiresAt),
-          }) satisfies AuthBootstrapResult,
+          }) satisfies BootstrapExchangeResult,
       ),
     );
 

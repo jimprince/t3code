@@ -65,7 +65,19 @@ describe("resolveInitialServerAuthGateState", () => {
         jsonResponse({
           authenticated: true,
           sessionMethod: "browser-session-cookie",
-          sessionToken: "session-token",
+          expiresAt: "2026-04-05T00:00:00.000Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          authenticated: true,
+          auth: {
+            policy: "loopback-browser",
+            bootstrapMethods: ["one-time-token"],
+            sessionMethods: ["browser-session-cookie"],
+            sessionCookieName: "t3_session",
+          },
+          sessionMethod: "browser-session-cookie",
           expiresAt: "2026-04-05T00:00:00.000Z",
         }),
       );
@@ -207,7 +219,19 @@ describe("resolveInitialServerAuthGateState", () => {
         jsonResponse({
           authenticated: true,
           sessionMethod: "browser-session-cookie",
-          sessionToken: "session-token",
+          expiresAt: "2026-04-05T00:00:00.000Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          authenticated: true,
+          auth: {
+            policy: "loopback-browser",
+            bootstrapMethods: ["one-time-token"],
+            sessionMethods: ["browser-session-cookie"],
+            sessionCookieName: "t3_session",
+          },
+          sessionMethod: "browser-session-cookie",
           expiresAt: "2026-04-05T00:00:00.000Z",
         }),
       );
@@ -229,6 +253,52 @@ describe("resolveInitialServerAuthGateState", () => {
     await expect(submitServerAuthCredential("retry-token")).resolves.toBeUndefined();
     await expect(resolveInitialServerAuthGateState()).resolves.toEqual({
       status: "authenticated",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("revalidates the server session state after a previous authenticated result", async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          authenticated: true,
+          auth: {
+            policy: "loopback-browser",
+            bootstrapMethods: ["one-time-token"],
+            sessionMethods: ["browser-session-cookie"],
+            sessionCookieName: "t3_session",
+          },
+          sessionMethod: "browser-session-cookie",
+          expiresAt: "2026-04-05T00:00:00.000Z",
+        }),
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          authenticated: false,
+          auth: {
+            policy: "loopback-browser",
+            bootstrapMethods: ["one-time-token"],
+            sessionMethods: ["browser-session-cookie"],
+            sessionCookieName: "t3_session",
+          },
+        }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { resolveInitialServerAuthGateState } = await import("./authBootstrap");
+
+    await expect(resolveInitialServerAuthGateState()).resolves.toEqual({
+      status: "authenticated",
+    });
+    await expect(resolveInitialServerAuthGateState()).resolves.toEqual({
+      status: "requires-auth",
+      auth: {
+        policy: "loopback-browser",
+        bootstrapMethods: ["one-time-token"],
+        sessionMethods: ["browser-session-cookie"],
+        sessionCookieName: "t3_session",
+      },
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

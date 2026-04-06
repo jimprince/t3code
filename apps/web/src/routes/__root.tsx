@@ -16,10 +16,10 @@ import { Throttler } from "@tanstack/react-pacer";
 
 import { APP_DISPLAY_NAME } from "../branding";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
-import { SplashScreen } from "../components/SplashScreen";
 import {
   SlowRpcAckToastCoordinator,
   WebSocketConnectionCoordinator,
+  WebSocketConnectionSurface,
 } from "../components/WebSocketConnectionSurface";
 import { Button } from "../components/ui/button";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "../components/ui/toast";
@@ -63,7 +63,6 @@ export const Route = createRootRouteWithContext<{
 
 function RootRouteView() {
   const pathname = useLocation({ select: (location) => location.pathname });
-  const bootstrapComplete = useStore((store) => store.bootstrapComplete);
 
   if (pathname === "/pair") {
     return <Outlet />;
@@ -77,13 +76,11 @@ function RootRouteView() {
         <EventRouter />
         <WebSocketConnectionCoordinator />
         <SlowRpcAckToastCoordinator />
-        {bootstrapComplete ? (
+        <WebSocketConnectionSurface>
           <AppSidebarLayout>
             <Outlet />
           </AppSidebarLayout>
-        ) : (
-          <SplashScreen />
-        )}
+        </WebSocketConnectionSurface>
       </AnchoredToastProvider>
     </ToastProvider>
   );

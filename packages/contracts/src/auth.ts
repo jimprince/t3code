@@ -105,7 +105,6 @@ export type AuthBootstrapInput = typeof AuthBootstrapInput.Type;
 export const AuthBootstrapResult = Schema.Struct({
   authenticated: Schema.Literal(true),
   sessionMethod: ServerAuthSessionMethod,
-  sessionToken: TrimmedNonEmptyString,
   expiresAt: Schema.DateTimeUtc,
 });
 export type AuthBootstrapResult = typeof AuthBootstrapResult.Type;

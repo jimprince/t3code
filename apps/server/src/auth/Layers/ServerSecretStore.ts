@@ -16,6 +16,15 @@ export const makeServerSecretStore = Effect.gen(function* () {
   const serverConfig = yield* ServerConfig;
 
   yield* fileSystem.makeDirectory(serverConfig.secretsDir, { recursive: true });
+  yield* fileSystem.chmod(serverConfig.secretsDir, 0o700).pipe(
+    Effect.mapError(
+      (cause) =>
+        new SecretStoreError({
+          message: `Failed to secure secrets directory ${serverConfig.secretsDir}.`,
+          cause,
+        }),
+    ),
+  );
 
   const resolveSecretPath = (name: string) => path.join(serverConfig.secretsDir, `${name}.bin`);
 
@@ -42,7 +51,9 @@ export const makeServerSecretStore = Effect.gen(function* () {
     const tempPath = `${secretPath}.${Crypto.randomUUID()}.tmp`;
     return Effect.gen(function* () {
       yield* fileSystem.writeFile(tempPath, value);
+      yield* fileSystem.chmod(tempPath, 0o600);
       yield* fileSystem.rename(tempPath, secretPath);
+      yield* fileSystem.chmod(secretPath, 0o600);
     }).pipe(
       Effect.catch((cause) =>
         fileSystem.remove(tempPath).pipe(

@@ -368,3 +368,7 @@ export function SlowRpcAckToastCoordinator() {
 
   return null;
 }
+
+export function WebSocketConnectionSurface({ children }: { readonly children: ReactNode }) {
+  return children;
+}

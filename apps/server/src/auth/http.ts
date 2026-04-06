@@ -40,9 +40,9 @@ export const authBootstrapRouteLayer = HttpRouter.add(
     );
     const result = yield* serverAuth.exchangeBootstrapCredential(payload.credential);
 
-    return yield* HttpServerResponse.jsonUnsafe(result, { status: 200 }).pipe(
+    return yield* HttpServerResponse.jsonUnsafe(result.response, { status: 200 }).pipe(
       HttpServerResponse.setCookie(descriptor.sessionCookieName, result.sessionToken, {
-        expires: DateTime.toDate(result.expiresAt),
+        expires: DateTime.toDate(result.response.expiresAt),
         httpOnly: true,
         path: "/",
         sameSite: "lax",

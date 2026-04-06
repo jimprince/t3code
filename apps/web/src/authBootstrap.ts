@@ -108,7 +108,7 @@ export async function submitServerAuthCredential(credential: string): Promise<vo
   }
 
   await exchangeBootstrapCredential(trimmedCredential);
-  bootstrapPromise = Promise.resolve({ status: "authenticated" } satisfies ServerAuthGateState);
+  bootstrapPromise = null;
   stripPairingTokenFromUrl();
 }
 
@@ -117,12 +117,13 @@ export function resolveInitialServerAuthGateState(): Promise<ServerAuthGateState
     return bootstrapPromise;
   }
 
-  bootstrapPromise = bootstrapServerAuth().catch((error) => {
-    bootstrapPromise = null;
-    throw error;
+  const nextBootstrapPromise = bootstrapServerAuth();
+  bootstrapPromise = nextBootstrapPromise;
+  return nextBootstrapPromise.finally(() => {
+    if (bootstrapPromise === nextBootstrapPromise) {
+      bootstrapPromise = null;
+    }
   });
-
-  return bootstrapPromise;
 }
 
 export function __resetServerAuthBootstrapForTests() {

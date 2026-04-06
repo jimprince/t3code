@@ -43,6 +43,7 @@ import {
 } from "effect/unstable/http";
 import { OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import * as Socket from "effect/unstable/socket/Socket";
 import { vi } from "vitest";
 
 import type { ServerConfigShape } from "./config.ts";
@@ -118,8 +119,6 @@ const testEnvironmentDescriptor = {
     repositoryIdentity: true,
   },
 };
-let cachedDefaultSessionToken: string | null = null;
-
 const makeDefaultOrchestrationReadModel = () => {
   const now = new Date().toISOString();
   return {
@@ -303,7 +302,6 @@ const buildAppUnderTest = (options?: {
   };
 }) =>
   Effect.gen(function* () {
-    cachedDefaultSessionToken = null;
     const fileSystem = yield* FileSystem.FileSystem;
     const tempBaseDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-router-test-" });
     const baseDir = options?.config?.baseDir ?? tempBaseDir;
@@ -474,11 +472,37 @@ const buildAppUnderTest = (options?: {
     return config;
   });
 
-const wsRpcProtocolLayer = (wsUrl: string) =>
-  RpcClient.layerProtocolSocket().pipe(
-    Layer.provide(NodeSocket.layerWebSocket(wsUrl)),
+const parseSessionCookieFromWsUrl = (
+  wsUrl: string,
+): { readonly cookie: string | null; readonly url: string } => {
+  const next = new URL(wsUrl);
+  const cookie = next.hash.startsWith("#cookie=")
+    ? decodeURIComponent(next.hash.slice("#cookie=".length))
+    : null;
+  next.hash = "";
+  return {
+    cookie,
+    url: next.toString(),
+  };
+};
+
+const wsRpcProtocolLayer = (wsUrl: string) => {
+  const { cookie, url } = parseSessionCookieFromWsUrl(wsUrl);
+  const webSocketConstructorLayer = Layer.succeed(
+    Socket.WebSocketConstructor,
+    (socketUrl, protocols) =>
+      new NodeSocket.NodeWS.WebSocket(
+        socketUrl,
+        protocols,
+        cookie ? { headers: { cookie } } : undefined,
+      ) as unknown as globalThis.WebSocket,
+  );
+
+  return RpcClient.layerProtocolSocket().pipe(
+    Layer.provide(Socket.layerWebSocket(url).pipe(Layer.provide(webSocketConstructorLayer))),
     Layer.provide(RpcSerialization.layerJson),
   );
+};
 
 const makeWsRpcClient = RpcClient.make(WsRpcGroup);
 type WsRpcClient =
@@ -489,10 +513,10 @@ const withWsRpcClient = <A, E, R>(
   f: (client: WsRpcClient) => Effect.Effect<A, E, R>,
 ) => makeWsRpcClient.pipe(Effect.flatMap(f), Effect.provide(wsRpcProtocolLayer(wsUrl)));
 
-const appendSessionTokenToUrl = (url: string, sessionToken: string) => {
+const appendSessionCookieToWsUrl = (url: string, sessionCookieHeader: string) => {
   const isAbsoluteUrl = /^[a-zA-Z][a-zA-Z\d+.-]*:/.test(url);
   const next = new URL(url, "http://localhost");
-  next.searchParams.set("token", sessionToken);
+  next.hash = `cookie=${encodeURIComponent(sessionCookieHeader)}`;
   return isAbsoluteUrl ? next.toString() : `${next.pathname}${next.search}${next.hash}`;
 };
 
@@ -520,7 +544,6 @@ const bootstrapBrowserSession = (credential = defaultDesktopBootstrapToken) =>
     const body = (yield* Effect.promise(() => response.json())) as {
       readonly authenticated: boolean;
       readonly sessionMethod: string;
-      readonly sessionToken: string;
       readonly expiresAt: string;
     };
     return {
@@ -530,29 +553,34 @@ const bootstrapBrowserSession = (credential = defaultDesktopBootstrapToken) =>
     };
   });
 
-const getAuthenticatedSessionToken = (credential = defaultDesktopBootstrapToken) =>
+const getAuthenticatedSessionCookieHeader = (credential = defaultDesktopBootstrapToken) =>
   Effect.gen(function* () {
-    if (credential === defaultDesktopBootstrapToken && cachedDefaultSessionToken) {
-      return cachedDefaultSessionToken;
-    }
-
-    const { response, body } = yield* bootstrapBrowserSession(credential);
+    const { response, cookie } = yield* bootstrapBrowserSession(credential);
     if (!response.ok) {
       return yield* Effect.fail(
         new Error(`Expected bootstrap session response to succeed, got ${response.status}`),
       );
     }
 
-    if (credential === defaultDesktopBootstrapToken) {
-      cachedDefaultSessionToken = body.sessionToken;
+    if (!cookie) {
+      return yield* Effect.fail(new Error("Expected bootstrap session response to set a cookie."));
     }
 
-    return body.sessionToken;
+    return cookie.split(";")[0] ?? cookie;
   });
+
+const extractSessionTokenFromSetCookie = (cookieHeader: string): string => {
+  const [nameValue] = cookieHeader.split(";", 1);
+  const token = nameValue?.split("=", 2)[1];
+  if (!token) {
+    throw new Error("Expected session cookie header to contain a token value.");
+  }
+  return token;
+};
 
 const getWsServerUrl = (
   pathname = "",
-  options?: { authenticated?: boolean; sessionToken?: string; credential?: string },
+  options?: { authenticated?: boolean; credential?: string },
 ) =>
   Effect.gen(function* () {
     const server = yield* HttpServer.HttpServer;
@@ -561,9 +589,9 @@ const getWsServerUrl = (
     if (options?.authenticated === false) {
       return baseUrl;
     }
-    return appendSessionTokenToUrl(
+    return appendSessionCookieToWsUrl(
       baseUrl,
-      options?.sessionToken ?? (yield* getAuthenticatedSessionToken(options?.credential)),
+      yield* getAuthenticatedSessionCookieHeader(options?.credential),
     );
   });
 
@@ -615,10 +643,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const response = yield* HttpClient.get(
-        appendSessionTokenToUrl(
-          `/api/project-favicon?cwd=${encodeURIComponent(projectDir)}`,
-          yield* getAuthenticatedSessionToken(),
-        ),
+        `/api/project-favicon?cwd=${encodeURIComponent(projectDir)}`,
+        {
+          headers: {
+            cookie: yield* getAuthenticatedSessionCookieHeader(),
+          },
+        },
       );
 
       assert.equal(response.status, 200);
@@ -638,10 +668,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       });
 
       const response = yield* HttpClient.get(
-        appendSessionTokenToUrl(
-          `/api/project-favicon?cwd=${encodeURIComponent(projectDir)}`,
-          yield* getAuthenticatedSessionToken(),
-        ),
+        `/api/project-favicon?cwd=${encodeURIComponent(projectDir)}`,
+        {
+          headers: {
+            cookie: yield* getAuthenticatedSessionCookieHeader(),
+          },
+        },
       );
 
       assert.equal(response.status, 200);
@@ -690,6 +722,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(bootstrapResponse.status, 200);
       assert.equal(bootstrapBody.authenticated, true);
       assert.equal(bootstrapBody.sessionMethod, "browser-session-cookie");
+      assert.isUndefined((bootstrapBody as { readonly sessionToken?: string }).sessionToken);
       assert.isDefined(setCookie);
 
       const sessionUrl = yield* getHttpServerUrl("/api/auth/session");
@@ -727,17 +760,41 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("accepts websocket rpc handshake with a bootstrapped session token", () =>
+  it.effect(
+    "does not accept session tokens via query parameters on authenticated HTTP routes",
+    () =>
+      Effect.gen(function* () {
+        const fileSystem = yield* FileSystem.FileSystem;
+        const projectDir = yield* fileSystem.makeTempDirectoryScoped({
+          prefix: "t3-router-project-favicon-query-token-",
+        });
+
+        yield* buildAppUnderTest();
+
+        const { cookie } = yield* bootstrapBrowserSession();
+        assert.isDefined(cookie);
+        const sessionToken = extractSessionTokenFromSetCookie(cookie ?? "");
+
+        const response = yield* HttpClient.get(
+          `/api/project-favicon?cwd=${encodeURIComponent(projectDir)}&token=${encodeURIComponent(sessionToken)}`,
+        );
+
+        assert.equal(response.status, 401);
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("accepts websocket rpc handshake with a bootstrapped browser session cookie", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
 
-      const { response: bootstrapResponse, body: bootstrapBody } = yield* bootstrapBrowserSession();
+      const { response: bootstrapResponse, cookie } = yield* bootstrapBrowserSession();
 
       assert.equal(bootstrapResponse.status, 200);
+      assert.isDefined(cookie);
 
-      const wsUrl = appendSessionTokenToUrl(
+      const wsUrl = appendSessionCookieToWsUrl(
         yield* getWsServerUrl("/ws", { authenticated: false }),
-        bootstrapBody.sessionToken,
+        cookie?.split(";")[0] ?? "",
       );
       const response = yield* Effect.scoped(
         withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverGetConfig]({})),
@@ -746,6 +803,26 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(response.environment.environmentId, testEnvironmentDescriptor.environmentId);
       assert.equal(response.auth.policy, "desktop-managed-local");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect(
+    "rejects websocket rpc handshake when a session token is only provided via query string",
+    () =>
+      Effect.gen(function* () {
+        yield* buildAppUnderTest();
+
+        const { cookie } = yield* bootstrapBrowserSession();
+        assert.isDefined(cookie);
+        const sessionToken = extractSessionTokenFromSetCookie(cookie ?? "");
+        const wsUrl = `${yield* getWsServerUrl("/ws", { authenticated: false })}?token=${encodeURIComponent(sessionToken)}`;
+
+        const error = yield* Effect.flip(
+          Effect.scoped(withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverGetConfig]({}))),
+        );
+
+        assert.equal(error._tag, "RpcClientError");
+        assertInclude(String(error), "401");
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect("serves attachment files from state dir", () =>
@@ -764,12 +841,11 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* fileSystem.makeDirectory(path.dirname(attachmentPath), { recursive: true });
       yield* fileSystem.writeFileString(attachmentPath, "attachment-ok");
 
-      const response = yield* HttpClient.get(
-        appendSessionTokenToUrl(
-          `/attachments/${attachmentId}`,
-          yield* getAuthenticatedSessionToken(),
-        ),
-      );
+      const response = yield* HttpClient.get(`/attachments/${attachmentId}`, {
+        headers: {
+          cookie: yield* getAuthenticatedSessionCookieHeader(),
+        },
+      });
       assert.equal(response.status, 200);
       assert.equal(yield* response.text, "attachment-ok");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
@@ -791,10 +867,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* fileSystem.writeFileString(attachmentPath, "attachment-encoded-ok");
 
       const response = yield* HttpClient.get(
-        appendSessionTokenToUrl(
-          "/attachments/thread%20folder/message%20folder/file%20name.png",
-          yield* getAuthenticatedSessionToken(),
-        ),
+        "/attachments/thread%20folder/message%20folder/file%20name.png",
+        {
+          headers: {
+            cookie: yield* getAuthenticatedSessionCookieHeader(),
+          },
+        },
       );
       assert.equal(response.status, 200);
       assert.equal(yield* response.text, "attachment-encoded-ok");
@@ -931,7 +1009,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
       const response = yield* HttpClient.post("/api/observability/v1/traces", {
         headers: {
-          authorization: `Bearer ${yield* getAuthenticatedSessionToken()}`,
+          cookie: yield* getAuthenticatedSessionCookieHeader(),
           "content-type": "application/json",
           origin: "http://localhost:5733",
         },
@@ -1040,7 +1118,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
 
         const response = yield* HttpClient.post("/api/observability/v1/traces", {
           headers: {
-            authorization: `Bearer ${yield* getAuthenticatedSessionToken()}`,
+            cookie: yield* getAuthenticatedSessionCookieHeader(),
             "content-type": "application/json",
           },
           body: HttpBody.text(JSON.stringify(payload), "application/json"),
@@ -1087,10 +1165,12 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest();
 
       const response = yield* HttpClient.get(
-        appendSessionTokenToUrl(
-          "/attachments/missing-11111111-1111-4111-8111-111111111111",
-          yield* getAuthenticatedSessionToken(),
-        ),
+        "/attachments/missing-11111111-1111-4111-8111-111111111111",
+        {
+          headers: {
+            cookie: yield* getAuthenticatedSessionCookieHeader(),
+          },
+        },
       );
       assert.equal(response.status, 404);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),

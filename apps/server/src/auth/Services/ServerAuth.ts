@@ -24,9 +24,13 @@ export interface ServerAuthShape {
   readonly getSessionState: (
     request: HttpServerRequest.HttpServerRequest,
   ) => Effect.Effect<AuthSessionState, never>;
-  readonly exchangeBootstrapCredential: (
-    credential: string,
-  ) => Effect.Effect<AuthBootstrapResult, AuthError>;
+  readonly exchangeBootstrapCredential: (credential: string) => Effect.Effect<
+    {
+      readonly response: AuthBootstrapResult;
+      readonly sessionToken: string;
+    },
+    AuthError
+  >;
   readonly authenticateHttpRequest: (
     request: HttpServerRequest.HttpServerRequest,
   ) => Effect.Effect<AuthenticatedSession, AuthError>;

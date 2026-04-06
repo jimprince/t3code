@@ -11,7 +11,7 @@ const makeServerConfigLayer = () =>
   ServerConfig.layerTest(process.cwd(), { prefix: "t3-secret-store-test-" });
 
 const makeServerSecretStoreLayer = () =>
-  ServerSecretStoreLive.pipe(Layer.provide(makeServerConfigLayer()));
+  Layer.provide(ServerSecretStoreLive, makeServerConfigLayer());
 
 const PermissionDeniedFileSystemLayer = Layer.effect(
   FileSystem.FileSystem,
@@ -37,7 +37,7 @@ const PermissionDeniedFileSystemLayer = Layer.effect(
 const makePermissionDeniedSecretStoreLayer = () =>
   ServerSecretStoreLive.pipe(
     Layer.provide(makeServerConfigLayer()),
-    Layer.provide(PermissionDeniedFileSystemLayer),
+    Layer.provideMerge(PermissionDeniedFileSystemLayer),
   );
 
 const RenameFailureFileSystemLayer = Layer.effect(
@@ -64,7 +64,7 @@ const RenameFailureFileSystemLayer = Layer.effect(
 const makeRenameFailureSecretStoreLayer = () =>
   ServerSecretStoreLive.pipe(
     Layer.provide(makeServerConfigLayer()),
-    Layer.provide(RenameFailureFileSystemLayer),
+    Layer.provideMerge(RenameFailureFileSystemLayer),
   );
 
 const RemoveFailureFileSystemLayer = Layer.effect(
@@ -91,7 +91,7 @@ const RemoveFailureFileSystemLayer = Layer.effect(
 const makeRemoveFailureSecretStoreLayer = () =>
   ServerSecretStoreLive.pipe(
     Layer.provide(makeServerConfigLayer()),
-    Layer.provide(RemoveFailureFileSystemLayer),
+    Layer.provideMerge(RemoveFailureFileSystemLayer),
   );
 
 it.layer(NodeServices.layer)("ServerSecretStoreLive", (it) => {
@@ -114,6 +114,45 @@ it.layer(NodeServices.layer)("ServerSecretStoreLive", (it) => {
 
       expect(Array.from(second)).toEqual(Array.from(first));
     }).pipe(Effect.provide(makeServerSecretStoreLayer())),
+  );
+
+  it.effect("uses restrictive permissions for the secret directory and files", () =>
+    Effect.gen(function* () {
+      const chmodCalls: Array<{ readonly path: string; readonly mode: number }> = [];
+      const recordingFileSystemLayer = Layer.effect(
+        FileSystem.FileSystem,
+        Effect.gen(function* () {
+          const fileSystem = yield* FileSystem.FileSystem;
+
+          return {
+            ...fileSystem,
+            makeDirectory: () => Effect.void,
+            writeFile: () => Effect.void,
+            rename: () => Effect.void,
+            chmod: (path, mode) =>
+              Effect.sync(() => {
+                chmodCalls.push({ path: String(path), mode });
+              }),
+          } satisfies FileSystem.FileSystem;
+        }),
+      ).pipe(Layer.provide(NodeServices.layer));
+
+      const secretStore = yield* Effect.service(ServerSecretStore).pipe(
+        Effect.provide(
+          ServerSecretStoreLive.pipe(
+            Layer.provide(makeServerConfigLayer()),
+            Layer.provideMerge(recordingFileSystemLayer),
+          ),
+        ),
+      );
+
+      yield* secretStore.set("session-signing-key", Uint8Array.from([1, 2, 3]));
+
+      expect(chmodCalls.some((call) => call.mode === 0o700 && call.path.endsWith("/secrets"))).toBe(
+        true,
+      );
+      expect(chmodCalls.filter((call) => call.mode === 0o600).length).toBeGreaterThanOrEqual(2);
+    }).pipe(Effect.provide(NodeServices.layer)),
   );
 
   it.effect("propagates read failures other than missing-file errors", () =>
