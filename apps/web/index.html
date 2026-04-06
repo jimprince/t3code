@@ -54,165 +54,21 @@
         min-height: 100%;
         align-items: center;
         justify-content: center;
-        padding: 24px;
-        background:
-          radial-gradient(44rem 16rem at top, rgba(59, 130, 246, 0.08), transparent),
-          linear-gradient(145deg, rgba(250, 250, 250, 0.96) 0%, rgba(255, 255, 255, 1) 55%);
-      }
-
-      html.dark #boot-shell {
-        background:
-          radial-gradient(44rem 16rem at top, rgba(59, 130, 246, 0.12), transparent),
-          linear-gradient(145deg, rgba(10, 10, 10, 0.98) 0%, rgba(18, 18, 18, 1) 55%);
+        background: inherit;
       }
 
       #boot-shell-card {
-        width: min(100%, 36rem);
-        border-radius: 28px;
-        border: 1px solid rgba(24, 24, 27, 0.08);
-        background: rgba(255, 255, 255, 0.92);
-        padding: 24px;
-        box-shadow: 0 20px 70px rgba(15, 23, 42, 0.12);
-        backdrop-filter: blur(18px);
-      }
-
-      html.dark #boot-shell-card {
-        border-color: rgba(255, 255, 255, 0.08);
-        background: rgba(24, 24, 27, 0.9);
-        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
-      }
-
-      #boot-shell-header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-      }
-
-      #boot-shell-eyebrow {
-        margin: 0;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        opacity: 0.72;
-      }
-
-      #boot-shell-title {
-        margin: 12px 0 0;
-        font-size: clamp(1.5rem, 2vw, 2rem);
-        font-weight: 700;
-        letter-spacing: -0.03em;
-      }
-
-      #boot-shell-copy {
-        margin: 10px 0 0;
-        font-size: 0.92rem;
-        line-height: 1.55;
-        opacity: 0.72;
-      }
-
-      #boot-shell-icon {
         display: flex;
         align-items: center;
         justify-content: center;
-        border-radius: 16px;
-        border: 1px solid rgba(24, 24, 27, 0.08);
-        background: rgba(255, 255, 255, 0.8);
-        padding: 12px;
-        box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
+        width: 96px;
+        height: 96px;
       }
 
-      html.dark #boot-shell-icon {
-        border-color: rgba(255, 255, 255, 0.08);
-        background: rgba(10, 10, 10, 0.8);
-      }
-
-      #boot-shell-spinner {
-        width: 20px;
-        height: 20px;
-        border-radius: 999px;
-        border: 2px solid rgba(113, 113, 122, 0.32);
-        border-top-color: currentColor;
-        animation: boot-shell-spin 0.9s linear infinite;
-      }
-
-      #boot-shell-status {
-        display: grid;
-        gap: 12px;
-        margin-top: 20px;
-        border-radius: 18px;
-        border: 1px solid rgba(24, 24, 27, 0.08);
-        background: rgba(255, 255, 255, 0.6);
-        padding: 16px;
-      }
-
-      html.dark #boot-shell-status {
-        border-color: rgba(255, 255, 255, 0.08);
-        background: rgba(10, 10, 10, 0.6);
-      }
-
-      @media (min-width: 640px) {
-        #boot-shell-status {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
-      .boot-shell-status-label {
-        margin: 0;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
-        opacity: 0.72;
-      }
-
-      .boot-shell-status-value {
-        margin: 4px 0 0;
-        font-size: 15px;
-        font-weight: 600;
-      }
-
-      #boot-shell-actions {
-        display: flex;
-        gap: 8px;
-        margin-top: 20px;
-      }
-
-      #boot-shell-button,
-      #boot-shell-details {
-        border-radius: 10px;
-        font: inherit;
-      }
-
-      #boot-shell-button {
-        border: 0;
-        background: #2563eb;
-        color: white;
-        padding: 10px 14px;
-        font-size: 14px;
-        font-weight: 600;
-      }
-
-      #boot-shell-details {
-        margin-top: 20px;
-        border: 1px solid rgba(24, 24, 27, 0.08);
-        background: rgba(255, 255, 255, 0.55);
-        padding: 10px 12px;
-        font-size: 12px;
-        font-weight: 500;
-        opacity: 0.72;
-      }
-
-      html.dark #boot-shell-details {
-        border-color: rgba(255, 255, 255, 0.08);
-        background: rgba(10, 10, 10, 0.55);
-      }
-
-      @keyframes boot-shell-spin {
-        to {
-          transform: rotate(360deg);
-        }
+      #boot-shell-logo {
+        width: 64px;
+        height: 64px;
+        object-fit: contain;
       }
     </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -226,37 +82,9 @@
   <body>
     <div id="root">
       <div id="boot-shell">
-        <section id="boot-shell-card" aria-live="polite">
-          <div id="boot-shell-header">
-            <div>
-              <p id="boot-shell-eyebrow">Starting Session</p>
-              <h1 id="boot-shell-title">Connecting to T3 Code (Alpha)</h1>
-            </div>
-            <div id="boot-shell-icon" aria-hidden="true">
-              <div id="boot-shell-spinner"></div>
-            </div>
-          </div>
-          <p id="boot-shell-copy">
-            Opening the WebSocket connection to the T3 Code (Alpha) server and waiting for the
-            initial config snapshot.
-          </p>
-          <div id="boot-shell-status">
-            <div>
-              <p class="boot-shell-status-label">Connection</p>
-              <p class="boot-shell-status-value">Opening WebSocket</p>
-            </div>
-            <div>
-              <p class="boot-shell-status-label">Latest Event</p>
-              <p class="boot-shell-status-value">Pending</p>
-            </div>
-          </div>
-          <div id="boot-shell-actions">
-            <button id="boot-shell-button" type="button" onclick="window.location.reload()">
-              Reload app
-            </button>
-          </div>
-          <div id="boot-shell-details">Show connection details</div>
-        </section>
+        <div id="boot-shell-card" aria-label="T3 Code splash screen">
+          <img id="boot-shell-logo" src="/apple-touch-icon.png" alt="T3 Code" />
+        </div>
       </div>
     </div>
     <script type="module" src="/src/main.tsx"></script>

@@ -1,6 +1,6 @@
 import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
 
-import { PairingRouteSurface } from "../components/auth/PairingRouteSurface";
+import { PairingPendingSurface, PairingRouteSurface } from "../components/auth/PairingRouteSurface";
 import { resolveInitialServerAuthGateState } from "../authBootstrap";
 
 export const Route = createFileRoute("/pair")({
@@ -14,6 +14,7 @@ export const Route = createFileRoute("/pair")({
     };
   },
   component: PairRouteView,
+  pendingComponent: PairRoutePendingView,
 });
 
 function PairRouteView() {
@@ -33,4 +34,8 @@ function PairRouteView() {
       {...(authGateState.errorMessage ? { initialErrorMessage: authGateState.errorMessage } : {})}
     />
   );
+}
+
+function PairRoutePendingView() {
+  return <PairingPendingSurface />;
 }

@@ -16,11 +16,10 @@ import { Throttler } from "@tanstack/react-pacer";
 
 import { APP_DISPLAY_NAME } from "../branding";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
-import { BootShell } from "../components/BootShell";
+import { SplashScreen } from "../components/SplashScreen";
 import {
   SlowRpcAckToastCoordinator,
   WebSocketConnectionCoordinator,
-  WebSocketConnectionSurface,
 } from "../components/WebSocketConnectionSurface";
 import { Button } from "../components/ui/button";
 import { AnchoredToastProvider, ToastProvider, toastManager } from "../components/ui/toast";
@@ -49,19 +48,14 @@ import { collectActiveTerminalThreadIds } from "../lib/terminalStateCleanup";
 import { deriveOrchestrationBatchEffects } from "../orchestrationEventEffects";
 import { createOrchestrationRecoveryCoordinator } from "../orchestrationRecovery";
 import { deriveReplayRetryDecision } from "../orchestrationRecovery";
-import { resolveInitialServerAuthGateState } from "../authBootstrap";
 import { configureClientTracing } from "../observability/clientTracing";
 import { getWsRpcClient } from "~/wsRpcClient";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
 }>()({
-  beforeLoad: async () => ({
-    authGateState: await resolveInitialServerAuthGateState(),
-  }),
   component: RootRouteView,
   errorComponent: RootRouteErrorView,
-  pendingComponent: RootRoutePendingView,
   head: () => ({
     meta: [{ name: "title", content: APP_DISPLAY_NAME }],
   }),
@@ -69,13 +63,9 @@ export const Route = createRootRouteWithContext<{
 
 function RootRouteView() {
   const pathname = useLocation({ select: (location) => location.pathname });
-  const { authGateState } = Route.useRouteContext();
+  const bootstrapComplete = useStore((store) => store.bootstrapComplete);
 
   if (pathname === "/pair") {
-    return <Outlet />;
-  }
-
-  if (authGateState.status !== "authenticated") {
     return <Outlet />;
   }
 
@@ -87,23 +77,15 @@ function RootRouteView() {
         <EventRouter />
         <WebSocketConnectionCoordinator />
         <SlowRpcAckToastCoordinator />
-        <WebSocketConnectionSurface>
+        {bootstrapComplete ? (
           <AppSidebarLayout>
             <Outlet />
           </AppSidebarLayout>
-        </WebSocketConnectionSurface>
+        ) : (
+          <SplashScreen />
+        )}
       </AnchoredToastProvider>
     </ToastProvider>
-  );
-}
-
-function RootRoutePendingView() {
-  return (
-    <BootShell
-      eyebrow="Starting Session"
-      title={`Connecting to ${APP_DISPLAY_NAME}`}
-      copy={`Opening the WebSocket connection to the ${APP_DISPLAY_NAME} server and waiting for the initial config snapshot.`}
-    />
   );
 }
 
