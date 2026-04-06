@@ -201,6 +201,9 @@ describe("resolveInitialServerAuthGateState", () => {
       },
     });
     await expect(submitServerAuthCredential("retry-token")).resolves.toBeUndefined();
+    await expect(resolveInitialServerAuthGateState()).resolves.toEqual({
+      status: "authenticated",
+    });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });
