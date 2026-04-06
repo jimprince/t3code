@@ -255,7 +255,7 @@ function resolveThreadPr(
 }
 
 interface SidebarThreadRowProps {
-  thread: SidebarThreadSummary;
+  thread: SidebarThreadSummary | undefined;
   projectCwd: string | null;
   orderedProjectThreadIds: readonly ThreadId[];
   routeThreadId: ThreadId | null;
@@ -291,16 +291,23 @@ interface SidebarThreadRowProps {
 
 function SidebarThreadRow(props: SidebarThreadRowProps) {
   const { thread } = props;
-  const lastVisitedAt = useUiStateStore((state) => state.threadLastVisitedAtById[thread.id]);
-  const runningTerminalIds = useTerminalStateStore(
-    (state) =>
-      selectThreadTerminalState(state.terminalStateByThreadId, thread.id).runningTerminalIds,
+  const threadId = thread?.id ?? null;
+  const lastVisitedAt = useUiStateStore((state) =>
+    threadId ? state.threadLastVisitedAtById[threadId] : undefined,
+  );
+  const runningTerminalIds = useTerminalStateStore((state) =>
+    threadId
+      ? selectThreadTerminalState(state.terminalStateByThreadId, threadId).runningTerminalIds
+      : [],
   );
   const gitCwd = thread?.worktreePath ?? props.projectCwd;
   const gitStatus = useGitStatus(thread?.branch != null ? gitCwd : null);
+  if (!thread || threadId === null) {
+    return null;
+  }
 
-  const isActive = props.routeThreadId === thread.id;
-  const isSelected = props.selectedThreadIds.has(thread.id);
+  const isActive = props.routeThreadId === threadId;
+  const isSelected = props.selectedThreadIds.has(threadId);
   const isHighlighted = isActive || isSelected;
   const isThreadRunning =
     thread.session?.status === "running" && thread.session.activeTurnId != null;
@@ -674,6 +681,7 @@ function SortableProjectItem({
 }
 
 export default function Sidebar() {
+  const activeEnvironmentId = useStore((store) => store.activeEnvironmentId);
   const projects = useStore((store) => store.projects);
   const sidebarThreadsByScopedId = useStore((store) => store.sidebarThreadsByScopedId);
   const threadScopedIdsByProjectScopedId = useStore(
@@ -785,15 +793,14 @@ export default function Sidebar() {
         .filter((thread): thread is NonNullable<typeof thread> => thread !== undefined),
     [sidebarThreadsByScopedId, threadScopedIdsByProjectScopedId],
   );
-  const sidebarThreadByScopedId = useMemo(
+  const activeSidebarThreadById = useMemo(
     () =>
       new Map(
-        sidebarThreads.map((thread) => [
-          getThreadScopedId({ environmentId: thread.environmentId, id: thread.id }),
-          thread,
-        ]),
+        sidebarThreads
+          .filter((thread) => thread.environmentId === activeEnvironmentId)
+          .map((thread) => [thread.id, thread]),
       ),
-    [sidebarThreads],
+    [activeEnvironmentId, sidebarThreads],
   );
   const routeTerminalOpen = routeThreadId
     ? selectThreadTerminalState(terminalStateByThreadId, routeThreadId).terminalOpen
@@ -1144,13 +1151,7 @@ export default function Sidebar() {
 
       if (clicked === "mark-unread") {
         for (const id of ids) {
-          let thread: SidebarThreadSummary | undefined;
-          for (const t of sidebarThreadByScopedId.values()) {
-            if (t.id === id) {
-              thread = t;
-              break;
-            }
-          }
+          const thread = activeSidebarThreadById.get(id);
           markThreadUnread(id, thread?.latestTurn?.completedAt);
         }
         clearSelection();
@@ -1181,7 +1182,7 @@ export default function Sidebar() {
       deleteThread,
       markThreadUnread,
       removeFromSelection,
-      sidebarThreadByScopedId,
+      activeSidebarThreadById,
       selectedThreadIds,
     ],
   );
@@ -1720,7 +1721,7 @@ export default function Sidebar() {
           {shouldShowThreadPanel &&
             renderedThreads.map((thread) => (
               <SidebarThreadRow
-                key={thread.id}
+                key={getThreadScopedId({ environmentId: thread.environmentId, id: thread.id })}
                 thread={thread}
                 projectCwd={project.cwd}
                 orderedProjectThreadIds={orderedProjectThreadIds}

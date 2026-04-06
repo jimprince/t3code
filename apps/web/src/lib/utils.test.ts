@@ -24,6 +24,10 @@ describe("isWindowsPlatform", () => {
 });
 
 describe("resolveServerUrl", () => {
+  it("falls back to the bootstrap environment URL when the explicit URL is empty", () => {
+    expect(resolveServerUrl({ url: "" })).toBe("http://bootstrap.test:4321/");
+  });
+
   it("uses the bootstrap environment URL when no explicit URL is provided", () => {
     expect(resolveServerUrl()).toBe("http://bootstrap.test:4321/");
   });
