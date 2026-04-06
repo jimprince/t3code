@@ -124,6 +124,7 @@ export const makeServerAuth = Effect.gen(function* () {
     bootstrapCredentials.issueOneTimeToken().pipe(
       Effect.map((credential) => {
         const url = new URL(baseUrl);
+        url.pathname = "/pair";
         url.searchParams.set("token", credential);
         return url.toString();
       }),

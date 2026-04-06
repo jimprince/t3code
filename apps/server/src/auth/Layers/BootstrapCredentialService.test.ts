@@ -41,6 +41,29 @@ it.layer(NodeServices.layer)("BootstrapCredentialServiceLive", (it) => {
     }).pipe(Effect.provide(makeBootstrapCredentialLayer())),
   );
 
+  it.effect("atomically consumes a one-time token when multiple requests race", () =>
+    Effect.gen(function* () {
+      const bootstrapCredentials = yield* BootstrapCredentialService;
+      const token = yield* bootstrapCredentials.issueOneTimeToken();
+      const results = yield* Effect.all(
+        Array.from({ length: 8 }, () => Effect.result(bootstrapCredentials.consume(token))),
+        {
+          concurrency: "unbounded",
+        },
+      );
+
+      const successes = results.filter((result) => result._tag === "Success");
+      const failures = results.filter((result) => result._tag === "Failure");
+
+      expect(successes).toHaveLength(1);
+      expect(failures).toHaveLength(7);
+      for (const failure of failures) {
+        expect(failure.failure._tag).toBe("BootstrapCredentialError");
+        expect(failure.failure.message).toContain("Unknown bootstrap credential");
+      }
+    }).pipe(Effect.provide(makeBootstrapCredentialLayer())),
+  );
+
   it.effect("seeds the desktop bootstrap credential as a one-time grant", () =>
     Effect.gen(function* () {
       const bootstrapCredentials = yield* BootstrapCredentialService;

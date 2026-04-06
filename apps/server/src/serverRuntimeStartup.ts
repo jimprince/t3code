@@ -246,22 +246,22 @@ const resolveStartupBrowserTarget = Effect.gen(function* () {
   );
 });
 
-const maybeOpenBrowser = Effect.gen(function* () {
-  const serverConfig = yield* ServerConfig;
-  if (serverConfig.noBrowser) {
-    return;
-  }
-  const { openBrowser } = yield* Open;
-  const target = yield* resolveStartupBrowserTarget;
+const maybeOpenBrowser = (target: string) =>
+  Effect.gen(function* () {
+    const serverConfig = yield* ServerConfig;
+    if (serverConfig.noBrowser) {
+      return;
+    }
+    const { openBrowser } = yield* Open;
 
-  yield* openBrowser(target).pipe(
-    Effect.catch(() =>
-      Effect.logInfo("browser auto-open unavailable", {
-        hint: `Open ${target} in your browser.`,
-      }),
-    ),
-  );
-});
+    yield* openBrowser(target).pipe(
+      Effect.catch(() =>
+        Effect.logInfo("browser auto-open unavailable", {
+          hint: `Open ${target} in your browser.`,
+        }),
+      ),
+    );
+  });
 
 const runStartupPhase = <A, E, R>(phase: string, effect: Effect.Effect<A, E, R>) =>
   effect.pipe(
@@ -383,13 +383,13 @@ const makeServerRuntimeStartup = Effect.gen(function* () {
       yield* Effect.logDebug("startup phase: recording startup heartbeat");
       yield* launchStartupHeartbeat;
       yield* Effect.logDebug("startup phase: browser open check");
+      const startupBrowserTarget = yield* resolveStartupBrowserTarget;
       if (serverConfig.mode !== "desktop") {
-        const pairingUrl = yield* resolveStartupBrowserTarget;
         yield* Effect.logInfo("Authentication required. Open T3 Code using the pairing URL.", {
-          pairingUrl,
+          pairingUrl: startupBrowserTarget,
         });
       }
-      yield* runStartupPhase("browser.open", maybeOpenBrowser);
+      yield* runStartupPhase("browser.open", maybeOpenBrowser(startupBrowserTarget));
       yield* Effect.logDebug("startup phase: complete");
     }),
   );

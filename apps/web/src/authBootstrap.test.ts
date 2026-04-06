@@ -24,7 +24,7 @@ function installTestBrowser(url: string) {
     location: new URL(url),
     history: {
       replaceState: (_data, _unused, nextUrl) => {
-        testWindow.location = new URL(nextUrl);
+        testWindow.location = new URL(nextUrl, testWindow.location.href);
       },
     },
   };
