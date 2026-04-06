@@ -83,6 +83,7 @@ const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const DESKTOP_UPDATE_CHANNEL = "latest";
 const DESKTOP_UPDATE_ALLOW_PRERELEASE = false;
+const DESKTOP_LOOPBACK_HOST = "127.0.0.1";
 
 type DesktopUpdateErrorContext = DesktopUpdateState["errorContext"];
 type LinuxDesktopNamedApp = Electron.App & {
@@ -142,6 +143,28 @@ function readPersistedBackendObservabilitySettings(): {
   }
 }
 
+function resolveConfiguredDesktopBackendPort(rawPort: string | undefined): number | undefined {
+  if (!rawPort) {
+    return undefined;
+  }
+
+  const parsedPort = Number.parseInt(rawPort, 10);
+  if (!Number.isInteger(parsedPort) || parsedPort < 1 || parsedPort > 65_535) {
+    return undefined;
+  }
+
+  return parsedPort;
+}
+
+function resolveDesktopDevServerUrl(): string {
+  const devServerUrl = process.env.VITE_DEV_SERVER_URL?.trim();
+  if (!devServerUrl) {
+    throw new Error("VITE_DEV_SERVER_URL is required in desktop development.");
+  }
+
+  return devServerUrl;
+}
+
 function backendChildEnv(): NodeJS.ProcessEnv {
   const env = { ...process.env };
   delete env.T3CODE_PORT;
@@ -197,28 +220,6 @@ function getSafeTheme(rawTheme: unknown): DesktopTheme | null {
   }
 
   return null;
-}
-
-function resolveDesktopBackendHost(): string {
-  if (!isDevelopment) {
-    return "127.0.0.1";
-  }
-
-  const devServerUrl = process.env.VITE_DEV_SERVER_URL;
-  if (!devServerUrl) {
-    return "127.0.0.1";
-  }
-
-  try {
-    const hostname = new URL(devServerUrl).hostname.trim();
-    if (hostname === "localhost" || hostname === "127.0.0.1") {
-      return hostname;
-    }
-  } catch {
-    // Fall through to the default loopback host.
-  }
-
-  return "127.0.0.1";
 }
 
 async function waitForBackendHttpReady(baseUrl: string): Promise<void> {
@@ -588,10 +589,7 @@ function dispatchMenuAction(action: string): void {
   const send = () => {
     if (targetWindow.isDestroyed()) return;
     targetWindow.webContents.send(MENU_ACTION_CHANNEL, action);
-    if (!targetWindow.isVisible()) {
-      targetWindow.show();
-    }
-    targetWindow.focus();
+    revealWindow(targetWindow);
   };
 
   if (targetWindow.webContents.isLoadingMainFrame()) {
@@ -810,6 +808,26 @@ function clearUpdatePollTimer(): void {
     clearInterval(updatePollTimer);
     updatePollTimer = null;
   }
+}
+
+function revealWindow(window: BrowserWindow): void {
+  if (window.isDestroyed()) {
+    return;
+  }
+
+  if (window.isMinimized()) {
+    window.restore();
+  }
+
+  if (!window.isVisible()) {
+    window.show();
+  }
+
+  if (process.platform === "darwin") {
+    app.focus({ steal: true });
+  }
+
+  window.focus();
 }
 
 function emitUpdateState(): void {
@@ -1081,7 +1099,7 @@ function startBackend(): void {
         noBrowser: true,
         port: backendPort,
         t3Home: BASE_DIR,
-        host: resolveDesktopBackendHost(),
+        host: DESKTOP_LOOPBACK_HOST,
         desktopBootstrapToken: backendBootstrapToken,
         ...(backendObservabilitySettings.otlpTracesUrl
           ? { otlpTracesUrl: backendObservabilitySettings.otlpTracesUrl }
@@ -1393,14 +1411,19 @@ function getIconOption(): { icon: string } | Record<string, never> {
   return iconPath ? { icon: iconPath } : {};
 }
 
+function getInitialWindowBackgroundColor(): string {
+  return nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff";
+}
+
 function createWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1100,
     height: 780,
     minWidth: 840,
     minHeight: 620,
-    show: false,
+    show: isDevelopment,
     autoHideMenuBar: true,
+    backgroundColor: getInitialWindowBackgroundColor(),
     ...getIconOption(),
     title: APP_DISPLAY_NAME,
     titleBarStyle: "hiddenInset",
@@ -1457,13 +1480,18 @@ function createWindow(): BrowserWindow {
     window.setTitle(APP_DISPLAY_NAME);
     emitUpdateState();
   });
-  window.once("ready-to-show", () => {
-    window.show();
-  });
+  if (!isDevelopment) {
+    window.once("ready-to-show", () => {
+      revealWindow(window);
+    });
+  }
 
   if (isDevelopment) {
-    void window.loadURL(process.env.VITE_DEV_SERVER_URL as string);
+    void window.loadURL(resolveDesktopDevServerUrl());
     window.webContents.openDevTools({ mode: "detach" });
+    setImmediate(() => {
+      revealWindow(window);
+    });
   } else {
     void window.loadURL(resolveDesktopWindowUrl());
   }
@@ -1494,22 +1522,46 @@ configureAppIdentity();
 
 async function bootstrap(): Promise<void> {
   writeDesktopLogHeader("bootstrap start");
-  const backendHost = resolveDesktopBackendHost();
-  backendPort = await Effect.service(NetService).pipe(
-    Effect.flatMap((net) => net.reserveLoopbackPort(backendHost)),
-    Effect.provide(NetService.layer),
-    Effect.runPromise,
+  const configuredBackendPort = resolveConfiguredDesktopBackendPort(process.env.T3CODE_PORT);
+  if (isDevelopment && configuredBackendPort === undefined) {
+    throw new Error("T3CODE_PORT is required in desktop development.");
+  }
+
+  backendPort =
+    configuredBackendPort ??
+    (await Effect.service(NetService).pipe(
+      Effect.flatMap((net) => net.reserveLoopbackPort(DESKTOP_LOOPBACK_HOST)),
+      Effect.provide(NetService.layer),
+      Effect.runPromise,
+    ));
+  writeDesktopLogHeader(
+    configuredBackendPort === undefined
+      ? `reserved backend port via NetService port=${backendPort}`
+      : `using configured backend port port=${backendPort}`,
   );
-  writeDesktopLogHeader(`reserved backend port via NetService port=${backendPort}`);
   backendBootstrapToken = Crypto.randomBytes(24).toString("hex");
-  backendHttpUrl = `http://${backendHost}:${backendPort}`;
-  backendWsUrl = `ws://${backendHost}:${backendPort}`;
+  backendHttpUrl = `http://${DESKTOP_LOOPBACK_HOST}:${backendPort}`;
+  backendWsUrl = `ws://${DESKTOP_LOOPBACK_HOST}:${backendPort}`;
   writeDesktopLogHeader(`bootstrap resolved backend endpoint baseUrl=${backendHttpUrl}`);
 
   registerIpcHandlers();
   writeDesktopLogHeader("bootstrap ipc handlers registered");
   startBackend();
   writeDesktopLogHeader("bootstrap backend start requested");
+
+  if (isDevelopment) {
+    mainWindow = createWindow();
+    writeDesktopLogHeader("bootstrap main window created");
+    void waitForBackendHttpReady(backendHttpUrl)
+      .then(() => {
+        writeDesktopLogHeader("bootstrap backend ready");
+      })
+      .catch((error) => {
+        handleFatalStartupError("bootstrap", error);
+      });
+    return;
+  }
+
   await waitForBackendHttpReady(backendHttpUrl);
   writeDesktopLogHeader("bootstrap backend ready");
   mainWindow = createWindow();

@@ -1,5 +1,5 @@
 import { AuthBootstrapInput } from "@t3tools/contracts";
-import { DateTime, Effect, Schema } from "effect";
+import { DateTime, Effect } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/unstable/http";
 
 import { AuthError, ServerAuth } from "./Services/ServerAuth.ts";
@@ -27,11 +27,9 @@ export const authBootstrapRouteLayer = HttpRouter.add(
   "POST",
   "/api/auth/bootstrap",
   Effect.gen(function* () {
-    const request = yield* HttpServerRequest.HttpServerRequest;
     const serverAuth = yield* ServerAuth;
     const descriptor = yield* serverAuth.getDescriptor();
-    const payload = yield* request.json.pipe(
-      Effect.flatMap((body) => Schema.decodeUnknownEffect(AuthBootstrapInput)(body)),
+    const payload = yield* HttpServerRequest.schemaBodyJson(AuthBootstrapInput).pipe(
       Effect.mapError(
         (cause) =>
           new AuthError({

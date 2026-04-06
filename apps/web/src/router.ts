@@ -11,6 +11,7 @@ export function getRouter(history: RouterHistory) {
   return createRouter({
     routeTree,
     history,
+    defaultPendingMs: 0,
     context: {
       queryClient,
     },

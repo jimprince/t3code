@@ -1,7 +1,5 @@
 import type { AuthBootstrapInput, AuthBootstrapResult, AuthSessionState } from "@t3tools/contracts";
-import { getKnownEnvironmentHttpBaseUrl } from "@t3tools/client-runtime";
-
-import { getPrimaryKnownEnvironment } from "./environmentBootstrap";
+import { resolveServerHttpUrl } from "./lib/utils";
 
 export type ServerAuthGateState =
   | { status: "authenticated" }
@@ -48,16 +46,8 @@ function getDesktopBootstrapCredential(): string | null {
     : null;
 }
 
-function resolvePrimaryEnvironmentHttpBaseUrl(): string {
-  const baseUrl = getKnownEnvironmentHttpBaseUrl(getPrimaryKnownEnvironment());
-  if (!baseUrl) {
-    throw new Error("Unable to resolve a known environment bootstrap URL.");
-  }
-  return baseUrl;
-}
-
-async function fetchSessionState(baseUrl: string): Promise<AuthSessionState> {
-  const response = await fetch(new URL("/api/auth/session", baseUrl), {
+async function fetchSessionState(): Promise<AuthSessionState> {
+  const response = await fetch(resolveServerHttpUrl({ pathname: "/api/auth/session" }), {
     credentials: "include",
   });
   if (!response.ok) {
@@ -66,12 +56,9 @@ async function fetchSessionState(baseUrl: string): Promise<AuthSessionState> {
   return (await response.json()) as AuthSessionState;
 }
 
-async function exchangeBootstrapCredential(
-  baseUrl: string,
-  credential: string,
-): Promise<AuthBootstrapResult> {
+async function exchangeBootstrapCredential(credential: string): Promise<AuthBootstrapResult> {
   const payload: AuthBootstrapInput = { credential };
-  const response = await fetch(new URL("/api/auth/bootstrap", baseUrl), {
+  const response = await fetch(resolveServerHttpUrl({ pathname: "/api/auth/bootstrap" }), {
     body: JSON.stringify(payload),
     credentials: "include",
     headers: {
@@ -89,9 +76,8 @@ async function exchangeBootstrapCredential(
 }
 
 async function bootstrapServerAuth(): Promise<ServerAuthGateState> {
-  const baseUrl = resolvePrimaryEnvironmentHttpBaseUrl();
   const bootstrapCredential = getBootstrapCredential();
-  const currentSession = await fetchSessionState(baseUrl);
+  const currentSession = await fetchSessionState();
   if (currentSession.authenticated) {
     return { status: "authenticated" };
   }
@@ -104,7 +90,7 @@ async function bootstrapServerAuth(): Promise<ServerAuthGateState> {
   }
 
   try {
-    await exchangeBootstrapCredential(baseUrl, bootstrapCredential);
+    await exchangeBootstrapCredential(bootstrapCredential);
     return { status: "authenticated" };
   } catch (error) {
     return {
@@ -121,7 +107,7 @@ export async function submitServerAuthCredential(credential: string): Promise<vo
     throw new Error("Enter a pairing token to continue.");
   }
 
-  await exchangeBootstrapCredential(resolvePrimaryEnvironmentHttpBaseUrl(), trimmedCredential);
+  await exchangeBootstrapCredential(trimmedCredential);
   bootstrapPromise = Promise.resolve({ status: "authenticated" } satisfies ServerAuthGateState);
   stripPairingTokenFromUrl();
 }

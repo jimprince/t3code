@@ -11,7 +11,7 @@ import {
 } from "effect";
 import { RpcClient } from "effect/unstable/rpc";
 
-import { ClientTracingLive, configureClientTracing } from "./observability/clientTracing";
+import { ClientTracingLive } from "./observability/clientTracing";
 import {
   createWsRpcProtocolLayer,
   makeWsRpcProtocolClient,
@@ -44,7 +44,6 @@ function formatErrorMessage(error: unknown): string {
 }
 
 export class WsTransport {
-  private readonly tracingReady: Promise<void>;
   private readonly url: string | undefined;
   private disposed = false;
   private reconnectChain: Promise<void> = Promise.resolve();
@@ -52,7 +51,6 @@ export class WsTransport {
 
   constructor(url?: string) {
     this.url = url;
-    this.tracingReady = configureClientTracing();
     this.session = this.createSession();
   }
 
@@ -64,7 +62,6 @@ export class WsTransport {
       throw new Error("Transport disposed");
     }
 
-    await this.tracingReady;
     const session = this.session;
     const client = await session.clientPromise;
     return await session.runtime.runPromise(Effect.suspend(() => execute(client)));
@@ -78,7 +75,6 @@ export class WsTransport {
       throw new Error("Transport disposed");
     }
 
-    await this.tracingReady;
     const session = this.session;
     const client = await session.clientPromise;
     await session.runtime.runPromise(
@@ -220,8 +216,7 @@ export class WsTransport {
       rejectCompleted = reject;
     });
     const cancel = session.runtime.runCallback(
-      Effect.promise(() => this.tracingReady).pipe(
-        Effect.flatMap(() => Effect.promise(() => session.clientPromise)),
+      Effect.promise(() => session.clientPromise).pipe(
         Effect.flatMap((client) =>
           Stream.runForEach(connect(client), (value) =>
             Effect.sync(() => {

@@ -53,14 +53,8 @@ export const resolveServerUrl = (options?: {
   pathname?: string | undefined;
   searchParams?: Record<string, string> | undefined;
 }): string => {
-  const rawUrl = firstNonEmptyString(
-    options?.url,
-    resolvePrimaryEnvironmentBootstrapUrl(),
-    import.meta.env.VITE_WS_URL,
-    window.location.origin,
-  );
-
-  const parsedUrl = new URL(rawUrl);
+  const rawUrl = resolveBaseServerUrl(options?.url);
+  const parsedUrl = resolveServerBaseUrl(rawUrl, options?.protocol);
   if (options?.protocol) {
     parsedUrl.protocol = options.protocol;
   }
@@ -74,3 +68,77 @@ export const resolveServerUrl = (options?: {
   }
   return parsedUrl.toString();
 };
+
+export const resolveServerHttpUrl = (options?: {
+  url?: string | undefined;
+  pathname?: string | undefined;
+  searchParams?: Record<string, string> | undefined;
+}): string => {
+  const rawUrl = resolveBaseServerUrl(options?.url);
+  return resolveServerUrl({
+    ...options,
+    url: rawUrl,
+    protocol: inferHttpProtocol(rawUrl),
+  });
+};
+
+function resolveBaseServerUrl(url?: string | undefined): string {
+  return firstNonEmptyString(
+    url,
+    resolvePrimaryEnvironmentBootstrapUrl(),
+    import.meta.env.VITE_WS_URL,
+    window.location.origin,
+  );
+}
+
+function resolveServerBaseUrl(
+  rawUrl: string,
+  requestedProtocol: "http" | "https" | "ws" | "wss" | undefined,
+): URL {
+  const currentUrl = new URL(window.location.origin);
+  const targetUrl = new URL(rawUrl, currentUrl);
+
+  if (shouldUseSameOriginForLocalHttp(currentUrl, targetUrl, requestedProtocol)) {
+    return new URL(currentUrl);
+  }
+
+  return targetUrl;
+}
+
+function shouldUseSameOriginForLocalHttp(
+  currentUrl: URL,
+  targetUrl: URL,
+  requestedProtocol: "http" | "https" | "ws" | "wss" | undefined,
+): boolean {
+  const protocol = requestedProtocol ?? targetUrl.protocol.slice(0, -1);
+  if (protocol !== "http" && protocol !== "https") {
+    return false;
+  }
+
+  try {
+    return (
+      isLocalHostname(currentUrl.hostname) &&
+      isLocalHostname(targetUrl.hostname) &&
+      currentUrl.origin !== targetUrl.origin
+    );
+  } catch {
+    return false;
+  }
+}
+
+function inferHttpProtocol(rawUrl: string): "http" | "https" {
+  try {
+    const url = new URL(rawUrl, window.location.origin);
+    if (url.protocol === "wss:" || url.protocol === "https:") {
+      return "https";
+    }
+  } catch {
+    // Fall back to http for malformed values.
+  }
+
+  return "http";
+}
+
+function isLocalHostname(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+}

@@ -85,12 +85,8 @@ describe("resolveInitialServerAuthGateState", () => {
     await Promise.all([resolveInitialServerAuthGateState(), resolveInitialServerAuthGateState()]);
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[0]?.[0]).toEqual(
-      new URL("/api/auth/session", "http://localhost:3773/"),
-    );
-    expect(fetchMock.mock.calls[1]?.[0]).toEqual(
-      new URL("/api/auth/bootstrap", "http://localhost:3773/"),
-    );
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost/api/auth/session");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("http://localhost/api/auth/bootstrap");
   });
 
   it("uses https fetch urls when the primary environment uses wss", async () => {
@@ -120,12 +116,42 @@ describe("resolveInitialServerAuthGateState", () => {
       },
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      new URL("/api/auth/session", "https://remote.example.com/ws"),
-      {
-        credentials: "include",
-      },
+    expect(fetchMock).toHaveBeenCalledWith("https://remote.example.com/api/auth/session", {
+      credentials: "include",
+    });
+  });
+
+  it("uses the current origin as an auth proxy base for local dev environments", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        authenticated: false,
+        auth: {
+          policy: "loopback-browser",
+          bootstrapMethods: ["one-time-token"],
+          sessionMethods: ["browser-session-cookie"],
+          sessionCookieName: "t3_session",
+        },
+      }),
     );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("VITE_WS_URL", "ws://127.0.0.1:3773/ws");
+    installTestBrowser("http://localhost:5735/");
+
+    const { resolveInitialServerAuthGateState } = await import("./authBootstrap");
+
+    await expect(resolveInitialServerAuthGateState()).resolves.toEqual({
+      status: "requires-auth",
+      auth: {
+        policy: "loopback-browser",
+        bootstrapMethods: ["one-time-token"],
+        sessionMethods: ["browser-session-cookie"],
+        sessionCookieName: "t3_session",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:5735/api/auth/session", {
+      credentials: "include",
+    });
   });
 
   it("returns a requires-auth state instead of throwing when no bootstrap credential exists", async () => {

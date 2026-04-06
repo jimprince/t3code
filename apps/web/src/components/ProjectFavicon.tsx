@@ -1,12 +1,11 @@
 import { FolderIcon } from "lucide-react";
 import { useState } from "react";
-import { resolveServerUrl } from "~/lib/utils";
+import { resolveServerHttpUrl } from "~/lib/utils";
 
 const loadedProjectFaviconSrcs = new Set<string>();
 
 export function ProjectFavicon({ cwd, className }: { cwd: string; className?: string }) {
-  const src = resolveServerUrl({
-    protocol: "http",
+  const src = resolveServerHttpUrl({
     pathname: "/api/project-favicon",
     searchParams: { cwd },
   });

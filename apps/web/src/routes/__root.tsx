@@ -16,6 +16,7 @@ import { Throttler } from "@tanstack/react-pacer";
 
 import { APP_DISPLAY_NAME } from "../branding";
 import { AppSidebarLayout } from "../components/AppSidebarLayout";
+import { BootShell } from "../components/BootShell";
 import {
   SlowRpcAckToastCoordinator,
   WebSocketConnectionCoordinator,
@@ -49,6 +50,7 @@ import { deriveOrchestrationBatchEffects } from "../orchestrationEventEffects";
 import { createOrchestrationRecoveryCoordinator } from "../orchestrationRecovery";
 import { deriveReplayRetryDecision } from "../orchestrationRecovery";
 import { resolveInitialServerAuthGateState } from "../authBootstrap";
+import { configureClientTracing } from "../observability/clientTracing";
 import { getWsRpcClient } from "~/wsRpcClient";
 
 export const Route = createRootRouteWithContext<{
@@ -69,10 +71,6 @@ function RootRouteView() {
   const pathname = useLocation({ select: (location) => location.pathname });
   const { authGateState } = Route.useRouteContext();
 
-  if (!authGateState) {
-    return <RootRoutePendingView />;
-  }
-
   if (pathname === "/pair") {
     return <Outlet />;
   }
@@ -84,6 +82,7 @@ function RootRouteView() {
   return (
     <ToastProvider>
       <AnchoredToastProvider>
+        <AuthenticatedTracingBootstrap />
         <ServerStateBootstrap />
         <EventRouter />
         <WebSocketConnectionCoordinator />
@@ -100,11 +99,11 @@ function RootRouteView() {
 
 function RootRoutePendingView() {
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-muted-foreground">Connecting to {APP_DISPLAY_NAME} server...</p>
-      </div>
-    </div>
+    <BootShell
+      eyebrow="Starting Session"
+      title={`Connecting to ${APP_DISPLAY_NAME}`}
+      copy={`Opening the WebSocket connection to the ${APP_DISPLAY_NAME} server and waiting for the initial config snapshot.`}
+    />
   );
 }
 
@@ -221,6 +220,14 @@ const MAX_NO_PROGRESS_REPLAY_RETRIES = 3;
 
 function ServerStateBootstrap() {
   useEffect(() => startServerStateSync(getWsRpcClient().server), []);
+
+  return null;
+}
+
+function AuthenticatedTracingBootstrap() {
+  useEffect(() => {
+    void configureClientTracing();
+  }, []);
 
   return null;
 }
