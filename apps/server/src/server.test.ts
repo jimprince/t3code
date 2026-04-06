@@ -338,7 +338,7 @@ const buildAppUnderTest = (options?: {
     });
     const gitStatusBroadcasterLayer = GitStatusBroadcasterLive.pipe(Layer.provide(gitManagerLayer));
 
-    const appLayer = HttpRouter.serve(makeRoutesLayer, {
+    const servedRoutesLayer = HttpRouter.serve(makeRoutesLayer, {
       disableListenLog: true,
       disableLogger: true,
     }).pipe(
@@ -427,6 +427,9 @@ const buildAppUnderTest = (options?: {
           ...options?.layers?.checkpointDiffQuery,
         }),
       ),
+    );
+
+    const appLayer = servedRoutesLayer.pipe(
       Layer.provide(
         Layer.mock(BrowserTraceCollector)({
           record: () => Effect.void,
