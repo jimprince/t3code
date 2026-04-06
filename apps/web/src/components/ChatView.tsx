@@ -819,12 +819,14 @@ export default function ChatView({ threadId }: ChatViewProps) {
   );
 
   const fallbackDraftProject = useProjectById(draftThread?.projectId);
+  const activeEnvironmentId = useStore((store) => store.activeEnvironmentId);
   const localDraftError = serverThread ? null : (localDraftErrorsByThreadId[threadId] ?? null);
   const localDraftThread = useMemo(
     () =>
-      draftThread
+      draftThread && activeEnvironmentId
         ? buildLocalDraftThread(
             threadId,
+            activeEnvironmentId,
             draftThread,
             fallbackDraftProject?.defaultModelSelection ?? {
               provider: "codex",
@@ -833,7 +835,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
             localDraftError,
           )
         : undefined,
-    [draftThread, fallbackDraftProject?.defaultModelSelection, localDraftError, threadId],
+    [
+      activeEnvironmentId,
+      draftThread,
+      fallbackDraftProject?.defaultModelSelection,
+      localDraftError,
+      threadId,
+    ],
   );
   const activeThread = serverThread ?? localDraftThread;
   const runtimeMode =

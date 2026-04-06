@@ -1,4 +1,5 @@
 import {
+  type EnvironmentId,
   OrchestrationEvent,
   type ServerLifecycleWelcomePayload,
   type ThreadId,
@@ -201,6 +202,13 @@ function coalesceOrchestrationUiEvents(
 const REPLAY_RECOVERY_RETRY_DELAY_MS = 100;
 const MAX_NO_PROGRESS_REPLAY_RETRIES = 3;
 
+function resolveKnownEnvironmentId(input: {
+  serverConfigEnvironmentId: EnvironmentId | null | undefined;
+  activeEnvironmentId: EnvironmentId | null;
+}): EnvironmentId | null {
+  return input.serverConfigEnvironmentId ?? input.activeEnvironmentId;
+}
+
 function ServerStateBootstrap() {
   useEffect(() => startServerStateSync(getWsRpcClient().server), []);
 
@@ -227,15 +235,15 @@ function EventRouter() {
   const handledBootstrapThreadIdRef = useRef<string | null>(null);
   const seenServerConfigUpdateIdRef = useRef(getServerConfigUpdatedNotification()?.id ?? 0);
   const disposedRef = useRef(false);
-  const bootstrapFromSnapshotRef = useRef<
-    (
-      environmentId?: ServerLifecycleWelcomePayload["environment"]["environmentId"] | null,
-    ) => Promise<void>
-  >(async () => undefined);
+  const bootstrapFromSnapshotRef = useRef<(environmentId: EnvironmentId) => Promise<void>>(
+    async () => undefined,
+  );
   const serverConfig = useServerConfig();
-  const resolveCurrentEnvironmentId = useEffectEvent(
-    () =>
-      serverConfig?.environment.environmentId ?? useStore.getState().activeEnvironmentId ?? null,
+  const resolveCurrentEnvironmentId = useEffectEvent((): EnvironmentId | null =>
+    resolveKnownEnvironmentId({
+      serverConfigEnvironmentId: serverConfig?.environment.environmentId,
+      activeEnvironmentId: useStore.getState().activeEnvironmentId,
+    }),
   );
 
   const handleWelcome = useEffectEvent((payload: ServerLifecycleWelcomePayload | null) => {
@@ -387,7 +395,10 @@ function EventRouter() {
       },
     );
 
-    const applyEventBatch = (events: ReadonlyArray<OrchestrationEvent>) => {
+    const applyEventBatch = (
+      events: ReadonlyArray<OrchestrationEvent>,
+      environmentId: EnvironmentId,
+    ) => {
       const nextEvents = recovery.markEventBatchApplied(events);
       if (nextEvents.length === 0) {
         return;
@@ -407,7 +418,7 @@ function EventRouter() {
         void queryInvalidationThrottler.maybeExecute();
       }
 
-      applyOrchestrationEvents(uiEvents, resolveCurrentEnvironmentId());
+      applyOrchestrationEvents(uiEvents, environmentId);
       if (needsProjectUiSync) {
         const projects = useStore.getState().projects;
         syncProjects(projects.map((project) => ({ id: project.id, cwd: project.cwd })));
@@ -441,9 +452,13 @@ function EventRouter() {
       if (disposed || pendingDomainEvents.length === 0) {
         return;
       }
+      const currentEnvironmentId = resolveCurrentEnvironmentId();
+      if (currentEnvironmentId === null) {
+        return;
+      }
 
       const events = pendingDomainEvents.splice(0, pendingDomainEvents.length);
-      applyEventBatch(events);
+      applyEventBatch(events, currentEnvironmentId);
     };
     const schedulePendingDomainEventFlush = () => {
       if (flushPendingDomainEventsScheduled) {
@@ -463,7 +478,13 @@ function EventRouter() {
       try {
         const events = await api.orchestration.replayEvents(fromSequenceExclusive);
         if (!disposed) {
-          applyEventBatch(events);
+          const currentEnvironmentId = resolveCurrentEnvironmentId();
+          if (currentEnvironmentId === null) {
+            replayRetryTracker = null;
+            recovery.failReplayRecovery();
+            return;
+          }
+          applyEventBatch(events, currentEnvironmentId);
         }
       } catch {
         replayRetryTracker = null;
@@ -507,7 +528,7 @@ function EventRouter() {
 
     const runSnapshotRecovery = async (
       reason: "bootstrap" | "replay-failed",
-      environmentId?: ServerLifecycleWelcomePayload["environment"]["environmentId"] | null,
+      environmentId: EnvironmentId,
     ): Promise<void> => {
       const started = recovery.beginSnapshotRecovery(reason);
       if (import.meta.env.MODE !== "test") {
@@ -531,7 +552,7 @@ function EventRouter() {
       try {
         const snapshot = await api.orchestration.getSnapshot();
         if (!disposed) {
-          syncServerReadModel(snapshot, environmentId ?? resolveCurrentEnvironmentId());
+          syncServerReadModel(snapshot, environmentId);
           reconcileSnapshotDerivedState();
           if (recovery.completeSnapshotRecovery(snapshot.snapshotSequence)) {
             void runReplayRecovery("sequence-gap");
@@ -543,15 +564,17 @@ function EventRouter() {
       }
     };
 
-    const bootstrapFromSnapshot = async (
-      environmentId?: ServerLifecycleWelcomePayload["environment"]["environmentId"] | null,
-    ): Promise<void> => {
+    const bootstrapFromSnapshot = async (environmentId: EnvironmentId): Promise<void> => {
       await runSnapshotRecovery("bootstrap", environmentId);
     };
     bootstrapFromSnapshotRef.current = bootstrapFromSnapshot;
 
     const fallbackToSnapshotRecovery = async (): Promise<void> => {
-      await runSnapshotRecovery("replay-failed");
+      const currentEnvironmentId = resolveCurrentEnvironmentId();
+      if (currentEnvironmentId === null) {
+        return;
+      }
+      await runSnapshotRecovery("replay-failed", currentEnvironmentId);
     };
     const unsubDomainEvent = api.orchestration.onDomainEvent(
       (event) => {
@@ -578,12 +601,13 @@ function EventRouter() {
     );
     const unsubTerminalEvent = api.terminal.onEvent((event) => {
       const currentEnvironmentId = resolveCurrentEnvironmentId();
+      if (currentEnvironmentId === null) {
+        return;
+      }
       const thread = useStore
         .getState()
         .threads.find(
-          (entry) =>
-            entry.id === event.threadId &&
-            (entry.environmentId ?? null) === (currentEnvironmentId ?? null),
+          (entry) => entry.id === event.threadId && entry.environmentId === currentEnvironmentId,
         );
       if (thread && thread.archivedAt !== null) {
         return;

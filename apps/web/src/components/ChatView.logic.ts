@@ -1,4 +1,10 @@
-import { ProjectId, type ModelSelection, type ThreadId, type TurnId } from "@t3tools/contracts";
+import {
+  type EnvironmentId,
+  ProjectId,
+  type ModelSelection,
+  type ThreadId,
+  type TurnId,
+} from "@t3tools/contracts";
 import { type ChatMessage, type SessionPhase, type Thread, type ThreadSession } from "../types";
 import { randomUUID } from "~/lib/utils";
 import { type ComposerImageAttachment, type DraftThreadState } from "../composerDraftStore";
@@ -18,12 +24,14 @@ export const LastInvokedScriptByProjectSchema = Schema.Record(ProjectId, Schema.
 
 export function buildLocalDraftThread(
   threadId: ThreadId,
+  environmentId: EnvironmentId,
   draftThread: DraftThreadState,
   fallbackModelSelection: ModelSelection,
   error: string | null,
 ): Thread {
   return {
     id: threadId,
+    environmentId,
     codexThreadId: null,
     projectId: draftThread.projectId,
     title: "New thread",

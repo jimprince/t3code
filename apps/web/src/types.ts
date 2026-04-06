@@ -82,7 +82,7 @@ export interface TurnDiffSummary {
 
 export interface Project {
   id: ProjectId;
-  environmentId?: EnvironmentId | null;
+  environmentId: EnvironmentId;
   name: string;
   cwd: string;
   repositoryIdentity?: RepositoryIdentity | null;
@@ -94,7 +94,7 @@ export interface Project {
 
 export interface Thread {
   id: ThreadId;
-  environmentId?: EnvironmentId | null;
+  environmentId: EnvironmentId;
   codexThreadId: string | null;
   projectId: ProjectId;
   title: string;
@@ -118,7 +118,7 @@ export interface Thread {
 
 export interface SidebarThreadSummary {
   id: ThreadId;
-  environmentId?: EnvironmentId | null;
+  environmentId: EnvironmentId;
   projectId: ProjectId;
   title: string;
   interactionMode: ProviderInteractionMode;

@@ -192,7 +192,11 @@ describe("store read model sync", () => {
       bootstrapComplete: false,
     };
 
-    const next = syncServerReadModel(initialState, makeReadModel(makeReadModelThread({})));
+    const next = syncServerReadModel(
+      initialState,
+      makeReadModel(makeReadModelThread({})),
+      localEnvironmentId,
+    );
 
     expect(next.bootstrapComplete).toBe(true);
   });
@@ -208,7 +212,7 @@ describe("store read model sync", () => {
       }),
     );
 
-    const next = syncServerReadModel(initialState, readModel);
+    const next = syncServerReadModel(initialState, readModel, localEnvironmentId);
 
     expect(next.threads[0]?.modelSelection.model).toBe("claude-opus-4-6");
   });
@@ -233,7 +237,7 @@ describe("store read model sync", () => {
       }),
     );
 
-    const next = syncServerReadModel(initialState, readModel);
+    const next = syncServerReadModel(initialState, readModel, localEnvironmentId);
 
     expect(next.threads[0]?.modelSelection.model).toBe("claude-sonnet-4-6");
   });
@@ -246,7 +250,7 @@ describe("store read model sync", () => {
       }),
     );
 
-    const next = syncServerReadModel(initialState, readModel);
+    const next = syncServerReadModel(initialState, readModel, localEnvironmentId);
 
     expect(next.projects[0]?.updatedAt).toBe("2026-02-27T00:00:00.000Z");
     expect(next.threads[0]?.updatedAt).toBe("2026-02-27T00:05:00.000Z");
@@ -262,6 +266,7 @@ describe("store read model sync", () => {
           archivedAt,
         }),
       ),
+      localEnvironmentId,
     );
 
     expect(next.threads[0]?.archivedAt).toBe(archivedAt);
@@ -327,7 +332,7 @@ describe("store read model sync", () => {
       threads: [],
     };
 
-    const next = syncServerReadModel(initialState, readModel);
+    const next = syncServerReadModel(initialState, readModel, localEnvironmentId);
 
     expect(next.projects.map((project) => project.id)).toEqual([project1, project2, project3]);
   });
@@ -380,38 +385,6 @@ describe("store read model sync", () => {
     );
   });
 
-  it("treats an explicit null environment as distinct from the active environment", () => {
-    const remoteThread = makeThread({
-      id: ThreadId.makeUnsafe("thread-remote"),
-      projectId: ProjectId.makeUnsafe("project-remote"),
-      environmentId: remoteEnvironmentId,
-      title: "Remote thread",
-    });
-    const initialState: AppState = {
-      ...makeState(remoteThread),
-      activeEnvironmentId: remoteEnvironmentId,
-    };
-
-    const next = syncServerReadModel(
-      initialState,
-      makeReadModel(
-        makeReadModelThread({
-          id: ThreadId.makeUnsafe("thread-null-environment"),
-          title: "Null environment thread",
-        }),
-      ),
-      null,
-    );
-
-    expect(next.threads).toHaveLength(2);
-    expect(next.threads.find((thread) => thread.environmentId === remoteEnvironmentId)?.title).toBe(
-      "Remote thread",
-    );
-    expect(next.threads.find((thread) => thread.environmentId === null)?.title).toBe(
-      "Null environment thread",
-    );
-  });
-
   it("returns a stable thread id array for unchanged project thread inputs", () => {
     const projectId = ProjectId.makeUnsafe("project-1");
     const syncedState = syncServerReadModel(
@@ -445,6 +418,7 @@ describe("incremental orchestration updates", () => {
         title: "Updated title",
         updatedAt: "2026-02-27T00:00:01.000Z",
       }),
+      localEnvironmentId,
     );
 
     expect(next.bootstrapComplete).toBe(false);
@@ -460,6 +434,7 @@ describe("incremental orchestration updates", () => {
         projectId: ProjectId.makeUnsafe("project-missing"),
         deletedAt: "2026-02-27T00:00:01.000Z",
       }),
+      localEnvironmentId,
     );
     const nextAfterThreadDelete = applyOrchestrationEvent(
       state,
@@ -467,6 +442,7 @@ describe("incremental orchestration updates", () => {
         threadId: ThreadId.makeUnsafe("thread-missing"),
         deletedAt: "2026-02-27T00:00:01.000Z",
       }),
+      localEnvironmentId,
     );
 
     expect(nextAfterProjectDelete).toBe(state);
@@ -512,6 +488,7 @@ describe("incremental orchestration updates", () => {
         createdAt: "2026-02-27T00:00:01.000Z",
         updatedAt: "2026-02-27T00:00:01.000Z",
       }),
+      localEnvironmentId,
     );
 
     expect(next.projects).toHaveLength(1);
@@ -541,6 +518,7 @@ describe("incremental orchestration updates", () => {
         },
         updatedAt: "2026-02-27T00:00:01.000Z",
       }),
+      localEnvironmentId,
     );
 
     expect(next.projects[0]?.repositoryIdentity?.canonicalKey).toBe("github.com/t3tools/t3code");
@@ -615,6 +593,7 @@ describe("incremental orchestration updates", () => {
         createdAt: "2026-02-27T00:00:01.000Z",
         updatedAt: "2026-02-27T00:00:01.000Z",
       }),
+      localEnvironmentId,
     );
 
     expect(next.threads).toHaveLength(1);
@@ -675,6 +654,7 @@ describe("incremental orchestration updates", () => {
         createdAt: "2026-02-27T00:00:01.000Z",
         updatedAt: "2026-02-27T00:00:01.000Z",
       }),
+      localEnvironmentId,
     );
 
     expect(next.threads[0]?.messages[0]?.text).toBe("hello world");
@@ -695,38 +675,42 @@ describe("incremental orchestration updates", () => {
     });
     const state = makeState(thread);
 
-    const next = applyOrchestrationEvents(state, [
-      makeEvent(
-        "thread.session-set",
-        {
-          threadId: thread.id,
-          session: {
+    const next = applyOrchestrationEvents(
+      state,
+      [
+        makeEvent(
+          "thread.session-set",
+          {
             threadId: thread.id,
-            status: "running",
-            providerName: "codex",
-            runtimeMode: "full-access",
-            activeTurnId: TurnId.makeUnsafe("turn-1"),
-            lastError: null,
-            updatedAt: "2026-02-27T00:00:02.000Z",
+            session: {
+              threadId: thread.id,
+              status: "running",
+              providerName: "codex",
+              runtimeMode: "full-access",
+              activeTurnId: TurnId.makeUnsafe("turn-1"),
+              lastError: null,
+              updatedAt: "2026-02-27T00:00:02.000Z",
+            },
           },
-        },
-        { sequence: 2 },
-      ),
-      makeEvent(
-        "thread.message-sent",
-        {
-          threadId: thread.id,
-          messageId: MessageId.makeUnsafe("assistant-1"),
-          role: "assistant",
-          text: "done",
-          turnId: TurnId.makeUnsafe("turn-1"),
-          streaming: false,
-          createdAt: "2026-02-27T00:00:03.000Z",
-          updatedAt: "2026-02-27T00:00:03.000Z",
-        },
-        { sequence: 3 },
-      ),
-    ]);
+          { sequence: 2 },
+        ),
+        makeEvent(
+          "thread.message-sent",
+          {
+            threadId: thread.id,
+            messageId: MessageId.makeUnsafe("assistant-1"),
+            role: "assistant",
+            text: "done",
+            turnId: TurnId.makeUnsafe("turn-1"),
+            streaming: false,
+            createdAt: "2026-02-27T00:00:03.000Z",
+            updatedAt: "2026-02-27T00:00:03.000Z",
+          },
+          { sequence: 3 },
+        ),
+      ],
+      localEnvironmentId,
+    );
 
     expect(next.threads[0]?.session?.status).toBe("running");
     expect(next.threads[0]?.latestTurn?.state).toBe("completed");
@@ -759,6 +743,7 @@ describe("incremental orchestration updates", () => {
         assistantMessageId: MessageId.makeUnsafe("assistant-1"),
         completedAt: "2026-02-27T00:00:04.000Z",
       }),
+      localEnvironmentId,
     );
 
     expect(next.threads[0]?.turnDiffSummaries).toHaveLength(1);
@@ -803,6 +788,7 @@ describe("incremental orchestration updates", () => {
         createdAt: "2026-02-27T00:00:03.000Z",
         updatedAt: "2026-02-27T00:00:03.000Z",
       }),
+      localEnvironmentId,
     );
 
     expect(next.threads[0]?.turnDiffSummaries[0]?.assistantMessageId).toBe(
@@ -912,6 +898,7 @@ describe("incremental orchestration updates", () => {
         threadId: ThreadId.makeUnsafe("thread-1"),
         turnCount: 1,
       }),
+      localEnvironmentId,
     );
 
     expect(next.threads[0]?.messages.map((message) => message.id)).toEqual([
@@ -970,6 +957,7 @@ describe("incremental orchestration updates", () => {
         threadId: thread.id,
         turnCount: 1,
       }),
+      localEnvironmentId,
     );
 
     expect(reverted.threads[0]?.pendingSourceProposedPlan).toBeUndefined();
@@ -988,6 +976,7 @@ describe("incremental orchestration updates", () => {
           updatedAt: "2026-02-27T00:00:04.000Z",
         },
       }),
+      localEnvironmentId,
     );
 
     expect(next.threads[0]?.latestTurn).toMatchObject({
