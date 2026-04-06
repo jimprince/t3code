@@ -12,6 +12,16 @@ interface StoredBootstrapGrant extends BootstrapGrant {
   readonly remainingUses: number | "unbounded";
 }
 
+type ConsumeResult =
+  | {
+      readonly _tag: "error";
+      readonly error: BootstrapCredentialError;
+    }
+  | {
+      readonly _tag: "success";
+      readonly grant: BootstrapGrant;
+    };
+
 const DEFAULT_ONE_TIME_TOKEN_TTL_MINUTES = Duration.minutes(5);
 
 export const makeBootstrapCredentialService = Effect.gen(function* () {
@@ -51,29 +61,40 @@ export const makeBootstrapCredentialService = Effect.gen(function* () {
 
   const consume: BootstrapCredentialServiceShape["consume"] = (credential) =>
     Effect.gen(function* () {
-      const current = yield* Ref.get(grantsRef);
-      const grant = current.get(credential);
-      if (!grant) {
-        return yield* new BootstrapCredentialError({
-          message: "Unknown bootstrap credential.",
-        });
-      }
+      const now = yield* DateTime.now;
+      const result: ConsumeResult = yield* Ref.modify(grantsRef, (current): readonly [
+        ConsumeResult,
+        Map<string, StoredBootstrapGrant>,
+      ] => {
+        const grant = current.get(credential);
+        if (!grant) {
+          return [
+            {
+              _tag: "error",
+              error: new BootstrapCredentialError({
+                message: "Unknown bootstrap credential.",
+              }),
+            },
+            current,
+          ];
+        }
 
-      if (DateTime.isGreaterThanOrEqualTo(yield* DateTime.now, grant.expiresAt)) {
-        yield* Ref.update(grantsRef, (state) => {
-          const next = new Map(state);
+        const next = new Map(current);
+        if (DateTime.isGreaterThanOrEqualTo(now, grant.expiresAt)) {
           next.delete(credential);
-          return next;
-        });
-        return yield* new BootstrapCredentialError({
-          message: "Bootstrap credential expired.",
-        });
-      }
+          return [
+            {
+              _tag: "error",
+              error: new BootstrapCredentialError({
+                message: "Bootstrap credential expired.",
+              }),
+            },
+            next,
+          ];
+        }
 
-      const remainingUses = grant.remainingUses;
-      if (typeof remainingUses === "number") {
-        yield* Ref.update(grantsRef, (state) => {
-          const next = new Map(state);
+        const remainingUses = grant.remainingUses;
+        if (typeof remainingUses === "number") {
           if (remainingUses <= 1) {
             next.delete(credential);
           } else {
@@ -82,14 +103,25 @@ export const makeBootstrapCredentialService = Effect.gen(function* () {
               remainingUses: remainingUses - 1,
             });
           }
-          return next;
-        });
+        }
+
+        return [
+          {
+            _tag: "success",
+            grant: {
+              method: grant.method,
+              expiresAt: grant.expiresAt,
+            } satisfies BootstrapGrant,
+          },
+          next,
+        ];
+      });
+
+      if (result._tag === "error") {
+        return yield* result.error;
       }
 
-      return {
-        method: grant.method,
-        expiresAt: grant.expiresAt,
-      } satisfies BootstrapGrant;
+      return result.grant;
     });
 
   return {

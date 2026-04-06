@@ -1465,7 +1465,7 @@ function createWindow(): BrowserWindow {
     void window.loadURL(process.env.VITE_DEV_SERVER_URL as string);
     window.webContents.openDevTools({ mode: "detach" });
   } else {
-    void window.loadURL(backendHttpUrl);
+    void window.loadURL(resolveDesktopWindowUrl());
   }
 
   window.on("closed", () => {
@@ -1475,6 +1475,14 @@ function createWindow(): BrowserWindow {
   });
 
   return window;
+}
+
+function resolveDesktopWindowUrl(): string {
+  if (backendHttpUrl) {
+    return backendHttpUrl;
+  }
+
+  return `${DESKTOP_SCHEME}://app`;
 }
 
 // Override Electron's userData path before the `ready` event so that

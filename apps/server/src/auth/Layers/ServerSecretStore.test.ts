@@ -40,6 +40,33 @@ const makePermissionDeniedSecretStoreLayer = () =>
     Layer.provide(PermissionDeniedFileSystemLayer),
   );
 
+const RenameFailureFileSystemLayer = Layer.effect(
+  FileSystem.FileSystem,
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+
+    return {
+      ...fileSystem,
+      rename: (from, to) =>
+        Effect.fail(
+          PlatformError.systemError({
+            _tag: "PermissionDenied",
+            module: "FileSystem",
+            method: "rename",
+            pathOrDescriptor: `${String(from)} -> ${String(to)}`,
+            description: "Permission denied while persisting secret file.",
+          }),
+        ),
+    } satisfies FileSystem.FileSystem;
+  }),
+).pipe(Layer.provide(NodeServices.layer));
+
+const makeRenameFailureSecretStoreLayer = () =>
+  ServerSecretStoreLive.pipe(
+    Layer.provide(makeServerConfigLayer()),
+    Layer.provide(RenameFailureFileSystemLayer),
+  );
+
 it.layer(NodeServices.layer)("ServerSecretStoreLive", (it) => {
   it.effect("returns null when a secret file does not exist", () =>
     Effect.gen(function* () {
@@ -73,5 +100,20 @@ it.layer(NodeServices.layer)("ServerSecretStoreLive", (it) => {
       expect(error.cause).toBeInstanceOf(PlatformError.PlatformError);
       expect((error.cause as PlatformError.PlatformError).reason._tag).toBe("PermissionDenied");
     }).pipe(Effect.provide(makePermissionDeniedSecretStoreLayer())),
+  );
+
+  it.effect("propagates write failures instead of treating them as success", () =>
+    Effect.gen(function* () {
+      const secretStore = yield* ServerSecretStore;
+
+      const error = yield* Effect.flip(
+        secretStore.set("session-signing-key", Uint8Array.from([1, 2, 3])),
+      );
+
+      expect(error).toBeInstanceOf(SecretStoreError);
+      expect(error.message).toContain("Failed to persist secret session-signing-key.");
+      expect(error.cause).toBeInstanceOf(PlatformError.PlatformError);
+      expect((error.cause as PlatformError.PlatformError).reason._tag).toBe("PermissionDenied");
+    }).pipe(Effect.provide(makeRenameFailureSecretStoreLayer())),
   );
 });
