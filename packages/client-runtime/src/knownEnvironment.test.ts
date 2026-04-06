@@ -1,7 +1,10 @@
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vitest";
 
-import { createKnownEnvironmentFromWsUrl } from "./knownEnvironment";
+import {
+  createKnownEnvironmentFromWsUrl,
+  getKnownEnvironmentHttpBaseUrl,
+} from "./knownEnvironment";
 import { scopedRefKey, scopeProjectRef, scopeThreadRef } from "./scoped";
 
 describe("known environment bootstrap helpers", () => {
@@ -20,6 +23,26 @@ describe("known environment bootstrap helpers", () => {
         wsUrl: "wss://remote.example.com/ws",
       },
     });
+  });
+
+  it("converts websocket base urls into fetchable http origins", () => {
+    expect(
+      getKnownEnvironmentHttpBaseUrl(
+        createKnownEnvironmentFromWsUrl({
+          label: "Local environment",
+          wsUrl: "ws://localhost:3773/ws",
+        }),
+      ),
+    ).toBe("http://localhost:3773/ws");
+
+    expect(
+      getKnownEnvironmentHttpBaseUrl(
+        createKnownEnvironmentFromWsUrl({
+          label: "Remote environment",
+          wsUrl: "wss://remote.example.com/api/ws",
+        }),
+      ),
+    ).toBe("https://remote.example.com/api/ws");
   });
 });
 

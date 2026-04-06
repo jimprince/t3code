@@ -86,10 +86,45 @@ describe("resolveInitialServerAuthGateState", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0]?.[0]).toEqual(
-      new URL("/api/auth/session", "ws://localhost:3773/"),
+      new URL("/api/auth/session", "http://localhost:3773/"),
     );
     expect(fetchMock.mock.calls[1]?.[0]).toEqual(
-      new URL("/api/auth/bootstrap", "ws://localhost:3773/"),
+      new URL("/api/auth/bootstrap", "http://localhost:3773/"),
+    );
+  });
+
+  it("uses https fetch urls when the primary environment uses wss", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(
+      jsonResponse({
+        authenticated: false,
+        auth: {
+          policy: "loopback-browser",
+          bootstrapMethods: ["one-time-token"],
+          sessionMethods: ["browser-session-cookie"],
+          sessionCookieName: "t3_session",
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubEnv("VITE_WS_URL", "wss://remote.example.com/ws");
+
+    const { resolveInitialServerAuthGateState } = await import("./authBootstrap");
+
+    await expect(resolveInitialServerAuthGateState()).resolves.toEqual({
+      status: "requires-auth",
+      auth: {
+        policy: "loopback-browser",
+        bootstrapMethods: ["one-time-token"],
+        sessionMethods: ["browser-session-cookie"],
+        sessionCookieName: "t3_session",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      new URL("/api/auth/session", "https://remote.example.com/ws"),
+      {
+        credentials: "include",
+      },
     );
   });
 

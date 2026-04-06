@@ -38,6 +38,27 @@ export function getKnownEnvironmentBaseUrl(
   return environment?.target.wsUrl ?? null;
 }
 
+export function getKnownEnvironmentHttpBaseUrl(
+  environment: KnownEnvironment | null | undefined,
+): string | null {
+  const baseUrl = getKnownEnvironmentBaseUrl(environment);
+  if (!baseUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(baseUrl);
+    if (url.protocol === "ws:") {
+      url.protocol = "http:";
+    } else if (url.protocol === "wss:") {
+      url.protocol = "https:";
+    }
+    return url.toString();
+  } catch {
+    return baseUrl;
+  }
+}
+
 export function attachEnvironmentDescriptor(
   environment: KnownEnvironment,
   descriptor: ExecutionEnvironmentDescriptor,

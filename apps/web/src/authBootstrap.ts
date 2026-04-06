@@ -1,6 +1,7 @@
 import type { AuthBootstrapInput, AuthBootstrapResult, AuthSessionState } from "@t3tools/contracts";
+import { getKnownEnvironmentHttpBaseUrl } from "@t3tools/client-runtime";
 
-import { resolvePrimaryEnvironmentBootstrapUrl } from "./environmentBootstrap";
+import { getPrimaryKnownEnvironment } from "./environmentBootstrap";
 
 export type ServerAuthGateState =
   | { status: "authenticated" }
@@ -47,6 +48,14 @@ function getDesktopBootstrapCredential(): string | null {
     : null;
 }
 
+function resolvePrimaryEnvironmentHttpBaseUrl(): string {
+  const baseUrl = getKnownEnvironmentHttpBaseUrl(getPrimaryKnownEnvironment());
+  if (!baseUrl) {
+    throw new Error("Unable to resolve a known environment bootstrap URL.");
+  }
+  return baseUrl;
+}
+
 async function fetchSessionState(baseUrl: string): Promise<AuthSessionState> {
   const response = await fetch(new URL("/api/auth/session", baseUrl), {
     credentials: "include",
@@ -80,7 +89,7 @@ async function exchangeBootstrapCredential(
 }
 
 async function bootstrapServerAuth(): Promise<ServerAuthGateState> {
-  const baseUrl = resolvePrimaryEnvironmentBootstrapUrl();
+  const baseUrl = resolvePrimaryEnvironmentHttpBaseUrl();
   const bootstrapCredential = getBootstrapCredential();
   const currentSession = await fetchSessionState(baseUrl);
   if (currentSession.authenticated) {
@@ -112,7 +121,7 @@ export async function submitServerAuthCredential(credential: string): Promise<vo
     throw new Error("Enter a pairing token to continue.");
   }
 
-  await exchangeBootstrapCredential(resolvePrimaryEnvironmentBootstrapUrl(), trimmedCredential);
+  await exchangeBootstrapCredential(resolvePrimaryEnvironmentHttpBaseUrl(), trimmedCredential);
   stripPairingTokenFromUrl();
 }
 
