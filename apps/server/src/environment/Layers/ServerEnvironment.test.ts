@@ -1,13 +1,57 @@
+import * as nodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
-import { Effect, FileSystem, Layer } from "effect";
+import { Effect, Exit, FileSystem, Layer, PlatformError } from "effect";
 
-import { ServerConfig } from "../../config.ts";
+import { ServerConfig, type ServerConfigShape } from "../../config.ts";
 import { ServerEnvironment } from "../Services/ServerEnvironment.ts";
 import { ServerEnvironmentLive } from "./ServerEnvironment.ts";
 
 const makeServerEnvironmentLayer = (baseDir: string) =>
   ServerEnvironmentLive.pipe(Layer.provide(ServerConfig.layerTest(process.cwd(), baseDir)));
+
+const makeServerConfig = (baseDir: string): ServerConfigShape => {
+  const stateDir = nodePath.join(baseDir, "userdata");
+  const logsDir = nodePath.join(stateDir, "logs");
+  const providerLogsDir = nodePath.join(logsDir, "provider");
+  return {
+    logLevel: "Error",
+    traceMinLevel: "Info",
+    traceTimingEnabled: true,
+    traceBatchWindowMs: 200,
+    traceMaxBytes: 10 * 1024 * 1024,
+    traceMaxFiles: 10,
+    otlpTracesUrl: undefined,
+    otlpMetricsUrl: undefined,
+    otlpExportIntervalMs: 10_000,
+    otlpServiceName: "t3-server",
+    cwd: process.cwd(),
+    baseDir,
+    stateDir,
+    dbPath: nodePath.join(stateDir, "state.sqlite"),
+    keybindingsConfigPath: nodePath.join(stateDir, "keybindings.json"),
+    settingsPath: nodePath.join(stateDir, "settings.json"),
+    worktreesDir: nodePath.join(baseDir, "worktrees"),
+    attachmentsDir: nodePath.join(stateDir, "attachments"),
+    logsDir,
+    serverLogPath: nodePath.join(logsDir, "server.log"),
+    serverTracePath: nodePath.join(logsDir, "server.trace.ndjson"),
+    providerLogsDir,
+    providerEventLogPath: nodePath.join(providerLogsDir, "events.log"),
+    terminalLogsDir: nodePath.join(logsDir, "terminals"),
+    anonymousIdPath: nodePath.join(stateDir, "anonymous-id"),
+    environmentIdPath: nodePath.join(stateDir, "environment-id"),
+    mode: "web",
+    autoBootstrapProjectFromCwd: false,
+    logWebSocketEvents: false,
+    port: 0,
+    host: undefined,
+    authToken: undefined,
+    staticDir: undefined,
+    devUrl: undefined,
+    noBrowser: false,
+  };
+};
 
 it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
   it.effect("persists the environment id across service restarts", () =>
@@ -28,6 +72,67 @@ it.layer(NodeServices.layer)("ServerEnvironmentLive", (it) => {
 
       expect(first.environmentId).toBe(second.environmentId);
       expect(second.capabilities.repositoryIdentity).toBe(true);
+    }),
+  );
+
+  it.effect("fails instead of overwriting a persisted id when reading the file errors", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-server-environment-read-error-test-",
+      });
+      const serverConfig = makeServerConfig(baseDir);
+      const environmentIdPath = serverConfig.environmentIdPath;
+      yield* fileSystem.makeDirectory(nodePath.dirname(environmentIdPath), { recursive: true });
+      yield* fileSystem.writeFileString(environmentIdPath, "persisted-environment-id\n");
+      const writeAttempts: string[] = [];
+      const failingFileSystemLayer = FileSystem.layerNoop({
+        exists: (path) => Effect.succeed(path === environmentIdPath),
+        readFileString: (path) =>
+          path === environmentIdPath
+            ? Effect.fail(
+                PlatformError.systemError({
+                  _tag: "PermissionDenied",
+                  module: "FileSystem",
+                  method: "readFileString",
+                  description: "permission denied",
+                  pathOrDescriptor: path,
+                }),
+              )
+            : Effect.fail(
+                PlatformError.systemError({
+                  _tag: "NotFound",
+                  module: "FileSystem",
+                  method: "readFileString",
+                  description: "not found",
+                  pathOrDescriptor: path,
+                }),
+              ),
+        writeFileString: (path) => {
+          writeAttempts.push(path);
+          return Effect.void;
+        },
+      });
+
+      const exit = yield* Effect.gen(function* () {
+        const serverEnvironment = yield* ServerEnvironment;
+        return yield* serverEnvironment.getDescriptor;
+      }).pipe(
+        Effect.provide(
+          ServerEnvironmentLive.pipe(
+            Layer.provide(
+              Layer.merge(Layer.succeed(ServerConfig, serverConfig), failingFileSystemLayer),
+            ),
+          ),
+        ),
+        Effect.exit,
+      );
+
+      expect(Exit.isFailure(exit)).toBe(true);
+      expect(writeAttempts).toEqual([]);
+      expect(yield* fileSystem.readFileString(environmentIdPath)).toBe(
+        "persisted-environment-id\n",
+      );
     }),
   );
 });

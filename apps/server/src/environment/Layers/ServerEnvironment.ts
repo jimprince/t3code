@@ -42,10 +42,9 @@ export const makeServerEnvironment = Effect.fn("makeServerEnvironment")(function
       return null;
     }
 
-    const raw = yield* fileSystem.readFileString(serverConfig.environmentIdPath).pipe(
-      Effect.orElseSucceed(() => ""),
-      Effect.map((value) => value.trim()),
-    );
+    const raw = yield* fileSystem
+      .readFileString(serverConfig.environmentIdPath)
+      .pipe(Effect.map((value) => value.trim()));
 
     return raw.length > 0 ? raw : null;
   });
