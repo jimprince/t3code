@@ -58,7 +58,7 @@ import { isElectron } from "../env";
 import { APP_STAGE_LABEL, APP_VERSION } from "../branding";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isLinuxPlatform, isMacPlatform, newCommandId, newProjectId } from "../lib/utils";
-import { getProjectScopedId, getThreadScopedId, useStore } from "../store";
+import { getProjectScopedId, useStore } from "../store";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { useUiStateStore } from "../uiStateStore";
 import {
@@ -785,14 +785,8 @@ export default function Sidebar() {
         .filter((thread): thread is NonNullable<typeof thread> => thread !== undefined),
     [sidebarThreadsByScopedId, threadScopedIdsByProjectScopedId],
   );
-  const sidebarThreadByScopedId = useMemo(
-    () =>
-      new Map(
-        sidebarThreads.map((thread) => [
-          getThreadScopedId({ environmentId: thread.environmentId, id: thread.id }),
-          thread,
-        ]),
-      ),
+  const sidebarThreadById = useMemo(
+    () => new Map(sidebarThreads.map((thread) => [thread.id, thread] as const)),
     [sidebarThreads],
   );
   const routeTerminalOpen = routeThreadId
@@ -1144,13 +1138,7 @@ export default function Sidebar() {
 
       if (clicked === "mark-unread") {
         for (const id of ids) {
-          let thread: SidebarThreadSummary | undefined;
-          for (const t of sidebarThreadByScopedId.values()) {
-            if (t.id === id) {
-              thread = t;
-              break;
-            }
-          }
+          const thread = sidebarThreadById.get(id);
           markThreadUnread(id, thread?.latestTurn?.completedAt);
         }
         clearSelection();
@@ -1181,7 +1169,7 @@ export default function Sidebar() {
       deleteThread,
       markThreadUnread,
       removeFromSelection,
-      sidebarThreadByScopedId,
+      sidebarThreadById,
       selectedThreadIds,
     ],
   );
