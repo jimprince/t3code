@@ -53,7 +53,7 @@ export const resolveServerUrl = (options?: {
   pathname?: string | undefined;
   searchParams?: Record<string, string> | undefined;
 }): string => {
-  const rawUrl = firstNonEmptyString(options?.url, resolvePrimaryEnvironmentBootstrapUrl());
+  const rawUrl = firstNonEmptyString(options?.url || resolvePrimaryEnvironmentBootstrapUrl());
 
   const parsedUrl = new URL(rawUrl);
   if (options?.protocol) {
