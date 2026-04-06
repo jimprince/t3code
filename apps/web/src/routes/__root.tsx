@@ -454,6 +454,10 @@ function EventRouter() {
       }
       const currentEnvironmentId = resolveCurrentEnvironmentId();
       if (currentEnvironmentId === null) {
+        if (!disposed && pendingDomainEvents.length > 0) {
+          flushPendingDomainEventsScheduled = true;
+          setTimeout(flushPendingDomainEvents, 100);
+        }
         return;
       }
 

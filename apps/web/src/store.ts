@@ -661,8 +661,23 @@ export function syncServerReadModel(
     ...state.threads.filter((thread) => !sameEnvironmentId(thread.environmentId, environmentId)),
     ...threadsForEnvironment,
   ];
-  const sidebarThreadsByScopedId = buildSidebarThreadsByScopedId(threads);
-  const threadScopedIdsByProjectScopedId = buildThreadScopedIdsByProjectScopedId(threads);
+  const otherEnvSidebarEntries = Object.fromEntries(
+    Object.entries(state.sidebarThreadsByScopedId).filter(
+      ([, summary]) => !sameEnvironmentId(summary.environmentId, environmentId),
+    ),
+  );
+  const newEnvSidebarEntries = buildSidebarThreadsByScopedId(threadsForEnvironment);
+  const sidebarThreadsByScopedId = { ...otherEnvSidebarEntries, ...newEnvSidebarEntries };
+
+  const envProjectPrefix = `${environmentId}:project:`;
+  const otherEnvProjectEntries = Object.fromEntries(
+    Object.entries(state.threadScopedIdsByProjectScopedId).filter(
+      ([key]) => !key.startsWith(envProjectPrefix),
+    ),
+  );
+  const newEnvProjectEntries = buildThreadScopedIdsByProjectScopedId(threadsForEnvironment);
+  const threadScopedIdsByProjectScopedId = { ...otherEnvProjectEntries, ...newEnvProjectEntries };
+
   return {
     ...state,
     projects,
