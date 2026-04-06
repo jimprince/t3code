@@ -28,6 +28,15 @@ describe("normalizeGitRemoteUrl", () => {
       "gitlab.com/t3tools/platform/t3code",
     );
   });
+
+  it("drops explicit ports from URL-shaped remotes", () => {
+    expect(normalizeGitRemoteUrl("https://gitlab.company.com:8443/team/project.git")).toBe(
+      "gitlab.company.com/team/project",
+    );
+    expect(normalizeGitRemoteUrl("ssh://git@gitlab.company.com:2222/team/project.git")).toBe(
+      "gitlab.company.com/team/project",
+    );
+  });
 });
 
 describe("parseGitHubRepositoryNameWithOwnerFromRemoteUrl", () => {

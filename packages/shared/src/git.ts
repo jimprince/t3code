@@ -89,13 +89,25 @@ export function normalizeGitRemoteUrl(value: string): string {
     .replace(/\/+$/g, "")
     .replace(/\.git$/i, "")
     .toLowerCase();
-  const hostAndPath =
-    /^(?:git@|ssh:\/\/git@|https:\/\/|http:\/\/|git:\/\/)([^/:]+)[:/]([^/\s]+(?:\/[^/\s]+)+)$/i.exec(
-      normalized,
-    );
 
-  if (hostAndPath?.[1] && hostAndPath[2]) {
-    return `${hostAndPath[1]}/${hostAndPath[2]}`;
+  if (/^(?:ssh|https?|git):\/\//i.test(normalized)) {
+    try {
+      const url = new URL(normalized);
+      const repositoryPath = url.pathname
+        .split("/")
+        .filter((segment) => segment.length > 0)
+        .join("/");
+      if (url.hostname && repositoryPath.includes("/")) {
+        return `${url.hostname}/${repositoryPath}`;
+      }
+    } catch {
+      return normalized;
+    }
+  }
+
+  const scpStyleHostAndPath = /^git@([^:/\s]+)[:/]([^/\s]+(?:\/[^/\s]+)+)$/i.exec(normalized);
+  if (scpStyleHostAndPath?.[1] && scpStyleHostAndPath[2]) {
+    return `${scpStyleHostAndPath[1]}/${scpStyleHostAndPath[2]}`;
   }
 
   return normalized;
