@@ -19,6 +19,15 @@ describe("normalizeGitRemoteUrl", () => {
       "github.com/t3tools/t3code",
     );
   });
+
+  it("preserves nested group paths for providers like GitLab", () => {
+    expect(normalizeGitRemoteUrl("git@gitlab.com:T3Tools/platform/T3Code.git")).toBe(
+      "gitlab.com/t3tools/platform/t3code",
+    );
+    expect(normalizeGitRemoteUrl("https://gitlab.com/T3Tools/platform/T3Code.git")).toBe(
+      "gitlab.com/t3tools/platform/t3code",
+    );
+  });
 });
 
 describe("parseGitHubRepositoryNameWithOwnerFromRemoteUrl", () => {

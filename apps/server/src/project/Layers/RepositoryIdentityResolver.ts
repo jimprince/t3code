@@ -46,7 +46,9 @@ function buildRepositoryIdentity(input: {
   const canonicalKey = normalizeGitRemoteUrl(input.remoteUrl);
   const hostingProvider = detectGitHostingProviderFromRemoteUrl(input.remoteUrl);
   const repositoryPath = canonicalKey.split("/").slice(1).join("/");
-  const [owner, repositoryName] = repositoryPath.split("/");
+  const repositoryPathSegments = repositoryPath.split("/").filter((segment) => segment.length > 0);
+  const [owner] = repositoryPathSegments;
+  const repositoryName = repositoryPathSegments.at(-1);
 
   return {
     canonicalKey,
@@ -103,7 +105,7 @@ async function resolveRepositoryIdentity(cwd: string): Promise<{
 }
 
 export const makeRepositoryIdentityResolver = Effect.gen(function* () {
-  const cacheRef = yield* Ref.make(new Map<string, RepositoryIdentity | null>());
+  const cacheRef = yield* Ref.make(new Map<string, RepositoryIdentity>());
 
   const resolve: RepositoryIdentityResolverShape["resolve"] = Effect.fn(
     "RepositoryIdentityResolver.resolve",
@@ -115,12 +117,15 @@ export const makeRepositoryIdentityResolver = Effect.gen(function* () {
     }
 
     const resolved = yield* Effect.promise(() => resolveRepositoryIdentity(cwd));
-    yield* Ref.update(cacheRef, (current) => {
-      const next = new Map(current);
-      next.set(cwd, resolved.identity);
-      next.set(resolved.cacheKey, resolved.identity);
-      return next;
-    });
+    if (resolved.identity !== null) {
+      const identity = resolved.identity;
+      yield* Ref.update(cacheRef, (current) => {
+        const next = new Map(current);
+        next.set(cwd, identity);
+        next.set(resolved.cacheKey, identity);
+        return next;
+      });
+    }
     return resolved.identity;
   });
 

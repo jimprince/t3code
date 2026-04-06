@@ -90,7 +90,7 @@ export function normalizeGitRemoteUrl(value: string): string {
     .replace(/\.git$/i, "")
     .toLowerCase();
   const hostAndPath =
-    /^(?:git@|ssh:\/\/git@|https:\/\/|http:\/\/|git:\/\/)([^/:]+)[:/]([^/\s]+\/[^/\s]+)$/i.exec(
+    /^(?:git@|ssh:\/\/git@|https:\/\/|http:\/\/|git:\/\/)([^/:]+)[:/]([^/\s]+(?:\/[^/\s]+)+)$/i.exec(
       normalized,
     );
 

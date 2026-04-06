@@ -95,4 +95,47 @@ it.layer(NodeServices.layer)("RepositoryIdentityResolverLive", (it) => {
       expect(identity?.name).toBe("t3code");
     }).pipe(Effect.provide(RepositoryIdentityResolverLive)),
   );
+
+  it.effect("uses the last remote path segment as the repository name for nested groups", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-repository-identity-nested-group-test-",
+      });
+
+      yield* git(cwd, ["init"]);
+      yield* git(cwd, ["remote", "add", "origin", "git@gitlab.com:T3Tools/platform/t3code.git"]);
+
+      const resolver = yield* RepositoryIdentityResolver;
+      const identity = yield* resolver.resolve(cwd);
+
+      expect(identity).not.toBeNull();
+      expect(identity?.canonicalKey).toBe("gitlab.com/t3tools/platform/t3code");
+      expect(identity?.displayName).toBe("t3tools/platform/t3code");
+      expect(identity?.owner).toBe("t3tools");
+      expect(identity?.name).toBe("t3code");
+    }).pipe(Effect.provide(RepositoryIdentityResolverLive)),
+  );
+
+  it.effect("re-resolves after a remote is configured later in the same process", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const cwd = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-repository-identity-late-remote-test-",
+      });
+
+      yield* git(cwd, ["init"]);
+
+      const resolver = yield* RepositoryIdentityResolver;
+      const initialIdentity = yield* resolver.resolve(cwd);
+      expect(initialIdentity).toBeNull();
+
+      yield* git(cwd, ["remote", "add", "origin", "git@github.com:T3Tools/t3code.git"]);
+
+      const resolvedIdentity = yield* resolver.resolve(cwd);
+      expect(resolvedIdentity).not.toBeNull();
+      expect(resolvedIdentity?.canonicalKey).toBe("github.com/t3tools/t3code");
+      expect(resolvedIdentity?.name).toBe("t3code");
+    }).pipe(Effect.provide(RepositoryIdentityResolverLive)),
+  );
 });
