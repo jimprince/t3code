@@ -67,6 +67,33 @@ const makeRenameFailureSecretStoreLayer = () =>
     Layer.provide(RenameFailureFileSystemLayer),
   );
 
+const RemoveFailureFileSystemLayer = Layer.effect(
+  FileSystem.FileSystem,
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+
+    return {
+      ...fileSystem,
+      remove: (path, options) =>
+        Effect.fail(
+          PlatformError.systemError({
+            _tag: "PermissionDenied",
+            module: "FileSystem",
+            method: "remove",
+            pathOrDescriptor: String(path),
+            description: `Permission denied while removing secret file.${options ? " options-set" : ""}`,
+          }),
+        ),
+    } satisfies FileSystem.FileSystem;
+  }),
+).pipe(Layer.provide(NodeServices.layer));
+
+const makeRemoveFailureSecretStoreLayer = () =>
+  ServerSecretStoreLive.pipe(
+    Layer.provide(makeServerConfigLayer()),
+    Layer.provide(RemoveFailureFileSystemLayer),
+  );
+
 it.layer(NodeServices.layer)("ServerSecretStoreLive", (it) => {
   it.effect("returns null when a secret file does not exist", () =>
     Effect.gen(function* () {
@@ -115,5 +142,18 @@ it.layer(NodeServices.layer)("ServerSecretStoreLive", (it) => {
       expect(error.cause).toBeInstanceOf(PlatformError.PlatformError);
       expect((error.cause as PlatformError.PlatformError).reason._tag).toBe("PermissionDenied");
     }).pipe(Effect.provide(makeRenameFailureSecretStoreLayer())),
+  );
+
+  it.effect("propagates remove failures other than missing-file errors", () =>
+    Effect.gen(function* () {
+      const secretStore = yield* ServerSecretStore;
+
+      const error = yield* Effect.flip(secretStore.remove("session-signing-key"));
+
+      expect(error).toBeInstanceOf(SecretStoreError);
+      expect(error.message).toContain("Failed to remove secret session-signing-key.");
+      expect(error.cause).toBeInstanceOf(PlatformError.PlatformError);
+      expect((error.cause as PlatformError.PlatformError).reason._tag).toBe("PermissionDenied");
+    }).pipe(Effect.provide(makeRemoveFailureSecretStoreLayer())),
   );
 });

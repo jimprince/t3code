@@ -73,7 +73,18 @@ export const makeServerSecretStore = Effect.gen(function* () {
     );
 
   const remove: ServerSecretStoreShape["remove"] = (name) =>
-    fileSystem.remove(resolveSecretPath(name)).pipe(Effect.orElseSucceed(() => undefined));
+    fileSystem.remove(resolveSecretPath(name)).pipe(
+      Effect.catch((cause) =>
+        isMissingSecretFileError(cause)
+          ? Effect.void
+          : Effect.fail(
+              new SecretStoreError({
+                message: `Failed to remove secret ${name}.`,
+                cause,
+              }),
+            ),
+      ),
+    );
 
   return {
     get,
