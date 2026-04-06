@@ -1,10 +1,7 @@
 import type { RepositoryIdentity } from "@t3tools/contracts";
 import { Effect, Layer, Ref } from "effect";
 import { runProcess } from "../../processRunner.ts";
-import {
-  normalizeGitRemoteUrl,
-  parseGitHubRepositoryNameWithOwnerFromRemoteUrl,
-} from "@t3tools/shared/git";
+import { detectGitHostingProviderFromRemoteUrl, normalizeGitRemoteUrl } from "@t3tools/shared/git";
 
 import {
   RepositoryIdentityResolver,
@@ -47,8 +44,9 @@ function buildRepositoryIdentity(input: {
   readonly remoteUrl: string;
 }): RepositoryIdentity {
   const canonicalKey = normalizeGitRemoteUrl(input.remoteUrl);
-  const githubNameWithOwner = parseGitHubRepositoryNameWithOwnerFromRemoteUrl(input.remoteUrl);
-  const [owner, repositoryName] = githubNameWithOwner?.split("/") ?? [];
+  const hostingProvider = detectGitHostingProviderFromRemoteUrl(input.remoteUrl);
+  const repositoryPath = canonicalKey.split("/").slice(1).join("/");
+  const [owner, repositoryName] = repositoryPath.split("/");
 
   return {
     canonicalKey,
@@ -57,8 +55,8 @@ function buildRepositoryIdentity(input: {
       remoteName: input.remoteName,
       remoteUrl: input.remoteUrl,
     },
-    ...(githubNameWithOwner ? { displayName: githubNameWithOwner } : {}),
-    ...(githubNameWithOwner ? { provider: "github" } : {}),
+    ...(repositoryPath ? { displayName: repositoryPath } : {}),
+    ...(hostingProvider ? { provider: hostingProvider.kind } : {}),
     ...(owner ? { owner } : {}),
     ...(repositoryName ? { name: repositoryName } : {}),
   };

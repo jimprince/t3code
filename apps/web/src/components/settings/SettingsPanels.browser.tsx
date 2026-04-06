@@ -42,16 +42,16 @@ function createBaseServerConfig(): ServerConfig {
 }
 
 describe("GeneralSettingsPanel observability", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetServerStateForTests();
-    __resetNativeApiForTests();
+    await __resetNativeApiForTests();
     localStorage.clear();
     document.body.innerHTML = "";
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     resetServerStateForTests();
-    __resetNativeApiForTests();
+    await __resetNativeApiForTests();
     document.body.innerHTML = "";
   });
 

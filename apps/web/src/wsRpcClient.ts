@@ -2,11 +2,14 @@ import {
   type GitActionProgressEvent,
   type GitRunStackedActionInput,
   type GitRunStackedActionResult,
+  type GitStatusResult,
+  type GitStatusStreamEvent,
   type NativeApi,
   ORCHESTRATION_WS_METHODS,
   type ServerSettingsPatch,
   WS_METHODS,
 } from "@t3tools/contracts";
+import { applyGitStatusStreamEvent } from "@t3tools/shared/git";
 import { Effect, Stream } from "effect";
 
 import { resolvePrimaryEnvironmentBootstrapUrl } from "./environmentBootstrap";
@@ -65,7 +68,12 @@ export interface WsRpcClient {
   };
   readonly git: {
     readonly pull: RpcUnaryMethod<typeof WS_METHODS.gitPull>;
-    readonly status: RpcUnaryMethod<typeof WS_METHODS.gitStatus>;
+    readonly refreshStatus: RpcUnaryMethod<typeof WS_METHODS.gitRefreshStatus>;
+    readonly onStatus: (
+      input: RpcInput<typeof WS_METHODS.subscribeGitStatus>,
+      listener: (status: GitStatusResult) => void,
+      options?: StreamSubscriptionOptions,
+    ) => () => void;
     readonly runStackedAction: (
       input: GitRunStackedActionInput,
       options?: GitRunStackedActionOptions,
@@ -152,7 +160,19 @@ export function createWsRpcClient(
     },
     git: {
       pull: (input) => transport.request((client) => client[WS_METHODS.gitPull](input)),
-      status: (input) => transport.request((client) => client[WS_METHODS.gitStatus](input)),
+      refreshStatus: (input) =>
+        transport.request((client) => client[WS_METHODS.gitRefreshStatus](input)),
+      onStatus: (input, listener, options) => {
+        let current: GitStatusResult | null = null;
+        return transport.subscribe(
+          (client) => client[WS_METHODS.subscribeGitStatus](input),
+          (event: GitStatusStreamEvent) => {
+            current = applyGitStatusStreamEvent(current, event);
+            listener(current);
+          },
+          options,
+        );
+      },
       runStackedAction: async (input, options) => {
         let result: GitRunStackedActionResult | null = null;
 
