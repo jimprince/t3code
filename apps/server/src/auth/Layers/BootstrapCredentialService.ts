@@ -62,60 +62,60 @@ export const makeBootstrapCredentialService = Effect.gen(function* () {
   const consume: BootstrapCredentialServiceShape["consume"] = (credential) =>
     Effect.gen(function* () {
       const now = yield* DateTime.now;
-      const result: ConsumeResult = yield* Ref.modify(grantsRef, (current): readonly [
-        ConsumeResult,
-        Map<string, StoredBootstrapGrant>,
-      ] => {
-        const grant = current.get(credential);
-        if (!grant) {
-          return [
-            {
-              _tag: "error",
-              error: new BootstrapCredentialError({
-                message: "Unknown bootstrap credential.",
-              }),
-            },
-            current,
-          ];
-        }
+      const result: ConsumeResult = yield* Ref.modify(
+        grantsRef,
+        (current): readonly [ConsumeResult, Map<string, StoredBootstrapGrant>] => {
+          const grant = current.get(credential);
+          if (!grant) {
+            return [
+              {
+                _tag: "error",
+                error: new BootstrapCredentialError({
+                  message: "Unknown bootstrap credential.",
+                }),
+              },
+              current,
+            ];
+          }
 
-        const next = new Map(current);
-        if (DateTime.isGreaterThanOrEqualTo(now, grant.expiresAt)) {
-          next.delete(credential);
+          const next = new Map(current);
+          if (DateTime.isGreaterThanOrEqualTo(now, grant.expiresAt)) {
+            next.delete(credential);
+            return [
+              {
+                _tag: "error",
+                error: new BootstrapCredentialError({
+                  message: "Bootstrap credential expired.",
+                }),
+              },
+              next,
+            ];
+          }
+
+          const remainingUses = grant.remainingUses;
+          if (typeof remainingUses === "number") {
+            if (remainingUses <= 1) {
+              next.delete(credential);
+            } else {
+              next.set(credential, {
+                ...grant,
+                remainingUses: remainingUses - 1,
+              });
+            }
+          }
+
           return [
             {
-              _tag: "error",
-              error: new BootstrapCredentialError({
-                message: "Bootstrap credential expired.",
-              }),
+              _tag: "success",
+              grant: {
+                method: grant.method,
+                expiresAt: grant.expiresAt,
+              } satisfies BootstrapGrant,
             },
             next,
           ];
-        }
-
-        const remainingUses = grant.remainingUses;
-        if (typeof remainingUses === "number") {
-          if (remainingUses <= 1) {
-            next.delete(credential);
-          } else {
-            next.set(credential, {
-              ...grant,
-              remainingUses: remainingUses - 1,
-            });
-          }
-        }
-
-        return [
-          {
-            _tag: "success",
-            grant: {
-              method: grant.method,
-              expiresAt: grant.expiresAt,
-            } satisfies BootstrapGrant,
-          },
-          next,
-        ];
-      });
+        },
+      );
 
       if (result._tag === "error") {
         return yield* result.error;

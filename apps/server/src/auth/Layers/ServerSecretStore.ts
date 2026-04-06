@@ -46,10 +46,13 @@ export const makeServerSecretStore = Effect.gen(function* () {
     }).pipe(
       Effect.catch((cause) =>
         fileSystem.remove(tempPath).pipe(
-          Effect.orElseSucceed(() => undefined),
+          Effect.ignore,
           Effect.flatMap(() =>
             Effect.fail(
-              new SecretStoreError({ message: `Failed to persist secret ${name}.`, cause }),
+              new SecretStoreError({
+                message: `Failed to persist secret ${name}.`,
+                cause,
+              }),
             ),
           ),
         ),
