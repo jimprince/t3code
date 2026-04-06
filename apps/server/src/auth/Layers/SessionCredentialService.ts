@@ -1,4 +1,4 @@
-import { DateTime, Duration, Effect, Layer, Schema } from "effect";
+import { Clock, DateTime, Duration, Effect, Layer, Schema } from "effect";
 
 import { ServerSecretStore } from "../Services/ServerSecretStore.ts";
 import {
@@ -80,7 +80,8 @@ export const makeSessionCredentialService = Effect.gen(function* () {
         }),
     });
 
-    if (claims.exp <= Date.now()) {
+    const now = yield* Clock.currentTimeMillis;
+    if (claims.exp <= now) {
       return yield* new SessionCredentialError({
         message: "Session token expired.",
       });

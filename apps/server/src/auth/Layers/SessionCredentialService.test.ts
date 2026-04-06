@@ -1,6 +1,7 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { expect, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
+import { TestClock } from "effect/testing";
 
 import type { ServerConfigShape } from "../../config.ts";
 import { ServerConfig } from "../../config.ts";
@@ -41,7 +42,7 @@ it.layer(NodeServices.layer)("SessionCredentialServiceLive", (it) => {
 
       expect(verified.method).toBe("browser-session-cookie");
       expect(verified.subject).toBe("desktop-bootstrap");
-      expect(verified.expiresAt).toBe(issued.expiresAt);
+      expect(verified.expiresAt?.toString()).toBe(issued.expiresAt.toString());
     }).pipe(Effect.provide(makeSessionCredentialLayer())),
   );
   it.effect("rejects malformed session tokens", () =>
@@ -52,5 +53,18 @@ it.layer(NodeServices.layer)("SessionCredentialServiceLive", (it) => {
       expect(error._tag).toBe("SessionCredentialError");
       expect(error.message).toContain("Malformed session token");
     }).pipe(Effect.provide(makeSessionCredentialLayer())),
+  );
+  it.effect("verifies session tokens against the Effect clock", () =>
+    Effect.gen(function* () {
+      const sessions = yield* SessionCredentialService;
+      const issued = yield* sessions.issue({
+        method: "bearer-session-token",
+        subject: "test-clock",
+      });
+      const verified = yield* sessions.verify(issued.token);
+
+      expect(verified.method).toBe("bearer-session-token");
+      expect(verified.subject).toBe("test-clock");
+    }).pipe(Effect.provide(Layer.merge(makeSessionCredentialLayer(), TestClock.layer()))),
   );
 });
