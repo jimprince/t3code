@@ -24,6 +24,7 @@ jobs:
       tag: ${{ steps.release_meta.outputs.tag }}
       is_prerelease: ${{ steps.release_meta.outputs.is_prerelease }}
       make_latest: ${{ steps.release_meta.outputs.make_latest }}
+      build_matrix: ${{ steps.build_matrix.outputs.matrix }}
       ref: ${{ github.sha }}
     steps:
       - name: Checkout
@@ -55,6 +56,16 @@ jobs:
             echo "make_latest=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - id: build_matrix
+        name: Resolve build matrix
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REPOSITORY}" == "pingdotgg/t3code" ]]; then
+            echo 'matrix={"include":[{"label":"macOS arm64","runner":"macos-14","platform":"mac","target":"dmg","arch":"arm64"},{"label":"macOS x64","runner":"macos-15-intel","platform":"mac","target":"dmg","arch":"x64"},{"label":"Linux x64","runner":"ubuntu-24.04","platform":"linux","target":"AppImage","arch":"x64"},{"label":"Windows x64","runner":"windows-2022","platform":"win","target":"nsis","arch":"x64"}]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'matrix={"include":[{"label":"macOS arm64","runner":"macos-14","platform":"mac","target":"dmg","arch":"arm64"}]}' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -83,28 +94,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - label: macOS arm64
-            runner: macos-14
-            platform: mac
-            target: dmg
-            arch: arm64
-          - label: macOS x64
-            runner: macos-15-intel
-            platform: mac
-            target: dmg
-            arch: x64
-          - label: Linux x64
-            runner: ubuntu-24.04
-            platform: linux
-            target: AppImage
-            arch: x64
-          - label: Windows x64
-            runner: windows-2022
-            platform: win
-            target: nsis
-            arch: x64
+      matrix: ${{ fromJSON(needs.preflight.outputs.build_matrix) }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
