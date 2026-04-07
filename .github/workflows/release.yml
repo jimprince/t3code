@@ -298,7 +298,7 @@ jobs:
             release-assets/*.exe
             release-assets/*.blockmap
             release-assets/latest*.yml
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: ${{ github.repository == 'pingdotgg/t3code' }}
 
   finalize:
     name: Finalize release

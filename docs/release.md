@@ -18,6 +18,7 @@ This document covers how to run desktop releases from one tag, first without sig
 - Includes Electron auto-update metadata (for example `latest*.yml` and `*.blockmap`) in release assets.
 - On `pingdotgg/t3code`, publishes the CLI package (`apps/server`, npm package `t3`) with OIDC trusted publishing and finalizes the release by committing version bumps back to `main`.
 - On forks, skips npm publishing and the upstream-only finalize/version-bump automation.
+- On forks, the GitHub Release step tolerates unmatched asset globs so reduced build matrices can publish only the artifacts they actually produced.
 - Signing is optional and auto-detected per platform from secrets.
 
 ## Desktop auto-update notes
