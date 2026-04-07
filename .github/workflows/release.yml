@@ -250,6 +250,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [preflight, build, publish_cli]
+    if: ${{ always() && needs.preflight.result == 'success' && needs.build.result == 'success' && (needs.publish_cli.result == 'success' || needs.publish_cli.result == 'skipped') }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -270,11 +271,16 @@ jobs:
           path: release-assets
 
       - name: Merge macOS updater manifests
+        shell: bash
         run: |
-          node scripts/merge-mac-update-manifests.ts \
-            release-assets/latest-mac.yml \
-            release-assets/latest-mac-x64.yml
-          rm -f release-assets/latest-mac-x64.yml
+          if [[ -f release-assets/latest-mac.yml && -f release-assets/latest-mac-x64.yml ]]; then
+            node scripts/merge-mac-update-manifests.ts \
+              release-assets/latest-mac.yml \
+              release-assets/latest-mac-x64.yml
+            rm -f release-assets/latest-mac-x64.yml
+          else
+            echo "Skipping macOS updater manifest merge; secondary manifest not present."
+          fi
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
@@ -297,6 +303,7 @@ jobs:
   finalize:
     name: Finalize release
     needs: [preflight, release]
+    if: ${{ github.repository == 'pingdotgg/t3code' && needs.release.result == 'success' }}
     runs-on: ubuntu-24.04
     steps:
       - id: app_token

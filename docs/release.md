@@ -16,7 +16,8 @@ This document covers how to run desktop releases from one tag, first without sig
   - Versions with a suffix after `X.Y.Z` (for example `1.2.3-alpha.1`) are published as GitHub prereleases.
   - Only plain `X.Y.Z` releases are marked as the repository's latest release.
 - Includes Electron auto-update metadata (for example `latest*.yml` and `*.blockmap`) in release assets.
-- Publishes the CLI package (`apps/server`, npm package `t3`) with OIDC trusted publishing.
+- On `pingdotgg/t3code`, publishes the CLI package (`apps/server`, npm package `t3`) with OIDC trusted publishing and finalizes the release by committing version bumps back to `main`.
+- On forks, skips npm publishing and the upstream-only finalize/version-bump automation.
 - Signing is optional and auto-detected per platform from secrets.
 
 ## Desktop auto-update notes
