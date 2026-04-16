@@ -27,7 +27,7 @@
 
 ## Status
 
-- In progress
+- Completed
 
 ## Verification
 
