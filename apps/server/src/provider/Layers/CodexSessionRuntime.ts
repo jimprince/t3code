@@ -389,6 +389,23 @@ export function isRecoverableThreadResumeError(error: unknown): boolean {
   return RECOVERABLE_THREAD_RESUME_ERROR_SNIPPETS.some((snippet) => message.includes(snippet));
 }
 
+/**
+ * Fork-specific: inject `T3_THREAD_ID` into the spawned codex child's env so
+ * downstream codex code (messages/threads protocol in the t3 codex fork) can
+ * correlate its work with the server-side thread. Upstream only forwards
+ * `CODEX_HOME`; we always forward `T3_THREAD_ID` and optionally `CODEX_HOME`.
+ */
+export function buildCodexChildEnv(input: {
+  readonly threadId: ThreadId;
+  readonly homePath?: string;
+}): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    T3_THREAD_ID: String(input.threadId),
+    ...(input.homePath ? { CODEX_HOME: input.homePath } : {}),
+  };
+}
+
 type CodexThreadOpenResponse =
   | CodexRpc.ClientRequestResponsesByMethod["thread/start"]
   | CodexRpc.ClientRequestResponsesByMethod["thread/resume"];
@@ -683,7 +700,10 @@ export const makeCodexSessionRuntime = (
       .spawn(
         ChildProcess.make(options.binaryPath, ["app-server"], {
           cwd: options.cwd,
-          ...(options.homePath ? { env: { ...process.env, CODEX_HOME: options.homePath } } : {}),
+          env: buildCodexChildEnv({
+            threadId: options.threadId,
+            ...(options.homePath ? { homePath: options.homePath } : {}),
+          }),
           shell: process.platform === "win32",
         }),
       )

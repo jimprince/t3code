@@ -11,6 +11,7 @@ import {
   CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
 } from "../CodexDeveloperInstructions.ts";
 import {
+  buildCodexChildEnv,
   buildTurnStartParams,
   isRecoverableThreadResumeError,
   openCodexThread,
@@ -271,5 +272,26 @@ describe("openCodexThread", () => {
         Schema.is(CodexErrors.CodexAppServerRequestError)(error) &&
         error.errorMessage === "timed out waiting for server",
     );
+  });
+});
+
+describe("buildCodexChildEnv", () => {
+  it("injects T3_THREAD_ID and CODEX_HOME", () => {
+    const env = buildCodexChildEnv({
+      threadId: ThreadId.make("thread-env-test"),
+      homePath: "/tmp/codex-home",
+    });
+
+    assert.equal(env.T3_THREAD_ID, "thread-env-test");
+    assert.equal(env.CODEX_HOME, "/tmp/codex-home");
+  });
+
+  it("injects T3_THREAD_ID without CODEX_HOME when homePath is omitted", () => {
+    const env = buildCodexChildEnv({
+      threadId: ThreadId.make("thread-env-test"),
+    });
+
+    assert.equal(env.T3_THREAD_ID, "thread-env-test");
+    assert.equal(env.CODEX_HOME, undefined);
   });
 });
