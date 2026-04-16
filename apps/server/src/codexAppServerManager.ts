@@ -312,6 +312,17 @@ function mapCodexRuntimeMode(runtimeMode: RuntimeMode): {
   }
 }
 
+export function buildCodexAppServerEnv(input: {
+  readonly threadId: ThreadId;
+  readonly homePath?: string;
+}): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    T3_THREAD_ID: String(input.threadId),
+    ...(input.homePath ? { CODEX_HOME: input.homePath } : {}),
+  };
+}
+
 /**
  * On Windows with `shell: true`, `child.kill()` only terminates the `cmd.exe`
  * wrapper, leaving the actual command running. Use `taskkill /T` to kill the
@@ -491,10 +502,10 @@ export class CodexAppServerManager extends EventEmitter<CodexAppServerManagerEve
       });
       const child = spawn(codexBinaryPath, ["app-server"], {
         cwd: resolvedCwd,
-        env: {
-          ...process.env,
-          ...(codexHomePath ? { CODEX_HOME: codexHomePath } : {}),
-        },
+        env: buildCodexAppServerEnv({
+          threadId,
+          ...(codexHomePath ? { homePath: codexHomePath } : {}),
+        }),
         stdio: ["pipe", "pipe", "pipe"],
         shell: process.platform === "win32",
       });

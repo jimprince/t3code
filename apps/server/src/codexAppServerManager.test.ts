@@ -6,6 +6,7 @@ import path from "node:path";
 import { ApprovalRequestId, ThreadId } from "@t3tools/contracts";
 
 import {
+  buildCodexAppServerEnv,
   buildCodexInitializeParams,
   CODEX_DEFAULT_MODE_DEVELOPER_INSTRUCTIONS,
   CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
@@ -369,6 +370,16 @@ describe("resolveCodexModelForAccount", () => {
 });
 
 describe("startSession", () => {
+  it("builds a Codex app-server env with the T3 thread id", () => {
+    const env = buildCodexAppServerEnv({
+      threadId: asThreadId("thread-env-test"),
+      homePath: "/tmp/codex-home",
+    });
+
+    expect(env.T3_THREAD_ID).toBe("thread-env-test");
+    expect(env.CODEX_HOME).toBe("/tmp/codex-home");
+  });
+
   it("enables Codex experimental api capabilities during initialize", () => {
     expect(buildCodexInitializeParams()).toEqual({
       clientInfo: {
