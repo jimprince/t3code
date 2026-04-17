@@ -1,0 +1,119 @@
+name: Sync Upstream
+
+# Detects new stable releases on pingdotgg/t3code, rebases our fork commits
+# onto the upstream tag, and pushes — which triggers release.yml to build.
+#
+# On rebase conflict: fails loudly with instructions to resolve locally.
+
+on:
+  schedule:
+    - cron: "0 10 * * *" # daily 10:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync with upstream
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Get latest upstream release tag
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag=$(gh api repos/pingdotgg/t3code/releases/latest --jq .tag_name)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Latest upstream stable release: $tag"
+
+      - name: Checkout fork
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Check if sync needed
+        id: check
+        run: |
+          upstream_tag="${{ steps.upstream.outputs.tag }}"
+
+          # Check whether the fork already has a tag for this version
+          if git rev-parse --verify "$upstream_tag" >/dev/null 2>&1; then
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            echo "Fork already has $upstream_tag. Nothing to do."
+          else
+            fork_latest=$(git tag --list 'v*.*.*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+            echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
+            echo "Upstream at $upstream_tag, fork at $fork_latest. Syncing..."
+          fi
+
+      - name: Fetch upstream tag (namespaced to avoid clobbering fork tags)
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          upstream_tag="${{ steps.upstream.outputs.tag }}"
+          git remote add upstream https://github.com/pingdotgg/t3code.git
+          git fetch upstream "refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}"
+
+      - name: Rebase fork commits onto upstream tag
+        if: steps.check.outputs.needed == 'true'
+        id: rebase
+        run: |
+          upstream_tag="${{ steps.upstream.outputs.tag }}"
+          upstream_ref="refs/tags/upstream/${upstream_tag}"
+
+          echo "Rebasing onto $upstream_ref..."
+          echo "Our commits being replayed:"
+          git log --oneline "$upstream_ref"..HEAD
+
+          if git rebase "$upstream_ref"; then
+            echo "status=clean" >> "$GITHUB_OUTPUT"
+          else
+            # Capture which files conflicted before aborting
+            conflicted=$(git diff --name-only --diff-filter=U 2>/dev/null || echo "(unknown)")
+            git rebase --abort
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+            {
+              echo "files<<EOF"
+              echo "$conflicted"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push rebased main and release tag
+        if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
+        run: |
+          new_tag="${{ steps.upstream.outputs.tag }}"
+          git tag "$new_tag"
+          git push origin HEAD:main --force-with-lease
+          git push origin "$new_tag"
+          echo "Pushed $new_tag — release.yml will build and publish."
+
+      - name: Fail with conflict resolution instructions
+        if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'conflict'
+        run: |
+          upstream_tag="${{ steps.upstream.outputs.tag }}"
+          echo "::error::Rebase conflict syncing to $upstream_tag."
+          echo "::error::Conflicting files:"
+          echo "${{ steps.rebase.outputs.files }}" | sed 's/^/::error::  /'
+          echo "::error::"
+          echo "::error::Resolve locally:"
+          echo "::error::  git fetch upstream"
+          echo "::error::  git fetch upstream 'refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}'"
+          echo "::error::  git rebase refs/tags/upstream/${upstream_tag}"
+          echo "::error::  # fix conflicts, then:"
+          echo "::error::  git push origin main --force-with-lease"
+          echo "::error::  git push origin ${upstream_tag}"
+          exit 1
