@@ -13,10 +13,10 @@ things specific to the fork relationship.
 Our version numbers **mirror upstream**. Our `vX` tag = upstream `vX` + fork
 commits rebased on top. There is no independent versioning axis for the fork.
 
-- `.github/workflows/sync-upstream.yml` runs daily. It is the **only** thing
-  that should create new release-version tags. Do not manually bump the version
-  in `package.json` or tag releases to new numbers — sync-upstream does that
-  when upstream ships a new stable release.
+- `.github/workflows/sync-upstream.yml` runs every 3 hours. It is the **only**
+  thing that should create new release-version tags. Do not manually bump the
+  version in `package.json` or tag releases to new numbers — sync-upstream does
+  that when upstream ships a new release on the selected channel.
 - sync-upstream fetches upstream tags into `refs/tags/upstream/*` (namespaced)
   to avoid clobbering our tags, then rebases our fork commits onto the upstream
   tag and force-pushes `main` + the shared tag name.
@@ -24,7 +24,56 @@ commits rebased on top. There is no independent versioning axis for the fork.
   `GITHUB_TOKEN` cannot push commits that modify workflow files.
 
 If you need to put fork patches on top of upstream, push normal commits to
-`main`. The next sync (or next upstream release) rebases them forward automatically.
+`main`. The next sync rebases them forward automatically.
+
+### Channel: stable vs nightly
+
+sync-upstream can track either upstream stable releases (`/releases/latest`,
+excludes pre-releases) or upstream nightly pre-releases (first release whose
+tag matches `v<ver>-nightly.*` or `nightly-v<ver>-nightly.*`).
+
+Channel resolution order (first non-empty wins):
+
+1. `workflow_dispatch` input `channel` — one-off override.
+2. Repo variable `SYNC_CHANNEL` — persistent default.
+3. Hardcoded fallback: `stable`.
+
+**Flip the persistent default** (no code change, no commit needed):
+
+```bash
+gh variable set SYNC_CHANNEL --body nightly --repo jimprince/t3code
+gh variable set SYNC_CHANNEL --body stable  --repo jimprince/t3code
+gh variable list --repo jimprince/t3code        # verify
+```
+
+**One-off run on the other channel** (doesn't change the default):
+
+```bash
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
+```
+
+**Tradeoffs of tracking nightlies:**
+
+- Upstream ships 2–3 nightlies/day; our sync runs every 3h, so at most ~1 lag.
+- More frequent rebases = more chances for conflicts with our fork commits.
+  On conflict, the workflow fails with resolution instructions (see lines
+  106–121 of the workflow). Our previous nightly stays in place until resolved
+  — no data loss.
+- `main` gets force-pushed on every sync. Any local work on `main` needs
+  `git pull --rebase`; long-running feature branches should branch off and
+  rebase when ready.
+- No GitHub billing concern: `jimprince/t3code` is public, so Actions minutes
+  are unlimited and free.
+
+**Switching channels does not retroactively rewrite history.** If you flip
+from nightly → stable, the next sync will target the latest stable tag. If
+stable is older than our current `HEAD` (likely, since we rode nightlies
+ahead), the sync's `git rev-parse --verify <stable_tag>` check may already
+see that tag and skip — in which case we're already "at" stable and the next
+upstream stable release will pick us back up. If it does try to rebase
+backwards, conflicts are likely; resolve locally per the workflow's error
+output.
 
 ## Build matrix is intentionally minimal
 
@@ -74,7 +123,7 @@ release.yml — an open TODO, not a missing config.
 
 ## Fork-only interim builds: use `-fork.N` pre-release suffix
 
-If you need to ship a fork-only patch *before* upstream releases the next
+If you need to ship a fork-only patch _before_ upstream releases the next
 version (rebrand, fork-specific bugfix, config change), **do not** claim a
 real version number like `v0.0.21`. That poisons sync-upstream: when upstream
 eventually releases that number, sync sees we already have the tag and
@@ -94,7 +143,7 @@ Why this works:
 - **Auto-update sees it as an upgrade**: `0.0.22-fork.1 > 0.0.21` because
   patch 22 > patch 21. Users on the last clean release get prompted.
 - **Upstream's eventual release wins**: `0.0.22 > 0.0.22-fork.N` because a
-  pre-release suffix sorts *lower* than the release itself in semver. When
+  pre-release suffix sorts _lower_ than the release itself in semver. When
   upstream ships `v0.0.22`, sync creates it cleanly; users auto-update off
   the fork build.
 - **sync-upstream is not blocked**: the tag `v0.0.22-fork.N` is a different
