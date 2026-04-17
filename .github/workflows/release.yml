@@ -3,10 +3,14 @@ name: Release
 on:
   push:
     tags:
+      # Stable and fork-interim stable: v0.0.21, v0.0.22-fork.1
       - "v*.*.*"
+      # Exclude pure upstream nightly tags (should never land on this repo,
+      # but belt-and-braces: the fork only publishes -fork.N suffixed nightlies)
       - "!v*-nightly.*"
-  schedule:
-    - cron: "0 */3 * * *"
+      # Re-include fork nightly tags: v0.0.21-nightly.20260421.88-fork.1
+      # (pushed by sync-upstream.yml after rebasing onto an upstream nightly)
+      - "v*-nightly.*-fork.*"
   workflow_dispatch:
     inputs:
       channel:
@@ -16,9 +20,12 @@ on:
         type: choice
         options:
           - stable
-          - nightly
       version:
-        description: "Release version (for example 1.2.3 or v1.2.3)"
+        description: "Release version (for example 1.2.3, v1.2.3-fork.1, or v1.2.3-nightly.YYYYMMDD.RUN-fork.N)"
+        required: false
+        type: string
+      target_ref:
+        description: "Commit SHA, tag, or ref to build and publish. Defaults to the workflow ref."
         required: false
         type: string
 
@@ -26,48 +33,26 @@ permissions:
   contents: write
   id-token: write
 
+# Concurrency policy:
+#   * Nightly tag pushes (e.g. v0.0.22-nightly.20260430.161-fork.1) all share
+#     one group "release-nightly" with cancel-in-progress=true. If sync-upstream
+#     catches up on several upstream nightlies in one run, only the newest one
+#     ends up shipping — older queued/in-progress nightly builds get cancelled.
+#     Older nightly artifacts have no shelf life, so cancelling is correct.
+#   * Stable releases (e.g. v0.0.21) and fork-interim stable (v0.0.22-fork.N)
+#     keep per-tag groups so every stable build completes; semver still lets
+#     a later upstream stable supersede a fork-interim.
+#   * Manual workflow_dispatch runs always get unique per-run groups so an
+#     explicit reroll/recovery is never silently cancelled.
+concurrency:
+  group: ${{ (github.event_name == 'push' && contains(github.ref_name, '-nightly.')) && 'release-nightly' || format('release-{0}-{1}', github.workflow, github.ref_name || github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'push' && contains(github.ref_name, '-nightly.') }}
+
 jobs:
-  check_changes:
-    name: Check for changes since last nightly
-    if: github.event_name == 'schedule'
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    outputs:
-      has_changes: ${{ steps.check.outputs.has_changes }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - id: check
-        name: Compare HEAD to last nightly tag
-        run: |
-          last_nightly_tag=$(git tag --list 'v*-nightly.*' 'nightly-v*' --sort=-creatordate | head -n 1)
-          if [[ -z "$last_nightly_tag" ]]; then
-            echo "No previous nightly tag found. Proceeding with release."
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          last_nightly_sha=$(git rev-parse "$last_nightly_tag^{commit}")
-          head_sha=$(git rev-parse HEAD)
-
-          if [[ "$last_nightly_sha" == "$head_sha" ]]; then
-            echo "No changes on main since last nightly release ($last_nightly_tag). Skipping."
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Changes detected on main since $last_nightly_tag ($last_nightly_sha → $head_sha). Proceeding."
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          fi
-
   preflight:
     name: Preflight
-    needs: [check_changes]
-    if: |
-      !failure() && !cancelled() &&
-      (github.event_name != 'schedule' || needs.check_changes.outputs.has_changes == 'true')
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     outputs:
       release_channel: ${{ steps.release_meta.outputs.release_channel }}
       version: ${{ steps.release_meta.outputs.version }}
@@ -78,7 +63,7 @@ jobs:
       cli_dist_tag: ${{ steps.release_meta.outputs.cli_dist_tag }}
       is_prerelease: ${{ steps.release_meta.outputs.is_prerelease }}
       make_latest: ${{ steps.release_meta.outputs.make_latest }}
-      ref: ${{ github.sha }}
+      ref: ${{ steps.release_meta.outputs.ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -95,61 +80,106 @@ jobs:
         with:
           node-version-file: package.json
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
       - id: release_meta
         name: Resolve release version
         shell: bash
         env:
           DISPATCH_CHANNEL: ${{ github.event.inputs.channel }}
           DISPATCH_VERSION: ${{ github.event.inputs.version }}
+          DISPATCH_TARGET_REF: ${{ github.event.inputs.target_ref }}
           NIGHTLY_DATE: ${{ github.run_started_at }}
           NIGHTLY_SHA: ${{ github.sha }}
           NIGHTLY_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "schedule" || ( "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-stable}" == "nightly" ) ]]; then
-            nightly_date="$(date -u -d "$NIGHTLY_DATE" +%Y%m%d)"
+          set -euo pipefail
 
-            node scripts/resolve-nightly-release.ts \
-              --date "$nightly_date" \
-              --run-number "$NIGHTLY_RUN_NUMBER" \
-              --sha "$NIGHTLY_SHA" \
-              --github-output
+          resolve_target_ref() {
+            local requested="${1:-$NIGHTLY_SHA}"
+            local target_sha
 
-            echo "release_channel=nightly" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=nightly" >> "$GITHUB_OUTPUT"
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "make_latest=false" >> "$GITHUB_OUTPUT"
-          else
-            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-              raw="${DISPATCH_VERSION}"
-              if [[ -z "$raw" ]]; then
-                echo "workflow_dispatch stable releases require the version input." >&2
-                exit 1
-              fi
-            else
-              raw="${GITHUB_REF_NAME}"
-            fi
-
-            version="${raw#v}"
-            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-              echo "Invalid release version: $raw" >&2
+            if ! target_sha="$(git rev-parse --verify "${requested}^{commit}" 2>/dev/null)"; then
+              echo "Unable to resolve target ref to a commit: $requested" >&2
               exit 1
             fi
 
-            echo "release_channel=stable" >> "$GITHUB_OUTPUT"
-            echo "version=$version" >> "$GITHUB_OUTPUT"
-            echo "tag=v$version" >> "$GITHUB_OUTPUT"
-            echo "name=T3 Code v$version" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=latest" >> "$GITHUB_OUTPUT"
-            if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-              echo "make_latest=true" >> "$GITHUB_OUTPUT"
-            else
+            echo "$target_sha"
+          }
+
+          emit_from_tag_version() {
+            # Args: raw_version (without leading v)
+            local version="$1"
+            local target_sha="$2"
+            local short_sha="${target_sha:0:12}"
+
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+              echo "Invalid release version: v$version" >&2
+              exit 1
+            fi
+
+            echo "ref=$target_sha" >> "$GITHUB_OUTPUT"
+
+            # Channel detection: presence of "-nightly." anywhere in the
+            # pre-release identifies a nightly build (upstream-synced fork
+            # nightly). Anything else (pure semver or "-fork.N") is stable.
+            if [[ "$version" == *-nightly.* ]]; then
+              echo "release_channel=nightly" >> "$GITHUB_OUTPUT"
+              echo "version=$version" >> "$GITHUB_OUTPUT"
+              echo "tag=v$version" >> "$GITHUB_OUTPUT"
+              echo "name=T3 Code Nightly $version ($short_sha)" >> "$GITHUB_OUTPUT"
+              echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+              echo "cli_dist_tag=nightly" >> "$GITHUB_OUTPUT"
               echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
               echo "make_latest=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "release_channel=stable" >> "$GITHUB_OUTPUT"
+              echo "version=$version" >> "$GITHUB_OUTPUT"
+              echo "tag=v$version" >> "$GITHUB_OUTPUT"
+              echo "name=T3 Code v$version" >> "$GITHUB_OUTPUT"
+              echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+              echo "cli_dist_tag=latest" >> "$GITHUB_OUTPUT"
+              if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+                echo "make_latest=true" >> "$GITHUB_OUTPUT"
+              else
+                # -fork.N interim stable build. Publish as a normal latest
+                # release so stable desktop clients can see it as an update.
+                # Semver still lets the later upstream final release win:
+                # X.Y.Z > X.Y.Z-fork.N.
+                echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+                echo "make_latest=true" >> "$GITHUB_OUTPUT"
+              fi
             fi
+          }
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            # Tag push (from sync-upstream.yml or manual `git push origin vX.Y.Z`).
+            # Tag name is authoritative for both version and channel.
+            raw="${GITHUB_REF_NAME}"
+            target_sha="$(resolve_target_ref "$NIGHTLY_SHA")"
+            emit_from_tag_version "${raw#v}" "$target_sha"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            # Manual dispatch: version input required. Nightlies must be explicit
+            # fork-nightly versions, e.g. vX.Y.Z-nightly.YYYYMMDD.RUN-fork.N.
+            # Do not generate bare upstream-style nightly tags here.
+            raw="${DISPATCH_VERSION}"
+            if [[ -z "$raw" ]]; then
+              echo "workflow_dispatch releases require the version input." >&2
+              exit 1
+            fi
+            target_sha="$(resolve_target_ref "${DISPATCH_TARGET_REF:-$NIGHTLY_SHA}")"
+            emit_from_tag_version "${raw#v}" "$target_sha"
+          else
+            echo "Unsupported event: ${GITHUB_EVENT_NAME}" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [[ "${{ steps.release_meta.outputs.release_channel }}" == "nightly" ]]; then
+            bun install --frozen-lockfile --ignore-scripts
+          else
+            bun install --frozen-lockfile
           fi
 
       - name: Lint
@@ -173,6 +203,7 @@ jobs:
     name: Build ${{ matrix.label }}
     needs: preflight
     if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' }}
+    continue-on-error: ${{ matrix.platform == 'linux' && needs.preflight.outputs.release_channel == 'nightly' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -180,30 +211,15 @@ jobs:
       matrix:
         include:
           - label: macOS arm64
-            runner: blacksmith-12vcpu-macos-26
+            runner: [self-hosted, macOS, ARM64, t3code-mac-arm64]
             platform: mac
             target: dmg
             arch: arm64
-          - label: macOS x64
-            runner: blacksmith-12vcpu-macos-26
-            platform: mac
-            target: dmg
-            arch: x64
           - label: Linux x64
-            runner: blacksmith-32vcpu-ubuntu-2404
+            runner: ubuntu-24.04
             platform: linux
             target: AppImage
             arch: x64
-          - label: Windows x64
-            runner: blacksmith-32vcpu-windows-2025
-            platform: win
-            target: nsis
-            arch: x64
-          # - label: Windows arm64
-          #   runner: windows-11-arm
-          #   platform: win
-          #   target: nsis
-          #   arch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -222,7 +238,13 @@ jobs:
           node-version-file: package.json
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        shell: bash
+        run: |
+          if [[ "${{ matrix.platform }}" == "linux" && "${{ needs.preflight.outputs.release_channel }}" == "nightly" ]]; then
+            bun install --frozen-lockfile --ignore-scripts
+          else
+            bun install --frozen-lockfile
+          fi
 
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
@@ -287,25 +309,22 @@ jobs:
             else
               echo "macOS signing disabled (missing one or more Apple signing secrets)."
             fi
-          elif [[ "${{ matrix.platform }}" == "win" ]]; then
-            if has_all \
-              "$AZURE_TENANT_ID" \
-              "$AZURE_CLIENT_ID" \
-              "$AZURE_CLIENT_SECRET" \
-              "$AZURE_TRUSTED_SIGNING_ENDPOINT" \
-              "$AZURE_TRUSTED_SIGNING_ACCOUNT_NAME" \
-              "$AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME" \
-              "$AZURE_TRUSTED_SIGNING_PUBLISHER_NAME"; then
-              echo "Windows signing enabled (Azure Trusted Signing)."
-              args+=(--signed)
-            else
-              echo "Windows signing disabled (missing one or more Azure Trusted Signing secrets)."
-            fi
           else
             echo "Signing disabled for ${{ matrix.platform }}."
           fi
 
-          bun run dist:desktop:artifact -- "${args[@]}"
+          # Retry on transient flakes (hdiutil "Device not configured" on macos-14,
+          # network hiccups during native-deps download). Two tries is enough.
+          attempt=1
+          until bun run dist:desktop:artifact -- "${args[@]}"; do
+            if [[ $attempt -ge 2 ]]; then
+              echo "dist:desktop:artifact failed after $attempt attempts." >&2
+              exit 1
+            fi
+            echo "dist:desktop:artifact attempt $attempt failed, retrying..." >&2
+            attempt=$((attempt + 1))
+            sleep 15
+          done
 
       - name: Collect release assets
         shell: bash
@@ -352,59 +371,13 @@ jobs:
           path: release-publish/*
           if-no-files-found: error
 
-  publish_cli:
-    name: Publish CLI to npm
-    needs: [preflight, build]
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.build.result == 'success' }}
-    runs-on: ubuntu-24.04 # blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.preflight.outputs.ref }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: package.json
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-          registry-url: https://registry.npmjs.org
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile --filter=t3 --filter=@t3tools/web --filter=@t3tools/scripts
-
-      - name: Align package versions to release version
-        run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
-
-      - name: Build web package
-        run: bun --filter=@t3tools/web run build
-
-      - name: Build CLI package
-        run: bun --filter=t3 run build
-
-      - name: Publish CLI package
-        run: node apps/server/scripts/cli.ts publish --tag "${{ needs.preflight.outputs.cli_dist_tag }}" --app-version "${{ needs.preflight.outputs.version }}" --verbose
-
   release:
     name: Publish GitHub Release
-    needs: [preflight, build, publish_cli]
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.build.result == 'success' && needs.publish_cli.result == 'success' }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 10
+    needs: [preflight, build]
+    if: ${{ !cancelled() && needs.preflight.result == 'success' && (needs.build.result == 'success' || needs.preflight.outputs.release_channel == 'nightly') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - id: app_token
-        name: Mint release app token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -421,7 +394,7 @@ jobs:
           node-version-file: package.json
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --filter=@t3tools/scripts
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - name: Download all desktop artifacts
         uses: actions/download-artifact@v8
@@ -429,6 +402,22 @@ jobs:
           pattern: desktop-*
           merge-multiple: true
           path: release-assets
+
+      - name: Validate release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(release-assets/*)
+          if (( ${#assets[@]} == 0 )); then
+            echo "No release assets were downloaded." >&2
+            exit 1
+          fi
+
+          if [[ "${{ needs.preflight.outputs.release_channel }}" == "nightly" && ! -f release-assets/nightly-mac.yml ]]; then
+            echo "Nightly macOS updater manifest release-assets/nightly-mac.yml is required." >&2
+            exit 1
+          fi
 
       - name: Merge macOS updater manifests
         run: |
@@ -440,35 +429,6 @@ jobs:
               rm -f "$x64_manifest"
             fi
           done
-
-      # - name: Merge Windows updater manifests
-      #   run: |
-      #     shopt -s nullglob
-      #     found_windows_manifest=false
-      #     for x64_manifest in release-assets/*-win-x64.yml; do
-      #       if [[ "$(basename "$x64_manifest")" == builder-debug-* ]]; then
-      #         continue
-      #       fi
-
-      #       arm64_manifest="${x64_manifest/-x64.yml/-arm64.yml}"
-      #       output_manifest="${x64_manifest/-win-x64.yml/.yml}"
-      #       if [[ ! -f "$arm64_manifest" ]]; then
-      #         echo "Missing matching arm64 Windows manifest for $x64_manifest" >&2
-      #         exit 1
-      #       fi
-
-      #       found_windows_manifest=true
-      #       node scripts/merge-update-manifests.ts --platform win \
-      #         "$arm64_manifest" \
-      #         "$x64_manifest" \
-      #         "$output_manifest"
-      #       rm -f "$arm64_manifest" "$x64_manifest"
-      #     done
-
-      #     if [[ "$found_windows_manifest" != true ]]; then
-      #       echo "No Windows updater manifests found to merge." >&2
-      #       exit 1
-      #     fi
 
       - name: Publish release
         if: needs.preflight.outputs.previous_tag != ''
@@ -485,11 +445,10 @@ jobs:
             release-assets/*.dmg
             release-assets/*.zip
             release-assets/*.AppImage
-            release-assets/*.exe
             release-assets/*.blockmap
             release-assets/*.yml
-          fail_on_unmatched_files: true
-          token: ${{ steps.app_token.outputs.token }}
+          fail_on_unmatched_files: false
+          token: ${{ secrets.GH_PAT || github.token }}
 
       - name: Publish first release
         if: needs.preflight.outputs.previous_tag == ''
@@ -505,44 +464,25 @@ jobs:
             release-assets/*.dmg
             release-assets/*.zip
             release-assets/*.AppImage
-            release-assets/*.exe
             release-assets/*.blockmap
             release-assets/*.yml
-          fail_on_unmatched_files: true
-          token: ${{ steps.app_token.outputs.token }}
+          fail_on_unmatched_files: false
+          token: ${{ secrets.GH_PAT || github.token }}
 
   finalize:
     name: Finalize release
     if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.release.result == 'success' && needs.preflight.outputs.release_channel == 'stable' }}
     needs: [preflight, release]
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
-      - id: app_token
-        name: Mint release app token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ steps.app_token.outputs.token }}
+          token: ${{ secrets.GH_PAT }}
           persist-credentials: true
-
-      - id: app_bot
-        name: Resolve GitHub App bot identity
-        env:
-          GH_TOKEN: ${{ steps.app_token.outputs.token }}
-          APP_SLUG: ${{ steps.app_token.outputs.app-slug }}
-        run: |
-          user_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
-          echo "name=${APP_SLUG}[bot]" >> "$GITHUB_OUTPUT"
-          echo "email=${user_id}+${APP_SLUG}[bot]@users.noreply.github.com" >> "$GITHUB_OUTPUT"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -555,7 +495,7 @@ jobs:
           node-version-file: package.json
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --filter=@t3tools/scripts
+        run: bun install --frozen-lockfile --ignore-scripts
 
       - id: update_versions
         name: Update version strings
@@ -565,7 +505,7 @@ jobs:
 
       - name: Format package.json files
         if: steps.update_versions.outputs.changed == 'true'
-        run: bunx oxfmt@0.40.0 apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json
+        run: bunx oxfmt apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json
 
       - name: Refresh lockfile
         if: steps.update_versions.outputs.changed == 'true'
@@ -582,66 +522,9 @@ jobs:
             exit 0
           fi
 
-          git config user.name "${{ steps.app_bot.outputs.name }}"
-          git config user.email "${{ steps.app_bot.outputs.email }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock
           git commit -m "chore(release): prepare $RELEASE_TAG"
           git push origin HEAD:main
-
-  announce_discord:
-    name: Announce release on Discord
-    if: |
-      always() && !cancelled() &&
-      needs.preflight.result == 'success' &&
-      needs.release.result == 'success' &&
-      (needs.finalize.result == 'success' || needs.finalize.result == 'skipped')
-    needs: [preflight, release, finalize]
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.preflight.outputs.ref }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: package.json
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile --filter=@t3tools/scripts
-
-      - name: Announce prerelease on Discord
-        if: needs.preflight.outputs.is_prerelease == 'true'
-        continue-on-error: true
-        env:
-          DISCORD_MENTION_ROLE_ID: ${{ secrets.DISCORD_RELEASE_NIGHTLY_ROLE_ID }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
-        run: |
-          node scripts/notify-discord-release.ts prerelease \
-            --role-id "$DISCORD_MENTION_ROLE_ID" \
-            --release-name "${{ needs.preflight.outputs.release_name }}" \
-            --release-version "${{ needs.preflight.outputs.version }}" \
-            --tag "${{ needs.preflight.outputs.tag }}" \
-            --release-url "https://github.com/${{ github.repository }}/releases/tag/${{ needs.preflight.outputs.tag }}"
-
-      - name: Announce latest release on Discord
-        if: needs.preflight.outputs.make_latest == 'true'
-        continue-on-error: true
-        env:
-          DISCORD_MENTION_ROLE_ID: ${{ secrets.DISCORD_RELEASE_LATEST_ROLE_ID }}
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_RELEASE_WEBHOOK_URL }}
-        run: |
-          node scripts/notify-discord-release.ts latest \
-            --role-id "$DISCORD_MENTION_ROLE_ID" \
-            --release-name "${{ needs.preflight.outputs.release_name }}" \
-            --release-version "${{ needs.preflight.outputs.version }}" \
-            --tag "${{ needs.preflight.outputs.tag }}" \
-            --release-url "https://github.com/${{ github.repository }}/releases/tag/${{ needs.preflight.outputs.tag }}"
