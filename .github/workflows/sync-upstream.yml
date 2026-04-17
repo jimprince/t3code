@@ -16,7 +16,6 @@ concurrency:
 
 permissions:
   contents: write
-  workflows: write
 
 jobs:
   sync:
@@ -38,7 +37,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # PAT required: GITHUB_TOKEN cannot push commits that modify workflow files
+          token: ${{ secrets.GH_PAT }}
 
       - name: Configure git
         run: |
