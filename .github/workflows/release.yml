@@ -160,11 +160,6 @@ jobs:
             platform: win
             target: nsis
             arch: x64
-          - label: Windows arm64
-            runner: windows-11-arm
-            platform: win
-            target: nsis
-            arch: arm64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
