@@ -96,9 +96,10 @@ jobs:
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
         run: |
           new_tag="${{ steps.upstream.outputs.tag }}"
-          git tag "$new_tag"
+          # Force-update tag in case git auto-followed it from the upstream fetch
+          git tag -f "$new_tag"
           git push origin HEAD:main --force-with-lease
-          git push origin "$new_tag"
+          git push origin "$new_tag" --force
           echo "Pushed $new_tag — release.yml will build and publish."
 
       - name: Fail with conflict resolution instructions
