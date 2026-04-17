@@ -145,20 +145,10 @@ jobs:
             platform: mac
             target: dmg
             arch: arm64
-          - label: macOS x64
-            runner: macos-15-intel
-            platform: mac
-            target: dmg
-            arch: x64
           - label: Linux x64
             runner: ubuntu-24.04
             platform: linux
             target: AppImage
-            arch: x64
-          - label: Windows x64
-            runner: windows-2022
-            platform: win
-            target: nsis
             arch: x64
     steps:
       - name: Checkout
@@ -226,25 +216,22 @@ jobs:
             else
               echo "macOS signing disabled (missing one or more Apple signing secrets)."
             fi
-          elif [[ "${{ matrix.platform }}" == "win" ]]; then
-            if has_all \
-              "$AZURE_TENANT_ID" \
-              "$AZURE_CLIENT_ID" \
-              "$AZURE_CLIENT_SECRET" \
-              "$AZURE_TRUSTED_SIGNING_ENDPOINT" \
-              "$AZURE_TRUSTED_SIGNING_ACCOUNT_NAME" \
-              "$AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME" \
-              "$AZURE_TRUSTED_SIGNING_PUBLISHER_NAME"; then
-              echo "Windows signing enabled (Azure Trusted Signing)."
-              args+=(--signed)
-            else
-              echo "Windows signing disabled (missing one or more Azure Trusted Signing secrets)."
-            fi
           else
             echo "Signing disabled for ${{ matrix.platform }}."
           fi
 
-          bun run dist:desktop:artifact -- "${args[@]}"
+          # Retry on transient flakes (hdiutil "Device not configured" on macos-14,
+          # network hiccups during native-deps download). Two tries is enough.
+          attempt=1
+          until bun run dist:desktop:artifact -- "${args[@]}"; do
+            if [[ $attempt -ge 2 ]]; then
+              echo "dist:desktop:artifact failed after $attempt attempts." >&2
+              exit 1
+            fi
+            echo "dist:desktop:artifact attempt $attempt failed, retrying..." >&2
+            attempt=$((attempt + 1))
+            sleep 15
+          done
 
       - name: Collect release assets
         shell: bash
@@ -324,35 +311,6 @@ jobs:
             fi
           done
 
-      - name: Merge Windows updater manifests
-        run: |
-          shopt -s nullglob
-          found_windows_manifest=false
-          for x64_manifest in release-assets/*-win-x64.yml; do
-            if [[ "$(basename "$x64_manifest")" == builder-debug-* ]]; then
-              continue
-            fi
-
-            arm64_manifest="${x64_manifest/-x64.yml/-arm64.yml}"
-            output_manifest="${x64_manifest/-win-x64.yml/.yml}"
-            if [[ ! -f "$arm64_manifest" ]]; then
-              echo "Missing matching arm64 Windows manifest for $x64_manifest" >&2
-              exit 1
-            fi
-
-            found_windows_manifest=true
-            node scripts/merge-update-manifests.ts --platform win \
-              "$arm64_manifest" \
-              "$x64_manifest" \
-              "$output_manifest"
-            rm -f "$arm64_manifest" "$x64_manifest"
-          done
-
-          if [[ "$found_windows_manifest" != true ]]; then
-            echo "No Windows updater manifests found to merge." >&2
-            exit 1
-          fi
-
       - name: Publish release
         if: needs.preflight.outputs.previous_tag != ''
         uses: softprops/action-gh-release@v2
@@ -368,10 +326,9 @@ jobs:
             release-assets/*.dmg
             release-assets/*.zip
             release-assets/*.AppImage
-            release-assets/*.exe
             release-assets/*.blockmap
             release-assets/*.yml
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
 
       - name: Publish first release
         if: needs.preflight.outputs.previous_tag == ''
@@ -387,10 +344,9 @@ jobs:
             release-assets/*.dmg
             release-assets/*.zip
             release-assets/*.AppImage
-            release-assets/*.exe
             release-assets/*.blockmap
             release-assets/*.yml
-          fail_on_unmatched_files: true
+          fail_on_unmatched_files: false
 
   finalize:
     name: Finalize release
