@@ -21,13 +21,13 @@ describe("resolveDesktopAppStageLabel", () => {
     ).toBe("Nightly");
   });
 
-  it("uses Alpha for packaged stable builds", () => {
+  it("uses Fork for packaged stable builds", () => {
     expect(
       resolveDesktopAppStageLabel({
         isDevelopment: false,
         appVersion: "0.0.17",
       }),
-    ).toBe("Alpha");
+    ).toBe("Fork");
   });
 });
 
