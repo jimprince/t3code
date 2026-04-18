@@ -12,7 +12,7 @@ export function resolveDesktopAppStageLabel(input: {
     return "Dev";
   }
 
-  return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Alpha";
+  return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Fork";
 }
 
 export function resolveDesktopAppBranding(input: {
