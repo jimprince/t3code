@@ -26,6 +26,18 @@ This document covers the unified release workflow for stable and nightly desktop
   - nightly releases publish npm dist-tag `nightly`
 - Signing is optional and auto-detected per platform from secrets.
 
+## Fork desktop flavors
+
+- `stable` is the packaged fork lane intended to update through the fork's GitHub releases.
+- `dev` is a local packaged lane with a distinct app identity and auto-updates disabled.
+- Both fork flavors use distinct packaged app ids and Electron profile namespaces, so they can coexist with upstream installs.
+- Both fork flavors may still share `T3CODE_HOME` if you want the same server-side data at `~/.t3`.
+
+Useful commands:
+
+- `bun run dist:desktop:dmg:arm64`
+- `bun run dist:desktop:dev:dmg:arm64`
+
 ## Nightly builds
 
 - Workflow: `.github/workflows/release.yml`

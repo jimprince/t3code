@@ -3,35 +3,38 @@
 ## Active Requirements
 
 - Work in `/Users/brad/Programming/t3-plugin`.
-- Base the fork work on current `upstream/main`.
-- Integrate only the Codex-side `T3_THREAD_ID` environment injection.
-- Do not carry forward the OpenCode fork changes.
+- Ship a fork-only desktop release so the updater path can be tested end-to-end.
+- Use a semver prerelease fork version instead of a real upstream version number.
 - Keep changes minimal and inspectable.
+- Verify the released version metadata and updater artifacts are suitable for testing updates.
 
 ## Constraints
 
-- Follow repo-local instructions from `LLM_INSTRUCTIONS.md` and `CLAUDE.md`.
-- Limit implementation to the Codex app-server spawn path and focused test coverage.
-- Leave the repo in a clean state and report the resulting branch/commit state.
+- Follow repo-local instructions from `LLM_INSTRUCTIONS.md` and `AGENTS.md`.
+- All of `bun fmt`, `bun lint`, and `bun typecheck` must pass before calling the task complete.
+- Never run `bun test`; use `bun run test` or focused `bun run vitest ...` commands.
+- Preserve existing fork-specific packaging/runtime identity behavior unless a minimal fix is required.
+- Do not pre-claim a real upstream tag; use the documented `-fork.N` convention.
+- Current repo state is already dirty; avoid unrelated edits and account for pre-existing local changes when preparing the release.
 
 ## Acceptance Criteria
 
-- Codex app-server spawn includes `T3_THREAD_ID=<threadId>`.
-- A focused test covers the injected env.
-- `bun fmt`, `bun lint`, `bun typecheck`, and the focused Vitest target pass.
-- The resulting branch is based on `upstream/main` without the OpenCode fork stack.
+- The chosen release version is a fork prerelease tag compatible with the repo workflow (expected base: `v0.0.21-fork.N` unless inspection shows otherwise).
+- Any code needed so the built app reports the correct release version is updated minimally.
+- Relevant docs remain consistent with the fork release/update behavior.
+- Required verification commands are run and reported.
+- The GitHub release workflow is dispatched for the fork version and its result is checked.
+- The resulting release/update artifacts are verified enough to proceed with updater testing.
 
 ## Open Questions / Proposed Changes
 
-- A pre-rebase backup branch was created: `backup/main-before-upstream-rebase-20260415-2359`.
+- The working tree already contains local release-related modifications in `apps/desktop`, `scripts/`, `package.json`, and `docs/`. Confirm whether those changes are exactly what should ship for the fork release or whether any subset must be excluded.
+- Determine the next available fork prerelease tag from local/remote tags before dispatching the release.
 
 ## Status
 
-- Completed
+- In progress
 
 ## Verification
 
-- `bun fmt` passed
-- `bun lint` passed with pre-existing upstream warnings in unrelated `apps/web` files
-- `bun typecheck` failed on current `upstream/main` in unrelated `packages/contracts` schema code
-- `cd apps/server && bun run vitest run src/codexAppServerManager.test.ts` failed before test execution due an upstream runtime/schema issue unrelated to the Codex env patch
+- Pending

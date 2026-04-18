@@ -20,6 +20,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
 const BuildArch = Schema.Literals(["arm64", "x64", "universal"]);
+const DesktopFlavor = Schema.Literals(["stable", "dev"]);
 
 const RepoRoot = Effect.service(Path.Path).pipe(
   Effect.flatMap((path) => path.fromFileUrl(new URL("..", import.meta.url))),
@@ -57,6 +58,7 @@ const PLATFORM_CONFIG: Record<typeof BuildPlatform.Type, PlatformConfig> = {
 };
 
 interface BuildCliInput {
+  readonly flavor: Option.Option<typeof DesktopFlavor.Type>;
   readonly platform: Option.Option<typeof BuildPlatform.Type>;
   readonly target: Option.Option<string>;
   readonly arch: Option.Option<typeof BuildArch.Type>;
@@ -140,6 +142,7 @@ function resolvePythonForNodeGyp(): string | undefined {
 }
 
 interface ResolvedBuildOptions {
+  readonly flavor: typeof DesktopFlavor.Type;
   readonly platform: typeof BuildPlatform.Type;
   readonly target: string;
   readonly arch: typeof BuildArch.Type;
@@ -158,6 +161,7 @@ interface StagePackageJson {
   readonly version: string;
   readonly buildVersion: string;
   readonly t3codeCommitHash: string;
+  readonly t3codeDesktopFlavor: typeof DesktopFlavor.Type;
   readonly private: true;
   readonly description: string;
   readonly author: string;
@@ -185,6 +189,9 @@ const AzureTrustedSigningOptionsConfig = Config.all({
 });
 
 const BuildEnvConfig = Config.all({
+  flavor: Config.schema(DesktopFlavor, "T3CODE_DESKTOP_FLAVOR").pipe(
+    Config.withDefault("stable" as typeof DesktopFlavor.Type),
+  ),
   platform: Config.schema(BuildPlatform, "T3CODE_DESKTOP_PLATFORM").pipe(Config.option),
   target: Config.string("T3CODE_DESKTOP_TARGET").pipe(Config.option),
   arch: Config.schema(BuildArch, "T3CODE_DESKTOP_ARCH").pipe(Config.option),
@@ -226,6 +233,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
   const path = yield* Path.Path;
   const repoRoot = yield* RepoRoot;
   const env = yield* BuildEnvConfig.asEffect();
+  const flavor = Option.getOrElse(input.flavor, () => env.flavor);
 
   const platform = mergeOptions(
     input.platform,
@@ -269,6 +277,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     ));
 
   return {
+    flavor,
     platform,
     target,
     arch,
@@ -446,6 +455,35 @@ function resolveDesktopRuntimeDependencies(
   return resolveCatalogDependencies(runtimeDependencies, catalog, "apps/desktop");
 }
 
+function resolveDesktopFlavorMetadata(flavor: typeof DesktopFlavor.Type): {
+  readonly productName: string;
+  readonly appId: string;
+  readonly artifactName: string;
+  readonly executableName: string;
+  readonly linuxDesktopEntryName: string;
+  readonly packageName: string;
+} {
+  if (flavor === "dev") {
+    return {
+      productName: "T3 Code (Fork Dev)",
+      appId: "com.t3tools.t3code.fork.dev",
+      artifactName: "T3-Code-Fork-Dev-${version}-${arch}.${ext}",
+      executableName: "t3code-fork-dev",
+      linuxDesktopEntryName: "t3code-fork-dev",
+      packageName: "t3code-fork-dev",
+    };
+  }
+
+  return {
+    productName: "T3 Code (Fork)",
+    appId: "com.t3tools.t3code.fork",
+    artifactName: "T3-Code-Fork-${version}-${arch}.${ext}",
+    executableName: "t3code-fork",
+    linuxDesktopEntryName: "t3code-fork",
+    packageName: "t3code-fork",
+  };
+}
+
 function resolveGitHubPublishConfig(updateChannel: "latest" | "nightly"):
   | {
       readonly provider: "github";
@@ -504,6 +542,7 @@ export function resolveDesktopProductName(version: string): string {
 }
 
 const createBuildConfig = Effect.fn("createBuildConfig")(function* (
+  flavor: typeof DesktopFlavor.Type,
   platform: typeof BuildPlatform.Type,
   target: string,
   version: string,
@@ -511,16 +550,17 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   mockUpdates: boolean,
   mockUpdateServerPort: number | undefined,
 ) {
+  const flavorMetadata = resolveDesktopFlavorMetadata(flavor);
   const buildConfig: Record<string, unknown> = {
-    appId: "com.t3tools.t3code",
-    productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    appId: flavorMetadata.appId,
+    productName: flavorMetadata.productName,
+    artifactName: flavorMetadata.artifactName,
     directories: {
       buildResources: "apps/desktop/resources",
     },
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
-  const publishConfig = resolveGitHubPublishConfig(updateChannel);
+  const publishConfig = flavor === "stable" ? resolveGitHubPublishConfig(updateChannel) : undefined;
   if (publishConfig) {
     buildConfig.publish = [publishConfig];
   } else if (mockUpdates) {
@@ -543,12 +583,12 @@ const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "linux") {
     buildConfig.linux = {
       target: [target],
-      executableName: "t3code",
+      executableName: flavorMetadata.executableName,
       icon: "icon.png",
       category: "Development",
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: flavorMetadata.linuxDesktopEntryName,
         },
       },
     };
@@ -653,6 +693,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   });
 
   const appVersion = options.version ?? serverPackageJson.version;
+  const flavorMetadata = resolveDesktopFlavorMetadata(options.flavor);
   const iconAssets = resolveDesktopBuildIconAssets(appVersion);
   const commitHash = resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
@@ -720,15 +761,17 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copy(stageResourcesDir, path.join(stageAppDir, "apps/desktop/prod-resources"));
 
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: flavorMetadata.packageName,
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
+    t3codeDesktopFlavor: options.flavor,
     private: true,
     description: "T3 Code desktop build",
     author: "T3 Tools",
     main: "apps/desktop/dist-electron/main.js",
     build: yield* createBuildConfig(
+      options.flavor,
       options.platform,
       options.target,
       appVersion,
@@ -832,6 +875,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 });
 
 const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
+  flavor: Flag.choice("flavor", DesktopFlavor.literals).pipe(
+    Flag.withDescription("Desktop flavor: stable or dev (env: T3CODE_DESKTOP_FLAVOR)."),
+    Flag.optional,
+  ),
   platform: Flag.choice("platform", BuildPlatform.literals).pipe(
     Flag.withDescription("Build platform (env: T3CODE_DESKTOP_PLATFORM)."),
     Flag.optional,
