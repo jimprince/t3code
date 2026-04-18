@@ -72,34 +72,64 @@ or `xattr -rd com.apple.quarantine`. If you want to fix this properly, it
 requires wiring an Apple Developer cert + notarization credentials into
 release.yml — an open TODO, not a missing config.
 
-## Version-collision footgun: v0.0.21
+## Fork-only interim builds: use `-fork.N` pre-release suffix
 
-**This one is likely to bite.** We pre-emptively shipped our own `v0.0.21`
-(rebrand release) before upstream released theirs. Upstream's latest at the
-time of writing is `v0.0.20`; their next release will likely be `v0.0.21`.
+If you need to ship a fork-only patch *before* upstream releases the next
+version (rebrand, fork-specific bugfix, config change), **do not** claim a
+real version number like `v0.0.21`. That poisons sync-upstream: when upstream
+eventually releases that number, sync sees we already have the tag and
+silently skips, permanently losing upstream's changes for that version.
 
-When upstream ships `v0.0.21`:
+The correct pattern is a semver pre-release suffix targeting the **next
+unreleased upstream patch version**:
 
-- sync-upstream will check `git rev-parse --verify v0.0.21` — we already have
-  the tag — and **silently exit with "nothing to do"**. Upstream's v0.0.21
-  changes will never be pulled in. The scheduled sync will keep skipping
-  forever until someone notices.
-- **Remediation**: delete our v0.0.21 tag on GitHub and locally, then trigger
-  sync-upstream manually:
+```
+v0.0.22-fork.1    ← first interim fork build
+v0.0.22-fork.2    ← next interim fork build
+v0.0.22-fork.3    ← ...and so on
+```
 
-  ```bash
-  git push origin :refs/tags/v0.0.21
-  git tag -d v0.0.21
-  gh workflow run sync-upstream.yml --repo jimprince/t3code
-  ```
+Why this works:
 
-  sync-upstream will then see v0.0.21 as missing, fetch upstream's v0.0.21,
-  rebase our fork commits onto it, and recreate v0.0.21 cleanly.
+- **Auto-update sees it as an upgrade**: `0.0.22-fork.1 > 0.0.21` because
+  patch 22 > patch 21. Users on the last clean release get prompted.
+- **Upstream's eventual release wins**: `0.0.22 > 0.0.22-fork.N` because a
+  pre-release suffix sorts *lower* than the release itself in semver. When
+  upstream ships `v0.0.22`, sync creates it cleanly; users auto-update off
+  the fork build.
+- **sync-upstream is not blocked**: the tag `v0.0.22-fork.N` is a different
+  string from `v0.0.22`, so `git rev-parse --verify v0.0.22` still fails and
+  sync proceeds when upstream catches up.
+
+### How to ship a fork build
+
+1. Figure out the **next unreleased upstream patch version**:
+
+   ```bash
+   gh api repos/pingdotgg/t3code/releases/latest --jq .tag_name
+   ```
+
+   If upstream is at `v0.0.20`, your target base is `0.0.21`. If our own main
+   already has fork-tags at that base (check `git tag --list 'v*-fork.*'`),
+   just bump `N`.
+
+2. Dispatch release.yml with an explicit version input:
+
+   ```bash
+   gh workflow run release.yml --repo jimprince/t3code \
+     -f channel=stable -f version=v0.0.21-fork.1
+   ```
+
+### Never pre-claim a real version number
+
+We did this once (shipped `v0.0.21` pre-emptively before upstream); we deleted
+the tag + release to unblock sync-upstream. Don't repeat that. Fork-only
+builds always use `-fork.N`.
 
 Long-term fix would be changing sync-upstream's "already synced?" check from
 tag-existence to commit-equality (does our `refs/tags/vX` actually contain
-upstream's `refs/tags/vX` as ancestor?). Not done yet. Until then, the
-remediation above is the workaround.
+upstream's `refs/tags/vX` as ancestor?). Until then, the `-fork.N` convention
+sidesteps the whole class of problem.
 
 ## Worktree pattern for commits
 
