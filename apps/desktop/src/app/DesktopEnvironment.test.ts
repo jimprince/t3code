@@ -53,6 +53,12 @@ describe("DesktopEnvironment", () => {
       );
 
       assert.equal(environment.isDevelopment, true);
+      assert.equal(environment.displayName, "T3 Code (Dev)");
+      assert.deepEqual(environment.branding, {
+        baseName: "T3 Code",
+        displayName: "T3 Code (Dev)",
+        stageLabel: "Dev",
+      });
       assert.equal(environment.appDataDirectory, "/Users/alice/Library/Application Support");
       assert.equal(environment.baseDir, "/tmp/t3");
       assert.equal(environment.stateDir, "/tmp/t3/dev");
@@ -89,6 +95,12 @@ describe("DesktopEnvironment", () => {
       );
 
       assert.equal(environment.isDevelopment, false);
+      assert.equal(environment.displayName, "T3 Code (Fork)");
+      assert.deepEqual(environment.branding, {
+        baseName: "T3 Code",
+        displayName: "T3 Code (Fork)",
+        stageLabel: "Fork",
+      });
       assert.equal(environment.stateDir, "/tmp/t3/userdata");
       assert.equal(environment.logDir, "/tmp/t3/userdata/logs");
       assert.equal(environment.serverSettingsPath, "/tmp/t3/userdata/settings.json");
@@ -112,6 +124,21 @@ describe("DesktopEnvironment", () => {
         environment.resolvePickFolderDefaultPath({ initialPath: "~/project" }),
         Option.some("/Users/alice/project"),
       );
+    }),
+  );
+
+  it.effect("uses the nightly app stage for nightly versions", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment({
+        appVersion: "0.0.23-nightly.20260508.230-fork.1",
+      });
+
+      assert.equal(environment.displayName, "T3 Code (Nightly)");
+      assert.deepEqual(environment.branding, {
+        baseName: "T3 Code",
+        displayName: "T3 Code (Nightly)",
+        stageLabel: "Nightly",
+      });
     }),
   );
 });
