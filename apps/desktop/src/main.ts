@@ -677,6 +677,22 @@ function readAppUpdateYml(): Record<string, string> | null {
   }
 }
 
+function hasBuiltInAutoUpdateFeedConfig(): boolean {
+  return Boolean(process.env.T3CODE_DESKTOP_MOCK_UPDATES) || readAppUpdateYml() !== null;
+}
+
+function resolveAutoUpdateDisabledReason(): string | null {
+  return getAutoUpdateDisabledReason({
+    isDevelopment,
+    isPackaged: app.isPackaged,
+    platform: process.platform,
+    appImage: process.env.APPIMAGE,
+    disabledByEnv: process.env.T3CODE_DISABLE_AUTO_UPDATE === "1",
+    hasBuiltInFeedConfig: hasBuiltInAutoUpdateFeedConfig(),
+    devFlavor: false,
+  });
+}
+
 function normalizeCommitHash(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -862,16 +878,7 @@ function dispatchMenuAction(action: string): void {
 }
 
 function handleCheckForUpdatesMenuClick(): void {
-  const hasUpdateFeedConfig =
-    readAppUpdateYml() !== null || Boolean(process.env.T3CODE_DESKTOP_MOCK_UPDATES);
-  const disabledReason = getAutoUpdateDisabledReason({
-    isDevelopment,
-    isPackaged: app.isPackaged,
-    platform: process.platform,
-    appImage: process.env.APPIMAGE,
-    disabledByEnv: process.env.T3CODE_DISABLE_AUTO_UPDATE === "1",
-    hasUpdateFeedConfig,
-  });
+  const disabledReason = resolveAutoUpdateDisabledReason();
   if (disabledReason) {
     console.info("[desktop-updater] Manual update check requested, but updates are disabled.");
     void dialog.showMessageBox({
@@ -1139,18 +1146,7 @@ function applyAutoUpdaterChannel(channel: DesktopUpdateChannel): void {
 }
 
 function shouldEnableAutoUpdates(): boolean {
-  const hasUpdateFeedConfig =
-    readAppUpdateYml() !== null || Boolean(process.env.T3CODE_DESKTOP_MOCK_UPDATES);
-  return (
-    getAutoUpdateDisabledReason({
-      isDevelopment,
-      isPackaged: app.isPackaged,
-      platform: process.platform,
-      appImage: process.env.APPIMAGE,
-      disabledByEnv: process.env.T3CODE_DISABLE_AUTO_UPDATE === "1",
-      hasUpdateFeedConfig,
-    }) === null
-  );
+  return resolveAutoUpdateDisabledReason() === null;
 }
 
 async function checkForUpdates(reason: string): Promise<boolean> {
@@ -1257,7 +1253,10 @@ function configureAutoUpdater(): void {
   }
 
   const enabled = shouldEnableAutoUpdates();
-  setUpdateState(createBaseUpdateState(desktopSettings.updateChannel, enabled));
+  setUpdateState({
+    ...createBaseUpdateState(desktopSettings.updateChannel, enabled),
+    message: enabled ? null : resolveAutoUpdateDisabledReason(),
+  });
   if (!enabled) {
     return;
   }
