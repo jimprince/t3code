@@ -337,17 +337,10 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [preflight, build]
+    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.build.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - id: app_token
-        name: Mint release app token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         uses: actions/checkout@v6
         with:
@@ -402,7 +395,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
-          token: ${{ steps.app_token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Publish first release
         if: needs.preflight.outputs.previous_tag == ''
@@ -421,7 +414,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
-          token: ${{ steps.app_token.outputs.token }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   finalize:
     name: Finalize release
