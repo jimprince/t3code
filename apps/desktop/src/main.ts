@@ -110,16 +110,59 @@ const SAVED_ENVIRONMENT_REGISTRY_PATH = Path.join(STATE_DIR, "saved-environments
 const DESKTOP_SCHEME = "t3";
 const ROOT_DIR = Path.resolve(__dirname, "../../..");
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
+type DesktopAppFlavor = "stable" | "dev";
+
+function resolvePackagedDesktopFlavor(): DesktopAppFlavor {
+  if (!app.isPackaged) {
+    return "dev";
+  }
+
+  try {
+    const packageJsonPath = Path.join(app.getAppPath(), "package.json");
+    const raw = FS.readFileSync(packageJsonPath, "utf8");
+    const parsed = JSON.parse(raw) as { t3codeDesktopFlavor?: unknown };
+    return parsed.t3codeDesktopFlavor === "dev" ? "dev" : "stable";
+  } catch {
+    return "stable";
+  }
+}
+
+const desktopFlavor = isDevelopment ? "dev" : resolvePackagedDesktopFlavor();
+const isPackagedDevFlavor = !isDevelopment && desktopFlavor === "dev";
 const desktopAppBranding: DesktopAppBranding = resolveDesktopAppBranding({
   isDevelopment,
   appVersion: app.getVersion(),
 });
-const APP_DISPLAY_NAME = desktopAppBranding.displayName;
-const APP_USER_MODEL_ID = isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code";
-const LINUX_DESKTOP_ENTRY_NAME = isDevelopment ? "t3code-dev.desktop" : "t3code.desktop";
-const LINUX_WM_CLASS = isDevelopment ? "t3code-dev" : "t3code";
-const USER_DATA_DIR_NAME = isDevelopment ? "t3code-dev" : "t3code";
-const LEGACY_USER_DATA_DIR_NAME = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
+const APP_DISPLAY_NAME = isDevelopment
+  ? "T3 Code (Dev)"
+  : isPackagedDevFlavor
+    ? "T3 Code (Fork Dev)"
+    : "T3 Code (Fork)";
+const APP_USER_MODEL_ID = isDevelopment
+  ? "com.t3tools.t3code.dev"
+  : isPackagedDevFlavor
+    ? "com.t3tools.t3code.fork.dev"
+    : "com.t3tools.t3code.fork";
+const LINUX_DESKTOP_ENTRY_NAME = isDevelopment
+  ? "t3code-dev.desktop"
+  : isPackagedDevFlavor
+    ? "t3code-fork-dev.desktop"
+    : "t3code-fork.desktop";
+const LINUX_WM_CLASS = isDevelopment
+  ? "t3code-dev"
+  : isPackagedDevFlavor
+    ? "t3code-fork-dev"
+    : "t3code-fork";
+const USER_DATA_DIR_NAME = isDevelopment
+  ? "t3code-dev"
+  : isPackagedDevFlavor
+    ? "t3code-fork-dev"
+    : "t3code-fork";
+const LEGACY_USER_DATA_DIR_NAME = isDevelopment
+  ? "T3 Code (Dev)"
+  : isPackagedDevFlavor
+    ? "T3 Code (Fork Dev)"
+    : "T3 Code (Fork)";
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
 const LOG_DIR = Path.join(STATE_DIR, "logs");
@@ -689,7 +732,7 @@ function resolveAutoUpdateDisabledReason(): string | null {
     appImage: process.env.APPIMAGE,
     disabledByEnv: process.env.T3CODE_DISABLE_AUTO_UPDATE === "1",
     hasBuiltInFeedConfig: hasBuiltInAutoUpdateFeedConfig(),
-    devFlavor: false,
+    devFlavor: isPackagedDevFlavor,
   });
 }
 
@@ -1037,9 +1080,10 @@ function resolveIconPath(ext: "ico" | "icns" | "png"): string | null {
  * parentheses (e.g. `~/.config/T3 Code (Alpha)` on Linux). This is
  * unfriendly for shell usage and violates Linux naming conventions.
  *
- * We override it to a clean lowercase name (`t3code`). If the legacy
- * directory already exists we keep using it so existing users don't
- * lose their Chromium profile data (localStorage, cookies, sessions).
+ * We override it to clean lowercase names so upstream, fork stable,
+ * and fork dev can coexist without sharing Chromium profile data.
+ * If the legacy directory already exists we keep using it so existing
+ * users don't lose localStorage, cookies, or session state.
  */
 function resolveUserDataPath(): string {
   const appDataBase =
