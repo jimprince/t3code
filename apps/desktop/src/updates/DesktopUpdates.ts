@@ -128,11 +128,13 @@ function createBaseUpdateState(
   channel: DesktopUpdateChannel,
   enabled: boolean,
   environment: DesktopEnvironment.DesktopEnvironmentShape,
+  disabledReason: Option.Option<string>,
 ): DesktopUpdateState {
   return {
     ...createInitialDesktopUpdateState(environment.appVersion, environment.runtimeInfo, channel),
     enabled,
     status: enabled ? "idle" : "disabled",
+    message: enabled ? null : Option.getOrNull(disabledReason),
   };
 }
 
@@ -159,24 +161,28 @@ function shouldBroadcastDownloadProgress(
 }
 
 function getAutoUpdateDisabledReason(args: {
-  isDevelopment: boolean;
-  isPackaged: boolean;
-  platform: NodeJS.Platform;
-  appImage?: string | undefined;
-  disabledByEnv: boolean;
-  hasUpdateFeedConfig: boolean;
+  readonly isDevelopment: boolean;
+  readonly isPackaged: boolean;
+  readonly platform: NodeJS.Platform;
+  readonly appImage?: string | undefined;
+  readonly disabledByEnv: boolean;
+  readonly hasUpdateFeedConfig: boolean;
+  readonly devFlavor: boolean;
 }): string | null {
-  if (!args.hasUpdateFeedConfig) {
-    return "Automatic updates are not available because no update feed is configured.";
-  }
   if (args.isDevelopment || !args.isPackaged) {
     return "Automatic updates are only available in packaged production builds.";
+  }
+  if (args.devFlavor) {
+    return "Automatic updates are disabled for Fork Dev builds.";
   }
   if (args.disabledByEnv) {
     return "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.";
   }
   if (args.platform === "linux" && !args.appImage) {
     return "Automatic updates on Linux require running the AppImage build.";
+  }
+  if (!args.hasUpdateFeedConfig) {
+    return "Automatic updates are unavailable for this build because it does not include release update metadata.";
   }
   return null;
 }
@@ -250,6 +256,7 @@ const make = Effect.gen(function* () {
         appImage: Option.getOrUndefined(config.appImagePath),
         disabledByEnv: config.disableAutoUpdate,
         hasUpdateFeedConfig: hasFeedConfig,
+        devFlavor: environment.isPackagedDevFlavor,
       }),
     );
   });
@@ -282,8 +289,6 @@ const make = Effect.gen(function* () {
       allowDowngrade: allowsPrerelease,
     });
   });
-
-  const shouldEnableAutoUpdates = resolveDisabledReason.pipe(Effect.map(Option.isNone));
 
   const checkForUpdates = Effect.fn("desktop.updates.checkForUpdates")(function* (reason: string) {
     yield* Effect.annotateCurrentSpan({ reason });
@@ -546,8 +551,11 @@ const make = Effect.gen(function* () {
       }
 
       const settings = yield* desktopSettings.get;
-      const enabled = yield* shouldEnableAutoUpdates;
-      yield* setState(createBaseUpdateState(settings.updateChannel, enabled, environment));
+      const disabledReason = yield* resolveDisabledReason;
+      const enabled = Option.isNone(disabledReason);
+      yield* setState(
+        createBaseUpdateState(settings.updateChannel, enabled, environment, disabledReason),
+      );
       if (!enabled) {
         return;
       }
@@ -609,8 +617,9 @@ const make = Effect.gen(function* () {
         .setUpdateChannel(nextChannel)
         .pipe(Effect.mapError((cause) => new DesktopUpdatePersistenceError({ cause })));
 
-      const enabled = yield* shouldEnableAutoUpdates;
-      yield* setState(createBaseUpdateState(nextChannel, enabled, environment));
+      const disabledReason = yield* resolveDisabledReason;
+      const enabled = Option.isNone(disabledReason);
+      yield* setState(createBaseUpdateState(nextChannel, enabled, environment, disabledReason));
 
       if (!enabled || !(yield* Ref.get(updaterConfiguredRef))) {
         return yield* Ref.get(updateStateRef);
