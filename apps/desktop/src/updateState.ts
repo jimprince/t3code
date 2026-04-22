@@ -34,19 +34,23 @@ export function getAutoUpdateDisabledReason(args: {
   platform: NodeJS.Platform;
   appImage?: string | undefined;
   disabledByEnv: boolean;
-  hasUpdateFeedConfig: boolean;
+  hasBuiltInFeedConfig: boolean;
+  devFlavor: boolean;
 }): string | null {
-  if (!args.hasUpdateFeedConfig) {
-    return "Automatic updates are not available because no update feed is configured.";
-  }
   if (args.isDevelopment || !args.isPackaged) {
     return "Automatic updates are only available in packaged production builds.";
+  }
+  if (args.devFlavor) {
+    return "Automatic updates are disabled for Fork Dev builds.";
   }
   if (args.disabledByEnv) {
     return "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.";
   }
   if (args.platform === "linux" && !args.appImage) {
     return "Automatic updates on Linux require running the AppImage build.";
+  }
+  if (!args.hasBuiltInFeedConfig) {
+    return "Automatic updates are unavailable for this build because it does not include release update metadata.";
   }
   return null;
 }
