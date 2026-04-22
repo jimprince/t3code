@@ -2,8 +2,12 @@ import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
+import * as FileSystem from "node:fs";
+import * as Path from "node:path";
 
 import * as Electron from "electron";
+
+export type ElectronAppFlavor = "stable" | "dev";
 
 export interface ElectronAppMetadata {
   readonly appVersion: string;
@@ -11,6 +15,7 @@ export interface ElectronAppMetadata {
   readonly isPackaged: boolean;
   readonly resourcesPath: string;
   readonly runningUnderArm64Translation: boolean;
+  readonly desktopFlavor: ElectronAppFlavor;
 }
 
 export interface ElectronAppShape {
@@ -56,14 +61,29 @@ const addScopedAppListener = <Args extends ReadonlyArray<unknown>>(
       }),
   ).pipe(Effect.asVoid);
 
+function resolvePackagedDesktopFlavor(appPath: string): ElectronAppFlavor {
+  try {
+    const packageJsonPath = Path.join(appPath, "package.json");
+    const raw = FileSystem.readFileSync(packageJsonPath, "utf8");
+    const parsed = JSON.parse(raw) as { t3codeDesktopFlavor?: unknown };
+    return parsed.t3codeDesktopFlavor === "dev" ? "dev" : "stable";
+  } catch {
+    return "stable";
+  }
+}
+
 const make = ElectronApp.of({
-  metadata: Effect.sync(() => ({
-    appVersion: Electron.app.getVersion(),
-    appPath: Electron.app.getAppPath(),
-    isPackaged: Electron.app.isPackaged,
-    resourcesPath: process.resourcesPath,
-    runningUnderArm64Translation: Electron.app.runningUnderARM64Translation === true,
-  })),
+  metadata: Effect.sync(() => {
+    const appPath = Electron.app.getAppPath();
+    return {
+      appVersion: Electron.app.getVersion(),
+      appPath,
+      isPackaged: Electron.app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      runningUnderArm64Translation: Electron.app.runningUnderARM64Translation === true,
+      desktopFlavor: Electron.app.isPackaged ? resolvePackagedDesktopFlavor(appPath) : "dev",
+    };
+  }),
   name: Effect.sync(() => Electron.app.name),
   whenReady: Effect.promise(() => Electron.app.whenReady()).pipe(Effect.asVoid),
   quit: Effect.sync(() => {
