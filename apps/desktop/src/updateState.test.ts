@@ -72,12 +72,13 @@ describe("getAutoUpdateDisabledReason", () => {
         platform: "darwin",
         appImage: undefined,
         disabledByEnv: false,
-        hasUpdateFeedConfig: true,
+        hasBuiltInFeedConfig: false,
+        devFlavor: false,
       }),
     ).toContain("packaged production builds");
   });
 
-  it("reports packaged local builds without an update feed as disabled", () => {
+  it("reports fork dev builds as disabled", () => {
     expect(
       getAutoUpdateDisabledReason({
         isDevelopment: false,
@@ -85,12 +86,13 @@ describe("getAutoUpdateDisabledReason", () => {
         platform: "darwin",
         appImage: undefined,
         disabledByEnv: false,
-        hasUpdateFeedConfig: false,
+        hasBuiltInFeedConfig: true,
+        devFlavor: true,
       }),
-    ).toContain("no update feed");
+    ).toContain("Fork Dev");
   });
 
-  it("allows packaged builds with an update feed", () => {
+  it("reports packaged builds without baked update config as disabled", () => {
     expect(
       getAutoUpdateDisabledReason({
         isDevelopment: false,
@@ -98,7 +100,22 @@ describe("getAutoUpdateDisabledReason", () => {
         platform: "darwin",
         appImage: undefined,
         disabledByEnv: false,
-        hasUpdateFeedConfig: true,
+        hasBuiltInFeedConfig: false,
+        devFlavor: false,
+      }),
+    ).toContain("release update metadata");
+  });
+
+  it("allows packaged stable builds with baked update config", () => {
+    expect(
+      getAutoUpdateDisabledReason({
+        isDevelopment: false,
+        isPackaged: true,
+        platform: "darwin",
+        appImage: undefined,
+        disabledByEnv: false,
+        hasBuiltInFeedConfig: true,
+        devFlavor: false,
       }),
     ).toBeNull();
   });
@@ -111,7 +128,8 @@ describe("getAutoUpdateDisabledReason", () => {
         platform: "darwin",
         appImage: undefined,
         disabledByEnv: true,
-        hasUpdateFeedConfig: true,
+        hasBuiltInFeedConfig: true,
+        devFlavor: false,
       }),
     ).toContain("T3CODE_DISABLE_AUTO_UPDATE");
   });
@@ -124,7 +142,8 @@ describe("getAutoUpdateDisabledReason", () => {
         platform: "linux",
         appImage: undefined,
         disabledByEnv: false,
-        hasUpdateFeedConfig: true,
+        hasBuiltInFeedConfig: true,
+        devFlavor: false,
       }),
     ).toContain("AppImage");
   });
