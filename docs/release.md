@@ -26,6 +26,18 @@ This document covers the unified release workflow for stable and nightly desktop
   - nightly releases publish npm dist-tag `nightly`
 - Signing is optional and auto-detected per platform from secrets.
 
+## Fork desktop flavors
+
+- `stable` is the packaged fork lane intended to update through the fork's GitHub releases.
+- `dev` is a local packaged lane with a distinct app identity and auto-updates disabled.
+- Both fork flavors use distinct packaged app ids and Electron profile namespaces, so they can coexist with upstream installs.
+- Both fork flavors may still share `T3CODE_HOME` if you want the same server-side data at `~/.t3`.
+
+Useful commands:
+
+- `bun run dist:desktop:dmg:arm64`
+- `bun run dist:desktop:dev:dmg:arm64`
+
 ## Nightly builds
 
 - Workflow: `.github/workflows/release.yml`
@@ -34,7 +46,7 @@ This document covers the unified release workflow for stable and nightly desktop
   - manual `workflow_dispatch` with `channel=nightly`
 - Runs the same desktop quality gates and artifact matrix as the tagged release flow.
 - Publishes a GitHub prerelease only:
-  - tag format: `nightly-vX.Y.Z-nightly.YYYYMMDD.<run_number>`
+  - tag format: `vX.Y.Z-nightly.YYYYMMDD.<run_number>` (plain `v` prefix keeps the tag semver-parseable so electron-updater's GitHub provider matches the nightly channel via the atom feed)
   - release name includes the short commit SHA
   - `make_latest` is always `false`
 - Uses the next stable patch version as the nightly base. For example, `0.0.17` produces nightlies on `0.0.18-nightly.*`.
