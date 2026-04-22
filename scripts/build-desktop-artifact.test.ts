@@ -64,6 +64,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("preserves explicit false boolean flags over true env defaults", () =>
     Effect.gen(function* () {
       const resolved = yield* resolveBuildOptions({
+        flavor: Option.none(),
         platform: Option.some("mac"),
         target: Option.none(),
         arch: Option.some("arm64"),
