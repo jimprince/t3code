@@ -186,6 +186,19 @@ tag-existence to commit-equality (does our `refs/tags/vX` actually contain
 upstream's `refs/tags/vX` as ancestor?). Until then, the `-fork.N` convention
 sidesteps the whole class of problem.
 
+## Fork-only stable auto-releases
+
+`.github/workflows/fork-interim-release.yml` watches non-doc, non-workflow
+pushes to `main`. If the pushed commit is not already release-tagged and is not
+the release finalizer's `chore(release): prepare ...` commit, it computes the
+next unreleased upstream patch version and pushes `vNEXT-fork.N`.
+
+Example: if upstream latest stable is `v0.0.21`, the first fork-only main
+push creates `v0.0.22-fork.1`; the next creates `v0.0.22-fork.2`. These are
+published as normal latest releases so stable desktop clients see them. When
+upstream later ships `v0.0.22`, sync-upstream publishes `v0.0.22`, which
+semver ranks above every `v0.0.22-fork.N`.
+
 ## Worktree pattern for commits
 
 The user often has WIP in the main working tree. When committing fork
