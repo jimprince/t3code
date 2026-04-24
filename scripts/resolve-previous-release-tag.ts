@@ -111,8 +111,9 @@ const parseNightlyTag = (tag: string): NightlyVersion | undefined => {
   //     release-note diffs across the transition)
   //   - `v<semver>-nightly.<date>.<run>-fork.<N>` (fork nightlies published by
   //     sync-upstream.yml after rebasing onto an upstream nightly)
-  const match =
-    /^(?:nightly-)?v(\d+)\.(\d+)\.(\d+)-nightly\.(\d{8})\.(\d+)(?:-fork\.(\d+))?$/.exec(tag);
+  const match = /^(?:nightly-)?v(\d+)\.(\d+)\.(\d+)-nightly\.(\d{8})\.(\d+)(?:-fork\.(\d+))?$/.exec(
+    tag,
+  );
   if (!match) return undefined;
 
   const [, major, minor, patch, date, runNumber, forkNumber] = match;
