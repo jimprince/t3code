@@ -21,6 +21,9 @@ desktop releases of the fork (`jimprince/t3code`).
   - Linux `x64` AppImage
   - Windows and macOS x64 are deliberately dropped; do not re-add them.
 - Publishes one GitHub Release with all produced files.
+  - Release creation uses the workflow-scoped `GITHUB_TOKEN`; PAT-backed
+    `GH_PAT` is reserved for tag/commit pushes that must trigger follow-on
+    workflows.
   - Nightly tags with a suffix after `X.Y.Z` (for example
     `0.0.21-nightly.20260421.88-fork.1`) are published as GitHub prereleases.
   - Stable fork-only tags such as `0.0.22-fork.1` are published as normal
@@ -219,6 +222,10 @@ Checklist:
 
 ## 5) Troubleshooting
 
+- GitHub Release publish fails with `403 Resource not accessible by integration`:
+  - Confirm `.github/workflows/release.yml` grants `contents: write`.
+  - Confirm the `softprops/action-gh-release` publish steps use
+    `github.token`, not `secrets.GH_PAT`.
 - macOS build unsigned when expected signed:
   - Check all Apple secrets are populated and non-empty.
 - Windows build unsigned when expected signed:
