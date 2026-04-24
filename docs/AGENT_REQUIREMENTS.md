@@ -30,6 +30,10 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Fork-only stable tags like `v0.0.22-fork.1` publish as normal/latest releases so installed stable fork clients receive updates.
 - Documentation matches the implemented workflow.
 - Existing fork patches and local untracked user files are not destroyed.
+- Nightly updater feed must not be poisoned by orphan tag-only entries that lack
+  `nightly*.yml` release assets.
+- Nightly macOS updater releases must still publish when the hosted Linux
+  artifact build fails, as long as the macOS updater manifest exists.
 
 ## Constraints
 
@@ -49,3 +53,7 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   `chore(release): prepare v0.0.21`.
 - Implemented: release publishing now uses the job-scoped `GITHUB_TOKEN` for
   `softprops/action-gh-release`; `GH_PAT` remains reserved for tag/commit pushes.
+- In progress: remove orphan nightly tags from the GitHub Releases Atom feed,
+  prevent a Linux-only nightly build failure from blocking macOS updater
+  publication, and recreate the latest nightly through the fixed fork
+  sync/release path.
