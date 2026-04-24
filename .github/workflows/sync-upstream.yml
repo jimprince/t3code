@@ -41,7 +41,6 @@ permissions:
 jobs:
   sync:
     name: Sync ${{ matrix.channel }} with upstream
-    if: ${{ github.event_name == 'schedule' || inputs.channel == '' || inputs.channel == matrix.channel }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     strategy:
