@@ -8,6 +8,51 @@ This repo (`jimprince/t3code`) is a fork of [`pingdotgg/t3code`](https://github.
 The general agent guide is in `CLAUDE.md` / `AGENTS.md`; this file covers only
 things specific to the fork relationship.
 
+## Fast path for release/update work
+
+1. Start the local macOS runner before any release that needs desktop macOS
+   artifacts:
+
+   ```bash
+   t3code-mac-runner start 7200
+   ```
+
+2. Normal upstream sync:
+
+   ```bash
+   gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
+   gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
+   ```
+
+3. Reroll the same upstream nightly for updater testing by dispatching
+   `release.yml` with the next explicit `-fork.N` version. The dispatch form
+   only offers `channel=stable`; the version string still makes the run nightly.
+
+   ```bash
+   gh workflow run release.yml --repo jimprince/t3code \
+     -f channel=stable \
+     -f version=v0.0.22-nightly.20260423.108-fork.2
+   ```
+
+4. Watch and verify:
+
+   ```bash
+   gh run watch <run-id> --repo jimprince/t3code --exit-status
+   gh release view <tag> --repo jimprince/t3code --json tagName,isPrerelease,publishedAt,url,assets
+   curl -fsSL https://github.com/jimprince/t3code/releases/download/<tag>/nightly-mac.yml | sed -n '1,80p'
+   tail -n 160 ~/.t3/userdata/logs/desktop-main.log | rg -i 'desktop-updater|Update available|Ignoring|No updates'
+   ```
+
+5. Stop the runner when done:
+
+   ```bash
+   t3code-mac-runner stop
+   ```
+
+Validated updater path: an installed
+`v0.0.22-nightly.20260423.108-fork.1` app detected
+`v0.0.22-nightly.20260423.108-fork.2` through the nightly mac updater feed.
+
 ## The fork-mirroring model
 
 Our version numbers **mirror upstream**. Our release tags are derived from
@@ -34,8 +79,10 @@ versioning axis for the fork.
     2. sorts strictly higher than the bare upstream tag under semver
        (alphanumeric `88-fork` > numeric `88`), so electron-updater sees
        each successive fork rebuild as an upgrade,
-    3. lets us re-roll a fork build on the same upstream commit
-       (bump `N`) without any tag-delete dance.
+    3. lets a manual reroll on the same upstream commit publish as an upgrade
+       when you dispatch `release.yml` with the next explicit `-fork.N`.
+       `sync-upstream.yml` intentionally skips once any fork tag exists for an
+       upstream nightly; use manual release dispatch for same-upstream rerolls.
 - Workflows require `GH_PAT` in secrets for tag/commit pushes that need to
   trigger follow-on workflows or modify workflow files. Release creation itself
   uses the workflow-scoped `GITHUB_TOKEN` with `contents: write`.
