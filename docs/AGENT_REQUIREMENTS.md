@@ -1,5 +1,37 @@
 # Agent Requirements
 
+## Current Task: Documentation Cleanup
+
+Clarify and streamline release/update documentation so future agents can work
+efficiently from a cold start.
+
+### Current User Requirements
+
+- Make the documentation clear and up to date.
+- Thin out unnecessary or stale detail.
+- Preserve the operational guidance agents need for the fork release/update
+  workflow.
+- Reflect the updater path that was validated by installing
+  `v0.0.22-nightly.20260423.108-fork.1` and detecting
+  `v0.0.22-nightly.20260423.108-fork.2`.
+
+### Current Acceptance Criteria
+
+- `LLM_INSTRUCTIONS.md` gives future agents a concise fast path for stable,
+  nightly, and rerolled updater-test releases.
+- `docs/release.md` matches the current workflow and avoids obsolete setup
+  detail that can mislead agents.
+- Documentation calls out any known workflow quirks that are still true.
+- Existing fork patches and local untracked user files are not destroyed.
+
+### Current Status
+
+- Completed: release/update docs now contain a concise fast path, current
+  reroll guidance, updater verification notes, and no obsolete Windows/Azure
+  signing setup checklist.
+- Verified with `git diff --check`, `bun fmt`, `bun lint`, and
+  `bun typecheck`.
+
 ## Task
 
 Repair the T3 Code fork automation so the fork follows upstream stable and nightly releases reliably.
