@@ -1,12 +1,20 @@
 name: Sync Upstream
 
 # Detects new releases on pingdotgg/t3code, rebases our fork commits onto the
-# upstream tag, and pushes — which triggers release.yml to build.
+# upstream tag, and pushes a release tag — which triggers release.yml to build.
 #
 # Channel (stable | nightly) resolves from, in priority order:
 #   1. workflow_dispatch input `channel` (one-off override)
 #   2. repo variable `SYNC_CHANNEL` (persistent default)
 #   3. Hardcoded fallback: "stable"
+#
+# Tag scheme pushed to the fork:
+#   - stable channel: ${upstream_tag} verbatim (e.g. v0.0.21)
+#   - nightly channel: ${upstream_tag}-fork.<N> (e.g.
+#     v0.0.21-nightly.20260421.88-fork.1), where N auto-increments per
+#     upstream nightly tag. The -fork suffix keeps fork artifacts
+#     distinguishable and allows re-rolling a fork build on the same upstream
+#     commit.
 #
 # Flip the persistent default with:
 #   gh variable set SYNC_CHANNEL --body nightly   # or: stable
@@ -94,18 +102,40 @@ jobs:
 
       - name: Check if sync needed
         id: check
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
         run: |
+          set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
 
-          # Check whether the fork already has a tag for this version
-          if git rev-parse --verify "$upstream_tag" >/dev/null 2>&1; then
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-            echo "Fork already has $upstream_tag. Nothing to do."
+          if [[ "$CHANNEL" == "nightly" ]]; then
+            # Nightly: the fork publishes tags of the form
+            # "${upstream_tag}-fork.<N>". If any such tag already exists, we've
+            # already rolled this upstream nightly — skip. (A rebuild is still
+            # possible by manually deleting the fork tags.)
+            existing=$(git tag --list "${upstream_tag}-fork.*")
+            if [[ -n "$existing" ]]; then
+              echo "needed=false" >> "$GITHUB_OUTPUT"
+              echo "Fork already has a build for $upstream_tag:"
+              echo "$existing" | sed 's/^/  /'
+              echo "Nothing to do."
+            else
+              fork_latest=$(git tag --list 'v*' --sort=-creatordate | head -n 1)
+              echo "needed=true" >> "$GITHUB_OUTPUT"
+              echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
+              echo "Upstream nightly at $upstream_tag, fork has no build yet (latest fork tag: $fork_latest). Syncing..."
+            fi
           else
-            fork_latest=$(git tag --list 'v*' | sort -V | tail -1)
-            echo "needed=true" >> "$GITHUB_OUTPUT"
-            echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
-            echo "Upstream at $upstream_tag, fork at $fork_latest. Syncing..."
+            # Stable: fork tag == upstream tag exactly.
+            if git rev-parse --verify "$upstream_tag" >/dev/null 2>&1; then
+              echo "needed=false" >> "$GITHUB_OUTPUT"
+              echo "Fork already has $upstream_tag. Nothing to do."
+            else
+              fork_latest=$(git tag --list 'v*' | sort -V | tail -1)
+              echo "needed=true" >> "$GITHUB_OUTPUT"
+              echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
+              echo "Upstream at $upstream_tag, fork at $fork_latest. Syncing..."
+            fi
           fi
 
       - name: Fetch upstream tag (namespaced to avoid clobbering fork tags)
@@ -214,19 +244,49 @@ jobs:
 
       - name: Push rebased main and release tag
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
         run: |
-          new_tag="${{ steps.upstream.outputs.tag }}"
-          # Force-update tag in case git auto-followed it from the upstream fetch
-          git tag -f "$new_tag"
-          git push origin HEAD:main --force-with-lease
-          git push origin "$new_tag" --force
-          echo "Pushed $new_tag — release.yml will build and publish."
+          set -euo pipefail
+          upstream_tag="${{ steps.upstream.outputs.tag }}"
+
+          if [[ "$CHANNEL" == "nightly" ]]; then
+            # Fork nightly tag: ${upstream_tag}-fork.<N>. N is the next integer
+            # after the largest existing -fork.<N> for this upstream tag.
+            # Semver note: "88-fork" is a single pre-release identifier (hyphens
+            # are valid inside identifiers); because it's alphanumeric (not pure
+            # digits), it sorts strictly higher than the numeric "88" — so the
+            # fork version is always > the upstream nightly it's based on.
+            mapfile -t existing < <(git tag --list "${upstream_tag}-fork.*" \
+              | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
+              | sort -n)
+            if [[ ${#existing[@]} -eq 0 ]]; then
+              next_n=1
+            else
+              last="${existing[-1]}"
+              next_n=$((last + 1))
+            fi
+            new_tag="${upstream_tag}-fork.${next_n}"
+            git tag "$new_tag" HEAD
+            git push origin HEAD:main --force-with-lease
+            git push origin "$new_tag"
+            echo "Pushed $new_tag (rebased onto $upstream_tag) — release.yml will build and publish."
+          else
+            new_tag="$upstream_tag"
+            # Force-update tag in case git auto-followed it from the upstream fetch
+            git tag -f "$new_tag"
+            git push origin HEAD:main --force-with-lease
+            git push origin "$new_tag" --force
+            echo "Pushed $new_tag — release.yml will build and publish."
+          fi
 
       - name: Fail with conflict resolution instructions
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'conflict'
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
         run: |
           upstream_tag="${{ steps.upstream.outputs.tag }}"
-          echo "::error::Rebase conflict syncing to $upstream_tag."
+          echo "::error::Rebase conflict syncing to $upstream_tag (channel: $CHANNEL)."
           echo "::error::Conflicting files:"
           echo "${{ steps.rebase.outputs.files }}" | sed 's/^/::error::  /'
           echo "::error::"
@@ -236,5 +296,12 @@ jobs:
           echo "::error::  git rebase refs/tags/upstream/${upstream_tag}"
           echo "::error::  # fix conflicts, then:"
           echo "::error::  git push origin main --force-with-lease"
-          echo "::error::  git push origin ${upstream_tag}"
+          if [[ "$CHANNEL" == "nightly" ]]; then
+            echo "::error::  # pick the next fork.N for this upstream tag:"
+            echo "::error::  n=\$(( \$(git tag --list '${upstream_tag}-fork.*' | awk -F '-fork\\\\.' 'NF==2{print \$2}' | sort -n | tail -1) + 1 ))"
+            echo "::error::  git tag \"${upstream_tag}-fork.\$n\" HEAD"
+            echo "::error::  git push origin \"${upstream_tag}-fork.\$n\""
+          else
+            echo "::error::  git push origin ${upstream_tag}"
+          fi
           exit 1
