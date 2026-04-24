@@ -1,0 +1,96 @@
+name: Fork Interim Release
+
+# Creates updater-visible stable fork releases for Brad-authored changes between
+# upstream stable releases. Example: if upstream latest stable is v0.0.21, a
+# fork-only push to main publishes v0.0.22-fork.1, then v0.0.22-fork.2, etc.
+# When upstream later ships v0.0.22, semver makes v0.0.22 > v0.0.22-fork.N.
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - ".github/**"
+      - "docs/**"
+      - "*.md"
+      - "LLM_INSTRUCTIONS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-interim-release
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag fork-only stable release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # PAT required: GITHUB_TOKEN tag pushes do not trigger release.yml.
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve and push next fork tag
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "push" && "$HEAD_MESSAGE" == chore\(release\):\ prepare* ]]; then
+            echo "Release finalize version-bump commit; no fork interim tag needed."
+            exit 0
+          fi
+
+          # sync-upstream pushes main and then a release tag. Give the tag push
+          # a moment to appear so sync-created commits do not get double-tagged
+          # as fork-only interim releases.
+          sleep 30
+          git fetch --tags origin
+
+          existing_head_tags=$(git tag --points-at HEAD --list 'v*')
+          if [[ -n "$existing_head_tags" ]]; then
+            echo "HEAD already has release tag(s); no fork interim tag needed:"
+            echo "$existing_head_tags" | sed 's/^/  /'
+            exit 0
+          fi
+
+          upstream_tag=$(gh api repos/pingdotgg/t3code/releases/latest --jq .tag_name)
+          if [[ ! "$upstream_tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Unexpected upstream stable tag: $upstream_tag"
+            exit 1
+          fi
+
+          major="${BASH_REMATCH[1]}"
+          minor="${BASH_REMATCH[2]}"
+          patch="${BASH_REMATCH[3]}"
+          next_patch=$((patch + 1))
+          target_base="v${major}.${minor}.${next_patch}"
+
+          mapfile -t existing_numbers < <(git tag --list "${target_base}-fork.*" \
+            | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
+            | sort -n)
+
+          if [[ ${#existing_numbers[@]} -eq 0 ]]; then
+            next_n=1
+          else
+            last="${existing_numbers[-1]}"
+            next_n=$((last + 1))
+          fi
+
+          new_tag="${target_base}-fork.${next_n}"
+          git tag "$new_tag" HEAD
+          git push origin "$new_tag"
+          echo "Pushed $new_tag for fork-only stable update. release.yml will publish it as latest."
