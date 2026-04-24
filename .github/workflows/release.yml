@@ -175,7 +175,7 @@ jobs:
       matrix:
         include:
           - label: macOS arm64
-            runner: macos-14
+            runner: [self-hosted, macOS, ARM64, t3code-mac-arm64]
             platform: mac
             target: dmg
             arch: arm64
