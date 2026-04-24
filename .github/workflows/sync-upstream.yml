@@ -3,10 +3,8 @@ name: Sync Upstream
 # Detects new releases on pingdotgg/t3code, rebases our fork commits onto the
 # upstream tag, and pushes a release tag — which triggers release.yml to build.
 #
-# Channel (stable | nightly) resolves from, in priority order:
-#   1. workflow_dispatch input `channel` (one-off override)
-#   2. repo variable `SYNC_CHANNEL` (persistent default)
-#   3. Hardcoded fallback: "stable"
+# Scheduled runs check both channels independently. Manual runs can target one
+# channel or leave the input blank to check both.
 #
 # Tag scheme pushed to the fork:
 #   - stable channel: ${upstream_tag} verbatim (e.g. v0.0.21)
@@ -16,9 +14,6 @@ name: Sync Upstream
 #     distinguishable and allows re-rolling a fork build on the same upstream
 #     commit.
 #
-# Flip the persistent default with:
-#   gh variable set SYNC_CHANNEL --body nightly   # or: stable
-#
 # On rebase conflict: fails loudly with instructions to resolve locally.
 
 on:
@@ -27,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: "Upstream channel (overrides SYNC_CHANNEL repo var for this run)"
+        description: "Upstream channel. Leave blank to check both."
         required: false
         type: choice
         options:
@@ -45,25 +40,24 @@ permissions:
 
 jobs:
   sync:
-    name: Sync with upstream
+    name: Sync ${{ matrix.channel }} with upstream
+    if: ${{ github.event_name == 'schedule' || inputs.channel == '' || inputs.channel == matrix.channel }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      # Keep channels sequential inside the workflow because both may force-push main.
+      max-parallel: 1
+      matrix:
+        channel:
+          - stable
+          - nightly
 
     steps:
-      - name: Resolve channel
+      - name: Select channel
         id: channel
         run: |
-          channel="${{ inputs.channel }}"
-          if [[ -z "$channel" ]]; then
-            channel="${{ vars.SYNC_CHANNEL }}"
-          fi
-          if [[ -z "$channel" ]]; then
-            channel="stable"
-          fi
-          if [[ "$channel" != "stable" && "$channel" != "nightly" ]]; then
-            echo "::error::Invalid channel '$channel' — must be 'stable' or 'nightly'."
-            exit 1
-          fi
+          channel="${{ matrix.channel }}"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
           echo "Resolved channel: $channel"
 
