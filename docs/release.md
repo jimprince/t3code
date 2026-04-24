@@ -20,6 +20,10 @@ desktop releases of the fork (`jimprince/t3code`).
   - macOS `arm64` DMG + zip (for Squirrel.Mac update payloads)
   - Linux `x64` AppImage
   - Windows and macOS x64 are deliberately dropped; do not re-add them.
+- Nightly releases treat Linux as best-effort: a Linux-only build failure does
+  not block publication if the macOS artifact produced the required
+  `nightly-mac.yml` updater manifest. Stable releases still require the full
+  configured matrix to pass.
 - Publishes one GitHub Release with all produced files.
   - Release creation uses the workflow-scoped `GITHUB_TOKEN`; PAT-backed
     `GH_PAT` is reserved for tag/commit pushes that must trigger follow-on
