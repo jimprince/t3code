@@ -21,8 +21,10 @@ desktop releases of the fork (`jimprince/t3code`).
   - Linux `x64` AppImage
   - Windows and macOS x64 are deliberately dropped; do not re-add them.
 - Publishes one GitHub Release with all produced files.
-  - Stable tags with a suffix after `X.Y.Z` (for example `0.0.22-fork.1` or
+  - Nightly tags with a suffix after `X.Y.Z` (for example
     `0.0.21-nightly.20260421.88-fork.1`) are published as GitHub prereleases.
+  - Stable fork-only tags such as `0.0.22-fork.1` are published as normal
+    GitHub releases so stable desktop clients can see them as updates.
   - Only plain stable `X.Y.Z` releases are marked as the repository's latest release.
   - Nightly runs are always GitHub prereleases and never marked latest.
   - Automatically generated release notes are pinned to the previous tag in
@@ -56,10 +58,9 @@ Useful commands:
 - Triggers:
   - tag push `v*-nightly.*-fork.*` from `sync-upstream.yml` after it rebases
     fork commits onto a new upstream nightly
-  - manual `workflow_dispatch` with `channel=nightly` (no tag push needed;
-    falls back to generating a fresh `vX.Y.Z-nightly.YYYYMMDD.<run_number>`
-    tag via `scripts/resolve-nightly-release.ts`; used for testing the
-    pipeline without waiting for upstream)
+  - manual `workflow_dispatch` with an explicit fork-nightly version, e.g.
+    `vX.Y.Z-nightly.YYYYMMDD.<run>-fork.N`, for testing without waiting for
+    upstream
 - Runs the same desktop quality gates and artifact matrix as the tagged
   release flow.
 - Publishes a GitHub prerelease only:
@@ -68,8 +69,8 @@ Useful commands:
     (for example `v0.0.21-nightly.20260421.88-fork.1`). `N` auto-increments
     per upstream nightly tag and the suffix keeps the fork's artifact
     distinguishable from upstream's own nightly.
-  - tag format (workflow_dispatch-driven): `vX.Y.Z-nightly.YYYYMMDD.<run>`
-    (no `-fork.N` suffix).
+  - manual dispatch uses the same `-fork.N` suffix. The fork does not generate
+    bare upstream-style nightly tags.
   - release name includes the short commit SHA.
   - `make_latest` is always `false`.
 - Publishes Electron auto-update metadata to the dedicated `nightly` updater
