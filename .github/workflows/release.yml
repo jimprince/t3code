@@ -3,10 +3,14 @@ name: Release
 on:
   push:
     tags:
+      # Stable and fork-interim stable: v0.0.21, v0.0.22-fork.1
       - "v*.*.*"
+      # Exclude pure upstream nightly tags (should never land on this repo,
+      # but belt-and-braces: the fork only publishes -fork.N suffixed nightlies)
       - "!v*-nightly.*"
-  schedule:
-    - cron: "0 */3 * * *"
+      # Re-include fork nightly tags: v0.0.21-nightly.20260421.88-fork.1
+      # (pushed by sync-upstream.yml after rebasing onto an upstream nightly)
+      - "v*-nightly.*-fork.*"
   workflow_dispatch:
     inputs:
       channel:
@@ -18,7 +22,7 @@ on:
           - stable
           - nightly
       version:
-        description: "Release version (for example 1.2.3 or v1.2.3)"
+        description: "Release version (for example 1.2.3 or v1.2.3); required for stable, ignored for nightly"
         required: false
         type: string
 
@@ -26,54 +30,17 @@ permissions:
   contents: write
   id-token: write
 
-# Serialize release runs. Scheduled nightly runs (every 3 hrs) can otherwise
-# overlap with each other or with tag-push releases, contending for runners
-# and occasionally getting preempted mid-job. cancel-in-progress: false so
+# Serialize release runs. sync-upstream can push back-to-back tags if it
+# catches up on several upstream nightlies in one run; concurrency ensures
+# the later build waits instead of racing. cancel-in-progress: false so
 # that an in-flight build always completes — a queued run will just wait.
 concurrency:
   group: release-${{ github.workflow }}
   cancel-in-progress: false
 
 jobs:
-  check_changes:
-    name: Check for changes since last nightly
-    if: github.event_name == 'schedule'
-    runs-on: ubuntu-24.04
-    outputs:
-      has_changes: ${{ steps.check.outputs.has_changes }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - id: check
-        name: Compare HEAD to last nightly tag
-        run: |
-          last_nightly_tag=$(git tag --list 'v*-nightly.*' 'nightly-v*' --sort=-creatordate | head -n 1)
-          if [[ -z "$last_nightly_tag" ]]; then
-            echo "No previous nightly tag found. Proceeding with release."
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          last_nightly_sha=$(git rev-parse "$last_nightly_tag^{commit}")
-          head_sha=$(git rev-parse HEAD)
-
-          if [[ "$last_nightly_sha" == "$head_sha" ]]; then
-            echo "No changes on main since last nightly release ($last_nightly_tag). Skipping."
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "Changes detected on main since $last_nightly_tag ($last_nightly_sha → $head_sha). Proceeding."
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          fi
-
   preflight:
     name: Preflight
-    needs: [check_changes]
-    if: |
-      !failure() && !cancelled() &&
-      (github.event_name != 'schedule' || needs.check_changes.outputs.has_changes == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     outputs:
@@ -116,7 +83,58 @@ jobs:
           NIGHTLY_SHA: ${{ github.sha }}
           NIGHTLY_RUN_NUMBER: ${{ github.run_number }}
         run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "schedule" || ( "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-stable}" == "nightly" ) ]]; then
+          set -euo pipefail
+
+          emit_from_tag_version() {
+            # Args: raw_version (without leading v)
+            local version="$1"
+            local short_sha="${NIGHTLY_SHA:0:12}"
+
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+              echo "Invalid release version: v$version" >&2
+              exit 1
+            fi
+
+            # Channel detection: presence of "-nightly." anywhere in the
+            # pre-release identifies a nightly build (upstream-synced fork
+            # nightly). Anything else (pure semver or "-fork.N") is stable.
+            if [[ "$version" == *-nightly.* ]]; then
+              echo "release_channel=nightly" >> "$GITHUB_OUTPUT"
+              echo "version=$version" >> "$GITHUB_OUTPUT"
+              echo "tag=v$version" >> "$GITHUB_OUTPUT"
+              echo "name=T3 Code Nightly $version ($short_sha)" >> "$GITHUB_OUTPUT"
+              echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+              echo "cli_dist_tag=nightly" >> "$GITHUB_OUTPUT"
+              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+              echo "make_latest=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "release_channel=stable" >> "$GITHUB_OUTPUT"
+              echo "version=$version" >> "$GITHUB_OUTPUT"
+              echo "tag=v$version" >> "$GITHUB_OUTPUT"
+              echo "name=T3 Code v$version" >> "$GITHUB_OUTPUT"
+              echo "short_sha=$short_sha" >> "$GITHUB_OUTPUT"
+              echo "cli_dist_tag=latest" >> "$GITHUB_OUTPUT"
+              if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+                echo "make_latest=true" >> "$GITHUB_OUTPUT"
+              else
+                # -fork.N interim stable build
+                echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
+                echo "make_latest=false" >> "$GITHUB_OUTPUT"
+              fi
+            fi
+          }
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            # Tag push (from sync-upstream.yml or manual `git push origin vX.Y.Z`).
+            # Tag name is authoritative for both version and channel.
+            raw="${GITHUB_REF_NAME}"
+            emit_from_tag_version "${raw#v}"
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-stable}" == "nightly" ]]; then
+            # Manual nightly dispatch: generate a fresh nightly tag/version from
+            # apps/desktop/package.json. Used for testing the nightly pipeline
+            # without waiting for sync-upstream. Produces a tag of the form
+            # vX.Y.Z-nightly.YYYYMMDD.<run_number> (no -fork.N suffix).
             nightly_date="$(date -u -d "$NIGHTLY_DATE" +%Y%m%d)"
 
             node scripts/resolve-nightly-release.ts \
@@ -129,35 +147,17 @@ jobs:
             echo "cli_dist_tag=nightly" >> "$GITHUB_OUTPUT"
             echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
             echo "make_latest=false" >> "$GITHUB_OUTPUT"
-          else
-            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-              raw="${DISPATCH_VERSION}"
-              if [[ -z "$raw" ]]; then
-                echo "workflow_dispatch stable releases require the version input." >&2
-                exit 1
-              fi
-            else
-              raw="${GITHUB_REF_NAME}"
-            fi
-
-            version="${raw#v}"
-            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-              echo "Invalid release version: $raw" >&2
+          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+            # Manual stable dispatch: version input required.
+            raw="${DISPATCH_VERSION}"
+            if [[ -z "$raw" ]]; then
+              echo "workflow_dispatch stable releases require the version input." >&2
               exit 1
             fi
-
-            echo "release_channel=stable" >> "$GITHUB_OUTPUT"
-            echo "version=$version" >> "$GITHUB_OUTPUT"
-            echo "tag=v$version" >> "$GITHUB_OUTPUT"
-            echo "name=T3 Code v$version" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=latest" >> "$GITHUB_OUTPUT"
-            if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-              echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
-              echo "make_latest=true" >> "$GITHUB_OUTPUT"
-            else
-              echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-              echo "make_latest=false" >> "$GITHUB_OUTPUT"
-            fi
+            emit_from_tag_version "${raw#v}"
+          else
+            echo "Unsupported event: ${GITHUB_EVENT_NAME}" >&2
+            exit 1
           fi
 
       - name: Lint
