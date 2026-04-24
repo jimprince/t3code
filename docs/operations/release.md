@@ -16,6 +16,17 @@ file is the concise runbook.
   `v0.0.22-fork.1`.
 - Nightly fork builds use `vX.Y.Z-nightly.YYYYMMDD.RUN-fork.N`.
 
+## Fork-Interim Trigger
+
+`fork-interim-release.yml` publishes updater-visible stable fork builds only
+for changes that can affect packaged app/runtime output: `apps/**`,
+`packages/**`, `assets/**`, root package/build files, and desktop artifact
+build inputs.
+
+Docs, workflow maintenance, release helper scripts, and other repo plumbing
+should not create `vNEXT-fork.N`. Use manual `release.yml` dispatch if a
+maintenance-only commit genuinely needs to ship as a desktop update.
+
 ## Normal Commands
 
 Start the local Apple Silicon runner before any desktop release:
