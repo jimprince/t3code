@@ -34,7 +34,7 @@ permissions:
 # the later build waits instead of racing. cancel-in-progress: false so
 # that an in-flight build always completes — a queued run will just wait.
 concurrency:
-  group: release-${{ github.workflow }}
+  group: release-${{ github.workflow }}-${{ github.ref_name || github.run_id }}
   cancel-in-progress: false
 
 jobs:
