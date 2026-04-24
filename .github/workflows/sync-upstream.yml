@@ -137,6 +137,7 @@ jobs:
         run: |
           upstream_tag="${{ steps.upstream.outputs.tag }}"
           git remote add upstream https://github.com/pingdotgg/t3code.git
+          git fetch upstream main
           git fetch upstream "refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}"
 
       - name: Rebase fork commits onto upstream tag
@@ -160,8 +161,8 @@ jobs:
           upstream_ref="refs/tags/upstream/${upstream_tag}"
 
           echo "Rebasing onto $upstream_ref..."
-          echo "Our commits being replayed:"
-          git log --oneline "$upstream_ref"..HEAD
+          echo "Fork commits being replayed (relative to upstream/main):"
+          git log --oneline upstream/main..HEAD
 
           # Build allowlist as a sorted unique set
           mapfile -t ALLOW < <(echo "$AUTO_RESOLVE_FILES" | sed '/^$/d' | sort -u)
@@ -188,7 +189,7 @@ jobs:
 
           # Initial rebase attempt. If it fails, fall through to the
           # conflict-resolution loop below.
-          if git rebase "$upstream_ref"; then
+          if git rebase --onto "$upstream_ref" upstream/main; then
             echo "status=clean" >> "$GITHUB_OUTPUT"
             exit 0
           fi
