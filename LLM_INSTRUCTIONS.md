@@ -39,6 +39,9 @@ versioning axis for the fork.
 - Workflows require `GH_PAT` in secrets for tag/commit pushes that need to
   trigger follow-on workflows or modify workflow files. Release creation itself
   uses the workflow-scoped `GITHUB_TOKEN` with `contents: write`.
+- Release publish/finalize jobs use `bun install --ignore-scripts` because
+  they only need helper scripts and artifact upload; keep full dependency
+  lifecycle scripts in preflight/build jobs.
 
 If you need to put fork patches on top of upstream, push normal commits to
 `main`. The next sync rebases them forward automatically.
