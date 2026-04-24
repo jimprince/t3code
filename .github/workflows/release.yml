@@ -168,6 +168,7 @@ jobs:
     name: Build ${{ matrix.label }}
     needs: preflight
     if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' }}
+    continue-on-error: ${{ matrix.platform == 'linux' && needs.preflight.outputs.release_channel == 'nightly' }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -332,7 +333,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [preflight, build]
-    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' && needs.build.result == 'success' }}
+    if: ${{ !cancelled() && needs.preflight.result == 'success' && (needs.build.result == 'success' || needs.preflight.outputs.release_channel == 'nightly') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -360,6 +361,22 @@ jobs:
           pattern: desktop-*
           merge-multiple: true
           path: release-assets
+
+      - name: Validate release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          assets=(release-assets/*)
+          if (( ${#assets[@]} == 0 )); then
+            echo "No release assets were downloaded." >&2
+            exit 1
+          fi
+
+          if [[ "${{ needs.preflight.outputs.release_channel }}" == "nightly" && ! -f release-assets/nightly-mac.yml ]]; then
+            echo "Nightly macOS updater manifest release-assets/nightly-mac.yml is required." >&2
+            exit 1
+          fi
 
       - name: Merge macOS updater manifests
         run: |
