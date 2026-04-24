@@ -566,8 +566,14 @@ function resolveGitHubPublishConfig(updateChannel: "latest" | "nightly"):
   };
 }
 
+// Accepts:
+//   - workflow_dispatch-generated nightlies: `0.0.17-nightly.20260413.42`
+//   - fork nightlies published by sync-upstream.yml after rebasing onto an
+//     upstream nightly: `0.0.21-nightly.20260421.88-fork.1`
+// The optional `-fork.N` suffix ensures fork nightly builds route to the
+// `nightly` updater channel and pick up nightly icons/branding at package time.
 export function resolveDesktopUpdateChannel(version: string): "latest" | "nightly" {
-  return /-nightly\.\d{8}\.\d+$/.test(version) ? "nightly" : "latest";
+  return /-nightly\.\d{8}\.\d+(?:-fork\.\d+)?$/.test(version) ? "nightly" : "latest";
 }
 
 export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
