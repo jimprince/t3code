@@ -244,8 +244,11 @@ sidesteps the whole class of problem.
 
 ## Fork-only stable auto-releases
 
-`.github/workflows/fork-interim-release.yml` watches non-doc, non-workflow
-pushes to `main`. If the pushed commit is not already release-tagged and is not
+`.github/workflows/fork-interim-release.yml` watches a narrow allowlist of
+paths that can affect packaged app/runtime output (`apps/**`, `packages/**`,
+`assets/**`, root package/build files, and desktop artifact build inputs).
+Docs, workflows, and unrelated helper scripts must not publish a fork-only
+desktop update. If the pushed commit is not already release-tagged and is not
 the release finalizer's `chore(release): prepare ...` commit, it computes the
 next unreleased upstream patch version and pushes `vNEXT-fork.N`.
 
