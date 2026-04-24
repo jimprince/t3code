@@ -1,242 +1,156 @@
-# Release Checklist
+# Release Workflow
 
-This document covers the unified release workflow for stable and nightly
-desktop releases of the fork (`jimprince/t3code`).
+This is the operational release guide for the fork at `jimprince/t3code`.
+`LLM_INSTRUCTIONS.md` is still the source of truth for the fork model; this
+file is the concise runbook.
 
-## What the workflow does
+## Release Model
 
-- Workflow: `.github/workflows/release.yml`
-- Triggers (fork-local):
-  - push tag matching `v*.*.*` for stable and stable-interim (`-fork.N`) releases
-  - push tag matching `v*-nightly.*-fork.*` for fork nightlies
-    (published by `.github/workflows/sync-upstream.yml` after rebasing onto
-    an upstream nightly tag)
-  - manual `workflow_dispatch` for either channel (mainly for testing)
-  - **No `schedule:` trigger.** Nightly builds fire on tag push from
-    `sync-upstream.yml`; there is no independent nightly cron on this workflow.
-- Runs quality gates first: lint, typecheck, test.
-- Builds the intentionally-minimal fork matrix (see also
-  `LLM_INSTRUCTIONS.md`):
-  - macOS `arm64` DMG + zip (for Squirrel.Mac update payloads)
-  - Linux `x64` AppImage
-  - Windows and macOS x64 are deliberately dropped; do not re-add them.
-- Nightly releases treat Linux as best-effort: a Linux-only build failure does
-  not block publication if the macOS artifact produced the required
-  `nightly-mac.yml` updater manifest. Linux nightly dependency installs skip
-  lifecycle scripts to avoid native dependency hangs holding the macOS updater
-  release open. Stable releases still require the full configured matrix to pass.
-- Publishes one GitHub Release with all produced files.
-  - Release creation uses the workflow-scoped `GITHUB_TOKEN`; PAT-backed
-    `GH_PAT` is reserved for tag/commit pushes that must trigger follow-on
-    workflows.
-  - Publish/finalize jobs install dependencies with lifecycle scripts disabled,
-    because they only need helper scripts and artifact upload.
-  - Nightly tags with a suffix after `X.Y.Z` (for example
-    `0.0.21-nightly.20260421.88-fork.1`) are published as GitHub prereleases.
-  - Stable fork-only tags such as `0.0.22-fork.1` are published as normal
-    GitHub releases so stable desktop clients can see them as updates.
-  - Only plain stable `X.Y.Z` releases are marked as the repository's latest release.
-  - Nightly runs are always GitHub prereleases and never marked latest.
-  - Automatically generated release notes are pinned to the previous tag in
-    the same channel, so stable compares to the previous stable tag and
-    nightly compares to the previous nightly tag.
-- Includes Electron auto-update metadata (for example `latest*.yml`,
-  `nightly*.yml`, and `*.blockmap`) in release assets.
-- Publishes the CLI package (`apps/server`, npm package `t3`) with OIDC
-  trusted publishing from the same workflow file:
-  - stable releases publish npm dist-tag `latest`
-  - nightly releases publish npm dist-tag `nightly`
-- Signing is optional and auto-detected per platform from secrets.
+- `sync-upstream.yml` checks upstream every 3 hours and can also be dispatched
+  manually.
+- `release.yml` builds only after a release tag is pushed, or when manually
+  dispatched with an explicit version.
+- Versions mirror upstream. Do not invent independent fork version numbers.
+- Stable upstream tags are reused verbatim, for example `v0.0.21`.
+- Stable fork-only interim builds use `vNEXT-fork.N`, for example
+  `v0.0.22-fork.1`.
+- Nightly fork builds use `vX.Y.Z-nightly.YYYYMMDD.RUN-fork.N`.
 
-## Fork desktop flavors
+## Normal Commands
 
-- `stable` is the packaged fork lane intended to update through the fork's GitHub releases.
-- `dev` is a local packaged lane with a distinct app identity and auto-updates disabled.
-- Both fork flavors use distinct packaged app ids and Electron profile namespaces, so they can coexist with upstream installs.
-- Both fork flavors may still share `T3CODE_HOME` if you want the same server-side data at `~/.t3`.
+Start the local Apple Silicon runner before any desktop release:
 
-Useful commands:
+```bash
+t3code-mac-runner start 7200
+```
 
-- `bun run dist:desktop:dmg:arm64`
-- `bun run dist:desktop:dev:dmg:arm64`
+Sync stable or nightly from upstream:
 
-## Fork-only stable releases
+```bash
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
+```
 
-Driver workflow: `.github/workflows/fork-interim-release.yml`.
+Check both channels:
 
-A non-doc, non-workflow push to `main` creates the next stable fork-only tag
-for the next unreleased upstream patch version, for example `v0.0.22-fork.1`.
-The existing `release.yml` tag trigger then builds and publishes that tag as a
-normal/latest GitHub Release, not a prerelease, so stable desktop clients can
-update before upstream ships the final patch.
+```bash
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=
+```
 
-The workflow skips commits already tagged by `sync-upstream.yml` and skips the
-release finalizer's `chore(release): prepare ...` commits to avoid loops.
+Stop the runner when the release is done:
 
-## Nightly builds
+```bash
+t3code-mac-runner stop
+```
 
-- Driver workflow: `.github/workflows/sync-upstream.yml`
-  (see `LLM_INSTRUCTIONS.md` "The fork-mirroring model").
-- Builder workflow: `.github/workflows/release.yml`
-- Triggers:
-  - tag push `v*-nightly.*-fork.*` from `sync-upstream.yml` after it rebases
-    fork commits onto a new upstream nightly
-  - manual `workflow_dispatch` with an explicit fork-nightly version, e.g.
-    `vX.Y.Z-nightly.YYYYMMDD.<run>-fork.N`, for testing without waiting for
-    upstream
-- Runs the same desktop quality gates and artifact matrix as the tagged
-  release flow.
-- Publishes a GitHub prerelease only:
-  - tag format (sync-upstream-driven):
-    `v<upstream_semver>-nightly.YYYYMMDD.<run>-fork.<N>`
-    (for example `v0.0.21-nightly.20260421.88-fork.1`). `N` auto-increments
-    per upstream nightly tag and the suffix keeps the fork's artifact
-    distinguishable from upstream's own nightly.
-  - manual dispatch uses the same `-fork.N` suffix. The fork does not generate
-    bare upstream-style nightly tags.
-  - release name includes the short commit SHA.
-  - `make_latest` is always `false`.
-- Publishes Electron auto-update metadata to the dedicated `nightly` updater
-  channel, so desktop users can opt into that track independently from stable.
-- Publishes the CLI package (`apps/server`, npm package `t3`) to the
-  `nightly` npm dist-tag using the same nightly version.
-- Does not commit version bumps back to `main`.
-- Channel detection in `release.yml` is tag-name-based: any tag whose
-  pre-release contains `-nightly.` is treated as a nightly build; otherwise
-  it is treated as stable (including `-fork.N` interim stable builds).
+## Rerolling A Nightly For Updater Testing
 
-## Desktop auto-update notes
+`sync-upstream.yml` skips an upstream nightly once any
+`${upstream_tag}-fork.*` tag exists. To publish another build from the same
+upstream nightly, dispatch `release.yml` directly with the next `-fork.N`
+version.
+
+Important quirk: `release.yml` currently exposes only `channel=stable` in the
+manual dispatch form. That is fine; the workflow derives the real release
+channel from the version string. Any version containing `-nightly.` is built as
+nightly.
+
+```bash
+gh workflow run release.yml --repo jimprince/t3code \
+  -f channel=stable \
+  -f version=v0.0.22-nightly.20260423.108-fork.2
+```
+
+Validated path: an installed `v0.0.22-nightly.20260423.108-fork.1` app found
+`v0.0.22-nightly.20260423.108-fork.2` as available through
+`nightly-mac.yml`.
+
+## Build Matrix
+
+The fork intentionally builds only:
+
+- macOS arm64: DMG, zip, blockmaps, and `latest-mac.yml` or `nightly-mac.yml`.
+- Linux x64: AppImage and updater metadata.
+
+Do not re-add Windows or macOS x64 unless the user explicitly changes the
+support target.
+
+Nightly Linux is best-effort. A Linux-only nightly failure must not block a
+macOS updater release as long as `nightly-mac.yml` exists. Stable releases
+still require the configured matrix to pass.
+
+## Updater Requirements
 
 - Runtime updater: `electron-updater` in `apps/desktop/src/main.ts`.
-- Update UX:
-  - Background checks run on startup delay + interval.
-  - No automatic download or install.
-  - The desktop UI shows a rocket update button when an update is available; click once to download, click again after download to restart/install.
-- Provider: GitHub Releases (`provider: github`) configured at build time.
-- Repository slug source:
-  - `T3CODE_DESKTOP_UPDATE_REPOSITORY` (format `owner/repo`), if set.
-  - otherwise `GITHUB_REPOSITORY` from GitHub Actions.
-- Temporary private-repo auth workaround:
-  - set `T3CODE_DESKTOP_UPDATE_GITHUB_TOKEN` (or `GH_TOKEN`) in the desktop app runtime environment.
-  - the app forwards it as an `Authorization: Bearer <token>` request header for updater HTTP calls.
-- Required release assets for updater:
-  - platform installers (`.exe`, `.dmg`, `.AppImage`, plus macOS `.zip` for Squirrel.Mac update payloads)
-  - channel metadata: `latest*.yml` for stable releases, `nightly*.yml` for nightly releases
-  - `*.blockmap` files (used for differential downloads)
-- macOS metadata note:
-  - `electron-updater` reads `latest-mac.yml` on stable and `nightly-mac.yml` on nightly, for both Intel and Apple Silicon.
-  - The workflow merges the per-arch mac manifests into one channel-specific mac manifest before publishing the GitHub Release.
+- Packaged update provider: GitHub Releases.
+- Repository source: `T3CODE_DESKTOP_UPDATE_REPOSITORY`, otherwise
+  `GITHUB_REPOSITORY`.
+- Stable channel metadata: `latest*.yml`.
+- Nightly channel metadata: `nightly*.yml`.
+- macOS requires both the DMG and zip because Squirrel.Mac uses the zip payload.
+- `scripts/build-desktop-artifact.ts` must write `channel: nightly` into
+  `app-update.yml` for nightly versions.
+- `apps/desktop/src/updateChannels.ts` must continue accepting
+  `*-nightly.YYYYMMDD.RUN-fork.N` as the nightly channel.
 
-## 0) npm OIDC trusted publishing setup (CLI)
+If testing a private repo build locally, the app can use
+`T3CODE_DESKTOP_UPDATE_GITHUB_TOKEN` or `GH_TOKEN` at runtime for updater HTTP
+requests. Do not commit tokens or print them in logs.
 
-The workflow publishes the CLI with `npm publish` from `apps/server` after bumping
-the package version to the release tag version.
+## Verification
 
-Checklist:
+Watch a workflow:
 
-1. Confirm npm org/user owns package `t3` (or rename package first if needed).
-2. In npm package settings, configure Trusted Publisher:
-   - Provider: GitHub Actions
-   - Repository: this repo
-   - Workflow file: `.github/workflows/release.yml`
-   - Environment (if used): match your npm trusted publishing config
-3. Ensure npm account and org policies allow trusted publishing for the package.
-4. Create release tag `vX.Y.Z` and push; workflow will:
-   - set `apps/server/package.json` version to `X.Y.Z`
-   - build web + server
-   - run `npm publish --access public --tag latest`
-5. Nightly runs from the same workflow file publish with `npm publish --access public --tag nightly`.
+```bash
+gh run watch <run-id> --repo jimprince/t3code --exit-status
+```
 
-## 1) Dry-run release without signing
+Inspect a release and its assets:
 
-Use this first to validate the release pipeline.
+```bash
+gh release view <tag> --repo jimprince/t3code \
+  --json tagName,isPrerelease,publishedAt,url,assets
+```
 
-1. Confirm no signing secrets are required for this test.
-2. Create a test tag:
-   - `git tag v0.0.0-test.1`
-   - `git push origin v0.0.0-test.1`
-3. Wait for `.github/workflows/release.yml` to finish.
-4. Verify the GitHub Release contains all platform artifacts.
-5. Download each artifact and sanity-check installation on each OS.
+Inspect the nightly mac feed:
 
-## 2) Apple signing + notarization setup (macOS)
+```bash
+curl -fsSL \
+  https://github.com/jimprince/t3code/releases/download/<tag>/nightly-mac.yml \
+  | sed -n '1,80p'
+```
 
-Required secrets used by the workflow:
+Check the installed desktop app updater log:
 
-- `CSC_LINK`
-- `CSC_KEY_PASSWORD`
-- `APPLE_API_KEY`
-- `APPLE_API_KEY_ID`
-- `APPLE_API_ISSUER`
+```bash
+tail -n 160 ~/.t3/userdata/logs/desktop-main.log \
+  | rg -i 'desktop-updater|Update available|Ignoring|No updates'
+```
 
-Checklist:
+Expected updater proof line:
 
-1. Apple Developer account access:
-   - Team has rights to create Developer ID certificates.
-2. Create `Developer ID Application` certificate.
-3. Export certificate + private key as `.p12` from Keychain.
-4. Base64-encode the `.p12` and store as `CSC_LINK`.
-5. Store the `.p12` export password as `CSC_KEY_PASSWORD`.
-6. In App Store Connect, create an API key (Team key).
-7. Add API key values:
-   - `APPLE_API_KEY`: contents of the downloaded `.p8`
-   - `APPLE_API_KEY_ID`: Key ID
-   - `APPLE_API_ISSUER`: Issuer ID
-8. Re-run a tag release and confirm macOS artifacts are signed/notarized.
+```text
+[desktop-updater] Update available: 0.0.22-nightly.20260423.108-fork.2
+```
 
-Notes:
+## Signing
 
-- `APPLE_API_KEY` is stored as raw key text in secrets.
-- The workflow writes it to a temporary `AuthKey_<id>.p8` file at runtime.
+Release artifacts are currently unsigned unless Apple signing secrets are
+present. macOS users may need right-click Open or quarantine removal for first
+launch. Windows signing setup is intentionally omitted because Windows builds
+are not part of the fork release matrix.
 
-## 3) Azure Trusted Signing setup (Windows)
+## Troubleshooting
 
-Required secrets used by the workflow:
-
-- `AZURE_TENANT_ID`
-- `AZURE_CLIENT_ID`
-- `AZURE_CLIENT_SECRET`
-- `AZURE_TRUSTED_SIGNING_ENDPOINT`
-- `AZURE_TRUSTED_SIGNING_ACCOUNT_NAME`
-- `AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME`
-- `AZURE_TRUSTED_SIGNING_PUBLISHER_NAME`
-
-Checklist:
-
-1. Create Azure Trusted Signing account and certificate profile.
-2. Record ATS values:
-   - Endpoint
-   - Account name
-   - Certificate profile name
-   - Publisher name
-3. Create/choose an Entra app registration (service principal).
-4. Grant service principal permissions required by Trusted Signing.
-5. Create a client secret for the service principal.
-6. Add Azure secrets listed above in GitHub Actions secrets.
-7. Re-run a tag release and confirm Windows installer is signed.
-
-## 4) Ongoing release checklist
-
-1. Ensure `main` is green in CI.
-2. Bump app version as needed.
-3. Create release tag: `vX.Y.Z`.
-4. Push tag.
-5. Verify workflow steps:
-   - preflight passes
-   - all matrix builds pass
-   - release job uploads expected files
-6. Smoke test downloaded artifacts.
-
-## 5) Troubleshooting
-
-- GitHub Release publish fails with `403 Resource not accessible by integration`:
-  - Confirm `.github/workflows/release.yml` grants `contents: write`.
-  - Confirm the `softprops/action-gh-release` publish steps use
-    `github.token`, not `secrets.GH_PAT`.
-- macOS build unsigned when expected signed:
-  - Check all Apple secrets are populated and non-empty.
-- Windows build unsigned when expected signed:
-  - Check all Azure ATS and auth secrets are populated and non-empty.
-- Build fails with signing error:
-  - Retry with secrets removed to confirm unsigned path still works.
-  - Re-check certificate/profile names and tenant/client credentials.
+- `403 Resource not accessible by integration` while publishing a release:
+  ensure `release.yml` grants `contents: write` and the release step uses
+  `github.token`, not `secrets.GH_PAT`.
+- Nightly release publishes but updater does not see it: confirm the release
+  has `nightly-mac.yml`, the app is on the `nightly` update channel, and the
+  version matches `*-nightly.YYYYMMDD.RUN-fork.N`.
+- Nightly feed points at an assetless release: delete the orphan release/tag or
+  republish it with the required updater assets. Assetless nightly feed entries
+  poison updater discovery.
+- macOS job never starts: start the local runner with
+  `t3code-mac-runner start 7200` and verify it is online with the
+  `t3code-mac-arm64` label.
