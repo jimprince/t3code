@@ -11,8 +11,9 @@ name: Sync Upstream
 #   - nightly channel: ${upstream_tag}-fork.<N> (e.g.
 #     v0.0.21-nightly.20260421.88-fork.1), where N auto-increments per
 #     upstream nightly tag. The -fork suffix keeps fork artifacts
-#     distinguishable and allows re-rolling a fork build on the same upstream
-#     commit.
+#     distinguishable. sync-upstream skips once any fork tag exists for the
+#     same upstream nightly; reroll the same upstream commit by manually
+#     dispatching release.yml with the next explicit -fork.N version.
 #
 # On rebase conflict: fails loudly with instructions to resolve locally.
 
