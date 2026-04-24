@@ -42,32 +42,29 @@ versioning axis for the fork.
 If you need to put fork patches on top of upstream, push normal commits to
 `main`. The next sync rebases them forward automatically.
 
-### Channel: stable vs nightly
+### Channel: stable and nightly
 
-sync-upstream can track either upstream stable releases (`/releases/latest`,
-excludes pre-releases) or upstream nightly pre-releases (first release whose
-tag matches `v<ver>-nightly.*` or `nightly-v<ver>-nightly.*`).
+Scheduled `sync-upstream` runs check **both** upstream stable releases
+(`/releases/latest`, excludes pre-releases) and upstream nightly pre-releases
+(first release whose tag matches `v<ver>-nightly.*` or
+`nightly-v<ver>-nightly.*`). Manual runs can target one channel, or leave the
+input blank to check both.
 
-Channel resolution order (first non-empty wins):
-
-1. `workflow_dispatch` input `channel` — one-off override.
-2. Repo variable `SYNC_CHANNEL` — persistent default.
-3. Hardcoded fallback: `stable`.
-
-**Flip the persistent default** (no code change, no commit needed):
-
-```bash
-gh variable set SYNC_CHANNEL --body nightly --repo jimprince/t3code
-gh variable set SYNC_CHANNEL --body stable  --repo jimprince/t3code
-gh variable list --repo jimprince/t3code        # verify
-```
-
-**One-off run on the other channel** (doesn't change the default):
+**One-off run for a channel:**
 
 ```bash
 gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
 gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
 ```
+
+**One-off run for both channels:**
+
+```bash
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=
+```
+
+There is no persistent channel variable anymore. If you see a stale
+`SYNC_CHANNEL` repo variable, it is ignored by the workflow and can be deleted.
 
 **Tradeoffs of tracking nightlies:**
 
@@ -82,14 +79,6 @@ gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
 - No GitHub billing concern: `jimprince/t3code` is public, so Actions minutes
   are unlimited and free.
 
-**Switching channels does not retroactively rewrite history.** If you flip
-from nightly → stable, the next sync will target the latest stable tag. If
-stable is older than our current `HEAD` (likely, since we rode nightlies
-ahead), the sync's `git rev-parse --verify <stable_tag>` check may already
-see that tag and skip — in which case we're already "at" stable and the next
-upstream stable release will pick us back up. If it does try to rebase
-backwards, conflicts are likely; resolve locally per the workflow's error
-output.
 
 ## Build matrix is intentionally minimal
 
@@ -157,7 +146,8 @@ v0.0.22-fork.3    ← ...and so on
 Why this works:
 
 - **Auto-update sees it as an upgrade**: `0.0.22-fork.1 > 0.0.21` because
-  patch 22 > patch 21. Users on the last clean release get prompted.
+  patch 22 > patch 21. Fork-only stable builds are published as normal GitHub
+  releases, not prereleases, so stable desktop clients can see them.
 - **Upstream's eventual release wins**: `0.0.22 > 0.0.22-fork.N` because a
   pre-release suffix sorts _lower_ than the release itself in semver. When
   upstream ships `v0.0.22`, sync creates it cleanly; users auto-update off
