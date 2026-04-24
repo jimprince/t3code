@@ -28,6 +28,8 @@ desktop releases of the fork (`jimprince/t3code`).
   - Release creation uses the workflow-scoped `GITHUB_TOKEN`; PAT-backed
     `GH_PAT` is reserved for tag/commit pushes that must trigger follow-on
     workflows.
+  - Publish/finalize jobs install dependencies with lifecycle scripts disabled,
+    because they only need helper scripts and artifact upload.
   - Nightly tags with a suffix after `X.Y.Z` (for example
     `0.0.21-nightly.20260421.88-fork.1`) are published as GitHub prereleases.
   - Stable fork-only tags such as `0.0.22-fork.1` are published as normal
