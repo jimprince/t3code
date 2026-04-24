@@ -50,6 +50,19 @@ Useful commands:
 - `bun run dist:desktop:dmg:arm64`
 - `bun run dist:desktop:dev:dmg:arm64`
 
+## Fork-only stable releases
+
+Driver workflow: `.github/workflows/fork-interim-release.yml`.
+
+A non-doc, non-workflow push to `main` creates the next stable fork-only tag
+for the next unreleased upstream patch version, for example `v0.0.22-fork.1`.
+The existing `release.yml` tag trigger then builds and publishes that tag as a
+normal/latest GitHub Release, not a prerelease, so stable desktop clients can
+update before upstream ships the final patch.
+
+The workflow skips commits already tagged by `sync-upstream.yml` and skips the
+release finalizer's `chore(release): prepare ...` commits to avoid loops.
+
 ## Nightly builds
 
 - Driver workflow: `.github/workflows/sync-upstream.yml`
