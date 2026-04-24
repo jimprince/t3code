@@ -1,5 +1,36 @@
 # Agent Requirements
 
+## Current Task: CI and Fork-Interim Trigger Hardening
+
+Implement the follow-up recommendation to prevent accidental releases and
+unblock CI.
+
+### Current User Requirements
+
+- Narrow `fork-interim-release.yml` so docs, workflow, and helper-script
+  maintenance cannot accidentally publish a fork-only stable desktop update.
+- Move CI off the currently unavailable `blacksmith-8vcpu-ubuntu-2404` runner.
+- Keep documentation current for future agents.
+- Do not disturb existing untracked user files.
+
+### Current Acceptance Criteria
+
+- Fork-interim release creation only triggers for paths that can affect the
+  packaged desktop/runtime build.
+- CI jobs use an available hosted runner.
+- The old queued CI run on the unavailable runner is not left hanging.
+- Relevant docs describe the narrowed fork-interim trigger behavior.
+- Changes are verified with repo-required checks where practical.
+
+### Current Status
+
+- Completed: `fork-interim-release.yml` now uses a narrow path allowlist for
+  packaged app/runtime/build inputs, and CI now runs on `ubuntu-24.04`.
+- Completed: canceled the old queued CI run waiting on the unavailable
+  Blacksmith runner.
+- Verified with `git diff --check`, YAML parsing, `bun fmt`, `bun lint`, and
+  `bun typecheck`.
+
 ## Current Task: Documentation Cleanup
 
 Clarify and streamline release/update documentation so future agents can work
