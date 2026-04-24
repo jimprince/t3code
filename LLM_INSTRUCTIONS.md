@@ -10,8 +10,9 @@ things specific to the fork relationship.
 
 ## The fork-mirroring model
 
-Our version numbers **mirror upstream**. Our `vX` tag = upstream `vX` + fork
-commits rebased on top. There is no independent versioning axis for the fork.
+Our version numbers **mirror upstream**. Our release tags are derived from
+upstream release tags + fork commits rebased on top. There is no independent
+versioning axis for the fork.
 
 - `.github/workflows/sync-upstream.yml` runs every 3 hours. It is the **only**
   thing that should create new release-version tags. Do not manually bump the
@@ -19,7 +20,22 @@ commits rebased on top. There is no independent versioning axis for the fork.
   that when upstream ships a new release on the selected channel.
 - sync-upstream fetches upstream tags into `refs/tags/upstream/*` (namespaced)
   to avoid clobbering our tags, then rebases our fork commits onto the upstream
-  tag and force-pushes `main` + the shared tag name.
+  tag and force-pushes `main` plus a release tag. Pushing the release tag is
+  what drives the build: `release.yml` has no `schedule:` trigger and fires
+  only on tag pushes (and `workflow_dispatch`).
+- Tag scheme by channel:
+  - **stable**: `${upstream_tag}` verbatim (e.g. `v0.0.21`). The fork and
+    upstream share the tag name; the commit on the fork is upstream's commit
+    plus our rebased fork commits.
+  - **nightly**: `${upstream_tag}-fork.${N}`
+    (e.g. `v0.0.21-nightly.20260421.88-fork.1`), where `N` auto-increments
+    per upstream nightly tag. The `-fork.N` suffix:
+      1. distinguishes our artifact from upstream's,
+      2. sorts strictly higher than the bare upstream tag under semver
+         (alphanumeric `88-fork` > numeric `88`), so electron-updater sees
+         each successive fork rebuild as an upgrade,
+      3. lets us re-roll a fork build on the same upstream commit
+         (bump `N`) without any tag-delete dance.
 - Workflow requires `GH_PAT` (not `GITHUB_TOKEN`) in secrets because
   `GITHUB_TOKEN` cannot push commits that modify workflow files.
 
