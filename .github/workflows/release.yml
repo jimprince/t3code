@@ -20,9 +20,8 @@ on:
         type: choice
         options:
           - stable
-          - nightly
       version:
-        description: "Release version (for example 1.2.3 or v1.2.3); required for stable, ignored for nightly"
+        description: "Release version (for example 1.2.3, v1.2.3-fork.1, or v1.2.3-nightly.YYYYMMDD.RUN-fork.N)"
         required: false
         type: string
 
@@ -118,9 +117,12 @@ jobs:
                 echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
                 echo "make_latest=true" >> "$GITHUB_OUTPUT"
               else
-                # -fork.N interim stable build
-                echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-                echo "make_latest=false" >> "$GITHUB_OUTPUT"
+                # -fork.N interim stable build. Publish as a normal latest
+                # release so stable desktop clients can see it as an update.
+                # Semver still lets the later upstream final release win:
+                # X.Y.Z > X.Y.Z-fork.N.
+                echo "is_prerelease=false" >> "$GITHUB_OUTPUT"
+                echo "make_latest=true" >> "$GITHUB_OUTPUT"
               fi
             fi
           }
@@ -130,28 +132,13 @@ jobs:
             # Tag name is authoritative for both version and channel.
             raw="${GITHUB_REF_NAME}"
             emit_from_tag_version "${raw#v}"
-          elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && "${DISPATCH_CHANNEL:-stable}" == "nightly" ]]; then
-            # Manual nightly dispatch: generate a fresh nightly tag/version from
-            # apps/desktop/package.json. Used for testing the nightly pipeline
-            # without waiting for sync-upstream. Produces a tag of the form
-            # vX.Y.Z-nightly.YYYYMMDD.<run_number> (no -fork.N suffix).
-            nightly_date="$(date -u -d "$NIGHTLY_DATE" +%Y%m%d)"
-
-            node scripts/resolve-nightly-release.ts \
-              --date "$nightly_date" \
-              --run-number "$NIGHTLY_RUN_NUMBER" \
-              --sha "$NIGHTLY_SHA" \
-              --github-output
-
-            echo "release_channel=nightly" >> "$GITHUB_OUTPUT"
-            echo "cli_dist_tag=nightly" >> "$GITHUB_OUTPUT"
-            echo "is_prerelease=true" >> "$GITHUB_OUTPUT"
-            echo "make_latest=false" >> "$GITHUB_OUTPUT"
           elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-            # Manual stable dispatch: version input required.
+            # Manual dispatch: version input required. Nightlies must be explicit
+            # fork-nightly versions, e.g. vX.Y.Z-nightly.YYYYMMDD.RUN-fork.N.
+            # Do not generate bare upstream-style nightly tags here.
             raw="${DISPATCH_VERSION}"
             if [[ -z "$raw" ]]; then
-              echo "workflow_dispatch stable releases require the version input." >&2
+              echo "workflow_dispatch releases require the version input." >&2
               exit 1
             fi
             emit_from_tag_version "${raw#v}"
