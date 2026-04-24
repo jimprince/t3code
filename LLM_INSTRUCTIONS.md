@@ -99,7 +99,9 @@ added flake surface without being used. Do not "helpfully" re-add them.
 - For nightly builds only, the Linux hosted build is best-effort. The release
   job is allowed to continue after a Linux-only failure, but it validates that
   `nightly-mac.yml` exists before publishing so the macOS updater track remains
-  usable. Stable releases still require the full matrix to pass.
+  usable. The Linux nightly install also disables dependency lifecycle scripts
+  so a native dependency hang cannot hold the macOS updater release open. Stable
+  releases still require the full matrix to pass with full dependency installs.
 - The 2-attempt retry wrapper around `bun run dist:desktop:artifact` absorbs
   transient flakes (macOS `hdiutil: Device not configured`, native-dep network
   hiccups). Don't remove it.
