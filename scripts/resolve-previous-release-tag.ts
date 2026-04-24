@@ -22,6 +22,12 @@ interface NightlyVersion {
   readonly patch: number;
   readonly date: number;
   readonly runNumber: number;
+  // forkNumber > 0 means a fork-published rebuild of the corresponding upstream
+  // nightly (tag form: vX.Y.Z-nightly.YYYYMMDD.R-fork.N). 0 means no -fork
+  // suffix (legacy tags or direct workflow_dispatch-generated nightlies).
+  // Ordering: 0 < 1 < 2 < ..., matching semver where the absence of
+  // additional pre-release identifiers sorts lower than their presence.
+  readonly forkNumber: number;
 }
 
 const parseNumericIdentifier = (identifier: string): number | undefined =>
@@ -94,16 +100,22 @@ const compareNightlyVersions = (left: NightlyVersion, right: NightlyVersion): nu
   if (left.minor !== right.minor) return left.minor - right.minor;
   if (left.patch !== right.patch) return left.patch - right.patch;
   if (left.date !== right.date) return left.date - right.date;
-  return left.runNumber - right.runNumber;
+  if (left.runNumber !== right.runNumber) return left.runNumber - right.runNumber;
+  return left.forkNumber - right.forkNumber;
 };
 
 const parseNightlyTag = (tag: string): NightlyVersion | undefined => {
-  // Accept both the current `v<semver>` format and the legacy `nightly-v<semver>`
-  // format so release note diffs keep working across the tag-format transition.
-  const match = /^(?:nightly-)?v(\d+)\.(\d+)\.(\d+)-nightly\.(\d{8})\.(\d+)$/.exec(tag);
+  // Accept:
+  //   - `v<semver>-nightly.<date>.<run>` (workflow_dispatch-generated nightlies)
+  //   - `nightly-v<semver>-nightly.<date>.<run>` (legacy tag format, kept for
+  //     release-note diffs across the transition)
+  //   - `v<semver>-nightly.<date>.<run>-fork.<N>` (fork nightlies published by
+  //     sync-upstream.yml after rebasing onto an upstream nightly)
+  const match =
+    /^(?:nightly-)?v(\d+)\.(\d+)\.(\d+)-nightly\.(\d{8})\.(\d+)(?:-fork\.(\d+))?$/.exec(tag);
   if (!match) return undefined;
 
-  const [, major, minor, patch, date, runNumber] = match;
+  const [, major, minor, patch, date, runNumber, forkNumber] = match;
   if (!major || !minor || !patch || !date || !runNumber) return undefined;
 
   return {
@@ -112,6 +124,7 @@ const parseNightlyTag = (tag: string): NightlyVersion | undefined => {
     patch: Number(patch),
     date: Number(date),
     runNumber: Number(runNumber),
+    forkNumber: forkNumber ? Number(forkNumber) : 0,
   };
 };
 
