@@ -390,7 +390,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT }}
 
       - name: Publish first release
         if: needs.preflight.outputs.previous_tag == ''
@@ -409,7 +409,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT }}
 
   finalize:
     name: Finalize release
@@ -423,7 +423,7 @@ jobs:
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GH_PAT }}
           persist-credentials: true
 
       - name: Setup Bun
