@@ -1,27 +1,37 @@
 # Release Checklist
 
-This document covers the unified release workflow for stable and nightly desktop releases.
+This document covers the unified release workflow for stable and nightly
+desktop releases of the fork (`jimprince/t3code`).
 
 ## What the workflow does
 
 - Workflow: `.github/workflows/release.yml`
-- Triggers:
-  - push tag matching `v*.*.*` for stable releases
-  - scheduled nightly at `09:00 UTC`
-  - manual `workflow_dispatch` for either channel
+- Triggers (fork-local):
+  - push tag matching `v*.*.*` for stable and stable-interim (`-fork.N`) releases
+  - push tag matching `v*-nightly.*-fork.*` for fork nightlies
+    (published by `.github/workflows/sync-upstream.yml` after rebasing onto
+    an upstream nightly tag)
+  - manual `workflow_dispatch` for either channel (mainly for testing)
+  - **No `schedule:` trigger.** Nightly builds fire on tag push from
+    `sync-upstream.yml`; there is no independent nightly cron on this workflow.
 - Runs quality gates first: lint, typecheck, test.
-- Builds four artifacts in parallel for both channels:
-  - macOS `arm64` DMG
-  - macOS `x64` DMG
+- Builds the intentionally-minimal fork matrix (see also
+  `LLM_INSTRUCTIONS.md`):
+  - macOS `arm64` DMG + zip (for Squirrel.Mac update payloads)
   - Linux `x64` AppImage
-  - Windows `x64` NSIS installer
+  - Windows and macOS x64 are deliberately dropped; do not re-add them.
 - Publishes one GitHub Release with all produced files.
-  - Stable tags with a suffix after `X.Y.Z` (for example `1.2.3-alpha.1`) are published as GitHub prereleases.
+  - Stable tags with a suffix after `X.Y.Z` (for example `0.0.22-fork.1` or
+    `0.0.21-nightly.20260421.88-fork.1`) are published as GitHub prereleases.
   - Only plain stable `X.Y.Z` releases are marked as the repository's latest release.
   - Nightly runs are always GitHub prereleases and never marked latest.
-  - Automatically generated release notes are pinned to the previous tag in the same channel, so stable compares to the previous stable tag and nightly compares to the previous nightly tag.
-- Includes Electron auto-update metadata (for example `latest*.yml`, `nightly*.yml`, and `*.blockmap`) in release assets.
-- Publishes the CLI package (`apps/server`, npm package `t3`) with OIDC trusted publishing from the same workflow file:
+  - Automatically generated release notes are pinned to the previous tag in
+    the same channel, so stable compares to the previous stable tag and
+    nightly compares to the previous nightly tag.
+- Includes Electron auto-update metadata (for example `latest*.yml`,
+  `nightly*.yml`, and `*.blockmap`) in release assets.
+- Publishes the CLI package (`apps/server`, npm package `t3`) with OIDC
+  trusted publishing from the same workflow file:
   - stable releases publish npm dist-tag `latest`
   - nightly releases publish npm dist-tag `nightly`
 - Signing is optional and auto-detected per platform from secrets.
@@ -40,19 +50,36 @@ Useful commands:
 
 ## Nightly builds
 
-- Workflow: `.github/workflows/release.yml`
+- Driver workflow: `.github/workflows/sync-upstream.yml`
+  (see `LLM_INSTRUCTIONS.md` "The fork-mirroring model").
+- Builder workflow: `.github/workflows/release.yml`
 - Triggers:
-  - scheduled every day at `09:00 UTC`
-  - manual `workflow_dispatch` with `channel=nightly`
-- Runs the same desktop quality gates and artifact matrix as the tagged release flow.
+  - tag push `v*-nightly.*-fork.*` from `sync-upstream.yml` after it rebases
+    fork commits onto a new upstream nightly
+  - manual `workflow_dispatch` with `channel=nightly` (no tag push needed;
+    falls back to generating a fresh `vX.Y.Z-nightly.YYYYMMDD.<run_number>`
+    tag via `scripts/resolve-nightly-release.ts`; used for testing the
+    pipeline without waiting for upstream)
+- Runs the same desktop quality gates and artifact matrix as the tagged
+  release flow.
 - Publishes a GitHub prerelease only:
-  - tag format: `vX.Y.Z-nightly.YYYYMMDD.<run_number>` (plain `v` prefix keeps the tag semver-parseable so electron-updater's GitHub provider matches the nightly channel via the atom feed)
-  - release name includes the short commit SHA
-  - `make_latest` is always `false`
-- Uses the next stable patch version as the nightly base. For example, `0.0.17` produces nightlies on `0.0.18-nightly.*`.
-- Publishes Electron auto-update metadata to the dedicated `nightly` updater channel, so desktop users can opt into that track independently from stable.
-- Publishes the CLI package (`apps/server`, npm package `t3`) to the `nightly` npm dist-tag using the same nightly version.
+  - tag format (sync-upstream-driven):
+    `v<upstream_semver>-nightly.YYYYMMDD.<run>-fork.<N>`
+    (for example `v0.0.21-nightly.20260421.88-fork.1`). `N` auto-increments
+    per upstream nightly tag and the suffix keeps the fork's artifact
+    distinguishable from upstream's own nightly.
+  - tag format (workflow_dispatch-driven): `vX.Y.Z-nightly.YYYYMMDD.<run>`
+    (no `-fork.N` suffix).
+  - release name includes the short commit SHA.
+  - `make_latest` is always `false`.
+- Publishes Electron auto-update metadata to the dedicated `nightly` updater
+  channel, so desktop users can opt into that track independently from stable.
+- Publishes the CLI package (`apps/server`, npm package `t3`) to the
+  `nightly` npm dist-tag using the same nightly version.
 - Does not commit version bumps back to `main`.
+- Channel detection in `release.yml` is tag-name-based: any tag whose
+  pre-release contains `-nightly.` is treated as a nightly build; otherwise
+  it is treated as stable (including `-fork.N` interim stable builds).
 
 ## Desktop auto-update notes
 
