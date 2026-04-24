@@ -26,4 +26,5 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Use GitHub CLI/API wrappers; do not read or expose secrets.
 
 ## Status
-- In progress.
+- Implemented: stable/nightly sync repair, updater-visible fork-only stable releases, and automatic `vNEXT-fork.N` tagging for main-branch fork changes.
+- Not locally test-run in this session.
