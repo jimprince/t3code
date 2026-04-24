@@ -26,6 +26,14 @@ permissions:
   contents: write
   id-token: write
 
+# Serialize release runs. Scheduled nightly runs (every 3 hrs) can otherwise
+# overlap with each other or with tag-push releases, contending for runners
+# and occasionally getting preempted mid-job. cancel-in-progress: false so
+# that an in-flight build always completes — a queued run will just wait.
+concurrency:
+  group: release-${{ github.workflow }}
+  cancel-in-progress: false
+
 jobs:
   check_changes:
     name: Check for changes since last nightly
