@@ -57,9 +57,12 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   `chore(release): prepare v0.0.21`.
 - Implemented: release publishing now uses the job-scoped `GITHUB_TOKEN` for
   `softprops/action-gh-release`; `GH_PAT` remains reserved for tag/commit pushes.
-- In progress: remove orphan nightly tags from the GitHub Releases Atom feed,
-  prevent a Linux-only nightly build failure from blocking macOS updater
-  publication, prevent publish-only dependency installs from hanging on native
-  lifecycle scripts, prevent nightly Linux dependency installs from holding
-  the macOS updater release open, and recreate the latest nightly through the
-  fixed fork sync/release path.
+- Implemented: orphan latest-nightly tag entries were removed from the GitHub
+  Releases Atom feed.
+- Implemented: nightly release `v0.0.22-nightly.20260423.108-fork.1` was
+  recreated through the fixed sync/release path and published successfully at
+  `2026-04-24T07:36:10Z` with `nightly-mac.yml`, macOS DMG/zip/blockmaps, and
+  Linux AppImage assets.
+- Implemented: nightly Linux builds and publish/finalize jobs avoid dependency
+  lifecycle-script hangs in the paths that can otherwise block macOS updater
+  publication.
