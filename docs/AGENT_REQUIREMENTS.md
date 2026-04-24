@@ -44,6 +44,8 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Implemented: release workflow routes macOS arm64 jobs to the local self-hosted runner label while Linux remains hosted.
 - Implemented: local runner script supports on-demand detached `tmux` start, status, stop, and foreground run modes with a default 2-hour TTL.
 - Implemented: shared `github-actions-local-runner` skill documents Brad's no-startup-service, TTL-limited local runner preference.
-- Operational state: local runner was observed online under label `t3code-mac-arm64`; release run `24874392764` was still in `Preflight` when last checked.
+- Operational state: release run `24874392764` completed successfully and
+  published `v0.0.21` at `2026-04-24T06:00:35Z`; finalizer pushed
+  `chore(release): prepare v0.0.21`.
 - Implemented: release publishing now uses the job-scoped `GITHUB_TOKEN` for
   `softprops/action-gh-release`; `GH_PAT` remains reserved for tag/commit pushes.
