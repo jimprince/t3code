@@ -57,10 +57,17 @@ jobs:
         id: channel
         run: |
           channel="${{ matrix.channel }}"
+          requested="${{ inputs.channel }}"
+          selected=true
+          if [[ -n "$requested" && "$requested" != "$channel" ]]; then
+            selected=false
+          fi
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
-          echo "Resolved channel: $channel"
+          echo "selected=$selected" >> "$GITHUB_OUTPUT"
+          echo "Resolved channel: $channel (selected=$selected)"
 
       - name: Get latest upstream release tag
+        if: steps.channel.outputs.selected == 'true'
         id: upstream
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -82,6 +89,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Checkout fork
+        if: steps.channel.outputs.selected == 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
@@ -89,11 +97,13 @@ jobs:
           token: ${{ secrets.GH_PAT }}
 
       - name: Configure git
+        if: steps.channel.outputs.selected == 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Check if sync needed
+        if: steps.channel.outputs.selected == 'true'
         id: check
         env:
           CHANNEL: ${{ steps.channel.outputs.channel }}
