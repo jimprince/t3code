@@ -11,8 +11,17 @@ describe("isNightlyDesktopVersion", () => {
     expect(isNightlyDesktopVersion("0.0.17-nightly.20260415.1")).toBe(true);
   });
 
+  it("detects fork-published nightly versions (sync-upstream rebased onto upstream nightly)", () => {
+    expect(isNightlyDesktopVersion("0.0.21-nightly.20260421.88-fork.1")).toBe(true);
+    expect(isNightlyDesktopVersion("0.0.22-nightly.20260423.108-fork.2")).toBe(true);
+  });
+
   it("does not flag stable versions as nightly", () => {
     expect(isNightlyDesktopVersion("0.0.17")).toBe(false);
+  });
+
+  it("does not flag stable fork-interim versions as nightly", () => {
+    expect(isNightlyDesktopVersion("0.0.22-fork.1")).toBe(false);
   });
 });
 
@@ -23,6 +32,10 @@ describe("resolveDefaultDesktopUpdateChannel", () => {
 
   it("defaults nightly builds to nightly", () => {
     expect(resolveDefaultDesktopUpdateChannel("0.0.17-nightly.20260415.1")).toBe("nightly");
+  });
+
+  it("defaults fork-published nightly builds to nightly", () => {
+    expect(resolveDefaultDesktopUpdateChannel("0.0.21-nightly.20260421.88-fork.1")).toBe("nightly");
   });
 });
 
