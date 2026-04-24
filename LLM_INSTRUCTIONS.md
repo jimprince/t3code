@@ -30,14 +30,15 @@ versioning axis for the fork.
   - **nightly**: `${upstream_tag}-fork.${N}`
     (e.g. `v0.0.21-nightly.20260421.88-fork.1`), where `N` auto-increments
     per upstream nightly tag. The `-fork.N` suffix:
-      1. distinguishes our artifact from upstream's,
-      2. sorts strictly higher than the bare upstream tag under semver
-         (alphanumeric `88-fork` > numeric `88`), so electron-updater sees
-         each successive fork rebuild as an upgrade,
-      3. lets us re-roll a fork build on the same upstream commit
-         (bump `N`) without any tag-delete dance.
-- Workflow requires `GH_PAT` (not `GITHUB_TOKEN`) in secrets because
-  `GITHUB_TOKEN` cannot push commits that modify workflow files.
+    1. distinguishes our artifact from upstream's,
+    2. sorts strictly higher than the bare upstream tag under semver
+       (alphanumeric `88-fork` > numeric `88`), so electron-updater sees
+       each successive fork rebuild as an upgrade,
+    3. lets us re-roll a fork build on the same upstream commit
+       (bump `N`) without any tag-delete dance.
+- Workflows require `GH_PAT` in secrets for tag/commit pushes that need to
+  trigger follow-on workflows or modify workflow files. Release creation itself
+  uses the workflow-scoped `GITHUB_TOKEN` with `contents: write`.
 
 If you need to put fork patches on top of upstream, push normal commits to
 `main`. The next sync rebases them forward automatically.
@@ -78,7 +79,6 @@ There is no persistent channel variable anymore. If you see a stale
   rebase when ready.
 - No GitHub billing concern: `jimprince/t3code` is public, so Actions minutes
   are unlimited and free.
-
 
 ## Build matrix is intentionally minimal
 

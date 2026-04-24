@@ -1,9 +1,11 @@
 # Agent Requirements
 
 ## Task
+
 Repair the T3 Code fork automation so the fork follows upstream stable and nightly releases reliably.
 
 ## User Requirements
+
 - Use Brad's local Apple Silicon Mac as an on-demand GitHub Actions macOS build worker.
 - Do not configure the runner to launch at startup.
 - Runner must be time-limited so it shuts off automatically if forgotten.
@@ -15,6 +17,7 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Clean up the prior botched implementation enough that the system works.
 
 ## Acceptance Criteria
+
 - Self-hosted macOS runner can be started manually with a timeout.
 - Release workflow routes macOS arm64 build to the self-hosted runner label.
 - Shared skill documents the management preference and commands.
@@ -29,9 +32,18 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Existing fork patches and local untracked user files are not destroyed.
 
 ## Constraints
+
 - Do not overwrite unrelated user work.
 - Avoid destructive remote cleanup unless it is directly part of repairing the broken release state.
 - Use GitHub CLI/API wrappers; do not read or expose secrets.
+- For GitHub release creation, prefer the workflow-scoped `GITHUB_TOKEN` with
+  `contents: write`; keep `GH_PAT` only for workflow-triggering tag/commit pushes.
 
 ## Status
-- In progress: local runner online for 2h; release publish token repair pending.
+
+- Implemented: release workflow routes macOS arm64 jobs to the local self-hosted runner label while Linux remains hosted.
+- Implemented: local runner script supports on-demand detached `tmux` start, status, stop, and foreground run modes with a default 2-hour TTL.
+- Implemented: shared `github-actions-local-runner` skill documents Brad's no-startup-service, TTL-limited local runner preference.
+- Operational state: local runner was observed online under label `t3code-mac-arm64`; release run `24874392764` was still in `Preflight` when last checked.
+- Implemented: release publishing now uses the job-scoped `GITHUB_TOKEN` for
+  `softprops/action-gh-release`; `GH_PAT` remains reserved for tag/commit pushes.
