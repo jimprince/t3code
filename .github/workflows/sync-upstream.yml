@@ -118,7 +118,20 @@ jobs:
       - name: Rebase fork commits onto upstream tag
         if: steps.check.outputs.needed == 'true'
         id: rebase
+        env:
+          # Files we always want to take upstream's version of during rebase.
+          # release.yml's finalize job rewrites these on every release, which
+          # creates perpetual conflicts with upstream's own version bumps.
+          # Auto-resolving to upstream is safe because finalize will rewrite
+          # them again after the next fork release builds.
+          AUTO_RESOLVE_FILES: |
+            apps/desktop/package.json
+            apps/server/package.json
+            apps/web/package.json
+            packages/contracts/package.json
+            bun.lock
         run: |
+          set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
           upstream_ref="refs/tags/upstream/${upstream_tag}"
 
@@ -126,19 +139,78 @@ jobs:
           echo "Our commits being replayed:"
           git log --oneline "$upstream_ref"..HEAD
 
-          if git rebase "$upstream_ref"; then
-            echo "status=clean" >> "$GITHUB_OUTPUT"
-          else
-            # Capture which files conflicted before aborting
-            conflicted=$(git diff --name-only --diff-filter=U 2>/dev/null || echo "(unknown)")
-            git rebase --abort
+          # Build allowlist as a sorted unique set
+          mapfile -t ALLOW < <(echo "$AUTO_RESOLVE_FILES" | sed '/^$/d' | sort -u)
+
+          is_allowed() {
+            local f="$1"
+            for a in "${ALLOW[@]}"; do
+              [[ "$f" == "$a" ]] && return 0
+            done
+            return 1
+          }
+
+          fail_with_conflicts() {
+            local files="$1"
+            git rebase --abort || true
             echo "status=conflict" >> "$GITHUB_OUTPUT"
             {
               echo "files<<EOF"
-              echo "$conflicted"
+              echo "$files"
               echo "EOF"
             } >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          # Initial rebase attempt. If it fails, fall through to the
+          # conflict-resolution loop below.
+          if git rebase "$upstream_ref"; then
+            echo "status=clean" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          # Loop: at each stop, either auto-resolve allowlisted file
+          # conflicts (taking upstream's version) or bail out loudly.
+          while [[ -d .git/rebase-merge || -d .git/rebase-apply ]]; do
+            mapfile -t conflicted < <(git diff --name-only --diff-filter=U | sort -u)
+
+            if [[ ${#conflicted[@]} -eq 0 ]]; then
+              # No conflicts but rebase is stopped — likely an empty commit
+              # after auto-resolve. Skip it and continue.
+              git rebase --skip || break
+              continue
+            fi
+
+            unknown=()
+            for f in "${conflicted[@]}"; do
+              is_allowed "$f" || unknown+=("$f")
+            done
+
+            if [[ ${#unknown[@]} -gt 0 ]]; then
+              echo "Conflicts outside auto-resolve allowlist:"
+              printf '  %s\n' "${unknown[@]}"
+              fail_with_conflicts "$(printf '%s\n' "${conflicted[@]}")"
+            fi
+
+            echo "Auto-resolving (taking upstream) for: ${conflicted[*]}"
+            for f in "${conflicted[@]}"; do
+              # During rebase, "ours" = upstream (the new base),
+              # "theirs" = the fork commit being replayed. We want upstream.
+              git checkout --ours -- "$f"
+              git add -- "$f"
+            done
+
+            # Continue. If the resulting commit is empty (it only touched
+            # auto-resolved files), --continue will fail; --skip handles it.
+            if ! GIT_EDITOR=true git rebase --continue; then
+              if [[ -d .git/rebase-merge || -d .git/rebase-apply ]]; then
+                git rebase --skip || break
+              fi
+            fi
+          done
+
+          echo "status=clean" >> "$GITHUB_OUTPUT"
+          echo "Rebase completed (some version-bump conflicts auto-resolved to upstream)."
 
       - name: Push rebased main and release tag
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
