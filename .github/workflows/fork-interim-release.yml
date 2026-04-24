@@ -9,11 +9,19 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - ".github/**"
-      - "docs/**"
-      - "*.md"
-      - "LLM_INSTRUCTIONS.md"
+    # Keep this allowlist narrow. Helper-script/docs/workflow maintenance should
+    # not publish an updater-visible desktop release.
+    paths:
+      - "apps/desktop/**"
+      - "apps/server/**"
+      - "apps/web/**"
+      - "assets/**"
+      - "packages/**"
+      - "scripts/build-desktop-artifact.ts"
+      - "scripts/lib/brand-assets.ts"
+      - "package.json"
+      - "bun.lock"
+      - "turbo.json"
   workflow_dispatch:
 
 permissions:
