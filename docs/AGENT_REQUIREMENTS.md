@@ -36,6 +36,8 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   artifact build fails, as long as the macOS updater manifest exists.
 - Release publication jobs must avoid native dependency lifecycle scripts when
   they only need helper scripts and artifact upload.
+- Nightly Linux builds must not hold the macOS updater release open on native
+  dependency lifecycle hangs; stable Linux builds should keep the full install.
 
 ## Constraints
 
@@ -58,5 +60,6 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - In progress: remove orphan nightly tags from the GitHub Releases Atom feed,
   prevent a Linux-only nightly build failure from blocking macOS updater
   publication, prevent publish-only dependency installs from hanging on native
-  lifecycle scripts, and recreate the latest nightly through the fixed fork
-  sync/release path.
+  lifecycle scripts, prevent nightly Linux dependency installs from holding
+  the macOS updater release open, and recreate the latest nightly through the
+  fixed fork sync/release path.
