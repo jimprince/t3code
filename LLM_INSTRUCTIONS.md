@@ -93,6 +93,10 @@ added flake surface without being used. Do not "helpfully" re-add them.
 - `fail_on_unmatched_files: false` on the `softprops/action-gh-release@v2` step
   is intentional — it lets the publish step succeed when patterns for dropped
   platforms don't match.
+- For nightly builds only, the Linux hosted build is best-effort. The release
+  job is allowed to continue after a Linux-only failure, but it validates that
+  `nightly-mac.yml` exists before publishing so the macOS updater track remains
+  usable. Stable releases still require the full matrix to pass.
 - The 2-attempt retry wrapper around `bun run dist:desktop:artifact` absorbs
   transient flakes (macOS `hdiutil: Device not configured`, native-dep network
   hiccups). Don't remove it.
