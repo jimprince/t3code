@@ -34,4 +34,4 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Use GitHub CLI/API wrappers; do not read or expose secrets.
 
 ## Status
-- In progress: local runner script and skill created; workflow routing updated; runner registration pending.
+- In progress: local runner online for 2h; release publish token repair pending.
