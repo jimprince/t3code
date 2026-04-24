@@ -34,6 +34,8 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   `nightly*.yml` release assets.
 - Nightly macOS updater releases must still publish when the hosted Linux
   artifact build fails, as long as the macOS updater manifest exists.
+- Release publication jobs must avoid native dependency lifecycle scripts when
+  they only need helper scripts and artifact upload.
 
 ## Constraints
 
@@ -55,5 +57,6 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   `softprops/action-gh-release`; `GH_PAT` remains reserved for tag/commit pushes.
 - In progress: remove orphan nightly tags from the GitHub Releases Atom feed,
   prevent a Linux-only nightly build failure from blocking macOS updater
-  publication, and recreate the latest nightly through the fixed fork
+  publication, prevent publish-only dependency installs from hanging on native
+  lifecycle scripts, and recreate the latest nightly through the fixed fork
   sync/release path.
