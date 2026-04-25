@@ -1,5 +1,31 @@
 # Agent Requirements
 
+## Current Task: Final Cleanup
+
+Remove the low-value leftovers from the release repair work.
+
+### Current User Requirements
+
+- Remove the local untracked `apps/server/t3-0.0.21.tgz` artifact.
+- Remove canceled GitHub workflow runs that only represent the accidental
+  interim release attempt and the old stuck CI run.
+- Leave real releases, successful runs, and required tags intact.
+
+### Current Acceptance Criteria
+
+- Local working tree has no untracked cleanup artifact.
+- Canceled cleanup-target runs are gone from the recent GitHub Actions list.
+- No `v0.0.22-fork.1` tag or release exists.
+- Current successful releases remain intact.
+
+### Current Status
+
+- Completed: removed local `apps/server/t3-0.0.21.tgz`.
+- Completed: deleted canceled workflow runs `24908811347` and `24908784560`.
+- Verified: recent Actions list no longer includes those canceled runs,
+  `v0.0.22-fork.1` has no remote tag, and the current stable/nightly releases
+  remain present.
+
 ## Current Task: CI and Fork-Interim Trigger Hardening
 
 Implement the follow-up recommendation to prevent accidental releases and
