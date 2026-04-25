@@ -1,0 +1,30 @@
+{
+  "name": "t3-thread",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "t3-thread": "./bin/t3-thread",
+    "t3-agent": "./bin/t3-agent"
+  },
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js",
+    "cli": "tsx src/cli.ts",
+    "smoke": "tsx src/cli.ts envs >/dev/null && tsx src/cli.ts projects --env local-mbp >/dev/null && tsx src/cli.ts watch --once --no-deliver >/dev/null",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@effect/platform-node": "4.0.0-beta.45",
+    "@effect/platform-node-shared": "4.0.0-beta.45",
+    "commander": "^14.0.3",
+    "effect": "4.0.0-beta.45"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.13",
+    "esbuild": "^0.25.11",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "^4.0.0"
+  },
+  "description": "Operator CLI for T3 Code worker threads"
+}
