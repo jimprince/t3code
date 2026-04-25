@@ -1,0 +1,322 @@
+import { randomUUID } from "node:crypto";
+
+import {
+  bootstrapBearerSession,
+  fetchEnvironmentDescriptor,
+  fetchSessionState,
+  resolveWebSocketUrl,
+} from "./http.js";
+import { T3RpcClient } from "./rpc.js";
+import { classifyThread } from "./status.js";
+import type {
+  ExecutionEnvironmentDescriptor,
+  ModelSelection,
+  OrchestrationProjectShell,
+  OrchestrationShellSnapshot,
+  OrchestrationThread,
+  OrchestrationThreadShell,
+  SavedEnvironment,
+} from "./types.js";
+
+const DEFAULT_MODEL_SELECTION: ModelSelection = {
+  provider: "codex",
+  model: "gpt-5.4",
+};
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+export class RemoteEnvironmentClient {
+  readonly environment: SavedEnvironment;
+
+  constructor(environment: SavedEnvironment) {
+    this.environment = environment;
+  }
+
+  static async pair(input: {
+    name: string;
+    httpBaseUrl: string;
+    wsBaseUrl: string;
+    credential: string;
+  }): Promise<SavedEnvironment> {
+    const [descriptor, bootstrap] = await Promise.all([
+      fetchEnvironmentDescriptor(input.httpBaseUrl),
+      bootstrapBearerSession({
+        httpBaseUrl: input.httpBaseUrl,
+        credential: input.credential,
+      }),
+    ]);
+
+    const session = await fetchSessionState({
+      httpBaseUrl: input.httpBaseUrl,
+      bearerToken: bootstrap.sessionToken,
+    });
+
+    if (!session.auth.sessionMethods.includes("bearer-session-token")) {
+      throw new Error("Remote environment did not confirm bearer-session-token support.");
+    }
+
+    return {
+      name: input.name,
+      httpBaseUrl: input.httpBaseUrl,
+      wsBaseUrl: input.wsBaseUrl,
+      environmentId: descriptor.environmentId,
+      label: descriptor.label,
+      serverVersion: descriptor.serverVersion,
+      bearerToken: bootstrap.sessionToken,
+      expiresAt: bootstrap.expiresAt,
+      pairedAt: nowIso(),
+    };
+  }
+
+  async describe(): Promise<ExecutionEnvironmentDescriptor> {
+    return fetchEnvironmentDescriptor(this.environment.httpBaseUrl);
+  }
+
+  async getShellSnapshot(): Promise<{
+    projects: OrchestrationProjectShell[];
+    threads: OrchestrationThreadShell[];
+  }> {
+    const rpc = await this.openRpc();
+    try {
+      const item = await rpc.subscribeShellSnapshot<{
+        kind: "snapshot";
+        snapshot: OrchestrationShellSnapshot;
+      }>();
+      if (item.kind !== "snapshot") {
+        throw new Error(`Expected an orchestration shell snapshot, received '${item.kind}'.`);
+      }
+      return {
+        projects: item.snapshot.projects,
+        threads: item.snapshot.threads,
+      };
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async getThreadDetail(threadId: string): Promise<OrchestrationThread> {
+    return this.findThread(threadId);
+  }
+
+  async listThreads(): Promise<OrchestrationThreadShell[]> {
+    const snapshot = await this.getShellSnapshot();
+    return snapshot.threads;
+  }
+
+  async listProjects(): Promise<OrchestrationProjectShell[]> {
+    const snapshot = await this.getShellSnapshot();
+    return snapshot.projects;
+  }
+
+  async findThread(threadId: string): Promise<OrchestrationThread> {
+    const rpc = await this.openRpc();
+    try {
+      const item = await rpc.subscribeThreadSnapshot<{
+        kind: "snapshot";
+        snapshot: {
+          snapshotSequence: number;
+          thread: OrchestrationThread;
+        };
+      }>(threadId);
+      if (item.kind !== "snapshot") {
+        throw new Error(`Expected a thread snapshot for '${threadId}', received '${item.kind}'.`);
+      }
+      return item.snapshot.thread;
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async createAgentThread(input: {
+    projectId: string;
+    title: string;
+    provider?: string;
+    model?: string;
+    runtimeMode?: string;
+    interactionMode?: string;
+    branch?: string;
+    baseBranch?: string;
+    initialMessage?: string;
+  }): Promise<{ threadId: string; projectId: string; title: string }> {
+    const snapshot = await this.getShellSnapshot();
+    const project = snapshot.projects.find((candidate) => candidate.id === input.projectId);
+    if (!project) {
+      throw new Error(`Project '${input.projectId}' was not found in '${this.environment.name}'.`);
+    }
+    const initialMessage = input.initialMessage?.trim();
+    if (!initialMessage) {
+      throw new Error("agent create requires a non-empty initial message.");
+    }
+
+    const modelSelection =
+      input.model || input.provider
+        ? {
+            provider: input.provider ?? DEFAULT_MODEL_SELECTION.provider,
+            model: input.model ?? DEFAULT_MODEL_SELECTION.model,
+          }
+        : (project.defaultModelSelection ?? DEFAULT_MODEL_SELECTION);
+
+    const threadId = randomUUID();
+    const runtimeMode = input.runtimeMode ?? "full-access";
+    const interactionMode = input.interactionMode ?? "default";
+    const createdAt = nowIso();
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: "thread.turn.start",
+        commandId: randomUUID(),
+        threadId,
+        message: {
+          messageId: randomUUID(),
+          role: "user",
+          text: initialMessage,
+          attachments: [],
+        },
+        modelSelection,
+        titleSeed: input.title,
+        runtimeMode,
+        interactionMode,
+        bootstrap: {
+          createThread: {
+            projectId: project.id,
+            title: input.title,
+            modelSelection,
+            runtimeMode,
+            interactionMode,
+            branch: null,
+            worktreePath: null,
+            createdAt,
+          },
+          ...(input.branch
+            ? {
+                prepareWorktree: {
+                  projectCwd: project.workspaceRoot,
+                  baseBranch: input.baseBranch ?? "main",
+                  branch: input.branch,
+                },
+                runSetupScript: true,
+              }
+            : {}),
+        },
+        createdAt,
+      });
+    } finally {
+      await rpc.dispose();
+    }
+
+    return {
+      threadId,
+      projectId: project.id,
+      title: input.title,
+    };
+  }
+
+  async sendMessage(input: {
+    threadId: string;
+    text: string;
+    allowWhileRunning?: boolean;
+  }): Promise<void> {
+    const thread = await this.findThread(input.threadId);
+    const status = classifyThread(thread);
+    if (status.state === "running" && !input.allowWhileRunning) {
+      throw new Error(
+        `Thread '${thread.id}' is still running. Use interrupt first or pass a force path in code if you really want concurrent sends.`,
+      );
+    }
+
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: "thread.turn.start",
+        commandId: randomUUID(),
+        threadId: thread.id,
+        message: {
+          messageId: randomUUID(),
+          role: "user",
+          text: input.text,
+          attachments: [],
+        },
+        runtimeMode: thread.runtimeMode,
+        interactionMode: thread.interactionMode,
+        createdAt: nowIso(),
+      });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async interrupt(threadId: string): Promise<void> {
+    const thread = await this.findThread(threadId);
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: "thread.turn.interrupt",
+        commandId: randomUUID(),
+        threadId: thread.id,
+        turnId: thread.latestTurn?.turnId,
+        createdAt: nowIso(),
+      });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async archiveThread(threadId: string): Promise<boolean> {
+    const thread = await this.findThread(threadId);
+    if (thread.archivedAt) {
+      return false;
+    }
+
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: "thread.archive",
+        commandId: randomUUID(),
+        threadId: thread.id,
+      });
+      return true;
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async waitForThread(input: {
+    threadId: string;
+    goal: "completion" | "attention" | "idle" | "running";
+    timeoutMs: number;
+    intervalMs: number;
+  }): Promise<OrchestrationThread> {
+    const started = Date.now();
+    for (;;) {
+      const thread = await this.findThread(input.threadId);
+      const status = classifyThread(thread);
+      const matched =
+        (input.goal === "completion" && status.state === "completed") ||
+        (input.goal === "attention" &&
+          ["needs-plan", "error", "completed", "interrupted"].includes(status.state)) ||
+        (input.goal === "idle" && ["idle", "completed"].includes(status.state)) ||
+        (input.goal === "running" && status.state === "running");
+
+      if (matched) {
+        return thread;
+      }
+
+      if (Date.now() - started > input.timeoutMs) {
+        throw new Error(`Timed out waiting for thread '${input.threadId}' to reach ${input.goal}.`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, input.intervalMs));
+    }
+  }
+
+  private async openRpc(): Promise<T3RpcClient> {
+    const wsUrl = await resolveWebSocketUrl({
+      httpBaseUrl: this.environment.httpBaseUrl,
+      wsBaseUrl: this.environment.wsBaseUrl,
+      bearerToken: this.environment.bearerToken,
+    });
+    return new T3RpcClient(wsUrl);
+  }
+}
