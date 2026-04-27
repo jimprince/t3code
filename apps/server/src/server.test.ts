@@ -3929,6 +3929,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         history: "",
         exitCode: null,
         exitSignal: null,
+        label: "Primary",
         updatedAt: new Date().toISOString(),
       };
 
