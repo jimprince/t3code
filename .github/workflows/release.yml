@@ -24,6 +24,10 @@ on:
         description: "Release version (for example 1.2.3, v1.2.3-fork.1, or v1.2.3-nightly.YYYYMMDD.RUN-fork.N)"
         required: false
         type: string
+      target_ref:
+        description: "Commit SHA, tag, or ref to build and publish. Defaults to the workflow ref."
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -52,7 +56,7 @@ jobs:
       cli_dist_tag: ${{ steps.release_meta.outputs.cli_dist_tag }}
       is_prerelease: ${{ steps.release_meta.outputs.is_prerelease }}
       make_latest: ${{ steps.release_meta.outputs.make_latest }}
-      ref: ${{ github.sha }}
+      ref: ${{ steps.release_meta.outputs.ref }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -78,21 +82,37 @@ jobs:
         env:
           DISPATCH_CHANNEL: ${{ github.event.inputs.channel }}
           DISPATCH_VERSION: ${{ github.event.inputs.version }}
+          DISPATCH_TARGET_REF: ${{ github.event.inputs.target_ref }}
           NIGHTLY_DATE: ${{ github.run_started_at }}
           NIGHTLY_SHA: ${{ github.sha }}
           NIGHTLY_RUN_NUMBER: ${{ github.run_number }}
         run: |
           set -euo pipefail
 
+          resolve_target_ref() {
+            local requested="${1:-$NIGHTLY_SHA}"
+            local target_sha
+
+            if ! target_sha="$(git rev-parse --verify "${requested}^{commit}" 2>/dev/null)"; then
+              echo "Unable to resolve target ref to a commit: $requested" >&2
+              exit 1
+            fi
+
+            echo "$target_sha"
+          }
+
           emit_from_tag_version() {
             # Args: raw_version (without leading v)
             local version="$1"
-            local short_sha="${NIGHTLY_SHA:0:12}"
+            local target_sha="$2"
+            local short_sha="${target_sha:0:12}"
 
             if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
               echo "Invalid release version: v$version" >&2
               exit 1
             fi
+
+            echo "ref=$target_sha" >> "$GITHUB_OUTPUT"
 
             # Channel detection: presence of "-nightly." anywhere in the
             # pre-release identifies a nightly build (upstream-synced fork
@@ -131,7 +151,8 @@ jobs:
             # Tag push (from sync-upstream.yml or manual `git push origin vX.Y.Z`).
             # Tag name is authoritative for both version and channel.
             raw="${GITHUB_REF_NAME}"
-            emit_from_tag_version "${raw#v}"
+            target_sha="$(resolve_target_ref "$NIGHTLY_SHA")"
+            emit_from_tag_version "${raw#v}" "$target_sha"
           elif [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
             # Manual dispatch: version input required. Nightlies must be explicit
             # fork-nightly versions, e.g. vX.Y.Z-nightly.YYYYMMDD.RUN-fork.N.
@@ -141,7 +162,8 @@ jobs:
               echo "workflow_dispatch releases require the version input." >&2
               exit 1
             fi
-            emit_from_tag_version "${raw#v}"
+            target_sha="$(resolve_target_ref "${DISPATCH_TARGET_REF:-$NIGHTLY_SHA}")"
+            emit_from_tag_version "${raw#v}" "$target_sha"
           else
             echo "Unsupported event: ${GITHUB_EVENT_NAME}" >&2
             exit 1
@@ -413,7 +435,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
-          token: ${{ github.token }}
+          token: ${{ secrets.GH_PAT || github.token }}
 
       - name: Publish first release
         if: needs.preflight.outputs.previous_tag == ''
@@ -432,7 +454,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
-          token: ${{ github.token }}
+          token: ${{ secrets.GH_PAT || github.token }}
 
   finalize:
     name: Finalize release
