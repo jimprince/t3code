@@ -37,15 +37,22 @@ failure is found.
   now pass and identify the latest upstream nightly.
 - Found: both tag-push rerun and manual `release.yml` dispatch rebuilt artifacts
   successfully but failed at GitHub release creation with `403 Resource not
-  accessible by integration`, even though the job received `contents: write`.
-- In progress: update `release.yml` to use the repo PAT for release creation
+accessible by integration`, even though the job received `contents: write`.
+- Completed: update `release.yml` to use the repo PAT for release creation
   when available, with `github.token` fallback, and add a manual `target_ref`
   recovery input so the fixed `main` workflow can build/publish an existing tag.
 - Found: fixed-workflow recovery run `25009285649` failed before publishing
   because nightly preflight ran full dependency lifecycle scripts and `bun
-  install` was killed with exit 143 after resolving packages.
-- In progress: make nightly preflight installs use `--ignore-scripts` while
+install` was killed with exit 143 after resolving packages.
+- Completed: make nightly preflight installs use `--ignore-scripts` while
   leaving stable preflight/build installs full.
+- Completed: recovery run `25009607368` passed from the fixed `main` workflow,
+  publishing `v0.0.22-nightly.20260427.135-fork.1` as a prerelease targeting
+  `1182813ffd620f141847203cebe816abf36366ee`.
+- Verified: release assets include `nightly-mac.yml`, macOS arm64 zip/dmg and
+  blockmaps, `nightly-linux.yml`, and Linux AppImage.
+- Follow-up: push CI runs for the workflow/doc commits failed only at `bun fmt`
+  against this tracker file; local `bun fmt` corrected the formatting.
 
 ## Current Task: Final Cleanup
 
