@@ -60,6 +60,8 @@ t3code-mac-runner stop
 `${upstream_tag}-fork.*` tag exists. To publish another build from the same
 upstream nightly, dispatch `release.yml` directly with the next `-fork.N`
 version.
+Manual dispatch also accepts `target_ref` when the fixed workflow on `main`
+should build and publish a specific existing tag or commit.
 
 Important quirk: `release.yml` currently exposes only `channel=stable` in the
 manual dispatch form. That is fine; the workflow derives the real release
@@ -70,6 +72,17 @@ nightly.
 gh workflow run release.yml --repo jimprince/t3code \
   -f channel=stable \
   -f version=v0.0.22-nightly.20260423.108-fork.2
+```
+
+Use `target_ref` when recovering an existing tag from a fixed workflow on
+`main`:
+
+```bash
+gh workflow run release.yml --repo jimprince/t3code \
+  --ref main \
+  -f channel=stable \
+  -f version=v0.0.22-nightly.20260427.135-fork.1 \
+  -f target_ref=v0.0.22-nightly.20260427.135-fork.1
 ```
 
 Validated path: an installed `v0.0.22-nightly.20260423.108-fork.1` app found
@@ -154,8 +167,9 @@ are not part of the fork release matrix.
 ## Troubleshooting
 
 - `403 Resource not accessible by integration` while publishing a release:
-  ensure `release.yml` grants `contents: write` and the release step uses
-  `github.token`, not `secrets.GH_PAT`.
+  ensure `release.yml` grants `contents: write`, the release step can use
+  `secrets.GH_PAT || github.token`, and the repo has a release-capable
+  `GH_PAT` secret. Do not print or inspect the secret value.
 - Nightly release publishes but updater does not see it: confirm the release
   has `nightly-mac.yml`, the app is on the `nightly` update channel, and the
   version matches `*-nightly.YYYYMMDD.RUN-fork.N`.
