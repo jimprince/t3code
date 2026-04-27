@@ -101,8 +101,10 @@ versioning axis for the fork.
   this avoids GitHub's intermittent `Resource not accessible by integration`
   failure during release creation.
 - Release publish/finalize jobs use `bun install --ignore-scripts` because
-  they only need helper scripts and artifact upload; keep full dependency
-  lifecycle scripts in preflight/build jobs.
+  they only need helper scripts and artifact upload. Nightly preflight and
+  Linux build installs also use `--ignore-scripts` so native dependency
+  lifecycle hangs do not block macOS updater releases. Keep full dependency
+  lifecycle scripts for stable preflight/build jobs.
 
 If you need to put fork patches on top of upstream, push normal commits to
 `main`. The next sync rebases them forward automatically.
