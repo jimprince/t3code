@@ -34,6 +34,18 @@ things specific to the fork relationship.
      -f version=v0.0.22-nightly.20260423.108-fork.2
    ```
 
+   Add `target_ref` only when the workflow should build a specific existing
+   tag or commit instead of the workflow ref, for example recovering an
+   existing tag whose release publication failed:
+
+   ```bash
+   gh workflow run release.yml --repo jimprince/t3code \
+     --ref main \
+     -f channel=stable \
+     -f version=v0.0.22-nightly.20260427.135-fork.1 \
+     -f target_ref=v0.0.22-nightly.20260427.135-fork.1
+   ```
+
 4. Watch and verify:
 
    ```bash
@@ -84,8 +96,10 @@ versioning axis for the fork.
        `sync-upstream.yml` intentionally skips once any fork tag exists for an
        upstream nightly; use manual release dispatch for same-upstream rerolls.
 - Workflows require `GH_PAT` in secrets for tag/commit pushes that need to
-  trigger follow-on workflows or modify workflow files. Release creation itself
-  uses the workflow-scoped `GITHUB_TOKEN` with `contents: write`.
+  trigger follow-on workflows or modify workflow files. Release creation uses
+  `GH_PAT` when present, with the workflow-scoped `GITHUB_TOKEN` as fallback;
+  this avoids GitHub's intermittent `Resource not accessible by integration`
+  failure during release creation.
 - Release publish/finalize jobs use `bun install --ignore-scripts` because
   they only need helper scripts and artifact upload; keep full dependency
   lifecycle scripts in preflight/build jobs.
