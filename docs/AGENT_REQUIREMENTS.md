@@ -1,5 +1,39 @@
 # Agent Requirements
 
+## Current Task: Check and repair nightly GitHub Actions
+
+Investigate why the user did not receive the April 27 nightly update, unblock
+the queued nightly release, and harden the sync workflow if a repeatable Actions
+failure is found.
+
+### Current User Requirements
+
+- Check whether GitHub Actions are working for nightly release tracking.
+- Determine why no new nightly update was available today.
+- Unblock or repair the workflow if a clear issue is found.
+- Keep release automation safe: do not delete releases/tags or expose secrets.
+
+### Current Acceptance Criteria
+
+- The latest upstream nightly state is identified.
+- The fork's sync/release workflow state is inspected from live GitHub Actions.
+- The queued nightly release is either completed or the remaining blocker is
+  clearly identified.
+- Any repeatable workflow failure found during the check is fixed and verified.
+
+### Current Status
+
+- Completed: upstream published `v0.0.22-nightly.20260427.135`.
+- Completed: fork tag `v0.0.22-nightly.20260427.135-fork.1` exists and its
+  release run was queued on the offline self-hosted macOS runner.
+- Completed: started the TTL-limited local runner so the queued release can
+  continue.
+- Completed: manual `sync-upstream` nightly dispatch failed because the
+  workflow's REST release-list query returned no upstream nightly; patching the
+  query to use `gh release list --json`.
+- Verified: replacement query resolves `v0.0.22-nightly.20260427.135` locally;
+  YAML parsing and `git diff --check` pass.
+
 ## Current Task: Final Cleanup
 
 Remove the low-value leftovers from the release repair work.
