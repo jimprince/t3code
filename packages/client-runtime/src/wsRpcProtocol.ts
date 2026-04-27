@@ -10,6 +10,7 @@ import {
 } from "./reconnectBackoff.ts";
 
 export interface WsProtocolLifecycleHandlers {
+  readonly isActive?: () => boolean;
   readonly onAttempt?: (socketUrl: string) => void;
   readonly onOpen?: () => void;
   readonly onError?: (message: string) => void;
@@ -60,6 +61,7 @@ function resolveWsRpcSocketUrl(rawUrl: string): string {
 
 function defaultLifecycleHandlers(): Required<WsProtocolLifecycleHandlers> {
   return {
+    isActive: () => true,
     onAttempt: () => undefined,
     onOpen: () => undefined,
     onError: () => undefined,
@@ -71,28 +73,40 @@ function resolveLifecycleHandlers(
   handlers: WsProtocolLifecycleHandlers | undefined,
   telemetryLifecycle: WsProtocolLifecycleHandlers | undefined,
 ): Required<WsProtocolLifecycleHandlers> {
-  if (telemetryLifecycle === undefined) {
-    return {
-      ...defaultLifecycleHandlers(),
-      ...handlers,
-    };
-  }
+  const isActive = handlers?.isActive ?? (() => true);
+  const telemetry = {
+    ...defaultLifecycleHandlers(),
+    ...telemetryLifecycle,
+  };
 
   return {
+    isActive,
     onAttempt: (socketUrl) => {
-      telemetryLifecycle.onAttempt?.(socketUrl);
+      if (!isActive()) {
+        return;
+      }
+      telemetry.onAttempt(socketUrl);
       handlers?.onAttempt?.(socketUrl);
     },
     onOpen: () => {
-      telemetryLifecycle.onOpen?.();
+      if (!isActive()) {
+        return;
+      }
+      telemetry.onOpen();
       handlers?.onOpen?.();
     },
     onError: (message) => {
-      telemetryLifecycle.onError?.(message);
+      if (!isActive()) {
+        return;
+      }
+      telemetry.onError(message);
       handlers?.onError?.(message);
     },
     onClose: (details) => {
-      telemetryLifecycle.onClose?.(details);
+      if (!isActive()) {
+        return;
+      }
+      telemetry.onClose(details);
       handlers?.onClose?.(details);
     },
   };

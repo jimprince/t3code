@@ -354,14 +354,17 @@ export function NewTaskDraftScreen(props: {
         flow.selectedModel.provider === "claudeAgent"
           ? {
               ...flow.selectedModel,
-              options: {
-                effort: flow.effort,
-                fastMode: flow.fastMode || undefined,
-                contextWindow: flow.contextWindow,
-              },
+              options: [
+                { id: "effort", value: flow.effort },
+                ...(flow.fastMode ? [{ id: "fastMode", value: true }] : []),
+                { id: "contextWindow", value: flow.contextWindow },
+              ],
             }
           : flow.selectedModel.provider === "codex"
-            ? { ...flow.selectedModel, options: { fastMode: flow.fastMode || undefined } }
+            ? {
+                ...flow.selectedModel,
+                ...(flow.fastMode ? { options: [{ id: "fastMode", value: true }] } : {}),
+              }
             : flow.selectedModel;
 
       const createdThread = await onCreateThreadWithOptions({

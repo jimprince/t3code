@@ -13,6 +13,10 @@ import {
   replaceTextRange,
   type ComposerTrigger,
 } from "@t3tools/shared/composerTrigger";
+import {
+  getModelSelectionBooleanOptionValue,
+  getModelSelectionStringOptionValue,
+} from "@t3tools/shared/model";
 import { TextInputWrapper } from "expo-paste-input";
 import type { ReactNode } from "react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -43,7 +47,7 @@ import {
   scoreQueryMatch,
 } from "@t3tools/shared/searchRanking";
 import { getEnvironmentClient } from "../../state/use-remote-environment-registry";
-import { CLAUDE_AGENT_EFFORT_OPTIONS } from "./claudeEffortOptions";
+import { CLAUDE_AGENT_EFFORT_OPTIONS, type ClaudeAgentEffort } from "./claudeEffortOptions";
 import { ComposerCommandPopover, type ComposerCommandItem } from "./ComposerCommandPopover";
 
 /**
@@ -57,6 +61,22 @@ export const COMPOSER_COLLAPSED_CHROME = 68;
  * Used by the parent to compute the larger feed bottom inset when the composer is focused.
  */
 export const COMPOSER_EXPANDED_CHROME = 174;
+
+function withModelSelectionOption(
+  selection: ModelSelection,
+  id: string,
+  value: string | boolean | undefined,
+): ModelSelection {
+  const options = (selection.options ?? []).filter((option) => option.id !== id);
+  if (value !== undefined) {
+    options.push({ id, value });
+  }
+  if (options.length === 0) {
+    const { options: _options, ...rest } = selection;
+    return rest as ModelSelection;
+  }
+  return { ...selection, options } as ModelSelection;
+}
 
 export interface ThreadComposerProps {
   readonly draftMessage: string;
@@ -169,15 +189,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
   // Extract current model options (effort, fastMode, contextWindow)
   const currentEffort =
     currentModelSelection.provider === "claudeAgent"
-      ? (currentModelSelection.options?.effort ?? "high")
+      ? ((getModelSelectionStringOptionValue(currentModelSelection, "effort") ??
+          "high") as ClaudeAgentEffort)
       : "high";
   const currentFastMode =
-    currentModelSelection.options && "fastMode" in currentModelSelection.options
-      ? (currentModelSelection.options.fastMode ?? false)
-      : false;
+    getModelSelectionBooleanOptionValue(currentModelSelection, "fastMode") ?? false;
   const currentContextWindow =
     currentModelSelection.provider === "claudeAgent"
-      ? (currentModelSelection.options?.contextWindow ?? "1M")
+      ? (getModelSelectionStringOptionValue(currentModelSelection, "contextWindow") ?? "1M")
       : "1M";
 
   const handleNativePaste = useNativePaste((uris) => {
@@ -587,10 +606,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       const effort = event.slice("options:effort:".length);
       const updated: ModelSelection =
         currentModelSelection.provider === "claudeAgent"
-          ? {
-              ...currentModelSelection,
-              options: { ...currentModelSelection.options, effort: effort as typeof currentEffort },
-            }
+          ? withModelSelectionOption(currentModelSelection, "effort", effort)
           : currentModelSelection;
       void props.onUpdateModelSelection(updated);
       return;
@@ -601,10 +617,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       if (currentModelSelection.provider === "opencode") {
         return;
       }
-      const updated: ModelSelection = {
-        ...currentModelSelection,
-        options: { ...currentModelSelection.options, fastMode: nextFast },
-      };
+      const updated = withModelSelectionOption(currentModelSelection, "fastMode", nextFast);
       void props.onUpdateModelSelection(updated);
       return;
     }
@@ -612,10 +625,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
       const contextWindow = event.slice("options:context-window:".length);
       const updated: ModelSelection =
         currentModelSelection.provider === "claudeAgent"
-          ? {
-              ...currentModelSelection,
-              options: { ...currentModelSelection.options, contextWindow },
-            }
+          ? withModelSelectionOption(currentModelSelection, "contextWindow", contextWindow)
           : currentModelSelection;
       void props.onUpdateModelSelection(updated);
       return;

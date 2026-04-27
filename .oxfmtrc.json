@@ -14,5 +14,13 @@
     "apps/mobile/uniwind-types.d.ts",
     "*.icon/**"
   ],
-  "sortPackageJson": {}
+  "sortPackageJson": {},
+  "overrides": [
+    {
+      "files": [".devcontainer/devcontainer.json"],
+      "options": {
+        "trailingComma": "none"
+      }
+    }
+  ]
 }

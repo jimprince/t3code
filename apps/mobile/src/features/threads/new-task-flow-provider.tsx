@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
-  ClaudeAgentEffort,
   EnvironmentId,
   GitBranch,
   ModelSelection,
@@ -24,6 +23,7 @@ import {
   useRemoteEnvironmentState,
 } from "../../state/use-remote-environment-registry";
 import { EnvironmentScopedProjectShell } from "@t3tools/client-runtime";
+import type { ClaudeAgentEffort } from "./claudeEffortOptions";
 
 type WorkspaceMode = "local" | "worktree";
 

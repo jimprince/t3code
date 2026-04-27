@@ -59,6 +59,8 @@ export class WsTransport {
   private disposed = false;
   private hasReportedTransportDisconnect = false;
   private reconnectChain: Promise<void> = Promise.resolve();
+  private nextSessionId = 0;
+  private activeSessionId = 0;
   private session: TransportSession;
 
   constructor(
@@ -229,8 +231,14 @@ export class WsTransport {
   }
 
   private createSession(): TransportSession {
+    const sessionId = this.nextSessionId + 1;
+    this.nextSessionId = sessionId;
+    this.activeSessionId = sessionId;
     const protocolFactory = this.options?.createProtocolLayer ?? createWsRpcProtocolLayer;
-    const protocolLayer = protocolFactory(this.url, this.lifecycleHandlers);
+    const protocolLayer = protocolFactory(this.url, {
+      ...this.lifecycleHandlers,
+      isActive: () => !this.disposed && this.activeSessionId === sessionId,
+    });
     const rootLayer = this.options?.tracingLayer
       ? Layer.mergeAll(protocolLayer, this.options.tracingLayer)
       : protocolLayer;
