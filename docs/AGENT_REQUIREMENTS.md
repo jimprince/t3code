@@ -33,6 +33,14 @@ failure is found.
   query to use `gh release list --json`.
 - Verified: replacement query resolves `v0.0.22-nightly.20260427.135` locally;
   YAML parsing and `git diff --check` pass.
+- Completed: patched and pushed `sync-upstream.yml`; CI and manual nightly sync
+  now pass and identify the latest upstream nightly.
+- Found: both tag-push rerun and manual `release.yml` dispatch rebuilt artifacts
+  successfully but failed at GitHub release creation with `403 Resource not
+  accessible by integration`, even though the job received `contents: write`.
+- In progress: update `release.yml` to use the repo PAT for release creation
+  when available, with `github.token` fallback, and add a manual `target_ref`
+  recovery input so the fixed `main` workflow can build/publish an existing tag.
 
 ## Current Task: Final Cleanup
 
@@ -168,7 +176,9 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Avoid destructive remote cleanup unless it is directly part of repairing the broken release state.
 - Use GitHub CLI/API wrappers; do not read or expose secrets.
 - For GitHub release creation, prefer the workflow-scoped `GITHUB_TOKEN` with
-  `contents: write`; keep `GH_PAT` only for workflow-triggering tag/commit pushes.
+  `contents: write` when it works; if GitHub rejects release creation with
+  `Resource not accessible by integration`, use the existing release-capable
+  `GH_PAT` secret without printing or inspecting it.
 
 ## Status
 
