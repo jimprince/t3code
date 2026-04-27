@@ -41,6 +41,11 @@ failure is found.
 - In progress: update `release.yml` to use the repo PAT for release creation
   when available, with `github.token` fallback, and add a manual `target_ref`
   recovery input so the fixed `main` workflow can build/publish an existing tag.
+- Found: fixed-workflow recovery run `25009285649` failed before publishing
+  because nightly preflight ran full dependency lifecycle scripts and `bun
+  install` was killed with exit 143 after resolving packages.
+- In progress: make nightly preflight installs use `--ignore-scripts` while
+  leaving stable preflight/build installs full.
 
 ## Current Task: Final Cleanup
 
@@ -167,8 +172,9 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   artifact build fails, as long as the macOS updater manifest exists.
 - Release publication jobs must avoid native dependency lifecycle scripts when
   they only need helper scripts and artifact upload.
-- Nightly Linux builds must not hold the macOS updater release open on native
-  dependency lifecycle hangs; stable Linux builds should keep the full install.
+- Nightly preflight/Linux builds must not hold the macOS updater release open
+  on native dependency lifecycle hangs; stable preflight/Linux builds should
+  keep the full install.
 
 ## Constraints
 
