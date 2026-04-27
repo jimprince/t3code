@@ -73,9 +73,6 @@ jobs:
         with:
           node-version-file: package.json
 
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-
       - id: release_meta
         name: Resolve release version
         shell: bash
@@ -167,6 +164,15 @@ jobs:
           else
             echo "Unsupported event: ${GITHUB_EVENT_NAME}" >&2
             exit 1
+          fi
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [[ "${{ steps.release_meta.outputs.release_channel }}" == "nightly" ]]; then
+            bun install --frozen-lockfile --ignore-scripts
+          else
+            bun install --frozen-lockfile
           fi
 
       - name: Lint
