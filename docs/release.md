@@ -99,9 +99,11 @@ The fork intentionally builds only:
 Do not re-add Windows or macOS x64 unless the user explicitly changes the
 support target.
 
-Nightly Linux is best-effort. A Linux-only nightly failure must not block a
-macOS updater release as long as `nightly-mac.yml` exists. Stable releases
-still require the configured matrix to pass.
+Nightly preflight and Linux installs skip dependency lifecycle scripts so
+native dependency hangs do not block macOS updater releases. Nightly Linux is
+best-effort: a Linux-only nightly failure must not block a macOS updater
+release as long as `nightly-mac.yml` exists. Stable releases still require the
+configured matrix to pass with full installs.
 
 ## Updater Requirements
 
