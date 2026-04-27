@@ -76,8 +76,9 @@ jobs:
           if [[ "${{ steps.channel.outputs.channel }}" == "nightly" ]]; then
             # First upstream release whose tag matches a nightly pattern.
             # Upstream has used two tag schemes: v<ver>-nightly.* and nightly-v<ver>-nightly.*
-            tag=$(gh api repos/pingdotgg/t3code/releases --jq \
-              '[.[] | select(.tag_name | test("(^|-)v[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\."))][0].tag_name')
+            tag=$(gh release list --repo pingdotgg/t3code --limit 50 \
+              --json tagName,isPrerelease,publishedAt \
+              --jq '[.[] | select(.isPrerelease and (.tagName | test("(^|-)v[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\.")))] | sort_by(.publishedAt) | reverse | .[0].tagName')
             if [[ -z "$tag" || "$tag" == "null" ]]; then
               echo "::error::No nightly release found on upstream."
               exit 1
