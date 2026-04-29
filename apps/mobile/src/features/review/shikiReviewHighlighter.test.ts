@@ -24,7 +24,7 @@ function makeRenderableFile(
 describe("highlightReviewFile", () => {
   it("preserves one highlighted token row per diff line even without trailing newlines", async () => {
     const file = makeRenderableFile({
-      path: "apps/mobile/src/example.test.ts",
+      path: "apps/mobile/src/example.txt",
       additionLines: [
         'const items = ["a"];',
         'expect(items).toEqual(["a"]);',
@@ -36,15 +36,23 @@ describe("highlightReviewFile", () => {
     const highlighted = await highlightReviewFile(file, "light");
 
     expect(highlighted.additionLines).toHaveLength(file.additionLines.length);
-    expect(highlighted.additionLines[0]?.some((token) => token.content === "const")).toBe(true);
-    expect(highlighted.additionLines[1]?.some((token) => token.content === "expect")).toBe(true);
-    expect(highlighted.additionLines[2]?.some((token) => token.content === "const")).toBe(true);
-    expect(highlighted.additionLines[3]?.some((token) => token.content === "expect")).toBe(true);
+    expect(highlighted.additionLines[0]?.map((token) => token.content).join("")).toBe(
+      file.additionLines[0],
+    );
+    expect(highlighted.additionLines[1]?.map((token) => token.content).join("")).toBe(
+      file.additionLines[1],
+    );
+    expect(highlighted.additionLines[2]?.map((token) => token.content).join("")).toBe(
+      file.additionLines[2],
+    );
+    expect(highlighted.additionLines[3]?.map((token) => token.content).join("")).toBe(
+      file.additionLines[3],
+    );
   });
 
   it("adds word-alt diff emphasis for paired deletion and addition lines", async () => {
     const file = makeRenderableFile({
-      path: "apps/mobile/src/example-inline-diff.test.ts",
+      path: "apps/mobile/src/example-inline-diff.txt",
       additionLines: ["const after = 2;"],
       deletionLines: ["const before = 1;"],
       rows: [
@@ -82,7 +90,7 @@ describe("highlightReviewFile", () => {
   it("falls back to plain tokens for very long lines", async () => {
     const longLine = `const value = "${"a".repeat(1_100)}";`;
     const file = makeRenderableFile({
-      path: "apps/mobile/src/example-long-line.ts",
+      path: "apps/mobile/src/example-long-line.txt",
       additionLines: [longLine],
       rows: [
         {

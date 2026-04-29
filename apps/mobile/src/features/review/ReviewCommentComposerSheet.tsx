@@ -2,15 +2,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { SymbolView } from "expo-symbols";
 import { TextInputWrapper } from "expo-paste-input";
 import { useEffect, useMemo, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  ScrollView,
-  View,
-  useColorScheme,
-  useWindowDimensions,
-} from "react-native";
+import { Pressable, ScrollView, View, useColorScheme, useWindowDimensions } from "react-native";
+import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ImageViewing from "react-native-image-viewing";
 
@@ -34,6 +27,7 @@ import {
 import {
   changeTone,
   DiffTokenText,
+  REVIEW_DIFF_LINE_HEIGHT,
   REVIEW_MONO_FONT_FAMILY,
   ReviewChangeBar,
 } from "./reviewDiffRendering";
@@ -44,7 +38,6 @@ import {
 } from "./shikiReviewHighlighter";
 
 const REVIEW_COMMENT_PREVIEW_MAX_LINES = 5;
-const REVIEW_COMMENT_LINE_HEIGHT = 26;
 
 export function ReviewCommentComposerSheet() {
   const router = useRouter();
@@ -84,8 +77,8 @@ export function ReviewCommentComposerSheet() {
         ? `Lines ${firstNumber}-${lastNumber}`
         : `${selectedLines.length} lines selected`;
   const previewHeight = Math.max(
-    Math.min(selectedLines.length, REVIEW_COMMENT_PREVIEW_MAX_LINES) * REVIEW_COMMENT_LINE_HEIGHT,
-    REVIEW_COMMENT_LINE_HEIGHT,
+    Math.min(selectedLines.length, REVIEW_COMMENT_PREVIEW_MAX_LINES) * REVIEW_DIFF_LINE_HEIGHT,
+    REVIEW_DIFF_LINE_HEIGHT,
   );
   const previewViewportWidth = Math.max(width - 40, 280);
   const handleNativePaste = useNativePaste((uris) => {
@@ -143,17 +136,13 @@ export function ReviewCommentComposerSheet() {
   }
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
-      style={{ flex: 1 }}
-    >
+    <View style={{ flex: 1 }}>
       <View
         style={{
           flex: 1,
           paddingHorizontal: 20,
           paddingTop: 8,
-          paddingBottom: Math.max(insets.bottom, 18) + 18,
+          paddingBottom: Math.max(insets.bottom, 18) + 82,
         }}
       >
         <View className="flex-row items-center justify-between py-2">
@@ -219,7 +208,7 @@ export function ReviewCommentComposerSheet() {
                         <View
                           key={line.id}
                           className={cn("flex-row items-start", changeTone(line.change))}
-                          style={{ height: REVIEW_COMMENT_LINE_HEIGHT }}
+                          style={{ height: REVIEW_DIFF_LINE_HEIGHT }}
                         >
                           <ReviewChangeBar change={line.change} />
                           <Text
@@ -280,35 +269,41 @@ export function ReviewCommentComposerSheet() {
                 ) : null}
               </View>
             </View>
-
-            <View className="flex-row items-center gap-3 pt-1">
-              <ControlPill icon="plus" onPress={() => void handlePickImages()} />
-              <View className="flex-1" />
-              <ControlPill
-                icon="arrow.up"
-                label="Comment"
-                variant="primary"
-                disabled={!canSubmit}
-                onPress={() => {
-                  if (!target || !environmentId || !threadId || commentText.trim().length === 0) {
-                    return;
-                  }
-
-                  appendReviewCommentToDraft({
-                    environmentId,
-                    threadId,
-                    text: formatReviewCommentContext(target, commentText),
-                    attachments,
-                  });
-                  setAttachments([]);
-                  clearReviewCommentTarget();
-                  router.dismiss();
-                }}
-              />
-            </View>
           </View>
         )}
       </View>
+      {target ? (
+        <KeyboardStickyView style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}>
+          <View
+            className="flex-row items-center gap-3 bg-sheet px-5 pt-3"
+            style={{ paddingBottom: Math.max(insets.bottom, 18) }}
+          >
+            <ControlPill icon="plus" onPress={() => void handlePickImages()} />
+            <View className="flex-1" />
+            <ControlPill
+              icon="arrow.up"
+              label="Comment"
+              variant="primary"
+              disabled={!canSubmit}
+              onPress={() => {
+                if (!target || !environmentId || !threadId || commentText.trim().length === 0) {
+                  return;
+                }
+
+                appendReviewCommentToDraft({
+                  environmentId,
+                  threadId,
+                  text: formatReviewCommentContext(target, commentText),
+                  attachments,
+                });
+                setAttachments([]);
+                clearReviewCommentTarget();
+                router.dismiss();
+              }}
+            />
+          </View>
+        </KeyboardStickyView>
+      ) : null}
       <ImageViewing
         images={previewImageUri ? [{ uri: previewImageUri }] : []}
         imageIndex={0}
@@ -317,6 +312,6 @@ export function ReviewCommentComposerSheet() {
         swipeToCloseEnabled
         doubleTapToZoomEnabled
       />
-    </KeyboardAvoidingView>
+    </View>
   );
 }

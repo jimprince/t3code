@@ -43,28 +43,50 @@ export default function HomeRouteScreen() {
           headerTintColor: iconColor,
           headerTitle: "",
           headerRight: () => (
-            <Pressable
-              onPress={() => router.push("/connections")}
-              hitSlop={8}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 8,
-                paddingHorizontal: 4,
-                paddingVertical: 4,
-              }}
-            >
-              <ConnectionStatusDot state={connectionState} pulse={hasRemoteActivity} size={7} />
-              <RNText
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Pressable
+                onPress={() => router.push("/debug/syntax-highlight")}
+                hitSlop={8}
                 style={{
-                  fontFamily: "DMSans_700Bold",
-                  fontSize: 12,
-                  color: secondaryFg,
+                  borderRadius: 999,
+                  backgroundColor: isDark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
                 }}
               >
-                {CONNECTION_LABEL[connectionState]}
-              </RNText>
-            </Pressable>
+                <RNText
+                  style={{
+                    fontFamily: "DMSans_700Bold",
+                    fontSize: 12,
+                    color: secondaryFg,
+                  }}
+                >
+                  Debug
+                </RNText>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push("/connections")}
+                hitSlop={8}
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 8,
+                  paddingHorizontal: 4,
+                  paddingVertical: 4,
+                }}
+              >
+                <ConnectionStatusDot state={connectionState} pulse={hasRemoteActivity} size={7} />
+                <RNText
+                  style={{
+                    fontFamily: "DMSans_700Bold",
+                    fontSize: 12,
+                    color: secondaryFg,
+                  }}
+                >
+                  {CONNECTION_LABEL[connectionState]}
+                </RNText>
+              </Pressable>
+            </View>
           ),
           headerSearchBarOptions: {
             placeholder: "Search threads",

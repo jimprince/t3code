@@ -72,6 +72,7 @@ export interface ReviewHunkListItem {
   readonly kind: "hunk";
   readonly id: string;
   readonly fileId: string;
+  readonly file: ReviewRenderableFile;
   readonly row: ReviewRenderableHunkRow;
 }
 
@@ -79,7 +80,9 @@ export interface ReviewLineListItem {
   readonly kind: "line";
   readonly id: string;
   readonly fileId: string;
+  readonly file: ReviewRenderableFile;
   readonly row: ReviewRenderableLineRow;
+  readonly lineIndex: number;
 }
 
 export type ReviewListItem =
@@ -308,7 +311,7 @@ export function getReviewFilePreviewState(file: ReviewRenderableFile): ReviewFil
 }
 
 // The flattened review list item model is inspired by pierre/diffs' iterator-first
-// virtualization architecture, adapted here for React Native and LegendList.
+// virtualization architecture, adapted here for React Native virtualization.
 // Original project: https://github.com/pingdotgg/pierre/tree/main/packages/diffs
 // Reference files:
 // - src/utils/iterateOverDiff.ts
@@ -350,12 +353,14 @@ export function buildReviewListItems(input: {
       }
     }
 
-    file.rows.forEach((row) => {
+    let lineIndex = 0;
+    file.rows.forEach((row, rowIndex) => {
       if (row.kind === "hunk") {
         items.push({
           kind: "hunk",
-          id: row.id,
+          id: `${file.id}:row:${rowIndex}:${row.id}`,
           fileId: file.id,
+          file,
           row,
         });
         return;
@@ -363,10 +368,13 @@ export function buildReviewListItems(input: {
 
       items.push({
         kind: "line",
-        id: row.id,
+        id: `${file.id}:row:${rowIndex}:${row.id}`,
         fileId: file.id,
+        file,
         row,
+        lineIndex,
       });
+      lineIndex += 1;
     });
   });
 

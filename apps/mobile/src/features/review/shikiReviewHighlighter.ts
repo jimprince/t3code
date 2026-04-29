@@ -1,5 +1,14 @@
 import { createHighlighterCore, type HighlighterCore } from "@shikijs/core";
 import { createJavaScriptRegexEngine } from "@shikijs/engine-javascript";
+import bashLanguage from "@shikijs/langs/bash";
+import javascriptLanguage from "@shikijs/langs/javascript";
+import jsonLanguage from "@shikijs/langs/json";
+import jsxLanguage from "@shikijs/langs/jsx";
+import tsxLanguage from "@shikijs/langs/tsx";
+import typescriptLanguage from "@shikijs/langs/typescript";
+import yamlLanguage from "@shikijs/langs/yaml";
+import githubDarkDefault from "@shikijs/themes/github-dark-default";
+import githubLightDefault from "@shikijs/themes/github-light-default";
 import { getFiletypeFromFileName } from "@pierre/diffs/utils";
 
 import {
@@ -11,6 +20,7 @@ import type { ReviewRenderableFile, ReviewRenderableLineRow } from "./reviewMode
 import { applyDiffRangesToTokens, computeWordAltDiffRanges } from "./reviewWordDiffs";
 
 export type ReviewDiffTheme = "light" | "dark";
+export type { ReviewHighlighterEngine };
 
 export interface ReviewHighlightedToken {
   content: string;
@@ -24,12 +34,19 @@ export interface ReviewHighlightedFile {
   readonly deletionLines: ReadonlyArray<ReadonlyArray<ReviewHighlightedToken>>;
 }
 
+export interface ReviewHighlightFileProgress {
+  readonly highlightedFile: ReviewHighlightedFile;
+  readonly complete: boolean;
+  readonly highlightedLineCount: number;
+}
+
 const SHIKI_THEME_NAME_BY_SCHEME = {
   light: "github-light-default",
   dark: "github-dark-default",
 } as const;
 const REVIEW_HIGHLIGHTER_ENGINE_ENV_VALUE =
-  process.env.EXPO_PUBLIC_REVIEW_HIGHLIGHTER_ENGINE ?? "javascript";
+  process.env.EXPO_PUBLIC_REVIEW_HIGHLIGHTER_ENGINE ??
+  (process.env.NODE_ENV === "test" ? "javascript" : "native");
 const REVIEW_HIGHLIGHTER_ENGINE_PREFERENCE = resolveReviewHighlighterEnginePreference(
   REVIEW_HIGHLIGHTER_ENGINE_ENV_VALUE,
 );
@@ -38,12 +55,30 @@ const REVIEW_HIGHLIGHTER_DISABLE_RESULT_CACHE = resolveReviewHighlighterBooleanF
   false,
 );
 const REVIEW_HIGHLIGHT_RESULT_CACHE_LIMIT = 8;
-const REVIEW_HIGHLIGHT_CHUNK_LINE_THRESHOLD = 40;
-const REVIEW_HIGHLIGHT_CHUNK_SIZE = 20;
+const REVIEW_HIGHLIGHT_CHUNK_LINE_THRESHOLD = 8;
+const REVIEW_HIGHLIGHT_CHUNK_SIZE = 200;
 const REVIEW_TOKENIZE_MAX_LINE_LENGTH = 1_000;
 const highlightCache = new Map<string, Promise<ReviewHighlightedFile>>();
 const resolvedHighlightCache = new Map<string, ReviewHighlightedFile>();
-const loadedLanguages = new Set<string>(["text"]);
+const REVIEW_INITIAL_LANGUAGE_MODULES = [
+  bashLanguage,
+  javascriptLanguage,
+  jsonLanguage,
+  jsxLanguage,
+  tsxLanguage,
+  typescriptLanguage,
+  yamlLanguage,
+] satisfies Parameters<typeof createHighlighterCore>[0]["langs"];
+const loadedLanguages = new Set<string>([
+  "text",
+  "bash",
+  "javascript",
+  "json",
+  "jsx",
+  "tsx",
+  "typescript",
+  "yaml",
+]);
 const languageLoadingPromises = new Map<string, Promise<boolean>>();
 const languageImports: Partial<Record<string, () => Promise<unknown>>> = {
   javascript: () => import("@shikijs/langs/javascript"),
@@ -215,21 +250,13 @@ function joinPatchLines(lines: ReadonlyArray<string>): string {
 
 function waitForNextFrame(): Promise<void> {
   return new Promise((resolve) => {
-    if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => resolve());
-      return;
-    }
-
     setTimeout(resolve, 0);
   });
 }
 
 async function getHighlighter(): Promise<HighlighterCore> {
   if (!highlighterPromise) {
-    const configuredHighlighterPromise = Promise.all([
-      import("@shikijs/themes/github-light-default"),
-      import("@shikijs/themes/github-dark-default"),
-    ]).then(async ([lightThemeModule, darkThemeModule]) => {
+    const configuredHighlighterPromise = (async () => {
       let nativeEngineAvailable = false;
 
       logReviewHighlighterDiagnostic("initializing", {
@@ -238,12 +265,11 @@ async function getHighlighter(): Promise<HighlighterCore> {
         resultCacheDisabled: REVIEW_HIGHLIGHTER_DISABLE_RESULT_CACHE,
       });
 
-      const themes = [lightThemeModule.default, darkThemeModule.default];
+      const themes = [githubLightDefault, githubDarkDefault];
 
       if (REVIEW_HIGHLIGHTER_ENGINE_PREFERENCE !== "javascript") {
         try {
           const nativeEngineModule = await import("react-native-shiki-engine");
-          logReviewHighlighterDiagnostic("imported react-native-shiki-engine");
           nativeEngineAvailable = nativeEngineModule.isNativeEngineAvailable();
           logReviewHighlighterDiagnostic("checked native engine availability", {
             nativeEngineAvailable,
@@ -253,7 +279,7 @@ async function getHighlighter(): Promise<HighlighterCore> {
             logReviewHighlighterDiagnostic("creating native regex engine");
             const highlighter = await createHighlighterCore({
               themes,
-              langs: [],
+              langs: REVIEW_INITIAL_LANGUAGE_MODULES,
               engine: nativeEngineModule.createNativeEngine(),
             });
             logReviewHighlighterDiagnostic("using native engine");
@@ -281,7 +307,7 @@ async function getHighlighter(): Promise<HighlighterCore> {
       );
       const highlighter = await createHighlighterCore({
         themes,
-        langs: [],
+        langs: REVIEW_INITIAL_LANGUAGE_MODULES,
         engine: createJavaScriptRegexEngine(),
       });
       logReviewHighlighterDiagnostic("using javascript engine", {
@@ -291,7 +317,7 @@ async function getHighlighter(): Promise<HighlighterCore> {
         highlighter,
         engine,
       };
-    });
+    })();
 
     highlighterPromise = configuredHighlighterPromise
       .then((result) => result.highlighter)
@@ -316,9 +342,50 @@ export async function getActiveReviewHighlighterEngine(): Promise<ReviewHighligh
   return activeHighlighterEnginePromise ?? Promise.resolve("javascript");
 }
 
+export async function prepareReviewHighlighter(): Promise<void> {
+  await getHighlighter();
+}
+
+export async function prepareReviewHighlighterLanguages(
+  languages: ReadonlyArray<string>,
+): Promise<void> {
+  const highlighter = await getHighlighter();
+  await Promise.all(
+    languages.map(async (language) => {
+      const candidate = resolveLanguageAlias(language);
+      if (candidate === "text" || !(candidate in languageImports)) {
+        return;
+      }
+
+      await loadSingleLanguage(highlighter, candidate);
+    }),
+  );
+}
+
 function resolveLanguageAlias(language: string): string {
   const normalized = language.toLowerCase();
   return languageAliases[normalized] ?? normalized;
+}
+
+function resolveLoadedLanguageFromPath(
+  path: string,
+  languageHint: string | null = null,
+): string | null {
+  const detectedLanguage = languageHint ?? getFiletypeFromFileName(path);
+  if (!detectedLanguage) {
+    return "text";
+  }
+
+  const candidate = resolveLanguageAlias(detectedLanguage);
+  if (candidate === "text" || candidate === "ansi") {
+    return "text";
+  }
+
+  if (!(candidate in languageImports)) {
+    return "text";
+  }
+
+  return loadedLanguages.has(candidate) ? candidate : null;
 }
 
 async function loadSingleLanguage(
@@ -360,6 +427,11 @@ async function resolveLanguageFromPath(
   path: string,
   languageHint: string | null = null,
 ): Promise<string> {
+  const loadedLanguage = resolveLoadedLanguageFromPath(path, languageHint);
+  if (loadedLanguage) {
+    return loadedLanguage;
+  }
+
   const detectedLanguage = languageHint ?? getFiletypeFromFileName(path);
   if (!detectedLanguage) {
     return "text";
@@ -374,8 +446,12 @@ async function resolveLanguageFromPath(
     return "text";
   }
 
+  if (loadedLanguages.has(candidate)) {
+    return candidate;
+  }
+
   const highlighter = await getHighlighter();
-  const loaded = await loadSingleLanguage(highlighter, resolveLanguageAlias(candidate));
+  const loaded = await loadSingleLanguage(highlighter, candidate);
   if (!loaded) {
     return "text";
   }
@@ -384,7 +460,10 @@ async function resolveLanguageFromPath(
 }
 
 async function resolveLanguage(file: ReviewRenderableFile): Promise<string> {
-  return resolveLanguageFromPath(file.path, file.languageHint);
+  return (
+    resolveLoadedLanguageFromPath(file.path, file.languageHint) ??
+    (await resolveLanguageFromPath(file.path, file.languageHint))
+  );
 }
 
 function normalizeHighlightedLines(
@@ -397,6 +476,18 @@ function normalizeHighlightedLines(
       fontStyle: token.fontStyle ?? null,
     })),
   );
+}
+
+function makePlainHighlightedLines(
+  lines: ReadonlyArray<string>,
+): ReadonlyArray<ReadonlyArray<ReviewHighlightedToken>> {
+  return lines.map((line) => [
+    {
+      content: stripTrailingNewline(line),
+      color: null,
+      fontStyle: null,
+    },
+  ]);
 }
 
 function applyWordAltDiffHighlightsToFile(
@@ -594,6 +685,67 @@ async function highlightLines(
   return highlightedLines;
 }
 
+async function highlightPatchLinesInChunks(input: {
+  readonly lines: ReadonlyArray<string>;
+  readonly language: string;
+  readonly theme: string;
+  readonly onChunk: (
+    startIndex: number,
+    tokens: ReadonlyArray<ReadonlyArray<ReviewHighlightedToken>>,
+  ) => void;
+}): Promise<ReadonlyArray<ReadonlyArray<ReviewHighlightedToken>>> {
+  if (input.lines.length === 0) {
+    return [];
+  }
+
+  const highlighter = await getHighlighter();
+  const highlightedLines: Array<ReadonlyArray<ReviewHighlightedToken>> = [];
+
+  for (
+    let startIndex = 0;
+    startIndex < input.lines.length;
+    startIndex += REVIEW_HIGHLIGHT_CHUNK_SIZE
+  ) {
+    const lineChunk = input.lines.slice(startIndex, startIndex + REVIEW_HIGHLIGHT_CHUNK_SIZE);
+    const chunkTokens: Array<ReadonlyArray<ReviewHighlightedToken>> = [];
+    const tokenizableLines: string[] = [];
+    const tokenizableIndexes: number[] = [];
+
+    lineChunk.forEach((line, index) => {
+      const strippedLine = stripTrailingNewline(line);
+      if (strippedLine.length > REVIEW_TOKENIZE_MAX_LINE_LENGTH) {
+        chunkTokens[index] = [{ content: strippedLine, color: null, fontStyle: null }];
+        return;
+      }
+
+      tokenizableIndexes.push(index);
+      tokenizableLines.push(strippedLine);
+    });
+
+    if (tokenizableLines.length > 0) {
+      const tokenLines = highlighter.codeToTokensBase(tokenizableLines.join("\n"), {
+        lang: input.language,
+        theme: input.theme,
+      });
+      const normalizedTokenLines = normalizeHighlightedLines(tokenLines);
+
+      tokenizableIndexes.forEach((chunkIndex, tokenIndex) => {
+        chunkTokens[chunkIndex] = normalizedTokenLines[tokenIndex] ?? [];
+      });
+    }
+
+    const completedChunk = lineChunk.map((_, index) => chunkTokens[index] ?? []);
+    highlightedLines.push(...completedChunk);
+    input.onChunk(startIndex, completedChunk);
+
+    if (startIndex + REVIEW_HIGHLIGHT_CHUNK_SIZE < input.lines.length) {
+      await waitForNextFrame();
+    }
+  }
+
+  return highlightedLines;
+}
+
 function getHighlightCacheKey(file: ReviewRenderableFile, theme: ReviewDiffTheme): string {
   return `${SHIKI_THEME_NAME_BY_SCHEME[theme]}:${file.cacheKey}`;
 }
@@ -667,7 +819,28 @@ export async function highlightReviewFile(
       deletionLineCount: file.deletionLines.length,
       rowCount: file.rows.length,
     });
-    const language = await resolveLanguage(file);
+    const loadedLanguage = resolveLoadedLanguageFromPath(file.path, file.languageHint);
+    const language = loadedLanguage ?? (await resolveLanguage(file));
+    if (language === "text") {
+      const highlighted = applyWordAltDiffHighlightsToFile(file, {
+        additionLines: makePlainHighlightedLines(file.additionLines),
+        deletionLines: makePlainHighlightedLines(file.deletionLines),
+      });
+      if (!REVIEW_HIGHLIGHTER_DISABLE_RESULT_CACHE) {
+        storeResolvedHighlightedFile(cacheKey, highlighted);
+      }
+      logReviewHighlighterDiagnostic("file highlight complete", {
+        fileId: file.id,
+        filePath: file.path,
+        theme,
+        language,
+        highlightedAdditionLineCount: highlighted.additionLines.length,
+        highlightedDeletionLineCount: highlighted.deletionLines.length,
+        durationMs: Date.now() - startedAt,
+      });
+      return highlighted;
+    }
+
     const additionLines = await highlightLines(
       joinPatchLines(file.additionLines),
       language,
@@ -707,6 +880,113 @@ export async function highlightReviewFile(
   });
 }
 
+export async function streamHighlightReviewFile(
+  file: ReviewRenderableFile,
+  theme: ReviewDiffTheme,
+  onProgress: (progress: ReviewHighlightFileProgress) => void,
+): Promise<ReviewHighlightedFile> {
+  const shikiTheme = SHIKI_THEME_NAME_BY_SCHEME[theme];
+  const cacheKey = getHighlightCacheKey(file, theme);
+  if (!REVIEW_HIGHLIGHTER_DISABLE_RESULT_CACHE) {
+    const resolved = resolvedHighlightCache.get(cacheKey);
+    if (resolved) {
+      onProgress({
+        highlightedFile: resolved,
+        complete: true,
+        highlightedLineCount: resolved.additionLines.length + resolved.deletionLines.length,
+      });
+      return resolved;
+    }
+  }
+
+  const startedAt = Date.now();
+  logReviewHighlighterDiagnostic("file stream highlight start", {
+    fileId: file.id,
+    filePath: file.path,
+    theme,
+    additionLineCount: file.additionLines.length,
+    deletionLineCount: file.deletionLines.length,
+    rowCount: file.rows.length,
+  });
+
+  const loadedLanguage = resolveLoadedLanguageFromPath(file.path, file.languageHint);
+  const language = loadedLanguage ?? (await resolveLanguage(file));
+  if (language === "text") {
+    const highlighted = applyWordAltDiffHighlightsToFile(file, {
+      additionLines: makePlainHighlightedLines(file.additionLines),
+      deletionLines: makePlainHighlightedLines(file.deletionLines),
+    });
+    if (!REVIEW_HIGHLIGHTER_DISABLE_RESULT_CACHE) {
+      storeResolvedHighlightedFile(cacheKey, highlighted);
+    }
+    onProgress({
+      highlightedFile: highlighted,
+      complete: true,
+      highlightedLineCount: highlighted.additionLines.length + highlighted.deletionLines.length,
+    });
+    logReviewHighlighterDiagnostic("file stream highlight complete", {
+      fileId: file.id,
+      filePath: file.path,
+      theme,
+      language,
+      highlightedAdditionLineCount: highlighted.additionLines.length,
+      highlightedDeletionLineCount: highlighted.deletionLines.length,
+      highlightedLineCount: highlighted.additionLines.length + highlighted.deletionLines.length,
+      durationMs: Date.now() - startedAt,
+    });
+    return highlighted;
+  }
+
+  const additionLines: Array<ReadonlyArray<ReviewHighlightedToken>> = [];
+  const deletionLines: Array<ReadonlyArray<ReviewHighlightedToken>> = [];
+  let highlightedLineCount = 0;
+
+  await highlightPatchLinesInChunks({
+    lines: file.additionLines,
+    language,
+    theme: shikiTheme,
+    onChunk: (startIndex, tokens) => {
+      tokens.forEach((lineTokens, index) => {
+        additionLines[startIndex + index] = lineTokens;
+      });
+      highlightedLineCount += tokens.length;
+    },
+  });
+  await waitForNextFrame();
+  await highlightPatchLinesInChunks({
+    lines: file.deletionLines,
+    language,
+    theme: shikiTheme,
+    onChunk: (startIndex, tokens) => {
+      tokens.forEach((lineTokens, index) => {
+        deletionLines[startIndex + index] = lineTokens;
+      });
+      highlightedLineCount += tokens.length;
+    },
+  });
+
+  const highlighted = applyWordAltDiffHighlightsToFile(file, { additionLines, deletionLines });
+  if (!REVIEW_HIGHLIGHTER_DISABLE_RESULT_CACHE) {
+    storeResolvedHighlightedFile(cacheKey, highlighted);
+  }
+  onProgress({
+    highlightedFile: highlighted,
+    complete: true,
+    highlightedLineCount,
+  });
+  logReviewHighlighterDiagnostic("file stream highlight complete", {
+    fileId: file.id,
+    filePath: file.path,
+    theme,
+    language,
+    highlightedAdditionLineCount: highlighted.additionLines.length,
+    highlightedDeletionLineCount: highlighted.deletionLines.length,
+    highlightedLineCount,
+    durationMs: Date.now() - startedAt,
+  });
+  return highlighted;
+}
+
 export async function highlightReviewSelectedLines(input: {
   readonly filePath: string;
   readonly lines: ReadonlyArray<ReviewRenderableLineRow>;
@@ -717,7 +997,9 @@ export async function highlightReviewSelectedLines(input: {
     return {};
   }
 
-  const language = await resolveLanguageFromPath(input.filePath, input.languageHint ?? null);
+  const loadedLanguage = resolveLoadedLanguageFromPath(input.filePath, input.languageHint ?? null);
+  const language =
+    loadedLanguage ?? (await resolveLanguageFromPath(input.filePath, input.languageHint ?? null));
   const shikiTheme = SHIKI_THEME_NAME_BY_SCHEME[input.theme];
   const additionLikeLines = input.lines
     .filter((line) => line.change !== "delete")

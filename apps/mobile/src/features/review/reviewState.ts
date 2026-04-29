@@ -64,6 +64,13 @@ const reviewRevealedLargeFileIdsByThreadKeyAtom = Atom.family((threadKey: string
   ),
 );
 
+const reviewViewedFileIdsByThreadKeyAtom = Atom.family((threadKey: string) =>
+  Atom.make(EMPTY_REVIEW_SECTION_FILE_IDS).pipe(
+    Atom.keepAlive,
+    Atom.withLabel(`mobile:review:viewed-file-ids:${threadKey}`),
+  ),
+);
+
 const reviewParsedDiffBySectionCacheKeyAtom = Atom.family((cacheKey: string) =>
   Atom.make<{ readonly diff: string | null; readonly parsed: ReviewParsedDiff } | null>(null).pipe(
     Atom.keepAlive,
@@ -110,6 +117,9 @@ export function useReviewCacheForThread(input: {
       ? reviewRevealedLargeFileIdsByThreadKeyAtom(threadKey)
       : EMPTY_REVIEW_SECTION_FILE_IDS_ATOM,
   );
+  const viewedFileIdsBySection = useAtomValue(
+    threadKey ? reviewViewedFileIdsByThreadKeyAtom(threadKey) : EMPTY_REVIEW_SECTION_FILE_IDS_ATOM,
+  );
 
   return {
     threadKey,
@@ -118,6 +128,7 @@ export function useReviewCacheForThread(input: {
     selectedSectionId,
     expandedFileIdsBySection,
     revealedLargeFileIdsBySection,
+    viewedFileIdsBySection,
   };
 }
 
@@ -161,6 +172,20 @@ export function updateReviewRevealedLargeFileIds(
   update: (current: ReadonlyArray<string> | undefined) => ReadonlyArray<string> | undefined,
 ): void {
   const atom = reviewRevealedLargeFileIdsByThreadKeyAtom(threadKey);
+  const current = appAtomRegistry.get(atom);
+  const nextValue = update(current[sectionId]);
+  appAtomRegistry.set(atom, {
+    ...current,
+    [sectionId]: nextValue,
+  });
+}
+
+export function updateReviewViewedFileIds(
+  threadKey: string,
+  sectionId: string,
+  update: (current: ReadonlyArray<string> | undefined) => ReadonlyArray<string> | undefined,
+): void {
+  const atom = reviewViewedFileIdsByThreadKeyAtom(threadKey);
   const current = appAtomRegistry.get(atom);
   const nextValue = update(current[sectionId]);
   appAtomRegistry.set(atom, {

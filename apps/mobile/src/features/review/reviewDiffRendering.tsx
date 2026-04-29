@@ -11,6 +11,9 @@ export const REVIEW_MONO_FONT_FAMILY = Platform.select({
   default: "monospace",
 });
 
+export const REVIEW_DIFF_LINE_HEIGHT = 26;
+const REVIEW_DELETE_STRIPE_COUNT = REVIEW_DIFF_LINE_HEIGHT / 2;
+
 export function renderVisibleWhitespace(value: string): string {
   const expandedTabs = value.replace(/\t/g, "    ");
   return expandedTabs.replace(/^( +)/, (leading) => leading.replaceAll(" ", "\u00A0"));
@@ -37,10 +40,13 @@ function diffHighlightColor(change: ReviewRenderableLineRow["change"]): string |
 export function ReviewChangeBar(props: { readonly change: ReviewRenderableLineRow["change"] }) {
   if (props.change === "delete") {
     return (
-      <View className="w-[5px] self-stretch overflow-hidden">
-        <View className="flex-1 justify-between">
-          {Array.from({ length: 6 }, (_, index) => (
-            <View key={index} className="h-[2px] w-[5px] bg-rose-400" />
+      <View className="w-[5px] overflow-hidden" style={{ height: REVIEW_DIFF_LINE_HEIGHT }}>
+        <View>
+          {Array.from({ length: REVIEW_DELETE_STRIPE_COUNT }, (_, index) => (
+            <View key={index}>
+              <View className="w-[5px] bg-rose-400" style={{ height: 1 }} />
+              <View style={{ height: 1 }} />
+            </View>
           ))}
         </View>
       </View>
@@ -48,7 +54,7 @@ export function ReviewChangeBar(props: { readonly change: ReviewRenderableLineRo
   }
 
   return (
-    <View className="w-[5px] self-stretch overflow-hidden">
+    <View className="w-[5px] overflow-hidden" style={{ height: REVIEW_DIFF_LINE_HEIGHT }}>
       <View className={cn("h-full w-[5px] flex-1", changeBarTone(props.change))} />
     </View>
   );
@@ -63,6 +69,7 @@ export function DiffTokenText(props: {
   if (!props.tokens || props.tokens.length === 0) {
     return (
       <NativeText
+        numberOfLines={1}
         selectable
         className={cn("text-[13px] leading-[17px] font-medium text-foreground", props.className)}
         style={{ fontFamily: REVIEW_MONO_FONT_FAMILY }}
@@ -74,6 +81,7 @@ export function DiffTokenText(props: {
 
   return (
     <NativeText
+      numberOfLines={1}
       selectable
       className={cn("text-[13px] leading-[17px] font-medium text-foreground", props.className)}
       style={{ fontFamily: REVIEW_MONO_FONT_FAMILY }}

@@ -238,7 +238,7 @@ describe("buildReviewParsedDiff", () => {
     });
   });
 
-  it("flattens expanded files into virtualizable review items", () => {
+  it("flattens expanded file rows into virtualized review items", () => {
     const file = makeRenderableFile({
       path: "apps/mobile/src/a.ts",
       rows: [
@@ -270,8 +270,19 @@ describe("buildReviewParsedDiff", () => {
 
     expect(items).toEqual([
       expect.objectContaining({ kind: "file-header", fileId: file.id, expanded: true }),
-      expect.objectContaining({ kind: "hunk", fileId: file.id, row: file.rows[0] }),
-      expect.objectContaining({ kind: "line", fileId: file.id, row: file.rows[1] }),
+      expect.objectContaining({
+        kind: "hunk",
+        fileId: file.id,
+        file,
+        row: file.rows[0],
+      }),
+      expect.objectContaining({
+        kind: "line",
+        fileId: file.id,
+        file,
+        row: file.rows[1],
+        lineIndex: 0,
+      }),
     ]);
   });
 
