@@ -1,5 +1,35 @@
 # Agent Requirements
 
+## Current Task: Cancel stacked nightly release builds
+
+Stop multiple queued nightly tag-push runs from all building when only the most
+recent one matters. Also confirm the local self-hosted macOS runner is healthy.
+
+### Current User Requirements
+
+- If multiple nightly release runs are queued/in-progress, only the most recent
+  upstream nightly should build; older nightly runs should be cancelled.
+- Stable releases (incl. fork-interim `vNEXT-fork.N`) and manual
+  `workflow_dispatch` runs must NOT be cancelled by this change.
+- Confirm the local Apple Silicon self-hosted macOS runner is online and
+  processing the queue without stuck/zombie state.
+- Land the fix on `main` so it applies to future nightly tag pushes.
+- Document the new behavior in `LLM_INSTRUCTIONS.md` / `docs/release.md`.
+
+### Current Acceptance Criteria
+
+- `release.yml` puts nightly tag-push runs in a single shared concurrency group
+  with `cancel-in-progress: true`; stable/dispatch runs keep per-run groups.
+- Existing redundant queued/in-progress nightly runs (`.157`, `.158`) are
+  cancelled so the runner can pick up `.161` (latest) instead.
+- `v0.0.22-fork.1` (stable fork-interim, in queue) is left intact.
+- Local mac runner status: online, busy/idle as expected, no stuck workers.
+- Docs updated to describe the new "newer nightly cancels older" behavior.
+
+### Current Status
+
+- In progress.
+
 ## Current Task: Check and repair nightly GitHub Actions
 
 Investigate why the user did not receive the April 27 nightly update, unblock
