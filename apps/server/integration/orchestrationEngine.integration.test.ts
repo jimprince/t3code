@@ -878,7 +878,7 @@ it.live("reverts to an earlier checkpoint and trims checkpoint projections + git
 );
 
 it.live(
-  "appends checkpoint.revert.failed activity when revert is requested without an active session",
+  "reverts to baseline from the persisted workspace when no active provider session is listed",
   () =>
     withHarness((harness) =>
       Effect.gen(function* () {
@@ -892,24 +892,13 @@ it.live(
           createdAt: nowIso(),
         });
 
-        const thread = yield* harness.waitForThread(THREAD_ID, (entry) =>
-          entry.activities.some(
-            (activity) =>
-              activity.kind === "checkpoint.revert.failed" &&
-              typeof activity.payload === "object" &&
-              activity.payload !== null,
-          ),
-        );
-        const failureActivity = thread.activities.find(
-          (activity) => activity.kind === "checkpoint.revert.failed",
-        );
-        assert.equal(failureActivity !== undefined, true);
+        yield* harness.waitForDomainEvent((event) => event.type === "thread.reverted");
+        const thread = yield* harness.waitForThread(THREAD_ID, () => true);
         assert.equal(
-          String(
-            (failureActivity?.payload as { readonly detail?: string } | undefined)?.detail,
-          ).includes("No active provider session"),
-          true,
+          thread.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
+          false,
         );
+        assert.equal(fs.readFileSync(path.join(harness.workspaceDir, "README.md"), "utf8"), "v1\n");
       }),
     ),
 );
