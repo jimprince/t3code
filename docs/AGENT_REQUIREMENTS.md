@@ -54,6 +54,58 @@ install` was killed with exit 143 after resolving packages.
 - Follow-up: push CI runs for the workflow/doc commits failed only at `bun fmt`
   against this tracker file; local `bun fmt` corrected the formatting.
 
+## Current Task: Commit And Push Checkpoint Revert Fix
+
+Publish the checkpoint revert fix to Brad's T3 Code fork so the fork build
+pipeline can produce an updateable local version.
+
+### Current User Requirements
+
+- Commit the checkpoint revert fix.
+- Push it to the fork.
+- Target the rebuild/update path; local dev server update will happen after
+  the local version is updated.
+
+### Current Acceptance Criteria
+
+- Commit contains only the checkpoint revert fix, regression tests, and task
+  tracker updates.
+- Commit is pushed to the fork branch that triggers the intended build path.
+- Report commit SHA and push target.
+
+### Current Status
+
+- In progress.
+
+## Current Task: Checkpoint Revert Session Binding Investigation
+
+Troubleshoot and fix frequent checkpoint revert failures that report:
+`No active provider session with workspace cwd is bound to this thread.`
+
+### Current User Requirements
+
+- Diagnose why checkpoint revert frequently fails with the missing active provider session error.
+- Prefer a robust fix over a surface-level explanation.
+- Preserve unrelated release-work changes and untracked files.
+
+### Current Acceptance Criteria
+
+- Identify the code path that emits the failure.
+- Add focused regression coverage for the failing path.
+- Make checkpoint revert work when the thread has a persisted workspace path even if no live provider session appears in `listSessions()`.
+- Run the relevant focused tests, and report any broader checks not run.
+
+### Current Status
+
+- Completed: checkpoint revert now resolves its filesystem workspace from the
+  live provider session when available, otherwise from the persisted
+  `thread.worktreePath` / project workspace root.
+- Completed: added regression coverage for reverting when
+  `providerService.listSessions()` returns no active session.
+- Verified: the new regression fails when the workspace fallback is removed.
+- Verified with focused server tests, orchestration integration tests,
+  `bun fmt`, `bun lint`, `bun typecheck`, and `git diff --check`.
+
 ## Current Task: Final Cleanup
 
 Remove the low-value leftovers from the release repair work.
