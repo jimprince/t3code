@@ -1,8 +1,22 @@
 import type { ExpoConfig } from "expo/config";
 
+import forkConfig from "./fork.config.json";
+
 type AppVariant = "development" | "preview" | "production";
 
+type ForkConfig = {
+  readonly appleTeamId?: string | null;
+  readonly iosBundleIdBase?: string | null;
+  readonly androidPackageBase?: string | null;
+  readonly schemeBase?: string | null;
+  readonly easProjectId?: string | null;
+  readonly easOwner?: string | null;
+};
+
+const FORK: ForkConfig = forkConfig;
+
 const APP_VARIANT = resolveAppVariant(process.env.APP_VARIANT);
+const EAS_PROJECT_ID = FORK.easProjectId ?? "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
 
 const VARIANT_CONFIG: Record<
   AppVariant,
@@ -48,7 +62,27 @@ function resolveAppVariant(value: string | undefined): AppVariant {
   }
 }
 
-const variant = VARIANT_CONFIG[APP_VARIANT];
+const variant = applyForkOverrides(VARIANT_CONFIG[APP_VARIANT], APP_VARIANT);
+
+function applyForkOverrides(
+  base: (typeof VARIANT_CONFIG)[AppVariant],
+  appVariant: AppVariant,
+): (typeof VARIANT_CONFIG)[AppVariant] {
+  const variantSlug =
+    appVariant === "production" ? "" : appVariant === "development" ? ".dev" : ".preview";
+  const schemeSlug =
+    appVariant === "production" ? "" : appVariant === "development" ? "-dev" : "-preview";
+  return {
+    ...base,
+    iosBundleIdentifier: FORK.iosBundleIdBase
+      ? `${FORK.iosBundleIdBase}${variantSlug}`
+      : base.iosBundleIdentifier,
+    androidPackage: FORK.androidPackageBase
+      ? `${FORK.androidPackageBase}${variantSlug}`
+      : base.androidPackage,
+    scheme: FORK.schemeBase ? `${FORK.schemeBase}${schemeSlug}` : base.scheme,
+  };
+}
 
 const config: ExpoConfig = {
   name: variant.appName,
@@ -63,7 +97,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   updates: {
     enabled: true,
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -133,10 +167,10 @@ const config: ExpoConfig = {
   extra: {
     appVariant: APP_VARIANT,
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      projectId: EAS_PROJECT_ID,
     },
   },
-  owner: "pingdotgg",
+  owner: FORK.easOwner ?? "pingdotgg",
 };
 
 export default config;
