@@ -60,10 +60,13 @@ branch tracks the upstream mobile feature branch instead.
   cleanly when there are no semantic conflicts.
 - The mobile app's iOS bundle identifier and Apple development team are
   configurable from `fork.config.json` without further code edits.
+- The mobile app's EAS owner, project ID, and Expo Updates URL must resolve to
+  the user's fork Expo project so OTA updates do not come from upstream.
 
 ### Current Status
 
-- In progress: initial branch setup + overlay scaffolding.
+- In progress: rebased onto upstream mobile branch and preserving fork Expo
+  update identity.
 - Out of scope for this task: actually running `bun install` /
   `expo prebuild` / a real device install. The user wanted the branch
   scaffolded so they can drive the build from there. Build verification will
