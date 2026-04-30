@@ -105,6 +105,27 @@ best-effort: a Linux-only nightly failure must not block a macOS updater
 release as long as `nightly-mac.yml` exists. Stable releases still require the
 configured matrix to pass with full installs.
 
+## Nightly Release Concurrency
+
+`release.yml` puts all nightly tag pushes in the shared `release-nightly`
+concurrency group with `cancel-in-progress: true`. If multiple upstream
+nightlies queue up (for example because the self-hosted macOS runner was
+offline overnight), only the newest one builds; older queued/in-progress
+nightly runs are cancelled. Stable releases (`v0.0.21`, `v0.0.22-fork.N`) and
+manual `workflow_dispatch` runs use per-run groups and always complete, so
+this does not affect stable update delivery.
+
+To force an older nightly to ship anyway, dispatch `release.yml` manually with
+the desired version — manual dispatch always gets a unique concurrency group:
+
+```bash
+gh workflow run release.yml --repo jimprince/t3code \
+  --ref main \
+  -f channel=stable \
+  -f version=v0.0.22-nightly.20260430.158-fork.1 \
+  -f target_ref=v0.0.22-nightly.20260430.158-fork.1
+```
+
 ## Updater Requirements
 
 - Runtime updater: `electron-updater` in `apps/desktop/src/main.ts`.
