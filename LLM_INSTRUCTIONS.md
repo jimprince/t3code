@@ -146,6 +146,14 @@ There is no persistent channel variable anymore. If you see a stale
 - No GitHub billing concern: `jimprince/t3code` is public, so Actions minutes
   are unlimited and free.
 
+**Nightly release concurrency:** all nightly tag pushes share the
+`release-nightly` concurrency group with `cancel-in-progress: true` in
+`release.yml`. When several upstream nightlies arrive close together (e.g. the
+local mac runner was offline and the queue grew), only the newest one ships;
+older queued/in-progress nightly builds get cancelled. Stable tags
+(`v0.0.21`, `v0.0.22-fork.N`) and manual `workflow_dispatch` runs keep
+per-run groups and always complete.
+
 ## Build matrix is intentionally minimal
 
 `.github/workflows/release.yml` only builds:
