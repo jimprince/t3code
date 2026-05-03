@@ -14,6 +14,7 @@ import { useCSSVariable, useResolveClassNames } from "uniwind";
 
 import { LoadingScreen } from "../components/LoadingScreen";
 
+import { useMobileDebugCommands } from "../features/debug/useMobileDebugCommands";
 import {
   useRemoteEnvironmentBootstrap,
   useRemoteEnvironmentState,
@@ -89,6 +90,7 @@ export default function RootLayout() {
     DMSans_700Bold,
   });
   useRemoteEnvironmentBootstrap();
+  useMobileDebugCommands();
 
   return (
     <RegistryContext value={appAtomRegistry}>

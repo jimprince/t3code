@@ -49,6 +49,12 @@ help:
 	@echo "    make doctor                expo-doctor"
 	@echo "    make fork-config-show      Print the resolved fork.config.json values"
 	@echo
+	@echo "  iOS device debug control:"
+	@echo "    make ios-debug-vm-pair     Pair connected iPhone to the dev VM and verify snapshot"
+	@echo "    make ios-debug-dump        Request and copy app debug snapshot"
+	@echo "    make ios-debug-clear       Clear saved mobile backends"
+	@echo "    make ios-debug-logs        Stream filtered iOS app logs"
+	@echo
 	@echo "Fork identity (from $(FORK_CONFIG)):"
 	@echo "  Apple Team ID    : $(APPLE_TEAM_ID)"
 	@echo "  iOS bundle base  : $(IOS_BUNDLE_ID_BASE)"
@@ -105,3 +111,17 @@ config-prod:
 
 doctor:
 	bunx expo-doctor
+
+# --- iOS device debug control ---
+.PHONY: ios-debug-vm-pair ios-debug-dump ios-debug-clear ios-debug-logs
+ios-debug-vm-pair:
+	node scripts/ios-debug-control.mjs pair-vm
+
+ios-debug-dump:
+	node scripts/ios-debug-control.mjs dump
+
+ios-debug-clear:
+	node scripts/ios-debug-control.mjs clear
+
+ios-debug-logs:
+	node scripts/ios-debug-control.mjs logs

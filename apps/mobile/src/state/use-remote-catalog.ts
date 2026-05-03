@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import * as Order from "effect/Order";
 import * as Arr from "effect/Array";
 
@@ -17,6 +17,7 @@ import {
   useRemoteConnectionStatus,
   useRemoteEnvironmentState,
 } from "./use-remote-environment-registry";
+import { recordMobileDiagnostic } from "../lib/mobileDiagnostics";
 
 const projectsSortOrder = Order.mapInput(
   Order.Struct({
@@ -185,6 +186,19 @@ export function useRemoteCatalog() {
     overallConnectionState,
     shellSnapshotStates,
   ]);
+
+  useEffect(() => {
+    recordMobileDiagnostic({
+      level: "debug",
+      tag: "mobile.catalog.derive.counts",
+      data: {
+        savedConnectionCount: Object.keys(savedConnectionsById).length,
+        projectCount: projects.length,
+        threadCount: threads.length,
+        connectionState: connectionState ?? overallConnectionState,
+      },
+    });
+  }, [connectionState, overallConnectionState, projects.length, savedConnectionsById, threads.length]);
 
   return {
     projects,
