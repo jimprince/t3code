@@ -5,12 +5,14 @@ export type ModelOption = {
   readonly label: string;
   readonly subtitle: string;
   readonly providerKey: string;
+  readonly providerDriver: string;
   readonly providerLabel: string;
   readonly selection: ModelSelection;
 };
 
 export type ProviderGroup = {
   readonly providerKey: string;
+  readonly providerDriver: string;
   readonly providerLabel: string;
   readonly models: ReadonlyArray<ModelOption>;
 };
@@ -32,17 +34,18 @@ export function buildModelOptions(
       continue;
     }
 
-    const providerLabel = providerDisplayLabel(provider.provider);
+    const providerLabel = provider.displayName ?? providerDisplayLabel(provider.driver);
     for (const model of provider.models) {
-      const key = `${provider.provider}:${model.slug}`;
+      const key = `${provider.instanceId}:${model.slug}`;
       options.set(key, {
         key,
         label: model.name,
         subtitle: providerLabel,
-        providerKey: provider.provider,
+        providerKey: provider.instanceId,
+        providerDriver: provider.driver,
         providerLabel,
         selection: {
-          provider: provider.provider,
+          instanceId: provider.instanceId,
           model: model.slug,
         },
       });
@@ -50,14 +53,15 @@ export function buildModelOptions(
   }
 
   if (fallbackModelSelection) {
-    const key = `${fallbackModelSelection.provider}:${fallbackModelSelection.model}`;
+    const key = `${fallbackModelSelection.instanceId}:${fallbackModelSelection.model}`;
     if (!options.has(key)) {
-      const providerLabel = providerDisplayLabel(fallbackModelSelection.provider);
+      const providerLabel = providerDisplayLabel(fallbackModelSelection.instanceId);
       options.set(key, {
         key,
         label: fallbackModelSelection.model,
         subtitle: providerLabel,
-        providerKey: fallbackModelSelection.provider,
+        providerKey: fallbackModelSelection.instanceId,
+        providerDriver: fallbackModelSelection.instanceId,
         providerLabel,
         selection: fallbackModelSelection,
       });
@@ -68,13 +72,17 @@ export function buildModelOptions(
 }
 
 export function groupByProvider(options: ReadonlyArray<ModelOption>): ReadonlyArray<ProviderGroup> {
-  const groups = new Map<string, { providerLabel: string; models: ModelOption[] }>();
+  const groups = new Map<
+    string,
+    { providerDriver: string; providerLabel: string; models: ModelOption[] }
+  >();
   for (const option of options) {
     const existing = groups.get(option.providerKey);
     if (existing) {
       existing.models.push(option);
     } else {
       groups.set(option.providerKey, {
+        providerDriver: option.providerDriver,
         providerLabel: option.providerLabel,
         models: [option],
       });
@@ -83,6 +91,7 @@ export function groupByProvider(options: ReadonlyArray<ModelOption>): ReadonlyAr
 
   return [...groups.entries()].map(([providerKey, group]) => ({
     providerKey,
+    providerDriver: group.providerDriver,
     providerLabel: group.providerLabel,
     models: group.models,
   }));

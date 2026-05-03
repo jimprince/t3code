@@ -3,12 +3,11 @@ import type {
   GitActionProgressEvent,
   GitRunStackedActionResult,
   GitStackedAction,
-  GitStatusResult,
+  VcsStatusResult,
 } from "@t3tools/contracts";
 import { useIsMutating, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { ChevronDownIcon, CloudUploadIcon, GitCommitIcon, InfoIcon } from "lucide-react";
-import { GitHubIcon } from "./Icons";
 import {
   buildGitActionProgressStages,
   buildMenuItems,
@@ -53,6 +52,7 @@ import { resolvePathLinkTarget } from "~/terminal-links";
 import { type DraftId, useComposerDraftStore } from "~/composerDraftStore";
 import { readEnvironmentApi } from "~/environmentApi";
 import { readLocalApi } from "~/localApi";
+import { getSourceControlPresentation } from "~/sourceControlPresentation";
 import { useStore } from "~/store";
 import { createThreadSelectorByRef } from "~/storeSelectors";
 
@@ -90,7 +90,7 @@ interface RunGitActionWithToastInput {
   commitMessage?: string;
   onConfirmed?: () => void;
   skipDefaultBranchPrompt?: boolean;
-  statusOverride?: GitStatusResult | null;
+  statusOverride?: VcsStatusResult | null;
   featureBranch?: boolean;
   progressToastId?: GitActionToastId;
   filePaths?: string[];
@@ -122,22 +122,34 @@ const COMMIT_DIALOG_TITLE = "Commit changes";
 const COMMIT_DIALOG_DESCRIPTION =
   "Review and confirm your commit. Leave the message blank to auto-generate one.";
 
-function GitActionItemIcon({ icon }: { icon: GitActionIconName }) {
+function GitActionItemIcon({
+  icon,
+  SourceControlIcon,
+}: {
+  icon: GitActionIconName;
+  SourceControlIcon: ReturnType<typeof getSourceControlPresentation>["Icon"];
+}) {
   if (icon === "commit") return <GitCommitIcon />;
   if (icon === "push") return <CloudUploadIcon />;
-  return <GitHubIcon />;
+  return <SourceControlIcon />;
 }
 
-function GitQuickActionIcon({ quickAction }: { quickAction: GitQuickAction }) {
+function GitQuickActionIcon({
+  quickAction,
+  SourceControlIcon,
+}: {
+  quickAction: GitQuickAction;
+  SourceControlIcon: ReturnType<typeof getSourceControlPresentation>["Icon"];
+}) {
   const iconClassName = "size-3.5";
-  if (quickAction.kind === "open_pr") return <GitHubIcon className={iconClassName} />;
+  if (quickAction.kind === "open_pr") return <SourceControlIcon className={iconClassName} />;
   if (quickAction.kind === "run_pull") return <InfoIcon className={iconClassName} />;
   if (quickAction.kind === "run_action") {
     if (quickAction.action === "commit") return <GitCommitIcon className={iconClassName} />;
     if (quickAction.action === "push" || quickAction.action === "commit_push") {
       return <CloudUploadIcon className={iconClassName} />;
     }
-    return <GitHubIcon className={iconClassName} />;
+    return <SourceControlIcon className={iconClassName} />;
   }
   if (quickAction.label === "Commit") return <GitCommitIcon className={iconClassName} />;
   return <InfoIcon className={iconClassName} />;
@@ -255,9 +267,15 @@ export default function GitActionsControl({
     environmentId: activeEnvironmentId,
     cwd: gitCwd,
   });
+  const sourceControlPresentation = useMemo(
+    () => getSourceControlPresentation(gitStatus?.sourceControlProvider),
+    [gitStatus?.sourceControlProvider],
+  );
+  const changeRequestTerminology = sourceControlPresentation.terminology;
+  const SourceControlIcon = sourceControlPresentation.Icon;
   // Default to true while loading so we don't flash init controls.
   const isRepo = gitStatus?.isRepo ?? true;
-  const hasOriginRemote = gitStatus?.hasOriginRemote ?? false;
+  const hasPrimaryRemote = gitStatus?.hasPrimaryRemote ?? false;
   const gitStatusForActions = gitStatus;
 
   const allFiles = gitStatusForActions?.workingTree.files ?? [];
@@ -315,18 +333,18 @@ export default function GitActionsControl({
     persistThreadBranchSync,
   ]);
 
-  const isDefaultBranch = useMemo(() => {
-    return gitStatusForActions?.isDefaultBranch ?? false;
-  }, [gitStatusForActions?.isDefaultBranch]);
+  const isDefaultRef = useMemo(() => {
+    return gitStatusForActions?.isDefaultRef ?? false;
+  }, [gitStatusForActions?.isDefaultRef]);
 
   const gitActionMenuItems = useMemo(
-    () => buildMenuItems(gitStatusForActions, isGitActionRunning, hasOriginRemote),
-    [gitStatusForActions, hasOriginRemote, isGitActionRunning],
+    () => buildMenuItems(gitStatusForActions, isGitActionRunning, hasPrimaryRemote),
+    [gitStatusForActions, hasPrimaryRemote, isGitActionRunning],
   );
   const quickAction = useMemo(
     () =>
-      resolveQuickAction(gitStatusForActions, isGitActionRunning, isDefaultBranch, hasOriginRemote),
-    [gitStatusForActions, hasOriginRemote, isDefaultBranch, isGitActionRunning],
+      resolveQuickAction(gitStatusForActions, isGitActionRunning, isDefaultRef, hasPrimaryRemote),
+    [gitStatusForActions, hasPrimaryRemote, isDefaultRef, isGitActionRunning],
   );
   const quickActionDisabledReason = quickAction.disabled
     ? (quickAction.hint ?? "This action is currently unavailable.")
@@ -336,6 +354,7 @@ export default function GitActionsControl({
         action: pendingDefaultBranchAction.action,
         branchName: pendingDefaultBranchAction.branchName,
         includesCommit: pendingDefaultBranchAction.includesCommit,
+        terminology: changeRequestTerminology,
       })
     : null;
 
@@ -401,7 +420,7 @@ export default function GitActionsControl({
     if (!prUrl) {
       toastManager.add({
         type: "error",
-        title: "No open PR found.",
+        title: "No open pull request found.",
         data: threadToastData,
       });
       return;
@@ -410,7 +429,7 @@ export default function GitActionsControl({
       toastManager.add(
         stackedThreadToast({
           type: "error",
-          title: "Unable to open PR link",
+          title: "Unable to open pull request link",
           description: err instanceof Error ? err.message : "An error occurred.",
           ...(threadToastData !== undefined ? { data: threadToastData } : {}),
         }),
@@ -430,8 +449,8 @@ export default function GitActionsControl({
       filePaths,
     }: RunGitActionWithToastInput) => {
       const actionStatus = statusOverride ?? gitStatusForActions;
-      const actionBranch = actionStatus?.branch ?? null;
-      const actionIsDefaultBranch = featureBranch ? false : isDefaultBranch;
+      const actionBranch = actionStatus?.refName ?? null;
+      const actionIsDefaultBranch = featureBranch ? false : isDefaultRef;
       const actionCanCommit =
         action === "commit" || action === "commit_push" || action === "commit_push_pr";
       const includesCommit =
@@ -467,6 +486,7 @@ export default function GitActionsControl({
         hasCustomCommitMessage: !!commitMessage?.trim(),
         hasWorkingTreeChanges: !!actionStatus?.hasWorkingTreeChanges,
         featureBranch,
+        terminology: changeRequestTerminology,
         shouldPushBeforePr:
           action === "create_pr" &&
           (!actionStatus?.hasUpstream || (actionStatus?.aheadCount ?? 0) > 0),
@@ -708,8 +728,8 @@ export default function GitActionsControl({
           title: result.status === "pulled" ? "Pulled" : "Already up to date",
           description:
             result.status === "pulled"
-              ? `Updated ${result.branch} from ${result.upstreamBranch ?? "upstream"}`
-              : `${result.branch} is already synchronized.`,
+              ? `Updated ${result.refName} from ${result.upstreamRef ?? "upstream"}`
+              : `${result.refName} is already synchronized.`,
           data: threadToastData,
         }),
         error: (err) => ({
@@ -822,7 +842,10 @@ export default function GitActionsControl({
                   />
                 }
               >
-                <GitQuickActionIcon quickAction={quickAction} />
+                <GitQuickActionIcon
+                  quickAction={quickAction}
+                  SourceControlIcon={SourceControlIcon}
+                />
                 <span className="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5">
                   {quickAction.label}
                 </span>
@@ -838,7 +861,7 @@ export default function GitActionsControl({
               disabled={isGitActionRunning || quickAction.disabled}
               onClick={runQuickAction}
             >
-              <GitQuickActionIcon quickAction={quickAction} />
+              <GitQuickActionIcon quickAction={quickAction} SourceControlIcon={SourceControlIcon} />
               <span className="sr-only @3xl/header-actions:not-sr-only @3xl/header-actions:ml-0.5">
                 {quickAction.label}
               </span>
@@ -867,7 +890,7 @@ export default function GitActionsControl({
                   item,
                   gitStatus: gitStatusForActions,
                   isBusy: isGitActionRunning,
-                  hasOriginRemote,
+                  hasPrimaryRemote,
                 });
                 if (item.disabled && disabledReason) {
                   return (
@@ -878,7 +901,10 @@ export default function GitActionsControl({
                         render={<span className="block w-max cursor-not-allowed" />}
                       >
                         <MenuItem className="w-full" disabled>
-                          <GitActionItemIcon icon={item.icon} />
+                          <GitActionItemIcon
+                            icon={item.icon}
+                            SourceControlIcon={SourceControlIcon}
+                          />
                           {item.label}
                         </MenuItem>
                       </PopoverTrigger>
@@ -897,18 +923,19 @@ export default function GitActionsControl({
                       openDialogForMenuItem(item);
                     }}
                   >
-                    <GitActionItemIcon icon={item.icon} />
+                    <GitActionItemIcon icon={item.icon} SourceControlIcon={SourceControlIcon} />
                     {item.label}
                   </MenuItem>
                 );
               })}
-              {gitStatusForActions?.branch === null && (
+              {gitStatusForActions?.refName === null && (
                 <p className="px-2 py-1.5 text-xs text-warning">
-                  Detached HEAD: create and checkout a branch to enable push and PR actions.
+                  Detached HEAD: create and checkout a refName to enable push and pull request
+                  actions.
                 </p>
               )}
               {gitStatusForActions &&
-                gitStatusForActions.branch !== null &&
+                gitStatusForActions.refName !== null &&
                 !gitStatusForActions.hasWorkingTreeChanges &&
                 gitStatusForActions.behindCount > 0 &&
                 gitStatusForActions.aheadCount === 0 && (
@@ -946,10 +973,12 @@ export default function GitActionsControl({
                 <span className="text-muted-foreground">Branch</span>
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-medium">
-                    {gitStatusForActions?.branch ?? "(detached HEAD)"}
+                    {gitStatusForActions?.refName ?? "(detached HEAD)"}
                   </span>
-                  {isDefaultBranch && (
-                    <span className="text-right text-warning text-xs">Warning: default branch</span>
+                  {isDefaultRef && (
+                    <span className="text-right text-warning text-xs">
+                      Warning: default refName
+                    </span>
                   )}
                 </span>
               </div>
@@ -1082,7 +1111,7 @@ export default function GitActionsControl({
               disabled={noneSelected}
               onClick={runDialogActionOnNewBranch}
             >
-              Commit on new branch
+              Commit on new refName
             </Button>
             <Button size="sm" disabled={noneSelected} onClick={runDialogAction}>
               Commit
@@ -1102,18 +1131,32 @@ export default function GitActionsControl({
         <DialogPopup className="max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {pendingDefaultBranchActionCopy?.title ?? "Run action on default branch?"}
+              {pendingDefaultBranchActionCopy?.title ?? "Run action on default refName?"}
             </DialogTitle>
             <DialogDescription>{pendingDefaultBranchActionCopy?.description}</DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setPendingDefaultBranchAction(null)}>
+          <DialogFooter className="sm:flex-wrap sm:items-center">
+            <Button
+              className="w-full sm:mr-auto sm:w-auto"
+              variant="outline"
+              size="sm"
+              onClick={() => setPendingDefaultBranchAction(null)}
+            >
               Abort
             </Button>
-            <Button variant="outline" size="sm" onClick={continuePendingDefaultBranchAction}>
+            <Button
+              className="min-h-8 w-full max-w-full whitespace-normal py-1.5 leading-snug sm:min-h-7 sm:w-auto"
+              variant="outline"
+              size="sm"
+              onClick={continuePendingDefaultBranchAction}
+            >
               {pendingDefaultBranchActionCopy?.continueLabel ?? "Continue"}
             </Button>
-            <Button size="sm" onClick={checkoutFeatureBranchAndContinuePendingAction}>
+            <Button
+              className="min-h-8 w-full max-w-full whitespace-normal py-1.5 leading-snug sm:min-h-7 sm:w-auto"
+              size="sm"
+              onClick={checkoutFeatureBranchAndContinuePendingAction}
+            >
               Checkout feature branch & continue
             </Button>
           </DialogFooter>

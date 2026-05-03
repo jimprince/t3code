@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 import type {
   EnvironmentId,
-  GitBranch,
   ModelSelection,
   ProviderInteractionMode,
   RuntimeMode,
@@ -22,7 +21,7 @@ import {
   setPendingConnectionError,
   useRemoteEnvironmentState,
 } from "../../state/use-remote-environment-registry";
-import { EnvironmentScopedProjectShell } from "@t3tools/client-runtime";
+import { EnvironmentScopedProjectShell, type GitBranch } from "@t3tools/client-runtime";
 import type { ClaudeAgentEffort } from "./claudeEffortOptions";
 
 type WorkspaceMode = "local" | "worktree";
@@ -293,7 +292,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
     modelOptions.find(
       (option) =>
         selectedModel &&
-        option.selection.provider === selectedModel.provider &&
+        option.selection.instanceId === selectedModel.instanceId &&
         option.selection.model === selectedModel.model,
     ) ?? null;
 
@@ -311,10 +310,10 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   const availableBranches = useMemo(
     () =>
       pipe(
-        branchState.data?.branches ?? [],
+        branchState.data?.refs ?? [],
         Arr.filter((branch) => !branch.isRemote),
       ),
-    [branchState.data?.branches],
+    [branchState.data?.refs],
   );
 
   const filteredBranches = useMemo(() => {
@@ -364,7 +363,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
       });
       setPendingConnectionError(null);
       const branches = pipe(
-        result?.branches ?? [],
+        result?.refs ?? [],
         Arr.filter((branch) => !branch.isRemote),
       );
 

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 
-import { EnvironmentScopedProjectShell } from "@t3tools/client-runtime";
+import { EnvironmentScopedProjectShell, type GitBranch } from "@t3tools/client-runtime";
 import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
@@ -8,7 +8,6 @@ import {
   type EnvironmentId,
   MessageId,
   ThreadId,
-  type GitBranch,
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
@@ -195,10 +194,10 @@ export function useProjectActions() {
       try {
         const result = await gitBranchManager.load(
           { environmentId: project.environmentId, cwd: project.workspaceRoot, query: null },
-          client.git,
+          client.vcs,
           { limit: 100 },
         );
-        return (result?.branches ?? []).filter((branch) => !branch.isRemote);
+        return (result?.refs ?? []).filter((branch) => !branch.isRemote);
       } catch (error) {
         setPendingConnectionError(
           error instanceof Error ? error.message : "Failed to load branches.",
@@ -226,10 +225,10 @@ export function useProjectActions() {
       }
 
       try {
-        const result = await client.git.createWorktree({
+        const result = await client.vcs.createWorktree({
           cwd: project.workspaceRoot,
-          branch: nextWorktree.baseBranch,
-          newBranch: sanitizeFeatureBranchName(nextWorktree.newBranch),
+          refName: nextWorktree.baseBranch,
+          newRefName: sanitizeFeatureBranchName(nextWorktree.newBranch),
           path: null,
         });
         gitBranchManager.invalidate({
@@ -238,7 +237,7 @@ export function useProjectActions() {
           query: null,
         });
         return {
-          branch: result.worktree.branch,
+          branch: result.worktree.refName,
           worktreePath: result.worktree.path,
         };
       } catch (error) {

@@ -33,7 +33,7 @@ export function GitCommitSheet() {
   });
 
   const busy = gitState.gitOperationLabel !== null;
-  const isDefaultBranch = gitStatus.data?.isDefaultBranch ?? false;
+  const isDefaultBranch = gitStatus.data?.isDefaultRef ?? false;
   const allFiles = gitStatus.data?.workingTree?.files ?? [];
 
   const [dialogCommitMessage, setDialogCommitMessage] = useState("");
@@ -76,7 +76,7 @@ export function GitCommitSheet() {
         <View className="flex-row items-center justify-between gap-3">
           <Text className="text-foreground-muted text-[13px] font-medium">Branch</Text>
           <Text className="text-foreground text-[15px] font-t3-bold">
-            {gitStatus.data?.branch ?? "(detached HEAD)"}
+            {gitStatus.data?.refName ?? "(detached HEAD)"}
           </Text>
         </View>
         {isDefaultBranch ? (

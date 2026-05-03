@@ -108,7 +108,7 @@ export function NewTaskDraftScreen(props: {
         subtitle: group.models.find(
           (model) =>
             flow.selectedModel &&
-            model.selection.provider === flow.selectedModel.provider &&
+            model.selection.instanceId === flow.selectedModel.instanceId &&
             model.selection.model === flow.selectedModel.model,
         )?.label,
         subactions: group.models.map((option) => ({
@@ -116,7 +116,7 @@ export function NewTaskDraftScreen(props: {
           title: option.label,
           state:
             flow.selectedModel &&
-            option.selection.provider === flow.selectedModel.provider &&
+            option.selection.instanceId === flow.selectedModel.instanceId &&
             option.selection.model === flow.selectedModel.model
               ? ("on" as const)
               : undefined,
@@ -351,7 +351,7 @@ export function NewTaskDraftScreen(props: {
     flow.setSubmitting(true);
     try {
       const modelWithOptions: ModelSelection =
-        flow.selectedModel.provider === "claudeAgent"
+        flow.selectedModelOption?.providerDriver === "claudeAgent"
           ? {
               ...flow.selectedModel,
               options: [
@@ -360,7 +360,7 @@ export function NewTaskDraftScreen(props: {
                 { id: "contextWindow", value: flow.contextWindow },
               ],
             }
-          : flow.selectedModel.provider === "codex"
+          : flow.selectedModelOption?.providerDriver === "codex"
             ? {
                 ...flow.selectedModel,
                 ...(flow.fastMode ? { options: [{ id: "fastMode", value: true }] } : {}),
@@ -473,7 +473,9 @@ export function NewTaskDraftScreen(props: {
             themeVariant={isDarkMode ? "dark" : "light"}
           >
             <ControlPill
-              iconNode={<ProviderIcon provider={flow.selectedModel?.provider} size={16} />}
+              iconNode={
+                <ProviderIcon provider={flow.selectedModelOption?.providerDriver} size={16} />
+              }
             />
           </MenuView>
           <MenuView

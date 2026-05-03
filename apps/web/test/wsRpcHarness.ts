@@ -27,7 +27,7 @@ const STREAM_METHODS = new Set<string>([
   ORCHESTRATION_WS_METHODS.subscribeThread,
   WS_METHODS.gitRunStackedAction,
   WS_METHODS.terminalAttach,
-  WS_METHODS.subscribeGitStatus,
+  WS_METHODS.subscribeVcsStatus,
   WS_METHODS.subscribeTerminalEvents,
   WS_METHODS.subscribeTerminalMetadata,
   WS_METHODS.subscribeServerConfig,

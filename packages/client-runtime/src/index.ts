@@ -17,3 +17,4 @@ export * from "./wsRpcProtocol.ts";
 export * from "./wsTransport.ts";
 export * from "./wsRpcClient.ts";
 export * from "./environmentConnection.ts";
+export * from "./sourceControlDiscoveryState.ts";

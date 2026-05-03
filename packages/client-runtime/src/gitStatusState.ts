@@ -1,4 +1,4 @@
-import type { EnvironmentId, GitManagerServiceError, GitStatusResult } from "@t3tools/contracts";
+import type { EnvironmentId, GitManagerServiceError, VcsStatusResult } from "@t3tools/contracts";
 import type { Cause } from "effect";
 import { Atom, type AtomRegistry } from "effect/unstable/reactivity";
 import type { WsRpcClient } from "./wsRpcClient.ts";
@@ -6,7 +6,7 @@ import type { WsRpcClient } from "./wsRpcClient.ts";
 /* ─── Types ─────────────────────────────────────────────────────────── */
 
 export interface GitStatusState {
-  readonly data: GitStatusResult | null;
+  readonly data: VcsStatusResult | null;
   readonly error: GitManagerServiceError | null;
   readonly cause: Cause.Cause<GitManagerServiceError> | null;
   readonly isPending: boolean;
@@ -17,7 +17,7 @@ export interface GitStatusTarget {
   readonly cwd: string | null;
 }
 
-export type GitStatusClient = Pick<WsRpcClient["git"], "onStatus" | "refreshStatus">;
+export type GitStatusClient = Pick<WsRpcClient["vcs"], "onStatus" | "refreshStatus">;
 
 interface WatchedEntry {
   refCount: number;
@@ -95,7 +95,7 @@ const GIT_STATUS_REFRESH_DEBOUNCE_MS = 1_000;
 
 export function createGitStatusManager(config: GitStatusManagerConfig) {
   const watched = new Map<string, WatchedEntry>();
-  const refreshInFlight = new Map<string, Promise<GitStatusResult>>();
+  const refreshInFlight = new Map<string, Promise<VcsStatusResult>>();
   const lastRefreshAt = new Map<string, number>();
 
   /* ── Atom helpers ───────────────────────────────────────────────── */
@@ -118,7 +118,7 @@ export function createGitStatusManager(config: GitStatusManagerConfig) {
     config.getRegistry().set(atom, next);
   }
 
-  function setData(targetKey: string, status: GitStatusResult): void {
+  function setData(targetKey: string, status: VcsStatusResult): void {
     config.getRegistry().set(gitStatusStateAtom(targetKey), {
       data: status,
       error: null,
@@ -238,7 +238,7 @@ export function createGitStatusManager(config: GitStatusManagerConfig) {
   function refresh(
     target: GitStatusTarget,
     client?: GitStatusClient,
-  ): Promise<GitStatusResult | null> {
+  ): Promise<VcsStatusResult | null> {
     const targetKey = getGitStatusTargetKey(target);
     if (targetKey === null || target.cwd === null) {
       return Promise.resolve(null);

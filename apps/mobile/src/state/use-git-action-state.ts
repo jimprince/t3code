@@ -18,7 +18,7 @@ export const gitActionManager = createGitActionManager({
   getRegistry: () => appAtomRegistry,
   getClient: (environmentId) => {
     const client = getEnvironmentClient(environmentId);
-    return client ? client.git : null;
+    return client ? { ...client.vcs, runStackedAction: client.git.runStackedAction } : null;
   },
   getActionId: uuidv4,
 });

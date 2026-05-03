@@ -3,6 +3,7 @@ import type { WsRpcClient } from "@t3tools/client-runtime";
 import {
   EnvironmentId,
   ProjectId,
+  ProviderInstanceId,
   ThreadId,
   TurnId,
   type OrchestrationShellSnapshot,
@@ -100,17 +101,19 @@ vi.mock("@t3tools/client-runtime", async (importOriginal) => {
     shell: {
       openInEditor: vi.fn(),
     },
-    git: {
+    vcs: {
       pull: vi.fn(),
       refreshStatus: vi.fn(),
       onStatus: vi.fn(() => () => undefined),
-      runStackedAction: vi.fn(),
-      listBranches: vi.fn(),
+      listRefs: vi.fn(),
       createWorktree: vi.fn(),
       removeWorktree: vi.fn(),
-      createBranch: vi.fn(),
-      checkout: vi.fn(),
+      createRef: vi.fn(),
+      switchRef: vi.fn(),
       init: vi.fn(),
+    },
+    git: {
+      runStackedAction: vi.fn(),
       resolvePullRequest: vi.fn(),
       preparePullRequestThread: vi.fn(),
       getReviewDiffs: vi.fn(),
@@ -121,6 +124,7 @@ vi.mock("@t3tools/client-runtime", async (importOriginal) => {
       upsertKeybinding: vi.fn(),
       getSettings: vi.fn(),
       updateSettings: vi.fn(),
+      discoverSourceControl: vi.fn(),
       subscribeConfig: vi.fn(() => () => undefined),
       subscribeLifecycle: vi.fn(() => () => undefined),
       subscribeAuthAccess: vi.fn(() => () => undefined),
@@ -163,7 +167,7 @@ function makeThreadShellSnapshot(params: {
         projectId,
         title: "Thread",
         modelSelection: {
-          provider: "codex",
+          instanceId: ProviderInstanceId.make("codex"),
           model: "gpt-5-codex",
         },
         runtimeMode: "full-access",

@@ -181,21 +181,25 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     props.queueCount > 0;
 
   const sendLabel = props.activeThreadBusy || props.queueCount > 0 ? "Queue" : "Send";
-  const modelProvider = props.selectedThread.modelSelection?.provider ?? null;
   const currentModelSelection = props.selectedThread.modelSelection;
+  const currentModelDriver =
+    props.serverConfig?.providers.find(
+      (provider) => provider.instanceId === currentModelSelection.instanceId,
+    )?.driver ?? currentModelSelection.instanceId;
+  const modelProvider = currentModelDriver;
   const currentRuntimeMode = props.selectedThread.runtimeMode;
   const currentInteractionMode = props.selectedThread.interactionMode ?? "default";
 
   // Extract current model options (effort, fastMode, contextWindow)
   const currentEffort =
-    currentModelSelection.provider === "claudeAgent"
+    currentModelDriver === "claudeAgent"
       ? ((getModelSelectionStringOptionValue(currentModelSelection, "effort") ??
           "high") as ClaudeAgentEffort)
       : "high";
   const currentFastMode =
     getModelSelectionBooleanOptionValue(currentModelSelection, "fastMode") ?? false;
   const currentContextWindow =
-    currentModelSelection.provider === "claudeAgent"
+    currentModelDriver === "claudeAgent"
       ? (getModelSelectionStringOptionValue(currentModelSelection, "contextWindow") ?? "1M")
       : "1M";
 
@@ -280,10 +284,10 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     if (!props.serverConfig) return null;
     return (
       props.serverConfig.providers.find(
-        (p) => p.provider === props.selectedThread.modelSelection.provider,
+        (p) => p.instanceId === props.selectedThread.modelSelection.instanceId,
       ) ?? null
     );
-  }, [props.serverConfig, props.selectedThread.modelSelection.provider]);
+  }, [props.serverConfig, props.selectedThread.modelSelection.instanceId]);
 
   const composerMenuItems: ComposerCommandItem[] = useMemo(() => {
     if (!composerTrigger) return [];
@@ -491,14 +495,14 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
         title: group.providerLabel,
         subtitle: group.models.find(
           (model) =>
-            model.selection.provider === currentModelSelection.provider &&
+            model.selection.instanceId === currentModelSelection.instanceId &&
             model.selection.model === currentModelSelection.model,
         )?.label,
         subactions: group.models.map((option) => ({
           id: `model:${option.key}`,
           title: option.label,
           state:
-            option.selection.provider === currentModelSelection.provider &&
+            option.selection.instanceId === currentModelSelection.instanceId &&
             option.selection.model === currentModelSelection.model
               ? ("on" as const)
               : undefined,
@@ -605,7 +609,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     if (event.startsWith("options:effort:")) {
       const effort = event.slice("options:effort:".length);
       const updated: ModelSelection =
-        currentModelSelection.provider === "claudeAgent"
+        currentModelDriver === "claudeAgent"
           ? withModelSelectionOption(currentModelSelection, "effort", effort)
           : currentModelSelection;
       void props.onUpdateModelSelection(updated);
@@ -614,7 +618,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     if (event.startsWith("options:fast-mode:")) {
       const fastMode = event.endsWith(":on");
       const nextFast = fastMode || undefined;
-      if (currentModelSelection.provider === "opencode") {
+      if (currentModelDriver === "opencode") {
         return;
       }
       const updated = withModelSelectionOption(currentModelSelection, "fastMode", nextFast);
@@ -624,7 +628,7 @@ export const ThreadComposer = memo(function ThreadComposer(props: ThreadComposer
     if (event.startsWith("options:context-window:")) {
       const contextWindow = event.slice("options:context-window:".length);
       const updated: ModelSelection =
-        currentModelSelection.provider === "claudeAgent"
+        currentModelDriver === "claudeAgent"
           ? withModelSelectionOption(currentModelSelection, "contextWindow", contextWindow)
           : currentModelSelection;
       void props.onUpdateModelSelection(updated);

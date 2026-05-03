@@ -1,4 +1,4 @@
-import { EnvironmentId, type GitListBranchesResult } from "@t3tools/contracts";
+import { EnvironmentId, type VcsListRefsResult } from "@t3tools/contracts";
 import { AtomRegistry } from "effect/unstable/reactivity";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -18,34 +18,34 @@ function resetAtomRegistry() {
 
 const TARGET = { environmentId: EnvironmentId.make("env-local"), cwd: "/repo" } as const;
 
-const FIRST_PAGE: GitListBranchesResult = {
-  branches: [
+const FIRST_PAGE: VcsListRefsResult = {
+  refs: [
     { name: "main", current: true, isDefault: true, worktreePath: null },
     { name: "feature/a", current: false, isDefault: false, worktreePath: null },
   ],
   isRepo: true,
-  hasOriginRemote: true,
+  hasPrimaryRemote: true,
   nextCursor: 2,
   totalCount: 3,
 };
 
-const SECOND_PAGE: GitListBranchesResult = {
-  branches: [{ name: "feature/b", current: false, isDefault: false, worktreePath: null }],
+const SECOND_PAGE: VcsListRefsResult = {
+  refs: [{ name: "feature/b", current: false, isDefault: false, worktreePath: null }],
   isRepo: true,
-  hasOriginRemote: true,
+  hasPrimaryRemote: true,
   nextCursor: null,
   totalCount: 3,
 };
 
 function createMockClient() {
-  const listBranches = vi.fn(async (input: Parameters<GitBranchClient["listBranches"]>[0]) => {
+  const listRefs = vi.fn(async (input: Parameters<GitBranchClient["listRefs"]>[0]) => {
     if (input.query === "feature") {
       return {
         ...FIRST_PAGE,
-        branches: FIRST_PAGE.branches.filter((branch) => branch.name.includes("feature")),
+        refs: FIRST_PAGE.refs.filter((branch) => branch.name.includes("feature")),
         nextCursor: null,
         totalCount: 2,
-      } satisfies GitListBranchesResult;
+      } satisfies VcsListRefsResult;
     }
 
     if (input.cursor === 2) {
@@ -56,8 +56,8 @@ function createMockClient() {
   });
 
   return {
-    client: { listBranches } satisfies GitBranchClient,
-    listBranches,
+    client: { listRefs } satisfies GitBranchClient,
+    listRefs,
   };
 }
 
@@ -87,7 +87,7 @@ describe("createGitBranchManager", () => {
       isPending: false,
       error: null,
     });
-    expect(mock.listBranches).toHaveBeenCalledWith({ cwd: "/repo", limit: 100 });
+    expect(mock.listRefs).toHaveBeenCalledWith({ cwd: "/repo", limit: 100 });
   });
 
   it("loads the next page and appends branches", async () => {
@@ -102,12 +102,12 @@ describe("createGitBranchManager", () => {
 
     expect(next).toEqual({
       ...SECOND_PAGE,
-      branches: [...FIRST_PAGE.branches, ...SECOND_PAGE.branches],
+      refs: [...FIRST_PAGE.refs, ...SECOND_PAGE.refs],
     });
     expect(manager.getSnapshot(TARGET)).toEqual({
       data: {
         ...SECOND_PAGE,
-        branches: [...FIRST_PAGE.branches, ...SECOND_PAGE.branches],
+        refs: [...FIRST_PAGE.refs, ...SECOND_PAGE.refs],
       },
       isPending: false,
       error: null,
@@ -124,9 +124,9 @@ describe("createGitBranchManager", () => {
     const queriedTarget = { ...TARGET, query: "feature" } as const;
     const queried = await manager.load(queriedTarget, mock.client);
 
-    expect(queried?.branches.map((branch) => branch.name)).toEqual(["feature/a"]);
+    expect(queried?.refs.map((branch) => branch.name)).toEqual(["feature/a"]);
     expect(manager.getSnapshot(TARGET).data).toBeNull();
-    expect(manager.getSnapshot(queriedTarget).data?.branches.map((branch) => branch.name)).toEqual([
+    expect(manager.getSnapshot(queriedTarget).data?.refs.map((branch) => branch.name)).toEqual([
       "feature/a",
     ]);
   });

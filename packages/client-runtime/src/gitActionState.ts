@@ -1,18 +1,18 @@
 import type {
   GitActionProgressEvent,
-  GitCreateBranchInput,
-  GitCreateBranchResult,
-  GitCreateWorktreeInput,
-  GitCreateWorktreeResult,
-  GitCheckoutInput,
-  GitCheckoutResult,
-  GitPullInput,
-  GitPullResult,
   GitRunStackedActionInput,
   GitRunStackedActionResult,
   GitStackedAction,
-  GitStatusResult,
   EnvironmentId,
+  VcsCreateRefInput,
+  VcsCreateRefResult,
+  VcsCreateWorktreeInput,
+  VcsCreateWorktreeResult,
+  VcsPullInput,
+  VcsPullResult,
+  VcsStatusResult,
+  VcsSwitchRefInput,
+  VcsSwitchRefResult,
 } from "@t3tools/contracts";
 import { Atom, type AtomRegistry } from "effect/unstable/reactivity";
 
@@ -23,8 +23,8 @@ export type GitActionOperation =
   | "refresh_status"
   | "run_stacked_action"
   | "pull"
-  | "checkout"
-  | "create_branch"
+  | "switch_ref"
+  | "create_ref"
   | "create_worktree"
   | "init";
 
@@ -48,15 +48,10 @@ export interface GitActionTarget {
 }
 
 export type GitActionClient = Pick<
-  WsRpcClient["git"],
-  | "refreshStatus"
-  | "runStackedAction"
-  | "pull"
-  | "checkout"
-  | "createBranch"
-  | "createWorktree"
-  | "init"
->;
+  WsRpcClient["vcs"],
+  "refreshStatus" | "pull" | "switchRef" | "createRef" | "createWorktree" | "init"
+> &
+  Pick<WsRpcClient["git"], "runStackedAction">;
 
 export const EMPTY_GIT_ACTION_STATE = Object.freeze<GitActionState>({
   isRunning: false,
@@ -308,49 +303,49 @@ export function createGitActionManager(config: GitActionManagerConfig) {
     target: GitActionTarget,
     client?: GitActionClient,
     options?: { readonly label?: string },
-  ): Promise<GitPullResult | null> {
+  ): Promise<VcsPullResult | null> {
     return runOperation(target, {
       operation: "pull",
       label: options?.label ?? "Pulling latest changes",
       client,
-      execute: (resolved) => resolved.pull({ cwd: target.cwd! } satisfies GitPullInput),
+      execute: (resolved) => resolved.pull({ cwd: target.cwd! } satisfies VcsPullInput),
     });
   }
 
-  async function checkout(
+  async function switchRef(
     target: GitActionTarget,
-    input: Omit<GitCheckoutInput, "cwd">,
+    input: Omit<VcsSwitchRefInput, "cwd">,
     client?: GitActionClient,
     options?: { readonly label?: string },
-  ): Promise<GitCheckoutResult | null> {
+  ): Promise<VcsSwitchRefResult | null> {
     return runOperation(target, {
-      operation: "checkout",
-      label: options?.label ?? "Checking out branch",
+      operation: "switch_ref",
+      label: options?.label ?? "Switching branch",
       client,
-      execute: (resolved) => resolved.checkout({ cwd: target.cwd!, ...input }),
+      execute: (resolved) => resolved.switchRef({ cwd: target.cwd!, ...input }),
     });
   }
 
-  async function createBranch(
+  async function createRef(
     target: GitActionTarget,
-    input: Omit<GitCreateBranchInput, "cwd">,
+    input: Omit<VcsCreateRefInput, "cwd">,
     client?: GitActionClient,
     options?: { readonly label?: string },
-  ): Promise<GitCreateBranchResult | null> {
+  ): Promise<VcsCreateRefResult | null> {
     return runOperation(target, {
-      operation: "create_branch",
+      operation: "create_ref",
       label: options?.label ?? "Creating branch",
       client,
-      execute: (resolved) => resolved.createBranch({ cwd: target.cwd!, ...input }),
+      execute: (resolved) => resolved.createRef({ cwd: target.cwd!, ...input }),
     });
   }
 
   async function createWorktree(
     target: GitActionTarget,
-    input: Omit<GitCreateWorktreeInput, "cwd">,
+    input: Omit<VcsCreateWorktreeInput, "cwd">,
     client?: GitActionClient,
     options?: { readonly label?: string },
-  ): Promise<GitCreateWorktreeResult | null> {
+  ): Promise<VcsCreateWorktreeResult | null> {
     return runOperation(target, {
       operation: "create_worktree",
       label: options?.label ?? "Creating worktree",
@@ -377,7 +372,7 @@ export function createGitActionManager(config: GitActionManagerConfig) {
     input: Omit<GitRunStackedActionInput, "cwd" | "actionId"> & { readonly actionId?: string },
     options?: {
       readonly client?: GitActionClient;
-      readonly gitStatus?: GitStatusResult | null;
+      readonly gitStatus?: VcsStatusResult | null;
       readonly onProgress?: (event: GitActionProgressEvent) => void;
     },
   ): Promise<GitRunStackedActionResult | null> {
@@ -435,8 +430,8 @@ export function createGitActionManager(config: GitActionManagerConfig) {
     getSnapshot,
     refreshStatus,
     pull,
-    checkout,
-    createBranch,
+    switchRef,
+    createRef,
     createWorktree,
     init,
     runStackedAction,

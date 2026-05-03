@@ -1,7 +1,7 @@
 import type {
-  GitStatusLocalResult,
-  GitStatusRemoteResult,
-  GitStatusStreamEvent,
+  VcsStatusLocalResult,
+  VcsStatusRemoteResult,
+  VcsStatusStreamEvent,
 } from "@t3tools/contracts";
 import { describe, expect, it, vi } from "vitest";
 
@@ -18,16 +18,16 @@ vi.mock("./wsTransport.ts", () => ({
 import { createWsRpcClient } from "./wsRpcClient.ts";
 import type { WsTransport } from "./wsTransport.ts";
 
-const baseLocalStatus: GitStatusLocalResult = {
+const baseLocalStatus: VcsStatusLocalResult = {
   isRepo: true,
-  hasOriginRemote: true,
-  isDefaultBranch: false,
-  branch: "feature/demo",
+  hasPrimaryRemote: true,
+  isDefaultRef: false,
+  refName: "feature/demo",
   hasWorkingTreeChanges: false,
   workingTree: { files: [], insertions: 0, deletions: 0 },
 };
 
-const baseRemoteStatus: GitStatusRemoteResult = {
+const baseRemoteStatus: VcsStatusRemoteResult = {
   hasUpstream: true,
   aheadCount: 0,
   behindCount: 0,
@@ -60,7 +60,7 @@ describe("createWsRpcClient", () => {
     expect(order).toEqual(["beforeReconnect", "reconnect"]);
   });
 
-  it("reduces git status stream events into flat status snapshots", () => {
+  it("reduces vcs status stream events into flat status snapshots", () => {
     const subscribe = vi.fn(<TValue>(_connect: unknown, listener: (value: TValue) => void) => {
       for (const event of [
         {
@@ -79,7 +79,7 @@ describe("createWsRpcClient", () => {
             hasWorkingTreeChanges: true,
           },
         },
-      ] satisfies GitStatusStreamEvent[]) {
+      ] satisfies VcsStatusStreamEvent[]) {
         listener(event as TValue);
       }
       return () => undefined;
@@ -99,7 +99,7 @@ describe("createWsRpcClient", () => {
     const client = createWsRpcClient(transport as unknown as WsTransport);
     const listener = vi.fn();
 
-    client.git.onStatus({ cwd: "/repo" }, listener);
+    client.vcs.onStatus({ cwd: "/repo" }, listener);
 
     expect(listener.mock.calls).toEqual([
       [
@@ -108,6 +108,7 @@ describe("createWsRpcClient", () => {
           hasUpstream: false,
           aheadCount: 0,
           behindCount: 0,
+          aheadOfDefaultCount: 0,
           pr: null,
         },
       ],

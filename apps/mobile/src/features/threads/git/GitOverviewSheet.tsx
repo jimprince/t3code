@@ -40,17 +40,17 @@ export function GitOverviewSheet() {
     cwd: selectedThreadCwd,
   });
 
-  const currentBranchLabel = gitStatus.data?.branch ?? selectedThread?.branch ?? "Detached HEAD";
+  const currentBranchLabel = gitStatus.data?.refName ?? selectedThread?.branch ?? "Detached HEAD";
   const currentWorktreePath = selectedThreadWorktreePath;
   const gitOperationLabel = gitState.gitOperationLabel;
   const busy = gitOperationLabel !== null;
   const isRepo = gitStatus.data?.isRepo ?? true;
-  const hasOriginRemote = gitStatus.data?.hasOriginRemote ?? false;
-  const isDefaultBranch = gitStatus.data?.isDefaultBranch ?? false;
+  const hasPrimaryRemote = gitStatus.data?.hasPrimaryRemote ?? false;
+  const isDefaultBranch = gitStatus.data?.isDefaultRef ?? false;
 
   const menuItems = useMemo(
-    () => (isRepo ? buildMenuItems(gitStatus.data, busy, hasOriginRemote) : []),
-    [busy, gitStatus.data, hasOriginRemote, isRepo],
+    () => (isRepo ? buildMenuItems(gitStatus.data, busy, hasPrimaryRemote) : []),
+    [busy, gitStatus.data, hasPrimaryRemote, isRepo],
   );
 
   const sheetMenuItems = useMemo(
@@ -61,10 +61,10 @@ export function GitOverviewSheet() {
           item,
           gitStatus: gitStatus.data,
           isBusy: busy,
-          hasOriginRemote,
+          hasPrimaryRemote,
         }),
       })),
-    [busy, gitStatus.data, hasOriginRemote, menuItems],
+    [busy, gitStatus.data, hasPrimaryRemote, menuItems],
   );
 
   useEffect(() => {
@@ -96,7 +96,7 @@ export function GitOverviewSheet() {
         input.action === "commit_push_pr"
           ? input.action
           : null;
-      const branchName = gitStatus.data?.branch;
+      const branchName = gitStatus.data?.refName;
       if (
         branchName &&
         confirmableAction &&

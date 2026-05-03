@@ -195,7 +195,14 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const { onOpenDrawer, onRefresh } = props;
 
   const insets = useSafeAreaInsets();
-  const agentLabel = `${props.selectedThread.modelSelection.provider} agent`;
+  const selectedProvider = props.serverConfig?.providers.find(
+    (provider) => provider.instanceId === props.selectedThread.modelSelection.instanceId,
+  );
+  const agentName =
+    selectedProvider?.displayName ??
+    selectedProvider?.driver ??
+    props.selectedThread.modelSelection.instanceId;
+  const agentLabel = `${agentName} agent`;
   const composerBottomInset = Math.max(insets.bottom, 12);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const composerChrome = composerExpanded ? COMPOSER_EXPANDED_CHROME : COMPOSER_COLLAPSED_CHROME;

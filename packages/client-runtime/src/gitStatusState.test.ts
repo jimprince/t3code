@@ -1,4 +1,4 @@
-import { EnvironmentId, type GitStatusResult } from "@t3tools/contracts";
+import { EnvironmentId, type VcsStatusResult } from "@t3tools/contracts";
 import { AtomRegistry } from "effect/unstable/reactivity";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -20,11 +20,11 @@ function registerListener<T>(listeners: Set<(event: T) => void>, listener: (even
   };
 }
 
-const BASE_STATUS: GitStatusResult = {
+const BASE_STATUS: VcsStatusResult = {
   isRepo: true,
-  hasOriginRemote: true,
-  isDefaultBranch: false,
-  branch: "feature/push-status",
+  hasPrimaryRemote: true,
+  isDefaultRef: false,
+  refName: "feature/push-status",
   hasWorkingTreeChanges: false,
   workingTree: { files: [], insertions: 0, deletions: 0 },
   hasUpstream: true,
@@ -35,16 +35,16 @@ const BASE_STATUS: GitStatusResult = {
 
 function createMockClient(): {
   client: GitStatusClient;
-  listeners: Set<(event: GitStatusResult) => void>;
-  emit: (event: GitStatusResult) => void;
+  listeners: Set<(event: VcsStatusResult) => void>;
+  emit: (event: VcsStatusResult) => void;
 } {
-  const listeners = new Set<(event: GitStatusResult) => void>();
+  const listeners = new Set<(event: VcsStatusResult) => void>();
   const client: GitStatusClient = {
     refreshStatus: vi.fn(async (input: { cwd: string }) => ({
       ...BASE_STATUS,
-      branch: `${input.cwd}-refreshed`,
+      refName: `${input.cwd}-refreshed`,
     })),
-    onStatus: vi.fn((_: { cwd: string }, listener: (event: GitStatusResult) => void) =>
+    onStatus: vi.fn((_: { cwd: string }, listener: (event: VcsStatusResult) => void) =>
       registerListener(listeners, listener),
     ),
   };
@@ -126,7 +126,7 @@ describe("createGitStatusManager", () => {
 
       expect(client.onStatus).toHaveBeenCalledOnce();
       expect(client.refreshStatus).toHaveBeenCalledWith({ cwd: "/repo" });
-      expect(refreshed).toEqual({ ...BASE_STATUS, branch: "/repo-refreshed" });
+      expect(refreshed).toEqual({ ...BASE_STATUS, refName: "/repo-refreshed" });
 
       // Snapshot still reflects stream data, not the refresh response
       expect(manager.getSnapshot(TARGET)).toEqual({
@@ -151,10 +151,10 @@ describe("createGitStatusManager", () => {
       const releaseRemote = manager.watch(OTHER_ENV_TARGET, remote.client);
 
       local.emit(BASE_STATUS);
-      remote.emit({ ...BASE_STATUS, branch: "remote-branch" });
+      remote.emit({ ...BASE_STATUS, refName: "remote-branch" });
 
-      expect(manager.getSnapshot(TARGET).data?.branch).toBe("feature/push-status");
-      expect(manager.getSnapshot(OTHER_ENV_TARGET).data?.branch).toBe("remote-branch");
+      expect(manager.getSnapshot(TARGET).data?.refName).toBe("feature/push-status");
+      expect(manager.getSnapshot(OTHER_ENV_TARGET).data?.refName).toBe("remote-branch");
 
       releaseLocal();
       releaseRemote();
@@ -234,7 +234,7 @@ describe("createGitStatusManager", () => {
       const release = manager.watch(TARGET);
 
       first.emit(BASE_STATUS);
-      expect(manager.getSnapshot(TARGET).data?.branch).toBe("feature/push-status");
+      expect(manager.getSnapshot(TARGET).data?.refName).toBe("feature/push-status");
 
       // Remove client
       clients.delete("env-local");
@@ -252,8 +252,8 @@ describe("createGitStatusManager", () => {
       clients.set("env-local", second);
       for (const listener of connectionListeners) listener();
 
-      second.emit({ ...BASE_STATUS, branch: "reconnected-branch" });
-      expect(manager.getSnapshot(TARGET).data?.branch).toBe("reconnected-branch");
+      second.emit({ ...BASE_STATUS, refName: "reconnected-branch" });
+      expect(manager.getSnapshot(TARGET).data?.refName).toBe("reconnected-branch");
 
       release();
     });
@@ -293,7 +293,7 @@ describe("createGitStatusManager", () => {
       expect(mock.client.onStatus).toHaveBeenCalledOnce();
 
       mock.emit(BASE_STATUS);
-      expect(manager.getSnapshot(TARGET).data?.branch).toBe("feature/push-status");
+      expect(manager.getSnapshot(TARGET).data?.refName).toBe("feature/push-status");
 
       release();
       expect(mock.listeners.size).toBe(0);

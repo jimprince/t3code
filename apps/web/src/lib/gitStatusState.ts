@@ -9,24 +9,22 @@ import {
   getGitStatusTargetKey,
   gitStatusStateAtom,
 } from "@t3tools/client-runtime";
-import { type EnvironmentId } from "@t3tools/contracts";
+import type { EnvironmentId } from "@t3tools/contracts";
 import { useEffect } from "react";
 
-import { appAtomRegistry } from "../rpc/atomRegistry";
 import {
   readEnvironmentConnection,
   subscribeEnvironmentConnections,
 } from "../environments/runtime";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 
 export type { GitStatusState, GitStatusTarget };
-
-/* ─── Manager singleton ─────────────────────────────────────────────── */
 
 const manager = createGitStatusManager({
   getRegistry: () => appAtomRegistry,
   getClient: (environmentId) => {
     const connection = readEnvironmentConnection(environmentId as EnvironmentId);
-    return connection ? connection.client.git : null;
+    return connection ? connection.client.vcs : null;
   },
   getClientIdentity: (environmentId) => {
     const connection = readEnvironmentConnection(environmentId as EnvironmentId);
@@ -35,7 +33,13 @@ const manager = createGitStatusManager({
   subscribeClientChanges: subscribeEnvironmentConnections,
 });
 
-/* ─── Public API (preserves existing call-sites) ────────────────────── */
+export function getGitStatusSnapshot(target: GitStatusTarget): GitStatusState {
+  return manager.getSnapshot(target);
+}
+
+export function watchGitStatus(target: GitStatusTarget, client?: GitStatusClient): () => void {
+  return manager.watch(target, client);
+}
 
 export function refreshGitStatus(target: GitStatusTarget, client?: GitStatusClient) {
   return manager.refresh(target, client);

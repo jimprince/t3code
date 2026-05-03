@@ -17,7 +17,7 @@
       "version": "0.0.21",
       "dependencies": {
         "effect": "catalog:",
-        "electron": "40.6.0",
+        "electron": "40.9.3",
         "electron-updater": "^6.6.2",
       },
       "devDependencies": {
@@ -284,6 +284,7 @@
     },
   },
   "trustedDependencies": [
+    "electron",
     "node-pty",
   ],
   "overrides": {
@@ -1620,7 +1621,7 @@
 
     "effect-codex-app-server": ["effect-codex-app-server@workspace:packages/effect-codex-app-server"],
 
-    "electron": ["electron@40.6.0", "", { "dependencies": { "@electron/get": "^2.0.0", "@types/node": "^24.9.0", "extract-zip": "^2.0.1" }, "bin": { "electron": "cli.js" } }, "sha512-ett8W+yOFGDuM0vhJMamYSkrbV3LoaffzJd9GfjI96zRAxyrNqUSKqBpf/WGbQCweDxX2pkUCUfrv4wwKpsFZA=="],
+    "electron": ["electron@40.9.3", "", { "dependencies": { "@electron/get": "^2.0.0", "@types/node": "^24.9.0", "extract-zip": "^2.0.1" }, "bin": { "electron": "cli.js" } }, "sha512-rDcJOT6BBE689Ada+4jD3rVr05pMv9MZOgT0x/rIMVDF9c4ttx4RTb6lVARTyxZC7uqpirttCtcli1eg1DX5qg=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.335", "", {}, "sha512-q9n5T4BR4Xwa2cwbrwcsDJtHD/enpQ5S1xF1IAtdqf5AAgqDFmR/aakqH3ChFdqd/QXJhS3rnnXFtexU7rax6Q=="],
 
