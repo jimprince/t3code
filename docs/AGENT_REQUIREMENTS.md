@@ -1,5 +1,34 @@
 # Agent Requirements
 
+## Current Task: Repair May 2 Nightly Sync Failure
+
+Investigate and repair failing scheduled nightly upstream sync runs after the
+user received "nightly needs attention" emails.
+
+### Current User Requirements
+
+- Look into the nightly release/sync attention emails.
+- Identify the failing workflow and concrete blocker.
+- Repair the fork nightly sync path if the fix is clear and safe.
+- Preserve existing dirty local work and untracked worktrees.
+- Do not delete releases/tags or expose secrets.
+
+### Current Acceptance Criteria
+
+- Latest failed nightly run and upstream nightly tag are identified.
+- The rebase conflict is reproduced and resolved locally.
+- `main` is updated with the rebased fork commits if verification passes.
+- A new fork nightly tag/release is created for the upstream nightly.
+- GitHub Actions run(s), release assets, and local runner state are verified.
+
+### Current Status
+
+- In progress.
+- Latest failing scheduled run: `25262598575` (`Sync Upstream`).
+- Stable sync is clean; nightly sync fails rebasing onto
+  `v0.0.22-nightly.20260502.184`.
+- Conflict file: `.github/workflows/release.yml`.
+
 ## Current Task: Cancel stacked nightly release builds
 
 Stop multiple queued nightly tag-push runs from all building when only the most
