@@ -18,8 +18,14 @@ import * as Option from "effect/Option";
 import { pipe } from "effect/Function";
 import { Atom } from "effect/unstable/reactivity";
 import { type SavedRemoteConnection, bootstrapRemoteConnection } from "../lib/connection";
+import { recordMobileDiagnostic } from "../lib/mobileDiagnostics";
 import { terminalDebugLog } from "../features/terminal/terminalDebugLog";
-import { clearSavedConnection, loadSavedConnections, saveConnection } from "../lib/storage";
+import {
+  clearSavedConnection,
+  clearSavedConnections,
+  loadSavedConnections,
+  saveConnection,
+} from "../lib/storage";
 import { appAtomRegistry } from "./atom-registry";
 import { type ConnectedEnvironmentSummary, type EnvironmentSession } from "./remote-runtime-types";
 import { environmentRuntimeManager, useEnvironmentRuntimeStates } from "./use-environment-runtime";
@@ -63,6 +69,10 @@ function notifyEnvironmentConnectionListeners() {
 
 function getSavedConnectionsById(): Record<EnvironmentId, SavedRemoteConnection> {
   return appAtomRegistry.get(savedConnectionsByIdAtom);
+}
+
+export function getSavedConnectionsSnapshot(): Record<EnvironmentId, SavedRemoteConnection> {
+  return getSavedConnectionsById();
 }
 
 function setIsLoadingSavedConnection(value: boolean): void {
@@ -152,6 +162,11 @@ export async function disconnectEnvironment(
   environmentId: EnvironmentId,
   options?: { readonly removeSaved?: boolean },
 ) {
+  recordMobileDiagnostic({
+    level: "info",
+    tag: "mobile.connection.saved.disconnect.start",
+    data: { environmentId, removeSaved: options?.removeSaved ?? false },
+  });
   const session = environmentSessions.get(environmentId);
   environmentSessions.delete(environmentId);
   notifyEnvironmentConnectionListeners();
@@ -166,12 +181,48 @@ export async function disconnectEnvironment(
     await clearSavedConnection(environmentId);
     removeSavedConnection(environmentId);
   }
+  recordMobileDiagnostic({
+    level: "info",
+    tag: "mobile.connection.saved.disconnect.end",
+    data: { environmentId, removeSaved: options?.removeSaved ?? false },
+  });
+}
+
+export async function disconnectAllEnvironments(options?: { readonly removeSaved?: boolean }) {
+  const environmentIds = [
+    ...new Set([...environmentSessions.keys(), ...Object.keys(getSavedConnectionsById())]),
+  ] as EnvironmentId[];
+
+  await Promise.all(
+    environmentIds.map((environmentId) =>
+      disconnectEnvironment(environmentId, {
+        removeSaved: options?.removeSaved,
+      }),
+    ),
+  );
+
+  if (options?.removeSaved) {
+    await clearSavedConnections();
+    replaceSavedConnections({});
+  }
 }
 
 export async function connectSavedEnvironment(
   connection: SavedRemoteConnection,
   options?: { readonly persist?: boolean },
 ) {
+  recordMobileDiagnostic({
+    level: "info",
+    tag: "mobile.connection.saved.connect.start",
+    data: {
+      environmentId: connection.environmentId,
+      environmentLabel: connection.environmentLabel,
+      httpBaseUrl: connection.httpBaseUrl,
+      wsBaseUrl: connection.wsBaseUrl,
+      persist: options?.persist !== false,
+      bearerTokenPresent: connection.bearerToken.length > 0,
+    },
+  });
   await disconnectEnvironment(connection.environmentId);
 
   if (options?.persist !== false) {
@@ -180,17 +231,58 @@ export async function connectSavedEnvironment(
 
   upsertSavedConnection(connection);
   setEnvironmentConnectionStatus(connection.environmentId, "connecting", null);
+  recordMobileDiagnostic({
+    level: "info",
+    tag: "mobile.connection.saved.connect.state",
+    data: { environmentId: connection.environmentId, state: "connecting" },
+  });
   shellSnapshotManager.markPending({ environmentId: connection.environmentId });
 
   const transport = new WsTransport(
-    () =>
-      resolveRemoteWebSocketConnectionUrl({
-        wsBaseUrl: connection.wsBaseUrl,
-        httpBaseUrl: connection.httpBaseUrl,
-        bearerToken: connection.bearerToken,
-      }),
+    async () => {
+      recordMobileDiagnostic({
+        level: "info",
+        tag: "mobile.ws.token.start",
+        data: {
+          environmentId: connection.environmentId,
+          httpBaseUrl: connection.httpBaseUrl,
+          wsBaseUrl: connection.wsBaseUrl,
+          bearerTokenPresent: connection.bearerToken.length > 0,
+        },
+      });
+      try {
+        const url = await resolveRemoteWebSocketConnectionUrl({
+          wsBaseUrl: connection.wsBaseUrl,
+          httpBaseUrl: connection.httpBaseUrl,
+          bearerToken: connection.bearerToken,
+        });
+        recordMobileDiagnostic({
+          level: "info",
+          tag: "mobile.ws.token.success",
+          data: { environmentId: connection.environmentId, socketUrl: url },
+        });
+        return url;
+      } catch (error) {
+        recordMobileDiagnostic({
+          level: "error",
+          tag: "mobile.ws.token.error",
+          message: error instanceof Error ? error.message : "Failed to mint WebSocket token.",
+          data: {
+            environmentId: connection.environmentId,
+            httpBaseUrl: connection.httpBaseUrl,
+            wsBaseUrl: connection.wsBaseUrl,
+          },
+        });
+        throw error;
+      }
+    },
     {
-      onAttempt: () => {
+      onAttempt: (socketUrl) => {
+        recordMobileDiagnostic({
+          level: "info",
+          tag: "mobile.ws.attempt",
+          data: { environmentId: connection.environmentId, socketUrl },
+        });
         environmentRuntimeManager.patch({ environmentId: connection.environmentId }, (previous) => {
           const nextState =
             previous.connectionState === "ready" ||
@@ -205,10 +297,32 @@ export async function connectSavedEnvironment(
           };
         });
       },
+      onOpen: () => {
+        recordMobileDiagnostic({
+          level: "info",
+          tag: "mobile.ws.open",
+          data: { environmentId: connection.environmentId },
+        });
+      },
       onError: (message) => {
+        recordMobileDiagnostic({
+          level: "error",
+          tag: "mobile.ws.error",
+          message,
+          data: { environmentId: connection.environmentId },
+        });
         setEnvironmentConnectionStatus(connection.environmentId, "disconnected", message);
       },
       onClose: (details) => {
+        recordMobileDiagnostic({
+          level: details.code === 1000 ? "info" : "warn",
+          tag: "mobile.ws.close",
+          data: {
+            environmentId: connection.environmentId,
+            code: details.code,
+            reason: details.reason,
+          },
+        });
         const reason =
           details.reason.trim().length > 0
             ? details.reason
@@ -237,9 +351,23 @@ export async function connectSavedEnvironment(
     },
     client,
     applyShellEvent: (event, environmentId) => {
+      recordMobileDiagnostic({
+        level: "debug",
+        tag: "mobile.rpc.subscribe.shell.event",
+        data: { environmentId, eventKind: event.kind },
+      });
       shellSnapshotManager.applyEvent({ environmentId }, event);
     },
     syncShellSnapshot: (snapshot, environmentId) => {
+      recordMobileDiagnostic({
+        level: "info",
+        tag: "mobile.rpc.subscribe.shell.snapshot",
+        data: {
+          environmentId,
+          projectCount: snapshot.projects.length,
+          threadCount: snapshot.threads.length,
+        },
+      });
       shellSnapshotManager.syncSnapshot({ environmentId }, snapshot);
       environmentRuntimeManager.patch({ environmentId }, (runtime) => ({
         ...runtime,
@@ -248,9 +376,19 @@ export async function connectSavedEnvironment(
       }));
     },
     onShellResubscribe: (environmentId) => {
+      recordMobileDiagnostic({
+        level: "info",
+        tag: "mobile.rpc.subscribe.shell.resubscribe",
+        data: { environmentId },
+      });
       shellSnapshotManager.markPending({ environmentId });
     },
     onConfigSnapshot: (serverConfig) => {
+      recordMobileDiagnostic({
+        level: "info",
+        tag: "mobile.rpc.subscribe.config.snapshot",
+        data: { environmentId: connection.environmentId },
+      });
       environmentRuntimeManager.patch({ environmentId: connection.environmentId }, (runtime) => ({
         ...runtime,
         serverConfig,
@@ -262,21 +400,64 @@ export async function connectSavedEnvironment(
     client,
     connection: environmentConnection,
   });
-  terminalMetadataUnsubscribers.set(
-    connection.environmentId,
-    subscribeTerminalMetadata({
+  try {
+    recordMobileDiagnostic({
+      level: "info",
+      tag: "mobile.rpc.subscribe.terminalMetadata.start",
+      data: { environmentId: connection.environmentId },
+    });
+    terminalMetadataUnsubscribers.set(
+      connection.environmentId,
+      subscribeTerminalMetadata({
+        environmentId: connection.environmentId,
+        client,
+        options: {
+          onError: (message) => {
+            recordMobileDiagnostic({
+              level: "warn",
+              tag: "mobile.rpc.subscribe.terminalMetadata.error",
+              message,
+              data: { environmentId: connection.environmentId },
+            });
+          },
+        },
+      }),
+    );
+    terminalDebugLog("registry:terminal-metadata-subscribed", {
       environmentId: connection.environmentId,
-      client,
-    }),
-  );
-  terminalDebugLog("registry:terminal-metadata-subscribed", {
-    environmentId: connection.environmentId,
-  });
+    });
+  } catch (error) {
+    recordMobileDiagnostic({
+      level: "warn",
+      tag: "mobile.rpc.subscribe.terminalMetadata.error",
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to subscribe to terminal metadata; shell snapshot remains authoritative.",
+      data: { environmentId: connection.environmentId },
+    });
+  }
   notifyEnvironmentConnectionListeners();
 
   try {
+    recordMobileDiagnostic({
+      level: "info",
+      tag: "mobile.rpc.subscribe.shell.start",
+      data: { environmentId: connection.environmentId },
+    });
     await environmentConnection.ensureBootstrapped();
+    recordMobileDiagnostic({
+      level: "info",
+      tag: "mobile.connection.saved.connect.state",
+      data: { environmentId: connection.environmentId, state: "ready" },
+    });
   } catch (error) {
+    recordMobileDiagnostic({
+      level: "error",
+      tag: "mobile.rpc.subscribe.shell.error",
+      message: error instanceof Error ? error.message : "Failed to bootstrap remote connection.",
+      data: { environmentId: connection.environmentId },
+    });
     setEnvironmentConnectionStatus(
       connection.environmentId,
       "disconnected",
@@ -312,6 +493,14 @@ export function useRemoteEnvironmentBootstrap() {
   useEffect(() => {
     let cancelled = false;
 
+    recordMobileDiagnostic({
+      level: "info",
+      tag: "mobile.app.bootstrap.start",
+    });
+    recordMobileDiagnostic({
+      level: "info",
+      tag: "mobile.storage.loadSavedConnections.start",
+    });
     void loadSavedConnections()
       .then((connections) => {
         if (cancelled) {
@@ -324,7 +513,17 @@ export function useRemoteEnvironmentBootstrap() {
           ),
         );
 
+        recordMobileDiagnostic({
+          level: "info",
+          tag: "mobile.storage.loadSavedConnections.end",
+          data: { count: connections.length },
+        });
         setIsLoadingSavedConnection(false);
+        recordMobileDiagnostic({
+          level: "info",
+          tag: "mobile.app.bootstrap.end",
+          data: { savedConnectionCount: connections.length },
+        });
 
         void Promise.all(
           connections.map((connection) =>
@@ -334,9 +533,20 @@ export function useRemoteEnvironmentBootstrap() {
           ),
         );
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
+          recordMobileDiagnostic({
+            level: "error",
+            tag: "mobile.storage.loadSavedConnections.error",
+            message:
+              error instanceof Error ? error.message : "Failed to load saved remote connections.",
+          });
           setIsLoadingSavedConnection(false);
+          recordMobileDiagnostic({
+            level: "warn",
+            tag: "mobile.app.bootstrap.end",
+            data: { savedConnectionCount: 0 },
+          });
         }
       });
 
@@ -433,6 +643,12 @@ export function useRemoteConnections() {
         await connectSavedEnvironment(connection);
         clearConnectionPairingUrl();
       } catch (error) {
+        recordMobileDiagnostic({
+          level: "error",
+          tag: "mobile.pairing.connect.error",
+          message:
+            error instanceof Error ? error.message : "Failed to pair with the environment.",
+        });
         setPendingConnectionError(
           error instanceof Error ? error.message : "Failed to pair with the environment.",
         );
@@ -506,4 +722,18 @@ export function useRemoteConnections() {
     onUpdateEnvironment,
     onRemoveEnvironmentPress,
   };
+}
+
+export async function pairRemoteEnvironment(input: {
+  readonly pairingUrl: string;
+  readonly replaceExisting?: boolean;
+}): Promise<SavedRemoteConnection> {
+  if (input.replaceExisting) {
+    await disconnectAllEnvironments({ removeSaved: true });
+  }
+  const connection = await bootstrapRemoteConnection({ pairingUrl: input.pairingUrl });
+  clearPendingConnectionError();
+  await connectSavedEnvironment(connection);
+  clearConnectionPairingUrl();
+  return connection;
 }

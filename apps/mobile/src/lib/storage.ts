@@ -67,6 +67,10 @@ export async function clearSavedConnection(environmentId: string): Promise<void>
   await writeStorageItem(CONNECTIONS_KEY, JSON.stringify({ connections: next }));
 }
 
+export async function clearSavedConnections(): Promise<void> {
+  await writeStorageItem(CONNECTIONS_KEY, JSON.stringify({ connections: [] }));
+}
+
 export async function loadPreferences(): Promise<MobilePreferences> {
   const parsed = await readJsonStorageItem<MobilePreferences>(PREFERENCES_KEY);
   if (!parsed || typeof parsed !== "object") {

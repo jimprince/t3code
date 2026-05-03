@@ -30,6 +30,24 @@ See `docs/AGENT_REQUIREMENTS.md` for the active mobile-track task,
 constraints, acceptance criteria, and status. Treat it as required execution
 metadata before changing files.
 
+## Physical iPhone pairing/debug loop
+
+If the task mentions iOS pairing, the phone, the dev VM, Tailscale backend
+connectivity, "No threads yet", Expo dev-client updates, or agent-driven mobile
+testing, read `docs/mobile-ios-debugging.md` before changing code.
+
+That doc explains the fork-local instrumentation and host workflow:
+
+```bash
+cd apps/mobile
+APP_VARIANT=development CI=1 bunx expo start --dev-client --clear
+make ios-debug-vm-pair
+```
+
+The workflow pairs the installed dev app to the desktop dev VM
+(`http://100.64.0.4:3773`), copies a redacted app-state snapshot from the
+iPhone, and verifies the shell snapshot reaches `ready`.
+
 ## How the overlay is organized
 
 The overlay sits at the tip of `feature/mobile-track`. Roughly:
@@ -104,6 +122,7 @@ cd apps/mobile
 make help                 # list targets
 make ios-dev              # local dev-client iOS build via expo prebuild + run:ios
 make eas-ios-dev          # cloud dev-client build via EAS (requires `eas login`)
+make ios-debug-vm-pair    # physical iPhone pairing/debug smoke test
 ```
 
 The Apple Team ID and fork bundle-id suffix are read from

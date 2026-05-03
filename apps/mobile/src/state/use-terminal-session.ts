@@ -31,9 +31,16 @@ export function subscribeTerminalMetadata(input: {
     readonly terminal: {
       readonly onMetadata: (
         listener: (event: TerminalMetadataStreamEvent) => void,
-        options?: { readonly onResubscribe?: () => void },
+        options?: {
+          readonly onResubscribe?: () => void;
+          readonly onError?: (message: string) => void;
+        },
       ) => () => void;
     };
+  };
+  readonly options?: {
+    readonly onResubscribe?: () => void;
+    readonly onError?: (message: string) => void;
   };
 }) {
   return terminalSessionManager.subscribeMetadata(input);

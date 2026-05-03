@@ -33,6 +33,7 @@ export interface WsTransportOptions {
 interface SubscribeOptions {
   readonly retryDelay?: Duration.Input;
   readonly onResubscribe?: () => void;
+  readonly onError?: (message: string) => void;
 }
 
 const DEFAULT_SUBSCRIPTION_RETRY_DELAY = Duration.millis(250);
@@ -170,6 +171,7 @@ export class WsTransport {
             console.warn("WebSocket RPC subscription failed", {
               error: formattedError,
             });
+            options?.onError?.(formattedError);
             return;
           }
 

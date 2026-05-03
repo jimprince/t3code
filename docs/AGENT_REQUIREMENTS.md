@@ -62,11 +62,28 @@ branch tracks the upstream mobile feature branch instead.
   configurable from `fork.config.json` without further code edits.
 - The mobile app's EAS owner, project ID, and Expo Updates URL must resolve to
   the user's fork Expo project so OTA updates do not come from upstream.
+- Implement iOS pairing troubleshooting instrumentation for the fork mobile app:
+  - Structured mobile diagnostics with secret redaction and app-document snapshots.
+  - Root-level development/fork-only debug URL commands for pair, dump, clear,
+    and disconnect.
+  - A machine-readable mobile debug snapshot that distinguishes saved
+    connection, runtime, shell snapshot, and catalog states.
+  - Fork/dev scheme pairing URL extraction support.
+  - Terminal metadata subscription failures must be diagnostic-only and must not
+    prevent shell snapshot readiness.
+  - Host-side iOS debug control script plus Make targets for VM pairing,
+    dumping, clearing, and logs.
+- Document the iOS debugging workflow and fork-overlay policy so future agents
+  can reproduce the phone pairing test and know when to keep, rebase, or drop
+  fork-only instrumentation.
+- Surface the iOS debugging workflow from the branch entry instructions so it
+  is immediately discoverable by future agents working on mobile pairing or
+  physical-device testing.
 
 ### Current Status
 
-- In progress: rebased onto upstream mobile branch and preserving fork Expo
-  update identity.
+- In progress: adding iOS pairing troubleshooting instrumentation and host-side
+  debug control tooling on top of the mobile-track fork overlay.
 - Out of scope for this task: actually running `bun install` /
   `expo prebuild` / a real device install. The user wanted the branch
   scaffolded so they can drive the build from there. Build verification will

@@ -166,6 +166,9 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
+    enableMobileDebugControl: APP_VARIANT !== "production",
+    scheme: variant.scheme,
+    bundleIdentifier: variant.iosBundleIdentifier,
     eas: {
       projectId: EAS_PROJECT_ID,
     },
