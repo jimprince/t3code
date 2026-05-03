@@ -32,6 +32,7 @@ on:
 permissions:
   contents: write
   id-token: write
+  actions: read
 
 # Concurrency policy:
 #   * Nightly tag pushes (e.g. v0.0.22-nightly.20260430.161-fork.1) all share
@@ -64,6 +65,7 @@ jobs:
       is_prerelease: ${{ steps.release_meta.outputs.is_prerelease }}
       make_latest: ${{ steps.release_meta.outputs.make_latest }}
       ref: ${{ steps.release_meta.outputs.ref }}
+      mac_runner: ${{ steps.mac_runner.outputs.runner }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -199,24 +201,45 @@ jobs:
             --current-tag "${{ steps.release_meta.outputs.tag }}" \
             --github-output
 
+      - id: mac_runner
+        name: Resolve macOS runner
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          hosted_runner='"macos-15"'
+          self_hosted_runner='["self-hosted","macOS","ARM64","t3code-mac-arm64"]'
+
+          if gh api repos/${{ github.repository }}/actions/runners \
+            --jq '.runners[] | select(.status == "online" and .busy == false and ([.labels[].name] | index("t3code-mac-arm64"))) | .name' \
+            | grep -q .; then
+            echo "Using local self-hosted macOS runner."
+            echo "runner=$self_hosted_runner" >> "$GITHUB_OUTPUT"
+          else
+            echo "Local self-hosted macOS runner unavailable or busy; using GitHub-hosted macOS."
+            echo "runner=$hosted_runner" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build ${{ matrix.label }}
     needs: preflight
     if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' }}
     continue-on-error: ${{ matrix.platform == 'linux' && needs.preflight.outputs.release_channel == 'nightly' }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ fromJSON(matrix.platform == 'mac' && needs.preflight.outputs.mac_runner || matrix.runner) }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
           - label: macOS arm64
-            runner: [self-hosted, macOS, ARM64, t3code-mac-arm64]
+            runner: '"macos-15"'
             platform: mac
             target: dmg
             arch: arm64
           - label: Linux x64
-            runner: ubuntu-24.04
+            runner: '"ubuntu-24.04"'
             platform: linux
             target: AppImage
             arch: x64

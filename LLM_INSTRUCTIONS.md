@@ -10,12 +10,17 @@ things specific to the fork relationship.
 
 ## Fast path for release/update work
 
-1. Start the local macOS runner before any release that needs desktop macOS
-   artifacts:
+1. Optionally start the local macOS runner before a release that needs desktop
+   macOS artifacts:
 
    ```bash
    t3code-mac-runner start 7200
    ```
+
+   Release preflight prefers this runner when it is online and idle. If it is
+   unavailable or busy, the macOS build falls back to GitHub-hosted `macos-15`.
+   GitHub Actions cannot migrate a job that is already queued on a
+   self-hosted label, so this choice happens before the build job is created.
 
 2. Normal upstream sync:
 
@@ -164,6 +169,11 @@ per-run groups and always complete.
 We deliberately **dropped** Windows x64, Windows arm64, and macOS x64. They
 added flake surface without being used. Do not "helpfully" re-add them.
 
+- macOS arm64 prefers the local self-hosted `t3code-mac-arm64` runner when it
+  is online and idle. If it is offline or busy during preflight, the workflow
+  uses GitHub-hosted `macos-15` instead. GitHub Actions cannot migrate an
+  already queued self-hosted job, so this fallback decision must happen before
+  the build job is created.
 - `fail_on_unmatched_files: false` on the `softprops/action-gh-release@v2` step
   is intentional — it lets the publish step succeed when patterns for dropped
   platforms don't match.

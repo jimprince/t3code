@@ -1,5 +1,37 @@
 # Agent Requirements
 
+## Current Task: Hosted macOS fallback for release builds
+
+Allow release builds to proceed when Brad's local Apple Silicon runner is not
+available, then kick off a build for the latest upstream nightly with current
+fork commits rebased on top.
+
+### Current User Requirements
+
+- Commit the current release-runner fallback changes.
+- If the local macOS runner is unavailable or busy, use a GitHub-hosted macOS
+  runner instead of leaving the macOS release job queued indefinitely.
+- Preserve the fork's normal preference for the local `t3code-mac-arm64`
+  runner when it is online and idle.
+- Build the latest upstream nightly with our rebased fork commits, including
+  macOS desktop app changes and iOS/mobile app changes.
+- Preserve unrelated dirty local work in other worktrees.
+
+### Current Acceptance Criteria
+
+- `release.yml` chooses the self-hosted macOS runner when online/idle and
+  chooses GitHub-hosted macOS when the local runner is unavailable or busy at
+  preflight time.
+- The limitation that GitHub Actions cannot migrate an already queued
+  self-hosted job is documented.
+- The change is committed and pushed to the fork.
+- The latest nightly release build is rerun from the fixed workflow.
+- The resulting run status and any remaining blockers are reported.
+
+### Current Status
+
+- In progress.
+
 ## Current Task: Repair May 2 Nightly Sync Failure
 
 Investigate and repair failing scheduled nightly upstream sync runs after the
