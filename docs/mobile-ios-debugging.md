@@ -105,6 +105,10 @@ Verified on May 3, 2026 through the Expo dev-client Metro path:
 - saved connection count: 2
 - VM runtime: `ready`, shell snapshot loaded, 8 projects, 15 threads
 - Mac runtime: `ready`, shell snapshot loaded, 11 projects, 161 threads
+- EAS development update group:
+  `bfc4eb11-f72b-499e-bebb-145f519c21de`
+- EAS update message:
+  `mobile mac tailscale shell bootstrap 476cffc7d`
 
 If the Mac runtime is stuck at `connecting` with `shellSnapshotPending: true`,
 check whether terminal metadata subscription is being attempted before shell
@@ -129,7 +133,7 @@ Current fork EAS values:
 - Runtime version: `0.1.0`
 - Apple team: `CBCQ6MJF4B`
 - EAS iOS dev-client build: `545e2a20-54e7-47ec-9ed6-ecc70e89e47f`
-- Latest verified update group: `38ca6731-097c-4f36-93ee-6b3cdc5ffecf`
+- Latest verified update group: `bfc4eb11-f72b-499e-bebb-145f519c21de`
 
 `EXPO_TOKEN` is expected in `/Users/brad/.shared/config/secrets.env` for
 non-interactive EAS reads, updates, and build starts. Never print the token or

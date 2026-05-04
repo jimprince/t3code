@@ -115,7 +115,7 @@ branch tracks the upstream mobile feature branch instead.
   at `0385713da`; the old duplicate hide-whitespace add/revert commits were
   skipped because upstream now contains that change.
 - Completed: latest development EAS Update group is
-  `38ca6731-097c-4f36-93ee-6b3cdc5ffecf` for runtime `0.1.0`.
+  `bfc4eb11-f72b-499e-bebb-145f519c21de` for runtime `0.1.0`.
 - Completed: `make ios-debug-vm-pair` passed against VM environment
   `c9d5fd19-15d1-45f1-856d-3d05a939854d`; runtime state was `ready`, shell
   snapshot loaded, with 7 projects and 14 threads at verification time.
@@ -131,6 +131,9 @@ branch tracks the upstream mobile feature branch instead.
 - Completed: mobile now sequences terminal metadata subscription after shell
   bootstrap so older/local backends that do not support `subscribeTerminalMetadata`
   still reach shell snapshot readiness.
+- Completed: published the MacBook/Tailscale shell-bootstrap fix to EAS
+  development channel with message
+  `mobile mac tailscale shell bootstrap 476cffc7d`.
 
 ### Open Questions / Deferred
 
