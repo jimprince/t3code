@@ -85,6 +85,60 @@ The exact project/thread counts may change. The important checks are:
 - shell snapshot is loaded,
 - the snapshot file contains no auth secrets.
 
+## EAS Build And Update Status
+
+The fork Expo project and OTA update channel are configured, but EAS cloud iOS
+signing is separate from local Xcode signing. The old WKWebView wrapper at
+`/Users/brad/Programming/t3code-ios` can build locally with Xcode provisioning;
+that does not mean EAS has credentials for Expo dev-client cloud builds.
+
+Current fork EAS values:
+
+- Project: `@jimprince/t3-code`
+- Project ID: `c148e0df-ed1f-4673-9c07-403ea56b6d1b`
+- Development bundle ID: `com.brad.t3code.dev`
+- Development scheme: `t3code-brad-dev`
+- Development channel: `development`
+- Runtime version: `0.1.0`
+- Apple team: `CBCQ6MJF4B`
+
+`EXPO_TOKEN` is expected in `/Users/brad/.shared/config/secrets.env` for
+non-interactive EAS reads, updates, and build starts. Never print the token or
+commit it to the repo.
+
+EAS Update can ship JS/TS-only changes when the installed native dev client has
+the same runtime version. Native dependency changes, native config changes, or
+runtime-version changes require a new EAS build.
+
+Configure or inspect EAS iOS credentials interactively:
+
+```bash
+cd /Users/brad/Programming/t3-plugin/.worktrees/mobile-track/apps/mobile
+set -a
+source /Users/brad/.shared/config/secrets.env
+set +a
+APP_VARIANT=development npx eas-cli credentials -p ios
+```
+
+Create a development iOS dev-client build:
+
+```bash
+APP_VARIANT=development EXPO_NO_GIT_STATUS=1 npx eas-cli build --profile development -p ios --no-wait
+```
+
+Publish a JS/TS update to the development channel:
+
+```bash
+APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli update --channel development --environment development --platform ios --message "<message>"
+```
+
+Verify EAS build and update state:
+
+```bash
+APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli build:list --platform ios --limit 5 --json
+APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli update:list --branch development --limit 5 --json
+```
+
 ## Debug Command Channels
 
 The app supports debug URLs in dev/fork builds:

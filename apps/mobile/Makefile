@@ -41,6 +41,10 @@ help:
 	@echo "    make eas-ios-dev           eas build --profile development -p ios"
 	@echo "    make eas-ios-preview       eas build --profile preview -p ios"
 	@echo "    make eas-ios-prod          eas build --profile production -p ios"
+	@echo "    make eas-ios-dev-no-wait   Start development iOS build and return immediately"
+	@echo "    make eas-ios-update-dev    Publish iOS OTA update to development channel"
+	@echo "    make eas-ios-build-list    List recent iOS builds"
+	@echo "    make eas-ios-update-list   List recent development updates"
 	@echo
 	@echo "  Inspect:"
 	@echo "    make config-dev            APP_VARIANT=development expo config"
@@ -87,8 +91,8 @@ ios-device-preview:
 ios-device-prod:
 	APP_VARIANT=production EXPO_NO_GIT_STATUS=1 bunx expo prebuild --clean --platform ios && bunx expo run:ios $(EXPO_DEVICE_FLAG)
 
-# --- EAS cloud builds ---
-.PHONY: eas-ios-dev eas-ios-preview eas-ios-prod
+# --- EAS cloud builds and updates ---
+.PHONY: eas-ios-dev eas-ios-preview eas-ios-prod eas-ios-dev-no-wait eas-ios-update-dev eas-ios-build-list eas-ios-update-list
 eas-ios-dev:
 	bunx eas-cli build --profile development -p ios
 
@@ -97,6 +101,18 @@ eas-ios-preview:
 
 eas-ios-prod:
 	bunx eas-cli build --profile production -p ios
+
+eas-ios-dev-no-wait:
+	APP_VARIANT=development EXPO_NO_GIT_STATUS=1 npx eas-cli build --profile development -p ios --no-wait
+
+eas-ios-update-dev:
+	APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli update --channel development --environment development --platform ios --message "$${MESSAGE:-mobile update}"
+
+eas-ios-build-list:
+	APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli build:list --platform ios --limit 5 --json
+
+eas-ios-update-list:
+	APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli update:list --branch development --limit 5 --json
 
 # --- Inspect ---
 .PHONY: config-dev config-preview config-prod doctor

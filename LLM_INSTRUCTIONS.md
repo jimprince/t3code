@@ -130,6 +130,12 @@ The Apple Team ID and fork bundle-id suffix are read from
 ASC API keys, provisioning profiles) live in EAS and **must not** be added to
 this repo.
 
+For EAS signing, build, update, and physical-device verification status, read
+`docs/mobile-ios-debugging.md`. Do not assume local Xcode provisioning from
+`/Users/brad/Programming/t3code-ios` means EAS cloud credentials are configured
+for this Expo app. Prefer `npx eas-cli` if `bunx eas-cli` hits transient package
+resolution failures.
+
 ## Hard rules on this branch
 
 - Do not modify any `.github/workflows/*.yml` that targets `main` (sync,

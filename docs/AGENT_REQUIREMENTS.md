@@ -21,6 +21,10 @@ branch tracks the upstream mobile feature branch instead.
 - The user must be able to build the mobile app from the CLI.
 - The user's Apple Developer Team (`CBCQ6MJF4B`) must be configured for iOS
   builds, paralleling the `t3code-ios` shell project.
+- EAS iOS development build credentials must be configured for the fork dev
+  bundle ID `com.brad.t3code.dev`; local Xcode signing in
+  `/Users/brad/Programming/t3code-ios` is separate and does not satisfy EAS
+  cloud build signing.
 - Do not commit or print secrets (Apple ID password, App Store Connect API
   keys, EAS-managed credentials, provisioning profile contents).
 
@@ -62,6 +66,13 @@ branch tracks the upstream mobile feature branch instead.
   configurable from `fork.config.json` without further code edits.
 - The mobile app's EAS owner, project ID, and Expo Updates URL must resolve to
   the user's fork Expo project so OTA updates do not come from upstream.
+- EAS build/update state must be verifiable from the CLI:
+  - `eas build:list --platform ios --limit 5 --json` shows at least one iOS
+    development build for `@jimprince/t3-code` after credentials are configured.
+  - The latest relevant build uses profile `development` and bundle ID
+    `com.brad.t3code.dev`.
+  - EAS Updates remain on the fork project/channel (`development`) with runtime
+    version `0.1.0`.
 - Implement iOS pairing troubleshooting instrumentation for the fork mobile app:
   - Structured mobile diagnostics with secret redaction and app-document snapshots.
   - Root-level development/fork-only debug URL commands for pair, dump, clear,
@@ -79,15 +90,22 @@ branch tracks the upstream mobile feature branch instead.
 - Surface the iOS debugging workflow from the branch entry instructions so it
   is immediately discoverable by future agents working on mobile pairing or
   physical-device testing.
+- Installed-app debug verification must show `bundleIdentifier =
+  com.brad.t3code.dev`.
+- `make ios-debug-vm-pair` must succeed against VM environment
+  `c9d5fd19-15d1-45f1-856d-3d05a939854d` when Metro and the dev client are
+  available.
 
 ### Current Status
 
-- In progress: adding iOS pairing troubleshooting instrumentation and host-side
-  debug control tooling on top of the mobile-track fork overlay.
-- Out of scope for this task: actually running `bun install` /
-  `expo prebuild` / a real device install. The user wanted the branch
-  scaffolded so they can drive the build from there. Build verification will
-  follow as a separate task.
+- Completed: fork Expo project wiring, EAS Updates on the `development`
+  channel, mobile pairing diagnostics, host-side debug control tooling, and VM
+  state dump verification.
+- In progress: finishing EAS cloud iOS signing credentials for
+  `com.brad.t3code.dev`, creating a development iOS dev-client build, and
+  recording the verified build/install/debug workflow.
+- Current blocker: EAS iOS development builds fail before build creation until
+  credentials suitable for internal distribution are configured in EAS.
 
 ### Open Questions / Deferred
 
