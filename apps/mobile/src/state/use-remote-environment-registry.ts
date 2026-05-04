@@ -400,43 +400,6 @@ export async function connectSavedEnvironment(
     client,
     connection: environmentConnection,
   });
-  try {
-    recordMobileDiagnostic({
-      level: "info",
-      tag: "mobile.rpc.subscribe.terminalMetadata.start",
-      data: { environmentId: connection.environmentId },
-    });
-    terminalMetadataUnsubscribers.set(
-      connection.environmentId,
-      subscribeTerminalMetadata({
-        environmentId: connection.environmentId,
-        client,
-        options: {
-          onError: (message) => {
-            recordMobileDiagnostic({
-              level: "warn",
-              tag: "mobile.rpc.subscribe.terminalMetadata.error",
-              message,
-              data: { environmentId: connection.environmentId },
-            });
-          },
-        },
-      }),
-    );
-    terminalDebugLog("registry:terminal-metadata-subscribed", {
-      environmentId: connection.environmentId,
-    });
-  } catch (error) {
-    recordMobileDiagnostic({
-      level: "warn",
-      tag: "mobile.rpc.subscribe.terminalMetadata.error",
-      message:
-        error instanceof Error
-          ? error.message
-          : "Failed to subscribe to terminal metadata; shell snapshot remains authoritative.",
-      data: { environmentId: connection.environmentId },
-    });
-  }
   notifyEnvironmentConnectionListeners();
 
   try {
@@ -451,6 +414,43 @@ export async function connectSavedEnvironment(
       tag: "mobile.connection.saved.connect.state",
       data: { environmentId: connection.environmentId, state: "ready" },
     });
+    try {
+      recordMobileDiagnostic({
+        level: "info",
+        tag: "mobile.rpc.subscribe.terminalMetadata.start",
+        data: { environmentId: connection.environmentId },
+      });
+      terminalMetadataUnsubscribers.set(
+        connection.environmentId,
+        subscribeTerminalMetadata({
+          environmentId: connection.environmentId,
+          client,
+          options: {
+            onError: (message) => {
+              recordMobileDiagnostic({
+                level: "warn",
+                tag: "mobile.rpc.subscribe.terminalMetadata.error",
+                message,
+                data: { environmentId: connection.environmentId },
+              });
+            },
+          },
+        }),
+      );
+      terminalDebugLog("registry:terminal-metadata-subscribed", {
+        environmentId: connection.environmentId,
+      });
+    } catch (error) {
+      recordMobileDiagnostic({
+        level: "warn",
+        tag: "mobile.rpc.subscribe.terminalMetadata.error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Failed to subscribe to terminal metadata; shell snapshot remains authoritative.",
+        data: { environmentId: connection.environmentId },
+      });
+    }
   } catch (error) {
     recordMobileDiagnostic({
       level: "error",

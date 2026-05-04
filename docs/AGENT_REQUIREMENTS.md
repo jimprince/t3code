@@ -95,6 +95,11 @@ branch tracks the upstream mobile feature branch instead.
 - `make ios-debug-vm-pair` must succeed against VM environment
   `c9d5fd19-15d1-45f1-856d-3d05a939854d` when Metro and the dev client are
   available.
+- The phone should also be able to save and connect to this MacBook backend via
+  the Mac's Tailscale URL `http://100.64.0.2:3773` without replacing the VM
+  backend.
+- Older/local backends that do not implement `subscribeTerminalMetadata` must
+  still reach shell snapshot readiness; terminal metadata remains optional.
 
 ### Current Status
 
@@ -118,6 +123,14 @@ branch tracks the upstream mobile feature branch instead.
   as a plain app during this run (`updateId` remained null). Physical-device
   verification used the Expo dev-client Metro path, which served the rebased
   JS/contracts directly.
+- Completed: local MacBook backend was paired on the phone using Tailscale URL
+  `http://100.64.0.2:3773` without replacing the VM backend. Debug dump showed
+  both VM and Mac runtimes in `ready` state with shell snapshots loaded; Mac
+  environment `5fa7c701-bf4d-496f-b753-55f77b4de905` had 11 projects and 161
+  threads at verification time.
+- Completed: mobile now sequences terminal metadata subscription after shell
+  bootstrap so older/local backends that do not support `subscribeTerminalMetadata`
+  still reach shell snapshot readiness.
 
 ### Open Questions / Deferred
 

@@ -55,6 +55,12 @@ The implementation is intentionally split into small fork-overlay pieces:
     such as unsupported terminal metadata subscription can be recorded in
     mobile diagnostics.
 
+- `apps/mobile/src/state/use-remote-environment-registry.ts`
+  - Treats shell snapshot bootstrap as the readiness source.
+  - Subscribes to terminal metadata only after shell bootstrap succeeds, so
+    older/local backends that reject `subscribeTerminalMetadata` can still
+    connect and render projects/threads.
+
 ## How To Run The Phone Pairing Test
 
 From `apps/mobile/`, start Metro for the development client:
@@ -84,6 +90,26 @@ The exact project/thread counts may change. The important checks are:
 - runtime state is `ready`,
 - shell snapshot is loaded,
 - the snapshot file contains no auth secrets.
+
+## Local MacBook Backend
+
+The phone can also keep this MacBook backend saved alongside the VM backend.
+Use the Mac's Tailscale URL so the phone does not depend on LAN addressing:
+
+- URL: `http://100.64.0.2:3773`
+- Environment ID: `5fa7c701-bf4d-496f-b753-55f77b4de905`
+- Label: `Bradley’s MacBook Pro (4)`
+
+Verified on May 3, 2026 through the Expo dev-client Metro path:
+
+- saved connection count: 2
+- VM runtime: `ready`, shell snapshot loaded, 8 projects, 15 threads
+- Mac runtime: `ready`, shell snapshot loaded, 11 projects, 161 threads
+
+If the Mac runtime is stuck at `connecting` with `shellSnapshotPending: true`,
+check whether terminal metadata subscription is being attempted before shell
+bootstrap. The Mac fork build may reject `subscribeTerminalMetadata`; that must
+remain diagnostic-only and must not block shell readiness.
 
 ## EAS Build And Update Status
 
