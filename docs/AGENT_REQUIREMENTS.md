@@ -101,11 +101,23 @@ branch tracks the upstream mobile feature branch instead.
 - Completed: fork Expo project wiring, EAS Updates on the `development`
   channel, mobile pairing diagnostics, host-side debug control tooling, and VM
   state dump verification.
-- In progress: finishing EAS cloud iOS signing credentials for
-  `com.brad.t3code.dev`, creating a development iOS dev-client build, and
-  recording the verified build/install/debug workflow.
-- Current blocker: EAS iOS development builds fail before build creation until
-  credentials suitable for internal distribution are configured in EAS.
+- Completed: EAS cloud iOS signing credentials are configured for
+  `com.brad.t3code.dev` under Apple team `CBCQ6MJF4B`.
+- Completed: EAS development iOS dev-client build
+  `545e2a20-54e7-47ec-9ed6-ecc70e89e47f` finished successfully and was
+  installed on the connected iPhone as `com.brad.t3code.dev`.
+- Completed: branch was rebased onto `upstream/t3code/mobile-remote-connect`
+  at `0385713da`; the old duplicate hide-whitespace add/revert commits were
+  skipped because upstream now contains that change.
+- Completed: latest development EAS Update group is
+  `38ca6731-097c-4f36-93ee-6b3cdc5ffecf` for runtime `0.1.0`.
+- Completed: `make ios-debug-vm-pair` passed against VM environment
+  `c9d5fd19-15d1-45f1-856d-3d05a939854d`; runtime state was `ready`, shell
+  snapshot loaded, with 7 projects and 14 threads at verification time.
+- Note: the installed development client did not apply OTA updates when launched
+  as a plain app during this run (`updateId` remained null). Physical-device
+  verification used the Expo dev-client Metro path, which served the rebased
+  JS/contracts directly.
 
 ### Open Questions / Deferred
 

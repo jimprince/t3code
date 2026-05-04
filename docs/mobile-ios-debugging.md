@@ -87,8 +87,9 @@ The exact project/thread counts may change. The important checks are:
 
 ## EAS Build And Update Status
 
-The fork Expo project and OTA update channel are configured, but EAS cloud iOS
-signing is separate from local Xcode signing. The old WKWebView wrapper at
+The fork Expo project, OTA update channel, and EAS cloud iOS signing credentials
+are configured. EAS cloud signing is separate from local Xcode signing. The old
+WKWebView wrapper at
 `/Users/brad/Programming/t3code-ios` can build locally with Xcode provisioning;
 that does not mean EAS has credentials for Expo dev-client cloud builds.
 
@@ -101,6 +102,8 @@ Current fork EAS values:
 - Development channel: `development`
 - Runtime version: `0.1.0`
 - Apple team: `CBCQ6MJF4B`
+- EAS iOS dev-client build: `545e2a20-54e7-47ec-9ed6-ecc70e89e47f`
+- Latest verified update group: `38ca6731-097c-4f36-93ee-6b3cdc5ffecf`
 
 `EXPO_TOKEN` is expected in `/Users/brad/.shared/config/secrets.env` for
 non-interactive EAS reads, updates, and build starts. Never print the token or
@@ -109,6 +112,21 @@ commit it to the repo.
 EAS Update can ship JS/TS-only changes when the installed native dev client has
 the same runtime version. Native dependency changes, native config changes, or
 runtime-version changes require a new EAS build.
+
+Verified on May 3, 2026:
+
+- EAS credentials were created for `@jimprince/t3-code`
+  / `com.brad.t3code.dev` with Apple team `CBCQ6MJF4B`.
+- EAS development iOS build `545e2a20-54e7-47ec-9ed6-ecc70e89e47f` finished and
+  installed on the connected iPhone as `com.brad.t3code.dev`.
+- The branch was rebased onto `upstream/t3code/mobile-remote-connect` at
+  `0385713da` so the mobile client contracts match the VM backend's current
+  multi-provider contract shape.
+- `make ios-debug-vm-pair` passed through the Expo dev-client Metro path:
+  runtime state `ready`, shell snapshot loaded, 7 projects, 14 threads.
+- Plain app launch did not apply the OTA update during this verification
+  (`updateId` remained null), so physical-device acceptance used Metro:
+  `APP_VARIANT=development CI=1 bunx expo start --dev-client --clear`.
 
 Configure or inspect EAS iOS credentials interactively:
 
