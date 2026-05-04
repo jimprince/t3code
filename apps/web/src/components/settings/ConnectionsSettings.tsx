@@ -2583,7 +2583,7 @@ export function ConnectionsSettings() {
           <Input
             value={savedBackendHost}
             onChange={(event) => handleSavedBackendHostChange(event.target.value)}
-            placeholder="backend.example.com"
+            placeholder="192.168.x.y or https://backend.example.com"
             disabled={isAddingSavedBackend}
             spellCheck={false}
           />
@@ -2601,7 +2601,8 @@ export function ConnectionsSettings() {
       </div>
       <div>
         <span className="mt-1 block text-[11px] text-muted-foreground">
-          Paste a full pairing URL here to fill both fields automatically.
+          Bare LAN and Tailscale hosts default to `http://&lt;host&gt;:3773`. Paste a full pairing
+          URL here to fill both fields automatically.
         </span>
       </div>
     </div>
