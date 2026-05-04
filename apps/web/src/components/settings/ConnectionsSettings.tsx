@@ -1370,7 +1370,7 @@ export function ConnectionsSettings() {
                         <Input
                           value={savedBackendPairingUrl}
                           onChange={(event) => setSavedBackendPairingUrl(event.target.value)}
-                          placeholder="https://backend.example.com/pair#token=..."
+                          placeholder="http://192.168.x.y:3773/pair#token=..."
                           disabled={isAddingSavedBackend}
                           spellCheck={false}
                         />
@@ -1387,7 +1387,7 @@ export function ConnectionsSettings() {
                           <Input
                             value={savedBackendHost}
                             onChange={(event) => setSavedBackendHost(event.target.value)}
-                            placeholder="https://backend.example.com"
+                            placeholder="http://192.168.x.y:3773"
                             disabled={isAddingSavedBackend}
                             spellCheck={false}
                           />

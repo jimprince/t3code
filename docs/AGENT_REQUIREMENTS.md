@@ -1,5 +1,36 @@
 # Agent Requirements
 
+## Current Task: Preserve LAN Backend Pairing Fix
+
+Save the useful LAN/Tailscale backend pairing changes from the cleanup stash,
+commit them on a fresh branch, merge them into main, and clean up the stale
+checkpoint fallback feature branch.
+
+### Current User Requirements
+
+- Keep the changes from the stash that are worth saving.
+- Put the kept changes on a new branch.
+- Commit the kept changes.
+- Merge the committed changes into main.
+- Clean up the old checkpoint revert feature branch.
+
+### Current Acceptance Criteria
+
+- The LAN/Tailscale backend pairing fix and focused tests are committed.
+- Stale release workflow/doc stash changes are not committed.
+- The new commit is merged into local main.
+- The old checkpoint revert feature branch is removed when no longer needed.
+- Repo-required checks are run, or any skipped checks are reported.
+
+### Current Status
+
+- Completed: restored only the LAN/Tailscale remote backend pairing changes
+  from the cleanup stash.
+- Completed: stale hosted macOS fallback workflow/doc stash changes were left
+  out because current `origin/main` already contains the cleaner version.
+- Verified: focused remote API test, `bun fmt`, `bun lint`, and
+  `bun typecheck` pass.
+
 ## Current Task: Hosted macOS fallback for release builds
 
 Allow release builds to proceed when Brad's local Apple Silicon runner is not

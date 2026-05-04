@@ -48,6 +48,18 @@ describe("remote environment api", () => {
     });
   });
 
+  it("preserves http and port from a LAN pairing url", () => {
+    expect(
+      resolveRemotePairingTarget({
+        pairingUrl: "http://192.168.50.131:3773/pair#token=pairing-token",
+      }),
+    ).toEqual({
+      credential: "pairing-token",
+      httpBaseUrl: "http://192.168.50.131:3773/",
+      wsBaseUrl: "ws://192.168.50.131:3773/",
+    });
+  });
+
   it("derives backend urls from a host and pairing code", () => {
     expect(
       resolveRemotePairingTarget({
@@ -71,6 +83,45 @@ describe("remote environment api", () => {
       credential: "pairing-token",
       httpBaseUrl: "https://myserver.com:3000/",
       wsBaseUrl: "wss://myserver.com:3000/",
+    });
+  });
+
+  it("defaults bare LAN hosts to the local T3 backend endpoint", () => {
+    expect(
+      resolveRemotePairingTarget({
+        host: "192.168.50.131",
+        pairingCode: "pairing-token",
+      }),
+    ).toEqual({
+      credential: "pairing-token",
+      httpBaseUrl: "http://192.168.50.131:3773/",
+      wsBaseUrl: "ws://192.168.50.131:3773/",
+    });
+  });
+
+  it("defaults bare Tailscale hosts to the local T3 backend endpoint", () => {
+    expect(
+      resolveRemotePairingTarget({
+        host: "100.64.0.4",
+        pairingCode: "pairing-token",
+      }),
+    ).toEqual({
+      credential: "pairing-token",
+      httpBaseUrl: "http://100.64.0.4:3773/",
+      wsBaseUrl: "ws://100.64.0.4:3773/",
+    });
+  });
+
+  it("repairs scheme-only LAN host entries that would otherwise try HTTPS port 443", () => {
+    expect(
+      resolveRemotePairingTarget({
+        host: "https://192.168.50.131",
+        pairingCode: "pairing-token",
+      }),
+    ).toEqual({
+      credential: "pairing-token",
+      httpBaseUrl: "http://192.168.50.131:3773/",
+      wsBaseUrl: "ws://192.168.50.131:3773/",
     });
   });
 

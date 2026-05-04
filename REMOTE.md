@@ -48,6 +48,10 @@ From there, connect from another device in either of these ways:
 - in the desktop app, enter the full pairing URL
 - in the desktop app, enter the host and token separately
 
+For LAN/private hosts, including Tailscale `100.64.0.0/10` addresses, the app
+treats a bare host such as `192.168.x.y` or `100.64.x.y` as the local T3
+backend at `http://<host>:3773`.
+
 Use `t3 serve --help` for the full flag reference. It supports the same general startup options as the normal server command, including an optional `cwd` argument.
 
 > Note
