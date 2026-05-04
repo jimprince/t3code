@@ -21,6 +21,10 @@ branch tracks the upstream mobile feature branch instead.
 - The user must be able to build the mobile app from the CLI.
 - The user's Apple Developer Team (`CBCQ6MJF4B`) must be configured for iOS
   builds, paralleling the `t3code-ios` shell project.
+- EAS iOS development build credentials must be configured for the fork dev
+  bundle ID `com.brad.t3code.dev`; local Xcode signing in
+  `/Users/brad/Programming/t3code-ios` is separate and does not satisfy EAS
+  cloud build signing.
 - Do not commit or print secrets (Apple ID password, App Store Connect API
   keys, EAS-managed credentials, provisioning profile contents).
 
@@ -62,6 +66,13 @@ branch tracks the upstream mobile feature branch instead.
   configurable from `fork.config.json` without further code edits.
 - The mobile app's EAS owner, project ID, and Expo Updates URL must resolve to
   the user's fork Expo project so OTA updates do not come from upstream.
+- EAS build/update state must be verifiable from the CLI:
+  - `eas build:list --platform ios --limit 5 --json` shows at least one iOS
+    development build for `@jimprince/t3-code` after credentials are configured.
+  - The latest relevant build uses profile `development` and bundle ID
+    `com.brad.t3code.dev`.
+  - EAS Updates remain on the fork project/channel (`development`) with runtime
+    version `0.1.0`.
 - Implement iOS pairing troubleshooting instrumentation for the fork mobile app:
   - Structured mobile diagnostics with secret redaction and app-document snapshots.
   - Root-level development/fork-only debug URL commands for pair, dump, clear,
@@ -79,15 +90,47 @@ branch tracks the upstream mobile feature branch instead.
 - Surface the iOS debugging workflow from the branch entry instructions so it
   is immediately discoverable by future agents working on mobile pairing or
   physical-device testing.
+- Installed-app debug verification must show `bundleIdentifier =
+  com.brad.t3code.dev`.
+- `make ios-debug-vm-pair` must succeed against VM environment
+  `c9d5fd19-15d1-45f1-856d-3d05a939854d` when Metro and the dev client are
+  available.
+- The phone should also be able to save and connect to this MacBook backend via
+  the Mac's Tailscale URL `http://100.64.0.2:3773` without replacing the VM
+  backend.
+- Older/local backends that do not implement `subscribeTerminalMetadata` must
+  still reach shell snapshot readiness; terminal metadata remains optional.
 
 ### Current Status
 
-- In progress: adding iOS pairing troubleshooting instrumentation and host-side
-  debug control tooling on top of the mobile-track fork overlay.
-- Out of scope for this task: actually running `bun install` /
-  `expo prebuild` / a real device install. The user wanted the branch
-  scaffolded so they can drive the build from there. Build verification will
-  follow as a separate task.
+- Completed: fork Expo project wiring, EAS Updates on the `development`
+  channel, mobile pairing diagnostics, host-side debug control tooling, and VM
+  state dump verification.
+- Completed: EAS cloud iOS signing credentials are configured for
+  `com.brad.t3code.dev` under Apple team `CBCQ6MJF4B`.
+- Completed: EAS development iOS dev-client build
+  `545e2a20-54e7-47ec-9ed6-ecc70e89e47f` finished successfully and was
+  installed on the connected iPhone as `com.brad.t3code.dev`.
+- Completed: branch was rebased onto `upstream/t3code/mobile-remote-connect`
+  at `0385713da`; the old duplicate hide-whitespace add/revert commits were
+  skipped because upstream now contains that change.
+- Completed: latest development EAS Update group is
+  `38ca6731-097c-4f36-93ee-6b3cdc5ffecf` for runtime `0.1.0`.
+- Completed: `make ios-debug-vm-pair` passed against VM environment
+  `c9d5fd19-15d1-45f1-856d-3d05a939854d`; runtime state was `ready`, shell
+  snapshot loaded, with 7 projects and 14 threads at verification time.
+- Note: the installed development client did not apply OTA updates when launched
+  as a plain app during this run (`updateId` remained null). Physical-device
+  verification used the Expo dev-client Metro path, which served the rebased
+  JS/contracts directly.
+- Completed: local MacBook backend was paired on the phone using Tailscale URL
+  `http://100.64.0.2:3773` without replacing the VM backend. Debug dump showed
+  both VM and Mac runtimes in `ready` state with shell snapshots loaded; Mac
+  environment `5fa7c701-bf4d-496f-b753-55f77b4de905` had 11 projects and 161
+  threads at verification time.
+- Completed: mobile now sequences terminal metadata subscription after shell
+  bootstrap so older/local backends that do not support `subscribeTerminalMetadata`
+  still reach shell snapshot readiness.
 
 ### Open Questions / Deferred
 

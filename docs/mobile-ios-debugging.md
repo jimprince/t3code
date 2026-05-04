@@ -55,6 +55,12 @@ The implementation is intentionally split into small fork-overlay pieces:
     such as unsupported terminal metadata subscription can be recorded in
     mobile diagnostics.
 
+- `apps/mobile/src/state/use-remote-environment-registry.ts`
+  - Treats shell snapshot bootstrap as the readiness source.
+  - Subscribes to terminal metadata only after shell bootstrap succeeds, so
+    older/local backends that reject `subscribeTerminalMetadata` can still
+    connect and render projects/threads.
+
 ## How To Run The Phone Pairing Test
 
 From `apps/mobile/`, start Metro for the development client:
@@ -84,6 +90,98 @@ The exact project/thread counts may change. The important checks are:
 - runtime state is `ready`,
 - shell snapshot is loaded,
 - the snapshot file contains no auth secrets.
+
+## Local MacBook Backend
+
+The phone can also keep this MacBook backend saved alongside the VM backend.
+Use the Mac's Tailscale URL so the phone does not depend on LAN addressing:
+
+- URL: `http://100.64.0.2:3773`
+- Environment ID: `5fa7c701-bf4d-496f-b753-55f77b4de905`
+- Label: `Bradley’s MacBook Pro (4)`
+
+Verified on May 3, 2026 through the Expo dev-client Metro path:
+
+- saved connection count: 2
+- VM runtime: `ready`, shell snapshot loaded, 8 projects, 15 threads
+- Mac runtime: `ready`, shell snapshot loaded, 11 projects, 161 threads
+
+If the Mac runtime is stuck at `connecting` with `shellSnapshotPending: true`,
+check whether terminal metadata subscription is being attempted before shell
+bootstrap. The Mac fork build may reject `subscribeTerminalMetadata`; that must
+remain diagnostic-only and must not block shell readiness.
+
+## EAS Build And Update Status
+
+The fork Expo project, OTA update channel, and EAS cloud iOS signing credentials
+are configured. EAS cloud signing is separate from local Xcode signing. The old
+WKWebView wrapper at
+`/Users/brad/Programming/t3code-ios` can build locally with Xcode provisioning;
+that does not mean EAS has credentials for Expo dev-client cloud builds.
+
+Current fork EAS values:
+
+- Project: `@jimprince/t3-code`
+- Project ID: `c148e0df-ed1f-4673-9c07-403ea56b6d1b`
+- Development bundle ID: `com.brad.t3code.dev`
+- Development scheme: `t3code-brad-dev`
+- Development channel: `development`
+- Runtime version: `0.1.0`
+- Apple team: `CBCQ6MJF4B`
+- EAS iOS dev-client build: `545e2a20-54e7-47ec-9ed6-ecc70e89e47f`
+- Latest verified update group: `38ca6731-097c-4f36-93ee-6b3cdc5ffecf`
+
+`EXPO_TOKEN` is expected in `/Users/brad/.shared/config/secrets.env` for
+non-interactive EAS reads, updates, and build starts. Never print the token or
+commit it to the repo.
+
+EAS Update can ship JS/TS-only changes when the installed native dev client has
+the same runtime version. Native dependency changes, native config changes, or
+runtime-version changes require a new EAS build.
+
+Verified on May 3, 2026:
+
+- EAS credentials were created for `@jimprince/t3-code`
+  / `com.brad.t3code.dev` with Apple team `CBCQ6MJF4B`.
+- EAS development iOS build `545e2a20-54e7-47ec-9ed6-ecc70e89e47f` finished and
+  installed on the connected iPhone as `com.brad.t3code.dev`.
+- The branch was rebased onto `upstream/t3code/mobile-remote-connect` at
+  `0385713da` so the mobile client contracts match the VM backend's current
+  multi-provider contract shape.
+- `make ios-debug-vm-pair` passed through the Expo dev-client Metro path:
+  runtime state `ready`, shell snapshot loaded, 7 projects, 14 threads.
+- Plain app launch did not apply the OTA update during this verification
+  (`updateId` remained null), so physical-device acceptance used Metro:
+  `APP_VARIANT=development CI=1 bunx expo start --dev-client --clear`.
+
+Configure or inspect EAS iOS credentials interactively:
+
+```bash
+cd /Users/brad/Programming/t3-plugin/.worktrees/mobile-track/apps/mobile
+set -a
+source /Users/brad/.shared/config/secrets.env
+set +a
+APP_VARIANT=development npx eas-cli credentials -p ios
+```
+
+Create a development iOS dev-client build:
+
+```bash
+APP_VARIANT=development EXPO_NO_GIT_STATUS=1 npx eas-cli build --profile development -p ios --no-wait
+```
+
+Publish a JS/TS update to the development channel:
+
+```bash
+APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli update --channel development --environment development --platform ios --message "<message>"
+```
+
+Verify EAS build and update state:
+
+```bash
+APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli build:list --platform ios --limit 5 --json
+APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli update:list --branch development --limit 5 --json
+```
 
 ## Debug Command Channels
 
