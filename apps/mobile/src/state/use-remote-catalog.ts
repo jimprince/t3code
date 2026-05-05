@@ -198,7 +198,13 @@ export function useRemoteCatalog() {
         connectionState: connectionState ?? overallConnectionState,
       },
     });
-  }, [connectionState, overallConnectionState, projects.length, savedConnectionsById, threads.length]);
+  }, [
+    connectionState,
+    overallConnectionState,
+    projects.length,
+    savedConnectionsById,
+    threads.length,
+  ]);
 
   return {
     projects,

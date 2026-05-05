@@ -155,6 +155,15 @@ export function createThreadDetailManager(config: ThreadDetailManagerConfig) {
     });
   }
 
+  function setError(targetKey: string, message: string): void {
+    const current = config.getRegistry().get(threadDetailStateAtom(targetKey));
+    setState(targetKey, {
+      ...current,
+      error: message,
+      isPending: false,
+    });
+  }
+
   function shouldKeepWarm(entry: ThreadDetailEntry): boolean {
     return config.retention?.shouldKeepWarm?.(entry.target, getSnapshot(entry.target)) ?? false;
   }
@@ -292,6 +301,7 @@ export function createThreadDetailManager(config: ThreadDetailManagerConfig) {
       (item) => applyStreamItem(targetKey, item, target.threadId),
       {
         onResubscribe: () => markPending(targetKey),
+        onError: (message) => setError(targetKey, message),
       },
     );
   }

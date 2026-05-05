@@ -33,8 +33,9 @@ metadata before changing files.
 ## Physical iPhone pairing/debug loop
 
 If the task mentions iOS pairing, the phone, the dev VM, Tailscale backend
-connectivity, "No threads yet", Expo dev-client updates, or agent-driven mobile
-testing, read `docs/mobile-ios-debugging.md` before changing code.
+connectivity, "No threads yet", thread-open spinners, Expo dev-client updates,
+or agent-driven mobile testing, read `docs/mobile-ios-debugging.md` before
+changing code.
 
 That doc explains the fork-local instrumentation and host workflow:
 
@@ -52,14 +53,14 @@ iPhone, and verifies the shell snapshot reaches `ready`.
 
 The overlay sits at the tip of `feature/mobile-track`. Roughly:
 
-| Layer                                       | Purpose                                                                 |
-| ------------------------------------------- | ----------------------------------------------------------------------- |
-| `docs/AGENT_REQUIREMENTS.md`                | Active fork task tracker (this branch).                                 |
-| `LLM_INSTRUCTIONS.md` (this file)           | How to work on this branch.                                             |
-| `apps/mobile/fork.config.json`              | Non-secret fork identity: Apple team, bundle-id suffix, scheme suffix.  |
-| `apps/mobile/app.config.ts` (small patch)   | Reads `fork.config.json` when present and overrides upstream defaults.  |
-| `apps/mobile/eas.json` (small patch)        | Drops upstream's `ascAppId` so the fork uses its own EAS config.        |
-| `apps/mobile/Makefile`                      | CLI helpers paralleling `~/Programming/t3code-ios/Makefile`.            |
+| Layer                                     | Purpose                                                                |
+| ----------------------------------------- | ---------------------------------------------------------------------- |
+| `docs/AGENT_REQUIREMENTS.md`              | Active fork task tracker (this branch).                                |
+| `LLM_INSTRUCTIONS.md` (this file)         | How to work on this branch.                                            |
+| `apps/mobile/fork.config.json`            | Non-secret fork identity: Apple team, bundle-id suffix, scheme suffix. |
+| `apps/mobile/app.config.ts` (small patch) | Reads `fork.config.json` when present and overrides upstream defaults. |
+| `apps/mobile/eas.json` (small patch)      | Drops upstream's `ascAppId` so the fork uses its own EAS config.       |
+| `apps/mobile/Makefile`                    | CLI helpers paralleling `~/Programming/t3code-ios/Makefile`.           |
 
 **Design rule:** keep overlay edits to existing upstream files _surgical_.
 Anything bigger should live in a new fork-only file (like `fork.config.json`)

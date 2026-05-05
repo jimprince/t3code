@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo } from "react";
 
 import { derivePendingApprovals, derivePendingUserInputs } from "../lib/threadActivity";
+import { recordMobileDiagnostic } from "../lib/mobileDiagnostics";
 import { appAtomRegistry } from "./atom-registry";
 import {
   getEnvironmentClient,
@@ -68,15 +69,33 @@ export function useThreadDetail(target: ThreadDetailTarget): ThreadDetailState {
   const state = useAtomValue(
     targetKey !== null ? threadDetailStateAtom(targetKey) : EMPTY_THREAD_DETAIL_ATOM,
   );
+
+  useEffect(() => {
+    if (!state.error || targetKey === null) {
+      return;
+    }
+
+    recordMobileDiagnostic({
+      level: "warn",
+      tag: "mobile.threadDetail.error",
+      message: state.error,
+      data: { environmentId, threadId },
+    });
+  }, [environmentId, state.error, targetKey, threadId]);
+
   return targetKey === null ? EMPTY_THREAD_DETAIL_STATE : state;
 }
 
-export function useSelectedThreadDetail() {
+export function useSelectedThreadDetailState() {
   const { selectedThread } = useThreadSelection();
-  const state = useThreadDetail({
+  return useThreadDetail({
     environmentId: selectedThread?.environmentId ?? null,
     threadId: selectedThread?.id ?? null,
   });
+}
+
+export function useSelectedThreadDetail() {
+  const state = useSelectedThreadDetailState();
 
   return useMemo(() => state.data, [state.data]);
 }
