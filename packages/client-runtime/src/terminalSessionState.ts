@@ -69,7 +69,10 @@ export interface TerminalMetadataClient {
   readonly terminal: {
     readonly onMetadata: (
       listener: (event: TerminalMetadataStreamEvent) => void,
-      options?: { readonly onResubscribe?: () => void; readonly onError?: (message: string) => void },
+      options?: {
+        readonly onResubscribe?: () => void;
+        readonly onError?: (message: string) => void;
+      },
     ) => () => void;
   };
 }
@@ -548,7 +551,10 @@ export function createTerminalSessionManager(config: TerminalSessionManagerConfi
   function subscribeMetadata(input: {
     readonly environmentId: EnvironmentId;
     readonly client: TerminalMetadataClient;
-    readonly options?: { readonly onResubscribe?: () => void; readonly onError?: (message: string) => void };
+    readonly options?: {
+      readonly onResubscribe?: () => void;
+      readonly onError?: (message: string) => void;
+    };
   }): () => void {
     return input.client.terminal.onMetadata(
       (event) => applyMetadataEvent({ environmentId: input.environmentId }, event),

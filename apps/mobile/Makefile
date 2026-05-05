@@ -54,10 +54,11 @@ help:
 	@echo "    make fork-config-show      Print the resolved fork.config.json values"
 	@echo
 	@echo "  iOS device debug control:"
-	@echo "    make ios-debug-vm-pair     Pair connected iPhone to the dev VM and verify snapshot"
-	@echo "    make ios-debug-dump        Request and copy app debug snapshot"
-	@echo "    make ios-debug-clear       Clear saved mobile backends"
-	@echo "    make ios-debug-logs        Stream filtered iOS app logs"
+	@echo "    make ios-debug-vm-pair            Pair connected iPhone to the dev VM and preserve saved backends"
+	@echo "    make ios-debug-vm-pair-replace    Pair to the dev VM after clearing saved backends"
+	@echo "    make ios-debug-dump               Request and copy app debug snapshot"
+	@echo "    make ios-debug-clear              Clear saved mobile backends"
+	@echo "    make ios-debug-logs               Stream filtered iOS app logs"
 	@echo
 	@echo "Fork identity (from $(FORK_CONFIG)):"
 	@echo "  Apple Team ID    : $(APPLE_TEAM_ID)"
@@ -129,9 +130,12 @@ doctor:
 	bunx expo-doctor
 
 # --- iOS device debug control ---
-.PHONY: ios-debug-vm-pair ios-debug-dump ios-debug-clear ios-debug-logs
+.PHONY: ios-debug-vm-pair ios-debug-vm-pair-replace ios-debug-dump ios-debug-clear ios-debug-logs
 ios-debug-vm-pair:
 	node scripts/ios-debug-control.mjs pair-vm
+
+ios-debug-vm-pair-replace:
+	T3_MOBILE_DEBUG_REPLACE_EXISTING=1 node scripts/ios-debug-control.mjs pair-vm
 
 ios-debug-dump:
 	node scripts/ios-debug-control.mjs dump

@@ -38,6 +38,14 @@ function parseEnvFile(filePath) {
 }
 
 const localEnv = parseEnvFile(LOCAL_NETWORK_ENV);
+
+function parseBooleanEnv(value, defaultValue = false) {
+  if (value === undefined) {
+    return defaultValue;
+  }
+  return /^(1|true|yes)$/i.test(value.trim());
+}
+
 const config = {
   backendUrl:
     process.env.T3_MOBILE_DEBUG_VM_URL ?? localEnv.DESKTOP_DEV_VM_T3CODE_URL ?? DEFAULTS.backendUrl,
@@ -51,6 +59,7 @@ const config = {
   vmT3Bin: process.env.T3_MOBILE_DEBUG_VM_T3_BIN ?? DEFAULTS.vmT3Bin,
   appBootWaitMs: Number(process.env.T3_MOBILE_DEBUG_APP_BOOT_WAIT_MS ?? DEFAULTS.appBootWaitMs),
   commandWaitMs: Number(process.env.T3_MOBILE_DEBUG_COMMAND_WAIT_MS ?? DEFAULTS.commandWaitMs),
+  replaceExisting: parseBooleanEnv(process.env.T3_MOBILE_DEBUG_REPLACE_EXISTING, false),
   sshHost:
     process.env.T3_MOBILE_DEBUG_VM_SSH ??
     localEnv.DESKTOP_DEV_VM_TAILNET_HOST ??
@@ -97,7 +106,9 @@ async function resolveDeviceId() {
 }
 
 async function verifyVmDescriptor() {
-  const response = await fetch(`${config.backendUrl.replace(/\/$/, "")}/.well-known/t3/environment`);
+  const response = await fetch(
+    `${config.backendUrl.replace(/\/$/, "")}/.well-known/t3/environment`,
+  );
   if (!response.ok) {
     throw new Error(`VM descriptor request failed with HTTP ${response.status}.`);
   }
@@ -257,10 +268,19 @@ async function requestDump(deviceId) {
 
 function verifySnapshot(snapshot) {
   const savedConnections = snapshot.savedConnections ?? [];
-  if (savedConnections.length !== 1) {
-    throw new Error(`Expected exactly one saved connection, found ${savedConnections.length}.`);
+  if (config.replaceExisting && savedConnections.length !== 1) {
+    throw new Error(
+      `Expected exactly one saved connection after replacement, found ${savedConnections.length}.`,
+    );
   }
-  const [connection] = savedConnections;
+  const connection = savedConnections.find(
+    (entry) => entry.environmentId === config.expectedEnvironmentId,
+  );
+  if (!connection) {
+    throw new Error(
+      `Expected VM environment ${config.expectedEnvironmentId}, found ${savedConnections.length} saved connection(s).`,
+    );
+  }
   if (connection.environmentId !== config.expectedEnvironmentId) {
     throw new Error(
       `Expected VM environment ${config.expectedEnvironmentId}, found ${connection.environmentId}.`,
@@ -303,9 +323,12 @@ async function pairVm() {
   await launchDevClient(deviceId);
   await new Promise((resolve) => setTimeout(resolve, config.appBootWaitMs));
   const pairingUrl = await createPairingUrl();
-  const debugUrl = `${config.scheme}://debug/pair?pairingUrl=${encodeURIComponent(pairingUrl)}&replace=1`;
+  const replaceQuery = config.replaceExisting ? "&replace=1" : "";
+  const debugUrl = `${config.scheme}://debug/pair?pairingUrl=${encodeURIComponent(pairingUrl)}${replaceQuery}`;
   await sendDebugCommand(deviceId, debugUrl);
-  console.log("App: pairing command sent");
+  console.log(
+    `App: pairing command sent (${config.replaceExisting ? "replace existing backends" : "preserve existing backends"})`,
+  );
   await new Promise((resolve) => setTimeout(resolve, config.commandWaitMs));
   const { snapshotPath, snapshot } = await requestDump(deviceId);
   verifySnapshot(snapshot);

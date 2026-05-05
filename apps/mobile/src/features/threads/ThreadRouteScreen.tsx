@@ -1,5 +1,5 @@
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as Arr from "effect/Array";
 import * as Option from "effect/Option";
 import { pipe } from "effect/Function";
@@ -7,6 +7,7 @@ import { EnvironmentId, type ProjectScript } from "@t3tools/contracts";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
 import { Pressable, ScrollView, Text as RNText, View, useColorScheme } from "react-native";
 import { useThemeColor } from "../../lib/useThemeColor";
+import { recordMobileDiagnostic } from "../../lib/mobileDiagnostics";
 import { useGitStatus, gitStatusManager } from "../../state/use-git-status";
 import { dismissGitActionResult, useGitActionProgress } from "../../state/use-git-action-state";
 
@@ -22,7 +23,7 @@ import {
   useRemoteEnvironmentState,
 } from "../../state/use-remote-environment-registry";
 import { useKnownTerminalSessions } from "../../state/use-terminal-session";
-import { useSelectedThreadDetail } from "../../state/use-thread-detail";
+import { useSelectedThreadDetailState } from "../../state/use-thread-detail";
 import { useThreadSelection } from "../../state/use-thread-selection";
 import { GitActionProgressOverlay } from "./GitActionProgressOverlay";
 import {
@@ -60,7 +61,8 @@ export function ThreadRouteScreen() {
   const { projects, threads } = useRemoteCatalog();
   const { selectedThread, selectedThreadProject, selectedEnvironmentConnection } =
     useThreadSelection();
-  const selectedThreadDetail = useSelectedThreadDetail();
+  const selectedThreadDetailState = useSelectedThreadDetailState();
+  const selectedThreadDetail = selectedThreadDetailState.data;
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const composer = useThreadComposerState();
   const gitState = useSelectedThreadGitState();
@@ -102,6 +104,7 @@ export function ThreadRouteScreen() {
     environmentId: selectedThread?.environmentId ?? null,
     threadId: selectedThread?.id ?? null,
   });
+  const lastThreadRouteDiagnosticKeyRef = useRef<string | null>(null);
   const terminalMenuSessions = useMemo(
     () =>
       buildTerminalMenuSessions({
@@ -111,6 +114,56 @@ export function ThreadRouteScreen() {
     [knownTerminalSessions, selectedThreadProject?.workspaceRoot],
   );
   const selectedThreadDetailWorktreePath = selectedThreadDetail?.worktreePath ?? null;
+
+  useEffect(() => {
+    if (!environmentId || !threadId) {
+      return;
+    }
+
+    if (selectedThreadDetail) {
+      const diagnosticKey = `ready:${environmentId}:${threadId}:${selectedThreadDetail.updatedAt}`;
+      if (lastThreadRouteDiagnosticKeyRef.current === diagnosticKey) {
+        return;
+      }
+      lastThreadRouteDiagnosticKeyRef.current = diagnosticKey;
+      recordMobileDiagnostic({
+        level: "info",
+        tag: "mobile.threadRoute.detail.ready",
+        data: {
+          environmentId,
+          threadId,
+          title: selectedThreadDetail.title,
+        },
+      });
+      return;
+    }
+
+    if (selectedThreadDetailState.error || selectedThreadDetailState.isDeleted) {
+      const diagnosticKey = `unavailable:${environmentId}:${threadId}:${selectedThreadDetailState.isDeleted}:${selectedThreadDetailState.error ?? ""}`;
+      if (lastThreadRouteDiagnosticKeyRef.current === diagnosticKey) {
+        return;
+      }
+      lastThreadRouteDiagnosticKeyRef.current = diagnosticKey;
+      recordMobileDiagnostic({
+        level: "warn",
+        tag: "mobile.threadRoute.detail.unavailable",
+        message:
+          selectedThreadDetailState.error ??
+          "This thread was deleted or is no longer available on the connected server.",
+        data: {
+          environmentId,
+          isDeleted: selectedThreadDetailState.isDeleted,
+          threadId,
+        },
+      });
+    }
+  }, [
+    environmentId,
+    selectedThreadDetail,
+    selectedThreadDetailState.error,
+    selectedThreadDetailState.isDeleted,
+    threadId,
+  ]);
 
   /* ─── Git action progress (for overlay banner) ──────────────────── */
   const gitActionProgressTarget = useMemo(
@@ -278,6 +331,29 @@ export function ThreadRouteScreen() {
   }
 
   if (!selectedThreadDetail) {
+    if (selectedThreadDetailState.error || selectedThreadDetailState.isDeleted) {
+      return (
+        <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
+          contentContainerStyle={{
+            flexGrow: 1,
+            justifyContent: "center",
+            paddingHorizontal: 24,
+            paddingVertical: 32,
+          }}
+          className="bg-screen flex-1"
+        >
+          <EmptyState
+            title="Thread unavailable"
+            detail={
+              selectedThreadDetailState.error ??
+              "This thread was deleted or is no longer available on the connected server."
+            }
+          />
+        </ScrollView>
+      );
+    }
+
     return <LoadingScreen message="Opening thread…" />;
   }
 

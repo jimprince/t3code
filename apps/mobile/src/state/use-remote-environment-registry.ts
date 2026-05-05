@@ -646,8 +646,7 @@ export function useRemoteConnections() {
         recordMobileDiagnostic({
           level: "error",
           tag: "mobile.pairing.connect.error",
-          message:
-            error instanceof Error ? error.message : "Failed to pair with the environment.",
+          message: error instanceof Error ? error.message : "Failed to pair with the environment.",
         });
         setPendingConnectionError(
           error instanceof Error ? error.message : "Failed to pair with the environment.",

@@ -42,6 +42,7 @@ The implementation is intentionally split into small fork-overlay pieces:
 - `apps/mobile/Makefile`
   - Adds:
     - `make ios-debug-vm-pair`
+    - `make ios-debug-vm-pair-replace`
     - `make ios-debug-dump`
     - `make ios-debug-clear`
     - `make ios-debug-logs`
@@ -75,6 +76,11 @@ In another shell:
 make ios-debug-vm-pair
 ```
 
+This preserves existing saved backends on the phone. Use
+`make ios-debug-vm-pair-replace` only when intentionally testing a clean
+single-backend state; it sends `replace=1` and clears saved connections such as
+the MacBook backend.
+
 Expected success output:
 
 ```text
@@ -86,7 +92,8 @@ Debug dump: /var/folders/.../T/t3-mobile-debug/t3-mobile-debug-snapshot.json
 
 The exact project/thread counts may change. The important checks are:
 
-- saved connection environment ID is `c9d5fd19-15d1-45f1-856d-3d05a939854d`,
+- saved connections include environment ID
+  `c9d5fd19-15d1-45f1-856d-3d05a939854d`,
 - runtime state is `ready`,
 - shell snapshot is loaded,
 - the snapshot file contains no auth secrets.
@@ -192,6 +199,7 @@ APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 npx eas-cli update:list --bran
 The app supports debug URLs in dev/fork builds:
 
 ```text
+t3code-brad-dev://debug/pair?pairingUrl=<encoded>
 t3code-brad-dev://debug/pair?pairingUrl=<encoded>&replace=1
 t3code-brad-dev://debug/dump
 t3code-brad-dev://debug/clear-connections
@@ -216,6 +224,9 @@ with this shape:
 
 The app polls that file in dev/fork builds and runs new commands once.
 
+Do not use `replace=1` for routine verification unless the test explicitly
+requires clearing every saved backend.
+
 ## What The Snapshot Proves
 
 The copied snapshot distinguishes these cases:
@@ -227,6 +238,45 @@ The copied snapshot distinguishes these cases:
 - shell snapshot loaded with real projects/threads,
 - WebSocket/RPC/schema failures,
 - stale saved Mac backend versus the dev VM backend.
+
+## Thread Opening Spinner Triage
+
+When the app gets stuck on `Opening thread...` after selecting a thread from a
+connected server, separate shell-catalog state from per-thread detail state:
+
+1. Verify the app build and JS source first.
+   - Dev bundle ID should be `com.brad.t3code.dev`.
+   - If using the dev client, start Metro from this worktree:
+     `APP_VARIANT=development CI=1 bunx expo start --dev-client --clear`.
+   - If relying on OTA, confirm `Updates.updateId` and channel in the debug
+     snapshot; a plain app launch may keep `updateId` null.
+2. Dump the device state:
+   - `cd apps/mobile && make ios-debug-dump`
+   - Check `savedConnections`, `runtime.state`, `shellSnapshotLoaded`,
+     `projectCount`, and `threadCount`.
+3. Interpret the route state:
+   - Missing route params means Expo Router never supplied
+     `environmentId/threadId`.
+   - `runtime.state` of `connecting` or `reconnecting` means connection
+     hydration is still blocking the route.
+   - `runtime.state` of `ready` plus `shellSnapshotLoaded: true` but no matching
+     thread means the shell catalog does not contain the route thread; the UI
+     should show `Thread unavailable`.
+   - A matching shell thread with no detail usually means
+     `orchestration.subscribeThread` failed or never delivered a snapshot.
+4. Check diagnostics for detail subscription failures:
+   - `mobile.threadDetail.error` identifies a per-thread detail subscription
+     failure and records the environment/thread IDs without secrets.
+   - Backend `subscribeThread` can fail with `Thread <id> was not found` if the
+     shell snapshot is stale or the server read model has no detail row.
+   - Client/runtime schema mismatches also surface here as non-transport
+     subscription errors.
+
+Implementation note: `packages/client-runtime/src/threadDetailState.ts` must
+convert non-retryable subscription errors into `ThreadDetailState.error` with
+`isPending: false`. The mobile thread route must render that error instead of
+leaving `selectedThreadDetail === null` on an infinite spinner. The focused
+regression is `packages/client-runtime/src/threadDetailState.test.ts`.
 
 Example successful VM state:
 

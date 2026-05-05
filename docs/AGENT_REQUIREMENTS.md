@@ -1,5 +1,49 @@
 # Agent Requirements
 
+## Current Task: Reconcile Mobile Spinner Debug Worktree
+
+Reconcile the intentional work from
+`/Users/brad/.t3/worktrees/t3-plugin/feature-ios-thread-spinner-debug` into the
+canonical `feature/mobile-track` worktree, then remove the redundant spinner
+debug branch/worktree once the useful changes are represented here.
+
+### Current User Requirements
+
+- Use `feature/mobile-track` as the canonical branch/worktree.
+- Port the intentional iOS thread-opening spinner fix, diagnostics, tests,
+  debug workflow improvements, and required docs/dependency changes from
+  `feature/ios-thread-spinner-debug`.
+- Do not keep generated or formatting-only drift unless it is needed for the
+  intended reconciliation.
+- Clean up the redundant spinner debug branch and worktree after reconciliation.
+- Preserve unrelated existing mobile-track work.
+- Do not print or commit secrets.
+
+### Acceptance Criteria
+
+- `feature/mobile-track` contains the useful spinner-debug changes.
+- Low-signal generated-only diffs in the mobile-track worktree are removed.
+- The spinner debug worktree and branch are removed after reconciliation.
+- Focused verification is run where feasible, and any skipped repo-required
+  verification is called out.
+
+### Status
+
+- Completed: ported the selected spinner-debug files into `feature/mobile-track`.
+- Completed: removed generated/formatting-only drift from
+  `apps/mobile/uniwind-types.d.ts` and `apps/web/public/mockServiceWorker.js`.
+- Completed: verification run:
+  - `bun fmt`
+  - `bun lint` (0 errors; existing warnings remain)
+  - `bun run --filter @t3tools/client-runtime test src/threadDetailState.test.ts`
+  - `bun install` to refresh workspace dependencies after the first typecheck
+    failed to resolve workspace packages
+  - `bun typecheck` (passed after install; existing Effect advisory messages
+    remain)
+- Completed: removed redundant worktree
+  `/Users/brad/.t3/worktrees/t3-plugin/feature-ios-thread-spinner-debug`.
+- Completed: deleted local branch `feature/ios-thread-spinner-debug`.
+
 ## Current Task: Mobile Track Branch (feature/mobile-track)
 
 Set up and maintain a long-lived fork branch that mirrors upstream's
@@ -91,7 +135,7 @@ branch tracks the upstream mobile feature branch instead.
   is immediately discoverable by future agents working on mobile pairing or
   physical-device testing.
 - Installed-app debug verification must show `bundleIdentifier =
-  com.brad.t3code.dev`.
+com.brad.t3code.dev`.
 - `make ios-debug-vm-pair` must succeed against VM environment
   `c9d5fd19-15d1-45f1-856d-3d05a939854d` when Metro and the dev client are
   available.

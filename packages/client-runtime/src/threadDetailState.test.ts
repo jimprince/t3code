@@ -67,11 +67,28 @@ function createMockClient(): {
   client: ThreadDetailClient;
   listeners: Set<(event: OrchestrationThreadStreamItem) => void>;
   emit: (event: OrchestrationThreadStreamItem) => void;
+  emitError: (message: string) => void;
 } {
   const listeners = new Set<(event: OrchestrationThreadStreamItem) => void>();
+  const errorListeners = new Set<(message: string) => void>();
   const client: ThreadDetailClient = {
-    subscribeThread: vi.fn((_input, listener: (event: OrchestrationThreadStreamItem) => void) =>
-      registerListener(listeners, listener),
+    subscribeThread: vi.fn(
+      (
+        _input,
+        listener: (event: OrchestrationThreadStreamItem) => void,
+        options?: { readonly onError?: (message: string) => void },
+      ) => {
+        const unregisterListener = registerListener(listeners, listener);
+        if (options?.onError) {
+          errorListeners.add(options.onError);
+        }
+        return () => {
+          unregisterListener();
+          if (options?.onError) {
+            errorListeners.delete(options.onError);
+          }
+        };
+      },
     ),
   };
 
@@ -81,6 +98,11 @@ function createMockClient(): {
     emit: (event) => {
       for (const listener of listeners) {
         listener(event);
+      }
+    },
+    emitError: (message) => {
+      for (const listener of errorListeners) {
+        listener(message);
       }
     },
   };
@@ -217,6 +239,27 @@ describe("createThreadDetailManager", () => {
       error: null,
       isPending: false,
       isDeleted: true,
+    });
+
+    release();
+  });
+
+  it("records subscription errors so callers do not stay pending forever", () => {
+    const { client, emitError } = createMockClient();
+    const manager = createThreadDetailManager({
+      getRegistry: () => atomRegistry,
+      getClient: () => null,
+    });
+
+    const release = manager.watch(TARGET, client);
+
+    emitError("Thread thread-1 was not found");
+
+    expect(manager.getSnapshot(TARGET)).toEqual({
+      data: null,
+      error: "Thread thread-1 was not found",
+      isPending: false,
+      isDeleted: false,
     });
 
     release();
