@@ -1,5 +1,44 @@
 # Agent Requirements
 
+## Current Task: Automate Mobile EAS Updates
+
+Add CI/CD so pushes to `feature/mobile-track` can publish the fork mobile app's
+JavaScript/assets through EAS Update, making GitHub branch changes available to
+installed compatible dev-client builds without manually running the update
+command.
+
+### Current User Requirements
+
+- Add EAS Update publishing as part of CI for the mobile-track branch.
+- Keep automation scoped to `feature/mobile-track`; do not affect fork `main`
+  desktop sync/release workflows.
+- Continue to avoid committing or printing secrets.
+- Preserve existing mobile-track overlay rules and documentation.
+
+### Acceptance Criteria
+
+- A GitHub Actions workflow exists for `feature/mobile-track` pushes and manual
+  dispatch.
+- The workflow verifies the branch before publishing.
+- The workflow publishes an EAS Update to the fork mobile app's development
+  channel when the required Expo token secret is available.
+- Repo docs explain what the workflow does and which secret it requires.
+- Workflow syntax and relevant checks are verified locally where feasible.
+
+### Status
+
+- Completed: added `.github/workflows/mobile-track-eas-update.yml` for
+  `feature/mobile-track` pushes and manual dispatch.
+- Completed: documented the GitHub `EXPO_TOKEN` repository secret requirement
+  in `LLM_INSTRUCTIONS.md` and `docs/mobile-ios-debugging.md`.
+- Completed: local verification run:
+  - parsed workflow YAML with Ruby
+  - `bun fmt`
+  - `bun lint` (0 errors; existing warnings remain)
+  - `bun typecheck` (passed; existing Effect advisory messages remain)
+- Note: `actionlint` is not installed locally, so GitHub-expression validation
+  is deferred to the pushed workflow run.
+
 ## Current Task: Reconcile Mobile Spinner Debug Worktree
 
 Reconcile the intentional work from

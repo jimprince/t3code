@@ -146,6 +146,13 @@ Current fork EAS values:
 non-interactive EAS reads, updates, and build starts. Never print the token or
 commit it to the repo.
 
+GitHub Actions also needs an `EXPO_TOKEN` repository secret for
+`.github/workflows/mobile-track-eas-update.yml`. On pushes to
+`feature/mobile-track` that touch mobile/runtime inputs, that workflow runs
+format, lint, typecheck, the focused thread-detail regression, and then publishes
+an iOS EAS Update to the `development` channel. If that secret is missing, the
+workflow fails before publishing.
+
 EAS Update can ship JS/TS-only changes when the installed native dev client has
 the same runtime version. Native dependency changes, native config changes, or
 runtime-version changes require a new EAS build.

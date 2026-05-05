@@ -137,6 +137,15 @@ For EAS signing, build, update, and physical-device verification status, read
 for this Expo app. Prefer `npx eas-cli` if `bunx eas-cli` hits transient package
 resolution failures.
 
+## Publishing mobile updates
+
+Pushes to `feature/mobile-track` that touch mobile/runtime inputs run
+`.github/workflows/mobile-track-eas-update.yml`. That workflow verifies the
+branch and publishes an iOS EAS Update to the `development` channel for the fork
+Expo project. It requires the GitHub repository secret `EXPO_TOKEN`; a Git push
+alone only persists code in GitHub and does not update installed clients unless
+this workflow or a manual EAS Update succeeds.
+
 ## Hard rules on this branch
 
 - Do not modify any `.github/workflows/*.yml` that targets `main` (sync,
