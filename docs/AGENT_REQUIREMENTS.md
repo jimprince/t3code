@@ -38,6 +38,12 @@ command.
   - `bun typecheck` (passed; existing Effect advisory messages remain)
 - Note: `actionlint` is not installed locally, so GitHub-expression validation
   is deferred to the pushed workflow run.
+- Completed: pushed workflow commits and verified GitHub Actions trigger.
+- Completed: first hosted-runner workflow run validated install, format, lint,
+  typecheck, and focused regression successfully.
+- Blocked: EAS publish did not run because the GitHub repository secret
+  `EXPO_TOKEN` is not configured. `gh secret list --repo jimprince/t3code`
+  showed no `EXPO_TOKEN` entry.
 
 ## Current Task: Reconcile Mobile Spinner Debug Worktree
 
