@@ -1,5 +1,35 @@
 # Agent Requirements
 
+## Current Task: Fix macOS signing documentation
+
+Update fork release documentation so it matches the current macOS signing and
+notarization workflow.
+
+### Current User Requirements
+
+- Fix the stale documentation that says macOS artifacts are unsigned.
+- Preserve the current release workflow behavior: macOS signing/notarization is
+  enabled only when the required Apple Developer ID and App Store Connect
+  secrets are present.
+- Do not inspect or print secret values.
+- Keep the change documentation-only unless a real workflow gap is found.
+
+### Current Acceptance Criteria
+
+- `LLM_INSTRUCTIONS.md` accurately describes macOS signing/notarization and
+  the required secret names.
+- `docs/release.md` matches the current release signing behavior.
+- Required repo checks are run, or any skipped checks are reported.
+
+### Current Status
+
+- Completed: updated `LLM_INSTRUCTIONS.md` and `docs/release.md` to describe
+  the current conditional macOS signing/notarization path.
+- Confirmed the latest release run logged `macOS signing enabled`, Developer ID
+  signing, and successful notarization for
+  `v0.0.23-nightly.20260506.212-fork.1`.
+- Verified with `bun fmt`, `bun lint`, and `bun typecheck`.
+
 ## Current Task: May 6 Minimal Main Rewrite
 
 Repair Brad's fork sync by rewriting `origin/main` to a minimal fork stack on
