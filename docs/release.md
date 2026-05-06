@@ -192,10 +192,18 @@ Expected updater proof line:
 
 ## Signing
 
-Release artifacts are currently unsigned unless Apple signing secrets are
-present. macOS users may need right-click Open or quarantine removal for first
-launch. Windows signing setup is intentionally omitted because Windows builds
-are not part of the fork release matrix.
+macOS release artifacts are Developer ID-signed and notarized when all required
+Apple secrets are present: `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_API_KEY`,
+`APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`. The release workflow logs
+`macOS signing enabled.` before the desktop build and Electron Builder should
+later log `notarization successful`.
+
+If any required Apple secret is missing, the macOS build intentionally proceeds
+unsigned and logs `macOS signing disabled (missing one or more Apple signing
+secrets).` Do not print or inspect secret values; use `gh secret list --repo
+jimprince/t3code` only to confirm secret names exist. Linux AppImage artifacts
+are not code-signed. Windows signing setup is intentionally omitted because
+Windows builds are not part of the fork release matrix.
 
 ## Troubleshooting
 
