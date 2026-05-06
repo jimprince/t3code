@@ -1,5 +1,48 @@
 # Agent Requirements
 
+## Current Task: May 6 Minimal Main Rewrite
+
+Repair Brad's fork sync by rewriting `origin/main` to a minimal fork stack on
+top of the latest upstream nightly while preserving custom fork features.
+
+### Current User Requirements
+
+- Keep Brad's fork as minimal as possible while maintaining custom features.
+- Preserve the fork desktop identity and updater lanes documented in
+  `LLM_INSTRUCTIONS.md`.
+- Keep mobile overlay work on `origin/feature/mobile-track`, not merged into
+  `main`.
+- Create a remote backup of the current `origin/main` before rewriting it.
+- Rebase the minimal fork maintenance stack onto the latest upstream nightly
+  available at execution time.
+- Run `bun fmt`, `bun lint`, and `bun typecheck` before considering the rewrite
+  complete.
+- Push rewritten `origin/main` with `--force-with-lease` and publish the next
+  fork nightly tag for the upstream nightly.
+
+### Current Acceptance Criteria
+
+- Current `origin/main` is preserved in a backup remote ref.
+- Rewritten `main` is based on the latest upstream nightly tag and excludes
+  mobile-only overlay commits and release-finalizer noise.
+- Fork branding, release automation, updater behavior, and fork-specific fixes
+  remain in the rebased stack.
+- Required checks pass.
+- Pushed refs, workflow URLs, and any blockers are reported.
+
+### Current Status
+
+- In progress.
+- Backup branch `backup/main-before-minimal-rewrite-20260506` was pushed at
+  `1f189f6b7338201e8ec966305f2a48a1411db035`.
+- Latest upstream nightly at execution time is
+  `v0.0.23-nightly.20260506.212`
+  (`166bce0389e2068ae48c5936692eb315b17a269d`).
+- Minimal fork stack rebased cleanly onto
+  `refs/tags/upstream/v0.0.23-nightly.20260506.212`.
+- Mobile branch remains separate at
+  `a39ad591697ed71b543e6d3777a9f8c1f97f3a05`.
+
 ## Current Task: Preserve LAN Backend Pairing Fix
 
 Save the useful LAN/Tailscale backend pairing changes from the cleanup stash,
