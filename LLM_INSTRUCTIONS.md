@@ -82,9 +82,10 @@ versioning axis for the fork.
   that when upstream ships a new release on the selected channel.
 - sync-upstream fetches upstream tags into `refs/tags/upstream/*` (namespaced)
   to avoid clobbering our tags, then rebases our fork commits onto the upstream
-  tag and force-pushes `main` plus a release tag. Pushing the release tag is
-  what drives the build: `release.yml` has no `schedule:` trigger and fires
-  only on tag pushes (and `workflow_dispatch`).
+  tag, stamps releasable package versions to the fork release version, and
+  force-pushes `main` plus a release tag that points at the stamped commit.
+  Pushing the release tag is what drives the build: `release.yml` has no
+  `schedule:` trigger and fires only on tag pushes (and `workflow_dispatch`).
 - Tag scheme by channel:
   - **stable**: `${upstream_tag}` verbatim (e.g. `v0.0.21`). The fork and
     upstream share the tag name; the commit on the fork is upstream's commit
@@ -303,13 +304,20 @@ paths that can affect packaged app/runtime output (`apps/**`, `packages/**`,
 Docs, workflows, and unrelated helper scripts must not publish a fork-only
 desktop update. If the pushed commit is not already release-tagged and is not
 the release finalizer's `chore(release): prepare ...` commit, it computes the
-next unreleased upstream patch version and pushes `vNEXT-fork.N`.
+next unreleased upstream patch version, stamps releasable package versions to
+that release version, commits the stamp, and pushes `vNEXT-fork.N` at the
+stamped commit.
 
 Example: if upstream latest stable is `v0.0.21`, the first fork-only main
 push creates `v0.0.22-fork.1`; the next creates `v0.0.22-fork.2`. These are
 published as normal latest releases so stable desktop clients see them. When
 upstream later ships `v0.0.22`, sync-upstream publishes `v0.0.22`, which
 semver ranks above every `v0.0.22-fork.N`.
+
+Release tags must contain the stamped package versions, not only rely on
+`release.yml`'s temporary build-time stamp. The headless `t3` CLI reports its
+version from `apps/server/package.json`, and remote/headless installs may run
+from a tag checkout rather than a desktop release artifact.
 
 ## Worktree pattern for commits
 
