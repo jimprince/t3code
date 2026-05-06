@@ -98,6 +98,18 @@ jobs:
           # PAT required: GITHUB_TOKEN cannot push commits that modify workflow files
           token: ${{ secrets.GH_PAT }}
 
+      - name: Setup Bun
+        if: steps.channel.outputs.selected == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        if: steps.channel.outputs.selected == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
       - name: Configure git
         if: steps.channel.outputs.selected == 'true'
         run: |
@@ -273,14 +285,31 @@ jobs:
               next_n=$((last + 1))
             fi
             new_tag="${upstream_tag}-fork.${next_n}"
+          else
+            new_tag="$upstream_tag"
+          fi
+
+          version="${new_tag#v}"
+          bun install --frozen-lockfile --ignore-scripts
+          node scripts/update-release-package-versions.ts "$version"
+          bunx oxfmt apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json
+          bun install --lockfile-only --ignore-scripts
+
+          if ! git diff --quiet -- apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock; then
+            git add apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock
+            git commit -m "chore(release): prepare $new_tag"
+          else
+            echo "Package versions already match $version."
+          fi
+
+          if [[ "$CHANNEL" == "nightly" ]]; then
             git tag "$new_tag" HEAD
             git push origin HEAD:main --force-with-lease
             git push origin "$new_tag"
             echo "Pushed $new_tag (rebased onto $upstream_tag) — release.yml will build and publish."
           else
-            new_tag="$upstream_tag"
-            # Force-update tag in case git auto-followed it from the upstream fetch
-            git tag -f "$new_tag"
+            # Force-update tag in case git auto-followed it from the upstream fetch.
+            git tag -f "$new_tag" HEAD
             git push origin HEAD:main --force-with-lease
             git push origin "$new_tag" --force
             echo "Pushed $new_tag — release.yml will build and publish."

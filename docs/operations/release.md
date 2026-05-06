@@ -15,6 +15,9 @@ file is the concise runbook.
 - Stable fork-only interim builds use `vNEXT-fork.N`, for example
   `v0.0.22-fork.1`.
 - Nightly fork builds use `vX.Y.Z-nightly.YYYYMMDD.RUN-fork.N`.
+- Release tags point at commits where releasable package versions already
+  match the release tag. This keeps tag-checkout/headless installs reporting
+  the same version as the desktop release.
 
 ## Fork-Interim Trigger
 
@@ -26,6 +29,11 @@ build inputs.
 Docs, workflow maintenance, release helper scripts, and other repo plumbing
 should not create `vNEXT-fork.N`. Use manual `release.yml` dispatch if a
 maintenance-only commit genuinely needs to ship as a desktop update.
+
+Before pushing `vNEXT-fork.N`, the workflow stamps the releasable package
+versions and lockfile, then tags the stamped commit. That package stamp is
+required because the headless `t3` server reports its version from
+`apps/server/package.json`.
 
 ## Normal Commands
 
@@ -44,6 +52,10 @@ Sync stable or nightly from upstream:
 gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
 gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
 ```
+
+For both channels, `sync-upstream.yml` rebases fork commits onto the selected
+upstream tag, stamps package versions to the derived fork release version, and
+pushes the release tag at that stamped commit.
 
 Check both channels:
 
