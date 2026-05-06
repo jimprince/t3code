@@ -605,6 +605,7 @@ const make = Effect.gen(function* () {
     }
 
     const sessionRuntime = yield* resolveSessionRuntimeForThread(event.payload.threadId);
+    const projects = yield* resolveThreadProjects(thread.projectId);
     const revertCwd =
       Option.match(sessionRuntime, {
         onNone: () => undefined,
@@ -612,7 +613,7 @@ const make = Effect.gen(function* () {
       }) ??
       resolveThreadWorkspaceCwd({
         thread,
-        projects: readModel.projects,
+        projects,
       });
     if (!revertCwd) {
       yield* appendRevertFailureActivity({
