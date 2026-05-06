@@ -1,5 +1,43 @@
 # Agent Requirements
 
+## Current Task: Close Mobile Track Work
+
+Update the mobile troubleshooting runbook with any lessons from the EAS
+dev-client/debugging session, then commit outstanding work, merge the mobile
+track branch to fork `main`, push to GitHub, and clean up the local
+`feature/mobile-track` branch/worktree.
+
+### Current User Requirements
+
+- If the troubleshooting session produced reusable lessons, update the
+  troubleshooting runbook.
+- Commit all outstanding mobile-track work.
+- Merge the completed mobile-track branch into fork `main`.
+- Push the result to the user's GitHub fork.
+- Clean up the local feature branch and worktree after the merge/push is
+  complete.
+- Continue to avoid committing or printing secrets.
+
+### Acceptance Criteria
+
+- `docs/mobile-ios-debugging.md` documents the EAS/dev-client troubleshooting
+  behavior learned during the session.
+- Required checks are run before finalizing.
+- The relevant changes are committed and pushed.
+- Fork `main` contains the merged mobile-track work.
+- The local `feature/mobile-track` worktree and branch are removed after merge.
+
+### Status
+
+- Completed: updated `docs/mobile-ios-debugging.md` with stale EAS update
+  troubleshooting, correct Expo dev-client deep-link launch form, and
+  uninstall/reinstall verification notes.
+- Completed: required checks passed:
+  - `bun fmt`
+  - `bun lint` (0 errors; existing warnings remain)
+  - `bun typecheck` (passed; existing Effect advisory messages remain)
+- In progress: committing and merging to fork `main`.
+
 ## Current Task: Automate Mobile EAS Updates
 
 Add CI/CD so pushes to `feature/mobile-track` can publish the fork mobile app's

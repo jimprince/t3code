@@ -157,6 +157,55 @@ EAS Update can ship JS/TS-only changes when the installed native dev client has
 the same runtime version. Native dependency changes, native config changes, or
 runtime-version changes require a new EAS build.
 
+### Dev Client Update Troubleshooting
+
+When the installed iOS dev client shows saved servers but no threads, first
+check the app update identity in the debug snapshot:
+
+```bash
+cd apps/mobile
+make ios-debug-dump
+```
+
+If `savedConnectionCount` is non-zero but all runtimes are stuck at
+`connecting` with `shellSnapshotPending: true`, compare `app.updateId` with the
+latest EAS update:
+
+```bash
+APP_VARIANT=development CI=1 EXPO_NO_GIT_STATUS=1 \
+  npx eas-cli update:list --branch development --limit 5 --json
+```
+
+A stale `updateId` can keep running old JavaScript even after a new EAS Update
+has published. In one verified failure, stale update
+`019df07b-137b-7ee2-b33f-2efe39542601` attempted terminal metadata
+subscription before shell bootstrap and left both saved backends yellow. The
+latest update `019dfaa4-60ef-7ff0-b366-5d81a0d0d7ef` loaded correctly and both
+VM and MacBook backends reached `ready`.
+
+Plain app launch can open the Expo dev-client shell rather than the fork app
+runtime. Directly passing `https://u.expo.dev/update/<update-id>` as the launch
+payload can also be ignored by the dev client. Use the Expo dev-client deep-link
+wrapper when validating a specific EAS update:
+
+```bash
+xcrun devicectl device process launch \
+  --device <device-id> \
+  --terminate-existing \
+  --payload-url 't3code-brad-dev://expo-development-client/?url=https%3A%2F%2Fu.expo.dev%2Fupdate%2F<update-id>' \
+  com.brad.t3code.dev
+```
+
+After deleting the app to clear a stale Expo update cache, reinstall the latest
+IPA and relaunch with the wrapped update URL above. Then run
+`make ios-debug-dump` and verify:
+
+- `app.bundleIdentifier` is `com.brad.t3code.dev`.
+- `app.updateId` matches the intended EAS update ID.
+- saved runtimes reach `ready` with `shellSnapshotLoaded: true`.
+- VM and MacBook saved backends are still present, or re-pair them if iOS
+  cleared app data during uninstall.
+
 Verified on May 3, 2026:
 
 - EAS credentials were created for `@jimprince/t3-code`
