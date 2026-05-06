@@ -208,13 +208,32 @@ silently replaced upstream's installation. We renamed the packaged app to
 
 When merging upstream changes that touch any of these, keep our values.
 
-## macOS/Linux artifacts are unsigned
+## macOS signing and notarization
 
-Release artifacts are **not** Apple Developer ID-signed or notarized. First-
-open on macOS is blocked by Gatekeeper; users bypass via right-click → Open,
-or `xattr -rd com.apple.quarantine`. If you want to fix this properly, it
-requires wiring an Apple Developer cert + notarization credentials into
-release.yml — an open TODO, not a missing config.
+macOS release artifacts are Developer ID-signed and notarized when the release
+job has all required Apple secrets:
+
+- `CSC_LINK`
+- `CSC_KEY_PASSWORD`
+- `APPLE_API_KEY`
+- `APPLE_API_KEY_ID`
+- `APPLE_API_ISSUER`
+
+`.github/workflows/release.yml` writes the App Store Connect key to a temporary
+`.p8` file, exports `APPLE_API_KEY` as that file path, and passes `--signed` to
+`scripts/build-desktop-artifact.ts`. The build script leaves Electron Builder's
+signing/notarization environment intact only for signed builds; unsigned builds
+strip the Apple signing variables and disable certificate auto-discovery.
+
+Before assuming a macOS release is Gatekeeper-ready, verify the build log
+contains both `macOS signing enabled.` and `notarization successful`. You may
+check secret names with `gh secret list --repo jimprince/t3code`, but never
+print or inspect secret values. The latest verified signed/notarized fork
+release at the time this note was updated was
+`v0.0.23-nightly.20260506.212-fork.1`.
+
+Linux AppImage artifacts are not code-signed. Windows signing setup is
+intentionally omitted because Windows is not part of the fork release matrix.
 
 ## Fork-only interim builds: use `-fork.N` pre-release suffix
 
