@@ -87,7 +87,42 @@ export const ClaudeModelSelection = Schema.Struct({
 });
 export type ClaudeModelSelection = typeof ClaudeModelSelection.Type;
 
-export const ModelSelection = Schema.Union([CodexModelSelection, ClaudeModelSelection]);
+const LegacyInstanceModelSelection = Schema.Struct({
+  instanceId: ProviderKind,
+  model: TrimmedNonEmptyString,
+  options: Schema.optionalKey(
+    Schema.Union([
+      CodexModelOptions,
+      ClaudeModelOptions,
+      LegacyCodexModelOptions,
+      LegacyClaudeModelOptions,
+    ]),
+  ),
+}).pipe(
+  Schema.decodeTo(
+    Schema.Union([CodexModelSelection, ClaudeModelSelection]),
+    SchemaTransformation.transformOrFail({
+      decode: ({ instanceId, model, options }) =>
+        Effect.succeed({
+          provider: instanceId,
+          model,
+          ...(options === undefined ? {} : { options }),
+        }),
+      encode: ({ provider, model, options }) =>
+        Effect.succeed({
+          instanceId: provider,
+          model,
+          ...(options === undefined ? {} : { options }),
+        }),
+    }),
+  ),
+);
+
+export const ModelSelection = Schema.Union([
+  CodexModelSelection,
+  ClaudeModelSelection,
+  LegacyInstanceModelSelection,
+]);
 export type ModelSelection = typeof ModelSelection.Type;
 
 export const RuntimeMode = Schema.Literals([
