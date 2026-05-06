@@ -22,7 +22,15 @@
 - Shared skills and wrappers route future agents here.
 
 ### Status
-- In progress.
+- Completed.
+
+### Status Update
+- Added compatibility decoding for `instanceId`/`model` model selections in shell snapshots.
+- Added regression coverage for instanceId-shaped project and thread model selections.
+- Verified with `npm run test -- orchestration-model-options-compat` and `npm run build`.
+- Confirmed `t3-thread projects --env dev-vm` lists remote projects again.
+- Registered `/home/brad/Programming/t3code-fork` as remote project `a50f5bdb-01be-4dea-8359-6959ac86a277`.
+- Created real T3 worker `t3code-upstream-sync-repair` with remote thread id `1e537256-51f0-4be0-8fae-904a6b6b5b21`.
 
 ### Status Update
 - Created standalone project at `/Users/brad/Programming/t3-thread`.
@@ -101,3 +109,124 @@
 ### Git/Gitea Preparation
 - Added `.gitignore` so generated dependencies and build outputs are not committed.
 - Target Gitea remote: `ssh://git@git.home:2222/brad/t3-thread.git`.
+
+## Current Task Snapshot — Remote T3 Code Update Runbook
+
+### Active Requirements
+- Add a skill or runbook that explains how to update the remote dev VM's `t3code`/`t3` version.
+- Link the new operational documentation from `LLM_INSTRUCTIONS.md`.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Keep the guidance concise and operational.
+- Use canonical local-network values from `~/.shared/config/local_network.env`; do not hardcode secrets.
+- Preserve the distinction between remote `t3code.service` substrate maintenance and `t3-thread` worker lifecycle operations.
+
+### Acceptance Criteria
+- Future agents can find the remote update procedure from `LLM_INSTRUCTIONS.md`.
+- The procedure covers updating from Brad's fork, building/installing the CLI on the dev VM, restarting the service, verification, and known failure modes.
+
+### Status
+- Completed.
+
+### Status Update
+- Added `docs/REMOTE_T3CODE_UPDATE.md` with the remote dev VM update workflow for Brad's `jimprince/t3code` fork.
+- Linked the runbook from `LLM_INSTRUCTIONS.md` read order and maintenance guidance.
+- Added the runbook to the README docs list.
+- Verification performed by inspecting the new runbook and linked docs; no code tests were needed for this docs-only change.
+
+## Current Task Snapshot — Current Thread Cleanup Documentation
+
+### Active Requirements
+- Document the safe cleanup pattern used after troubleshooting a stuck T3 thread.
+- Preserve the key operational nuance: when replying from the thread being cleaned up, do not archive that T3 thread before the final response lands.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Keep the documentation small and place it in the existing operational runbook.
+- Do not change CLI behavior.
+
+### Acceptance Criteria
+- Future agents can find the procedure in `docs/AGENT_OPERATIONS.md`.
+- The documented flow distinguishes remote thread archival from local Git worktree/branch cleanup.
+
+### Status
+- Completed.
+
+### Status Update
+- Added the current-thread cleanup sequence to `docs/AGENT_OPERATIONS.md`.
+- Documented the rule to leave the current T3 thread unarchived until its final response lands.
+- No CLI behavior changes were needed.
+
+## Current Task Snapshot — Model Selection Snapshot Compatibility
+
+### Active Requirements
+- Unblock creating a real remote T3 Code worker thread for `/home/brad/Programming/t3code-fork` on `dev-vm`.
+- Fix `t3-thread` snapshot decoding so it accepts the current remote T3 Code `defaultModelSelection` / `modelSelection` shape using `instanceId` and `model`.
+- Launch the T3 worker only through the canonical `t3-thread create` flow and confirm the returned remote `threadId`.
+
+### Constraints
+- This tracker update is the first project write for this compatibility-fix task.
+- Preserve existing unrelated dirty documentation changes in this repo.
+- Do not fabricate thread ids or bypass T3 thread lifecycle state.
+
+### Acceptance Criteria
+- `t3-thread projects --env dev-vm` can list projects without the snapshot schema error.
+- A worker thread is created on the remote dev VM for the T3 Code fork maintenance task.
+- The saved agent name and remote `threadId` are recorded in the handoff response.
+
+### Status
+- Completed.
+
+### Status Update
+- Reviewed the dirty main-checkout changes in a branch-pinned worktree and reconstructed the compatibility, test, and docs changes without editing the dirty source checkout during implementation.
+- Installed worktree dependencies with `npm ci` so validation could run locally.
+- Validation passed with `npm run test`, `npm run build`, and `npm run smoke`.
+
+## Current Task Snapshot — Review Dirty Main Checkout, Fix, Commit, Merge, Push
+
+### Active Requirements
+- Review the current dirty changes in `/Users/brad/Programming/t3-thread`.
+- Reconstruct the needed changes in this branch-pinned worktree instead of editing the dirty main checkout during implementation.
+- Preserve user work; do not drop or revert dirty main-checkout changes without recording a clear reason here first.
+- Ensure snapshot decoding remains compatible with newer T3 Code `modelSelection` / `defaultModelSelection` payloads that use `instanceId` and `model`.
+- Review the dirty docs additions and keep, adjust, or split them logically as part of publishing.
+- Run at minimum `npm run test`, `npm run build`, and any repo freshness/smoke checks needed by current scripts/docs.
+- Commit logically, merge the finished branch to `main`, and push `origin/main`.
+
+### Constraints
+- This tracker update is the first repo file edit for this task in the worktree.
+- Do not edit `/Users/brad/Programming/t3-thread` directly during implementation unless needed at the final merge/push step.
+- Do not use destructive git commands or hand-edit `~/.config/t3-remote-agents/state.json`.
+- Keep `t3-thread` a thin wrapper over T3 Code native bootstrap semantics.
+
+### Acceptance Criteria
+- The worktree contains the reviewed compatibility fix, regression tests, and any approved docs updates from the dirty main checkout.
+- Validation passes or any unavoidable failures are explicitly documented.
+- One or more commits capture the finalized changes cleanly.
+- `main` is updated from the committed worktree changes and pushed to `origin/main` without losing dirty user state.
+
+### Status
+- Completed.
+
+### Review Notes
+- Source material is the dirty main checkout on `main`, which currently modifies:
+  - `LLM_INSTRUCTIONS.md`
+  - `README.md`
+  - `docs/AGENT_OPERATIONS.md`
+  - `docs/AGENT_REQUIREMENTS.md`
+  - `src/vendor/t3contracts/orchestration.ts`
+  - `tests/orchestration-model-options-compat.test.ts`
+  - untracked `docs/REMOTE_T3CODE_UPDATE.md`
+- Planned publishing split under review:
+  - compatibility code + regression tests
+  - operator docs/runbook additions
+
+### Validation Update
+- `npm ci` completed successfully in the worktree; one moderate audit vulnerability remains in dependencies and was not changed in this task.
+- `npm run test` passed: 9 files, 49 tests.
+- `npm run build` passed and refreshed `dist/cli.js` deterministically with no tracked diff.
+- `npm run smoke` passed.
+
+### Publish Plan
+- Keep the compatibility fix and operator docs as separate conventional commits for cleaner history.

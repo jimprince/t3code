@@ -77,3 +77,4 @@ When `T3_THREAD_ID` is set, `create` auto-subscribes the caller thread to the ne
 - Canonical skill: `/Users/brad/.shared/skills/t3-threads/SKILL.md`
 - Overseer layer: `/Users/brad/.shared/skills/overseer-thread-management/SKILL.md`
 - Runbook: `docs/AGENT_OPERATIONS.md`
+- Remote T3 Code update runbook: `docs/REMOTE_T3CODE_UPDATE.md`

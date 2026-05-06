@@ -8,6 +8,7 @@ This repo owns the standalone `t3-thread` operator CLI for creating, supervising
 2. [README.md](/Users/brad/Programming/t3-thread/README.md)
 3. [~/.shared/skills/t3-threads/SKILL.md](/Users/brad/.shared/skills/t3-threads/SKILL.md)
 4. [~/.shared/skills/overseer-thread-management/SKILL.md](/Users/brad/.shared/skills/overseer-thread-management/SKILL.md) when coordinating multiple workers
+5. [docs/REMOTE_T3CODE_UPDATE.md](/Users/brad/Programming/t3-thread/docs/REMOTE_T3CODE_UPDATE.md) when updating the remote dev VM's headless `t3code.service`
 
 ## Purpose
 
@@ -42,3 +43,5 @@ When command names, lifecycle behavior, or notification routing change, update:
 - `/Users/brad/.shared/bin/t3-thread`
 - `/Users/brad/.shared/bin/t3-agent` compatibility alias
 - `~/Library/LaunchAgents/network.homenetwork.t3-watcher.plist` if watcher invocation changes
+
+Remote T3 Code server updates are a separate substrate-maintenance workflow. Use [docs/REMOTE_T3CODE_UPDATE.md](/Users/brad/Programming/t3-thread/docs/REMOTE_T3CODE_UPDATE.md) plus `/Users/brad/.shared/skills/t3code-remote-ops/SKILL.md` for updating the dev VM's installed `t3`/`t3code.service` from Brad's fork.
