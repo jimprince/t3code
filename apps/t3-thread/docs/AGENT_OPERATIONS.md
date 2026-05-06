@@ -192,6 +192,20 @@ Cleanup timing:
 - Use the supported order: `t3-thread archive` first for the remote thread, then `t3-thread forget` for the local mapping.
 - Remove related branches or worktrees only after confirming no retained artifact, comparison page, or follow-up task still depends on them.
 
+When cleaning up the current T3 thread's own checkout:
+
+1. Confirm there are no repo changes to preserve:
+   - `git status --short --branch`
+2. From the main checkout, remove the worker worktree:
+   - `git worktree remove <worker-worktree-path>`
+3. Delete the now-unused branch:
+   - `git branch -d <worker-branch>`
+4. Verify both are gone:
+   - `git worktree list --porcelain`
+   - `git branch --list <worker-branch>`
+
+Do not archive the current T3 thread before sending the final response from that same thread. Leave it unarchived long enough for the response to land cleanly; archive/forget it later from another controlling thread if needed.
+
 Resolve the current caller from `T3_THREAD_ID`:
 
 ```bash
