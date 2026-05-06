@@ -1,5 +1,50 @@
 # Agent Requirements
 
+## Current Task: Stamp Server Version During Fork Releases
+
+Fix the fork release pipeline so the remote/headless T3 Code server advertises
+the fork release version instead of the stale upstream package version.
+
+### Current User Requirements
+
+- Make fork nightly releases stamp the server package/version source with the
+  release version before building/publishing.
+- Prevent local desktop clients from reporting version drift after connecting
+  to the updated remote T3 Code server.
+- Prefer the existing GitHub release/pipeline model for the fork.
+
+### Current Acceptance Criteria
+
+- Release builds use the requested/tagged release version for the server CLI
+  version metadata.
+- The change covers nightly fork releases such as
+  `v0.0.23-nightly.20260506.213-fork.1`.
+- The implementation is verified with focused local checks.
+- Relevant release documentation is updated if the workflow contract changes.
+
+### Current Status
+
+- Completed: `sync-upstream.yml` now stamps releasable package versions and
+  `bun.lock` before pushing stable/nightly release tags.
+- Completed: `fork-interim-release.yml` now stamps releasable package versions
+  and `bun.lock` before pushing `vNEXT-fork.N` tags.
+- Completed: release documentation records that release tags must point at
+  stamped commits for headless/tag-checkout installs.
+
+### Current Verification
+
+- Passed: `bun run --filter @t3tools/scripts test update-release-package-versions.test.ts`.
+- Passed: `bun scripts/release-smoke.ts`.
+- Passed: workflow YAML parse check with `yq`.
+- Passed: `bunx oxfmt --check` on changed workflow/docs/tracker files.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+- Note: `bun run release:smoke` currently fails locally because the package
+  script invokes `node scripts/release-smoke.ts`, and local Node v22.15.1 does
+  not load `.ts` files directly. Running the same smoke script through Bun
+  passed.
+
 ## Current Task: Fix macOS signing documentation
 
 Update fork release documentation so it matches the current macOS signing and
