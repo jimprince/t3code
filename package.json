@@ -26,6 +26,7 @@
   },
   "type": "module",
   "scripts": {
+    "postinstall": "node scripts/patch-expo-dev-launcher.mjs && node scripts/patch-react-native-nitro-modules.mjs && node scripts/patch-pierre-diffs-utils.mjs",
     "dev": "node scripts/dev-runner.ts dev",
     "dev:server": "node scripts/dev-runner.ts dev:server",
     "dev:web": "node scripts/dev-runner.ts dev:web",
@@ -40,6 +41,7 @@
     "build:desktop": "turbo run build --filter=@t3tools/desktop --filter=t3",
     "typecheck": "turbo run typecheck",
     "lint": "oxlint --report-unused-disable-directives",
+    "lint:mobile": "node scripts/mobile-native-static-check.ts",
     "test": "turbo run test",
     "test:desktop-smoke": "turbo run smoke-test --filter=@t3tools/desktop",
     "fmt": "oxfmt",
@@ -74,6 +76,7 @@
     "@effect/sql-sqlite-bun": "catalog:",
     "@effect/vitest": "catalog:",
     "effect": "catalog:",
+    "lightningcss": "1.30.1",
     "vite": "^8.0.0"
   },
   "engines": {

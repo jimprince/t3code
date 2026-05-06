@@ -311,3 +311,24 @@ git worktree remove /tmp/t3code-<task>
 
 This keeps the user's dirty files in `/Users/brad/Programming/t3-plugin`
 untouched.
+
+## Native Mobile / Expo Dev Client
+
+`apps/mobile/` now contains the upstream native mobile app plus fork overlay
+configuration for Brad's Expo/EAS project (`com.brad.t3code.dev`,
+`t3code-brad-dev`, Apple team `CBCQ6MJF4B`). For iOS pairing, physical iPhone
+debugging, Tailscale backend connectivity, Expo dev-client updates, or "No
+threads yet" issues, read `docs/mobile-ios-debugging.md` before changing code.
+
+Useful entry points:
+
+```bash
+cd apps/mobile
+APP_VARIANT=development CI=1 bunx expo start --dev-client --clear
+make ios-debug-vm-pair
+make ios-debug-dump
+```
+
+Mobile EAS Update publishing is handled by
+`.github/workflows/mobile-track-eas-update.yml` for the fork development
+channel and requires the GitHub repository secret `EXPO_TOKEN`.

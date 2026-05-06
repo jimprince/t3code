@@ -1,4 +1,5 @@
 import type { ContextMenuItem, LocalApi } from "@t3tools/contracts";
+import type { WsRpcClient } from "@t3tools/client-runtime";
 
 import { resetGitStatusStateForTests } from "./lib/gitStatusState";
 import { resetSourceControlDiscoveryStateForTests } from "./lib/sourceControlDiscoveryState";
@@ -13,7 +14,7 @@ import {
   getPrimaryEnvironmentConnection,
   resetEnvironmentServiceForTests,
 } from "./environments/runtime";
-import { type WsRpcClient } from "./rpc/wsRpcClient";
+
 import { showContextMenuFallback } from "./contextMenuFallback";
 import {
   readBrowserClientSettings,

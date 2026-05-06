@@ -1,0 +1,99 @@
+name: Mobile Track EAS Update
+
+on:
+  push:
+    branches:
+      - feature/mobile-track
+    paths:
+      - ".github/workflows/mobile-track-eas-update.yml"
+      - "apps/mobile/**"
+      - "packages/client-runtime/**"
+      - "packages/contracts/**"
+      - "packages/shared/**"
+      - "bun.lock"
+      - "package.json"
+      - "turbo.json"
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "EAS update message"
+        required: false
+        type: string
+
+concurrency:
+  group: mobile-track-eas-update-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish-development-update:
+    name: Verify and publish development update
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Cache Bun and Turbo
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.bun/install/cache
+            .turbo
+          key: ${{ runner.os }}-mobile-track-bun-${{ hashFiles('bun.lock') }}-${{ hashFiles('turbo.json') }}
+          restore-keys: |
+            ${{ runner.os }}-mobile-track-bun-${{ hashFiles('bun.lock') }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Format
+        run: bun run fmt:check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Focused mobile runtime regression
+        run: bun run --filter @t3tools/client-runtime test src/threadDetailState.test.ts
+
+      - name: Require Expo token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN repository secret is required to publish EAS updates." >&2
+            exit 1
+          fi
+
+      - name: Publish EAS update
+        working-directory: apps/mobile
+        env:
+          UPDATE_MESSAGE: ${{ inputs.message }}
+        run: |
+          if [ -z "$UPDATE_MESSAGE" ]; then
+            UPDATE_MESSAGE="mobile-track ${GITHUB_SHA::7}"
+          fi
+
+          APP_VARIANT=development \
+          CI=1 \
+          EXPO_NO_GIT_STATUS=1 \
+          npx eas-cli update \
+            --channel development \
+            --environment development \
+            --platform ios \
+            --message "$UPDATE_MESSAGE"

@@ -1,5 +1,48 @@
 # Agent Requirements
 
+## Current Task: Close Mobile Track Work
+
+Update the mobile troubleshooting runbook with lessons from the EAS
+dev-client/debugging session, then commit outstanding work, merge the mobile
+track branch to fork `main`, push to GitHub, and clean up the local
+`feature/mobile-track` branch/worktree.
+
+### Current User Requirements
+
+- If the troubleshooting session produced reusable lessons, update the
+  troubleshooting runbook.
+- Commit all outstanding mobile-track work.
+- Merge the completed mobile-track branch into fork `main`.
+- Push the result to the user's GitHub fork.
+- Clean up the local feature branch and worktree after the merge/push is
+  complete.
+- Continue to avoid committing or printing secrets.
+
+### Acceptance Criteria
+
+- `docs/mobile-ios-debugging.md` documents the EAS/dev-client troubleshooting
+  behavior learned during the session.
+- Required checks are run before finalizing.
+- The relevant changes are committed and pushed.
+- Fork `main` contains the merged mobile-track work.
+- The local `feature/mobile-track` worktree and branch are removed after merge.
+
+### Status
+
+- Completed: updated `docs/mobile-ios-debugging.md` with stale EAS update
+  troubleshooting, correct Expo dev-client deep-link launch form, and
+  uninstall/reinstall verification notes.
+- Completed: `bun fmt`, `bun lint`, and `bun typecheck` passed on
+  `feature/mobile-track` before the merge.
+- Completed: resolved fork `main` merge conflicts in
+  `LLM_INSTRUCTIONS.md`, `docs/AGENT_REQUIREMENTS.md`, remote pairing target
+  shared logic, and remote pairing tests.
+- Completed: refreshed Bun workspace links after the merge, resolving stale
+  module-resolution failures for `@t3tools/shared/*` imports.
+- Verified: `bun run --filter @t3tools/shared test src/remote.test.ts`,
+  `bun run --filter @t3tools/client-runtime typecheck`, `bun fmt`, `bun lint`,
+  and `bun typecheck` pass on the merged `main` tree.
+
 ## Current Task: Preserve LAN Backend Pairing Fix
 
 Save the useful LAN/Tailscale backend pairing changes from the cleanup stash,

@@ -26,6 +26,8 @@ import {
   GitPreparePullRequestThreadResult,
   VcsPullInput,
   GitPullRequestRefInput,
+  GitReviewDiffsInput,
+  GitReviewDiffsResult,
   VcsPullResult,
   VcsRemoveWorktreeInput,
   GitResolvePullRequestResult,
@@ -58,10 +60,13 @@ import {
   ProjectWriteFileResult,
 } from "./project.ts";
 import {
+  TerminalAttachInput,
+  TerminalAttachStreamEvent,
   TerminalClearInput,
   TerminalCloseInput,
   TerminalError,
   TerminalEvent,
+  TerminalMetadataStreamEvent,
   TerminalOpenInput,
   TerminalResizeInput,
   TerminalRestartInput,
@@ -108,9 +113,11 @@ export const WS_METHODS = {
   gitRunStackedAction: "git.runStackedAction",
   gitResolvePullRequest: "git.resolvePullRequest",
   gitPreparePullRequestThread: "git.preparePullRequestThread",
+  gitGetReviewDiffs: "git.getReviewDiffs",
 
   // Terminal methods
   terminalOpen: "terminal.open",
+  terminalAttach: "terminal.attach",
   terminalWrite: "terminal.write",
   terminalResize: "terminal.resize",
   terminalClear: "terminal.clear",
@@ -128,6 +135,7 @@ export const WS_METHODS = {
   // Streaming subscriptions
   subscribeVcsStatus: "subscribeVcsStatus",
   subscribeTerminalEvents: "subscribeTerminalEvents",
+  subscribeTerminalMetadata: "subscribeTerminalMetadata",
   subscribeServerConfig: "subscribeServerConfig",
   subscribeServerLifecycle: "subscribeServerLifecycle",
   subscribeAuthAccess: "subscribeAuthAccess",
@@ -270,10 +278,23 @@ export const WsVcsInitRpc = Rpc.make(WS_METHODS.vcsInit, {
   error: VcsError,
 });
 
+export const WsGitGetReviewDiffsRpc = Rpc.make(WS_METHODS.gitGetReviewDiffs, {
+  payload: GitReviewDiffsInput,
+  success: GitReviewDiffsResult,
+  error: GitCommandError,
+});
+
 export const WsTerminalOpenRpc = Rpc.make(WS_METHODS.terminalOpen, {
   payload: TerminalOpenInput,
   success: TerminalSessionSnapshot,
   error: TerminalError,
+});
+
+export const WsTerminalAttachRpc = Rpc.make(WS_METHODS.terminalAttach, {
+  payload: TerminalAttachInput,
+  success: TerminalAttachStreamEvent,
+  error: TerminalError,
+  stream: true,
 });
 
 export const WsTerminalWriteRpc = Rpc.make(WS_METHODS.terminalWrite, {
@@ -355,6 +376,12 @@ export const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTermina
   stream: true,
 });
 
+export const WsSubscribeTerminalMetadataRpc = Rpc.make(WS_METHODS.subscribeTerminalMetadata, {
+  payload: Schema.Struct({}),
+  success: TerminalMetadataStreamEvent,
+  stream: true,
+});
+
 export const WsSubscribeServerConfigRpc = Rpc.make(WS_METHODS.subscribeServerConfig, {
   payload: Schema.Struct({}),
   success: ServerConfigStreamEvent,
@@ -397,13 +424,16 @@ export const WsRpcGroup = RpcGroup.make(
   WsVcsCreateRefRpc,
   WsVcsSwitchRefRpc,
   WsVcsInitRpc,
+  WsGitGetReviewDiffsRpc,
   WsTerminalOpenRpc,
+  WsTerminalAttachRpc,
   WsTerminalWriteRpc,
   WsTerminalResizeRpc,
   WsTerminalClearRpc,
   WsTerminalRestartRpc,
   WsTerminalCloseRpc,
   WsSubscribeTerminalEventsRpc,
+  WsSubscribeTerminalMetadataRpc,
   WsSubscribeServerConfigRpc,
   WsSubscribeServerLifecycleRpc,
   WsSubscribeAuthAccessRpc,

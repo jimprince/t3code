@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import type { WsRpcClient } from "@t3tools/client-runtime";
 import {
   EnvironmentId,
   ProjectId,
@@ -67,6 +68,73 @@ vi.mock("./connection", () => ({
 vi.mock("../../rpc/wsRpcClient", () => ({
   createWsRpcClient: mockCreateWsRpcClient,
 }));
+
+vi.mock("@t3tools/client-runtime", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@t3tools/client-runtime")>();
+  const stubWsClient: WsRpcClient = {
+    dispose: async () => undefined,
+    reconnect: async () => undefined,
+    orchestration: {
+      dispatchCommand: vi.fn(),
+      getTurnDiff: vi.fn(),
+      getFullThreadDiff: vi.fn(),
+      subscribeShell: vi.fn(() => () => undefined),
+      subscribeThread: mockSubscribeThread,
+    },
+    terminal: {
+      open: vi.fn(),
+      attach: vi.fn(() => () => undefined),
+      write: vi.fn(),
+      resize: vi.fn(),
+      clear: vi.fn(),
+      restart: vi.fn(),
+      close: vi.fn(),
+      onMetadata: vi.fn(() => () => undefined),
+    },
+    projects: {
+      searchEntries: vi.fn(),
+      writeFile: vi.fn(),
+    },
+    filesystem: {
+      browse: vi.fn(),
+    },
+    shell: {
+      openInEditor: vi.fn(),
+    },
+    vcs: {
+      pull: vi.fn(),
+      refreshStatus: vi.fn(),
+      onStatus: vi.fn(() => () => undefined),
+      listRefs: vi.fn(),
+      createWorktree: vi.fn(),
+      removeWorktree: vi.fn(),
+      createRef: vi.fn(),
+      switchRef: vi.fn(),
+      init: vi.fn(),
+    },
+    git: {
+      runStackedAction: vi.fn(),
+      resolvePullRequest: vi.fn(),
+      preparePullRequestThread: vi.fn(),
+      getReviewDiffs: vi.fn(),
+    },
+    server: {
+      getConfig: vi.fn(),
+      refreshProviders: vi.fn(),
+      upsertKeybinding: vi.fn(),
+      getSettings: vi.fn(),
+      updateSettings: vi.fn(),
+      discoverSourceControl: vi.fn(),
+      subscribeConfig: vi.fn(() => () => undefined),
+      subscribeLifecycle: vi.fn(() => () => undefined),
+      subscribeAuthAccess: vi.fn(() => () => undefined),
+    },
+  };
+  return {
+    ...actual,
+    createWsRpcClient: vi.fn(() => stubWsClient),
+  };
+});
 
 vi.mock("../../rpc/wsTransport", () => ({
   WsTransport: MockWsTransport,

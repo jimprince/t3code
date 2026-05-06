@@ -51,12 +51,14 @@ describe("ProjectSetupScriptRunner", () => {
             Layer.provideMerge(
               Layer.succeed(TerminalManager, {
                 open,
+                attachStream: () => Effect.die(new Error("unused")),
                 write,
                 resize: () => Effect.void,
                 clear: () => Effect.void,
                 restart: () => Effect.die(new Error("unused")),
                 close: () => Effect.void,
                 subscribe: () => Effect.succeed(() => undefined),
+                subscribeMetadata: () => Effect.succeed(() => undefined),
               }),
             ),
           ),
@@ -89,6 +91,7 @@ describe("ProjectSetupScriptRunner", () => {
         history: "",
         exitCode: null,
         exitSignal: null,
+        label: "setup-setup",
         updatedAt: "2026-01-01T00:00:00.000Z",
       }),
     );
@@ -119,12 +122,14 @@ describe("ProjectSetupScriptRunner", () => {
             Layer.provideMerge(
               Layer.succeed(TerminalManager, {
                 open,
+                attachStream: () => Effect.die(new Error("unused")),
                 write,
                 resize: () => Effect.void,
                 clear: () => Effect.void,
                 restart: () => Effect.die(new Error("unused")),
                 close: () => Effect.void,
                 subscribe: () => Effect.succeed(() => undefined),
+                subscribeMetadata: () => Effect.succeed(() => undefined),
               }),
             ),
           ),

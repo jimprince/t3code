@@ -1,0 +1,179 @@
+import type { ExpoConfig } from "expo/config";
+
+import forkConfig from "./fork.config.json";
+
+type AppVariant = "development" | "preview" | "production";
+
+type ForkConfig = {
+  readonly appleTeamId?: string | null;
+  readonly iosBundleIdBase?: string | null;
+  readonly androidPackageBase?: string | null;
+  readonly schemeBase?: string | null;
+  readonly easProjectId?: string | null;
+  readonly easOwner?: string | null;
+};
+
+const FORK: ForkConfig = forkConfig;
+
+const APP_VARIANT = resolveAppVariant(process.env.APP_VARIANT);
+const EAS_PROJECT_ID = FORK.easProjectId ?? "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
+
+const VARIANT_CONFIG: Record<
+  AppVariant,
+  {
+    readonly appName: string;
+    readonly scheme: string;
+    readonly iosIcon: string;
+    readonly iosBundleIdentifier: string;
+    readonly androidPackage: string;
+  }
+> = {
+  development: {
+    appName: "T3 Code Dev",
+    scheme: "t3code-dev",
+    iosIcon: "./assets/icon-composer-dev.icon",
+    iosBundleIdentifier: "com.t3tools.t3code.dev",
+    androidPackage: "com.t3tools.t3code.dev",
+  },
+  preview: {
+    appName: "T3 Code Preview",
+    scheme: "t3code-preview",
+    iosIcon: "./assets/icon-composer-prod.icon",
+    iosBundleIdentifier: "com.t3tools.t3code.preview",
+    androidPackage: "com.t3tools.t3code.preview",
+  },
+  production: {
+    appName: "T3 Code",
+    scheme: "t3code",
+    iosIcon: "./assets/icon-composer-prod.icon",
+    iosBundleIdentifier: "com.t3tools.t3code",
+    androidPackage: "com.t3tools.t3code",
+  },
+};
+
+function resolveAppVariant(value: string | undefined): AppVariant {
+  switch (value) {
+    case "development":
+    case "preview":
+    case "production":
+      return value;
+    default:
+      return "production";
+  }
+}
+
+const variant = applyForkOverrides(VARIANT_CONFIG[APP_VARIANT], APP_VARIANT);
+
+function applyForkOverrides(
+  base: (typeof VARIANT_CONFIG)[AppVariant],
+  appVariant: AppVariant,
+): (typeof VARIANT_CONFIG)[AppVariant] {
+  const variantSlug =
+    appVariant === "production" ? "" : appVariant === "development" ? ".dev" : ".preview";
+  const schemeSlug =
+    appVariant === "production" ? "" : appVariant === "development" ? "-dev" : "-preview";
+  return {
+    ...base,
+    iosBundleIdentifier: FORK.iosBundleIdBase
+      ? `${FORK.iosBundleIdBase}${variantSlug}`
+      : base.iosBundleIdentifier,
+    androidPackage: FORK.androidPackageBase
+      ? `${FORK.androidPackageBase}${variantSlug}`
+      : base.androidPackage,
+    scheme: FORK.schemeBase ? `${FORK.schemeBase}${schemeSlug}` : base.scheme,
+  };
+}
+
+const config: ExpoConfig = {
+  name: variant.appName,
+  slug: "t3-code",
+  scheme: variant.scheme,
+  version: "0.1.0",
+  runtimeVersion: {
+    policy: "appVersion",
+  },
+  orientation: "portrait",
+  icon: "./assets/icon.png",
+  userInterfaceStyle: "automatic",
+  updates: {
+    enabled: true,
+    url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
+    checkAutomatically: "ON_LOAD",
+    fallbackToCacheTimeout: 0,
+  },
+  splash: {
+    image: "./assets/splash-icon.png",
+    resizeMode: "contain",
+    backgroundColor: "#ffffff",
+  },
+  ios: {
+    icon: variant.iosIcon,
+    supportsTablet: true,
+    bundleIdentifier: variant.iosBundleIdentifier,
+    infoPlist: {
+      NSAppTransportSecurity: {
+        NSAllowsArbitraryLoads: true,
+      },
+      ITSAppUsesNonExemptEncryption: false,
+    },
+  },
+  android: {
+    icon: "./assets/icon.png",
+    package: variant.androidPackage,
+    adaptiveIcon: {
+      backgroundColor: "#E6F4FE",
+      foregroundImage: "./assets/android-icon-foreground.png",
+      backgroundImage: "./assets/android-icon-background.png",
+      monochromeImage: "./assets/android-icon-monochrome.png",
+    },
+    predictiveBackGestureEnabled: false,
+  },
+  web: {
+    favicon: "./assets/favicon.png",
+  },
+  plugins: [
+    [
+      "expo-camera",
+      {
+        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        barcodeScannerEnabled: true,
+      },
+    ],
+    [
+      "expo-splash-screen",
+      {
+        image: "./assets/splash-icon.png",
+        resizeMode: "contain",
+        backgroundColor: "#ffffff",
+        imageWidth: 220,
+        dark: {
+          image: "./assets/splash-icon.png",
+          backgroundColor: "#0a0a0a",
+        },
+      },
+    ],
+    [
+      "expo-build-properties",
+      {
+        ios: {
+          deploymentTarget: "16.1",
+        },
+      },
+    ],
+    "expo-secure-store",
+    "expo-router",
+    "./plugins/withAndroidCleartextTraffic.cjs",
+  ],
+  extra: {
+    appVariant: APP_VARIANT,
+    enableMobileDebugControl: APP_VARIANT !== "production",
+    scheme: variant.scheme,
+    bundleIdentifier: variant.iosBundleIdentifier,
+    eas: {
+      projectId: EAS_PROJECT_ID,
+    },
+  },
+  owner: FORK.easOwner ?? "pingdotgg",
+};
+
+export default config;

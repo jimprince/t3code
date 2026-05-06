@@ -2508,6 +2508,27 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             removeWorktree: () => Effect.void,
             createRef: (input) => Effect.succeed({ refName: input.refName }),
             switchRef: (input) => Effect.succeed({ refName: input.refName }),
+            getReviewDiffs: (input) =>
+              Effect.succeed({
+                cwd: input.cwd,
+                generatedAt: new Date(0).toISOString(),
+                sections: [
+                  {
+                    kind: "dirty",
+                    title: "Dirty worktree",
+                    baseRef: "HEAD",
+                    headRef: null,
+                    diff: "dirty-diff",
+                  },
+                  {
+                    kind: "base",
+                    title: "Against main",
+                    baseRef: "main",
+                    headRef: "feature/demo",
+                    diff: "base-diff",
+                  },
+                ],
+              }),
           },
           vcsDriver: {
             isInsideWorkTree: () => Effect.succeed(true),
@@ -2618,6 +2639,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           }),
         ),
       );
+
+      const reviewDiffs = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.gitGetReviewDiffs]({ cwd: "/tmp/repo" }),
+        ),
+      );
+      assert.equal(reviewDiffs.sections[0]?.diff, "dirty-diff");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
@@ -4029,6 +4057,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         history: "",
         exitCode: null,
         exitSignal: null,
+        label: "Primary",
         updatedAt: new Date().toISOString(),
       };
 
