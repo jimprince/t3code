@@ -44,6 +44,16 @@ jobs:
           # PAT required: GITHUB_TOKEN tag pushes do not trigger release.yml.
           token: ${{ secrets.GH_PAT }}
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
@@ -99,6 +109,20 @@ jobs:
           fi
 
           new_tag="${target_base}-fork.${next_n}"
+          version="${new_tag#v}"
+          bun install --frozen-lockfile --ignore-scripts
+          node scripts/update-release-package-versions.ts "$version"
+          bunx oxfmt apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json
+          bun install --lockfile-only --ignore-scripts
+
+          if ! git diff --quiet -- apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock; then
+            git add apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock
+            git commit -m "chore(release): prepare $new_tag"
+            git push origin HEAD:main
+          else
+            echo "Package versions already match $version."
+          fi
+
           git tag "$new_tag" HEAD
           git push origin "$new_tag"
           echo "Pushed $new_tag for fork-only stable update. release.yml will publish it as latest."
