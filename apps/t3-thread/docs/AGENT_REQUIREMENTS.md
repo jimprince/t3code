@@ -25,22 +25,23 @@
 ### Validation Update
 - Updated current docs, shared guidance, CLI help, and worker preamble to prefer `t3-thread`.
 - Kept `t3-agent` package/global alias in place as deprecated compatibility.
-- Rebuilt `dist/cli.js` with `npm run build`.
+- Rebuilt `dist/cli.cjs` with `npm run build`.
 - `npm run test -- thread-preamble dist-freshness` passed: 7 tests.
 - `npm run test` passed: 49 tests.
 - `npm run smoke` passed.
 
 ### Remote Verification Follow-Up
 - Dev VM pull succeeded.
-- Remote focused test exposed that `tests/dist-freshness.test.ts` expects committed `dist/cli.js`, while `.gitignore` excluded `dist/`.
-- Track only `dist/cli.js` so fresh clones and the dev VM can run the same test suite without relying on an untracked local build artifact.
+- Remote focused test exposed that `tests/dist-freshness.test.ts` expects committed `dist/cli.cjs`, while `.gitignore` excluded `dist/`.
+- Track only `dist/cli.cjs` so fresh clones and the dev VM can run the same test suite without relying on an untracked local build artifact.
+- Align `package.json` package bin entries with `package-lock.json`: package-style installs use the committed `dist/cli.cjs`; repo-local wrappers still exist for source-backed development.
 
 ## Current Task Snapshot — Initial Extraction
 
 ### Active Requirements
 - Standalone project for the T3 worker-thread operator CLI.
 - Primary command name: `t3-thread`.
-- Compatibility alias: `t3-agent`.
+- Deprecated compatibility alias: `t3-agent`.
 - Keep CLI as a thin wrapper over T3 Code's native thread/bootstrap internals.
 - Do not require or recommend caller-managed worktree paths.
 - Preserve runtime state compatibility with the existing `~/.config/t3-remote-agents/state.json` unless explicitly migrated later.
@@ -53,7 +54,7 @@
 ### Acceptance Criteria
 - Source, tests, package metadata, and instructions exist in this standalone project.
 - `t3-thread` is documented as the primary command.
-- `t3-agent` remains available as an alias.
+- `t3-agent` remains available as a deprecated compatibility alias.
 - Shared skills and wrappers route future agents here.
 
 ### Status
@@ -71,7 +72,7 @@
 - Created standalone project at `/Users/brad/Programming/t3-thread`.
 - Copied CLI source, tests, TypeScript/Vitest config, and README from HomeNetwork.
 - Added standalone `LLM_INSTRUCTIONS.md`, `docs/AGENT_OPERATIONS.md`, and `docs/ACTIVE_COORDINATION.md`.
-- Renamed package to `t3-thread` with bin entries for both `t3-thread` and compatibility alias `t3-agent`.
+- Renamed package to `t3-thread` with bin entries for both `t3-thread` and deprecated compatibility alias `t3-agent`.
 - Updated copied CLI so direct commands like `t3-thread create`, `t3-thread status`, and `t3-thread result` route to the existing lifecycle implementation; legacy nested `agent` commands still work.
 - Installed standalone npm dependencies. `npm install` reported four moderate audit findings in transitive dependencies; no forced audit fix was run.
 - Updated global wrappers:
@@ -82,11 +83,11 @@
 - Validation not run yet; per operator policy, ask before running build/tests or live CLI checks.
 
 ### Packaging Update
-- Added package-local bin shims:
+- Added package-local development shims:
   - `bin/t3-thread`
   - `bin/t3-agent`
-- Updated `package.json` bin entries to point at those shims instead of requiring a prebuilt `dist/cli.js`.
-- The shims run `npm run --silent cli -- ...`, matching the global wrapper behavior and keeping source edits live without a build step.
+- Package-style bin entries now point at the committed `dist/cli.cjs` bundle.
+- The repo-local and shared shims still run `npm run --silent cli -- ...`, matching the global wrapper behavior and keeping source edits live without a build step.
 
 ## Current Task Snapshot — Help and Smoke Polish
 
@@ -260,7 +261,7 @@
 ### Validation Update
 - `npm ci` completed successfully in the worktree; one moderate audit vulnerability remains in dependencies and was not changed in this task.
 - `npm run test` passed: 9 files, 49 tests.
-- `npm run build` passed and refreshed `dist/cli.js` deterministically with no tracked diff.
+- `npm run build` passed and refreshed `dist/cli.cjs` deterministically with no tracked diff.
 - `npm run smoke` passed.
 
 ### Publish Plan
