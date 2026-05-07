@@ -114,6 +114,15 @@ const pendingSavedEnvironmentConnections = new Map<
   EnvironmentId,
   PendingSavedEnvironmentConnection
 >();
+const pendingSavedEnvironmentReconnects = new Map<
+  EnvironmentId,
+  {
+    readonly timeoutId: ReturnType<typeof setTimeout>;
+    readonly attempt: number;
+  }
+>();
+const savedEnvironmentReconnectAttempts = new Map<EnvironmentId, number>();
+const savedEnvironmentReconnectsInFlight = new Set<EnvironmentId>();
 const environmentConnectionListeners = new Set<() => void>();
 const threadDetailSubscriptions = new Map<string, ThreadDetailSubscriptionEntry>();
 const lastAppliedProjectionVersionByEnvironment = new Map<
@@ -140,6 +149,8 @@ const THREAD_DETAIL_SUBSCRIPTION_IDLE_EVICTION_MS = 15 * 60 * 1000;
 const MAX_CACHED_THREAD_DETAIL_SUBSCRIPTIONS = 32;
 const BROWSER_RESUME_RECONNECT_COOLDOWN_MS = 2_000;
 const INITIAL_SERVER_CONFIG_SNAPSHOT_WAIT_MS = 150;
+const SAVED_ENVIRONMENT_RECONNECT_INITIAL_DELAY_MS = 1_000;
+const SAVED_ENVIRONMENT_RECONNECT_MAX_DELAY_MS = 64_000;
 const NOOP = () => undefined;
 const SSH_HTTP_STATUS_RE = /^\[ssh_http:(\d+)\]\s/u;
 
@@ -833,6 +844,8 @@ function setRuntimeConnecting(environmentId: EnvironmentId) {
 }
 
 function setRuntimeConnected(environmentId: EnvironmentId) {
+  clearScheduledSavedEnvironmentReconnect(environmentId);
+  savedEnvironmentReconnectAttempts.delete(environmentId);
   const connectedAt = isoNow();
   useSavedEnvironmentRuntimeStore.getState().patch(environmentId, {
     connectionState: "connected",
@@ -862,6 +875,67 @@ function setRuntimeError(environmentId: EnvironmentId, error: unknown) {
   useSavedEnvironmentRuntimeStore.getState().patch(environmentId, {
     connectionState: "error",
     ...getRuntimeErrorFields(error),
+  });
+}
+
+function getSavedEnvironmentReconnectDelayMs(attempt: number): number {
+  return Math.min(
+    SAVED_ENVIRONMENT_RECONNECT_INITIAL_DELAY_MS * 2 ** Math.max(0, attempt),
+    SAVED_ENVIRONMENT_RECONNECT_MAX_DELAY_MS,
+  );
+}
+
+function clearScheduledSavedEnvironmentReconnect(environmentId: EnvironmentId) {
+  const pending = pendingSavedEnvironmentReconnects.get(environmentId);
+  if (!pending) {
+    return;
+  }
+  clearTimeout(pending.timeoutId);
+  pendingSavedEnvironmentReconnects.delete(environmentId);
+}
+
+function clearAllScheduledSavedEnvironmentReconnects() {
+  for (const environmentId of pendingSavedEnvironmentReconnects.keys()) {
+    clearScheduledSavedEnvironmentReconnect(environmentId);
+  }
+  savedEnvironmentReconnectAttempts.clear();
+  savedEnvironmentReconnectsInFlight.clear();
+}
+
+function scheduleSavedEnvironmentReconnect(environmentId: EnvironmentId) {
+  if (
+    pendingSavedEnvironmentReconnects.has(environmentId) ||
+    savedEnvironmentReconnectsInFlight.has(environmentId)
+  ) {
+    return;
+  }
+
+  const record = getSavedEnvironmentRecord(environmentId);
+  const connection = environmentConnections.get(environmentId);
+  if (!record || connection?.kind !== "saved") {
+    return;
+  }
+
+  const attempt = savedEnvironmentReconnectAttempts.get(environmentId) ?? 0;
+  savedEnvironmentReconnectAttempts.set(environmentId, attempt + 1);
+  const timeoutId = setTimeout(() => {
+    pendingSavedEnvironmentReconnects.delete(environmentId);
+    savedEnvironmentReconnectsInFlight.add(environmentId);
+    void reconnectSavedEnvironment(environmentId)
+      .catch(() => {
+        savedEnvironmentReconnectsInFlight.delete(environmentId);
+        if (getSavedEnvironmentRecord(environmentId)) {
+          scheduleSavedEnvironmentReconnect(environmentId);
+        }
+      })
+      .finally(() => {
+        savedEnvironmentReconnectsInFlight.delete(environmentId);
+      });
+  }, getSavedEnvironmentReconnectDelayMs(attempt));
+
+  pendingSavedEnvironmentReconnects.set(environmentId, {
+    attempt,
+    timeoutId,
   });
 }
 
@@ -1187,6 +1261,7 @@ function createSavedEnvironmentClient(
             lastError: appendVersionMismatchHint(message, mismatch),
             lastErrorAt: isoNow(),
           });
+          scheduleSavedEnvironmentReconnect(environmentId);
         },
         onClose: (
           details: { readonly code: number; readonly reason: string },
@@ -1204,6 +1279,7 @@ function createSavedEnvironmentClient(
               ),
             ),
           );
+          scheduleSavedEnvironmentReconnect(environmentId);
         },
       },
     ),
@@ -1260,6 +1336,7 @@ async function removeConnection(environmentId: EnvironmentId): Promise<boolean> 
     return false;
   }
 
+  clearScheduledSavedEnvironmentReconnect(environmentId);
   lastAppliedProjectionVersionByEnvironment.delete(environmentId);
   environmentConnections.delete(environmentId);
   emitEnvironmentConnectionRegistryChange();
@@ -1475,6 +1552,7 @@ async function syncSavedEnvironmentConnections(
 function stopActiveService() {
   activeService?.stop();
   activeService = null;
+  clearAllScheduledSavedEnvironmentReconnects();
 }
 
 function reconnectEnvironmentConnectionsAfterBrowserResume(reason: string): void {
@@ -1560,6 +1638,9 @@ export function getPrimaryEnvironmentConnection(): EnvironmentConnection {
 
 export async function disconnectSavedEnvironment(environmentId: EnvironmentId): Promise<void> {
   const record = getSavedEnvironmentRecord(environmentId);
+  clearScheduledSavedEnvironmentReconnect(environmentId);
+  savedEnvironmentReconnectAttempts.delete(environmentId);
+  savedEnvironmentReconnectsInFlight.delete(environmentId);
   const pendingConnection = pendingSavedEnvironmentConnections.get(environmentId);
   if (pendingConnection) {
     pendingConnection.cancelled = true;
