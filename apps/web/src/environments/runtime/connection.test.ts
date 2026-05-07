@@ -12,6 +12,7 @@ function createTestClient(config?: { readonly emitInitialSnapshot?: boolean }) {
 
   const client = {
     dispose: vi.fn(async () => undefined),
+    isHeartbeatFresh: vi.fn(() => true),
     reconnect: vi.fn(async () => {
       shellResubscribe?.();
     }),
