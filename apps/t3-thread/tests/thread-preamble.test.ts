@@ -16,7 +16,7 @@ describe("thread-preamble", () => {
     });
 
     it("REGRESSION: tells the child how to reach the parent", () => {
-      expect(THREAD_PREAMBLE).toContain("t3-agent agent send");
+      expect(THREAD_PREAMBLE).toContain("t3-thread send");
     });
   });
 
