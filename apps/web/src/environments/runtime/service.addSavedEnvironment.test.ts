@@ -52,6 +52,7 @@ const mockDisconnectSshEnvironment = vi.fn();
 const mockFetchSshEnvironmentDescriptor = vi.fn();
 const mockToPersistedSavedEnvironmentRecord = vi.fn((record) => record);
 const mockCreateEnvironmentConnection = vi.fn();
+const mockWsTransport = vi.fn();
 const mockClientGetConfig = vi.fn(async () => ({
   environment: {
     environmentId: EnvironmentId.make("environment-1"),
@@ -98,6 +99,7 @@ vi.mock("./catalog", () => ({
   },
   useSavedEnvironmentRuntimeStore: {
     getState: () => ({
+      byId: {},
       ensure: vi.fn(),
       patch: mockPatchRuntime,
       clear: mockClearRuntime,
@@ -135,7 +137,7 @@ vi.mock("@t3tools/client-runtime", async (importOriginal) => {
 });
 
 vi.mock("../../rpc/wsTransport", () => ({
-  WsTransport: vi.fn(),
+  WsTransport: mockWsTransport,
 }));
 
 describe("addSavedEnvironment", () => {
@@ -779,6 +781,121 @@ describe("addSavedEnvironment", () => {
         connectionState: "error",
       }),
     );
+
+    await resetEnvironmentServiceForTests();
+  });
+
+  it("automatically reconnects a saved environment after an unexpected websocket close", async () => {
+    const environmentId = EnvironmentId.make("environment-1");
+    mockSavedRecords = [
+      {
+        environmentId,
+        label: "Remote environment",
+        httpBaseUrl: "https://remote.example.com/",
+        wsBaseUrl: "wss://remote.example.com/",
+        createdAt: "2026-04-14T00:00:00.000Z",
+        lastConnectedAt: null,
+      },
+    ];
+    mockReadSavedEnvironmentBearerToken.mockResolvedValue("bearer-token");
+    const reconnect = vi.fn(async () => {
+      const lifecycle = mockWsTransport.mock.calls[0]?.[1] as { onOpen?: () => void } | undefined;
+      lifecycle?.onOpen?.();
+    });
+    mockCreateEnvironmentConnection.mockImplementation(
+      (input: { knownEnvironment: { environmentId: EnvironmentId }; client: unknown }) => ({
+        kind: "saved" as const,
+        environmentId: input.knownEnvironment.environmentId,
+        knownEnvironment: input.knownEnvironment,
+        client: input.client,
+        ensureBootstrapped: async () => undefined,
+        reconnect,
+        dispose: async () => undefined,
+      }),
+    );
+
+    const { reconnectSavedEnvironment, resetEnvironmentServiceForTests } =
+      await import("./service");
+
+    await reconnectSavedEnvironment(environmentId);
+    vi.useFakeTimers();
+    const lifecycle = mockWsTransport.mock.calls[0]?.[1] as
+      | {
+          onClose?: (
+            details: { readonly code: number; readonly reason: string },
+            context: { readonly intentional: boolean },
+          ) => void;
+        }
+      | undefined;
+    lifecycle?.onClose?.({ code: 1006, reason: "network reset" }, { intentional: false });
+
+    expect(reconnect).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(reconnect).toHaveBeenCalledOnce();
+    expect(mockPatchRuntime).toHaveBeenCalledWith(
+      environmentId,
+      expect.objectContaining({ connectionState: "disconnected" }),
+    );
+    expect(mockPatchRuntime).toHaveBeenCalledWith(
+      environmentId,
+      expect.objectContaining({ connectionState: "connecting" }),
+    );
+    expect(mockPatchRuntime).toHaveBeenCalledWith(
+      environmentId,
+      expect.objectContaining({ connectionState: "connected" }),
+    );
+
+    await resetEnvironmentServiceForTests();
+  });
+
+  it("cancels a pending automatic saved environment reconnect after manual disconnect", async () => {
+    const environmentId = EnvironmentId.make("environment-1");
+    mockSavedRecords = [
+      {
+        environmentId,
+        label: "Remote environment",
+        httpBaseUrl: "https://remote.example.com/",
+        wsBaseUrl: "wss://remote.example.com/",
+        createdAt: "2026-04-14T00:00:00.000Z",
+        lastConnectedAt: null,
+      },
+    ];
+    mockReadSavedEnvironmentBearerToken.mockResolvedValue("bearer-token");
+    const reconnect = vi.fn(async () => undefined);
+    mockCreateEnvironmentConnection.mockImplementation(
+      (input: { knownEnvironment: { environmentId: EnvironmentId }; client: unknown }) => ({
+        kind: "saved" as const,
+        environmentId: input.knownEnvironment.environmentId,
+        knownEnvironment: input.knownEnvironment,
+        client: input.client,
+        ensureBootstrapped: async () => undefined,
+        reconnect,
+        dispose: async () => undefined,
+      }),
+    );
+
+    const {
+      disconnectSavedEnvironment,
+      reconnectSavedEnvironment,
+      resetEnvironmentServiceForTests,
+    } = await import("./service");
+
+    await reconnectSavedEnvironment(environmentId);
+    vi.useFakeTimers();
+    const lifecycle = mockWsTransport.mock.calls[0]?.[1] as
+      | {
+          onClose?: (
+            details: { readonly code: number; readonly reason: string },
+            context: { readonly intentional: boolean },
+          ) => void;
+        }
+      | undefined;
+    lifecycle?.onClose?.({ code: 1006, reason: "network reset" }, { intentional: false });
+    await disconnectSavedEnvironment(environmentId);
+    await vi.advanceTimersByTimeAsync(1_000);
+
+    expect(reconnect).not.toHaveBeenCalled();
 
     await resetEnvironmentServiceForTests();
   });
