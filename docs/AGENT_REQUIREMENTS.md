@@ -37,7 +37,28 @@ headless server tarball instead of the Electron/AppImage desktop artifact.
 
 ### Current Status
 
-- In progress.
+- Completed locally; pending push/PR CI.
+- Rebasing onto current `origin/main` succeeded after dropping a stale
+  docs-only verification replay and preserving the current task tracker.
+- Updated `release.yml` so the desktop build matrix contains only macOS arm64.
+- Updated release publication to require the headless Linux x64 tarball and to
+  reject Linux desktop assets (`*.AppImage` and `*-linux.yml`) if they appear.
+- Updated `LLM_INSTRUCTIONS.md` and `docs/release.md` to describe the new
+  macOS desktop + Linux headless release matrix.
+
+### Current Verification
+
+- Passed: `bun --filter @t3tools/scripts test build-headless-artifact.test.ts build-desktop-artifact.test.ts`.
+- Passed: `git diff --check`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only.
+- Passed: `bun scripts/release-smoke.ts`.
+- Passed: `PATH="$HOME/.nvm/versions/node/v22.22.1/bin:$PATH" bun run test`.
+- Note: `bun run release:smoke` fails in this shell because its package script
+  invokes Node directly and `/usr/local/bin/node` is `v22.15.1`; running the
+  same script through Bun passed.
 
 ## Current Task: Fix Saved Environment Reconnect Spinner Hang
 

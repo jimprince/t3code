@@ -226,8 +226,7 @@ jobs:
     name: Build ${{ matrix.label }}
     needs: preflight
     if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' }}
-    continue-on-error: ${{ matrix.platform == 'linux' && needs.preflight.outputs.release_channel == 'nightly' }}
-    runs-on: ${{ fromJSON(matrix.platform == 'mac' && needs.preflight.outputs.mac_runner || matrix.runner) }}
+    runs-on: ${{ fromJSON(needs.preflight.outputs.mac_runner) }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -238,11 +237,6 @@ jobs:
             platform: mac
             target: dmg
             arch: arm64
-          - label: Linux x64
-            runner: '"ubuntu-24.04"'
-            platform: linux
-            target: AppImage
-            arch: x64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -261,13 +255,7 @@ jobs:
           node-version-file: package.json
 
       - name: Install dependencies
-        shell: bash
-        run: |
-          if [[ "${{ matrix.platform }}" == "linux" && "${{ needs.preflight.outputs.release_channel }}" == "nightly" ]]; then
-            bun install --frozen-lockfile --ignore-scripts
-          else
-            bun install --frozen-lockfile
-          fi
+        run: bun install --frozen-lockfile
 
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
@@ -332,8 +320,6 @@ jobs:
             else
               echo "macOS signing disabled (missing one or more Apple signing secrets)."
             fi
-          else
-            echo "Signing disabled for ${{ matrix.platform }}."
           fi
 
           # Retry on transient flakes (hdiutil "Device not configured" on macos-14,
@@ -359,8 +345,6 @@ jobs:
           for pattern in \
             "release/*.dmg" \
             "release/*.zip" \
-            "release/*.AppImage" \
-            "release/*.exe" \
             "release/*.blockmap" \
             "release/*.yml"; do
             for file in $pattern; do
@@ -374,18 +358,6 @@ jobs:
               mv "$manifest" "${manifest%.yml}-${{ matrix.arch }}.yml"
             done
           fi
-
-          # Enable if Windows arm64 builds are enabled.
-          # Windows updater metadata is channel-specific (for example
-          # "latest.yml" or "nightly.yml"). Suffix each per-arch copy so the
-          # release job can merge matching arm64/x64 manifests back into one
-          # canonical manifest per channel.
-          # if [[ "${{ matrix.platform }}" == "win" ]]; then
-          #   shopt -s nullglob
-          #   for manifest in release-publish/*.yml; do
-          #     mv "$manifest" "${manifest%.yml}-win-${{ matrix.arch }}.yml"
-          #   done
-          # fi
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
@@ -459,7 +431,7 @@ jobs:
   release:
     name: Publish GitHub Release
     needs: [preflight, build, build_headless]
-    if: ${{ !cancelled() && needs.preflight.result == 'success' && needs.build_headless.result == 'success' && (needs.build.result == 'success' || needs.preflight.outputs.release_channel == 'nightly') }}
+    if: ${{ !cancelled() && needs.preflight.result == 'success' && needs.build.result == 'success' && needs.build_headless.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -517,6 +489,13 @@ jobs:
             exit 1
           fi
 
+          forbidden_linux_desktop_assets=(release-assets/*.AppImage release-assets/*-linux.yml)
+          if (( ${#forbidden_linux_desktop_assets[@]} > 0 )); then
+            printf 'Linux desktop release assets are no longer published:\n' >&2
+            printf '  %s\n' "${forbidden_linux_desktop_assets[@]}" >&2
+            exit 1
+          fi
+
       - name: Merge macOS updater manifests
         run: |
           shopt -s nullglob
@@ -542,7 +521,6 @@ jobs:
           files: |
             release-assets/*.dmg
             release-assets/*.zip
-            release-assets/*.AppImage
             release-assets/*.tar.gz
             release-assets/*.blockmap
             release-assets/*.yml
@@ -562,7 +540,6 @@ jobs:
           files: |
             release-assets/*.dmg
             release-assets/*.zip
-            release-assets/*.AppImage
             release-assets/*.tar.gz
             release-assets/*.blockmap
             release-assets/*.yml

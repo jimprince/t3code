@@ -172,11 +172,11 @@ per-run groups and always complete.
 `.github/workflows/release.yml` only builds:
 
 - macOS arm64 (dmg + zip)
-- Linux x64 (AppImage)
 - Linux x64 headless server tarball
 
-We deliberately **dropped** Windows x64, Windows arm64, and macOS x64. They
-added flake surface without being used. Do not "helpfully" re-add them.
+We deliberately **dropped** Linux Electron/AppImage, Windows x64, Windows
+arm64, and macOS x64. They added flake surface without being used. Do not
+"helpfully" re-add them.
 
 - macOS arm64 prefers the local self-hosted `t3code-mac-arm64` runner when it
   is online and idle. If it is offline or busy during preflight, the workflow
@@ -186,14 +186,9 @@ added flake surface without being used. Do not "helpfully" re-add them.
 - `fail_on_unmatched_files: false` on the `softprops/action-gh-release@v2` step
   is intentional — it lets the publish step succeed when patterns for dropped
   platforms don't match.
-- For nightly builds only, the Linux hosted build is best-effort. The release
-  job is allowed to continue after a Linux-only failure, but it validates that
-  `nightly-mac.yml` exists before publishing so the macOS updater track remains
-  usable. The Linux nightly install also disables dependency lifecycle scripts
-  so a native dependency hang cannot hold the macOS updater release open. Stable
-  releases still require the full matrix to pass with full dependency installs.
-- The headless server tarball is not part of the desktop updater flow, but it
-  is required before publishing both stable and nightly releases. It is named
+- The Linux release artifact is the headless server tarball, not an Electron
+  AppImage and not part of the desktop updater flow. It is required before
+  publishing both stable and nightly releases. It is named
   `t3-headless-<version>-linux-x64.tar.gz`, includes `bin/t3`,
   `apps/server/dist/bin.mjs`, `apps/server/dist/client/**`, and staged
   production `node_modules`, and its CI job smoke-tests `--version`, `--help`,
@@ -247,7 +242,7 @@ print or inspect secret values. The latest verified signed/notarized fork
 release at the time this note was updated was
 `v0.0.23-nightly.20260506.212-fork.1`.
 
-Linux AppImage artifacts are not code-signed. Windows signing setup is
+The Linux headless tarball is not code-signed. Windows signing setup is
 intentionally omitted because Windows is not part of the fork release matrix.
 
 ## Fork-only interim builds: use `-fork.N` pre-release suffix
