@@ -1,5 +1,55 @@
 # Agent Requirements
 
+## Current Task: Fix Saved Environment Reconnect Spinner Hang
+
+Troubleshoot and fix the case where `brad-linux-dev` reaches the remote
+backend after the VM/server update but the frontend remains stuck in a
+reconnecting UI state.
+
+### Current User Requirements
+
+- Troubleshoot the currently stuck reconnect state.
+- Use local/remote logs and live connection evidence.
+- Fix the repo code path if the frontend reconnect state can hang after the
+  socket/auth path has already recovered.
+- Keep secrets out of logs and chat output.
+
+### Current Acceptance Criteria
+
+- Confirm whether `brad-linux-dev` is reachable and auth/WebSocket connection
+  attempts are succeeding.
+- Identify why the UI can remain in reconnecting state despite backend reachability.
+- Implement a focused fix that prevents manual saved-environment reconnects
+  from hanging after the replacement connection receives its shell snapshot.
+- Add a regression test for the stuck reconnect sequence.
+- Run focused tests and report broader required checks if not run.
+
+### Current Status
+
+- Completed locally; pending commit/push/nightly release if this fix should ship
+  immediately.
+- Confirmed `brad-linux-dev` is active, serving
+  `0.0.23-nightly.20260507.219-fork.1`, and has an established TCP connection
+  from the Mac.
+- Confirmed the saved environment record and remote auth session updated
+  `lastConnectedAt` after the user retried reconnecting.
+- Root cause: `connection.reconnect()` already resets the reconnect bootstrap
+  gate before replacing the socket, but the shell subscription also reset the
+  same gate on stream resubscribe. If the fresh shell snapshot arrived before
+  the resubscribe hook ran, the snapshot could resolve the gate and then the
+  hook could reset it again, leaving the UI stuck waiting.
+- Implemented: removed the duplicate shell `onResubscribe` bootstrap reset and
+  kept reconnect bootstrapping owned by `connection.reconnect()`.
+
+### Current Verification
+
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/connection.test.ts`.
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/service.addSavedEnvironment.test.ts src/environments/runtime/service.threadSubscriptions.test.ts src/environments/runtime/connection.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only.
+
 ## Current Task: Deduplicate Remote Reconnect Fix And Ship Nightly
 
 Compare the service-level saved-environment reconnect patch against the

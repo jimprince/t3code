@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createEnvironmentConnection } from "./connection";
 import type { WsRpcClient } from "~/rpc/wsRpcClient";
 
-function createTestClient() {
+function createTestClient(options?: { readonly emitSnapshotBeforeResubscribe?: boolean }) {
   const lifecycleListeners = new Set<(event: any) => void>();
   const configListeners = new Set<(event: any) => void>();
   const terminalListeners = new Set<(event: any) => void>();
@@ -15,6 +15,19 @@ function createTestClient() {
     dispose: vi.fn(async () => undefined),
     isHeartbeatFresh: vi.fn(() => true),
     reconnect: vi.fn(async () => {
+      if (options?.emitSnapshotBeforeResubscribe) {
+        for (const listener of shellListeners) {
+          listener({
+            kind: "snapshot",
+            snapshot: {
+              snapshotSequence: 2,
+              projects: [],
+              threads: [],
+              updatedAt: "2026-04-12T00:00:01.000Z",
+            },
+          });
+        }
+      }
       shellResubscribe?.();
     }),
     server: {
@@ -231,6 +244,45 @@ describe("createEnvironmentConnection", () => {
 
     expect(client.reconnect).toHaveBeenCalledTimes(1);
     expect(syncShellSnapshot).toHaveBeenCalledTimes(2);
+    expect(syncShellSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotSequence: 2 }),
+      environmentId,
+    );
+
+    await connection.dispose();
+  });
+
+  it("does not hang when the reconnect snapshot arrives before the stream start hook settles", async () => {
+    const environmentId = EnvironmentId.make("env-1");
+    const { client } = createTestClient({ emitSnapshotBeforeResubscribe: true });
+    const syncShellSnapshot = vi.fn();
+
+    const connection = createEnvironmentConnection({
+      kind: "saved",
+      knownEnvironment: {
+        id: "env-1",
+        label: "Remote env",
+        source: "manual",
+        target: {
+          httpBaseUrl: "http://example.test",
+          wsBaseUrl: "ws://example.test",
+        },
+        environmentId,
+      },
+      client,
+      applyShellEvent: vi.fn(),
+      syncShellSnapshot,
+      applyTerminalEvent: vi.fn(),
+    });
+
+    await connection.ensureBootstrapped();
+
+    const result = await Promise.race([
+      connection.reconnect().then(() => "resolved" as const),
+      new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 20)),
+    ]);
+
+    expect(result).toBe("resolved");
     expect(syncShellSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({ snapshotSequence: 2 }),
       environmentId,
