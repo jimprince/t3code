@@ -30,6 +30,11 @@
 - `npm run test` passed: 49 tests.
 - `npm run smoke` passed.
 
+### Remote Verification Follow-Up
+- Dev VM pull succeeded.
+- Remote focused test exposed that `tests/dist-freshness.test.ts` expects committed `dist/cli.js`, while `.gitignore` excluded `dist/`.
+- Track only `dist/cli.js` so fresh clones and the dev VM can run the same test suite without relying on an untracked local build artifact.
+
 ## Current Task Snapshot — Initial Extraction
 
 ### Active Requirements
