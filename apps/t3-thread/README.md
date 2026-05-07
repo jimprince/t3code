@@ -3,7 +3,7 @@
 Standalone operator CLI for T3 Code worker threads.
 
 Primary command: `t3-thread`.
-Compatibility alias: `t3-agent`.
+Deprecated compatibility alias: `t3-agent` remains in place for old scripts and active threads. Do not use it in new instructions.
 
 Runtime state remains at `~/.config/t3-remote-agents/state.json` so existing paired environments and saved workers continue to work.
 
@@ -53,11 +53,11 @@ t3-thread forget worker-a
 Legacy nested commands still work for compatibility:
 
 ```bash
-t3-thread create ...
-t3-thread status worker-a
+t3-thread agent create ...
+t3-thread agent status worker-a
 ```
 
-Prefer the new direct form:
+Use the direct canonical form in all new workflows:
 
 ```bash
 t3-thread create ...

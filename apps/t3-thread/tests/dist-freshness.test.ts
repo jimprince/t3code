@@ -6,8 +6,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * dist/cli.js is referenced by the `bin` entry in package.json and by the
- * `~/.shared/bin/t3-agent` wrapper's fallback path. If src/ changes without
+ * dist/cli.js is retained for package-style installs. If src/ changes without
  * a corresponding `npm run build`, dist drifts silently — the wrapper itself
  * runs `tsx src/cli.ts` live, so nothing in the normal workflow would surface
  * the drift until someone does `npm install -g` or invokes `node dist/cli.js`
