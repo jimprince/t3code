@@ -125,6 +125,7 @@ export function createEnvironmentConnection(
   }
 
   let disposed = false;
+  let reconnecting = false;
   const bootstrapGate = createBootstrapGate();
   const shouldObserveLifecycle = input.kind === "saved" || input.onWelcome !== undefined;
   const shouldObserveConfig = input.kind === "saved" || input.onConfigSnapshot !== undefined;
@@ -185,7 +186,9 @@ export function createEnvironmentConnection(
           return;
         }
 
-        bootstrapGate.reset();
+        if (!reconnecting) {
+          bootstrapGate.reset();
+        }
         input.onShellResubscribe?.(environmentId);
       },
     },
@@ -227,6 +230,7 @@ export function createEnvironmentConnection(
       }
 
       bootstrapGate.reset();
+      reconnecting = true;
       try {
         await input.client.reconnect();
         await input.refreshMetadata?.();
@@ -234,6 +238,8 @@ export function createEnvironmentConnection(
       } catch (error) {
         bootstrapGate.reject(error);
         throw error;
+      } finally {
+        reconnecting = false;
       }
     },
     dispose: async () => {
