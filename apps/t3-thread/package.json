@@ -4,11 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "bin": {
-    "t3-thread": "./bin/t3-thread",
-    "t3-agent": "./bin/t3-agent"
+    "t3-thread": "dist/cli.cjs",
+    "t3-agent": "dist/cli.cjs"
   },
   "scripts": {
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=esm --outfile=dist/cli.js",
+    "build": "esbuild src/cli.ts --bundle --platform=node --format=cjs --outfile=dist/cli.cjs",
     "cli": "tsx src/cli.ts",
     "smoke": "tsx src/cli.ts envs >/dev/null && tsx src/cli.ts projects --env local-mbp >/dev/null && tsx src/cli.ts watch --once --no-deliver >/dev/null",
     "test": "vitest run"
