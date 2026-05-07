@@ -13,6 +13,7 @@ function createTestClient() {
 
   const client = {
     dispose: vi.fn(async () => undefined),
+    isHeartbeatFresh: vi.fn(() => true),
     reconnect: vi.fn(async () => {
       shellResubscribe?.();
     }),
