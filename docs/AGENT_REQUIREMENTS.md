@@ -1,5 +1,54 @@
 # Agent Requirements
 
+## Current Task: Investigate Frequent Remote Environment Disconnects
+
+Investigate why the frontend frequently shows saved backend environments such
+as `brad-linux-dev` as disconnected, and fix the client-side behavior if the
+code path is responsible.
+
+### Current User Requirements
+
+- Investigate why the frontend frequently disconnects from connected backends.
+- Use the screenshot state where `brad-linux-dev is disconnected` as the
+  symptom to trace.
+- Prefer evidence from local/remote logs, persisted environment configuration,
+  and the connection lifecycle code.
+- If the root cause is in this repo, implement the fix rather than only
+  reporting the finding.
+
+### Current Acceptance Criteria
+
+- Identify whether the problem is backend service instability, network/tunnel
+  instability, or frontend reconnect-state behavior.
+- Saved remote environments recover automatically from transient WebSocket
+  disconnects without requiring manual Reconnect for ordinary retryable
+  failures.
+- Avoid reconnect storms with bounded/backed-off retries.
+- Add focused tests for saved-environment reconnect behavior.
+- Run the required repo checks, or report any blockers.
+
+### Current Status
+
+- Completed.
+- Found saved `brad-linux-dev` record points at `http://100.64.0.4:3773/`.
+- Remote `t3code.service` is active and listening on `100.64.0.4:3773`.
+- A fresh authenticated diagnostic WebSocket stayed open for 60 seconds.
+- Root cause: saved environments get marked disconnected/error on transport
+  close/error but do not have the same automatic reconnect driver as the
+  primary WebSocket surface.
+- Implemented service-level automatic reconnect for saved environments after
+  unexpected WebSocket close/error, with one pending retry per environment and
+  exponential backoff capped at 64 seconds.
+- Manual saved-environment disconnect and successful reconnect clear pending
+  automatic reconnect state.
+
+### Current Verification
+
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/service.addSavedEnvironment.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service messages only.
+
 ## Current Task: Stamp Server Version During Fork Releases
 
 Fix the fork release pipeline so the remote/headless T3 Code server advertises
