@@ -1,7 +1,7 @@
 node_modules/
 dist/*
 !dist/
-!dist/cli.js
+!dist/cli.cjs
 coverage/
 .env
 .env.*
