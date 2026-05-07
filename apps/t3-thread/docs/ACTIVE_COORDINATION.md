@@ -19,7 +19,7 @@ t3-thread status <saved-agent-name>
 ## Current Model
 
 - `t3-thread` is primary.
-- `t3-agent` is a compatibility alias.
+- `t3-agent` is a deprecated compatibility alias kept temporarily for old scripts and active threads.
 - Runtime state remains in `~/.config/t3-remote-agents/state.json`.
 - Creation uses T3 Code's native `thread.turn.start` bootstrap flow.
 - T3 chooses and records worktree paths; callers do not pass `--worktree`.

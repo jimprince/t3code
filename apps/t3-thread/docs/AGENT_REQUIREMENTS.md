@@ -1,5 +1,35 @@
 # Agent Requirements
 
+## Current Task Snapshot — Deprecate T3-Agent Naming
+
+### Active Requirements
+- Keep `t3-agent` executable alias in place for compatibility during one or two releases.
+- Rename current docs, prompts, tests, and shared agent guidance to use `t3-thread` as the canonical command.
+- Mark `t3-agent` as legacy/deprecated compatibility only.
+- Avoid breaking old active worker threads that may still have `t3-agent` in history.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Do not remove the `t3-agent` alias yet.
+- Keep runtime behavior equivalent except for canonical wording and orientation.
+
+### Acceptance Criteria
+- New worker preamble instructs `t3-thread send`, not `t3-agent agent send`.
+- Help/shared docs prefer `t3-thread`.
+- Remaining `t3-agent` references are only compatibility/deprecation notes, bin alias entries, or non-user-facing test temp names.
+- Tests pass after wording updates.
+
+### Status
+- Completed locally.
+
+### Validation Update
+- Updated current docs, shared guidance, CLI help, and worker preamble to prefer `t3-thread`.
+- Kept `t3-agent` package/global alias in place as deprecated compatibility.
+- Rebuilt `dist/cli.js` with `npm run build`.
+- `npm run test -- thread-preamble dist-freshness` passed: 7 tests.
+- `npm run test` passed: 49 tests.
+- `npm run smoke` passed.
+
 ## Current Task Snapshot — Initial Extraction
 
 ### Active Requirements

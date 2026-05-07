@@ -1,6 +1,6 @@
 /**
  * Canonical preamble injected into the initial message of every
- * `t3-agent agent create` invocation (unless `--no-preamble` is passed).
+ * `t3-thread create` invocation (unless `--no-preamble` is passed).
  *
  * Purpose: make every T3 worker thread aware that it is a T3 worker and
  * point it at the canonical skill, without duplicating the skill body
@@ -14,7 +14,7 @@
 export const THREAD_PREAMBLE = [
   "You are a T3 worker thread. Before acting on the brief below, read and follow:",
   "  ~/.shared/skills/t3-threads/SKILL.md",
-  "If you need to coordinate with a parent thread, use `t3-agent agent send <name> ...`.",
+  "If you need to coordinate with a parent thread, use `t3-thread send <name> ...`.",
   "",
   "--- BRIEF ---",
 ].join("\n");

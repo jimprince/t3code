@@ -197,7 +197,8 @@ Examples:
   t3-thread result worker-a --wait 120 --final-message
 
 Compatibility:
-  Legacy nested forms like \`t3-agent agent create ...\` still work, but new workflows should use \`t3-thread create ...\`.
+  Legacy nested forms like \`t3-thread agent create ...\` still work.
+  \`t3-agent\` remains temporarily as a deprecated executable alias; new workflows should use \`t3-thread ...\`.
 `,
 );
 
