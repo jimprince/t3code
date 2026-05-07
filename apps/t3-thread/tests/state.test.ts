@@ -205,7 +205,7 @@ describe("state helpers", () => {
   });
 
   it("serializes concurrent state updates so both writes are preserved", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "t3-agent-state-test-"));
+    const tempDir = await mkdtemp(path.join(os.tmpdir(), "t3-thread-state-test-"));
     const stateFile = path.join(tempDir, "state.json");
     const previousStateFile = process.env.T3_AGENT_STATE_FILE;
     process.env.T3_AGENT_STATE_FILE = stateFile;
