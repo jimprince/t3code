@@ -1,17 +1,12 @@
 #!/usr/bin/env node
+"use strict";
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __getProtoOf = Object.getPrototypeOf;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
-  if (typeof require !== "undefined") return require.apply(this, arguments);
-  throw Error('Dynamic require of "' + x + '" is not supported');
-});
-var __commonJS = (cb, mod) => function __require2() {
+var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 var __export = (target2, all4) => {
@@ -37,7 +32,7 @@ var __toESM = (mod, isNodeMode, target2) => (target2 = mod != null ? __create(__
 
 // node_modules/commander/lib/error.js
 var require_error = __commonJS({
-  "node_modules/commander/lib/error.js"(exports) {
+  "node_modules/commander/lib/error.js"(exports2) {
     var CommanderError2 = class extends Error {
       /**
        * Constructs the CommanderError class
@@ -65,14 +60,14 @@ var require_error = __commonJS({
         this.name = this.constructor.name;
       }
     };
-    exports.CommanderError = CommanderError2;
-    exports.InvalidArgumentError = InvalidArgumentError2;
+    exports2.CommanderError = CommanderError2;
+    exports2.InvalidArgumentError = InvalidArgumentError2;
   }
 });
 
 // node_modules/commander/lib/argument.js
 var require_argument = __commonJS({
-  "node_modules/commander/lib/argument.js"(exports) {
+  "node_modules/commander/lib/argument.js"(exports2) {
     var { InvalidArgumentError: InvalidArgumentError2 } = require_error();
     var Argument2 = class {
       /**
@@ -193,14 +188,14 @@ var require_argument = __commonJS({
       const nameOutput = arg.name() + (arg.variadic === true ? "..." : "");
       return arg.required ? "<" + nameOutput + ">" : "[" + nameOutput + "]";
     }
-    exports.Argument = Argument2;
-    exports.humanReadableArgName = humanReadableArgName;
+    exports2.Argument = Argument2;
+    exports2.humanReadableArgName = humanReadableArgName;
   }
 });
 
 // node_modules/commander/lib/help.js
 var require_help = __commonJS({
-  "node_modules/commander/lib/help.js"(exports) {
+  "node_modules/commander/lib/help.js"(exports2) {
     var { humanReadableArgName } = require_argument();
     var Help2 = class {
       constructor() {
@@ -795,14 +790,14 @@ ${itemIndentStr}`);
       const sgrPattern = /\x1b\[\d*(;\d*)*m/g;
       return str.replace(sgrPattern, "");
     }
-    exports.Help = Help2;
-    exports.stripColor = stripColor;
+    exports2.Help = Help2;
+    exports2.stripColor = stripColor;
   }
 });
 
 // node_modules/commander/lib/option.js
 var require_option = __commonJS({
-  "node_modules/commander/lib/option.js"(exports) {
+  "node_modules/commander/lib/option.js"(exports2) {
     var { InvalidArgumentError: InvalidArgumentError2 } = require_error();
     var Option3 = class {
       /**
@@ -1108,14 +1103,14 @@ var require_option = __commonJS({
         );
       return { shortFlag, longFlag };
     }
-    exports.Option = Option3;
-    exports.DualOptions = DualOptions;
+    exports2.Option = Option3;
+    exports2.DualOptions = DualOptions;
   }
 });
 
 // node_modules/commander/lib/suggestSimilar.js
 var require_suggestSimilar = __commonJS({
-  "node_modules/commander/lib/suggestSimilar.js"(exports) {
+  "node_modules/commander/lib/suggestSimilar.js"(exports2) {
     var maxDistance = 3;
     function editDistance(a, b) {
       if (Math.abs(a.length - b.length) > maxDistance)
@@ -1189,18 +1184,18 @@ var require_suggestSimilar = __commonJS({
       }
       return "";
     }
-    exports.suggestSimilar = suggestSimilar;
+    exports2.suggestSimilar = suggestSimilar;
   }
 });
 
 // node_modules/commander/lib/command.js
 var require_command = __commonJS({
-  "node_modules/commander/lib/command.js"(exports) {
-    var EventEmitter = __require("node:events").EventEmitter;
-    var childProcess = __require("node:child_process");
-    var path2 = __require("node:path");
-    var fs = __require("node:fs");
-    var process2 = __require("node:process");
+  "node_modules/commander/lib/command.js"(exports2) {
+    var EventEmitter = require("node:events").EventEmitter;
+    var childProcess = require("node:child_process");
+    var path2 = require("node:path");
+    var fs = require("node:fs");
+    var process2 = require("node:process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
     var { CommanderError: CommanderError2 } = require_error();
     var { Help: Help2, stripColor } = require_help();
@@ -3434,41 +3429,41 @@ Expecting one of '${allowedValues.join("', '")}'`);
         return true;
       return void 0;
     }
-    exports.Command = Command2;
-    exports.useColor = useColor;
+    exports2.Command = Command2;
+    exports2.useColor = useColor;
   }
 });
 
 // node_modules/commander/index.js
 var require_commander = __commonJS({
-  "node_modules/commander/index.js"(exports) {
+  "node_modules/commander/index.js"(exports2) {
     var { Argument: Argument2 } = require_argument();
     var { Command: Command2 } = require_command();
     var { CommanderError: CommanderError2, InvalidArgumentError: InvalidArgumentError2 } = require_error();
     var { Help: Help2 } = require_help();
     var { Option: Option3 } = require_option();
-    exports.program = new Command2();
-    exports.createCommand = (name) => new Command2(name);
-    exports.createOption = (flags, description) => new Option3(flags, description);
-    exports.createArgument = (name, description) => new Argument2(name, description);
-    exports.Command = Command2;
-    exports.Option = Option3;
-    exports.Argument = Argument2;
-    exports.Help = Help2;
-    exports.CommanderError = CommanderError2;
-    exports.InvalidArgumentError = InvalidArgumentError2;
-    exports.InvalidOptionArgumentError = InvalidArgumentError2;
+    exports2.program = new Command2();
+    exports2.createCommand = (name) => new Command2(name);
+    exports2.createOption = (flags, description) => new Option3(flags, description);
+    exports2.createArgument = (name, description) => new Argument2(name, description);
+    exports2.Command = Command2;
+    exports2.Option = Option3;
+    exports2.Argument = Argument2;
+    exports2.Help = Help2;
+    exports2.CommanderError = CommanderError2;
+    exports2.InvalidArgumentError = InvalidArgumentError2;
+    exports2.InvalidOptionArgumentError = InvalidArgumentError2;
   }
 });
 
 // node_modules/ws/lib/constants.js
 var require_constants = __commonJS({
-  "node_modules/ws/lib/constants.js"(exports, module) {
+  "node_modules/ws/lib/constants.js"(exports2, module2) {
     "use strict";
     var BINARY_TYPES = ["nodebuffer", "arraybuffer", "fragments"];
     var hasBlob = typeof Blob !== "undefined";
     if (hasBlob) BINARY_TYPES.push("blob");
-    module.exports = {
+    module2.exports = {
       BINARY_TYPES,
       CLOSE_TIMEOUT: 3e4,
       EMPTY_BUFFER: Buffer.alloc(0),
@@ -3486,7 +3481,7 @@ var require_constants = __commonJS({
 
 // node_modules/ws/lib/buffer-util.js
 var require_buffer_util = __commonJS({
-  "node_modules/ws/lib/buffer-util.js"(exports, module) {
+  "node_modules/ws/lib/buffer-util.js"(exports2, module2) {
     "use strict";
     var { EMPTY_BUFFER } = require_constants();
     var FastBuffer = Buffer[Symbol.species];
@@ -3535,7 +3530,7 @@ var require_buffer_util = __commonJS({
       }
       return buf;
     }
-    module.exports = {
+    module2.exports = {
       concat: concat3,
       mask: _mask,
       toArrayBuffer,
@@ -3544,12 +3539,12 @@ var require_buffer_util = __commonJS({
     };
     if (!process.env.WS_NO_BUFFER_UTIL) {
       try {
-        const bufferUtil = __require("bufferutil");
-        module.exports.mask = function(source, mask2, output, offset, length) {
+        const bufferUtil = require("bufferutil");
+        module2.exports.mask = function(source, mask2, output, offset, length) {
           if (length < 48) _mask(source, mask2, output, offset, length);
           else bufferUtil.mask(source, mask2, output, offset, length);
         };
-        module.exports.unmask = function(buffer3, mask2) {
+        module2.exports.unmask = function(buffer3, mask2) {
           if (buffer3.length < 32) _unmask(buffer3, mask2);
           else bufferUtil.unmask(buffer3, mask2);
         };
@@ -3561,7 +3556,7 @@ var require_buffer_util = __commonJS({
 
 // node_modules/ws/lib/limiter.js
 var require_limiter = __commonJS({
-  "node_modules/ws/lib/limiter.js"(exports, module) {
+  "node_modules/ws/lib/limiter.js"(exports2, module2) {
     "use strict";
     var kDone = Symbol("kDone");
     var kRun = Symbol("kRun");
@@ -3605,15 +3600,15 @@ var require_limiter = __commonJS({
         }
       }
     };
-    module.exports = Limiter;
+    module2.exports = Limiter;
   }
 });
 
 // node_modules/ws/lib/permessage-deflate.js
 var require_permessage_deflate = __commonJS({
-  "node_modules/ws/lib/permessage-deflate.js"(exports, module) {
+  "node_modules/ws/lib/permessage-deflate.js"(exports2, module2) {
     "use strict";
-    var zlib = __require("zlib");
+    var zlib = require("zlib");
     var bufferUtil = require_buffer_util();
     var Limiter = require_limiter();
     var { kStatusCode } = require_constants();
@@ -3963,7 +3958,7 @@ var require_permessage_deflate = __commonJS({
         });
       }
     };
-    module.exports = PerMessageDeflate2;
+    module2.exports = PerMessageDeflate2;
     function deflateOnData(chunk) {
       this[kBuffers].push(chunk);
       this[kTotalLength] += chunk.length;
@@ -3994,9 +3989,9 @@ var require_permessage_deflate = __commonJS({
 
 // node_modules/ws/lib/validation.js
 var require_validation = __commonJS({
-  "node_modules/ws/lib/validation.js"(exports, module) {
+  "node_modules/ws/lib/validation.js"(exports2, module2) {
     "use strict";
-    var { isUtf8 } = __require("buffer");
+    var { isUtf8 } = require("buffer");
     var { hasBlob } = require_constants();
     var tokenChars = [
       0,
@@ -4171,20 +4166,20 @@ var require_validation = __commonJS({
     function isBlob(value3) {
       return hasBlob && typeof value3 === "object" && typeof value3.arrayBuffer === "function" && typeof value3.type === "string" && typeof value3.stream === "function" && (value3[Symbol.toStringTag] === "Blob" || value3[Symbol.toStringTag] === "File");
     }
-    module.exports = {
+    module2.exports = {
       isBlob,
       isValidStatusCode,
       isValidUTF8: _isValidUTF8,
       tokenChars
     };
     if (isUtf8) {
-      module.exports.isValidUTF8 = function(buf) {
+      module2.exports.isValidUTF8 = function(buf) {
         return buf.length < 24 ? _isValidUTF8(buf) : isUtf8(buf);
       };
     } else if (!process.env.WS_NO_UTF_8_VALIDATE) {
       try {
-        const isValidUTF8 = __require("utf-8-validate");
-        module.exports.isValidUTF8 = function(buf) {
+        const isValidUTF8 = require("utf-8-validate");
+        module2.exports.isValidUTF8 = function(buf) {
           return buf.length < 32 ? _isValidUTF8(buf) : isValidUTF8(buf);
         };
       } catch (e) {
@@ -4195,9 +4190,9 @@ var require_validation = __commonJS({
 
 // node_modules/ws/lib/receiver.js
 var require_receiver = __commonJS({
-  "node_modules/ws/lib/receiver.js"(exports, module) {
+  "node_modules/ws/lib/receiver.js"(exports2, module2) {
     "use strict";
-    var { Writable } = __require("stream");
+    var { Writable } = require("stream");
     var PerMessageDeflate2 = require_permessage_deflate();
     var {
       BINARY_TYPES,
@@ -4781,16 +4776,16 @@ var require_receiver = __commonJS({
         return err;
       }
     };
-    module.exports = Receiver2;
+    module2.exports = Receiver2;
   }
 });
 
 // node_modules/ws/lib/sender.js
 var require_sender = __commonJS({
-  "node_modules/ws/lib/sender.js"(exports, module) {
+  "node_modules/ws/lib/sender.js"(exports2, module2) {
     "use strict";
-    var { Duplex } = __require("stream");
-    var { randomFillSync } = __require("crypto");
+    var { Duplex } = require("stream");
+    var { randomFillSync } = require("crypto");
     var PerMessageDeflate2 = require_permessage_deflate();
     var { EMPTY_BUFFER, kWebSocket, NOOP } = require_constants();
     var { isBlob, isValidStatusCode } = require_validation();
@@ -5257,7 +5252,7 @@ var require_sender = __commonJS({
         }
       }
     };
-    module.exports = Sender2;
+    module2.exports = Sender2;
     function callCallbacks(sender, err, cb) {
       if (typeof cb === "function") cb(err);
       for (let i = 0; i < sender._queue.length; i++) {
@@ -5275,7 +5270,7 @@ var require_sender = __commonJS({
 
 // node_modules/ws/lib/event-target.js
 var require_event_target = __commonJS({
-  "node_modules/ws/lib/event-target.js"(exports, module) {
+  "node_modules/ws/lib/event-target.js"(exports2, module2) {
     "use strict";
     var { kForOnEventAttribute, kListener } = require_constants();
     var kCode = Symbol("kCode");
@@ -5485,7 +5480,7 @@ var require_event_target = __commonJS({
         }
       }
     };
-    module.exports = {
+    module2.exports = {
       CloseEvent: CloseEvent2,
       ErrorEvent,
       Event,
@@ -5504,7 +5499,7 @@ var require_event_target = __commonJS({
 
 // node_modules/ws/lib/extension.js
 var require_extension = __commonJS({
-  "node_modules/ws/lib/extension.js"(exports, module) {
+  "node_modules/ws/lib/extension.js"(exports2, module2) {
     "use strict";
     var { tokenChars } = require_validation();
     function push(dest, name, elem) {
@@ -5651,22 +5646,22 @@ var require_extension = __commonJS({
         }).join(", ");
       }).join(", ");
     }
-    module.exports = { format: format4, parse };
+    module2.exports = { format: format4, parse };
   }
 });
 
 // node_modules/ws/lib/websocket.js
 var require_websocket = __commonJS({
-  "node_modules/ws/lib/websocket.js"(exports, module) {
+  "node_modules/ws/lib/websocket.js"(exports2, module2) {
     "use strict";
-    var EventEmitter = __require("events");
-    var https = __require("https");
-    var http = __require("http");
-    var net = __require("net");
-    var tls = __require("tls");
-    var { randomBytes, createHash } = __require("crypto");
-    var { Duplex, Readable } = __require("stream");
-    var { URL: URL3 } = __require("url");
+    var EventEmitter = require("events");
+    var https = require("https");
+    var http = require("http");
+    var net = require("net");
+    var tls = require("tls");
+    var { randomBytes, createHash } = require("crypto");
+    var { Duplex, Readable } = require("stream");
+    var { URL: URL3 } = require("url");
     var PerMessageDeflate2 = require_permessage_deflate();
     var Receiver2 = require_receiver();
     var Sender2 = require_sender();
@@ -6129,7 +6124,7 @@ var require_websocket = __commonJS({
     });
     WebSocket3.prototype.addEventListener = addEventListener;
     WebSocket3.prototype.removeEventListener = removeEventListener;
-    module.exports = WebSocket3;
+    module2.exports = WebSocket3;
     function initAsClient(websocket, address, protocols, options) {
       const opts = {
         allowSynchronousEvents: true,
@@ -6543,10 +6538,10 @@ var require_websocket = __commonJS({
 
 // node_modules/ws/lib/stream.js
 var require_stream = __commonJS({
-  "node_modules/ws/lib/stream.js"(exports, module) {
+  "node_modules/ws/lib/stream.js"(exports2, module2) {
     "use strict";
     var WebSocket3 = require_websocket();
-    var { Duplex } = __require("stream");
+    var { Duplex } = require("stream");
     function emitClose(stream3) {
       stream3.emit("close");
     }
@@ -6635,13 +6630,13 @@ var require_stream = __commonJS({
       duplex.on("error", duplexOnError);
       return duplex;
     }
-    module.exports = createWebSocketStream2;
+    module2.exports = createWebSocketStream2;
   }
 });
 
 // node_modules/ws/lib/subprotocol.js
 var require_subprotocol = __commonJS({
-  "node_modules/ws/lib/subprotocol.js"(exports, module) {
+  "node_modules/ws/lib/subprotocol.js"(exports2, module2) {
     "use strict";
     var { tokenChars } = require_validation();
     function parse(header) {
@@ -6680,18 +6675,18 @@ var require_subprotocol = __commonJS({
       protocols.add(protocol);
       return protocols;
     }
-    module.exports = { parse };
+    module2.exports = { parse };
   }
 });
 
 // node_modules/ws/lib/websocket-server.js
 var require_websocket_server = __commonJS({
-  "node_modules/ws/lib/websocket-server.js"(exports, module) {
+  "node_modules/ws/lib/websocket-server.js"(exports2, module2) {
     "use strict";
-    var EventEmitter = __require("events");
-    var http = __require("http");
-    var { Duplex } = __require("stream");
-    var { createHash } = __require("crypto");
+    var EventEmitter = require("events");
+    var http = require("http");
+    var { Duplex } = require("stream");
+    var { createHash } = require("crypto");
     var extension2 = require_extension();
     var PerMessageDeflate2 = require_permessage_deflate();
     var subprotocol2 = require_subprotocol();
@@ -7035,7 +7030,7 @@ var require_websocket_server = __commonJS({
         cb(ws, req);
       }
     };
-    module.exports = WebSocketServer2;
+    module2.exports = WebSocketServer2;
     function addListeners(server, map14) {
       for (const event of Object.keys(map14)) server.on(event, map14[event]);
       return function removeListeners() {
@@ -7079,7 +7074,7 @@ var require_websocket_server = __commonJS({
 
 // node_modules/detect-libc/lib/process.js
 var require_process = __commonJS({
-  "node_modules/detect-libc/lib/process.js"(exports, module) {
+  "node_modules/detect-libc/lib/process.js"(exports2, module2) {
     "use strict";
     var isLinux = () => process.platform === "linux";
     var report = null;
@@ -7096,15 +7091,15 @@ var require_process = __commonJS({
       }
       return report;
     };
-    module.exports = { isLinux, getReport };
+    module2.exports = { isLinux, getReport };
   }
 });
 
 // node_modules/detect-libc/lib/filesystem.js
 var require_filesystem = __commonJS({
-  "node_modules/detect-libc/lib/filesystem.js"(exports, module) {
+  "node_modules/detect-libc/lib/filesystem.js"(exports2, module2) {
     "use strict";
-    var fs = __require("fs");
+    var fs = require("fs");
     var LDD_PATH = "/usr/bin/ldd";
     var SELF_PATH = "/proc/self/exe";
     var MAX_LENGTH = 2048;
@@ -7130,7 +7125,7 @@ var require_filesystem = __commonJS({
         }
       });
     });
-    module.exports = {
+    module2.exports = {
       LDD_PATH,
       SELF_PATH,
       readFileSync,
@@ -7141,7 +7136,7 @@ var require_filesystem = __commonJS({
 
 // node_modules/detect-libc/lib/elf.js
 var require_elf = __commonJS({
-  "node_modules/detect-libc/lib/elf.js"(exports, module) {
+  "node_modules/detect-libc/lib/elf.js"(exports2, module2) {
     "use strict";
     var interpreterPath = (elf) => {
       if (elf.length < 64) {
@@ -7170,7 +7165,7 @@ var require_elf = __commonJS({
       }
       return null;
     };
-    module.exports = {
+    module2.exports = {
       interpreterPath
     };
   }
@@ -7178,9 +7173,9 @@ var require_elf = __commonJS({
 
 // node_modules/detect-libc/lib/detect-libc.js
 var require_detect_libc = __commonJS({
-  "node_modules/detect-libc/lib/detect-libc.js"(exports, module) {
+  "node_modules/detect-libc/lib/detect-libc.js"(exports2, module2) {
     "use strict";
-    var childProcess = __require("child_process");
+    var childProcess = require("child_process");
     var { isLinux, getReport } = require_process();
     var { LDD_PATH, SELF_PATH, readFile: readFile2, readFileSync } = require_filesystem();
     var { interpreterPath } = require_elf();
@@ -7418,7 +7413,7 @@ var require_detect_libc = __commonJS({
       }
       return version3;
     };
-    module.exports = {
+    module2.exports = {
       GLIBC,
       MUSL,
       family,
@@ -7433,12 +7428,12 @@ var require_detect_libc = __commonJS({
 
 // node_modules/node-gyp-build-optional-packages/node-gyp-build.js
 var require_node_gyp_build = __commonJS({
-  "node_modules/node-gyp-build-optional-packages/node-gyp-build.js"(exports, module) {
-    var fs = __require("fs");
-    var path2 = __require("path");
-    var url = __require("url");
-    var os2 = __require("os");
-    var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : __require;
+  "node_modules/node-gyp-build-optional-packages/node-gyp-build.js"(exports2, module2) {
+    var fs = require("fs");
+    var path2 = require("path");
+    var url = require("url");
+    var os2 = require("os");
+    var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
     var vars = process.config && process.config.variables || {};
     var prebuildsOnly = !!process.env.PREBUILDS_ONLY;
     var versions = process.versions;
@@ -7452,7 +7447,7 @@ var require_node_gyp_build = __commonJS({
     var libc = process.env.LIBC || (isMusl(platform) ? "musl" : "glibc");
     var armv = process.env.ARM_VERSION || (arch === "arm64" ? "8" : vars.arm_version) || "";
     var uv = (versions.uv || "").split(".")[0];
-    module.exports = load;
+    module2.exports = load;
     function load(dir) {
       return runtimeRequire(load.resolve(dir));
     }
@@ -7480,7 +7475,7 @@ var require_node_gyp_build = __commonJS({
       var platformPackage = (packageName[0] == "@" ? "" : "@" + packageName + "/") + packageName + "-" + platform + "-" + arch;
       var packageResolutionError;
       try {
-        var prebuildPackage = path2.dirname(__require("module").createRequire(url.pathToFileURL(path2.join(dir, "package.json"))).resolve(platformPackage));
+        var prebuildPackage = path2.dirname(require("module").createRequire(url.pathToFileURL(path2.join(dir, "package.json"))).resolve(platformPackage));
         return resolveFile(prebuildPackage);
       } catch (error) {
         packageResolutionError = error;
@@ -7630,20 +7625,20 @@ var require_node_gyp_build = __commonJS({
 
 // node_modules/node-gyp-build-optional-packages/index.js
 var require_node_gyp_build_optional_packages = __commonJS({
-  "node_modules/node-gyp-build-optional-packages/index.js"(exports, module) {
-    var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : __require;
+  "node_modules/node-gyp-build-optional-packages/index.js"(exports2, module2) {
+    var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
     if (typeof runtimeRequire.addon === "function") {
-      module.exports = runtimeRequire.addon.bind(runtimeRequire);
+      module2.exports = runtimeRequire.addon.bind(runtimeRequire);
     } else {
-      module.exports = require_node_gyp_build();
+      module2.exports = require_node_gyp_build();
     }
   }
 });
 
 // node_modules/msgpackr-extract/index.js
 var require_msgpackr_extract = __commonJS({
-  "node_modules/msgpackr-extract/index.js"(exports, module) {
-    module.exports = require_node_gyp_build_optional_packages()(__dirname);
+  "node_modules/msgpackr-extract/index.js"(exports2, module2) {
+    module2.exports = require_node_gyp_build_optional_packages()(__dirname);
   }
 });
 
@@ -7677,7 +7672,7 @@ function buildFollowUpMessage(kind, message) {
 }
 
 // src/client.ts
-import { randomUUID } from "node:crypto";
+var import_node_crypto = require("node:crypto");
 
 // src/http.ts
 var PAIRING_TOKEN_PARAM = "token";
@@ -43138,15 +43133,16 @@ function prepareStructures2(structures, packr) {
 setReadStruct(readStruct2, onLoadedStructures2, saveState2);
 
 // node_modules/msgpackr/node-index.js
-import { createRequire } from "module";
+var import_module = require("module");
+var import_meta = {};
 var nativeAccelerationDisabled = process.env.MSGPACKR_NATIVE_ACCELERATION_DISABLED !== void 0 && process.env.MSGPACKR_NATIVE_ACCELERATION_DISABLED.toLowerCase() === "true";
 if (!nativeAccelerationDisabled) {
   let extractor;
   try {
-    if (typeof __require == "function")
+    if (typeof require == "function")
       extractor = require_msgpackr_extract();
     else
-      extractor = createRequire(import.meta.url)("msgpackr-extract");
+      extractor = (0, import_module.createRequire)(import_meta.url)("msgpackr-extract");
     if (extractor)
       setExtractor(extractor.extractStrings);
   } catch (error) {
@@ -47214,7 +47210,7 @@ var RemoteEnvironmentClient = class {
       provider: input.provider ?? DEFAULT_MODEL_SELECTION.provider,
       model: input.model ?? DEFAULT_MODEL_SELECTION.model
     } : project.defaultModelSelection ?? DEFAULT_MODEL_SELECTION;
-    const threadId = randomUUID();
+    const threadId = (0, import_node_crypto.randomUUID)();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
     const createdAt = nowIso();
@@ -47222,10 +47218,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: randomUUID(),
+        commandId: (0, import_node_crypto.randomUUID)(),
         threadId,
         message: {
-          messageId: randomUUID(),
+          messageId: (0, import_node_crypto.randomUUID)(),
           role: "user",
           text: initialMessage,
           attachments: []
@@ -47277,10 +47273,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: randomUUID(),
+        commandId: (0, import_node_crypto.randomUUID)(),
         threadId: thread.id,
         message: {
-          messageId: randomUUID(),
+          messageId: (0, import_node_crypto.randomUUID)(),
           role: "user",
           text: input.text,
           attachments: []
@@ -47299,7 +47295,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.interrupt",
-        commandId: randomUUID(),
+        commandId: (0, import_node_crypto.randomUUID)(),
         threadId: thread.id,
         turnId: thread.latestTurn?.turnId,
         createdAt: nowIso()
@@ -47317,7 +47313,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.archive",
-        commandId: randomUUID(),
+        commandId: (0, import_node_crypto.randomUUID)(),
         threadId: thread.id
       });
       return true;
@@ -47432,12 +47428,12 @@ function formatInboxLine(overview) {
 }
 
 // src/state.ts
-import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { randomUUID as randomUUID2 } from "node:crypto";
-var DEFAULT_STATE_DIR = path.join(os.homedir(), ".config", "t3-remote-agents");
-var DEFAULT_STATE_FILE = path.join(DEFAULT_STATE_DIR, "state.json");
+var import_promises = require("node:fs/promises");
+var import_node_os = __toESM(require("node:os"), 1);
+var import_node_path = __toESM(require("node:path"), 1);
+var import_node_crypto2 = require("node:crypto");
+var DEFAULT_STATE_DIR = import_node_path.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
+var DEFAULT_STATE_FILE = import_node_path.default.join(DEFAULT_STATE_DIR, "state.json");
 var STATE_LOCK_TIMEOUT_MS = 1e4;
 var STATE_LOCK_RETRY_MS = 50;
 var EMPTY_STATE = {
@@ -47451,7 +47447,7 @@ function resolveStateFile() {
   return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
 }
 async function ensureStateDir(stateFile) {
-  await mkdir(path.dirname(stateFile), { recursive: true });
+  await (0, import_promises.mkdir)(import_node_path.default.dirname(stateFile), { recursive: true });
 }
 function normalizeState(parsed) {
   return {
@@ -47464,7 +47460,7 @@ function normalizeState(parsed) {
 }
 async function loadStateFromFile(stateFile) {
   try {
-    const raw2 = await readFile(stateFile, "utf8");
+    const raw2 = await (0, import_promises.readFile)(stateFile, "utf8");
     const parsed = JSON.parse(raw2);
     return normalizeState(parsed);
   } catch (error) {
@@ -47480,10 +47476,10 @@ async function loadState() {
 }
 async function saveStateToFile(stateFile, state) {
   await ensureStateDir(stateFile);
-  const tempFile = path.join(path.dirname(stateFile), `.${path.basename(stateFile)}.${randomUUID2()}.tmp`);
-  await writeFile(tempFile, `${JSON.stringify(state, null, 2)}
+  const tempFile = import_node_path.default.join(import_node_path.default.dirname(stateFile), `.${import_node_path.default.basename(stateFile)}.${(0, import_node_crypto2.randomUUID)()}.tmp`);
+  await (0, import_promises.writeFile)(tempFile, `${JSON.stringify(state, null, 2)}
 `, "utf8");
-  await rename(tempFile, stateFile);
+  await (0, import_promises.rename)(tempFile, stateFile);
 }
 async function sleep3(ms) {
   await new Promise((resolve2) => setTimeout(resolve2, ms));
@@ -47494,14 +47490,14 @@ async function withStateLock(stateFile, task) {
   const startedAt = Date.now();
   for (; ; ) {
     try {
-      const handle = await open(lockFile, "wx");
+      const handle = await (0, import_promises.open)(lockFile, "wx");
       try {
         await handle.writeFile(`${process.pid}
 `, "utf8");
         return await task();
       } finally {
         await handle.close();
-        await unlink(lockFile).catch(() => {
+        await (0, import_promises.unlink)(lockFile).catch(() => {
         });
       }
     } catch (error) {
@@ -47633,10 +47629,10 @@ ${message}`;
 }
 
 // src/watch.ts
-import { randomUUID as randomUUID4 } from "node:crypto";
+var import_node_crypto4 = require("node:crypto");
 
 // src/notifications.ts
-import { randomUUID as randomUUID3 } from "node:crypto";
+var import_node_crypto3 = require("node:crypto");
 function buildNotificationEventKey(input) {
   const marker = input.latestAssistantMessageId ? `assistant:${input.latestAssistantMessageId}` : input.latestTurnId ? `turn:${input.latestTurnId}:${input.sourceState}` : `state:${input.sourceState}`;
   return `${input.subscriberThreadId}:${input.sourceThreadId}:${marker}`;
@@ -47650,7 +47646,7 @@ function buildNotificationRecord(input) {
     sourceState: input.overview.state
   });
   return {
-    id: input.existing?.id ?? randomUUID3(),
+    id: input.existing?.id ?? (0, import_node_crypto3.randomUUID)(),
     eventKey,
     subscriberThreadId: input.subscription.subscriberThreadId,
     subscriberAgentName: input.subscription.subscriberAgentName,
@@ -47802,7 +47798,7 @@ async function claimPendingNotifications(options = {}) {
         updatedAt: claimedAt,
         lastAttemptedAt: claimedAt,
         lastError: null,
-        deliveryClaimId: randomUUID4()
+        deliveryClaimId: (0, import_node_crypto4.randomUUID)()
       };
       claimed.push(next);
       return next;
