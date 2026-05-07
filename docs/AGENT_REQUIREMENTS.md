@@ -1,5 +1,51 @@
 # Agent Requirements
 
+## Current Task: Deduplicate Remote Reconnect Fix And Ship Nightly
+
+Compare the service-level saved-environment reconnect patch against the
+browser-resume heartbeat freshness patch, keep the right behavior, remove
+duplicate/conflicting retry logic, and deploy the result through the GitHub
+nightly release path.
+
+### Current User Requirements
+
+- Compare `fix: auto-reconnect saved environments` against
+  `fix(web): avoid healthy resume reconnects`.
+- Deduplicate the implementation and keep the correct fix for frequent frontend
+  disconnect/reconnect behavior.
+- Verify the resulting code locally.
+- Deploy the deduplicated fix through GitHub as a nightly version.
+
+### Current Acceptance Criteria
+
+- Healthy local and remote WebSocket connections are not force-reconnected on
+  browser/window resume.
+- Stale connections still reconnect on resume.
+- There is no extra saved-environment service retry loop duplicating transport
+  reconnect/resume behavior.
+- Focused tests cover the kept behavior.
+- Required repo checks pass: `bun fmt`, `bun lint`, and `bun typecheck`.
+- A GitHub nightly release run is triggered and reported with concrete status.
+
+### Current Status
+
+- Implemented locally; pending commit/push/nightly release.
+- Initial comparison: `origin/main` contains both patches stacked. The heartbeat
+  freshness guard addresses the likely cause of frequent disconnects; the
+  saved-environment service retry loop is a separate symptom-masking retry path
+  and should be removed unless verification proves it is still required.
+- Removed the saved-environment service retry loop and its retry-loop tests.
+- Kept the heartbeat-fresh browser resume guard and its fresh/stale resume
+  tests.
+
+### Current Verification
+
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/service.addSavedEnvironment.test.ts src/environments/runtime/service.threadSubscriptions.test.ts src/environments/runtime/connection.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only.
+
 ## Current Task: Gate Browser Resume WebSocket Reconnects
 
 Prevent healthy T3 Code frontend connections from briefly disconnecting and
