@@ -6,29 +6,29 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 /**
- * dist/cli.js is retained for package-style installs. If src/ changes without
+ * dist/cli.cjs is retained for package-style installs. If src/ changes without
  * a corresponding `npm run build`, dist drifts silently — the wrapper itself
  * runs `tsx src/cli.ts` live, so nothing in the normal workflow would surface
- * the drift until someone does `npm install -g` or invokes `node dist/cli.js`
+ * the drift until someone does `npm install -g` or invokes `node dist/cli.cjs`
  * directly and gets stale behavior.
  *
  * This test rebuilds to a temp file using the exact build command from
- * package.json, then byte-compares against the committed dist/cli.js. If
+ * package.json, then byte-compares against the committed dist/cli.cjs. If
  * they differ, the committed dist is stale and must be rebuilt.
  */
-describe("dist/cli.js freshness", () => {
+describe("dist/cli.cjs freshness", () => {
   it(
-    "REGRESSION: dist/cli.js matches the output of `npm run build` (if this fails: run `npm run build` and commit the updated dist/cli.js)",
+    "REGRESSION: dist/cli.cjs matches the output of `npm run build` (if this fails: run `npm run build` and commit the updated dist/cli.cjs)",
     () => {
       const pkg = JSON.parse(readFileSync("package.json", "utf-8")) as {
         scripts: { build: string };
       };
       const buildCmd = pkg.scripts.build;
 
-      // The build command must write to dist/cli.js; we swap that for a
+      // The build command must write to dist/cli.cjs; we swap that for a
       // temp path to produce a fresh comparison bundle without touching
       // the committed artifact.
-      const outfileMarker = "dist/cli.js";
+      const outfileMarker = "dist/cli.cjs";
       if (!buildCmd.includes(outfileMarker)) {
         throw new Error(
           `dist-freshness test expects scripts.build in package.json to write to "${outfileMarker}" so it can be redirected to a temp file. ` +
@@ -38,7 +38,7 @@ describe("dist/cli.js freshness", () => {
       }
 
       const tmp = mkdtempSync(join(tmpdir(), "t3-dist-freshness-"));
-      const freshOutfile = join(tmp, "cli.js");
+      const freshOutfile = join(tmp, "cli.cjs");
       try {
         const redirected = buildCmd.replace(outfileMarker, freshOutfile);
         // `npx --no-install` ensures we use the locally-installed esbuild
@@ -47,11 +47,11 @@ describe("dist/cli.js freshness", () => {
         execSync(`npx --no-install ${redirected}`, { stdio: "pipe" });
 
         const fresh = readFileSync(freshOutfile);
-        const committed = readFileSync("dist/cli.js");
+        const committed = readFileSync("dist/cli.cjs");
 
         expect(
           committed.equals(fresh),
-          "dist/cli.js is stale relative to src/. Run `npm run build` and commit the updated dist/cli.js.",
+          "dist/cli.cjs is stale relative to src/. Run `npm run build` and commit the updated dist/cli.cjs.",
         ).toBe(true);
       } finally {
         rmSync(tmp, { recursive: true, force: true });
