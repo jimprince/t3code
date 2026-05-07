@@ -1,5 +1,46 @@
 # Agent Requirements
 
+## Current Task: Gate Browser Resume WebSocket Reconnects
+
+Prevent healthy T3 Code frontend connections from briefly disconnecting and
+reconnecting to both local and remote backends when the browser/window resumes.
+
+### Current User Requirements
+
+- Dig into the local frontend disconnect/reconnect behavior and build evidence
+  one way or the other.
+- Add the fix so healthy local and remote backend WebSocket connections are not
+  force-reconnected on browser resume.
+- Push the fix so a new build can be produced and installed.
+
+### Current Acceptance Criteria
+
+- Browser resume reconnects still recover stale or disconnected connections.
+- Browser resume does not force-reconnect healthy/fresh connections.
+- The behavior is covered by focused tests.
+- The change is committed and pushed to the fork.
+- A new release/build path is triggered or reported with concrete status.
+
+### Current Status
+
+- Completed locally; pending push/release verification.
+- Evidence gathered: current code unconditionally calls `connection.reconnect()`
+  for every registered environment on `visibilitychange`/`pageshow`, and the
+  focused existing test proves that behavior.
+- Implemented: browser resume now skips reconnecting environment connections
+  whose WebSocket heartbeat is fresh while preserving reconnects for stale
+  connections.
+
+### Current Verification
+
+- Passed: focused existing test confirming the current unconditional browser
+  resume reconnect behavior before changing it.
+- Passed: `bun run test -- --filter=@t3tools/web -- src/environments/runtime/service.threadSubscriptions.test.ts src/environments/runtime/connection.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only after `bun install --frozen-lockfile` refreshed local dependencies.
+
 ## Current Task: Investigate Frequent Remote Environment Disconnects
 
 Investigate why the frontend frequently shows saved backend environments such
