@@ -98,6 +98,7 @@ The fork intentionally builds only:
 
 - macOS arm64: DMG, zip, blockmaps, and `latest-mac.yml` or `nightly-mac.yml`.
 - Linux x64: AppImage and updater metadata.
+- Linux x64 headless server: `t3-headless-<version>-linux-x64.tar.gz`.
 
 Do not re-add Windows or macOS x64 unless the user explicitly changes the
 support target.
@@ -114,6 +115,60 @@ native dependency hangs do not block macOS updater releases. Nightly Linux is
 best-effort: a Linux-only nightly failure must not block a macOS updater
 release as long as `nightly-mac.yml` exists. Stable releases still require the
 configured matrix to pass with full installs.
+
+The headless Linux x64 tarball is required for both stable and nightly releases.
+It is built in a separate Ubuntu job, includes `bin/t3`,
+`apps/server/dist/bin.mjs`, `apps/server/dist/client/**`, and production
+`node_modules`, and is smoke-tested after a clean unpack before publication.
+The target VM must have Node.js 22.16 or newer; the current release workflow
+uses the repo `package.json` Node version.
+
+## Headless Server Install / Update
+
+Discover the latest fork release before installing or testing. Do not hardcode
+an old nightly tag:
+
+```bash
+gh release list --repo jimprince/t3code --limit 10
+```
+
+Install or update the remote VM from a release asset:
+
+```bash
+set -euo pipefail
+
+repo="jimprince/t3code"
+tag="<release-tag>"
+version="${tag#v}"
+root="/home/brad/.local/share/t3code-server"
+release_dir="$root/releases/$version"
+asset="t3-headless-${version}-linux-x64.tar.gz"
+
+mkdir -p "$root/releases"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+gh release download "$tag" --repo "$repo" --pattern "$asset" --dir "$tmp"
+mkdir -p "$release_dir"
+tar -xzf "$tmp/$asset" -C "$release_dir" --strip-components 1
+ln -sfn "$release_dir" "$root/current"
+
+"$root/current/bin/t3" --version
+sudo systemctl restart t3code.service
+sudo systemctl status t3code.service --no-pager
+curl -I http://100.64.0.4:3773/
+```
+
+The service command should run the current symlink:
+
+```bash
+/home/brad/.local/share/t3code-server/current/bin/t3 serve \
+  --mode web \
+  --host 100.64.0.4 \
+  --port 3773 \
+  --no-browser \
+  --base-dir /home/brad/.local/share/t3code-dev
+```
 
 ## Nightly Release Concurrency
 
@@ -167,6 +222,14 @@ Inspect a release and its assets:
 ```bash
 gh release view <tag> --repo jimprince/t3code \
   --json tagName,isPrerelease,publishedAt,url,assets
+```
+
+Smoke-test a downloaded headless asset locally:
+
+```bash
+bun run smoke:headless:artifact -- \
+  --artifact release/t3-headless-<version>-linux-x64.tar.gz \
+  --version <version>
 ```
 
 Inspect the nightly mac feed:

@@ -1,5 +1,127 @@
 # Agent Requirements
 
+## Current Task: Publish Headless Nightly Artifact
+
+Publish or trigger a fork nightly release that exercises the new headless Linux
+x64 server artifact without creating an unintended stable fork-interim release.
+
+### Current User Requirements
+
+- Use `gh release list --repo jimprince/t3code` to discover the current latest
+  fork nightly before choosing a test/release tag.
+- Create a new nightly release artifact from the fork release pipeline; do not
+  hardcode or reuse an old nightly tag.
+- Verify the published release assets with
+  `gh release view <tag> --repo jimprince/t3code --json assets`.
+- Keep the existing desktop release flow intact.
+
+### Constraints
+
+- Do not delete or rewrite release tags.
+- Avoid a direct push to `main` that would trigger the stable fork-interim
+  release workflow for this release-plumbing change.
+- Preserve package-version stamping behavior in the release workflow.
+- Use `bun run test`, not `bun test`.
+- Repo checks required before done: `bun fmt`, `bun lint`, and
+  `bun typecheck`.
+
+### Current Acceptance Criteria
+
+- The headless release-artifact implementation is committed and pushed to a
+  branch.
+- A nightly release workflow run is dispatched from that branch/ref.
+- The resulting GitHub Release includes
+  `t3-headless-${version}-linux-x64.tar.gz`.
+- Verification commands and any remaining limitations are recorded.
+
+### Current Status
+
+- In progress.
+
+## Current Task: Headless Server Release Artifact
+
+Add a headless/server release artifact to the fork release pipeline so the
+remote dev VM can install/update T3 Code from GitHub Releases without cloning
+or building from a git checkout.
+
+### Current User Requirements
+
+- Add a CI/release job or step in `.github/workflows/release.yml` that builds a
+  headless server artifact and uploads it to the same GitHub Release.
+- Name the artifact with a clear version/platform identifier, such as
+  `t3-headless-${version}-linux-x64.tar.gz` or
+  `t3-server-${version}-linux-x64.tar.gz`.
+- Artifact must contain a runnable `bin/t3` entrypoint plus all runtime files
+  needed after extraction.
+- Include `apps/server/dist/bin.mjs`, server runtime dependencies, and
+  `apps/server/dist/client/**`.
+- Inspect actual server runtime imports before deciding whether to package
+  `node_modules`, bundle, or ship another runtime layout.
+- Node 22+ may be assumed on the target VM, but the runtime requirement must be
+  documented.
+- Add a clean unpack smoke test in CI that verifies `bin/t3 --version` prints
+  the release version, `bin/t3 --help` works, and preferably
+  `bin/t3 serve --host 127.0.0.1 --port <test-port> --no-browser --base-dir <tmp>`
+  starts and returns HTTP 200.
+- Add/update `docs/release.md` and `LLM_INSTRUCTIONS.md` if agent-facing
+  release/update instructions change.
+- Include a CLI install/update path for the remote VM that downloads from a
+  GitHub Release, extracts to
+  `/home/brad/.local/share/t3code-server/releases/<version>`, updates
+  `/home/brad/.local/share/t3code-server/current`, and restarts
+  `t3code.service`.
+
+### Constraints
+
+- Existing releases only publish desktop artifacts; do not replace the desktop
+  updater/release flow.
+- Keep edits scoped to release artifact generation, installer/update docs, and
+  necessary smoke tests.
+- Do not delete or rewrite release tags.
+- Preserve existing release pipeline behavior that stamps package versions
+  before tagging.
+- Discover the latest nightly from the fork with
+  `gh release list --repo jimprince/t3code`; do not hardcode an old tag.
+- Current known good nightly was `v0.0.23-nightly.20260506.217-fork.1`, but it
+  must be verified before testing.
+- Use `bun run test`, not `bun test`.
+- Repo checks required before done: `bun fmt`, `bun lint`, and
+  `bun typecheck`.
+
+### Current Acceptance Criteria
+
+- Release workflow publishes a linux-x64 headless tarball to the same GitHub
+  Release as the desktop artifacts.
+- Tarball unpacks into a self-contained runtime layout with `bin/t3`,
+  `apps/server/dist/bin.mjs`, server runtime dependencies, and
+  `apps/server/dist/client/**`.
+- CI smoke test validates an unpacked artifact with `--version`, `--help`, and
+  the local HTTP server path if feasible.
+- `docs/release.md` documents Node 22+ and the remote VM install/update flow.
+- `LLM_INSTRUCTIONS.md` reflects any changed agent-facing release/update
+  instructions.
+- Verification results include `bun fmt`, `bun lint`, `bun typecheck`,
+  focused artifact smoke tests, and
+  `gh release view <tag> --repo jimprince/t3code --json assets` if a test tag
+  or published release is used.
+
+### Current Status
+
+- Completed: added a required Linux x64 headless release job to `release.yml`
+  and included the tarball in release publication.
+- Completed: added artifact build and clean-unpack smoke scripts, with shared
+  bundled-client asset validation.
+- Completed: documented Node 22.16+ and the remote VM install/update path.
+- Verified: latest fork nightly discovered with
+  `gh release list --repo jimprince/t3code --limit 10`; current latest is
+  `v0.0.23-nightly.20260506.217-fork.1`.
+- Verified: inspected current latest nightly assets with
+  `gh release view v0.0.23-nightly.20260506.217-fork.1 --repo jimprince/t3code --json tagName,assets`.
+- Verified: local unpack smoke passed for
+  `t3-headless-0.0.22-linux-x64.tar.gz` using the checked-out package version.
+- Verified: `bun fmt`, `bun lint`, `bun typecheck`, and
+  `bun run test build-headless-artifact.test.ts` pass.
+
 ## Current Task: Preserve LAN Backend Pairing Fix
 
 Save the useful LAN/Tailscale backend pairing changes from the cleanup stash,
