@@ -162,7 +162,7 @@ function createClientFactory(input: {
 }
 
 async function withTempState(test: () => Promise<void>): Promise<void> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "t3-agent-watch-test-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "t3-thread-watch-test-"));
   const stateFile = path.join(tempDir, "state.json");
   const previousStateFile = process.env.T3_AGENT_STATE_FILE;
   process.env.T3_AGENT_STATE_FILE = stateFile;
