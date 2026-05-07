@@ -26,8 +26,8 @@ reconnecting UI state.
 
 ### Current Status
 
-- Completed locally; pending commit/push/nightly release if this fix should ship
-  immediately.
+- Completed locally and prepared for the
+  `v0.0.23-nightly.20260507.219-fork.2` release path.
 - Confirmed `brad-linux-dev` is active, serving
   `0.0.23-nightly.20260507.219-fork.1`, and has an established TCP connection
   from the Mac.
