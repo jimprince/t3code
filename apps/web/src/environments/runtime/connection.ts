@@ -82,7 +82,6 @@ export function createEnvironmentConnection(
     );
   }
 
-  let disposed = false;
   const bootstrapGate = createBootstrapGate();
   const shouldObserveLifecycle = input.kind === "saved" || input.onWelcome !== undefined;
   const shouldObserveConfig = input.kind === "saved" || input.onConfigSnapshot !== undefined;
@@ -134,14 +133,6 @@ export function createEnvironmentConnection(
       }
       input.applyShellEvent(item, environmentId);
     },
-    {
-      onResubscribe: () => {
-        if (disposed) {
-          return;
-        }
-        bootstrapGate.reset();
-      },
-    },
   );
 
   const unsubTerminalEvent = input.client.terminal.onEvent(
@@ -151,7 +142,6 @@ export function createEnvironmentConnection(
   );
 
   const cleanup = () => {
-    disposed = true;
     unsubShell();
     unsubTerminalEvent();
     unsubLifecycle();
