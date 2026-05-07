@@ -29,6 +29,13 @@ things specific to the fork relationship.
    gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
    ```
 
+   Before testing an existing nightly or headless server update, discover the
+   current fork release state rather than reusing an old tag:
+
+   ```bash
+   gh release list --repo jimprince/t3code --limit 10
+   ```
+
 3. Reroll the same upstream nightly for updater testing by dispatching
    `release.yml` with the next explicit `-fork.N` version. The dispatch form
    only offers `channel=stable`; the version string still makes the run nightly.
@@ -166,6 +173,7 @@ per-run groups and always complete.
 
 - macOS arm64 (dmg + zip)
 - Linux x64 (AppImage)
+- Linux x64 headless server tarball
 
 We deliberately **dropped** Windows x64, Windows arm64, and macOS x64. They
 added flake surface without being used. Do not "helpfully" re-add them.
@@ -184,6 +192,12 @@ added flake surface without being used. Do not "helpfully" re-add them.
   usable. The Linux nightly install also disables dependency lifecycle scripts
   so a native dependency hang cannot hold the macOS updater release open. Stable
   releases still require the full matrix to pass with full dependency installs.
+- The headless server tarball is not part of the desktop updater flow, but it
+  is required before publishing both stable and nightly releases. It is named
+  `t3-headless-<version>-linux-x64.tar.gz`, includes `bin/t3`,
+  `apps/server/dist/bin.mjs`, `apps/server/dist/client/**`, and staged
+  production `node_modules`, and its CI job smoke-tests `--version`, `--help`,
+  and HTTP startup from a clean unpack. Target hosts need Node.js 22.16+.
 - The 2-attempt retry wrapper around `bun run dist:desktop:artifact` absorbs
   transient flakes (macOS `hdiutil: Device not configured`, native-dep network
   hiccups). Don't remove it.
