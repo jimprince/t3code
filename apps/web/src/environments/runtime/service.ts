@@ -148,6 +148,7 @@ let lastBrowserResumeReconnectAt = Number.NEGATIVE_INFINITY;
 const THREAD_DETAIL_SUBSCRIPTION_IDLE_EVICTION_MS = 15 * 60 * 1000;
 const MAX_CACHED_THREAD_DETAIL_SUBSCRIPTIONS = 32;
 const BROWSER_RESUME_RECONNECT_COOLDOWN_MS = 2_000;
+const BROWSER_RESUME_HEARTBEAT_FRESH_MS = 15_000;
 const INITIAL_SERVER_CONFIG_SNAPSHOT_WAIT_MS = 150;
 const SAVED_ENVIRONMENT_RECONNECT_INITIAL_DELAY_MS = 1_000;
 const SAVED_ENVIRONMENT_RECONNECT_MAX_DELAY_MS = 64_000;
@@ -1563,6 +1564,9 @@ function reconnectEnvironmentConnectionsAfterBrowserResume(reason: string): void
   lastBrowserResumeReconnectAt = now;
 
   for (const connection of environmentConnections.values()) {
+    if (connection.isHeartbeatFresh(BROWSER_RESUME_HEARTBEAT_FRESH_MS)) {
+      continue;
+    }
     void connection.reconnect().catch((error) => {
       console.warn("Environment reconnect after browser resume failed", {
         environmentId: connection.environmentId,
