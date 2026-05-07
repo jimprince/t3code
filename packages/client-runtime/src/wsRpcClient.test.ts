@@ -79,7 +79,9 @@ describe("createWsRpcClient", () => {
     const client = createWsRpcClient(transport as unknown as WsTransport);
 
     expect(client.isHeartbeatFresh()).toBe(true);
-    expect(isHeartbeatFresh).toHaveBeenCalledOnce();
+    expect(client.isHeartbeatFresh(2_000)).toBe(true);
+    expect(isHeartbeatFresh).toHaveBeenNthCalledWith(1, undefined);
+    expect(isHeartbeatFresh).toHaveBeenNthCalledWith(2, 2_000);
   });
 
   it("reduces vcs status stream events into flat status snapshots", () => {
