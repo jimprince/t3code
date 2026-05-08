@@ -1,5 +1,134 @@
 # Agent Requirements
 
+## Current Task: Trigger Headless Server Update Check From Newer Client
+
+Let a newer desktop/web client ask an older headless server to check for a
+GitHub release update immediately, without replacing the existing once-daily
+timer.
+
+### Current User Requirements
+
+- Keep once-daily scheduled update checks.
+- If the client version supersedes the server version, check for an update on
+  the server.
+- Keep the update path safe for a 24/7 headless service.
+
+### Constraints
+
+- Do not run the updater in-process.
+- Do not put SSH/systemd details or secrets in the browser.
+- Rate-limit client-triggered checks so reconnecting clients do not repeatedly
+  hammer the server or GitHub.
+- Keep unsupported/non-headless installs as a safe no-op.
+- Use `bun run test`, not `bun test`.
+- Repo checks required before done: `bun fmt`, `bun lint`, and
+  `bun typecheck`.
+
+### Current Acceptance Criteria
+
+- Server exposes an authenticated RPC that requests an external headless update
+  check and reports queued/cooldown/unsupported/error.
+- The RPC uses the user systemd upgrade service when available, so the updater
+  runs outside the T3 server process and can safely restart it.
+- The web client triggers the RPC only when its version sorts newer than the
+  connected server version.
+- Client-triggered checks are rate-limited per environment/version pair.
+- Documentation describes the once-daily timer plus newer-client immediate
+  check behavior.
+- Focused tests cover version supersedence logic and the trigger guard.
+
+### Current Status
+
+- Implemented locally; pending commit/push.
+- Added authenticated `server.requestHeadlessUpdateCheck` websocket RPC.
+- Added server-side headless update requester that starts
+  `t3code-headless-upgrade.service` through `systemctl --user` with a cooldown.
+- Added client-side version supersedence detection and per
+  environment/client/server throttling before requesting a server check.
+- Updated release docs and repo instructions to describe once-daily checks plus
+  newer-client immediate checks.
+
+### Current Verification
+
+- Passed: `bun --filter @t3tools/web test src/versionSkew.test.ts src/serverUpdateCheck.test.ts`.
+- Passed: `bun --filter @t3tools/web test src/serverUpdateCheck.test.ts src/environments/runtime/service.addSavedEnvironment.test.ts`.
+- Passed: `bun --filter @t3tools/web test`.
+- Passed: `bun --filter t3 test src/headlessUpdateCheck.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `git diff --check`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only.
+
+## Current Task: Document And Install Headless Auto-Update
+
+Document the correct update model for the Linux headless release artifact and
+set up the remote VM to update from GitHub Releases safely.
+
+### Current User Requirements
+
+- Explain what happens if the headless app is running during an update.
+- Document the chosen auto-update model in the repo.
+- Set up auto-update on the remote `brad-linux-dev` T3 Code service.
+- Keep the implementation safe for a 24/7 service.
+
+### Constraints
+
+- Do not mutate the running release directory in place.
+- Stage new releases in versioned directories and atomically move a `current`
+  symlink only after validation.
+- Restart the service only after the new release has been downloaded,
+  checksummed, extracted, and smoke-tested.
+- Keep rollback possible.
+- Keep secrets out of logs and chat output.
+- Use `bun run test`, not `bun test`.
+- Repo checks required before done: `bun fmt`, `bun lint`, and
+  `bun typecheck`.
+
+### Current Acceptance Criteria
+
+- Repo docs describe the headless update policy, running-service behavior,
+  rollback model, and systemd timer approach.
+- A reusable updater script exists for installing newer GitHub release assets.
+- The remote VM has the updater and timer installed.
+- The remote updater can run safely when already current.
+- `t3code.service` remains healthy and reports the expected version after
+  setup.
+
+### Current Status
+
+- Completed locally and installed on the remote VM; pending commit/push.
+- Added `scripts/headless-auto-upgrade.sh` as the reusable updater.
+- Updated `docs/release.md` and `LLM_INSTRUCTIONS.md` to document the
+  external updater model, running-service behavior, rollback, and systemd
+  timer setup.
+- Installed the updater on `brad-linux-dev` as
+  `~/.local/bin/t3code-headless-upgrade`.
+- Installed and enabled the user timer
+  `t3code-headless-upgrade.timer`.
+- Repointed the remote `t3` wrapper to
+  `~/.local/share/t3code-server/current/bin/t3`, so the existing system
+  service now runs through the documented `current` symlink.
+- Note: `loginctl` reports `Linger=no`, so the user timer is active in the
+  current user manager but will need `sudo loginctl enable-linger brad` or a
+  root-owned system timer to run before login after VM reboot.
+
+### Current Verification
+
+- Passed: `bash -n scripts/headless-auto-upgrade.sh`.
+- Passed: `git diff --check`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only.
+- Remote: updater staged `v0.0.23-fork.4` into
+  `~/.local/share/t3code-server/releases/0.0.23-fork.4`.
+- Remote: manual `systemctl --user start t3code-headless-upgrade.service`
+  exited successfully with `already on 0.0.23-fork.4`.
+- Remote: `t3code.service` is active and reports
+  `serverVersion: "0.0.23-fork.4"` from
+  `/.well-known/t3/environment`.
+
 ## Current Task: Replace Linux Electron Release With Headless Linux Artifact
 
 Update the headless release-artifact branch so Linux releases publish the

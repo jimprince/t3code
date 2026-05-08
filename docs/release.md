@@ -134,6 +134,18 @@ uses the repo `package.json` Node version.
 
 ## Headless Server Install / Update
 
+The headless server does not use Electron's in-app updater. Treat it like a
+Linux daemon: an external updater stages release tarballs into versioned
+directories, flips a `current` symlink only after validation, then restarts
+`t3code.service`.
+
+This is safe while the app is running. The running Node process keeps using the
+files it already opened; the updater never overwrites that active release
+directory. Existing browser clients may disconnect during the final service
+restart, then reconnect to the new version. If the new release fails its health
+check, the updater flips `current` back to the previous release and restarts
+again.
+
 Discover the latest fork release before installing or testing. Do not hardcode
 an old nightly tag:
 
@@ -178,6 +190,73 @@ The service command should run the current symlink:
   --no-browser \
   --base-dir /home/brad/.local/share/t3code-dev
 ```
+
+### Headless Auto-Update
+
+The canonical updater script is `scripts/headless-auto-upgrade.sh`. Install it
+on the VM as `~/.local/bin/t3code-headless-upgrade` and run it from a systemd
+timer. By default it tracks the latest stable GitHub release from
+`jimprince/t3code`; set `T3CODE_HEADLESS_CHANNEL=nightly` only for an explicit
+nightly host.
+
+Recommended user timer:
+
+```ini
+# ~/.config/systemd/user/t3code-headless-upgrade.service
+[Unit]
+Description=Update T3 Code headless server from GitHub Releases
+
+[Service]
+Type=oneshot
+Environment=T3CODE_HEADLESS_CHANNEL=stable
+Environment=T3CODE_HEADLESS_ROOT=%h/.local/share/t3code-server
+ExecStart=%h/.local/bin/t3code-headless-upgrade
+```
+
+```ini
+# ~/.config/systemd/user/t3code-headless-upgrade.timer
+[Unit]
+Description=Check for T3 Code headless server updates
+
+[Timer]
+OnCalendar=*-*-* 05:20:00
+RandomizedDelaySec=45m
+Persistent=true
+Unit=t3code-headless-upgrade.service
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable and inspect it:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now t3code-headless-upgrade.timer
+systemctl --user list-timers t3code-headless-upgrade.timer
+journalctl --user -u t3code-headless-upgrade.service -n 100 --no-pager
+```
+
+The timer checks once per day at 05:20 UTC with up to 45 minutes of randomized
+delay. `Persistent=true` makes systemd run a missed check after the machine
+comes back.
+
+For a user timer to run after reboot before the user logs in, enable lingering
+once with `sudo loginctl enable-linger brad`. If lingering is unavailable, use
+a system timer that runs the same script as the install user.
+
+Newer clients can also request an immediate server-side check when the connected
+Linux server reports an older `serverVersion`. That request goes through the
+authenticated websocket RPC `server.requestHeadlessUpdateCheck`; the server
+rate-limits it and starts `t3code-headless-upgrade.service` through
+`systemctl --user`, so the updater runs outside the T3 server process and can
+safely restart `t3code.service`. Non-Linux hosts or Linux hosts without the
+upgrade service report `unsupported` and do nothing.
+
+If the timer runs while `t3code.service` is active, it downloads and validates
+the new release first. Downtime is limited to the final restart. The updater
+keeps the previous release for rollback and prunes older releases after a
+successful update.
 
 ## Nightly Release Concurrency
 
