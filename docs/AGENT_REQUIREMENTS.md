@@ -1,5 +1,74 @@
 # Agent Requirements
 
+## Current Task: Document And Install Headless Auto-Update
+
+Document the correct update model for the Linux headless release artifact and
+set up the remote VM to update from GitHub Releases safely.
+
+### Current User Requirements
+
+- Explain what happens if the headless app is running during an update.
+- Document the chosen auto-update model in the repo.
+- Set up auto-update on the remote `brad-linux-dev` T3 Code service.
+- Keep the implementation safe for a 24/7 service.
+
+### Constraints
+
+- Do not mutate the running release directory in place.
+- Stage new releases in versioned directories and atomically move a `current`
+  symlink only after validation.
+- Restart the service only after the new release has been downloaded,
+  checksummed, extracted, and smoke-tested.
+- Keep rollback possible.
+- Keep secrets out of logs and chat output.
+- Use `bun run test`, not `bun test`.
+- Repo checks required before done: `bun fmt`, `bun lint`, and
+  `bun typecheck`.
+
+### Current Acceptance Criteria
+
+- Repo docs describe the headless update policy, running-service behavior,
+  rollback model, and systemd timer approach.
+- A reusable updater script exists for installing newer GitHub release assets.
+- The remote VM has the updater and timer installed.
+- The remote updater can run safely when already current.
+- `t3code.service` remains healthy and reports the expected version after
+  setup.
+
+### Current Status
+
+- Completed locally and installed on the remote VM; pending commit/push.
+- Added `scripts/headless-auto-upgrade.sh` as the reusable updater.
+- Updated `docs/release.md` and `LLM_INSTRUCTIONS.md` to document the
+  external updater model, running-service behavior, rollback, and systemd
+  timer setup.
+- Installed the updater on `brad-linux-dev` as
+  `~/.local/bin/t3code-headless-upgrade`.
+- Installed and enabled the user timer
+  `t3code-headless-upgrade.timer`.
+- Repointed the remote `t3` wrapper to
+  `~/.local/share/t3code-server/current/bin/t3`, so the existing system
+  service now runs through the documented `current` symlink.
+- Note: `loginctl` reports `Linger=no`, so the user timer is active in the
+  current user manager but will need `sudo loginctl enable-linger brad` or a
+  root-owned system timer to run before login after VM reboot.
+
+### Current Verification
+
+- Passed: `bash -n scripts/headless-auto-upgrade.sh`.
+- Passed: `git diff --check`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only.
+- Remote: updater staged `v0.0.23-fork.4` into
+  `~/.local/share/t3code-server/releases/0.0.23-fork.4`.
+- Remote: manual `systemctl --user start t3code-headless-upgrade.service`
+  exited successfully with `already on 0.0.23-fork.4`.
+- Remote: `t3code.service` is active and reports
+  `serverVersion: "0.0.23-fork.4"` from
+  `/.well-known/t3/environment`.
+
 ## Current Task: Replace Linux Electron Release With Headless Linux Artifact
 
 Update the headless release-artifact branch so Linux releases publish the

@@ -193,6 +193,13 @@ arm64, and macOS x64. They added flake surface without being used. Do not
   `apps/server/dist/bin.mjs`, `apps/server/dist/client/**`, and staged
   production `node_modules`, and its CI job smoke-tests `--version`, `--help`,
   and HTTP startup from a clean unpack. Target hosts need Node.js 22.16+.
+- Headless hosts should update with the external
+  `scripts/headless-auto-upgrade.sh` flow documented in `docs/release.md`, not
+  an in-process self-updater. The updater stages a versioned release directory,
+  atomically flips `current`, restarts `t3code.service`, health-checks the
+  server version, and rolls back on failure. This keeps a 24/7 server safe:
+  clients only see the intentional restart window, and the running process is
+  never overwritten in place.
 - The 2-attempt retry wrapper around `bun run dist:desktop:artifact` absorbs
   transient flakes (macOS `hdiutil: Device not configured`, native-dep network
   hiccups). Don't remove it.
