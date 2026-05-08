@@ -7,6 +7,7 @@ import serverPackageJson from "../apps/server/package.json" with { type: "json" 
 
 import { BRAND_ASSET_PATHS } from "./lib/brand-assets.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
+import { validateBundledClientAssets } from "./lib/client-assets.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
@@ -573,43 +574,6 @@ function stageWindowsIcons(stageResourcesDir: string, sourceIco: string) {
 
     const iconPath = path.join(stageResourcesDir, "icon.ico");
     yield* fs.copyFile(sourceIco, iconPath);
-  });
-}
-
-function validateBundledClientAssets(clientDir: string) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const indexPath = path.join(clientDir, "index.html");
-    const indexHtml = yield* fs.readFileString(indexPath);
-    const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)]
-      .map((match) => match[1])
-      .filter((value): value is string => value !== undefined);
-    const missing: string[] = [];
-
-    for (const ref of refs) {
-      const normalizedRef = ref.split("#")[0]?.split("?")[0] ?? "";
-      if (!normalizedRef) continue;
-      if (normalizedRef.startsWith("http://") || normalizedRef.startsWith("https://")) continue;
-      if (normalizedRef.startsWith("data:") || normalizedRef.startsWith("mailto:")) continue;
-
-      const ext = path.extname(normalizedRef);
-      if (!ext) continue;
-
-      const relativePath = normalizedRef.replace(/^\/+/, "");
-      const assetPath = path.join(clientDir, relativePath);
-      if (!(yield* fs.exists(assetPath))) {
-        missing.push(normalizedRef);
-      }
-    }
-
-    if (missing.length > 0) {
-      const preview = missing.slice(0, 6).join(", ");
-      const suffix = missing.length > 6 ? ` (+${missing.length - 6} more)` : "";
-      return yield* new BuildScriptError({
-        message: `Bundled client references missing files in ${indexPath}: ${preview}${suffix}. Rebuild web/server artifacts.`,
-      });
-    }
   });
 }
 
