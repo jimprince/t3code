@@ -395,6 +395,27 @@ export const ServerSignalProcessResult = Schema.Struct({
 });
 export type ServerSignalProcessResult = typeof ServerSignalProcessResult.Type;
 
+export const ServerHeadlessUpdateCheckStatus = Schema.Literals([
+  "queued",
+  "cooldown",
+  "unsupported",
+  "error",
+]);
+export type ServerHeadlessUpdateCheckStatus = typeof ServerHeadlessUpdateCheckStatus.Type;
+
+export const ServerHeadlessUpdateCheckInput = Schema.Struct({
+  clientVersion: TrimmedNonEmptyString,
+  serverVersion: TrimmedNonEmptyString,
+});
+export type ServerHeadlessUpdateCheckInput = typeof ServerHeadlessUpdateCheckInput.Type;
+
+export const ServerHeadlessUpdateCheckResult = Schema.Struct({
+  status: ServerHeadlessUpdateCheckStatus,
+  checkedAt: IsoDateTime,
+  message: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type ServerHeadlessUpdateCheckResult = typeof ServerHeadlessUpdateCheckResult.Type;
+
 export const ServerConfig = Schema.Struct({
   environment: ExecutionEnvironmentDescriptor,
   auth: ServerAuthDescriptor,
