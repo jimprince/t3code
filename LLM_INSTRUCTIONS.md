@@ -29,6 +29,13 @@ things specific to the fork relationship.
    gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
    ```
 
+   Before testing an existing nightly or headless server update, discover the
+   current fork release state rather than reusing an old tag:
+
+   ```bash
+   gh release list --repo jimprince/t3code --limit 10
+   ```
+
 3. Reroll the same upstream nightly for updater testing by dispatching
    `release.yml` with the next explicit `-fork.N` version. The dispatch form
    only offers `channel=stable`; the version string still makes the run nightly.
@@ -165,10 +172,11 @@ per-run groups and always complete.
 `.github/workflows/release.yml` only builds:
 
 - macOS arm64 (dmg + zip)
-- Linux x64 (AppImage)
+- Linux x64 headless server tarball
 
-We deliberately **dropped** Windows x64, Windows arm64, and macOS x64. They
-added flake surface without being used. Do not "helpfully" re-add them.
+We deliberately **dropped** Linux Electron/AppImage, Windows x64, Windows
+arm64, and macOS x64. They added flake surface without being used. Do not
+"helpfully" re-add them.
 
 - macOS arm64 prefers the local self-hosted `t3code-mac-arm64` runner when it
   is online and idle. If it is offline or busy during preflight, the workflow
@@ -178,12 +186,13 @@ added flake surface without being used. Do not "helpfully" re-add them.
 - `fail_on_unmatched_files: false` on the `softprops/action-gh-release@v2` step
   is intentional — it lets the publish step succeed when patterns for dropped
   platforms don't match.
-- For nightly builds only, the Linux hosted build is best-effort. The release
-  job is allowed to continue after a Linux-only failure, but it validates that
-  `nightly-mac.yml` exists before publishing so the macOS updater track remains
-  usable. The Linux nightly install also disables dependency lifecycle scripts
-  so a native dependency hang cannot hold the macOS updater release open. Stable
-  releases still require the full matrix to pass with full dependency installs.
+- The Linux release artifact is the headless server tarball, not an Electron
+  AppImage and not part of the desktop updater flow. It is required before
+  publishing both stable and nightly releases. It is named
+  `t3-headless-<version>-linux-x64.tar.gz`, includes `bin/t3`,
+  `apps/server/dist/bin.mjs`, `apps/server/dist/client/**`, and staged
+  production `node_modules`, and its CI job smoke-tests `--version`, `--help`,
+  and HTTP startup from a clean unpack. Target hosts need Node.js 22.16+.
 - The 2-attempt retry wrapper around `bun run dist:desktop:artifact` absorbs
   transient flakes (macOS `hdiutil: Device not configured`, native-dep network
   hiccups). Don't remove it.
@@ -233,7 +242,7 @@ print or inspect secret values. The latest verified signed/notarized fork
 release at the time this note was updated was
 `v0.0.23-nightly.20260506.212-fork.1`.
 
-Linux AppImage artifacts are not code-signed. Windows signing setup is
+The Linux headless tarball is not code-signed. Windows signing setup is
 intentionally omitted because Windows is not part of the fork release matrix.
 
 ## Fork-only interim builds: use `-fork.N` pre-release suffix
