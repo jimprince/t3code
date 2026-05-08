@@ -89,6 +89,8 @@ import {
   ServerProcessDiagnosticsResult,
   ServerProcessResourceHistoryInput,
   ServerProcessResourceHistoryResult,
+  ServerHeadlessUpdateCheckInput,
+  ServerHeadlessUpdateCheckResult,
   ServerSignalProcessInput,
   ServerSignalProcessResult,
   ServerUpsertKeybindingInput,
@@ -161,6 +163,7 @@ export const WS_METHODS = {
   serverGetProcessDiagnostics: "server.getProcessDiagnostics",
   serverGetProcessResourceHistory: "server.getProcessResourceHistory",
   serverSignalProcess: "server.signalProcess",
+  serverRequestHeadlessUpdateCheck: "server.requestHeadlessUpdateCheck",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -252,6 +255,14 @@ export const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess,
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
 });
+
+export const WsServerRequestHeadlessUpdateCheckRpc = Rpc.make(
+  WS_METHODS.serverRequestHeadlessUpdateCheck,
+  {
+    payload: ServerHeadlessUpdateCheckInput,
+    success: ServerHeadlessUpdateCheckResult,
+  },
+);
 
 export const WsSourceControlLookupRepositoryRpc = Rpc.make(
   WS_METHODS.sourceControlLookupRepository,
@@ -522,6 +533,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerGetProcessDiagnosticsRpc,
   WsServerGetProcessResourceHistoryRpc,
   WsServerSignalProcessRpc,
+  WsServerRequestHeadlessUpdateCheckRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,

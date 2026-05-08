@@ -84,6 +84,7 @@ import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
 import * as VcsProjectConfig from "./vcs/VcsProjectConfig.ts";
 import * as VcsProcess from "./vcs/VcsProcess.ts";
+import { requestHeadlessUpdateCheck } from "./headlessUpdateCheck.ts";
 import {
   BootstrapCredentialService,
   type BootstrapCredentialChange,
@@ -945,6 +946,14 @@ const makeWsRpcLayer = (currentSessionId: AuthSessionId) =>
           observeRpcEffect(WS_METHODS.serverSignalProcess, processDiagnostics.signal(input), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.serverRequestHeadlessUpdateCheck]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverRequestHeadlessUpdateCheck,
+            requestHeadlessUpdateCheck(input),
+            {
+              "rpc.aggregate": "server",
+            },
+          ),
         [WS_METHODS.sourceControlLookupRepository]: (input) =>
           observeRpcEffect(
             WS_METHODS.sourceControlLookupRepository,

@@ -80,6 +80,7 @@ import { getClientSettings } from "~/hooks/useSettings";
 import { subscribeTerminalMetadata, terminalSessionManager } from "../../terminalSessionState";
 import { resetWsReconnectBackoff } from "~/rpc/wsConnectionState";
 import { resolveRemotePairingTarget } from "@t3tools/shared/remote";
+import { maybeRequestHeadlessUpdateCheck } from "~/serverUpdateCheck";
 
 type EnvironmentServiceState = {
   readonly queryClient: QueryClient;
@@ -1239,6 +1240,11 @@ async function refreshSavedEnvironmentMetadata(
     descriptor: serverConfig.environment,
     serverConfig,
     role: sessionState.authenticated ? (sessionState.role ?? roleHint ?? null) : null,
+  });
+  maybeRequestHeadlessUpdateCheck({
+    environmentId: record.environmentId,
+    serverConfig,
+    client,
   });
   useSavedEnvironmentRegistryStore
     .getState()
