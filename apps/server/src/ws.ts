@@ -96,6 +96,7 @@ import * as VcsProcess from "./vcs/VcsProcess.ts";
 import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
+import { requestHeadlessUpdateCheck } from "./headlessUpdateCheck.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 const isWorkspacePathOutsideRootError = Schema.is(WorkspacePathOutsideRootError);
 
@@ -1070,6 +1071,14 @@ const makeWsRpcLayer = (currentSession: AuthenticatedSession) =>
           observeRpcEffect(WS_METHODS.serverSignalProcess, processDiagnostics.signal(input), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.serverRequestHeadlessUpdateCheck]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverRequestHeadlessUpdateCheck,
+            requestHeadlessUpdateCheck(input),
+            {
+              "rpc.aggregate": "server",
+            },
+          ),
         [WS_METHODS.sourceControlLookupRepository]: (input) =>
           observeRpcEffect(
             WS_METHODS.sourceControlLookupRepository,
