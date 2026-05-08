@@ -1,5 +1,65 @@
 # Agent Requirements
 
+## Current Task: Trigger Headless Server Update Check From Newer Client
+
+Let a newer desktop/web client ask an older headless server to check for a
+GitHub release update immediately, without replacing the existing once-daily
+timer.
+
+### Current User Requirements
+
+- Keep once-daily scheduled update checks.
+- If the client version supersedes the server version, check for an update on
+  the server.
+- Keep the update path safe for a 24/7 headless service.
+
+### Constraints
+
+- Do not run the updater in-process.
+- Do not put SSH/systemd details or secrets in the browser.
+- Rate-limit client-triggered checks so reconnecting clients do not repeatedly
+  hammer the server or GitHub.
+- Keep unsupported/non-headless installs as a safe no-op.
+- Use `bun run test`, not `bun test`.
+- Repo checks required before done: `bun fmt`, `bun lint`, and
+  `bun typecheck`.
+
+### Current Acceptance Criteria
+
+- Server exposes an authenticated RPC that requests an external headless update
+  check and reports queued/cooldown/unsupported/error.
+- The RPC uses the user systemd upgrade service when available, so the updater
+  runs outside the T3 server process and can safely restart it.
+- The web client triggers the RPC only when its version sorts newer than the
+  connected server version.
+- Client-triggered checks are rate-limited per environment/version pair.
+- Documentation describes the once-daily timer plus newer-client immediate
+  check behavior.
+- Focused tests cover version supersedence logic and the trigger guard.
+
+### Current Status
+
+- Implemented locally; pending commit/push.
+- Added authenticated `server.requestHeadlessUpdateCheck` websocket RPC.
+- Added server-side headless update requester that starts
+  `t3code-headless-upgrade.service` through `systemctl --user` with a cooldown.
+- Added client-side version supersedence detection and per
+  environment/client/server throttling before requesting a server check.
+- Updated release docs and repo instructions to describe once-daily checks plus
+  newer-client immediate checks.
+
+### Current Verification
+
+- Passed: `bun --filter @t3tools/web test src/versionSkew.test.ts src/serverUpdateCheck.test.ts`.
+- Passed: `bun --filter @t3tools/web test src/serverUpdateCheck.test.ts src/environments/runtime/service.addSavedEnvironment.test.ts`.
+- Passed: `bun --filter @t3tools/web test`.
+- Passed: `bun --filter t3 test src/headlessUpdateCheck.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `git diff --check`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only.
+
 ## Current Task: Document And Install Headless Auto-Update
 
 Document the correct update model for the Linux headless release artifact and

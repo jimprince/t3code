@@ -237,9 +237,21 @@ systemctl --user list-timers t3code-headless-upgrade.timer
 journalctl --user -u t3code-headless-upgrade.service -n 100 --no-pager
 ```
 
+The timer checks once per day at 05:20 UTC with up to 45 minutes of randomized
+delay. `Persistent=true` makes systemd run a missed check after the machine
+comes back.
+
 For a user timer to run after reboot before the user logs in, enable lingering
 once with `sudo loginctl enable-linger brad`. If lingering is unavailable, use
 a system timer that runs the same script as the install user.
+
+Newer clients can also request an immediate server-side check when the connected
+Linux server reports an older `serverVersion`. That request goes through the
+authenticated websocket RPC `server.requestHeadlessUpdateCheck`; the server
+rate-limits it and starts `t3code-headless-upgrade.service` through
+`systemctl --user`, so the updater runs outside the T3 server process and can
+safely restart `t3code.service`. Non-Linux hosts or Linux hosts without the
+upgrade service report `unsupported` and do nothing.
 
 If the timer runs while `t3code.service` is active, it downloads and validates
 the new release first. Downtime is limited to the final restart. The updater

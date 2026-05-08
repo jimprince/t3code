@@ -199,7 +199,11 @@ arm64, and macOS x64. They added flake surface without being used. Do not
   atomically flips `current`, restarts `t3code.service`, health-checks the
   server version, and rolls back on failure. This keeps a 24/7 server safe:
   clients only see the intentional restart window, and the running process is
-  never overwritten in place.
+  never overwritten in place. The systemd timer checks once per day, and newer
+  clients can request an immediate check through the authenticated
+  `server.requestHeadlessUpdateCheck` RPC when a Linux server reports an older
+  version. That RPC must start the existing user systemd upgrade service; do
+  not run the updater as an in-process child of the server being restarted.
 - The 2-attempt retry wrapper around `bun run dist:desktop:artifact` absorbs
   transient flakes (macOS `hdiutil: Device not configured`, native-dep network
   hiccups). Don't remove it.
