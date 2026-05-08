@@ -226,8 +226,7 @@ jobs:
     name: Build ${{ matrix.label }}
     needs: preflight
     if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' }}
-    continue-on-error: ${{ matrix.platform == 'linux' && needs.preflight.outputs.release_channel == 'nightly' }}
-    runs-on: ${{ fromJSON(matrix.platform == 'mac' && needs.preflight.outputs.mac_runner || matrix.runner) }}
+    runs-on: ${{ fromJSON(needs.preflight.outputs.mac_runner) }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
@@ -238,11 +237,6 @@ jobs:
             platform: mac
             target: dmg
             arch: arm64
-          - label: Linux x64
-            runner: '"ubuntu-24.04"'
-            platform: linux
-            target: AppImage
-            arch: x64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -261,13 +255,7 @@ jobs:
           node-version-file: package.json
 
       - name: Install dependencies
-        shell: bash
-        run: |
-          if [[ "${{ matrix.platform }}" == "linux" && "${{ needs.preflight.outputs.release_channel }}" == "nightly" ]]; then
-            bun install --frozen-lockfile --ignore-scripts
-          else
-            bun install --frozen-lockfile
-          fi
+        run: bun install --frozen-lockfile
 
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
@@ -332,8 +320,6 @@ jobs:
             else
               echo "macOS signing disabled (missing one or more Apple signing secrets)."
             fi
-          else
-            echo "Signing disabled for ${{ matrix.platform }}."
           fi
 
           # Retry on transient flakes (hdiutil "Device not configured" on macos-14,
@@ -359,8 +345,6 @@ jobs:
           for pattern in \
             "release/*.dmg" \
             "release/*.zip" \
-            "release/*.AppImage" \
-            "release/*.exe" \
             "release/*.blockmap" \
             "release/*.yml"; do
             for file in $pattern; do
@@ -375,18 +359,6 @@ jobs:
             done
           fi
 
-          # Enable if Windows arm64 builds are enabled.
-          # Windows updater metadata is channel-specific (for example
-          # "latest.yml" or "nightly.yml"). Suffix each per-arch copy so the
-          # release job can merge matching arm64/x64 manifests back into one
-          # canonical manifest per channel.
-          # if [[ "${{ matrix.platform }}" == "win" ]]; then
-          #   shopt -s nullglob
-          #   for manifest in release-publish/*.yml; do
-          #     mv "$manifest" "${manifest%.yml}-win-${{ matrix.arch }}.yml"
-          #   done
-          # fi
-
       - name: Upload build artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -394,10 +366,72 @@ jobs:
           path: release-publish/*
           if-no-files-found: error
 
+  build_headless:
+    name: Build headless Linux x64
+    needs: preflight
+    if: ${{ !failure() && !cancelled() && needs.preflight.result == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.preflight.outputs.ref }}
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          if [[ "${{ needs.preflight.outputs.release_channel }}" == "nightly" ]]; then
+            bun install --frozen-lockfile --ignore-scripts
+          else
+            bun install --frozen-lockfile
+          fi
+
+      - name: Align package versions to release version
+        run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
+
+      - name: Build headless artifact
+        run: |
+          bun run dist:headless:artifact -- \
+            --platform linux \
+            --arch x64 \
+            --build-version "${{ needs.preflight.outputs.version }}"
+
+      - name: Smoke test headless artifact
+        run: |
+          bun run smoke:headless:artifact -- \
+            --artifact "release/t3-headless-${{ needs.preflight.outputs.version }}-linux-x64.tar.gz" \
+            --version "${{ needs.preflight.outputs.version }}"
+
+      - name: Collect headless release asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-publish
+          cp "release/t3-headless-${{ needs.preflight.outputs.version }}-linux-x64.tar.gz" release-publish/
+
+      - name: Upload headless artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: headless-linux-x64
+          path: release-publish/*
+          if-no-files-found: error
+
   release:
     name: Publish GitHub Release
-    needs: [preflight, build]
-    if: ${{ !cancelled() && needs.preflight.result == 'success' && (needs.build.result == 'success' || needs.preflight.outputs.release_channel == 'nightly') }}
+    needs: [preflight, build, build_headless]
+    if: ${{ !cancelled() && needs.preflight.result == 'success' && needs.build.result == 'success' && needs.build_headless.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -426,6 +460,13 @@ jobs:
           merge-multiple: true
           path: release-assets
 
+      - name: Download headless artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: headless-*
+          merge-multiple: true
+          path: release-assets
+
       - name: Validate release assets
         shell: bash
         run: |
@@ -439,6 +480,19 @@ jobs:
 
           if [[ "${{ needs.preflight.outputs.release_channel }}" == "nightly" && ! -f release-assets/nightly-mac.yml ]]; then
             echo "Nightly macOS updater manifest release-assets/nightly-mac.yml is required." >&2
+            exit 1
+          fi
+
+          headless_asset="release-assets/t3-headless-${{ needs.preflight.outputs.version }}-linux-x64.tar.gz"
+          if [[ ! -f "$headless_asset" ]]; then
+            echo "Headless Linux x64 release asset $headless_asset is required." >&2
+            exit 1
+          fi
+
+          forbidden_linux_desktop_assets=(release-assets/*.AppImage release-assets/*-linux.yml)
+          if (( ${#forbidden_linux_desktop_assets[@]} > 0 )); then
+            printf 'Linux desktop release assets are no longer published:\n' >&2
+            printf '  %s\n' "${forbidden_linux_desktop_assets[@]}" >&2
             exit 1
           fi
 
@@ -467,7 +521,7 @@ jobs:
           files: |
             release-assets/*.dmg
             release-assets/*.zip
-            release-assets/*.AppImage
+            release-assets/*.tar.gz
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
@@ -486,7 +540,7 @@ jobs:
           files: |
             release-assets/*.dmg
             release-assets/*.zip
-            release-assets/*.AppImage
+            release-assets/*.tar.gz
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
