@@ -109,10 +109,11 @@ Validated path: an installed `v0.0.22-nightly.20260423.108-fork.1` app found
 The fork intentionally builds only:
 
 - macOS arm64: DMG, zip, blockmaps, and `latest-mac.yml` or `nightly-mac.yml`.
-- Linux x64: AppImage and updater metadata.
+- Linux x64 headless server:
+  `t3-headless-<version>-linux-x64.tar.gz`.
 
-Do not re-add Windows or macOS x64 unless the user explicitly changes the
-support target.
+Do not re-add Linux Electron/AppImage, Windows, or macOS x64 unless the user
+explicitly changes the support target.
 
 macOS arm64 builds prefer the local self-hosted `t3code-mac-arm64` runner when
 it is online and idle. During release preflight, `release.yml` checks the
@@ -121,11 +122,62 @@ busy, the macOS build uses GitHub-hosted `macos-15` instead. GitHub Actions
 cannot migrate a job that is already queued on a self-hosted label, so the
 fallback decision must happen before the macOS build job is created.
 
-Nightly preflight and Linux installs skip dependency lifecycle scripts so
-native dependency hangs do not block macOS updater releases. Nightly Linux is
-best-effort: a Linux-only nightly failure must not block a macOS updater
-release as long as `nightly-mac.yml` exists. Stable releases still require the
-configured matrix to pass with full installs.
+Nightly preflight and headless Linux installs skip dependency lifecycle scripts
+so native dependency hangs do not block macOS updater releases.
+
+The headless Linux x64 tarball is required for both stable and nightly
+releases. It is built in a separate Ubuntu job, includes `bin/t3`,
+`apps/server/dist/bin.mjs`, `apps/server/dist/client/**`, and production
+`node_modules`, and is smoke-tested after a clean unpack before publication.
+The target VM must have Node.js 22.16 or newer; the current release workflow
+uses the repo `package.json` Node version.
+
+## Headless Server Install / Update
+
+Discover the latest fork release before installing or testing. Do not hardcode
+an old nightly tag:
+
+```bash
+gh release list --repo jimprince/t3code --limit 10
+```
+
+Install or update the remote VM from a release asset:
+
+```bash
+set -euo pipefail
+
+repo="jimprince/t3code"
+tag="<release-tag>"
+version="${tag#v}"
+root="/home/brad/.local/share/t3code-server"
+release_dir="$root/releases/$version"
+asset="t3-headless-${version}-linux-x64.tar.gz"
+
+mkdir -p "$root/releases"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+gh release download "$tag" --repo "$repo" --pattern "$asset" --dir "$tmp"
+mkdir -p "$release_dir"
+tar -xzf "$tmp/$asset" -C "$release_dir" --strip-components 1
+ln -sfn "$release_dir" "$root/current"
+
+"$root/current/bin/t3" --version
+sudo systemctl restart t3code.service
+sudo systemctl status t3code.service --no-pager
+curl -I http://100.64.0.4:3773/
+```
+
+The service command should run the current symlink:
+
+```bash
+/home/brad/.local/share/t3code-server/current/bin/t3 serve \
+  --mode web \
+  --host 100.64.0.4 \
+  --port 3773 \
+  --no-browser \
+  --base-dir /home/brad/.local/share/t3code-dev
+```
 
 ## Nightly Release Concurrency
 
@@ -181,6 +233,14 @@ gh release view <tag> --repo jimprince/t3code \
   --json tagName,isPrerelease,publishedAt,url,assets
 ```
 
+Smoke-test a downloaded headless asset locally:
+
+```bash
+bun run smoke:headless:artifact -- \
+  --artifact release/t3-headless-<version>-linux-x64.tar.gz \
+  --version <version>
+```
+
 Inspect the nightly mac feed:
 
 ```bash
@@ -213,8 +273,8 @@ later log `notarization successful`.
 If any required Apple secret is missing, the macOS build intentionally proceeds
 unsigned and logs `macOS signing disabled (missing one or more Apple signing
 secrets).` Do not print or inspect secret values; use `gh secret list --repo
-jimprince/t3code` only to confirm secret names exist. Linux AppImage artifacts
-are not code-signed. Windows signing setup is intentionally omitted because
+jimprince/t3code` only to confirm secret names exist. The Linux headless tarball
+is not code-signed. Windows signing setup is intentionally omitted because
 Windows builds are not part of the fork release matrix.
 
 ## Troubleshooting
