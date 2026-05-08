@@ -1,5 +1,65 @@
 # Agent Requirements
 
+## Current Task: Replace Linux Electron Release With Headless Linux Artifact
+
+Update the headless release-artifact branch so Linux releases publish the
+headless server tarball instead of the Electron/AppImage desktop artifact.
+
+### Current User Requirements
+
+- Work from the existing `t3code/headless-release-artifact` branch.
+- Bring the branch current with `main` and resolve conflicts.
+- Replace the Linux Electron release artifact with the Linux headless artifact.
+- Keep macOS desktop release artifacts intact.
+- Keep the fork release/versioning model intact.
+- Push the updated branch when verified.
+
+### Constraints
+
+- Do not delete or rewrite release tags.
+- Avoid pushing directly to `main`; keep this on the feature branch/PR.
+- Preserve package-version stamping behavior in release workflows.
+- Use `bun run test`, not `bun test`.
+- Repo checks required before done: `bun fmt`, `bun lint`, and
+  `bun typecheck`.
+
+### Current Acceptance Criteria
+
+- PR branch is no longer conflicting with current `main`.
+- `release.yml` no longer builds or publishes the Linux Electron/AppImage
+  artifact.
+- `release.yml` requires and publishes
+  `t3-headless-${version}-linux-x64.tar.gz` for Linux.
+- Release documentation and fork-specific instructions describe the new
+  macOS desktop + Linux headless release matrix.
+- Focused artifact tests and required repo checks pass, or blockers are
+  reported.
+
+### Current Status
+
+- Completed locally; pending push/PR CI.
+- Rebasing onto current `origin/main` succeeded after dropping a stale
+  docs-only verification replay and preserving the current task tracker.
+- Updated `release.yml` so the desktop build matrix contains only macOS arm64.
+- Updated release publication to require the headless Linux x64 tarball and to
+  reject Linux desktop assets (`*.AppImage` and `*-linux.yml`) if they appear.
+- Updated `LLM_INSTRUCTIONS.md` and `docs/release.md` to describe the new
+  macOS desktop + Linux headless release matrix.
+
+### Current Verification
+
+- Passed: `bun --filter @t3tools/scripts test build-headless-artifact.test.ts build-desktop-artifact.test.ts`.
+- Passed: `git diff --check`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only.
+- Passed: `bun scripts/release-smoke.ts`.
+- Passed: `PATH="$HOME/.nvm/versions/node/v22.22.1/bin:$PATH" bun run test`.
+- Note: `bun run release:smoke` fails in this shell because its package script
+  invokes Node directly and `/usr/local/bin/node` is `v22.15.1`; running the
+  same script through Bun passed.
+
 ## Current Task: Fix Saved Environment Reconnect Spinner Hang
 
 Troubleshoot and fix the case where `brad-linux-dev` reaches the remote
