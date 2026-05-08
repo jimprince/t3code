@@ -73,6 +73,7 @@ import {
   derivePhysicalProjectKey,
 } from "../../logicalProject";
 import { getClientSettings } from "~/hooks/useSettings";
+import { maybeRequestHeadlessUpdateCheck } from "~/serverUpdateCheck";
 
 type EnvironmentServiceState = {
   readonly queryClient: QueryClient;
@@ -1237,6 +1238,11 @@ async function refreshSavedEnvironmentMetadata(
     descriptor: serverConfig.environment,
     serverConfig,
     role: sessionState.authenticated ? (sessionState.role ?? roleHint ?? null) : null,
+  });
+  maybeRequestHeadlessUpdateCheck({
+    environmentId: record.environmentId,
+    serverConfig,
+    client,
   });
   useSavedEnvironmentRegistryStore
     .getState()
