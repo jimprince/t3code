@@ -1,5 +1,46 @@
 # Agent Requirements
 
+## Current Task Snapshot — Legacy Schema Decode Compatibility
+
+### Active Requirements
+- Fix the `t3-thread` CLI/contracts decode path so normal commands no longer require direct-RPC workarounds when T3 backends return legacy shell snapshot payloads.
+- Support legacy project `defaultModelSelection` values shaped like `{"instanceId":"codex","model":"gpt-5.4"}`.
+- Support legacy thread `modelSelection` values shaped like `{"instanceId":"codex","model":"gpt-5.5","options":[{"id":"reasoningEffort","value":"medium"}]}`.
+- Support legacy/current model selection payloads that include `options` arrays without failing schema decode.
+- Confirm `subscribeShell` stream items with `kind:"snapshot"` decode correctly and are not rejected as non-event stream items.
+- Add regression tests using the exact legacy payload shapes from the failure examples.
+- Rebuild committed distribution output if source changes require it.
+- Run focused tests and a smoke command where feasible.
+- Commit the completed changes and report the commit SHA, changed files, tests run, and any follow-up.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Do not change T3 server code.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+- Preserve existing user work and avoid destructive git operations.
+
+### Acceptance Criteria
+- `t3-thread projects --env local-mbp` can decode shell snapshots with legacy `defaultModelSelection`.
+- `t3-thread create ...` can proceed past project snapshot decoding for legacy model selections.
+- `t3-thread status <agent>` can decode thread snapshots with legacy `modelSelection` and `options`.
+- `subscribeShell` snapshot stream items decode as valid snapshots.
+- Regression tests fail without the compatibility normalization and pass with it.
+- Focused tests, build/dist freshness, and smoke validation are run or any infeasible command is documented.
+
+### Status
+- Completed locally.
+
+### Validation Update
+- Existing vendored contract layer already contains backward-compatible `instanceId` model-selection normalization and legacy `options` array normalization in `src/vendor/t3contracts/orchestration.ts`.
+- Added regression coverage for the exact legacy `subscribeShell` project `defaultModelSelection` shape: `{"instanceId":"codex","model":"gpt-5.4"}`.
+- Added regression coverage for the exact legacy `subscribeThread` status snapshot shape: `{"instanceId":"codex","model":"gpt-5.5","options":[{"id":"reasoningEffort","value":"medium"}]}`.
+- Confirmed the regressions fail when the legacy `instanceId` decoder is temporarily removed, then pass after restoring it.
+- `npm run test -- orchestration-model-options-compat` passed: 4 tests.
+- `npm run build` passed and did not change `dist/cli.cjs`.
+- `npm run test -- dist-freshness` passed: 1 test.
+- `npm run test` passed: 51 tests.
+- `npm run smoke` passed, including `tsx src/cli.ts projects --env local-mbp`.
+
 ## Current Task Snapshot — Deprecate T3-Agent Naming
 
 ### Active Requirements
