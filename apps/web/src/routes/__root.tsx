@@ -63,6 +63,7 @@ import {
   updatePrimaryEnvironmentDescriptor,
 } from "../environments/primary";
 import { hasHostedPairingRequest, isHostedStaticApp } from "../hostedPairing";
+import { maybeRequestHeadlessUpdateCheck } from "../serverUpdateCheck";
 
 export const Route = createRootRouteWithContext<{
   queryClient: QueryClient;
@@ -256,7 +257,19 @@ function ServerStateBootstrap() {
       return;
     }
 
-    return startServerStateSync(getPrimaryEnvironmentConnection().client.server);
+    const connection = getPrimaryEnvironmentConnection();
+    void connection.client.server
+      .getConfig()
+      .then((serverConfig) => {
+        maybeRequestHeadlessUpdateCheck({
+          environmentId: connection.environmentId,
+          serverConfig,
+          client: connection.client,
+        });
+      })
+      .catch(() => undefined);
+
+    return startServerStateSync(connection.client.server);
   }, []);
 
   return null;
