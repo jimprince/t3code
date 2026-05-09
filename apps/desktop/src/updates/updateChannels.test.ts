@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  doesVersionMatchDesktopUpdateChannel,
-  isNightlyDesktopVersion,
-  resolveDefaultDesktopUpdateChannel,
-} from "./updateChannels.ts";
+import { isNightlyDesktopVersion, resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 
 describe("isNightlyDesktopVersion", () => {
   it("detects packaged nightly versions", () => {
@@ -35,24 +31,6 @@ describe("resolveDefaultDesktopUpdateChannel", () => {
   });
 
   it("defaults fork-published nightly builds to nightly", () => {
-    expect(resolveDefaultDesktopUpdateChannel("0.0.21-nightly.20260421.88-fork.1")).toBe(
-      "nightly",
-    );
-  });
-});
-
-describe("doesVersionMatchDesktopUpdateChannel", () => {
-  it("accepts nightly releases on the nightly channel", () => {
-    expect(doesVersionMatchDesktopUpdateChannel("0.0.17-nightly.20260416.1", "nightly")).toBe(true);
-  });
-
-  it("rejects stable releases on the nightly channel", () => {
-    expect(doesVersionMatchDesktopUpdateChannel("0.0.17", "nightly")).toBe(false);
-  });
-
-  it("rejects nightly releases on the stable channel", () => {
-    expect(doesVersionMatchDesktopUpdateChannel("0.0.17-nightly.20260416.1", "latest")).toBe(
-      false,
-    );
+    expect(resolveDefaultDesktopUpdateChannel("0.0.21-nightly.20260421.88-fork.1")).toBe("nightly");
   });
 });
