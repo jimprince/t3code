@@ -34,11 +34,23 @@ rebasing the fork onto upstream `v0.0.23-nightly.20260508.230`.
 
 ### Current Status
 
-- In progress.
+- Rebase completed on branch `t3code/nightly-230-sync`.
+- Upstream desktop module layout preserved; fork branding/flavor behavior was
+  reconciled into `DesktopEnvironment`, `ElectronApp`, and `DesktopUpdates`.
+- Pending push to `main` and nightly fork tag after final review.
 
 ### Current Verification
 
-- Pending.
+- Passed: `bun --filter @t3tools/desktop test src/app/DesktopEnvironment.test.ts src/app/DesktopAppIdentity.test.ts src/electron/ElectronApp.test.ts src/updates/DesktopUpdates.test.ts src/updates/updateChannels.test.ts`.
+- Passed: `bun --filter @t3tools/scripts test build-desktop-artifact.test.ts resolve-previous-release-tag.test.ts` (only `build-desktop-artifact.test.ts` exists for the second path).
+- Passed: `bun fmt`.
+- Passed: `git diff --check`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions
+  only.
+- Blocked: `bun run test` reaches the server suite and fails because the local
+  Node runtime is `22.15.1`, missing `node:sqlite` `StatementSync.columns`.
+  The test error requires Node `>=22.16`, `>=23.11`, or `>=24`.
 
 ## Current Task: Trigger Headless Server Update Check From Newer Client
 
