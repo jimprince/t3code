@@ -1,5 +1,45 @@
 # Agent Requirements
 
+## Current Task: Resolve Nightly 230 Upstream Sync Rebase
+
+Resolve the scheduled `Sync Upstream` failure for the nightly channel by
+rebasing the fork onto upstream `v0.0.23-nightly.20260508.230`.
+
+### Current User Requirements
+
+- Prefer the pattern in the remote/upstream code.
+- Reconcile the fork's branding changes against upstream's new desktop
+  structure.
+- Restore the GitHub nightly sync path so the fork can publish a
+  `v0.0.23-nightly.20260508.230-fork.N` release.
+
+### Constraints
+
+- Keep the fork release/versioning model intact.
+- Do not delete or rewrite existing release tags.
+- Keep upstream's new desktop app module layout instead of reviving removed
+  `apps/desktop/src/appBranding.*` files.
+- Preserve externally visible fork branding where it still applies.
+- Use `bun run test`, not `bun test`.
+
+### Current Acceptance Criteria
+
+- Rebase onto `refs/tags/upstream/v0.0.23-nightly.20260508.230` completes.
+- The old `appBranding.*` conflict is resolved by porting fork branding into
+  upstream's new `apps/desktop/src/app/DesktopEnvironment.ts` path.
+- Focused desktop identity/environment tests pass.
+- Required format/lint/typecheck gates pass or blockers are reported.
+- If verified, push rebased `main` with `--force-with-lease` and push the next
+  nightly fork tag for upstream `v0.0.23-nightly.20260508.230`.
+
+### Current Status
+
+- In progress.
+
+### Current Verification
+
+- Pending.
+
 ## Current Task: Trigger Headless Server Update Check From Newer Client
 
 Let a newer desktop/web client ask an older headless server to check for a
