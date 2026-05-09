@@ -1,5 +1,180 @@
 # Agent Requirements
 
+## Current Task: Fix Mobile Clarification Form Scroll Lock
+
+Investigate and fix the mobile thread UI bug where plan/clarification question
+content prevents the user from scrolling back up and interacting with the
+rendered form, leaving the thread blocked.
+
+### Current User Requirements
+
+- Diagnose the UI bug on the mobile-track branch.
+- Fix the thread plan / clarification question experience so the user can
+  scroll and fill out the form.
+- Unblock threads that currently get stuck because the clarification UI cannot
+  be interacted with.
+- Verify the relevant behavior with focused checks, then run the repo-required
+  formatting, lint, and typecheck commands before finishing.
+
+### Acceptance Criteria
+
+- The clarification / plan question UI can be scrolled and interacted with on
+  mobile.
+- The fix preserves the existing thread detail UX outside of the broken
+  interaction.
+- Focused verification covers the affected UI logic.
+- `bun fmt`, `bun lint`, and `bun typecheck` pass before completion, or any
+  blocker is reported explicitly.
+
+### Status
+
+- Completed: identified the broken layout in
+  `apps/mobile/src/features/threads/ThreadDetailScreen.tsx`, where the pending
+  approval / clarification stack was rendered in a bottom-fixed
+  `KeyboardStickyView` without its own scroll container or max height.
+- Completed: wrapped the pending request stack in a bounded vertical
+  `ScrollView` so long clarification forms stay reachable above the composer.
+- Completed: extracted the pending-request height calculation into
+  `apps/mobile/src/features/threads/threadDetailLayout.ts` and added focused
+  regression coverage in
+  `apps/mobile/src/features/threads/ThreadDetailScreen.test.ts`.
+- Completed: verification run:
+  - `bun run --filter @t3tools/mobile test src/features/threads/ThreadDetailScreen.test.ts`
+  - `bun fmt`
+  - `bun lint` (passed with pre-existing warnings only)
+  - `bun typecheck`
+
+## Current Task: Rebase Mobile Track Onto Upstream Mobile
+
+Update the fork iOS/mobile feature branch by replaying Brad's mobile overlay
+commits onto the latest upstream `t3code/mobile-remote-connect` branch.
+
+### Current User Requirements
+
+- Treat this as the T3 Code iOS app work, not the desktop/headless release
+  branch.
+- Use the fork's existing mobile branch and instructions.
+- Rebase the fork overlay commits onto the current upstream mobile feature
+  branch.
+- Preserve fork/mobile documentation, EAS update setup, and local-only
+  troubleshooting notes where still applicable.
+- Run relevant mobile checks and push the updated branch when complete.
+
+### Acceptance Criteria
+
+- The rebased branch is based on current `upstream/t3code/mobile-remote-connect`.
+- Fork-only mobile overlay commits are preserved or deliberately reconciled.
+- Mobile app configuration and EAS update workflow remain present.
+- Relevant checks pass, or blockers are reported with concrete errors.
+- The updated feature branch is pushed to GitHub.
+
+### Status
+
+- Completed: created isolated worktree
+  `.worktrees/mobile-track-rebased` from `origin/feature/mobile-track`.
+- Completed: rebased the fork overlay commits onto
+  `upstream/t3code/mobile-remote-connect` at
+  `4ec9647ce799162a455dd7f59c4c6644358755df`.
+- Completed: preserved the fork mobile app config, EAS update workflow, debug
+  instrumentation, and thread-detail subscription fix.
+- Completed: resolved the upstream git-to-VCS rename conflict in
+  `apps/mobile/src/features/threads/ThreadRouteScreen.tsx`.
+- Completed: verification run:
+  - `bun install --frozen-lockfile`
+  - `bun --filter @t3tools/mobile test`
+  - `bun --filter @t3tools/mobile typecheck`
+  - `bun scripts/mobile-native-static-check.ts`
+  - `bun fmt`
+  - `NODE_OPTIONS=--experimental-strip-types bun lint` (0 errors; existing
+    warnings remain)
+  - `bun typecheck`
+- Note: plain `bun lint` and `bun lint:mobile` are blocked locally because this
+  machine's default Node is v22.15.1 and cannot load the repo's `.ts` lint
+  entrypoints without `--experimental-strip-types` or Bun.
+
+## Current Task: Close Mobile Track Work
+
+Update the mobile troubleshooting runbook with any lessons from the EAS
+dev-client/debugging session, then commit outstanding work, merge the mobile
+track branch to fork `main`, push to GitHub, and clean up the local
+`feature/mobile-track` branch/worktree.
+
+### Current User Requirements
+
+- If the troubleshooting session produced reusable lessons, update the
+  troubleshooting runbook.
+- Commit all outstanding mobile-track work.
+- Merge the completed mobile-track branch into fork `main`.
+- Push the result to the user's GitHub fork.
+- Clean up the local feature branch and worktree after the merge/push is
+  complete.
+- Continue to avoid committing or printing secrets.
+
+### Acceptance Criteria
+
+- `docs/mobile-ios-debugging.md` documents the EAS/dev-client troubleshooting
+  behavior learned during the session.
+- Required checks are run before finalizing.
+- The relevant changes are committed and pushed.
+- Fork `main` contains the merged mobile-track work.
+- The local `feature/mobile-track` worktree and branch are removed after merge.
+
+### Status
+
+- Completed: updated `docs/mobile-ios-debugging.md` with stale EAS update
+  troubleshooting, correct Expo dev-client deep-link launch form, and
+  uninstall/reinstall verification notes.
+- Completed: required checks passed:
+  - `bun fmt`
+  - `bun lint` (0 errors; existing warnings remain)
+  - `bun typecheck` (passed; existing Effect advisory messages remain)
+- In progress: committing and merging to fork `main`.
+
+## Current Task: Automate Mobile EAS Updates
+
+Add CI/CD so pushes to `feature/mobile-track` can publish the fork mobile app's
+JavaScript/assets through EAS Update, making GitHub branch changes available to
+installed compatible dev-client builds without manually running the update
+command.
+
+### Current User Requirements
+
+- Add EAS Update publishing as part of CI for the mobile-track branch.
+- Keep automation scoped to `feature/mobile-track`; do not affect fork `main`
+  desktop sync/release workflows.
+- Continue to avoid committing or printing secrets.
+- Preserve existing mobile-track overlay rules and documentation.
+
+### Acceptance Criteria
+
+- A GitHub Actions workflow exists for `feature/mobile-track` pushes and manual
+  dispatch.
+- The workflow verifies the branch before publishing.
+- The workflow publishes an EAS Update to the fork mobile app's development
+  channel when the required Expo token secret is available.
+- Repo docs explain what the workflow does and which secret it requires.
+- Workflow syntax and relevant checks are verified locally where feasible.
+
+### Status
+
+- Completed: added `.github/workflows/mobile-track-eas-update.yml` for
+  `feature/mobile-track` pushes and manual dispatch.
+- Completed: documented the GitHub `EXPO_TOKEN` repository secret requirement
+  in `LLM_INSTRUCTIONS.md` and `docs/mobile-ios-debugging.md`.
+- Completed: local verification run:
+  - parsed workflow YAML with Ruby
+  - `bun fmt`
+  - `bun lint` (0 errors; existing warnings remain)
+  - `bun typecheck` (passed; existing Effect advisory messages remain)
+- Note: `actionlint` is not installed locally, so GitHub-expression validation
+  is deferred to the pushed workflow run.
+- Completed: pushed workflow commits and verified GitHub Actions trigger.
+- Completed: first hosted-runner workflow run validated install, format, lint,
+  typecheck, and focused regression successfully.
+- Blocked: EAS publish did not run because the GitHub repository secret
+  `EXPO_TOKEN` is not configured. `gh secret list --repo jimprince/t3code`
+  showed no `EXPO_TOKEN` entry.
+
 ## Current Task: Reconcile Mobile Spinner Debug Worktree
 
 Reconcile the intentional work from
@@ -159,7 +334,7 @@ com.brad.t3code.dev`.
   at `0385713da`; the old duplicate hide-whitespace add/revert commits were
   skipped because upstream now contains that change.
 - Completed: latest development EAS Update group is
-  `38ca6731-097c-4f36-93ee-6b3cdc5ffecf` for runtime `0.1.0`.
+  `bfc4eb11-f72b-499e-bebb-145f519c21de` for runtime `0.1.0`.
 - Completed: `make ios-debug-vm-pair` passed against VM environment
   `c9d5fd19-15d1-45f1-856d-3d05a939854d`; runtime state was `ready`, shell
   snapshot loaded, with 7 projects and 14 threads at verification time.
@@ -175,6 +350,9 @@ com.brad.t3code.dev`.
 - Completed: mobile now sequences terminal metadata subscription after shell
   bootstrap so older/local backends that do not support `subscribeTerminalMetadata`
   still reach shell snapshot readiness.
+- Completed: published the MacBook/Tailscale shell-bootstrap fix to EAS
+  development channel with message
+  `mobile mac tailscale shell bootstrap 476cffc7d`.
 
 ### Open Questions / Deferred
 

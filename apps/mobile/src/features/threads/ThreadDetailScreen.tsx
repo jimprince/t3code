@@ -12,7 +12,7 @@ import type {
 import { formatElapsed } from "@t3tools/shared/orchestrationTiming";
 import * as Haptics from "expo-haptics";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, type LayoutChangeEvent } from "react-native";
+import { ScrollView, View, useWindowDimensions, type LayoutChangeEvent } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { KeyboardStickyView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -30,6 +30,7 @@ import type {
 } from "../../lib/threadActivity";
 import { PendingApprovalCard } from "./PendingApprovalCard";
 import { PendingUserInputCard } from "./PendingUserInputCard";
+import { resolvePendingRequestPanelMaxHeight } from "./threadDetailLayout";
 import {
   COMPOSER_COLLAPSED_CHROME,
   COMPOSER_EXPANDED_CHROME,
@@ -201,7 +202,15 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const { onOpenDrawer, onRefresh } = props;
 
   const insets = useSafeAreaInsets();
-  const agentLabel = `${props.selectedThread.modelSelection.instanceId} agent`;
+  const { height: viewportHeight } = useWindowDimensions();
+  const selectedProvider = props.serverConfig?.providers.find(
+    (provider) => provider.instanceId === props.selectedThread.modelSelection.instanceId,
+  );
+  const agentName =
+    selectedProvider?.displayName ??
+    selectedProvider?.driver ??
+    props.selectedThread.modelSelection.instanceId;
+  const agentLabel = `${agentName} agent`;
   const composerBottomInset = Math.max(insets.bottom, 12);
   const [composerExpanded, setComposerExpanded] = useState(false);
   const composerChrome = composerExpanded ? COMPOSER_EXPANDED_CHROME : COMPOSER_COLLAPSED_CHROME;
@@ -217,6 +226,13 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const expandedToolbarInset = composerExpanded ? COMPOSER_EXPANDED_TOOLBAR_CHROME : 0;
   const feedBottomInset =
     Math.max(estimatedOverlayHeight, measuredOverlayHeight) + expandedToolbarInset + 8;
+  const pendingRequestPanelMaxHeight = resolvePendingRequestPanelMaxHeight({
+    viewportHeight,
+    topInset: insets.top,
+    composerChrome,
+    composerBottomInset,
+    activeWorkIndicatorHeight,
+  });
 
   const completeDrawerGesture = useCallback(() => {
     void Haptics.selectionAsync();
@@ -292,26 +308,34 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               ) : null}
 
               {props.activePendingApproval || props.activePendingUserInput ? (
-                <View className="gap-3 px-4 pb-3" style={{ flexShrink: 0 }}>
-                  {props.activePendingApproval ? (
-                    <PendingApprovalCard
-                      approval={props.activePendingApproval}
-                      respondingApprovalId={props.respondingApprovalId}
-                      onRespond={props.onRespondToApproval}
-                    />
-                  ) : null}
-                  {props.activePendingUserInput ? (
-                    <PendingUserInputCard
-                      pendingUserInput={props.activePendingUserInput}
-                      drafts={props.activePendingUserInputDrafts}
-                      answers={props.activePendingUserInputAnswers}
-                      respondingUserInputId={props.respondingUserInputId}
-                      onSelectOption={props.onSelectUserInputOption}
-                      onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
-                      onSubmit={props.onSubmitUserInput}
-                    />
-                  ) : null}
-                </View>
+                <ScrollView
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                  showsVerticalScrollIndicator
+                  style={{ maxHeight: pendingRequestPanelMaxHeight, flexShrink: 1 }}
+                  contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 12 }}
+                >
+                  <View className="gap-3">
+                    {props.activePendingApproval ? (
+                      <PendingApprovalCard
+                        approval={props.activePendingApproval}
+                        respondingApprovalId={props.respondingApprovalId}
+                        onRespond={props.onRespondToApproval}
+                      />
+                    ) : null}
+                    {props.activePendingUserInput ? (
+                      <PendingUserInputCard
+                        pendingUserInput={props.activePendingUserInput}
+                        drafts={props.activePendingUserInputDrafts}
+                        answers={props.activePendingUserInputAnswers}
+                        respondingUserInputId={props.respondingUserInputId}
+                        onSelectOption={props.onSelectUserInputOption}
+                        onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
+                        onSubmit={props.onSubmitUserInput}
+                      />
+                    ) : null}
+                  </View>
+                </ScrollView>
               ) : null}
 
               <ThreadComposer
