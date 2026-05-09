@@ -37,7 +37,12 @@ rebasing the fork onto upstream `v0.0.23-nightly.20260508.230`.
 - Rebase completed on branch `t3code/nightly-230-sync`.
 - Upstream desktop module layout preserved; fork branding/flavor behavior was
   reconciled into `DesktopEnvironment`, `ElectronApp`, and `DesktopUpdates`.
-- Pending push to `main` and nightly fork tag after final review.
+- Pushed `main` and tag `v0.0.23-nightly.20260508.230-fork.1`.
+- Release preflight exposed a separate nightly workflow bug: Electron tests now
+  import the `electron` package, but nightly preflight installed dependencies
+  with `--ignore-scripts`, leaving Electron incomplete.
+- Preparing a follow-up workflow fix and `v0.0.23-nightly.20260508.230-fork.2`
+  tag instead of rewriting the failed `-fork.1` tag.
 
 ### Current Verification
 
@@ -51,6 +56,8 @@ rebasing the fork onto upstream `v0.0.23-nightly.20260508.230`.
 - Blocked: `bun run test` reaches the server suite and fails because the local
   Node runtime is `22.15.1`, missing `node:sqlite` `StatementSync.columns`.
   The test error requires Node `>=22.16`, `>=23.11`, or `>=24`.
+- GitHub: `Release` run `25589350595` failed in preflight desktop tests because
+  Electron was not installed after the nightly `--ignore-scripts` install.
 
 ## Current Task: Trigger Headless Server Update Check From Newer Client
 
