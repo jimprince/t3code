@@ -2,13 +2,18 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { Effect } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, Layer } from "effect";
 import type {
   ServerHeadlessUpdateCheckInput,
   ServerHeadlessUpdateCheckResult,
 } from "@t3tools/contracts";
 
-import { runProcess, type ProcessRunResult } from "./processRunner.ts";
+import {
+  ProcessRunner,
+  layer as ProcessRunnerLive,
+  type ProcessRunOutput,
+} from "./processRunner.ts";
 
 const DEFAULT_COOLDOWN_MS = 30 * 60 * 1000;
 const DEFAULT_SERVICE_NAME = "t3code-headless-upgrade.service";
@@ -23,7 +28,7 @@ interface HeadlessUpdateCheckDeps {
     command: string,
     args: readonly string[],
     options: { readonly env: NodeJS.ProcessEnv; readonly timeoutMs: number },
-  ) => Promise<ProcessRunResult>;
+  ) => Promise<ProcessRunOutput>;
   readonly getUid?: () => number | undefined;
   readonly cooldownMs?: number;
 }
@@ -77,21 +82,49 @@ function buildCommandEnvironment(
   };
 }
 
+function formatFailedCommandMessage(
+  command: string,
+  args: readonly string[],
+  result: ProcessRunOutput,
+): string {
+  const output = (result.stderr || result.stdout).trim();
+  const label = [command, ...args].join(" ");
+  return output.length > 0
+    ? `${label} exited with code ${result.code}: ${output}`
+    : `${label} exited with code ${result.code}.`;
+}
+
+function runSystemCommand(
+  command: string,
+  args: readonly string[],
+  options: { readonly env: NodeJS.ProcessEnv; readonly timeoutMs: number },
+): Promise<ProcessRunOutput> {
+  return Effect.gen(function* () {
+    const processRunner = yield* ProcessRunner;
+    const result = yield* processRunner.run({
+      command,
+      args,
+      env: options.env,
+      timeout: options.timeoutMs,
+      outputMode: "truncate",
+      maxOutputBytes: 16 * 1024,
+    });
+    if (result.code !== 0) {
+      return yield* Effect.fail(new Error(formatFailedCommandMessage(command, args, result)));
+    }
+    return result;
+  }).pipe(
+    Effect.provide(ProcessRunnerLive.pipe(Layer.provide(NodeServices.layer))),
+    Effect.runPromise,
+  );
+}
+
 export function createHeadlessUpdateCheckRequester(deps: HeadlessUpdateCheckDeps = {}) {
   const platform = deps.platform ?? process.platform;
   const env = deps.env ?? process.env;
   const now = deps.now ?? (() => new Date());
   const existsSync = deps.existsSync ?? fs.existsSync;
-  const runCommand =
-    deps.runCommand ??
-    ((command, args, options) =>
-      runProcess(command, args, {
-        env: options.env,
-        timeoutMs: options.timeoutMs,
-        allowNonZeroExit: false,
-        outputMode: "truncate",
-        maxBufferBytes: 16 * 1024,
-      }));
+  const runCommand = deps.runCommand ?? runSystemCommand;
   const getUid = deps.getUid ?? (() => process.getuid?.());
   const cooldownMs = deps.cooldownMs ?? DEFAULT_COOLDOWN_MS;
   let lastStartedAt = Number.NEGATIVE_INFINITY;
