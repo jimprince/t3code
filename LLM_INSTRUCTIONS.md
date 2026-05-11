@@ -240,10 +240,11 @@ silently replaced upstream's installation. We renamed the packaged app to
   values were `"Alpha" | "Dev" | "Nightly"`; ours are `"Dev" | "Fork" | "Nightly"`.
   `"Alpha"` is intentionally absent. If you add it back you'll reintroduce the
   upstream collision.
-- `apps/desktop/src/appBranding.ts` returns `"Fork"` for stable builds
-  (previously `"Alpha"`).
-- `apps/desktop/src/main.ts` uses `"T3 Code (Fork)"` for window titles, user-
-  data dir, Windows app model IDs, Linux desktop entries.
+- `apps/desktop/src/app/DesktopEnvironment.ts` resolves stable packaged
+  builds to `"Fork"` and dev-flavor packaged builds to `"Fork Dev"`.
+- Desktop environment consumers use `"T3 Code (Fork)"` for window titles,
+  user-data dir, Windows app model IDs, Linux desktop entries, and updater
+  identity.
 - `apps/web/src/branding.ts` has `"Fork"` as the non-Electron fallback.
 - `apps/web/index.html` `<title>` is `"T3 Code (Fork)"`.
 
