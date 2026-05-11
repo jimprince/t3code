@@ -123,6 +123,13 @@ three lanes separately:
    workflow and its EAS publish result. Mobile is not part of `release.yml` on
    `main`.
 
+`mobile-track-sync.yml` runs from default branch `main` on a schedule/manual
+dispatch and operates on `feature/mobile-track`. It checks whether the mobile
+branch is behind `upstream/t3code/mobile-remote-connect`; if the rebase is
+clean, it verifies, force-with-lease pushes the branch, and publishes an EAS
+update. If the rebase conflicts, it fails without pushing partial state so the
+fork overlay can be reviewed manually.
+
 Do not re-add Linux Electron/AppImage, Windows, or macOS x64 unless the user
 explicitly changes the support target.
 
