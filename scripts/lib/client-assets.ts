@@ -1,4 +1,7 @@
-import { Data, Effect, FileSystem, Path } from "effect";
+import * as Data from "effect/Data";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 
 export class ClientAssetValidationError extends Data.TaggedError("ClientAssetValidationError")<{
   readonly message: string;

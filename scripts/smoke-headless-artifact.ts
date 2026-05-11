@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+// @effect-diagnostics nodeBuiltinImport:off
+// @effect-diagnostics globalDate:off
+// @effect-diagnostics globalTimers:off
+// @effect-diagnostics globalConsole:off
 
 import { execFile, spawn, type ChildProcessByStdio } from "node:child_process";
 import http from "node:http";
