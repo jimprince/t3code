@@ -1,5 +1,39 @@
 # Agent Requirements
 
+## Current Task: Recover Main Upstream Sync And Release Builds
+
+Repair the fork `main` sync after scheduled `Sync Upstream` runs failed while
+rebasing the fork stack onto current upstream stable/nightly releases.
+
+### Current User Requirements
+
+- Resolve the failed fork rebase as recommended, using a fresh worktree.
+- Prefer as few fork changes as possible relative to upstream.
+- Preserve fork functionality only where it still provides the reason the fork
+  change was added.
+- If an upstream change appears to supersede a fork change, check with Brad
+  before keeping the fork change.
+- If in doubt, stop and review the fork-vs-upstream choice with Brad.
+- Restore the remote build path and verify all three lanes: mac Electron,
+  Linux/headless, and mobile.
+
+### Acceptance Criteria
+
+- The fork stack rebases cleanly onto the latest relevant upstream stable and
+  nightly tags.
+- Manual conflict resolutions preserve fork behavior only where still needed.
+- `origin/main` is repaired through a safe force-with-lease push.
+- Release tags are pushed for the repaired upstream stable/nightly targets as
+  appropriate.
+- GitHub Actions release/update results are checked for mac Electron,
+  Linux/headless, and mobile lanes.
+- Required local checks pass before pushing, or blockers are reported.
+
+### Status
+
+- In progress: created recovery worktree
+  `.worktrees/main-upstream-20260511` from `origin/main`.
+
 ## Current Task: Resolve Nightly 230 Upstream Sync Rebase
 
 Resolve the scheduled `Sync Upstream` failure for the nightly channel by
