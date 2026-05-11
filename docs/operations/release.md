@@ -112,6 +112,17 @@ The fork intentionally builds only:
 - Linux x64 headless server:
   `t3-headless-<version>-linux-x64.tar.gz`.
 
+When Brad asks for remote build or build status in this fork, check and report
+three lanes separately:
+
+1. mac Electron app: the `Release` workflow's macOS arm64 build and published
+   mac assets.
+2. Linux/headless app: the `Release` workflow's Linux x64 build and published
+   `t3-headless-<version>-linux-x64.tar.gz` asset.
+3. Mobile app: the separate `feature/mobile-track` `Mobile Track EAS Update`
+   workflow and its EAS publish result. Mobile is not part of `release.yml` on
+   `main`.
+
 Do not re-add Linux Electron/AppImage, Windows, or macOS x64 unless the user
 explicitly changes the support target.
 
