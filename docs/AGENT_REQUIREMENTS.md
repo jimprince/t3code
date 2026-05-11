@@ -31,8 +31,21 @@ rebasing the fork stack onto current upstream stable/nightly releases.
 
 ### Status
 
-- In progress: created recovery worktree
-  `.worktrees/main-upstream-20260511` from `origin/main`.
+- Stable recovery completed and pushed: rebased the fork stack onto upstream
+  `v0.0.23`, stamped `0.0.23`, pushed `origin/main` with
+  `--force-with-lease`, and pushed tag `v0.0.23`.
+- Nightly rebase completed locally onto upstream
+  `v0.0.24-nightly.20260511.260`; pending final fork version stamp,
+  validation, push, tag, and GitHub Actions verification.
+- Conflict decisions so far:
+  - Kept the fork release workflow instead of upstream hosted-web/Discord
+    release jobs because this fork publishes GitHub desktop/headless artifacts.
+  - Kept fork release documentation where it describes fork-only
+    desktop/headless artifacts and updater behavior.
+  - Kept upstream hosted-channel branding logic and limited the fork delta to
+    the non-hosted production fallback label `Fork`.
+  - Resolved historical package-version bump conflicts to upstream during the
+    rebase; the current fork release version is applied once at the end.
 
 ## Current Task: Resolve Nightly 230 Upstream Sync Rebase
 
