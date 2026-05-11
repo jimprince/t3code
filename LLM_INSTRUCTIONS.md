@@ -67,6 +67,16 @@ things specific to the fork relationship.
    tail -n 160 ~/.t3/userdata/logs/desktop-main.log | rg -i 'desktop-updater|Update available|Ignoring|No updates'
    ```
 
+   When Brad asks for "remote build status", "build status", or whether the
+   fork build succeeded, report all three fork deliverable lanes separately:
+   mac Electron app, Linux/headless app, and mobile app. The first two come
+   from the main-branch `Release` workflow (`release.yml`) and its published
+   GitHub release assets. The mobile app is separate: check the
+   `feature/mobile-track` branch's `Mobile Track EAS Update` workflow and its
+   EAS publish result. Do not treat a green desktop/headless release as proof
+   that mobile is current, and do not treat a green mobile EAS update as proof
+   that the mac or Linux/headless release artifacts built.
+
 5. Stop the runner when done:
 
    ```bash
@@ -171,12 +181,22 @@ per-run groups and always complete.
 
 `.github/workflows/release.yml` only builds:
 
-- macOS arm64 (dmg + zip)
+- macOS arm64 Electron app (dmg + zip)
 - Linux x64 headless server tarball
 
 We deliberately **dropped** Linux Electron/AppImage, Windows x64, Windows
 arm64, and macOS x64. They added flake surface without being used. Do not
 "helpfully" re-add them.
+
+Remote build status in this fork is a three-part answer:
+
+1. mac Electron app: the `Release` workflow's macOS arm64 matrix leg succeeded
+   and published the mac updater manifest plus dmg/zip assets.
+2. Linux/headless app: the `Release` workflow's Linux x64 matrix leg succeeded
+   and published `t3-headless-<version>-linux-x64.tar.gz`.
+3. Mobile app: the `feature/mobile-track` branch's `Mobile Track EAS Update`
+   workflow succeeded and published an iOS EAS update to the development
+   channel. Mobile is not built by `release.yml` on `main`.
 
 - macOS arm64 prefers the local self-hosted `t3code-mac-arm64` runner when it
   is online and idle. If it is offline or busy during preflight, the workflow
