@@ -1,9 +1,14 @@
+// @effect-diagnostics nodeBuiltinImport:off
+// @effect-diagnostics globalDate:off
+// @effect-diagnostics globalErrorInEffectFailure:off
+
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, Layer } from "effect";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import type {
   ServerHeadlessUpdateCheckInput,
   ServerHeadlessUpdateCheckResult,
