@@ -77,6 +77,14 @@ things specific to the fork relationship.
    that mobile is current, and do not treat a green mobile EAS update as proof
    that the mac or Linux/headless release artifacts built.
 
+   Mobile upstream drift is checked by `mobile-track-sync.yml`, which must live
+   on this default branch because GitHub schedules only run default-branch
+   workflow files. That workflow checks out `feature/mobile-track`, compares it
+   with `upstream/t3code/mobile-remote-connect`, and only auto-rebases when Git
+   can replay the fork overlay cleanly. Clean rebases run verification, push
+   with `--force-with-lease`, and publish an EAS update; conflicted rebases fail
+   without pushing and require manual review.
+
 5. Stop the runner when done:
 
    ```bash
