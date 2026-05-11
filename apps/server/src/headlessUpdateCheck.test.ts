@@ -1,5 +1,7 @@
+// @effect-diagnostics globalDate:off
+
 import { describe, expect, it, vi } from "vitest";
-import { Effect } from "effect";
+import * as Effect from "effect/Effect";
 
 import { createHeadlessUpdateCheckRequester } from "./headlessUpdateCheck.ts";
 
