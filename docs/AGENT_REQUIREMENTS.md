@@ -1,5 +1,50 @@
 # Agent Requirements
 
+## Current Task: Schedule Clean Mobile Track Sync
+
+Add default-branch automation that periodically checks whether the fork mobile
+track is behind upstream and automatically updates it only when the rebase is
+clean.
+
+### Current User Requirements
+
+- Run this kind of upstream/build status check on GitHub schedule.
+- If `feature/mobile-track` is out of date and there is nothing to review,
+  automatically rebase/update it.
+- If upstream changes supersede or conflict with fork changes, do not guess;
+  surface the conflict for manual review.
+- Preserve the documented three-lane remote build status model: mac Electron,
+  Linux/headless, and mobile.
+
+### Acceptance Criteria
+
+- The scheduled workflow lives on default branch `main`, because GitHub
+  schedules only run default-branch workflow files.
+- The workflow checks `feature/mobile-track` against
+  `upstream/t3code/mobile-remote-connect`.
+- A clean rebase runs verification, pushes with `--force-with-lease`, and
+  publishes an EAS update.
+- Conflicts fail without pushing partial state and report conflicted files.
+- Repo instructions document the scheduled clean-rebase behavior.
+
+### Status
+
+- Completed: added `.github/workflows/mobile-track-sync.yml` on `main`.
+- Completed: documented the scheduled clean-rebase behavior in
+  `LLM_INSTRUCTIONS.md` and `docs/release.md`.
+- Completed: validation run:
+  - YAML parsed successfully with Ruby `YAML.load_file`.
+  - `bun fmt`
+  - `go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/mobile-track-sync.yml`
+  - `bun install --frozen-lockfile`
+  - `bun typecheck`
+- Blocked: `bun lint` fails on clean `origin/main` before reaching this change
+  because oxlint `1.63.0` cannot load the existing TypeScript JS plugin
+  `./oxlint-plugin-t3code/index.ts` (`ERR_UNKNOWN_FILE_EXTENSION`). The same
+  workflow lint path runs against `feature/mobile-track`, where lint has passed
+  after install.
+- In progress: completing the clean `origin/main` branch commit for review.
+
 ## Current Task: Recover Main Upstream Sync And Release Builds
 
 Repair the fork `main` sync after scheduled `Sync Upstream` runs failed while
