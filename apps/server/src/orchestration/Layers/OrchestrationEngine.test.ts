@@ -357,6 +357,91 @@ describe("OrchestrationEngine", () => {
     await system.dispose();
   });
 
+  it("accepts repeated archive commands as no-ops without duplicate archive events", async () => {
+    const system = await createOrchestrationSystem();
+    const { engine } = system;
+    const createdAt = now();
+    const threadId = ThreadId.make("thread-archive-idempotent");
+
+    await system.run(
+      engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("cmd-project-archive-idempotent-create"),
+        projectId: asProjectId("project-archive-idempotent"),
+        title: "Project Archive Idempotent",
+        workspaceRoot: "/tmp/project-archive-idempotent",
+        defaultModelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        createdAt,
+      }),
+    );
+    await system.run(
+      engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-thread-archive-idempotent-create"),
+        threadId,
+        projectId: asProjectId("project-archive-idempotent"),
+        title: "Archive me twice",
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "full-access",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      }),
+    );
+
+    const firstArchive = await system.run(
+      engine.dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make("cmd-thread-archive-idempotent-first"),
+        threadId,
+      }),
+    );
+    const secondArchive = await system.run(
+      engine.dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make("cmd-thread-archive-idempotent-second"),
+        threadId,
+      }),
+    );
+
+    expect(secondArchive.sequence).toBe(firstArchive.sequence);
+    const events = await system.run(
+      Stream.runCollect(engine.readEvents(0)).pipe(
+        Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)),
+      ),
+    );
+    expect(events.filter((event) => event.type === "thread.archived")).toHaveLength(1);
+    expect(
+      (await system.readModel()).threads.find((thread) => thread.id === threadId)?.archivedAt,
+    ).not.toBeNull();
+
+    await system.dispose();
+  });
+
+  it("still rejects archive commands for missing threads", async () => {
+    const system = await createOrchestrationSystem();
+    const { engine } = system;
+
+    await expect(
+      system.run(
+        engine.dispatch({
+          type: "thread.archive",
+          commandId: CommandId.make("cmd-thread-archive-missing"),
+          threadId: ThreadId.make("thread-archive-missing"),
+        }),
+      ),
+    ).rejects.toThrow("Thread 'thread-archive-missing' does not exist");
+
+    await system.dispose();
+  });
+
   it("replays append-only events from sequence", async () => {
     const system = await createOrchestrationSystem();
     const { engine } = system;
@@ -979,15 +1064,15 @@ describe("OrchestrationEngine", () => {
       ),
     ).rejects.toThrow("projection failed");
 
-    await expect(
-      runtime.runPromise(
-        engine.dispatch({
-          type: "thread.archive",
-          commandId: CommandId.make("cmd-thread-archive-sync-retry"),
-          threadId: ThreadId.make("thread-sync"),
-        }),
-      ),
-    ).rejects.toThrow("already archived");
+    const retryResult = await runtime.runPromise(
+      engine.dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make("cmd-thread-archive-sync-retry"),
+        threadId: ThreadId.make("thread-sync"),
+      }),
+    );
+    expect(retryResult.sequence).toBe(3);
+    expect(events.filter((event) => event.type === "thread.archived")).toHaveLength(1);
 
     await runtime.dispose();
   });
