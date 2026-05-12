@@ -1,5 +1,76 @@
 # Agent Requirements
 
+## Current Task: Release Archive Idempotency Fix
+
+Commit and push the thread archive idempotency fix, ensure GitHub publishes a
+new build, then update the local macOS app and the remote headless server.
+
+### Current User Requirements
+
+- Commit the completed archive idempotency fix.
+- Push it to GitHub.
+- Make sure the change deploys through the fork release/build pipeline.
+- Update the local T3 Code app.
+- Update the remote `brad-linux-dev` headless T3 Code server.
+
+### Acceptance Criteria
+
+- The fix is present on the pushed branch used for the fork release.
+- GitHub release/build status is checked and reported.
+- A new macOS build is installed or the local updater is confirmed current on
+  the new build.
+- A new Linux/headless build is installed on `brad-linux-dev`.
+- Remote health reports the new server version after upgrade.
+
+### Status
+
+- In progress.
+
+### Verification
+
+- Pending.
+
+## Current Task: Make Thread Archive Idempotent
+
+Make repeated archive commands succeed as no-ops when the target thread is
+already archived, so users do not see a failure after archive already
+succeeded.
+
+### Current User Requirements
+
+- Implement the approved plan for fixing the archive error.
+- Prefer server-side semantic idempotency for `thread.archive`.
+- Preserve normal failure behavior for invalid archive requests, such as a
+  missing thread.
+- Add regression coverage and run the repo-required verification.
+
+### Acceptance Criteria
+
+- Archiving an active thread emits exactly one `thread.archived` event.
+- Archiving an already archived thread succeeds without emitting a duplicate
+  archive event.
+- Replaying/retrying archive after a persisted archive event no longer reports
+  `already archived`.
+- Missing-thread archive commands still fail.
+- No public WebSocket/schema/client API changes are required.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Passed: focused regression test first failed against the old behavior with
+  `already archived`.
+- Passed: temporarily disabled the no-op branch and confirmed the idempotency
+  regression test failed with a duplicate archive sequence.
+- Passed: `NODE_BIN_DIR=$(dirname "$(bunx node@24 -e 'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun run --filter t3 test src/orchestration/Layers/OrchestrationEngine.test.ts`.
+- Passed: `NODE_BIN_DIR=$(dirname "$(bunx node@24 -e 'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun run --filter t3 test`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with pre-existing warnings only.
+- Passed: `bun typecheck` with pre-existing Effect language-service messages
+  only.
+
 ## Current Task: Schedule Clean Mobile Track Sync
 
 Add default-branch automation that periodically checks whether the fork mobile

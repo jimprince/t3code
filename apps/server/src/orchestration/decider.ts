@@ -14,7 +14,6 @@ import {
   requireThread,
   requireThreadArchived,
   requireThreadAbsent,
-  requireThreadNotArchived,
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
 
@@ -247,11 +246,14 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.archive": {
-      yield* requireThreadNotArchived({
+      const thread = yield* requireThread({
         readModel,
         command,
         threadId: command.threadId,
       });
+      if (thread.archivedAt !== null) {
+        return [];
+      }
       const occurredAt = yield* nowIso;
       return {
         ...withEventBase({
