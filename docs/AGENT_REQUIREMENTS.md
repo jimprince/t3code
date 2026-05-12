@@ -24,11 +24,20 @@ new build, then update the local macOS app and the remote headless server.
 
 ### Status
 
-- In progress.
+- Completed.
 
 ### Verification
 
-- Pending.
+- Passed: pushed fix commit `1e7f5d7babe9f7b2045af010a2106abf1b0d4c85` to
+  `origin/main`.
+- Passed: GitHub Actions release run `25758403268` completed successfully for
+  tag `v0.0.24-fork.1`.
+- Passed: GitHub release `v0.0.24-fork.1` published macOS arm64 and Linux
+  headless artifacts.
+- Passed: local `/Applications/T3 Code (Fork).app` reports version
+  `0.0.24-fork.1`.
+- Passed: remote `brad-linux-dev` reports server version `0.0.24-fork.1` from
+  `/.well-known/t3/environment`.
 
 ## Current Task: Make Thread Archive Idempotent
 
