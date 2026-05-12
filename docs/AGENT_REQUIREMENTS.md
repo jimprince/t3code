@@ -1,5 +1,47 @@
 # Agent Requirements
 
+## Current Task: Repair Nightly Release Channel
+
+Fix the nightly release state so the nightly channel has a current build that
+includes the latest fork fixes, and verify the nightly artifacts/updater
+manifest do not have obvious release-channel issues.
+
+### Current User Requirements
+
+- Fix the nightlies.
+- Make sure there are no issues with the nightly release/build artifacts.
+- Preserve the fork release model and avoid accidental stable/latest changes.
+
+### Acceptance Criteria
+
+- A new nightly fork release is published from the current fixed code.
+- The nightly release is marked as a prerelease, not the latest stable release.
+- macOS arm64 artifacts and nightly updater manifest are present.
+- Linux/headless artifact is present.
+- GitHub Actions release run completes successfully.
+- Any workflow/release issues found during investigation are fixed or reported.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Passed: latest upstream nightly is `v0.0.24-nightly.20260511.260`; fork
+  already had `-fork.4`, so a reroll was needed to include current fork fixes.
+- Passed: created stamped tag commit
+  `9483ce253e211f462a03705c66473614c6798f44` for
+  `v0.0.24-nightly.20260511.260-fork.5`.
+- Passed: GitHub Actions release run `25760182337` completed successfully:
+  preflight, macOS arm64 build, Linux/headless build, and publish all passed.
+- Passed: release `v0.0.24-nightly.20260511.260-fork.5` is a prerelease and
+  `v0.0.24-fork.1` remains the latest stable release.
+- Passed: nightly release contains `nightly-mac.yml`, macOS arm64 DMG/zip and
+  blockmaps, and `t3-headless-0.0.24-nightly.20260511.260-fork.5-linux-x64.tar.gz`.
+- Passed: `nightly-mac.yml` reports version
+  `0.0.24-nightly.20260511.260-fork.5` and points at the matching arm64 zip
+  and dmg assets.
+
 ## Current Task: Release Archive Idempotency Fix
 
 Commit and push the thread archive idempotency fix, ensure GitHub publishes a
