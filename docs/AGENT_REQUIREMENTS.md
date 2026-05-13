@@ -1,5 +1,192 @@
 # Agent Requirements
 
+## Current Task: Integrate Mobile Snapshot Fix Into GitHub CI/CD
+
+Commit and push the rebased mobile snapshot fix through the existing
+`feature/mobile-track` GitHub workflow so it is verified and published as an
+iOS development EAS update.
+
+### Current User Requirements
+
+- Integrate the mobile snapshot fix into the mobile CI/CD path through GitHub.
+- Use the existing mobile-track workflow where possible.
+- Preserve unrelated local dirty files and do not include them in the commit.
+- Verify the GitHub mobile workflow run after pushing.
+
+### Acceptance Criteria
+
+- The snapshot fix is committed on `feature/mobile-track`.
+- The GitHub `Mobile Track EAS Update` workflow includes regression coverage
+  for the new mobile snapshot refresh behavior.
+- The rebased branch is pushed to `origin/feature/mobile-track`.
+- The triggered GitHub workflow succeeds and publishes the development EAS
+  update, or any failure is reported with concrete run details.
+
+### Status
+
+- In progress: confirmed `.github/workflows/mobile-track-eas-update.yml`
+  triggers on pushes to `feature/mobile-track` touching `apps/mobile/**` and
+  publishes an iOS development EAS update.
+
+## Current Task: Rebase Mobile Track And Minimize Snapshot Fix Overlay
+
+Rebase `feature/mobile-track` onto the latest
+`upstream/t3code/mobile-remote-connect`, then remediate the mobile-created
+thread “current mobile snapshot” routing failure while keeping the fork overlay
+as small and upstream-aligned as possible.
+
+### Current User Requirements
+
+- Rebase against the most up-to-date upstream mobile branch before adding the
+  fix.
+- Favor upstream architecture wherever possible.
+- Minimize the number and size of fork-local changes placed on top of upstream.
+- After the rebase, provide a short summary of what the feature branch adds on
+  top of upstream.
+- Then proceed from the rebased branch to fix the mobile-created thread
+  snapshot/catalog issue.
+- Preserve existing user/worktree changes that are unrelated to this task.
+
+### Acceptance Criteria
+
+- `feature/mobile-track` is rebased onto the latest
+  `upstream/t3code/mobile-remote-connect`.
+- Existing local dirty changes are preserved and not accidentally overwritten.
+- Fork overlay changes after rebase are summarized clearly.
+- The remediation plan is revised against the rebased code before
+  implementation.
+- Required checks are run before declaring implementation complete, or any
+  blockers are reported with concrete errors.
+
+### Status
+
+- Completed: requirements captured before rebase or implementation changes.
+- Completed: preserved pre-existing dirty worktree changes in a named stash
+  before rebasing, then restored them after the rebase.
+- Completed: cleanly rebased `feature/mobile-track` onto
+  `upstream/t3code/mobile-remote-connect` at
+  `61b8aaa864a1e58c9d66a9ba2b48e3e0db75a7b9`.
+- Completed: after rebase the fork overlay is 19 commits on top of upstream,
+  covering fork mobile identity/build config, EAS update/scheduled rebase
+  workflows, iPhone debug instrumentation, remote connection hardening,
+  thread-detail subscription handling, clarification-form scroll behavior, and
+  branch-specific docs.
+- Completed: revised the remediation against the rebased code and kept it
+  mobile-only by reusing upstream's existing `subscribeShell` stream as a
+  one-shot fresh shell snapshot source.
+- Completed: added a post-create shell refresh that waits for the newly
+  created thread to appear before mobile navigates to the thread route.
+- Completed: if the refreshed shell snapshot still does not contain the
+  created thread, mobile now stays out of the known-bad route and surfaces a
+  targeted connection error instead of rendering "Thread unavailable".
+- Completed: added focused regression coverage for immediate shell refresh,
+  retrying after an initially stale snapshot, and the final "not visible yet"
+  result.
+- Completed: validation run:
+  - `bun run --filter @t3tools/mobile test src/state/shell-snapshot-refresh.test.ts`
+  - `bun run --filter @t3tools/mobile typecheck`
+  - `bun fmt`
+  - `bun run --filter @t3tools/mobile test`
+  - `NODE_OPTIONS=--experimental-strip-types bun lint:mobile`
+  - `NODE_OPTIONS=--experimental-strip-types bun lint` (passed with existing
+    warnings only)
+  - `bun typecheck`
+- Note: plain `bun lint:mobile` and `bun lint` are still blocked locally by
+  Node 22.15.1 loading repo TypeScript entrypoints without
+  `--experimental-strip-types`; the strip-types variants passed.
+
+## Current Task: Scheduled Clean Mobile Rebase
+
+Add automation so the fork can periodically check whether
+`feature/mobile-track` is behind `upstream/t3code/mobile-remote-connect` and
+automatically rebase/publish only when there is nothing requiring human review.
+
+### Current User Requirements
+
+- It makes sense to run remote build/upstream status checks on a GitHub
+  schedule.
+- If the mobile branch is out of date and the rebase is clean, automatically
+  update it.
+- If the rebase requires a decision or conflict review, do not guess; surface
+  the failure for manual review.
+- Preserve the existing policy of minimizing fork overlay changes and checking
+  with the user when upstream supersedes fork changes.
+
+### Acceptance Criteria
+
+- A scheduled/manual GitHub workflow can detect whether `feature/mobile-track`
+  is behind `upstream/t3code/mobile-remote-connect`.
+- The workflow attempts an automatic rebase only when upstream has new commits.
+- Clean rebases are verified and pushed, then an EAS update is published.
+- Conflicted rebases fail without pushing partial state and produce actionable
+  conflict output.
+- Documentation notes that scheduled workflows must live on the default branch
+  to run on GitHub.
+
+### Status
+
+- Completed: added `.github/workflows/mobile-track-sync.yml` to check upstream
+  drift on a schedule/manual dispatch, rebase only when clean, run
+  mobile-track verification, push with `--force-with-lease`, and publish an EAS
+  update.
+- Completed: documented that scheduled GitHub workflows must live on default
+  branch `main` even though this workflow operates on `feature/mobile-track`.
+- Completed: validation run:
+  - YAML parsed successfully with Ruby `YAML.load_file`.
+  - `bun fmt`
+  - `bun lint` (passed with pre-existing warnings only)
+  - `bun typecheck`
+- In progress: committing the workflow and applying it to `main` so GitHub
+  schedule events will run it.
+
+## Current Task: Rebase Mobile Track Onto Latest Upstream
+
+Rebase the fork `feature/mobile-track` branch onto the latest upstream
+`upstream/t3code/mobile-remote-connect` commit and verify/push a fresh EAS
+update.
+
+### Current User Requirements
+
+- Rebase `feature/mobile-track` onto the latest upstream mobile branch.
+- Prefer as few fork changes as possible relative to upstream.
+- Preserve fork functionality where still needed, including the mobile
+  clarification-form scroll fix and fork EAS/mobile configuration.
+- If upstream appears to supersede a fork change, stop and review before
+  keeping the fork change.
+- Push the updated branch and verify the remote mobile EAS update workflow.
+
+### Acceptance Criteria
+
+- `feature/mobile-track` is based on current
+  `upstream/t3code/mobile-remote-connect`.
+- Fork overlay commits are preserved or deliberately reconciled.
+- Mobile clarification forms remain scrollable/interactable.
+- Required local checks pass, or blockers are reported with concrete errors.
+- GitHub `Mobile Track EAS Update` succeeds after push.
+
+### Status
+
+- Completed: rebased onto upstream
+  `168ec8a81 Harden remote connect and subscription handling`.
+- Completed: resolved the `apps/mobile/app.config.ts` conflict by keeping
+  upstream's development-only cleartext behavior while re-applying the fork
+  `fork.config.json` identity/EAS override hook.
+- Completed: preserved the mobile clarification form scroll fix and focused
+  regression coverage.
+- Completed: local verification run:
+  - `bun install --frozen-lockfile`
+  - `bun run --filter @t3tools/mobile test src/features/threads/ThreadDetailScreen.test.ts`
+  - `bun run --filter @t3tools/mobile test`
+  - `bun run --filter @t3tools/mobile typecheck`
+  - `bun scripts/mobile-native-static-check.ts`
+  - `bun fmt`
+  - `bun lint:mobile`
+  - `bun lint`
+  - `bun typecheck`
+- Completed: pushed the rebased branch to `origin/feature/mobile-track` and
+  verified GitHub `Mobile Track EAS Update` run `25687890264` succeeded on
+  commit `37c495f41d078913edbbaaeb09ca00542b3eda07`, including EAS publish.
+
 ## Current Task: Fix Mobile Clarification Form Scroll Lock
 
 Investigate and fix the mobile thread UI bug where plan/clarification question

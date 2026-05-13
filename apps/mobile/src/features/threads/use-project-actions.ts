@@ -17,6 +17,7 @@ import { buildTemporaryWorktreeBranchName, sanitizeFeatureBranchName } from "@t3
 import type { DraftComposerImageAttachment } from "../../lib/composerImages";
 import { uuidv4 } from "../../lib/uuid";
 import { getEnvironmentClient } from "../../state/environment-session-registry";
+import { refreshShellSnapshot } from "../../state/shell-snapshot-refresh";
 import { environmentRuntimeManager } from "../../state/use-environment-runtime";
 import { vcsRefManager } from "../../state/use-vcs-refs";
 import { useRemoteCatalog } from "../../state/use-remote-catalog";
@@ -146,7 +147,31 @@ export function useProjectActions() {
         createdAt: new Date().toISOString(),
       });
 
+      let shellRefreshResult;
+      try {
+        shellRefreshResult = await refreshShellSnapshot({
+          client: client.orchestration,
+          environmentId: input.project.environmentId,
+          expectedThreadId: threadId,
+        });
+      } catch (error) {
+        setPendingConnectionError(
+          error instanceof Error
+            ? `The thread was created, but the mobile snapshot could not be refreshed: ${error.message}`
+            : "The thread was created, but the mobile snapshot could not be refreshed.",
+        );
+        return null;
+      }
+
       await refreshRemoteData([input.project.environmentId]);
+
+      if (!shellRefreshResult.hasExpectedThread) {
+        setPendingConnectionError(
+          "The thread was created, but it has not appeared in the mobile snapshot yet. Reconnect this environment and try opening it from the thread list.",
+        );
+        return null;
+      }
+
       return {
         environmentId: input.project.environmentId,
         threadId,
