@@ -32,11 +32,58 @@ fork nightly build.
 
 ### Status
 
-- In progress.
+- Completed.
 
 ### Verification
 
-- Pending.
+- Passed: latest failing `Sync Upstream` run `25881898332` was a nightly
+  rebase conflict against upstream `v0.0.24-nightly.20260514.285`.
+- Passed: rebased fork stack onto upstream
+  `v0.0.24-nightly.20260514.285`.
+- Passed: resolved browser-resume reconnect conflicts by keeping upstream's
+  newer service/test implementation.
+- Passed: resolved headless artifact conflict by keeping shared
+  `scripts/lib/client-assets.ts` validation and upstream's newer desktop
+  runtime dependency filtering.
+- Passed: resolved RPC contract conflict by keeping both upstream process
+  resource history RPCs and fork headless update-check RPCs.
+- Passed: removed a duplicate `isHeartbeatFresh` merge artifact from
+  `apps/web/src/rpc/wsRpcClient.ts`.
+- Passed: stamped package versions to
+  `0.0.24-nightly.20260514.285-fork.1`.
+- Passed: `go run github.com/rhysd/actionlint/cmd/actionlint@latest
+.github/workflows/sync-upstream.yml .github/workflows/release.yml`.
+- Passed: `bun fmt`.
+- Passed: `NODE_BIN_DIR=$(dirname "$(bunx node@24 -e
+'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun lint`
+  with pre-existing warnings only.
+- Passed: `NODE_BIN_DIR=$(dirname "$(bunx node@24 -e
+'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun
+typecheck`.
+- Passed: focused web tests: `bun run test
+src/environments/runtime/service.threadSubscriptions.test.ts
+src/serverUpdateCheck.test.ts` from `apps/web`.
+- Passed: focused artifact tests: `bun run test
+build-headless-artifact.test.ts build-desktop-artifact.test.ts` from
+  `scripts`.
+- Passed: focused server update-check test: `bun run test
+src/headlessUpdateCheck.test.ts` from `apps/server`.
+- Passed: force-pushed repaired `main` to
+  `2868d38451714d5acbae75ed6c05bb22a19ce9a3`.
+- Passed: pushed tag `v0.0.24-nightly.20260514.285-fork.1` at
+  `2868d38451714d5acbae75ed6c05bb22a19ce9a3`.
+- Passed: GitHub Actions release run `25884383186` completed successfully:
+  preflight, macOS arm64 build, Linux/headless build and smoke test, and
+  release publish all passed.
+- Passed: release `v0.0.24-nightly.20260514.285-fork.1` is a prerelease.
+- Passed: release assets include `nightly-mac.yml`, macOS arm64 DMG/zip and
+  blockmaps, `builder-debug.yml`, and
+  `t3-headless-0.0.24-nightly.20260514.285-fork.1-linux-x64.tar.gz`.
+- Passed: `nightly-mac.yml` reports version
+  `0.0.24-nightly.20260514.285-fork.1` and points to the matching arm64 zip
+  and DMG assets.
+- Passed: manual `Sync Upstream` run `25885042722` completed successfully for
+  the nightly channel and skipped rebase because the fork tag already exists.
 
 ## Current Task: Resolve Nightly 277 Upstream Sync Rebase
 
