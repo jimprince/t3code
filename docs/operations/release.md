@@ -60,7 +60,7 @@ pushes the release tag at that stamped commit.
 Check both channels:
 
 ```bash
-gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=both
 ```
 
 Stop the runner when the release is done:
