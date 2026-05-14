@@ -1,5 +1,43 @@
 # Agent Requirements
 
+## Current Task: Resolve Nightly 285 Upstream Sync Rebase
+
+Repair the scheduled `Sync Upstream` failure for the nightly channel by
+rebasing the fork onto upstream `v0.0.24-nightly.20260514.285`, resolving the
+known fork/upstream conflicts intentionally, and publishing the corresponding
+fork nightly build.
+
+### Current User Requirements
+
+- Resolve the current GitHub `Sync Upstream` nightly failure.
+- Preserve the fork release model while reconciling upstream changes.
+- Keep Linux releases headless-only; do not restore Linux Electron/AppImage.
+- Keep the minimal fork build matrix: macOS arm64 Electron and Linux x64
+  headless server artifact.
+- Push the repaired history/tag so GitHub can produce the new nightly build.
+- Verify the resulting GitHub release assets and updater manifest.
+
+### Acceptance Criteria
+
+- Fork `main` rebases cleanly onto upstream
+  `v0.0.24-nightly.20260514.285`.
+- Browser-resume reconnect conflict is resolved against upstream's newer
+  implementation without reintroducing unnecessary reconnects.
+- Headless artifact and headless update-check fork patches remain present.
+- `origin/main` is updated with a safe `--force-with-lease` push.
+- A new fork nightly tag for upstream `.285` is pushed.
+- GitHub Actions release run completes for the new nightly tag.
+- Release verification confirms prerelease status, macOS updater manifest, mac
+  artifacts, and Linux/headless artifact.
+
+### Status
+
+- In progress.
+
+### Verification
+
+- Pending.
+
 ## Current Task: Resolve Nightly 277 Upstream Sync Rebase
 
 Repair the scheduled `Sync Upstream` failure for the nightly channel by
