@@ -3,10 +3,13 @@ import { useCallback } from "react";
 import type { EnvironmentScopedThreadShell } from "@t3tools/client-runtime";
 import {
   CommandId,
-  type OrchestrationThread,
+  type EnvironmentId,
   type ModelSelection,
+  type OrchestrationThread,
   type ProviderInteractionMode,
   type RuntimeMode,
+  type ThreadId,
+  type TurnId,
 } from "@t3tools/contracts";
 
 import { uuidv4 } from "../lib/uuid";
@@ -17,23 +20,26 @@ import { useThreadSelection } from "./use-thread-selection";
 
 interface StopPlanSessionLike {
   readonly status?: string | null;
-  readonly activeTurnId?: string | null;
+  readonly activeTurnId?: TurnId | null;
 }
 
 export interface SelectedThreadStopPlan {
-  readonly environmentId: EnvironmentScopedThreadShell["environmentId"];
-  readonly threadId: EnvironmentScopedThreadShell["id"];
-  readonly turnId?: string;
+  readonly environmentId: EnvironmentId;
+  readonly threadId: ThreadId;
+  readonly turnId?: TurnId;
   readonly shouldInterrupt: boolean;
   readonly shouldClearQueue: boolean;
 }
 
 export function resolveSelectedThreadStopPlan(input: {
-  readonly selectedThreadShell: Pick<
-    EnvironmentScopedThreadShell,
-    "environmentId" | "id" | "session"
-  > | null;
-  readonly selectedThreadDetail: Pick<OrchestrationThread, "session"> | null;
+  readonly selectedThreadShell: {
+    readonly environmentId: EnvironmentScopedThreadShell["environmentId"];
+    readonly id: EnvironmentScopedThreadShell["id"];
+    readonly session?: StopPlanSessionLike | null;
+  } | null;
+  readonly selectedThreadDetail: {
+    readonly session?: StopPlanSessionLike | null;
+  } | null;
   readonly queueCount: number;
 }): SelectedThreadStopPlan | null {
   const { selectedThreadShell, selectedThreadDetail, queueCount } = input;
