@@ -32,11 +32,34 @@ nightly build.
 
 ### Status
 
-- In progress.
+- Local repair completed; remote push/release verification pending.
 
 ### Verification
 
-- Pending.
+- Passed: rebased fork stack onto upstream
+  `v0.0.24-nightly.20260513.277`.
+- Passed: resolved `.github/workflows/release.yml` by preserving the fork
+  release workflow: tag-driven releases, fork nightly tags, macOS arm64
+  Electron artifact, Linux x64 headless artifact, and release asset validation.
+- Passed: stamped package versions to
+  `0.0.24-nightly.20260513.277-fork.1`.
+- Passed: `ruby -e 'require "yaml"; YAML.load_file(...)'` for
+  `release.yml` and `sync-upstream.yml`.
+- Passed: `go run github.com/rhysd/actionlint/cmd/actionlint@latest
+  .github/workflows/release.yml .github/workflows/sync-upstream.yml`.
+- Passed: `bun fmt`.
+- Passed: `NODE_BIN_DIR=$(dirname "$(bunx node@24 -e
+  'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun lint`
+  with pre-existing warnings only.
+- Passed: `NODE_BIN_DIR=$(dirname "$(bunx node@24 -e
+  'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun
+  typecheck`.
+- Partial: full `bun run test` initially failed because Electron was missing
+  after an `--ignore-scripts` install; after running Electron's install script,
+  desktop tests passed and only one web test timed out.
+- Passed: focused retry
+  `bun --filter @t3tools/web test
+  src/environments/runtime/service.addSavedEnvironment.test.ts`.
 
 ## Current Task: Repair Nightly Release Channel
 
