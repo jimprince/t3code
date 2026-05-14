@@ -145,8 +145,8 @@ If you need to put fork patches on top of upstream, push normal commits to
 Scheduled `sync-upstream` runs check **both** upstream stable releases
 (`/releases/latest`, excludes pre-releases) and upstream nightly pre-releases
 (first release whose tag matches `v<ver>-nightly.*` or
-`nightly-v<ver>-nightly.*`). Manual runs can target one channel, or leave the
-input blank to check both.
+`nightly-v<ver>-nightly.*`). Manual runs can target one channel, or select
+`both` to check both.
 
 **One-off run for a channel:**
 
@@ -158,7 +158,7 @@ gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
 **One-off run for both channels:**
 
 ```bash
-gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=both
 ```
 
 There is no persistent channel variable anymore. If you see a stale
