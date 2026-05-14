@@ -89,9 +89,7 @@ jobs:
           DISPATCH_CHANNEL: ${{ github.event.inputs.channel }}
           DISPATCH_VERSION: ${{ github.event.inputs.version }}
           DISPATCH_TARGET_REF: ${{ github.event.inputs.target_ref }}
-          NIGHTLY_DATE: ${{ github.run_started_at }}
           NIGHTLY_SHA: ${{ github.sha }}
-          NIGHTLY_RUN_NUMBER: ${{ github.run_number }}
         run: |
           set -euo pipefail
 
