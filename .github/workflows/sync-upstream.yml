@@ -4,7 +4,7 @@ name: Sync Upstream
 # upstream tag, and pushes a release tag — which triggers release.yml to build.
 #
 # Scheduled runs check both channels independently. Manual runs can target one
-# channel or leave the input blank to check both.
+# channel or explicitly select both.
 #
 # Tag scheme pushed to the fork:
 #   - stable channel: ${upstream_tag} verbatim (e.g. v0.0.21)
@@ -23,14 +23,14 @@ on:
   workflow_dispatch:
     inputs:
       channel:
-        description: "Upstream channel. Leave blank to check both."
+        description: "Upstream channel."
         required: false
         type: choice
         options:
-          - ""
+          - both
           - stable
           - nightly
-        default: ""
+        default: both
 
 concurrency:
   group: sync-upstream
@@ -60,7 +60,7 @@ jobs:
           channel="${{ matrix.channel }}"
           requested="${{ inputs.channel }}"
           selected=true
-          if [[ -n "$requested" && "$requested" != "$channel" ]]; then
+          if [[ -n "$requested" && "$requested" != "both" && "$requested" != "$channel" ]]; then
             selected=false
           fi
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
