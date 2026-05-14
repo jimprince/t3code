@@ -1,5 +1,113 @@
 # Agent Requirements
 
+## Current Task: Diagnose And Fix Mobile Thread Stop Button
+
+Review the iOS/mobile thread stop control on the latest mobile branch in an
+isolated worktree, determine why tapping Stop in a thread view does nothing,
+and implement the smallest robust fix with regression coverage.
+
+### Current User Requirements
+
+- Use a new worktree.
+- Use the most recent branch that contains the iOS/mobile app instead of
+  `main`.
+- Review the iOS/mobile implementation of the thread stop button.
+- Determine why pressing Stop in a thread view does nothing.
+- Fix the issue if the cause is clear from the implementation review.
+
+### Constraints
+
+- Work from the newest mobile branch carrying `apps/mobile`, identified as
+  `origin/feature/mobile-track`.
+- Preserve unrelated existing changes in the repo and other worktrees.
+- Before considering the task complete, run `bun fmt`, `bun lint`, and
+  `bun typecheck` per repo instructions.
+- Do not run `bun test`; use `bun run test`.
+
+### Acceptance Criteria
+
+- The root cause of the inert mobile Stop action is identified concretely.
+- The mobile Stop control dispatches the correct behavior for active turns
+  and queued sends.
+- Regression coverage exists for the broken stop-decision path.
+- Required verification is run, or concrete blockers are documented.
+
+### Status
+
+- Completed: loaded shared and repo instructions, then identified
+  `origin/feature/mobile-track` as the newest mobile branch.
+- Completed: created isolated worktree
+  `.worktrees/review-ios-stop-button` from `origin/feature/mobile-track`.
+- Completed: identified two concrete causes for the inert Stop control:
+  mobile showed Stop when queued sends existed, but the handler only attempted
+  a live turn interrupt; and the handler gated interrupt eligibility off the
+  shell-thread snapshot while the UI used hydrated thread detail.
+- Completed: updated mobile stop handling so it clears queued sends and uses
+  hydrated thread detail to decide whether to dispatch `thread.turn.interrupt`.
+- Completed: added focused regression coverage for the stop-decision logic.
+- Completed: `bun run test src/features/threads/ThreadDetailScreen.test.ts`
+  passes from `apps/mobile`, confirming the mobile Vitest harness works in
+  this worktree.
+- Completed: `bun run test src/state/use-selected-thread-commands.test.ts`
+  passes from `apps/mobile` with 3 assertions covering the fixed stop path.
+- Completed: `bun fmt` passed.
+- Blocked: `bun lint` fails in this branch/worktree because the local
+  `oxlint-plugin-t3code` plugin cannot resolve package `effect` when loaded by
+  `oxlint`.
+- Blocked: `bun typecheck` fails before reaching this patch because
+  `apps/marketing` cannot find `astro`, and a direct mobile `tsc` run surfaces
+  many broader branch typing issues unrelated to the stop-button change.
+
+## Current Task: Rebase Mobile Track Onto Upstream 399b13dc7
+
+Rebase the fork `feature/mobile-track` branch onto upstream
+`t3code/mobile-remote-connect` commit
+`399b13dc7 Refine mobile environment connection flows`, reconcile conflicts
+with the fork mobile overlay, push the updated branch, and verify the mobile
+EAS workflow.
+
+### Current User Requirements
+
+- Bring the upstream mobile branch update into our fork branch.
+- Preserve the fork's mobile EAS/app identity setup and debugging overlay where
+  still needed.
+- Prefer upstream behavior and avoid unnecessary fork divergence.
+- Do not disturb unrelated dirty files in other worktrees.
+- Push the rebased branch and verify the GitHub mobile update workflow.
+
+### Acceptance Criteria
+
+- The working branch rebases successfully onto
+  `upstream/t3code/mobile-remote-connect` at `399b13dc7`.
+- Conflicts in mobile environment/catalog state are manually reconciled.
+- Focused mobile checks, plus repo-required format/lint/typecheck where
+  feasible, pass or have concrete blockers documented.
+- `origin/feature/mobile-track` is updated with `--force-with-lease`.
+- The triggered `Mobile Track EAS Update` GitHub run succeeds or failure details
+  are reported.
+
+### Status
+
+- Completed: requirements captured before rebase/conflict edits.
+- Completed: rebased the fork overlay onto upstream
+  `399b13dc7 Refine mobile environment connection flows`.
+- Completed: reconciled the mobile environment/catalog conflicts by keeping
+  upstream's cached shell snapshot and connection timeout behavior while
+  reapplying fork mobile diagnostics.
+- Completed: local verification run:
+  - `bun fmt`
+  - `bun install --frozen-lockfile`
+  - `bun run --filter @t3tools/mobile test src/state/shell-snapshot-refresh.test.ts`
+  - `bun run --filter @t3tools/client-runtime test src/threadDetailState.test.ts`
+  - `bun run --filter @t3tools/mobile test src/features/debug/mobileDebugCommands.test.ts src/lib/mobileDiagnostics.test.ts src/features/connection/pairing.test.ts`
+  - `bun run --filter @t3tools/mobile typecheck`
+  - `bun typecheck`
+  - `NODE_OPTIONS=--experimental-strip-types bun lint`
+- Note: plain `bun lint` remains blocked locally by Node's TypeScript plugin
+  loader (`Unknown file extension ".ts"` for
+  `oxlint-plugin-t3code/index.ts`); the strip-types lint run passed with
+  warnings only.
+
 ## Current Task: Integrate Mobile Snapshot Fix Into GitHub CI/CD
 
 Commit and push the rebased mobile snapshot fix through the existing
@@ -24,9 +132,21 @@ iOS development EAS update.
 
 ### Status
 
-- In progress: confirmed `.github/workflows/mobile-track-eas-update.yml`
+- Completed: confirmed `.github/workflows/mobile-track-eas-update.yml`
   triggers on pushes to `feature/mobile-track` touching `apps/mobile/**` and
   publishes an iOS development EAS update.
+- Completed: added `Focused mobile snapshot regression` to the mobile GitHub
+  workflow:
+  `bun run --filter @t3tools/mobile test src/state/shell-snapshot-refresh.test.ts`.
+- Completed: committed and force-with-lease pushed
+  `6a119e0fd fix(mobile): wait for created thread snapshot` to
+  `origin/feature/mobile-track`.
+- Completed: GitHub `Mobile Track EAS Update` run `25778208337` succeeded in
+  5m40s on the pushed mobile snapshot fix, including format, lint, typecheck,
+  focused mobile snapshot regression, focused client-runtime regression, Expo
+  token check, and `Publish EAS update`.
+- Note: the workflow completed with existing lint annotations only; no errors
+  blocked publication.
 
 ## Current Task: Rebase Mobile Track And Minimize Snapshot Fix Overlay
 

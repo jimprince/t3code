@@ -169,6 +169,18 @@ function removeQueuedMessage(
   appAtomRegistry.set(queuedMessagesByThreadKeyAtom, next);
 }
 
+function clearQueuedMessagesForThread(environmentId: EnvironmentId, threadId: ThreadId): void {
+  const current = appAtomRegistry.get(queuedMessagesByThreadKeyAtom);
+  const threadKey = scopedThreadKey(environmentId, threadId);
+  if (!(threadKey in current)) {
+    return;
+  }
+
+  const next = { ...current };
+  delete next[threadKey];
+  appAtomRegistry.set(queuedMessagesByThreadKeyAtom, next);
+}
+
 function useQueueDrain(input: {
   readonly dispatchingQueuedMessageId: MessageId | null;
   readonly queuedMessagesByThreadKey: Record<string, ReadonlyArray<QueuedThreadMessage>>;
@@ -452,6 +464,14 @@ export function useThreadComposerState() {
     [selectedThreadShell],
   );
 
+  const clearSelectedThreadQueue = useCallback(() => {
+    if (!selectedThreadShell) {
+      return;
+    }
+
+    clearQueuedMessagesForThread(selectedThreadShell.environmentId, selectedThreadShell.id);
+  }, [selectedThreadShell]);
+
   return {
     selectedThreadFeed,
     selectedThreadQueueCount,
@@ -464,6 +484,7 @@ export function useThreadComposerState() {
     onPasteIntoDraft,
     onNativePasteImages,
     onRemoveDraftImage,
+    clearSelectedThreadQueue,
     onSendMessage,
   };
 }

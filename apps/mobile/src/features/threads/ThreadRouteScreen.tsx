@@ -71,6 +71,9 @@ export function ThreadRouteScreen() {
   const requests = useSelectedThreadRequests();
   const commands = useSelectedThreadCommands({
     refreshSelectedThreadGitStatus: gitActions.refreshSelectedThreadGitStatus,
+    selectedThreadDetail,
+    selectedThreadQueueCount: composer.selectedThreadQueueCount,
+    clearSelectedThreadQueue: composer.clearSelectedThreadQueue,
   });
   const refreshSelectedThread = commands.onRefresh;
   const router = useRouter();

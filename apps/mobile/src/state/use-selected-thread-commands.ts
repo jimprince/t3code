@@ -1,7 +1,9 @@
 import { useCallback } from "react";
 
+import type { EnvironmentScopedThreadShell } from "@t3tools/client-runtime";
 import {
   CommandId,
+  type OrchestrationThread,
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
@@ -13,13 +15,64 @@ import { getEnvironmentClient } from "./environment-session-registry";
 import { useRemoteEnvironmentState } from "./use-remote-environment-registry";
 import { useThreadSelection } from "./use-thread-selection";
 
+interface StopPlanSessionLike {
+  readonly status?: string | null;
+  readonly activeTurnId?: string | null;
+}
+
+export interface SelectedThreadStopPlan {
+  readonly environmentId: EnvironmentScopedThreadShell["environmentId"];
+  readonly threadId: EnvironmentScopedThreadShell["id"];
+  readonly turnId?: string;
+  readonly shouldInterrupt: boolean;
+  readonly shouldClearQueue: boolean;
+}
+
+export function resolveSelectedThreadStopPlan(input: {
+  readonly selectedThreadShell: Pick<
+    EnvironmentScopedThreadShell,
+    "environmentId" | "id" | "session"
+  > | null;
+  readonly selectedThreadDetail: Pick<OrchestrationThread, "session"> | null;
+  readonly queueCount: number;
+}): SelectedThreadStopPlan | null {
+  const { selectedThreadShell, selectedThreadDetail, queueCount } = input;
+  if (!selectedThreadShell) {
+    return null;
+  }
+
+  const session: StopPlanSessionLike | null =
+    selectedThreadDetail?.session ?? selectedThreadShell.session ?? null;
+  const shouldInterrupt = session?.status === "running" || session?.status === "starting";
+  const shouldClearQueue = queueCount > 0;
+  if (!shouldInterrupt && !shouldClearQueue) {
+    return null;
+  }
+
+  return {
+    environmentId: selectedThreadShell.environmentId,
+    threadId: selectedThreadShell.id,
+    ...(shouldInterrupt && session?.activeTurnId ? { turnId: session.activeTurnId } : {}),
+    shouldInterrupt,
+    shouldClearQueue,
+  };
+}
+
 export function useSelectedThreadCommands(input: {
   readonly refreshSelectedThreadGitStatus: (options?: {
     readonly quiet?: boolean;
     readonly cwd?: string | null;
   }) => Promise<unknown>;
+  readonly selectedThreadDetail: OrchestrationThread | null;
+  readonly selectedThreadQueueCount: number;
+  readonly clearSelectedThreadQueue: () => void;
 }) {
-  const { refreshSelectedThreadGitStatus } = input;
+  const {
+    clearSelectedThreadQueue,
+    refreshSelectedThreadGitStatus,
+    selectedThreadDetail,
+    selectedThreadQueueCount,
+  } = input;
   const { selectedThread } = useThreadSelection();
   const { savedConnectionsById } = useRemoteEnvironmentState();
 
@@ -123,32 +176,36 @@ export function useSelectedThreadCommands(input: {
   );
 
   const onStopThread = useCallback(async () => {
-    if (!selectedThread) {
+    const stopPlan = resolveSelectedThreadStopPlan({
+      selectedThreadShell: selectedThread,
+      selectedThreadDetail,
+      queueCount: selectedThreadQueueCount,
+    });
+    if (!stopPlan) {
       return;
     }
 
-    const client = getEnvironmentClient(selectedThread.environmentId);
+    if (stopPlan.shouldClearQueue) {
+      clearSelectedThreadQueue();
+    }
+
+    if (!stopPlan.shouldInterrupt) {
+      return;
+    }
+
+    const client = getEnvironmentClient(stopPlan.environmentId);
     if (!client) {
-      return;
-    }
-
-    if (
-      selectedThread.session?.status !== "running" &&
-      selectedThread.session?.status !== "starting"
-    ) {
       return;
     }
 
     await client.orchestration.dispatchCommand({
       type: "thread.turn.interrupt",
       commandId: CommandId.make(uuidv4()),
-      threadId: selectedThread.id,
-      ...(selectedThread.session?.activeTurnId
-        ? { turnId: selectedThread.session.activeTurnId }
-        : {}),
+      threadId: stopPlan.threadId,
+      ...(stopPlan.turnId ? { turnId: stopPlan.turnId } : {}),
       createdAt: new Date().toISOString(),
     });
-  }, [selectedThread]);
+  }, [clearSelectedThreadQueue, selectedThread, selectedThreadDetail, selectedThreadQueueCount]);
 
   const onRenameThread = useCallback(
     async (title: string) => {
