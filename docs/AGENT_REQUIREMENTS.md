@@ -32,7 +32,7 @@ nightly build.
 
 ### Status
 
-- Local repair completed; remote push/release verification pending.
+- Completed.
 
 ### Verification
 
@@ -46,20 +46,37 @@ nightly build.
 - Passed: `ruby -e 'require "yaml"; YAML.load_file(...)'` for
   `release.yml` and `sync-upstream.yml`.
 - Passed: `go run github.com/rhysd/actionlint/cmd/actionlint@latest
-  .github/workflows/release.yml .github/workflows/sync-upstream.yml`.
+.github/workflows/release.yml .github/workflows/sync-upstream.yml`.
 - Passed: `bun fmt`.
 - Passed: `NODE_BIN_DIR=$(dirname "$(bunx node@24 -e
-  'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun lint`
+'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun lint`
   with pre-existing warnings only.
 - Passed: `NODE_BIN_DIR=$(dirname "$(bunx node@24 -e
-  'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun
-  typecheck`.
+'console.log(process.execPath)')"); PATH="$NODE_BIN_DIR:$PATH" bun
+typecheck`.
 - Partial: full `bun run test` initially failed because Electron was missing
   after an `--ignore-scripts` install; after running Electron's install script,
   desktop tests passed and only one web test timed out.
 - Passed: focused retry
   `bun --filter @t3tools/web test
-  src/environments/runtime/service.addSavedEnvironment.test.ts`.
+src/environments/runtime/service.addSavedEnvironment.test.ts`.
+- Passed: force-pushed repaired `main` to `43bba1001148db8a0614438aca45cae56a835d39`.
+- Passed: pushed tag `v0.0.24-nightly.20260513.277-fork.1` at
+  `43bba1001148db8a0614438aca45cae56a835d39`.
+- Passed: GitHub Actions release run `25834014502` completed successfully:
+  preflight, macOS arm64 build, Linux/headless build and smoke test, and
+  release publish all passed.
+- Passed: release `v0.0.24-nightly.20260513.277-fork.1` is a prerelease and
+  `v0.0.24-fork.1` remains the latest stable release.
+- Passed: release assets include `nightly-mac.yml`, macOS arm64 DMG/zip and
+  blockmaps, `builder-debug.yml`, and
+  `t3-headless-0.0.24-nightly.20260513.277-fork.1-linux-x64.tar.gz`.
+- Passed: `nightly-mac.yml` reports version
+  `0.0.24-nightly.20260513.277-fork.1` and points to the matching arm64 zip
+  and DMG assets.
+- Follow-up: main CI run `25834009325` failed only at `bun run fmt:check`
+  because this tracker entry needed formatting; a docs-only formatting repair
+  is being pushed after this update.
 
 ## Current Task: Repair Nightly Release Channel
 
