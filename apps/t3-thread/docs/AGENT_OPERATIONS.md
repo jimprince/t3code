@@ -102,7 +102,7 @@ Post-create reliability checklist:
 `--notify` behavior:
 
 - no flag: if `T3_THREAD_ID` is set, the current caller thread is auto-subscribed by default
-- if `T3_ENVIRONMENT_NAME` and `T3_ENVIRONMENT_ID` are also set, unsaved callers resolve directly from that metadata without scanning paired environments
+- no flag: if `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME` are also set, unsaved caller threads resolve directly from that metadata; the CLI maps environment id/name/label back to the saved environment key used for routing
 - no flag: if `T3_THREAD_ID` is not set, create still succeeds without a subscription
 - `--no-notify` disables the default caller subscription
 - bare `--notify` requires `T3_THREAD_ID` to be set and forces caller subscription explicitly
@@ -213,7 +213,11 @@ Resolve the current caller from `T3_THREAD_ID` and T3 environment metadata:
 t3-thread caller
 ```
 
-`agent caller` reports the caller even when that thread is not saved locally. With `T3_ENVIRONMENT_NAME` and `T3_ENVIRONMENT_ID`, it returns the unsaved caller directly, for example `{"threadId":"...","caller":{"name":null,"environment":"local-mbp","saved":false}}`. Without metadata, it falls back to paired-environment lookup.
+`agent caller` reports the caller even when that thread is not saved locally. Newer T3 launchers provide
+`T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME`, which lets the CLI resolve directly and avoid scanning
+paired environments just to discover ownership. The CLI maps the env id/name/label to the saved
+environment key (for example `local-mbp`) before storing notification routes. Older sessions fall back
+to paired-environment scanning. Unsaved caller records show `saved: false`.
 
 Register the calling T3 thread as a subscriber for a saved source agent:
 

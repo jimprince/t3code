@@ -26,36 +26,52 @@
 ## Current Task Snapshot — Caller Environment Metadata
 
 ### Active Requirements
-- Update `t3-thread caller`/caller resolution so it can use launcher-provided
-  `T3_ENVIRONMENT_NAME` and `T3_ENVIRONMENT_ID` alongside `T3_THREAD_ID`.
-- Prefer direct environment metadata over scanning saved environments when all
-  required variables are present.
+- Update `t3-thread caller` and notification caller resolution to consume
+  `T3_ENVIRONMENT_ID` / `T3_ENVIRONMENT_NAME` when present alongside
+  `T3_THREAD_ID`.
+- Prefer explicit environment context over scanning every saved environment.
 - Return an unsaved caller payload like
-  `{ "threadId": "...", "environment": "local-mbp", "saved": false }` without
-  depending on saved environment scans or non-expired pairing.
+  `{ "threadId": "...", "environment": "local-mbp", "saved": false }`, mapping
+  env id/name/label back to the saved environment key used for routing.
 - Preserve the existing saved-agent resolution behavior when the current thread
   id is saved locally.
 - Preserve fallback paired-environment scanning when the new metadata is not
   present.
+- Add focused regression tests for env-provided caller environment resolution.
+- Rebuild committed distribution output if source changes require it.
+- Verify the focused tests and live `t3-thread caller` behavior in this session.
 
 ### Constraints
 - This tracker update is the first project write for this task.
 - Keep `t3-thread` a thin wrapper over T3 Code native APIs.
 - Preserve existing state format compatibility.
-- Rebuild committed distribution output if source changes require it.
+- Preserve existing user work and avoid destructive git operations.
 
 ### Acceptance Criteria
 - `resolveCallerThreadId` still reads trimmed `T3_THREAD_ID`.
 - A new caller resolver reads `T3_ENVIRONMENT_NAME`/`T3_ENVIRONMENT_ID` and
   returns an unsaved endpoint without remote environment scanning when possible.
+- Caller subscription during `t3-thread create` can use the env-provided caller environment.
 - Existing saved-agent lookup remains preferred over raw environment metadata.
 - Fallback scanning still works when environment metadata is absent.
-- Tests cover direct metadata, saved-agent preference, and missing metadata.
+- Tests cover direct metadata, saved-agent preference, environment id matching,
+  environment name/label matching, and missing metadata.
 - Focused tests, build/dist freshness, and relevant docs are updated.
 
 ### Status
-- Implemented and verified with focused state tests, full Vitest suite, a direct
-  `t3-thread caller` metadata smoke check, and `npm run build`.
+- Completed locally.
+
+### Validation Update
+- Added caller environment metadata parsing for `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME`.
+- Caller endpoint resolution now prefers saved agent mappings, then maps env id/name/label to the saved environment key before falling back to paired-environment scanning.
+- Updated `t3-thread caller`, default create notification resolution, `subscribe`, and `unsubscribe` caller paths to pass env metadata into resolution.
+- Added regression tests for complete/incomplete env metadata, saved-agent precedence, environment id matching, environment label matching, saved-name matching, and missing metadata fallback.
+- Updated README, operations runbook, and shared `t3-threads` skill routing notes.
+- `npm run test -- state` passed: 21 tests.
+- `npm run build` passed and updated `dist/cli.cjs`.
+- `npm run test -- state dist-freshness` passed: 22 tests.
+- `npm run test` passed: 57 tests across 9 files.
+- `npm run --silent cli -- caller` returned the current unsaved caller with `environment: "local-mbp"` and `saved: false`.
 
 ## Current Task Snapshot — Legacy Schema Decode Compatibility
 
