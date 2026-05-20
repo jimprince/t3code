@@ -19,12 +19,13 @@ import { classifyThread, formatThreadLine } from "./status.js";
 import {
   assertNotSelfSubscription,
   buildSubscriptionRecord,
-  findAgentByThreadId,
   loadState,
   requireAgent,
   requireEnvironment,
   removeAgent,
   removeSubscription,
+  resolveCallerEndpointFromLocalContext,
+  resolveCallerEnvironmentMetadata,
   resolveCallerThreadId,
   resolveNotifyPreference,
   updateState,
@@ -34,13 +35,8 @@ import {
 } from "./state.js";
 import { wrapWithPreamble } from "./thread-preamble.js";
 import { deliverPendingNotifications, detectAttentionEvents } from "./watch.js";
+import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
 import type { SavedAgent } from "./types.js";
-
-type SubscriptionEndpoint = {
-  threadId: string;
-  name: string | null;
-  environment: string;
-};
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -76,10 +72,11 @@ async function resolveThreadEndpoint(
   state: Awaited<ReturnType<typeof loadState>>,
   threadId: string,
   preferredEnvironment?: string,
+  callerEnvironment?: CallerEnvironmentMetadata | null,
 ): Promise<SubscriptionEndpoint> {
-  const savedAgent = findAgentByThreadId(state, threadId);
-  if (savedAgent) {
-    return toSubscriptionEndpoint(savedAgent);
+  const localEndpoint = resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment ?? null);
+  if (localEndpoint) {
+    return localEndpoint;
   }
 
   const orderedEnvironmentNames = [
@@ -108,6 +105,7 @@ async function resolveNotifyEndpoint(
   notify: string | boolean | undefined,
   preferredEnvironment?: string,
 ): Promise<SubscriptionEndpoint | null> {
+  const callerEnvironment = resolveCallerEnvironmentMetadata();
   const preference = resolveNotifyPreference(notify);
 
   if (preference.kind === "none") {
@@ -126,7 +124,7 @@ async function resolveNotifyEndpoint(
   if (!threadId) {
     throw new Error("Internal error: caller notification was selected without a caller thread.");
   }
-  return resolveThreadEndpoint(state, threadId, preferredEnvironment);
+  return resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment);
 }
 
 async function withCallerFromEnv(): Promise<{ state: Awaited<ReturnType<typeof loadState>>; caller: SubscriptionEndpoint }> {
@@ -137,7 +135,7 @@ async function withCallerFromEnv(): Promise<{ state: Awaited<ReturnType<typeof l
   }
   return {
     state,
-    caller: await resolveThreadEndpoint(state, threadId),
+    caller: await resolveThreadEndpoint(state, threadId, undefined, resolveCallerEnvironmentMetadata()),
   };
 }
 
@@ -462,11 +460,15 @@ agent
 
 agent
   .command("caller")
-  .description("Resolve the calling thread from T3_THREAD_ID, with paired-environment lookup when it is not saved locally")
+  .description("Resolve the calling thread from T3_THREAD_ID and T3 environment metadata")
   .action(async () => {
     const state = await loadState();
     const threadId = resolveCallerThreadId();
-    const caller = threadId ? await resolveThreadEndpoint(state, threadId).catch(() => null) : null;
+    const caller = threadId
+      ? await resolveThreadEndpoint(state, threadId, undefined, resolveCallerEnvironmentMetadata()).catch(
+          () => null,
+        )
+      : null;
     printJson({
       threadId,
       caller: caller
