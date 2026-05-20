@@ -47558,6 +47558,35 @@ function resolveCallerThreadId(env = process.env) {
   const value3 = env.T3_THREAD_ID?.trim();
   return value3 ? value3 : null;
 }
+function resolveCallerEnvironmentMetadata(env = process.env) {
+  const environmentName = env.T3_ENVIRONMENT_NAME?.trim();
+  const environmentId = env.T3_ENVIRONMENT_ID?.trim();
+  if (!environmentName || !environmentId) {
+    return null;
+  }
+  return {
+    environmentName,
+    environmentId
+  };
+}
+function resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment = null) {
+  const savedAgent = findAgentByThreadId(state, threadId);
+  if (savedAgent) {
+    return {
+      threadId: savedAgent.threadId,
+      name: savedAgent.name,
+      environment: savedAgent.environment
+    };
+  }
+  if (!callerEnvironment) {
+    return null;
+  }
+  return {
+    threadId,
+    name: null,
+    environment: callerEnvironment.environmentName
+  };
+}
 function resolveNotifyPreference(notify, env = process.env) {
   if (notify === false) {
     return { kind: "none" };
@@ -47929,10 +47958,10 @@ function toSubscriptionEndpoint(agent2) {
     environment: agent2.environment
   };
 }
-async function resolveThreadEndpoint(state, threadId, preferredEnvironment) {
-  const savedAgent = findAgentByThreadId(state, threadId);
-  if (savedAgent) {
-    return toSubscriptionEndpoint(savedAgent);
+async function resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment) {
+  const localEndpoint = resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment ?? null);
+  if (localEndpoint) {
+    return localEndpoint;
   }
   const orderedEnvironmentNames = [
     ...preferredEnvironment ? [preferredEnvironment] : [],
@@ -47953,6 +47982,7 @@ async function resolveThreadEndpoint(state, threadId, preferredEnvironment) {
   throw new Error(`Unknown thread '${threadId}'. It is not saved locally and was not found in any paired environment.`);
 }
 async function resolveNotifyEndpoint(state, notify, preferredEnvironment) {
+  const callerEnvironment = resolveCallerEnvironmentMetadata();
   const preference = resolveNotifyPreference(notify);
   if (preference.kind === "none") {
     return null;
@@ -47968,7 +47998,7 @@ async function resolveNotifyEndpoint(state, notify, preferredEnvironment) {
   if (!threadId) {
     throw new Error("Internal error: caller notification was selected without a caller thread.");
   }
-  return resolveThreadEndpoint(state, threadId, preferredEnvironment);
+  return resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment);
 }
 async function withCallerFromEnv() {
   const state = await loadState();
@@ -47978,7 +48008,7 @@ async function withCallerFromEnv() {
   }
   return {
     state,
-    caller: await resolveThreadEndpoint(state, threadId)
+    caller: await resolveThreadEndpoint(state, threadId, void 0, resolveCallerEnvironmentMetadata())
   };
 }
 function nowIso3() {
@@ -48227,10 +48257,12 @@ agent.command("forget").argument("<name>", "agent name").description("Remove a s
     forgotten: true
   });
 });
-agent.command("caller").description("Resolve the calling thread from T3_THREAD_ID, with paired-environment lookup when it is not saved locally").action(async () => {
+agent.command("caller").description("Resolve the calling thread from T3_THREAD_ID and T3 environment metadata").action(async () => {
   const state = await loadState();
   const threadId = resolveCallerThreadId();
-  const caller = threadId ? await resolveThreadEndpoint(state, threadId).catch(() => null) : null;
+  const caller = threadId ? await resolveThreadEndpoint(state, threadId, void 0, resolveCallerEnvironmentMetadata()).catch(
+    () => null
+  ) : null;
   printJson({
     threadId,
     caller: caller ? {
