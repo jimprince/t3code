@@ -27,7 +27,33 @@ Codex app-server processes, push it to GitHub, and monitor the rebuild.
 
 ### Status
 
-- In progress.
+- Completed.
+
+### Verification
+
+- Passed: confirmed the active shell/session did not have `T3_THREAD_ID` in
+  its environment before the fix.
+- Passed: found the prior fork patch in historical commits and confirmed the
+  current rebased build path had dropped the Codex child-process
+  `T3_THREAD_ID` injection.
+- Passed: restored `T3_THREAD_ID` injection for spawned Codex app-server
+  processes while preserving caller environment and `CODEX_HOME` behavior.
+- Passed: added regression coverage for `T3_THREAD_ID` with and without
+  `CODEX_HOME`.
+- Passed: focused Codex session runtime test passed.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with pre-existing warnings only.
+- Passed: `bun typecheck`.
+- Passed: pushed stable fix and release prep to `jimprince/t3code`.
+- Passed: GitHub Actions release run `26180240306` completed successfully for
+  `v0.0.25-fork.1`.
+- Passed: stable release assets include `latest-mac.yml`, macOS arm64 DMG/zip
+  assets and blockmaps, `builder-debug.yml`, and the Linux x64 headless
+  tarball.
+- In progress: rebasing the fork onto upstream
+  `v0.0.25-nightly.20260515.295` and publishing
+  `v0.0.25-nightly.20260515.295-fork.1` so the nightly channel also includes
+  the restored `T3_THREAD_ID` fix.
 
 ## Current Task: Resolve Nightly 285 Upstream Sync Rebase
 
