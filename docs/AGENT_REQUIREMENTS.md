@@ -1,5 +1,40 @@
 # Agent Requirements
 
+## Current Task: Export T3 Environment Metadata To Agent Runtime
+
+Extend the T3 launcher child-process environment so coding agents can discover
+the current T3 environment directly from environment variables instead of
+scanning saved environments or depending on a non-expired pairing.
+
+### Current User Requirements
+
+- Continue exporting `T3_THREAD_ID=<thread-id>`.
+- Also export `T3_ENVIRONMENT_NAME=<environment-name>` for the environment the
+  current thread belongs to, for example `local-mbp`.
+- Also export `T3_ENVIRONMENT_ID=<environment-id>` for the environment the
+  current thread belongs to, for example
+  `5fa7c701-bf4d-496f-b753-55f77b4de905`.
+- Make this useful for `t3-thread` callers to resolve a current thread payload
+  like `{ "threadId": "...", "environment": "local-mbp", "saved": false }`
+  without scanning saved environments or relying on a live pairing.
+
+### Acceptance Criteria
+
+- Spawned Codex app-server child env includes `T3_THREAD_ID`,
+  `T3_ENVIRONMENT_ID`, and `T3_ENVIRONMENT_NAME` when the server can identify
+  the current environment.
+- Existing `CODEX_HOME` and base environment preservation behavior remains
+  intact.
+- Regression coverage proves environment metadata injection and optional
+  behavior when metadata is absent.
+- The relevant caller/resolver surface is updated if it exists in this repo.
+- Repo-required verification is run or any blockers are reported.
+
+### Status
+
+- Implemented and verified with `bun fmt`, `bun lint`, focused provider tests,
+  and `bun typecheck`.
+
 ## Current Task: Restore Codex T3_THREAD_ID Env Injection
 
 Restore the fork patch that injects the T3 orchestration thread id into spawned

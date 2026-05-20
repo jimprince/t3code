@@ -6,6 +6,7 @@ import path from "node:path";
 import {
   ApprovalRequestId,
   CodexSettings,
+  EnvironmentId,
   EventId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -228,6 +229,10 @@ const validationLayer = it.layer(
       const codexConfig = decodeCodexSettings({});
       return yield* makeCodexAdapter(codexConfig, {
         makeRuntime: validationRuntimeFactory.factory,
+        t3Environment: {
+          id: EnvironmentId.make("environment-local"),
+          name: "local-mbp",
+        },
       });
     }),
   ).pipe(
@@ -282,6 +287,10 @@ validationLayer("CodexAdapterLive validation", (it) => {
         model: "gpt-5.3-codex",
         providerInstanceId: ProviderInstanceId.make("codex"),
         serviceTier: "fast",
+        t3Environment: {
+          id: EnvironmentId.make("environment-local"),
+          name: "local-mbp",
+        },
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
       });

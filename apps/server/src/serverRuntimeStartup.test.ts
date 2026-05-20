@@ -1,5 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  DEFAULT_MODEL,
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
@@ -17,6 +23,7 @@ import { ProjectionSnapshotQuery } from "./orchestration/Services/ProjectionSnap
 import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
 import {
   getAutoBootstrapDefaultModelSelection,
+  applyT3EnvironmentMetadataToProcessEnv,
   launchStartupHeartbeat,
   makeCommandGate,
   resolveAutoBootstrapWelcomeTargets,
@@ -29,6 +36,29 @@ it("uses the canonical Codex default for auto-bootstrapped model selection", () 
     instanceId: ProviderInstanceId.make("codex"),
     model: DEFAULT_MODEL,
   });
+});
+
+it("applies T3 environment metadata to process env for launched agent children", () => {
+  const env: NodeJS.ProcessEnv = {};
+
+  applyT3EnvironmentMetadataToProcessEnv(
+    {
+      environmentId: EnvironmentId.make("environment-local"),
+      label: "local-mbp",
+      platform: {
+        os: "darwin",
+        arch: "arm64",
+      },
+      serverVersion: "0.1.0",
+      capabilities: {
+        repositoryIdentity: true,
+      },
+    },
+    env,
+  );
+
+  assert.equal(env.T3_ENVIRONMENT_ID, "environment-local");
+  assert.equal(env.T3_ENVIRONMENT_NAME, "local-mbp");
 });
 
 it.effect("enqueueCommand waits for readiness and then drains queued work", () =>
