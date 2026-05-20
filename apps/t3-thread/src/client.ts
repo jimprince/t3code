@@ -1,6 +1,16 @@
 import { randomUUID } from "node:crypto";
 
 import {
+  buildModelSelection,
+  buildProjectCreateCommand,
+  buildProjectDeleteCommand,
+  buildProjectMetaUpdateCommand,
+  deriveProjectTitle,
+  findExistingProjectByPath,
+  listThreadsForProject,
+  resolveProjectTarget,
+} from "./projects.js";
+import {
   bootstrapBearerSession,
   fetchEnvironmentDescriptor,
   fetchSessionState,
@@ -108,6 +118,145 @@ export class RemoteEnvironmentClient {
   async listProjects(): Promise<OrchestrationProjectShell[]> {
     const snapshot = await this.getShellSnapshot();
     return snapshot.projects;
+  }
+
+  async createProject(input: {
+    workspaceRoot: string;
+    title?: string;
+    provider?: string;
+    model?: string;
+    modelOptionEntries?: string[];
+    noDefaultModel?: boolean;
+    createDir?: boolean;
+  }): Promise<OrchestrationProjectShell> {
+    const snapshot = await this.getShellSnapshot();
+    const existingProject = findExistingProjectByPath(snapshot.projects, input.workspaceRoot);
+    if (existingProject) {
+      throw new Error(
+        `An active project already exists for '${existingProject.workspaceRoot}' (${existingProject.id}).`,
+      );
+    }
+
+    const projectId = randomUUID();
+    const title = deriveProjectTitle(input.workspaceRoot, input.title);
+    const defaultModelSelection = buildModelSelection({
+      provider: input.provider,
+      model: input.model,
+      optionEntries: input.modelOptionEntries,
+      noDefault: input.noDefaultModel,
+    });
+    const command = buildProjectCreateCommand({
+      commandId: randomUUID(),
+      projectId,
+      title,
+      workspaceRoot: input.workspaceRoot,
+      createWorkspaceRootIfMissing: input.createDir,
+      defaultModelSelection,
+      createdAt: nowIso(),
+    });
+
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+
+    return {
+      id: projectId,
+      title,
+      workspaceRoot: command.workspaceRoot,
+      defaultModelSelection,
+    };
+  }
+
+  async renameProject(input: { identifier: string; title: string }): Promise<OrchestrationProjectShell> {
+    const snapshot = await this.getShellSnapshot();
+    const project = resolveProjectTarget(snapshot.projects, input.identifier);
+    const command = buildProjectMetaUpdateCommand({
+      commandId: randomUUID(),
+      projectId: project.id,
+      title: input.title,
+    });
+
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+
+    return {
+      ...project,
+      title: command.title ?? project.title,
+    };
+  }
+
+  async setProjectDefaultModel(input: {
+    identifier: string;
+    provider?: string;
+    model?: string;
+    modelOptionEntries?: string[];
+    clear?: boolean;
+  }): Promise<OrchestrationProjectShell> {
+    const snapshot = await this.getShellSnapshot();
+    const project = resolveProjectTarget(snapshot.projects, input.identifier);
+    const defaultModelSelection = buildModelSelection({
+      provider: input.provider,
+      model: input.model,
+      optionEntries: input.modelOptionEntries,
+      clear: input.clear,
+    });
+    const command = buildProjectMetaUpdateCommand({
+      commandId: randomUUID(),
+      projectId: project.id,
+      defaultModelSelection,
+    });
+
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+
+    return {
+      ...project,
+      defaultModelSelection: command.defaultModelSelection ?? null,
+    };
+  }
+
+  async removeProject(input: { identifier: string; force?: boolean }): Promise<{
+    project: OrchestrationProjectShell;
+    activeThreadCount: number;
+    removed: true;
+  }> {
+    const snapshot = await this.getShellSnapshot();
+    const project = resolveProjectTarget(snapshot.projects, input.identifier);
+    const activeThreads = listThreadsForProject(snapshot.threads, project.id);
+    if (activeThreads.length > 0 && !input.force) {
+      throw new Error(
+        `Project '${project.id}' has ${activeThreads.length} active thread(s). Re-run with --force to remove the project and its threads.`,
+      );
+    }
+    const command = buildProjectDeleteCommand({
+      commandId: randomUUID(),
+      projectId: project.id,
+      force: input.force,
+    });
+
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+
+    return {
+      project,
+      activeThreadCount: activeThreads.length,
+      removed: true,
+    };
   }
 
   async findThread(threadId: string): Promise<OrchestrationThread> {

@@ -121,6 +121,23 @@ it.effect("decodes project.create with createWorkspaceRootIfMissing enabled", ()
   }),
 );
 
+it.effect("decodes project.delete with force enabled", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeOrchestrationCommand({
+      type: "project.delete",
+      commandId: "cmd-1",
+      projectId: "project-1",
+      force: true,
+    });
+
+    assert.strictEqual(parsed.type, "project.delete");
+    if (parsed.type !== "project.delete") {
+      throw new Error("Expected project.delete");
+    }
+    assert.strictEqual(parsed.force, true);
+  }),
+);
+
 it.effect("decodes historical project.created payloads with a default provider", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeProjectCreatedPayload({
