@@ -66,7 +66,9 @@ t3-thread status worker-a
 
 ## Notifications
 
-When `T3_THREAD_ID` is set, `create` auto-subscribes the caller thread to the new worker by default. If `T3_ENVIRONMENT_NAME` and `T3_ENVIRONMENT_ID` are also set, unsaved callers resolve directly from that metadata without scanning paired environments.
+When `T3_THREAD_ID` is set, `create` auto-subscribes the caller thread to the new worker by default.
+When `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME` are also set, the CLI resolves unsaved caller
+threads directly from that environment metadata and maps it to the saved environment key used for routing.
 
 - Use `--no-notify` to opt out.
 - Use `--notify <saved-agent-or-thread-id>` to route notifications to another subscriber.

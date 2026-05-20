@@ -1,61 +1,40 @@
 # Agent Requirements
 
-## Current Task Snapshot — Audit Dependency Fix
+## Current Task Snapshot — Caller Environment Env Vars
 
 ### Active Requirements
-- Resolve the current `npm audit` findings in `t3-thread` for transitive `uuid@13.0.0` and `ws@8.20.0`.
-- Prefer bumping the Effect package family together if that naturally updates the vulnerable transitive packages.
-- If package bumps do not resolve the findings, use targeted npm overrides for `uuid@13.0.1` and `ws@8.20.1`.
-- Keep the CLI behavior unchanged.
-
-### Constraints
-- This tracker update is the first project write for this task.
-- Avoid forced audit fixes that introduce unrelated dependency churn.
-- Preserve the remote repo state and avoid destructive git operations.
-
-### Acceptance Criteria
-- `npm audit` reports zero vulnerabilities.
-- `npm run build` succeeds.
-- `npm test` succeeds.
-- `t3-thread --help` still runs.
-
-### Status
-- Completed using targeted npm overrides for `uuid@13.0.1` and `ws@8.20.1` while keeping the existing Effect `4.0.0-beta.45` dependency line.
-- Validation passed: `npm run build`, `npm test` (56 tests), `npm audit` (0 vulnerabilities), and `t3-thread --help`.
-
-## Current Task Snapshot — Caller Environment Metadata
-
-### Active Requirements
-- Update `t3-thread caller`/caller resolution so it can use launcher-provided
-  `T3_ENVIRONMENT_NAME` and `T3_ENVIRONMENT_ID` alongside `T3_THREAD_ID`.
-- Prefer direct environment metadata over scanning saved environments when all
-  required variables are present.
-- Return an unsaved caller payload like
-  `{ "threadId": "...", "environment": "local-mbp", "saved": false }` without
-  depending on saved environment scans or non-expired pairing.
-- Preserve the existing saved-agent resolution behavior when the current thread
-  id is saved locally.
-- Preserve fallback paired-environment scanning when the new metadata is not
-  present.
+- Update `t3-thread caller` and notification caller resolution to consume `T3_ENVIRONMENT_ID` / `T3_ENVIRONMENT_NAME` when present alongside `T3_THREAD_ID`.
+- Prefer the explicit environment context over scanning every saved environment.
+- Preserve fallback behavior for older sessions that only have `T3_THREAD_ID`.
+- Add focused regression tests for env-provided caller environment resolution.
+- Rebuild committed distribution output if source changes require it.
+- Verify the focused tests and live `t3-thread caller` behavior in this session.
 
 ### Constraints
 - This tracker update is the first project write for this task.
 - Keep `t3-thread` a thin wrapper over T3 Code native APIs.
-- Preserve existing state format compatibility.
-- Rebuild committed distribution output if source changes require it.
+- Preserve existing user work and avoid destructive git operations.
 
 ### Acceptance Criteria
-- `resolveCallerThreadId` still reads trimmed `T3_THREAD_ID`.
-- A new caller resolver reads `T3_ENVIRONMENT_NAME`/`T3_ENVIRONMENT_ID` and
-  returns an unsaved endpoint without remote environment scanning when possible.
-- Existing saved-agent lookup remains preferred over raw environment metadata.
-- Fallback scanning still works when environment metadata is absent.
-- Tests cover direct metadata, saved-agent preference, and missing metadata.
-- Focused tests, build/dist freshness, and relevant docs are updated.
+- `t3-thread caller` resolves the current caller using `T3_ENVIRONMENT_ID` / `T3_ENVIRONMENT_NAME` without requiring environment scanning.
+- Caller subscription during `t3-thread create` can use the env-provided caller environment.
+- Existing saved-agent and paired-environment fallback paths continue to work.
+- Tests cover matching by environment id, matching by environment name/label, and fallback when env context is absent.
 
 ### Status
-- Implemented and verified with focused state tests, full Vitest suite, a direct
-  `t3-thread caller` metadata smoke check, and `npm run build`.
+- Completed locally.
+
+### Validation Update
+- Added caller environment metadata parsing for `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME`.
+- Caller endpoint resolution now prefers saved agent mappings, then maps env id/name/label to the saved environment key before falling back to paired-environment scanning.
+- Updated `t3-thread caller`, default create notification resolution, `subscribe`, and `unsubscribe` caller paths to pass env metadata into resolution.
+- Added regression tests for complete/incomplete env metadata, saved-agent precedence, environment id matching, environment label matching, saved-name matching, and missing metadata fallback.
+- Updated README, operations runbook, and shared `t3-threads` skill routing notes.
+- `npm run test -- state` passed: 21 tests.
+- `npm run build` passed and updated `dist/cli.cjs`.
+- `npm run test -- state dist-freshness` passed: 22 tests.
+- `npm run test` passed: 57 tests across 9 files.
+- `npm run --silent cli -- caller` returned the current unsaved caller with `environment: "local-mbp"` and `saved: false`.
 
 ## Current Task Snapshot — Legacy Schema Decode Compatibility
 
