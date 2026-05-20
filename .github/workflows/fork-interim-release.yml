@@ -42,7 +42,7 @@ jobs:
         with:
           fetch-depth: 0
           # PAT required: GITHUB_TOKEN tag pushes do not trigger release.yml.
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ github.token }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
