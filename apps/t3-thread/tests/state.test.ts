@@ -9,12 +9,14 @@ import {
   findAgentByThreadId,
   removeAgent,
   removeSubscription,
+  resolveCallerEndpointFromLocalContext,
+  resolveCallerEnvironmentMetadata,
   resolveCallerThreadId,
   resolveNotifyPreference,
   updateState,
   upsertSubscription,
 } from "../src/state.js";
-import type { SavedAgent, SavedSubscription, StateFile } from "../src/types.js";
+import type { SavedAgent, SavedEnvironment, SavedSubscription, StateFile } from "../src/types.js";
 
 function makeAgent(overrides: Partial<SavedAgent> = {}): SavedAgent {
   return {
@@ -43,10 +45,25 @@ function makeSubscription(overrides: Partial<SavedSubscription> = {}): SavedSubs
   };
 }
 
+function makeEnvironment(overrides: Partial<SavedEnvironment> = {}): SavedEnvironment {
+  return {
+    name: "local-mbp",
+    httpBaseUrl: "http://127.0.0.1:3773",
+    wsBaseUrl: "ws://127.0.0.1:3773",
+    environmentId: "environment-local",
+    label: "Bradley’s MacBook Pro (4)",
+    serverVersion: "0.1.0",
+    bearerToken: "token",
+    expiresAt: "2026-04-18T00:00:00.000Z",
+    pairedAt: "2026-04-17T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 function makeState(overrides: Partial<StateFile> = {}): StateFile {
   return {
     version: 1,
-    environments: [],
+    environments: [makeEnvironment()],
     agents: [makeAgent(), makeAgent({ name: "coordinator-a", threadId: "thread-coordinator-a" })],
     subscriptions: [],
     notifications: [],
@@ -63,6 +80,85 @@ describe("state helpers", () => {
 
   it("returns null when T3_THREAD_ID is missing", () => {
     expect(resolveCallerThreadId({} as NodeJS.ProcessEnv)).toBeNull();
+  });
+
+  it("resolves caller environment metadata from T3 environment variables", () => {
+    expect(
+      resolveCallerEnvironmentMetadata({
+        T3_ENVIRONMENT_NAME: " Bradley’s MacBook Pro (4) ",
+        T3_ENVIRONMENT_ID: " environment-local ",
+      } as NodeJS.ProcessEnv),
+    ).toEqual({
+      environmentName: "Bradley’s MacBook Pro (4)",
+      environmentId: "environment-local",
+    });
+  });
+
+  it("returns null when caller environment metadata is incomplete", () => {
+    expect(
+      resolveCallerEnvironmentMetadata({
+        T3_ENVIRONMENT_NAME: "local-mbp",
+      } as NodeJS.ProcessEnv),
+    ).toBeNull();
+    expect(
+      resolveCallerEnvironmentMetadata({
+        T3_ENVIRONMENT_ID: "environment-local",
+      } as NodeJS.ProcessEnv),
+    ).toBeNull();
+  });
+
+  it("prefers saved caller agents over environment metadata", () => {
+    expect(
+      resolveCallerEndpointFromLocalContext(makeState(), "thread-worker-a", {
+        environmentName: "other-env",
+        environmentId: "environment-other",
+      }),
+    ).toEqual({
+      threadId: "thread-worker-a",
+      name: "worker-a",
+      environment: "local-mbp",
+    });
+  });
+
+  it("resolves unsaved caller threads from environment id metadata", () => {
+    expect(
+      resolveCallerEndpointFromLocalContext(makeState(), "thread-unsaved-caller", {
+        environmentName: "Some stale label",
+        environmentId: "environment-local",
+      }),
+    ).toEqual({
+      threadId: "thread-unsaved-caller",
+      name: null,
+      environment: "local-mbp",
+    });
+  });
+
+  it("resolves unsaved caller threads from environment name or label metadata", () => {
+    expect(
+      resolveCallerEndpointFromLocalContext(makeState(), "thread-unsaved-caller", {
+        environmentName: "Bradley’s MacBook Pro (4)",
+        environmentId: "unknown-id",
+      }),
+    ).toEqual({
+      threadId: "thread-unsaved-caller",
+      name: null,
+      environment: "local-mbp",
+    });
+
+    expect(
+      resolveCallerEndpointFromLocalContext(makeState(), "thread-unsaved-caller", {
+        environmentName: "local-mbp",
+        environmentId: "unknown-id",
+      }),
+    ).toEqual({
+      threadId: "thread-unsaved-caller",
+      name: null,
+      environment: "local-mbp",
+    });
+  });
+
+  it("returns null for unsaved caller threads without environment metadata", () => {
+    expect(resolveCallerEndpointFromLocalContext(makeState(), "thread-unsaved-caller")).toBeNull();
   });
 
   it("defaults notify preference to caller when T3_THREAD_ID is present", () => {

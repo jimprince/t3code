@@ -1,5 +1,41 @@
 # Agent Requirements
 
+## Current Task Snapshot — Caller Environment Env Vars
+
+### Active Requirements
+- Update `t3-thread caller` and notification caller resolution to consume `T3_ENVIRONMENT_ID` / `T3_ENVIRONMENT_NAME` when present alongside `T3_THREAD_ID`.
+- Prefer the explicit environment context over scanning every saved environment.
+- Preserve fallback behavior for older sessions that only have `T3_THREAD_ID`.
+- Add focused regression tests for env-provided caller environment resolution.
+- Rebuild committed distribution output if source changes require it.
+- Verify the focused tests and live `t3-thread caller` behavior in this session.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+- Preserve existing user work and avoid destructive git operations.
+
+### Acceptance Criteria
+- `t3-thread caller` resolves the current caller using `T3_ENVIRONMENT_ID` / `T3_ENVIRONMENT_NAME` without requiring environment scanning.
+- Caller subscription during `t3-thread create` can use the env-provided caller environment.
+- Existing saved-agent and paired-environment fallback paths continue to work.
+- Tests cover matching by environment id, matching by environment name/label, and fallback when env context is absent.
+
+### Status
+- Completed locally.
+
+### Validation Update
+- Added caller environment metadata parsing for `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME`.
+- Caller endpoint resolution now prefers saved agent mappings, then maps env id/name/label to the saved environment key before falling back to paired-environment scanning.
+- Updated `t3-thread caller`, default create notification resolution, `subscribe`, and `unsubscribe` caller paths to pass env metadata into resolution.
+- Added regression tests for complete/incomplete env metadata, saved-agent precedence, environment id matching, environment label matching, saved-name matching, and missing metadata fallback.
+- Updated README, operations runbook, and shared `t3-threads` skill routing notes.
+- `npm run test -- state` passed: 21 tests.
+- `npm run build` passed and updated `dist/cli.cjs`.
+- `npm run test -- state dist-freshness` passed: 22 tests.
+- `npm run test` passed: 57 tests across 9 files.
+- `npm run --silent cli -- caller` returned the current unsaved caller with `environment: "local-mbp"` and `saved: false`.
+
 ## Current Task Snapshot — Legacy Schema Decode Compatibility
 
 ### Active Requirements
