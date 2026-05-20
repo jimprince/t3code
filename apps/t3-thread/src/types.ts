@@ -68,7 +68,11 @@ export interface OrchestrationProjectShell {
   id: string;
   title: string;
   workspaceRoot: string;
+  repositoryIdentity?: Record<string, unknown> | null;
   defaultModelSelection: ModelSelection | null;
+  scripts?: Array<Record<string, unknown>>;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface OrchestrationProposedPlan {
