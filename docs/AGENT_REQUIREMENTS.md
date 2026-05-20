@@ -40,7 +40,16 @@ the update.
 - Completed: full mobile Vitest suite now passes locally.
 - Completed: added the full mobile Vitest suite to the mobile-track GitHub EAS
   workflow before the EAS publish step.
-- In progress: committing, pushing, and monitoring GitHub EAS publication.
+- Completed: committed and pushed
+  `c60542dae9fa59eb583e419e5d59df2e27267559` to
+  `origin/feature/mobile-track`.
+- Completed: GitHub `Mobile Track EAS Update` run `26181289388` succeeded in
+  5m05s, including format, lint, typecheck, the full mobile test suite,
+  focused regressions, Expo token check, and EAS publish.
+- Completed: EAS published iOS development update
+  `019e469d-e1d0-7965-96f0-a183aefebb19` in update group
+  `0a7ab84c-4399-4522-ab69-36f6c505b5a2` with message
+  `mobile-track c60542d`.
 
 ### Verification
 
@@ -55,6 +64,9 @@ the update.
   `NODE_OPTIONS=--experimental-strip-types bun lint`.
 - Blocked: plain `bun lint` fails before linting because Node cannot load
   `oxlint-plugin-t3code/index.ts` without type stripping.
+- Passed: GitHub `Mobile Track EAS Update` run `26181289388`.
+- Published: EAS iOS development update
+  `019e469d-e1d0-7965-96f0-a183aefebb19`.
 
 ### User-Approved Requirement Changes
 
