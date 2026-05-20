@@ -50,10 +50,25 @@ Codex app-server processes, push it to GitHub, and monitor the rebuild.
 - Passed: stable release assets include `latest-mac.yml`, macOS arm64 DMG/zip
   assets and blockmaps, `builder-debug.yml`, and the Linux x64 headless
   tarball.
-- In progress: rebasing the fork onto upstream
-  `v0.0.25-nightly.20260515.295` and publishing
-  `v0.0.25-nightly.20260515.295-fork.1` so the nightly channel also includes
-  the restored `T3_THREAD_ID` fix.
+- Passed: rebased the fork onto upstream
+  `v0.0.25-nightly.20260515.295`, stamped
+  `0.0.25-nightly.20260515.295-fork.1`, and pushed `main` plus tag
+  `v0.0.25-nightly.20260515.295-fork.1`.
+- Passed: patched scheduled sync/release workflows to avoid the broken
+  `GH_PAT` checkout/API path and explicitly dispatch release publishing after
+  token-authenticated sync pushes.
+- Passed: local `actionlint` for `sync-upstream.yml`,
+  `fork-interim-release.yml`, and `release.yml`.
+- Passed: GitHub Actions release run `26181112859` completed successfully for
+  `v0.0.25-nightly.20260515.295-fork.1`.
+- Passed: main CI run `26181112838` completed successfully for
+  `79ed044ee629967e6590deee50d2074a8c24739c`.
+- Passed: nightly release is a prerelease and contains `nightly-mac.yml`,
+  macOS arm64 DMG/zip assets and blockmaps, `builder-debug.yml`, and the Linux
+  x64 headless tarball.
+- Passed: `nightly-mac.yml` reports version
+  `0.0.25-nightly.20260515.295-fork.1` and points to the matching arm64 zip
+  and DMG assets.
 
 ## Current Task: Resolve Nightly 285 Upstream Sync Rebase
 
