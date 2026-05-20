@@ -1193,7 +1193,7 @@ var require_command = __commonJS({
   "node_modules/commander/lib/command.js"(exports2) {
     var EventEmitter = require("node:events").EventEmitter;
     var childProcess = require("node:child_process");
-    var path2 = require("node:path");
+    var path3 = require("node:path");
     var fs = require("node:fs");
     var process2 = require("node:process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
@@ -2206,9 +2206,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
         let launchWithNode = false;
         const sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
         function findFile(baseDir, baseName) {
-          const localBin = path2.resolve(baseDir, baseName);
+          const localBin = path3.resolve(baseDir, baseName);
           if (fs.existsSync(localBin)) return localBin;
-          if (sourceExt.includes(path2.extname(baseName))) return void 0;
+          if (sourceExt.includes(path3.extname(baseName))) return void 0;
           const foundExt = sourceExt.find(
             (ext) => fs.existsSync(`${localBin}${ext}`)
           );
@@ -2226,17 +2226,17 @@ Expecting one of '${allowedValues.join("', '")}'`);
           } catch {
             resolvedScriptPath = this._scriptPath;
           }
-          executableDir = path2.resolve(
-            path2.dirname(resolvedScriptPath),
+          executableDir = path3.resolve(
+            path3.dirname(resolvedScriptPath),
             executableDir
           );
         }
         if (executableDir) {
           let localFile = findFile(executableDir, executableFile);
           if (!localFile && !subcommand._executableFile && this._scriptPath) {
-            const legacyName = path2.basename(
+            const legacyName = path3.basename(
               this._scriptPath,
-              path2.extname(this._scriptPath)
+              path3.extname(this._scriptPath)
             );
             if (legacyName !== this._name) {
               localFile = findFile(
@@ -2247,7 +2247,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
           }
           executableFile = localFile || executableFile;
         }
-        launchWithNode = sourceExt.includes(path2.extname(executableFile));
+        launchWithNode = sourceExt.includes(path3.extname(executableFile));
         let proc;
         if (process2.platform !== "win32") {
           if (launchWithNode) {
@@ -3162,7 +3162,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @return {Command}
        */
       nameFromFilename(filename) {
-        this._name = path2.basename(filename, path2.extname(filename));
+        this._name = path3.basename(filename, path3.extname(filename));
         return this;
       }
       /**
@@ -3176,9 +3176,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [path]
        * @return {(string|null|Command)}
        */
-      executableDir(path3) {
-        if (path3 === void 0) return this._executableDir;
-        this._executableDir = path3;
+      executableDir(path4) {
+        if (path4 === void 0) return this._executableDir;
+        this._executableDir = path4;
         return this;
       }
       /**
@@ -7103,16 +7103,16 @@ var require_filesystem = __commonJS({
     var LDD_PATH = "/usr/bin/ldd";
     var SELF_PATH = "/proc/self/exe";
     var MAX_LENGTH = 2048;
-    var readFileSync = (path2) => {
-      const fd = fs.openSync(path2, "r");
+    var readFileSync = (path3) => {
+      const fd = fs.openSync(path3, "r");
       const buffer3 = Buffer.alloc(MAX_LENGTH);
       const bytesRead = fs.readSync(fd, buffer3, 0, MAX_LENGTH, 0);
       fs.close(fd, () => {
       });
       return buffer3.subarray(0, bytesRead);
     };
-    var readFile2 = (path2) => new Promise((resolve2, reject) => {
-      fs.open(path2, "r", (err, fd) => {
+    var readFile2 = (path3) => new Promise((resolve2, reject) => {
+      fs.open(path3, "r", (err, fd) => {
         if (err) {
           reject(err);
         } else {
@@ -7231,11 +7231,11 @@ var require_detect_libc = __commonJS({
       }
       return null;
     };
-    var familyFromInterpreterPath = (path2) => {
-      if (path2) {
-        if (path2.includes("/ld-musl-")) {
+    var familyFromInterpreterPath = (path3) => {
+      if (path3) {
+        if (path3.includes("/ld-musl-")) {
           return MUSL;
-        } else if (path2.includes("/ld-linux-")) {
+        } else if (path3.includes("/ld-linux-")) {
           return GLIBC;
         }
       }
@@ -7282,8 +7282,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = await readFile2(SELF_PATH);
-        const path2 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path2);
+        const path3 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7295,8 +7295,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = readFileSync(SELF_PATH);
-        const path2 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path2);
+        const path3 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7430,7 +7430,7 @@ var require_detect_libc = __commonJS({
 var require_node_gyp_build = __commonJS({
   "node_modules/node-gyp-build-optional-packages/node-gyp-build.js"(exports2, module2) {
     var fs = require("fs");
-    var path2 = require("path");
+    var path3 = require("path");
     var url = require("url");
     var os2 = require("os");
     var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
@@ -7452,30 +7452,30 @@ var require_node_gyp_build = __commonJS({
       return runtimeRequire(load.resolve(dir));
     }
     load.resolve = load.path = function(dir) {
-      dir = path2.resolve(dir || ".");
+      dir = path3.resolve(dir || ".");
       var packageName = "";
       var packageNameError;
       try {
-        packageName = runtimeRequire(path2.join(dir, "package.json")).name;
+        packageName = runtimeRequire(path3.join(dir, "package.json")).name;
         var varName = packageName.toUpperCase().replace(/-/g, "_");
         if (process.env[varName + "_PREBUILD"]) dir = process.env[varName + "_PREBUILD"];
       } catch (err) {
         packageNameError = err;
       }
       if (!prebuildsOnly) {
-        var release2 = getFirst(path2.join(dir, "build/Release"), matchBuild);
+        var release2 = getFirst(path3.join(dir, "build/Release"), matchBuild);
         if (release2) return release2;
-        var debug = getFirst(path2.join(dir, "build/Debug"), matchBuild);
+        var debug = getFirst(path3.join(dir, "build/Debug"), matchBuild);
         if (debug) return debug;
       }
       var prebuild = resolve2(dir);
       if (prebuild) return prebuild;
-      var nearby = resolve2(path2.dirname(process.execPath));
+      var nearby = resolve2(path3.dirname(process.execPath));
       if (nearby) return nearby;
       var platformPackage = (packageName[0] == "@" ? "" : "@" + packageName + "/") + packageName + "-" + platform + "-" + arch;
       var packageResolutionError;
       try {
-        var prebuildPackage = path2.dirname(require("module").createRequire(url.pathToFileURL(path2.join(dir, "package.json"))).resolve(platformPackage));
+        var prebuildPackage = path3.dirname(require("module").createRequire(url.pathToFileURL(path3.join(dir, "package.json"))).resolve(platformPackage));
         return resolveFile(prebuildPackage);
       } catch (error) {
         packageResolutionError = error;
@@ -7502,16 +7502,16 @@ var require_node_gyp_build = __commonJS({
       }
       throw new Error(errMessage);
       function resolve2(dir2) {
-        var tuples = readdirSync(path2.join(dir2, "prebuilds")).map(parseTuple);
+        var tuples = readdirSync(path3.join(dir2, "prebuilds")).map(parseTuple);
         var tuple3 = tuples.filter(matchTuple(platform, arch)).sort(compareTuples)[0];
         if (!tuple3) return;
-        return resolveFile(path2.join(dir2, "prebuilds", tuple3.name));
+        return resolveFile(path3.join(dir2, "prebuilds", tuple3.name));
       }
       function resolveFile(prebuilds) {
         var parsed = readdirSync(prebuilds).map(parseTags);
         var candidates = parsed.filter(matchTags(runtime2, abi));
         var winner = candidates.sort(compareTags(runtime2))[0];
-        if (winner) return path2.join(prebuilds, winner.file);
+        if (winner) return path3.join(prebuilds, winner.file);
       }
     };
     function readdirSync(dir) {
@@ -7523,7 +7523,7 @@ var require_node_gyp_build = __commonJS({
     }
     function getFirst(dir, filter12) {
       var files = readdirSync(dir).filter(filter12);
-      return files[0] && path2.join(dir, files[0]);
+      return files[0] && path3.join(dir, files[0]);
     }
     function matchBuild(name) {
       return /\.node$/.test(name);
@@ -7674,163 +7674,8 @@ function buildFollowUpMessage(kind, message) {
 // src/client.ts
 var import_node_crypto = require("node:crypto");
 
-// src/http.ts
-var PAIRING_TOKEN_PARAM = "token";
-function readHashParams(url) {
-  return new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
-}
-function getPairingTokenFromUrl(url) {
-  const hashToken = readHashParams(url).get(PAIRING_TOKEN_PARAM)?.trim() ?? "";
-  if (hashToken) {
-    return hashToken;
-  }
-  const searchToken = url.searchParams.get(PAIRING_TOKEN_PARAM)?.trim() ?? "";
-  return searchToken || null;
-}
-function normalizeRemoteBaseUrl(rawValue) {
-  const trimmed = rawValue.trim();
-  if (!trimmed) {
-    throw new Error("Enter a backend URL.");
-  }
-  const normalizedInput = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(trimmed) || trimmed.startsWith("//") ? trimmed : `https://${trimmed}`;
-  const url = new URL(normalizedInput);
-  url.pathname = "/";
-  url.search = "";
-  url.hash = "";
-  return url;
-}
-function toHttpBaseUrl(url) {
-  const next = new URL(url.toString());
-  if (next.protocol === "ws:") {
-    next.protocol = "http:";
-  } else if (next.protocol === "wss:") {
-    next.protocol = "https:";
-  }
-  next.pathname = "/";
-  next.search = "";
-  next.hash = "";
-  return next.toString();
-}
-function toWsBaseUrl(url) {
-  const next = new URL(url.toString());
-  if (next.protocol === "http:") {
-    next.protocol = "ws:";
-  } else if (next.protocol === "https:") {
-    next.protocol = "wss:";
-  }
-  next.pathname = "/";
-  next.search = "";
-  next.hash = "";
-  return next.toString();
-}
-function resolvePairingTarget(input) {
-  const pairingUrl = input.pairingUrl?.trim() ?? "";
-  if (pairingUrl) {
-    const url = new URL(pairingUrl);
-    const credential2 = getPairingTokenFromUrl(url);
-    if (!credential2) {
-      throw new Error("Pairing URL is missing its token.");
-    }
-    return {
-      credential: credential2,
-      httpBaseUrl: toHttpBaseUrl(url),
-      wsBaseUrl: toWsBaseUrl(url)
-    };
-  }
-  const host = input.host?.trim() ?? "";
-  const credential = input.credential?.trim() ?? "";
-  if (!host) {
-    throw new Error("Enter a backend URL or pairing URL.");
-  }
-  if (!credential) {
-    throw new Error("Enter a pairing code or use a pairing URL.");
-  }
-  const normalizedHost = normalizeRemoteBaseUrl(host);
-  return {
-    credential,
-    httpBaseUrl: toHttpBaseUrl(normalizedHost),
-    wsBaseUrl: toWsBaseUrl(normalizedHost)
-  };
-}
-async function readErrorMessage(response, fallback) {
-  const text2 = await response.text();
-  if (!text2) {
-    return fallback;
-  }
-  try {
-    const parsed = JSON.parse(text2);
-    if (typeof parsed.error === "string" && parsed.error.trim()) {
-      return parsed.error;
-    }
-  } catch {
-  }
-  return text2;
-}
-async function fetchRemoteJson(input) {
-  const requestUrl = new URL(input.pathname, input.httpBaseUrl).toString();
-  let response;
-  try {
-    response = await fetch(requestUrl, {
-      method: input.method ?? "GET",
-      headers: {
-        ...input.body !== void 0 ? { "content-type": "application/json" } : {},
-        ...input.bearerToken ? { authorization: `Bearer ${input.bearerToken}` } : {}
-      },
-      ...input.body !== void 0 ? { body: JSON.stringify(input.body) } : {}
-    });
-  } catch (error) {
-    throw new Error(
-      `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`
-    );
-  }
-  if (!response.ok) {
-    throw new Error(
-      await readErrorMessage(response, `Remote request failed (${response.status}).`)
-    );
-  }
-  return await response.json();
-}
-async function fetchEnvironmentDescriptor(httpBaseUrl) {
-  return fetchRemoteJson({
-    httpBaseUrl,
-    pathname: "/.well-known/t3/environment"
-  });
-}
-async function bootstrapBearerSession(input) {
-  return fetchRemoteJson({
-    httpBaseUrl: input.httpBaseUrl,
-    pathname: "/api/auth/bootstrap/bearer",
-    method: "POST",
-    body: { credential: input.credential }
-  });
-}
-async function fetchSessionState(input) {
-  return fetchRemoteJson({
-    httpBaseUrl: input.httpBaseUrl,
-    pathname: "/api/auth/session",
-    bearerToken: input.bearerToken
-  });
-}
-async function issueWebSocketToken(input) {
-  return fetchRemoteJson({
-    httpBaseUrl: input.httpBaseUrl,
-    pathname: "/api/auth/ws-token",
-    method: "POST",
-    bearerToken: input.bearerToken
-  });
-}
-async function resolveWebSocketUrl(input) {
-  const issued = await issueWebSocketToken({
-    httpBaseUrl: input.httpBaseUrl,
-    bearerToken: input.bearerToken
-  });
-  const url = new URL(input.wsBaseUrl);
-  url.pathname = "/ws";
-  url.search = "";
-  url.hash = "";
-  url.searchParams.set("wsToken", issued.token);
-  return url.toString();
-}
+// src/projects.ts
+var import_node_path = __toESM(require("node:path"), 1);
 
 // node_modules/effect/dist/Pipeable.js
 var pipeArguments = (self, args2) => {
@@ -8575,8 +8420,8 @@ var CIRCULAR = "[Circular]";
 function formatPropertyKey(name) {
   return typeof name === "string" ? JSON.stringify(name) : String(name);
 }
-function formatPath(path2) {
-  return path2.map((key) => `[${formatPropertyKey(key)}]`).join("");
+function formatPath(path3) {
+  return path3.map((key) => `[${formatPropertyKey(key)}]`).join("");
 }
 function formatDate(date2) {
   try {
@@ -9683,6 +9528,198 @@ function makeReducerConcat() {
   return reducer;
 }
 
+// node_modules/effect/dist/BigDecimal.js
+var FINITE_INT_REGEXP = /^[+-]?\d+$/;
+var TypeId3 = "~effect/BigDecimal";
+var BigDecimalProto = {
+  [TypeId3]: TypeId3,
+  [symbol]() {
+    const normalized = normalize(this);
+    return combine(hash(normalized.value), number(normalized.scale));
+  },
+  [symbol2](that) {
+    return isBigDecimal(that) && equals2(this, that);
+  },
+  toString() {
+    return `BigDecimal(${format2(this)})`;
+  },
+  toJSON() {
+    return {
+      _id: "BigDecimal",
+      value: String(this.value),
+      scale: this.scale
+    };
+  },
+  [NodeInspectSymbol]() {
+    return this.toJSON();
+  },
+  pipe() {
+    return pipeArguments(this, arguments);
+  }
+};
+var isBigDecimal = (u) => hasProperty(u, TypeId3);
+var make5 = (value3, scale2) => {
+  const o = Object.create(BigDecimalProto);
+  o.value = value3;
+  o.scale = scale2;
+  return o;
+};
+var makeNormalizedUnsafe = (value3, scale2) => {
+  if (value3 !== bigint0 && value3 % bigint10 === bigint0) {
+    throw new RangeError("Value must be normalized");
+  }
+  const o = make5(value3, scale2);
+  o.normalized = o;
+  return o;
+};
+var bigint0 = /* @__PURE__ */ BigInt(0);
+var bigint10 = /* @__PURE__ */ BigInt(10);
+var zero = /* @__PURE__ */ makeNormalizedUnsafe(bigint0, 0);
+var normalize = (self) => {
+  if (self.normalized === void 0) {
+    if (self.value === bigint0) {
+      self.normalized = zero;
+    } else {
+      const digits = `${self.value}`;
+      let trail = 0;
+      for (let i = digits.length - 1; i >= 0; i--) {
+        if (digits[i] === "0") {
+          trail++;
+        } else {
+          break;
+        }
+      }
+      if (trail === 0) {
+        self.normalized = self;
+      }
+      const value3 = BigInt(digits.substring(0, digits.length - trail));
+      const scale2 = self.scale - trail;
+      self.normalized = makeNormalizedUnsafe(value3, scale2);
+    }
+  }
+  return self.normalized;
+};
+var scale = /* @__PURE__ */ dual(2, (self, scale2) => {
+  if (scale2 > self.scale) {
+    return make5(self.value * bigint10 ** BigInt(scale2 - self.scale), scale2);
+  }
+  if (scale2 < self.scale) {
+    return make5(self.value / bigint10 ** BigInt(self.scale - scale2), scale2);
+  }
+  return self;
+});
+var Order = /* @__PURE__ */ make4((self, that) => {
+  const scmp = Number2(sign(self), sign(that));
+  if (scmp !== 0) {
+    return scmp;
+  }
+  if (self.scale > that.scale) {
+    return BigInt2(self.value, scale(that, self.scale).value);
+  }
+  if (self.scale < that.scale) {
+    return BigInt2(scale(self, that.scale).value, that.value);
+  }
+  return BigInt2(self.value, that.value);
+});
+var sign = (n) => n.value === bigint0 ? 0 : n.value < bigint0 ? -1 : 1;
+var abs = (n) => n.value < bigint0 ? make5(-n.value, n.scale) : n;
+var Equivalence = /* @__PURE__ */ make2((self, that) => {
+  if (self.scale > that.scale) {
+    return scale(that, self.scale).value === self.value;
+  }
+  if (self.scale < that.scale) {
+    return scale(self, that.scale).value === that.value;
+  }
+  return self.value === that.value;
+});
+var equals2 = /* @__PURE__ */ dual(2, (self, that) => Equivalence(self, that));
+var fromString = (s) => {
+  if (s === "") {
+    return some2(zero);
+  }
+  let base2;
+  let exp;
+  const seperator = s.search(/[eE]/);
+  if (seperator !== -1) {
+    const trail = s.slice(seperator + 1);
+    base2 = s.slice(0, seperator);
+    exp = Number(trail);
+    if (base2 === "" || !Number.isSafeInteger(exp) || !FINITE_INT_REGEXP.test(trail)) {
+      return none2();
+    }
+  } else {
+    base2 = s;
+    exp = 0;
+  }
+  let digits;
+  let offset;
+  const dot = base2.search(/\./);
+  if (dot !== -1) {
+    const lead = base2.slice(0, dot);
+    const trail = base2.slice(dot + 1);
+    digits = `${lead}${trail}`;
+    offset = trail.length;
+  } else {
+    digits = base2;
+    offset = 0;
+  }
+  if (!FINITE_INT_REGEXP.test(digits)) {
+    return none2();
+  }
+  const scale2 = offset - exp;
+  if (!Number.isSafeInteger(scale2)) {
+    return none2();
+  }
+  return some2(make5(BigInt(digits), scale2));
+};
+var format2 = (n) => {
+  const normalized = normalize(n);
+  if (Math.abs(normalized.scale) >= 16) {
+    return toExponential(normalized);
+  }
+  const negative = normalized.value < bigint0;
+  const absolute = negative ? `${normalized.value}`.substring(1) : `${normalized.value}`;
+  let before;
+  let after;
+  if (normalized.scale >= absolute.length) {
+    before = "0";
+    after = "0".repeat(normalized.scale - absolute.length) + absolute;
+  } else {
+    const location2 = absolute.length - normalized.scale;
+    if (location2 > absolute.length) {
+      const zeros = location2 - absolute.length;
+      before = `${absolute}${"0".repeat(zeros)}`;
+      after = "";
+    } else {
+      after = absolute.slice(location2);
+      before = absolute.slice(0, location2);
+    }
+  }
+  const complete = after === "" ? before : `${before}.${after}`;
+  return negative ? `-${complete}` : complete;
+};
+var toExponential = (n) => {
+  if (isZero(n)) {
+    return "0e+0";
+  }
+  const normalized = normalize(n);
+  const digits = `${abs(normalized).value}`;
+  const head2 = digits.slice(0, 1);
+  const tail = digits.slice(1);
+  let output = `${isNegative(normalized) ? "-" : ""}${head2}`;
+  if (tail !== "") {
+    output += `.${tail}`;
+  }
+  const exp = tail.length - normalized.scale;
+  return `${output}e${exp >= 0 ? "+" : ""}${exp}`;
+};
+var isZero = (n) => n.value === bigint0;
+var isNegative = (n) => n.value < bigint0;
+
+// node_modules/effect/dist/Boolean.js
+var Boolean2 = globalThis.Boolean;
+var ReducerOr = /* @__PURE__ */ make((a, b) => a || b, false);
+
 // node_modules/effect/dist/Context.js
 var ServiceTypeId = "~effect/Context/Service";
 var Service = function() {
@@ -9735,7 +9772,7 @@ var ServiceProto = {
     return self;
   },
   context(self) {
-    return make5(this, self);
+    return make6(this, self);
   },
   use(f) {
     return withFiber((fiber3) => f(get(fiber3.context, this)));
@@ -9745,7 +9782,7 @@ var ServiceProto = {
   }
 };
 var ReferenceTypeId = "~effect/Context/Reference";
-var TypeId3 = "~effect/Context";
+var TypeId4 = "~effect/Context";
 var makeUnsafe = (mapUnsafe) => {
   const self = Object.create(Proto);
   self.mapUnsafe = mapUnsafe;
@@ -9754,7 +9791,7 @@ var makeUnsafe = (mapUnsafe) => {
 };
 var Proto = {
   ...PipeInspectableProto,
-  [TypeId3]: {
+  [TypeId4]: {
     _Services: (_) => _
   },
   toJSON() {
@@ -9779,11 +9816,11 @@ var Proto = {
     return number(this.mapUnsafe.size);
   }
 };
-var isContext = (u) => hasProperty(u, TypeId3);
+var isContext = (u) => hasProperty(u, TypeId4);
 var isReference = (u) => hasProperty(u, ReferenceTypeId);
 var empty4 = () => emptyContext2;
 var emptyContext2 = /* @__PURE__ */ makeUnsafe(/* @__PURE__ */ new Map());
-var make5 = (key, service4) => makeUnsafe(/* @__PURE__ */ new Map([[key.key, service4]]));
+var make6 = (key, service4) => makeUnsafe(/* @__PURE__ */ new Map([[key.key, service4]]));
 var add = /* @__PURE__ */ dual(3, (self, key, service4) => withMapUnsafe(self, (map14) => {
   map14.set(key.key, service4);
 }));
@@ -9866,8 +9903,8 @@ var withMapUnsafe = (self, f) => {
 var Reference = Service;
 
 // node_modules/effect/dist/Duration.js
-var TypeId4 = "~effect/time/Duration";
-var bigint0 = /* @__PURE__ */ BigInt(0);
+var TypeId5 = "~effect/time/Duration";
+var bigint02 = /* @__PURE__ */ BigInt(0);
 var bigint1e3 = /* @__PURE__ */ BigInt(1e3);
 var bigint1e6 = /* @__PURE__ */ BigInt(1e6);
 var DURATION_REGEXP = /^(-?\d+(?:\.\d+)?)\s+(nanos?|micros?|millis?|seconds?|minutes?|hours?|days?|weeks?)$/;
@@ -9912,13 +9949,13 @@ var fromInputUnsafe = (input) => {
     }
     case "object": {
       if (input === null) break;
-      if (TypeId4 in input) return input;
+      if (TypeId5 in input) return input;
       if (Array.isArray(input)) {
         if (input.length !== 2 || !input.every(isNumber)) {
           return invalid(input);
         }
         if (Number.isNaN(input[0]) || Number.isNaN(input[1])) {
-          return zero;
+          return zero2;
         }
         if (input[0] === -Infinity || input[1] === -Infinity) {
           return negativeInfinity;
@@ -9926,7 +9963,7 @@ var fromInputUnsafe = (input) => {
         if (input[0] === Infinity || input[1] === Infinity) {
           return infinity;
         }
-        return make6(BigInt(Math.round(input[0] * 1e9)) + BigInt(Math.round(input[1])));
+        return make7(BigInt(Math.round(input[0] * 1e9)) + BigInt(Math.round(input[1])));
       }
       const obj = input;
       let millis2 = 0;
@@ -9936,11 +9973,11 @@ var fromInputUnsafe = (input) => {
       if (obj.minutes) millis2 += obj.minutes * 6e4;
       if (obj.seconds) millis2 += obj.seconds * 1e3;
       if (obj.milliseconds) millis2 += obj.milliseconds;
-      if (!obj.microseconds && !obj.nanoseconds) return make6(millis2);
+      if (!obj.microseconds && !obj.nanoseconds) return make7(millis2);
       let nanos2 = BigInt(millis2) * bigint1e6;
       if (obj.microseconds) nanos2 += BigInt(obj.microseconds) * bigint1e3;
       if (obj.nanoseconds) nanos2 += BigInt(obj.nanoseconds);
-      return make6(nanos2);
+      return make7(nanos2);
     }
   }
   return invalid(input);
@@ -9959,12 +9996,12 @@ var negativeInfinityDurationValue = {
   _tag: "NegativeInfinity"
 };
 var DurationProto = {
-  [TypeId4]: TypeId4,
+  [TypeId5]: TypeId5,
   [symbol]() {
     return structure(this.value);
   },
   [symbol2](that) {
-    return isDuration(that) && equals2(this, that);
+    return isDuration(that) && equals3(this, that);
   },
   toString() {
     switch (this.value._tag) {
@@ -10011,7 +10048,7 @@ var DurationProto = {
     return pipeArguments(this, arguments);
   }
 };
-var make6 = (input) => {
+var make7 = (input) => {
   const duration = Object.create(DurationProto);
   if (typeof input === "number") {
     if (isNaN(input) || input === 0 || Object.is(input, -0)) {
@@ -10029,7 +10066,7 @@ var make6 = (input) => {
         millis: input
       };
     }
-  } else if (input === bigint0) {
+  } else if (input === bigint02) {
     duration.value = zeroDurationValue;
   } else {
     duration.value = {
@@ -10039,30 +10076,30 @@ var make6 = (input) => {
   }
   return duration;
 };
-var isDuration = (u) => hasProperty(u, TypeId4);
+var isDuration = (u) => hasProperty(u, TypeId5);
 var isFinite = (self) => self.value._tag !== "Infinity" && self.value._tag !== "NegativeInfinity";
-var isZero = (self) => {
+var isZero2 = (self) => {
   switch (self.value._tag) {
     case "Millis":
       return self.value.millis === 0;
     case "Nanos":
-      return self.value.nanos === bigint0;
+      return self.value.nanos === bigint02;
     case "Infinity":
     case "NegativeInfinity":
       return false;
   }
 };
-var zero = /* @__PURE__ */ make6(0);
-var infinity = /* @__PURE__ */ make6(Infinity);
-var negativeInfinity = /* @__PURE__ */ make6(-Infinity);
-var nanos = (nanos2) => make6(nanos2);
-var micros = (micros2) => make6(micros2 * bigint1e3);
-var millis = (millis2) => make6(millis2);
-var seconds = (seconds2) => make6(seconds2 * 1e3);
-var minutes = (minutes2) => make6(minutes2 * 6e4);
-var hours = (hours2) => make6(hours2 * 36e5);
-var days = (days2) => make6(days2 * 864e5);
-var weeks = (weeks2) => make6(weeks2 * 6048e5);
+var zero2 = /* @__PURE__ */ make7(0);
+var infinity = /* @__PURE__ */ make7(Infinity);
+var negativeInfinity = /* @__PURE__ */ make7(-Infinity);
+var nanos = (nanos2) => make7(nanos2);
+var micros = (micros2) => make7(micros2 * bigint1e3);
+var millis = (millis2) => make7(millis2);
+var seconds = (seconds2) => make7(seconds2 * 1e3);
+var minutes = (minutes2) => make7(minutes2 * 6e4);
+var hours = (hours2) => make7(hours2 * 36e5);
+var days = (days2) => make7(days2 * 864e5);
+var weeks = (weeks2) => make7(weeks2 * 6048e5);
 var toMillis = (self) => match3(self, {
   onMillis: identity,
   onNanos: (nanos2) => Number(nanos2) / 1e6,
@@ -10101,7 +10138,7 @@ var matchPair = /* @__PURE__ */ dual(3, (self, that, options) => {
     return options.onNanos(self.value.nanos, toNanosUnsafe(that));
   }
 });
-var Order = /* @__PURE__ */ make4((self, that) => matchPair(self, that, {
+var Order2 = /* @__PURE__ */ make4((self, that) => matchPair(self, that, {
   onMillis: (self2, that2) => self2 < that2 ? -1 : self2 > that2 ? 1 : 0,
   onNanos: (self2, that2) => self2 < that2 ? -1 : self2 > that2 ? 1 : 0,
   onInfinity: (self2, that2) => {
@@ -10112,24 +10149,24 @@ var Order = /* @__PURE__ */ make4((self, that) => matchPair(self, that, {
     return 1;
   }
 }));
-var Equivalence = (self, that) => matchPair(self, that, {
+var Equivalence2 = (self, that) => matchPair(self, that, {
   onMillis: (self2, that2) => self2 === that2,
   onNanos: (self2, that2) => self2 === that2,
   onInfinity: (self2, that2) => self2.value._tag === that2.value._tag
 });
-var min2 = /* @__PURE__ */ min(Order);
+var min2 = /* @__PURE__ */ min(Order2);
 var subtract = /* @__PURE__ */ dual(2, (self, that) => matchPair(self, that, {
-  onMillis: (self2, that2) => make6(self2 - that2),
-  onNanos: (self2, that2) => make6(self2 - that2),
+  onMillis: (self2, that2) => make7(self2 - that2),
+  onNanos: (self2, that2) => make7(self2 - that2),
   onInfinity: (self2, that2) => {
     const s = self2.value._tag;
     const t = that2.value._tag;
-    if (s === "Infinity") return t === "Infinity" ? zero : infinity;
-    if (s === "NegativeInfinity") return t === "NegativeInfinity" ? zero : negativeInfinity;
+    if (s === "Infinity") return t === "Infinity" ? zero2 : infinity;
+    if (s === "NegativeInfinity") return t === "NegativeInfinity" ? zero2 : negativeInfinity;
     return t === "Infinity" ? negativeInfinity : infinity;
   }
 }));
-var equals2 = /* @__PURE__ */ dual(2, (self, that) => Equivalence(self, that));
+var equals3 = /* @__PURE__ */ dual(2, (self, that) => Equivalence2(self, that));
 
 // node_modules/effect/dist/Filter.js
 var toPredicate = (self) => (input) => !isFailure2(self(input));
@@ -10262,7 +10299,7 @@ var PreventSchedulerYield = /* @__PURE__ */ Reference("effect/Scheduler/PreventS
 var ParentSpanKey = "effect/Tracer/ParentSpan";
 var ParentSpan = class extends (/* @__PURE__ */ Service()(ParentSpanKey)) {
 };
-var make7 = (options) => options;
+var make8 = (options) => options;
 var DisablePropagation = /* @__PURE__ */ Reference("effect/Tracer/DisablePropagation", {
   defaultValue: constFalse
 });
@@ -10274,7 +10311,7 @@ var MinimumTraceLevel = /* @__PURE__ */ Reference("effect/Tracer/MinimumTraceLev
 });
 var TracerKey = "effect/Tracer";
 var Tracer = /* @__PURE__ */ Reference(TracerKey, {
-  defaultValue: () => make7({
+  defaultValue: () => make8({
     span: (options) => new NativeSpan(options)
   })
 });
@@ -10718,7 +10755,7 @@ var FiberImpl = class {
     }
     let cause = causeInterrupt(fiberId3);
     if (this.currentStackFrame) {
-      cause = causeAnnotate(cause, make5(StackTraceKey, this.currentStackFrame));
+      cause = causeAnnotate(cause, make6(StackTraceKey, this.currentStackFrame));
     }
     if (annotations) {
       cause = causeAnnotate(cause, annotations);
@@ -12241,7 +12278,7 @@ var tracer = /* @__PURE__ */ withFiber((fiber3) => succeed3(fiber3.getRef(Tracer
 var withTracer = /* @__PURE__ */ dual(2, (effect2, tracer3) => provideService(effect2, Tracer, tracer3));
 var withTracerEnabled = /* @__PURE__ */ provideService(TracerEnabled);
 var withTracerTiming = /* @__PURE__ */ provideService(TracerTimingEnabled);
-var bigint02 = /* @__PURE__ */ BigInt(0);
+var bigint03 = /* @__PURE__ */ BigInt(0);
 var NoopSpanProto = {
   _tag: "Span",
   spanId: "noop",
@@ -12249,8 +12286,8 @@ var NoopSpanProto = {
   sampled: false,
   status: {
     _tag: "Ended",
-    startTime: bigint02,
-    endTime: bigint02,
+    startTime: bigint03,
+    endTime: bigint03,
     exit: exitVoid
   },
   attributes: /* @__PURE__ */ new Map(),
@@ -12347,7 +12384,7 @@ var linkSpans = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self, span2
 });
 var endSpan = (span2, exit3, clock, timingEnabled) => sync(() => {
   if (span2.status._tag === "Ended") return;
-  span2.end(timingEnabled ? clock.currentTimeNanosUnsafe() : bigint02, exit3);
+  span2.end(timingEnabled ? clock.currentTimeNanosUnsafe() : bigint03, exit3);
 });
 var useSpan = (name, ...args2) => {
   const options = args2.length === 1 ? void 0 : args2[0];
@@ -12743,190 +12780,6 @@ var done2 = done;
 var IllegalArgumentError2 = IllegalArgumentError;
 var ExceededCapacityError2 = ExceededCapacityError;
 
-// node_modules/effect/dist/Chunk.js
-var TypeId5 = "~effect/collections/Chunk";
-function copy(src2, srcPos, dest, destPos, len) {
-  for (let i = srcPos; i < Math.min(src2.length, srcPos + len); i++) {
-    dest[destPos + i - srcPos] = src2[i];
-  }
-  return dest;
-}
-var emptyArray = [];
-var makeEquivalence6 = (isEquivalent) => make2((self, that) => self.length === that.length && toReadonlyArray(self).every((value3, i) => isEquivalent(value3, getUnsafe3(that, i))));
-var _equivalence = /* @__PURE__ */ makeEquivalence6(equals);
-var ChunkProto = {
-  [TypeId5]: {
-    _A: (_) => _
-  },
-  toString() {
-    return `Chunk(${format(toReadonlyArray(this))})`;
-  },
-  toJSON() {
-    return {
-      _id: "Chunk",
-      values: toJson(toReadonlyArray(this))
-    };
-  },
-  [NodeInspectSymbol]() {
-    return this.toJSON();
-  },
-  [symbol2](that) {
-    return isChunk(that) && _equivalence(this, that);
-  },
-  [symbol]() {
-    return array(toReadonlyArray(this));
-  },
-  [Symbol.iterator]() {
-    switch (this.backing._tag) {
-      case "IArray": {
-        return this.backing.array[Symbol.iterator]();
-      }
-      case "IEmpty": {
-        return emptyArray[Symbol.iterator]();
-      }
-      default: {
-        return toReadonlyArray(this)[Symbol.iterator]();
-      }
-    }
-  },
-  pipe() {
-    return pipeArguments(this, arguments);
-  }
-};
-var makeChunk = (backing) => {
-  const chunk = Object.create(ChunkProto);
-  chunk.backing = backing;
-  switch (backing._tag) {
-    case "IEmpty": {
-      chunk.length = 0;
-      chunk.depth = 0;
-      chunk.left = chunk;
-      chunk.right = chunk;
-      break;
-    }
-    case "IConcat": {
-      chunk.length = backing.left.length + backing.right.length;
-      chunk.depth = 1 + Math.max(backing.left.depth, backing.right.depth);
-      chunk.left = backing.left;
-      chunk.right = backing.right;
-      break;
-    }
-    case "IArray": {
-      chunk.length = backing.array.length;
-      chunk.depth = 0;
-      chunk.left = _empty;
-      chunk.right = _empty;
-      break;
-    }
-    case "ISingleton": {
-      chunk.length = 1;
-      chunk.depth = 0;
-      chunk.left = _empty;
-      chunk.right = _empty;
-      break;
-    }
-    case "ISlice": {
-      chunk.length = backing.length;
-      chunk.depth = backing.chunk.depth + 1;
-      chunk.left = _empty;
-      chunk.right = _empty;
-      break;
-    }
-  }
-  return chunk;
-};
-var isChunk = (u) => hasProperty(u, TypeId5);
-var _empty = /* @__PURE__ */ makeChunk({
-  _tag: "IEmpty"
-});
-var empty5 = () => _empty;
-var of2 = (a) => makeChunk({
-  _tag: "ISingleton",
-  a
-});
-var fromIterable3 = (self) => isChunk(self) ? self : fromArrayUnsafe(fromIterable2(self));
-var copyToArray = (self, array4, initial) => {
-  switch (self.backing._tag) {
-    case "IArray": {
-      copy(self.backing.array, 0, array4, initial, self.length);
-      break;
-    }
-    case "IConcat": {
-      copyToArray(self.left, array4, initial);
-      copyToArray(self.right, array4, initial + self.left.length);
-      break;
-    }
-    case "ISingleton": {
-      array4[initial] = self.backing.a;
-      break;
-    }
-    case "ISlice": {
-      let i = 0;
-      let j = initial;
-      while (i < self.length) {
-        array4[j] = getUnsafe3(self, i);
-        i += 1;
-        j += 1;
-      }
-      break;
-    }
-  }
-};
-var toReadonlyArray_ = (self) => {
-  switch (self.backing._tag) {
-    case "IEmpty": {
-      return emptyArray;
-    }
-    case "IArray": {
-      return self.backing.array;
-    }
-    default: {
-      const arr = new Array(self.length);
-      copyToArray(self, arr, 0);
-      self.backing = {
-        _tag: "IArray",
-        array: arr
-      };
-      self.left = _empty;
-      self.right = _empty;
-      self.depth = 0;
-      return arr;
-    }
-  }
-};
-var toReadonlyArray = toReadonlyArray_;
-var fromArrayUnsafe = (self) => self.length === 0 ? empty5() : self.length === 1 ? of2(self[0]) : makeChunk({
-  _tag: "IArray",
-  array: self
-});
-var getUnsafe3 = /* @__PURE__ */ dual(2, (self, index2) => {
-  const i = Math.floor(index2);
-  switch (self.backing._tag) {
-    case "IEmpty": {
-      throw new Error(`Index out of bounds: ${i}`);
-    }
-    case "ISingleton": {
-      if (index2 !== 0) {
-        throw new Error(`Index out of bounds: ${i}`);
-      }
-      return self.backing.a;
-    }
-    case "IArray": {
-      if (i >= self.length || i < 0) {
-        throw new Error(`Index out of bounds: ${i}`);
-      }
-      return self.backing.array[i];
-    }
-    case "IConcat": {
-      return i < self.left.length ? getUnsafe3(self.left, i) : getUnsafe3(self.right, i - self.left.length);
-    }
-    case "ISlice": {
-      return getUnsafe3(self.backing.chunk, i + self.backing.offset);
-    }
-  }
-});
-var size = (self) => self.length;
-
 // node_modules/effect/dist/Effect.js
 var Effect_exports = {};
 __export(Effect_exports, {
@@ -12989,7 +12842,7 @@ __export(Effect_exports, {
   filterMapOrFail: () => filterMapOrFail2,
   filterOrElse: () => filterOrElse2,
   filterOrFail: () => filterOrFail2,
-  findFirst: () => findFirst3,
+  findFirst: () => findFirst2,
   findFirstFilter: () => findFirstFilter2,
   flatMap: () => flatMap5,
   flatMapEager: () => flatMapEager2,
@@ -13151,7 +13004,7 @@ __export(Effect_exports, {
   yieldNow: () => yieldNow2,
   yieldNowWith: () => yieldNowWith2,
   zip: () => zip2,
-  zipWith: () => zipWith4
+  zipWith: () => zipWith3
 });
 
 // node_modules/effect/dist/Exit.js
@@ -13226,7 +13079,7 @@ __export(Layer_exports, {
   effect: () => effect,
   effectContext: () => effectContext,
   effectDiscard: () => effectDiscard,
-  empty: () => empty6,
+  empty: () => empty5,
   flatMap: () => flatMap4,
   fresh: () => fresh,
   fromBuild: () => fromBuild,
@@ -13320,13 +13173,13 @@ __export(Scope_exports, {
   closeUnsafe: () => closeUnsafe,
   fork: () => fork,
   forkUnsafe: () => forkUnsafe2,
-  make: () => make8,
+  make: () => make9,
   makeUnsafe: () => makeUnsafe3,
   provide: () => provide,
   use: () => use
 });
 var Scope = scopeTag;
-var make8 = scopeMake;
+var make9 = scopeMake;
 var makeUnsafe3 = scopeMakeUnsafe;
 var provide = provideScope;
 var addFinalizerExit = scopeAddFinalizerExit;
@@ -13406,17 +13259,17 @@ var build = (self) => withFiber((fiber3) => buildWithMemoMap(self, CurrentMemoMa
 var buildWithScope = /* @__PURE__ */ dual(2, (self, scope3) => withFiber((fiber3) => buildWithMemoMap(self, CurrentMemoMap.getOrCreate(fiber3.context), scope3)));
 var succeed5 = function() {
   if (arguments.length === 1) {
-    return (resource) => succeedContext(make5(arguments[0], resource));
+    return (resource) => succeedContext(make6(arguments[0], resource));
   }
-  return succeedContext(make5(arguments[0], arguments[1]));
+  return succeedContext(make6(arguments[0], arguments[1]));
 };
 var succeedContext = (context4) => fromBuildUnsafe(constant(succeed3(context4)));
-var empty6 = /* @__PURE__ */ succeedContext(/* @__PURE__ */ empty4());
+var empty5 = /* @__PURE__ */ succeedContext(/* @__PURE__ */ empty4());
 var sync2 = function() {
   if (arguments.length === 1) {
-    return (evaluate2) => syncContext(() => make5(arguments[0], evaluate2()));
+    return (evaluate2) => syncContext(() => make6(arguments[0], evaluate2()));
   }
-  return syncContext(() => make5(arguments[0], arguments[1]()));
+  return syncContext(() => make6(arguments[0], arguments[1]()));
 };
 var syncContext = (evaluate2) => fromBuildMemo(constant(sync(evaluate2)));
 var effect = function() {
@@ -13425,7 +13278,7 @@ var effect = function() {
   }
   return effectImpl(arguments[0], arguments[1]);
 };
-var effectImpl = (service4, effect2) => effectContext(map5(effect2, (value3) => make5(service4, value3)));
+var effectImpl = (service4, effect2) => effectContext(map5(effect2, (value3) => make6(service4, value3)));
 var effectContext = (effect2) => fromBuildMemo((_, scope3) => provide(effect2, scope3));
 var effectDiscard = (effect2) => effectContext(as2(effect2, empty4()));
 var suspend2 = (evaluate2) => fromBuildMemo((memoMap, scope3) => suspend(() => evaluate2().build(memoMap, scope3)));
@@ -13697,7 +13550,7 @@ var isTimeZoneOffset = (u) => isTimeZone(u) && u._tag === "Offset";
 var isTimeZoneNamed = (u) => isTimeZone(u) && u._tag === "Named";
 var isUtc = (self) => self._tag === "Utc";
 var isZoned = (self) => self._tag === "Zoned";
-var Equivalence2 = /* @__PURE__ */ make2((a, b) => a.epochMilliseconds === b.epochMilliseconds);
+var Equivalence3 = /* @__PURE__ */ make2((a, b) => a.epochMilliseconds === b.epochMilliseconds);
 var makeUtc = (epochMillis) => {
   const self = Object.create(ProtoUtc);
   self.epochMilliseconds = epochMillis;
@@ -13768,7 +13621,7 @@ var makeZonedUnsafe = (input, options) => {
   return makeZonedFromAdjusted(self.epochMilliseconds, zone, options?.disambiguation ?? "compatible");
 };
 var makeZoned = /* @__PURE__ */ liftThrowable(makeZonedUnsafe);
-var make9 = /* @__PURE__ */ liftThrowable(makeUnsafe4);
+var make10 = /* @__PURE__ */ liftThrowable(makeUnsafe4);
 var zonedStringRegExp = /^(.{17,35})\[(.+)\]$/;
 var makeZonedFromString = (input) => {
   const match8 = zonedStringRegExp.exec(input);
@@ -14032,7 +13885,7 @@ var CurrentMetadata2 = /* @__PURE__ */ Reference("effect/Schedule/CurrentMetadat
   defaultValue: /* @__PURE__ */ constant({
     input: void 0,
     output: void 0,
-    duration: zero,
+    duration: zero2,
     attempt: 0,
     start: 0,
     now: 0,
@@ -14130,7 +13983,7 @@ var while_ = /* @__PURE__ */ dual(2, (self, predicate) => fromStep(map5(toStep(s
     return flatMap3(isEffect(eff) ? eff : succeed3(eff), (check3) => check3 ? succeed3(result4) : done2(output));
   });
 })));
-var forever3 = /* @__PURE__ */ spaced(zero);
+var forever3 = /* @__PURE__ */ spaced(zero2);
 
 // node_modules/effect/dist/internal/layer.js
 var provideLayer = (self, layer, options) => scopedWith((scope3) => flatMap3(options?.local ? buildWithMemoMap(layer, makeMemoMapUnsafe(), scope3) : buildWithScope(layer, scope3), (context4) => provideContext(self, context4)));
@@ -14503,7 +14356,7 @@ var isEffect2 = isEffect;
 var all3 = all2;
 var partition3 = partition2;
 var validate2 = validate;
-var findFirst3 = findFirst;
+var findFirst2 = findFirst;
 var findFirstFilter2 = findFirstFilter;
 var forEach2 = forEach;
 var whileLoop2 = whileLoop;
@@ -14549,7 +14402,7 @@ var asSome2 = asSome;
 var asVoid4 = asVoid2;
 var flip2 = flip;
 var zip2 = zip;
-var zipWith4 = zipWith2;
+var zipWith3 = zipWith2;
 var catch_3 = catch_;
 var catchTag3 = catchTag;
 var catchTags2 = catchTags;
@@ -14844,8 +14697,3104 @@ var flatMapEager2 = flatMapEager;
 var catchEager2 = catchEager;
 var fnUntracedEager2 = fnUntracedEager;
 
+// node_modules/effect/dist/internal/record.js
+function set(self, key, value3) {
+  if (key === "__proto__") {
+    Object.defineProperty(self, key, {
+      value: value3,
+      writable: true,
+      enumerable: true,
+      configurable: true
+    });
+  } else {
+    self[key] = value3;
+  }
+  return self;
+}
+
+// node_modules/effect/dist/internal/schema/annotations.js
+function resolve(ast) {
+  return ast.checks ? ast.checks[ast.checks.length - 1].annotations : ast.annotations;
+}
+function resolveAt(key) {
+  return (ast) => resolve(ast)?.[key];
+}
+var resolveIdentifier = /* @__PURE__ */ resolveAt("identifier");
+var resolveTitle = /* @__PURE__ */ resolveAt("title");
+var resolveBrands = /* @__PURE__ */ resolveAt("brands");
+var getExpected = /* @__PURE__ */ memoize((ast) => {
+  const identifier2 = resolveIdentifier(ast);
+  if (typeof identifier2 === "string") return identifier2;
+  return ast.getExpected(getExpected);
+});
+
+// node_modules/effect/dist/RegExp.js
+var RegExp2 = globalThis.RegExp;
+var escape = (string4) => string4.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&");
+
+// node_modules/effect/dist/DateTime.js
+var isDateTime2 = isDateTime;
+var isTimeZone2 = isTimeZone;
+var isTimeZoneOffset2 = isTimeZoneOffset;
+var isTimeZoneNamed2 = isTimeZoneNamed;
+var isUtc2 = isUtc;
+var isZoned2 = isZoned;
+var Equivalence4 = Equivalence3;
+var fromDateUnsafe2 = fromDateUnsafe;
+var makeZonedUnsafe2 = makeZonedUnsafe;
+var make11 = make10;
+var makeZonedFromString2 = makeZonedFromString;
+var toUtc2 = toUtc;
+var zoneMakeNamedUnsafe2 = zoneMakeNamedUnsafe;
+var zoneMakeOffset2 = zoneMakeOffset;
+var zoneMakeNamed2 = zoneMakeNamed;
+var zoneFromString2 = zoneFromString;
+var zoneToString2 = zoneToString;
+var toDateUtc2 = toDateUtc;
+var toEpochMillis2 = toEpochMillis;
+var formatIso2 = formatIso;
+var formatIsoZoned2 = formatIsoZoned;
+
+// node_modules/effect/dist/Encoding.js
+var EncodingErrorTypeId = "~effect/encoding/EncodingError";
+var EncodingError = class extends (/* @__PURE__ */ TaggedError2("EncodingError")) {
+  /**
+   * @since 4.0.0
+   */
+  [EncodingErrorTypeId] = EncodingErrorTypeId;
+};
+var encodeBase64 = (input) => typeof input === "string" ? base64EncodeUint8Array(encoder.encode(input)) : base64EncodeUint8Array(input);
+var decodeBase64 = (str) => {
+  const stripped = stripCrlf(str);
+  const length = stripped.length;
+  if (length % 4 !== 0) {
+    return fail2(new EncodingError({
+      kind: "Decode",
+      module: "Base64",
+      input: stripped,
+      message: `Length must be a multiple of 4, but is ${length}`
+    }));
+  }
+  const index2 = stripped.indexOf("=");
+  if (index2 !== -1 && (index2 < length - 2 || index2 === length - 2 && stripped[length - 1] !== "=")) {
+    return fail2(new EncodingError({
+      kind: "Decode",
+      module: "Base64",
+      input: stripped,
+      message: `Found a '=' character, but it is not at the end`
+    }));
+  }
+  try {
+    const missingOctets = stripped.endsWith("==") ? 2 : stripped.endsWith("=") ? 1 : 0;
+    const result4 = new Uint8Array(3 * (length / 4) - missingOctets);
+    for (let i = 0, j = 0; i < length; i += 4, j += 3) {
+      const buffer3 = getBase64Code(stripped.charCodeAt(i)) << 18 | getBase64Code(stripped.charCodeAt(i + 1)) << 12 | getBase64Code(stripped.charCodeAt(i + 2)) << 6 | getBase64Code(stripped.charCodeAt(i + 3));
+      result4[j] = buffer3 >> 16;
+      result4[j + 1] = buffer3 >> 8 & 255;
+      result4[j + 2] = buffer3 & 255;
+    }
+    return succeed2(result4);
+  } catch (e) {
+    return fail2(new EncodingError({
+      kind: "Decode",
+      module: "Base64",
+      input: stripped,
+      message: e instanceof Error ? e.message : "Invalid input"
+    }));
+  }
+};
+var decodeBase64String = (str) => map2(decodeBase64(str), (_) => decoder.decode(_));
+var encodeBase64Url = (input) => typeof input === "string" ? base64UrlEncodeUint8Array(encoder.encode(input)) : base64UrlEncodeUint8Array(input);
+var decodeBase64Url = (str) => {
+  const stripped = stripCrlf(str);
+  const length = stripped.length;
+  if (length % 4 === 1) {
+    return fail2(new EncodingError({
+      module: "Base64Url",
+      kind: "Decode",
+      input: stripped,
+      message: `Length should be a multiple of 4, but is ${length}`
+    }));
+  }
+  if (!/^[-_A-Z0-9]*?={0,2}$/i.test(stripped)) {
+    return fail2(new EncodingError({
+      module: "Base64Url",
+      kind: "Decode",
+      input: stripped,
+      message: "Invalid input"
+    }));
+  }
+  let sanitized = length % 4 === 2 ? `${stripped}==` : length % 4 === 3 ? `${stripped}=` : stripped;
+  sanitized = sanitized.replace(/-/g, "+").replace(/_/g, "/");
+  return decodeBase64(sanitized);
+};
+var decodeBase64UrlString = (str) => map2(decodeBase64Url(str), (_) => decoder.decode(_));
+var encodeHex = (input) => typeof input === "string" ? hexEncodeUint8Array(encoder.encode(input)) : hexEncodeUint8Array(input);
+var decodeHex = (str) => {
+  const bytes = new TextEncoder().encode(str);
+  if (bytes.length % 2 !== 0) {
+    return fail2(new EncodingError({
+      module: "Hex",
+      kind: "Decode",
+      input: str,
+      message: `Length must be a multiple of 2, but is ${bytes.length}`
+    }));
+  }
+  try {
+    const length = bytes.length / 2;
+    const result4 = new Uint8Array(length);
+    for (let i = 0; i < length; i++) {
+      const a = fromHexChar(bytes[i * 2]);
+      const b = fromHexChar(bytes[i * 2 + 1]);
+      result4[i] = a << 4 | b;
+    }
+    return succeed2(result4);
+  } catch (e) {
+    return fail2(new EncodingError({
+      module: "Hex",
+      kind: "Decode",
+      input: str,
+      message: e instanceof Error ? e.message : "Invalid input"
+    }));
+  }
+};
+var decodeHexString = (str) => map2(decodeHex(str), (_) => decoder.decode(_));
+var encoder = /* @__PURE__ */ new TextEncoder();
+var decoder = /* @__PURE__ */ new TextDecoder();
+var stripCrlf = (str) => str.replace(/[\n\r]/g, "");
+var base64EncodeUint8Array = (bytes) => {
+  const length = bytes.length;
+  let result4 = "";
+  let i;
+  for (i = 2; i < length; i += 3) {
+    result4 += base64abc[bytes[i - 2] >> 2];
+    result4 += base64abc[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
+    result4 += base64abc[(bytes[i - 1] & 15) << 2 | bytes[i] >> 6];
+    result4 += base64abc[bytes[i] & 63];
+  }
+  if (i === length + 1) {
+    result4 += base64abc[bytes[i - 2] >> 2];
+    result4 += base64abc[(bytes[i - 2] & 3) << 4];
+    result4 += "==";
+  }
+  if (i === length) {
+    result4 += base64abc[bytes[i - 2] >> 2];
+    result4 += base64abc[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
+    result4 += base64abc[(bytes[i - 1] & 15) << 2];
+    result4 += "=";
+  }
+  return result4;
+};
+function getBase64Code(charCode) {
+  if (charCode >= base64codes.length) {
+    throw new TypeError(`Invalid character ${String.fromCharCode(charCode)}`);
+  }
+  const code = base64codes[charCode];
+  if (code === 255) {
+    throw new TypeError(`Invalid character ${String.fromCharCode(charCode)}`);
+  }
+  return code;
+}
+var base64abc = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "/"];
+var base64codes = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 255, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255, 255, 255, 0, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255, 255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51];
+var base64UrlEncodeUint8Array = (data) => base64EncodeUint8Array(data).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+var hexEncodeUint8Array = (bytes) => {
+  let result4 = "";
+  for (let i = 0; i < bytes.length; ++i) {
+    result4 += bytesToHex[bytes[i]];
+  }
+  return result4;
+};
+var fromHexChar = (byte) => {
+  if (48 <= byte && byte <= 57) {
+    return byte - 48;
+  }
+  if (97 <= byte && byte <= 102) {
+    return byte - 97 + 10;
+  }
+  if (65 <= byte && byte <= 70) {
+    return byte - 65 + 10;
+  }
+  throw new TypeError("Invalid input");
+};
+var bytesToHex = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "0a", "0b", "0c", "0d", "0e", "0f", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "1a", "1b", "1c", "1d", "1e", "1f", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "2a", "2b", "2c", "2d", "2e", "2f", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "3a", "3b", "3c", "3d", "3e", "3f", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "4a", "4b", "4c", "4d", "4e", "4f", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "5a", "5b", "5c", "5d", "5e", "5f", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "6a", "6b", "6c", "6d", "6e", "6f", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "7a", "7b", "7c", "7d", "7e", "7f", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "8a", "8b", "8c", "8d", "8e", "8f", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "9a", "9b", "9c", "9d", "9e", "9f", "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "aa", "ab", "ac", "ad", "ae", "af", "b0", "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "ba", "bb", "bc", "bd", "be", "bf", "c0", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "ca", "cb", "cc", "cd", "ce", "cf", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "da", "db", "dc", "dd", "de", "df", "e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "ea", "eb", "ec", "ed", "ee", "ef", "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "fa", "fb", "fc", "fd", "fe", "ff"];
+
+// node_modules/effect/dist/SchemaIssue.js
+var SchemaIssue_exports = {};
+__export(SchemaIssue_exports, {
+  AnyOf: () => AnyOf,
+  Composite: () => Composite,
+  Encoding: () => Encoding,
+  Filter: () => Filter,
+  Forbidden: () => Forbidden,
+  InvalidType: () => InvalidType,
+  InvalidValue: () => InvalidValue,
+  MissingKey: () => MissingKey,
+  OneOf: () => OneOf,
+  Pointer: () => Pointer,
+  UnexpectedKey: () => UnexpectedKey,
+  defaultCheckHook: () => defaultCheckHook,
+  defaultFormatter: () => defaultFormatter,
+  defaultLeafHook: () => defaultLeafHook,
+  getActual: () => getActual,
+  isIssue: () => isIssue,
+  make: () => make13,
+  makeFormatterDefault: () => makeFormatterDefault,
+  makeFormatterStandardSchemaV1: () => makeFormatterStandardSchemaV1,
+  redact: () => redact2
+});
+
+// node_modules/effect/dist/internal/redacted.js
+var redactedRegistry = /* @__PURE__ */ new WeakMap();
+var value = (self) => {
+  if (redactedRegistry.has(self)) {
+    return redactedRegistry.get(self);
+  } else {
+    throw new Error("Unable to get redacted value" + (self.label ? ` with label: "${self.label}"` : ""));
+  }
+};
+
+// node_modules/effect/dist/Redacted.js
+var TypeId13 = "~effect/data/Redacted";
+var isRedacted = (u) => hasProperty(u, TypeId13);
+var make12 = (value3, options) => {
+  const self = Object.create(Proto4);
+  if (options?.label) {
+    self.label = options.label;
+  }
+  redactedRegistry.set(self, value3);
+  return self;
+};
+var Proto4 = {
+  [TypeId13]: {
+    _A: (_) => _
+  },
+  label: void 0,
+  ...PipeInspectableProto,
+  toJSON() {
+    return this.toString();
+  },
+  toString() {
+    return `<redacted${isString(this.label) ? ":" + this.label : ""}>`;
+  },
+  [symbol]() {
+    return hash(redactedRegistry.get(this));
+  },
+  [symbol2](that) {
+    return isRedacted(that) && equals(redactedRegistry.get(this), redactedRegistry.get(that));
+  }
+};
+var value2 = value;
+var makeEquivalence6 = (isEquivalent) => make2((x, y) => isEquivalent(value2(x), value2(y)));
+
+// node_modules/effect/dist/SchemaIssue.js
+var TypeId14 = "~effect/SchemaIssue/Issue";
+function isIssue(u) {
+  return hasProperty(u, TypeId14);
+}
+var Base = class {
+  [TypeId14] = TypeId14;
+  toString() {
+    return defaultFormatter(this);
+  }
+};
+var Filter = class extends Base {
+  _tag = "Filter";
+  /**
+   * The input value that caused the issue.
+   */
+  actual;
+  /**
+   * The filter that failed.
+   */
+  filter;
+  /**
+   * The issue that occurred.
+   */
+  issue;
+  constructor(actual, filter12, issue) {
+    super();
+    this.actual = actual;
+    this.filter = filter12;
+    this.issue = issue;
+  }
+};
+var Encoding = class extends Base {
+  _tag = "Encoding";
+  /**
+   * The schema that caused the issue.
+   */
+  ast;
+  /**
+   * The input value that caused the issue.
+   */
+  actual;
+  /**
+   * The issue that occurred.
+   */
+  issue;
+  constructor(ast, actual, issue) {
+    super();
+    this.ast = ast;
+    this.actual = actual;
+    this.issue = issue;
+  }
+};
+var Pointer = class extends Base {
+  _tag = "Pointer";
+  /**
+   * The path to the location in the input that caused the issue.
+   */
+  path;
+  /**
+   * The issue that occurred.
+   */
+  issue;
+  constructor(path3, issue) {
+    super();
+    this.path = path3;
+    this.issue = issue;
+  }
+};
+var MissingKey = class extends Base {
+  _tag = "MissingKey";
+  /**
+   * The metadata for the issue.
+   */
+  annotations;
+  constructor(annotations) {
+    super();
+    this.annotations = annotations;
+  }
+};
+var UnexpectedKey = class extends Base {
+  _tag = "UnexpectedKey";
+  /**
+   * The schema that caused the issue.
+   */
+  ast;
+  /**
+   * The input value that caused the issue.
+   */
+  actual;
+  constructor(ast, actual) {
+    super();
+    this.ast = ast;
+    this.actual = actual;
+  }
+};
+var Composite = class extends Base {
+  _tag = "Composite";
+  /**
+   * The schema that caused the issue.
+   */
+  ast;
+  /**
+   * The input value that caused the issue.
+   */
+  actual;
+  /**
+   * The issues that occurred.
+   */
+  issues;
+  constructor(ast, actual, issues) {
+    super();
+    this.ast = ast;
+    this.actual = actual;
+    this.issues = issues;
+  }
+};
+var InvalidType = class extends Base {
+  _tag = "InvalidType";
+  /**
+   * The schema that caused the issue.
+   */
+  ast;
+  /**
+   * The input value that caused the issue.
+   */
+  actual;
+  constructor(ast, actual) {
+    super();
+    this.ast = ast;
+    this.actual = actual;
+  }
+};
+var InvalidValue = class extends Base {
+  _tag = "InvalidValue";
+  /**
+   * The value that caused the issue.
+   */
+  actual;
+  /**
+   * The metadata for the issue.
+   */
+  annotations;
+  constructor(actual, annotations) {
+    super();
+    this.actual = actual;
+    this.annotations = annotations;
+  }
+};
+var Forbidden = class extends Base {
+  _tag = "Forbidden";
+  /**
+   * The input value that caused the issue.
+   */
+  actual;
+  /**
+   * The metadata for the issue.
+   */
+  annotations;
+  constructor(actual, annotations) {
+    super();
+    this.actual = actual;
+    this.annotations = annotations;
+  }
+};
+var AnyOf = class extends Base {
+  _tag = "AnyOf";
+  /**
+   * The schema that caused the issue.
+   */
+  ast;
+  /**
+   * The input value that caused the issue.
+   */
+  actual;
+  /**
+   * The issues that occurred.
+   */
+  issues;
+  constructor(ast, actual, issues) {
+    super();
+    this.ast = ast;
+    this.actual = actual;
+    this.issues = issues;
+  }
+};
+var OneOf = class extends Base {
+  _tag = "OneOf";
+  /**
+   * The schema that caused the issue.
+   */
+  ast;
+  /**
+   * The input value that caused the issue.
+   */
+  actual;
+  /**
+   * The schemas that were successful.
+   */
+  successes;
+  constructor(ast, actual, successes) {
+    super();
+    this.ast = ast;
+    this.actual = actual;
+    this.successes = successes;
+  }
+};
+function getActual(issue) {
+  switch (issue._tag) {
+    case "Pointer":
+    case "MissingKey":
+      return none2();
+    case "InvalidType":
+    case "InvalidValue":
+    case "Forbidden":
+    case "Encoding":
+    case "Composite":
+      return issue.actual;
+    case "AnyOf":
+    case "UnexpectedKey":
+    case "OneOf":
+    case "Filter":
+      return some2(issue.actual);
+  }
+}
+function make13(input, out) {
+  if (isIssue(out)) {
+    return out;
+  }
+  if (out === void 0) {
+    return void 0;
+  }
+  if (typeof out === "boolean") {
+    return out ? void 0 : new InvalidValue(some2(input));
+  }
+  if (typeof out === "string") {
+    return new InvalidValue(some2(input), {
+      message: out
+    });
+  }
+  return new Pointer(out.path, new InvalidValue(some2(input), {
+    message: out.message
+  }));
+}
+var defaultLeafHook = (issue) => {
+  const message = findMessage(issue);
+  if (message !== void 0) return message;
+  switch (issue._tag) {
+    case "InvalidType":
+      return getExpectedMessage(getExpected(issue.ast), formatOption(issue.actual));
+    case "InvalidValue":
+      return `Invalid data ${formatOption(issue.actual)}`;
+    case "MissingKey":
+      return "Missing key";
+    case "UnexpectedKey":
+      return `Unexpected key with value ${format(issue.actual)}`;
+    case "Forbidden":
+      return "Forbidden operation";
+    case "OneOf":
+      return `Expected exactly one member to match the input ${format(issue.actual)}`;
+  }
+};
+var defaultCheckHook = (issue) => {
+  return findMessage(issue.issue) ?? findMessage(issue);
+};
+function makeFormatterStandardSchemaV1(options) {
+  return (issue) => ({
+    issues: toDefaultIssues(issue, [], options?.leafHook ?? defaultLeafHook, options?.checkHook ?? defaultCheckHook)
+  });
+}
+function getExpectedMessage(expected, actual) {
+  return `Expected ${expected}, got ${actual}`;
+}
+function toDefaultIssues(issue, path3, leafHook, checkHook) {
+  switch (issue._tag) {
+    case "Filter": {
+      const message = checkHook(issue);
+      if (message !== void 0) {
+        return [{
+          path: path3,
+          message
+        }];
+      }
+      switch (issue.issue._tag) {
+        case "InvalidValue":
+          return [{
+            path: path3,
+            message: getExpectedMessage(formatCheck(issue.filter), format(issue.actual))
+          }];
+        default:
+          return toDefaultIssues(issue.issue, path3, leafHook, checkHook);
+      }
+    }
+    case "Encoding":
+      return toDefaultIssues(issue.issue, path3, leafHook, checkHook);
+    case "Pointer":
+      return toDefaultIssues(issue.issue, [...path3, ...issue.path], leafHook, checkHook);
+    case "Composite":
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path3, leafHook, checkHook));
+    case "AnyOf": {
+      const message = findMessage(issue);
+      if (issue.issues.length === 0) {
+        if (message !== void 0) return [{
+          path: path3,
+          message
+        }];
+        const expected = getExpectedMessage(getExpected(issue.ast), format(issue.actual));
+        return [{
+          path: path3,
+          message: expected
+        }];
+      }
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path3, leafHook, checkHook));
+    }
+    default:
+      return [{
+        path: path3,
+        message: leafHook(issue)
+      }];
+  }
+}
+function formatCheck(check3) {
+  const expected = check3.annotations?.expected;
+  if (typeof expected === "string") return expected;
+  switch (check3._tag) {
+    case "Filter":
+      return "<filter>";
+    case "FilterGroup":
+      return check3.checks.map((check4) => formatCheck(check4)).join(" & ");
+  }
+}
+function makeFormatterDefault() {
+  return (issue) => toDefaultIssues(issue, [], defaultLeafHook, defaultCheckHook).map(formatDefaultIssue).join("\n");
+}
+var defaultFormatter = /* @__PURE__ */ makeFormatterDefault();
+function formatDefaultIssue(issue) {
+  let out = issue.message;
+  if (issue.path && issue.path.length > 0) {
+    const path3 = formatPath(issue.path);
+    out += `
+  at ${path3}`;
+  }
+  return out;
+}
+function findMessage(issue) {
+  switch (issue._tag) {
+    case "InvalidType":
+    case "OneOf":
+    case "Composite":
+    case "AnyOf":
+      return getMessageAnnotation(issue.ast.annotations);
+    case "InvalidValue":
+    case "Forbidden":
+      return getMessageAnnotation(issue.annotations);
+    case "MissingKey":
+      return getMessageAnnotation(issue.annotations, "messageMissingKey");
+    case "UnexpectedKey":
+      return getMessageAnnotation(issue.ast.annotations, "messageUnexpectedKey");
+    case "Filter":
+      return getMessageAnnotation(issue.filter.annotations);
+    case "Encoding":
+      return findMessage(issue.issue);
+  }
+}
+function getMessageAnnotation(annotations, type = "message") {
+  const message = annotations?.[type];
+  if (typeof message === "string") return message;
+}
+function formatOption(actual) {
+  if (isNone2(actual)) return "no value provided";
+  return format(actual.value);
+}
+function redact2(issue) {
+  switch (issue._tag) {
+    case "MissingKey":
+      return issue;
+    case "Forbidden":
+      return new Forbidden(map(issue.actual, make12), issue.annotations);
+    case "Filter":
+      return new Filter(make12(issue.actual), issue.filter, redact2(issue.issue));
+    case "Pointer":
+      return new Pointer(issue.path, redact2(issue.issue));
+    case "Encoding":
+    case "InvalidType":
+    case "InvalidValue":
+    case "Composite":
+      return new InvalidValue(map(issue.actual, make12));
+    case "AnyOf":
+    case "OneOf":
+    case "UnexpectedKey":
+      return new InvalidValue(some2(make12(issue.actual)));
+  }
+}
+
+// node_modules/effect/dist/SchemaGetter.js
+var Getter = class _Getter extends Class {
+  run;
+  constructor(run4) {
+    super();
+    this.run = run4;
+  }
+  map(f) {
+    return new _Getter((oe, options) => this.run(oe, options).pipe(mapEager2(map(f))));
+  }
+  compose(other) {
+    if (isPassthrough(this)) {
+      return other;
+    }
+    if (isPassthrough(other)) {
+      return this;
+    }
+    return new _Getter((oe, options) => this.run(oe, options).pipe(flatMapEager2((ot) => other.run(ot, options))));
+  }
+};
+function fail6(f) {
+  return new Getter((oe) => fail5(f(oe)));
+}
+function forbidden(message) {
+  return fail6((oe) => new Forbidden(oe, {
+    message: message(oe)
+  }));
+}
+var passthrough_ = /* @__PURE__ */ new Getter(succeed6);
+function isPassthrough(getter) {
+  return getter.run === passthrough_.run;
+}
+function passthrough2() {
+  return passthrough_;
+}
+function onSome(f) {
+  return new Getter((oe, options) => isNone2(oe) ? succeedNone2 : f(oe.value, options));
+}
+function transform(f) {
+  return transformOptional(map(f));
+}
+function transformOrFail(f) {
+  return onSome((e, options) => f(e, options).pipe(mapEager2(some2)));
+}
+function transformOptional(f) {
+  return new Getter((oe) => succeed6(f(oe)));
+}
+function omit() {
+  return new Getter(() => succeedNone2);
+}
+function withDefault(defaultValue) {
+  return new Getter((o) => {
+    const filtered = filter(o, isNotUndefined);
+    return isSome2(filtered) ? succeed6(filtered) : map7(defaultValue, some2);
+  });
+}
+function String3() {
+  return transform(globalThis.String);
+}
+function Number4() {
+  return transform(globalThis.Number);
+}
+function BigInt3() {
+  return transform(globalThis.BigInt);
+}
+function Date3() {
+  return transform((u) => new globalThis.Date(u));
+}
+function trim2() {
+  return transform(trim);
+}
+function parseJson(options) {
+  return onSome((input) => try_2({
+    try: () => some2(JSON.parse(input, options?.reviver)),
+    catch: (e) => new InvalidValue(some2(input), {
+      message: globalThis.String(e)
+    })
+  }));
+}
+function stringifyJson(options) {
+  return onSome((input) => try_2({
+    try: () => some2(JSON.stringify(input, options?.replacer, options?.space)),
+    catch: (e) => new InvalidValue(some2(input), {
+      message: globalThis.String(e)
+    })
+  }));
+}
+function split(options) {
+  const separator = options?.separator ?? ",";
+  return transform((input) => input === "" ? [] : input.split(separator));
+}
+function encodeBase642() {
+  return transform(encodeBase64);
+}
+function encodeBase64Url2() {
+  return transform(encodeBase64Url);
+}
+function encodeHex2() {
+  return transform(encodeHex);
+}
+function decodeBase642() {
+  return transformOrFail((input) => mapError(decodeBase64(input), (e) => new InvalidValue(some2(input), {
+    message: e.message
+  })).asEffect());
+}
+function decodeBase64String2() {
+  return transformOrFail((input) => match2(decodeBase64String(input), {
+    onFailure: (e) => fail5(new InvalidValue(some2(input), {
+      message: e.message
+    })),
+    onSuccess: succeed6
+  }));
+}
+function decodeBase64Url2() {
+  return transformOrFail((input) => match2(decodeBase64Url(input), {
+    onFailure: (e) => fail5(new InvalidValue(some2(input), {
+      message: e.message
+    })),
+    onSuccess: succeed6
+  }));
+}
+function decodeBase64UrlString2() {
+  return transformOrFail((input) => match2(decodeBase64UrlString(input), {
+    onFailure: (e) => fail5(new InvalidValue(some2(input), {
+      message: e.message
+    })),
+    onSuccess: succeed6
+  }));
+}
+function decodeHex2() {
+  return transformOrFail((input) => match2(decodeHex(input), {
+    onFailure: (e) => fail5(new InvalidValue(some2(input), {
+      message: e.message
+    })),
+    onSuccess: succeed6
+  }));
+}
+function decodeHexString2() {
+  return transformOrFail((input) => match2(decodeHexString(input), {
+    onFailure: (e) => fail5(new InvalidValue(some2(input), {
+      message: e.message
+    })),
+    onSuccess: succeed6
+  }));
+}
+function encodeUriComponent() {
+  return transform(encodeURIComponent);
+}
+function decodeUriComponent() {
+  return transformOrFail((input) => {
+    try {
+      return succeed6(globalThis.decodeURIComponent(input));
+    } catch (e) {
+      return fail5(new InvalidValue(some2(input), {
+        message: e instanceof URIError ? e.message : "Invalid URI component"
+      }));
+    }
+  });
+}
+function dateTimeUtcFromInput() {
+  return transformOrFail((input) => {
+    return match(make11(input), {
+      onNone: () => fail5(new InvalidValue(some2(input), {
+        message: "Invalid DateTime input"
+      })),
+      onSome: (dt) => succeed6(toUtc2(dt))
+    });
+  });
+}
+function decodeFormData() {
+  return transform((input) => makeTreeRecord(Array.from(input.entries())));
+}
+var collectFormDataEntries = /* @__PURE__ */ collectBracketPathEntries((value3) => typeof value3 === "string" || typeof Blob !== "undefined" && value3 instanceof Blob);
+function encodeFormData() {
+  return transform((input) => {
+    const out = new FormData();
+    if (typeof input === "object" && input !== null) {
+      const entries3 = collectFormDataEntries(input);
+      entries3.forEach(([key, value3]) => {
+        out.append(key, value3);
+      });
+    }
+    return out;
+  });
+}
+function decodeURLSearchParams() {
+  return transform((input) => makeTreeRecord(Array.from(input.entries())));
+}
+var collectURLSearchParamsEntries = /* @__PURE__ */ collectBracketPathEntries(isString);
+function encodeURLSearchParams() {
+  return transform((input) => {
+    if (typeof input === "object" && input !== null) {
+      return new URLSearchParams(collectURLSearchParamsEntries(input));
+    }
+    return new URLSearchParams();
+  });
+}
+var INDEX_REGEXP = /^\d+$/;
+function bracketPathToTokens(bracketPath) {
+  if (bracketPath === "") {
+    return [""];
+  }
+  const replaced = bracketPath.replace(/\[(.*?)\]/g, ".$1");
+  const parts = replaced.split(".");
+  const start = replaced.startsWith(".") ? 1 : 0;
+  return parts.slice(start).map((part) => INDEX_REGEXP.test(part) ? globalThis.Number(part) : part);
+}
+function makeTreeRecord(bracketPathEntries) {
+  const out = {};
+  bracketPathEntries.forEach(([key, value3]) => {
+    const tokens = bracketPathToTokens(key);
+    let cur = out;
+    tokens.forEach((token, i) => {
+      const isLast = i === tokens.length - 1;
+      if (Array.isArray(cur) && token === "") {
+        if (isLast) {
+          cur.push(value3);
+        } else {
+          const next = tokens[i + 1];
+          const shouldBeArray = typeof next === "number" || next === "";
+          const index2 = cur.length;
+          if (cur[index2] === void 0) {
+            cur[index2] = shouldBeArray ? [] : {};
+          }
+          cur = cur[index2];
+        }
+      } else if (isLast) {
+        if (Array.isArray(cur[token])) {
+          cur[token].push(value3);
+        } else if (Object.prototype.hasOwnProperty.call(cur, token)) {
+          cur[token] = [cur[token], value3];
+        } else {
+          cur[token] = value3;
+        }
+      } else {
+        const next = tokens[i + 1];
+        const shouldBeArray = typeof next === "number" || next === "";
+        if (cur[token] === void 0) {
+          cur[token] = shouldBeArray ? [] : {};
+        }
+        cur = cur[token];
+      }
+    });
+  });
+  return out;
+}
+function collectBracketPathEntries(isLeaf) {
+  return (input) => {
+    const bracketPathEntries = [];
+    function append4(key, value3) {
+      if (isLeaf(value3)) {
+        bracketPathEntries.push([key, value3]);
+      } else if (Array.isArray(value3)) {
+        const allLeaves = value3.every(isLeaf);
+        if (allLeaves) {
+          value3.forEach((v) => {
+            bracketPathEntries.push([key, v]);
+          });
+        } else {
+          value3.forEach((v, i) => {
+            append4(`${key}[${i}]`, v);
+          });
+        }
+      } else if (typeof value3 === "object" && value3 !== null) {
+        for (const [k, v] of Object.entries(value3)) {
+          append4(`${key}[${k}]`, v);
+        }
+      }
+    }
+    for (const [key, value3] of Object.entries(input)) {
+      append4(key, value3);
+    }
+    return bracketPathEntries;
+  };
+}
+
+// node_modules/effect/dist/SchemaTransformation.js
+var Middleware = class _Middleware {
+  _tag = "Middleware";
+  decode;
+  encode;
+  constructor(decode3, encode3) {
+    this.decode = decode3;
+    this.encode = encode3;
+  }
+  flip() {
+    return new _Middleware(this.encode, this.decode);
+  }
+};
+var TypeId15 = "~effect/SchemaTransformation/Transformation";
+var Transformation = class _Transformation {
+  [TypeId15] = TypeId15;
+  _tag = "Transformation";
+  decode;
+  encode;
+  constructor(decode3, encode3) {
+    this.decode = decode3;
+    this.encode = encode3;
+  }
+  flip() {
+    return new _Transformation(this.encode, this.decode);
+  }
+  compose(other) {
+    return new _Transformation(this.decode.compose(other.decode), other.encode.compose(this.encode));
+  }
+};
+function isTransformation(u) {
+  return hasProperty(u, TypeId15);
+}
+var make14 = (options) => {
+  if (isTransformation(options)) {
+    return options;
+  }
+  return new Transformation(options.decode, options.encode);
+};
+function transformOrFail2(options) {
+  return new Transformation(transformOrFail(options.decode), transformOrFail(options.encode));
+}
+function transform2(options) {
+  return new Transformation(transform(options.decode), transform(options.encode));
+}
+function transformOptional2(options) {
+  return new Transformation(transformOptional(options.decode), transformOptional(options.encode));
+}
+function trim3() {
+  return new Transformation(trim2(), passthrough2());
+}
+var passthrough_2 = /* @__PURE__ */ new Transformation(/* @__PURE__ */ passthrough2(), /* @__PURE__ */ passthrough2());
+function passthrough3() {
+  return passthrough_2;
+}
+var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number4(), /* @__PURE__ */ String3());
+var bigintFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ BigInt3(), /* @__PURE__ */ String3());
+var dateFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Date3(), /* @__PURE__ */ transform(formatDate));
+var durationFromNanos = /* @__PURE__ */ transformOrFail2({
+  decode: (i) => succeed6(nanos(i)),
+  encode: (a) => match(toNanos(a), {
+    onNone: () => fail5(new InvalidValue(some2(a), {
+      message: `Unable to encode ${a} into a bigint`
+    })),
+    onSome: (nanos2) => succeed6(nanos2)
+  })
+});
+var durationFromMillis = /* @__PURE__ */ transform2({
+  decode: (i) => millis(i),
+  encode: (a) => toMillis(a)
+});
+var errorFromErrorJsonEncoded = (options) => transform2({
+  decode: (i) => {
+    const err = new Error(i.message);
+    if (typeof i.name === "string" && i.name !== "Error") err.name = i.name;
+    if (typeof i.stack === "string") err.stack = i.stack;
+    return err;
+  },
+  encode: (a) => {
+    const e = {
+      name: a.name,
+      message: a.message
+    };
+    if (options?.includeStack && typeof a.stack === "string") {
+      e.stack = a.stack;
+    }
+    return e;
+  }
+});
+function optionFromNullOr() {
+  return transform2({
+    decode: fromNullOr,
+    encode: getOrNull
+  });
+}
+function optionFromUndefinedOr() {
+  return transform2({
+    decode: fromUndefinedOr,
+    encode: getOrUndefined
+  });
+}
+function optionFromNullishOr(options) {
+  return transform2({
+    decode: fromNullishOr,
+    encode: options?.onNoneEncoding === null ? getOrNull : getOrUndefined
+  });
+}
+function optionFromOptionalKey() {
+  return transformOptional2({
+    decode: some2,
+    encode: flatten
+  });
+}
+function optionFromOptional() {
+  return transformOptional2({
+    decode: (ot) => ot.pipe(filter(isNotUndefined), some2),
+    encode: flatten
+  });
+}
+var urlFromString = /* @__PURE__ */ transformOrFail2({
+  decode: (s) => try_2({
+    try: () => new URL(s),
+    catch: (e) => new InvalidValue(some2(s), {
+      message: globalThis.String(e)
+    })
+  }),
+  encode: (url) => succeed6(url.href)
+});
+var bigDecimalFromString = /* @__PURE__ */ transformOrFail2({
+  decode: (s) => {
+    const result4 = fromString(s);
+    return isNone2(result4) ? fail5(new InvalidValue(some2(s), {
+      message: `Invalid BigDecimal string: ${s}`
+    })) : succeed6(result4.value);
+  },
+  encode: (bd) => succeed6(format2(bd))
+});
+var uint8ArrayFromBase64String = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase642(), /* @__PURE__ */ encodeBase642());
+var stringFromBase64String = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase64String2(), /* @__PURE__ */ encodeBase642());
+var stringFromBase64UrlString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase64UrlString2(), /* @__PURE__ */ encodeBase64Url2());
+var stringFromHexString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeHexString2(), /* @__PURE__ */ encodeHex2());
+var stringFromUriComponent = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeUriComponent(), /* @__PURE__ */ encodeUriComponent());
+var fromJsonString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ parseJson(), /* @__PURE__ */ stringifyJson());
+var fromFormData = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeFormData(), /* @__PURE__ */ encodeFormData());
+var fromURLSearchParams = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeURLSearchParams(), /* @__PURE__ */ encodeURLSearchParams());
+var timeZoneOffsetFromNumber = /* @__PURE__ */ transform2({
+  decode: (n) => zoneMakeOffset2(n),
+  encode: (tz) => tz.offset
+});
+var timeZoneNamedFromString = /* @__PURE__ */ transformOrFail2({
+  decode: (s) => {
+    return match(zoneMakeNamed2(s), {
+      onNone: () => fail5(new InvalidValue(some2(s), {
+        message: `Invalid IANA time zone: ${s}`
+      })),
+      onSome: succeed6
+    });
+  },
+  encode: (tz) => succeed6(tz.id)
+});
+var timeZoneFromString = /* @__PURE__ */ transformOrFail2({
+  decode: (s) => {
+    return match(zoneFromString2(s), {
+      onNone: () => fail5(new InvalidValue(some2(s), {
+        message: `Invalid time zone: ${s}`
+      })),
+      onSome: succeed6
+    });
+  },
+  encode: (tz) => succeed6(zoneToString2(tz))
+});
+var dateTimeUtcFromString = /* @__PURE__ */ transformOrFail2({
+  decode: (s) => {
+    return match(make11(s), {
+      onNone: () => fail5(new InvalidValue(some2(s), {
+        message: "Invalid DateTime input"
+      })),
+      onSome: (result4) => succeed6(toUtc2(result4))
+    });
+  },
+  encode: (utc) => succeed6(formatIso2(utc))
+});
+var dateTimeZonedFromString = /* @__PURE__ */ transformOrFail2({
+  decode: (s) => {
+    return match(makeZonedFromString2(s), {
+      onNone: () => fail5(new InvalidValue(some2(s), {
+        message: `Invalid zoned DateTime string: ${s}`
+      })),
+      onSome: succeed6
+    });
+  },
+  encode: (zoned) => succeed6(formatIsoZoned2(zoned))
+});
+
+// node_modules/effect/dist/SchemaAST.js
+function makeGuard(tag2) {
+  return (ast) => ast._tag === tag2;
+}
+function isAST(u) {
+  return hasProperty(u, TypeId16) && u[TypeId16] === TypeId16;
+}
+var isDeclaration = /* @__PURE__ */ makeGuard("Declaration");
+var isNever2 = /* @__PURE__ */ makeGuard("Never");
+var isLiteral = /* @__PURE__ */ makeGuard("Literal");
+var isUniqueSymbol = /* @__PURE__ */ makeGuard("UniqueSymbol");
+var isArrays = /* @__PURE__ */ makeGuard("Arrays");
+var isObjects = /* @__PURE__ */ makeGuard("Objects");
+var isUnion = /* @__PURE__ */ makeGuard("Union");
+var Link = class {
+  to;
+  transformation;
+  constructor(to, transformation) {
+    this.to = to;
+    this.transformation = transformation;
+  }
+};
+var defaultParseOptions = {};
+var Context = class {
+  isOptional;
+  isMutable;
+  /** Used for constructor default values (e.g. `withConstructorDefault` API) */
+  defaultValue;
+  annotations;
+  constructor(isOptional2, isMutable2, defaultValue = void 0, annotations = void 0) {
+    this.isOptional = isOptional2;
+    this.isMutable = isMutable2;
+    this.defaultValue = defaultValue;
+    this.annotations = annotations;
+  }
+};
+var TypeId16 = "~effect/Schema";
+var Base2 = class {
+  [TypeId16] = TypeId16;
+  annotations;
+  checks;
+  encoding;
+  context;
+  constructor(annotations = void 0, checks = void 0, encoding = void 0, context4 = void 0) {
+    this.annotations = annotations;
+    this.checks = checks;
+    this.encoding = encoding;
+    this.context = context4;
+  }
+  toString() {
+    return `<${this._tag}>`;
+  }
+};
+var Declaration = class _Declaration extends Base2 {
+  _tag = "Declaration";
+  typeParameters;
+  run;
+  constructor(typeParameters, run4, annotations, checks, encoding, context4) {
+    super(annotations, checks, encoding, context4);
+    this.typeParameters = typeParameters;
+    this.run = run4;
+  }
+  /** @internal */
+  getParser() {
+    const run4 = this.run(this.typeParameters);
+    return (oinput, options) => {
+      if (isNone2(oinput)) return succeedNone2;
+      return mapEager2(run4(oinput.value, this, options), some2);
+    };
+  }
+  /** @internal */
+  recur(recur5) {
+    const tps = mapOrSame(this.typeParameters, recur5);
+    return tps === this.typeParameters ? this : new _Declaration(tps, this.run, this.annotations, this.checks, void 0, this.context);
+  }
+  /** @internal */
+  getExpected() {
+    const expected = this.annotations?.expected;
+    if (typeof expected === "string") return expected;
+    return "<Declaration>";
+  }
+};
+var Null = class extends Base2 {
+  _tag = "Null";
+  /** @internal */
+  getParser() {
+    return fromConst(this, null);
+  }
+  /** @internal */
+  getExpected() {
+    return "null";
+  }
+};
+var null_ = /* @__PURE__ */ new Null();
+var Undefined = class extends Base2 {
+  _tag = "Undefined";
+  /** @internal */
+  getParser() {
+    return fromConst(this, void 0);
+  }
+  /** @internal */
+  toCodecJson() {
+    return replaceEncoding(this, [undefinedToNull]);
+  }
+  /** @internal */
+  getExpected() {
+    return "undefined";
+  }
+};
+var undefinedToNull = /* @__PURE__ */ new Link(null_, /* @__PURE__ */ new Transformation(/* @__PURE__ */ transform(() => void 0), /* @__PURE__ */ transform(() => null)));
+var undefined_3 = /* @__PURE__ */ new Undefined();
+var Void = class extends Base2 {
+  _tag = "Void";
+  /** @internal */
+  getParser() {
+    return fromConst(this, void 0);
+  }
+  /** @internal */
+  toCodecJson() {
+    return replaceEncoding(this, [undefinedToNull]);
+  }
+  /** @internal */
+  getExpected() {
+    return "void";
+  }
+};
+var void_5 = /* @__PURE__ */ new Void();
+var Never = class extends Base2 {
+  _tag = "Never";
+  /** @internal */
+  getParser() {
+    return fromRefinement(this, isNever);
+  }
+  /** @internal */
+  getExpected() {
+    return "never";
+  }
+};
+var never3 = /* @__PURE__ */ new Never();
+var Any = class extends Base2 {
+  _tag = "Any";
+  /** @internal */
+  getParser() {
+    return fromRefinement(this, isUnknown);
+  }
+  /** @internal */
+  getExpected() {
+    return "any";
+  }
+};
+var any = /* @__PURE__ */ new Any();
+var Unknown = class extends Base2 {
+  _tag = "Unknown";
+  /** @internal */
+  getParser() {
+    return fromRefinement(this, isUnknown);
+  }
+  /** @internal */
+  getExpected() {
+    return "unknown";
+  }
+};
+var unknown = /* @__PURE__ */ new Unknown();
+var ObjectKeyword = class extends Base2 {
+  _tag = "ObjectKeyword";
+  /** @internal */
+  getParser() {
+    return fromRefinement(this, isObjectKeyword);
+  }
+  /** @internal */
+  getExpected() {
+    return "object | array | function";
+  }
+};
+var objectKeyword = /* @__PURE__ */ new ObjectKeyword();
+var Enum = class extends Base2 {
+  _tag = "Enum";
+  enums;
+  constructor(enums, annotations, checks, encoding, context4) {
+    super(annotations, checks, encoding, context4);
+    this.enums = enums;
+  }
+  /** @internal */
+  getParser() {
+    const values2 = new Set(this.enums.map(([, v]) => v));
+    return fromRefinement(this, (input) => values2.has(input));
+  }
+  /** @internal */
+  toCodecStringTree() {
+    if (this.enums.some(([_, v]) => typeof v === "number")) {
+      const coercions = Object.fromEntries(this.enums.map(([_, v]) => [globalThis.String(v), v]));
+      return replaceEncoding(this, [new Link(new Union(Object.keys(coercions).map((k) => new Literal(k)), "anyOf"), new Transformation(transform((s) => coercions[s]), String3()))]);
+    }
+    return this;
+  }
+  /** @internal */
+  getExpected() {
+    return this.enums.map(([_, value3]) => JSON.stringify(value3)).join(" | ");
+  }
+};
+function isTemplateLiteralPart(ast) {
+  switch (ast._tag) {
+    case "String":
+    case "Number":
+    case "BigInt":
+    case "Literal":
+    case "TemplateLiteral":
+      return true;
+    case "Union":
+      return ast.types.every(isTemplateLiteralPart);
+    default:
+      return false;
+  }
+}
+var TemplateLiteral = class extends Base2 {
+  _tag = "TemplateLiteral";
+  parts;
+  /** @internal */
+  encodedParts;
+  constructor(parts, annotations, checks, encoding, context4) {
+    super(annotations, checks, encoding, context4);
+    const encodedParts = [];
+    for (const part of parts) {
+      const encoded = toEncoded(part);
+      if (isTemplateLiteralPart(encoded)) {
+        encodedParts.push(encoded);
+      } else {
+        throw new Error(`Invalid TemplateLiteral part ${encoded._tag}`);
+      }
+    }
+    this.parts = parts;
+    this.encodedParts = encodedParts;
+  }
+  /** @internal */
+  getParser(recur5) {
+    const parser = recur5(this.asTemplateLiteralParser());
+    return (oinput, options) => mapBothEager2(parser(oinput, options), {
+      onSuccess: () => oinput,
+      onFailure: (issue) => new Composite(this, oinput, [issue])
+    });
+  }
+  /** @internal */
+  getExpected() {
+    return "string";
+  }
+  /** @internal */
+  asTemplateLiteralParser() {
+    const tuple3 = new Arrays(false, this.parts.map(templateLiteralPartFromString), []);
+    const regExp = getTemplateLiteralRegExp(this);
+    return decodeTo(string2, tuple3, new Transformation(transformOrFail((s) => {
+      const match8 = regExp.exec(s);
+      if (match8) return succeed6(match8.slice(1, this.parts.length + 1));
+      return fail5(new InvalidValue(some2(s), {
+        message: `Expected a value matching ${regExp.source}, got ${format(s)}`
+      }));
+    }), transform((parts) => parts.join(""))));
+  }
+};
+var UniqueSymbol = class extends Base2 {
+  _tag = "UniqueSymbol";
+  symbol;
+  constructor(symbol5, annotations, checks, encoding, context4) {
+    super(annotations, checks, encoding, context4);
+    this.symbol = symbol5;
+  }
+  /** @internal */
+  getParser() {
+    return fromConst(this, this.symbol);
+  }
+  /** @internal */
+  toCodecStringTree() {
+    return replaceEncoding(this, [symbolToString]);
+  }
+  /** @internal */
+  getExpected() {
+    return globalThis.String(this.symbol);
+  }
+};
+var Literal = class extends Base2 {
+  _tag = "Literal";
+  literal;
+  constructor(literal, annotations, checks, encoding, context4) {
+    super(annotations, checks, encoding, context4);
+    if (typeof literal === "number" && !globalThis.Number.isFinite(literal)) {
+      throw new Error(`A numeric literal must be finite, got ${format(literal)}`);
+    }
+    this.literal = literal;
+  }
+  /** @internal */
+  getParser() {
+    return fromConst(this, this.literal);
+  }
+  /** @internal */
+  toCodecJson() {
+    return typeof this.literal === "bigint" ? literalToString(this) : this;
+  }
+  /** @internal */
+  toCodecStringTree() {
+    return typeof this.literal === "string" ? this : literalToString(this);
+  }
+  /** @internal */
+  getExpected() {
+    return typeof this.literal === "string" ? JSON.stringify(this.literal) : globalThis.String(this.literal);
+  }
+};
+function literalToString(ast) {
+  const literalAsString = globalThis.String(ast.literal);
+  return replaceEncoding(ast, [new Link(new Literal(literalAsString), new Transformation(transform(() => ast.literal), transform(() => literalAsString)))]);
+}
+var String4 = class extends Base2 {
+  _tag = "String";
+  /** @internal */
+  getParser() {
+    return fromRefinement(this, isString);
+  }
+  /** @internal */
+  getExpected() {
+    return "string";
+  }
+};
+var string2 = /* @__PURE__ */ new String4();
+var Number5 = class extends Base2 {
+  _tag = "Number";
+  /** @internal */
+  getParser() {
+    return fromRefinement(this, isNumber);
+  }
+  /** @internal */
+  toCodecJson() {
+    if (this.checks && (hasCheck(this.checks, "isFinite") || hasCheck(this.checks, "isInt"))) {
+      return this;
+    }
+    return replaceEncoding(this, [numberToJson]);
+  }
+  /** @internal */
+  toCodecStringTree() {
+    if (this.checks && (hasCheck(this.checks, "isFinite") || hasCheck(this.checks, "isInt"))) {
+      return replaceEncoding(this, [finiteToString]);
+    }
+    return replaceEncoding(this, [numberToString]);
+  }
+  /** @internal */
+  getExpected() {
+    return "number";
+  }
+};
+function hasCheck(checks, tag2) {
+  return checks.some((c) => {
+    switch (c._tag) {
+      case "Filter":
+        return c.annotations?.meta?._tag === tag2;
+      case "FilterGroup":
+        return hasCheck(c.checks, tag2);
+    }
+  });
+}
+var number2 = /* @__PURE__ */ new Number5();
+var Boolean3 = class extends Base2 {
+  _tag = "Boolean";
+  /** @internal */
+  getParser() {
+    return fromRefinement(this, isBoolean);
+  }
+  /** @internal */
+  getExpected() {
+    return "boolean";
+  }
+};
+var boolean = /* @__PURE__ */ new Boolean3();
+var Symbol2 = class extends Base2 {
+  _tag = "Symbol";
+  /** @internal */
+  getParser() {
+    return fromRefinement(this, isSymbol);
+  }
+  /** @internal */
+  toCodecStringTree() {
+    return replaceEncoding(this, [symbolToString]);
+  }
+  /** @internal */
+  getExpected() {
+    return "symbol";
+  }
+};
+var symbol3 = /* @__PURE__ */ new Symbol2();
+var BigInt4 = class extends Base2 {
+  _tag = "BigInt";
+  /** @internal */
+  getParser() {
+    return fromRefinement(this, isBigInt);
+  }
+  /** @internal */
+  toCodecStringTree() {
+    return replaceEncoding(this, [bigIntToString]);
+  }
+  /** @internal */
+  getExpected() {
+    return "bigint";
+  }
+};
+var bigInt = /* @__PURE__ */ new BigInt4();
+var Arrays = class _Arrays extends Base2 {
+  _tag = "Arrays";
+  isMutable;
+  elements;
+  rest;
+  constructor(isMutable2, elements, rest, annotations, checks, encoding, context4) {
+    super(annotations, checks, encoding, context4);
+    this.isMutable = isMutable2;
+    this.elements = elements;
+    this.rest = rest;
+    const i = elements.findIndex(isOptional);
+    if (i !== -1 && (elements.slice(i + 1).some((e) => !isOptional(e)) || rest.length > 1)) {
+      throw new Error("A required element cannot follow an optional element. ts(1257)");
+    }
+    if (rest.length > 1 && rest.slice(1).some(isOptional)) {
+      throw new Error("An optional element cannot follow a rest element. ts(1266)");
+    }
+  }
+  /** @internal */
+  getParser(recur5) {
+    const ast = this;
+    const elements = ast.elements.map((ast2) => ({
+      ast: ast2,
+      parser: recur5(ast2)
+    }));
+    const rest = ast.rest.map((ast2) => ({
+      ast: ast2,
+      parser: recur5(ast2)
+    }));
+    const elementLen = elements.length;
+    return fnUntracedEager2(function* (oinput, options) {
+      if (oinput._tag === "None") {
+        return oinput;
+      }
+      const input = oinput.value;
+      if (!Array.isArray(input)) {
+        return yield* fail5(new InvalidType(ast, oinput));
+      }
+      const output = [];
+      let issues;
+      const errorsAllOption = options.errors === "all";
+      let i = 0;
+      for (; i < elementLen; i++) {
+        const e = elements[i];
+        const value3 = i < input.length ? some2(input[i]) : none2();
+        const eff = e.parser(value3, options);
+        const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
+        if (exit3._tag === "Failure") {
+          const issueElement = findError2(exit3.cause);
+          if (isFailure2(issueElement)) {
+            return yield* exit3;
+          }
+          const issue = new Pointer([i], issueElement.success);
+          if (errorsAllOption) {
+            if (issues) issues.push(issue);
+            else issues = [issue];
+          } else {
+            return yield* fail5(new Composite(ast, oinput, [issue]));
+          }
+        } else if (exit3.value._tag === "Some") {
+          output[i] = exit3.value.value;
+        } else if (!isOptional(e.ast)) {
+          const issue = new Pointer([i], new MissingKey(e.ast.context?.annotations));
+          if (errorsAllOption) {
+            if (issues) issues.push(issue);
+            else issues = [issue];
+          } else {
+            return yield* fail5(new Composite(ast, oinput, [issue]));
+          }
+        }
+      }
+      const len = input.length;
+      if (ast.rest.length > 0) {
+        const [head2, ...tail] = rest;
+        const keyAnnotations = head2.ast.context?.annotations;
+        for (; i < len - tail.length; i++) {
+          const eff = head2.parser(some2(input[i]), options);
+          const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
+          if (exit3._tag === "Failure") {
+            const issueRest = findError2(exit3.cause);
+            if (isFailure2(issueRest)) {
+              return yield* exit3;
+            }
+            const issue = new Pointer([i], issueRest.success);
+            if (errorsAllOption) {
+              if (issues) issues.push(issue);
+              else issues = [issue];
+            } else {
+              return yield* fail5(new Composite(ast, oinput, [issue]));
+            }
+          } else if (exit3.value._tag === "Some") {
+            output[i] = exit3.value.value;
+          } else {
+            const issue = new Pointer([i], new MissingKey(keyAnnotations));
+            if (errorsAllOption) {
+              if (issues) issues.push(issue);
+              else issues = [issue];
+            } else {
+              return yield* fail5(new Composite(ast, oinput, [issue]));
+            }
+          }
+        }
+        for (let j = 0; j < tail.length; j++) {
+          const index2 = i + j;
+          if (len < index2) {
+            continue;
+          } else {
+            const tailj = tail[j];
+            const keyAnnotations2 = tailj.ast.context?.annotations;
+            const eff = tailj.parser(some2(input[index2]), options);
+            const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
+            if (exit3._tag === "Failure") {
+              const issueRest = findError2(exit3.cause);
+              if (isFailure2(issueRest)) {
+                return yield* exit3;
+              }
+              const issue = new Pointer([index2], issueRest.success);
+              if (errorsAllOption) {
+                if (issues) issues.push(issue);
+                else issues = [issue];
+              } else {
+                return yield* fail5(new Composite(ast, oinput, [issue]));
+              }
+            } else if (exit3.value._tag === "Some") {
+              output[index2] = exit3.value.value;
+            } else {
+              const issue = new Pointer([index2], new MissingKey(keyAnnotations2));
+              if (errorsAllOption) {
+                if (issues) issues.push(issue);
+                else issues = [issue];
+              } else {
+                return yield* fail5(new Composite(ast, oinput, [issue]));
+              }
+            }
+          }
+        }
+      } else {
+        for (let i2 = elementLen; i2 <= len - 1; i2++) {
+          const issue = new Pointer([i2], new UnexpectedKey(ast, input[i2]));
+          if (errorsAllOption) {
+            if (issues) issues.push(issue);
+            else issues = [issue];
+          } else {
+            return yield* fail5(new Composite(ast, oinput, [issue]));
+          }
+        }
+      }
+      if (issues) {
+        return yield* fail5(new Composite(ast, oinput, issues));
+      }
+      return some2(output);
+    });
+  }
+  /** @internal */
+  recur(recur5) {
+    const elements = mapOrSame(this.elements, recur5);
+    const rest = mapOrSame(this.rest, recur5);
+    return elements === this.elements && rest === this.rest ? this : new _Arrays(this.isMutable, elements, rest, this.annotations, this.checks, void 0, this.context);
+  }
+  /** @internal */
+  getExpected() {
+    return "array";
+  }
+};
+var FINITE_PATTERN = "[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?";
+var isNumberStringRegExp = /* @__PURE__ */ new globalThis.RegExp(`(?:${FINITE_PATTERN}|Infinity|-Infinity|NaN)`);
+function getIndexSignatureKeys(input, parameter) {
+  const encoded = toEncoded(parameter);
+  switch (encoded._tag) {
+    case "String":
+      return Object.keys(input);
+    case "TemplateLiteral": {
+      const regExp = getTemplateLiteralRegExp(encoded);
+      return Object.keys(input).filter((k) => regExp.test(k));
+    }
+    case "Symbol":
+      return Object.getOwnPropertySymbols(input);
+    case "Number":
+      return Object.keys(input).filter((k) => isNumberStringRegExp.test(k));
+    case "Union":
+      return [...new Set(encoded.types.flatMap((t) => getIndexSignatureKeys(input, t)))];
+    default:
+      return [];
+  }
+}
+var PropertySignature = class {
+  name;
+  type;
+  constructor(name, type) {
+    this.name = name;
+    this.type = type;
+  }
+};
+var KeyValueCombiner = class _KeyValueCombiner {
+  decode;
+  encode;
+  constructor(decode3, encode3) {
+    this.decode = decode3;
+    this.encode = encode3;
+  }
+  /** @internal */
+  flip() {
+    return new _KeyValueCombiner(this.encode, this.decode);
+  }
+};
+var IndexSignature = class {
+  parameter;
+  type;
+  merge;
+  constructor(parameter, type, merge7) {
+    this.parameter = parameter;
+    this.type = type;
+    this.merge = merge7;
+    if (isOptional(type) && !containsUndefined(type)) {
+      throw new Error("Cannot use `Schema.optionalKey` with index signatures, use `Schema.optional` instead.");
+    }
+  }
+};
+var Objects = class _Objects extends Base2 {
+  _tag = "Objects";
+  propertySignatures;
+  indexSignatures;
+  constructor(propertySignatures, indexSignatures, annotations, checks, encoding, context4) {
+    super(annotations, checks, encoding, context4);
+    this.propertySignatures = propertySignatures;
+    this.indexSignatures = indexSignatures;
+    const duplicates = propertySignatures.map((ps) => ps.name).filter((name, i, arr) => arr.indexOf(name) !== i);
+    if (duplicates.length > 0) {
+      throw new Error(`Duplicate identifiers: ${JSON.stringify(duplicates)}. ts(2300)`);
+    }
+  }
+  /** @internal */
+  getParser(recur5) {
+    const ast = this;
+    const expectedKeys = [];
+    const expectedKeysSet = /* @__PURE__ */ new Set();
+    const properties = [];
+    const propertyCount = ast.propertySignatures.length;
+    for (const ps of ast.propertySignatures) {
+      expectedKeys.push(ps.name);
+      expectedKeysSet.add(ps.name);
+      properties.push({
+        ps,
+        parser: recur5(ps.type),
+        name: ps.name,
+        type: ps.type
+      });
+    }
+    const indexCount = ast.indexSignatures.length;
+    if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
+      return fromRefinement(ast, isNotNullish);
+    }
+    return fnUntracedEager2(function* (oinput, options) {
+      if (oinput._tag === "None") {
+        return oinput;
+      }
+      const input = oinput.value;
+      if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
+        return yield* fail5(new InvalidType(ast, oinput));
+      }
+      const out = {};
+      let issues;
+      const errorsAllOption = options.errors === "all";
+      const onExcessPropertyError = options.onExcessProperty === "error";
+      const onExcessPropertyPreserve = options.onExcessProperty === "preserve";
+      let inputKeys;
+      if (ast.indexSignatures.length === 0 && (onExcessPropertyError || onExcessPropertyPreserve)) {
+        inputKeys = Reflect.ownKeys(input);
+        for (let i = 0; i < inputKeys.length; i++) {
+          const key = inputKeys[i];
+          if (!expectedKeysSet.has(key)) {
+            if (onExcessPropertyError) {
+              const issue = new Pointer([key], new UnexpectedKey(ast, input[key]));
+              if (errorsAllOption) {
+                if (issues) {
+                  issues.push(issue);
+                } else {
+                  issues = [issue];
+                }
+                continue;
+              } else {
+                return yield* fail5(new Composite(ast, oinput, [issue]));
+              }
+            } else {
+              set(out, key, input[key]);
+            }
+          }
+        }
+      }
+      for (let i = 0; i < propertyCount; i++) {
+        const p = properties[i];
+        const value3 = Object.hasOwn(input, p.name) ? some2(input[p.name]) : none2();
+        const eff = p.parser(value3, options);
+        const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
+        if (exit3._tag === "Failure") {
+          const issueProp = findError2(exit3.cause);
+          if (isFailure2(issueProp)) {
+            return yield* exit3;
+          }
+          const issue = new Pointer([p.name], issueProp.success);
+          if (errorsAllOption) {
+            if (issues) issues.push(issue);
+            else issues = [issue];
+            continue;
+          } else {
+            return yield* fail5(new Composite(ast, oinput, [issue]));
+          }
+        } else if (exit3.value._tag === "Some") {
+          set(out, p.name, exit3.value.value);
+        } else if (!isOptional(p.type)) {
+          const issue = new Pointer([p.name], new MissingKey(p.type.context?.annotations));
+          if (errorsAllOption) {
+            if (issues) issues.push(issue);
+            else issues = [issue];
+            continue;
+          } else {
+            return yield* fail5(new Composite(ast, oinput, [issue]));
+          }
+        }
+      }
+      if (indexCount > 0) {
+        for (let i = 0; i < indexCount; i++) {
+          const is3 = ast.indexSignatures[i];
+          const keys5 = getIndexSignatureKeys(input, is3.parameter);
+          for (let j = 0; j < keys5.length; j++) {
+            const key = keys5[j];
+            const parserKey = recur5(indexSignatureParameterFromString(is3.parameter));
+            const effKey = parserKey(some2(key), options);
+            const exitKey = effectIsExit(effKey) ? effKey : yield* exit2(effKey);
+            if (exitKey._tag === "Failure") {
+              const issueKey = findError2(exitKey.cause);
+              if (isFailure2(issueKey)) {
+                return yield* exitKey;
+              }
+              const issue = new Pointer([key], issueKey.success);
+              if (errorsAllOption) {
+                if (issues) issues.push(issue);
+                else issues = [issue];
+                continue;
+              }
+              return yield* fail5(new Composite(ast, oinput, [issue]));
+            }
+            const value3 = some2(input[key]);
+            const parserValue = recur5(is3.type);
+            const effValue = parserValue(value3, options);
+            const exitValue = effectIsExit(effValue) ? effValue : yield* exit2(effValue);
+            if (exitValue._tag === "Failure") {
+              const issueValue = findError2(exitValue.cause);
+              if (isFailure2(issueValue)) {
+                return yield* exitValue;
+              }
+              const issue = new Pointer([key], issueValue.success);
+              if (errorsAllOption) {
+                if (issues) issues.push(issue);
+                else issues = [issue];
+                continue;
+              } else {
+                return yield* fail5(new Composite(ast, oinput, [issue]));
+              }
+            } else if (exitKey.value._tag === "Some" && exitValue.value._tag === "Some") {
+              const k2 = exitKey.value.value;
+              const v2 = exitValue.value.value;
+              if (is3.merge && is3.merge.decode && Object.hasOwn(out, k2)) {
+                const [k, v] = is3.merge.decode.combine([k2, out[k2]], [k2, v2]);
+                set(out, k, v);
+              } else {
+                set(out, k2, v2);
+              }
+            }
+          }
+        }
+      }
+      if (issues) {
+        return yield* fail5(new Composite(ast, oinput, issues));
+      }
+      if (options.propertyOrder === "original") {
+        const keys5 = (inputKeys ?? Reflect.ownKeys(input)).concat(expectedKeys);
+        const preserved = {};
+        for (const key of keys5) {
+          if (Object.hasOwn(out, key)) {
+            set(preserved, key, out[key]);
+          }
+        }
+        return some2(preserved);
+      }
+      return some2(out);
+    });
+  }
+  rebuild(recur5, flipMerge) {
+    const props = mapOrSame(this.propertySignatures, (ps) => {
+      const t = recur5(ps.type);
+      return t === ps.type ? ps : new PropertySignature(ps.name, t);
+    });
+    const indexes = mapOrSame(this.indexSignatures, (is3) => {
+      const p = recur5(is3.parameter);
+      const t = recur5(is3.type);
+      const merge7 = flipMerge ? is3.merge?.flip() : is3.merge;
+      return p === is3.parameter && t === is3.type && merge7 === is3.merge ? is3 : new IndexSignature(p, t, merge7);
+    });
+    return props === this.propertySignatures && indexes === this.indexSignatures ? this : new _Objects(props, indexes, this.annotations, this.checks, void 0, this.context);
+  }
+  /** @internal */
+  flip(recur5) {
+    return this.rebuild(recur5, true);
+  }
+  /** @internal */
+  recur(recur5) {
+    return this.rebuild(recur5, false);
+  }
+  /** @internal */
+  getExpected() {
+    if (this.propertySignatures.length === 0 && this.indexSignatures.length === 0) return "object | array";
+    return "object";
+  }
+};
+function mergeChecks(checks, b) {
+  if (!checks) {
+    return b.checks;
+  }
+  if (!b.checks) {
+    return checks;
+  }
+  return [...checks, ...b.checks];
+}
+function struct(fields, checks, annotations) {
+  return new Objects(Reflect.ownKeys(fields).map((key) => {
+    return new PropertySignature(key, fields[key].ast);
+  }), [], annotations, checks);
+}
+function getAST(self) {
+  return self.ast;
+}
+function tuple(elements, checks = void 0) {
+  return new Arrays(false, elements.map((e) => e.ast), [], void 0, checks);
+}
+function union2(members, mode, checks) {
+  return new Union(members.map(getAST), mode, void 0, checks);
+}
+function structWithRest(ast, records) {
+  if (ast.encoding || records.some((r) => r.encoding)) {
+    throw new Error("StructWithRest does not support encodings");
+  }
+  let propertySignatures = ast.propertySignatures;
+  let indexSignatures = ast.indexSignatures;
+  let checks = ast.checks;
+  for (const r of records) {
+    propertySignatures = propertySignatures.concat(r.propertySignatures);
+    indexSignatures = indexSignatures.concat(r.indexSignatures);
+    checks = mergeChecks(checks, r);
+  }
+  return new Objects(propertySignatures, indexSignatures, void 0, checks);
+}
+function tupleWithRest(ast, rest) {
+  if (ast.encoding) {
+    throw new Error("TupleWithRest does not support encodings");
+  }
+  return new Arrays(ast.isMutable, ast.elements, rest, void 0, ast.checks);
+}
+function getCandidateTypes(ast) {
+  switch (ast._tag) {
+    case "Null":
+      return ["null"];
+    case "Undefined":
+    case "Void":
+      return ["undefined"];
+    case "String":
+    case "TemplateLiteral":
+      return ["string"];
+    case "Number":
+      return ["number"];
+    case "Boolean":
+      return ["boolean"];
+    case "Symbol":
+    case "UniqueSymbol":
+      return ["symbol"];
+    case "BigInt":
+      return ["bigint"];
+    case "Arrays":
+      return ["array"];
+    case "ObjectKeyword":
+      return ["object", "array", "function"];
+    case "Objects":
+      return ast.propertySignatures.length || ast.indexSignatures.length ? ["object"] : ["object", "array"];
+    case "Enum":
+      return Array.from(new Set(ast.enums.map(([, v]) => typeof v)));
+    case "Literal":
+      return [typeof ast.literal];
+    case "Union":
+      return Array.from(new Set(ast.types.flatMap(getCandidateTypes)));
+    default:
+      return ["null", "undefined", "string", "number", "boolean", "symbol", "bigint", "object", "array", "function"];
+  }
+}
+function collectSentinels(ast) {
+  switch (ast._tag) {
+    default:
+      return [];
+    case "Declaration": {
+      const s = ast.annotations?.["~sentinels"];
+      return Array.isArray(s) ? s : [];
+    }
+    case "Objects":
+      return ast.propertySignatures.flatMap((ps) => {
+        const type = ps.type;
+        if (!isOptional(type)) {
+          if (isLiteral(type)) {
+            return [{
+              key: ps.name,
+              literal: type.literal
+            }];
+          }
+          if (isUniqueSymbol(type)) {
+            return [{
+              key: ps.name,
+              literal: type.symbol
+            }];
+          }
+        }
+        return [];
+      });
+    case "Arrays":
+      return ast.elements.flatMap((e, i) => {
+        return isLiteral(e) && !isOptional(e) ? [{
+          key: i,
+          literal: e.literal
+        }] : [];
+      });
+    case "Suspend":
+      return collectSentinels(ast.thunk());
+  }
+}
+var candidateIndexCache = /* @__PURE__ */ new WeakMap();
+function getIndex(types) {
+  let idx = candidateIndexCache.get(types);
+  if (idx) return idx;
+  idx = {};
+  for (const a of types) {
+    const encoded = toEncoded(a);
+    if (isNever2(encoded)) continue;
+    const types2 = getCandidateTypes(encoded);
+    const sentinels = collectSentinels(encoded);
+    idx.byType ??= {};
+    for (const t of types2) (idx.byType[t] ??= []).push(a);
+    if (sentinels.length > 0) {
+      idx.bySentinel ??= /* @__PURE__ */ new Map();
+      for (const {
+        key,
+        literal
+      } of sentinels) {
+        let m = idx.bySentinel.get(key);
+        if (!m) idx.bySentinel.set(key, m = /* @__PURE__ */ new Map());
+        let arr = m.get(literal);
+        if (!arr) m.set(literal, arr = []);
+        arr.push(a);
+      }
+    } else {
+      idx.otherwise ??= {};
+      for (const t of types2) (idx.otherwise[t] ??= []).push(a);
+    }
+  }
+  candidateIndexCache.set(types, idx);
+  return idx;
+}
+function filterLiterals(input) {
+  return (ast) => {
+    const encoded = toEncoded(ast);
+    return encoded._tag === "Literal" ? encoded.literal === input : encoded._tag === "UniqueSymbol" ? encoded.symbol === input : true;
+  };
+}
+function getCandidates(input, types) {
+  const idx = getIndex(types);
+  const runtimeType = input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
+  if (idx.bySentinel) {
+    const base2 = idx.otherwise?.[runtimeType] ?? [];
+    if (runtimeType === "object" || runtimeType === "array") {
+      for (const [k, m] of idx.bySentinel) {
+        if (Object.hasOwn(input, k)) {
+          const match8 = m.get(input[k]);
+          if (match8) return [...match8, ...base2].filter(filterLiterals(input));
+        }
+      }
+    }
+    return base2;
+  }
+  return (idx.byType?.[runtimeType] ?? []).filter(filterLiterals(input));
+}
+var Union = class _Union extends Base2 {
+  _tag = "Union";
+  types;
+  mode;
+  constructor(types, mode, annotations, checks, encoding, context4) {
+    super(annotations, checks, encoding, context4);
+    this.types = types;
+    this.mode = mode;
+  }
+  /** @internal */
+  getParser(recur5) {
+    const ast = this;
+    return fnUntracedEager2(function* (oinput, options) {
+      if (oinput._tag === "None") {
+        return oinput;
+      }
+      const input = oinput.value;
+      const oneOf = ast.mode === "oneOf";
+      const candidates = getCandidates(input, ast.types);
+      let issues;
+      const tracking = {
+        out: void 0,
+        successes: []
+      };
+      for (let i = 0; i < candidates.length; i++) {
+        const candidate = candidates[i];
+        const parser = recur5(candidate);
+        const eff = parser(oinput, options);
+        const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
+        if (exit3._tag === "Failure") {
+          const issueResult = findError2(exit3.cause);
+          if (isFailure2(issueResult)) {
+            return yield* exit3;
+          }
+          if (issues) issues.push(issueResult.success);
+          else issues = [issueResult.success];
+          continue;
+        } else {
+          if (tracking.out && oneOf) {
+            tracking.successes.push(candidate);
+            return yield* fail5(new OneOf(ast, input, tracking.successes));
+          }
+          tracking.out = exit3.value;
+          tracking.successes.push(candidate);
+          if (!oneOf) {
+            break;
+          }
+        }
+      }
+      if (tracking.out) {
+        return tracking.out;
+      } else {
+        return yield* fail5(new AnyOf(ast, input, issues ?? []));
+      }
+    });
+  }
+  /** @internal */
+  recur(recur5) {
+    const types = mapOrSame(this.types, recur5);
+    return types === this.types ? this : new _Union(types, this.mode, this.annotations, this.checks, void 0, this.context);
+  }
+  /** @internal */
+  getExpected(getExpected2) {
+    const expected = this.annotations?.expected;
+    if (typeof expected === "string") return expected;
+    if (this.types.length === 0) return "never";
+    const types = this.types.map((type) => {
+      const encoded = toEncoded(type);
+      switch (encoded._tag) {
+        case "Arrays": {
+          const literals = encoded.elements.filter(isLiteral);
+          if (literals.length > 0) {
+            return `${formatIsMutable(encoded.isMutable)}[ ${literals.map((e) => getExpected2(e) + formatIsOptional(e.context?.isOptional)).join(", ")}, ... ]`;
+          }
+          break;
+        }
+        case "Objects": {
+          const literals = encoded.propertySignatures.filter((ps) => isLiteral(ps.type));
+          if (literals.length > 0) {
+            return `{ ${literals.map((ps) => `${formatIsMutable(ps.type.context?.isMutable)}${formatPropertyKey(ps.name)}${formatIsOptional(ps.type.context?.isOptional)}: ${getExpected2(ps.type)}`).join(", ")}, ... }`;
+          }
+          break;
+        }
+      }
+      return getExpected2(encoded);
+    });
+    return Array.from(new Set(types)).join(" | ");
+  }
+};
+var nonFiniteLiterals = /* @__PURE__ */ new Union([/* @__PURE__ */ new Literal("Infinity"), /* @__PURE__ */ new Literal("-Infinity"), /* @__PURE__ */ new Literal("NaN")], "anyOf");
+var numberToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([number2, nonFiniteLiterals], "anyOf"), /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number4(), /* @__PURE__ */ transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
+function formatIsMutable(isMutable2) {
+  return isMutable2 ? "" : "readonly ";
+}
+function formatIsOptional(isOptional2) {
+  return isOptional2 ? "?" : "";
+}
+function memoizeThunk(f) {
+  let done4 = false;
+  let a;
+  return () => {
+    if (done4) {
+      return a;
+    }
+    a = f();
+    done4 = true;
+    return a;
+  };
+}
+var Suspend = class _Suspend extends Base2 {
+  _tag = "Suspend";
+  thunk;
+  constructor(thunk, annotations, checks, encoding, context4) {
+    super(annotations, checks, encoding, context4);
+    this.thunk = memoizeThunk(thunk);
+  }
+  /** @internal */
+  getParser(recur5) {
+    return recur5(this.thunk());
+  }
+  /** @internal */
+  recur(recur5) {
+    return new _Suspend(() => recur5(this.thunk()), this.annotations, this.checks, void 0, this.context);
+  }
+  /** @internal */
+  getExpected(getExpected2) {
+    return getExpected2(this.thunk());
+  }
+};
+var Filter2 = class _Filter extends Class {
+  _tag = "Filter";
+  run;
+  annotations;
+  /**
+   * Whether the parsing process should be aborted after this check has failed.
+   */
+  aborted;
+  constructor(run4, annotations = void 0, aborted = false) {
+    super();
+    this.run = run4;
+    this.annotations = annotations;
+    this.aborted = aborted;
+  }
+  annotate(annotations) {
+    return new _Filter(this.run, {
+      ...this.annotations,
+      ...annotations
+    }, this.aborted);
+  }
+  abort() {
+    return new _Filter(this.run, this.annotations, true);
+  }
+  and(other, annotations) {
+    return new FilterGroup([this, other], annotations);
+  }
+};
+var FilterGroup = class _FilterGroup extends Class {
+  _tag = "FilterGroup";
+  checks;
+  annotations;
+  constructor(checks, annotations = void 0) {
+    super();
+    this.checks = checks;
+    this.annotations = annotations;
+  }
+  annotate(annotations) {
+    return new _FilterGroup(this.checks, {
+      ...this.annotations,
+      ...annotations
+    });
+  }
+  and(other, annotations) {
+    return new _FilterGroup([this, other], annotations);
+  }
+};
+function makeFilter(filter12, annotations, aborted = false) {
+  return new Filter2((input, ast, options) => make13(input, filter12(input, ast, options)), annotations, aborted);
+}
+function makeFilterByGuard(is3, annotations) {
+  return new Filter2(
+    (input) => is3(input) ? void 0 : new InvalidValue(some2(input)),
+    annotations,
+    true
+    // after a guard, we always want to abort
+  );
+}
+function isPattern(regExp, annotations) {
+  const source = regExp.source;
+  return makeFilter((s) => regExp.test(s), {
+    expected: `a string matching the RegExp ${source}`,
+    meta: {
+      _tag: "isPattern",
+      regExp
+    },
+    toArbitraryConstraint: {
+      string: {
+        patterns: [regExp.source]
+      }
+    },
+    ...annotations
+  });
+}
+function modifyOwnPropertyDescriptors(ast, f) {
+  const d = Object.getOwnPropertyDescriptors(ast);
+  f(d);
+  return Object.create(Object.getPrototypeOf(ast), d);
+}
+function replaceEncoding(ast, encoding) {
+  if (ast.encoding === encoding) {
+    return ast;
+  }
+  return modifyOwnPropertyDescriptors(ast, (d) => {
+    d.encoding.value = encoding;
+  });
+}
+function replaceContext(ast, context4) {
+  if (ast.context === context4) {
+    return ast;
+  }
+  return modifyOwnPropertyDescriptors(ast, (d) => {
+    d.context.value = context4;
+  });
+}
+function getLastEncoding(ast) {
+  return ast.encoding ? getLastEncoding(ast.encoding[ast.encoding.length - 1].to) : ast;
+}
+function annotate(ast, annotations) {
+  if (ast.checks) {
+    const last = ast.checks[ast.checks.length - 1];
+    return replaceChecks(ast, append(ast.checks.slice(0, -1), last.annotate(annotations)));
+  }
+  return modifyOwnPropertyDescriptors(ast, (d) => {
+    d.annotations.value = {
+      ...d.annotations.value,
+      ...annotations
+    };
+  });
+}
+function replaceChecks(ast, checks) {
+  if (ast.checks === checks) {
+    return ast;
+  }
+  return modifyOwnPropertyDescriptors(ast, (d) => {
+    d.checks.value = checks;
+  });
+}
+function appendChecks(ast, checks) {
+  return replaceChecks(ast, ast.checks ? [...ast.checks, ...checks] : checks);
+}
+function updateLastLink(encoding, f) {
+  const links = encoding;
+  const last = links[links.length - 1];
+  const to = f(last.to);
+  if (to !== last.to) {
+    return append(encoding.slice(0, encoding.length - 1), new Link(to, last.transformation));
+  }
+  return encoding;
+}
+function applyToLastLink(f) {
+  return (ast) => ast.encoding ? replaceEncoding(ast, updateLastLink(ast.encoding, f)) : ast;
+}
+function middlewareDecoding(ast, middleware) {
+  return appendTransformation(ast, middleware, toType(ast));
+}
+function middlewareEncoding(ast, middleware) {
+  return appendTransformation(toEncoded(ast), middleware, ast);
+}
+function appendTransformation(from, transformation, to) {
+  const link2 = new Link(from, transformation);
+  return replaceEncoding(to, to.encoding ? [...to.encoding, link2] : [link2]);
+}
+function brand(ast, brand3) {
+  const existing = resolveBrands(ast);
+  const brands = existing ? [...existing, brand3] : [brand3];
+  return annotate(ast, {
+    brands
+  });
+}
+function mapOrSame(as4, f) {
+  let changed = false;
+  const out = new Array(as4.length);
+  for (let i = 0; i < as4.length; i++) {
+    const a = as4[i];
+    const fa = f(a);
+    if (fa !== a) {
+      changed = true;
+    }
+    out[i] = fa;
+  }
+  return changed ? out : as4;
+}
+function annotateKey(ast, annotations) {
+  const context4 = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, ast.context.defaultValue, {
+    ...ast.context.annotations,
+    ...annotations
+  }) : new Context(false, false, void 0, annotations);
+  return replaceContext(ast, context4);
+}
+var optionalKeyLastLink = /* @__PURE__ */ applyToLastLink(optionalKey);
+function optionalKey(ast) {
+  const context4 = ast.context ? ast.context.isOptional === false ? new Context(true, ast.context.isMutable, ast.context.defaultValue, ast.context.annotations) : ast.context : new Context(true, false);
+  return optionalKeyLastLink(replaceContext(ast, context4));
+}
+var mutableKeyLastLink = /* @__PURE__ */ applyToLastLink(mutableKey);
+function mutableKey(ast) {
+  const context4 = ast.context ? ast.context.isMutable === false ? new Context(ast.context.isOptional, true, ast.context.defaultValue, ast.context.annotations) : ast.context : new Context(false, true);
+  return mutableKeyLastLink(replaceContext(ast, context4));
+}
+function withConstructorDefault(ast, defaultValue) {
+  const transformation = new Transformation(withDefault(defaultValue), passthrough2());
+  const encoding = [new Link(unknown, transformation)];
+  const context4 = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, encoding, ast.context.annotations) : new Context(false, false, encoding);
+  return replaceContext(ast, context4);
+}
+function decodeTo(from, to, transformation) {
+  return appendTransformation(from, transformation, to);
+}
+function parseParameter(ast) {
+  switch (ast._tag) {
+    case "Literal":
+      return {
+        literals: isPropertyKey(ast.literal) ? [ast.literal] : [],
+        parameters: []
+      };
+    case "UniqueSymbol":
+      return {
+        literals: [ast.symbol],
+        parameters: []
+      };
+    case "String":
+    case "Number":
+    case "Symbol":
+    case "TemplateLiteral":
+      return {
+        literals: [],
+        parameters: [ast]
+      };
+    case "Union": {
+      const out = {
+        literals: [],
+        parameters: []
+      };
+      for (let i = 0; i < ast.types.length; i++) {
+        const parsed = parseParameter(ast.types[i]);
+        out.literals = out.literals.concat(parsed.literals);
+        out.parameters = out.parameters.concat(parsed.parameters);
+      }
+      return out;
+    }
+  }
+  return {
+    literals: [],
+    parameters: []
+  };
+}
+function record(key, value3, keyValueCombiner) {
+  const {
+    literals,
+    parameters: indexSignatures
+  } = parseParameter(key);
+  return new Objects(literals.map((literal) => new PropertySignature(literal, value3)), indexSignatures.map((parameter) => new IndexSignature(parameter, value3, keyValueCombiner)));
+}
+function isOptional(ast) {
+  return ast.context?.isOptional ?? false;
+}
+function isMutable(ast) {
+  return ast.context?.isMutable ?? false;
+}
+var toType = /* @__PURE__ */ memoize((ast) => {
+  if (ast.encoding) {
+    return toType(replaceEncoding(ast, void 0));
+  }
+  const out = ast;
+  return out.recur?.(toType) ?? out;
+});
+var toEncoded = /* @__PURE__ */ memoize((ast) => {
+  return toType(flip3(ast));
+});
+function flipEncoding(ast, encoding) {
+  const links = encoding;
+  const len = links.length;
+  const last = links[len - 1];
+  const ls = [new Link(flip3(replaceEncoding(ast, void 0)), links[0].transformation.flip())];
+  for (let i = 1; i < len; i++) {
+    ls.unshift(new Link(flip3(links[i - 1].to), links[i].transformation.flip()));
+  }
+  const to = flip3(last.to);
+  if (to.encoding) {
+    return replaceEncoding(to, [...to.encoding, ...ls]);
+  } else {
+    return replaceEncoding(to, ls);
+  }
+}
+var flip3 = /* @__PURE__ */ memoize((ast) => {
+  if (ast.encoding) {
+    return flipEncoding(ast, ast.encoding);
+  }
+  const out = ast;
+  return out.flip?.(flip3) ?? out.recur?.(flip3) ?? out;
+});
+function containsUndefined(ast) {
+  switch (ast._tag) {
+    case "Undefined":
+      return true;
+    case "Union":
+      return ast.types.some(containsUndefined);
+    default:
+      return false;
+  }
+}
+function getTemplateLiteralSource(ast, top) {
+  return ast.encodedParts.map((part) => handleTemplateLiteralASTPartParens(part, getTemplateLiteralASTPartPattern(part), top)).join("");
+}
+var getTemplateLiteralRegExp = /* @__PURE__ */ memoize((ast) => {
+  return new globalThis.RegExp(`^${getTemplateLiteralSource(ast, true)}$`);
+});
+function getTemplateLiteralASTPartPattern(part) {
+  switch (part._tag) {
+    case "Literal":
+      return escape(globalThis.String(part.literal));
+    case "String":
+      return STRING_PATTERN;
+    case "Number":
+      return FINITE_PATTERN;
+    case "BigInt":
+      return BIGINT_PATTERN;
+    case "TemplateLiteral":
+      return getTemplateLiteralSource(part, false);
+    case "Union":
+      return part.types.map(getTemplateLiteralASTPartPattern).join("|");
+  }
+}
+function handleTemplateLiteralASTPartParens(part, s, top) {
+  if (isUnion(part)) {
+    if (!top) {
+      return `(?:${s})`;
+    }
+  } else if (!top) {
+    return s;
+  }
+  return `(${s})`;
+}
+function fromConst(ast, value3) {
+  const succeed9 = succeedSome2(value3);
+  return (oinput) => {
+    if (oinput._tag === "None") {
+      return succeedNone2;
+    }
+    return oinput.value === value3 ? succeed9 : fail5(new InvalidType(ast, oinput));
+  };
+}
+function fromRefinement(ast, refinement) {
+  return (oinput) => {
+    if (oinput._tag === "None") {
+      return succeedNone2;
+    }
+    return refinement(oinput.value) ? succeed6(oinput) : fail5(new InvalidType(ast, oinput));
+  };
+}
+var enumsToLiterals = /* @__PURE__ */ memoize((ast) => {
+  return new Union(ast.enums.map((e) => new Literal(e[1], {
+    title: e[0]
+  })), "anyOf");
+});
+function toCodec(f) {
+  function out(ast) {
+    return ast.encoding ? replaceEncoding(ast, updateLastLink(ast.encoding, out)) : f(ast);
+  }
+  return memoize(out);
+}
+var indexSignatureParameterFromString = /* @__PURE__ */ toCodec((ast) => {
+  switch (ast._tag) {
+    default:
+      return ast;
+    case "Number":
+      return ast.toCodecStringTree();
+    case "Union":
+      return ast.recur(indexSignatureParameterFromString);
+  }
+});
+var templateLiteralPartFromString = /* @__PURE__ */ toCodec((ast) => {
+  switch (ast._tag) {
+    default:
+      return ast;
+    case "String":
+    case "TemplateLiteral":
+      return ast;
+    case "BigInt":
+    case "Number":
+    case "Literal":
+      return ast.toCodecStringTree();
+    case "Union":
+      return ast.recur(templateLiteralPartFromString);
+  }
+});
+var STRING_PATTERN = "[\\s\\S]*?";
+var isStringFiniteRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${FINITE_PATTERN}$`);
+function isStringFinite(annotations) {
+  return isPattern(isStringFiniteRegExp, {
+    expected: "a string representing a finite number",
+    meta: {
+      _tag: "isStringFinite",
+      regExp: isStringFiniteRegExp
+    },
+    ...annotations
+  });
+}
+var finiteString = /* @__PURE__ */ appendChecks(string2, [/* @__PURE__ */ isStringFinite()]);
+var finiteToString = /* @__PURE__ */ new Link(finiteString, numberFromString);
+var numberToString = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finiteString, nonFiniteLiterals], "anyOf"), numberFromString);
+var BIGINT_PATTERN = "-?\\d+";
+var isStringBigIntRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${BIGINT_PATTERN}$`);
+function isStringBigInt(annotations) {
+  return isPattern(isStringBigIntRegExp, {
+    expected: "a string representing a bigint",
+    meta: {
+      _tag: "isStringBigInt",
+      regExp: isStringBigIntRegExp
+    },
+    ...annotations
+  });
+}
+var bigIntString = /* @__PURE__ */ appendChecks(string2, [/* @__PURE__ */ isStringBigInt({
+  expected: "a string representing a bigint"
+})]);
+var bigIntToString = /* @__PURE__ */ new Link(bigIntString, bigintFromString);
+var REGEXP_PATTERN = "Symbol\\((.*)\\)";
+var isStringSymbolRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${REGEXP_PATTERN}$`);
+var symbolString = /* @__PURE__ */ appendChecks(string2, [/* @__PURE__ */ isStringSymbol()]);
+var symbolToString = /* @__PURE__ */ new Link(symbolString, /* @__PURE__ */ new Transformation(/* @__PURE__ */ transform((description) => globalThis.Symbol.for(isStringSymbolRegExp.exec(description)[1])), /* @__PURE__ */ transformOrFail((sym) => {
+  const key = globalThis.Symbol.keyFor(sym);
+  if (key !== void 0) {
+    return succeed6(globalThis.String(sym));
+  }
+  return fail5(new Forbidden(some2(sym), {
+    message: "cannot serialize to string, Symbol is not registered"
+  }));
+})));
+function isStringSymbol(annotations) {
+  return isPattern(isStringSymbolRegExp, {
+    expected: "a string representing a symbol",
+    meta: {
+      _tag: "isStringSymbol",
+      regExp: isStringSymbolRegExp
+    },
+    ...annotations
+  });
+}
+function collectIssues(checks, value3, issues, ast, options) {
+  for (let i = 0; i < checks.length; i++) {
+    const check3 = checks[i];
+    if (check3._tag === "FilterGroup") {
+      collectIssues(check3.checks, value3, issues, ast, options);
+    } else {
+      const issue = check3.run(value3, ast, options);
+      if (issue) {
+        issues.push(new Filter(value3, check3, issue));
+        if (check3.aborted || options?.errors !== "all") {
+          return;
+        }
+      }
+    }
+  }
+}
+function runChecks(checks, s) {
+  const issues = [];
+  collectIssues(checks, s, issues, unknown, {
+    errors: "all"
+  });
+  if (isArrayNonEmpty2(issues)) {
+    const issue = new Composite(unknown, some2(s), issues);
+    return fail2(issue);
+  }
+  return succeed2(s);
+}
+var ClassTypeId = "~effect/Schema/Class";
+var STRUCTURAL_ANNOTATION_KEY = "~structural";
+function isJson(u) {
+  const seen = /* @__PURE__ */ new Set();
+  return recur5(u);
+  function recur5(u2) {
+    if (u2 === null || typeof u2 === "string" || typeof u2 === "boolean") {
+      return true;
+    }
+    if (typeof u2 === "number") {
+      return globalThis.Number.isFinite(u2);
+    }
+    if (typeof u2 !== "object" || u2 === void 0) {
+      return false;
+    }
+    if (seen.has(u2)) {
+      return false;
+    }
+    seen.add(u2);
+    if (Array.isArray(u2)) {
+      return u2.every(recur5);
+    }
+    return Object.keys(u2).every((key) => recur5(u2[key]));
+  }
+}
+var Json = /* @__PURE__ */ new Declaration([], () => (input, ast) => isJson(input) ? succeed6(input) : fail5(new InvalidType(ast, some2(input))), {
+  typeConstructor: {
+    _tag: "effect/Json"
+  },
+  generation: {
+    runtime: `Schema.Json`,
+    Type: `Schema.Json`
+  },
+  expected: "JSON value",
+  toCodecJson: () => new Link(unknown, passthrough3())
+});
+var MutableJson = /* @__PURE__ */ annotate(Json, {
+  typeConstructor: {
+    _tag: "effect/MutableJson"
+  },
+  generation: {
+    runtime: `Schema.MutableJson`,
+    Type: `Schema.MutableJson`
+  }
+});
+var unknownToNull = /* @__PURE__ */ new Link(null_, /* @__PURE__ */ new Transformation(/* @__PURE__ */ passthrough2(), /* @__PURE__ */ transform(() => null)));
+var unknownToJson = /* @__PURE__ */ new Link(Json, /* @__PURE__ */ passthrough3());
+function isStringTree(u) {
+  const seen = /* @__PURE__ */ new Set();
+  return recur5(u);
+  function recur5(u2) {
+    if (u2 === void 0 || typeof u2 === "string") {
+      return true;
+    }
+    if (typeof u2 !== "object" || u2 === null) {
+      return false;
+    }
+    if (seen.has(u2)) {
+      return false;
+    }
+    seen.add(u2);
+    if (Array.isArray(u2)) {
+      return u2.every(recur5);
+    }
+    return Object.keys(u2).every((key) => recur5(u2[key]));
+  }
+}
+var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast) => isStringTree(input) ? succeed6(input) : fail5(new InvalidType(ast, some2(input))), {
+  expected: "StringTree",
+  toCodecStringTree: () => new Link(unknown, passthrough3())
+});
+var unknownToStringTree = /* @__PURE__ */ new Link(StringTree, /* @__PURE__ */ passthrough3());
+
+// node_modules/effect/dist/MutableHashMap.js
+var TypeId17 = "~effect/collections/MutableHashMap";
+var MutableHashMapProto = {
+  [TypeId17]: TypeId17,
+  [Symbol.iterator]() {
+    return this.backing[Symbol.iterator]();
+  },
+  toString() {
+    return `MutableHashMap(${format(Array.from(this))})`;
+  },
+  toJSON() {
+    return {
+      _id: "MutableHashMap",
+      values: toJson(Array.from(this))
+    };
+  },
+  [NodeInspectSymbol]() {
+    return this.toJSON();
+  },
+  pipe() {
+    return pipeArguments(this, arguments);
+  }
+};
+var empty6 = () => {
+  const self = Object.create(MutableHashMapProto);
+  self.backing = /* @__PURE__ */ new Map();
+  self.buckets = /* @__PURE__ */ new Map();
+  return self;
+};
+var get2 = /* @__PURE__ */ dual(2, (self, key) => {
+  if (self.backing.has(key)) {
+    return some2(self.backing.get(key));
+  } else if (isSimpleKey(key)) {
+    return none2();
+  }
+  const refKey = referentialKeysCache.get(self);
+  if (refKey !== void 0) {
+    return self.backing.has(refKey) ? some2(self.backing.get(refKey)) : none2();
+  }
+  const hash3 = hash(key);
+  const bucket = self.buckets.get(hash3);
+  if (bucket === void 0) {
+    return none2();
+  }
+  return getFromBucket(self, bucket, key);
+});
+var referentialKeysCache = /* @__PURE__ */ new WeakMap();
+var isSimpleKey = (u) => typeof u !== "object" && typeof u !== "function";
+var getFromBucket = (self, bucket, key) => {
+  for (let i = 0, len = bucket.length; i < len; i++) {
+    if (equals(key, bucket[i])) {
+      const refKey = bucket[i];
+      referentialKeysCache.set(key, refKey);
+      return some2(self.backing.get(refKey));
+    }
+  }
+  return none2();
+};
+var has3 = /* @__PURE__ */ dual(2, (self, key) => isSome2(get2(self, key)));
+var set2 = /* @__PURE__ */ dual(3, (self, key, value3) => {
+  if (self.backing.has(key) || isSimpleKey(key)) {
+    self.backing.set(key, value3);
+    return self;
+  }
+  let refKey = referentialKeysCache.get(self);
+  if (refKey !== void 0 && self.backing.has(refKey)) {
+    self.backing.set(refKey, value3);
+    return self;
+  }
+  const hash3 = hash(key);
+  const bucket = self.buckets.get(hash3);
+  if (bucket === void 0) {
+    self.buckets.set(hash3, [key]);
+    self.backing.set(key, value3);
+    return self;
+  }
+  refKey = getRefKey(bucket, key);
+  if (refKey === void 0) {
+    bucket.push(key);
+    refKey = key;
+  }
+  self.backing.set(refKey, value3);
+  return self;
+});
+var getRefKey = (bucket, key) => {
+  for (let i = 0, len = bucket.length; i < len; i++) {
+    if (equals(key, bucket[i])) {
+      referentialKeysCache.set(key, bucket[i]);
+      return bucket[i];
+    }
+  }
+};
+var remove = /* @__PURE__ */ dual(2, (self, key_) => {
+  if (isSimpleKey(key_)) {
+    self.backing.delete(key_);
+    return self;
+  }
+  const key = referentialKeysCache.get(self) ?? key_;
+  const hash3 = hash(key);
+  const bucket = self.buckets.get(hash3);
+  if (bucket === void 0) {
+    return self;
+  }
+  for (let i = 0, len = bucket.length; i < len; i++) {
+    const bkey = bucket[i];
+    if (bkey === key || equals(key, bkey)) {
+      self.backing.delete(bkey);
+      bucket.splice(i, 1);
+      break;
+    }
+  }
+  if (bucket.length === 0) {
+    self.buckets.delete(hash3);
+  }
+  return self;
+});
+var clear = (self) => {
+  self.backing.clear();
+  self.buckets.clear();
+  return self;
+};
+var size = (self) => self.backing.size;
+
+// node_modules/effect/dist/Chunk.js
+var TypeId18 = "~effect/collections/Chunk";
+function copy(src2, srcPos, dest, destPos, len) {
+  for (let i = srcPos; i < Math.min(src2.length, srcPos + len); i++) {
+    dest[destPos + i - srcPos] = src2[i];
+  }
+  return dest;
+}
+var emptyArray = [];
+var makeEquivalence7 = (isEquivalent) => make2((self, that) => self.length === that.length && toReadonlyArray(self).every((value3, i) => isEquivalent(value3, getUnsafe3(that, i))));
+var _equivalence = /* @__PURE__ */ makeEquivalence7(equals);
+var ChunkProto = {
+  [TypeId18]: {
+    _A: (_) => _
+  },
+  toString() {
+    return `Chunk(${format(toReadonlyArray(this))})`;
+  },
+  toJSON() {
+    return {
+      _id: "Chunk",
+      values: toJson(toReadonlyArray(this))
+    };
+  },
+  [NodeInspectSymbol]() {
+    return this.toJSON();
+  },
+  [symbol2](that) {
+    return isChunk(that) && _equivalence(this, that);
+  },
+  [symbol]() {
+    return array(toReadonlyArray(this));
+  },
+  [Symbol.iterator]() {
+    switch (this.backing._tag) {
+      case "IArray": {
+        return this.backing.array[Symbol.iterator]();
+      }
+      case "IEmpty": {
+        return emptyArray[Symbol.iterator]();
+      }
+      default: {
+        return toReadonlyArray(this)[Symbol.iterator]();
+      }
+    }
+  },
+  pipe() {
+    return pipeArguments(this, arguments);
+  }
+};
+var makeChunk = (backing) => {
+  const chunk = Object.create(ChunkProto);
+  chunk.backing = backing;
+  switch (backing._tag) {
+    case "IEmpty": {
+      chunk.length = 0;
+      chunk.depth = 0;
+      chunk.left = chunk;
+      chunk.right = chunk;
+      break;
+    }
+    case "IConcat": {
+      chunk.length = backing.left.length + backing.right.length;
+      chunk.depth = 1 + Math.max(backing.left.depth, backing.right.depth);
+      chunk.left = backing.left;
+      chunk.right = backing.right;
+      break;
+    }
+    case "IArray": {
+      chunk.length = backing.array.length;
+      chunk.depth = 0;
+      chunk.left = _empty;
+      chunk.right = _empty;
+      break;
+    }
+    case "ISingleton": {
+      chunk.length = 1;
+      chunk.depth = 0;
+      chunk.left = _empty;
+      chunk.right = _empty;
+      break;
+    }
+    case "ISlice": {
+      chunk.length = backing.length;
+      chunk.depth = backing.chunk.depth + 1;
+      chunk.left = _empty;
+      chunk.right = _empty;
+      break;
+    }
+  }
+  return chunk;
+};
+var isChunk = (u) => hasProperty(u, TypeId18);
+var _empty = /* @__PURE__ */ makeChunk({
+  _tag: "IEmpty"
+});
+var empty7 = () => _empty;
+var of2 = (a) => makeChunk({
+  _tag: "ISingleton",
+  a
+});
+var fromIterable3 = (self) => isChunk(self) ? self : fromArrayUnsafe(fromIterable2(self));
+var copyToArray = (self, array4, initial) => {
+  switch (self.backing._tag) {
+    case "IArray": {
+      copy(self.backing.array, 0, array4, initial, self.length);
+      break;
+    }
+    case "IConcat": {
+      copyToArray(self.left, array4, initial);
+      copyToArray(self.right, array4, initial + self.left.length);
+      break;
+    }
+    case "ISingleton": {
+      array4[initial] = self.backing.a;
+      break;
+    }
+    case "ISlice": {
+      let i = 0;
+      let j = initial;
+      while (i < self.length) {
+        array4[j] = getUnsafe3(self, i);
+        i += 1;
+        j += 1;
+      }
+      break;
+    }
+  }
+};
+var toReadonlyArray_ = (self) => {
+  switch (self.backing._tag) {
+    case "IEmpty": {
+      return emptyArray;
+    }
+    case "IArray": {
+      return self.backing.array;
+    }
+    default: {
+      const arr = new Array(self.length);
+      copyToArray(self, arr, 0);
+      self.backing = {
+        _tag: "IArray",
+        array: arr
+      };
+      self.left = _empty;
+      self.right = _empty;
+      self.depth = 0;
+      return arr;
+    }
+  }
+};
+var toReadonlyArray = toReadonlyArray_;
+var fromArrayUnsafe = (self) => self.length === 0 ? empty7() : self.length === 1 ? of2(self[0]) : makeChunk({
+  _tag: "IArray",
+  array: self
+});
+var getUnsafe3 = /* @__PURE__ */ dual(2, (self, index2) => {
+  const i = Math.floor(index2);
+  switch (self.backing._tag) {
+    case "IEmpty": {
+      throw new Error(`Index out of bounds: ${i}`);
+    }
+    case "ISingleton": {
+      if (index2 !== 0) {
+        throw new Error(`Index out of bounds: ${i}`);
+      }
+      return self.backing.a;
+    }
+    case "IArray": {
+      if (i >= self.length || i < 0) {
+        throw new Error(`Index out of bounds: ${i}`);
+      }
+      return self.backing.array[i];
+    }
+    case "IConcat": {
+      return i < self.left.length ? getUnsafe3(self.left, i) : getUnsafe3(self.right, i - self.left.length);
+    }
+    case "ISlice": {
+      return getUnsafe3(self.backing.chunk, i + self.backing.offset);
+    }
+  }
+});
+var size2 = (self) => self.length;
+
 // node_modules/effect/dist/Fiber.js
-var TypeId13 = `~effect/Fiber/${version}`;
+var TypeId19 = `~effect/Fiber/${version}`;
 var await_ = fiberAwait;
 var join2 = fiberJoin;
 var joinAll = fiberJoinAll;
@@ -14856,11 +17805,11 @@ var runIn = fiberRunIn;
 
 // node_modules/effect/dist/Latch.js
 var makeUnsafe5 = makeLatchUnsafe;
-var make10 = makeLatch;
+var make15 = makeLatch;
 
 // node_modules/effect/dist/MutableList.js
 var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
-var make11 = () => ({
+var make16 = () => ({
   head: void 0,
   tail: void 0,
   length: 0
@@ -14909,7 +17858,7 @@ var appendAllUnsafe = (self, messages, mutable2 = false) => {
   self.length += messages.length;
   return messages.length;
 };
-var clear = (self) => {
+var clear2 = (self) => {
   self.head = self.tail = void 0;
   self.length = 0;
 };
@@ -14918,7 +17867,7 @@ var takeN = (self, n) => {
   n = Math.min(n, self.length);
   if (n === self.length && self.head?.offset === 0 && !self.head.next) {
     const array5 = self.head.array;
-    clear(self);
+    clear2(self);
     return array5;
   }
   const array4 = new Array(n);
@@ -14932,20 +17881,20 @@ var takeN = (self, n) => {
       if (index2 === n) {
         self.head = chunk;
         self.length -= n;
-        if (self.length === 0) clear(self);
+        if (self.length === 0) clear2(self);
         return array4;
       }
     }
     chunk = chunk.next;
   }
-  clear(self);
+  clear2(self);
   return array4;
 };
 var takeNVoid = (self, n) => {
   if (n <= 0 || !self.head) return;
   n = Math.min(n, self.length);
   if (n === self.length && self.head?.offset === 0 && !self.head.next) {
-    clear(self);
+    clear2(self);
     return;
   }
   let count = 0;
@@ -14961,7 +17910,7 @@ var takeNVoid = (self, n) => {
     count += size7;
     chunk = chunk.next;
   }
-  clear(self);
+  clear2(self);
   return;
 };
 var takeAll = (self) => takeN(self, self.length);
@@ -14975,7 +17924,7 @@ var take = (self) => {
     if (self.head.next) {
       self.head = self.head.next;
     } else {
-      clear(self);
+      clear2(self);
     }
   }
   return message;
@@ -15012,12 +17961,12 @@ var filter7 = (self, f) => {
     next: void 0
   };
 };
-var remove2 = (self, value3) => filter7(self, (v) => v !== value3);
+var remove3 = (self, value3) => filter7(self, (v) => v !== value3);
 
 // node_modules/effect/dist/MutableRef.js
-var TypeId14 = "~effect/MutableRef";
+var TypeId20 = "~effect/MutableRef";
 var MutableRefProto = {
-  [TypeId14]: TypeId14,
+  [TypeId20]: TypeId20,
   ...PipeInspectableProto,
   toJSON() {
     return {
@@ -15026,34 +17975,34 @@ var MutableRefProto = {
     };
   }
 };
-var make12 = (value3) => {
+var make17 = (value3) => {
   const ref = Object.create(MutableRefProto);
   ref.current = value3;
   return ref;
 };
-var get2 = (self) => self.current;
-var set = /* @__PURE__ */ dual(2, (self, value3) => {
+var get3 = (self) => self.current;
+var set3 = /* @__PURE__ */ dual(2, (self, value3) => {
   self.current = value3;
   return self;
 });
 
 // node_modules/effect/dist/PubSub.js
-var TypeId15 = "~effect/PubSub";
+var TypeId21 = "~effect/PubSub";
 var SubscriptionTypeId = "~effect/PubSub/Subscription";
-var make13 = (options) => sync3(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe5(false), make12(false), options.strategy()));
-var bounded = (capacity) => make13({
+var make18 = (options) => sync3(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe5(false), make17(false), options.strategy()));
+var bounded = (capacity) => make18({
   atomicPubSub: () => makeAtomicBounded(capacity),
   strategy: () => new BackPressureStrategy()
 });
-var dropping = (capacity) => make13({
+var dropping = (capacity) => make18({
   atomicPubSub: () => makeAtomicBounded(capacity),
   strategy: () => new DroppingStrategy()
 });
-var sliding = (capacity) => make13({
+var sliding = (capacity) => make18({
   atomicPubSub: () => makeAtomicBounded(capacity),
   strategy: () => new SlidingStrategy()
 });
-var unbounded = (options) => make13({
+var unbounded = (options) => make18({
   atomicPubSub: () => makeAtomicUnbounded(options),
   strategy: () => new DroppingStrategy()
 });
@@ -15073,7 +18022,7 @@ var makeAtomicBounded = (capacity) => {
 };
 var makeAtomicUnbounded = (options) => new UnboundedPubSub(options?.replay ? new ReplayBuffer(options.replay) : void 0);
 var shutdown = (self) => uninterruptible2(withFiber2((fiber3) => {
-  set(self.shutdownFlag, true);
+  set3(self.shutdownFlag, true);
   return close(self.scope, interrupt2(fiber3.id)).pipe(andThen3(self.strategy.shutdown), when2(self.shutdownHook.open), asVoid4);
 }));
 var publish = /* @__PURE__ */ dual(2, (self, value3) => suspend3(() => {
@@ -15104,7 +18053,7 @@ var subscribe = (self) => uninterruptible2(contextWith2((services) => {
   return addFinalizer2(scope3, unsubscribe(subscription)).pipe(andThen3(addFinalizerExit(localScope, (exit3) => close(scope3, exit3))), as3(subscription));
 }));
 var unsubscribe = (self) => uninterruptible2(withFiber2((state) => {
-  set(self.shutdownFlag, true);
+  set3(self.shutdownFlag, true);
   return forEach2(takeAll(self.pollers), (d) => interruptWith(d, state.id), {
     discard: true,
     concurrency: "unbounded"
@@ -15157,7 +18106,7 @@ var pollForItem = (self) => {
   append2(self.pollers, deferred);
   self.strategy.completePollersUnsafe(self.pubsub, self.subscribers, self.subscription, self.pollers);
   return onInterrupt2(_await(deferred), () => {
-    remove2(self.pollers, deferred);
+    remove3(self.pollers, deferred);
     return void_4;
   });
 };
@@ -15179,7 +18128,7 @@ var removeSubscribers = (subscribers, subscription, pollers) => {
     subscribers.delete(subscription);
   }
 };
-var makeSubscriptionUnsafe = (pubsub, subscribers, strategy) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make11(), makeUnsafe5(false), make12(false), strategy, pubsub.replayWindow());
+var makeSubscriptionUnsafe = (pubsub, subscribers, strategy) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make16(), makeUnsafe5(false), make17(false), strategy, pubsub.replayWindow());
 var BoundedPubSubArb = class {
   array;
   publisherIndex = 0;
@@ -15831,7 +18780,7 @@ var SubscriptionImpl = class {
   }
 };
 var PubSubImpl = class {
-  [TypeId15] = {
+  [TypeId21] = {
     _A: identity
   };
   pubsub;
@@ -15859,7 +18808,7 @@ var ensureCapacity = (capacity) => {
   }
 };
 var BackPressureStrategy = class {
-  publishers = /* @__PURE__ */ make11();
+  publishers = /* @__PURE__ */ make16();
   get shutdown() {
     return withFiber2((fiber3) => forEach2(takeAll(this.publishers), ([_, deferred, last]) => last ? interruptWith(deferred, fiber3.id) : void_4, {
       concurrency: "unbounded",
@@ -15872,7 +18821,7 @@ var BackPressureStrategy = class {
       this.offerUnsafe(elements, deferred);
       this.onPubSubEmptySpaceUnsafe(pubsub, subscribers);
       this.completeSubscribersUnsafe(pubsub, subscribers);
-      return (get2(isShutdown) ? interrupt3 : _await(deferred)).pipe(onInterrupt2(() => {
+      return (get3(isShutdown) ? interrupt3 : _await(deferred)).pipe(onInterrupt2(() => {
         this.removeUnsafe(deferred);
         return void_4;
       }));
@@ -16093,7 +19042,7 @@ var emptyReplayWindow = {
 };
 
 // node_modules/effect/dist/Queue.js
-var TypeId16 = "~effect/Queue";
+var TypeId22 = "~effect/Queue";
 var EnqueueTypeId = "~effect/Queue/Enqueue";
 var DequeueTypeId = "~effect/Queue/Dequeue";
 var variance = {
@@ -16101,7 +19050,7 @@ var variance = {
   _E: identity
 };
 var QueueProto = {
-  [TypeId16]: variance,
+  [TypeId22]: variance,
   [EnqueueTypeId]: variance,
   [DequeueTypeId]: variance,
   ...PipeInspectableProto,
@@ -16113,12 +19062,12 @@ var QueueProto = {
     };
   }
 };
-var make14 = (options) => withFiber((fiber3) => {
+var make19 = (options) => withFiber((fiber3) => {
   const self = Object.create(QueueProto);
   self.dispatcher = fiber3.currentDispatcher;
   self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
   self.strategy = options?.strategy ?? "suspend";
-  self.messages = make11();
+  self.messages = make16();
   self.scheduleRunning = false;
   self.state = {
     _tag: "Open",
@@ -16128,10 +19077,10 @@ var make14 = (options) => withFiber((fiber3) => {
   };
   return succeed3(self);
 });
-var bounded2 = (capacity) => make14({
+var bounded2 = (capacity) => make19({
   capacity
 });
-var unbounded2 = () => make14();
+var unbounded2 = () => make19();
 var offer = (self, message) => suspend(() => {
   if (self.state._tag !== "Open") {
     return exitFalse;
@@ -16239,7 +19188,7 @@ var shutdown2 = (self) => sync(() => {
   if (self.state._tag === "Done") {
     return true;
   }
-  clear(self.messages);
+  clear2(self.messages);
   const offers = self.state.offers;
   finalize(self, self.state._tag === "Open" ? exitInterrupt2 : self.state.exit);
   if (offers.size > 0) {
@@ -16504,10 +19453,10 @@ var SemaphoreImpl = class {
 var toPull = (take6) => isExit2(take6) ? isSuccess4(take6) ? done2(take6.value) : take6 : succeed6(take6);
 
 // node_modules/effect/dist/Channel.js
-var TypeId17 = "~effect/Channel";
-var isChannel = (u) => hasProperty(u, TypeId17);
+var TypeId23 = "~effect/Channel";
+var isChannel = (u) => hasProperty(u, TypeId23);
 var ChannelProto = {
-  [TypeId17]: {
+  [TypeId23]: {
     _Env: identity,
     _InErr: identity,
     _InElem: identity,
@@ -16533,7 +19482,7 @@ var fromTransformBracket = (f) => fromTransform(fnUntraced2(function* (upstream,
 }));
 var toTransform = (channel) => channel.transform;
 var DefaultChunkSize = 4096;
-var asyncQueue = (scope3, f, options) => make14({
+var asyncQueue = (scope3, f, options) => make19({
   capacity: options?.bufferSize,
   strategy: options?.strategy
 }).pipe(tap4((queue) => addFinalizer2(scope3, shutdown2(queue))), tap4((queue) => forkIn2(provide(f(queue), scope3), scope3)));
@@ -16574,9 +19523,9 @@ var fromIterableArray = (iterable, chunkSize = DefaultChunkSize) => fromIterator
 var succeed7 = (value3) => fromEffect(succeed6(value3));
 var end2 = (value3) => fromPull(succeed6(done2(value3)));
 var sync4 = (evaluate2) => fromEffect(sync3(evaluate2));
-var empty7 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(/* @__PURE__ */ done2()));
-var never3 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(never2));
-var fail6 = (error) => fromPull(succeed6(fail5(error)));
+var empty8 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(/* @__PURE__ */ done2()));
+var never4 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(never2));
+var fail7 = (error) => fromPull(succeed6(fail5(error)));
 var failSync3 = (evaluate2) => fromPull(failSync2(evaluate2));
 var failCause6 = (cause) => fromPull(failCause4(cause));
 var failCauseSync3 = (evaluate2) => fromPull(failCauseSync2(evaluate2));
@@ -16882,11 +19831,11 @@ var catchCauseFilter3 = /* @__PURE__ */ dual(3, (self, filter12, f) => catchCaus
 var catch_4 = /* @__PURE__ */ dual(2, (self, f) => catchCauseFilter3(self, findError2, (e) => f(e)));
 var tapError4 = /* @__PURE__ */ dual(2, (self, f) => transformPull(self, (pull) => succeed6(tapError3(pull, (err) => isDone2(err) ? void_4 : asVoid4(f(err))))));
 var catchIf3 = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, predicate, f, orElse2) => catch_4(self, (err) => {
-  return predicate(err) ? f(err) : orElse2 ? orElse2(err) : fail6(err);
+  return predicate(err) ? f(err) : orElse2 ? orElse2(err) : fail7(err);
 }));
 var catchFilter3 = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, filter12, f, orElse2) => catch_4(self, (err) => {
   const result4 = filter12(err);
-  return isFailure2(result4) ? orElse2 ? orElse2(result4.failure) : fail6(result4.failure) : f(result4.success);
+  return isFailure2(result4) ? orElse2 ? orElse2(result4.failure) : fail7(result4.failure) : f(result4.success);
 }));
 var catchReason3 = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, errorTag, reasonTag, f, orElse2) => catch_4(self, (error) => {
   if (isTagged(error, errorTag) && hasProperty(error, "reason")) {
@@ -16894,9 +19843,9 @@ var catchReason3 = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, e
     if (isTagged(reason, reasonTag)) {
       return f(reason, error);
     }
-    return orElse2 ? orElse2(reason, error) : fail6(error);
+    return orElse2 ? orElse2(reason, error) : fail7(error);
   }
-  return fail6(error);
+  return fail7(error);
 }));
 var catchReasons3 = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, errorTag, cases, orElse2) => {
   let keys5;
@@ -16907,21 +19856,21 @@ var catchReasons3 = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, 
       if (keys5.has(reason._tag)) {
         return cases[reason._tag](reason, error);
       }
-      return orElse2 ? orElse2(reason, error) : fail6(error);
+      return orElse2 ? orElse2(reason, error) : fail7(error);
     }
-    return fail6(error);
+    return fail7(error);
   });
 });
-var mapError5 = /* @__PURE__ */ dual(2, (self, f) => catch_4(self, (err) => fail6(f(err))));
+var mapError5 = /* @__PURE__ */ dual(2, (self, f) => catch_4(self, (err) => fail7(f(err))));
 var orDie4 = (self) => catch_4(self, die5);
 var ignore3 = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, options) => {
   if (!options?.log) {
-    return catch_4(self, () => empty7);
+    return catch_4(self, () => empty8);
   }
   const logEffect = logWithLevel2(options.log === true ? void 0 : options.log);
-  return catch_4(tapCause4(self, (cause) => hasFails2(cause) ? logEffect(cause) : void_4), () => empty7);
+  return catch_4(tapCause4(self, (cause) => hasFails2(cause) ? logEffect(cause) : void_4), () => empty8);
 });
-var ignoreCause_ = (self) => catchCause4(self, () => empty7);
+var ignoreCause_ = (self) => catchCause4(self, () => empty8);
 var ignoreCause3 = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, options) => {
   if (!options?.log) return ignoreCause_(self);
   const logEffect = logWithLevel2(options.log === true ? void 0 : options.log);
@@ -16942,7 +19891,7 @@ var retry3 = /* @__PURE__ */ dual(2, (self, schedule4) => suspend4(() => {
     }
     meta = yield* step(error);
     return loop;
-  }, (effect2, error) => catchDone(effect2, () => succeed6(fail6(error))), unwrap2));
+  }, (effect2, error) => catchDone(effect2, () => succeed6(fail7(error))), unwrap2));
   return loop;
 }));
 var switchMap = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (self, f, options) => self.pipe(map8(f), mergeAll3({
@@ -16957,7 +19906,7 @@ var mergeAll3 = /* @__PURE__ */ dual(2, (channels, {
 }) => fromTransformBracket(fnUntraced2(function* (upstream, scope3, forkedScope) {
   const concurrencyN = concurrency === "unbounded" ? Number.MAX_SAFE_INTEGER : Math.max(1, concurrency);
   const semaphore = switch_ ? void 0 : makeUnsafe6(concurrencyN);
-  const doneLatch = yield* make10(true);
+  const doneLatch = yield* make15(true);
   const fibers = /* @__PURE__ */ new Set();
   const queue = yield* bounded2(bufferSize);
   yield* addFinalizer2(forkedScope, shutdown2(queue));
@@ -17115,7 +20064,7 @@ var unwrap2 = (channel) => fromTransform((upstream, scope3) => {
 var scoped3 = (self) => fromTransformBracket((upstream, scope3, forkedScope) => provide(toTransform(self)(upstream, scope3), forkedScope));
 var buffer = /* @__PURE__ */ dual(2, (self, options) => fromTransform(fnUntraced2(function* (upstream, scope3) {
   const pull = yield* toTransform(self)(upstream, scope3);
-  const queue = yield* make14({
+  const queue = yield* make19({
     capacity: options.capacity === "unbounded" ? void 0 : options.capacity,
     strategy: options.capacity === "unbounded" ? void 0 : options.strategy
   });
@@ -17127,7 +20076,7 @@ var buffer = /* @__PURE__ */ dual(2, (self, options) => fromTransform(fnUntraced
 })));
 var bufferArray = /* @__PURE__ */ dual(2, (self, options) => fromTransform(fnUntraced2(function* (upstream, scope3) {
   const pull = yield* toTransform(self)(upstream, scope3);
-  const queue = yield* make14({
+  const queue = yield* make19({
     capacity: options.capacity === "unbounded" ? void 0 : options.capacity,
     strategy: options.capacity === "unbounded" ? void 0 : options.strategy
   });
@@ -17258,7 +20207,7 @@ var runIntoQueueArray = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (se
 }))));
 var toQueueArray = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), /* @__PURE__ */ fnUntraced2(function* (self, options) {
   const scope3 = yield* scope2;
-  const queue = yield* make14({
+  const queue = yield* make19({
     capacity: typeof options.capacity === "number" ? options.capacity : void 0,
     strategy: typeof options.capacity === "number" ? options.strategy : void 0
   });
@@ -17280,85 +20229,6 @@ var toPubSubTake = /* @__PURE__ */ dual(2, /* @__PURE__ */ fnUntraced2(function*
   yield* runForEach(self, (value3) => publish(pubsub, value3)).pipe(onExit2((exit3) => publish(pubsub, exit3)), forkScoped2);
   return pubsub;
 }));
-
-// node_modules/effect/dist/FiberSet.js
-var TypeId18 = "~effect/FiberSet";
-var isFiberSet = (u) => hasProperty(u, TypeId18);
-var Proto4 = {
-  [TypeId18]: TypeId18,
-  [Symbol.iterator]() {
-    if (this.state._tag === "Closed") {
-      return empty();
-    }
-    return this.state.backing[Symbol.iterator]();
-  },
-  ...PipeInspectableProto,
-  toJSON() {
-    return {
-      _id: "FiberMap",
-      state: this.state
-    };
-  }
-};
-var makeUnsafe7 = (backing, deferred) => {
-  const self = Object.create(Proto4);
-  self.state = {
-    _tag: "Open",
-    backing
-  };
-  self.deferred = deferred;
-  return self;
-};
-var make15 = () => acquireRelease2(sync3(() => makeUnsafe7(/* @__PURE__ */ new Set(), makeUnsafe2())), (set9) => suspend3(() => {
-  const state = set9.state;
-  if (state._tag === "Closed") return void_4;
-  set9.state = {
-    _tag: "Closed"
-  };
-  const fibers = state.backing;
-  return interruptAll(fibers).pipe(into(set9.deferred));
-}));
-var internalFiberId = -1;
-var isInternalInterruption = /* @__PURE__ */ toPredicate(/* @__PURE__ */ compose(filterInterruptors, /* @__PURE__ */ has2(internalFiberId)));
-var addUnsafe = /* @__PURE__ */ dual((args2) => isFiberSet(args2[0]), (self, fiber3, options) => {
-  if (self.state._tag === "Closed") {
-    fiber3.interruptUnsafe(internalFiberId);
-    return;
-  } else if (self.state.backing.has(fiber3)) {
-    return;
-  }
-  self.state.backing.add(fiber3);
-  fiber3.addObserver((exit3) => {
-    if (self.state._tag === "Closed") {
-      return;
-    }
-    self.state.backing.delete(fiber3);
-    if (isFailure4(exit3) && (options?.propagateInterruption === true ? !isInternalInterruption(exit3.cause) : !hasInterruptsOnly2(exit3.cause))) {
-      doneUnsafe(self.deferred, exit3);
-    }
-  });
-});
-var constInterruptedFiber = /* @__PURE__ */ (function() {
-  let fiber3 = void 0;
-  return () => {
-    if (fiber3 === void 0) {
-      fiber3 = runFork2(interrupt3);
-    }
-    return fiber3;
-  };
-})();
-var runtime = (self) => () => map7(context2(), (services) => {
-  const runFork3 = runForkWith2(services);
-  return (effect2, options) => {
-    if (self.state._tag === "Closed") {
-      return constInterruptedFiber();
-    }
-    const fiber3 = runFork3(effect2, options);
-    addUnsafe(self, fiber3);
-    return fiber3;
-  };
-});
-var join3 = (self) => _await(self.deferred);
 
 // node_modules/effect/dist/Schema.js
 var Schema_exports = {};
@@ -17580,7 +20450,7 @@ __export(Schema_exports, {
   isUnique: () => isUnique,
   isUppercased: () => isUppercased,
   link: () => link,
-  make: () => make25,
+  make: () => make24,
   makeFilter: () => makeFilter2,
   makeFilterGroup: () => makeFilterGroup,
   makeIsBetween: () => makeIsBetween,
@@ -17633,381 +20503,6 @@ __export(Schema_exports, {
   withDecodingDefault: () => withDecodingDefault,
   withDecodingDefaultKey: () => withDecodingDefaultKey
 });
-
-// node_modules/effect/dist/BigDecimal.js
-var FINITE_INT_REGEXP = /^[+-]?\d+$/;
-var TypeId19 = "~effect/BigDecimal";
-var BigDecimalProto = {
-  [TypeId19]: TypeId19,
-  [symbol]() {
-    const normalized = normalize(this);
-    return combine(hash(normalized.value), number(normalized.scale));
-  },
-  [symbol2](that) {
-    return isBigDecimal(that) && equals3(this, that);
-  },
-  toString() {
-    return `BigDecimal(${format2(this)})`;
-  },
-  toJSON() {
-    return {
-      _id: "BigDecimal",
-      value: String(this.value),
-      scale: this.scale
-    };
-  },
-  [NodeInspectSymbol]() {
-    return this.toJSON();
-  },
-  pipe() {
-    return pipeArguments(this, arguments);
-  }
-};
-var isBigDecimal = (u) => hasProperty(u, TypeId19);
-var make16 = (value3, scale2) => {
-  const o = Object.create(BigDecimalProto);
-  o.value = value3;
-  o.scale = scale2;
-  return o;
-};
-var makeNormalizedUnsafe = (value3, scale2) => {
-  if (value3 !== bigint03 && value3 % bigint10 === bigint03) {
-    throw new RangeError("Value must be normalized");
-  }
-  const o = make16(value3, scale2);
-  o.normalized = o;
-  return o;
-};
-var bigint03 = /* @__PURE__ */ BigInt(0);
-var bigint10 = /* @__PURE__ */ BigInt(10);
-var zero2 = /* @__PURE__ */ makeNormalizedUnsafe(bigint03, 0);
-var normalize = (self) => {
-  if (self.normalized === void 0) {
-    if (self.value === bigint03) {
-      self.normalized = zero2;
-    } else {
-      const digits = `${self.value}`;
-      let trail = 0;
-      for (let i = digits.length - 1; i >= 0; i--) {
-        if (digits[i] === "0") {
-          trail++;
-        } else {
-          break;
-        }
-      }
-      if (trail === 0) {
-        self.normalized = self;
-      }
-      const value3 = BigInt(digits.substring(0, digits.length - trail));
-      const scale2 = self.scale - trail;
-      self.normalized = makeNormalizedUnsafe(value3, scale2);
-    }
-  }
-  return self.normalized;
-};
-var scale = /* @__PURE__ */ dual(2, (self, scale2) => {
-  if (scale2 > self.scale) {
-    return make16(self.value * bigint10 ** BigInt(scale2 - self.scale), scale2);
-  }
-  if (scale2 < self.scale) {
-    return make16(self.value / bigint10 ** BigInt(self.scale - scale2), scale2);
-  }
-  return self;
-});
-var Order2 = /* @__PURE__ */ make4((self, that) => {
-  const scmp = Number2(sign(self), sign(that));
-  if (scmp !== 0) {
-    return scmp;
-  }
-  if (self.scale > that.scale) {
-    return BigInt2(self.value, scale(that, self.scale).value);
-  }
-  if (self.scale < that.scale) {
-    return BigInt2(scale(self, that.scale).value, that.value);
-  }
-  return BigInt2(self.value, that.value);
-});
-var sign = (n) => n.value === bigint03 ? 0 : n.value < bigint03 ? -1 : 1;
-var abs = (n) => n.value < bigint03 ? make16(-n.value, n.scale) : n;
-var Equivalence3 = /* @__PURE__ */ make2((self, that) => {
-  if (self.scale > that.scale) {
-    return scale(that, self.scale).value === self.value;
-  }
-  if (self.scale < that.scale) {
-    return scale(self, that.scale).value === that.value;
-  }
-  return self.value === that.value;
-});
-var equals3 = /* @__PURE__ */ dual(2, (self, that) => Equivalence3(self, that));
-var fromString = (s) => {
-  if (s === "") {
-    return some2(zero2);
-  }
-  let base2;
-  let exp;
-  const seperator = s.search(/[eE]/);
-  if (seperator !== -1) {
-    const trail = s.slice(seperator + 1);
-    base2 = s.slice(0, seperator);
-    exp = Number(trail);
-    if (base2 === "" || !Number.isSafeInteger(exp) || !FINITE_INT_REGEXP.test(trail)) {
-      return none2();
-    }
-  } else {
-    base2 = s;
-    exp = 0;
-  }
-  let digits;
-  let offset;
-  const dot = base2.search(/\./);
-  if (dot !== -1) {
-    const lead = base2.slice(0, dot);
-    const trail = base2.slice(dot + 1);
-    digits = `${lead}${trail}`;
-    offset = trail.length;
-  } else {
-    digits = base2;
-    offset = 0;
-  }
-  if (!FINITE_INT_REGEXP.test(digits)) {
-    return none2();
-  }
-  const scale2 = offset - exp;
-  if (!Number.isSafeInteger(scale2)) {
-    return none2();
-  }
-  return some2(make16(BigInt(digits), scale2));
-};
-var format2 = (n) => {
-  const normalized = normalize(n);
-  if (Math.abs(normalized.scale) >= 16) {
-    return toExponential(normalized);
-  }
-  const negative = normalized.value < bigint03;
-  const absolute = negative ? `${normalized.value}`.substring(1) : `${normalized.value}`;
-  let before;
-  let after;
-  if (normalized.scale >= absolute.length) {
-    before = "0";
-    after = "0".repeat(normalized.scale - absolute.length) + absolute;
-  } else {
-    const location2 = absolute.length - normalized.scale;
-    if (location2 > absolute.length) {
-      const zeros = location2 - absolute.length;
-      before = `${absolute}${"0".repeat(zeros)}`;
-      after = "";
-    } else {
-      after = absolute.slice(location2);
-      before = absolute.slice(0, location2);
-    }
-  }
-  const complete = after === "" ? before : `${before}.${after}`;
-  return negative ? `-${complete}` : complete;
-};
-var toExponential = (n) => {
-  if (isZero2(n)) {
-    return "0e+0";
-  }
-  const normalized = normalize(n);
-  const digits = `${abs(normalized).value}`;
-  const head2 = digits.slice(0, 1);
-  const tail = digits.slice(1);
-  let output = `${isNegative(normalized) ? "-" : ""}${head2}`;
-  if (tail !== "") {
-    output += `.${tail}`;
-  }
-  const exp = tail.length - normalized.scale;
-  return `${output}e${exp >= 0 ? "+" : ""}${exp}`;
-};
-var isZero2 = (n) => n.value === bigint03;
-var isNegative = (n) => n.value < bigint03;
-
-// node_modules/effect/dist/DateTime.js
-var isDateTime2 = isDateTime;
-var isTimeZone2 = isTimeZone;
-var isTimeZoneOffset2 = isTimeZoneOffset;
-var isTimeZoneNamed2 = isTimeZoneNamed;
-var isUtc2 = isUtc;
-var isZoned2 = isZoned;
-var Equivalence4 = Equivalence2;
-var fromDateUnsafe2 = fromDateUnsafe;
-var makeZonedUnsafe2 = makeZonedUnsafe;
-var make17 = make9;
-var makeZonedFromString2 = makeZonedFromString;
-var toUtc2 = toUtc;
-var zoneMakeNamedUnsafe2 = zoneMakeNamedUnsafe;
-var zoneMakeOffset2 = zoneMakeOffset;
-var zoneMakeNamed2 = zoneMakeNamed;
-var zoneFromString2 = zoneFromString;
-var zoneToString2 = zoneToString;
-var toDateUtc2 = toDateUtc;
-var toEpochMillis2 = toEpochMillis;
-var formatIso2 = formatIso;
-var formatIsoZoned2 = formatIsoZoned;
-
-// node_modules/effect/dist/Encoding.js
-var EncodingErrorTypeId = "~effect/encoding/EncodingError";
-var EncodingError = class extends (/* @__PURE__ */ TaggedError2("EncodingError")) {
-  /**
-   * @since 4.0.0
-   */
-  [EncodingErrorTypeId] = EncodingErrorTypeId;
-};
-var encodeBase64 = (input) => typeof input === "string" ? base64EncodeUint8Array(encoder.encode(input)) : base64EncodeUint8Array(input);
-var decodeBase64 = (str) => {
-  const stripped = stripCrlf(str);
-  const length = stripped.length;
-  if (length % 4 !== 0) {
-    return fail2(new EncodingError({
-      kind: "Decode",
-      module: "Base64",
-      input: stripped,
-      message: `Length must be a multiple of 4, but is ${length}`
-    }));
-  }
-  const index2 = stripped.indexOf("=");
-  if (index2 !== -1 && (index2 < length - 2 || index2 === length - 2 && stripped[length - 1] !== "=")) {
-    return fail2(new EncodingError({
-      kind: "Decode",
-      module: "Base64",
-      input: stripped,
-      message: `Found a '=' character, but it is not at the end`
-    }));
-  }
-  try {
-    const missingOctets = stripped.endsWith("==") ? 2 : stripped.endsWith("=") ? 1 : 0;
-    const result4 = new Uint8Array(3 * (length / 4) - missingOctets);
-    for (let i = 0, j = 0; i < length; i += 4, j += 3) {
-      const buffer3 = getBase64Code(stripped.charCodeAt(i)) << 18 | getBase64Code(stripped.charCodeAt(i + 1)) << 12 | getBase64Code(stripped.charCodeAt(i + 2)) << 6 | getBase64Code(stripped.charCodeAt(i + 3));
-      result4[j] = buffer3 >> 16;
-      result4[j + 1] = buffer3 >> 8 & 255;
-      result4[j + 2] = buffer3 & 255;
-    }
-    return succeed2(result4);
-  } catch (e) {
-    return fail2(new EncodingError({
-      kind: "Decode",
-      module: "Base64",
-      input: stripped,
-      message: e instanceof Error ? e.message : "Invalid input"
-    }));
-  }
-};
-var decodeBase64String = (str) => map2(decodeBase64(str), (_) => decoder.decode(_));
-var encodeBase64Url = (input) => typeof input === "string" ? base64UrlEncodeUint8Array(encoder.encode(input)) : base64UrlEncodeUint8Array(input);
-var decodeBase64Url = (str) => {
-  const stripped = stripCrlf(str);
-  const length = stripped.length;
-  if (length % 4 === 1) {
-    return fail2(new EncodingError({
-      module: "Base64Url",
-      kind: "Decode",
-      input: stripped,
-      message: `Length should be a multiple of 4, but is ${length}`
-    }));
-  }
-  if (!/^[-_A-Z0-9]*?={0,2}$/i.test(stripped)) {
-    return fail2(new EncodingError({
-      module: "Base64Url",
-      kind: "Decode",
-      input: stripped,
-      message: "Invalid input"
-    }));
-  }
-  let sanitized = length % 4 === 2 ? `${stripped}==` : length % 4 === 3 ? `${stripped}=` : stripped;
-  sanitized = sanitized.replace(/-/g, "+").replace(/_/g, "/");
-  return decodeBase64(sanitized);
-};
-var decodeBase64UrlString = (str) => map2(decodeBase64Url(str), (_) => decoder.decode(_));
-var encodeHex = (input) => typeof input === "string" ? hexEncodeUint8Array(encoder.encode(input)) : hexEncodeUint8Array(input);
-var decodeHex = (str) => {
-  const bytes = new TextEncoder().encode(str);
-  if (bytes.length % 2 !== 0) {
-    return fail2(new EncodingError({
-      module: "Hex",
-      kind: "Decode",
-      input: str,
-      message: `Length must be a multiple of 2, but is ${bytes.length}`
-    }));
-  }
-  try {
-    const length = bytes.length / 2;
-    const result4 = new Uint8Array(length);
-    for (let i = 0; i < length; i++) {
-      const a = fromHexChar(bytes[i * 2]);
-      const b = fromHexChar(bytes[i * 2 + 1]);
-      result4[i] = a << 4 | b;
-    }
-    return succeed2(result4);
-  } catch (e) {
-    return fail2(new EncodingError({
-      module: "Hex",
-      kind: "Decode",
-      input: str,
-      message: e instanceof Error ? e.message : "Invalid input"
-    }));
-  }
-};
-var decodeHexString = (str) => map2(decodeHex(str), (_) => decoder.decode(_));
-var encoder = /* @__PURE__ */ new TextEncoder();
-var decoder = /* @__PURE__ */ new TextDecoder();
-var stripCrlf = (str) => str.replace(/[\n\r]/g, "");
-var base64EncodeUint8Array = (bytes) => {
-  const length = bytes.length;
-  let result4 = "";
-  let i;
-  for (i = 2; i < length; i += 3) {
-    result4 += base64abc[bytes[i - 2] >> 2];
-    result4 += base64abc[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
-    result4 += base64abc[(bytes[i - 1] & 15) << 2 | bytes[i] >> 6];
-    result4 += base64abc[bytes[i] & 63];
-  }
-  if (i === length + 1) {
-    result4 += base64abc[bytes[i - 2] >> 2];
-    result4 += base64abc[(bytes[i - 2] & 3) << 4];
-    result4 += "==";
-  }
-  if (i === length) {
-    result4 += base64abc[bytes[i - 2] >> 2];
-    result4 += base64abc[(bytes[i - 2] & 3) << 4 | bytes[i - 1] >> 4];
-    result4 += base64abc[(bytes[i - 1] & 15) << 2];
-    result4 += "=";
-  }
-  return result4;
-};
-function getBase64Code(charCode) {
-  if (charCode >= base64codes.length) {
-    throw new TypeError(`Invalid character ${String.fromCharCode(charCode)}`);
-  }
-  const code = base64codes[charCode];
-  if (code === 255) {
-    throw new TypeError(`Invalid character ${String.fromCharCode(charCode)}`);
-  }
-  return code;
-}
-var base64abc = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "+", "/"];
-var base64codes = [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 62, 255, 255, 255, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 255, 255, 255, 0, 255, 255, 255, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 255, 255, 255, 255, 255, 255, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51];
-var base64UrlEncodeUint8Array = (data) => base64EncodeUint8Array(data).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-var hexEncodeUint8Array = (bytes) => {
-  let result4 = "";
-  for (let i = 0; i < bytes.length; ++i) {
-    result4 += bytesToHex[bytes[i]];
-  }
-  return result4;
-};
-var fromHexChar = (byte) => {
-  if (48 <= byte && byte <= 57) {
-    return byte - 48;
-  }
-  if (97 <= byte && byte <= 102) {
-    return byte - 97 + 10;
-  }
-  if (65 <= byte && byte <= 70) {
-    return byte - 65 + 10;
-  }
-  throw new TypeError("Invalid input");
-};
-var bytesToHex = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "0a", "0b", "0c", "0d", "0e", "0f", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "1a", "1b", "1c", "1d", "1e", "1f", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "2a", "2b", "2c", "2d", "2e", "2f", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "3a", "3b", "3c", "3d", "3e", "3f", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "4a", "4b", "4c", "4d", "4e", "4f", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "5a", "5b", "5c", "5d", "5e", "5f", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "6a", "6b", "6c", "6d", "6e", "6f", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "7a", "7b", "7c", "7d", "7e", "7f", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "8a", "8b", "8c", "8d", "8e", "8f", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "9a", "9b", "9c", "9d", "9e", "9f", "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "aa", "ab", "ac", "ad", "ae", "af", "b0", "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "ba", "bb", "bc", "bd", "be", "bf", "c0", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "ca", "cb", "cc", "cd", "ce", "cf", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "da", "db", "dc", "dd", "de", "df", "e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "ea", "eb", "ec", "ed", "ee", "ef", "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "fa", "fb", "fc", "fd", "fe", "ff"];
 
 // node_modules/effect/dist/internal/hashMap.js
 var HashMapTypeId = "~effect/collections/HashMap";
@@ -18536,7 +21031,7 @@ var HashMapImpl = class {
         return false;
       }
       for (const [key, value3] of this) {
-        const otherValue = pipe(that, get3(key));
+        const otherValue = pipe(that, get4(key));
         if (isNone2(otherValue) || !equals(value3, otherValue.value)) {
           return false;
         }
@@ -18570,7 +21065,7 @@ var HashMapImpl = class {
 };
 var emptyNode = /* @__PURE__ */ new EmptyNode();
 var isHashMap = (u) => hasProperty(u, HashMapTypeId);
-var empty8 = () => new HashMapImpl(false, 0, emptyNode, 0);
+var empty9 = () => new HashMapImpl(false, 0, emptyNode, 0);
 var fromIterable4 = (entries3) => {
   let root = emptyNode;
   let size7 = 0;
@@ -18587,15 +21082,15 @@ var fromIterable4 = (entries3) => {
   }
   return new HashMapImpl(false, 0, root, size7);
 };
-var get3 = /* @__PURE__ */ dual(2, (self, key) => {
+var get4 = /* @__PURE__ */ dual(2, (self, key) => {
   const impl = self;
   return impl._root.get(0, hash(key), key);
 });
-var has3 = /* @__PURE__ */ dual(2, (self, key) => {
+var has4 = /* @__PURE__ */ dual(2, (self, key) => {
   const impl = self;
   return impl._root.has(0, hash(key), key);
 });
-var set2 = /* @__PURE__ */ dual(3, (self, key, value3) => {
+var set4 = /* @__PURE__ */ dual(3, (self, key, value3) => {
   const impl = self;
   const hash3 = hash(key);
   const added = {
@@ -18647,14 +21142,14 @@ var entries = (self) => {
     }
   };
 };
-var size2 = (self) => self.size;
+var size3 = (self) => self.size;
 
 // node_modules/effect/dist/HashMap.js
 var isHashMap2 = isHashMap;
 var fromIterable5 = fromIterable4;
 var entries2 = entries;
 var toEntries = (self) => Array.from(entries2(self));
-var size3 = size2;
+var size4 = size3;
 
 // node_modules/effect/dist/internal/hashSet.js
 var HashSetTypeId = "~effect/collections/HashSet";
@@ -18663,7 +21158,7 @@ var HashSetProto = {
     return hash(HashSetTypeId);
   },
   [symbol2](that) {
-    return isHashSet(that) && size4(this) === size4(that) && every2(this, (value3) => has4(that, value3));
+    return isHashSet(that) && size5(this) === size5(that) && every2(this, (value3) => has5(that, value3));
   },
   [Symbol.iterator]() {
     return keys2(keyMap(this));
@@ -18693,14 +21188,14 @@ var makeImpl = (keyMap2) => {
 var isHashSet = (u) => hasProperty(u, HashSetTypeId);
 var keyMap = (self) => self.keyMap;
 var fromIterable6 = (values2) => {
-  let map14 = empty8();
+  let map14 = empty9();
   for (const value3 of values2) {
-    map14 = set2(map14, value3, true);
+    map14 = set4(map14, value3, true);
   }
   return makeImpl(map14);
 };
-var has4 = (self, value3) => has3(keyMap(self), value3);
-var size4 = (self) => size2(keyMap(self));
+var has5 = (self, value3) => has4(keyMap(self), value3);
+var size5 = (self) => size3(keyMap(self));
 var every2 = (self, predicate) => {
   for (const value3 of self) {
     if (!predicate(value3)) {
@@ -18713,2613 +21208,7 @@ var every2 = (self, predicate) => {
 // node_modules/effect/dist/HashSet.js
 var fromIterable7 = fromIterable6;
 var isHashSet2 = isHashSet;
-var size5 = size4;
-
-// node_modules/effect/dist/internal/schema/annotations.js
-function resolve(ast) {
-  return ast.checks ? ast.checks[ast.checks.length - 1].annotations : ast.annotations;
-}
-function resolveAt(key) {
-  return (ast) => resolve(ast)?.[key];
-}
-var resolveIdentifier = /* @__PURE__ */ resolveAt("identifier");
-var resolveTitle = /* @__PURE__ */ resolveAt("title");
-var resolveBrands = /* @__PURE__ */ resolveAt("brands");
-var getExpected = /* @__PURE__ */ memoize((ast) => {
-  const identifier2 = resolveIdentifier(ast);
-  if (typeof identifier2 === "string") return identifier2;
-  return ast.getExpected(getExpected);
-});
-
-// node_modules/effect/dist/Boolean.js
-var Boolean2 = globalThis.Boolean;
-var ReducerOr = /* @__PURE__ */ make((a, b) => a || b, false);
-
-// node_modules/effect/dist/internal/record.js
-function set3(self, key, value3) {
-  if (key === "__proto__") {
-    Object.defineProperty(self, key, {
-      value: value3,
-      writable: true,
-      enumerable: true,
-      configurable: true
-    });
-  } else {
-    self[key] = value3;
-  }
-  return self;
-}
-
-// node_modules/effect/dist/RegExp.js
-var RegExp2 = globalThis.RegExp;
-var escape = (string4) => string4.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&");
-
-// node_modules/effect/dist/SchemaIssue.js
-var SchemaIssue_exports = {};
-__export(SchemaIssue_exports, {
-  AnyOf: () => AnyOf,
-  Composite: () => Composite,
-  Encoding: () => Encoding,
-  Filter: () => Filter,
-  Forbidden: () => Forbidden,
-  InvalidType: () => InvalidType,
-  InvalidValue: () => InvalidValue,
-  MissingKey: () => MissingKey,
-  OneOf: () => OneOf,
-  Pointer: () => Pointer,
-  UnexpectedKey: () => UnexpectedKey,
-  defaultCheckHook: () => defaultCheckHook,
-  defaultFormatter: () => defaultFormatter,
-  defaultLeafHook: () => defaultLeafHook,
-  getActual: () => getActual,
-  isIssue: () => isIssue,
-  make: () => make21,
-  makeFormatterDefault: () => makeFormatterDefault,
-  makeFormatterStandardSchemaV1: () => makeFormatterStandardSchemaV1,
-  redact: () => redact2
-});
-
-// node_modules/effect/dist/internal/redacted.js
-var redactedRegistry = /* @__PURE__ */ new WeakMap();
-var value = (self) => {
-  if (redactedRegistry.has(self)) {
-    return redactedRegistry.get(self);
-  } else {
-    throw new Error("Unable to get redacted value" + (self.label ? ` with label: "${self.label}"` : ""));
-  }
-};
-
-// node_modules/effect/dist/Redacted.js
-var TypeId20 = "~effect/data/Redacted";
-var isRedacted = (u) => hasProperty(u, TypeId20);
-var make20 = (value3, options) => {
-  const self = Object.create(Proto5);
-  if (options?.label) {
-    self.label = options.label;
-  }
-  redactedRegistry.set(self, value3);
-  return self;
-};
-var Proto5 = {
-  [TypeId20]: {
-    _A: (_) => _
-  },
-  label: void 0,
-  ...PipeInspectableProto,
-  toJSON() {
-    return this.toString();
-  },
-  toString() {
-    return `<redacted${isString(this.label) ? ":" + this.label : ""}>`;
-  },
-  [symbol]() {
-    return hash(redactedRegistry.get(this));
-  },
-  [symbol2](that) {
-    return isRedacted(that) && equals(redactedRegistry.get(this), redactedRegistry.get(that));
-  }
-};
-var value2 = value;
-var makeEquivalence7 = (isEquivalent) => make2((x, y) => isEquivalent(value2(x), value2(y)));
-
-// node_modules/effect/dist/SchemaIssue.js
-var TypeId21 = "~effect/SchemaIssue/Issue";
-function isIssue(u) {
-  return hasProperty(u, TypeId21);
-}
-var Base = class {
-  [TypeId21] = TypeId21;
-  toString() {
-    return defaultFormatter(this);
-  }
-};
-var Filter = class extends Base {
-  _tag = "Filter";
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
-   * The filter that failed.
-   */
-  filter;
-  /**
-   * The issue that occurred.
-   */
-  issue;
-  constructor(actual, filter12, issue) {
-    super();
-    this.actual = actual;
-    this.filter = filter12;
-    this.issue = issue;
-  }
-};
-var Encoding = class extends Base {
-  _tag = "Encoding";
-  /**
-   * The schema that caused the issue.
-   */
-  ast;
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
-   * The issue that occurred.
-   */
-  issue;
-  constructor(ast, actual, issue) {
-    super();
-    this.ast = ast;
-    this.actual = actual;
-    this.issue = issue;
-  }
-};
-var Pointer = class extends Base {
-  _tag = "Pointer";
-  /**
-   * The path to the location in the input that caused the issue.
-   */
-  path;
-  /**
-   * The issue that occurred.
-   */
-  issue;
-  constructor(path2, issue) {
-    super();
-    this.path = path2;
-    this.issue = issue;
-  }
-};
-var MissingKey = class extends Base {
-  _tag = "MissingKey";
-  /**
-   * The metadata for the issue.
-   */
-  annotations;
-  constructor(annotations) {
-    super();
-    this.annotations = annotations;
-  }
-};
-var UnexpectedKey = class extends Base {
-  _tag = "UnexpectedKey";
-  /**
-   * The schema that caused the issue.
-   */
-  ast;
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  constructor(ast, actual) {
-    super();
-    this.ast = ast;
-    this.actual = actual;
-  }
-};
-var Composite = class extends Base {
-  _tag = "Composite";
-  /**
-   * The schema that caused the issue.
-   */
-  ast;
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
-   * The issues that occurred.
-   */
-  issues;
-  constructor(ast, actual, issues) {
-    super();
-    this.ast = ast;
-    this.actual = actual;
-    this.issues = issues;
-  }
-};
-var InvalidType = class extends Base {
-  _tag = "InvalidType";
-  /**
-   * The schema that caused the issue.
-   */
-  ast;
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  constructor(ast, actual) {
-    super();
-    this.ast = ast;
-    this.actual = actual;
-  }
-};
-var InvalidValue = class extends Base {
-  _tag = "InvalidValue";
-  /**
-   * The value that caused the issue.
-   */
-  actual;
-  /**
-   * The metadata for the issue.
-   */
-  annotations;
-  constructor(actual, annotations) {
-    super();
-    this.actual = actual;
-    this.annotations = annotations;
-  }
-};
-var Forbidden = class extends Base {
-  _tag = "Forbidden";
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
-   * The metadata for the issue.
-   */
-  annotations;
-  constructor(actual, annotations) {
-    super();
-    this.actual = actual;
-    this.annotations = annotations;
-  }
-};
-var AnyOf = class extends Base {
-  _tag = "AnyOf";
-  /**
-   * The schema that caused the issue.
-   */
-  ast;
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
-   * The issues that occurred.
-   */
-  issues;
-  constructor(ast, actual, issues) {
-    super();
-    this.ast = ast;
-    this.actual = actual;
-    this.issues = issues;
-  }
-};
-var OneOf = class extends Base {
-  _tag = "OneOf";
-  /**
-   * The schema that caused the issue.
-   */
-  ast;
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
-   * The schemas that were successful.
-   */
-  successes;
-  constructor(ast, actual, successes) {
-    super();
-    this.ast = ast;
-    this.actual = actual;
-    this.successes = successes;
-  }
-};
-function getActual(issue) {
-  switch (issue._tag) {
-    case "Pointer":
-    case "MissingKey":
-      return none2();
-    case "InvalidType":
-    case "InvalidValue":
-    case "Forbidden":
-    case "Encoding":
-    case "Composite":
-      return issue.actual;
-    case "AnyOf":
-    case "UnexpectedKey":
-    case "OneOf":
-    case "Filter":
-      return some2(issue.actual);
-  }
-}
-function make21(input, out) {
-  if (isIssue(out)) {
-    return out;
-  }
-  if (out === void 0) {
-    return void 0;
-  }
-  if (typeof out === "boolean") {
-    return out ? void 0 : new InvalidValue(some2(input));
-  }
-  if (typeof out === "string") {
-    return new InvalidValue(some2(input), {
-      message: out
-    });
-  }
-  return new Pointer(out.path, new InvalidValue(some2(input), {
-    message: out.message
-  }));
-}
-var defaultLeafHook = (issue) => {
-  const message = findMessage(issue);
-  if (message !== void 0) return message;
-  switch (issue._tag) {
-    case "InvalidType":
-      return getExpectedMessage(getExpected(issue.ast), formatOption(issue.actual));
-    case "InvalidValue":
-      return `Invalid data ${formatOption(issue.actual)}`;
-    case "MissingKey":
-      return "Missing key";
-    case "UnexpectedKey":
-      return `Unexpected key with value ${format(issue.actual)}`;
-    case "Forbidden":
-      return "Forbidden operation";
-    case "OneOf":
-      return `Expected exactly one member to match the input ${format(issue.actual)}`;
-  }
-};
-var defaultCheckHook = (issue) => {
-  return findMessage(issue.issue) ?? findMessage(issue);
-};
-function makeFormatterStandardSchemaV1(options) {
-  return (issue) => ({
-    issues: toDefaultIssues(issue, [], options?.leafHook ?? defaultLeafHook, options?.checkHook ?? defaultCheckHook)
-  });
-}
-function getExpectedMessage(expected, actual) {
-  return `Expected ${expected}, got ${actual}`;
-}
-function toDefaultIssues(issue, path2, leafHook, checkHook) {
-  switch (issue._tag) {
-    case "Filter": {
-      const message = checkHook(issue);
-      if (message !== void 0) {
-        return [{
-          path: path2,
-          message
-        }];
-      }
-      switch (issue.issue._tag) {
-        case "InvalidValue":
-          return [{
-            path: path2,
-            message: getExpectedMessage(formatCheck(issue.filter), format(issue.actual))
-          }];
-        default:
-          return toDefaultIssues(issue.issue, path2, leafHook, checkHook);
-      }
-    }
-    case "Encoding":
-      return toDefaultIssues(issue.issue, path2, leafHook, checkHook);
-    case "Pointer":
-      return toDefaultIssues(issue.issue, [...path2, ...issue.path], leafHook, checkHook);
-    case "Composite":
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path2, leafHook, checkHook));
-    case "AnyOf": {
-      const message = findMessage(issue);
-      if (issue.issues.length === 0) {
-        if (message !== void 0) return [{
-          path: path2,
-          message
-        }];
-        const expected = getExpectedMessage(getExpected(issue.ast), format(issue.actual));
-        return [{
-          path: path2,
-          message: expected
-        }];
-      }
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path2, leafHook, checkHook));
-    }
-    default:
-      return [{
-        path: path2,
-        message: leafHook(issue)
-      }];
-  }
-}
-function formatCheck(check3) {
-  const expected = check3.annotations?.expected;
-  if (typeof expected === "string") return expected;
-  switch (check3._tag) {
-    case "Filter":
-      return "<filter>";
-    case "FilterGroup":
-      return check3.checks.map((check4) => formatCheck(check4)).join(" & ");
-  }
-}
-function makeFormatterDefault() {
-  return (issue) => toDefaultIssues(issue, [], defaultLeafHook, defaultCheckHook).map(formatDefaultIssue).join("\n");
-}
-var defaultFormatter = /* @__PURE__ */ makeFormatterDefault();
-function formatDefaultIssue(issue) {
-  let out = issue.message;
-  if (issue.path && issue.path.length > 0) {
-    const path2 = formatPath(issue.path);
-    out += `
-  at ${path2}`;
-  }
-  return out;
-}
-function findMessage(issue) {
-  switch (issue._tag) {
-    case "InvalidType":
-    case "OneOf":
-    case "Composite":
-    case "AnyOf":
-      return getMessageAnnotation(issue.ast.annotations);
-    case "InvalidValue":
-    case "Forbidden":
-      return getMessageAnnotation(issue.annotations);
-    case "MissingKey":
-      return getMessageAnnotation(issue.annotations, "messageMissingKey");
-    case "UnexpectedKey":
-      return getMessageAnnotation(issue.ast.annotations, "messageUnexpectedKey");
-    case "Filter":
-      return getMessageAnnotation(issue.filter.annotations);
-    case "Encoding":
-      return findMessage(issue.issue);
-  }
-}
-function getMessageAnnotation(annotations, type = "message") {
-  const message = annotations?.[type];
-  if (typeof message === "string") return message;
-}
-function formatOption(actual) {
-  if (isNone2(actual)) return "no value provided";
-  return format(actual.value);
-}
-function redact2(issue) {
-  switch (issue._tag) {
-    case "MissingKey":
-      return issue;
-    case "Forbidden":
-      return new Forbidden(map(issue.actual, make20), issue.annotations);
-    case "Filter":
-      return new Filter(make20(issue.actual), issue.filter, redact2(issue.issue));
-    case "Pointer":
-      return new Pointer(issue.path, redact2(issue.issue));
-    case "Encoding":
-    case "InvalidType":
-    case "InvalidValue":
-    case "Composite":
-      return new InvalidValue(map(issue.actual, make20));
-    case "AnyOf":
-    case "OneOf":
-    case "UnexpectedKey":
-      return new InvalidValue(some2(make20(issue.actual)));
-  }
-}
-
-// node_modules/effect/dist/SchemaGetter.js
-var Getter = class _Getter extends Class {
-  run;
-  constructor(run4) {
-    super();
-    this.run = run4;
-  }
-  map(f) {
-    return new _Getter((oe, options) => this.run(oe, options).pipe(mapEager2(map(f))));
-  }
-  compose(other) {
-    if (isPassthrough(this)) {
-      return other;
-    }
-    if (isPassthrough(other)) {
-      return this;
-    }
-    return new _Getter((oe, options) => this.run(oe, options).pipe(flatMapEager2((ot) => other.run(ot, options))));
-  }
-};
-function fail7(f) {
-  return new Getter((oe) => fail5(f(oe)));
-}
-function forbidden(message) {
-  return fail7((oe) => new Forbidden(oe, {
-    message: message(oe)
-  }));
-}
-var passthrough_ = /* @__PURE__ */ new Getter(succeed6);
-function isPassthrough(getter) {
-  return getter.run === passthrough_.run;
-}
-function passthrough2() {
-  return passthrough_;
-}
-function onSome(f) {
-  return new Getter((oe, options) => isNone2(oe) ? succeedNone2 : f(oe.value, options));
-}
-function transform(f) {
-  return transformOptional(map(f));
-}
-function transformOrFail(f) {
-  return onSome((e, options) => f(e, options).pipe(mapEager2(some2)));
-}
-function transformOptional(f) {
-  return new Getter((oe) => succeed6(f(oe)));
-}
-function omit() {
-  return new Getter(() => succeedNone2);
-}
-function withDefault(defaultValue) {
-  return new Getter((o) => {
-    const filtered = filter(o, isNotUndefined);
-    return isSome2(filtered) ? succeed6(filtered) : map7(defaultValue, some2);
-  });
-}
-function String3() {
-  return transform(globalThis.String);
-}
-function Number4() {
-  return transform(globalThis.Number);
-}
-function BigInt3() {
-  return transform(globalThis.BigInt);
-}
-function Date3() {
-  return transform((u) => new globalThis.Date(u));
-}
-function trim2() {
-  return transform(trim);
-}
-function parseJson(options) {
-  return onSome((input) => try_2({
-    try: () => some2(JSON.parse(input, options?.reviver)),
-    catch: (e) => new InvalidValue(some2(input), {
-      message: globalThis.String(e)
-    })
-  }));
-}
-function stringifyJson(options) {
-  return onSome((input) => try_2({
-    try: () => some2(JSON.stringify(input, options?.replacer, options?.space)),
-    catch: (e) => new InvalidValue(some2(input), {
-      message: globalThis.String(e)
-    })
-  }));
-}
-function split(options) {
-  const separator = options?.separator ?? ",";
-  return transform((input) => input === "" ? [] : input.split(separator));
-}
-function encodeBase642() {
-  return transform(encodeBase64);
-}
-function encodeBase64Url2() {
-  return transform(encodeBase64Url);
-}
-function encodeHex2() {
-  return transform(encodeHex);
-}
-function decodeBase642() {
-  return transformOrFail((input) => mapError(decodeBase64(input), (e) => new InvalidValue(some2(input), {
-    message: e.message
-  })).asEffect());
-}
-function decodeBase64String2() {
-  return transformOrFail((input) => match2(decodeBase64String(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
-    })),
-    onSuccess: succeed6
-  }));
-}
-function decodeBase64Url2() {
-  return transformOrFail((input) => match2(decodeBase64Url(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
-    })),
-    onSuccess: succeed6
-  }));
-}
-function decodeBase64UrlString2() {
-  return transformOrFail((input) => match2(decodeBase64UrlString(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
-    })),
-    onSuccess: succeed6
-  }));
-}
-function decodeHex2() {
-  return transformOrFail((input) => match2(decodeHex(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
-    })),
-    onSuccess: succeed6
-  }));
-}
-function decodeHexString2() {
-  return transformOrFail((input) => match2(decodeHexString(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
-    })),
-    onSuccess: succeed6
-  }));
-}
-function encodeUriComponent() {
-  return transform(encodeURIComponent);
-}
-function decodeUriComponent() {
-  return transformOrFail((input) => {
-    try {
-      return succeed6(globalThis.decodeURIComponent(input));
-    } catch (e) {
-      return fail5(new InvalidValue(some2(input), {
-        message: e instanceof URIError ? e.message : "Invalid URI component"
-      }));
-    }
-  });
-}
-function dateTimeUtcFromInput() {
-  return transformOrFail((input) => {
-    return match(make17(input), {
-      onNone: () => fail5(new InvalidValue(some2(input), {
-        message: "Invalid DateTime input"
-      })),
-      onSome: (dt) => succeed6(toUtc2(dt))
-    });
-  });
-}
-function decodeFormData() {
-  return transform((input) => makeTreeRecord(Array.from(input.entries())));
-}
-var collectFormDataEntries = /* @__PURE__ */ collectBracketPathEntries((value3) => typeof value3 === "string" || typeof Blob !== "undefined" && value3 instanceof Blob);
-function encodeFormData() {
-  return transform((input) => {
-    const out = new FormData();
-    if (typeof input === "object" && input !== null) {
-      const entries3 = collectFormDataEntries(input);
-      entries3.forEach(([key, value3]) => {
-        out.append(key, value3);
-      });
-    }
-    return out;
-  });
-}
-function decodeURLSearchParams() {
-  return transform((input) => makeTreeRecord(Array.from(input.entries())));
-}
-var collectURLSearchParamsEntries = /* @__PURE__ */ collectBracketPathEntries(isString);
-function encodeURLSearchParams() {
-  return transform((input) => {
-    if (typeof input === "object" && input !== null) {
-      return new URLSearchParams(collectURLSearchParamsEntries(input));
-    }
-    return new URLSearchParams();
-  });
-}
-var INDEX_REGEXP = /^\d+$/;
-function bracketPathToTokens(bracketPath) {
-  if (bracketPath === "") {
-    return [""];
-  }
-  const replaced = bracketPath.replace(/\[(.*?)\]/g, ".$1");
-  const parts = replaced.split(".");
-  const start = replaced.startsWith(".") ? 1 : 0;
-  return parts.slice(start).map((part) => INDEX_REGEXP.test(part) ? globalThis.Number(part) : part);
-}
-function makeTreeRecord(bracketPathEntries) {
-  const out = {};
-  bracketPathEntries.forEach(([key, value3]) => {
-    const tokens = bracketPathToTokens(key);
-    let cur = out;
-    tokens.forEach((token, i) => {
-      const isLast = i === tokens.length - 1;
-      if (Array.isArray(cur) && token === "") {
-        if (isLast) {
-          cur.push(value3);
-        } else {
-          const next = tokens[i + 1];
-          const shouldBeArray = typeof next === "number" || next === "";
-          const index2 = cur.length;
-          if (cur[index2] === void 0) {
-            cur[index2] = shouldBeArray ? [] : {};
-          }
-          cur = cur[index2];
-        }
-      } else if (isLast) {
-        if (Array.isArray(cur[token])) {
-          cur[token].push(value3);
-        } else if (Object.prototype.hasOwnProperty.call(cur, token)) {
-          cur[token] = [cur[token], value3];
-        } else {
-          cur[token] = value3;
-        }
-      } else {
-        const next = tokens[i + 1];
-        const shouldBeArray = typeof next === "number" || next === "";
-        if (cur[token] === void 0) {
-          cur[token] = shouldBeArray ? [] : {};
-        }
-        cur = cur[token];
-      }
-    });
-  });
-  return out;
-}
-function collectBracketPathEntries(isLeaf) {
-  return (input) => {
-    const bracketPathEntries = [];
-    function append4(key, value3) {
-      if (isLeaf(value3)) {
-        bracketPathEntries.push([key, value3]);
-      } else if (Array.isArray(value3)) {
-        const allLeaves = value3.every(isLeaf);
-        if (allLeaves) {
-          value3.forEach((v) => {
-            bracketPathEntries.push([key, v]);
-          });
-        } else {
-          value3.forEach((v, i) => {
-            append4(`${key}[${i}]`, v);
-          });
-        }
-      } else if (typeof value3 === "object" && value3 !== null) {
-        for (const [k, v] of Object.entries(value3)) {
-          append4(`${key}[${k}]`, v);
-        }
-      }
-    }
-    for (const [key, value3] of Object.entries(input)) {
-      append4(key, value3);
-    }
-    return bracketPathEntries;
-  };
-}
-
-// node_modules/effect/dist/SchemaTransformation.js
-var Middleware = class _Middleware {
-  _tag = "Middleware";
-  decode;
-  encode;
-  constructor(decode3, encode3) {
-    this.decode = decode3;
-    this.encode = encode3;
-  }
-  flip() {
-    return new _Middleware(this.encode, this.decode);
-  }
-};
-var TypeId22 = "~effect/SchemaTransformation/Transformation";
-var Transformation = class _Transformation {
-  [TypeId22] = TypeId22;
-  _tag = "Transformation";
-  decode;
-  encode;
-  constructor(decode3, encode3) {
-    this.decode = decode3;
-    this.encode = encode3;
-  }
-  flip() {
-    return new _Transformation(this.encode, this.decode);
-  }
-  compose(other) {
-    return new _Transformation(this.decode.compose(other.decode), other.encode.compose(this.encode));
-  }
-};
-function isTransformation(u) {
-  return hasProperty(u, TypeId22);
-}
-var make22 = (options) => {
-  if (isTransformation(options)) {
-    return options;
-  }
-  return new Transformation(options.decode, options.encode);
-};
-function transformOrFail2(options) {
-  return new Transformation(transformOrFail(options.decode), transformOrFail(options.encode));
-}
-function transform2(options) {
-  return new Transformation(transform(options.decode), transform(options.encode));
-}
-function transformOptional2(options) {
-  return new Transformation(transformOptional(options.decode), transformOptional(options.encode));
-}
-function trim3() {
-  return new Transformation(trim2(), passthrough2());
-}
-var passthrough_2 = /* @__PURE__ */ new Transformation(/* @__PURE__ */ passthrough2(), /* @__PURE__ */ passthrough2());
-function passthrough3() {
-  return passthrough_2;
-}
-var numberFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number4(), /* @__PURE__ */ String3());
-var bigintFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ BigInt3(), /* @__PURE__ */ String3());
-var dateFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Date3(), /* @__PURE__ */ transform(formatDate));
-var durationFromNanos = /* @__PURE__ */ transformOrFail2({
-  decode: (i) => succeed6(nanos(i)),
-  encode: (a) => match(toNanos(a), {
-    onNone: () => fail5(new InvalidValue(some2(a), {
-      message: `Unable to encode ${a} into a bigint`
-    })),
-    onSome: (nanos2) => succeed6(nanos2)
-  })
-});
-var durationFromMillis = /* @__PURE__ */ transform2({
-  decode: (i) => millis(i),
-  encode: (a) => toMillis(a)
-});
-var errorFromErrorJsonEncoded = (options) => transform2({
-  decode: (i) => {
-    const err = new Error(i.message);
-    if (typeof i.name === "string" && i.name !== "Error") err.name = i.name;
-    if (typeof i.stack === "string") err.stack = i.stack;
-    return err;
-  },
-  encode: (a) => {
-    const e = {
-      name: a.name,
-      message: a.message
-    };
-    if (options?.includeStack && typeof a.stack === "string") {
-      e.stack = a.stack;
-    }
-    return e;
-  }
-});
-function optionFromNullOr() {
-  return transform2({
-    decode: fromNullOr,
-    encode: getOrNull
-  });
-}
-function optionFromUndefinedOr() {
-  return transform2({
-    decode: fromUndefinedOr,
-    encode: getOrUndefined
-  });
-}
-function optionFromNullishOr(options) {
-  return transform2({
-    decode: fromNullishOr,
-    encode: options?.onNoneEncoding === null ? getOrNull : getOrUndefined
-  });
-}
-function optionFromOptionalKey() {
-  return transformOptional2({
-    decode: some2,
-    encode: flatten
-  });
-}
-function optionFromOptional() {
-  return transformOptional2({
-    decode: (ot) => ot.pipe(filter(isNotUndefined), some2),
-    encode: flatten
-  });
-}
-var urlFromString = /* @__PURE__ */ transformOrFail2({
-  decode: (s) => try_2({
-    try: () => new URL(s),
-    catch: (e) => new InvalidValue(some2(s), {
-      message: globalThis.String(e)
-    })
-  }),
-  encode: (url) => succeed6(url.href)
-});
-var bigDecimalFromString = /* @__PURE__ */ transformOrFail2({
-  decode: (s) => {
-    const result4 = fromString(s);
-    return isNone2(result4) ? fail5(new InvalidValue(some2(s), {
-      message: `Invalid BigDecimal string: ${s}`
-    })) : succeed6(result4.value);
-  },
-  encode: (bd) => succeed6(format2(bd))
-});
-var uint8ArrayFromBase64String = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase642(), /* @__PURE__ */ encodeBase642());
-var stringFromBase64String = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase64String2(), /* @__PURE__ */ encodeBase642());
-var stringFromBase64UrlString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase64UrlString2(), /* @__PURE__ */ encodeBase64Url2());
-var stringFromHexString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeHexString2(), /* @__PURE__ */ encodeHex2());
-var stringFromUriComponent = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeUriComponent(), /* @__PURE__ */ encodeUriComponent());
-var fromJsonString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ parseJson(), /* @__PURE__ */ stringifyJson());
-var fromFormData = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeFormData(), /* @__PURE__ */ encodeFormData());
-var fromURLSearchParams = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeURLSearchParams(), /* @__PURE__ */ encodeURLSearchParams());
-var timeZoneOffsetFromNumber = /* @__PURE__ */ transform2({
-  decode: (n) => zoneMakeOffset2(n),
-  encode: (tz) => tz.offset
-});
-var timeZoneNamedFromString = /* @__PURE__ */ transformOrFail2({
-  decode: (s) => {
-    return match(zoneMakeNamed2(s), {
-      onNone: () => fail5(new InvalidValue(some2(s), {
-        message: `Invalid IANA time zone: ${s}`
-      })),
-      onSome: succeed6
-    });
-  },
-  encode: (tz) => succeed6(tz.id)
-});
-var timeZoneFromString = /* @__PURE__ */ transformOrFail2({
-  decode: (s) => {
-    return match(zoneFromString2(s), {
-      onNone: () => fail5(new InvalidValue(some2(s), {
-        message: `Invalid time zone: ${s}`
-      })),
-      onSome: succeed6
-    });
-  },
-  encode: (tz) => succeed6(zoneToString2(tz))
-});
-var dateTimeUtcFromString = /* @__PURE__ */ transformOrFail2({
-  decode: (s) => {
-    return match(make17(s), {
-      onNone: () => fail5(new InvalidValue(some2(s), {
-        message: "Invalid DateTime input"
-      })),
-      onSome: (result4) => succeed6(toUtc2(result4))
-    });
-  },
-  encode: (utc) => succeed6(formatIso2(utc))
-});
-var dateTimeZonedFromString = /* @__PURE__ */ transformOrFail2({
-  decode: (s) => {
-    return match(makeZonedFromString2(s), {
-      onNone: () => fail5(new InvalidValue(some2(s), {
-        message: `Invalid zoned DateTime string: ${s}`
-      })),
-      onSome: succeed6
-    });
-  },
-  encode: (zoned) => succeed6(formatIsoZoned2(zoned))
-});
-
-// node_modules/effect/dist/SchemaAST.js
-function makeGuard(tag2) {
-  return (ast) => ast._tag === tag2;
-}
-function isAST(u) {
-  return hasProperty(u, TypeId23) && u[TypeId23] === TypeId23;
-}
-var isDeclaration = /* @__PURE__ */ makeGuard("Declaration");
-var isNever2 = /* @__PURE__ */ makeGuard("Never");
-var isLiteral = /* @__PURE__ */ makeGuard("Literal");
-var isUniqueSymbol = /* @__PURE__ */ makeGuard("UniqueSymbol");
-var isArrays = /* @__PURE__ */ makeGuard("Arrays");
-var isObjects = /* @__PURE__ */ makeGuard("Objects");
-var isUnion = /* @__PURE__ */ makeGuard("Union");
-var Link = class {
-  to;
-  transformation;
-  constructor(to, transformation) {
-    this.to = to;
-    this.transformation = transformation;
-  }
-};
-var defaultParseOptions = {};
-var Context = class {
-  isOptional;
-  isMutable;
-  /** Used for constructor default values (e.g. `withConstructorDefault` API) */
-  defaultValue;
-  annotations;
-  constructor(isOptional2, isMutable2, defaultValue = void 0, annotations = void 0) {
-    this.isOptional = isOptional2;
-    this.isMutable = isMutable2;
-    this.defaultValue = defaultValue;
-    this.annotations = annotations;
-  }
-};
-var TypeId23 = "~effect/Schema";
-var Base2 = class {
-  [TypeId23] = TypeId23;
-  annotations;
-  checks;
-  encoding;
-  context;
-  constructor(annotations = void 0, checks = void 0, encoding = void 0, context4 = void 0) {
-    this.annotations = annotations;
-    this.checks = checks;
-    this.encoding = encoding;
-    this.context = context4;
-  }
-  toString() {
-    return `<${this._tag}>`;
-  }
-};
-var Declaration = class _Declaration extends Base2 {
-  _tag = "Declaration";
-  typeParameters;
-  run;
-  constructor(typeParameters, run4, annotations, checks, encoding, context4) {
-    super(annotations, checks, encoding, context4);
-    this.typeParameters = typeParameters;
-    this.run = run4;
-  }
-  /** @internal */
-  getParser() {
-    const run4 = this.run(this.typeParameters);
-    return (oinput, options) => {
-      if (isNone2(oinput)) return succeedNone2;
-      return mapEager2(run4(oinput.value, this, options), some2);
-    };
-  }
-  /** @internal */
-  recur(recur5) {
-    const tps = mapOrSame(this.typeParameters, recur5);
-    return tps === this.typeParameters ? this : new _Declaration(tps, this.run, this.annotations, this.checks, void 0, this.context);
-  }
-  /** @internal */
-  getExpected() {
-    const expected = this.annotations?.expected;
-    if (typeof expected === "string") return expected;
-    return "<Declaration>";
-  }
-};
-var Null = class extends Base2 {
-  _tag = "Null";
-  /** @internal */
-  getParser() {
-    return fromConst(this, null);
-  }
-  /** @internal */
-  getExpected() {
-    return "null";
-  }
-};
-var null_ = /* @__PURE__ */ new Null();
-var Undefined = class extends Base2 {
-  _tag = "Undefined";
-  /** @internal */
-  getParser() {
-    return fromConst(this, void 0);
-  }
-  /** @internal */
-  toCodecJson() {
-    return replaceEncoding(this, [undefinedToNull]);
-  }
-  /** @internal */
-  getExpected() {
-    return "undefined";
-  }
-};
-var undefinedToNull = /* @__PURE__ */ new Link(null_, /* @__PURE__ */ new Transformation(/* @__PURE__ */ transform(() => void 0), /* @__PURE__ */ transform(() => null)));
-var undefined_3 = /* @__PURE__ */ new Undefined();
-var Void = class extends Base2 {
-  _tag = "Void";
-  /** @internal */
-  getParser() {
-    return fromConst(this, void 0);
-  }
-  /** @internal */
-  toCodecJson() {
-    return replaceEncoding(this, [undefinedToNull]);
-  }
-  /** @internal */
-  getExpected() {
-    return "void";
-  }
-};
-var void_5 = /* @__PURE__ */ new Void();
-var Never = class extends Base2 {
-  _tag = "Never";
-  /** @internal */
-  getParser() {
-    return fromRefinement(this, isNever);
-  }
-  /** @internal */
-  getExpected() {
-    return "never";
-  }
-};
-var never4 = /* @__PURE__ */ new Never();
-var Any = class extends Base2 {
-  _tag = "Any";
-  /** @internal */
-  getParser() {
-    return fromRefinement(this, isUnknown);
-  }
-  /** @internal */
-  getExpected() {
-    return "any";
-  }
-};
-var any = /* @__PURE__ */ new Any();
-var Unknown = class extends Base2 {
-  _tag = "Unknown";
-  /** @internal */
-  getParser() {
-    return fromRefinement(this, isUnknown);
-  }
-  /** @internal */
-  getExpected() {
-    return "unknown";
-  }
-};
-var unknown = /* @__PURE__ */ new Unknown();
-var ObjectKeyword = class extends Base2 {
-  _tag = "ObjectKeyword";
-  /** @internal */
-  getParser() {
-    return fromRefinement(this, isObjectKeyword);
-  }
-  /** @internal */
-  getExpected() {
-    return "object | array | function";
-  }
-};
-var objectKeyword = /* @__PURE__ */ new ObjectKeyword();
-var Enum = class extends Base2 {
-  _tag = "Enum";
-  enums;
-  constructor(enums, annotations, checks, encoding, context4) {
-    super(annotations, checks, encoding, context4);
-    this.enums = enums;
-  }
-  /** @internal */
-  getParser() {
-    const values2 = new Set(this.enums.map(([, v]) => v));
-    return fromRefinement(this, (input) => values2.has(input));
-  }
-  /** @internal */
-  toCodecStringTree() {
-    if (this.enums.some(([_, v]) => typeof v === "number")) {
-      const coercions = Object.fromEntries(this.enums.map(([_, v]) => [globalThis.String(v), v]));
-      return replaceEncoding(this, [new Link(new Union(Object.keys(coercions).map((k) => new Literal(k)), "anyOf"), new Transformation(transform((s) => coercions[s]), String3()))]);
-    }
-    return this;
-  }
-  /** @internal */
-  getExpected() {
-    return this.enums.map(([_, value3]) => JSON.stringify(value3)).join(" | ");
-  }
-};
-function isTemplateLiteralPart(ast) {
-  switch (ast._tag) {
-    case "String":
-    case "Number":
-    case "BigInt":
-    case "Literal":
-    case "TemplateLiteral":
-      return true;
-    case "Union":
-      return ast.types.every(isTemplateLiteralPart);
-    default:
-      return false;
-  }
-}
-var TemplateLiteral = class extends Base2 {
-  _tag = "TemplateLiteral";
-  parts;
-  /** @internal */
-  encodedParts;
-  constructor(parts, annotations, checks, encoding, context4) {
-    super(annotations, checks, encoding, context4);
-    const encodedParts = [];
-    for (const part of parts) {
-      const encoded = toEncoded(part);
-      if (isTemplateLiteralPart(encoded)) {
-        encodedParts.push(encoded);
-      } else {
-        throw new Error(`Invalid TemplateLiteral part ${encoded._tag}`);
-      }
-    }
-    this.parts = parts;
-    this.encodedParts = encodedParts;
-  }
-  /** @internal */
-  getParser(recur5) {
-    const parser = recur5(this.asTemplateLiteralParser());
-    return (oinput, options) => mapBothEager2(parser(oinput, options), {
-      onSuccess: () => oinput,
-      onFailure: (issue) => new Composite(this, oinput, [issue])
-    });
-  }
-  /** @internal */
-  getExpected() {
-    return "string";
-  }
-  /** @internal */
-  asTemplateLiteralParser() {
-    const tuple3 = new Arrays(false, this.parts.map(templateLiteralPartFromString), []);
-    const regExp = getTemplateLiteralRegExp(this);
-    return decodeTo(string2, tuple3, new Transformation(transformOrFail((s) => {
-      const match8 = regExp.exec(s);
-      if (match8) return succeed6(match8.slice(1, this.parts.length + 1));
-      return fail5(new InvalidValue(some2(s), {
-        message: `Expected a value matching ${regExp.source}, got ${format(s)}`
-      }));
-    }), transform((parts) => parts.join(""))));
-  }
-};
-var UniqueSymbol = class extends Base2 {
-  _tag = "UniqueSymbol";
-  symbol;
-  constructor(symbol5, annotations, checks, encoding, context4) {
-    super(annotations, checks, encoding, context4);
-    this.symbol = symbol5;
-  }
-  /** @internal */
-  getParser() {
-    return fromConst(this, this.symbol);
-  }
-  /** @internal */
-  toCodecStringTree() {
-    return replaceEncoding(this, [symbolToString]);
-  }
-  /** @internal */
-  getExpected() {
-    return globalThis.String(this.symbol);
-  }
-};
-var Literal = class extends Base2 {
-  _tag = "Literal";
-  literal;
-  constructor(literal, annotations, checks, encoding, context4) {
-    super(annotations, checks, encoding, context4);
-    if (typeof literal === "number" && !globalThis.Number.isFinite(literal)) {
-      throw new Error(`A numeric literal must be finite, got ${format(literal)}`);
-    }
-    this.literal = literal;
-  }
-  /** @internal */
-  getParser() {
-    return fromConst(this, this.literal);
-  }
-  /** @internal */
-  toCodecJson() {
-    return typeof this.literal === "bigint" ? literalToString(this) : this;
-  }
-  /** @internal */
-  toCodecStringTree() {
-    return typeof this.literal === "string" ? this : literalToString(this);
-  }
-  /** @internal */
-  getExpected() {
-    return typeof this.literal === "string" ? JSON.stringify(this.literal) : globalThis.String(this.literal);
-  }
-};
-function literalToString(ast) {
-  const literalAsString = globalThis.String(ast.literal);
-  return replaceEncoding(ast, [new Link(new Literal(literalAsString), new Transformation(transform(() => ast.literal), transform(() => literalAsString)))]);
-}
-var String4 = class extends Base2 {
-  _tag = "String";
-  /** @internal */
-  getParser() {
-    return fromRefinement(this, isString);
-  }
-  /** @internal */
-  getExpected() {
-    return "string";
-  }
-};
-var string2 = /* @__PURE__ */ new String4();
-var Number5 = class extends Base2 {
-  _tag = "Number";
-  /** @internal */
-  getParser() {
-    return fromRefinement(this, isNumber);
-  }
-  /** @internal */
-  toCodecJson() {
-    if (this.checks && (hasCheck(this.checks, "isFinite") || hasCheck(this.checks, "isInt"))) {
-      return this;
-    }
-    return replaceEncoding(this, [numberToJson]);
-  }
-  /** @internal */
-  toCodecStringTree() {
-    if (this.checks && (hasCheck(this.checks, "isFinite") || hasCheck(this.checks, "isInt"))) {
-      return replaceEncoding(this, [finiteToString]);
-    }
-    return replaceEncoding(this, [numberToString]);
-  }
-  /** @internal */
-  getExpected() {
-    return "number";
-  }
-};
-function hasCheck(checks, tag2) {
-  return checks.some((c) => {
-    switch (c._tag) {
-      case "Filter":
-        return c.annotations?.meta?._tag === tag2;
-      case "FilterGroup":
-        return hasCheck(c.checks, tag2);
-    }
-  });
-}
-var number2 = /* @__PURE__ */ new Number5();
-var Boolean3 = class extends Base2 {
-  _tag = "Boolean";
-  /** @internal */
-  getParser() {
-    return fromRefinement(this, isBoolean);
-  }
-  /** @internal */
-  getExpected() {
-    return "boolean";
-  }
-};
-var boolean = /* @__PURE__ */ new Boolean3();
-var Symbol2 = class extends Base2 {
-  _tag = "Symbol";
-  /** @internal */
-  getParser() {
-    return fromRefinement(this, isSymbol);
-  }
-  /** @internal */
-  toCodecStringTree() {
-    return replaceEncoding(this, [symbolToString]);
-  }
-  /** @internal */
-  getExpected() {
-    return "symbol";
-  }
-};
-var symbol3 = /* @__PURE__ */ new Symbol2();
-var BigInt4 = class extends Base2 {
-  _tag = "BigInt";
-  /** @internal */
-  getParser() {
-    return fromRefinement(this, isBigInt);
-  }
-  /** @internal */
-  toCodecStringTree() {
-    return replaceEncoding(this, [bigIntToString]);
-  }
-  /** @internal */
-  getExpected() {
-    return "bigint";
-  }
-};
-var bigInt = /* @__PURE__ */ new BigInt4();
-var Arrays = class _Arrays extends Base2 {
-  _tag = "Arrays";
-  isMutable;
-  elements;
-  rest;
-  constructor(isMutable2, elements, rest, annotations, checks, encoding, context4) {
-    super(annotations, checks, encoding, context4);
-    this.isMutable = isMutable2;
-    this.elements = elements;
-    this.rest = rest;
-    const i = elements.findIndex(isOptional);
-    if (i !== -1 && (elements.slice(i + 1).some((e) => !isOptional(e)) || rest.length > 1)) {
-      throw new Error("A required element cannot follow an optional element. ts(1257)");
-    }
-    if (rest.length > 1 && rest.slice(1).some(isOptional)) {
-      throw new Error("An optional element cannot follow a rest element. ts(1266)");
-    }
-  }
-  /** @internal */
-  getParser(recur5) {
-    const ast = this;
-    const elements = ast.elements.map((ast2) => ({
-      ast: ast2,
-      parser: recur5(ast2)
-    }));
-    const rest = ast.rest.map((ast2) => ({
-      ast: ast2,
-      parser: recur5(ast2)
-    }));
-    const elementLen = elements.length;
-    return fnUntracedEager2(function* (oinput, options) {
-      if (oinput._tag === "None") {
-        return oinput;
-      }
-      const input = oinput.value;
-      if (!Array.isArray(input)) {
-        return yield* fail5(new InvalidType(ast, oinput));
-      }
-      const output = [];
-      let issues;
-      const errorsAllOption = options.errors === "all";
-      let i = 0;
-      for (; i < elementLen; i++) {
-        const e = elements[i];
-        const value3 = i < input.length ? some2(input[i]) : none2();
-        const eff = e.parser(value3, options);
-        const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
-        if (exit3._tag === "Failure") {
-          const issueElement = findError2(exit3.cause);
-          if (isFailure2(issueElement)) {
-            return yield* exit3;
-          }
-          const issue = new Pointer([i], issueElement.success);
-          if (errorsAllOption) {
-            if (issues) issues.push(issue);
-            else issues = [issue];
-          } else {
-            return yield* fail5(new Composite(ast, oinput, [issue]));
-          }
-        } else if (exit3.value._tag === "Some") {
-          output[i] = exit3.value.value;
-        } else if (!isOptional(e.ast)) {
-          const issue = new Pointer([i], new MissingKey(e.ast.context?.annotations));
-          if (errorsAllOption) {
-            if (issues) issues.push(issue);
-            else issues = [issue];
-          } else {
-            return yield* fail5(new Composite(ast, oinput, [issue]));
-          }
-        }
-      }
-      const len = input.length;
-      if (ast.rest.length > 0) {
-        const [head2, ...tail] = rest;
-        const keyAnnotations = head2.ast.context?.annotations;
-        for (; i < len - tail.length; i++) {
-          const eff = head2.parser(some2(input[i]), options);
-          const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
-          if (exit3._tag === "Failure") {
-            const issueRest = findError2(exit3.cause);
-            if (isFailure2(issueRest)) {
-              return yield* exit3;
-            }
-            const issue = new Pointer([i], issueRest.success);
-            if (errorsAllOption) {
-              if (issues) issues.push(issue);
-              else issues = [issue];
-            } else {
-              return yield* fail5(new Composite(ast, oinput, [issue]));
-            }
-          } else if (exit3.value._tag === "Some") {
-            output[i] = exit3.value.value;
-          } else {
-            const issue = new Pointer([i], new MissingKey(keyAnnotations));
-            if (errorsAllOption) {
-              if (issues) issues.push(issue);
-              else issues = [issue];
-            } else {
-              return yield* fail5(new Composite(ast, oinput, [issue]));
-            }
-          }
-        }
-        for (let j = 0; j < tail.length; j++) {
-          const index2 = i + j;
-          if (len < index2) {
-            continue;
-          } else {
-            const tailj = tail[j];
-            const keyAnnotations2 = tailj.ast.context?.annotations;
-            const eff = tailj.parser(some2(input[index2]), options);
-            const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
-            if (exit3._tag === "Failure") {
-              const issueRest = findError2(exit3.cause);
-              if (isFailure2(issueRest)) {
-                return yield* exit3;
-              }
-              const issue = new Pointer([index2], issueRest.success);
-              if (errorsAllOption) {
-                if (issues) issues.push(issue);
-                else issues = [issue];
-              } else {
-                return yield* fail5(new Composite(ast, oinput, [issue]));
-              }
-            } else if (exit3.value._tag === "Some") {
-              output[index2] = exit3.value.value;
-            } else {
-              const issue = new Pointer([index2], new MissingKey(keyAnnotations2));
-              if (errorsAllOption) {
-                if (issues) issues.push(issue);
-                else issues = [issue];
-              } else {
-                return yield* fail5(new Composite(ast, oinput, [issue]));
-              }
-            }
-          }
-        }
-      } else {
-        for (let i2 = elementLen; i2 <= len - 1; i2++) {
-          const issue = new Pointer([i2], new UnexpectedKey(ast, input[i2]));
-          if (errorsAllOption) {
-            if (issues) issues.push(issue);
-            else issues = [issue];
-          } else {
-            return yield* fail5(new Composite(ast, oinput, [issue]));
-          }
-        }
-      }
-      if (issues) {
-        return yield* fail5(new Composite(ast, oinput, issues));
-      }
-      return some2(output);
-    });
-  }
-  /** @internal */
-  recur(recur5) {
-    const elements = mapOrSame(this.elements, recur5);
-    const rest = mapOrSame(this.rest, recur5);
-    return elements === this.elements && rest === this.rest ? this : new _Arrays(this.isMutable, elements, rest, this.annotations, this.checks, void 0, this.context);
-  }
-  /** @internal */
-  getExpected() {
-    return "array";
-  }
-};
-var FINITE_PATTERN = "[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?";
-var isNumberStringRegExp = /* @__PURE__ */ new globalThis.RegExp(`(?:${FINITE_PATTERN}|Infinity|-Infinity|NaN)`);
-function getIndexSignatureKeys(input, parameter) {
-  const encoded = toEncoded(parameter);
-  switch (encoded._tag) {
-    case "String":
-      return Object.keys(input);
-    case "TemplateLiteral": {
-      const regExp = getTemplateLiteralRegExp(encoded);
-      return Object.keys(input).filter((k) => regExp.test(k));
-    }
-    case "Symbol":
-      return Object.getOwnPropertySymbols(input);
-    case "Number":
-      return Object.keys(input).filter((k) => isNumberStringRegExp.test(k));
-    case "Union":
-      return [...new Set(encoded.types.flatMap((t) => getIndexSignatureKeys(input, t)))];
-    default:
-      return [];
-  }
-}
-var PropertySignature = class {
-  name;
-  type;
-  constructor(name, type) {
-    this.name = name;
-    this.type = type;
-  }
-};
-var KeyValueCombiner = class _KeyValueCombiner {
-  decode;
-  encode;
-  constructor(decode3, encode3) {
-    this.decode = decode3;
-    this.encode = encode3;
-  }
-  /** @internal */
-  flip() {
-    return new _KeyValueCombiner(this.encode, this.decode);
-  }
-};
-var IndexSignature = class {
-  parameter;
-  type;
-  merge;
-  constructor(parameter, type, merge7) {
-    this.parameter = parameter;
-    this.type = type;
-    this.merge = merge7;
-    if (isOptional(type) && !containsUndefined(type)) {
-      throw new Error("Cannot use `Schema.optionalKey` with index signatures, use `Schema.optional` instead.");
-    }
-  }
-};
-var Objects = class _Objects extends Base2 {
-  _tag = "Objects";
-  propertySignatures;
-  indexSignatures;
-  constructor(propertySignatures, indexSignatures, annotations, checks, encoding, context4) {
-    super(annotations, checks, encoding, context4);
-    this.propertySignatures = propertySignatures;
-    this.indexSignatures = indexSignatures;
-    const duplicates = propertySignatures.map((ps) => ps.name).filter((name, i, arr) => arr.indexOf(name) !== i);
-    if (duplicates.length > 0) {
-      throw new Error(`Duplicate identifiers: ${JSON.stringify(duplicates)}. ts(2300)`);
-    }
-  }
-  /** @internal */
-  getParser(recur5) {
-    const ast = this;
-    const expectedKeys = [];
-    const expectedKeysSet = /* @__PURE__ */ new Set();
-    const properties = [];
-    const propertyCount = ast.propertySignatures.length;
-    for (const ps of ast.propertySignatures) {
-      expectedKeys.push(ps.name);
-      expectedKeysSet.add(ps.name);
-      properties.push({
-        ps,
-        parser: recur5(ps.type),
-        name: ps.name,
-        type: ps.type
-      });
-    }
-    const indexCount = ast.indexSignatures.length;
-    if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
-      return fromRefinement(ast, isNotNullish);
-    }
-    return fnUntracedEager2(function* (oinput, options) {
-      if (oinput._tag === "None") {
-        return oinput;
-      }
-      const input = oinput.value;
-      if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
-        return yield* fail5(new InvalidType(ast, oinput));
-      }
-      const out = {};
-      let issues;
-      const errorsAllOption = options.errors === "all";
-      const onExcessPropertyError = options.onExcessProperty === "error";
-      const onExcessPropertyPreserve = options.onExcessProperty === "preserve";
-      let inputKeys;
-      if (ast.indexSignatures.length === 0 && (onExcessPropertyError || onExcessPropertyPreserve)) {
-        inputKeys = Reflect.ownKeys(input);
-        for (let i = 0; i < inputKeys.length; i++) {
-          const key = inputKeys[i];
-          if (!expectedKeysSet.has(key)) {
-            if (onExcessPropertyError) {
-              const issue = new Pointer([key], new UnexpectedKey(ast, input[key]));
-              if (errorsAllOption) {
-                if (issues) {
-                  issues.push(issue);
-                } else {
-                  issues = [issue];
-                }
-                continue;
-              } else {
-                return yield* fail5(new Composite(ast, oinput, [issue]));
-              }
-            } else {
-              set3(out, key, input[key]);
-            }
-          }
-        }
-      }
-      for (let i = 0; i < propertyCount; i++) {
-        const p = properties[i];
-        const value3 = Object.hasOwn(input, p.name) ? some2(input[p.name]) : none2();
-        const eff = p.parser(value3, options);
-        const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
-        if (exit3._tag === "Failure") {
-          const issueProp = findError2(exit3.cause);
-          if (isFailure2(issueProp)) {
-            return yield* exit3;
-          }
-          const issue = new Pointer([p.name], issueProp.success);
-          if (errorsAllOption) {
-            if (issues) issues.push(issue);
-            else issues = [issue];
-            continue;
-          } else {
-            return yield* fail5(new Composite(ast, oinput, [issue]));
-          }
-        } else if (exit3.value._tag === "Some") {
-          set3(out, p.name, exit3.value.value);
-        } else if (!isOptional(p.type)) {
-          const issue = new Pointer([p.name], new MissingKey(p.type.context?.annotations));
-          if (errorsAllOption) {
-            if (issues) issues.push(issue);
-            else issues = [issue];
-            continue;
-          } else {
-            return yield* fail5(new Composite(ast, oinput, [issue]));
-          }
-        }
-      }
-      if (indexCount > 0) {
-        for (let i = 0; i < indexCount; i++) {
-          const is3 = ast.indexSignatures[i];
-          const keys5 = getIndexSignatureKeys(input, is3.parameter);
-          for (let j = 0; j < keys5.length; j++) {
-            const key = keys5[j];
-            const parserKey = recur5(indexSignatureParameterFromString(is3.parameter));
-            const effKey = parserKey(some2(key), options);
-            const exitKey = effectIsExit(effKey) ? effKey : yield* exit2(effKey);
-            if (exitKey._tag === "Failure") {
-              const issueKey = findError2(exitKey.cause);
-              if (isFailure2(issueKey)) {
-                return yield* exitKey;
-              }
-              const issue = new Pointer([key], issueKey.success);
-              if (errorsAllOption) {
-                if (issues) issues.push(issue);
-                else issues = [issue];
-                continue;
-              }
-              return yield* fail5(new Composite(ast, oinput, [issue]));
-            }
-            const value3 = some2(input[key]);
-            const parserValue = recur5(is3.type);
-            const effValue = parserValue(value3, options);
-            const exitValue = effectIsExit(effValue) ? effValue : yield* exit2(effValue);
-            if (exitValue._tag === "Failure") {
-              const issueValue = findError2(exitValue.cause);
-              if (isFailure2(issueValue)) {
-                return yield* exitValue;
-              }
-              const issue = new Pointer([key], issueValue.success);
-              if (errorsAllOption) {
-                if (issues) issues.push(issue);
-                else issues = [issue];
-                continue;
-              } else {
-                return yield* fail5(new Composite(ast, oinput, [issue]));
-              }
-            } else if (exitKey.value._tag === "Some" && exitValue.value._tag === "Some") {
-              const k2 = exitKey.value.value;
-              const v2 = exitValue.value.value;
-              if (is3.merge && is3.merge.decode && Object.hasOwn(out, k2)) {
-                const [k, v] = is3.merge.decode.combine([k2, out[k2]], [k2, v2]);
-                set3(out, k, v);
-              } else {
-                set3(out, k2, v2);
-              }
-            }
-          }
-        }
-      }
-      if (issues) {
-        return yield* fail5(new Composite(ast, oinput, issues));
-      }
-      if (options.propertyOrder === "original") {
-        const keys5 = (inputKeys ?? Reflect.ownKeys(input)).concat(expectedKeys);
-        const preserved = {};
-        for (const key of keys5) {
-          if (Object.hasOwn(out, key)) {
-            set3(preserved, key, out[key]);
-          }
-        }
-        return some2(preserved);
-      }
-      return some2(out);
-    });
-  }
-  rebuild(recur5, flipMerge) {
-    const props = mapOrSame(this.propertySignatures, (ps) => {
-      const t = recur5(ps.type);
-      return t === ps.type ? ps : new PropertySignature(ps.name, t);
-    });
-    const indexes = mapOrSame(this.indexSignatures, (is3) => {
-      const p = recur5(is3.parameter);
-      const t = recur5(is3.type);
-      const merge7 = flipMerge ? is3.merge?.flip() : is3.merge;
-      return p === is3.parameter && t === is3.type && merge7 === is3.merge ? is3 : new IndexSignature(p, t, merge7);
-    });
-    return props === this.propertySignatures && indexes === this.indexSignatures ? this : new _Objects(props, indexes, this.annotations, this.checks, void 0, this.context);
-  }
-  /** @internal */
-  flip(recur5) {
-    return this.rebuild(recur5, true);
-  }
-  /** @internal */
-  recur(recur5) {
-    return this.rebuild(recur5, false);
-  }
-  /** @internal */
-  getExpected() {
-    if (this.propertySignatures.length === 0 && this.indexSignatures.length === 0) return "object | array";
-    return "object";
-  }
-};
-function mergeChecks(checks, b) {
-  if (!checks) {
-    return b.checks;
-  }
-  if (!b.checks) {
-    return checks;
-  }
-  return [...checks, ...b.checks];
-}
-function struct(fields, checks, annotations) {
-  return new Objects(Reflect.ownKeys(fields).map((key) => {
-    return new PropertySignature(key, fields[key].ast);
-  }), [], annotations, checks);
-}
-function getAST(self) {
-  return self.ast;
-}
-function tuple(elements, checks = void 0) {
-  return new Arrays(false, elements.map((e) => e.ast), [], void 0, checks);
-}
-function union4(members, mode, checks) {
-  return new Union(members.map(getAST), mode, void 0, checks);
-}
-function structWithRest(ast, records) {
-  if (ast.encoding || records.some((r) => r.encoding)) {
-    throw new Error("StructWithRest does not support encodings");
-  }
-  let propertySignatures = ast.propertySignatures;
-  let indexSignatures = ast.indexSignatures;
-  let checks = ast.checks;
-  for (const r of records) {
-    propertySignatures = propertySignatures.concat(r.propertySignatures);
-    indexSignatures = indexSignatures.concat(r.indexSignatures);
-    checks = mergeChecks(checks, r);
-  }
-  return new Objects(propertySignatures, indexSignatures, void 0, checks);
-}
-function tupleWithRest(ast, rest) {
-  if (ast.encoding) {
-    throw new Error("TupleWithRest does not support encodings");
-  }
-  return new Arrays(ast.isMutable, ast.elements, rest, void 0, ast.checks);
-}
-function getCandidateTypes(ast) {
-  switch (ast._tag) {
-    case "Null":
-      return ["null"];
-    case "Undefined":
-    case "Void":
-      return ["undefined"];
-    case "String":
-    case "TemplateLiteral":
-      return ["string"];
-    case "Number":
-      return ["number"];
-    case "Boolean":
-      return ["boolean"];
-    case "Symbol":
-    case "UniqueSymbol":
-      return ["symbol"];
-    case "BigInt":
-      return ["bigint"];
-    case "Arrays":
-      return ["array"];
-    case "ObjectKeyword":
-      return ["object", "array", "function"];
-    case "Objects":
-      return ast.propertySignatures.length || ast.indexSignatures.length ? ["object"] : ["object", "array"];
-    case "Enum":
-      return Array.from(new Set(ast.enums.map(([, v]) => typeof v)));
-    case "Literal":
-      return [typeof ast.literal];
-    case "Union":
-      return Array.from(new Set(ast.types.flatMap(getCandidateTypes)));
-    default:
-      return ["null", "undefined", "string", "number", "boolean", "symbol", "bigint", "object", "array", "function"];
-  }
-}
-function collectSentinels(ast) {
-  switch (ast._tag) {
-    default:
-      return [];
-    case "Declaration": {
-      const s = ast.annotations?.["~sentinels"];
-      return Array.isArray(s) ? s : [];
-    }
-    case "Objects":
-      return ast.propertySignatures.flatMap((ps) => {
-        const type = ps.type;
-        if (!isOptional(type)) {
-          if (isLiteral(type)) {
-            return [{
-              key: ps.name,
-              literal: type.literal
-            }];
-          }
-          if (isUniqueSymbol(type)) {
-            return [{
-              key: ps.name,
-              literal: type.symbol
-            }];
-          }
-        }
-        return [];
-      });
-    case "Arrays":
-      return ast.elements.flatMap((e, i) => {
-        return isLiteral(e) && !isOptional(e) ? [{
-          key: i,
-          literal: e.literal
-        }] : [];
-      });
-    case "Suspend":
-      return collectSentinels(ast.thunk());
-  }
-}
-var candidateIndexCache = /* @__PURE__ */ new WeakMap();
-function getIndex(types) {
-  let idx = candidateIndexCache.get(types);
-  if (idx) return idx;
-  idx = {};
-  for (const a of types) {
-    const encoded = toEncoded(a);
-    if (isNever2(encoded)) continue;
-    const types2 = getCandidateTypes(encoded);
-    const sentinels = collectSentinels(encoded);
-    idx.byType ??= {};
-    for (const t of types2) (idx.byType[t] ??= []).push(a);
-    if (sentinels.length > 0) {
-      idx.bySentinel ??= /* @__PURE__ */ new Map();
-      for (const {
-        key,
-        literal
-      } of sentinels) {
-        let m = idx.bySentinel.get(key);
-        if (!m) idx.bySentinel.set(key, m = /* @__PURE__ */ new Map());
-        let arr = m.get(literal);
-        if (!arr) m.set(literal, arr = []);
-        arr.push(a);
-      }
-    } else {
-      idx.otherwise ??= {};
-      for (const t of types2) (idx.otherwise[t] ??= []).push(a);
-    }
-  }
-  candidateIndexCache.set(types, idx);
-  return idx;
-}
-function filterLiterals(input) {
-  return (ast) => {
-    const encoded = toEncoded(ast);
-    return encoded._tag === "Literal" ? encoded.literal === input : encoded._tag === "UniqueSymbol" ? encoded.symbol === input : true;
-  };
-}
-function getCandidates(input, types) {
-  const idx = getIndex(types);
-  const runtimeType = input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
-  if (idx.bySentinel) {
-    const base2 = idx.otherwise?.[runtimeType] ?? [];
-    if (runtimeType === "object" || runtimeType === "array") {
-      for (const [k, m] of idx.bySentinel) {
-        if (Object.hasOwn(input, k)) {
-          const match8 = m.get(input[k]);
-          if (match8) return [...match8, ...base2].filter(filterLiterals(input));
-        }
-      }
-    }
-    return base2;
-  }
-  return (idx.byType?.[runtimeType] ?? []).filter(filterLiterals(input));
-}
-var Union = class _Union extends Base2 {
-  _tag = "Union";
-  types;
-  mode;
-  constructor(types, mode, annotations, checks, encoding, context4) {
-    super(annotations, checks, encoding, context4);
-    this.types = types;
-    this.mode = mode;
-  }
-  /** @internal */
-  getParser(recur5) {
-    const ast = this;
-    return fnUntracedEager2(function* (oinput, options) {
-      if (oinput._tag === "None") {
-        return oinput;
-      }
-      const input = oinput.value;
-      const oneOf = ast.mode === "oneOf";
-      const candidates = getCandidates(input, ast.types);
-      let issues;
-      const tracking = {
-        out: void 0,
-        successes: []
-      };
-      for (let i = 0; i < candidates.length; i++) {
-        const candidate = candidates[i];
-        const parser = recur5(candidate);
-        const eff = parser(oinput, options);
-        const exit3 = effectIsExit(eff) ? eff : yield* exit2(eff);
-        if (exit3._tag === "Failure") {
-          const issueResult = findError2(exit3.cause);
-          if (isFailure2(issueResult)) {
-            return yield* exit3;
-          }
-          if (issues) issues.push(issueResult.success);
-          else issues = [issueResult.success];
-          continue;
-        } else {
-          if (tracking.out && oneOf) {
-            tracking.successes.push(candidate);
-            return yield* fail5(new OneOf(ast, input, tracking.successes));
-          }
-          tracking.out = exit3.value;
-          tracking.successes.push(candidate);
-          if (!oneOf) {
-            break;
-          }
-        }
-      }
-      if (tracking.out) {
-        return tracking.out;
-      } else {
-        return yield* fail5(new AnyOf(ast, input, issues ?? []));
-      }
-    });
-  }
-  /** @internal */
-  recur(recur5) {
-    const types = mapOrSame(this.types, recur5);
-    return types === this.types ? this : new _Union(types, this.mode, this.annotations, this.checks, void 0, this.context);
-  }
-  /** @internal */
-  getExpected(getExpected2) {
-    const expected = this.annotations?.expected;
-    if (typeof expected === "string") return expected;
-    if (this.types.length === 0) return "never";
-    const types = this.types.map((type) => {
-      const encoded = toEncoded(type);
-      switch (encoded._tag) {
-        case "Arrays": {
-          const literals = encoded.elements.filter(isLiteral);
-          if (literals.length > 0) {
-            return `${formatIsMutable(encoded.isMutable)}[ ${literals.map((e) => getExpected2(e) + formatIsOptional(e.context?.isOptional)).join(", ")}, ... ]`;
-          }
-          break;
-        }
-        case "Objects": {
-          const literals = encoded.propertySignatures.filter((ps) => isLiteral(ps.type));
-          if (literals.length > 0) {
-            return `{ ${literals.map((ps) => `${formatIsMutable(ps.type.context?.isMutable)}${formatPropertyKey(ps.name)}${formatIsOptional(ps.type.context?.isOptional)}: ${getExpected2(ps.type)}`).join(", ")}, ... }`;
-          }
-          break;
-        }
-      }
-      return getExpected2(encoded);
-    });
-    return Array.from(new Set(types)).join(" | ");
-  }
-};
-var nonFiniteLiterals = /* @__PURE__ */ new Union([/* @__PURE__ */ new Literal("Infinity"), /* @__PURE__ */ new Literal("-Infinity"), /* @__PURE__ */ new Literal("NaN")], "anyOf");
-var numberToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([number2, nonFiniteLiterals], "anyOf"), /* @__PURE__ */ new Transformation(/* @__PURE__ */ Number4(), /* @__PURE__ */ transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
-function formatIsMutable(isMutable2) {
-  return isMutable2 ? "" : "readonly ";
-}
-function formatIsOptional(isOptional2) {
-  return isOptional2 ? "?" : "";
-}
-function memoizeThunk(f) {
-  let done4 = false;
-  let a;
-  return () => {
-    if (done4) {
-      return a;
-    }
-    a = f();
-    done4 = true;
-    return a;
-  };
-}
-var Suspend = class _Suspend extends Base2 {
-  _tag = "Suspend";
-  thunk;
-  constructor(thunk, annotations, checks, encoding, context4) {
-    super(annotations, checks, encoding, context4);
-    this.thunk = memoizeThunk(thunk);
-  }
-  /** @internal */
-  getParser(recur5) {
-    return recur5(this.thunk());
-  }
-  /** @internal */
-  recur(recur5) {
-    return new _Suspend(() => recur5(this.thunk()), this.annotations, this.checks, void 0, this.context);
-  }
-  /** @internal */
-  getExpected(getExpected2) {
-    return getExpected2(this.thunk());
-  }
-};
-var Filter2 = class _Filter extends Class {
-  _tag = "Filter";
-  run;
-  annotations;
-  /**
-   * Whether the parsing process should be aborted after this check has failed.
-   */
-  aborted;
-  constructor(run4, annotations = void 0, aborted = false) {
-    super();
-    this.run = run4;
-    this.annotations = annotations;
-    this.aborted = aborted;
-  }
-  annotate(annotations) {
-    return new _Filter(this.run, {
-      ...this.annotations,
-      ...annotations
-    }, this.aborted);
-  }
-  abort() {
-    return new _Filter(this.run, this.annotations, true);
-  }
-  and(other, annotations) {
-    return new FilterGroup([this, other], annotations);
-  }
-};
-var FilterGroup = class _FilterGroup extends Class {
-  _tag = "FilterGroup";
-  checks;
-  annotations;
-  constructor(checks, annotations = void 0) {
-    super();
-    this.checks = checks;
-    this.annotations = annotations;
-  }
-  annotate(annotations) {
-    return new _FilterGroup(this.checks, {
-      ...this.annotations,
-      ...annotations
-    });
-  }
-  and(other, annotations) {
-    return new _FilterGroup([this, other], annotations);
-  }
-};
-function makeFilter(filter12, annotations, aborted = false) {
-  return new Filter2((input, ast, options) => make21(input, filter12(input, ast, options)), annotations, aborted);
-}
-function makeFilterByGuard(is3, annotations) {
-  return new Filter2(
-    (input) => is3(input) ? void 0 : new InvalidValue(some2(input)),
-    annotations,
-    true
-    // after a guard, we always want to abort
-  );
-}
-function isPattern(regExp, annotations) {
-  const source = regExp.source;
-  return makeFilter((s) => regExp.test(s), {
-    expected: `a string matching the RegExp ${source}`,
-    meta: {
-      _tag: "isPattern",
-      regExp
-    },
-    toArbitraryConstraint: {
-      string: {
-        patterns: [regExp.source]
-      }
-    },
-    ...annotations
-  });
-}
-function modifyOwnPropertyDescriptors(ast, f) {
-  const d = Object.getOwnPropertyDescriptors(ast);
-  f(d);
-  return Object.create(Object.getPrototypeOf(ast), d);
-}
-function replaceEncoding(ast, encoding) {
-  if (ast.encoding === encoding) {
-    return ast;
-  }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.encoding.value = encoding;
-  });
-}
-function replaceContext(ast, context4) {
-  if (ast.context === context4) {
-    return ast;
-  }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.context.value = context4;
-  });
-}
-function getLastEncoding(ast) {
-  return ast.encoding ? getLastEncoding(ast.encoding[ast.encoding.length - 1].to) : ast;
-}
-function annotate(ast, annotations) {
-  if (ast.checks) {
-    const last = ast.checks[ast.checks.length - 1];
-    return replaceChecks(ast, append(ast.checks.slice(0, -1), last.annotate(annotations)));
-  }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.annotations.value = {
-      ...d.annotations.value,
-      ...annotations
-    };
-  });
-}
-function replaceChecks(ast, checks) {
-  if (ast.checks === checks) {
-    return ast;
-  }
-  return modifyOwnPropertyDescriptors(ast, (d) => {
-    d.checks.value = checks;
-  });
-}
-function appendChecks(ast, checks) {
-  return replaceChecks(ast, ast.checks ? [...ast.checks, ...checks] : checks);
-}
-function updateLastLink(encoding, f) {
-  const links = encoding;
-  const last = links[links.length - 1];
-  const to = f(last.to);
-  if (to !== last.to) {
-    return append(encoding.slice(0, encoding.length - 1), new Link(to, last.transformation));
-  }
-  return encoding;
-}
-function applyToLastLink(f) {
-  return (ast) => ast.encoding ? replaceEncoding(ast, updateLastLink(ast.encoding, f)) : ast;
-}
-function middlewareDecoding(ast, middleware) {
-  return appendTransformation(ast, middleware, toType(ast));
-}
-function middlewareEncoding(ast, middleware) {
-  return appendTransformation(toEncoded(ast), middleware, ast);
-}
-function appendTransformation(from, transformation, to) {
-  const link2 = new Link(from, transformation);
-  return replaceEncoding(to, to.encoding ? [...to.encoding, link2] : [link2]);
-}
-function brand(ast, brand3) {
-  const existing = resolveBrands(ast);
-  const brands = existing ? [...existing, brand3] : [brand3];
-  return annotate(ast, {
-    brands
-  });
-}
-function mapOrSame(as4, f) {
-  let changed = false;
-  const out = new Array(as4.length);
-  for (let i = 0; i < as4.length; i++) {
-    const a = as4[i];
-    const fa = f(a);
-    if (fa !== a) {
-      changed = true;
-    }
-    out[i] = fa;
-  }
-  return changed ? out : as4;
-}
-function annotateKey(ast, annotations) {
-  const context4 = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, ast.context.defaultValue, {
-    ...ast.context.annotations,
-    ...annotations
-  }) : new Context(false, false, void 0, annotations);
-  return replaceContext(ast, context4);
-}
-var optionalKeyLastLink = /* @__PURE__ */ applyToLastLink(optionalKey);
-function optionalKey(ast) {
-  const context4 = ast.context ? ast.context.isOptional === false ? new Context(true, ast.context.isMutable, ast.context.defaultValue, ast.context.annotations) : ast.context : new Context(true, false);
-  return optionalKeyLastLink(replaceContext(ast, context4));
-}
-var mutableKeyLastLink = /* @__PURE__ */ applyToLastLink(mutableKey);
-function mutableKey(ast) {
-  const context4 = ast.context ? ast.context.isMutable === false ? new Context(ast.context.isOptional, true, ast.context.defaultValue, ast.context.annotations) : ast.context : new Context(false, true);
-  return mutableKeyLastLink(replaceContext(ast, context4));
-}
-function withConstructorDefault(ast, defaultValue) {
-  const transformation = new Transformation(withDefault(defaultValue), passthrough2());
-  const encoding = [new Link(unknown, transformation)];
-  const context4 = ast.context ? new Context(ast.context.isOptional, ast.context.isMutable, encoding, ast.context.annotations) : new Context(false, false, encoding);
-  return replaceContext(ast, context4);
-}
-function decodeTo(from, to, transformation) {
-  return appendTransformation(from, transformation, to);
-}
-function parseParameter(ast) {
-  switch (ast._tag) {
-    case "Literal":
-      return {
-        literals: isPropertyKey(ast.literal) ? [ast.literal] : [],
-        parameters: []
-      };
-    case "UniqueSymbol":
-      return {
-        literals: [ast.symbol],
-        parameters: []
-      };
-    case "String":
-    case "Number":
-    case "Symbol":
-    case "TemplateLiteral":
-      return {
-        literals: [],
-        parameters: [ast]
-      };
-    case "Union": {
-      const out = {
-        literals: [],
-        parameters: []
-      };
-      for (let i = 0; i < ast.types.length; i++) {
-        const parsed = parseParameter(ast.types[i]);
-        out.literals = out.literals.concat(parsed.literals);
-        out.parameters = out.parameters.concat(parsed.parameters);
-      }
-      return out;
-    }
-  }
-  return {
-    literals: [],
-    parameters: []
-  };
-}
-function record(key, value3, keyValueCombiner) {
-  const {
-    literals,
-    parameters: indexSignatures
-  } = parseParameter(key);
-  return new Objects(literals.map((literal) => new PropertySignature(literal, value3)), indexSignatures.map((parameter) => new IndexSignature(parameter, value3, keyValueCombiner)));
-}
-function isOptional(ast) {
-  return ast.context?.isOptional ?? false;
-}
-function isMutable(ast) {
-  return ast.context?.isMutable ?? false;
-}
-var toType = /* @__PURE__ */ memoize((ast) => {
-  if (ast.encoding) {
-    return toType(replaceEncoding(ast, void 0));
-  }
-  const out = ast;
-  return out.recur?.(toType) ?? out;
-});
-var toEncoded = /* @__PURE__ */ memoize((ast) => {
-  return toType(flip3(ast));
-});
-function flipEncoding(ast, encoding) {
-  const links = encoding;
-  const len = links.length;
-  const last = links[len - 1];
-  const ls = [new Link(flip3(replaceEncoding(ast, void 0)), links[0].transformation.flip())];
-  for (let i = 1; i < len; i++) {
-    ls.unshift(new Link(flip3(links[i - 1].to), links[i].transformation.flip()));
-  }
-  const to = flip3(last.to);
-  if (to.encoding) {
-    return replaceEncoding(to, [...to.encoding, ...ls]);
-  } else {
-    return replaceEncoding(to, ls);
-  }
-}
-var flip3 = /* @__PURE__ */ memoize((ast) => {
-  if (ast.encoding) {
-    return flipEncoding(ast, ast.encoding);
-  }
-  const out = ast;
-  return out.flip?.(flip3) ?? out.recur?.(flip3) ?? out;
-});
-function containsUndefined(ast) {
-  switch (ast._tag) {
-    case "Undefined":
-      return true;
-    case "Union":
-      return ast.types.some(containsUndefined);
-    default:
-      return false;
-  }
-}
-function getTemplateLiteralSource(ast, top) {
-  return ast.encodedParts.map((part) => handleTemplateLiteralASTPartParens(part, getTemplateLiteralASTPartPattern(part), top)).join("");
-}
-var getTemplateLiteralRegExp = /* @__PURE__ */ memoize((ast) => {
-  return new globalThis.RegExp(`^${getTemplateLiteralSource(ast, true)}$`);
-});
-function getTemplateLiteralASTPartPattern(part) {
-  switch (part._tag) {
-    case "Literal":
-      return escape(globalThis.String(part.literal));
-    case "String":
-      return STRING_PATTERN;
-    case "Number":
-      return FINITE_PATTERN;
-    case "BigInt":
-      return BIGINT_PATTERN;
-    case "TemplateLiteral":
-      return getTemplateLiteralSource(part, false);
-    case "Union":
-      return part.types.map(getTemplateLiteralASTPartPattern).join("|");
-  }
-}
-function handleTemplateLiteralASTPartParens(part, s, top) {
-  if (isUnion(part)) {
-    if (!top) {
-      return `(?:${s})`;
-    }
-  } else if (!top) {
-    return s;
-  }
-  return `(${s})`;
-}
-function fromConst(ast, value3) {
-  const succeed9 = succeedSome2(value3);
-  return (oinput) => {
-    if (oinput._tag === "None") {
-      return succeedNone2;
-    }
-    return oinput.value === value3 ? succeed9 : fail5(new InvalidType(ast, oinput));
-  };
-}
-function fromRefinement(ast, refinement) {
-  return (oinput) => {
-    if (oinput._tag === "None") {
-      return succeedNone2;
-    }
-    return refinement(oinput.value) ? succeed6(oinput) : fail5(new InvalidType(ast, oinput));
-  };
-}
-var enumsToLiterals = /* @__PURE__ */ memoize((ast) => {
-  return new Union(ast.enums.map((e) => new Literal(e[1], {
-    title: e[0]
-  })), "anyOf");
-});
-function toCodec(f) {
-  function out(ast) {
-    return ast.encoding ? replaceEncoding(ast, updateLastLink(ast.encoding, out)) : f(ast);
-  }
-  return memoize(out);
-}
-var indexSignatureParameterFromString = /* @__PURE__ */ toCodec((ast) => {
-  switch (ast._tag) {
-    default:
-      return ast;
-    case "Number":
-      return ast.toCodecStringTree();
-    case "Union":
-      return ast.recur(indexSignatureParameterFromString);
-  }
-});
-var templateLiteralPartFromString = /* @__PURE__ */ toCodec((ast) => {
-  switch (ast._tag) {
-    default:
-      return ast;
-    case "String":
-    case "TemplateLiteral":
-      return ast;
-    case "BigInt":
-    case "Number":
-    case "Literal":
-      return ast.toCodecStringTree();
-    case "Union":
-      return ast.recur(templateLiteralPartFromString);
-  }
-});
-var STRING_PATTERN = "[\\s\\S]*?";
-var isStringFiniteRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${FINITE_PATTERN}$`);
-function isStringFinite(annotations) {
-  return isPattern(isStringFiniteRegExp, {
-    expected: "a string representing a finite number",
-    meta: {
-      _tag: "isStringFinite",
-      regExp: isStringFiniteRegExp
-    },
-    ...annotations
-  });
-}
-var finiteString = /* @__PURE__ */ appendChecks(string2, [/* @__PURE__ */ isStringFinite()]);
-var finiteToString = /* @__PURE__ */ new Link(finiteString, numberFromString);
-var numberToString = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([finiteString, nonFiniteLiterals], "anyOf"), numberFromString);
-var BIGINT_PATTERN = "-?\\d+";
-var isStringBigIntRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${BIGINT_PATTERN}$`);
-function isStringBigInt(annotations) {
-  return isPattern(isStringBigIntRegExp, {
-    expected: "a string representing a bigint",
-    meta: {
-      _tag: "isStringBigInt",
-      regExp: isStringBigIntRegExp
-    },
-    ...annotations
-  });
-}
-var bigIntString = /* @__PURE__ */ appendChecks(string2, [/* @__PURE__ */ isStringBigInt({
-  expected: "a string representing a bigint"
-})]);
-var bigIntToString = /* @__PURE__ */ new Link(bigIntString, bigintFromString);
-var REGEXP_PATTERN = "Symbol\\((.*)\\)";
-var isStringSymbolRegExp = /* @__PURE__ */ new globalThis.RegExp(`^${REGEXP_PATTERN}$`);
-var symbolString = /* @__PURE__ */ appendChecks(string2, [/* @__PURE__ */ isStringSymbol()]);
-var symbolToString = /* @__PURE__ */ new Link(symbolString, /* @__PURE__ */ new Transformation(/* @__PURE__ */ transform((description) => globalThis.Symbol.for(isStringSymbolRegExp.exec(description)[1])), /* @__PURE__ */ transformOrFail((sym) => {
-  const key = globalThis.Symbol.keyFor(sym);
-  if (key !== void 0) {
-    return succeed6(globalThis.String(sym));
-  }
-  return fail5(new Forbidden(some2(sym), {
-    message: "cannot serialize to string, Symbol is not registered"
-  }));
-})));
-function isStringSymbol(annotations) {
-  return isPattern(isStringSymbolRegExp, {
-    expected: "a string representing a symbol",
-    meta: {
-      _tag: "isStringSymbol",
-      regExp: isStringSymbolRegExp
-    },
-    ...annotations
-  });
-}
-function collectIssues(checks, value3, issues, ast, options) {
-  for (let i = 0; i < checks.length; i++) {
-    const check3 = checks[i];
-    if (check3._tag === "FilterGroup") {
-      collectIssues(check3.checks, value3, issues, ast, options);
-    } else {
-      const issue = check3.run(value3, ast, options);
-      if (issue) {
-        issues.push(new Filter(value3, check3, issue));
-        if (check3.aborted || options?.errors !== "all") {
-          return;
-        }
-      }
-    }
-  }
-}
-function runChecks(checks, s) {
-  const issues = [];
-  collectIssues(checks, s, issues, unknown, {
-    errors: "all"
-  });
-  if (isArrayNonEmpty2(issues)) {
-    const issue = new Composite(unknown, some2(s), issues);
-    return fail2(issue);
-  }
-  return succeed2(s);
-}
-var ClassTypeId = "~effect/Schema/Class";
-var STRUCTURAL_ANNOTATION_KEY = "~structural";
-function isJson(u) {
-  const seen = /* @__PURE__ */ new Set();
-  return recur5(u);
-  function recur5(u2) {
-    if (u2 === null || typeof u2 === "string" || typeof u2 === "boolean") {
-      return true;
-    }
-    if (typeof u2 === "number") {
-      return globalThis.Number.isFinite(u2);
-    }
-    if (typeof u2 !== "object" || u2 === void 0) {
-      return false;
-    }
-    if (seen.has(u2)) {
-      return false;
-    }
-    seen.add(u2);
-    if (Array.isArray(u2)) {
-      return u2.every(recur5);
-    }
-    return Object.keys(u2).every((key) => recur5(u2[key]));
-  }
-}
-var Json = /* @__PURE__ */ new Declaration([], () => (input, ast) => isJson(input) ? succeed6(input) : fail5(new InvalidType(ast, some2(input))), {
-  typeConstructor: {
-    _tag: "effect/Json"
-  },
-  generation: {
-    runtime: `Schema.Json`,
-    Type: `Schema.Json`
-  },
-  expected: "JSON value",
-  toCodecJson: () => new Link(unknown, passthrough3())
-});
-var MutableJson = /* @__PURE__ */ annotate(Json, {
-  typeConstructor: {
-    _tag: "effect/MutableJson"
-  },
-  generation: {
-    runtime: `Schema.MutableJson`,
-    Type: `Schema.MutableJson`
-  }
-});
-var unknownToNull = /* @__PURE__ */ new Link(null_, /* @__PURE__ */ new Transformation(/* @__PURE__ */ passthrough2(), /* @__PURE__ */ transform(() => null)));
-var unknownToJson = /* @__PURE__ */ new Link(Json, /* @__PURE__ */ passthrough3());
-function isStringTree(u) {
-  const seen = /* @__PURE__ */ new Set();
-  return recur5(u);
-  function recur5(u2) {
-    if (u2 === void 0 || typeof u2 === "string") {
-      return true;
-    }
-    if (typeof u2 !== "object" || u2 === null) {
-      return false;
-    }
-    if (seen.has(u2)) {
-      return false;
-    }
-    seen.add(u2);
-    if (Array.isArray(u2)) {
-      return u2.every(recur5);
-    }
-    return Object.keys(u2).every((key) => recur5(u2[key]));
-  }
-}
-var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast) => isStringTree(input) ? succeed6(input) : fail5(new InvalidType(ast, some2(input))), {
-  expected: "StringTree",
-  toCodecStringTree: () => new Link(unknown, passthrough3())
-});
-var unknownToStringTree = /* @__PURE__ */ new Link(StringTree, /* @__PURE__ */ passthrough3());
+var size6 = size5;
 
 // node_modules/effect/dist/Struct.js
 var Struct_exports = {};
@@ -21329,7 +21218,7 @@ __export(Struct_exports, {
   evolve: () => evolve,
   evolveEntries: () => evolveEntries,
   evolveKeys: () => evolveKeys,
-  get: () => get4,
+  get: () => get5,
   keys: () => keys3,
   lambda: () => lambda,
   makeCombiner: () => makeCombiner,
@@ -21343,7 +21232,7 @@ __export(Struct_exports, {
   pick: () => pick,
   renameKeys: () => renameKeys
 });
-var get4 = /* @__PURE__ */ dual(2, (self, key) => self[key]);
+var get5 = /* @__PURE__ */ dual(2, (self, key) => self[key]);
 var keys3 = (self) => Object.keys(self);
 var pick = /* @__PURE__ */ dual(2, (self, keys5) => {
   return buildStruct(self, (k, v) => keys5.includes(k) ? [k, v] : void 0);
@@ -21433,10 +21322,10 @@ function makeReducer3(combiner2) {
 }
 
 // node_modules/effect/dist/internal/errors.js
-function errorWithPath(message, path2) {
-  if (path2.length > 0) {
+function errorWithPath(message, path3) {
+  if (path3.length > 0) {
     message += `
-  at ${formatPath(path2)}`;
+  at ${formatPath(path3)}`;
   }
   return new Error(message);
 }
@@ -21538,10 +21427,10 @@ function getFilters(checks) {
 var memoized = /* @__PURE__ */ memoize((ast) => {
   return recur(ast, []);
 });
-function recur(ast, path2) {
+function recur(ast, path3) {
   const annotation = resolve(ast)?.toArbitrary;
   if (annotation) {
-    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path2)) : [];
+    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path3)) : [];
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
     return (fc, ctx) => applyChecks(ast, filters, annotation(typeParameters.map((tp) => tp(fc, resetContext(ctx))))(fc, f(ctx)));
@@ -21549,16 +21438,16 @@ function recur(ast, path2) {
   if (ast.checks) {
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
-    const lawc = recur(replaceChecks(ast, void 0), path2);
+    const lawc = recur(replaceChecks(ast, void 0), path3);
     return (fc, ctx) => applyChecks(ast, filters, lawc(fc, f(ctx)));
   }
-  return base(ast, path2);
+  return base(ast, path3);
 }
-function base(ast, path2) {
+function base(ast, path3) {
   switch (ast._tag) {
     case "Never":
     case "Declaration":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path2);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path3);
     case "Null":
       return (fc) => fc.constant(null);
     case "Void":
@@ -21597,14 +21486,14 @@ function base(ast, path2) {
     case "ObjectKeyword":
       return (fc) => fc.oneof(fc.object(), fc.array(fc.anything()));
     case "Enum":
-      return recur(enumsToLiterals(ast), path2);
+      return recur(enumsToLiterals(ast), path3);
     case "TemplateLiteral":
       return (fc) => fc.stringMatching(getTemplateLiteralRegExp(ast));
     case "Arrays":
       return (fc, ctx) => {
         const reset = resetContext(ctx);
         const elements = ast.elements.map((e, i) => {
-          const out2 = recur(e, [...path2, i])(fc, reset);
+          const out2 = recur(e, [...path3, i])(fc, reset);
           if (!isOptional(e)) {
             return out2.map(some2);
           }
@@ -21613,7 +21502,7 @@ function base(ast, path2) {
         let out = fc.tuple(...elements).map(getSomes);
         if (isReadonlyArrayNonEmpty(ast.rest)) {
           const len = ast.elements.length;
-          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path2, len + i])(fc, reset));
+          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path3, len + i])(fc, reset));
           const rest = array2(fc, ast.elements.length === 0 ? ctx : reset, head2);
           out = out.chain((as4) => {
             if (as4.length < len) {
@@ -21643,13 +21532,13 @@ function base(ast, path2) {
           if (!isOptional(ps.type)) {
             requiredKeys.push(name);
           }
-          pss[name] = recur(ps.type, [...path2, name])(fc, reset);
+          pss[name] = recur(ps.type, [...path3, name])(fc, reset);
         }
         let out = fc.record(pss, {
           requiredKeys
         });
         for (const is3 of ast.indexSignatures) {
-          const entry = fc.tuple(recur(is3.parameter, path2)(fc, reset), recur(is3.type, path2)(fc, reset));
+          const entry = fc.tuple(recur(is3.parameter, path3)(fc, reset), recur(is3.type, path3)(fc, reset));
           const entries3 = array2(fc, ast.propertySignatures.length === 0 ? ctx : reset, entry);
           out = out.chain((o) => {
             return entries3.map((entries4) => {
@@ -21663,11 +21552,11 @@ function base(ast, path2) {
         return out;
       };
     case "Union":
-      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path2)(fc, ctx)));
+      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path3)(fc, ctx)));
     case "Suspend": {
       const memo2 = arbitraryMemoMap.get(ast);
       if (memo2) return memo2;
-      const get11 = memoizeThunk(() => recur(ast.thunk(), path2));
+      const get11 = memoizeThunk(() => recur(ast.thunk(), path3));
       const out = (fc, ctx) => fc.constant(null).chain(() => get11()(fc, {
         ...ctx,
         isSuspend: true
@@ -21723,7 +21612,7 @@ function makeOption(schema2) {
     return getSuccess3(runSyncExit2(parser(input, options)));
   };
 }
-function makeUnsafe8(schema2) {
+function makeUnsafe7(schema2) {
   const parser = makeEffect(schema2);
   return (input, options) => {
     return runSync2(mapErrorEager2(parser(input, options), (issue) => new Error(issue.toString(), {
@@ -21909,14 +21798,14 @@ var recur2 = /* @__PURE__ */ memoize((ast) => {
 var toEquivalence = /* @__PURE__ */ memoize((ast) => {
   return recur3(ast, []);
 });
-function recur3(ast, path2) {
+function recur3(ast, path3) {
   const annotation = resolve(ast)?.["toEquivalence"];
   if (annotation) {
-    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path2)) : []);
+    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path3)) : []);
   }
   switch (ast._tag) {
     case "Never":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path2);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path3);
     case "Declaration":
     case "Null":
     case "Undefined":
@@ -21935,9 +21824,9 @@ function recur3(ast, path2) {
     case "TemplateLiteral":
       return equals;
     case "Arrays": {
-      const elements = ast.elements.map((e, i) => recur3(e, [...path2, i]));
+      const elements = ast.elements.map((e, i) => recur3(e, [...path3, i]));
       const len = ast.elements.length;
-      const rest = ast.rest.map((r, i) => recur3(r, [...path2, len + i]));
+      const rest = ast.rest.map((r, i) => recur3(r, [...path3, len + i]));
       return make2((a, b) => {
         if (!Array.isArray(a) || !Array.isArray(b)) {
           return false;
@@ -21973,8 +21862,8 @@ function recur3(ast, path2) {
       if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
         return equals;
       }
-      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path2, ps.name]));
-      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path2));
+      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path3, ps.name]));
+      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path3));
       return make2((a, b) => {
         if (!isObject(a) || !isObject(b)) {
           return false;
@@ -22015,13 +21904,13 @@ function recur3(ast, path2) {
         for (let i = 0; i < candidates.length; i++) {
           const is3 = types[i];
           if (is3(a) && is3(b)) {
-            return recur3(candidates[i], path2)(a, b);
+            return recur3(candidates[i], path3)(a, b);
           }
         }
         return false;
       });
     case "Suspend": {
-      const get11 = memoizeThunk(() => recur3(ast.thunk(), path2));
+      const get11 = memoizeThunk(() => recur3(ast.thunk(), path3));
       return make2((a, b) => get11()(a, b));
     }
   }
@@ -22052,15 +21941,15 @@ var SchemaProto = {
     return this.rebuild(appendChecks(this.ast, checks));
   }
 };
-function make23(ast, options) {
+function make22(ast, options) {
   const self = Object.create(SchemaProto);
   if (options) {
     Object.assign(self, options);
   }
   self.ast = ast;
-  self.rebuild = (ast2) => make23(ast2, options);
+  self.rebuild = (ast2) => make22(ast2, options);
   self.makeEffect = flow(makeEffect(self), mapErrorEager2((issue) => new SchemaError(issue)));
-  self.make = makeUnsafe8(self);
+  self.make = makeUnsafe7(self);
   self.makeOption = makeOption(self);
   return self;
 }
@@ -22094,7 +21983,7 @@ function toCodecJsonBase(ast) {
     case "Declaration": {
       const getLink = ast.annotations?.toCodecJson ?? ast.annotations?.toCodec;
       if (isFunction(getLink)) {
-        const tps = isDeclaration(ast) ? ast.typeParameters.map((tp) => make23(toEncoded(tp))) : [];
+        const tps = isDeclaration(ast) ? ast.typeParameters.map((tp) => make22(toEncoded(tp))) : [];
         const link2 = getLink(tps);
         const to = toCodecJson(link2.to);
         return replaceEncoding(ast, to === link2.to ? [link2] : [new Link(to, link2.transformation)]);
@@ -22176,7 +22065,7 @@ function toCodecIsoBase(ast) {
     case "Declaration": {
       const getLink = ast.annotations?.toCodecIso ?? ast.annotations?.toCodec;
       if (isFunction(getLink)) {
-        const link2 = getLink(ast.typeParameters.map((tp) => make23(tp)));
+        const link2 = getLink(ast.typeParameters.map((tp) => make22(tp)));
         const to = toCodecIso(link2.to);
         return replaceEncoding(ast, to === link2.to ? [link2] : [new Link(to, link2.transformation)]);
       }
@@ -22276,7 +22165,7 @@ function fromASTs(asts) {
   function getEncodedSchema(last) {
     const getLink = last.annotations?.toCodecJson ?? last.annotations?.toCodec;
     if (isFunction(getLink)) {
-      const tps = last.typeParameters.map((tp) => make23(toEncoded(tp)));
+      const tps = last.typeParameters.map((tp) => make22(toEncoded(tp)));
       const link2 = getLink(tps);
       return replaceEncoding(last, [link2]);
     }
@@ -23012,7 +22901,7 @@ function getPartPattern(part) {
 }
 
 // node_modules/effect/dist/JsonPatch.js
-function get5(oldValue, newValue) {
+function get6(oldValue, newValue) {
   if (Object.is(oldValue, newValue)) return [];
   const patches = [];
   if (Array.isArray(oldValue) && Array.isArray(newValue)) {
@@ -23020,10 +22909,10 @@ function get5(oldValue, newValue) {
     const len2 = newValue.length;
     const shared = Math.min(len1, len2);
     for (let i = 0; i < shared; i++) {
-      const path2 = `/${i}`;
-      const patch = get5(oldValue[i], newValue[i]);
+      const path3 = `/${i}`;
+      const patch = get6(oldValue[i], newValue[i]);
       for (const op of patch) {
-        prefixPathInPlace(op, path2);
+        prefixPathInPlace(op, path3);
         patches.push(op);
       }
     }
@@ -23048,25 +22937,25 @@ function get5(oldValue, newValue) {
     const allKeys = Array.from(/* @__PURE__ */ new Set([...keys1, ...keys22])).sort();
     for (const key of allKeys) {
       const esc = escapeToken(key);
-      const path2 = `/${esc}`;
+      const path3 = `/${esc}`;
       const hasKey1 = Object.hasOwn(oldValue, key);
       const hasKey2 = Object.hasOwn(newValue, key);
       if (hasKey1 && hasKey2) {
-        const patch = get5(oldValue[key], newValue[key]);
+        const patch = get6(oldValue[key], newValue[key]);
         for (const op of patch) {
-          prefixPathInPlace(op, path2);
+          prefixPathInPlace(op, path3);
           patches.push(op);
         }
       } else if (!hasKey1 && hasKey2) {
         patches.push({
           op: "add",
-          path: path2,
+          path: path3,
           value: newValue[key]
         });
       } else if (hasKey1 && !hasKey2) {
         patches.push({
           op: "remove",
-          path: path2
+          path: path3
         });
       }
     }
@@ -23357,10 +23246,10 @@ function walk_object(value3, walk) {
 
 // node_modules/effect/dist/Optic.js
 function makeIso(get11, set9) {
-  return make24(new IsoNode(get11, set9));
+  return make23(new IsoNode(get11, set9));
 }
 function makeLens(get11, replace) {
-  return make24(new LensNode(get11, replace));
+  return make23(new LensNode(get11, replace));
 }
 var IdentityNode = class {
   _tag = "IdentityNode";
@@ -23412,8 +23301,8 @@ var OptionalNode = class {
 var PathNode = class {
   _tag = "PathNode";
   path;
-  constructor(path2) {
-    this.path = path2;
+  constructor(path3) {
+    this.path = path3;
   }
 };
 var CheckNode = class {
@@ -23459,7 +23348,7 @@ function compose2(a, b) {
   }
 }
 function makeOptional(getResult, set9) {
-  return make24(new OptionalNode(getResult, set9));
+  return make23(new OptionalNode(getResult, set9));
 }
 var OptionalImpl = class {
   node;
@@ -23477,13 +23366,13 @@ var OptionalImpl = class {
     return (s) => getOrElse2(flatMap2(this.getResult(s), (a) => this.replaceResult(f(a), s)), () => s);
   }
   compose(that) {
-    return make24(compose2(this.node, that.node));
+    return make23(compose2(this.node, that.node));
   }
   key(key) {
-    return make24(compose2(this.node, new PathNode([key])));
+    return make23(compose2(this.node, new PathNode([key])));
   }
   optionalKey(key) {
-    return make24(compose2(this.node, new LensNode((s) => s[key], (a, s) => {
+    return make23(compose2(this.node, new LensNode((s) => s[key], (a, s) => {
       const copy2 = cloneShallow(s);
       if (a === void 0) {
         if (Array.isArray(copy2) && typeof key === "number") {
@@ -23498,17 +23387,17 @@ var OptionalImpl = class {
     })));
   }
   check(...checks) {
-    return make24(compose2(this.node, new CheckNode(checks)));
+    return make23(compose2(this.node, new CheckNode(checks)));
   }
   refine(refinement, annotations) {
-    return make24(compose2(this.node, new CheckNode([makeFilterByGuard(refinement, annotations)])));
+    return make23(compose2(this.node, new CheckNode([makeFilterByGuard(refinement, annotations)])));
   }
   tag(tag2) {
-    return make24(compose2(this.node, new PrismNode((s) => s._tag === tag2 ? succeed2(s) : fail2(`Expected ${format(tag2)} tag, got ${format(s._tag)}`), identity)));
+    return make23(compose2(this.node, new PrismNode((s) => s._tag === tag2 ? succeed2(s) : fail2(`Expected ${format(tag2)} tag, got ${format(s._tag)}`), identity)));
   }
   at(key, ..._rest) {
     const err = fail2(`Key ${format(key)} not found`);
-    return make24(compose2(this.node, new OptionalNode((s) => Object.hasOwn(s, key) ? succeed2(s[key]) : err, (a, s) => {
+    return make23(compose2(this.node, new OptionalNode((s) => Object.hasOwn(s, key) ? succeed2(s[key]) : err, (a, s) => {
       if (Object.hasOwn(s, key)) {
         const copy2 = cloneShallow(s);
         copy2[key] = a;
@@ -23612,7 +23501,7 @@ var PrismImpl = class extends OptionalImpl {
     return (s) => getOrElse2(map2(this.getResult(s), (a) => this.set(f(a))), () => s);
   }
 };
-function make24(node) {
+function make23(node) {
   const op = recur4(node);
   switch (op._tag) {
     case "IsoNode":
@@ -23659,24 +23548,24 @@ var recur4 = /* @__PURE__ */ memoize((node) => {
       return {
         _tag: "LensNode",
         get: (s) => {
-          const path2 = node.path;
+          const path3 = node.path;
           let out = s;
-          for (let i = 0, n = path2.length; i < n; i++) {
-            out = out[path2[i]];
+          for (let i = 0, n = path3.length; i < n; i++) {
+            out = out[path3[i]];
           }
           return out;
         },
         set: (a, s) => {
-          const path2 = node.path;
+          const path3 = node.path;
           const out = cloneShallow(s);
           let current = out;
           let i = 0;
-          for (; i < path2.length - 1; i++) {
-            const key = path2[i];
+          for (; i < path3.length - 1; i++) {
+            const key = path3[i];
             current[key] = cloneShallow(current[key]);
             current = current[key];
           }
-          const finalKey = path2[i];
+          const finalKey = path3[i];
           current[finalKey] = a;
           return out;
         }
@@ -23764,7 +23653,7 @@ function getCompositionTag(a, b) {
       return "OptionalNode";
   }
 }
-var identityIso = /* @__PURE__ */ make24(identityNode);
+var identityIso = /* @__PURE__ */ make23(identityNode);
 function id() {
   return identityIso;
 }
@@ -23860,7 +23749,7 @@ __export(FastCheck_exports, {
   scheduledModelRun: () => scheduledModelRun,
   scheduler: () => scheduler,
   schedulerFor: () => schedulerFor,
-  set: () => set4,
+  set: () => set5,
   shuffledSubarray: () => shuffledSubarray,
   sparseArray: () => sparseArray,
   statistics: () => statistics,
@@ -25949,10 +25838,10 @@ var RunExecution = class RunExecution2 {
     }
     return failures;
   }
-  static mergePaths(offsetPath, path2) {
-    if (offsetPath.length === 0) return path2;
+  static mergePaths(offsetPath, path3) {
+    if (offsetPath.length === 0) return path3;
     const offsetItems = offsetPath.split(":");
-    const remainingItems = path2.split(":");
+    const remainingItems = path3.split(":");
     const middle = +offsetItems[offsetItems.length - 1] + +remainingItems[0];
     return [
       ...offsetItems.slice(0, offsetItems.length - 1),
@@ -26139,15 +26028,15 @@ function* lazyToss(generator, seed, random2, examples) {
 function produce(producer) {
   return producer();
 }
-function pathWalk(path2, initialProducers, shrink) {
+function pathWalk(path3, initialProducers, shrink) {
   const producers = initialProducers;
-  const segments = path2.split(":").map((text2) => +text2);
+  const segments = path3.split(":").map((text2) => +text2);
   if (segments.length === 0) return producers.map(produce);
-  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path2}`);
+  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path3}`);
   let values2 = producers.drop(segments[0]).map(produce);
   for (const s of segments.slice(1)) {
     const valueToShrink = values2.getNthOrLast(0);
-    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path2}`);
+    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path3}`);
     values2 = shrink(valueToShrink).drop(s);
   }
   return values2;
@@ -30688,7 +30577,7 @@ function arrayToSetUnmapper(value3) {
   if (!("constructor" in value3) || value3.constructor !== Set) throw new Error("Incompatible instance received: should be of exact type Set");
   return Array.from(value3);
 }
-function set4(arb, constraints = {}) {
+function set5(arb, constraints = {}) {
   return uniqueArray(arb, {
     minLength: constraints.minLength,
     maxLength: constraints.maxLength,
@@ -30741,7 +30630,7 @@ function anyArbitraryBuilder(constraints) {
       size: size7,
       depthIdentifier
     }),
-    set: set4(tie("anything"), {
+    set: set5(tie("anything"), {
       maxLength: maxKeys,
       size: size7,
       depthIdentifier
@@ -31328,8 +31217,8 @@ function webQueryParameters(constraints = {}) {
   return buildUriQueryOrFragmentArbitrary(constraints.size);
 }
 function partsToUrlMapper(data) {
-  const [scheme, authority, path2] = data;
-  return `${scheme}://${authority}${path2}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
+  const [scheme, authority, path3] = data;
+  return `${scheme}://${authority}${path3}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
 }
 var UrlSplitRegex = /^([[A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?(#[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?$/;
 function partsToUrlUnmapper(value3) {
@@ -31338,13 +31227,13 @@ function partsToUrlUnmapper(value3) {
   if (m === null) throw new Error("Incompatible value received");
   const scheme = m[1];
   const authority = m[2];
-  const path2 = m[3];
+  const path3 = m[3];
   const query = m[4];
   const fragments = m[5];
   return [
     scheme,
     authority,
-    path2,
+    path3,
     query !== void 0 ? query.substring(1) : null,
     fragments !== void 0 ? fragments.substring(1) : null
   ];
@@ -33316,7 +33205,7 @@ var __commitHash = "fd1a1840b2fda7f909f825083bd486318adfcf11";
 var TypeId25 = TypeId24;
 function declareConstructor() {
   return (typeParameters, run4, annotations) => {
-    return make25(new Declaration(typeParameters.map(getAST), (typeParameters2) => run4(typeParameters2.map((ast) => make25(ast))), annotations));
+    return make24(new Declaration(typeParameters.map(getAST), (typeParameters2) => run4(typeParameters2.map((ast) => make24(ast))), annotations));
   };
 }
 function declare(is3, annotations) {
@@ -33483,7 +33372,7 @@ var encodeUnknownPromise2 = encodeUnknownPromise;
 var encodePromise2 = encodePromise;
 var encodeUnknownSync2 = encodeUnknownSync;
 var encodeSync2 = encodeSync;
-var make25 = make23;
+var make24 = make22;
 function asClass(schema2) {
   class Class5 {
   }
@@ -33492,20 +33381,20 @@ function asClass(schema2) {
 function isSchema(u) {
   return hasProperty(u, TypeId25) && u[TypeId25] === TypeId25;
 }
-var optionalKey2 = /* @__PURE__ */ lambda((schema2) => make25(optionalKey(schema2.ast), {
+var optionalKey2 = /* @__PURE__ */ lambda((schema2) => make24(optionalKey(schema2.ast), {
   schema: schema2
 }));
 var requiredKey = /* @__PURE__ */ lambda((self) => self.schema);
 var optional = /* @__PURE__ */ lambda((self) => optionalKey2(UndefinedOr(self)));
 var required = /* @__PURE__ */ lambda((self) => self.schema.members[0]);
-var mutableKey2 = /* @__PURE__ */ lambda((schema2) => make25(mutableKey(schema2.ast), {
+var mutableKey2 = /* @__PURE__ */ lambda((schema2) => make24(mutableKey(schema2.ast), {
   schema: schema2
 }));
 var readonlyKey = /* @__PURE__ */ lambda((self) => self.schema);
-var toType2 = /* @__PURE__ */ lambda((schema2) => make25(toType(schema2.ast), {
+var toType2 = /* @__PURE__ */ lambda((schema2) => make24(toType(schema2.ast), {
   schema: schema2
 }));
-var toEncoded2 = /* @__PURE__ */ lambda((schema2) => make25(toEncoded(schema2.ast), {
+var toEncoded2 = /* @__PURE__ */ lambda((schema2) => make24(toEncoded(schema2.ast), {
   schema: schema2
 }));
 var FlipTypeId = "~effect/Schema/flip";
@@ -33516,13 +33405,13 @@ function flip4(schema2) {
   if (isFlip$(schema2)) {
     return schema2.schema.rebuild(flip3(schema2.ast));
   }
-  return make25(flip3(schema2.ast), {
+  return make24(flip3(schema2.ast), {
     [FlipTypeId]: FlipTypeId,
     schema: schema2
   });
 }
 function Literal2(literal) {
-  const out = make25(new Literal(literal), {
+  const out = make24(new Literal(literal), {
     literal,
     transform(to) {
       return out.pipe(decodeTo2(Literal2(to), {
@@ -33537,37 +33426,37 @@ function templateLiteralFromParts(parts) {
   return new TemplateLiteral(parts.map((part) => isSchema(part) ? part.ast : new Literal(part)));
 }
 function TemplateLiteral2(parts) {
-  return make25(templateLiteralFromParts(parts), {
+  return make24(templateLiteralFromParts(parts), {
     parts
   });
 }
 function TemplateLiteralParser(parts) {
-  return make25(templateLiteralFromParts(parts).asTemplateLiteralParser(), {
+  return make24(templateLiteralFromParts(parts).asTemplateLiteralParser(), {
     parts: [...parts]
   });
 }
 function Enum2(enums) {
-  return make25(new Enum(Object.keys(enums).filter((key) => typeof enums[enums[key]] !== "number").map((key) => [key, enums[key]])), {
+  return make24(new Enum(Object.keys(enums).filter((key) => typeof enums[enums[key]] !== "number").map((key) => [key, enums[key]])), {
     enums
   });
 }
-var Never2 = /* @__PURE__ */ make25(never4);
-var Any2 = /* @__PURE__ */ make25(any);
-var Unknown2 = /* @__PURE__ */ make25(unknown);
-var Null2 = /* @__PURE__ */ make25(null_);
-var Undefined2 = /* @__PURE__ */ make25(undefined_3);
-var String5 = /* @__PURE__ */ make25(string2);
-var Number6 = /* @__PURE__ */ make25(number2);
-var Boolean4 = /* @__PURE__ */ make25(boolean);
-var Symbol3 = /* @__PURE__ */ make25(symbol3);
-var BigInt5 = /* @__PURE__ */ make25(bigInt);
-var Void2 = /* @__PURE__ */ make25(void_5);
-var ObjectKeyword2 = /* @__PURE__ */ make25(objectKeyword);
+var Never2 = /* @__PURE__ */ make24(never3);
+var Any2 = /* @__PURE__ */ make24(any);
+var Unknown2 = /* @__PURE__ */ make24(unknown);
+var Null2 = /* @__PURE__ */ make24(null_);
+var Undefined2 = /* @__PURE__ */ make24(undefined_3);
+var String5 = /* @__PURE__ */ make24(string2);
+var Number6 = /* @__PURE__ */ make24(number2);
+var Boolean4 = /* @__PURE__ */ make24(boolean);
+var Symbol3 = /* @__PURE__ */ make24(symbol3);
+var BigInt5 = /* @__PURE__ */ make24(bigInt);
+var Void2 = /* @__PURE__ */ make24(void_5);
+var ObjectKeyword2 = /* @__PURE__ */ make24(objectKeyword);
 function UniqueSymbol2(symbol5) {
-  return make25(new UniqueSymbol(symbol5));
+  return make24(new UniqueSymbol(symbol5));
 }
 function makeStruct(ast, fields) {
-  return make25(ast, {
+  return make24(ast, {
     fields,
     mapFields(f, options) {
       const fields2 = f(this.fields);
@@ -33635,19 +33524,19 @@ function extendTo(fields, derive) {
 }
 function Record2(key, value3, options) {
   const keyValueCombiner = options?.keyValueCombiner?.decode || options?.keyValueCombiner?.encode ? new KeyValueCombiner(options.keyValueCombiner.decode, options.keyValueCombiner.encode) : void 0;
-  return make25(record(key.ast, value3.ast, keyValueCombiner), {
+  return make24(record(key.ast, value3.ast, keyValueCombiner), {
     key,
     value: value3
   });
 }
 function StructWithRest(schema2, records) {
-  return make25(structWithRest(schema2.ast, records.map(getAST)), {
+  return make24(structWithRest(schema2.ast, records.map(getAST)), {
     schema: schema2,
     records
   });
 }
 function makeTuple(ast, elements) {
-  return make25(ast, {
+  return make24(ast, {
     elements,
     mapElements(f, options) {
       const elements2 = f(this.elements);
@@ -33659,15 +33548,15 @@ function Tuple2(elements) {
   return makeTuple(tuple(elements), elements);
 }
 function TupleWithRest(schema2, rest) {
-  return make25(tupleWithRest(schema2.ast, rest.map(getAST)), {
+  return make24(tupleWithRest(schema2.ast, rest.map(getAST)), {
     schema: schema2,
     rest
   });
 }
-var ArraySchema = /* @__PURE__ */ lambda((schema2) => make25(new Arrays(false, [], [schema2.ast]), {
+var ArraySchema = /* @__PURE__ */ lambda((schema2) => make24(new Arrays(false, [], [schema2.ast]), {
   schema: schema2
 }));
-var NonEmptyArray = /* @__PURE__ */ lambda((schema2) => make25(new Arrays(false, [schema2.ast], [schema2.ast]), {
+var NonEmptyArray = /* @__PURE__ */ lambda((schema2) => make24(new Arrays(false, [schema2.ast], [schema2.ast]), {
   schema: schema2
 }));
 function ArrayEnsure(schema2) {
@@ -33680,25 +33569,25 @@ function UniqueArray(item) {
   return ArraySchema(item).check(isUnique());
 }
 var mutable = /* @__PURE__ */ lambda((schema2) => {
-  return make25(new Arrays(true, schema2.ast.elements, schema2.ast.rest), {
+  return make24(new Arrays(true, schema2.ast.elements, schema2.ast.rest), {
     schema: schema2
   });
 });
 function makeUnion(ast, members) {
-  return make25(ast, {
+  return make24(ast, {
     members,
     mapMembers(f, options) {
       const members2 = f(this.members);
-      return makeUnion(union4(members2, this.ast.mode, options?.unsafePreserveChecks ? this.ast.checks : void 0), members2);
+      return makeUnion(union2(members2, this.ast.mode, options?.unsafePreserveChecks ? this.ast.checks : void 0), members2);
     }
   });
 }
 function Union2(members, options) {
-  return makeUnion(union4(members, options?.mode ?? "anyOf", void 0), members);
+  return makeUnion(union2(members, options?.mode ?? "anyOf", void 0), members);
 }
 function Literals(literals) {
   const members = literals.map(Literal2);
-  return make25(union4(members, "anyOf", void 0), {
+  return make24(union2(members, "anyOf", void 0), {
     literals,
     members,
     mapMembers(f) {
@@ -33716,18 +33605,18 @@ var NullOr = /* @__PURE__ */ lambda((self) => Union2([self, Null2]));
 var UndefinedOr = /* @__PURE__ */ lambda((self) => Union2([self, Undefined2]));
 var NullishOr = /* @__PURE__ */ lambda((self) => Union2([self, Null2, Undefined2]));
 function suspend5(f) {
-  return make25(new Suspend(() => f().ast));
+  return make24(new Suspend(() => f().ast));
 }
 function check2(...checks) {
   return (self) => self.check(...checks);
 }
 function refine(refinement, annotations) {
-  return (schema2) => make25(appendChecks(schema2.ast, [makeFilterByGuard(refinement, annotations)]), {
+  return (schema2) => make24(appendChecks(schema2.ast, [makeFilterByGuard(refinement, annotations)]), {
     schema: schema2
   });
 }
 function brand2(identifier2) {
-  return (schema2) => make25(brand(schema2.ast, identifier2), {
+  return (schema2) => make24(brand(schema2.ast, identifier2), {
     schema: schema2,
     identifier: identifier2
   });
@@ -33738,12 +33627,12 @@ function fromBrand(identifier2, ctor) {
   };
 }
 function middlewareDecoding2(decode3) {
-  return (schema2) => make25(middlewareDecoding(schema2.ast, new Middleware(decode3, identity)), {
+  return (schema2) => make24(middlewareDecoding(schema2.ast, new Middleware(decode3, identity)), {
     schema: schema2
   });
 }
 function middlewareEncoding2(encode3) {
-  return (schema2) => make25(middlewareEncoding(schema2.ast, new Middleware(identity, encode3)), {
+  return (schema2) => make24(middlewareEncoding(schema2.ast, new Middleware(identity, encode3)), {
     schema: schema2
   });
 }
@@ -33761,7 +33650,7 @@ function catchEncodingWithContext(f) {
 }
 function decodeTo2(to, transformation) {
   return (from) => {
-    return make25(decodeTo(from.ast, to.ast, transformation ? make22(transformation) : passthrough3()), {
+    return make24(decodeTo(from.ast, to.ast, transformation ? make14(transformation) : passthrough3()), {
       from,
       to
     });
@@ -33783,7 +33672,7 @@ function encode(transformation) {
   };
 }
 function withConstructorDefault2(defaultValue) {
-  return (schema2) => make25(withConstructorDefault(schema2.ast, defaultValue), {
+  return (schema2) => make24(withConstructorDefault(schema2.ast, defaultValue), {
     schema: schema2
   });
 }
@@ -33872,7 +33761,7 @@ function TaggedUnion(casesByTag) {
     isAnyOf,
     match: match8
   } = toTaggedUnion("_tag")(union5);
-  return make25(union5.ast, {
+  return make24(union5.ast, {
     cases,
     isAnyOf,
     guards,
@@ -33891,7 +33780,7 @@ function instanceOf(constructor, annotations) {
 }
 function link() {
   return (encodeTo2, transformation) => {
-    return new Link(encodeTo2.ast, make22(transformation));
+    return new Link(encodeTo2.ast, make14(transformation));
   };
 }
 var makeFilter2 = makeFilter;
@@ -34453,23 +34342,23 @@ var isBetweenBigInt = /* @__PURE__ */ makeIsBetween({
   })
 });
 var isGreaterThanBigDecimal = /* @__PURE__ */ makeIsGreaterThan({
-  order: Order2,
+  order: Order,
   formatter: (bd) => format2(bd)
 });
 var isGreaterThanOrEqualToBigDecimal = /* @__PURE__ */ makeIsGreaterThanOrEqualTo({
-  order: Order2,
+  order: Order,
   formatter: (bd) => format2(bd)
 });
 var isLessThanBigDecimal = /* @__PURE__ */ makeIsLessThan({
-  order: Order2,
+  order: Order,
   formatter: (bd) => format2(bd)
 });
 var isLessThanOrEqualToBigDecimal = /* @__PURE__ */ makeIsLessThanOrEqualTo({
-  order: Order2,
+  order: Order,
   formatter: (bd) => format2(bd)
 });
 var isBetweenBigDecimal = /* @__PURE__ */ makeIsBetween({
-  order: Order2,
+  order: Order,
   formatter: (bd) => format2(bd)
 });
 function isMinLength(minLength, annotations) {
@@ -34739,7 +34628,7 @@ function Option2(value3) {
       onSome: (t) => `some(${value4(t)})`
     })
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -34821,7 +34710,7 @@ function Result(success, failure) {
       onFailure: (t) => `failure(${failure2(t)})`
     })
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     success,
     failure
   });
@@ -34851,18 +34740,18 @@ function Redacted(value3, options) {
     },
     expected: "Redacted",
     toCodecJson: ([value4]) => link()(redact3(value4), {
-      decode: transform((e) => make20(e, {
+      decode: transform((e) => make12(e, {
         label: options?.label
       })),
       encode: forbidden((oe) => "Cannot serialize Redacted" + (isSome2(oe) && typeof oe.value.label === "string" ? ` with label: "${oe.value.label}"` : ""))
     }),
-    toArbitrary: ([value4]) => () => value4.map((a) => make20(a, {
+    toArbitrary: ([value4]) => () => value4.map((a) => make12(a, {
       label: options?.label
     })),
     toFormatter: () => globalThis.String,
-    toEquivalence: ([value4]) => makeEquivalence7(value4)
+    toEquivalence: ([value4]) => makeEquivalence6(value4)
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -34871,7 +34760,7 @@ function redact3(schema2) {
 }
 function RedactedFromValue(value3, options) {
   return redact3(value3).pipe(decodeTo2(Redacted(toType2(value3), options), {
-    decode: transform((t) => make20(t, {
+    decode: transform((t) => make12(t, {
       label: options?.label
     })),
     encode: forbidden((oe) => "Cannot encode Redacted" + (isSome2(oe) && typeof oe.value.label === "string" ? ` with label: "${oe.value.label}"` : ""))
@@ -34932,7 +34821,7 @@ function CauseReason(error, defect) {
     toEquivalence: ([error2, defect2]) => causeReasonToEquivalence(error2, defect2),
     toFormatter: ([error2, defect2]) => causeReasonToFormatter(error2, defect2)
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     error,
     defect
   });
@@ -35004,7 +34893,7 @@ function Cause(error, defect) {
     toEquivalence: ([error2, defect2]) => causeToEquivalence(error2, defect2),
     toFormatter: ([error2, defect2]) => causeToFormatter(error2, defect2)
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     error,
     defect
   });
@@ -35144,7 +35033,7 @@ function Exit(value3, error, defect) {
       };
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3,
     error,
     defect
@@ -35191,7 +35080,7 @@ function ReadonlyMap(key, value3) {
       return `ReadonlyMap(${size7}) { ${entries3.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     key,
     value: value3
   });
@@ -35230,7 +35119,7 @@ function HashMap(key, value3) {
     },
     toEquivalence: ([key2, value4]) => makeCompareMap(key2, value4),
     toFormatter: ([key2, value4]) => (t) => {
-      const size7 = size3(t);
+      const size7 = size4(t);
       if (size7 === 0) {
         return "HashMap(0) {}";
       }
@@ -35238,7 +35127,7 @@ function HashMap(key, value3) {
       return `HashMap(${size7}) { ${entries3.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     key,
     value: value3
   });
@@ -35284,7 +35173,7 @@ function ReadonlySet(value3) {
       return `ReadonlySet(${size7}) { ${values2.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -35321,7 +35210,7 @@ function HashSet(value3) {
     },
     toEquivalence: ([value4]) => makeCompareSet(value4),
     toFormatter: ([value4]) => (t) => {
-      const size7 = size5(t);
+      const size7 = size6(t);
       if (size7 === 0) {
         return "HashSet(0) {}";
       }
@@ -35329,7 +35218,7 @@ function HashSet(value3) {
       return `HashSet(${size7}) { ${values2.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -35364,9 +35253,9 @@ function Chunk(value3) {
         depthIdentifier: "Chunk"
       } : {}, fc.constant([]), fc.array(value4, ctx?.constraints?.array)).map(fromIterable3);
     },
-    toEquivalence: ([value4]) => makeEquivalence6(value4),
+    toEquivalence: ([value4]) => makeEquivalence7(value4),
     toFormatter: ([value4]) => (t) => {
-      const size7 = size(t);
+      const size7 = size2(t);
       if (size7 === 0) {
         return "Chunk(0) {}";
       }
@@ -35374,7 +35263,7 @@ function Chunk(value3) {
       return `Chunk(${size7}) { ${values2.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -35511,7 +35400,7 @@ var Duration = /* @__PURE__ */ declare(isDuration, {
   })),
   toArbitrary: () => (fc) => fc.oneof(fc.constant(infinity), fc.constant(negativeInfinity), fc.bigInt().map(nanos), fc.maxSafeInteger().map(millis)),
   toFormatter: () => globalThis.String,
-  toEquivalence: () => Equivalence
+  toEquivalence: () => Equivalence2
 });
 var DurationFromNanos = /* @__PURE__ */ BigInt5.check(isGreaterThanOrEqualToBigInt(0n)).pipe(/* @__PURE__ */ decodeTo2(Duration, durationFromNanos));
 var DurationFromMillis = /* @__PURE__ */ Number6.check(isGreaterThanOrEqualTo3(0)).pipe(/* @__PURE__ */ decodeTo2(Duration, durationFromMillis));
@@ -35532,9 +35421,9 @@ var BigDecimal = /* @__PURE__ */ declare(isBigDecimal, {
   toArbitrary: () => (fc) => fc.tuple(fc.bigInt(), fc.integer({
     min: 0,
     max: 20
-  })).map(([value3, scale2]) => make16(value3, scale2)),
+  })).map(([value3, scale2]) => make5(value3, scale2)),
   toFormatter: () => (bd) => format2(bd),
-  toEquivalence: () => Equivalence3
+  toEquivalence: () => Equivalence
 });
 var BigDecimalFromString = /* @__PURE__ */ BigDecimalString.pipe(/* @__PURE__ */ decodeTo2(BigDecimal, bigDecimalFromString));
 var UnknownFromJsonString = /* @__PURE__ */ fromJsonString2(Unknown2);
@@ -35658,7 +35547,7 @@ var NumberFromString = /* @__PURE__ */ String5.annotate({
 var FiniteFromString = /* @__PURE__ */ String5.annotate({
   expected: "a string that will be decoded as a finite number"
 }).pipe(/* @__PURE__ */ decodeTo2(Finite, numberFromString));
-var BigIntFromString = /* @__PURE__ */ make25(bigIntString).pipe(/* @__PURE__ */ decodeTo2(BigInt5, bigintFromString));
+var BigIntFromString = /* @__PURE__ */ make24(bigIntString).pipe(/* @__PURE__ */ decodeTo2(BigInt5, bigintFromString));
 var Trimmed = /* @__PURE__ */ String5.check(/* @__PURE__ */ isTrimmed());
 var Trim = /* @__PURE__ */ String5.annotate({
   expected: "a string that will be decoded as a trimmed string"
@@ -35913,7 +35802,7 @@ function getClassSchemaFactory(from, identifier2, annotations) {
   return (self) => {
     if (memo2 === void 0) {
       const transformation = getClassTransformation(self);
-      const to = make25(new Declaration([from.ast], () => (input, ast) => {
+      const to = make24(new Declaration([from.ast], () => (input, ast) => {
         return input instanceof self || hasProperty(input, getClassTypeId(identifier2)) ? succeed6(input) : fail5(new InvalidType(ast, some2(input)));
       }, {
         identifier: identifier2,
@@ -36107,16 +35996,16 @@ function toJsonSchemaDocument2(schema2, options) {
   };
 }
 function toCodecJson2(schema2) {
-  return make25(toCodecJson(schema2.ast));
+  return make24(toCodecJson(schema2.ast));
 }
 function toCodecIso2(schema2) {
-  return make25(toCodecIso(toType(schema2.ast)));
+  return make24(toCodecIso(toType(schema2.ast)));
 }
 function toCodecStringTree(schema2, options) {
   if (options?.keepDeclarations === true) {
-    return make25(toCodecEnsureArray(serializerStringTreeKeepDeclarations(schema2.ast)));
+    return make24(toCodecEnsureArray(serializerStringTreeKeepDeclarations(schema2.ast)));
   } else {
-    return make25(toCodecEnsureArray(serializerStringTree(schema2.ast)));
+    return make24(toCodecEnsureArray(serializerStringTree(schema2.ast)));
   }
 }
 function toEncoderXml(codec, options) {
@@ -36235,7 +36124,7 @@ function serializerTree(ast, recur5, onMissingAnnotation) {
     case "Declaration": {
       const getLink = ast.annotations?.toCodecJson ?? ast.annotations?.toCodec;
       if (isFunction(getLink)) {
-        const tps = isDeclaration(ast) ? ast.typeParameters.map((tp) => make25(recur5(toEncoded(tp)))) : [];
+        const tps = isDeclaration(ast) ? ast.typeParameters.map((tp) => make24(recur5(toEncoded(tp)))) : [];
         const link2 = getLink(tps);
         const to = recur5(link2.to);
         return replaceEncoding(ast, to === link2.to ? [link2] : [new Link(to, link2.transformation)]);
@@ -36332,8 +36221,8 @@ function toIsoFocus(_) {
 }
 function overrideToCodecIso(to, transformation) {
   return (schema2) => {
-    return make25(annotate(schema2.ast, {
-      toCodecIso: () => new Link(to.ast, make22(transformation))
+    return make24(annotate(schema2.ast, {
+      toCodecIso: () => new Link(to.ast, make14(transformation))
     }), {
       schema: schema2
     });
@@ -36345,7 +36234,7 @@ function toDifferJsonPatch(schema2) {
   const set9 = decodeSync(serializer);
   return {
     empty: [],
-    diff: (oldValue, newValue) => get5(get11(oldValue), get11(newValue)),
+    diff: (oldValue, newValue) => get6(get11(oldValue), get11(newValue)),
     combine: (first, second) => [...first, ...second],
     patch: (oldValue, patch) => {
       const value3 = get11(oldValue);
@@ -36359,8 +36248,8 @@ function Tree(node) {
   const Tree2 = Union2([node, ArraySchema(Tree$ref), Record2(String5, Tree$ref)]);
   return Tree2;
 }
-var Json2 = /* @__PURE__ */ make25(Json);
-var MutableJson2 = /* @__PURE__ */ make25(MutableJson);
+var Json2 = /* @__PURE__ */ make24(Json);
+var MutableJson2 = /* @__PURE__ */ make24(MutableJson);
 function resolveAnnotations(schema2) {
   return resolve(schema2.ast);
 }
@@ -36368,371 +36257,15 @@ function resolveAnnotationsKey(schema2) {
   return schema2.ast.context?.annotations;
 }
 
-// node_modules/effect/dist/unstable/socket/Socket.js
-var TypeId26 = "~effect/socket/Socket";
-var Socket = /* @__PURE__ */ Service("effect/socket/Socket");
-var CloseEventTypeId = "~effect/socket/Socket/CloseEvent";
-var CloseEvent = class {
-  /**
-   * @since 4.0.0
-   */
-  [CloseEventTypeId];
-  code;
-  reason;
-  constructor(code = 1e3, reason) {
-    this[CloseEventTypeId] = CloseEventTypeId;
-    this.code = code;
-    this.reason = reason;
-  }
-  /**
-   * @since 4.0.0
-   */
-  toString() {
-    return this.reason ? `${this.code}: ${this.reason}` : `${this.code}`;
-  }
-};
-var isCloseEvent = (u) => hasProperty(u, CloseEventTypeId);
-var SocketErrorTypeId = "~effect/socket/Socket/SocketError";
-var isSocketError = (u) => hasProperty(u, SocketErrorTypeId);
-var SocketReadError = class extends (/* @__PURE__ */ ErrorClass("effect/socket/Socket/SocketReadError")({
-  _tag: /* @__PURE__ */ tag("SocketReadError"),
-  cause: Defect
-})) {
-  /**
-   * @since 4.0.0
-   */
-  message = `An error occurred during Read`;
-};
-var SocketWriteError = class extends (/* @__PURE__ */ ErrorClass("effect/socket/Socket/SocketWriteError")({
-  _tag: /* @__PURE__ */ tag("SocketWriteError"),
-  cause: Defect
-})) {
-  /**
-   * @since 4.0.0
-   */
-  message = `An error occurred during Write`;
-};
-var SocketOpenError = class extends (/* @__PURE__ */ ErrorClass("effect/socket/Socket/SocketOpenError")({
-  _tag: /* @__PURE__ */ tag("SocketOpenError"),
-  kind: /* @__PURE__ */ Literals(["Unknown", "Timeout"]),
-  cause: Defect
-})) {
-  /**
-   * @since 4.0.0
-   */
-  get message() {
-    return this.kind === "Timeout" ? `timeout waiting for "open"` : `An error occurred during Open`;
-  }
-};
-var SocketCloseError = class extends (/* @__PURE__ */ ErrorClass("effect/socket/Socket/SocketCloseError")({
-  _tag: /* @__PURE__ */ tag("SocketCloseError"),
-  code: Number6,
-  closeReason: /* @__PURE__ */ optional(String5)
-})) {
-  /**
-   * @since 4.0.0
-   */
-  static filterClean(isClean) {
-    return function(u) {
-      return SocketError.is(u) && u.reason._tag === "SocketCloseError" && isClean(u.reason.code) ? succeed2(u.reason) : fail2(u);
-    };
-  }
-  get message() {
-    if (this.closeReason) {
-      return `${this.code}: ${this.closeReason}`;
-    }
-    return `${this.code}`;
-  }
-};
-var SocketErrorReason = /* @__PURE__ */ Union2([SocketReadError, SocketWriteError, SocketOpenError, SocketCloseError]);
-var SocketError = class extends (/* @__PURE__ */ TaggedErrorClass(SocketErrorTypeId)("SocketError", {
-  _tag: /* @__PURE__ */ tag("SocketError"),
-  reason: SocketErrorReason
-})) {
-  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
-  constructor(props) {
-    if ("cause" in props.reason) {
-      super({
-        ...props,
-        cause: props.reason.cause
-      });
-    } else {
-      super(props);
-    }
-  }
-  /**
-   * @since 4.0.0
-   */
-  [SocketErrorTypeId] = SocketErrorTypeId;
-  /**
-   * @since 4.0.0
-   */
-  static is(u) {
-    return isSocketError(u);
-  }
-  message = this.reason.message;
-};
-var defaultCloseCodeIsError = (_code) => true;
-var WebSocket = class extends (/* @__PURE__ */ Service()("~effect/socket/Socket/WebSocket")) {
-};
-var WebSocketConstructor = class extends (/* @__PURE__ */ Service()("@effect/platform/Socket/WebSocketConstructor")) {
-};
-var makeWebSocket = (url, options) => WebSocketConstructor.use((makeWs) => fromWebSocket(acquireRelease2((typeof url === "string" ? succeed6(url) : url).pipe(map7((url2) => makeWs(url2, options?.protocols))), (ws) => sync3(() => ws.close(1e3))), options));
-var fromWebSocket = (acquire, options) => withFiber2((fiber3) => {
-  let currentWS;
-  const latch = makeUnsafe5(false);
-  const acquireContext = fiber3.context;
-  const closeCodeIsError = options?.closeCodeIsError ?? defaultCloseCodeIsError;
-  const runRaw = (handler, opts) => scopedWith2(fnUntraced2(function* (scope3) {
-    const fiberSet = yield* make15().pipe(provide(scope3));
-    const ws = yield* provide(acquire, scope3);
-    const run5 = yield* provideService2(runtime(fiberSet)(), WebSocket, ws);
-    let open2 = false;
-    function onMessage(event) {
-      if (event.data instanceof Blob) {
-        const effect2 = flatMap5(promise2(() => event.data.arrayBuffer()), (buffer3) => {
-          const result5 = handler(new Uint8Array(buffer3));
-          return isEffect2(result5) ? result5 : void_4;
-        });
-        return run5(effect2);
-      }
-      const result4 = handler(event.data);
-      if (isEffect2(result4)) {
-        run5(result4);
-      }
-    }
-    function onError5(cause) {
-      ws.removeEventListener("message", onMessage);
-      ws.removeEventListener("close", onClose);
-      doneUnsafe(fiberSet.deferred, fail5(new SocketError({
-        reason: open2 ? new SocketReadError({
-          cause
-        }) : new SocketOpenError({
-          kind: "Unknown",
-          cause
-        })
-      })));
-    }
-    function onClose(event) {
-      const code = typeof event.code === "number" ? event.code : 1001;
-      ws.removeEventListener("message", onMessage);
-      ws.removeEventListener("error", onError5);
-      doneUnsafe(fiberSet.deferred, fail5(new SocketError({
-        reason: new SocketCloseError({
-          code,
-          closeReason: event.reason
-        })
-      })));
-    }
-    ws.addEventListener("close", onClose, {
-      once: true
-    });
-    ws.addEventListener("error", onError5, {
-      once: true
-    });
-    ws.addEventListener("message", onMessage);
-    if (ws.readyState !== 1) {
-      const openDeferred = makeUnsafe2();
-      ws.addEventListener("open", () => {
-        open2 = true;
-        doneUnsafe(openDeferred, void_4);
-      }, {
-        once: true
-      });
-      yield* _await(openDeferred).pipe(timeoutOrElse2({
-        duration: options?.openTimeout ?? 1e4,
-        orElse: () => fail5(new SocketError({
-          reason: new SocketOpenError({
-            kind: "Timeout",
-            cause: new Error('timeout waiting for "open"')
-          })
-        }))
-      }), raceFirst2(join3(fiberSet)));
-    }
-    open2 = true;
-    currentWS = ws;
-    latch.openUnsafe();
-    if (opts?.onOpen) yield* opts.onOpen;
-    return yield* catchFilter2(join3(fiberSet), SocketCloseError.filterClean((_) => !closeCodeIsError(_)), () => void_4);
-  })).pipe(updateContext2((input) => merge(acquireContext, input)), ensuring2(sync3(() => {
-    latch.closeUnsafe();
-    currentWS = void 0;
-  })));
-  const encoder3 = new TextEncoder();
-  const run4 = (handler, opts) => runRaw((data) => typeof data === "string" ? handler(encoder3.encode(data)) : data instanceof Uint8Array ? handler(data) : handler(new Uint8Array(data)), opts);
-  const write = (chunk) => latch.whenOpen(sync3(() => {
-    const ws = currentWS;
-    if (isCloseEvent(chunk)) {
-      ws.close(chunk.code, chunk.reason);
-    } else {
-      ws.send(chunk);
-    }
-  }));
-  const writer = succeed6(write);
-  return succeed6(Socket.of({
-    [TypeId26]: TypeId26,
-    run: run4,
-    runRaw,
-    writer
-  }));
-});
-var layerWebSocket = /* @__PURE__ */ flow(makeWebSocket, /* @__PURE__ */ effect(Socket));
-
-// node_modules/ws/wrapper.mjs
-var wrapper_exports = {};
-__export(wrapper_exports, {
-  PerMessageDeflate: () => import_permessage_deflate.default,
-  Receiver: () => import_receiver.default,
-  Sender: () => import_sender.default,
-  WebSocket: () => import_websocket.default,
-  WebSocketServer: () => import_websocket_server.default,
-  createWebSocketStream: () => import_stream.default,
-  default: () => wrapper_default,
-  extension: () => import_extension.default,
-  subprotocol: () => import_subprotocol.default
-});
-var import_stream = __toESM(require_stream(), 1);
-var import_extension = __toESM(require_extension(), 1);
-var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
-var import_receiver = __toESM(require_receiver(), 1);
-var import_sender = __toESM(require_sender(), 1);
-var import_subprotocol = __toESM(require_subprotocol(), 1);
-var import_websocket = __toESM(require_websocket(), 1);
-var import_websocket_server = __toESM(require_websocket_server(), 1);
-var wrapper_default = import_websocket.default;
-
-// node_modules/effect/dist/MutableHashMap.js
-var TypeId27 = "~effect/collections/MutableHashMap";
-var MutableHashMapProto = {
-  [TypeId27]: TypeId27,
-  [Symbol.iterator]() {
-    return this.backing[Symbol.iterator]();
-  },
-  toString() {
-    return `MutableHashMap(${format(Array.from(this))})`;
-  },
-  toJSON() {
-    return {
-      _id: "MutableHashMap",
-      values: toJson(Array.from(this))
-    };
-  },
-  [NodeInspectSymbol]() {
-    return this.toJSON();
-  },
-  pipe() {
-    return pipeArguments(this, arguments);
-  }
-};
-var empty10 = () => {
-  const self = Object.create(MutableHashMapProto);
-  self.backing = /* @__PURE__ */ new Map();
-  self.buckets = /* @__PURE__ */ new Map();
-  return self;
-};
-var get6 = /* @__PURE__ */ dual(2, (self, key) => {
-  if (self.backing.has(key)) {
-    return some2(self.backing.get(key));
-  } else if (isSimpleKey(key)) {
-    return none2();
-  }
-  const refKey = referentialKeysCache.get(self);
-  if (refKey !== void 0) {
-    return self.backing.has(refKey) ? some2(self.backing.get(refKey)) : none2();
-  }
-  const hash3 = hash(key);
-  const bucket = self.buckets.get(hash3);
-  if (bucket === void 0) {
-    return none2();
-  }
-  return getFromBucket(self, bucket, key);
-});
-var referentialKeysCache = /* @__PURE__ */ new WeakMap();
-var isSimpleKey = (u) => typeof u !== "object" && typeof u !== "function";
-var getFromBucket = (self, bucket, key) => {
-  for (let i = 0, len = bucket.length; i < len; i++) {
-    if (equals(key, bucket[i])) {
-      const refKey = bucket[i];
-      referentialKeysCache.set(key, refKey);
-      return some2(self.backing.get(refKey));
-    }
-  }
-  return none2();
-};
-var has5 = /* @__PURE__ */ dual(2, (self, key) => isSome2(get6(self, key)));
-var set5 = /* @__PURE__ */ dual(3, (self, key, value3) => {
-  if (self.backing.has(key) || isSimpleKey(key)) {
-    self.backing.set(key, value3);
-    return self;
-  }
-  let refKey = referentialKeysCache.get(self);
-  if (refKey !== void 0 && self.backing.has(refKey)) {
-    self.backing.set(refKey, value3);
-    return self;
-  }
-  const hash3 = hash(key);
-  const bucket = self.buckets.get(hash3);
-  if (bucket === void 0) {
-    self.buckets.set(hash3, [key]);
-    self.backing.set(key, value3);
-    return self;
-  }
-  refKey = getRefKey(bucket, key);
-  if (refKey === void 0) {
-    bucket.push(key);
-    refKey = key;
-  }
-  self.backing.set(refKey, value3);
-  return self;
-});
-var getRefKey = (bucket, key) => {
-  for (let i = 0, len = bucket.length; i < len; i++) {
-    if (equals(key, bucket[i])) {
-      referentialKeysCache.set(key, bucket[i]);
-      return bucket[i];
-    }
-  }
-};
-var remove5 = /* @__PURE__ */ dual(2, (self, key_) => {
-  if (isSimpleKey(key_)) {
-    self.backing.delete(key_);
-    return self;
-  }
-  const key = referentialKeysCache.get(self) ?? key_;
-  const hash3 = hash(key);
-  const bucket = self.buckets.get(hash3);
-  if (bucket === void 0) {
-    return self;
-  }
-  for (let i = 0, len = bucket.length; i < len; i++) {
-    const bkey = bucket[i];
-    if (bkey === key || equals(key, bkey)) {
-      self.backing.delete(bkey);
-      bucket.splice(i, 1);
-      break;
-    }
-  }
-  if (bucket.length === 0) {
-    self.buckets.delete(hash3);
-  }
-  return self;
-});
-var clear2 = (self) => {
-  self.backing.clear();
-  self.buckets.clear();
-  return self;
-};
-var size6 = (self) => self.backing.size;
-
 // node_modules/effect/dist/internal/stream.js
-var TypeId28 = "~effect/Stream";
+var TypeId26 = "~effect/Stream";
 var streamVariance = {
   _R: identity,
   _E: identity,
   _A: identity
 };
 var StreamProto = {
-  [TypeId28]: streamVariance,
+  [TypeId26]: streamVariance,
   pipe() {
     return pipeArguments(this, arguments);
   }
@@ -36744,7 +36277,7 @@ var fromChannel = (channel) => {
 };
 
 // node_modules/effect/dist/Sink.js
-var TypeId29 = "~effect/Sink";
+var TypeId27 = "~effect/Sink";
 var sinkVariance = {
   _A: identity,
   _In: identity,
@@ -36753,7 +36286,7 @@ var sinkVariance = {
   _R: identity
 };
 var SinkProto = {
-  [TypeId29]: sinkVariance,
+  [TypeId27]: sinkVariance,
   pipe() {
     return pipeArguments(this, arguments);
   }
@@ -36798,7 +36331,7 @@ var Stream_exports = {};
 __export(Stream_exports, {
   DefaultChunkSize: () => DefaultChunkSize2,
   Do: () => Do4,
-  TypeId: () => TypeId32,
+  TypeId: () => TypeId30,
   accumulate: () => accumulate,
   aggregate: () => aggregate,
   aggregateWithin: () => aggregateWithin,
@@ -36844,7 +36377,7 @@ __export(Stream_exports, {
   empty: () => empty11,
   encodeText: () => encodeText,
   ensuring: () => ensuring4,
-  fail: () => fail9,
+  fail: () => fail8,
   failCause: () => failCause7,
   failCauseSync: () => failCauseSync4,
   failSync: () => failSync4,
@@ -36896,7 +36429,7 @@ __export(Stream_exports, {
   isStream: () => isStream,
   iterate: () => iterate,
   let: () => let_5,
-  make: () => make29,
+  make: () => make28,
   map: () => map13,
   mapAccum: () => mapAccum3,
   mapAccumArray: () => mapAccumArray,
@@ -36945,7 +36478,7 @@ __export(Stream_exports, {
   repeatElements: () => repeatElements,
   result: () => result3,
   retry: () => retry4,
-  run: () => run3,
+  run: () => run2,
   runCollect: () => runCollect,
   runCount: () => runCount,
   runDrain: () => runDrain2,
@@ -37028,9 +36561,9 @@ __export(Stream_exports, {
 });
 
 // node_modules/effect/dist/RcMap.js
-var TypeId30 = "~effect/RcMap";
-var makeUnsafe9 = (options) => ({
-  [TypeId30]: TypeId30,
+var TypeId28 = "~effect/RcMap";
+var makeUnsafe8 = (options) => ({
+  [TypeId28]: TypeId28,
   lookup: options.lookup,
   context: options.context,
   scope: options.scope,
@@ -37038,20 +36571,20 @@ var makeUnsafe9 = (options) => ({
   capacity: options.capacity,
   state: {
     _tag: "Open",
-    map: empty10()
+    map: empty6()
   },
   pipe() {
     return pipeArguments(this, arguments);
   }
 });
-var make26 = (options) => withFiber2((fiber3) => {
+var make25 = (options) => withFiber2((fiber3) => {
   const context4 = fiber3.context;
   const scope3 = get(context4, Scope);
-  const self = makeUnsafe9({
+  const self = makeUnsafe8({
     lookup: options.lookup,
     context: context4,
     scope: scope3,
-    idleTimeToLive: typeof options.idleTimeToLive === "function" ? flow(options.idleTimeToLive, fromInputUnsafe) : constant(fromInputUnsafe(options.idleTimeToLive ?? zero)),
+    idleTimeToLive: typeof options.idleTimeToLive === "function" ? flow(options.idleTimeToLive, fromInputUnsafe) : constant(fromInputUnsafe(options.idleTimeToLive ?? zero2)),
     capacity: Math.max(options.capacity ?? Number.POSITIVE_INFINITY, 0)
   });
   return as3(addFinalizerExit(scope3, () => {
@@ -37063,7 +36596,7 @@ var make26 = (options) => withFiber2((fiber3) => {
       _tag: "Closed"
     };
     return forEach2(map14, ([, entry]) => exit2(close(entry.scope, void_3))).pipe(tap4(() => sync3(() => {
-      clear2(map14);
+      clear(map14);
     })));
   }), self);
 });
@@ -37073,12 +36606,12 @@ var get7 = /* @__PURE__ */ dual(2, (self, key) => uninterruptibleMask2((restore)
   }
   const state = self.state;
   const parent = getCurrent();
-  const o = get6(state.map, key);
+  const o = get2(state.map, key);
   let entry;
   if (o._tag === "Some") {
     entry = o.value;
     entry.refCount++;
-  } else if (Number.isFinite(self.capacity) && size6(self.state.map) >= self.capacity) {
+  } else if (Number.isFinite(self.capacity) && size(self.state.map) >= self.capacity) {
     return fail5(new ExceededCapacityError2(`RcMap attempted to exceed capacity of ${self.capacity}`));
   } else {
     entry = {
@@ -37091,7 +36624,7 @@ var get7 = /* @__PURE__ */ dual(2, (self, key) => uninterruptibleMask2((restore)
       refCount: 1
     };
     entry.finalizer = release(self, key, entry);
-    set5(state.map, key, entry);
+    set2(state.map, key, entry);
     const context4 = new Map(self.context.mapUnsafe);
     parent.context.mapUnsafe.forEach((value3, key2) => {
       context4.set(key2, value3);
@@ -37106,9 +36639,9 @@ var release = (self, key, entry) => withFiber2((fiber3) => {
   entry.refCount--;
   if (entry.refCount > 0) {
     return void_4;
-  } else if (self.state._tag === "Closed" || !has5(self.state.map, key) || isZero(entry.idleTimeToLive)) {
+  } else if (self.state._tag === "Closed" || !has3(self.state.map, key) || isZero2(entry.idleTimeToLive)) {
     if (self.state._tag === "Open") {
-      remove5(self.state.map, key);
+      remove(self.state.map, key);
     }
     return close(entry.scope, void_3);
   } else if (!isFinite(entry.idleTimeToLive)) {
@@ -37122,7 +36655,7 @@ var release = (self, key, entry) => withFiber2((fiber3) => {
     const remaining = entry.expiresAt - now2;
     if (remaining <= 0) {
       if (self.state._tag === "Closed" || entry.refCount > 0) return void_4;
-      remove5(self.state.map, key);
+      remove(self.state.map, key);
       return restore(close(entry.scope, void_3));
     }
     return flatMap5(clock.sleep(millis(remaining)), () => loop(restore));
@@ -37135,8 +36668,8 @@ var touch = /* @__PURE__ */ dual(2, (self, key) => clockWith2((clock) => {
   if (self.state._tag === "Closed") {
     return void_4;
   }
-  const o = get6(self.state.map, key);
-  if (o._tag === "None" || isZero(o.value.idleTimeToLive)) {
+  const o = get2(self.state.map, key);
+  if (o._tag === "None" || isZero2(o.value.idleTimeToLive)) {
     return void_4;
   }
   const entry = o.value;
@@ -37145,7 +36678,7 @@ var touch = /* @__PURE__ */ dual(2, (self, key) => clockWith2((clock) => {
 }));
 
 // node_modules/effect/dist/internal/rcRef.js
-var TypeId31 = "~effect/RcRef";
+var TypeId29 = "~effect/RcRef";
 var stateEmpty = {
   _tag: "Empty"
 };
@@ -37157,7 +36690,7 @@ var variance2 = {
   _E: identity
 };
 var RcRefImpl = class {
-  [TypeId31] = variance2;
+  [TypeId29] = variance2;
   pipe() {
     return pipeArguments(this, arguments);
   }
@@ -37174,7 +36707,7 @@ var RcRefImpl = class {
     this.idleTimeToLive = idleTimeToLive;
   }
 };
-var make27 = (options) => withFiber2((fiber3) => {
+var make26 = (options) => withFiber2((fiber3) => {
   const context4 = fiber3.context;
   const scope3 = get(context4, Scope);
   const ref = new RcRefImpl(options.acquire, context4, scope3, options.idleTimeToLive ? fromInputUnsafe(options.idleTimeToLive) : void 0);
@@ -37243,12 +36776,12 @@ var get8 = /* @__PURE__ */ fnUntraced2(function* (self_) {
 });
 
 // node_modules/effect/dist/RcRef.js
-var make28 = make27;
+var make27 = make26;
 var get9 = get8;
 
 // node_modules/effect/dist/Stream.js
-var TypeId32 = "~effect/Stream";
-var isStream = (u) => hasProperty(u, TypeId32);
+var TypeId30 = "~effect/Stream";
+var isStream = (u) => hasProperty(u, TypeId30);
 var DefaultChunkSize2 = DefaultChunkSize;
 var fromChannel2 = fromChannel;
 var fromEffect2 = (effect2) => fromChannel2(fromEffect(map7(effect2, of)));
@@ -37289,12 +36822,12 @@ var transformPull2 = (self, f) => fromChannel2(fromTransform((_, scope3) => flat
 var transformPullBracket = (self, f) => fromChannel2(fromTransformBracket((_, scope3, forkedScope) => flatMap5(toPullScoped(self.channel, scope3), (pull) => f(pull, scope3, forkedScope))));
 var toChannel2 = (stream3) => stream3.channel;
 var callback3 = (f, options) => fromChannel2(callbackArray(f, options));
-var empty11 = /* @__PURE__ */ fromChannel2(empty7);
+var empty11 = /* @__PURE__ */ fromChannel2(empty8);
 var succeed8 = (value3) => fromChannel2(succeed7(of(value3)));
-var make29 = (...values2) => fromArray2(values2);
+var make28 = (...values2) => fromArray2(values2);
 var sync5 = (evaluate2) => fromChannel2(sync4(() => of(evaluate2())));
 var suspend6 = (stream3) => fromChannel2(suspend4(() => stream3().channel));
-var fail9 = (error) => fromChannel2(fail6(error));
+var fail8 = (error) => fromChannel2(fail7(error));
 var failSync4 = (evaluate2) => fromChannel2(failSync3(evaluate2));
 var failCause7 = (cause) => fromChannel2(failCause6(cause));
 var die6 = (defect) => fromChannel2(die5(defect));
@@ -37372,7 +36905,7 @@ var range2 = (min5, max5, chunkSize = DefaultChunkSize) => min5 > max5 ? empty11
     return succeed6(chunk);
   });
 }));
-var never5 = /* @__PURE__ */ fromChannel2(never3);
+var never5 = /* @__PURE__ */ fromChannel2(never4);
 var unwrap3 = (effect2) => fromChannel2(unwrap2(map7(effect2, toChannel2)));
 var scoped4 = (self) => fromChannel2(scoped3(self.channel));
 var map13 = /* @__PURE__ */ dual(2, (self, f) => suspend6(() => {
@@ -37447,7 +36980,7 @@ var timeout3 = /* @__PURE__ */ dual(2, (self, duration) => timeoutOrElse3(self, 
 var timeoutOrElse3 = /* @__PURE__ */ dual(2, (self, options) => {
   const duration = fromInputUnsafe(options.duration);
   if (!isFinite(duration)) return self;
-  if (isZero(duration)) return suspend6(options.orElse);
+  if (isZero2(duration)) return suspend6(options.orElse);
   const timeoutSymbol = Symbol();
   return catchCause5(suspend6(() => {
     const parent = getCurrent();
@@ -37669,10 +37202,10 @@ var partitionQueue = /* @__PURE__ */ dual((args2) => isStream(args2[0]), /* @__P
   const scope3 = yield* scope2;
   const pull = yield* toPullScoped(self.channel, scope3);
   const capacity = options?.capacity === "unbounded" ? void 0 : options?.capacity ?? DefaultChunkSize2;
-  const passes = yield* make14({
+  const passes = yield* make19({
     capacity
   });
-  const fails = yield* make14({
+  const fails = yield* make19({
     capacity
   });
   yield* gen3(function* () {
@@ -37723,7 +37256,7 @@ var peel = /* @__PURE__ */ dual(2, /* @__PURE__ */ fnUntraced2(function* (self, 
     return failCause4(cause_);
   });
   let stream3 = fromPull2(succeed6(pull));
-  const leftover = yield* run3(stream3, sink);
+  const leftover = yield* run2(stream3, sink);
   if (cause) return [leftover, empty11];
   stream3 = fromPull2(succeed6(originalPull));
   return [leftover, stream3];
@@ -37784,7 +37317,7 @@ var withExecutionPlan3 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (se
   const loop = suspend6(() => {
     const step = policy.steps[i];
     if (!step) {
-      return fail9(getOrThrow(lastError));
+      return fail8(getOrThrow(lastError));
     }
     let nextStream = provideMeta(provide6(self, step.provide));
     let receivedElements = false;
@@ -37795,7 +37328,7 @@ var withExecutionPlan3 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (se
       nextStream = suspend6(() => {
         if (attempted) return wrapped;
         attempted = true;
-        return fail9(error);
+        return fail8(error);
       });
       nextStream = retry4(nextStream, scheduleFromStep(step, false));
     } else {
@@ -37808,7 +37341,7 @@ var withExecutionPlan3 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (se
     }) : nextStream, (error) => {
       i++;
       if (preventFallbackOnPartialStream && receivedElements) {
-        return fail9(error);
+        return fail8(error);
       }
       lastError = some2(error);
       return loop;
@@ -37817,7 +37350,7 @@ var withExecutionPlan3 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (se
   return loop;
 }));
 var take5 = /* @__PURE__ */ dual(2, (self, n) => n < 1 ? empty11 : takeUntil(self, (_, i) => i === n - 1));
-var takeRight = /* @__PURE__ */ dual(2, (self, n) => mapAccumArray(self, make11, (list, arr) => {
+var takeRight = /* @__PURE__ */ dual(2, (self, n) => mapAccumArray(self, make16, (list, arr) => {
   appendAll2(list, arr);
   if (list.length > n) {
     takeNVoid(list, list.length - n);
@@ -37945,7 +37478,7 @@ var dropWhileEffect = /* @__PURE__ */ dual(2, (self, predicate) => transformPull
 var dropRight = /* @__PURE__ */ dual(2, (self, n) => {
   if (n <= 0) return self;
   return transformPull2(self, (pull, _scope) => sync3(() => {
-    const list = make11();
+    const list = make16();
     const emit = flatMap5(pull, (arr) => {
       appendAllUnsafe(list, arr);
       const toTake = list.length - n;
@@ -38000,7 +37533,7 @@ var rechunk = /* @__PURE__ */ dual(2, (self, target2) => {
 var sliding2 = /* @__PURE__ */ dual(2, (self, chunkSize) => slidingSize(self, chunkSize, 1));
 var slidingSize = /* @__PURE__ */ dual(3, (self, chunkSize, stepSize) => transformPull2(self, (upstream, _scope) => sync3(() => {
   let cause = null;
-  const list = make11();
+  const list = make16();
   let emitted = false;
   const pull = matchCauseEffect2(upstream, {
     onSuccess(arr) {
@@ -38227,45 +37760,45 @@ var groupedWithin = /* @__PURE__ */ dual(3, (self, chunkSize, duration) => aggre
 var groupBy = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, f, options) => groupByImpl(self, fnUntraced2(function* (arr, queues, queueMap) {
   for (let i = 0; i < arr.length; i++) {
     const [key, value3] = yield* f(arr[i]);
-    const oentry = get6(queueMap, key);
+    const oentry = get2(queueMap, key);
     const queue = isSome2(oentry) ? oentry.value : yield* scoped2(get7(queues, key));
     yield* touch(queues, key);
     yield* offer(queue, value3);
   }
 }), options));
 var groupByKey = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, f, options) => suspend6(() => {
-  const batch = empty10();
+  const batch = empty6();
   return groupByImpl(self, fnUntraced2(function* (arr, queues, queueMap) {
     for (let i = 0; i < arr.length; i++) {
       const key = f(arr[i]);
-      const ovalues = get6(batch, key);
+      const ovalues = get2(batch, key);
       if (isNone2(ovalues)) {
-        set5(batch, key, [arr[i]]);
+        set2(batch, key, [arr[i]]);
       } else {
         ovalues.value.push(arr[i]);
       }
     }
     for (const [key, values2] of batch) {
-      const oentry = get6(queueMap, key);
+      const oentry = get2(queueMap, key);
       const queue = isSome2(oentry) ? oentry.value : yield* scoped2(get7(queues, key));
       yield* touch(queues, key);
       yield* offerAll(queue, values2);
     }
-    clear2(batch);
+    clear(batch);
   }), options);
 }));
 var groupByImpl = (self, f, options) => transformPullBracket(self, fnUntraced2(function* (pull, scope3, forkedScope) {
   const out = yield* unbounded2();
   yield* addFinalizer2(scope3, shutdown2(out));
-  const queueMap = empty10();
-  const queues = yield* make26({
-    lookup: (key) => acquireRelease2(make14({
+  const queueMap = empty6();
+  const queues = yield* make25({
+    lookup: (key) => acquireRelease2(make19({
       capacity: options?.bufferSize ?? 4096
     }).pipe(tap4((queue) => {
-      set5(queueMap, key, queue);
+      set2(queueMap, key, queue);
       return offer(out, [key, fromQueue(queue)]);
     })), (queue) => {
-      remove5(queueMap, key);
+      remove(queueMap, key);
       return end(queue);
     }),
     idleTimeToLive: options?.idleTimeToLive ?? infinity
@@ -38337,7 +37870,7 @@ var aggregateWithin = /* @__PURE__ */ dual(3, (self, sink, schedule4) => fromCha
   const pull = yield* toPullScoped(self.channel, _);
   const pullLatch = makeUnsafe5(false);
   const scheduleStep = Symbol();
-  const buffer3 = yield* make14({
+  const buffer3 = yield* make19({
     capacity: 0
   });
   yield* pull.pipe(
@@ -38390,13 +37923,13 @@ var aggregateWithin = /* @__PURE__ */ dual(3, (self, sink, schedule4) => fromCha
   }).pipe(flatMap5((pull2) => raceFirst2(catchSinkHalt(pull2), stepToBuffer)));
 }))));
 var broadcast = /* @__PURE__ */ dual(2, (self, options) => map7(toPubSubTake2(self, options), fromPubSubTake2));
-var share = /* @__PURE__ */ dual(2, (self, options) => map7(make28({
+var share = /* @__PURE__ */ dual(2, (self, options) => map7(make27({
   acquire: broadcast(self, options),
   idleTimeToLive: options.idleTimeToLive
 }), (ref) => unwrap3(get9(ref))));
 var pipeThroughChannel = /* @__PURE__ */ dual(2, (self, channel) => fromChannel2(pipeTo(self.channel, channel)));
 var pipeThroughChannelOrFail = /* @__PURE__ */ dual(2, (self, channel) => fromChannel2(pipeToOrFail(self.channel, channel)));
-var pipeThrough = /* @__PURE__ */ dual(2, (self, sink) => self.channel.pipe(pipeToOrFail(toChannel(sink)), concatWith(([_, leftover]) => leftover ? succeed7(leftover) : empty7), fromChannel2));
+var pipeThrough = /* @__PURE__ */ dual(2, (self, sink) => self.channel.pipe(pipeToOrFail(toChannel(sink)), concatWith(([_, leftover]) => leftover ? succeed7(leftover) : empty8), fromChannel2));
 var collect2 = (self) => fromEffect2(runCollect(self));
 var accumulate = (self) => mapAccumArray(self, empty3, (acc, as4) => {
   const combined = appendAll(acc, as4);
@@ -38537,7 +38070,7 @@ var bindEffect = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, tag2
 var bindTo5 = /* @__PURE__ */ dual(2, (self, name) => map13(self, (a) => ({
   [name]: a
 })));
-var run3 = /* @__PURE__ */ dual(2, (self, sink) => scopedWith2((scope3) => toPullScoped(self.channel, scope3).pipe(flatMap5((upstream) => sink.transform(upstream, scope3)), map7(([a]) => a))));
+var run2 = /* @__PURE__ */ dual(2, (self, sink) => scopedWith2((scope3) => toPullScoped(self.channel, scope3).pipe(flatMap5((upstream) => sink.transform(upstream, scope3)), map7(([a]) => a))));
 var runCollect = (self) => runFold(self.channel, () => [], (acc, chunk) => {
   for (let i = 0; i < chunk.length; i++) {
     acc.push(chunk[i]);
@@ -38689,6 +38222,85 @@ var toPubSubTake2 = /* @__PURE__ */ dual(2, (self, options) => toPubSubTake(self
 var toQueue = /* @__PURE__ */ dual(2, (self, options) => toQueueArray(self.channel, options));
 var runIntoQueue = /* @__PURE__ */ dual(2, (self, queue) => runIntoQueueArray(self.channel, queue));
 
+// node_modules/effect/dist/FiberSet.js
+var TypeId31 = "~effect/FiberSet";
+var isFiberSet = (u) => hasProperty(u, TypeId31);
+var Proto5 = {
+  [TypeId31]: TypeId31,
+  [Symbol.iterator]() {
+    if (this.state._tag === "Closed") {
+      return empty();
+    }
+    return this.state.backing[Symbol.iterator]();
+  },
+  ...PipeInspectableProto,
+  toJSON() {
+    return {
+      _id: "FiberMap",
+      state: this.state
+    };
+  }
+};
+var makeUnsafe9 = (backing, deferred) => {
+  const self = Object.create(Proto5);
+  self.state = {
+    _tag: "Open",
+    backing
+  };
+  self.deferred = deferred;
+  return self;
+};
+var make29 = () => acquireRelease2(sync3(() => makeUnsafe9(/* @__PURE__ */ new Set(), makeUnsafe2())), (set9) => suspend3(() => {
+  const state = set9.state;
+  if (state._tag === "Closed") return void_4;
+  set9.state = {
+    _tag: "Closed"
+  };
+  const fibers = state.backing;
+  return interruptAll(fibers).pipe(into(set9.deferred));
+}));
+var internalFiberId = -1;
+var isInternalInterruption = /* @__PURE__ */ toPredicate(/* @__PURE__ */ compose(filterInterruptors, /* @__PURE__ */ has2(internalFiberId)));
+var addUnsafe = /* @__PURE__ */ dual((args2) => isFiberSet(args2[0]), (self, fiber3, options) => {
+  if (self.state._tag === "Closed") {
+    fiber3.interruptUnsafe(internalFiberId);
+    return;
+  } else if (self.state.backing.has(fiber3)) {
+    return;
+  }
+  self.state.backing.add(fiber3);
+  fiber3.addObserver((exit3) => {
+    if (self.state._tag === "Closed") {
+      return;
+    }
+    self.state.backing.delete(fiber3);
+    if (isFailure4(exit3) && (options?.propagateInterruption === true ? !isInternalInterruption(exit3.cause) : !hasInterruptsOnly2(exit3.cause))) {
+      doneUnsafe(self.deferred, exit3);
+    }
+  });
+});
+var constInterruptedFiber = /* @__PURE__ */ (function() {
+  let fiber3 = void 0;
+  return () => {
+    if (fiber3 === void 0) {
+      fiber3 = runFork2(interrupt3);
+    }
+    return fiber3;
+  };
+})();
+var runtime = (self) => () => map7(context2(), (services) => {
+  const runFork3 = runForkWith2(services);
+  return (effect2, options) => {
+    if (self.state._tag === "Closed") {
+      return constInterruptedFiber();
+    }
+    const fiber3 = runFork3(effect2, options);
+    addUnsafe(self, fiber3);
+    return fiber3;
+  };
+});
+var join3 = (self) => _await(self.deferred);
+
 // node_modules/effect/dist/PrimaryKey.js
 var symbol4 = "~effect/interfaces/PrimaryKey";
 
@@ -38698,8 +38310,8 @@ __export(ManagedRuntime_exports, {
   isManagedRuntime: () => isManagedRuntime,
   make: () => make30
 });
-var TypeId33 = "~effect/ManagedRuntime";
-var isManagedRuntime = (input) => hasProperty(input, TypeId33);
+var TypeId32 = "~effect/ManagedRuntime";
+var isManagedRuntime = (input) => hasProperty(input, TypeId32);
 var make30 = (layer, options) => {
   const memoMap = options?.memoMap ?? makeMemoMapUnsafe();
   const scope3 = makeUnsafe3("parallel");
@@ -38727,7 +38339,7 @@ var make30 = (layer, options) => {
     return flatten4(await_(buildFiber));
   });
   const self = {
-    [TypeId33]: TypeId33,
+    [TypeId32]: TypeId32,
     memoMap,
     scope: scope3,
     contextEffect,
@@ -38770,7 +38382,7 @@ function provide7(managed, effect2) {
 }
 
 // node_modules/effect/dist/Pool.js
-var TypeId34 = "~effect/Pool";
+var TypeId33 = "~effect/Pool";
 var make31 = (options) => makeWithStrategy({
   ...options,
   min: options.size,
@@ -38806,7 +38418,7 @@ var makeWithStrategy = (options) => uninterruptibleMask2(fnUntraced2(function* (
     waiters: 0
   };
   const self = {
-    [TypeId34]: TypeId34,
+    [TypeId33]: TypeId33,
     config,
     state,
     pipe() {
@@ -38909,7 +38521,7 @@ var resizeLoop = (self) => suspend3(() => {
     concurrency: toAcquire
   }), tap4(self.state.availableLatch.open), flatMap5((items2) => items2.some((_) => _.exit._tag === "Failure") ? void_4 : resizeLoop(self)));
 });
-var allocate = (self) => acquireUseRelease2(make8(), (scope3) => self.config.acquire.pipe(provide(scope3), exit2, flatMap5((exit3) => {
+var allocate = (self) => acquireUseRelease2(make9(), (scope3) => self.config.acquire.pipe(provide(scope3), exit2, flatMap5((exit3) => {
   const item = {
     exit: exit3,
     finalizer: catchCause3(close(scope3, exit3), reportUnhandledError),
@@ -39008,6 +38620,605 @@ var reportUnhandledError = (cause) => withFiber2((fiber3) => {
   return void_4;
 });
 
+// src/vendor/t3contracts/baseSchemas.ts
+var TrimmedString = Schema_exports.Trim;
+var TrimmedNonEmptyString = TrimmedString.check(Schema_exports.isNonEmpty());
+var NonNegativeInt = Schema_exports.Int.check(Schema_exports.isGreaterThanOrEqualTo(0));
+var PositiveInt = Schema_exports.Int.check(Schema_exports.isGreaterThanOrEqualTo(1));
+var IsoDateTime = Schema_exports.String;
+var makeEntityId = (brand3) => {
+  return TrimmedNonEmptyString.pipe(Schema_exports.brand(brand3));
+};
+var ThreadId = makeEntityId("ThreadId");
+var ProjectId = makeEntityId("ProjectId");
+var EnvironmentId = makeEntityId("EnvironmentId");
+var CommandId = makeEntityId("CommandId");
+var EventId = makeEntityId("EventId");
+var MessageId = makeEntityId("MessageId");
+var TurnId = makeEntityId("TurnId");
+var AuthSessionId = makeEntityId("AuthSessionId");
+var ProviderItemId = makeEntityId("ProviderItemId");
+var RuntimeSessionId = makeEntityId("RuntimeSessionId");
+var RuntimeItemId = makeEntityId("RuntimeItemId");
+var RuntimeRequestId = makeEntityId("RuntimeRequestId");
+var RuntimeTaskId = makeEntityId("RuntimeTaskId");
+var ApprovalRequestId = makeEntityId("ApprovalRequestId");
+var CheckpointRef = makeEntityId("CheckpointRef");
+
+// src/vendor/t3contracts/model.ts
+var CODEX_REASONING_EFFORT_OPTIONS = ["xhigh", "high", "medium", "low"];
+var CLAUDE_CODE_EFFORT_OPTIONS = ["low", "medium", "high", "max", "ultrathink", "xhigh"];
+var CodexModelOptions = Schema_exports.Struct({
+  reasoningEffort: Schema_exports.optional(Schema_exports.Literals(CODEX_REASONING_EFFORT_OPTIONS)),
+  fastMode: Schema_exports.optional(Schema_exports.Boolean)
+});
+var ClaudeModelOptions = Schema_exports.Struct({
+  thinking: Schema_exports.optional(Schema_exports.Boolean),
+  effort: Schema_exports.optional(Schema_exports.Literals(CLAUDE_CODE_EFFORT_OPTIONS)),
+  fastMode: Schema_exports.optional(Schema_exports.Boolean),
+  contextWindow: Schema_exports.optional(Schema_exports.String)
+});
+var ProviderModelOptions = Schema_exports.Struct({
+  codex: Schema_exports.optional(CodexModelOptions),
+  claudeAgent: Schema_exports.optional(ClaudeModelOptions)
+});
+var EffortOption = Schema_exports.Struct({
+  value: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  isDefault: Schema_exports.optional(Schema_exports.Boolean)
+});
+var ContextWindowOption = Schema_exports.Struct({
+  value: TrimmedNonEmptyString,
+  label: TrimmedNonEmptyString,
+  isDefault: Schema_exports.optional(Schema_exports.Boolean)
+});
+var ModelCapabilities = Schema_exports.Struct({
+  reasoningEffortLevels: Schema_exports.Array(EffortOption),
+  supportsFastMode: Schema_exports.Boolean,
+  supportsThinkingToggle: Schema_exports.Boolean,
+  contextWindowOptions: Schema_exports.Array(ContextWindowOption),
+  promptInjectedEffortLevels: Schema_exports.Array(TrimmedNonEmptyString)
+});
+var DEFAULT_MODEL_BY_PROVIDER = {
+  codex: "gpt-5.4",
+  claudeAgent: "claude-sonnet-4-6"
+};
+var DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
+var DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER = {
+  codex: "gpt-5.4-mini",
+  claudeAgent: "claude-haiku-4-5"
+};
+
+// src/projects.ts
+function normalizeProjectPath(workspaceRoot) {
+  const trimmed = workspaceRoot.trim();
+  if (!trimmed) {
+    throw new Error("Project path cannot be empty.");
+  }
+  if (trimmed.startsWith("~")) {
+    throw new Error("Project path must be absolute; shell-expand '~' before passing it to t3-thread.");
+  }
+  const isWindowsPath = /^[A-Za-z]:[\\/]/.test(trimmed) || /^\\\\/.test(trimmed);
+  if (!import_node_path.default.posix.isAbsolute(trimmed) && !isWindowsPath) {
+    throw new Error(`Project path must be absolute: ${workspaceRoot}`);
+  }
+  const normalized = isWindowsPath ? import_node_path.default.win32.normalize(trimmed) : import_node_path.default.posix.normalize(trimmed);
+  if (isWindowsPath) {
+    const parsed = import_node_path.default.win32.parse(normalized);
+    return normalized === parsed.root ? normalized : normalized.replace(/[\\/]+$/, "");
+  }
+  return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
+}
+function normalizeProjectTitle(title) {
+  const trimmed = title.trim();
+  if (!trimmed) {
+    throw new Error("Project title cannot be empty.");
+  }
+  return trimmed;
+}
+function deriveProjectTitle(workspaceRoot, explicitTitle) {
+  if (explicitTitle !== void 0) {
+    return normalizeProjectTitle(explicitTitle);
+  }
+  const normalized = normalizeProjectPath(workspaceRoot);
+  const baseName = (import_node_path.default.win32.isAbsolute(normalized) ? import_node_path.default.win32.basename(normalized) : import_node_path.default.posix.basename(normalized)).trim();
+  return baseName || "project";
+}
+function parseModelOptionEntries(entries3 = []) {
+  if (entries3.length === 0) {
+    return void 0;
+  }
+  const options = {};
+  for (const entry of entries3) {
+    const separatorIndex = entry.indexOf("=");
+    if (separatorIndex <= 0) {
+      throw new Error(`Model option must be formatted as key=value: ${entry}`);
+    }
+    const key = entry.slice(0, separatorIndex).trim();
+    const rawValue = entry.slice(separatorIndex + 1).trim();
+    if (!key) {
+      throw new Error(`Model option key cannot be empty: ${entry}`);
+    }
+    if (rawValue === "true") {
+      options[key] = true;
+    } else if (rawValue === "false") {
+      options[key] = false;
+    } else {
+      options[key] = rawValue;
+    }
+  }
+  return options;
+}
+function buildModelSelection(input) {
+  if (input.clear) {
+    if (input.provider || input.model || (input.optionEntries?.length ?? 0) > 0 || input.noDefault) {
+      throw new Error("`--clear` cannot be combined with model provider, model, options, or --no-default-model.");
+    }
+    return null;
+  }
+  if (input.noDefault) {
+    if (input.provider || input.model || (input.optionEntries?.length ?? 0) > 0) {
+      throw new Error("`--no-default-model` cannot be combined with model provider, model, or options.");
+    }
+    return null;
+  }
+  const provider = input.provider?.trim() || "codex";
+  const model = input.model?.trim() || DEFAULT_MODEL;
+  const options = parseModelOptionEntries(input.optionEntries);
+  return {
+    provider,
+    model,
+    ...options ? { options } : {}
+  };
+}
+function resolveProjectTarget(projects, identifier2) {
+  const trimmed = identifier2.trim();
+  if (!trimmed) {
+    throw new Error("Project identifier cannot be empty.");
+  }
+  const idMatch = projects.find((project2) => project2.id === trimmed);
+  if (idMatch) {
+    return idMatch;
+  }
+  const normalizedPath = normalizeProjectPath(trimmed);
+  const pathMatches = projects.filter((project2) => normalizeProjectPath(project2.workspaceRoot) === normalizedPath);
+  if (pathMatches.length === 1) {
+    return pathMatches[0];
+  }
+  if (pathMatches.length > 1) {
+    throw new Error(`Multiple active projects use '${normalizedPath}'. Re-run with the project id.`);
+  }
+  throw new Error(`No active project found for '${trimmed}'.`);
+}
+function findExistingProjectByPath(projects, workspaceRoot) {
+  const normalizedPath = normalizeProjectPath(workspaceRoot);
+  return projects.find((project2) => normalizeProjectPath(project2.workspaceRoot) === normalizedPath) ?? null;
+}
+function listThreadsForProject(threads, projectId) {
+  return threads.filter((thread) => thread.projectId === projectId);
+}
+function buildProjectCreateCommand(input) {
+  return {
+    type: "project.create",
+    commandId: input.commandId,
+    projectId: input.projectId,
+    title: input.title,
+    workspaceRoot: normalizeProjectPath(input.workspaceRoot),
+    ...input.createWorkspaceRootIfMissing ? { createWorkspaceRootIfMissing: true } : {},
+    ...input.defaultModelSelection !== void 0 ? { defaultModelSelection: input.defaultModelSelection } : {},
+    createdAt: input.createdAt
+  };
+}
+function buildProjectMetaUpdateCommand(input) {
+  return {
+    type: "project.meta.update",
+    commandId: input.commandId,
+    projectId: input.projectId,
+    ...input.title !== void 0 ? { title: normalizeProjectTitle(input.title) } : {},
+    ...input.workspaceRoot !== void 0 ? { workspaceRoot: normalizeProjectPath(input.workspaceRoot) } : {},
+    ...input.defaultModelSelection !== void 0 ? { defaultModelSelection: input.defaultModelSelection } : {}
+  };
+}
+function buildProjectDeleteCommand(input) {
+  return {
+    type: "project.delete",
+    commandId: input.commandId,
+    projectId: input.projectId,
+    ...input.force ? { force: true } : {}
+  };
+}
+
+// src/http.ts
+var PAIRING_TOKEN_PARAM = "token";
+function readHashParams(url) {
+  return new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
+}
+function getPairingTokenFromUrl(url) {
+  const hashToken = readHashParams(url).get(PAIRING_TOKEN_PARAM)?.trim() ?? "";
+  if (hashToken) {
+    return hashToken;
+  }
+  const searchToken = url.searchParams.get(PAIRING_TOKEN_PARAM)?.trim() ?? "";
+  return searchToken || null;
+}
+function normalizeRemoteBaseUrl(rawValue) {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    throw new Error("Enter a backend URL.");
+  }
+  const normalizedInput = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//.test(trimmed) || trimmed.startsWith("//") ? trimmed : `https://${trimmed}`;
+  const url = new URL(normalizedInput);
+  url.pathname = "/";
+  url.search = "";
+  url.hash = "";
+  return url;
+}
+function toHttpBaseUrl(url) {
+  const next = new URL(url.toString());
+  if (next.protocol === "ws:") {
+    next.protocol = "http:";
+  } else if (next.protocol === "wss:") {
+    next.protocol = "https:";
+  }
+  next.pathname = "/";
+  next.search = "";
+  next.hash = "";
+  return next.toString();
+}
+function toWsBaseUrl(url) {
+  const next = new URL(url.toString());
+  if (next.protocol === "http:") {
+    next.protocol = "ws:";
+  } else if (next.protocol === "https:") {
+    next.protocol = "wss:";
+  }
+  next.pathname = "/";
+  next.search = "";
+  next.hash = "";
+  return next.toString();
+}
+function resolvePairingTarget(input) {
+  const pairingUrl = input.pairingUrl?.trim() ?? "";
+  if (pairingUrl) {
+    const url = new URL(pairingUrl);
+    const credential2 = getPairingTokenFromUrl(url);
+    if (!credential2) {
+      throw new Error("Pairing URL is missing its token.");
+    }
+    return {
+      credential: credential2,
+      httpBaseUrl: toHttpBaseUrl(url),
+      wsBaseUrl: toWsBaseUrl(url)
+    };
+  }
+  const host = input.host?.trim() ?? "";
+  const credential = input.credential?.trim() ?? "";
+  if (!host) {
+    throw new Error("Enter a backend URL or pairing URL.");
+  }
+  if (!credential) {
+    throw new Error("Enter a pairing code or use a pairing URL.");
+  }
+  const normalizedHost = normalizeRemoteBaseUrl(host);
+  return {
+    credential,
+    httpBaseUrl: toHttpBaseUrl(normalizedHost),
+    wsBaseUrl: toWsBaseUrl(normalizedHost)
+  };
+}
+async function readErrorMessage(response, fallback) {
+  const text2 = await response.text();
+  if (!text2) {
+    return fallback;
+  }
+  try {
+    const parsed = JSON.parse(text2);
+    if (typeof parsed.error === "string" && parsed.error.trim()) {
+      return parsed.error;
+    }
+  } catch {
+  }
+  return text2;
+}
+async function fetchRemoteJson(input) {
+  const requestUrl = new URL(input.pathname, input.httpBaseUrl).toString();
+  let response;
+  try {
+    response = await fetch(requestUrl, {
+      method: input.method ?? "GET",
+      headers: {
+        ...input.body !== void 0 ? { "content-type": "application/json" } : {},
+        ...input.bearerToken ? { authorization: `Bearer ${input.bearerToken}` } : {}
+      },
+      ...input.body !== void 0 ? { body: JSON.stringify(input.body) } : {}
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`
+    );
+  }
+  if (!response.ok) {
+    throw new Error(
+      await readErrorMessage(response, `Remote request failed (${response.status}).`)
+    );
+  }
+  return await response.json();
+}
+async function fetchEnvironmentDescriptor(httpBaseUrl) {
+  return fetchRemoteJson({
+    httpBaseUrl,
+    pathname: "/.well-known/t3/environment"
+  });
+}
+async function bootstrapBearerSession(input) {
+  return fetchRemoteJson({
+    httpBaseUrl: input.httpBaseUrl,
+    pathname: "/api/auth/bootstrap/bearer",
+    method: "POST",
+    body: { credential: input.credential }
+  });
+}
+async function fetchSessionState(input) {
+  return fetchRemoteJson({
+    httpBaseUrl: input.httpBaseUrl,
+    pathname: "/api/auth/session",
+    bearerToken: input.bearerToken
+  });
+}
+async function issueWebSocketToken(input) {
+  return fetchRemoteJson({
+    httpBaseUrl: input.httpBaseUrl,
+    pathname: "/api/auth/ws-token",
+    method: "POST",
+    bearerToken: input.bearerToken
+  });
+}
+async function resolveWebSocketUrl(input) {
+  const issued = await issueWebSocketToken({
+    httpBaseUrl: input.httpBaseUrl,
+    bearerToken: input.bearerToken
+  });
+  const url = new URL(input.wsBaseUrl);
+  url.pathname = "/ws";
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("wsToken", issued.token);
+  return url.toString();
+}
+
+// node_modules/effect/dist/unstable/socket/Socket.js
+var TypeId34 = "~effect/socket/Socket";
+var Socket = /* @__PURE__ */ Service("effect/socket/Socket");
+var CloseEventTypeId = "~effect/socket/Socket/CloseEvent";
+var CloseEvent = class {
+  /**
+   * @since 4.0.0
+   */
+  [CloseEventTypeId];
+  code;
+  reason;
+  constructor(code = 1e3, reason) {
+    this[CloseEventTypeId] = CloseEventTypeId;
+    this.code = code;
+    this.reason = reason;
+  }
+  /**
+   * @since 4.0.0
+   */
+  toString() {
+    return this.reason ? `${this.code}: ${this.reason}` : `${this.code}`;
+  }
+};
+var isCloseEvent = (u) => hasProperty(u, CloseEventTypeId);
+var SocketErrorTypeId = "~effect/socket/Socket/SocketError";
+var isSocketError = (u) => hasProperty(u, SocketErrorTypeId);
+var SocketReadError = class extends (/* @__PURE__ */ ErrorClass("effect/socket/Socket/SocketReadError")({
+  _tag: /* @__PURE__ */ tag("SocketReadError"),
+  cause: Defect
+})) {
+  /**
+   * @since 4.0.0
+   */
+  message = `An error occurred during Read`;
+};
+var SocketWriteError = class extends (/* @__PURE__ */ ErrorClass("effect/socket/Socket/SocketWriteError")({
+  _tag: /* @__PURE__ */ tag("SocketWriteError"),
+  cause: Defect
+})) {
+  /**
+   * @since 4.0.0
+   */
+  message = `An error occurred during Write`;
+};
+var SocketOpenError = class extends (/* @__PURE__ */ ErrorClass("effect/socket/Socket/SocketOpenError")({
+  _tag: /* @__PURE__ */ tag("SocketOpenError"),
+  kind: /* @__PURE__ */ Literals(["Unknown", "Timeout"]),
+  cause: Defect
+})) {
+  /**
+   * @since 4.0.0
+   */
+  get message() {
+    return this.kind === "Timeout" ? `timeout waiting for "open"` : `An error occurred during Open`;
+  }
+};
+var SocketCloseError = class extends (/* @__PURE__ */ ErrorClass("effect/socket/Socket/SocketCloseError")({
+  _tag: /* @__PURE__ */ tag("SocketCloseError"),
+  code: Number6,
+  closeReason: /* @__PURE__ */ optional(String5)
+})) {
+  /**
+   * @since 4.0.0
+   */
+  static filterClean(isClean) {
+    return function(u) {
+      return SocketError.is(u) && u.reason._tag === "SocketCloseError" && isClean(u.reason.code) ? succeed2(u.reason) : fail2(u);
+    };
+  }
+  get message() {
+    if (this.closeReason) {
+      return `${this.code}: ${this.closeReason}`;
+    }
+    return `${this.code}`;
+  }
+};
+var SocketErrorReason = /* @__PURE__ */ Union2([SocketReadError, SocketWriteError, SocketOpenError, SocketCloseError]);
+var SocketError = class extends (/* @__PURE__ */ TaggedErrorClass(SocketErrorTypeId)("SocketError", {
+  _tag: /* @__PURE__ */ tag("SocketError"),
+  reason: SocketErrorReason
+})) {
+  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
+  constructor(props) {
+    if ("cause" in props.reason) {
+      super({
+        ...props,
+        cause: props.reason.cause
+      });
+    } else {
+      super(props);
+    }
+  }
+  /**
+   * @since 4.0.0
+   */
+  [SocketErrorTypeId] = SocketErrorTypeId;
+  /**
+   * @since 4.0.0
+   */
+  static is(u) {
+    return isSocketError(u);
+  }
+  message = this.reason.message;
+};
+var defaultCloseCodeIsError = (_code) => true;
+var WebSocket = class extends (/* @__PURE__ */ Service()("~effect/socket/Socket/WebSocket")) {
+};
+var WebSocketConstructor = class extends (/* @__PURE__ */ Service()("@effect/platform/Socket/WebSocketConstructor")) {
+};
+var makeWebSocket = (url, options) => WebSocketConstructor.use((makeWs) => fromWebSocket(acquireRelease2((typeof url === "string" ? succeed6(url) : url).pipe(map7((url2) => makeWs(url2, options?.protocols))), (ws) => sync3(() => ws.close(1e3))), options));
+var fromWebSocket = (acquire, options) => withFiber2((fiber3) => {
+  let currentWS;
+  const latch = makeUnsafe5(false);
+  const acquireContext = fiber3.context;
+  const closeCodeIsError = options?.closeCodeIsError ?? defaultCloseCodeIsError;
+  const runRaw = (handler, opts) => scopedWith2(fnUntraced2(function* (scope3) {
+    const fiberSet = yield* make29().pipe(provide(scope3));
+    const ws = yield* provide(acquire, scope3);
+    const run5 = yield* provideService2(runtime(fiberSet)(), WebSocket, ws);
+    let open2 = false;
+    function onMessage(event) {
+      if (event.data instanceof Blob) {
+        const effect2 = flatMap5(promise2(() => event.data.arrayBuffer()), (buffer3) => {
+          const result5 = handler(new Uint8Array(buffer3));
+          return isEffect2(result5) ? result5 : void_4;
+        });
+        return run5(effect2);
+      }
+      const result4 = handler(event.data);
+      if (isEffect2(result4)) {
+        run5(result4);
+      }
+    }
+    function onError5(cause) {
+      ws.removeEventListener("message", onMessage);
+      ws.removeEventListener("close", onClose);
+      doneUnsafe(fiberSet.deferred, fail5(new SocketError({
+        reason: open2 ? new SocketReadError({
+          cause
+        }) : new SocketOpenError({
+          kind: "Unknown",
+          cause
+        })
+      })));
+    }
+    function onClose(event) {
+      const code = typeof event.code === "number" ? event.code : 1001;
+      ws.removeEventListener("message", onMessage);
+      ws.removeEventListener("error", onError5);
+      doneUnsafe(fiberSet.deferred, fail5(new SocketError({
+        reason: new SocketCloseError({
+          code,
+          closeReason: event.reason
+        })
+      })));
+    }
+    ws.addEventListener("close", onClose, {
+      once: true
+    });
+    ws.addEventListener("error", onError5, {
+      once: true
+    });
+    ws.addEventListener("message", onMessage);
+    if (ws.readyState !== 1) {
+      const openDeferred = makeUnsafe2();
+      ws.addEventListener("open", () => {
+        open2 = true;
+        doneUnsafe(openDeferred, void_4);
+      }, {
+        once: true
+      });
+      yield* _await(openDeferred).pipe(timeoutOrElse2({
+        duration: options?.openTimeout ?? 1e4,
+        orElse: () => fail5(new SocketError({
+          reason: new SocketOpenError({
+            kind: "Timeout",
+            cause: new Error('timeout waiting for "open"')
+          })
+        }))
+      }), raceFirst2(join3(fiberSet)));
+    }
+    open2 = true;
+    currentWS = ws;
+    latch.openUnsafe();
+    if (opts?.onOpen) yield* opts.onOpen;
+    return yield* catchFilter2(join3(fiberSet), SocketCloseError.filterClean((_) => !closeCodeIsError(_)), () => void_4);
+  })).pipe(updateContext2((input) => merge(acquireContext, input)), ensuring2(sync3(() => {
+    latch.closeUnsafe();
+    currentWS = void 0;
+  })));
+  const encoder3 = new TextEncoder();
+  const run4 = (handler, opts) => runRaw((data) => typeof data === "string" ? handler(encoder3.encode(data)) : data instanceof Uint8Array ? handler(data) : handler(new Uint8Array(data)), opts);
+  const write = (chunk) => latch.whenOpen(sync3(() => {
+    const ws = currentWS;
+    if (isCloseEvent(chunk)) {
+      ws.close(chunk.code, chunk.reason);
+    } else {
+      ws.send(chunk);
+    }
+  }));
+  const writer = succeed6(write);
+  return succeed6(Socket.of({
+    [TypeId34]: TypeId34,
+    run: run4,
+    runRaw,
+    writer
+  }));
+});
+var layerWebSocket = /* @__PURE__ */ flow(makeWebSocket, /* @__PURE__ */ effect(Socket));
+
+// node_modules/ws/wrapper.mjs
+var wrapper_exports = {};
+__export(wrapper_exports, {
+  PerMessageDeflate: () => import_permessage_deflate.default,
+  Receiver: () => import_receiver.default,
+  Sender: () => import_sender.default,
+  WebSocket: () => import_websocket.default,
+  WebSocketServer: () => import_websocket_server.default,
+  createWebSocketStream: () => import_stream.default,
+  default: () => wrapper_default,
+  extension: () => import_extension.default,
+  subprotocol: () => import_subprotocol.default
+});
+var import_stream = __toESM(require_stream(), 1);
+var import_extension = __toESM(require_extension(), 1);
+var import_permessage_deflate = __toESM(require_permessage_deflate(), 1);
+var import_receiver = __toESM(require_receiver(), 1);
+var import_sender = __toESM(require_sender(), 1);
+var import_subprotocol = __toESM(require_subprotocol(), 1);
+var import_websocket = __toESM(require_websocket(), 1);
+var import_websocket_server = __toESM(require_websocket_server(), 1);
+var wrapper_default = import_websocket.default;
+
 // node_modules/effect/dist/unstable/rpc/RpcSchema.js
 var StreamSchemaTypeId = "~effect/rpc/RpcSchema/StreamSchema";
 function isStreamSchema(schema2) {
@@ -39021,7 +39232,7 @@ function getStreamSchemas(schema2) {
 }
 var schema = /* @__PURE__ */ declare(isStream);
 function Stream3(success, error) {
-  return make25(schema.ast, {
+  return make24(schema.ast, {
     [StreamSchemaTypeId]: StreamSchemaTypeId,
     success,
     error
@@ -39267,12 +39478,12 @@ var redact4 = /* @__PURE__ */ dual(2, (self, key) => {
     if (typeof key2 === "string") {
       const k = key2.toLowerCase();
       if (k in self) {
-        out[k] = make20(self[k]);
+        out[k] = make12(self[k]);
       }
     } else {
       for (const name in self) {
         if (key2.test(name)) {
-          out[name] = make20(self[name]);
+          out[name] = make12(self[name]);
         }
       }
     }
@@ -39800,9 +40011,9 @@ var setUrl = /* @__PURE__ */ dual(2, (self, url) => {
   clone2.hash = "";
   return makeWith(self.method, clone2.toString(), urlParams2, hash3, self.headers, self.body);
 });
-var prependUrl = /* @__PURE__ */ dual(2, (self, path2) => {
-  if (path2 === "") return self;
-  return makeWith(self.method, joinSegments(path2, self.url), self.urlParams, self.hash, self.headers, self.body);
+var prependUrl = /* @__PURE__ */ dual(2, (self, path3) => {
+  if (path3 === "") return self;
+  return makeWith(self.method, joinSegments(path3, self.url), self.urlParams, self.hash, self.headers, self.body);
 });
 var joinSegments = (first, second) => {
   const endsWithSlash = first.endsWith("/");
@@ -39902,7 +40113,7 @@ var WebHttpClientResponse = class extends Class2 {
           cause
         })
       })
-    }) : fail9(new HttpClientError({
+    }) : fail8(new HttpClientError({
       reason: new EmptyBodyError({
         request: this.request,
         response: this,
@@ -44313,7 +44524,7 @@ var RpcGroupProto = {
     });
   },
   annotateRpcs(service4, value3) {
-    return this.annotateRpcsMerge(make5(service4, value3));
+    return this.annotateRpcsMerge(make6(service4, value3));
   },
   annotateMerge(context4) {
     return makeProto3({
@@ -44341,75 +44552,6 @@ var make37 = (...rpcs) => makeProto3({
   requests: new Map(rpcs.map((rpc) => [rpc._tag, rpc])),
   annotations: empty4()
 });
-
-// src/vendor/t3contracts/baseSchemas.ts
-var TrimmedString = Schema_exports.Trim;
-var TrimmedNonEmptyString = TrimmedString.check(Schema_exports.isNonEmpty());
-var NonNegativeInt = Schema_exports.Int.check(Schema_exports.isGreaterThanOrEqualTo(0));
-var PositiveInt = Schema_exports.Int.check(Schema_exports.isGreaterThanOrEqualTo(1));
-var IsoDateTime = Schema_exports.String;
-var makeEntityId = (brand3) => {
-  return TrimmedNonEmptyString.pipe(Schema_exports.brand(brand3));
-};
-var ThreadId = makeEntityId("ThreadId");
-var ProjectId = makeEntityId("ProjectId");
-var EnvironmentId = makeEntityId("EnvironmentId");
-var CommandId = makeEntityId("CommandId");
-var EventId = makeEntityId("EventId");
-var MessageId = makeEntityId("MessageId");
-var TurnId = makeEntityId("TurnId");
-var AuthSessionId = makeEntityId("AuthSessionId");
-var ProviderItemId = makeEntityId("ProviderItemId");
-var RuntimeSessionId = makeEntityId("RuntimeSessionId");
-var RuntimeItemId = makeEntityId("RuntimeItemId");
-var RuntimeRequestId = makeEntityId("RuntimeRequestId");
-var RuntimeTaskId = makeEntityId("RuntimeTaskId");
-var ApprovalRequestId = makeEntityId("ApprovalRequestId");
-var CheckpointRef = makeEntityId("CheckpointRef");
-
-// src/vendor/t3contracts/model.ts
-var CODEX_REASONING_EFFORT_OPTIONS = ["xhigh", "high", "medium", "low"];
-var CLAUDE_CODE_EFFORT_OPTIONS = ["low", "medium", "high", "max", "ultrathink", "xhigh"];
-var CodexModelOptions = Schema_exports.Struct({
-  reasoningEffort: Schema_exports.optional(Schema_exports.Literals(CODEX_REASONING_EFFORT_OPTIONS)),
-  fastMode: Schema_exports.optional(Schema_exports.Boolean)
-});
-var ClaudeModelOptions = Schema_exports.Struct({
-  thinking: Schema_exports.optional(Schema_exports.Boolean),
-  effort: Schema_exports.optional(Schema_exports.Literals(CLAUDE_CODE_EFFORT_OPTIONS)),
-  fastMode: Schema_exports.optional(Schema_exports.Boolean),
-  contextWindow: Schema_exports.optional(Schema_exports.String)
-});
-var ProviderModelOptions = Schema_exports.Struct({
-  codex: Schema_exports.optional(CodexModelOptions),
-  claudeAgent: Schema_exports.optional(ClaudeModelOptions)
-});
-var EffortOption = Schema_exports.Struct({
-  value: TrimmedNonEmptyString,
-  label: TrimmedNonEmptyString,
-  isDefault: Schema_exports.optional(Schema_exports.Boolean)
-});
-var ContextWindowOption = Schema_exports.Struct({
-  value: TrimmedNonEmptyString,
-  label: TrimmedNonEmptyString,
-  isDefault: Schema_exports.optional(Schema_exports.Boolean)
-});
-var ModelCapabilities = Schema_exports.Struct({
-  reasoningEffortLevels: Schema_exports.Array(EffortOption),
-  supportsFastMode: Schema_exports.Boolean,
-  supportsThinkingToggle: Schema_exports.Boolean,
-  contextWindowOptions: Schema_exports.Array(ContextWindowOption),
-  promptInjectedEffortLevels: Schema_exports.Array(TrimmedNonEmptyString)
-});
-var DEFAULT_MODEL_BY_PROVIDER = {
-  codex: "gpt-5.4",
-  claudeAgent: "claude-sonnet-4-6"
-};
-var DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
-var DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER = {
-  codex: "gpt-5.4-mini",
-  claudeAgent: "claude-haiku-4-5"
-};
 
 // src/vendor/t3contracts/environment.ts
 var ExecutionEnvironmentPlatformOs = Schema_exports.Literals([
@@ -44836,7 +44978,8 @@ var ProjectMetaUpdateCommand = Schema_exports.Struct({
 var ProjectDeleteCommand = Schema_exports.Struct({
   type: Schema_exports.Literal("project.delete"),
   commandId: CommandId,
-  projectId: ProjectId
+  projectId: ProjectId,
+  force: Schema_exports.optional(Schema_exports.Boolean)
 });
 var ThreadCreateCommand = Schema_exports.Struct({
   type: Schema_exports.Literal("thread.create"),
@@ -47184,6 +47327,114 @@ var RemoteEnvironmentClient = class {
     const snapshot = await this.getShellSnapshot();
     return snapshot.projects;
   }
+  async createProject(input) {
+    const snapshot = await this.getShellSnapshot();
+    const existingProject = findExistingProjectByPath(snapshot.projects, input.workspaceRoot);
+    if (existingProject) {
+      throw new Error(
+        `An active project already exists for '${existingProject.workspaceRoot}' (${existingProject.id}).`
+      );
+    }
+    const projectId = (0, import_node_crypto.randomUUID)();
+    const title = deriveProjectTitle(input.workspaceRoot, input.title);
+    const defaultModelSelection = buildModelSelection({
+      provider: input.provider,
+      model: input.model,
+      optionEntries: input.modelOptionEntries,
+      noDefault: input.noDefaultModel
+    });
+    const command = buildProjectCreateCommand({
+      commandId: (0, import_node_crypto.randomUUID)(),
+      projectId,
+      title,
+      workspaceRoot: input.workspaceRoot,
+      createWorkspaceRootIfMissing: input.createDir,
+      defaultModelSelection,
+      createdAt: nowIso()
+    });
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+    return {
+      id: projectId,
+      title,
+      workspaceRoot: command.workspaceRoot,
+      defaultModelSelection
+    };
+  }
+  async renameProject(input) {
+    const snapshot = await this.getShellSnapshot();
+    const project2 = resolveProjectTarget(snapshot.projects, input.identifier);
+    const command = buildProjectMetaUpdateCommand({
+      commandId: (0, import_node_crypto.randomUUID)(),
+      projectId: project2.id,
+      title: input.title
+    });
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+    return {
+      ...project2,
+      title: command.title ?? project2.title
+    };
+  }
+  async setProjectDefaultModel(input) {
+    const snapshot = await this.getShellSnapshot();
+    const project2 = resolveProjectTarget(snapshot.projects, input.identifier);
+    const defaultModelSelection = buildModelSelection({
+      provider: input.provider,
+      model: input.model,
+      optionEntries: input.modelOptionEntries,
+      clear: input.clear
+    });
+    const command = buildProjectMetaUpdateCommand({
+      commandId: (0, import_node_crypto.randomUUID)(),
+      projectId: project2.id,
+      defaultModelSelection
+    });
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+    return {
+      ...project2,
+      defaultModelSelection: command.defaultModelSelection ?? null
+    };
+  }
+  async removeProject(input) {
+    const snapshot = await this.getShellSnapshot();
+    const project2 = resolveProjectTarget(snapshot.projects, input.identifier);
+    const activeThreads = listThreadsForProject(snapshot.threads, project2.id);
+    if (activeThreads.length > 0 && !input.force) {
+      throw new Error(
+        `Project '${project2.id}' has ${activeThreads.length} active thread(s). Re-run with --force to remove the project and its threads.`
+      );
+    }
+    const command = buildProjectDeleteCommand({
+      commandId: (0, import_node_crypto.randomUUID)(),
+      projectId: project2.id,
+      force: input.force
+    });
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+    return {
+      project: project2,
+      activeThreadCount: activeThreads.length,
+      removed: true
+    };
+  }
   async findThread(threadId) {
     const rpc = await this.openRpc();
     try {
@@ -47198,8 +47449,8 @@ var RemoteEnvironmentClient = class {
   }
   async createAgentThread(input) {
     const snapshot = await this.getShellSnapshot();
-    const project = snapshot.projects.find((candidate) => candidate.id === input.projectId);
-    if (!project) {
+    const project2 = snapshot.projects.find((candidate) => candidate.id === input.projectId);
+    if (!project2) {
       throw new Error(`Project '${input.projectId}' was not found in '${this.environment.name}'.`);
     }
     const initialMessage = input.initialMessage?.trim();
@@ -47209,7 +47460,7 @@ var RemoteEnvironmentClient = class {
     const modelSelection = input.model || input.provider ? {
       provider: input.provider ?? DEFAULT_MODEL_SELECTION.provider,
       model: input.model ?? DEFAULT_MODEL_SELECTION.model
-    } : project.defaultModelSelection ?? DEFAULT_MODEL_SELECTION;
+    } : project2.defaultModelSelection ?? DEFAULT_MODEL_SELECTION;
     const threadId = (0, import_node_crypto.randomUUID)();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
@@ -47232,7 +47483,7 @@ var RemoteEnvironmentClient = class {
         interactionMode,
         bootstrap: {
           createThread: {
-            projectId: project.id,
+            projectId: project2.id,
             title: input.title,
             modelSelection,
             runtimeMode,
@@ -47243,7 +47494,7 @@ var RemoteEnvironmentClient = class {
           },
           ...input.branch ? {
             prepareWorktree: {
-              projectCwd: project.workspaceRoot,
+              projectCwd: project2.workspaceRoot,
               baseBranch: input.baseBranch ?? "main",
               branch: input.branch
             },
@@ -47257,7 +47508,7 @@ var RemoteEnvironmentClient = class {
     }
     return {
       threadId,
-      projectId: project.id,
+      projectId: project2.id,
       title: input.title
     };
   }
@@ -47430,10 +47681,10 @@ function formatInboxLine(overview) {
 // src/state.ts
 var import_promises = require("node:fs/promises");
 var import_node_os = __toESM(require("node:os"), 1);
-var import_node_path = __toESM(require("node:path"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
 var import_node_crypto2 = require("node:crypto");
-var DEFAULT_STATE_DIR = import_node_path.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
-var DEFAULT_STATE_FILE = import_node_path.default.join(DEFAULT_STATE_DIR, "state.json");
+var DEFAULT_STATE_DIR = import_node_path2.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
+var DEFAULT_STATE_FILE = import_node_path2.default.join(DEFAULT_STATE_DIR, "state.json");
 var STATE_LOCK_TIMEOUT_MS = 1e4;
 var STATE_LOCK_RETRY_MS = 50;
 var EMPTY_STATE = {
@@ -47447,7 +47698,7 @@ function resolveStateFile() {
   return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
 }
 async function ensureStateDir(stateFile) {
-  await (0, import_promises.mkdir)(import_node_path.default.dirname(stateFile), { recursive: true });
+  await (0, import_promises.mkdir)(import_node_path2.default.dirname(stateFile), { recursive: true });
 }
 function normalizeState(parsed) {
   return {
@@ -47476,7 +47727,7 @@ async function loadState() {
 }
 async function saveStateToFile(stateFile, state) {
   await ensureStateDir(stateFile);
-  const tempFile = import_node_path.default.join(import_node_path.default.dirname(stateFile), `.${import_node_path.default.basename(stateFile)}.${(0, import_node_crypto2.randomUUID)()}.tmp`);
+  const tempFile = import_node_path2.default.join(import_node_path2.default.dirname(stateFile), `.${import_node_path2.default.basename(stateFile)}.${(0, import_node_crypto2.randomUUID)()}.tmp`);
   await (0, import_promises.writeFile)(tempFile, `${JSON.stringify(state, null, 2)}
 `, "utf8");
   await (0, import_promises.rename)(tempFile, stateFile);
@@ -47944,6 +48195,9 @@ function printLines(lines) {
   process.stdout.write(lines.join("\n"));
   process.stdout.write("\n");
 }
+function collectOption(value3, previous = []) {
+  return [...previous, value3];
+}
 async function withAgent(agentName) {
   const state = await loadState();
   const agent2 = requireAgent(state, agentName);
@@ -48053,6 +48307,7 @@ program2.addHelpText(
   "after",
   `
 Direct thread commands:
+  project      Manage T3 Code projects on a paired environment
   create       Create and start a branch-pinned T3 worker thread
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
@@ -48061,6 +48316,8 @@ Direct thread commands:
   watch        Detect and deliver completion/attention notifications
 
 Examples:
+  t3-thread project list --env dev-vm
+  t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
   t3-thread create --name worker-a --env local-mbp --project PROJECT_ID --title "Worker A" --branch t3/worker-a --message "Fix the issue."
   t3-thread status worker-a
   t3-thread result worker-a --wait 120 --final-message
@@ -48123,13 +48380,97 @@ program2.command("projects").requiredOption("--env <name>", "saved environment n
   const client = new RemoteEnvironmentClient(environment);
   const projects = await client.listProjects();
   printJson(
-    projects.map((project) => ({
-      id: project.id,
-      title: project.title,
-      workspaceRoot: project.workspaceRoot,
-      defaultModelSelection: project.defaultModelSelection
+    projects.map((project2) => ({
+      id: project2.id,
+      title: project2.title,
+      workspaceRoot: project2.workspaceRoot,
+      defaultModelSelection: project2.defaultModelSelection
     }))
   );
+});
+var project = program2.command("project").description("Manage T3 Code projects");
+project.command("list").requiredOption("--env <name>", "saved environment name").description("List remote projects so agents can target the correct project id").action(async (options) => {
+  const state = await loadState();
+  const environment = requireEnvironment(state, options.env);
+  const client = new RemoteEnvironmentClient(environment);
+  const projects = await client.listProjects();
+  printJson(
+    projects.map((project2) => ({
+      id: project2.id,
+      title: project2.title,
+      workspaceRoot: project2.workspaceRoot,
+      defaultModelSelection: project2.defaultModelSelection
+    }))
+  );
+});
+project.command("add").requiredOption("--env <name>", "saved environment name").requiredOption("--path <path>", "absolute workspace root on the target environment").option("--title <title>", "project title; defaults to workspace basename").option("--provider <provider>", "default model provider", "codex").option("--model <model>", "default model slug").option("--model-option <key=value>", "default model option; may be repeated", collectOption, []).option("--no-default-model", "create the project with no default model selection").option("--create-dir", "allow T3 Code to create the workspace root if it is missing").description("Add a project to a paired T3 Code environment").action(async (options) => {
+  const state = await loadState();
+  const environment = requireEnvironment(state, options.env);
+  const client = new RemoteEnvironmentClient(environment);
+  const added = await client.createProject({
+    workspaceRoot: options.path,
+    title: options.title,
+    provider: options.defaultModel === false ? void 0 : options.provider,
+    model: options.model,
+    modelOptionEntries: options.modelOption,
+    noDefaultModel: options.defaultModel === false,
+    createDir: Boolean(options.createDir)
+  });
+  printJson({
+    environment: options.env,
+    project: added,
+    created: true
+  });
+});
+project.command("rename").requiredOption("--env <name>", "saved environment name").argument("<project>", "project id or absolute workspace root").argument("<title>", "new project title").description("Rename a project on a paired T3 Code environment").action(async (identifier2, title, options) => {
+  const state = await loadState();
+  const environment = requireEnvironment(state, options.env);
+  const client = new RemoteEnvironmentClient(environment);
+  const renamed = await client.renameProject({
+    identifier: identifier2,
+    title
+  });
+  printJson({
+    environment: options.env,
+    project: renamed,
+    renamed: true
+  });
+});
+project.command("set-model").requiredOption("--env <name>", "saved environment name").argument("<project>", "project id or absolute workspace root").option("--provider <provider>", "default model provider").option("--model <model>", "default model slug").option("--model-option <key=value>", "default model option; may be repeated", collectOption, []).option("--clear", "clear the project default model selection").description("Set or clear a project's default model selection").action(async (identifier2, options) => {
+  if (!options.clear && (!options.provider || !options.model)) {
+    throw new Error("project set-model requires --provider and --model, or --clear.");
+  }
+  const state = await loadState();
+  const environment = requireEnvironment(state, options.env);
+  const client = new RemoteEnvironmentClient(environment);
+  const updated = await client.setProjectDefaultModel({
+    identifier: identifier2,
+    provider: options.provider,
+    model: options.model,
+    modelOptionEntries: options.modelOption,
+    clear: Boolean(options.clear)
+  });
+  printJson({
+    environment: options.env,
+    project: updated,
+    updated: true
+  });
+});
+project.command("remove").requiredOption("--env <name>", "saved environment name").argument("<project>", "project id or absolute workspace root").option("--force", "remove a project even when it has active threads").description("Remove a project from a paired T3 Code environment").action(async (identifier2, options) => {
+  const state = await loadState();
+  const environment = requireEnvironment(state, options.env);
+  const client = new RemoteEnvironmentClient(environment);
+  const removed = await client.removeProject({
+    identifier: identifier2,
+    force: Boolean(options.force)
+  });
+  printJson({
+    environment: options.env,
+    project: removed.project,
+    activeThreadCount: removed.activeThreadCount,
+    removed: removed.removed,
+    forced: Boolean(options.force)
+  });
 });
 var agent = program2.command("agent").description("Manage named remote agents");
 agent.command("create").requiredOption("--name <name>", "local agent name").requiredOption("--env <name>", "saved environment name").requiredOption("--project <id>", "remote project id").requiredOption("--title <title>", "thread title").option("--provider <provider>", "model provider").option("--model <model>", "model slug").option("--branch <name>", "git branch for T3's native worktree bootstrap").option("--worktree <path>", "deprecated; T3 chooses/manages worktree paths").option("--base-branch <name>", "base branch for T3's native worktree bootstrap", "main").option("--runtime-mode <mode>", "thread runtime mode").option("--interaction-mode <mode>", "thread interaction mode").requiredOption("--message <text>", "initial message (wrapped with the canonical T3 preamble unless --no-preamble)").option(
