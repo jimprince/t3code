@@ -416,6 +416,18 @@ export function isRecoverableThreadResumeError(error: unknown): boolean {
   return RECOVERABLE_THREAD_RESUME_ERROR_SNIPPETS.some((snippet) => message.includes(snippet));
 }
 
+export function buildCodexChildEnv(input: {
+  readonly threadId: ThreadId;
+  readonly environment?: NodeJS.ProcessEnv;
+  readonly homePath?: string;
+}): NodeJS.ProcessEnv {
+  return {
+    ...(input.environment ?? process.env),
+    T3_THREAD_ID: String(input.threadId),
+    ...(input.homePath ? { CODEX_HOME: input.homePath } : {}),
+  };
+}
+
 type CodexThreadOpenResponse =
   | CodexRpc.ClientRequestResponsesByMethod["thread/start"]
   | CodexRpc.ClientRequestResponsesByMethod["thread/resume"];
@@ -713,10 +725,11 @@ export const makeCodexSessionRuntime = (
     // `child_process.spawn`; `expandHomePath` lets a configured
     // `CODEX_HOME=~/.codex_work` reach codex as an absolute path.
     const resolvedHomePath = options.homePath ? expandHomePath(options.homePath) : undefined;
-    const env = {
-      ...(options.environment ?? process.env),
-      ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
-    };
+    const env = buildCodexChildEnv({
+      threadId: options.threadId,
+      ...(options.environment ? { environment: options.environment } : {}),
+      ...(resolvedHomePath ? { homePath: resolvedHomePath } : {}),
+    });
     const child = yield* spawner
       .spawn(
         ChildProcess.make(options.binaryPath, ["app-server"], {
