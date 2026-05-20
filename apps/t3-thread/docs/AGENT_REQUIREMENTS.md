@@ -1,5 +1,60 @@
 # Agent Requirements
 
+## Current Task Snapshot — T3 Project Management CLI
+
+### Active Requirements
+- Add first-class `t3-thread project` management commands for paired T3 Code environments.
+- Support managing both local and remote projects through the same saved `--env` model used for threads.
+- Keep `t3-thread projects --env <name>` as the existing list shortcut.
+- Add canonical singular commands: `project list`, `project add`, `project rename`, `project set-model`, and `project remove`.
+- Use T3 Code's existing orchestration RPC commands as the primary implementation path.
+- Keep SSH-based `t3 project ...` workflows as fallback documentation only, not routine CLI behavior.
+- Require explicit safety flags for potentially surprising mutations: `--create-dir` for missing add paths and `--force` for removing projects with active threads.
+- Require absolute project paths to avoid local-vs-remote ambiguity.
+- Rebuild committed distribution output if source changes require it.
+- Update repo docs and shared T3 skills so future agents discover the new project workflow.
+- Run focused tests, full tests, dist freshness validation, and live/smoke CLI validation where feasible.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+- Preserve existing thread lifecycle behavior and command compatibility.
+- Preserve the remote repo state and avoid destructive git operations.
+- Do not remove the deprecated `t3-agent` alias.
+
+### Acceptance Criteria
+- `t3-thread project list --env dev-vm` lists remote projects.
+- `t3-thread projects --env dev-vm` continues to work.
+- `t3-thread project add --env <env> --path <absolute-path>` dispatches `project.create`.
+- `project add` rejects relative paths and missing paths unless `--create-dir` is passed.
+- `project rename` dispatches `project.meta.update` for title changes.
+- `project set-model` dispatches `project.meta.update` for `defaultModelSelection`, including `--clear`.
+- `project remove` dispatches `project.delete` and rejects active-thread removal unless `--force` is passed.
+- Project target resolution by id and exact workspace root works, and duplicate workspace roots require id.
+- Regression tests cover command payloads and safety behavior.
+- Updated docs and shared skills describe the new workflow.
+
+### Status
+- Completed locally.
+
+### Validation Update
+- Added pure project-management helpers in `src/projects.ts`.
+- Added `t3-thread project list/add/rename/set-model/remove` in the CLI while preserving `t3-thread projects --env <name>`.
+- Added RPC client methods for project create, rename, default-model update/clear, and remove.
+- Updated vendored orchestration command decoding so `project.delete` accepts `force`.
+- Updated README, operations docs, and shared T3 skills with the new project-management workflow.
+- `npm ci` completed; npm reported two moderate transitive audit findings and no dependency changes were made.
+- `npm run test -- projects` passed: 19 tests.
+- `npm run test -- projects orchestration` passed: 23 tests.
+- `npm run build` passed.
+- `npm run test` passed: 70 tests.
+- `npm run test -- dist-freshness` passed: 1 test.
+- `t3-thread project --help` showed the new command group.
+- `t3-thread project list --env dev-vm` and existing `t3-thread projects --env dev-vm` both listed projects.
+- Live `dev-vm` smoke passed using `/tmp/t3-thread-project-smoke-20260520143904`: add with `--create-dir`, rename, set model, clear model, remove, and final list confirmed the smoke project was no longer active.
+- `npx tsc --noEmit` is not a valid repo check in the current configuration because existing vendored contract files lack NodeNext `.js` import extensions and have pre-existing type errors; one new type issue surfaced by that run was fixed before normal validation.
+- Fresh-agent validation via `subagents codex` passed: a new agent found the repo/shared docs and reported the canonical `t3-thread project` commands plus the preserved `projects --env` shortcut without hidden parent-session context.
+
 ## Current Task Snapshot — Audit Dependency Fix
 
 ### Active Requirements
