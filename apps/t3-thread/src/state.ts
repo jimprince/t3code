@@ -228,10 +228,17 @@ export function resolveCallerEndpointFromLocalContext(
     return null;
   }
 
+  const savedEnvironment = state.environments.find(
+    (environment) =>
+      environment.environmentId === callerEnvironment.environmentId ||
+      environment.name === callerEnvironment.environmentName ||
+      environment.label === callerEnvironment.environmentName,
+  );
+
   return {
     threadId,
     name: null,
-    environment: callerEnvironment.environmentName,
+    environment: savedEnvironment?.name ?? callerEnvironment.environmentName,
   };
 }
 
