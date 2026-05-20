@@ -12,6 +12,7 @@ Examples below use `t3-thread <command>` (the wrapper in `~/.shared/bin/t3-threa
    - `t3-thread envs`
 2. Discover projects on the target environment:
    - `t3-thread projects --env <environment>`
+   - `t3-thread project list --env <environment>`
 3. Create a branch-pinned delegated thread for the target project:
    - `t3-thread create --name <agent> --env <environment> --project <project-id> --title "<title>" --branch <branch> --message "<brief>"`
    - When running from inside a T3 caller thread, caller notification is the default.
@@ -54,6 +55,30 @@ t3-thread projects --env <environment>
 ```
 
 This returns the project id, title, workspace root, and default model selection.
+
+## Project Management
+
+Manage projects through the same paired environment model used for threads. This works for local and remote T3 Code servers as long as the environment is paired:
+
+```bash
+t3-thread project list --env <environment>
+t3-thread project add --env <environment> --path <absolute-workspace-root> --title "<title>"
+t3-thread project rename --env <environment> <project-id-or-absolute-workspace-root> "<new-title>"
+t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --provider codex --model gpt-5.4
+t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --clear
+t3-thread project remove --env <environment> <project-id-or-absolute-workspace-root>
+```
+
+Safety rules:
+
+- Project paths must be absolute paths on the target environment. Do not pass relative paths or `~`.
+- `project add` refuses missing workspace roots unless `--create-dir` is passed.
+- `project add` refuses duplicate active workspace roots.
+- `project rename`, `project set-model`, and `project remove` resolve exact project id first, then exact workspace root.
+- If multiple active projects share the same workspace root, re-run with the project id.
+- `project remove` refuses to remove a project with active threads unless `--force` is passed.
+
+Use SSH-based `t3 project add/remove/rename` only as a substrate fallback when the target server is not paired or the T3 service is unhealthy.
 
 ## Branch-Pinned Delegation
 
