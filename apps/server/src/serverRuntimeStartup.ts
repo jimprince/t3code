@@ -2,6 +2,7 @@ import {
   CommandId,
   DEFAULT_MODEL,
   DEFAULT_PROVIDER_INTERACTION_MODE,
+  type ExecutionEnvironmentDescriptor,
   type ModelSelection,
   ProjectId,
   ProviderInstanceId,
@@ -58,6 +59,14 @@ export class ServerRuntimeStartup extends Context.Service<
   ServerRuntimeStartup,
   ServerRuntimeStartupShape
 >()("t3/serverRuntimeStartup") {}
+
+export function applyT3EnvironmentMetadataToProcessEnv(
+  environment: ExecutionEnvironmentDescriptor,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  env.T3_ENVIRONMENT_ID = String(environment.environmentId);
+  env.T3_ENVIRONMENT_NAME = environment.label;
+}
 
 interface QueuedCommand {
   readonly run: Effect.Effect<void, never>;
@@ -337,8 +346,10 @@ export const makeServerRuntimeStartup = Effect.gen(function* () {
       }),
     );
 
-    const welcomeBase = yield* resolveWelcomeBase;
     const environment = yield* serverEnvironment.getDescriptor;
+    applyT3EnvironmentMetadataToProcessEnv(environment);
+
+    const welcomeBase = yield* resolveWelcomeBase;
     yield* Effect.logDebug("startup phase: preparing welcome payload");
     yield* Effect.logDebug("startup phase: publishing welcome event", {
       environmentId: environment.environmentId,
