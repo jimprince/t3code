@@ -1,5 +1,34 @@
 # Agent Requirements
 
+## Current Task: Restore Codex T3_THREAD_ID Env Injection
+
+Restore the fork patch that injects the T3 orchestration thread id into spawned
+Codex app-server processes, push it to GitHub, and monitor the rebuild.
+
+### Current User Requirements
+
+- Add `T3_THREAD_ID` env injection back to the current build path.
+- Check whether any other commits that were supposed to be rebased onto
+  `pingdotgg/t3code` fell out and should likely be kept.
+- Push the restored patch to GitHub.
+- Monitor the resulting rebuild.
+
+### Acceptance Criteria
+
+- Spawned Codex app-server child env includes `T3_THREAD_ID` equal to the
+  server-side thread id.
+- Existing `CODEX_HOME` behavior is preserved.
+- Regression coverage proves both `T3_THREAD_ID` and optional `CODEX_HOME`
+  handling.
+- The audit identifies likely lost fork patches or explains why no other
+  obvious keepers were found.
+- The fix is pushed to `jimprince/t3code`.
+- The relevant GitHub Actions rebuild is monitored and reported.
+
+### Status
+
+- In progress.
+
 ## Current Task: Resolve Nightly 285 Upstream Sync Rebase
 
 Repair the scheduled `Sync Upstream` failure for the nightly channel by
