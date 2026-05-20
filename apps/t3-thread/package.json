@@ -26,5 +26,9 @@
     "typescript": "^6.0.2",
     "vitest": "^4.0.0"
   },
-  "description": "Operator CLI for T3 Code worker threads"
+  "description": "Operator CLI for T3 Code worker threads",
+  "overrides": {
+    "uuid": "13.0.1",
+    "ws": "8.20.1"
+  }
 }
