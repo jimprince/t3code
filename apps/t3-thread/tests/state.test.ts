@@ -51,7 +51,7 @@ function makeEnvironment(overrides: Partial<SavedEnvironment> = {}): SavedEnviro
     httpBaseUrl: "http://127.0.0.1:3773",
     wsBaseUrl: "ws://127.0.0.1:3773",
     environmentId: "environment-local",
-    label: "local-mbp",
+    label: "Bradley’s MacBook Pro (4)",
     serverVersion: "0.1.0",
     bearerToken: "token",
     expiresAt: "2026-04-18T00:00:00.000Z",
@@ -85,11 +85,11 @@ describe("state helpers", () => {
   it("resolves caller environment metadata from T3 environment variables", () => {
     expect(
       resolveCallerEnvironmentMetadata({
-        T3_ENVIRONMENT_NAME: " local-mbp ",
+        T3_ENVIRONMENT_NAME: " Bradley’s MacBook Pro (4) ",
         T3_ENVIRONMENT_ID: " environment-local ",
       } as NodeJS.ProcessEnv),
     ).toEqual({
-      environmentName: "local-mbp",
+      environmentName: "Bradley’s MacBook Pro (4)",
       environmentId: "environment-local",
     });
   });
@@ -120,11 +120,35 @@ describe("state helpers", () => {
     });
   });
 
-  it("resolves unsaved caller threads directly from environment metadata", () => {
+  it("resolves unsaved caller threads from environment id metadata", () => {
+    expect(
+      resolveCallerEndpointFromLocalContext(makeState(), "thread-unsaved-caller", {
+        environmentName: "Some stale label",
+        environmentId: "environment-local",
+      }),
+    ).toEqual({
+      threadId: "thread-unsaved-caller",
+      name: null,
+      environment: "local-mbp",
+    });
+  });
+
+  it("resolves unsaved caller threads from environment name or label metadata", () => {
+    expect(
+      resolveCallerEndpointFromLocalContext(makeState(), "thread-unsaved-caller", {
+        environmentName: "Bradley’s MacBook Pro (4)",
+        environmentId: "unknown-id",
+      }),
+    ).toEqual({
+      threadId: "thread-unsaved-caller",
+      name: null,
+      environment: "local-mbp",
+    });
+
     expect(
       resolveCallerEndpointFromLocalContext(makeState(), "thread-unsaved-caller", {
         environmentName: "local-mbp",
-        environmentId: "environment-local",
+        environmentId: "unknown-id",
       }),
     ).toEqual({
       threadId: "thread-unsaved-caller",
