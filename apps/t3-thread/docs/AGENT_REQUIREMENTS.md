@@ -1,5 +1,39 @@
 # Agent Requirements
 
+## Current Task Snapshot — Caller Environment Metadata
+
+### Active Requirements
+- Update `t3-thread caller`/caller resolution so it can use launcher-provided
+  `T3_ENVIRONMENT_NAME` and `T3_ENVIRONMENT_ID` alongside `T3_THREAD_ID`.
+- Prefer direct environment metadata over scanning saved environments when all
+  required variables are present.
+- Return an unsaved caller payload like
+  `{ "threadId": "...", "environment": "local-mbp", "saved": false }` without
+  depending on saved environment scans or non-expired pairing.
+- Preserve the existing saved-agent resolution behavior when the current thread
+  id is saved locally.
+- Preserve fallback paired-environment scanning when the new metadata is not
+  present.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+- Preserve existing state format compatibility.
+- Rebuild committed distribution output if source changes require it.
+
+### Acceptance Criteria
+- `resolveCallerThreadId` still reads trimmed `T3_THREAD_ID`.
+- A new caller resolver reads `T3_ENVIRONMENT_NAME`/`T3_ENVIRONMENT_ID` and
+  returns an unsaved endpoint without remote environment scanning when possible.
+- Existing saved-agent lookup remains preferred over raw environment metadata.
+- Fallback scanning still works when environment metadata is absent.
+- Tests cover direct metadata, saved-agent preference, and missing metadata.
+- Focused tests, build/dist freshness, and relevant docs are updated.
+
+### Status
+- Implemented and verified with focused state tests, full Vitest suite, a direct
+  `t3-thread caller` metadata smoke check, and `npm run build`.
+
 ## Current Task Snapshot — Legacy Schema Decode Compatibility
 
 ### Active Requirements
