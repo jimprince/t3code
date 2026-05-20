@@ -12,6 +12,8 @@ Runtime state remains at `~/.config/t3-remote-agents/state.json` so existing pai
 ```bash
 t3-thread envs
 t3-thread projects --env local-mbp
+t3-thread project list --env local-mbp
+t3-thread project add --env local-mbp --path /Users/brad/Programming/repo --title Repo
 
 t3-thread create \
   --name worker-a \
@@ -40,6 +42,12 @@ Do not pass a worktree path and do not manually create a git worktree first.
 ## Common Commands
 
 ```bash
+t3-thread project list --env local-mbp
+t3-thread project add --env local-mbp --path /Users/brad/Programming/repo --title Repo
+t3-thread project rename --env local-mbp PROJECT_ID "New Title"
+t3-thread project set-model --env local-mbp PROJECT_ID --provider codex --model gpt-5.4
+t3-thread project remove --env local-mbp PROJECT_ID
+
 t3-thread threads --env local-mbp
 t3-thread status worker-a
 t3-thread worklog worker-a --tail 10
@@ -63,6 +71,26 @@ Use the direct canonical form in all new workflows:
 t3-thread create ...
 t3-thread status worker-a
 ```
+
+## Project Management
+
+`t3-thread project` manages projects on any paired environment, local or remote.
+Paths must be absolute paths on the target environment.
+
+```bash
+t3-thread project list --env dev-vm
+t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
+t3-thread project rename --env dev-vm PROJECT_ID "Repo"
+t3-thread project set-model --env dev-vm PROJECT_ID --provider codex --model gpt-5.4
+t3-thread project set-model --env dev-vm PROJECT_ID --clear
+t3-thread project remove --env dev-vm PROJECT_ID
+```
+
+Safety defaults:
+
+- `project add` only creates missing directories when `--create-dir` is passed.
+- `project remove` refuses to remove a project with active threads unless `--force` is passed.
+- If multiple active projects share a workspace root, use the project id instead of the path.
 
 ## Notifications
 
