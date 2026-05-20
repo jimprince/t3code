@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { EnvironmentId, ThreadId, TurnId } from "@t3tools/contracts";
 
-import { resolveSelectedThreadStopPlan } from "./use-selected-thread-commands";
+import { resolveSelectedThreadStopPlan } from "./selected-thread-stop-plan";
 
 describe("resolveSelectedThreadStopPlan", () => {
   const environmentId = EnvironmentId.make("env-mobile");

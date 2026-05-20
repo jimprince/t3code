@@ -1,5 +1,139 @@
 # Agent Requirements
 
+## Current Task: Fix Mobile Test Suite And Publish EAS Update
+
+Fix the full mobile Vitest suite blocker, then commit and push the mobile
+reconnect fix so the GitHub mobile EAS workflow runs successfully and publishes
+the update.
+
+### Current User Requirements
+
+- Fix the mobile test suite failure.
+- Push the reconnect fix branch.
+- Make sure the GitHub run succeeds.
+- Make sure the successful GitHub run publishes the EAS update.
+
+### Constraints
+
+- Continue working in `/tmp/t3-mobile-sync` on the current mobile branch.
+- Preserve unrelated worktree/user changes.
+- Follow `LLM_INSTRUCTIONS.md` and root `AGENTS.md`.
+- Do not run `bun test`; use `bun run test`.
+- Do not inspect or print secrets; rely on GitHub/EAS configured credentials.
+
+### Acceptance Criteria
+
+- `bun run --filter @t3tools/mobile test` passes locally.
+- Required local gates pass, or any pre-existing blocker is documented.
+- A commit containing the reconnect fix and test-suite fix is pushed to the
+  mobile branch.
+- The GitHub `Mobile Track EAS Update` workflow for that pushed commit
+  completes successfully.
+- The workflow's publish step confirms an EAS update was published.
+
+### Status
+
+- Completed: requirements captured before test-suite edits.
+- Completed: fixed the mobile Vitest suite blocker by extracting
+  `resolveSelectedThreadStopPlan` into a pure module that does not import
+  React Native hooks/runtime modules.
+- Completed: full mobile Vitest suite now passes locally.
+- Completed: added the full mobile Vitest suite to the mobile-track GitHub EAS
+  workflow before the EAS publish step.
+- In progress: committing, pushing, and monitoring GitHub EAS publication.
+
+### Verification
+
+- Passed: `bun run --filter @t3tools/mobile test src/state/use-selected-thread-commands.test.ts`.
+- Passed: `bun run --filter @t3tools/mobile test`.
+- Passed: `bun run --filter @t3tools/mobile typecheck`.
+- Passed: `NODE_OPTIONS=--experimental-strip-types bun lint:mobile`.
+- Passed: `bun fmt`.
+- Passed: `bun run fmt:check`.
+- Passed: `bun typecheck`.
+- Passed with existing warnings only:
+  `NODE_OPTIONS=--experimental-strip-types bun lint`.
+- Blocked: plain `bun lint` fails before linting because Node cannot load
+  `oxlint-plugin-t3code/index.ts` without type stripping.
+
+### User-Approved Requirement Changes
+
+- None.
+
+## Current Task: Fix Mobile Reconnect Runtime State
+
+Implement the approved reconnect-state plan for the mobile app after live iOS
+diagnostics showed WebSockets reopening while runtime state stayed
+`disconnected` with a stale socket error.
+
+### Current User Requirements
+
+- Implement the detailed implementation plan for mobile reconnect reliability.
+- Fix stale mobile runtime state after successful WebSocket reconnect/open.
+- Preserve cached shell snapshots and saved connections.
+- Keep `ready` gated on shell snapshot sync, not WebSocket open alone.
+- Add regression coverage for the reconnect state transition and watchdog.
+
+### Constraints
+
+- Work in the mobile sync worktree for the current mobile branch.
+- Preserve unrelated existing worktree changes.
+- Follow branch rules in `LLM_INSTRUCTIONS.md` and root `AGENTS.md`.
+- Do not run `bun test`; use `bun run test`.
+- Before considering completion, run repo-required checks where feasible:
+  `bun fmt`, `bun lint`, and `bun typecheck`; use documented local
+  workarounds only when plain lint is blocked by the existing TypeScript plugin
+  loader issue.
+
+### Acceptance Criteria
+
+- A new WebSocket attempt/open clears stale socket errors and moves runtime to
+  `connecting` or `reconnecting` instead of remaining hard `disconnected`.
+- WebSocket open alone never marks an environment `ready`.
+- Shell snapshot sync remains the only path back to `ready`.
+- If a reconnect opens but shell snapshot does not resume promptly, mobile
+  records an explicit diagnostic and surfaces a clear shell-resume timeout
+  error instead of the stale socket error.
+- Focused regression tests cover the stale disconnected/error case and the
+  shell-resume watchdog behavior.
+- Required verification is run, or blockers are documented with concrete
+  errors.
+
+### Status
+
+- Completed: requirements captured before implementation edits.
+- Completed: added testable reconnect-state helpers for WebSocket attempt/open
+  transitions and shell-resume watchdog behavior.
+- Completed: wired saved mobile environment connections to clear stale socket
+  errors on attempt/open, keep `ready` gated on shell snapshots, and record
+  `mobile.rpc.subscribe.shell.resume_timeout` if shell state does not resume.
+- Completed: documented the new shell-resume timeout breadcrumb in
+  `docs/mobile-ios-debugging.md`.
+- Completed: verified the new regression test fails when the stale
+  `disconnected` preservation behavior is reintroduced, then restored the fix.
+- Blocked: full mobile test suite currently fails while loading existing
+  `src/state/use-selected-thread-commands.test.ts` because Vite/Rolldown
+  cannot parse Flow syntax from `react-native/index.js`; this occurs after 26
+  mobile test files and 95 tests pass.
+
+### Verification
+
+- Passed: `bun run --filter @t3tools/mobile test src/state/remote-environment-reconnect.test.ts`.
+- Passed: `bun run --filter @t3tools/mobile typecheck`.
+- Passed: `bun fmt`.
+- Passed: `NODE_OPTIONS=--experimental-strip-types bun lint:mobile`.
+- Passed: `bun typecheck`.
+- Passed with existing warnings only:
+  `NODE_OPTIONS=--experimental-strip-types bun lint`.
+- Blocked: plain `bun lint` fails before linting because Node cannot load
+  `oxlint-plugin-t3code/index.ts` without type stripping.
+- Blocked: `bun run --filter @t3tools/mobile test` fails on the existing React
+  Native Flow parse issue noted above.
+
+### User-Approved Requirement Changes
+
+- None.
+
 ## Current Task: Diagnose And Fix Mobile Thread Stop Button
 
 Review the iOS/mobile thread stop control on the latest mobile branch in an

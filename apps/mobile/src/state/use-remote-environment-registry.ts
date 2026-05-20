@@ -41,6 +41,13 @@ import {
   invalidateSourceControlDiscoveryForEnvironment,
   resetSourceControlDiscoveryState,
 } from "./use-source-control-discovery";
+import {
+  SHELL_SNAPSHOT_RESUME_TIMEOUT_MESSAGE,
+  SHELL_SNAPSHOT_RESUME_TIMEOUT_MS,
+  createShellResumeWatchdog,
+  deriveRuntimeStateForConnectionAttempt,
+  deriveRuntimeStateForSocketOpen,
+} from "./remote-environment-reconnect";
 import { environmentRuntimeManager, useEnvironmentRuntimeStates } from "./use-environment-runtime";
 import {
   clearCachedShellSnapshotMetadata,
@@ -265,6 +272,26 @@ export async function connectSavedEnvironment(
     data: { environmentId: connection.environmentId, state: "connecting" },
   });
   shellSnapshotManager.markPending({ environmentId: connection.environmentId });
+  const shellResumeWatchdog = createShellResumeWatchdog({
+    timeoutMs: SHELL_SNAPSHOT_RESUME_TIMEOUT_MS,
+    getRuntimeState: () =>
+      environmentRuntimeManager.getSnapshot({ environmentId: connection.environmentId }),
+    markPending: () =>
+      shellSnapshotManager.markPending({ environmentId: connection.environmentId }),
+    onTimeout: () => {
+      recordMobileDiagnostic({
+        level: "error",
+        tag: "mobile.rpc.subscribe.shell.resume_timeout",
+        message: SHELL_SNAPSHOT_RESUME_TIMEOUT_MESSAGE,
+        data: { environmentId: connection.environmentId },
+      });
+      setEnvironmentConnectionStatus(
+        connection.environmentId,
+        "disconnected",
+        SHELL_SNAPSHOT_RESUME_TIMEOUT_MESSAGE,
+      );
+    },
+  });
 
   const transport = new WsTransport(
     async () => {
@@ -311,19 +338,10 @@ export async function connectSavedEnvironment(
           tag: "mobile.ws.attempt",
           data: { environmentId: connection.environmentId, socketUrl },
         });
-        environmentRuntimeManager.patch({ environmentId: connection.environmentId }, (previous) => {
-          const nextState =
-            previous.connectionState === "ready" || previous.connectionState === "reconnecting"
-              ? "reconnecting"
-              : "connecting";
-          const keepSettledFailure =
-            previous.connectionState === "disconnected" && previous.connectionError !== null;
-          return {
-            ...previous,
-            connectionState: keepSettledFailure ? "disconnected" : nextState,
-            connectionError: keepSettledFailure ? previous.connectionError : null,
-          };
-        });
+        environmentRuntimeManager.patch(
+          { environmentId: connection.environmentId },
+          deriveRuntimeStateForConnectionAttempt,
+        );
       },
       onOpen: () => {
         recordMobileDiagnostic({
@@ -331,6 +349,11 @@ export async function connectSavedEnvironment(
           tag: "mobile.ws.open",
           data: { environmentId: connection.environmentId },
         });
+        environmentRuntimeManager.patch(
+          { environmentId: connection.environmentId },
+          deriveRuntimeStateForSocketOpen,
+        );
+        shellResumeWatchdog.schedule();
       },
       onError: (message) => {
         recordMobileDiagnostic({
@@ -398,6 +421,7 @@ export async function connectSavedEnvironment(
       });
       shellSnapshotManager.syncSnapshot({ environmentId }, snapshot);
       markShellSnapshotLive(environmentId);
+      shellResumeWatchdog.markShellSnapshotSynced();
       void saveCachedShellSnapshot(environmentId, snapshot);
       environmentRuntimeManager.patch({ environmentId }, (runtime) => ({
         ...runtime,
@@ -411,7 +435,7 @@ export async function connectSavedEnvironment(
         tag: "mobile.rpc.subscribe.shell.resubscribe",
         data: { environmentId },
       });
-      shellSnapshotManager.markPending({ environmentId });
+      shellResumeWatchdog.schedule();
     },
     onConfigSnapshot: (serverConfig) => {
       recordMobileDiagnostic({

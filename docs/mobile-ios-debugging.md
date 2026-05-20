@@ -232,6 +232,8 @@ The copied snapshot distinguishes these cases:
 - connected but no shell snapshot yet,
 - shell snapshot loaded with zero projects/threads,
 - shell snapshot loaded with real projects/threads,
+- WebSocket reopened but shell snapshot did not resume
+  (`mobile.rpc.subscribe.shell.resume_timeout`),
 - WebSocket/RPC/schema failures,
 - stale saved Mac backend versus the dev VM backend.
 
