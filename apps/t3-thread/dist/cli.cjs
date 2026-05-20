@@ -4786,9 +4786,6 @@ var require_sender = __commonJS({
     "use strict";
     var { Duplex } = require("stream");
     var { randomFillSync } = require("crypto");
-    var {
-      types: { isUint8Array }
-    } = require("util");
     var PerMessageDeflate2 = require_permessage_deflate();
     var { EMPTY_BUFFER, kWebSocket, NOOP } = require_constants();
     var { isBlob, isValidStatusCode } = require_validation();
@@ -4942,10 +4939,8 @@ var require_sender = __commonJS({
           buf.writeUInt16BE(code, 0);
           if (typeof data === "string") {
             buf.write(data, 2);
-          } else if (isUint8Array(data)) {
-            buf.set(data, 2);
           } else {
-            throw new TypeError("Second argument must be a string or a Uint8Array");
+            buf.set(data, 2);
           }
         }
         const options = {
@@ -47586,10 +47581,13 @@ function resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironmen
   if (!callerEnvironment) {
     return null;
   }
+  const savedEnvironment = state.environments.find(
+    (environment) => environment.environmentId === callerEnvironment.environmentId || environment.name === callerEnvironment.environmentName || environment.label === callerEnvironment.environmentName
+  );
   return {
     threadId,
     name: null,
-    environment: callerEnvironment.environmentName
+    environment: savedEnvironment?.name ?? callerEnvironment.environmentName
   };
 }
 function resolveNotifyPreference(notify, env = process.env) {
