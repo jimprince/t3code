@@ -11,10 +11,15 @@ import type {
   StateFile,
 } from "./types.js";
 
-type SubscriptionEndpoint = {
+export type SubscriptionEndpoint = {
   threadId: string;
   name: string | null;
   environment: string;
+};
+
+export type CallerEnvironmentMetadata = {
+  environmentName: string;
+  environmentId: string;
 };
 
 export type NotifyPreference =
@@ -189,6 +194,45 @@ export function findAgentByThreadId(state: StateFile, threadId: string): SavedAg
 export function resolveCallerThreadId(env: NodeJS.ProcessEnv = process.env): string | null {
   const value = env.T3_THREAD_ID?.trim();
   return value ? value : null;
+}
+
+export function resolveCallerEnvironmentMetadata(
+  env: NodeJS.ProcessEnv = process.env,
+): CallerEnvironmentMetadata | null {
+  const environmentName = env.T3_ENVIRONMENT_NAME?.trim();
+  const environmentId = env.T3_ENVIRONMENT_ID?.trim();
+  if (!environmentName || !environmentId) {
+    return null;
+  }
+  return {
+    environmentName,
+    environmentId,
+  };
+}
+
+export function resolveCallerEndpointFromLocalContext(
+  state: StateFile,
+  threadId: string,
+  callerEnvironment: CallerEnvironmentMetadata | null = null,
+): SubscriptionEndpoint | null {
+  const savedAgent = findAgentByThreadId(state, threadId);
+  if (savedAgent) {
+    return {
+      threadId: savedAgent.threadId,
+      name: savedAgent.name,
+      environment: savedAgent.environment,
+    };
+  }
+
+  if (!callerEnvironment) {
+    return null;
+  }
+
+  return {
+    threadId,
+    name: null,
+    environment: callerEnvironment.environmentName,
+  };
 }
 
 export function resolveNotifyPreference(
