@@ -47,6 +47,10 @@ function printLines(lines: string[]): void {
   process.stdout.write("\n");
 }
 
+function collectOption(value: string, previous: string[] = []): string[] {
+  return [...previous, value];
+}
+
 async function withAgent(
   agentName: string,
 ): Promise<{ state: Awaited<ReturnType<typeof loadState>>; agent: SavedAgent; client: RemoteEnvironmentClient }> {
@@ -182,6 +186,7 @@ program.addHelpText(
   "after",
   `
 Direct thread commands:
+  project      Manage T3 Code projects on a paired environment
   create       Create and start a branch-pinned T3 worker thread
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
@@ -190,6 +195,8 @@ Direct thread commands:
   watch        Detect and deliver completion/attention notifications
 
 Examples:
+  t3-thread project list --env dev-vm
+  t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
   t3-thread create --name worker-a --env local-mbp --project PROJECT_ID --title "Worker A" --branch t3/worker-a --message "Fix the issue."
   t3-thread status worker-a
   t3-thread result worker-a --wait 120 --final-message
@@ -280,6 +287,132 @@ program
         defaultModelSelection: project.defaultModelSelection,
       })),
     );
+  });
+
+const project = program.command("project").description("Manage T3 Code projects");
+
+project
+  .command("list")
+  .requiredOption("--env <name>", "saved environment name")
+  .description("List remote projects so agents can target the correct project id")
+  .action(async (options) => {
+    const state = await loadState();
+    const environment = requireEnvironment(state, options.env);
+    const client = new RemoteEnvironmentClient(environment);
+    const projects = await client.listProjects();
+    printJson(
+      projects.map((project) => ({
+        id: project.id,
+        title: project.title,
+        workspaceRoot: project.workspaceRoot,
+        defaultModelSelection: project.defaultModelSelection,
+      })),
+    );
+  });
+
+project
+  .command("add")
+  .requiredOption("--env <name>", "saved environment name")
+  .requiredOption("--path <path>", "absolute workspace root on the target environment")
+  .option("--title <title>", "project title; defaults to workspace basename")
+  .option("--provider <provider>", "default model provider", "codex")
+  .option("--model <model>", "default model slug")
+  .option("--model-option <key=value>", "default model option; may be repeated", collectOption, [])
+  .option("--no-default-model", "create the project with no default model selection")
+  .option("--create-dir", "allow T3 Code to create the workspace root if it is missing")
+  .description("Add a project to a paired T3 Code environment")
+  .action(async (options) => {
+    const state = await loadState();
+    const environment = requireEnvironment(state, options.env);
+    const client = new RemoteEnvironmentClient(environment);
+    const added = await client.createProject({
+      workspaceRoot: options.path,
+      title: options.title,
+      provider: options.defaultModel === false ? undefined : options.provider,
+      model: options.model,
+      modelOptionEntries: options.modelOption,
+      noDefaultModel: options.defaultModel === false,
+      createDir: Boolean(options.createDir),
+    });
+    printJson({
+      environment: options.env,
+      project: added,
+      created: true,
+    });
+  });
+
+project
+  .command("rename")
+  .requiredOption("--env <name>", "saved environment name")
+  .argument("<project>", "project id or absolute workspace root")
+  .argument("<title>", "new project title")
+  .description("Rename a project on a paired T3 Code environment")
+  .action(async (identifier, title, options) => {
+    const state = await loadState();
+    const environment = requireEnvironment(state, options.env);
+    const client = new RemoteEnvironmentClient(environment);
+    const renamed = await client.renameProject({
+      identifier,
+      title,
+    });
+    printJson({
+      environment: options.env,
+      project: renamed,
+      renamed: true,
+    });
+  });
+
+project
+  .command("set-model")
+  .requiredOption("--env <name>", "saved environment name")
+  .argument("<project>", "project id or absolute workspace root")
+  .option("--provider <provider>", "default model provider")
+  .option("--model <model>", "default model slug")
+  .option("--model-option <key=value>", "default model option; may be repeated", collectOption, [])
+  .option("--clear", "clear the project default model selection")
+  .description("Set or clear a project's default model selection")
+  .action(async (identifier, options) => {
+    if (!options.clear && (!options.provider || !options.model)) {
+      throw new Error("project set-model requires --provider and --model, or --clear.");
+    }
+    const state = await loadState();
+    const environment = requireEnvironment(state, options.env);
+    const client = new RemoteEnvironmentClient(environment);
+    const updated = await client.setProjectDefaultModel({
+      identifier,
+      provider: options.provider,
+      model: options.model,
+      modelOptionEntries: options.modelOption,
+      clear: Boolean(options.clear),
+    });
+    printJson({
+      environment: options.env,
+      project: updated,
+      updated: true,
+    });
+  });
+
+project
+  .command("remove")
+  .requiredOption("--env <name>", "saved environment name")
+  .argument("<project>", "project id or absolute workspace root")
+  .option("--force", "remove a project even when it has active threads")
+  .description("Remove a project from a paired T3 Code environment")
+  .action(async (identifier, options) => {
+    const state = await loadState();
+    const environment = requireEnvironment(state, options.env);
+    const client = new RemoteEnvironmentClient(environment);
+    const removed = await client.removeProject({
+      identifier,
+      force: Boolean(options.force),
+    });
+    printJson({
+      environment: options.env,
+      project: removed.project,
+      activeThreadCount: removed.activeThreadCount,
+      removed: removed.removed,
+      forced: Boolean(options.force),
+    });
   });
 
 const agent = program.command("agent").description("Manage named remote agents");
