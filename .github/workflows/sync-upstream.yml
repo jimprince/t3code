@@ -37,6 +37,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
+  actions: write
   contents: write
 
 jobs:
@@ -95,8 +96,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          # PAT required: GITHUB_TOKEN cannot push commits that modify workflow files
-          token: ${{ secrets.GH_PAT }}
+          token: ${{ github.token }}
 
       - name: Setup Bun
         if: steps.channel.outputs.selected == 'true'
@@ -264,6 +264,7 @@ jobs:
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
         env:
           CHANNEL: ${{ steps.channel.outputs.channel }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
@@ -314,6 +315,14 @@ jobs:
             git push origin "$new_tag" --force
             echo "Pushed $new_tag — release.yml will build and publish."
           fi
+
+          # Pushes made with GITHUB_TOKEN do not trigger tag-push workflows.
+          # Dispatch the release workflow explicitly so scheduled syncs still
+          # publish artifacts without requiring a long-lived PAT secret.
+          gh workflow run release.yml \
+            --ref main \
+            -f version="$new_tag" \
+            -f target_ref="$new_tag"
 
       - name: Fail with conflict resolution instructions
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'conflict'
