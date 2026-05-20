@@ -1,5 +1,28 @@
 # Agent Requirements
 
+## Current Task Snapshot — Audit Dependency Fix
+
+### Active Requirements
+- Resolve the current `npm audit` findings in `t3-thread` for transitive `uuid@13.0.0` and `ws@8.20.0`.
+- Prefer bumping the Effect package family together if that naturally updates the vulnerable transitive packages.
+- If package bumps do not resolve the findings, use targeted npm overrides for `uuid@13.0.1` and `ws@8.20.1`.
+- Keep the CLI behavior unchanged.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Avoid forced audit fixes that introduce unrelated dependency churn.
+- Preserve the remote repo state and avoid destructive git operations.
+
+### Acceptance Criteria
+- `npm audit` reports zero vulnerabilities.
+- `npm run build` succeeds.
+- `npm test` succeeds.
+- `t3-thread --help` still runs.
+
+### Status
+- Completed using targeted npm overrides for `uuid@13.0.1` and `ws@8.20.1` while keeping the existing Effect `4.0.0-beta.45` dependency line.
+- Validation passed: `npm run build`, `npm test` (56 tests), `npm audit` (0 vulnerabilities), and `t3-thread --help`.
+
 ## Current Task Snapshot — Caller Environment Metadata
 
 ### Active Requirements
