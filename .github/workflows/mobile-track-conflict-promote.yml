@@ -1,0 +1,148 @@
+name: Mobile Track Conflict Promote
+
+on:
+  workflow_dispatch:
+    inputs:
+      candidate_branch:
+        description: "Candidate branch, automation/mobile-track-conflict/<sync-run-id>"
+        required: true
+        type: string
+      expected_mobile_sha:
+        description: "feature/mobile-track SHA from the original conflicted sync"
+        required: true
+        type: string
+      publish:
+        description: "Publish an EAS update after promotion"
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: mobile-track-conflict-promote
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    name: Promote reviewed mobile conflict candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      MOBILE_BRANCH: feature/mobile-track
+      CANDIDATE_BRANCH: ${{ inputs.candidate_branch }}
+      EXPECTED_MOBILE_SHA: ${{ inputs.expected_mobile_sha }}
+      PUBLISH_EAS_UPDATE: ${{ inputs.publish }}
+    steps:
+      - name: Validate branch input
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$CANDIDATE_BRANCH" =~ ^automation/mobile-track-conflict/[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::Candidate branch must be automation/mobile-track-conflict/<sync-run-id>."
+            exit 1
+          fi
+
+          if [[ ! "$EXPECTED_MOBILE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::expected_mobile_sha must be a full 40-character SHA."
+            exit 1
+          fi
+
+      - name: Checkout fork
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Fetch mobile and candidate branches
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin \
+            "+refs/heads/$MOBILE_BRANCH:refs/remotes/origin/$MOBILE_BRANCH" \
+            "+refs/heads/$CANDIDATE_BRANCH:refs/remotes/origin/$CANDIDATE_BRANCH"
+
+      - name: Reject stale candidates
+        run: |
+          set -euo pipefail
+
+          current_mobile_sha="$(git rev-parse "origin/$MOBILE_BRANCH")"
+          candidate_sha="$(git rev-parse "origin/$CANDIDATE_BRANCH")"
+
+          if [[ "$current_mobile_sha" != "$EXPECTED_MOBILE_SHA" ]]; then
+            echo "::error::feature/mobile-track moved from $EXPECTED_MOBILE_SHA to $current_mobile_sha. Re-run conflict resolution before promoting."
+            exit 1
+          fi
+
+          if [[ "$candidate_sha" == "$current_mobile_sha" ]]; then
+            echo "::error::Candidate branch does not change feature/mobile-track."
+            exit 1
+          fi
+
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_ENV"
+
+      - name: Checkout candidate for verification
+        run: git checkout --detach "origin/$CANDIDATE_BRANCH"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Format
+        run: bun run fmt:check
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Mobile native static check
+        run: bun run lint:mobile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Focused mobile scroll regression
+        run: bun run --filter @t3tools/mobile test src/features/threads/ThreadDetailScreen.test.ts
+
+      - name: Focused mobile runtime regression
+        run: bun run --filter @t3tools/client-runtime test src/threadDetailState.test.ts
+
+      - name: Promote candidate branch
+        run: |
+          set -euo pipefail
+          git push --force-with-lease=refs/heads/$MOBILE_BRANCH:$EXPECTED_MOBILE_SHA origin "origin/$CANDIDATE_BRANCH:$MOBILE_BRANCH"
+
+      - name: Require Expo token
+        if: env.PUBLISH_EAS_UPDATE == 'true'
+        run: |
+          if [[ -z "$EXPO_TOKEN" ]]; then
+            echo "EXPO_TOKEN repository secret is required to publish EAS updates." >&2
+            exit 1
+          fi
+
+      - name: Publish EAS update
+        if: env.PUBLISH_EAS_UPDATE == 'true'
+        working-directory: apps/mobile
+        run: |
+          APP_VARIANT=development \
+          CI=1 \
+          EXPO_NO_GIT_STATUS=1 \
+          npx eas-cli update \
+            --channel development \
+            --environment development \
+            --platform ios \
+            --message "mobile-track conflict promote ${candidate_sha:0:12}"
