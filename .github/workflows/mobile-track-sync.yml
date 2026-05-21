@@ -85,26 +85,80 @@ jobs:
             git diff --name-only --diff-filter=U || true
             echo
             git status --short
+            conflicted_files_json="$(git diff --name-only --diff-filter=U | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+            {
+              echo "conflict=true"
+              echo "conflicted_files_json=$conflicted_files_json"
+            } >> "$GITHUB_OUTPUT"
             git rebase --abort || true
-            exit "$status"
+            exit 0
           fi
 
+          echo "conflict=false" >> "$GITHUB_OUTPUT"
           echo "rebased_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Dispatch sandboxed conflict resolver
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.MOBILE_CONFLICT_DISPATCH_TOKEN || secrets.GH_PAT || github.token }}
+          UPSTREAM_SHA: ${{ steps.drift.outputs.upstream_sha }}
+          MOBILE_SHA: ${{ steps.drift.outputs.mobile_sha }}
+          CONFLICTED_FILES_JSON: ${{ steps.rebase.outputs.conflicted_files_json }}
+        run: |
+          set -euo pipefail
+
+          payload="$(jq -n \
+            --arg upstream_sha "$UPSTREAM_SHA" \
+            --arg mobile_sha "$MOBILE_SHA" \
+            --arg sync_run_id "$GITHUB_RUN_ID" \
+            --arg sync_run_attempt "$GITHUB_RUN_ATTEMPT" \
+            --arg upstream_branch "$UPSTREAM_BRANCH" \
+            --arg mobile_branch "$MOBILE_BRANCH" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg workflow "$GITHUB_WORKFLOW" \
+            --arg run_url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --argjson conflicted_files "$CONFLICTED_FILES_JSON" \
+            '{
+              event_type: "mobile-track-conflict",
+              client_payload: {
+                repository: $repository,
+                upstream_sha: $upstream_sha,
+                mobile_sha: $mobile_sha,
+                sync_run_id: $sync_run_id,
+                sync_run_attempt: $sync_run_attempt,
+                upstream_branch: $upstream_branch,
+                mobile_branch: $mobile_branch,
+                conflicted_files: $conflicted_files,
+                workflow: $workflow,
+                run_url: $run_url
+              }
+            }')"
+
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/dispatches" \
+            --input - <<< "$payload"
+
+      - name: Stop after conflict dispatch
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict == 'true'
+        run: |
+          echo "::error::Conflicted mobile-track rebase was dispatched for sandboxed PR resolution. No mobile branch push or EAS publish was attempted."
+          exit 1
+
       - name: Setup Bun
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: package.json
 
       - name: Setup Node
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
 
       - name: Cache Bun and Turbo
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         uses: actions/cache@v5
         with:
           path: |
@@ -115,35 +169,35 @@ jobs:
             ${{ runner.os }}-mobile-track-sync-bun-${{ hashFiles('bun.lock') }}-
 
       - name: Install dependencies
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         run: bun install --frozen-lockfile
 
       - name: Format
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         run: bun run fmt:check
 
       - name: Lint
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         run: bun run lint
 
       - name: Mobile native static check
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         run: bun run lint:mobile
 
       - name: Typecheck
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         run: bun run typecheck
 
       - name: Focused mobile scroll regression
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         run: bun run --filter @t3tools/mobile test src/features/threads/ThreadDetailScreen.test.ts
 
       - name: Focused mobile runtime regression
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         run: bun run --filter @t3tools/client-runtime test src/threadDetailState.test.ts
 
       - name: Push rebased mobile track
-        if: steps.drift.outputs.behind_count != '0'
+        if: steps.drift.outputs.behind_count != '0' && steps.rebase.outputs.conflict != 'true'
         run: |
           expected="$(git rev-parse origin/$MOBILE_BRANCH)"
           git push --force-with-lease=refs/heads/$MOBILE_BRANCH:$expected origin HEAD:$MOBILE_BRANCH
