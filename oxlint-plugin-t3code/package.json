@@ -3,8 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsgo --noEmit",
-    "test": "vitest run"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "bun run build && vitest run --exclude 'dist/**'"
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
