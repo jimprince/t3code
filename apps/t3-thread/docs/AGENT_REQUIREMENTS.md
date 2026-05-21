@@ -30,6 +30,9 @@
 ### Validation Update
 - Added `opencode` as an accepted T3 provider/model-selection kind in the vendored contract layer.
 - Added OpenCode model defaults and aliases that normalize to OpenCode's required `google/<model>` format for project defaults and thread creation.
+- During VM sync, found the local build had been produced from stale installed
+  transitive packages; refreshed local `node_modules` so `dist/cli.cjs` is built
+  against the committed audit overrides (`ws@8.20.1`, `uuid@13.0.1`).
 - Confirmed `t3-thread projects --env local-mbp` decodes snapshots containing existing `opencode` thread model selections.
 - Created high smoke thread `opencode-35-high-google-smoke` with thread id `d2bf4521-91dc-4688-ad4b-c7bbd4e929ad`; result text was `OK_HIGH_T3`.
 - Created low smoke thread `opencode-35-low-google-smoke` with thread id `ed26bb8c-aae0-4606-94e6-57af9a423d0b`; result text was `OK_LOW_T3`.
