@@ -26,3 +26,4 @@ squashfs-root/
 .gstack/
 dist-electron/
 .electron-runtime/
+oxlint-plugin-t3code/dist/
