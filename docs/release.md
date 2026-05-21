@@ -127,8 +127,65 @@ three lanes separately:
 dispatch and operates on `feature/mobile-track`. It checks whether the mobile
 branch is behind `upstream/t3code/mobile-remote-connect`; if the rebase is
 clean, it verifies, force-with-lease pushes the branch, and publishes an EAS
-update. If the rebase conflicts, it fails without pushing partial state so the
-fork overlay can be reviewed manually.
+update. If the rebase conflicts, it aborts the rebase, dispatches a
+`mobile-track-conflict` repository_dispatch event with only metadata, and fails
+without pushing `feature/mobile-track` or publishing EAS.
+
+## Mobile Conflict Sandbox
+
+Conflicted mobile-track updates are resolved as candidate PRs, not as trusted
+worker edits on the dev VM. The trusted dev-VM controller is
+`scripts/mobile-conflict-controller.ts`; it accepts GitHub webhooks at
+`/github/webhook`, verifies `X-Hub-Signature-256`, allowlists
+`jimprince/t3code`, queues one job at a time, and starts the resolver in Docker.
+
+Build the resolver image from the repo root:
+
+```bash
+docker build -f ops/mobile-conflict-resolver/Dockerfile \
+  -t t3code-mobile-conflict-resolver:latest .
+```
+
+Run the controller with local-only secrets supplied by the host service manager:
+
+```bash
+MOBILE_CONFLICT_WEBHOOK_SECRET=<github-webhook-secret> \
+MOBILE_CONFLICT_RESOLVER_GITHUB_TOKEN=<short-lived-fine-grained-token> \
+MOBILE_CONFLICT_WORKSPACE_ROOT=/var/lib/t3code-mobile-conflicts/jobs \
+MOBILE_CONFLICT_ALLOWED_REPOS=jimprince/t3code \
+MOBILE_CONFLICT_RESOLVER_IMAGE=t3code-mobile-conflict-resolver:latest \
+node scripts/mobile-conflict-controller.ts
+```
+
+A hardened systemd template is provided at
+`ops/mobile-conflict-controller/t3code-mobile-conflict-controller.service`.
+Install the repo on the dev VM at `/opt/t3code`, put only these local secrets
+in `/etc/t3code/mobile-conflict-controller.env`, and keep that env file out of
+git:
+
+```ini
+MOBILE_CONFLICT_WEBHOOK_SECRET=...
+MOBILE_CONFLICT_RESOLVER_GITHUB_TOKEN=...
+```
+
+The Docker invocation deliberately mounts only one temporary job workspace. It
+does not mount `/home/brad`, `.ssh`, `.config`, the Docker socket, T3 state,
+EAS credentials, or shared service volumes. The resolver runs as UID/GID
+`10001`, with `--read-only`, `--cap-drop ALL`, `no-new-privileges`, a tmpfs
+`/tmp`, and resource limits. Repository contents and conflict markers are
+untrusted input; the resolver may edit only its fresh clone under `/workspace`.
+
+The resolver pushes only
+`automation/mobile-track-conflict/<sync-run-id>` and opens or updates a PR
+against `feature/mobile-track`. The PR body records the upstream SHA, original
+mobile SHA, conflicted files, resolver summary, and check results. It receives
+no `EXPO_TOKEN` and cannot publish EAS.
+
+Promotion remains manual. After review, either merge the PR through GitHub or
+use `mobile-track-conflict-promote.yml` with the candidate branch and the
+original `expected_mobile_sha`. The promote workflow refuses stale candidates
+if `feature/mobile-track` moved, reruns mobile checks, pushes with
+`--force-with-lease`, and only then can publish the EAS update.
 
 Do not re-add Linux Electron/AppImage, Windows, or macOS x64 unless the user
 explicitly changes the support target.
