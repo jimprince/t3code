@@ -1,6 +1,10 @@
 import path from "node:path";
 
-import { DEFAULT_MODEL } from "./vendor/t3contracts/model.js";
+import {
+  DEFAULT_MODEL,
+  DEFAULT_MODEL_BY_PROVIDER,
+  MODEL_SLUG_ALIASES_BY_PROVIDER,
+} from "./vendor/t3contracts/model.js";
 import type { ModelSelection, OrchestrationProjectShell, OrchestrationThreadShell } from "./types.js";
 
 export type ProjectCreateCommandInput = {
@@ -93,6 +97,17 @@ export function parseModelOptionEntries(entries: string[] = []): Record<string, 
   return options;
 }
 
+function resolveModelSlug(provider: string, model?: string): string {
+  const providerDefaults = DEFAULT_MODEL_BY_PROVIDER as Record<string, string>;
+  const providerAliases = MODEL_SLUG_ALIASES_BY_PROVIDER as Record<string, Record<string, string>>;
+  const trimmedModel = model?.trim();
+  const fallbackModel = providerDefaults[provider] ?? DEFAULT_MODEL;
+  if (!trimmedModel) {
+    return fallbackModel;
+  }
+  return providerAliases[provider]?.[trimmedModel] ?? trimmedModel;
+}
+
 export function buildModelSelection(input: {
   provider?: string;
   model?: string;
@@ -115,7 +130,7 @@ export function buildModelSelection(input: {
   }
 
   const provider = input.provider?.trim() || "codex";
-  const model = input.model?.trim() || DEFAULT_MODEL;
+  const model = resolveModelSlug(provider, input.model);
   const options = parseModelOptionEntries(input.optionEntries);
   return {
     provider,
