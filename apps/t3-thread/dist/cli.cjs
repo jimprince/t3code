@@ -4786,9 +4786,6 @@ var require_sender = __commonJS({
     "use strict";
     var { Duplex } = require("stream");
     var { randomFillSync } = require("crypto");
-    var {
-      types: { isUint8Array }
-    } = require("util");
     var PerMessageDeflate2 = require_permessage_deflate();
     var { EMPTY_BUFFER, kWebSocket, NOOP } = require_constants();
     var { isBlob, isValidStatusCode } = require_validation();
@@ -4942,10 +4939,8 @@ var require_sender = __commonJS({
           buf.writeUInt16BE(code, 0);
           if (typeof data === "string") {
             buf.write(data, 2);
-          } else if (isUint8Array(data)) {
-            buf.set(data, 2);
           } else {
-            throw new TypeError("Second argument must be a string or a Uint8Array");
+            buf.set(data, 2);
           }
         }
         const options = {
@@ -38663,9 +38658,11 @@ var ClaudeModelOptions = Schema_exports.Struct({
   fastMode: Schema_exports.optional(Schema_exports.Boolean),
   contextWindow: Schema_exports.optional(Schema_exports.String)
 });
+var OpenCodeModelOptions = Schema_exports.Record(TrimmedNonEmptyString, Schema_exports.Unknown);
 var ProviderModelOptions = Schema_exports.Struct({
   codex: Schema_exports.optional(CodexModelOptions),
-  claudeAgent: Schema_exports.optional(ClaudeModelOptions)
+  claudeAgent: Schema_exports.optional(ClaudeModelOptions),
+  opencode: Schema_exports.optional(OpenCodeModelOptions)
 });
 var EffortOption = Schema_exports.Struct({
   value: TrimmedNonEmptyString,
@@ -38686,12 +38683,46 @@ var ModelCapabilities = Schema_exports.Struct({
 });
 var DEFAULT_MODEL_BY_PROVIDER = {
   codex: "gpt-5.4",
-  claudeAgent: "claude-sonnet-4-6"
+  claudeAgent: "claude-sonnet-4-6",
+  opencode: "google/antigravity-gemini-3.5-flash-high"
 };
 var DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
 var DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER = {
   codex: "gpt-5.4-mini",
-  claudeAgent: "claude-haiku-4-5"
+  claudeAgent: "claude-haiku-4-5",
+  opencode: "google/antigravity-gemini-3.5-flash-low"
+};
+var MODEL_SLUG_ALIASES_BY_PROVIDER = {
+  codex: {
+    "gpt-5-codex": "gpt-5.4",
+    "5.4": "gpt-5.4",
+    "5.3": "gpt-5.3-codex",
+    "gpt-5.3": "gpt-5.3-codex",
+    "5.3-spark": "gpt-5.3-codex-spark",
+    "gpt-5.3-spark": "gpt-5.3-codex-spark"
+  },
+  claudeAgent: {
+    opus: "claude-opus-4-6",
+    "opus-4.6": "claude-opus-4-6",
+    "claude-opus-4.6": "claude-opus-4-6",
+    "claude-opus-4-6-20251117": "claude-opus-4-6",
+    sonnet: "claude-sonnet-4-6",
+    "sonnet-4.6": "claude-sonnet-4-6",
+    "claude-sonnet-4.6": "claude-sonnet-4-6",
+    "claude-sonnet-4-6-20251117": "claude-sonnet-4-6",
+    haiku: "claude-haiku-4-5",
+    "haiku-4.5": "claude-haiku-4-5",
+    "claude-haiku-4.5": "claude-haiku-4-5",
+    "claude-haiku-4-5-20251001": "claude-haiku-4-5"
+  },
+  opencode: {
+    "antigravity-gemini-3.5-flash-high": "google/antigravity-gemini-3.5-flash-high",
+    "antigravity-gemini-3.5-flash-low": "google/antigravity-gemini-3.5-flash-low",
+    "gemini-3.5-flash-high": "google/antigravity-gemini-3.5-flash-high",
+    "gemini-3.5-flash-low": "google/antigravity-gemini-3.5-flash-low",
+    "3.5-flash-high": "google/antigravity-gemini-3.5-flash-high",
+    "3.5-flash-low": "google/antigravity-gemini-3.5-flash-low"
+  }
 };
 
 // src/projects.ts
@@ -38754,6 +38785,16 @@ function parseModelOptionEntries(entries3 = []) {
   }
   return options;
 }
+function resolveModelSlug(provider, model) {
+  const providerDefaults = DEFAULT_MODEL_BY_PROVIDER;
+  const providerAliases = MODEL_SLUG_ALIASES_BY_PROVIDER;
+  const trimmedModel = model?.trim();
+  const fallbackModel = providerDefaults[provider] ?? DEFAULT_MODEL;
+  if (!trimmedModel) {
+    return fallbackModel;
+  }
+  return providerAliases[provider]?.[trimmedModel] ?? trimmedModel;
+}
 function buildModelSelection(input) {
   if (input.clear) {
     if (input.provider || input.model || (input.optionEntries?.length ?? 0) > 0 || input.noDefault) {
@@ -38768,7 +38809,7 @@ function buildModelSelection(input) {
     return null;
   }
   const provider = input.provider?.trim() || "codex";
-  const model = input.model?.trim() || DEFAULT_MODEL;
+  const model = resolveModelSlug(provider, input.model);
   const options = parseModelOptionEntries(input.optionEntries);
   return {
     provider,
@@ -44621,7 +44662,7 @@ var ORCHESTRATION_WS_METHODS = {
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread"
 };
-var ProviderKind = Schema_exports.Literals(["codex", "claudeAgent"]);
+var ProviderKind = Schema_exports.Literals(["codex", "claudeAgent", "opencode"]);
 var ProviderApprovalPolicy = Schema_exports.Literals([
   "untrusted",
   "on-failure",
@@ -44665,6 +44706,11 @@ var ClaudeModelSelection = Schema_exports.Struct({
   model: TrimmedNonEmptyString,
   options: Schema_exports.optionalKey(Schema_exports.Union([ClaudeModelOptions, LegacyClaudeModelOptions]))
 });
+var OpenCodeModelSelection = Schema_exports.Struct({
+  provider: Schema_exports.Literal("opencode"),
+  model: TrimmedNonEmptyString,
+  options: Schema_exports.optionalKey(OpenCodeModelOptions)
+});
 var LegacyInstanceModelSelection = Schema_exports.Struct({
   instanceId: ProviderKind,
   model: TrimmedNonEmptyString,
@@ -44672,13 +44718,14 @@ var LegacyInstanceModelSelection = Schema_exports.Struct({
     Schema_exports.Union([
       CodexModelOptions,
       ClaudeModelOptions,
+      OpenCodeModelOptions,
       LegacyCodexModelOptions,
       LegacyClaudeModelOptions
     ])
   )
 }).pipe(
   Schema_exports.decodeTo(
-    Schema_exports.Union([CodexModelSelection, ClaudeModelSelection]),
+    Schema_exports.Union([CodexModelSelection, ClaudeModelSelection, OpenCodeModelSelection]),
     transformOrFail2({
       decode: ({ instanceId, model, options }) => Effect_exports.succeed({
         provider: instanceId,
@@ -44696,6 +44743,7 @@ var LegacyInstanceModelSelection = Schema_exports.Struct({
 var ModelSelection = Schema_exports.Union([
   CodexModelSelection,
   ClaudeModelSelection,
+  OpenCodeModelSelection,
   LegacyInstanceModelSelection
 ]);
 var RuntimeMode = Schema_exports.Literals([
@@ -46608,6 +46656,11 @@ var ClaudeSettings = Struct3({
   binaryPath: makeBinaryPathSetting("claude"),
   customModels: ArraySchema(String5).pipe(withDecodingDefault(Effect_exports.succeed([])))
 });
+var OpenCodeSettings = Struct3({
+  enabled: Boolean4.pipe(withDecodingDefault(Effect_exports.succeed(true))),
+  binaryPath: makeBinaryPathSetting("opencode"),
+  customModels: ArraySchema(String5).pipe(withDecodingDefault(Effect_exports.succeed([])))
+});
 var ObservabilitySettings = Struct3({
   otlpTracesUrl: TrimmedString.pipe(withDecodingDefault(Effect_exports.succeed(""))),
   otlpMetricsUrl: TrimmedString.pipe(withDecodingDefault(Effect_exports.succeed("")))
@@ -46629,7 +46682,8 @@ var ServerSettings = Struct3({
   // Provider specific settings
   providers: Struct3({
     codex: CodexSettings.pipe(withDecodingDefault(Effect_exports.succeed({}))),
-    claudeAgent: ClaudeSettings.pipe(withDecodingDefault(Effect_exports.succeed({})))
+    claudeAgent: ClaudeSettings.pipe(withDecodingDefault(Effect_exports.succeed({}))),
+    opencode: OpenCodeSettings.pipe(withDecodingDefault(Effect_exports.succeed({})))
   }).pipe(withDecodingDefault(Effect_exports.succeed({}))),
   observability: ObservabilitySettings.pipe(withDecodingDefault(Effect_exports.succeed({})))
 });
@@ -46660,6 +46714,7 @@ var ClaudeModelOptionsPatch = Struct3({
   fastMode: optionalKey2(ClaudeModelOptions.fields.fastMode),
   contextWindow: optionalKey2(ClaudeModelOptions.fields.contextWindow)
 });
+var OpenCodeModelOptionsPatch = OpenCodeModelOptions;
 var ModelSelectionPatch = Union2([
   Struct3({
     provider: optionalKey2(Literal2("codex")),
@@ -46670,6 +46725,11 @@ var ModelSelectionPatch = Union2([
     provider: optionalKey2(Literal2("claudeAgent")),
     model: optionalKey2(TrimmedNonEmptyString),
     options: optionalKey2(ClaudeModelOptionsPatch)
+  }),
+  Struct3({
+    provider: optionalKey2(Literal2("opencode")),
+    model: optionalKey2(TrimmedNonEmptyString),
+    options: optionalKey2(OpenCodeModelOptionsPatch)
   })
 ]);
 var CodexSettingsPatch = Struct3({
@@ -46679,6 +46739,11 @@ var CodexSettingsPatch = Struct3({
   customModels: optionalKey2(ArraySchema(String5))
 });
 var ClaudeSettingsPatch = Struct3({
+  enabled: optionalKey2(Boolean4),
+  binaryPath: optionalKey2(String5),
+  customModels: optionalKey2(ArraySchema(String5))
+});
+var OpenCodeSettingsPatch = Struct3({
   enabled: optionalKey2(Boolean4),
   binaryPath: optionalKey2(String5),
   customModels: optionalKey2(ArraySchema(String5))
@@ -46697,7 +46762,8 @@ var ServerSettingsPatch = Struct3({
   providers: optionalKey2(
     Struct3({
       codex: optionalKey2(CodexSettingsPatch),
-      claudeAgent: optionalKey2(ClaudeSettingsPatch)
+      claudeAgent: optionalKey2(ClaudeSettingsPatch),
+      opencode: optionalKey2(OpenCodeSettingsPatch)
     })
   )
 });
@@ -47462,10 +47528,10 @@ var RemoteEnvironmentClient = class {
     if (!initialMessage) {
       throw new Error("agent create requires a non-empty initial message.");
     }
-    const modelSelection = input.model || input.provider ? {
-      provider: input.provider ?? DEFAULT_MODEL_SELECTION.provider,
-      model: input.model ?? DEFAULT_MODEL_SELECTION.model
-    } : project2.defaultModelSelection ?? DEFAULT_MODEL_SELECTION;
+    const modelSelection = input.model || input.provider ? buildModelSelection({
+      provider: input.provider,
+      model: input.model
+    }) ?? DEFAULT_MODEL_SELECTION : project2.defaultModelSelection ?? DEFAULT_MODEL_SELECTION;
     const threadId = (0, import_node_crypto.randomUUID)();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";

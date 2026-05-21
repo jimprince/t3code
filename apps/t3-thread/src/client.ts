@@ -301,10 +301,10 @@ export class RemoteEnvironmentClient {
 
     const modelSelection =
       input.model || input.provider
-        ? {
-            provider: input.provider ?? DEFAULT_MODEL_SELECTION.provider,
-            model: input.model ?? DEFAULT_MODEL_SELECTION.model,
-          }
+        ? (buildModelSelection({
+            provider: input.provider,
+            model: input.model,
+          }) ?? DEFAULT_MODEL_SELECTION)
         : (project.defaultModelSelection ?? DEFAULT_MODEL_SELECTION);
 
     const threadId = randomUUID();
