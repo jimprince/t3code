@@ -151,6 +151,29 @@ describe("project helpers", () => {
     });
   });
 
+  it("normalizes opencode model aliases to provider/model slugs", () => {
+    expect(
+      buildModelSelection({
+        provider: "opencode",
+        model: "antigravity-gemini-3.5-flash-high",
+      }),
+    ).toEqual({
+      provider: "opencode",
+      model: "google/antigravity-gemini-3.5-flash-high",
+    });
+  });
+
+  it("uses an opencode default model when provider is opencode", () => {
+    expect(
+      buildModelSelection({
+        provider: "opencode",
+      }),
+    ).toEqual({
+      provider: "opencode",
+      model: "google/antigravity-gemini-3.5-flash-high",
+    });
+  });
+
   it("returns null when clearing or disabling default model selection", () => {
     expect(buildModelSelection({ clear: true })).toBeNull();
     expect(buildModelSelection({ noDefault: true })).toBeNull();

@@ -1,5 +1,42 @@
 # Agent Requirements
 
+## Current Task Snapshot — OpenCode Antigravity Thread Model Validation
+
+### Active Requirements
+- Check whether `t3-thread` can launch real T3 worker threads using OpenCode through Antigravity with Gemini 3.5 Flash High.
+- Check whether `t3-thread` can launch real T3 worker threads using OpenCode through Antigravity with Gemini 3.5 Flash Low/Medium.
+- Use the OpenCode model aliases through OpenCode's required `provider/model` syntax: `google/antigravity-gemini-3.5-flash-high` and `google/antigravity-gemini-3.5-flash-low`.
+- If the local `t3-thread` CLI blocks current T3 snapshots containing `opencode` model selections, fix the compatibility issue narrowly.
+- Verify with real `t3-thread create` calls and report the created thread ids/status.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+- Preserve existing Codex and Claude thread behavior.
+- Avoid printing secrets or Antigravity credentials.
+- Do not use Codex built-in subagents.
+
+### Acceptance Criteria
+- `t3-thread projects --env local-mbp` can decode snapshots containing `opencode` model selections.
+- A high test thread can be created with `--provider opencode --model google/antigravity-gemini-3.5-flash-high`.
+- A low test thread can be created with `--provider opencode --model google/antigravity-gemini-3.5-flash-low`.
+- Each test thread reaches a non-error status or any provider/runtime failure is captured from `worklog`.
+
+### Status
+- Completed locally; now syncing the validated OpenCode support by committing,
+  rebasing onto `origin/main`, rerunning validation, pushing, and updating the
+  dev VM checkout.
+
+### Validation Update
+- Added `opencode` as an accepted T3 provider/model-selection kind in the vendored contract layer.
+- Added OpenCode model defaults and aliases that normalize to OpenCode's required `google/<model>` format for project defaults and thread creation.
+- Confirmed `t3-thread projects --env local-mbp` decodes snapshots containing existing `opencode` thread model selections.
+- Created high smoke thread `opencode-35-high-google-smoke` with thread id `d2bf4521-91dc-4688-ad4b-c7bbd4e929ad`; result text was `OK_HIGH_T3`.
+- Created low smoke thread `opencode-35-low-google-smoke` with thread id `ed26bb8c-aae0-4606-94e6-57af9a423d0b`; result text was `OK_LOW_T3`.
+- Before CLI normalization was added, bare aliases without the `google/` prefix created thread shells but the OpenCode adapter rejected the turn with `OpenCode model selection must use the 'provider/model' format.`
+- Updated README, operations docs, and the shared `t3-threads` skill to show the required OpenCode slug format.
+- Validation passed: `npm run test -- projects orchestration-model-options-compat`, `npm run build`, `npm run test -- dist-freshness`, and `npm test`.
+
 ## Current Task Snapshot — T3 Project Management CLI
 
 ### Active Requirements
