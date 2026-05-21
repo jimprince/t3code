@@ -82,8 +82,10 @@ things specific to the fork relationship.
    workflow files. That workflow checks out `feature/mobile-track`, compares it
    with `upstream/t3code/mobile-remote-connect`, and only auto-rebases when Git
    can replay the fork overlay cleanly. Clean rebases run verification, push
-   with `--force-with-lease`, and publish an EAS update; conflicted rebases fail
-   without pushing and require manual review.
+   with `--force-with-lease`, and publish an EAS update. Conflicted rebases do
+   not push `feature/mobile-track` and do not publish EAS; they dispatch a
+   `mobile-track-conflict` repository_dispatch payload for the dev-VM sandboxed
+   resolver, then fail the workflow so the conflict is visible.
 
 5. Stop the runner when done:
 
