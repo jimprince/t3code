@@ -111,6 +111,68 @@ describe("orchestration model option compatibility", () => {
     expect(parsed.snapshot.threads[0]?.modelSelection.options?.reasoningEffort).toBe("high");
   });
 
+  it("decodes opencode model selections in shell snapshots", () => {
+    const parsed = decodeShellStreamItem({
+      kind: "snapshot",
+      snapshot: {
+        snapshotSequence: 1,
+        projects: [
+          {
+            id: "project-opencode",
+            title: "OpenCode project",
+            workspaceRoot: "/tmp/project",
+            repositoryIdentity: null,
+            defaultModelSelection: {
+              instanceId: "opencode",
+              model: "google/antigravity-gemini-3.5-flash-high",
+            },
+            scripts: [],
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+        threads: [
+          {
+            id: "thread-opencode",
+            projectId: "project-opencode",
+            title: "OpenCode thread",
+            modelSelection: {
+              instanceId: "opencode",
+              model: "google/antigravity-gemini-3.5-flash-low",
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            latestTurn: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+            archivedAt: null,
+            session: null,
+            latestUserMessageAt: null,
+            hasPendingApprovals: false,
+            hasPendingUserInput: false,
+            hasActionableProposedPlan: false,
+          },
+        ],
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    });
+
+    expect(parsed.kind).toBe("snapshot");
+    if (parsed.kind !== "snapshot") {
+      throw new Error("Expected snapshot");
+    }
+    expect(parsed.snapshot.projects[0]?.defaultModelSelection).toEqual({
+      provider: "opencode",
+      model: "google/antigravity-gemini-3.5-flash-high",
+    });
+    expect(parsed.snapshot.threads[0]?.modelSelection).toEqual({
+      provider: "opencode",
+      model: "google/antigravity-gemini-3.5-flash-low",
+    });
+  });
+
   it("decodes exact legacy subscribeShell snapshot model selections", () => {
     const parsed = decodeShellStreamItem({
       kind: "snapshot",

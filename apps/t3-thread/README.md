@@ -46,6 +46,7 @@ t3-thread project list --env local-mbp
 t3-thread project add --env local-mbp --path /Users/brad/Programming/repo --title Repo
 t3-thread project rename --env local-mbp PROJECT_ID "New Title"
 t3-thread project set-model --env local-mbp PROJECT_ID --provider codex --model gpt-5.4
+t3-thread project set-model --env local-mbp PROJECT_ID --provider opencode --model google/antigravity-gemini-3.5-flash-high
 t3-thread project remove --env local-mbp PROJECT_ID
 
 t3-thread threads --env local-mbp
@@ -82,9 +83,14 @@ t3-thread project list --env dev-vm
 t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
 t3-thread project rename --env dev-vm PROJECT_ID "Repo"
 t3-thread project set-model --env dev-vm PROJECT_ID --provider codex --model gpt-5.4
+t3-thread project set-model --env dev-vm PROJECT_ID --provider opencode --model google/antigravity-gemini-3.5-flash-high
 t3-thread project set-model --env dev-vm PROJECT_ID --clear
 t3-thread project remove --env dev-vm PROJECT_ID
 ```
+
+OpenCode models must use OpenCode's provider/model slug format, for example
+`google/antigravity-gemini-3.5-flash-high` or
+`google/antigravity-gemini-3.5-flash-low`.
 
 Safety defaults:
 
