@@ -65,9 +65,14 @@ t3-thread project list --env <environment>
 t3-thread project add --env <environment> --path <absolute-workspace-root> --title "<title>"
 t3-thread project rename --env <environment> <project-id-or-absolute-workspace-root> "<new-title>"
 t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --provider codex --model gpt-5.4
+t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --provider opencode --model google/antigravity-gemini-3.5-flash-high
 t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --clear
 t3-thread project remove --env <environment> <project-id-or-absolute-workspace-root>
 ```
+
+OpenCode model slugs must include OpenCode's provider/model prefix, such as
+`google/antigravity-gemini-3.5-flash-high` or
+`google/antigravity-gemini-3.5-flash-low`.
 
 Safety rules:
 
