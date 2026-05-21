@@ -1,5 +1,124 @@
 # Agent Requirements
 
+## Current Task: Fix OXLint Plugin Loading
+
+Make `bun lint` work again by addressing the existing failure where oxlint
+loads `./oxlint-plugin-t3code/index.ts` directly and Node rejects the `.ts`
+extension.
+
+### Current User Requirements
+
+- Address the `bun lint` blocker from `ERR_UNKNOWN_FILE_EXTENSION` on the local
+  oxlint TypeScript plugin.
+- Preserve the custom `t3code/no-inline-schema-compile` lint rule.
+- Keep the fix compatible with normal repo scripts and CI-style invocation.
+
+### Acceptance Criteria
+
+- `bun lint` builds or loads the custom oxlint plugin successfully.
+- The custom rule remains enabled through `.oxlintrc.json`.
+- Existing targeted verification for the sandboxed conflict workflow still
+  passes after the lint fix.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Passed: added `oxlint-plugin-t3code/tsconfig.build.json` and a package
+  `build` script that emits the TypeScript oxlint plugin to `dist/`.
+- Passed: updated `.oxlintrc.json` to load
+  `./oxlint-plugin-t3code/dist/index.js` instead of the TypeScript source.
+- Passed: updated root `bun lint` to build the custom plugin before invoking
+  oxlint, preserving `t3code/no-inline-schema-compile`.
+- Passed: `bun --filter @t3tools/oxlint-plugin-t3code build`.
+- Passed: `bun --filter @t3tools/oxlint-plugin-t3code typecheck`.
+- Passed: `bun --filter @t3tools/oxlint-plugin-t3code test`.
+- Passed: `bun lint` now exits 0; it reports 9 existing warnings and 0 errors.
+- Passed: `bun typecheck`.
+- Passed: `bun --filter @t3tools/scripts test mobile-conflict-controller.test.ts`.
+
+## Current Task: Sandboxed Automatic Conflict PRs
+
+Implement the sandboxed conflict-resolution plan for mobile-track sync:
+clean rebases remain fully automatic, but conflicted upstream rebases must not
+run in a normal trusted T3 worker. Instead, GitHub dispatches conflict metadata
+to a dev-VM controller, which launches an isolated Docker resolver and produces
+a candidate PR for manual phone review.
+
+### Current User Requirements
+
+- Keep `mobile-track-sync.yml` fully automatic for clean rebases: rebase,
+  verify, push `feature/mobile-track`, and publish EAS only when clean.
+- On rebase conflict, do not push `feature/mobile-track` and do not publish EAS.
+- On rebase conflict, send a GitHub `repository_dispatch` event to a dev-VM
+  controller containing only metadata: upstream SHA, mobile SHA, sync run id,
+  conflicted files, and branch names.
+- Add a dev-VM controller service that validates HMAC/signature and repo
+  allowlist, queues one mobile conflict job at a time, uses a temporary resolver
+  workspace, and starts a locked-down Docker container.
+- Resolver guardrails: non-root container user; no bind mounts of `/home/brad`,
+  `.ssh`, `.config`, Docker socket, T3 state, EAS credentials, or shared service
+  volumes; fresh clone of only `jimprince/t3code`; no EAS token; cannot update
+  `feature/mobile-track`; cannot publish EAS.
+- Candidate output goes to
+  `automation/mobile-track-conflict/<sync-run-id>` and opens a PR against
+  `feature/mobile-track` with upstream SHA, original mobile SHA, conflicted
+  files, resolver log summary, and check results.
+- Promotion remains manual: review/approve from phone, then merge or run a
+  manual promote workflow; only promotion to `feature/mobile-track` can trigger
+  or dispatch EAS.
+- Treat repo contents, upstream changes, conflict markers, docs, comments, and
+  commit messages as untrusted input for the AI resolver.
+
+### Acceptance Criteria
+
+- Clean upstream rebase path still directly verifies, pushes, and can publish
+  EAS.
+- Conflict path dispatches metadata for sandboxed handling while preventing EAS
+  publish and mobile-branch push.
+- Dev-VM controller and resolver scripts are documented and testable locally.
+- Resolver container cannot access trusted host paths, long-lived credentials,
+  Docker socket, T3 state, or EAS token through configured mounts/env.
+- Candidate PR branch and body include the required audit metadata.
+- Stale candidates cannot be promoted if `feature/mobile-track` moved.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Passed: `mobile-track-sync.yml` now preserves the clean rebase path and
+  gates all verification, push, and EAS steps behind a non-conflict rebase.
+- Passed: conflict path records conflicted files, aborts the rebase, dispatches
+  `mobile-track-conflict` metadata, and then fails before mobile-branch push or
+  EAS publish.
+- Passed: added `scripts/mobile-conflict-controller.ts` with HMAC validation,
+  repository allowlist validation, single-job queueing, temporary workspaces,
+  and locked-down Docker invocation construction.
+- Passed: added non-root resolver container files and a resolver script that
+  fresh-clones `jimprince/t3code`, refuses stale input SHAs, pushes only
+  `automation/mobile-track-conflict/<sync-run-id>`, and opens/updates a PR.
+- Passed: added manual `mobile-track-conflict-promote.yml` that rejects stale
+  candidates if `feature/mobile-track` moved before promotion.
+- Passed: temporarily added a forbidden `/home/brad` bind mount and confirmed
+  `mobile-conflict-controller.test.ts` failed on the guardrail assertion, then
+  restored the locked-down Docker args and confirmed the test passed.
+- Passed: `bun --filter @t3tools/scripts test mobile-conflict-controller.test.ts`.
+- Passed: `bun --filter @t3tools/scripts typecheck`.
+- Passed: `bun typecheck`.
+- Passed: `bun fmt`.
+- Passed: `go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/mobile-track-sync.yml .github/workflows/mobile-track-conflict-promote.yml`.
+- Passed: `bash -n scripts/mobile-conflict-resolver.sh`.
+- Passed: remote dev VM Docker build from a minimal `/tmp` context:
+  `docker build -f ops/mobile-conflict-resolver/Dockerfile -t t3code-mobile-conflict-resolver:test .`.
+- Passed: remote container smoke check confirmed UID/GID `10001:10001` and
+  `git`, `jq`, `gh`, and `bun` are executable for the non-root resolver user.
+- Resolved in the follow-up OXLint task above: `bun lint` now builds and loads
+  the custom plugin successfully.
+
 ## Current Task: Export T3 Environment Metadata To Agent Runtime
 
 Extend the T3 launcher child-process environment so coding agents can discover
