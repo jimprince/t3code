@@ -160,12 +160,40 @@ describe("getStartedThreadModelChangeBlockReason", () => {
 
 describe("resolveSendEnvMode", () => {
   it("keeps worktree mode for git repositories", () => {
-    expect(resolveSendEnvMode({ requestedEnvMode: "worktree", isGitRepo: true })).toBe("worktree");
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "worktree",
+        isGitRepo: true,
+        hasWorktreeBaseRef: true,
+      }),
+    ).toBe("worktree");
   });
 
   it("forces local mode for non-git repositories", () => {
-    expect(resolveSendEnvMode({ requestedEnvMode: "worktree", isGitRepo: false })).toBe("local");
-    expect(resolveSendEnvMode({ requestedEnvMode: "local", isGitRepo: false })).toBe("local");
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "worktree",
+        isGitRepo: false,
+        hasWorktreeBaseRef: true,
+      }),
+    ).toBe("local");
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "local",
+        isGitRepo: false,
+        hasWorktreeBaseRef: false,
+      }),
+    ).toBe("local");
+  });
+
+  it("falls back to local mode when a git repository has no valid worktree base ref", () => {
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "worktree",
+        isGitRepo: true,
+        hasWorktreeBaseRef: false,
+      }),
+    ).toBe("local");
   });
 });
 
