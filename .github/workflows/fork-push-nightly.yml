@@ -1,9 +1,9 @@
-name: Fork Interim Release
+name: Fork Push Nightly
 
-# Creates updater-visible stable fork releases for Brad-authored changes between
-# upstream stable releases. Example: if upstream latest stable is v0.0.21, a
-# fork-only push to main publishes v0.0.22-fork.1, then v0.0.22-fork.2, etc.
-# When upstream later ships v0.0.22, semver makes v0.0.22 > v0.0.22-fork.N.
+# Creates updater-visible nightly fork releases for Brad-authored changes.
+# Normal pushes to main should ship through the nightly feed only. The next
+# upstream stable sync still rebases these fork commits onto the upstream stable
+# tag and publishes the integrated stable release.
 
 on:
   push:
@@ -25,15 +25,16 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: write
   contents: write
 
 concurrency:
-  group: fork-interim-release
+  group: fork-push-nightly
   cancel-in-progress: false
 
 jobs:
   tag:
-    name: Tag fork-only stable release
+    name: Tag fork push nightly
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -41,7 +42,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          # PAT required: GITHUB_TOKEN tag pushes do not trigger release.yml.
           token: ${{ github.token }}
 
       - name: Setup Bun
@@ -68,36 +68,32 @@ jobs:
           set -euo pipefail
 
           if [[ "$EVENT_NAME" == "push" && "$HEAD_MESSAGE" == chore\(release\):\ prepare* ]]; then
-            echo "Release finalize version-bump commit; no fork interim tag needed."
+            echo "Release finalize version-bump commit; no fork push nightly tag needed."
             exit 0
           fi
 
           # sync-upstream pushes main and then a release tag. Give the tag push
           # a moment to appear so sync-created commits do not get double-tagged
-          # as fork-only interim releases.
+          # as push nightlies.
           sleep 30
           git fetch --tags origin
 
           existing_head_tags=$(git tag --points-at HEAD --list 'v*')
           if [[ -n "$existing_head_tags" ]]; then
-            echo "HEAD already has release tag(s); no fork interim tag needed:"
+            echo "HEAD already has release tag(s); no fork push nightly tag needed:"
             echo "$existing_head_tags" | sed 's/^/  /'
             exit 0
           fi
 
-          upstream_tag=$(gh api repos/pingdotgg/t3code/releases/latest --jq .tag_name)
-          if [[ ! "$upstream_tag" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
-            echo "::error::Unexpected upstream stable tag: $upstream_tag"
+          upstream_tag=$(gh release list --repo pingdotgg/t3code --limit 50 \
+            --json tagName,isPrerelease,publishedAt \
+            --jq '[.[] | select(.isPrerelease and (.tagName | test("(^|-)v[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\.")))] | sort_by(.publishedAt) | reverse | .[0].tagName')
+          if [[ -z "$upstream_tag" || "$upstream_tag" == "null" ]]; then
+            echo "::error::No nightly release found on upstream."
             exit 1
           fi
 
-          major="${BASH_REMATCH[1]}"
-          minor="${BASH_REMATCH[2]}"
-          patch="${BASH_REMATCH[3]}"
-          next_patch=$((patch + 1))
-          target_base="v${major}.${minor}.${next_patch}"
-
-          mapfile -t existing_numbers < <(git tag --list "${target_base}-fork.*" \
+          mapfile -t existing_numbers < <(git tag --list "${upstream_tag}-fork.*" \
             | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
             | sort -n)
 
@@ -108,7 +104,7 @@ jobs:
             next_n=$((last + 1))
           fi
 
-          new_tag="${target_base}-fork.${next_n}"
+          new_tag="${upstream_tag}-fork.${next_n}"
           version="${new_tag#v}"
           bun install --frozen-lockfile --ignore-scripts
           node scripts/update-release-package-versions.ts "$version"
@@ -125,4 +121,9 @@ jobs:
 
           git tag "$new_tag" HEAD
           git push origin "$new_tag"
-          echo "Pushed $new_tag for fork-only stable update. release.yml will publish it as latest."
+          gh workflow run release.yml \
+            --ref main \
+            -f channel=stable \
+            -f version="$new_tag" \
+            -f target_ref="$new_tag"
+          echo "Pushed $new_tag for fork push nightly update. release.yml will publish it to the nightly feed."
