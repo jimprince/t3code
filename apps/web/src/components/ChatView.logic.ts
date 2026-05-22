@@ -160,8 +160,15 @@ export function readFileAsDataUrl(file: File): Promise<string> {
 export function resolveSendEnvMode(input: {
   requestedEnvMode: DraftThreadEnvMode;
   isGitRepo: boolean;
+  hasWorktreeBaseRef: boolean;
 }): DraftThreadEnvMode {
-  return input.isGitRepo ? input.requestedEnvMode : "local";
+  if (!input.isGitRepo) {
+    return "local";
+  }
+  if (input.requestedEnvMode === "worktree" && !input.hasWorktreeBaseRef) {
+    return "local";
+  }
+  return input.requestedEnvMode;
 }
 
 export function cloneComposerImageForRetry(
