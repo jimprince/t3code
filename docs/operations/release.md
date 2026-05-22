@@ -12,28 +12,29 @@ file is the concise runbook.
   dispatched with an explicit version.
 - Versions mirror upstream. Do not invent independent fork version numbers.
 - Stable upstream tags are reused verbatim, for example `v0.0.21`.
-- Stable fork-only interim builds use `vNEXT-fork.N`, for example
-  `v0.0.22-fork.1`.
 - Nightly fork builds use `vX.Y.Z-nightly.YYYYMMDD.RUN-fork.N`.
+- Normal pushes to `main` publish fork changes through the nightly feed. They
+  do not create stable/latest `vNEXT-fork.N` releases.
 - Release tags point at commits where releasable package versions already
   match the release tag. This keeps tag-checkout/headless installs reporting
   the same version as the desktop release.
 
-## Fork-Interim Trigger
+## Push Nightly Trigger
 
-`fork-interim-release.yml` publishes updater-visible stable fork builds only
-for changes that can affect packaged app/runtime output: `apps/**`,
-`packages/**`, `assets/**`, root package/build files, and desktop artifact
-build inputs.
+`fork-push-nightly.yml` publishes updater-visible nightly fork builds for
+normal pushes to `main`, but only for changes that can affect packaged
+app/runtime output: `apps/**`, `packages/**`, `assets/**`, root package/build
+files, and desktop artifact build inputs.
 
 Docs, workflow maintenance, release helper scripts, and other repo plumbing
-should not create `vNEXT-fork.N`. Use manual `release.yml` dispatch if a
+should not create push nightlies. Use manual `release.yml` dispatch if a
 maintenance-only commit genuinely needs to ship as a desktop update.
 
-Before pushing `vNEXT-fork.N`, the workflow stamps the releasable package
-versions and lockfile, then tags the stamped commit. That package stamp is
-required because the headless `t3` server reports its version from
-`apps/server/package.json`.
+Before pushing `${upstream_nightly_tag}-fork.N`, the workflow stamps the
+releasable package versions and lockfile, then tags the stamped commit. That
+package stamp is required because the headless `t3` server reports its version
+from `apps/server/package.json`. The next upstream stable sync rebases these
+fork commits onto the stable tag and publishes the integrated stable release.
 
 ## Normal Commands
 
