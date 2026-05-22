@@ -103,10 +103,16 @@ Our version numbers **mirror upstream**. Our release tags are derived from
 upstream release tags + fork commits rebased on top. There is no independent
 versioning axis for the fork.
 
-- `.github/workflows/sync-upstream.yml` runs every 3 hours. It is the **only**
-  thing that should create new release-version tags. Do not manually bump the
-  version in `package.json` or tag releases to new numbers — sync-upstream does
-  that when upstream ships a new release on the selected channel.
+- `.github/workflows/sync-upstream.yml` runs every 3 hours and creates release
+  tags when upstream ships on the selected channel. Do not manually bump the
+  version in `package.json` or invent release numbers.
+- Normal pushes to `main` that affect packaged app/runtime output run
+  `.github/workflows/fork-push-nightly.yml`, which publishes the fork
+  changes through the nightly feed by tagging the latest upstream nightly as
+  `${upstream_nightly_tag}-fork.N`. These pushes do **not** create stable/latest
+  `vNEXT-fork.N` releases. The next upstream stable sync rebases the fork
+  commits onto the upstream stable tag and publishes the integrated stable
+  release.
 - sync-upstream fetches upstream tags into `refs/tags/upstream/*` (namespaced)
   to avoid clobbering our tags, then rebases our fork commits onto the upstream
   tag, stamps releasable package versions to the fork release version, and
