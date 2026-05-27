@@ -497,3 +497,23 @@
 
 ### Publish Plan
 - Keep the compatibility fix and operator docs as separate conventional commits for cleaner history.
+
+## Current Task Snapshot — Markdown Vault Web Handoff Thread
+
+### Active Requirements
+- Register `/Users/brad/Programming/markdown-vault-web` as a T3 Code project if it is missing.
+- Create a real T3 worker thread that can continue the current Markdown Vault Web conversation without losing context.
+- Include enough handoff detail for the worker to treat the live dirty checkout as the source of truth.
+
+### Constraints
+- This tracker update is the first `t3-thread` repo write for this coordination-record task.
+- Do not hand-edit T3 runtime state; use `t3-thread` CLI commands.
+- Preserve the Markdown Vault Web repo's dirty state.
+
+### Acceptance Criteria
+- Project registration returns a real project id.
+- Thread creation returns a real remote `threadId`.
+- Initial status/result confirms the worker read the live checkout and is ready for the next request.
+
+### Status
+- Completed.
