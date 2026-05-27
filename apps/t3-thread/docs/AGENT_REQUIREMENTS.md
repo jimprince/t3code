@@ -1,5 +1,27 @@
 # Agent Requirements
 
+## Current Task Snapshot - Willow Citrix Handoff Registration
+
+### Active Requirements
+- Register `/Users/brad/Programming/willow-citrix-hotpatch-notes` as a project in the local T3 Code environment.
+- Create a real T3 worker thread for the Willow/Citrix hotpatch handoff.
+- Verify creation with a returned remote `threadId` and status check.
+- Record the active project/thread handoff state for future agents.
+
+### Constraints
+- Use `t3-thread`, not the deprecated `t3-agent` command.
+- Do not fabricate a thread id; a worker exists only after `t3-thread create` returns `threadId`.
+- Keep the Willow handoff free of transcript contents or sensitive dictated text.
+
+### Acceptance Criteria
+- `local-mbp` contains a T3 project for `/Users/brad/Programming/willow-citrix-hotpatch-notes`.
+- Saved worker `willow-citrix-resume` exists with a real thread id.
+- `t3-thread status willow-citrix-resume` reports a non-error state.
+- `docs/ACTIVE_COORDINATION.md` records the live handoff state.
+
+### Status
+- Completed: project id `be9f8d66-92aa-407a-b606-00923610bf3b`; worker `willow-citrix-resume`; thread id `c2e1f65e-b42c-48f3-bb77-e859b6e9005e`; first turn completed.
+
 ## Current Task Snapshot — OpenCode Antigravity Thread Model Validation
 
 ### Active Requirements
