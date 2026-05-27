@@ -28,3 +28,13 @@ t3-thread status <saved-agent-name>
 ## Coordination Source
 
 Project/task coordination for target repos may still live in the target repo tracker or in HomeNetwork's historical coordination board. This file records CLI-level state only.
+
+## Active Handoffs
+
+- 2026-05-27: Registered local project `Willow Citrix Hotpatch` at `/Users/brad/Programming/willow-citrix-hotpatch-notes` in `local-mbp`.
+  - Project id: `be9f8d66-92aa-407a-b606-00923610bf3b`
+  - Worker saved name: `willow-citrix-resume`
+  - Thread id: `c2e1f65e-b42c-48f3-bb77-e859b6e9005e`
+  - Branch: `t3/willow-citrix-resume`
+  - First-turn status: `completed`
+  - First-turn finding: helper is running idle; logs show non-Citrix events skipped and helper pastes only into Citrix Viewer, so current evidence does not implicate the helper in non-Citrix double paste.
