@@ -31,6 +31,14 @@ Project/task coordination for target repos may still live in the target repo tra
 
 ## Active Handoffs
 
+- 2026-05-27: Registered local project `Markdown Vault Web` at `/Users/brad/Programming/markdown-vault-web` in `local-mbp`.
+  - Project id: `8fade5e4-f889-4c50-9dd9-3a183b09cd86`
+  - Worker saved name: `markdown-vault-handoff`
+  - Thread id: `ea48ee18-64b2-4c0b-b508-64ddd68b14aa`
+  - Branch: `t3/markdown-vault-handoff`
+  - First-turn status: `completed`
+  - First-turn finding: worker loaded the live dirty checkout at `/Users/brad/Programming/markdown-vault-web`, read repo instructions/tracker, noted dirty tracked/untracked files, and is ready for the next user request.
+
 - 2026-05-27: Registered local project `Willow Citrix Hotpatch` at `/Users/brad/Programming/willow-citrix-hotpatch-notes` in `local-mbp`.
   - Project id: `be9f8d66-92aa-407a-b606-00923610bf3b`
   - Worker saved name: `willow-citrix-resume`
