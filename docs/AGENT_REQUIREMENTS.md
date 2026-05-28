@@ -124,6 +124,9 @@
   reported that Linux `dist/electron` was still missing, so the helper now pins
   Electron's installer to the current runner `npm_config_platform` and
   `npm_config_arch`.
+- Updated: after CI run `26553427131` showed the pinned installer still produced
+  only `dist/locales`, the helper now falls back to direct `@electron/get`
+  download/extract and writes Electron's `path.txt` itself.
 
 ## User-Approved Requirement Changes
 
