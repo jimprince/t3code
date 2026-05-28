@@ -3,6 +3,7 @@ import type {
   AuthSessionState,
   AuthWebSocketTokenResult,
   ExecutionEnvironmentDescriptor,
+  ServerHeadlessUpdateCheckResult,
 } from "@t3tools/contracts";
 
 class RemoteEnvironmentAuthHttpError extends Error {
@@ -131,6 +132,25 @@ export async function issueRemoteWebSocketToken(input: {
     pathname: "/api/auth/ws-token",
     method: "POST",
     bearerToken: input.bearerToken,
+  });
+}
+
+export async function requestRemoteHeadlessUpdateCheck(input: {
+  readonly httpBaseUrl: string;
+  readonly bearerToken: string;
+  readonly clientVersion: string;
+  readonly serverVersion: string;
+}): Promise<ServerHeadlessUpdateCheckResult> {
+  return fetchRemoteJson<ServerHeadlessUpdateCheckResult>({
+    httpBaseUrl: input.httpBaseUrl,
+    pathname: "/api/server/headless-update-check",
+    method: "POST",
+    bearerToken: input.bearerToken,
+    body: {
+      clientVersion: input.clientVersion,
+      serverVersion: input.serverVersion,
+      manual: true,
+    },
   });
 }
 

@@ -1,5 +1,86 @@
 # Agent Requirements
 
+## Current Task: Remote Upgrade Button for Disconnected Environments
+
+Add an `Upgrade remote` action to the disconnected saved-environment banner
+when T3 Code can infer that the remote Linux server is older than the current
+client. The action must start an out-of-band upgrade when possible, then
+reconnect the environment.
+
+### Current User Requirements
+
+- Show `Upgrade remote` on disconnected/error saved remote environments only
+  when the last-known remote server version is older than the current client,
+  the last-known platform is Linux, and an out-of-band path exists.
+- Preserve the existing `Reconnect` primary action and `Connections` action.
+- Use desktop SSH bootstrap/relaunch semantics for desktop-managed SSH
+  environments.
+- For non-SSH HTTP remotes, add an authenticated
+  `POST /api/server/headless-update-check` endpoint that reuses the existing
+  headless update requester and bearer-session authentication.
+- Add a web HTTP helper for the remote headless update request.
+- Add a confirmation dialog before starting the upgrade.
+- On success, toast the result and attempt reconnect after a short delay.
+- On failure, show a useful error and keep reconnect/connections available.
+- Suppress duplicate generic version-skew banner text when the disconnected
+  banner already includes the version mismatch.
+
+### Constraints
+
+- Do not depend only on the active environment WebSocket because the feature is
+  exposed while disconnected.
+- Keep Linux as the only supported remote upgrade target in this change.
+- Do not add provider-update UI or provider-update contracts.
+- Do not add live upgrade log streaming, Windows/macOS remote support, package
+  manager UI, global channel changes, or forced upgrades when the client is not
+  newer.
+- Follow repo checks: `bun fmt`, `bun lint`, `bun typecheck`, and
+  `bun run test`. Never run `bun test`.
+
+### Acceptance Criteria
+
+- A disconnected older Linux saved remote with desktop SSH shows
+  `Upgrade remote`, confirms, starts the desktop SSH relaunch path, toasts, and
+  attempts reconnect.
+- A disconnected older Linux saved HTTP remote with a bearer token shows
+  `Upgrade remote`, confirms, calls the authenticated HTTP update endpoint,
+  handles queued/cooldown/unsupported/error statuses, and attempts reconnect on
+  queued/cooldown success cases.
+- Ineligible environments do not show the button.
+- Existing reconnect behavior remains intact.
+- Unit/integration coverage exercises eligibility, web remote API behavior, and
+  the authenticated server endpoint.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Passed: added pure remote upgrade eligibility logic with unit coverage for
+  local/primary, missing config, client-not-newer, non-Linux, connecting,
+  desktop SSH, remote HTTP bearer-token, and no-out-of-band-path cases.
+- Passed: added authenticated remote HTTP update request helper coverage for
+  bearer auth, request body, and non-2xx error surfacing.
+- Passed: added authenticated server endpoint coverage for unauthenticated
+  rejection and bearer-authenticated headless update check requests.
+- Passed: wired the disconnected banner to show `Upgrade remote`, include
+  remote/client version copy, open a confirmation dialog, call the out-of-band
+  upgrade service, toast results, and reconnect on queued/started/cooldown
+  success paths.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with 9 existing warnings and 0 errors.
+- Passed: `bun typecheck`.
+- Passed: `bun run test`.
+
+### Open Questions / Proposed Changes
+
+- None.
+
+### User-Approved Requirement Changes
+
+- None.
+
 ## Active Requirements
 
 - Use the local Mac as an on-demand GitHub Actions build worker for T3 Code

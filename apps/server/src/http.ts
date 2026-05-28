@@ -17,12 +17,18 @@ import {
 import { OtlpTracer } from "effect/unstable/observability";
 
 import {
+  ServerHeadlessUpdateCheckInput,
+  type ServerHeadlessUpdateCheckResult,
+} from "@t3tools/contracts";
+import {
   ATTACHMENTS_ROUTE_PREFIX,
   normalizeAttachmentRelativePath,
   resolveAttachmentRelativePath,
 } from "./attachmentPaths.ts";
+import { AuthError } from "./auth/Services/ServerAuth.ts";
 import { resolveAttachmentPathById } from "./attachmentStore.ts";
 import { resolveStaticDir, ServerConfig } from "./config.ts";
+import { requestHeadlessUpdateCheck } from "./headlessUpdateCheck.ts";
 import { BrowserTraceCollector } from "./observability/Services/BrowserTraceCollector.ts";
 import { ProjectFaviconResolver } from "./project/Services/ProjectFaviconResolver.ts";
 import { ServerAuth } from "./auth/Services/ServerAuth.ts";
@@ -79,6 +85,29 @@ export const serverEnvironmentRouteLayer = HttpRouter.add(
       headers: browserApiCorsHeaders,
     });
   }),
+);
+
+export const serverHeadlessUpdateCheckRouteLayer = HttpRouter.add(
+  "POST",
+  "/api/server/headless-update-check",
+  Effect.gen(function* () {
+    yield* requireAuthenticatedRequest;
+    const payload = yield* HttpServerRequest.schemaBodyJson(ServerHeadlessUpdateCheckInput).pipe(
+      Effect.mapError(
+        (cause) =>
+          new AuthError({
+            message: "Invalid headless update check payload.",
+            status: 400,
+            cause,
+          }),
+      ),
+    );
+    const result = yield* requestHeadlessUpdateCheck(payload);
+    return HttpServerResponse.jsonUnsafe(result satisfies ServerHeadlessUpdateCheckResult, {
+      status: 200,
+      headers: browserApiCorsHeaders,
+    });
+  }).pipe(Effect.catchTag("AuthError", respondToAuthError)),
 );
 
 class DecodeOtlpTraceRecordsError extends Data.TaggedError("DecodeOtlpTraceRecordsError")<{

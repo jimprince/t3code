@@ -5,6 +5,7 @@ import {
   fetchRemoteEnvironmentDescriptor,
   fetchRemoteSessionState,
   issueRemoteWebSocketToken,
+  requestRemoteHeadlessUpdateCheck,
   resolveRemoteWebSocketConnectionUrl,
 } from "./api";
 import { resolveRemotePairingTarget } from "./target";
@@ -291,6 +292,64 @@ describe("remote environment api", () => {
         bearerToken: "bearer-token",
       }),
     ).resolves.toBe("wss://remote.example.com/?wsToken=ws-token");
+  });
+
+  it("requests a remote headless update check over bearer auth", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: "queued",
+          checkedAt: "2026-05-01T12:00:00.000Z",
+          message: "Queued headless update check.",
+        }),
+        { status: 200 },
+      ),
+    );
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    await expect(
+      requestRemoteHeadlessUpdateCheck({
+        httpBaseUrl: "https://remote.example.com/",
+        bearerToken: "bearer-token",
+        clientVersion: "1.0.0",
+        serverVersion: "0.9.0",
+      }),
+    ).resolves.toMatchObject({
+      status: "queued",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://remote.example.com/api/server/headless-update-check",
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: "Bearer bearer-token",
+        },
+        body: JSON.stringify({
+          clientVersion: "1.0.0",
+          serverVersion: "0.9.0",
+          manual: true,
+        }),
+      },
+    );
+  });
+
+  it("surfaces non-2xx remote update errors", async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: "No headless update systemd service is installed." }), {
+        status: 400,
+      }),
+    ) as typeof fetch;
+
+    await expect(
+      requestRemoteHeadlessUpdateCheck({
+        httpBaseUrl: "https://remote.example.com/",
+        bearerToken: "bearer-token",
+        clientVersion: "1.0.0",
+        serverVersion: "0.9.0",
+      }),
+    ).rejects.toThrow("No headless update systemd service is installed.");
   });
 });
 

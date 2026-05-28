@@ -1190,6 +1190,61 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("requires auth for manual headless update checks", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+
+      const updateUrl = yield* getHttpServerUrl("/api/server/headless-update-check");
+      const response = yield* Effect.promise(() =>
+        fetch(updateUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            clientVersion: "1.0.0",
+            serverVersion: "0.9.0",
+            manual: true,
+          }),
+        }),
+      );
+
+      assert.equal(response.status, 401);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("accepts authenticated manual headless update checks over bearer auth", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+
+      const bearerToken = yield* getAuthenticatedBearerSessionToken();
+      const updateUrl = yield* getHttpServerUrl("/api/server/headless-update-check");
+      const response = yield* Effect.promise(() =>
+        fetch(updateUrl, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${bearerToken}`,
+          },
+          body: JSON.stringify({
+            clientVersion: "1.0.0",
+            serverVersion: "0.9.0",
+            manual: true,
+          }),
+        }),
+      );
+      const body = (yield* Effect.promise(() => response.json())) as {
+        readonly status: string;
+        readonly checkedAt: string;
+        readonly message: string | null;
+      };
+
+      assert.equal(response.status, 200);
+      assert.include(["queued", "cooldown", "unsupported", "error"], body.status);
+      assert.equal(typeof body.checkedAt, "string");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("includes CORS headers on remote auth success responses", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();

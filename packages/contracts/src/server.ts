@@ -405,6 +405,7 @@ export type ServerHeadlessUpdateCheckStatus = typeof ServerHeadlessUpdateCheckSt
 export const ServerHeadlessUpdateCheckInput = Schema.Struct({
   clientVersion: TrimmedNonEmptyString,
   serverVersion: TrimmedNonEmptyString,
+  manual: Schema.optionalKey(Schema.Boolean),
 });
 export type ServerHeadlessUpdateCheckInput = typeof ServerHeadlessUpdateCheckInput.Type;
 
