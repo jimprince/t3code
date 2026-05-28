@@ -145,14 +145,20 @@ function isUnknownPendingUserInputRequestError(cause: Cause.Cause<ProviderServic
     return (
       detail.includes("unknown pending user-input request") ||
       detail.includes("unknown pending user input request") ||
-      detail.includes("unknown pending codex user input request")
+      detail.includes("unknown pending codex user input request") ||
+      detail.includes("cannot recover thread") ||
+      detail.includes("no provider resume state") ||
+      detail.includes("no persisted provider binding")
     );
   }
   const message = Cause.pretty(cause).toLowerCase();
   return (
     message.includes("unknown pending user-input request") ||
     message.includes("unknown pending user input request") ||
-    message.includes("unknown pending codex user input request")
+    message.includes("unknown pending codex user input request") ||
+    message.includes("cannot recover thread") ||
+    message.includes("no provider resume state") ||
+    message.includes("no persisted provider binding")
   );
 }
 
