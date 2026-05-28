@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
   "ignorePatterns": [
+    ".worktrees",
     "dist",
     "dist-electron",
     "node_modules",

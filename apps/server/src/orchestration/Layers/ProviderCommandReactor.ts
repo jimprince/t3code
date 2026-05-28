@@ -119,22 +119,40 @@ function isUnknownPendingApprovalRequestError(cause: Cause.Cause<ProviderService
     const detail = error.detail.toLowerCase();
     return (
       detail.includes("unknown pending approval request") ||
-      detail.includes("unknown pending permission request")
+      detail.includes("unknown pending permission request") ||
+      detail.includes("cannot recover thread") ||
+      detail.includes("no provider resume state") ||
+      detail.includes("no persisted provider binding")
     );
   }
   const message = Cause.pretty(cause);
   return (
     message.includes("unknown pending approval request") ||
-    message.includes("unknown pending permission request")
+    message.includes("unknown pending permission request") ||
+    message.includes("cannot recover thread") ||
+    message.includes("no provider resume state") ||
+    message.includes("no persisted provider binding")
   );
 }
 
 function isUnknownPendingUserInputRequestError(cause: Cause.Cause<ProviderServiceError>): boolean {
   const error = findProviderAdapterRequestError(cause);
   if (error) {
-    return error.detail.toLowerCase().includes("unknown pending user-input request");
+    const detail = error.detail.toLowerCase();
+    return (
+      detail.includes("unknown pending user-input request") ||
+      detail.includes("cannot recover thread") ||
+      detail.includes("no provider resume state") ||
+      detail.includes("no persisted provider binding")
+    );
   }
-  return Cause.pretty(cause).toLowerCase().includes("unknown pending user-input request");
+  const message = Cause.pretty(cause).toLowerCase();
+  return (
+    message.includes("unknown pending user-input request") ||
+    message.includes("cannot recover thread") ||
+    message.includes("no provider resume state") ||
+    message.includes("no persisted provider binding")
+  );
 }
 
 function stalePendingRequestDetail(
@@ -262,6 +280,29 @@ const make = Effect.gen(function* () {
       session: {
         ...session,
         status: session.status === "stopped" ? "stopped" : "ready",
+        activeTurnId: null,
+        lastError: input.detail,
+        updatedAt: input.createdAt,
+      },
+      createdAt: input.createdAt,
+    });
+  });
+
+  const releaseThreadSessionAfterOrphanedPendingResponse = Effect.fnUntraced(function* (input: {
+    readonly threadId: ThreadId;
+    readonly detail: string;
+    readonly createdAt: string;
+  }) {
+    const thread = yield* resolveThread(input.threadId);
+    const session = thread?.session;
+    if (!session || session.status === "stopped") {
+      return;
+    }
+    yield* setThreadSession({
+      threadId: input.threadId,
+      session: {
+        ...session,
+        status: "ready",
         activeTurnId: null,
         lastError: input.detail,
         updatedAt: input.createdAt,
@@ -811,11 +852,17 @@ const make = Effect.gen(function* () {
     }
     const hasSession = thread.session && thread.session.status !== "stopped";
     if (!hasSession) {
+      const detail = stalePendingRequestDetail("approval", event.payload.requestId);
+      yield* releaseThreadSessionAfterOrphanedPendingResponse({
+        threadId: event.payload.threadId,
+        detail,
+        createdAt: event.payload.createdAt,
+      });
       return yield* appendProviderFailureActivity({
         threadId: event.payload.threadId,
         kind: "provider.approval.respond.failed",
         summary: "Provider approval response failed",
-        detail: "No active provider session is bound to this thread.",
+        detail,
         turnId: null,
         createdAt: event.payload.createdAt,
         requestId: event.payload.requestId,
@@ -829,19 +876,32 @@ const make = Effect.gen(function* () {
         decision: event.payload.decision,
       })
       .pipe(
-        Effect.catchCause((cause) =>
-          appendProviderFailureActivity({
-            threadId: event.payload.threadId,
-            kind: "provider.approval.respond.failed",
-            summary: "Provider approval response failed",
-            detail: isUnknownPendingApprovalRequestError(cause)
-              ? stalePendingRequestDetail("approval", event.payload.requestId)
-              : Cause.pretty(cause),
-            turnId: null,
-            createdAt: event.payload.createdAt,
-            requestId: event.payload.requestId,
-          }),
-        ),
+        Effect.catchCause((cause) => {
+          const orphanedRequest = isUnknownPendingApprovalRequestError(cause);
+          const detail = orphanedRequest
+            ? stalePendingRequestDetail("approval", event.payload.requestId)
+            : Cause.pretty(cause);
+          const releaseSession = orphanedRequest
+            ? releaseThreadSessionAfterOrphanedPendingResponse({
+                threadId: event.payload.threadId,
+                detail,
+                createdAt: event.payload.createdAt,
+              })
+            : Effect.void;
+          return releaseSession.pipe(
+            Effect.flatMap(() =>
+              appendProviderFailureActivity({
+                threadId: event.payload.threadId,
+                kind: "provider.approval.respond.failed",
+                summary: "Provider approval response failed",
+                detail,
+                turnId: null,
+                createdAt: event.payload.createdAt,
+                requestId: event.payload.requestId,
+              }),
+            ),
+          );
+        }),
       );
   });
 
@@ -855,11 +915,17 @@ const make = Effect.gen(function* () {
       }
       const hasSession = thread.session && thread.session.status !== "stopped";
       if (!hasSession) {
+        const detail = stalePendingRequestDetail("user-input", event.payload.requestId);
+        yield* releaseThreadSessionAfterOrphanedPendingResponse({
+          threadId: event.payload.threadId,
+          detail,
+          createdAt: event.payload.createdAt,
+        });
         return yield* appendProviderFailureActivity({
           threadId: event.payload.threadId,
           kind: "provider.user-input.respond.failed",
           summary: "Provider user input response failed",
-          detail: "No active provider session is bound to this thread.",
+          detail,
           turnId: null,
           createdAt: event.payload.createdAt,
           requestId: event.payload.requestId,
@@ -873,19 +939,32 @@ const make = Effect.gen(function* () {
           answers: event.payload.answers,
         })
         .pipe(
-          Effect.catchCause((cause) =>
-            appendProviderFailureActivity({
-              threadId: event.payload.threadId,
-              kind: "provider.user-input.respond.failed",
-              summary: "Provider user input response failed",
-              detail: isUnknownPendingUserInputRequestError(cause)
-                ? stalePendingRequestDetail("user-input", event.payload.requestId)
-                : Cause.pretty(cause),
-              turnId: null,
-              createdAt: event.payload.createdAt,
-              requestId: event.payload.requestId,
-            }),
-          ),
+          Effect.catchCause((cause) => {
+            const orphanedRequest = isUnknownPendingUserInputRequestError(cause);
+            const detail = orphanedRequest
+              ? stalePendingRequestDetail("user-input", event.payload.requestId)
+              : Cause.pretty(cause);
+            const releaseSession = orphanedRequest
+              ? releaseThreadSessionAfterOrphanedPendingResponse({
+                  threadId: event.payload.threadId,
+                  detail,
+                  createdAt: event.payload.createdAt,
+                })
+              : Effect.void;
+            return releaseSession.pipe(
+              Effect.flatMap(() =>
+                appendProviderFailureActivity({
+                  threadId: event.payload.threadId,
+                  kind: "provider.user-input.respond.failed",
+                  summary: "Provider user input response failed",
+                  detail,
+                  turnId: null,
+                  createdAt: event.payload.createdAt,
+                  requestId: event.payload.requestId,
+                }),
+              ),
+            );
+          }),
         );
     },
   );

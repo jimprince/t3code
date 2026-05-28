@@ -3543,6 +3543,17 @@ export default function ChatView(props: ChatViewProps) {
       <ProviderStatusBanner status={activeProviderStatus} />
       <ThreadErrorBanner
         error={activeThread.error}
+        onResume={async () => {
+          const api = readEnvironmentApi(environmentId);
+          if (!api || !activeThread) return;
+          setThreadError(activeThread.id, null);
+          await api.orchestration.dispatchCommand({
+            type: "thread.turn.resume",
+            commandId: newCommandId(),
+            threadId: activeThread.id,
+            createdAt: new Date().toISOString(),
+          });
+        }}
         onDismiss={() => setThreadError(activeThread.id, null)}
       />
       {/* Main content area with optional plan sidebar */}

@@ -3944,6 +3944,51 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
+  it("keeps the server thread route mounted long enough to recover from per-thread detail after a stale shell snapshot", async () => {
+    const serverSnapshot = createSnapshotForTargetUser({
+      targetMessageId: "msg-user-missing-shell-thread-test" as MessageId,
+      targetText: "missing shell thread test",
+    });
+    const routeThread = serverSnapshot.threads.find((thread) => thread.id === THREAD_ID);
+    if (!routeThread) {
+      throw new Error(`Expected thread ${THREAD_ID} in snapshot fixture.`);
+    }
+
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: {
+        ...serverSnapshot,
+        threads: serverSnapshot.threads.filter((thread) => thread.id !== THREAD_ID),
+      },
+      resolveRpc: (request) => {
+        if (request._tag !== ORCHESTRATION_WS_METHODS.subscribeThread) {
+          return undefined;
+        }
+        if (request.threadId !== THREAD_ID) {
+          return [];
+        }
+        return [
+          {
+            kind: "snapshot" as const,
+            snapshot: {
+              snapshotSequence: serverSnapshot.snapshotSequence,
+              thread: routeThread,
+            },
+          },
+        ];
+      },
+      initialPath: `/${LOCAL_ENVIRONMENT_ID}/${THREAD_ID}`,
+    });
+
+    try {
+      await waitForComposerEditor();
+      await expect.element(page.getByTestId("composer-editor")).toBeInTheDocument();
+      expect(mounted.router.state.location.pathname).toBe(`/${LOCAL_ENVIRONMENT_ID}/${THREAD_ID}`);
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
   it("creates a fresh worktree draft from an existing worktree thread when the default mode is worktree", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,

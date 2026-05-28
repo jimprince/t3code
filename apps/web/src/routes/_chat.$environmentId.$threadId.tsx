@@ -21,6 +21,10 @@ import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
 import { selectEnvironmentState, selectThreadExistsByRef, useStore } from "../store";
 import { createThreadSelectorByRef } from "../storeSelectors";
 import { resolveThreadRouteRef, buildThreadRouteParams } from "../threadRoutes";
+import {
+  shouldDelayMissingThreadRedirect,
+  shouldRenderServerThreadRoute,
+} from "./-threadRouteRecovery";
 import { RightPanelSheet } from "../components/RightPanelSheet";
 import { Sidebar, SidebarInset, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
 
@@ -30,6 +34,7 @@ const DIFF_INLINE_DEFAULT_WIDTH = "clamp(24rem,34vw,36rem)";
 const DIFF_INLINE_SIDEBAR_MIN_WIDTH = 22 * 16;
 const DIFF_INLINE_SIDEBAR_MAX_WIDTH = 256 * 16;
 const COMPOSER_COMPACT_MIN_LEFT_CONTROLS_WIDTH_PX = 208;
+const MISSING_ROUTE_THREAD_REDIRECT_DELAY_MS = 750;
 
 const DiffLoadingFallback = (props: { mode: DiffPanelMode }) => {
   return (
@@ -215,13 +220,26 @@ function ChatThreadRouteView() {
   }, [markDiffOpened, navigate, threadRef]);
 
   useEffect(() => {
-    if (!threadRef || !bootstrapComplete) {
+    if (
+      !shouldDelayMissingThreadRedirect({
+        threadRef,
+        bootstrapComplete,
+        routeThreadExists,
+        environmentHasAnyThreads,
+      })
+    ) {
       return;
     }
 
-    if (!routeThreadExists && environmentHasAnyThreads) {
+    // Keep the route mounted briefly so ChatView can attach the per-thread
+    // detail subscription and recover when a reconnect snapshot lags behind.
+    const timeoutId = window.setTimeout(() => {
       void navigate({ to: "/", replace: true });
-    }
+    }, MISSING_ROUTE_THREAD_REDIRECT_DELAY_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [bootstrapComplete, environmentHasAnyThreads, navigate, routeThreadExists, threadRef]);
 
   useEffect(() => {
@@ -231,9 +249,13 @@ function ChatThreadRouteView() {
     finalizePromotedDraftThreadByRef(threadRef);
   }, [draftThread?.promotedTo, serverThreadStarted, threadRef]);
 
-  if (!threadRef || !bootstrapComplete || !routeThreadExists) {
+  if (!shouldRenderServerThreadRoute({ threadRef, bootstrapComplete })) {
     return null;
   }
+  if (threadRef === null) {
+    return null;
+  }
+  const resolvedThreadRef = threadRef;
 
   const shouldRenderDiffContent = diffOpen || hasOpenedDiff;
 
@@ -242,8 +264,8 @@ function ChatThreadRouteView() {
       <>
         <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground md:h-dvh">
           <ChatView
-            environmentId={threadRef.environmentId}
-            threadId={threadRef.threadId}
+            environmentId={resolvedThreadRef.environmentId}
+            threadId={resolvedThreadRef.threadId}
             onDiffPanelOpen={markDiffOpened}
             reserveTitleBarControlInset={!diffOpen}
             routeKind="server"
@@ -263,8 +285,8 @@ function ChatThreadRouteView() {
     <>
       <SidebarInset className="h-svh min-h-0 overflow-hidden overscroll-y-none bg-background text-foreground md:h-dvh">
         <ChatView
-          environmentId={threadRef.environmentId}
-          threadId={threadRef.threadId}
+          environmentId={resolvedThreadRef.environmentId}
+          threadId={resolvedThreadRef.threadId}
           onDiffPanelOpen={markDiffOpened}
           routeKind="server"
         />

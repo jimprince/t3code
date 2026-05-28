@@ -1,5 +1,180 @@
 # Agent Requirements
 
+This is a running requirements and verification log. Keep completed task entries
+for continuity, and add the newest task at the top so future agents can see both
+current scope and recent decisions.
+
+## Current Task: Commit And Push Refresh Recovery Fixes
+
+Commit the verified combined refresh/recovery changes from the detached release
+tag onto a branch and push them to the fork remote.
+
+### Current User Requirements
+
+- Commit the current verified fix set.
+- Push the commit so the thread can be closed cleanly.
+- Preserve the running requirements log.
+
+### Current Acceptance Criteria
+
+- A branch exists for the current detached-HEAD work.
+- The current fix set is committed.
+- The branch is pushed to `origin`.
+- The working tree is clean after push.
+
+### Current Status
+
+- Completed.
+- Created branch `fix/refresh-pending-thread-recovery` from the detached
+  release tag.
+- Committed the verified fix set as `fix: recover stale pending thread state`.
+- Pushed the branch to `origin`.
+
+### Current Verification
+
+- Prior to this commit task, passed: `bun fmt`.
+- Prior to this commit task, passed: `bun lint` with existing warnings only.
+- Prior to this commit task, passed: `bun typecheck` with existing Effect
+  language-service suggestions only.
+- Passed: branch tracks `origin/fix/refresh-pending-thread-recovery`.
+
+## Current Task: Clarify Running Requirements Log And Hide Local Worktrees
+
+Keep the combined refresh/reconnect fixes together, prevent local worktree
+directories from polluting git status/lint scope, and make it explicit that
+this requirements file is intentionally a running log.
+
+### Current User Requirements
+
+- Keep the related route-recovery and pending-response fixes together.
+- Do not include `.worktrees/` as a committable path.
+- Make clear that `docs/AGENT_REQUIREMENTS.md` should remain a running file.
+
+### Current Acceptance Criteria
+
+- `.worktrees/` no longer appears as an untracked path in `git status`.
+- The requirements tracker documents itself as a running log and keeps prior
+  entries intact.
+- Required repo checks still pass after the cleanup.
+
+### Current Status
+
+- Completed.
+- Added a top-level note that this file is a running requirements and
+  verification log, with newest entries at the top and completed entries kept
+  for continuity.
+- Added `.worktrees/` to `.gitignore` so local worktree directories do not
+  appear as untracked paths.
+
+### Current Verification
+
+- Passed: `git status --short` no longer lists `.worktrees/`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions only.
+
+## Current Task: Investigate Frozen Pending Agent Threads After UI Refresh
+
+Investigate and fix the case where refreshing/reopening the UI while an agent
+is waiting for user input or has proposed a plan leaves the thread stuck:
+messages cannot be sent, pending questions cannot be answered, and proposed
+plans cannot be accepted.
+
+### Current User Requirements
+
+- Investigate the refresh/reopen freeze around agent questions and proposed plans.
+- Identify the state transition that leaves the thread unable to accept input.
+- Implement a focused robustness fix if the repo code path is responsible.
+
+### Current Acceptance Criteria
+
+- Pending user-input/approval callbacks that become orphaned after refresh,
+  restart, or provider-session recovery must not leave the UI permanently
+  blocked.
+- Threads with stale pending-response failures should leave `running` state so
+  the user can continue or restart the turn.
+- Proposed plan follow-up should remain actionable after the original planning
+  turn has produced a completed plan.
+- Add focused regression coverage for stale pending response recovery.
+- Run focused tests, then run `bun fmt`, `bun lint`, and `bun typecheck` before
+  declaring completion.
+
+### Current Status
+
+- Completed.
+- Initial finding: stale pending response failures are appended as activities,
+  and the frontend knows how to hide the stale prompt, but the thread session
+  can remain `running`. After a UI reload that makes the composer render a
+  running thread with no usable pending callback or plan action, so input stays
+  blocked.
+- Implemented: orphaned approval/user-input response failures now use the same
+  stale-pending detail that the frontend/projections already recognize, and
+  release the thread session to `ready` with `activeTurnId: null`.
+- Added regression assertions that stale approval and user-input response
+  failures clear the `running` session state instead of leaving the thread
+  frozen.
+
+### Current Verification
+
+- Passed: `bun test apps/server/src/orchestration/Layers/ProviderCommandReactor.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` with existing Effect language-service suggestions only.
+
+## Current Task: Harden Mobile Thread Route Recovery On Flaky Networks
+
+Troubleshoot and fix the mobile failure where opening a newly created thread
+can show as unavailable when the current shell snapshot briefly omits that
+thread, especially on less reliable connections such as the user's work Wi-Fi
+over Tailscale.
+
+### Current User Requirements
+
+- Investigate why creating/opening a new thread from the mobile app can fail
+  on work Wi-Fi while working over cellular.
+- Identify whether the frontend/backend handoff is too brittle around mobile
+  thread creation and reconnects.
+- Implement a focused robustness fix in this repo if the client route/snapshot
+  flow is responsible.
+
+### Current Acceptance Criteria
+
+- Identify the likely client-side failure mode that makes a just-created
+  thread appear unavailable after a flaky/recovering connection.
+- Prevent the server thread route from failing immediately when the current
+  shell snapshot temporarily omits the route thread.
+- Keep per-thread detail subscription recovery able to rehydrate the route.
+- Add a regression test covering the missing-shell-snapshot / available-thread-detail case.
+- Run `bun fmt`, `bun lint`, and `bun typecheck`.
+
+### Current Status
+
+- Completed.
+- Initial evidence: the server thread route currently renders nothing until
+  the route thread exists in the shell snapshot or an associated draft still
+  exists. `ChatView` only starts the per-thread detail subscription after the
+  route mounts, so a stale/partial reconnect snapshot can block the very
+  recovery path that would restore the thread.
+- Implemented: the server thread route now stays mounted after bootstrap even
+  when the current shell snapshot temporarily omits the route thread, and any
+  fallback redirect back to `/` is delayed briefly so the per-thread detail
+  subscription can recover the thread after reconnect/snapshot lag.
+- Added a focused route-recovery helper + unit test, plus a browser-regression
+  test for the stale-shell-snapshot / available-thread-detail path.
+- Verification hardening: the repo lint script now scopes oxlint to the repo's
+  owned source trees so nested `.worktrees/` clones do not break `bun lint`.
+
+### Current Verification
+
+- Passed: `bun --filter @t3tools/web test 'src/routes/-_chat.$environmentId.$threadId.test.ts'`.
+- Added but not executed here: `bun test:browser src/components/ChatView.browser.tsx`
+  because the local environment is missing Playwright runtime libraries
+  (`libatk-1.0.so.0`) for headless Chromium.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck` after freeing local disk space that had been causing
+  transient `ENOSPC` failures while writing `.tsbuildinfo`.
+
 ## Current Task: Fix Saved Environment Reconnect Spinner Hang
 
 Troubleshoot and fix the case where `brad-linux-dev` reaches the remote
