@@ -12,6 +12,11 @@
   channel instead of creating updater-visible stable fork-interim releases.
 - Preserve integration into the next stable release through the existing
   upstream stable sync/rebase path.
+- Troubleshoot why OpenCode-backed threads lose model continuity after an idle
+  gap or provider-session recovery.
+- Persist and reuse the OpenCode provider session id so recovered turns continue
+  the same OpenCode conversation instead of starting a blank session.
+- Commit, merge, and push the OpenCode continuity fix.
 
 ## Constraints
 
@@ -20,6 +25,8 @@
 - Keep the new-thread fix scoped to the new-thread/worktree failure path.
 - Keep release workflow changes scoped to the push-triggered fork build path,
   release docs, and agent-facing release instructions.
+- Keep the OpenCode continuity fix scoped to provider resume behavior and
+  focused regression coverage.
 
 ## Acceptance Criteria
 
@@ -34,6 +41,10 @@
   nightly tag and dispatches `release.yml` for that nightly.
 - The next upstream stable sync still rebases fork commits onto the stable tag
   and publishes the integrated stable release.
+- OpenCode-backed threads persist a `{ sessionId }` resume cursor.
+- OpenCode recovery starts from the saved session id or, for older uncursored
+  threads, an exact-title matching OpenCode session, rather than creating a
+  blank session.
 
 ## Open Questions / Proposed Changes
 
@@ -44,6 +55,8 @@
 - Complete: thread fix is pushed; release build completed; push-triggered fork
   builds now publish through the nightly channel and remain integrated into the
   next upstream stable sync.
+- Complete: OpenCode continuity fix is implemented, verified, and being merged
+  into `main`.
 
 ## Verification
 
@@ -63,6 +76,14 @@
   preload bundle verification.
 - Verified: pushing the workflow/docs change started CI only; it did not start
   another release/nightly build.
+- Confirmed from the live `state.sqlite` and provider log that
+  `194f1cc3-0954-4d7d-be51-f5bc0fabe4a1` is an OpenCode thread whose
+  `provider_session_runtime.resume_cursor_json` was `null`; the follow-up turn
+  ran in a different OpenCode session id than the prior deployment turn.
+- Passed: `bun --filter t3 test -- src/provider/Layers/OpenCodeAdapter.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with 9 existing warnings and 0 errors.
+- Passed: `bun typecheck`.
 
 ## User-Approved Requirement Changes
 
