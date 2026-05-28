@@ -1,5 +1,49 @@
 # Agent Requirements
 
+## Current Task: Fix OpenCode Thread Continuity After Idle Resume
+
+Diagnose and fix the continuity loss reported for thread
+`194f1cc3-0954-4d7d-be51-f5bc0fabe4a1`, where a follow-up message after an
+idle gap behaved as if the thread had no prior context.
+
+### Current User Requirements
+
+- Inspect the persisted messaging history and provider runtime state for the
+  specific failing thread.
+- Troubleshoot why follow-up messages after stepping away lose continuity.
+- Implement the fix rather than only reporting a plan.
+- Preserve predictable session recovery under provider process restart/reap.
+
+### Acceptance Criteria
+
+- The root cause is identified from persisted history/logs.
+- OpenCode-backed threads persist enough provider resume state to recover the
+  same provider session after idle/reconnect/restart.
+- Regression coverage proves recovery starts OpenCode from the saved session id
+  instead of creating a blank session.
+- Repo-required verification is run or blockers are explicitly recorded.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Confirmed from the live `state.sqlite` and provider log that
+  `194f1cc3-0954-4d7d-be51-f5bc0fabe4a1` is an OpenCode thread whose
+  `provider_session_runtime.resume_cursor_json` is `null`; the follow-up turn
+  ran in a different OpenCode session id than the prior deployment turn.
+- Passed: added OpenCode adapter regression coverage proving an explicit
+  `{ sessionId }` resume cursor is used for `session.get`, then for the next
+  `session.promptAsync`, without creating a blank session.
+- Passed: added fallback coverage proving older uncursored T3 threads reuse the
+  exact-title OpenCode session with the earliest creation time instead of
+  creating another duplicate session.
+- Passed: `bun --filter t3 test -- src/provider/Layers/OpenCodeAdapter.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with 9 existing warnings and 0 errors.
+- Passed: `bun typecheck`.
+
 ## Current Task: Fix OXLint Plugin Loading
 
 Make `bun lint` work again by addressing the existing failure where oxlint
