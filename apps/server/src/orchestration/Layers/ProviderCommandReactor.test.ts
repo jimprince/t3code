@@ -1933,6 +1933,11 @@ describe("ProviderCommandReactor", () => {
       requestId: "approval-request-1",
       detail: expect.stringContaining("Stale pending approval request: approval-request-1"),
     });
+    expect(thread?.session?.status).toBe("ready");
+    expect(thread?.session?.activeTurnId).toBeNull();
+    expect(thread?.session?.lastError).toContain(
+      "Stale pending approval request: approval-request-1",
+    );
 
     const resolvedActivity = thread?.activities.find(
       (activity) =>
@@ -2042,6 +2047,11 @@ describe("ProviderCommandReactor", () => {
       requestId: "user-input-request-1",
       detail: expect.stringContaining("Stale pending user-input request: user-input-request-1"),
     });
+    expect(thread?.session?.status).toBe("ready");
+    expect(thread?.session?.activeTurnId).toBeNull();
+    expect(thread?.session?.lastError).toContain(
+      "Stale pending user-input request: user-input-request-1",
+    );
 
     const resolvedActivity = thread?.activities.find(
       (activity) =>

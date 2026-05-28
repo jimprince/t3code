@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import ChatView from "../components/ChatView";
 import { threadHasStarted } from "../components/ChatView.logic";
 import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "../composerDraftStore";
+import { shouldDelayMissingThreadRedirect, shouldRenderServerThreadRoute } from "./-threadRouteRecovery";
 import { resolveThreadRouteRef } from "../threadRoutes";
 import { SidebarInset } from "~/components/ui/sidebar";
 import { useEnvironmentThreadRefs, useThreadDetail, useThreadShell } from "../state/entities";
@@ -41,13 +42,18 @@ function ChatThreadRouteView() {
   const environmentHasAnyThreads = environmentHasServerThreads || environmentHasDraftThreads;
 
   useEffect(() => {
-    if (!threadRef || !bootstrapComplete) {
+    if (
+      !shouldDelayMissingThreadRedirect({
+        threadRef,
+        bootstrapComplete,
+        routeThreadExists,
+        environmentHasAnyThreads,
+      })
+    ) {
       return;
     }
 
-    if (!routeThreadExists && environmentHasAnyThreads) {
-      void navigate({ to: "/", replace: true });
-    }
+    void navigate({ to: "/", replace: true });
   }, [bootstrapComplete, environmentHasAnyThreads, navigate, routeThreadExists, threadRef]);
 
   useEffect(() => {
@@ -57,7 +63,7 @@ function ChatThreadRouteView() {
     finalizePromotedDraftThreadByRef(threadRef);
   }, [draftThread, serverThreadStarted, threadRef]);
 
-  if (!threadRef || !bootstrapComplete || !routeThreadExists) {
+  if (!shouldRenderServerThreadRoute({ threadRef, bootstrapComplete })) {
     return null;
   }
 
