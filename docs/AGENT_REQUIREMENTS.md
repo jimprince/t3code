@@ -2,6 +2,15 @@
 
 ## Active Requirements
 
+- Use the local Mac as an on-demand GitHub Actions build worker for T3 Code
+  macOS arm64 builds to reduce remote build latency.
+- Keep Linux/headless builds on GitHub-hosted runners unless explicitly changed.
+- Route only trusted T3 Code release/fork build jobs to the self-hosted Mac
+  runner label.
+- Do not install the local runner as a permanent startup/login service unless
+  explicitly requested.
+- Ensure CI/release dependency setup installs the Electron binary before desktop
+  tests or desktop artifact builds import Electron.
 - Troubleshoot why a new thread cannot be created in a project just created from a local folder.
 - Account for the case where the project had no git repo initially and Git was initialized from the UI afterward.
 - Implement a fix if the failure is in the repo.
@@ -27,6 +36,8 @@
   release docs, and agent-facing release instructions.
 - Keep the OpenCode continuity fix scoped to provider resume behavior and
   focused regression coverage.
+- Keep the local Mac runner on-demand/time-limited and avoid exposing GitHub
+  runner registration tokens in logs or chat.
 
 ## Acceptance Criteria
 
@@ -45,6 +56,12 @@
 - OpenCode recovery starts from the saved session id or, for older uncursored
   threads, an exact-title matching OpenCode session, rather than creating a
   blank session.
+- T3 Code macOS arm64 release jobs target the local self-hosted runner label
+  `t3code-mac-arm64`.
+- The local runner can be started/stopped/status-checked using the existing
+  `t3code-mac-runner` helper.
+- Release preflight reaches macOS runner resolution instead of failing desktop
+  tests because the Electron executable is missing.
 
 ## Open Questions / Proposed Changes
 
@@ -55,8 +72,10 @@
 - Complete: thread fix is pushed; release build completed; push-triggered fork
   builds now publish through the nightly channel and remain integrated into the
   next upstream stable sync.
-- Complete: OpenCode continuity fix is implemented, verified, and being merged
-  into `main`.
+- Complete: OpenCode continuity fix is implemented, verified, merged into
+  `main`, and pushed.
+- In progress: local Mac runner is online; CI/release Electron binary install is
+  being committed so the release preflight can reach runner resolution.
 
 ## Verification
 
@@ -84,6 +103,17 @@
 - Passed: `bun fmt`.
 - Passed: `bun lint` with 9 existing warnings and 0 errors.
 - Passed: `bun typecheck`.
+- Verified: Release run `26552666470` failed before runner resolution because
+  Ubuntu preflight desktop tests could not resolve the Electron executable after
+  dependency install.
+- Verified: `t3code-mac-runner start 7200` started the local runner in detached
+  `tmux`; GitHub reports `t3code-mac-macbookpro` online, idle, and labeled
+  `t3code-mac-arm64`.
+- Passed: `bun run install:electron`.
+- Passed: `bun --filter '@t3tools/desktop' test`.
+- Passed: `git diff --check`.
+- Partial: `bun run test` passed through desktop and web packages locally, then
+  the server Vitest process stopped producing output and was terminated.
 
 ## User-Approved Requirement Changes
 

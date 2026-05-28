@@ -46,6 +46,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Electron binary
+        run: bun run install:electron
+
       - name: Format
         run: bun run fmt:check
 
