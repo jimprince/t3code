@@ -36,6 +36,7 @@ import {
   fetchRemoteEnvironmentDescriptor,
   fetchRemoteSessionState,
   isRemoteEnvironmentAuthHttpError,
+  requestRemoteHeadlessUpdateCheck,
   resolveRemoteWebSocketConnectionUrl,
 } from "../remote/api";
 import { resolveRemotePairingTarget } from "../remote/target";
@@ -1633,6 +1634,100 @@ export async function reconnectSavedEnvironment(environmentId: EnvironmentId): P
     }
     setRuntimeError(environmentId, error);
     throw error;
+  }
+}
+
+export type SavedEnvironmentUpgradeResult =
+  | {
+      readonly status: "started";
+      readonly mode: "desktopSsh" | "remoteHttp";
+      readonly message?: string;
+    }
+  | { readonly status: "cooldown"; readonly mode: "remoteHttp"; readonly message?: string }
+  | { readonly status: "unsupported"; readonly message: string }
+  | { readonly status: "error"; readonly message: string };
+
+function normalizeRemoteUpgradeError(error: unknown): string {
+  if (isRemoteEnvironmentAuthHttpError(error) && error.status === 404) {
+    return "This remote version cannot upgrade itself. Reconnect or open Connections.";
+  }
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message.trim();
+  }
+  return "Failed to request remote upgrade.";
+}
+
+export async function requestSavedEnvironmentRemoteUpgrade(input: {
+  readonly environmentId: EnvironmentId;
+  readonly clientVersion: string;
+  readonly serverVersion: string;
+}): Promise<SavedEnvironmentUpgradeResult> {
+  const record = getSavedEnvironmentRecord(input.environmentId);
+  if (!record) {
+    return { status: "error", message: "Saved environment not found." };
+  }
+
+  if (record.desktopSsh) {
+    try {
+      await disconnectSavedEnvironment(input.environmentId);
+      const issued = await issueDesktopSshBearerSession(
+        getSavedEnvironmentRecord(input.environmentId) ?? record,
+      );
+      useSavedEnvironmentRuntimeStore.getState().patch(input.environmentId, {
+        authState: "authenticated",
+        role: issued.role,
+      });
+      return {
+        status: "started",
+        mode: "desktopSsh",
+        message: "Remote upgraded, reconnecting.",
+      };
+    } catch (error) {
+      return { status: "error", message: normalizeRemoteUpgradeError(error) };
+    }
+  }
+
+  const bearerToken = await readSavedEnvironmentBearerToken(input.environmentId);
+  if (!bearerToken) {
+    return {
+      status: "error",
+      message: "No saved bearer session is available for this remote.",
+    };
+  }
+
+  try {
+    const result = await requestRemoteHeadlessUpdateCheck({
+      httpBaseUrl: record.httpBaseUrl,
+      bearerToken,
+      clientVersion: input.clientVersion,
+      serverVersion: input.serverVersion,
+    });
+    if (result.status === "queued") {
+      return {
+        status: "started",
+        mode: "remoteHttp",
+        ...(result.message ? { message: result.message } : {}),
+      };
+    }
+    if (result.status === "cooldown") {
+      return {
+        status: "cooldown",
+        mode: "remoteHttp",
+        ...(result.message ? { message: result.message } : {}),
+      };
+    }
+    if (result.status === "unsupported") {
+      return {
+        status: "unsupported",
+        message: result.message ?? "Remote upgrade is not supported by this server.",
+      };
+    }
+    return {
+      status: "error",
+      message: result.message ?? "Failed to request remote upgrade.",
+    };
+  } catch (error) {
+    return { status: "error", message: normalizeRemoteUpgradeError(error) };
   }
 }
 

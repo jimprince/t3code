@@ -104,7 +104,7 @@ import { BranchToolbar } from "./BranchToolbar";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import PlanSidebar from "./PlanSidebar";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
-import { ChevronDownIcon, TriangleAlertIcon, WifiOffIcon } from "lucide-react";
+import { ArrowUpCircleIcon, ChevronDownIcon, TriangleAlertIcon, WifiOffIcon } from "lucide-react";
 import { cn, randomUUID } from "~/lib/utils";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { decodeProjectScriptKeybindingRule } from "~/lib/projectScriptKeybindings";
@@ -124,7 +124,10 @@ import {
   selectProjectGroupingSettings,
 } from "../logicalProject";
 import {
+  readSavedEnvironmentBearerToken,
   reconnectSavedEnvironment,
+  requestSavedEnvironmentRemoteUpgrade,
+  resolveRemoteUpgradeEligibility,
   useSavedEnvironmentRegistryStore,
   useSavedEnvironmentRuntimeStore,
 } from "../environments/runtime";
@@ -187,11 +190,21 @@ import { retainThreadDetailSubscription } from "../environments/runtime/service"
 import { RightPanelSheet } from "./RightPanelSheet";
 import { Button } from "./ui/button";
 import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
+import {
   buildVersionMismatchDismissalKey,
   dismissVersionMismatch,
   isVersionMismatchDismissed,
   resolveServerConfigVersionMismatch,
 } from "../versionSkew";
+import { APP_VERSION } from "~/branding";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
   "[User attached one or more images without additional text. Respond using the conversation context and the attached image(s).]";
@@ -204,6 +217,13 @@ type EnvironmentUnavailableState = {
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly connectionState: "connecting" | "disconnected" | "error";
+};
+
+type RemoteUpgradeDialogState = {
+  readonly environmentId: EnvironmentId;
+  readonly label: string;
+  readonly serverVersion: string;
+  readonly clientVersion: string;
 };
 
 type ThreadPlanCatalogEntry = Pick<Thread, "id" | "proposedPlans">;
@@ -921,6 +941,46 @@ export default function ChatView(props: ChatViewProps) {
   const [reconnectingEnvironmentId, setReconnectingEnvironmentId] = useState<EnvironmentId | null>(
     null,
   );
+  const [activeSavedEnvironmentHasBearerToken, setActiveSavedEnvironmentHasBearerToken] = useState<
+    boolean | null
+  >(null);
+  const [remoteUpgradeDialogState, setRemoteUpgradeDialogState] =
+    useState<RemoteUpgradeDialogState | null>(null);
+  const [upgradingEnvironmentId, setUpgradingEnvironmentId] = useState<EnvironmentId | null>(null);
+  useEffect(() => {
+    if (!activeSavedEnvironmentId) {
+      setActiveSavedEnvironmentHasBearerToken(null);
+      setRemoteUpgradeDialogState(null);
+      return;
+    }
+
+    let cancelled = false;
+    setActiveSavedEnvironmentHasBearerToken(null);
+    void readSavedEnvironmentBearerToken(activeSavedEnvironmentId).then(
+      (token) => {
+        if (!cancelled) {
+          setActiveSavedEnvironmentHasBearerToken(Boolean(token));
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setActiveSavedEnvironmentHasBearerToken(false);
+        }
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSavedEnvironmentId]);
+  useEffect(() => {
+    if (
+      remoteUpgradeDialogState &&
+      remoteUpgradeDialogState.environmentId !== activeSavedEnvironmentId
+    ) {
+      setRemoteUpgradeDialogState(null);
+    }
+  }, [activeSavedEnvironmentId, remoteUpgradeDialogState]);
   const handleReconnectActiveEnvironment = useCallback(
     async (environmentId: EnvironmentId, label: string) => {
       setReconnectingEnvironmentId(environmentId);
@@ -945,6 +1005,50 @@ export default function ChatView(props: ChatViewProps) {
     },
     [],
   );
+  const handleConfirmRemoteUpgrade = useCallback(async () => {
+    const dialogState = remoteUpgradeDialogState;
+    if (!dialogState) {
+      return;
+    }
+
+    setUpgradingEnvironmentId(dialogState.environmentId);
+    try {
+      const result = await requestSavedEnvironmentRemoteUpgrade({
+        environmentId: dialogState.environmentId,
+        clientVersion: dialogState.clientVersion,
+        serverVersion: dialogState.serverVersion,
+      });
+      if (result.status === "started" || result.status === "cooldown") {
+        toastManager.add({
+          type: "success",
+          title:
+            result.mode === "desktopSsh"
+              ? "Remote upgraded, reconnecting"
+              : result.status === "cooldown"
+                ? "Remote upgrade already requested"
+                : "Remote upgrade started",
+          description: result.message ?? `${dialogState.label} will reconnect shortly.`,
+        });
+        setRemoteUpgradeDialogState(null);
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        await handleReconnectActiveEnvironment(dialogState.environmentId, dialogState.label);
+        return;
+      }
+
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title:
+            result.status === "unsupported"
+              ? "Remote upgrade is not supported"
+              : "Could not upgrade remote",
+          description: result.message,
+        }),
+      );
+    } finally {
+      setUpgradingEnvironmentId(null);
+    }
+  }, [handleReconnectActiveEnvironment, remoteUpgradeDialogState]);
   const projectGroupingSettings = useSettings(selectProjectGroupingSettings);
   const logicalProjectEnvironments = useMemo(() => {
     if (!activeProject) return [];
@@ -1153,6 +1257,24 @@ export default function ChatView(props: ChatViewProps) {
   const versionMismatchDismissed =
     versionMismatchDismissKey === dismissedVersionMismatchKey ||
     isVersionMismatchDismissed(versionMismatchDismissKey);
+  const remoteUpgradeEligibility = useMemo(
+    () =>
+      resolveRemoteUpgradeEligibility({
+        environmentRecord: activeSavedEnvironmentRecord,
+        runtime: activeSavedEnvironmentRuntime,
+        connectionState: activeSavedEnvironmentConnectionState,
+        clientVersion: APP_VERSION,
+        hasBearerToken: activeSavedEnvironmentHasBearerToken,
+      }),
+    [
+      activeSavedEnvironmentConnectionState,
+      activeSavedEnvironmentHasBearerToken,
+      activeSavedEnvironmentRecord,
+      activeSavedEnvironmentRuntime,
+    ],
+  );
+  const disconnectedBannerIncludesVersionMismatch =
+    activeEnvironmentUnavailableState !== null && remoteUpgradeEligibility.available;
   const showVersionMismatchBanner =
     versionMismatch !== null && versionMismatchDismissKey !== null && !versionMismatchDismissed;
   const hasMultipleRegisteredEnvironments = Object.keys(savedEnvironmentRegistry).length > 0;
@@ -1194,14 +1316,19 @@ export default function ChatView(props: ChatViewProps) {
               : "disconnected"}
           </>
         ),
-        description: "Reconnect this environment before sending messages or running actions.",
+        description: remoteUpgradeEligibility.available
+          ? `Remote server ${remoteUpgradeEligibility.serverVersion} is older than this client ${remoteUpgradeEligibility.clientVersion}. Upgrade or reconnect before sending messages.`
+          : "Reconnect this environment before sending messages or running actions.",
         actions: (
           <>
             <Button
               size="xs"
               disabled={
                 activeEnvironmentUnavailableState.connectionState === "connecting" ||
-                reconnectingEnvironmentId === activeEnvironmentUnavailableState.environmentId
+                reconnectingEnvironmentId === activeEnvironmentUnavailableState.environmentId ||
+                (remoteUpgradeEligibility.available &&
+                  remoteUpgradeEligibility.reason === "desktopSsh" &&
+                  upgradingEnvironmentId === activeEnvironmentUnavailableState.environmentId)
               }
               onClick={() =>
                 void handleReconnectActiveEnvironment(
@@ -1215,6 +1342,29 @@ export default function ChatView(props: ChatViewProps) {
                 ? "Reconnecting..."
                 : "Reconnect"}
             </Button>
+            {remoteUpgradeEligibility.available ? (
+              <Button
+                size="xs"
+                variant="outline"
+                disabled={
+                  activeEnvironmentUnavailableState.connectionState === "connecting" ||
+                  upgradingEnvironmentId === activeEnvironmentUnavailableState.environmentId
+                }
+                onClick={() =>
+                  setRemoteUpgradeDialogState({
+                    environmentId: activeEnvironmentUnavailableState.environmentId,
+                    label: activeEnvironmentUnavailableState.label,
+                    serverVersion: remoteUpgradeEligibility.serverVersion,
+                    clientVersion: remoteUpgradeEligibility.clientVersion,
+                  })
+                }
+              >
+                <ArrowUpCircleIcon className="size-3.5" />
+                {upgradingEnvironmentId === activeEnvironmentUnavailableState.environmentId
+                  ? "Upgrading..."
+                  : "Upgrade remote"}
+              </Button>
+            ) : null}
             <Button
               size="xs"
               variant="outline"
@@ -1226,7 +1376,12 @@ export default function ChatView(props: ChatViewProps) {
         ),
       });
     }
-    if (showVersionMismatchBanner && versionMismatch && versionMismatchDismissKey) {
+    if (
+      showVersionMismatchBanner &&
+      !disconnectedBannerIncludesVersionMismatch &&
+      versionMismatch &&
+      versionMismatchDismissKey
+    ) {
       items.push({
         id: `version-mismatch:${versionMismatchDismissKey}`,
         variant: "warning",
@@ -1248,10 +1403,13 @@ export default function ChatView(props: ChatViewProps) {
     return items;
   }, [
     activeEnvironmentUnavailableState,
+    disconnectedBannerIncludesVersionMismatch,
     handleReconnectActiveEnvironment,
     navigate,
     reconnectingEnvironmentId,
+    remoteUpgradeEligibility,
     showVersionMismatchBanner,
+    upgradingEnvironmentId,
     versionMismatch,
     versionMismatchDismissKey,
     versionMismatchServerLabel,
@@ -3719,6 +3877,47 @@ export default function ChatView(props: ChatViewProps) {
               onPrepared={handlePreparedPullRequestThread}
             />
           ) : null}
+          <AlertDialog
+            open={remoteUpgradeDialogState !== null}
+            onOpenChange={(open) => {
+              if (!open && upgradingEnvironmentId === null) {
+                setRemoteUpgradeDialogState(null);
+              }
+            }}
+          >
+            <AlertDialogPopup>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Upgrade {remoteUpgradeDialogState?.label ?? "remote environment"}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Install the current T3 Code remote server version, then reconnect this
+                  environment.
+                </AlertDialogDescription>
+                {remoteUpgradeDialogState ? (
+                  <div className="mt-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 font-mono text-muted-foreground text-xs">
+                    Remote {remoteUpgradeDialogState.serverVersion} -&gt; Client{" "}
+                    {remoteUpgradeDialogState.clientVersion}
+                  </div>
+                ) : null}
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+                <Button
+                  disabled={
+                    remoteUpgradeDialogState !== null &&
+                    upgradingEnvironmentId === remoteUpgradeDialogState.environmentId
+                  }
+                  onClick={() => void handleConfirmRemoteUpgrade()}
+                >
+                  {remoteUpgradeDialogState !== null &&
+                  upgradingEnvironmentId === remoteUpgradeDialogState.environmentId
+                    ? "Upgrading..."
+                    : "Upgrade and reconnect"}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogPopup>
+          </AlertDialog>
         </div>
         {/* end chat column */}
 

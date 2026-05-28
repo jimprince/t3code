@@ -4,6 +4,7 @@ export {
   getSavedEnvironmentRuntimeState,
   hasSavedEnvironmentRegistryHydrated,
   listSavedEnvironmentRecords,
+  readSavedEnvironmentBearerToken,
   resetSavedEnvironmentRegistryStoreForTests,
   resetSavedEnvironmentRuntimeStoreForTests,
   resolveEnvironmentHttpUrl,
@@ -23,8 +24,12 @@ export {
   readEnvironmentConnection,
   reconnectSavedEnvironment,
   removeSavedEnvironment,
+  requestSavedEnvironmentRemoteUpgrade,
   requireEnvironmentConnection,
   resetEnvironmentServiceForTests,
   startEnvironmentConnectionService,
   subscribeEnvironmentConnections,
+  type SavedEnvironmentUpgradeResult,
 } from "./service";
+
+export { resolveRemoteUpgradeEligibility, type RemoteUpgradeEligibility } from "./remoteUpgrade";

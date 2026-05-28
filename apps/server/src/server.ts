@@ -8,6 +8,7 @@ import {
   otlpTracesProxyRouteLayer,
   projectFaviconRouteLayer,
   serverEnvironmentRouteLayer,
+  serverHeadlessUpdateCheckRouteLayer,
   staticAndDevRouteLayer,
   browserApiCorsLayer,
 } from "./http.ts";
@@ -310,6 +311,7 @@ export const makeRoutesLayer = Layer.mergeAll(
   otlpTracesProxyRouteLayer,
   projectFaviconRouteLayer,
   serverEnvironmentRouteLayer,
+  serverHeadlessUpdateCheckRouteLayer,
   staticAndDevRouteLayer,
   websocketRpcRouteLayer,
 ).pipe(Layer.provide(browserApiCorsLayer));
