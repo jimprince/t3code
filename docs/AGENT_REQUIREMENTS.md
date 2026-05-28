@@ -1,5 +1,74 @@
 # Agent Requirements
 
+## Current Task: T3 Thread Cleanup and Deployment Verification
+
+Clean up completed/stale T3 Code threads for this repo after confirming their
+work is committed and merged, fast-forward local `main`, and verify the current
+fork deployment/release path is working as expected.
+
+### Current User Requirements
+
+- Fast-forward local `main` after confirming other T3 thread work is already
+  committed and merged.
+- Clean up completed/stale T3 Code threads and their local worktrees/branches.
+- Do not drop or delete any uncommitted or unmerged thread work.
+- Make sure deployment is working as expected.
+
+### Constraints
+
+- Use supported cleanup paths: archive remote T3 threads first, then remove
+  local mappings/worktrees/branches as applicable.
+- Do not clean up the current conversation thread before the final response.
+- Keep the active Mac nightly/release thread until the release/deployment lane
+  is verified or there is a clear blocker.
+- Follow repo instructions: `bun fmt`, `bun lint`, and `bun typecheck` are the
+  completion checks for code changes; do not run `bun test`.
+
+### Acceptance Criteria
+
+- Local `main` is up to date with `origin/main`.
+- Checked T3 worktrees have no uncommitted files and no commits ahead of
+  `origin/main` before removal.
+- Stale/completed repo threads are archived or otherwise accounted for.
+- Removed local T3 worktrees/branches no longer appear in `git worktree list`
+  or local branch listings.
+- GitHub release/deployment status is checked for macOS desktop, Linux
+  headless, and mobile lanes, with any remaining blocker called out.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Passed: local `main` fast-forwarded to `origin/main` at
+  `05e0b571935f8ab7228fb65842f5fbfb0e4ec250`.
+- Passed: checked five stale T3 worktrees/branches before cleanup; each was
+  clean and had `0` commits ahead of `origin/main`.
+- Passed: archived/forgot stale T3 threads for this repo and left only the
+  current conversation thread active.
+- Passed: removed the stale local T3 worktrees and local `t3code/*` cleanup
+  branches; `git worktree list --porcelain` now shows only the main checkout.
+- Passed: release workflow rerun
+  `https://github.com/jimprince/t3code/actions/runs/26557738388` completed
+  successfully for head SHA `05e0b571935f8ab7228fb65842f5fbfb0e4ec250`.
+- Passed: release `v0.0.25-nightly.20260515.295-fork.10` was published as a
+  prerelease with macOS arm64 DMG/ZIP, blockmaps, `nightly-mac.yml`, and Linux
+  headless tarball assets.
+- Passed: `nightly-mac.yml` downloads successfully and advertises version
+  `0.0.25-nightly.20260515.295-fork.10` with macOS arm64 ZIP and DMG entries.
+- Passed: mobile lane latest checked run,
+  `Mobile Track EAS Update` run `26181606004`, completed successfully on
+  `2026-05-20`.
+
+### Open Questions / Proposed Changes
+
+- None.
+
+### User-Approved Requirement Changes
+
+- None.
+
 ## Current Task: Remote Upgrade Button for Disconnected Environments
 
 Add an `Upgrade remote` action to the disconnected saved-environment banner
