@@ -547,6 +547,42 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.turn.resume": {
+      const targetThread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+
+      const lastUserMessage = [...targetThread.messages].reverse().find((m) => m.role === "user");
+
+      if (!lastUserMessage) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Cannot resume thread '${command.threadId}' because no user messages exist.`,
+        });
+      }
+
+      return [
+        {
+          ...withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          }),
+          type: "thread.turn-start-requested",
+          payload: {
+            threadId: command.threadId,
+            messageId: lastUserMessage.id,
+            runtimeMode: targetThread.runtimeMode,
+            interactionMode: targetThread.interactionMode,
+            createdAt: command.createdAt,
+          },
+        },
+      ];
+    }
+
     case "thread.approval.respond": {
       yield* requireThread({
         readModel,
