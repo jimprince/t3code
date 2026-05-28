@@ -176,6 +176,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Electron binary
+        run: bun run install:electron
+
       - name: Lint
         run: bun run lint
 
@@ -248,6 +251,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Install Electron binary
+        run: bun run install:electron
 
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
