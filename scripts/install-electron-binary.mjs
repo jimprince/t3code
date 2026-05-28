@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
@@ -31,6 +31,9 @@ const runElectronInstall = (force) => {
     env: {
       ...process.env,
       ELECTRON_SKIP_BINARY_DOWNLOAD: "",
+      ELECTRON_OVERRIDE_DIST_PATH: "",
+      npm_config_arch: process.arch,
+      npm_config_platform: process.platform,
       ...(force ? { force_no_cache: "true" } : {}),
     },
   });
@@ -53,6 +56,11 @@ if (!existsSync(electronExecutablePath)) {
 }
 
 if (!existsSync(electronExecutablePath)) {
+  const distPath = path.join(electronPackageDirectory, "dist");
+  const distEntries = existsSync(distPath) ? readdirSync(distPath).join(", ") : "<missing>";
+  console.error(
+    `Electron install did not create ${platformPath} for ${process.platform}/${process.arch}. dist contains: ${distEntries}`,
+  );
   console.error(`Electron executable was not installed at ${electronExecutablePath}`);
   process.exit(1);
 }
