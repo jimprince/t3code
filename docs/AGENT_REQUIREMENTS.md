@@ -130,6 +130,10 @@
 - Updated: release run `26553548478` hit Node's unsettled top-level-await exit
   path while using `@electron/get`; the fallback now uses synchronous `curl`
   plus `unzip` against Electron's published artifact URL.
+- Verified: release run `26553695852` passed preflight through Electron install,
+  lint, typecheck, and tests, but its runner API check returned HTTP 403 and
+  fell back to GitHub-hosted `macos-15`. The workflow now routes macOS arm64
+  directly to the `t3code-mac-arm64` self-hosted label.
 
 ## User-Approved Requirement Changes
 
