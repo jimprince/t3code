@@ -31,6 +31,14 @@ Project/task coordination for target repos may still live in the target repo tra
 
 ## Active Handoffs
 
+- 2026-05-28: Registered remote project `Protein Functional Topology` at `/home/brad/Programming/protein-functional-topology` in `dev-vm`.
+  - Project id: `9320c6c9-52a2-4082-900d-82cd0861ac9d`
+  - Worker saved name: `pft-phase-0-1`
+  - Thread id: `e90614fc-e662-495c-9e39-e5dc45114340`
+  - Branch: `t3/phase-0-1-euclidean-mvp`
+  - First-turn status: `completed`; session status: `running`
+  - First-turn finding: worker read the handover, confirmed it will inspect the repo, choose the smallest runnable stack, and update `docs/AGENT_REQUIREMENTS.md` before implementation writes.
+
 - 2026-05-27: Registered local project `Markdown Vault Web` at `/Users/brad/Programming/markdown-vault-web` in `local-mbp`.
   - Project id: `8fade5e4-f889-4c50-9dd9-3a183b09cd86`
   - Worker saved name: `markdown-vault-handoff`
