@@ -50,6 +50,16 @@ type MessageEntry = {
   parts: Array<unknown>;
 };
 
+type SubscribedEventInput = unknown | Promise<unknown>;
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolveValue) => {
+    resolve = resolveValue;
+  });
+  return { promise, resolve };
+}
+
 const runtimeMock = {
   state: {
     startCalls: [] as string[],
@@ -65,7 +75,7 @@ const runtimeMock = {
     closeError: null as Error | null,
     messages: [] as MessageEntry[],
     sessionListResponses: [] as Array<unknown>,
-    subscribedEvents: [] as unknown[],
+    subscribedEvents: [] as SubscribedEventInput[],
   },
   reset() {
     this.state.startCalls.length = 0;
@@ -176,7 +186,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         subscribe: async () => ({
           stream: (async function* () {
             for (const event of runtimeMock.state.subscribedEvents) {
-              yield event;
+              yield await event;
             }
           })(),
         }),
@@ -743,6 +753,81 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         assert.equal(completed.payload.detail, "A BBonus");
       }
     }),
+  );
+
+  it.effect(
+    "settles a turn from a terminal assistant message when OpenCode omits idle status",
+    () =>
+      Effect.gen(function* () {
+        const adapter = yield* OpenCodeAdapter;
+        const threadId = asThreadId("thread-opencode-terminal-message");
+        const messageUpdated = deferred<unknown>();
+        const partUpdated = deferred<unknown>();
+        const events: Array<{ readonly type: string; readonly turnId?: unknown }> = [];
+        runtimeMock.state.subscribedEvents = [messageUpdated.promise, partUpdated.promise];
+        const eventsFiber = yield* adapter.streamEvents.pipe(
+          Stream.filter((event) => event.threadId === threadId),
+          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
+          Effect.forkChild,
+        );
+
+        yield* adapter.startSession({
+          provider: ProviderDriverKind.make("opencode"),
+          threadId,
+          runtimeMode: "full-access",
+        });
+        const turn = yield* adapter.sendTurn({
+          threadId,
+          input: "Say done",
+          modelSelection: createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5"),
+        });
+
+        messageUpdated.resolve({
+          type: "message.updated",
+          properties: {
+            sessionID: "http://127.0.0.1:9999/session",
+            info: {
+              id: "msg-terminal",
+              role: "assistant",
+              time: { created: 1, completed: 2 },
+              finish: "stop",
+            },
+          },
+        });
+        partUpdated.resolve({
+          type: "message.part.updated",
+          properties: {
+            sessionID: "http://127.0.0.1:9999/session",
+            part: {
+              id: "part-terminal",
+              sessionID: "http://127.0.0.1:9999/session",
+              messageID: "msg-terminal",
+              type: "text",
+              text: "Done",
+              time: { start: 1, end: 2 },
+            },
+            time: 2,
+          },
+        });
+        yield* advanceTestClock(600);
+        const sessions = yield* adapter.listSessions();
+        yield* Fiber.interrupt(eventsFiber);
+
+        assert.deepEqual(
+          events.map((event) => event.type),
+          [
+            "session.started",
+            "thread.started",
+            "turn.started",
+            "content.delta",
+            "item.completed",
+            "turn.completed",
+          ],
+        );
+        assert.equal(events.at(-1)?.turnId, turn.turnId);
+        assert.equal(sessions[0]?.status, "ready");
+        assert.equal(sessions[0]?.activeTurnId, undefined);
+      }),
   );
 
   it.effect("writes provider-native observability records using the session thread id", () =>

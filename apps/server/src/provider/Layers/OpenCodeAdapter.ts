@@ -58,6 +58,12 @@ interface OpenCodeTurnSnapshot {
   readonly items: Array<unknown>;
 }
 
+interface TerminalAssistantMessage {
+  readonly completedAt: number;
+  readonly state: "completed" | "failed";
+  readonly errorMessage?: string;
+}
+
 type OpenCodeSubscribedEvent =
   Awaited<ReturnType<OpencodeClient["event"]["subscribe"]>> extends {
     readonly stream: AsyncIterable<infer TEvent>;
@@ -81,6 +87,7 @@ interface OpenCodeSessionContext {
   readonly partById: Map<string, Part>;
   readonly emittedTextByPartId: Map<string, string>;
   readonly completedAssistantPartIds: Set<string>;
+  readonly terminalAssistantMessages: Map<string, TerminalAssistantMessage>;
   readonly turns: Array<OpenCodeTurnSnapshot>;
   activeTurnId: TurnId | undefined;
   activeAgent: string | undefined;
@@ -434,6 +441,66 @@ function sessionErrorMessage(error: unknown): string {
     : "OpenCode session failed.";
 }
 
+function openCodeAssistantErrorMessage(error: unknown): string | undefined {
+  if (!error || typeof error !== "object") {
+    return undefined;
+  }
+  const message = (error as { readonly message?: unknown }).message;
+  return typeof message === "string" && message.trim().length > 0 ? message.trim() : undefined;
+}
+
+function terminalAssistantMessageFromInfo(info: {
+  readonly role?: unknown;
+  readonly time?: { readonly completed?: unknown };
+  readonly finish?: unknown;
+  readonly error?: unknown;
+}): TerminalAssistantMessage | undefined {
+  if (info.role !== "assistant") {
+    return undefined;
+  }
+  const completedAt = info.time?.completed;
+  if (typeof completedAt !== "number" || !Number.isFinite(completedAt)) {
+    return undefined;
+  }
+  const finish = typeof info.finish === "string" ? info.finish : undefined;
+  const hasTerminalFinish =
+    finish !== undefined && finish.length > 0 && finish !== "tool-calls" && finish !== "unknown";
+  const hasError = info.error !== undefined;
+  if (!hasTerminalFinish && !hasError) {
+    return undefined;
+  }
+  return {
+    completedAt,
+    state: hasError ? "failed" : "completed",
+    ...(hasError
+      ? { errorMessage: openCodeAssistantErrorMessage(info.error) ?? "OpenCode turn failed." }
+      : {}),
+  };
+}
+
+function isSettledPart(part: Part): boolean {
+  switch (part.type) {
+    case "text":
+    case "reasoning":
+      return part.time?.end !== undefined;
+    case "tool":
+      return part.state.status === "completed" || part.state.status === "error";
+    case "step-finish":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function hasSettledPartForMessage(context: OpenCodeSessionContext, messageId: string): boolean {
+  for (const part of context.partById.values()) {
+    if (part.messageID === messageId && isSettledPart(part)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function updateProviderSession(
   context: OpenCodeSessionContext,
   patch: Partial<ProviderSession>,
@@ -666,6 +733,46 @@ export function makeOpenCodeAdapter(
       }
     });
 
+    const completeActiveTurnFromTerminalAssistant = Effect.fn(
+      "completeActiveTurnFromTerminalAssistant",
+    )(function* (context: OpenCodeSessionContext, messageId: string, raw: unknown) {
+      const terminal = context.terminalAssistantMessages.get(messageId);
+      const turnId = context.activeTurnId;
+      if (!terminal || !turnId) {
+        return;
+      }
+      context.terminalAssistantMessages.delete(messageId);
+      context.activeTurnId = undefined;
+      context.activeAgent = undefined;
+      context.activeVariant = undefined;
+      yield* updateProviderSession(
+        context,
+        {
+          status: terminal.state === "failed" ? "error" : "ready",
+          ...(terminal.state === "failed" && terminal.errorMessage
+            ? { lastError: terminal.errorMessage }
+            : {}),
+        },
+        {
+          clearActiveTurnId: true,
+          clearLastError: terminal.state === "completed",
+        },
+      );
+      yield* emit({
+        ...(yield* buildEventBase({
+          threadId: context.session.threadId,
+          turnId,
+          createdAt: isoFromEpochMs(terminal.completedAt),
+          raw,
+        })),
+        type: "turn.completed",
+        payload: {
+          state: terminal.state,
+          ...(terminal.errorMessage ? { errorMessage: terminal.errorMessage } : {}),
+        },
+      });
+    });
+
     const handleSubscribedEvent = Effect.fn("handleSubscribedEvent")(function* (
       context: OpenCodeSessionContext,
       event: OpenCodeSubscribedEvent,
@@ -698,6 +805,20 @@ export function makeOpenCodeAdapter(
                 continue;
               }
               yield* emitAssistantTextDelta(context, part, turnId, event);
+            }
+            const terminal = terminalAssistantMessageFromInfo(event.properties.info);
+            if (terminal) {
+              context.terminalAssistantMessages.set(event.properties.info.id, terminal);
+              if (
+                terminal.state === "failed" ||
+                hasSettledPartForMessage(context, event.properties.info.id)
+              ) {
+                yield* completeActiveTurnFromTerminalAssistant(
+                  context,
+                  event.properties.info.id,
+                  event,
+                );
+              }
             }
           }
           break;
@@ -760,6 +881,7 @@ export function makeOpenCodeAdapter(
 
           if (messageRole === "assistant") {
             yield* emitAssistantTextDelta(context, part, turnId, event);
+            yield* completeActiveTurnFromTerminalAssistant(context, part.messageID, event);
           }
 
           if (part.type === "tool") {
@@ -923,6 +1045,8 @@ export function makeOpenCodeAdapter(
 
           if (event.properties.status.type === "idle" && turnId) {
             context.activeTurnId = undefined;
+            context.activeAgent = undefined;
+            context.activeVariant = undefined;
             yield* updateProviderSession(context, { status: "ready" }, { clearActiveTurnId: true });
             yield* emit({
               ...(yield* buildEventBase({
@@ -1175,6 +1299,7 @@ export function makeOpenCodeAdapter(
           emittedTextByPartId: new Map(),
           messageRoleById: new Map(),
           completedAssistantPartIds: new Set(),
+          terminalAssistantMessages: new Map(),
           turns: [],
           activeTurnId: undefined,
           activeAgent: undefined,
