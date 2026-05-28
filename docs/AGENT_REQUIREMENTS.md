@@ -1676,6 +1676,9 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Updated: after CI run `26553427131` showed the pinned installer still produced
   only `dist/locales`, the helper now falls back to direct `@electron/get`
   download/extract and writes Electron's `path.txt` itself.
+- Updated: release run `26553548478` hit Node's unsettled top-level-await exit
+  path while using `@electron/get`; the fallback now uses synchronous `curl`
+  plus `unzip` against Electron's published artifact URL.
 
 ## User-Approved Requirement Changes
 
