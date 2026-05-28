@@ -191,12 +191,14 @@ if `feature/mobile-track` moved, reruns mobile checks, pushes with
 Do not re-add Linux Electron/AppImage, Windows, or macOS x64 unless the user
 explicitly changes the support target.
 
-macOS arm64 builds prefer the local self-hosted `t3code-mac-arm64` runner when
-it is online and idle. During release preflight, `release.yml` checks the
-runner state through the GitHub Actions API; if the local runner is offline or
-busy, the macOS build uses GitHub-hosted `macos-15` instead. GitHub Actions
-cannot migrate a job that is already queued on a self-hosted label, so the
-fallback decision must happen before the macOS build job is created.
+macOS arm64 builds run on the local self-hosted `t3code-mac-arm64` runner.
+Start it before dispatching a release:
+
+```bash
+t3code-mac-runner start 7200
+```
+
+Linux/headless builds stay on GitHub-hosted Ubuntu.
 
 Nightly preflight and headless Linux installs skip dependency lifecycle scripts
 so native dependency hangs do not block macOS updater releases.
@@ -444,8 +446,7 @@ Windows builds are not part of the fork release matrix.
 - Nightly feed points at an assetless release: delete the orphan release/tag or
   republish it with the required updater assets. Assetless nightly feed entries
   poison updater discovery.
-- macOS job never starts: check the preflight "Resolve macOS runner" step. It
-  should choose GitHub-hosted `macos-15` when the local runner is offline or
-  busy. If you specifically want to use the local machine, start it with
+- macOS job never starts: start the local runner with
   `t3code-mac-runner start 7200` and verify it is online with the
-  `t3code-mac-arm64` label before dispatching or rerunning.
+  `t3code-mac-arm64` label before dispatching or rerunning. The release workflow
+  routes macOS arm64 directly to that self-hosted label.
