@@ -1,5 +1,27 @@
 # Agent Requirements
 
+## Current Task Snapshot - Protein Functional Topology Handoff Registration
+
+### Active Requirements
+- Register `/home/brad/Programming/protein-functional-topology` as a project in the remote `dev-vm` T3 Code environment.
+- Create a real T3 worker thread for the Protein Functional Topology Phase 0/1 handoff.
+- Verify creation with a returned remote `threadId` and status check.
+- Record the active project/thread handoff state for future agents.
+
+### Constraints
+- Use `t3-thread`, not the deprecated `t3-agent` command.
+- Do not fabricate a thread id; a worker exists only after `t3-thread create` returns `threadId`.
+- Preserve the target repo's active T3 worktree metadata after thread creation.
+
+### Acceptance Criteria
+- `dev-vm` contains a T3 project for `/home/brad/Programming/protein-functional-topology`.
+- Saved worker `pft-phase-0-1` exists with a real thread id.
+- `t3-thread status pft-phase-0-1` reports a non-error state.
+- `docs/ACTIVE_COORDINATION.md` records the live handoff state.
+
+### Status
+- Completed: project id `9320c6c9-52a2-4082-900d-82cd0861ac9d`; worker `pft-phase-0-1`; thread id `e90614fc-e662-495c-9e39-e5dc45114340`; first turn completed and worker acknowledged the handoff.
+
 ## Current Task Snapshot - Willow Citrix Handoff Registration
 
 ### Active Requirements
