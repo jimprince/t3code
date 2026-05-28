@@ -1,6 +1,15 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const require = createRequire(new URL("../apps/desktop/package.json", import.meta.url));
@@ -8,9 +17,6 @@ const electronPackageJsonPath = require.resolve("electron/package.json");
 const electronPackageDirectory = path.dirname(electronPackageJsonPath);
 const electronRequire = createRequire(electronPackageJsonPath);
 const installScriptPath = path.join(electronPackageDirectory, "install.js");
-const { downloadArtifact } = electronRequire("@electron/get");
-const extract = electronRequire("extract-zip");
-const checksums = electronRequire("./checksums.json");
 const { version } = electronRequire("./package.json");
 
 const platformPath = (() => {
@@ -53,20 +59,43 @@ const runElectronInstall = (force) => {
   }
 };
 
-const downloadAndExtractElectron = async () => {
+const downloadAndExtractElectron = () => {
   rmSync(distPath, { force: true, recursive: true });
   rmSync(path.join(electronPackageDirectory, "path.txt"), { force: true });
+  mkdirSync(distPath, { recursive: true });
 
-  const zipPath = await downloadArtifact({
-    version,
-    artifactName: "electron",
-    force: true,
-    checksums,
-    platform: process.platform,
-    arch: process.arch,
-  });
+  const tempDirectory = mkdtempSync(path.join(tmpdir(), "t3-electron-"));
+  const zipPath = path.join(
+    tempDirectory,
+    `electron-v${version}-${process.platform}-${process.arch}.zip`,
+  );
+  const artifactUrl = `https://github.com/electron/electron/releases/download/v${version}/${path.basename(zipPath)}`;
 
-  await extract(zipPath, { dir: distPath });
+  for (const [command, args] of [
+    [
+      "curl",
+      [
+        "--fail",
+        "--location",
+        "--retry",
+        "3",
+        "--retry-delay",
+        "2",
+        "--output",
+        zipPath,
+        artifactUrl,
+      ],
+    ],
+    ["unzip", ["-q", zipPath, "-d", distPath]],
+  ]) {
+    const result = spawnSync(command, args, { stdio: "inherit" });
+    if (result.error) {
+      throw result.error;
+    }
+    if (result.status !== 0) {
+      process.exit(result.status ?? 1);
+    }
+  }
 
   const extractedTypesPath = path.join(distPath, "electron.d.ts");
   if (existsSync(extractedTypesPath)) {
@@ -79,7 +108,7 @@ const downloadAndExtractElectron = async () => {
 runElectronInstall(false);
 
 if (!existsSync(electronExecutablePath)) {
-  await downloadAndExtractElectron();
+  downloadAndExtractElectron();
 }
 
 if (!existsSync(electronExecutablePath)) {
