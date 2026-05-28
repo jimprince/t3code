@@ -2,6 +2,15 @@
 
 ## Active Requirements
 
+- Use the local Mac as an on-demand GitHub Actions build worker for T3 Code
+  macOS arm64 builds to reduce remote build latency.
+- Keep Linux/headless builds on GitHub-hosted runners unless explicitly changed.
+- Route only trusted T3 Code release/fork build jobs to the self-hosted Mac
+  runner label.
+- Do not install the local runner as a permanent startup/login service unless
+  explicitly requested.
+- Ensure CI/release dependency setup installs the Electron binary before desktop
+  tests or desktop artifact builds import Electron.
 - Troubleshoot why a new thread cannot be created in a project just created from a local folder.
 - Account for the case where the project had no git repo initially and Git was initialized from the UI afterward.
 - Implement a fix if the failure is in the repo.
@@ -1574,6 +1583,10 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Keep the new-thread fix scoped to the new-thread/worktree failure path.
 - Keep release workflow changes scoped to the push-triggered fork build path,
   release docs, and agent-facing release instructions.
+- Keep the OpenCode continuity fix scoped to provider resume behavior and
+  focused regression coverage.
+- Keep the local Mac runner on-demand/time-limited and avoid exposing GitHub
+  runner registration tokens in logs or chat.
 
 ## Acceptance Criteria
 
@@ -1588,6 +1601,16 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   nightly tag and dispatches `release.yml` for that nightly.
 - The next upstream stable sync still rebases fork commits onto the stable tag
   and publishes the integrated stable release.
+- OpenCode-backed threads persist a `{ sessionId }` resume cursor.
+- OpenCode recovery starts from the saved session id or, for older uncursored
+  threads, an exact-title matching OpenCode session, rather than creating a
+  blank session.
+- T3 Code macOS arm64 release jobs target the local self-hosted runner label
+  `t3code-mac-arm64`.
+- The local runner can be started/stopped/status-checked using the existing
+  `t3code-mac-runner` helper.
+- Release preflight reaches macOS runner resolution instead of failing desktop
+  tests because the Electron executable is missing.
 
 ## Open Questions / Proposed Changes
 
@@ -1598,6 +1621,10 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Complete: thread fix is pushed; release build completed; push-triggered fork
   builds now publish through the nightly channel and remain integrated into the
   next upstream stable sync.
+- Complete: OpenCode continuity fix is implemented, verified, merged into
+  `main`, and pushed.
+- In progress: local Mac runner is online; CI/release Electron binary install is
+  being committed so the release preflight can reach runner resolution.
 
 ## Verification
 
@@ -1617,6 +1644,25 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   preload bundle verification.
 - Verified: pushing the workflow/docs change started CI only; it did not start
   another release/nightly build.
+- Confirmed from the live `state.sqlite` and provider log that
+  `194f1cc3-0954-4d7d-be51-f5bc0fabe4a1` is an OpenCode thread whose
+  `provider_session_runtime.resume_cursor_json` was `null`; the follow-up turn
+  ran in a different OpenCode session id than the prior deployment turn.
+- Passed: `bun --filter t3 test -- src/provider/Layers/OpenCodeAdapter.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with 9 existing warnings and 0 errors.
+- Passed: `bun typecheck`.
+- Verified: Release run `26552666470` failed before runner resolution because
+  Ubuntu preflight desktop tests could not resolve the Electron executable after
+  dependency install.
+- Verified: `t3code-mac-runner start 7200` started the local runner in detached
+  `tmux`; GitHub reports `t3code-mac-macbookpro` online, idle, and labeled
+  `t3code-mac-arm64`.
+- Passed: `bun run install:electron`.
+- Passed: `bun --filter '@t3tools/desktop' test`.
+- Passed: `git diff --check`.
+- Partial: `bun run test` passed through desktop and web packages locally, then
+  the server Vitest process stopped producing output and was terminated.
 
 ## User-Approved Requirement Changes
 
