@@ -26,6 +26,15 @@
 - Persist and reuse the OpenCode provider session id so recovered turns continue
   the same OpenCode conversation instead of starting a blank session.
 - Commit, merge, and push the OpenCode continuity fix.
+- Ensure macOS release builds do not get stuck or fail when the local Mac runner
+  is not online.
+- Prefer the local Mac runner only when release preflight can confirm the
+  `t3code-mac-arm64` runner is online and idle.
+- Fall back to GitHub-hosted macOS infrastructure when the runner is offline,
+  busy, or the workflow lacks permission to query self-hosted runner state.
+- Persist the local Mac build-agent lessons in repo docs and shared
+  agent-facing workflow notes so future agents can repeat the setup without
+  rediscovering the same failure modes.
 
 ## Constraints
 
@@ -38,6 +47,9 @@
   focused regression coverage.
 - Keep the local Mac runner on-demand/time-limited and avoid exposing GitHub
   runner registration tokens in logs or chat.
+- Do not require a self-hosted runner for normal releases when the local Mac is
+  unavailable.
+- Do not print or commit any GitHub runner/API token used for runner discovery.
 
 ## Acceptance Criteria
 
@@ -56,12 +68,19 @@
 - OpenCode recovery starts from the saved session id or, for older uncursored
   threads, an exact-title matching OpenCode session, rather than creating a
   blank session.
-- T3 Code macOS arm64 release jobs target the local self-hosted runner label
-  `t3code-mac-arm64`.
+- T3 Code macOS arm64 release jobs prefer the local self-hosted runner label
+  `t3code-mac-arm64` only after preflight confirms it is online and idle.
 - The local runner can be started/stopped/status-checked using the existing
   `t3code-mac-runner` helper.
 - Release preflight reaches macOS runner resolution instead of failing desktop
   tests because the Electron executable is missing.
+- If the runner probe cannot confirm an online idle `t3code-mac-arm64` runner,
+  `release.yml` resolves macOS arm64 builds to GitHub-hosted `macos-15`.
+- If a suitable token is available and the runner is online/idle, `release.yml`
+  resolves macOS arm64 builds to
+  `["self-hosted","macOS","ARM64","t3code-mac-arm64"]`.
+- Repo docs and the shared local-runner skill document the fallback behavior,
+  optional runner-state token, and repeatable `t3code-mac-runner` workflow.
 
 ## Open Questions / Proposed Changes
 
@@ -76,6 +95,10 @@
   `main`, and pushed.
 - In progress: local Mac runner is online; CI/release Electron binary install is
   being committed so the release preflight can reach runner resolution.
+- Complete: release preflight now falls back to GitHub-hosted `macos-15` when
+  the local Mac runner is unavailable or runner-state probing is not authorized.
+- Complete: reusable local Mac runner lessons are documented in `docs/release.md`,
+  the shared `github-actions-local-runner` skill, and shared T3 Code memory.
 
 ## Verification
 
@@ -138,6 +161,13 @@
   `v0.0.25-nightly.20260515.295-fork.8`; preflight passed, macOS arm64 built on
   the local `t3code-mac-macbookpro` runner in 7m24s, and the release published
   the notarized DMG/ZIP plus the headless Linux tarball.
+- Passed: release workflow YAML parses with Ruby's YAML parser.
+- Passed: extracted "Resolve macOS runner" shell passes `bash -n`.
+- Passed: runner resolution simulation with no token emits `runner="macos-15"`.
+- Passed: runner resolution simulation with an unauthorized token emits
+  `runner="macos-15"`.
+- Passed: runner resolution simulation with a fake online runner emits
+  `runner=["self-hosted","macOS","ARM64","t3code-mac-arm64"]`.
 
 ## User-Approved Requirement Changes
 
