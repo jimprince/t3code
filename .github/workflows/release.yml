@@ -176,6 +176,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Install Electron binary
+        run: bun run install:electron
+
       - name: Lint
         run: bun run lint
 
@@ -196,7 +199,7 @@ jobs:
       - id: mac_runner
         name: Resolve macOS runner
         env:
-          GH_TOKEN: ${{ github.token }}
+          RUNNER_STATE_TOKEN: ${{ secrets.T3CODE_RUNNER_STATE_TOKEN || secrets.GH_PAT }}
         shell: bash
         run: |
           set -euo pipefail
@@ -204,15 +207,29 @@ jobs:
           hosted_runner='"macos-15"'
           self_hosted_runner='["self-hosted","macOS","ARM64","t3code-mac-arm64"]'
 
-          if gh api repos/${{ github.repository }}/actions/runners \
-            --jq '.runners[] | select(.status == "online" and .busy == false and ([.labels[].name] | index("t3code-mac-arm64"))) | .name' \
-            | grep -q .; then
-            echo "Using local self-hosted macOS runner."
-            echo "runner=$self_hosted_runner" >> "$GITHUB_OUTPUT"
-          else
-            echo "Local self-hosted macOS runner unavailable or busy; using GitHub-hosted macOS."
+          if [[ -z "${RUNNER_STATE_TOKEN:-}" ]]; then
+            echo "Runner state token is not configured; using GitHub-hosted macOS."
             echo "runner=$hosted_runner" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          if runner_names="$(GH_TOKEN="$RUNNER_STATE_TOKEN" gh api \
+            "repos/${{ github.repository }}/actions/runners" \
+            --jq '.runners[] | select(.status == "online" and .busy == false and ([.labels[].name] | index("t3code-mac-arm64"))) | .name' \
+            2>/dev/null)"; then
+            runner_name="$(printf '%s\n' "$runner_names" | head -n 1)"
+            if [[ -n "$runner_name" ]]; then
+              echo "Using local self-hosted macOS runner: $runner_name."
+              echo "runner=$self_hosted_runner" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            echo "Local self-hosted macOS runner is offline or busy; using GitHub-hosted macOS."
+          else
+            echo "Could not query self-hosted runner state; using GitHub-hosted macOS."
+          fi
+
+          echo "runner=$hosted_runner" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.label }}
@@ -248,6 +265,9 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Install Electron binary
+        run: bun run install:electron
 
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"

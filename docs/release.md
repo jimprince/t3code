@@ -12,28 +12,29 @@ file is the concise runbook.
   dispatched with an explicit version.
 - Versions mirror upstream. Do not invent independent fork version numbers.
 - Stable upstream tags are reused verbatim, for example `v0.0.21`.
-- Stable fork-only interim builds use `vNEXT-fork.N`, for example
-  `v0.0.22-fork.1`.
 - Nightly fork builds use `vX.Y.Z-nightly.YYYYMMDD.RUN-fork.N`.
+- Normal pushes to `main` publish fork changes through the nightly feed. They
+  do not create stable/latest `vNEXT-fork.N` releases.
 - Release tags point at commits where releasable package versions already
   match the release tag. This keeps tag-checkout/headless installs reporting
   the same version as the desktop release.
 
-## Fork-Interim Trigger
+## Push Nightly Trigger
 
-`fork-interim-release.yml` publishes updater-visible stable fork builds only
-for changes that can affect packaged app/runtime output: `apps/**`,
-`packages/**`, `assets/**`, root package/build files, and desktop artifact
-build inputs.
+`fork-push-nightly.yml` publishes updater-visible nightly fork builds for
+normal pushes to `main`, but only for changes that can affect packaged
+app/runtime output: `apps/**`, `packages/**`, `assets/**`, root package/build
+files, and desktop artifact build inputs.
 
 Docs, workflow maintenance, release helper scripts, and other repo plumbing
-should not create `vNEXT-fork.N`. Use manual `release.yml` dispatch if a
+should not create push nightlies. Use manual `release.yml` dispatch if a
 maintenance-only commit genuinely needs to ship as a desktop update.
 
-Before pushing `vNEXT-fork.N`, the workflow stamps the releasable package
-versions and lockfile, then tags the stamped commit. That package stamp is
-required because the headless `t3` server reports its version from
-`apps/server/package.json`.
+Before pushing `${upstream_nightly_tag}-fork.N`, the workflow stamps the
+releasable package versions and lockfile, then tags the stamped commit. That
+package stamp is required because the headless `t3` server reports its version
+from `apps/server/package.json`. The next upstream stable sync rebases these
+fork commits onto the stable tag and publishes the integrated stable release.
 
 ## Normal Commands
 
@@ -45,6 +46,9 @@ t3code-mac-runner start 7200
 
 Release preflight prefers this runner when it is online and idle. If it is
 offline or busy, the macOS build uses GitHub-hosted `macos-15` instead.
+The runner-state probe uses `secrets.T3CODE_RUNNER_STATE_TOKEN` when present,
+falling back to `secrets.GH_PAT`. If neither secret can list repository
+self-hosted runners, preflight intentionally chooses GitHub-hosted macOS.
 
 Sync stable or nightly from upstream:
 
@@ -191,11 +195,22 @@ Do not re-add Linux Electron/AppImage, Windows, or macOS x64 unless the user
 explicitly changes the support target.
 
 macOS arm64 builds prefer the local self-hosted `t3code-mac-arm64` runner when
-it is online and idle. During release preflight, `release.yml` checks the
-runner state through the GitHub Actions API; if the local runner is offline or
-busy, the macOS build uses GitHub-hosted `macos-15` instead. GitHub Actions
-cannot migrate a job that is already queued on a self-hosted label, so the
-fallback decision must happen before the macOS build job is created.
+release preflight can confirm it is online and idle. Start it before dispatching
+a release:
+
+```bash
+t3code-mac-runner start 7200
+```
+
+If the runner is offline, busy, or runner-state API access is unavailable, the
+macOS build falls back to GitHub-hosted `macos-15`. Linux/headless builds stay
+on GitHub-hosted Ubuntu.
+
+To make local-runner detection work in GitHub Actions, configure
+`T3CODE_RUNNER_STATE_TOKEN` as a repository secret with read access to the
+repository self-hosted runner list. GitHub documents the required fine-grained
+token permission for that API as repository `Administration` read access. The
+workflow also tries the existing `GH_PAT` secret as a compatibility fallback.
 
 Nightly preflight and headless Linux installs skip dependency lifecycle scripts
 so native dependency hangs do not block macOS updater releases.
@@ -444,7 +459,8 @@ Windows builds are not part of the fork release matrix.
   republish it with the required updater assets. Assetless nightly feed entries
   poison updater discovery.
 - macOS job never starts: check the preflight "Resolve macOS runner" step. It
-  should choose GitHub-hosted `macos-15` when the local runner is offline or
-  busy. If you specifically want to use the local machine, start it with
-  `t3code-mac-runner start 7200` and verify it is online with the
-  `t3code-mac-arm64` label before dispatching or rerunning.
+  should choose GitHub-hosted `macos-15` if the local runner is offline, busy,
+  or not queryable. To use the local machine, start it with
+  `t3code-mac-runner start 7200`, verify the `t3code-mac-arm64` label, and make
+  sure `T3CODE_RUNNER_STATE_TOKEN` or `GH_PAT` can list repository
+  self-hosted runners.
