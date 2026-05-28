@@ -46,6 +46,9 @@ t3code-mac-runner start 7200
 
 Release preflight prefers this runner when it is online and idle. If it is
 offline or busy, the macOS build uses GitHub-hosted `macos-15` instead.
+The runner-state probe uses `secrets.T3CODE_RUNNER_STATE_TOKEN` when present,
+falling back to `secrets.GH_PAT`. If neither secret can list repository
+self-hosted runners, preflight intentionally chooses GitHub-hosted macOS.
 
 Sync stable or nightly from upstream:
 
@@ -191,14 +194,23 @@ if `feature/mobile-track` moved, reruns mobile checks, pushes with
 Do not re-add Linux Electron/AppImage, Windows, or macOS x64 unless the user
 explicitly changes the support target.
 
-macOS arm64 builds run on the local self-hosted `t3code-mac-arm64` runner.
-Start it before dispatching a release:
+macOS arm64 builds prefer the local self-hosted `t3code-mac-arm64` runner when
+release preflight can confirm it is online and idle. Start it before dispatching
+a release:
 
 ```bash
 t3code-mac-runner start 7200
 ```
 
-Linux/headless builds stay on GitHub-hosted Ubuntu.
+If the runner is offline, busy, or runner-state API access is unavailable, the
+macOS build falls back to GitHub-hosted `macos-15`. Linux/headless builds stay
+on GitHub-hosted Ubuntu.
+
+To make local-runner detection work in GitHub Actions, configure
+`T3CODE_RUNNER_STATE_TOKEN` as a repository secret with read access to the
+repository self-hosted runner list. GitHub documents the required fine-grained
+token permission for that API as repository `Administration` read access. The
+workflow also tries the existing `GH_PAT` secret as a compatibility fallback.
 
 Nightly preflight and headless Linux installs skip dependency lifecycle scripts
 so native dependency hangs do not block macOS updater releases.
@@ -446,7 +458,9 @@ Windows builds are not part of the fork release matrix.
 - Nightly feed points at an assetless release: delete the orphan release/tag or
   republish it with the required updater assets. Assetless nightly feed entries
   poison updater discovery.
-- macOS job never starts: start the local runner with
-  `t3code-mac-runner start 7200` and verify it is online with the
-  `t3code-mac-arm64` label before dispatching or rerunning. The release workflow
-  routes macOS arm64 directly to that self-hosted label.
+- macOS job never starts: check the preflight "Resolve macOS runner" step. It
+  should choose GitHub-hosted `macos-15` if the local runner is offline, busy,
+  or not queryable. To use the local machine, start it with
+  `t3code-mac-runner start 7200`, verify the `t3code-mac-arm64` label, and make
+  sure `T3CODE_RUNNER_STATE_TOKEN` or `GH_PAT` can list repository
+  self-hosted runners.
