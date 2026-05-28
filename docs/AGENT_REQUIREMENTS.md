@@ -25,15 +25,30 @@ to the Brad Prince fork.
 
 ### Current Status
 
-- In progress.
+- Completed.
 - Existing fork-nightly tags for the upstream nightly are `.1` and `.2`; the
   next tag is `v0.0.23-nightly.20260507.219-fork.3`.
+- Prepared package versions for `0.0.23-nightly.20260507.219-fork.3` and
+  committed `chore(release): prepare v0.0.23-nightly.20260507.219-fork.3`.
+- Pushed branch `fix/refresh-pending-thread-recovery` and tag
+  `v0.0.23-nightly.20260507.219-fork.3` to `origin`.
+- GitHub Actions `Release` run `26557124781` was triggered by the tag push.
+- The workflow passed preflight, macOS artifact build, and Linux artifact
+  build, then failed in `softprops/action-gh-release` because the configured
+  release token returned `Bad credentials`.
+- Published the GitHub prerelease manually with the successful workflow
+  artifacts using local `gh` authentication.
 
 ### Current Verification
 
-- Pending: release-prep commit.
-- Pending: tag push.
-- Pending: GitHub Actions release workflow confirmation.
+- Passed: release-prep commit `f1a7cf00`.
+- Passed: tag `v0.0.23-nightly.20260507.219-fork.3` pushed to `origin`.
+- Passed: GitHub Actions run `26557124781` confirmed tag-triggered release
+  workflow, with preflight and platform artifact builds passing.
+- Passed: prerelease exists at
+  `https://github.com/jimprince/t3code/releases/tag/v0.0.23-nightly.20260507.219-fork.3`.
+- Passed: prerelease assets include Linux AppImage, Linux nightly manifest,
+  macOS arm64 DMG, macOS arm64 ZIP, blockmaps, and macOS nightly manifest.
 
 ## Current Task: Commit And Push Refresh Recovery Fixes
 
