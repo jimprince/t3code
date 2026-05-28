@@ -114,6 +114,12 @@
 - Passed: `git diff --check`.
 - Partial: `bun run test` passed through desktop and web packages locally, then
   the server Vitest process stopped producing output and was terminated.
+- Verified: Release run `26553119701` passed the first explicit Electron install
+  step but still failed desktop tests because the helper did not verify the
+  executable was present.
+- Added: `scripts/install-electron-binary.mjs` clears skip flags, runs Electron's
+  installer, verifies the platform executable, and retries once after removing a
+  stale `dist`/`path.txt`.
 
 ## User-Approved Requirement Changes
 
