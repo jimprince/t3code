@@ -198,24 +198,14 @@ jobs:
 
       - id: mac_runner
         name: Resolve macOS runner
-        env:
-          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
 
-          hosted_runner='"macos-15"'
           self_hosted_runner='["self-hosted","macOS","ARM64","t3code-mac-arm64"]'
 
-          if gh api repos/${{ github.repository }}/actions/runners \
-            --jq '.runners[] | select(.status == "online" and .busy == false and ([.labels[].name] | index("t3code-mac-arm64"))) | .name' \
-            | grep -q .; then
-            echo "Using local self-hosted macOS runner."
-            echo "runner=$self_hosted_runner" >> "$GITHUB_OUTPUT"
-          else
-            echo "Local self-hosted macOS runner unavailable or busy; using GitHub-hosted macOS."
-            echo "runner=$hosted_runner" >> "$GITHUB_OUTPUT"
-          fi
+          echo "Using local self-hosted macOS runner label t3code-mac-arm64."
+          echo "runner=$self_hosted_runner" >> "$GITHUB_OUTPUT"
 
   build:
     name: Build ${{ matrix.label }}
