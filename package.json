@@ -47,7 +47,7 @@
     "lint": "bun --filter @t3tools/oxlint-plugin-t3code build && oxlint --disable-nested-config --report-unused-disable-directives",
     "lint:mobile": "node scripts/mobile-native-static-check.ts",
     "test": "turbo run test",
-    "install:electron": "node apps/desktop/node_modules/electron/install.js",
+    "install:electron": "node scripts/install-electron-binary.mjs",
     "test:desktop-smoke": "turbo run smoke-test --filter=@t3tools/desktop",
     "fmt": "oxfmt",
     "fmt:check": "oxfmt --check",
