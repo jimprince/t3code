@@ -2,6 +2,10 @@
 
 ## Active Requirements
 
+- Fix OpenCode-backed threads so completed threads do not continue to display
+  as "Working" in the sidebar or conversation footer after the agent has
+  finished responding.
+- Commit, merge, and push the OpenCode stale-working fix.
 - Use the local Mac as an on-demand GitHub Actions build worker for T3 Code
   macOS arm64 builds to reduce remote build latency.
 - Keep Linux/headless builds on GitHub-hosted runners unless explicitly changed.
@@ -1594,6 +1598,8 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 
 - Follow repo instructions: `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion.
 - Do not run `bun test`; use `bun run test` for Vitest.
+- Keep the OpenCode status fix scoped to provider/thread lifecycle state.
+- Preserve existing OpenCode session-resume behavior.
 - Keep the new-thread fix scoped to the new-thread/worktree failure path.
 - Keep release workflow changes scoped to the push-triggered fork build path,
   release docs, and agent-facing release instructions.
@@ -1607,6 +1613,14 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 
 ## Acceptance Criteria
 
+- OpenCode-backed turns emit or project a terminal state when provider work is
+  finished.
+- The web UI no longer derives "Working" for a completed OpenCode-backed thread
+  once the latest turn is settled.
+- Focused regression coverage proves the completed OpenCode path clears working
+  state.
+- The OpenCode stale-working fix is committed, merged to the intended branch,
+  and pushed to the remote.
 - A project with an initialized but unborn git branch does not try to create a worktree from an invalid `main` ref.
 - New thread send can proceed from the current checkout when there is no valid worktree base ref.
 - Focused regression tests cover the fallback.
@@ -1642,6 +1656,11 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 
 ## Status
 
+- Complete: OpenCode terminal assistant-message updates now settle the active
+  turn when OpenCode omits a `session.status` idle event, clearing stale
+  "Working" UI state while preserving resume behavior.
+- Complete: OpenCode stale-working fix committed, merged into `main`, and
+  pushed to `origin/main`.
 - Complete: thread fix is pushed; release build completed; push-triggered fork
   builds now publish through the nightly channel and remain integrated into the
   next upstream stable sync.
@@ -1656,6 +1675,17 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 
 ## Verification
 
+- Passed: `bun run --filter t3 test -- src/provider/Layers/OpenCodeAdapter.test.ts -t "settles a turn"`.
+- Verified regression catch: temporarily disabled terminal-finish detection and
+  the focused test failed because `turn.completed` was missing.
+- Passed: `bun run --filter t3 test -- src/provider/Layers/OpenCodeAdapter.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with 9 pre-existing warnings and 0 errors.
+- Passed: `bun typecheck`.
+- Passed after rebase onto `origin/main`: `bun run --filter t3 test -- src/provider/Layers/OpenCodeAdapter.test.ts`.
+- Passed after rebase onto `origin/main`: `bun fmt`.
+- Passed after rebase onto `origin/main`: `bun lint` with 9 pre-existing warnings and 0 errors.
+- Passed after rebase onto `origin/main`: `bun typecheck`.
 - Passed: `bun --filter @t3tools/web test src/components/ChatView.logic.test.ts`.
 - Passed: `bun --filter @t3tools/web test -- --config vitest.browser.config.ts src/components/ChatView.browser.tsx -t "falls back to current checkout"`.
 - Passed: `bun fmt`.
