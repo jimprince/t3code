@@ -46,12 +46,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Ensure Electron runtime is installed
+      - name: Install Electron binary
         run: |
-          if ! node -e "require('./apps/desktop/node_modules/electron')" >/dev/null 2>&1; then
-            rm -rf apps/desktop/node_modules/electron/dist apps/desktop/node_modules/electron/path.txt
-            bun apps/desktop/node_modules/electron/install.js
-          fi
+          bun run install:electron
           node -e "require('./apps/desktop/node_modules/electron')"
 
       - name: Format
