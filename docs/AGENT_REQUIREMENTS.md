@@ -1,5 +1,53 @@
 # Agent Requirements
 
+## Current Task: Hide Unsupported Remote Self-Upgrade Actions
+
+Prevent the connected version-mismatch upgrade button from appearing when the
+only available path is remote HTTP self-upgrade but the remote server predates
+the self-upgrade endpoint.
+
+### Current User Requirements
+
+- Address the observed `Could not upgrade remote` toast:
+  `This remote version cannot upgrade itself. Reconnect or open Connections.`
+- Keep valid upgrade actions available where the remote can actually be
+  upgraded out-of-band.
+- Continue the existing clean-main workflow and defer unrelated cleanup.
+
+### Constraints
+
+- Do not remove desktop-SSH upgrade support for older Linux remotes.
+- Do not show remote-HTTP self-upgrade for remote versions that cannot expose
+  the headless update endpoint.
+- Preserve existing version-drift warnings even when the upgrade action is
+  hidden.
+- Follow repo checks: `bun fmt`, `bun lint`, and `bun typecheck`; use package
+  test scripts instead of `bun test`.
+
+### Acceptance Criteria
+
+- A connected HTTP-only remote at `0.0.25-nightly.20260515.295-fork.8` is not
+  considered upgrade-eligible just because a bearer token exists.
+- A connected HTTP-only remote at or above the first self-upgrade-capable
+  version can still expose `Upgrade remote`.
+- A connected desktop-SSH remote can still expose `Upgrade remote` even when it
+  predates the remote-HTTP self-upgrade endpoint.
+
+### Status
+
+- Completed.
+- Remote HTTP self-upgrade eligibility now requires the server version to be at
+  or above the first version that exposes the headless update-check endpoint.
+- Desktop-SSH upgrade eligibility remains available for older connected Linux
+  remotes.
+
+### Verification
+
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/remoteUpgrade.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+
 ## Current Task: Clean Integrate And Push Remote Upgrade UI
 
 Integrate the remote-upgrade UI changes onto the current `origin/main` without
