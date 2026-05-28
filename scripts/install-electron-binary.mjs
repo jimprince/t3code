@@ -1,12 +1,17 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import { existsSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
 const require = createRequire(new URL("../apps/desktop/package.json", import.meta.url));
 const electronPackageJsonPath = require.resolve("electron/package.json");
 const electronPackageDirectory = path.dirname(electronPackageJsonPath);
+const electronRequire = createRequire(electronPackageJsonPath);
 const installScriptPath = path.join(electronPackageDirectory, "install.js");
+const { downloadArtifact } = electronRequire("@electron/get");
+const extract = electronRequire("extract-zip");
+const checksums = electronRequire("./checksums.json");
+const { version } = electronRequire("./package.json");
 
 const platformPath = (() => {
   switch (process.platform) {
@@ -24,6 +29,7 @@ const platformPath = (() => {
 })();
 
 const electronExecutablePath = path.join(electronPackageDirectory, "dist", platformPath);
+const distPath = path.join(electronPackageDirectory, "dist");
 
 const runElectronInstall = (force) => {
   const result = spawnSync(process.execPath, [installScriptPath], {
@@ -47,16 +53,36 @@ const runElectronInstall = (force) => {
   }
 };
 
+const downloadAndExtractElectron = async () => {
+  rmSync(distPath, { force: true, recursive: true });
+  rmSync(path.join(electronPackageDirectory, "path.txt"), { force: true });
+
+  const zipPath = await downloadArtifact({
+    version,
+    artifactName: "electron",
+    force: true,
+    checksums,
+    platform: process.platform,
+    arch: process.arch,
+  });
+
+  await extract(zipPath, { dir: distPath });
+
+  const extractedTypesPath = path.join(distPath, "electron.d.ts");
+  if (existsSync(extractedTypesPath)) {
+    renameSync(extractedTypesPath, path.join(electronPackageDirectory, "electron.d.ts"));
+  }
+
+  writeFileSync(path.join(electronPackageDirectory, "path.txt"), platformPath);
+};
+
 runElectronInstall(false);
 
 if (!existsSync(electronExecutablePath)) {
-  rmSync(path.join(electronPackageDirectory, "dist"), { force: true, recursive: true });
-  rmSync(path.join(electronPackageDirectory, "path.txt"), { force: true });
-  runElectronInstall(true);
+  await downloadAndExtractElectron();
 }
 
 if (!existsSync(electronExecutablePath)) {
-  const distPath = path.join(electronPackageDirectory, "dist");
   const distEntries = existsSync(distPath) ? readdirSync(distPath).join(", ") : "<missing>";
   console.error(
     `Electron install did not create ${platformPath} for ${process.platform}/${process.arch}. dist contains: ${distEntries}`,
