@@ -134,6 +134,10 @@
   lint, typecheck, and tests, but its runner API check returned HTTP 403 and
   fell back to GitHub-hosted `macos-15`. The workflow now routes macOS arm64
   directly to the `t3code-mac-arm64` self-hosted label.
+- Verified: release run `26554025503` completed successfully for
+  `v0.0.25-nightly.20260515.295-fork.8`; preflight passed, macOS arm64 built on
+  the local `t3code-mac-macbookpro` runner in 7m24s, and the release published
+  the notarized DMG/ZIP plus the headless Linux tarball.
 
 ## User-Approved Requirement Changes
 
