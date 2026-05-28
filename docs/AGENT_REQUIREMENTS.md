@@ -4,6 +4,37 @@ This is a running requirements and verification log. Keep completed task entries
 for continuity, and add the newest task at the top so future agents can see both
 current scope and recent decisions.
 
+## Current Task: Publish Fork Nightly Release
+
+Create the next updater-visible fork nightly release for the refresh recovery
+fixes by preparing a new fork-nightly version, tagging it, and pushing the tag
+to the Brad Prince fork.
+
+### Current User Requirements
+
+- Build a new nightly update containing the pushed refresh recovery fixes.
+- Use the Brad Prince fork remote, not upstream `pingdotgg/t3code`.
+- Keep release state clear in the running requirements log.
+
+### Current Acceptance Criteria
+
+- Package versions are prepared for the next fork nightly version.
+- A release-prep commit exists on `fix/refresh-pending-thread-recovery`.
+- A matching `v*-nightly.*-fork.*` tag is pushed to `origin`.
+- The tag push triggers the GitHub `Release` workflow.
+
+### Current Status
+
+- In progress.
+- Existing fork-nightly tags for the upstream nightly are `.1` and `.2`; the
+  next tag is `v0.0.23-nightly.20260507.219-fork.3`.
+
+### Current Verification
+
+- Pending: release-prep commit.
+- Pending: tag push.
+- Pending: GitHub Actions release workflow confirmation.
+
 ## Current Task: Commit And Push Refresh Recovery Fixes
 
 Commit the verified combined refresh/recovery changes from the detached release
