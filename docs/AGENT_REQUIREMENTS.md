@@ -120,6 +120,10 @@
 - Added: `scripts/install-electron-binary.mjs` clears skip flags, runs Electron's
   installer, verifies the platform executable, and retries once after removing a
   stale `dist`/`path.txt`.
+- Verified: CI run `26553321559` failed fast in `install:electron`; the verifier
+  reported that Linux `dist/electron` was still missing, so the helper now pins
+  Electron's installer to the current runner `npm_config_platform` and
+  `npm_config_arch`.
 
 ## User-Approved Requirement Changes
 
