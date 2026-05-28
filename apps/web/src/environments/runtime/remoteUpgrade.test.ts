@@ -118,7 +118,7 @@ describe("resolveRemoteUpgradeEligibility", () => {
     ).toEqual({ available: false, reason: "connecting" });
   });
 
-  it("is available through desktop SSH for older linux remotes", () => {
+  it("is hidden when an older linux remote is not connected", () => {
     expect(
       resolveRemoteUpgradeEligibility({
         environmentRecord: record({
@@ -126,6 +126,29 @@ describe("resolveRemoteUpgradeEligibility", () => {
         }),
         runtime: runtime({ serverVersion: "0.9.0" }),
         connectionState: "disconnected",
+        clientVersion: "1.0.0",
+      }),
+    ).toEqual({ available: false, reason: "notConnected" });
+
+    expect(
+      resolveRemoteUpgradeEligibility({
+        environmentRecord: record(),
+        runtime: runtime({ serverVersion: "0.9.0" }),
+        connectionState: "error",
+        clientVersion: "1.0.0",
+        hasBearerToken: true,
+      }),
+    ).toEqual({ available: false, reason: "notConnected" });
+  });
+
+  it("is available through desktop SSH for connected older linux remotes", () => {
+    expect(
+      resolveRemoteUpgradeEligibility({
+        environmentRecord: record({
+          desktopSsh: { alias: "remote", hostname: "remote", username: null, port: null },
+        }),
+        runtime: runtime({ serverVersion: "0.9.0" }),
+        connectionState: "connected",
         clientVersion: "1.0.0",
       }),
     ).toEqual({
@@ -141,7 +164,7 @@ describe("resolveRemoteUpgradeEligibility", () => {
       resolveRemoteUpgradeEligibility({
         environmentRecord: record(),
         runtime: runtime({ serverVersion: "0.9.0" }),
-        connectionState: "error",
+        connectionState: "connected",
         clientVersion: "1.0.0",
         hasBearerToken: true,
       }),
@@ -156,7 +179,7 @@ describe("resolveRemoteUpgradeEligibility", () => {
       resolveRemoteUpgradeEligibility({
         environmentRecord: record(),
         runtime: runtime({ serverVersion: "0.9.0" }),
-        connectionState: "error",
+        connectionState: "connected",
         clientVersion: "1.0.0",
         hasBearerToken: false,
       }),

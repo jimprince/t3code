@@ -147,8 +147,62 @@ const authAccessHarness = vi.hoisted(() => {
 });
 
 const mockConnectDesktopSshEnvironment = vi.hoisted(() => vi.fn());
+const runtimeHarness = vi.hoisted(() => {
+  let registryById: Record<string, unknown> = {};
+  let runtimeById: Record<string, unknown> = {};
+  const readSavedEnvironmentBearerToken = vi.fn<() => Promise<string | null>>(async () => null);
+  const requestSavedEnvironmentRemoteUpgrade = vi.fn(async () => ({
+    status: "started" as const,
+    mode: "desktopSsh" as const,
+    message: "Remote upgraded, reconnecting.",
+  }));
 
-vi.mock("../../environments/runtime", () => {
+  return {
+    reset() {
+      registryById = {};
+      runtimeById = {};
+      readSavedEnvironmentBearerToken.mockReset();
+      readSavedEnvironmentBearerToken.mockResolvedValue(null);
+      requestSavedEnvironmentRemoteUpgrade.mockReset();
+      requestSavedEnvironmentRemoteUpgrade.mockResolvedValue({
+        status: "started" as const,
+        mode: "desktopSsh" as const,
+        message: "Remote upgraded, reconnecting.",
+      });
+    },
+    upsertRecord(record: Record<string, unknown> & { environmentId: unknown }) {
+      registryById[String(record.environmentId)] = record;
+    },
+    patchRuntime(environmentId: unknown, runtime: unknown) {
+      runtimeById[String(environmentId)] = {
+        ...(runtimeById[String(environmentId)] as object | undefined),
+        ...(runtime as object),
+      };
+    },
+    getRecord(environmentId: unknown) {
+      return registryById[String(environmentId)] ?? null;
+    },
+    getRuntime(environmentId: unknown) {
+      return runtimeById[String(environmentId)] ?? null;
+    },
+    listRecords() {
+      return Object.values(registryById);
+    },
+    readSavedEnvironmentBearerToken,
+    requestSavedEnvironmentRemoteUpgrade,
+    selectRegistry(selector: (state: { byId: Record<string, unknown> }) => unknown) {
+      return selector({ byId: registryById });
+    },
+    selectRuntime(selector: (state: { byId: Record<string, unknown> }) => unknown) {
+      return selector({ byId: runtimeById });
+    },
+  };
+});
+
+vi.mock("../../environments/runtime", async () => {
+  const { resolveRemoteUpgradeEligibility } = await vi.importActual<
+    typeof import("../../environments/runtime/remoteUpgrade")
+  >("../../environments/runtime/remoteUpgrade");
   const primaryConnection = {
     kind: "primary" as const,
     knownEnvironment: {
@@ -175,10 +229,11 @@ vi.mock("../../environments/runtime", () => {
 
   return {
     getEnvironmentHttpBaseUrl: () => "http://localhost:3000",
-    getSavedEnvironmentRecord: () => null,
-    getSavedEnvironmentRuntimeState: () => null,
+    getSavedEnvironmentRecord: runtimeHarness.getRecord,
+    getSavedEnvironmentRuntimeState: runtimeHarness.getRuntime,
     hasSavedEnvironmentRegistryHydrated: () => true,
-    listSavedEnvironmentRecords: () => [],
+    listSavedEnvironmentRecords: runtimeHarness.listRecords,
+    readSavedEnvironmentBearerToken: runtimeHarness.readSavedEnvironmentBearerToken,
     resetSavedEnvironmentRegistryStoreForTests: () => undefined,
     resetSavedEnvironmentRuntimeStoreForTests: () => undefined,
     resolveEnvironmentHttpUrl: (_environmentId: unknown, path: string) =>
@@ -192,16 +247,14 @@ vi.mock("../../environments/runtime", () => {
     readEnvironmentConnection: () => primaryConnection,
     reconnectSavedEnvironment: vi.fn(),
     removeSavedEnvironment: vi.fn(),
+    requestSavedEnvironmentRemoteUpgrade: runtimeHarness.requestSavedEnvironmentRemoteUpgrade,
     requireEnvironmentConnection: () => primaryConnection,
+    resolveRemoteUpgradeEligibility,
     resetEnvironmentServiceForTests: () => undefined,
     startEnvironmentConnectionService: () => undefined,
     subscribeEnvironmentConnections: () => () => {},
-    useSavedEnvironmentRegistryStore: (
-      selector: (state: { byId: Record<string, never> }) => unknown,
-    ) => selector({ byId: {} }),
-    useSavedEnvironmentRuntimeStore: (
-      selector: (state: { byId: Record<string, never> }) => unknown,
-    ) => selector({ byId: {} }),
+    useSavedEnvironmentRegistryStore: runtimeHarness.selectRegistry,
+    useSavedEnvironmentRuntimeStore: runtimeHarness.selectRuntime,
   };
 });
 
@@ -482,6 +535,7 @@ describe("GeneralSettingsPanel observability", () => {
     localStorage.clear();
     useUiStateStore.setState({ defaultAdvertisedEndpointKey: null });
     authAccessHarness.reset();
+    runtimeHarness.reset();
     mockConnectDesktopSshEnvironment.mockReset();
   });
 
@@ -498,6 +552,7 @@ describe("GeneralSettingsPanel observability", () => {
     resetServerStateForTests();
     await __resetLocalApiForTests();
     authAccessHarness.reset();
+    runtimeHarness.reset();
   });
 
   it("hides owner pairing tools in browser-served loopback builds without remote exposure", async () => {
@@ -566,6 +621,73 @@ describe("GeneralSettingsPanel observability", () => {
     await expect
       .element(page.getByRole("heading", { name: "Remote environments", exact: true }))
       .toBeInTheDocument();
+  });
+
+  it("shows upgrade remote on eligible remote environment version drift rows", async () => {
+    const remoteEnvironmentId = EnvironmentId.make("environment-remote-version-drift");
+    runtimeHarness.upsertRecord({
+      environmentId: remoteEnvironmentId,
+      label: "brad-linux-dev",
+      httpBaseUrl: "https://brad-linux-dev.example.test",
+      wsBaseUrl: "wss://brad-linux-dev.example.test/ws",
+      createdAt: "2036-04-07T00:00:00.000Z",
+      lastConnectedAt: "2036-04-07T00:00:00.000Z",
+      desktopSsh: {
+        alias: "brad-linux-dev",
+        hostname: "brad-linux-dev",
+        username: null,
+        port: null,
+      },
+    });
+    const remoteServerConfig: ServerConfig = {
+      ...createBaseServerConfig(),
+      environment: {
+        ...createBaseServerConfig().environment,
+        environmentId: remoteEnvironmentId,
+        label: "brad-linux-dev",
+        platform: { os: "linux", arch: "x64" },
+        serverVersion: "0.0.0",
+      },
+    };
+    runtimeHarness.patchRuntime(remoteEnvironmentId, {
+      connectionState: "connected",
+      authState: "authenticated",
+      descriptor: remoteServerConfig.environment,
+      serverConfig: remoteServerConfig,
+      connectedAt: "2036-04-07T00:00:00.000Z",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<typeof fetch>().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            authenticated: true,
+            auth: createBaseServerConfig().auth,
+            role: "owner",
+            sessionMethod: "browser-session-cookie",
+            expiresAt: "2036-05-07T00:00:00.000Z",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        ),
+      ),
+    );
+
+    mounted = await render(
+      <AppAtomRegistryProvider>
+        <ConnectionsSettings />
+      </AppAtomRegistryProvider>,
+    );
+
+    await expect.element(page.getByText(/Version drift: client/u)).toBeInTheDocument();
+    const upgradeButton = page.getByRole("button", { name: "Upgrade remote" });
+    await expect.element(upgradeButton).toBeInTheDocument();
+
+    await upgradeButton.click();
+
+    await expect.element(page.getByText("Upgrade brad-linux-dev?")).toBeInTheDocument();
   });
 
   it("hides advertised endpoint rows when desktop network access is disabled", async () => {

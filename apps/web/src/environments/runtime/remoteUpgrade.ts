@@ -23,6 +23,7 @@ export type RemoteUpgradeEligibility =
         | "clientNotNewer"
         | "unsupportedPlatform"
         | "noOutOfBandPath"
+        | "notConnected"
         | "connecting";
     };
 
@@ -61,6 +62,9 @@ export function resolveRemoteUpgradeEligibility(input: {
   const serverVersion = normalizeVersion(serverConfig.environment.serverVersion);
   if (!clientVersion || !serverVersion || compareT3Versions(clientVersion, serverVersion) <= 0) {
     return { available: false, reason: "clientNotNewer" };
+  }
+  if (input.connectionState !== "connected") {
+    return { available: false, reason: "notConnected" };
   }
 
   if (input.environmentRecord.desktopSsh) {
