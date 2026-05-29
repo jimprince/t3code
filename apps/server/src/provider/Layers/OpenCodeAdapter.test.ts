@@ -110,6 +110,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
       );
       return {
         url,
+        processId: 43_001,
         exitCode: Effect.never,
       };
     }),
@@ -130,6 +131,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
       );
       return {
         url,
+        processId: null,
         exitCode: null,
         external: Boolean(serverUrl),
       };
