@@ -1,5 +1,68 @@
 # Agent Requirements
 
+## Current Task: Stop Archived Threads From Leaving Stale Provider Instances
+
+Implement the approved plan to prevent archived T3 threads from leaving stale
+provider sessions and `opencode serve` processes behind.
+
+### Current User Requirements
+
+- Archiving a thread must reliably stop its provider session regardless of
+  whether the archive command comes from the web UI, `t3-thread`, or a direct
+  orchestration RPC client.
+- Archived threads must not keep OpenCode, Claude, Codex, terminal, or provider
+  runtime state alive.
+- Existing archived-but-running provider runtime rows must self-heal without
+  manual SQL cleanup.
+- Preserve archived thread content/history; archive is not deletion.
+- Move archive cleanup into the server orchestration lifecycle rather than
+  relying on transport-specific WebSocket post-processing.
+- Make `thread.session.stop` work for archived, non-deleted threads.
+- Add an archived-session reaper backstop.
+- Add OpenCode process observability sufficient to map server process PID/port
+  to T3 thread context.
+
+### Constraints
+
+- No external wire protocol change.
+- No database migration.
+- No `t3-thread` CLI change required for correctness.
+- Archive means provider-runtime retirement, even when the archived thread has
+  an active turn.
+- Archive closes terminals without deleting terminal history.
+- Follow repo instructions: use `bun run test`, never `bun test`; all of
+  `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion.
+
+### Acceptance Criteria
+
+- Archived threads cannot remain `provider_session_runtime.status = 'running'`
+  because of archive ordering.
+- UI archive, `t3-thread archive`, and direct
+  `orchestration.dispatchCommand(thread.archive)` share the same cleanup
+  behavior.
+- Existing stale archived sessions are stopped by the provider session reaper
+  on the first relevant sweep.
+- Cleanup failures do not fail archive, and logs contain enough detail to
+  diagnose failed provider stop or terminal close.
+- Focused tests cover archived-inclusive lookup, session stop after archive,
+  archive cleanup reactor behavior, reaper behavior, and WebSocket archive
+  behavior after removing transport-specific cleanup.
+
+### Status
+
+- Complete.
+
+### Verification
+
+- `PATH=/Users/brad/.nvm/versions/node/v22.22.1/bin:$PATH bun run --shell system test src/orchestration/Layers/ProviderCommandReactor.test.ts src/orchestration/Layers/ProjectionSnapshotQuery.test.ts src/provider/Layers/ProviderSessionReaper.test.ts src/server.test.ts src/orchestration/Layers/ThreadArchiveCleanupReactor.test.ts src/orchestration/Layers/OrchestrationReactor.test.ts` from `apps/server`: passed, 6 files / 121 tests.
+- `bun fmt`: passed.
+- `bun lint`: passed with 9 existing unrelated warnings in `apps/web`.
+- `bun typecheck`: passed.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: T3 Thread Cleanup and Deployment Verification
 
 Clean up completed/stale T3 Code threads for this repo after confirming their

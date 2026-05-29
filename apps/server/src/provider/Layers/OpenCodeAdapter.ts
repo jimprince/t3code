@@ -536,6 +536,15 @@ const stopOpenCodeContext = Effect.fn("stopOpenCodeContext")(function* (
     return false;
   }
 
+  yield* Effect.logInfo("opencode provider session stopping", {
+    threadId: context.session.threadId,
+    providerInstanceId: context.session.providerInstanceId,
+    openCodeSessionId: context.openCodeSessionId,
+    serverUrl: context.server.url,
+    serverProcessId: context.server.processId,
+    externalServer: context.server.external,
+  });
+
   // Best-effort remote abort. The scope close below tears down the local
   // handles (event-pump fiber, server-exit fiber, event-subscribe fetch),
   // but we still want to tell OpenCode that this session is done.
@@ -547,6 +556,14 @@ const stopOpenCodeContext = Effect.fn("stopOpenCodeContext")(function* (
   // runs each finalizer we registered — the `AbortController.abort()` call,
   // the child-process termination, etc.
   yield* Scope.close(context.sessionScope, Exit.void);
+  yield* Effect.logInfo("opencode provider session stopped", {
+    threadId: context.session.threadId,
+    providerInstanceId: context.session.providerInstanceId,
+    openCodeSessionId: context.openCodeSessionId,
+    serverUrl: context.server.url,
+    serverProcessId: context.server.processId,
+    externalServer: context.server.external,
+  });
   return true;
 });
 
@@ -1307,6 +1324,14 @@ export function makeOpenCodeAdapter(
           stopped: yield* Ref.make(false),
           sessionScope: started.sessionScope,
         };
+        yield* Effect.logInfo("opencode provider session connected", {
+          threadId: input.threadId,
+          providerInstanceId: boundInstanceId,
+          openCodeSessionId: started.openCodeSession.id,
+          serverUrl: started.server.url,
+          serverProcessId: started.server.processId,
+          externalServer: started.server.external,
+        });
         sessions.set(input.threadId, context);
         yield* startEventPump(context);
 
