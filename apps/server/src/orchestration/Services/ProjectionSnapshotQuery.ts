@@ -152,6 +152,15 @@ export interface ProjectionSnapshotQueryShape {
   ) => Effect.Effect<Option.Option<OrchestrationThreadShell>, ProjectionRepositoryError>;
 
   /**
+   * Read a single non-deleted thread shell row by id, including archived
+   * threads. Use for lifecycle cleanup paths that must still operate after
+   * archive removes a thread from active navigation queries.
+   */
+  readonly getThreadShellByIdIncludingArchived: (
+    threadId: ThreadId,
+  ) => Effect.Effect<Option.Option<OrchestrationThreadShell>, ProjectionRepositoryError>;
+
+  /**
    * Read a single active thread detail snapshot by id.
    */
   readonly getThreadDetailById: (

@@ -964,7 +964,9 @@ const make = Effect.gen(function* () {
   const processSessionStopRequested = Effect.fn("processSessionStopRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.session-stop-requested" }>,
   ) {
-    const thread = yield* resolveThread(event.payload.threadId);
+    const thread = yield* projectionSnapshotQuery
+      .getThreadShellByIdIncludingArchived(event.payload.threadId)
+      .pipe(Effect.map(Option.getOrUndefined));
     if (!thread) {
       return;
     }
