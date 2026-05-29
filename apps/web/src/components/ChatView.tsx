@@ -1005,6 +1005,9 @@ export default function ChatView(props: ChatViewProps) {
     },
     [],
   );
+  const openRemoteUpgradeDialog = useCallback((input: RemoteUpgradeDialogState) => {
+    setRemoteUpgradeDialogState(input);
+  }, []);
   const handleConfirmRemoteUpgrade = useCallback(async () => {
     const dialogState = remoteUpgradeDialogState;
     if (!dialogState) {
@@ -1273,8 +1276,31 @@ export default function ChatView(props: ChatViewProps) {
       activeSavedEnvironmentRuntime,
     ],
   );
-  const disconnectedBannerIncludesVersionMismatch =
-    activeEnvironmentUnavailableState !== null && remoteUpgradeEligibility.available;
+  const disconnectedVersionMismatch =
+    activeEnvironmentUnavailableState !== null ? versionMismatch : null;
+  const disconnectedBannerIncludesVersionMismatch = disconnectedVersionMismatch !== null;
+  const connectedVersionMismatchUpgradeTarget = useMemo<RemoteUpgradeDialogState | null>(() => {
+    if (
+      activeEnvironmentUnavailableState !== null ||
+      activeSavedEnvironmentId === null ||
+      activeEnvironmentUnavailableLabel === null ||
+      !remoteUpgradeEligibility.available
+    ) {
+      return null;
+    }
+
+    return {
+      environmentId: activeSavedEnvironmentId,
+      label: activeEnvironmentUnavailableLabel,
+      serverVersion: remoteUpgradeEligibility.serverVersion,
+      clientVersion: remoteUpgradeEligibility.clientVersion,
+    };
+  }, [
+    activeEnvironmentUnavailableLabel,
+    activeEnvironmentUnavailableState,
+    activeSavedEnvironmentId,
+    remoteUpgradeEligibility,
+  ]);
   const showVersionMismatchBanner =
     versionMismatch !== null && versionMismatchDismissKey !== null && !versionMismatchDismissed;
   const hasMultipleRegisteredEnvironments = Object.keys(savedEnvironmentRegistry).length > 0;
@@ -1316,8 +1342,8 @@ export default function ChatView(props: ChatViewProps) {
               : "disconnected"}
           </>
         ),
-        description: remoteUpgradeEligibility.available
-          ? `Remote server ${remoteUpgradeEligibility.serverVersion} is older than this client ${remoteUpgradeEligibility.clientVersion}. Upgrade or reconnect before sending messages.`
+        description: disconnectedVersionMismatch
+          ? `Remote server ${disconnectedVersionMismatch.serverVersion} differs from this client ${disconnectedVersionMismatch.clientVersion}. Reconnect before sending messages.`
           : "Reconnect this environment before sending messages or running actions.",
         actions: (
           <>
@@ -1325,10 +1351,7 @@ export default function ChatView(props: ChatViewProps) {
               size="xs"
               disabled={
                 activeEnvironmentUnavailableState.connectionState === "connecting" ||
-                reconnectingEnvironmentId === activeEnvironmentUnavailableState.environmentId ||
-                (remoteUpgradeEligibility.available &&
-                  remoteUpgradeEligibility.reason === "desktopSsh" &&
-                  upgradingEnvironmentId === activeEnvironmentUnavailableState.environmentId)
+                reconnectingEnvironmentId === activeEnvironmentUnavailableState.environmentId
               }
               onClick={() =>
                 void handleReconnectActiveEnvironment(
@@ -1342,29 +1365,6 @@ export default function ChatView(props: ChatViewProps) {
                 ? "Reconnecting..."
                 : "Reconnect"}
             </Button>
-            {remoteUpgradeEligibility.available ? (
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={
-                  activeEnvironmentUnavailableState.connectionState === "connecting" ||
-                  upgradingEnvironmentId === activeEnvironmentUnavailableState.environmentId
-                }
-                onClick={() =>
-                  setRemoteUpgradeDialogState({
-                    environmentId: activeEnvironmentUnavailableState.environmentId,
-                    label: activeEnvironmentUnavailableState.label,
-                    serverVersion: remoteUpgradeEligibility.serverVersion,
-                    clientVersion: remoteUpgradeEligibility.clientVersion,
-                  })
-                }
-              >
-                <ArrowUpCircleIcon className="size-3.5" />
-                {upgradingEnvironmentId === activeEnvironmentUnavailableState.environmentId
-                  ? "Upgrading..."
-                  : "Upgrade remote"}
-              </Button>
-            ) : null}
             <Button
               size="xs"
               variant="outline"
@@ -1393,6 +1393,21 @@ export default function ChatView(props: ChatViewProps) {
             {versionMismatch.serverVersion}. Sync them if RPC calls or reconnects fail.
           </>
         ),
+        actions: connectedVersionMismatchUpgradeTarget ? (
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={
+              upgradingEnvironmentId === connectedVersionMismatchUpgradeTarget.environmentId
+            }
+            onClick={() => openRemoteUpgradeDialog(connectedVersionMismatchUpgradeTarget)}
+          >
+            <ArrowUpCircleIcon className="size-3.5" />
+            {upgradingEnvironmentId === connectedVersionMismatchUpgradeTarget.environmentId
+              ? "Upgrading..."
+              : "Upgrade remote"}
+          </Button>
+        ) : undefined,
         dismissLabel: "Dismiss version mismatch warning",
         onDismiss: () => {
           dismissVersionMismatch(versionMismatchDismissKey);
@@ -1403,11 +1418,13 @@ export default function ChatView(props: ChatViewProps) {
     return items;
   }, [
     activeEnvironmentUnavailableState,
+    connectedVersionMismatchUpgradeTarget,
+    disconnectedVersionMismatch,
     disconnectedBannerIncludesVersionMismatch,
     handleReconnectActiveEnvironment,
     navigate,
+    openRemoteUpgradeDialog,
     reconnectingEnvironmentId,
-    remoteUpgradeEligibility,
     showVersionMismatchBanner,
     upgradingEnvironmentId,
     versionMismatch,

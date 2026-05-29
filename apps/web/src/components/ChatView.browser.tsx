@@ -1805,6 +1805,182 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
+  it("shows upgrade remote on eligible connected remote version mismatch banners", async () => {
+    const snapshot = createSnapshotForTargetUser({
+      targetMessageId: "msg-user-remote-version-upgrade" as MessageId,
+      targetText: "remote version upgrade",
+    });
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot,
+    });
+
+    try {
+      await waitForServerConfigToApply();
+      const remoteThread = snapshot.threads[0];
+      if (!remoteThread) {
+        throw new Error("Expected remote test thread fixture.");
+      }
+
+      useSavedEnvironmentRegistryStore.getState().upsert({
+        environmentId: REMOTE_ENVIRONMENT_ID,
+        label: "brad-linux-dev",
+        httpBaseUrl: "https://brad-linux-dev.example.test",
+        wsBaseUrl: "wss://brad-linux-dev.example.test/ws",
+        createdAt: NOW_ISO,
+        lastConnectedAt: NOW_ISO,
+        desktopSsh: {
+          alias: "brad-linux-dev",
+          hostname: "brad-linux-dev",
+          username: null,
+          port: null,
+        },
+      });
+      useSavedEnvironmentRuntimeStore.getState().patch(REMOTE_ENVIRONMENT_ID, {
+        connectionState: "connected",
+        authState: "authenticated",
+        descriptor: {
+          ...fixture.serverConfig.environment,
+          environmentId: REMOTE_ENVIRONMENT_ID,
+          label: "brad-linux-dev",
+          platform: { os: "linux", arch: "x64" },
+          serverVersion: "0.0.0",
+        },
+        serverConfig: {
+          ...fixture.serverConfig,
+          environment: {
+            ...fixture.serverConfig.environment,
+            environmentId: REMOTE_ENVIRONMENT_ID,
+            label: "brad-linux-dev",
+            platform: { os: "linux", arch: "x64" },
+            serverVersion: "0.0.0",
+          },
+        },
+        connectedAt: NOW_ISO,
+      });
+      useStore.getState().syncServerShellSnapshot(toShellSnapshot(snapshot), REMOTE_ENVIRONMENT_ID);
+      useStore.getState().syncServerThreadDetail(remoteThread, REMOTE_ENVIRONMENT_ID);
+
+      await mounted.router.navigate({
+        to: "/$environmentId/$threadId",
+        params: {
+          environmentId: REMOTE_ENVIRONMENT_ID,
+          threadId: THREAD_ID,
+        },
+      });
+      await waitForURL(
+        mounted.router,
+        (path) => path === `/${REMOTE_ENVIRONMENT_ID}/${THREAD_ID}`,
+        "Route should switch to the remote test thread.",
+      );
+
+      const banner = await waitForElement(
+        () =>
+          Array.from(document.querySelectorAll<HTMLElement>('[data-slot="alert"]')).find(
+            (element) => element.textContent?.includes("Client and server versions differ"),
+          ) ?? null,
+        "Unable to find connected version mismatch banner.",
+      );
+
+      expect(
+        Array.from(banner.querySelectorAll<HTMLButtonElement>("button")).some(
+          (button) => button.textContent?.trim() === "Upgrade remote",
+        ),
+      ).toBe(true);
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("does not show upgrade remote on disconnected remote version mismatch banners", async () => {
+    const snapshot = createSnapshotForTargetUser({
+      targetMessageId: "msg-user-remote-disconnected-version-upgrade" as MessageId,
+      targetText: "remote disconnected version upgrade",
+    });
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot,
+    });
+
+    try {
+      await waitForServerConfigToApply();
+      const remoteThread = snapshot.threads[0];
+      if (!remoteThread) {
+        throw new Error("Expected remote test thread fixture.");
+      }
+
+      useSavedEnvironmentRegistryStore.getState().upsert({
+        environmentId: REMOTE_ENVIRONMENT_ID,
+        label: "brad-linux-dev",
+        httpBaseUrl: "https://brad-linux-dev.example.test",
+        wsBaseUrl: "wss://brad-linux-dev.example.test/ws",
+        createdAt: NOW_ISO,
+        lastConnectedAt: NOW_ISO,
+        desktopSsh: {
+          alias: "brad-linux-dev",
+          hostname: "brad-linux-dev",
+          username: null,
+          port: null,
+        },
+      });
+      useSavedEnvironmentRuntimeStore.getState().patch(REMOTE_ENVIRONMENT_ID, {
+        connectionState: "disconnected",
+        authState: "authenticated",
+        descriptor: {
+          ...fixture.serverConfig.environment,
+          environmentId: REMOTE_ENVIRONMENT_ID,
+          label: "brad-linux-dev",
+          platform: { os: "linux", arch: "x64" },
+          serverVersion: "0.0.0",
+        },
+        serverConfig: {
+          ...fixture.serverConfig,
+          environment: {
+            ...fixture.serverConfig.environment,
+            environmentId: REMOTE_ENVIRONMENT_ID,
+            label: "brad-linux-dev",
+            platform: { os: "linux", arch: "x64" },
+            serverVersion: "0.0.0",
+          },
+        },
+        connectedAt: null,
+        disconnectedAt: NOW_ISO,
+      });
+      useStore.getState().syncServerShellSnapshot(toShellSnapshot(snapshot), REMOTE_ENVIRONMENT_ID);
+      useStore.getState().syncServerThreadDetail(remoteThread, REMOTE_ENVIRONMENT_ID);
+
+      await mounted.router.navigate({
+        to: "/$environmentId/$threadId",
+        params: {
+          environmentId: REMOTE_ENVIRONMENT_ID,
+          threadId: THREAD_ID,
+        },
+      });
+      await waitForURL(
+        mounted.router,
+        (path) => path === `/${REMOTE_ENVIRONMENT_ID}/${THREAD_ID}`,
+        "Route should switch to the remote test thread.",
+      );
+
+      const banner = await waitForElement(
+        () =>
+          Array.from(document.querySelectorAll<HTMLElement>('[data-slot="alert"]')).find(
+            (element) => element.textContent?.includes("brad-linux-dev is disconnected"),
+          ) ?? null,
+        "Unable to find disconnected remote banner.",
+      );
+
+      expect(banner.textContent).toContain("Reconnect before sending messages.");
+      expect(
+        Array.from(banner.querySelectorAll<HTMLButtonElement>("button")).some(
+          (button) => button.textContent?.trim() === "Upgrade remote",
+        ),
+      ).toBe(false);
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
   it("re-expands the bootstrap project using its logical key", async () => {
     useUiStateStore.setState({
       projectExpandedById: {

@@ -1,4 +1,5 @@
 import {
+  ArrowUpCircleIcon,
   ChevronDownIcon,
   ChevronsLeftRightEllipsisIcon,
   PlusIcon,
@@ -92,12 +93,16 @@ import {
   connectDesktopSshEnvironment,
   disconnectSavedEnvironment,
   getPrimaryEnvironmentConnection,
+  readSavedEnvironmentBearerToken,
   reconnectSavedEnvironment,
   removeSavedEnvironment,
+  requestSavedEnvironmentRemoteUpgrade,
+  resolveRemoteUpgradeEligibility,
 } from "~/environments/runtime";
 import { useUiStateStore } from "~/uiStateStore";
 import { resolveServerConfigVersionMismatch } from "~/versionSkew";
 import { useServerConfig } from "~/rpc/serverState";
+import { APP_VERSION } from "~/branding";
 
 const DEFAULT_TAILSCALE_SERVE_PORT = 443;
 
@@ -1249,9 +1254,18 @@ type SavedBackendListRowProps = {
   reconnectingEnvironmentId: EnvironmentId | null;
   disconnectingEnvironmentId: EnvironmentId | null;
   removingEnvironmentId: EnvironmentId | null;
+  upgradingEnvironmentId: EnvironmentId | null;
   onConnect: (environmentId: EnvironmentId) => void;
   onDisconnect: (environmentId: EnvironmentId) => void;
   onRemove: (environmentId: EnvironmentId) => void;
+  onUpgrade: (input: RemoteUpgradeDialogState) => void;
+};
+
+type RemoteUpgradeDialogState = {
+  readonly environmentId: EnvironmentId;
+  readonly label: string;
+  readonly serverVersion: string;
+  readonly clientVersion: string;
 };
 
 function SavedBackendListRow({
@@ -1259,13 +1273,43 @@ function SavedBackendListRow({
   reconnectingEnvironmentId,
   disconnectingEnvironmentId,
   removingEnvironmentId,
+  upgradingEnvironmentId,
   onConnect,
   onDisconnect,
   onRemove,
+  onUpgrade,
 }: SavedBackendListRowProps) {
   const nowMs = useRelativeTimeTick(1_000);
   const record = useSavedEnvironmentRegistryStore((state) => state.byId[environmentId] ?? null);
   const runtime = useSavedEnvironmentRuntimeStore((state) => state.byId[environmentId] ?? null);
+  const [hasBearerToken, setHasBearerToken] = useState<boolean | null>(null);
+  const shouldReadBearerToken = Boolean(record && !record.desktopSsh && record.httpBaseUrl);
+
+  useEffect(() => {
+    if (!shouldReadBearerToken) {
+      setHasBearerToken(null);
+      return;
+    }
+
+    let cancelled = false;
+    setHasBearerToken(null);
+    void readSavedEnvironmentBearerToken(environmentId).then(
+      (token) => {
+        if (!cancelled) {
+          setHasBearerToken(Boolean(token));
+        }
+      },
+      () => {
+        if (!cancelled) {
+          setHasBearerToken(false);
+        }
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [environmentId, shouldReadBearerToken]);
 
   if (!record) {
     return null;
@@ -1289,6 +1333,14 @@ function SavedBackendListRow({
   const displayLabel = descriptorLabel ?? record.label;
   const statusTooltip = getSavedBackendStatusTooltip(runtime, record, nowMs);
   const versionMismatch = resolveServerConfigVersionMismatch(runtime?.serverConfig);
+  const remoteUpgradeEligibility = resolveRemoteUpgradeEligibility({
+    environmentRecord: record,
+    runtime,
+    connectionState,
+    clientVersion: APP_VERSION,
+    hasBearerToken,
+  });
+  const isUpgrading = upgradingEnvironmentId === environmentId;
   const metadataBits = [
     record.desktopSsh ? `SSH ${formatDesktopSshTarget(record.desktopSsh)}` : null,
     roleLabel,
@@ -1323,10 +1375,28 @@ function SavedBackendListRow({
           ) : null}
         </div>
         <div className="flex w-full shrink-0 items-center gap-2 sm:w-auto sm:justify-end">
+          {versionMismatch && remoteUpgradeEligibility.available ? (
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={isConnecting || isUpgrading}
+              onClick={() =>
+                onUpgrade({
+                  environmentId,
+                  label: displayLabel,
+                  serverVersion: remoteUpgradeEligibility.serverVersion,
+                  clientVersion: remoteUpgradeEligibility.clientVersion,
+                })
+              }
+            >
+              <ArrowUpCircleIcon className="size-3.5" />
+              {isUpgrading ? "Upgrading…" : "Upgrade remote"}
+            </Button>
+          ) : null}
           <Button
             size="xs"
             variant="outline"
-            disabled={isConnected ? isDisconnecting : isConnecting}
+            disabled={isUpgrading || (isConnected ? isDisconnecting : isConnecting)}
             onClick={() =>
               void (isConnected ? onDisconnect(environmentId) : onConnect(environmentId))
             }
@@ -1342,7 +1412,7 @@ function SavedBackendListRow({
           <Button
             size="xs"
             variant="destructive-outline"
-            disabled={removingEnvironmentId === environmentId}
+            disabled={isUpgrading || removingEnvironmentId === environmentId}
             onClick={() => void onRemove(environmentId)}
           >
             {removingEnvironmentId === environmentId ? "Removing…" : "Remove"}
@@ -1488,6 +1558,10 @@ export function ConnectionsSettings() {
   const [disconnectingSavedEnvironmentId, setDisconnectingSavedEnvironmentId] =
     useState<EnvironmentId | null>(null);
   const [removingSavedEnvironmentId, setRemovingSavedEnvironmentId] =
+    useState<EnvironmentId | null>(null);
+  const [remoteUpgradeDialogState, setRemoteUpgradeDialogState] =
+    useState<RemoteUpgradeDialogState | null>(null);
+  const [upgradingSavedEnvironmentId, setUpgradingSavedEnvironmentId] =
     useState<EnvironmentId | null>(null);
   const [isUpdatingDesktopServerExposure, setIsUpdatingDesktopServerExposure] = useState(false);
   const [isDesktopServerExposureDialogOpen, setIsDesktopServerExposureDialogOpen] = useState(false);
@@ -1844,6 +1918,63 @@ export function ConnectionsSettings() {
       setRemovingSavedEnvironmentId(null);
     }
   }, []);
+
+  const handleConfirmRemoteUpgrade = useCallback(async () => {
+    const dialogState = remoteUpgradeDialogState;
+    if (!dialogState) {
+      return;
+    }
+
+    setUpgradingSavedEnvironmentId(dialogState.environmentId);
+    setSavedBackendError(null);
+    try {
+      const result = await requestSavedEnvironmentRemoteUpgrade({
+        environmentId: dialogState.environmentId,
+        clientVersion: dialogState.clientVersion,
+        serverVersion: dialogState.serverVersion,
+      });
+      if (result.status === "started" || result.status === "cooldown") {
+        toastManager.add({
+          type: "success",
+          title:
+            result.mode === "desktopSsh"
+              ? "Remote upgraded, reconnecting"
+              : result.status === "cooldown"
+                ? "Remote upgrade already requested"
+                : "Remote upgrade started",
+          description: result.message ?? `${dialogState.label} will reconnect shortly.`,
+        });
+        setRemoteUpgradeDialogState(null);
+        await new Promise((resolve) => setTimeout(resolve, 750));
+        await handleConnectSavedBackend(dialogState.environmentId);
+        return;
+      }
+
+      setSavedBackendError(result.message);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title:
+            result.status === "unsupported"
+              ? "Remote upgrade is not supported"
+              : "Could not upgrade remote",
+          description: result.message,
+        }),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to request remote upgrade.";
+      setSavedBackendError(message);
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Could not upgrade remote",
+          description: message,
+        }),
+      );
+    } finally {
+      setUpgradingSavedEnvironmentId(null);
+    }
+  }, [handleConnectSavedBackend, remoteUpgradeDialogState]);
 
   const loadDiscoveredSshHosts = useCallback(async () => {
     if (!desktopBridge) {
@@ -2722,9 +2853,11 @@ export function ConnectionsSettings() {
             reconnectingEnvironmentId={reconnectingSavedEnvironmentId}
             disconnectingEnvironmentId={disconnectingSavedEnvironmentId}
             removingEnvironmentId={removingSavedEnvironmentId}
+            upgradingEnvironmentId={upgradingSavedEnvironmentId}
             onConnect={handleConnectSavedBackend}
             onDisconnect={handleDisconnectSavedBackend}
             onRemove={handleRemoveSavedBackend}
+            onUpgrade={setRemoteUpgradeDialogState}
           />
         ))}
 
@@ -2737,6 +2870,46 @@ export function ConnectionsSettings() {
           </div>
         ) : null}
       </SettingsSection>
+      <AlertDialog
+        open={remoteUpgradeDialogState !== null}
+        onOpenChange={(open) => {
+          if (!open && upgradingSavedEnvironmentId === null) {
+            setRemoteUpgradeDialogState(null);
+          }
+        }}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Upgrade {remoteUpgradeDialogState?.label ?? "remote environment"}?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Install the current T3 Code remote server version, then reconnect this environment.
+            </AlertDialogDescription>
+            {remoteUpgradeDialogState ? (
+              <div className="mt-2 rounded-md border border-border/70 bg-muted/40 px-3 py-2 font-mono text-muted-foreground text-xs">
+                Remote {remoteUpgradeDialogState.serverVersion} -&gt; Client{" "}
+                {remoteUpgradeDialogState.clientVersion}
+              </div>
+            ) : null}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+            <Button
+              disabled={
+                remoteUpgradeDialogState !== null &&
+                upgradingSavedEnvironmentId === remoteUpgradeDialogState.environmentId
+              }
+              onClick={() => void handleConfirmRemoteUpgrade()}
+            >
+              {remoteUpgradeDialogState !== null &&
+              upgradingSavedEnvironmentId === remoteUpgradeDialogState.environmentId
+                ? "Upgrading…"
+                : "Upgrade and reconnect"}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </SettingsPageContainer>
   );
 }

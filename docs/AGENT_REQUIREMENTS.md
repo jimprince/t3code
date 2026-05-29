@@ -63,6 +63,251 @@ provider sessions and `opencode serve` processes behind.
 
 - None.
 
+## Current Task: Hide Unsupported Remote Self-Upgrade Actions
+
+Prevent the connected version-mismatch upgrade button from appearing when the
+only available path is remote HTTP self-upgrade but the remote server predates
+the self-upgrade endpoint.
+
+### Current User Requirements
+
+- Address the observed `Could not upgrade remote` toast:
+  `This remote version cannot upgrade itself. Reconnect or open Connections.`
+- Keep valid upgrade actions available where the remote can actually be
+  upgraded out-of-band.
+- Continue the existing clean-main workflow and defer unrelated cleanup.
+
+### Constraints
+
+- Do not remove desktop-SSH upgrade support for older Linux remotes.
+- Do not show remote-HTTP self-upgrade for remote versions that cannot expose
+  the headless update endpoint.
+- Preserve existing version-drift warnings even when the upgrade action is
+  hidden.
+- Follow repo checks: `bun fmt`, `bun lint`, and `bun typecheck`; use package
+  test scripts instead of `bun test`.
+
+### Acceptance Criteria
+
+- A connected HTTP-only remote at `0.0.25-nightly.20260515.295-fork.8` is not
+  considered upgrade-eligible just because a bearer token exists.
+- A connected HTTP-only remote at or above the first self-upgrade-capable
+  version can still expose `Upgrade remote`.
+- A connected desktop-SSH remote can still expose `Upgrade remote` even when it
+  predates the remote-HTTP self-upgrade endpoint.
+
+### Status
+
+- Completed.
+- Remote HTTP self-upgrade eligibility now requires the server version to be at
+  or above the first version that exposes the headless update-check endpoint.
+- Desktop-SSH upgrade eligibility remains available for older connected Linux
+  remotes.
+
+### Verification
+
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/remoteUpgrade.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+
+## Current Task: Clean Integrate And Push Remote Upgrade UI
+
+Integrate the remote-upgrade UI changes onto the current `origin/main` without
+bringing along stale side-branch history, then push the clean result to
+`origin/main`.
+
+### Current User Requirements
+
+- Finish the clean integration path and push it.
+- Do not clean up the unrelated stale/diverged branch/worktree history yet.
+- Avoid pushing the polluted feature branch history to `main`.
+
+### Constraints
+
+- Use a clean worktree based on `origin/main`.
+- Include only the intended remote-upgrade UI/runtime/test/docs changes.
+- Preserve the existing verification standard: `bun fmt`, `bun lint`, and
+  `bun typecheck`; use `bun run test`/package test scripts, not `bun test`.
+
+### Acceptance Criteria
+
+- Clean integration commit contains only the intended remote-upgrade files.
+- Checks pass in the clean worktree before push, except browser tests may remain
+  blocked by local Chromium dependencies.
+- `origin/main` is updated with the clean commit.
+- The stale/diverged local `main` and polluted feature branch are left for a
+  later cleanup pass.
+
+### Status
+
+- Completed.
+- Clean integration was staged on a fresh worktree from `origin/main` instead of
+  the polluted feature branch.
+- The resulting commit contains only the remote-upgrade UI/runtime/test/docs
+  files.
+- The stale/diverged local `main` and polluted feature branch remain untouched
+  for later cleanup.
+
+### Verification
+
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/remoteUpgrade.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+- Push verification: clean commit is intended to fast-forward `origin/main`.
+
+## Current Task: Remove Disconnected Remote Upgrade Action
+
+Remove the `Upgrade remote` affordance from disconnected remote-environment
+composer banners because upgrade should only be offered while connected.
+
+### Current User Requirements
+
+- Remove `Upgrade remote` from the disconnected remote banner.
+- Keep `Reconnect` and `Connections` available on the disconnected banner.
+- Keep the connected version-mismatch upgrade affordances.
+
+### Constraints
+
+- Remote upgrade eligibility should not be true for disconnected/error saved
+  environments.
+- Preserve version-drift messaging without suggesting upgrade when the
+  environment is disconnected.
+- Follow repo checks: `bun fmt`, `bun lint`, and `bun typecheck` before
+  completion; use `bun run test` for focused Vitest coverage.
+
+### Acceptance Criteria
+
+- Disconnected/error composer banners do not show `Upgrade remote`.
+- Connected version-mismatch banners and connected settings rows can still show
+  `Upgrade remote` when otherwise eligible.
+- Disconnected settings rows do not show `Upgrade remote`.
+- Focused remote-upgrade eligibility coverage reflects the connected-only
+  rule.
+
+### Status
+
+- Completed.
+- Remote-upgrade eligibility now requires the saved environment to be connected.
+- Disconnected composer banners no longer render `Upgrade remote`; they keep
+  `Reconnect` and `Connections`.
+- Disconnected version-drift copy now says to reconnect, without suggesting
+  upgrade.
+
+### Verification
+
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/remoteUpgrade.test.ts`.
+- Added but not executed here: targeted browser coverage for the disconnected
+  composer banner, because local Chromium cannot launch without
+  `libatk-1.0.so.0`.
+- Blocked by local environment:
+  `bun --filter @t3tools/web test:browser src/components/ChatView.browser.tsx -t "does not show upgrade remote on disconnected remote version mismatch banners"`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+
+## Current Task: Add Upgrade Remote To Settings Version Drift Row
+
+Expose the remote-upgrade action from the Settings > Connections > Remote
+environments version-drift row when the saved remote environment is eligible.
+
+### Current User Requirements
+
+- Add `Upgrade remote` to the remote environment row that shows
+  `Version drift: client ..., server ...`.
+- Reuse the existing remote-upgrade behavior and eligibility checks.
+- Keep current connect/disconnect/remove actions intact.
+
+### Constraints
+
+- Only show the action for environments eligible for out-of-band remote upgrade.
+- Preserve existing version-drift display for ineligible environments.
+- Follow repo checks: `bun fmt`, `bun lint`, and `bun typecheck` before
+  completion; use `bun run test` for focused Vitest coverage.
+
+### Acceptance Criteria
+
+- Eligible remote environment rows with version drift show an `Upgrade remote`
+  action alongside existing row actions.
+- The action opens a confirmation dialog, starts the existing remote-upgrade
+  service, reports success/failure, and reconnects after successful queued or
+  started upgrade requests.
+- Ineligible remote environment rows keep the existing version-drift text and
+  do not show the upgrade action.
+
+### Status
+
+- Completed.
+- Added an eligible `Upgrade remote` action to saved remote environment rows
+  that show version drift.
+- Reused the existing remote-upgrade service, confirmation copy, toast results,
+  and reconnect behavior.
+- Added browser coverage for the settings row action and updated the settings
+  runtime mock to expose the remote-upgrade helpers.
+
+### Verification
+
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/remoteUpgrade.test.ts`.
+- Added but not executed here: targeted browser coverage for the settings
+  version-drift row, because local Chromium cannot launch without
+  `libatk-1.0.so.0`.
+- Blocked by local environment:
+  `bun --filter @t3tools/web test:browser src/components/settings/SettingsPanels.browser.tsx -t "shows upgrade remote on eligible remote environment version drift rows"`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+
+## Current Task: Add Upgrade Remote To Version Mismatch Banner
+
+Bring this worktree up to date with the current fork branch, then expose the
+remote-upgrade action from the connected "Client and server versions differ"
+banner.
+
+### Current User Requirements
+
+- Make sure the local worktree is up to date.
+- Add an "Upgrade remote" action to the connected version-mismatch banner.
+- Preserve existing remote-upgrade behavior for disconnected environments.
+
+### Constraints
+
+- Use the existing remote-upgrade flow and eligibility logic where possible.
+- Keep ineligible version-mismatch banners dismiss-only.
+- Follow repo checks: `bun fmt`, `bun lint`, and `bun typecheck` before
+  completion; use `bun run test` for focused Vitest coverage.
+
+### Acceptance Criteria
+
+- The branch includes the current `origin/main` remote-upgrade implementation.
+- The connected version-mismatch banner shows `Upgrade remote` when the active
+  remote environment is eligible for remote upgrade.
+- The action opens the existing confirmation dialog, uses the existing
+  out-of-band remote-upgrade service, and reconnects on success.
+- Ineligible environments keep the existing dismiss-only version-mismatch
+  banner behavior.
+- Existing disconnected-environment upgrade behavior remains intact.
+
+### Status
+
+- Completed.
+- Merged `origin/main` into the worktree and resolved conflicts in favor of
+  current `origin/main` state.
+- Added `Upgrade remote` to eligible connected version-mismatch banners.
+- Preserved the existing disconnected-environment remote-upgrade path and now
+  share the same upgrade confirmation opener between both banners.
+
+### Verification
+
+- Passed: `bun --filter @t3tools/web test src/environments/runtime/remoteUpgrade.test.ts`.
+- Added but not executed here: targeted browser coverage for the connected
+  version-mismatch banner, because local Chromium cannot launch without
+  `libatk-1.0.so.0`.
+- Blocked by local environment: `bun --filter @t3tools/web test:browser src/components/ChatView.browser.tsx -t "shows upgrade remote on eligible connected remote version mismatch banners"`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+
 ## Current Task: T3 Thread Cleanup and Deployment Verification
 
 Clean up completed/stale T3 Code threads for this repo after confirming their

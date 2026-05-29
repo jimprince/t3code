@@ -118,7 +118,7 @@ describe("resolveRemoteUpgradeEligibility", () => {
     ).toEqual({ available: false, reason: "connecting" });
   });
 
-  it("is available through desktop SSH for older linux remotes", () => {
+  it("is hidden when an older linux remote is not connected", () => {
     expect(
       resolveRemoteUpgradeEligibility({
         environmentRecord: record({
@@ -128,15 +128,8 @@ describe("resolveRemoteUpgradeEligibility", () => {
         connectionState: "disconnected",
         clientVersion: "1.0.0",
       }),
-    ).toEqual({
-      available: true,
-      reason: "desktopSsh",
-      serverVersion: "0.9.0",
-      clientVersion: "1.0.0",
-    });
-  });
+    ).toEqual({ available: false, reason: "notConnected" });
 
-  it("is available through remote HTTP only when a bearer token exists", () => {
     expect(
       resolveRemoteUpgradeEligibility({
         environmentRecord: record(),
@@ -145,19 +138,61 @@ describe("resolveRemoteUpgradeEligibility", () => {
         clientVersion: "1.0.0",
         hasBearerToken: true,
       }),
+    ).toEqual({ available: false, reason: "notConnected" });
+  });
+
+  it("is available through desktop SSH for connected older linux remotes", () => {
+    expect(
+      resolveRemoteUpgradeEligibility({
+        environmentRecord: record({
+          desktopSsh: { alias: "remote", hostname: "remote", username: null, port: null },
+        }),
+        runtime: runtime({ serverVersion: "0.0.25-nightly.20260515.295-fork.8" }),
+        connectionState: "connected",
+        clientVersion: "0.0.25-nightly.20260515.295-fork.10",
+      }),
+    ).toEqual({
+      available: true,
+      reason: "desktopSsh",
+      serverVersion: "0.0.25-nightly.20260515.295-fork.8",
+      clientVersion: "0.0.25-nightly.20260515.295-fork.10",
+    });
+  });
+
+  it("is hidden for remote HTTP when the server predates self-upgrade support", () => {
+    expect(
+      resolveRemoteUpgradeEligibility({
+        environmentRecord: record(),
+        runtime: runtime({ serverVersion: "0.0.25-nightly.20260515.295-fork.8" }),
+        connectionState: "connected",
+        clientVersion: "0.0.25-nightly.20260515.295-fork.10",
+        hasBearerToken: true,
+      }),
+    ).toEqual({ available: false, reason: "remoteHttpUnsupported" });
+  });
+
+  it("is available through remote HTTP only when a bearer token exists", () => {
+    expect(
+      resolveRemoteUpgradeEligibility({
+        environmentRecord: record(),
+        runtime: runtime({ serverVersion: "0.0.25-nightly.20260515.295-fork.9" }),
+        connectionState: "connected",
+        clientVersion: "0.0.25-nightly.20260515.295-fork.10",
+        hasBearerToken: true,
+      }),
     ).toEqual({
       available: true,
       reason: "remoteHttp",
-      serverVersion: "0.9.0",
-      clientVersion: "1.0.0",
+      serverVersion: "0.0.25-nightly.20260515.295-fork.9",
+      clientVersion: "0.0.25-nightly.20260515.295-fork.10",
     });
 
     expect(
       resolveRemoteUpgradeEligibility({
         environmentRecord: record(),
-        runtime: runtime({ serverVersion: "0.9.0" }),
-        connectionState: "error",
-        clientVersion: "1.0.0",
+        runtime: runtime({ serverVersion: "0.0.25-nightly.20260515.295-fork.9" }),
+        connectionState: "connected",
+        clientVersion: "0.0.25-nightly.20260515.295-fork.10",
         hasBearerToken: false,
       }),
     ).toEqual({ available: false, reason: "noOutOfBandPath" });
