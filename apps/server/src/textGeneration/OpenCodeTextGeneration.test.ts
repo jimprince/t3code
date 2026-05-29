@@ -52,12 +52,14 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
       );
       return {
         url,
+        processId: 4_300 + index,
         exitCode: Effect.never,
       };
     }),
   connectToOpenCodeServer: ({ serverUrl }) =>
     Effect.succeed({
       url: serverUrl ?? "http://127.0.0.1:4301",
+      processId: null,
       exitCode: null,
       external: Boolean(serverUrl),
     }),
