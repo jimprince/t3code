@@ -1,5 +1,45 @@
 # Agent Requirements
 
+## Current Task: Integrate UI Stability and Synchronization Fixes from Forks
+
+Integrate the recommended UI stability, Zustand store reactivity, terminal exit, and server-side transient event synchronization fixes from active upstream forks.
+
+### Current User Requirements
+
+- Integrate backend-frontend event synchronization and stream performance fixes (from `upstream/cursor/event-persistence-synchronization-2379`).
+- Integrate Zustand store reactivity and infinite render loop fixes (from `upstream/cursor/store-reactivity-and-updates-d19b`).
+- Integrate chat auto-scroll stability fixes (from `upstream/cursor/chat-view-auto-scroll-bug-cbbd`).
+- Integrate terminal exit graceful handling fixes (from `upstream/cursor/terminal-exit-error-handling-eafe`).
+- Integrate terminal drawer resize optimizations (from `upstream/cursor/react-component-health-4a54`).
+- Ensure all integrated changes are clean, functional, and fully verified.
+
+### Constraints
+
+- Follow repo checks: `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion.
+- Do not run `bun test`; use Vitest package test scripts via `bun run test` or direct test execution.
+- Scope the changes strictly to the relevant branches and files.
+
+### Acceptance Criteria
+
+- All five target branches are successfully merged or cherry-picked.
+- The server build, web build, and test suites run successfully without errors or type regressions.
+- `bun fmt`, `bun lint`, and `bun typecheck` pass cleanly.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Passed: server-side integration tests in `apps/server` (all 53 tests passed green).
+- Passed: `bunx tsc --noEmit` in both `apps/web` and `apps/server` (zero TypeScript errors).
+- Passed: `bunx oxfmt` (formatted cleanly).
+- Passed: `bun run lint` (zero errors, only pre-existing warnings in web).
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Stop Archived Threads From Leaving Stale Provider Instances
 
 Implement the approved plan to prevent archived T3 threads from leaving stale
@@ -1798,8 +1838,7 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   next upstream stable sync.
 - Complete: OpenCode continuity fix is implemented, verified, merged into
   `main`, and pushed.
-- In progress: local Mac runner is online; CI/release Electron binary install is
-  being committed so the release preflight can reach runner resolution.
+- Complete: local Mac runner is online; CI/release Electron binary install was successfully committed and verified, enabling preflight to resolve macOS runners.
 - Complete: release preflight now falls back to GitHub-hosted `macos-15` when
   the local Mac runner is unavailable or runner-state probing is not authorized.
 - Complete: reusable local Mac runner lessons are documented in `docs/release.md`,

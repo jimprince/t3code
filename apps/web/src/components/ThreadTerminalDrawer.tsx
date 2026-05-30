@@ -53,6 +53,23 @@ const MIN_DRAWER_HEIGHT = 180;
 const MAX_DRAWER_HEIGHT_RATIO = 0.75;
 const MULTI_CLICK_SELECTION_ACTION_DELAY_MS = 260;
 
+const BENIGN_TERMINAL_WRITE_ERROR_MARKERS = [
+  "terminal is not running",
+  "unknown terminal thread",
+] as const;
+
+function isIgnorableTerminalWriteError(error: unknown): boolean {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    return BENIGN_TERMINAL_WRITE_ERROR_MARKERS.some((marker) => msg.includes(marker));
+  }
+  if (typeof error === "string") {
+    const msg = error.toLowerCase();
+    return BENIGN_TERMINAL_WRITE_ERROR_MARKERS.some((marker) => msg.includes(marker));
+  }
+  return false;
+}
+
 function maxDrawerHeight(): number {
   if (typeof window === "undefined") return DEFAULT_THREAD_TERMINAL_HEIGHT;
   return Math.max(MIN_DRAWER_HEIGHT, Math.floor(window.innerHeight * MAX_DRAWER_HEIGHT_RATIO));
@@ -62,6 +79,52 @@ function clampDrawerHeight(height: number): number {
   const safeHeight = Number.isFinite(height) ? height : DEFAULT_THREAD_TERMINAL_HEIGHT;
   const maxHeight = maxDrawerHeight();
   return Math.min(Math.max(Math.round(safeHeight), MIN_DRAWER_HEIGHT), maxHeight);
+}
+
+interface DrawerHeightDraft {
+  threadId: ThreadId;
+  sourceHeight: number;
+  height: number;
+}
+
+function useThreadDrawerHeight(threadId: ThreadId, height: number) {
+  const clampedSourceHeight = clampDrawerHeight(height);
+  const [draft, setDraft] = useState<DrawerHeightDraft | null>(null);
+  const activeDraft =
+    draft?.threadId === threadId && draft.sourceHeight === clampedSourceHeight ? draft : null;
+  const drawerHeight = activeDraft?.height ?? clampedSourceHeight;
+  const drawerHeightRef = useRef(drawerHeight);
+  const lastSyncedHeightRef = useRef(clampedSourceHeight);
+
+  useEffect(() => {
+    drawerHeightRef.current = drawerHeight;
+  }, [drawerHeight]);
+
+  useEffect(() => {
+    lastSyncedHeightRef.current = clampedSourceHeight;
+  }, [clampedSourceHeight]);
+
+  const setDrawerHeight = useCallback(
+    (nextHeight: number) => {
+      setDraft({
+        threadId,
+        sourceHeight: clampedSourceHeight,
+        height: clampDrawerHeight(nextHeight),
+      });
+    },
+    [clampedSourceHeight, threadId],
+  );
+  const clearDrawerHeight = useCallback(() => {
+    setDraft(null);
+  }, []);
+
+  return {
+    drawerHeight,
+    drawerHeightRef,
+    lastSyncedHeightRef,
+    setDrawerHeight,
+    clearDrawerHeight,
+  };
 }
 
 function writeSystemMessage(terminal: Terminal, message: string): void {
@@ -425,6 +488,10 @@ export function TerminalViewport({
       try {
         await api.terminal.write({ threadId, terminalId, data });
       } catch (error) {
+        if (isIgnorableTerminalWriteError(error)) {
+          handleSessionExited();
+          return;
+        }
         writeSystemMessage(activeTerminal, error instanceof Error ? error.message : fallbackError);
       }
     };
@@ -532,14 +599,13 @@ export function TerminalViewport({
     });
 
     const inputDisposable = terminal.onData((data) => {
-      void api.terminal
-        .write({ threadId, terminalId, data })
-        .catch((err) =>
-          writeSystemMessage(
-            terminal,
-            err instanceof Error ? err.message : "Terminal write failed",
-          ),
-        );
+      void api.terminal.write({ threadId, terminalId, data }).catch((err) => {
+        if (isIgnorableTerminalWriteError(err)) {
+          handleSessionExited();
+          return;
+        }
+        writeSystemMessage(terminal, err instanceof Error ? err.message : "Terminal write failed");
+      });
     });
 
     const selectionDisposable = terminal.onSelectionChange(() => {
@@ -858,11 +924,9 @@ export default function ThreadTerminalDrawer({
   terminalLabelsById,
   terminalLaunchLocationsById,
 }: ThreadTerminalDrawerProps) {
-  const [drawerHeight, setDrawerHeight] = useState(() => clampDrawerHeight(height));
   const [resizeEpoch, setResizeEpoch] = useState(0);
-  const drawerHeightRef = useRef(drawerHeight);
-  const lastSyncedHeightRef = useRef(clampDrawerHeight(height));
-  const onHeightChangeRef = useRef(onHeightChange);
+  const { drawerHeight, drawerHeightRef, lastSyncedHeightRef, setDrawerHeight, clearDrawerHeight } =
+    useThreadDrawerHeight(threadId, height);
   const resizeStateRef = useRef<{
     pointerId: number;
     startY: number;
@@ -1018,54 +1082,47 @@ export default function ThreadTerminalDrawer({
     onNewTerminal();
   }, [onNewTerminal]);
 
-  useEffect(() => {
-    onHeightChangeRef.current = onHeightChange;
-  }, [onHeightChange]);
+  const syncHeight = useCallback(
+    (nextHeight: number) => {
+      const clampedHeight = clampDrawerHeight(nextHeight);
+      if (lastSyncedHeightRef.current === clampedHeight) return;
+      lastSyncedHeightRef.current = clampedHeight;
+      onHeightChange(clampedHeight);
+    },
+    [lastSyncedHeightRef, onHeightChange],
+  );
 
-  useEffect(() => {
-    drawerHeightRef.current = drawerHeight;
-  }, [drawerHeight]);
+  const handleResizePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.currentTarget.setPointerCapture(event.pointerId);
+      didResizeDuringDragRef.current = false;
+      resizeStateRef.current = {
+        pointerId: event.pointerId,
+        startY: event.clientY,
+        startHeight: drawerHeightRef.current,
+      };
+    },
+    [drawerHeightRef],
+  );
 
-  const syncHeight = useCallback((nextHeight: number) => {
-    const clampedHeight = clampDrawerHeight(nextHeight);
-    if (lastSyncedHeightRef.current === clampedHeight) return;
-    lastSyncedHeightRef.current = clampedHeight;
-    onHeightChangeRef.current(clampedHeight);
-  }, []);
-
-  useEffect(() => {
-    const clampedHeight = clampDrawerHeight(height);
-    setDrawerHeight(clampedHeight);
-    drawerHeightRef.current = clampedHeight;
-    lastSyncedHeightRef.current = clampedHeight;
-  }, [height, threadId]);
-
-  const handleResizePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    didResizeDuringDragRef.current = false;
-    resizeStateRef.current = {
-      pointerId: event.pointerId,
-      startY: event.clientY,
-      startHeight: drawerHeightRef.current,
-    };
-  }, []);
-
-  const handleResizePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-    const resizeState = resizeStateRef.current;
-    if (!resizeState || resizeState.pointerId !== event.pointerId) return;
-    event.preventDefault();
-    const clampedHeight = clampDrawerHeight(
-      resizeState.startHeight + (resizeState.startY - event.clientY),
-    );
-    if (clampedHeight === drawerHeightRef.current) {
-      return;
-    }
-    didResizeDuringDragRef.current = true;
-    drawerHeightRef.current = clampedHeight;
-    setDrawerHeight(clampedHeight);
-  }, []);
+  const handleResizePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLDivElement>) => {
+      const resizeState = resizeStateRef.current;
+      if (!resizeState || resizeState.pointerId !== event.pointerId) return;
+      event.preventDefault();
+      const clampedHeight = clampDrawerHeight(
+        resizeState.startHeight + (resizeState.startY - event.clientY),
+      );
+      if (clampedHeight === drawerHeightRef.current) {
+        return;
+      }
+      didResizeDuringDragRef.current = true;
+      setDrawerHeight(clampedHeight);
+    },
+    [drawerHeightRef, setDrawerHeight],
+  );
 
   const handleResizePointerEnd = useCallback(
     (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -1079,9 +1136,10 @@ export default function ThreadTerminalDrawer({
         return;
       }
       syncHeight(drawerHeightRef.current);
+      clearDrawerHeight();
       setResizeEpoch((value) => value + 1);
     },
-    [syncHeight],
+    [clearDrawerHeight, drawerHeightRef, syncHeight],
   );
 
   useEffect(() => {
@@ -1094,10 +1152,10 @@ export default function ThreadTerminalDrawer({
       const changed = clampedHeight !== drawerHeightRef.current;
       if (changed) {
         setDrawerHeight(clampedHeight);
-        drawerHeightRef.current = clampedHeight;
       }
       if (!resizeStateRef.current) {
         syncHeight(clampedHeight);
+        clearDrawerHeight();
       }
       setResizeEpoch((value) => value + 1);
     };
@@ -1105,20 +1163,15 @@ export default function ThreadTerminalDrawer({
     return () => {
       window.removeEventListener("resize", onWindowResize);
     };
-  }, [syncHeight, visible]);
-
-  useEffect(() => {
-    if (!visible) {
-      return;
-    }
-    setResizeEpoch((value) => value + 1);
-  }, [visible]);
+  }, [clearDrawerHeight, drawerHeightRef, syncHeight, visible, setDrawerHeight]);
 
   useEffect(() => {
     return () => {
       syncHeight(drawerHeightRef.current);
     };
-  }, [syncHeight]);
+  }, [drawerHeightRef, syncHeight]);
+
+  const effectiveResizeEpoch = resizeEpoch + (visible ? 1 : 0);
 
   if (normalizedTerminalIds.length === 0) {
     return (
@@ -1239,7 +1292,7 @@ export default function ThreadTerminalDrawer({
                           onAddTerminalContext={onAddTerminalContext}
                           focusRequestId={focusRequestId}
                           autoFocus={terminalId === resolvedActiveTerminalId}
-                          resizeEpoch={resizeEpoch}
+                          resizeEpoch={effectiveResizeEpoch}
                           drawerHeight={drawerHeight}
                           keybindings={keybindings}
                         />
@@ -1267,7 +1320,7 @@ export default function ThreadTerminalDrawer({
                   onAddTerminalContext={onAddTerminalContext}
                   focusRequestId={focusRequestId}
                   autoFocus
-                  resizeEpoch={resizeEpoch}
+                  resizeEpoch={effectiveResizeEpoch}
                   drawerHeight={drawerHeight}
                   keybindings={keybindings}
                 />
