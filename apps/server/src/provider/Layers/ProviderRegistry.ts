@@ -560,13 +560,10 @@ export const ProviderRegistryLive = Layer.effect(
         yield* Effect.forEach(
           newlyAdded,
           ([, instance]) =>
-            Effect.gen(function* () {
-              const source = buildSnapshotSource(instance);
-              const provider = yield* source.getSnapshot;
-              yield* correlateSnapshotWithSource(source, provider).pipe(
-                Effect.flatMap(syncProvider),
-              );
-            }).pipe(Effect.ignoreCause({ log: true })),
+            refreshOneSource(buildSnapshotSource(instance)).pipe(
+              Effect.ignoreCause({ log: true }),
+              Effect.forkScoped,
+            ),
           { concurrency: "unbounded", discard: true },
         );
         yield* upsertProviders(unavailableProviders, {
