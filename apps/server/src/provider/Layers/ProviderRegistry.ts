@@ -519,6 +519,7 @@ export const ProviderRegistryLive = Layer.effect(
           knownInstanceIds.add(snapshotInstanceKey(provider));
         }
         const previousSubs = yield* Ref.get(liveSubsRef);
+        const isBootSync = previousSubs.size === 0;
 
         // Carry over subscriptions for instances whose identity is
         // unchanged (reconcile treated them as no-op). Instances that
@@ -554,19 +555,18 @@ export const ProviderRegistryLive = Layer.effect(
           ).pipe(Effect.forkScoped);
         }
 
-        // Force-refresh every new/rebuilt instance in parallel and wait
-        // for them all to complete. The refresh's result is piped
-        // directly into `syncProvider`, so `providersRef` is populated
-        // deterministically by the time this block returns — regardless
-        // of PubSub subscription timing. Failures are logged and
-        // swallowed so one bad driver can't wedge the whole registry.
+        // Force-refresh every new/rebuilt instance. The refresh's result is
+        // piped directly into `syncProvider`, so it still compensates for
+        // any PubSub timing race. At boot, refreshes are forked so they
+        // do not block server HTTP/WS readiness.
         yield* Effect.forEach(
           newlyAdded,
-          ([, instance]) =>
-            refreshOneSource(buildSnapshotSource(instance)).pipe(
+          ([, instance]) => {
+            const refreshEffect = refreshOneSource(buildSnapshotSource(instance)).pipe(
               Effect.ignoreCause({ log: true }),
-              Effect.forkScoped,
-            ),
+            );
+            return isBootSync ? Effect.forkScoped(refreshEffect) : refreshEffect;
+          },
           { concurrency: "unbounded", discard: true },
         );
         yield* upsertProviders(unavailableProviders, {
