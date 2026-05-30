@@ -138,4 +138,44 @@ describe("ChatMarkdown", () => {
       await screen.unmount();
     }
   });
+
+  it("visually distinguishes headings, emphasis, and task lists", async () => {
+    const screen = await render(
+      <ChatMarkdown
+        text={"# Markdown heading\n\nRegular **bold** text\n\n- [x] Done"}
+        cwd="/repo/project"
+      />,
+    );
+
+    try {
+      await expect
+        .element(page.getByRole("heading", { level: 1, name: "Markdown heading" }))
+        .toBeInTheDocument();
+
+      const heading = document.querySelector<HTMLElement>(".chat-markdown h1");
+      const paragraph = document.querySelector<HTMLElement>(".chat-markdown p");
+      const strong = document.querySelector<HTMLElement>(".chat-markdown strong");
+      const checkbox = document.querySelector<HTMLInputElement>(
+        ".chat-markdown input[type='checkbox']",
+      );
+
+      expect(heading).not.toBeNull();
+      expect(paragraph).not.toBeNull();
+      expect(strong).not.toBeNull();
+      expect(checkbox).not.toBeNull();
+
+      const headingStyle = getComputedStyle(heading!);
+      const paragraphStyle = getComputedStyle(paragraph!);
+      const strongStyle = getComputedStyle(strong!);
+
+      expect(Number.parseFloat(headingStyle.fontSize)).toBeGreaterThan(
+        Number.parseFloat(paragraphStyle.fontSize),
+      );
+      expect(Number.parseInt(headingStyle.fontWeight, 10)).toBeGreaterThanOrEqual(600);
+      expect(Number.parseInt(strongStyle.fontWeight, 10)).toBeGreaterThanOrEqual(600);
+      expect(checkbox!.checked).toBe(true);
+    } finally {
+      await screen.unmount();
+    }
+  });
 });
