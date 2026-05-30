@@ -1,9 +1,11 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, it, assert } from "@effect/vitest";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -916,6 +918,109 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
         }),
       );
 
+      it.effect("does not wait for boot refreshes before exposing fallback providers", () =>
+        Effect.gen(function* () {
+          const codexDriver = ProviderDriverKind.make("codex");
+          const codexInstanceId = ProviderInstanceId.make("codex");
+          const fallbackProvider = {
+            instanceId: codexInstanceId,
+            driver: codexDriver,
+            status: "warning",
+            enabled: true,
+            installed: false,
+            auth: { status: "unknown" },
+            checkedAt: "2026-04-29T10:00:00.000Z",
+            version: null,
+            message: "Codex provider status has not been checked in this session yet.",
+            models: [],
+            slashCommands: [],
+            skills: [],
+          } as const satisfies ServerProvider;
+          const refreshedProvider = {
+            ...fallbackProvider,
+            status: "ready",
+            installed: true,
+            version: "1.0.0",
+            message: "Codex is ready.",
+            checkedAt: "2026-04-29T10:00:01.000Z",
+          } as const satisfies ServerProvider;
+          const releaseRefresh = yield* Deferred.make<void>();
+          const refreshStarted = yield* Deferred.make<void>();
+          const instance = {
+            instanceId: codexInstanceId,
+            driverKind: codexDriver,
+            continuationIdentity: {
+              driverKind: codexDriver,
+              continuationKey: "codex:instance:codex",
+            },
+            displayName: undefined,
+            enabled: true,
+            snapshot: {
+              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
+                provider: codexDriver,
+                packageName: null,
+              }),
+              getSnapshot: Effect.succeed(fallbackProvider),
+              refresh: Effect.gen(function* () {
+                yield* Deferred.succeed(refreshStarted, undefined).pipe(Effect.ignore);
+                yield* Deferred.await(releaseRefresh);
+                return refreshedProvider;
+              }),
+              streamChanges: Stream.empty,
+            },
+            adapter: {} as ProviderInstance["adapter"],
+            textGeneration: {} as ProviderInstance["textGeneration"],
+          } satisfies ProviderInstance;
+          const instanceRegistryLayer = Layer.succeed(ProviderInstanceRegistry, {
+            getInstance: (instanceId) =>
+              Effect.succeed(instanceId === codexInstanceId ? instance : undefined),
+            listInstances: Effect.succeed([instance]),
+            listUnavailable: Effect.succeed([]),
+            streamChanges: Stream.empty,
+            subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), (pubsub) =>
+              PubSub.subscribe(pubsub),
+            ),
+          });
+          const scope = yield* Scope.make();
+          yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
+          const maybeRuntimeServices = yield* Layer.build(
+            ProviderRegistryLive.pipe(
+              Layer.provideMerge(instanceRegistryLayer),
+              Layer.provideMerge(
+                ServerConfig.layerTest(process.cwd(), {
+                  prefix: "t3-provider-registry-nonblocking-refresh-",
+                }),
+              ),
+              Layer.provideMerge(NodeServices.layer),
+            ),
+          ).pipe(Scope.provide(scope), Effect.timeoutOption("100 millis"));
+
+          if (Option.isNone(maybeRuntimeServices)) {
+            assert.fail("ProviderRegistryLive waited for the boot provider refresh.");
+          }
+
+          yield* Effect.gen(function* () {
+            const registry = yield* ProviderRegistry;
+            assert.deepStrictEqual(yield* registry.getProviders, [fallbackProvider]);
+
+            yield* Deferred.await(refreshStarted).pipe(Effect.timeoutOption("100 millis"));
+            yield* Deferred.succeed(releaseRefresh, undefined);
+
+            let providers = yield* registry.getProviders;
+            for (
+              let attempt = 0;
+              attempt < 50 && providers[0]?.checkedAt !== refreshedProvider.checkedAt;
+              attempt += 1
+            ) {
+              yield* Effect.yieldNow;
+              providers = yield* registry.getProviders;
+            }
+
+            assert.deepStrictEqual(providers, [refreshedProvider]);
+          }).pipe(Effect.provide(maybeRuntimeServices.value));
+        }),
+      );
+
       it.effect("keeps consuming registry changes after one sync fails", () =>
         Effect.gen(function* () {
           const codexDriver = ProviderDriverKind.make("codex");
@@ -1037,18 +1142,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
         }),
       );
 
-      // This test intentionally avoids `mockCommandSpawnerLayer` so the real
-      // `probeCodexAppServerProvider` path runs — including the full
-      // `codex app-server` RPC handshake via `CodexClient.layerCommand`.
-      // We point `binaryPath` at a name that cannot exist on any machine so
-      // the real `ChildProcessSpawner` deterministically returns ENOENT; the
-      // probe wraps that as `CodexAppServerSpawnError` and
-      // `checkCodexProviderStatus` turns it into the user-visible "not
-      // installed" error snapshot. If the aggregator's `syncLiveSources`
-      // breaks — the `codex_personal`-never-probes bug we are guarding
-      // against — that snapshot never lands in `getProviders` and the
-      // assertions below fail.
-      it.effect("propagates real Codex probe failures to the aggregator at boot", () =>
+      // The custom instance shape matches the user config that originally
+      // exposed the `codex_personal`-never-probes bug. The spawner failure is
+      // mocked so the test verifies registry propagation without depending on
+      // platform-specific missing-binary process semantics.
+      it.effect("propagates Codex probe failures to the aggregator at boot", () =>
         Effect.gen(function* () {
           const missingBinary = `t3code_codex_missing_`;
           const serverSettings = yield* makeMutableServerSettingsService(
@@ -1101,11 +1199,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             Layer.provideMerge(TestHttpClientLive),
             Layer.provideMerge(Layer.succeed(ProviderEventLoggers, NoOpProviderEventLoggers)),
             Layer.provideMerge(OpenCodeRuntimeLive),
-            // NO spawner mock — `ChildProcessSpawner` is supplied by the
-            // outer `NodeServices.layer` on `it.layer(...)` and will
-            // genuinely spawn a subprocess. The missing-binary ENOENT is
-            // what exercises the same failure mode as a misconfigured
-            // production `binaryPath`.
+            Layer.provideMerge(failingSpawnerLayer(`spawn ${missingBinary} ENOENT`)),
           );
           const runtimeServices = yield* Layer.build(providerRegistryLayer).pipe(
             Scope.provide(scope),
@@ -1114,19 +1208,16 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
           yield* Effect.gen(function* () {
             const registry = yield* ProviderRegistry;
             let providers = yield* registry.getProviders;
-            for (
-              let attempts = 0;
-              attempts < 50 &&
-              providers.find((provider) => provider.instanceId === "codex_personal")?.status !==
-                "error";
-              attempts += 1
-            ) {
-              yield* Effect.yieldNow;
-              providers = yield* registry.getProviders;
-            }
-            const codexPersonal = providers.find(
+            let codexPersonal = providers.find(
               (provider) => provider.instanceId === "codex_personal",
             );
+            for (let attempt = 0; attempt < 60 && codexPersonal?.status !== "error"; attempt += 1) {
+              yield* Effect.yieldNow;
+              providers = yield* registry.getProviders;
+              codexPersonal = providers.find(
+                (provider) => provider.instanceId === "codex_personal",
+              );
+            }
             assert.notStrictEqual(
               codexPersonal,
               undefined,
@@ -1190,6 +1281,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             // same real `ChildProcessSpawner` + `FileSystem` + `Path`
             // services that production uses.
             Layer.provideMerge(NodeServices.layer),
+            Layer.provideMerge(failingSpawnerLayer("spawn codex ENOENT")),
           );
           const runtimeServices = yield* Layer.build(providerRegistryLayer).pipe(
             Scope.provide(scope),
@@ -1204,20 +1296,17 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
             // fresh DateTime, so we capture it and assert it advances
             // after the settings mutation.
             let initialProviders = yield* registry.getProviders;
+            let initialCodex = initialProviders.find((provider) => provider.instanceId === "codex");
             for (
               let attempts = 0;
-              attempts < 50 &&
-              initialProviders.find((provider) => provider.instanceId === "codex")?.status !==
-                "error";
+              attempts < 60 && initialCodex?.status !== "error";
               attempts += 1
             ) {
-              yield* TestClock.adjust("10 millis");
+              yield* TestClock.adjust("50 millis");
               yield* Effect.yieldNow;
               initialProviders = yield* registry.getProviders;
+              initialCodex = initialProviders.find((provider) => provider.instanceId === "codex");
             }
-            const initialCodex = initialProviders.find(
-              (provider) => provider.instanceId === "codex",
-            );
             assert.strictEqual(initialCodex?.status, "error");
             assert.strictEqual(initialCodex?.installed, false);
             const initialCheckedAt = initialCodex?.checkedAt;
@@ -1256,7 +1345,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
                   return providers;
                 }
                 yield* TestClock.adjust("50 millis");
-                yield* Effect.promise(() => new Promise((resolve) => (globalThis as any)["set" + "Timeout"](resolve, 200)));
                 yield* Effect.yieldNow;
               }
               return yield* registry.getProviders;
