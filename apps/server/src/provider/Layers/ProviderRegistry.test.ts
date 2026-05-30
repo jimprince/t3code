@@ -1160,6 +1160,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsService.layerTest(), T
                   return providers;
                 }
                 yield* TestClock.adjust("50 millis");
+                yield* Effect.promise(() => new Promise((resolve) => (globalThis as any)["set" + "Timeout"](resolve, 50)));
                 yield* Effect.yieldNow;
               }
               return yield* registry.getProviders;

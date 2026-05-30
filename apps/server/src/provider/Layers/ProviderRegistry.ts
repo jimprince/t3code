@@ -563,7 +563,10 @@ export const ProviderRegistryLive = Layer.effect(
         yield* Effect.forEach(
           newlyAdded,
           ([, instance]) =>
-            refreshOneSource(buildSnapshotSource(instance)).pipe(Effect.ignoreCause({ log: true })),
+            refreshOneSource(buildSnapshotSource(instance)).pipe(
+              Effect.ignoreCause({ log: true }),
+              Effect.forkScoped,
+            ),
           { concurrency: "unbounded", discard: true },
         );
         yield* upsertProviders(unavailableProviders, {
