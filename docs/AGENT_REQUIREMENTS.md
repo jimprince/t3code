@@ -1473,6 +1473,8 @@ Integrate the recommended UI stability, Zustand store reactivity, terminal exit,
 - Integrate chat auto-scroll stability fixes (from `upstream/cursor/chat-view-auto-scroll-bug-cbbd`).
 - Integrate terminal exit graceful handling fixes (from `upstream/cursor/terminal-exit-error-handling-eafe`).
 - Integrate terminal drawer resize optimizations (from `upstream/cursor/react-component-health-4a54`).
+- Integrate background non-blocking provider check optimizations (from `upstream/cursor/react-component-health-20cc` via `prisco-ai/main`).
+- Integrate polished chat markdown heading and checklist rendering styles (from `prisco-ai/main`).
 - Ensure all integrated changes are clean, functional, and fully verified.
 
 ### Constraints
@@ -1493,7 +1495,7 @@ Integrate the recommended UI stability, Zustand store reactivity, terminal exit,
 
 ### Verification
 
-- Passed: server-side integration tests in `apps/server` (all 53 tests passed green).
+- Passed: server-side integration tests in `apps/server` (all 86 tests passed green, including the new background refresh test and the updated settings re-probe test).
 - Passed: `bunx tsc --noEmit` in both `apps/web` and `apps/server` (zero TypeScript errors).
 - Passed: `bunx oxfmt` (formatted cleanly).
 - Passed: `bun run lint` (zero errors, only pre-existing warnings in web).
