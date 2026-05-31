@@ -1,5 +1,47 @@
 # Agent Requirements
 
+## Current Task: Retire Stale Mobile Track Sync Workflow
+
+Stop the daily GitHub Actions failure caused by the obsolete mobile-track sync
+workflow fetching an upstream branch that no longer exists.
+
+### Current User Requirements
+
+- Recommend the safest response to the failing `Mobile Track Sync` scheduled build.
+- Continue with clear next steps when the correct path is unambiguous.
+- Stop the recurring failure emails from the stale scheduled workflow.
+
+### Constraints
+
+- Do not retarget mobile automation to an unrelated upstream branch.
+- Preserve the main desktop/headless nightly release pipeline.
+- Follow repo instructions: use `bun run test`, never `bun test`; all of
+  `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion when
+  code changes require them.
+
+### Acceptance Criteria
+
+- The stale scheduled `Mobile Track Sync` workflow can no longer fail daily due
+  to missing `t3code/mobile-remote-connect`.
+- Fork release documentation no longer describes the retired workflow as active.
+- The change is limited to workflow/docs metadata and does not affect release
+  builds.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Passed: `git diff --check`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Integrate UI Stability and Synchronization Fixes from Forks
 
 Integrate the recommended UI stability, Zustand store reactivity, terminal exit, and server-side transient event synchronization fixes from active upstream forks.
