@@ -68,24 +68,13 @@ things specific to the fork relationship.
    ```
 
    When Brad asks for "remote build status", "build status", or whether the
-   fork build succeeded, report all three fork deliverable lanes separately:
-   mac Electron app, Linux/headless app, and mobile app. The first two come
-   from the main-branch `Release` workflow (`release.yml`) and its published
-   GitHub release assets. The mobile app is separate: check the
-   `feature/mobile-track` branch's `Mobile Track EAS Update` workflow and its
-   EAS publish result. Do not treat a green desktop/headless release as proof
-   that mobile is current, and do not treat a green mobile EAS update as proof
-   that the mac or Linux/headless release artifacts built.
-
-   Mobile upstream drift is checked by `mobile-track-sync.yml`, which must live
-   on this default branch because GitHub schedules only run default-branch
-   workflow files. That workflow checks out `feature/mobile-track`, compares it
-   with `upstream/t3code/mobile-remote-connect`, and only auto-rebases when Git
-   can replay the fork overlay cleanly. Clean rebases run verification, push
-   with `--force-with-lease`, and publish an EAS update. Conflicted rebases do
-   not push `feature/mobile-track` and do not publish EAS; they dispatch a
-   `mobile-track-conflict` repository_dispatch payload for the dev-VM sandboxed
-   resolver, then fail the workflow so the conflict is visible.
+   fork build succeeded, report the active fork deliverable lanes separately:
+   mac Electron app and Linux/headless app. Both come from the main-branch
+   `Release` workflow (`release.yml`) and its published GitHub release assets.
+   The old mobile drift workflow was retired after upstream deleted
+   `t3code/mobile-remote-connect`; do not treat mobile EAS status as part of
+   the desktop/headless fork release result unless a new mobile release lane is
+   explicitly reintroduced.
 
 5. Stop the runner when done:
 
