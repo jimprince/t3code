@@ -1273,6 +1273,12 @@ const make = Effect.gen(function* () {
           ? yield* getExpectedProviderTurnIdForThread(thread.id)
           : undefined;
       const matchesCurrentProviderTurn = sameId(expectedProviderTurnId, eventTurnId);
+      const providerHasNoCurrentTurn = expectedProviderTurnId === undefined;
+      // A queued turn.started can be processed after the provider has already
+      // completed and gone idle; in that case the event itself is the ordered
+      // evidence needed to advance a stale projected active turn.
+      const eventIsNotOlderThanProjectedSession =
+        thread.session?.updatedAt === undefined || event.createdAt >= thread.session.updatedAt;
 
       // A turn.started that conflicts with the active turn is legitimate when
       // the server itself has a turn start pending for this thread AND the
@@ -1304,7 +1310,8 @@ const make = Effect.gen(function* () {
             return (
               !conflictsWithActiveTurn ||
               conflictingTurnStartIsPendingTurnStart ||
-              matchesCurrentProviderTurn
+              matchesCurrentProviderTurn ||
+              (providerHasNoCurrentTurn && eventIsNotOlderThanProjectedSession)
             );
           case "turn.completed":
             if (
