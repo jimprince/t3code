@@ -1,5 +1,53 @@
 # Agent Requirements
 
+## Current Task: Fix Nightly Release Build After Goal Command
+
+Troubleshoot and fix the failed nightly release build that prevented the `/goal`
+changes from being published in a downloadable build.
+
+### Current User Requirements
+
+- Determine whether the current nightly build includes the `/goal` command.
+- Troubleshoot the failed release build.
+- Fix the release-blocking failure so a new nightly can publish with `/goal`.
+
+### Constraints
+
+- Follow repo instructions: use `bun run test`, never `bun test`; all of
+  `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion when
+  code changes require them.
+- Do not delete remote releases or tags unless explicitly confirmed.
+- Preserve the `/goal` implementation behavior; only fix release/test fallout.
+
+### Acceptance Criteria
+
+- The release-blocking failing tests pass locally.
+- Required repo checks pass locally.
+- The fix is committed and pushed to GitHub.
+- A new release workflow run is started or the release path is clearly handed
+  off with exact next command.
+
+### Status
+
+- Local fix verified; ready to commit and push.
+
+### Verification
+
+- Release failure identified in GitHub Actions run `26731273031`: full server
+  tests failed because expected thread snapshots omitted the new `goal: null`
+  read-model field.
+- Focused reproduction before patch failed in
+  `apps/server/src/orchestration/projector.test.ts` and
+  `apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.test.ts`.
+- Focused tests now pass:
+  `bun run --filter t3 test -- src/orchestration/projector.test.ts src/orchestration/Layers/ProjectionSnapshotQuery.test.ts`.
+- Required checks pass locally: `bun fmt`, `bun lint` (warnings only),
+  `bun typecheck`, and `bun run test`.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Recheck Orchestration External Event Catch-Up Fix
 
 Validate and, if appropriate, implement the fix for a running server rejecting
