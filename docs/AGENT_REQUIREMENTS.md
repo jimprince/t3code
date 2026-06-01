@@ -1,5 +1,56 @@
 # Agent Requirements
 
+## Current Task: Recheck Orchestration External Event Catch-Up Fix
+
+Validate and, if appropriate, implement the fix for a running server rejecting
+`thread.create` after a project was created by another process.
+
+### Current User Requirements
+
+- Double-check the proposed orchestration read-model catch-up fix.
+- Continue with next steps if the path is clear.
+- Implement a repo fix if the failure is confirmed in the repo.
+- Commit, merge, and push the verified fix.
+
+### Constraints
+
+- Keep the fix scoped to orchestration command read-model consistency.
+- Preserve command idempotency and existing receipt behavior.
+- Follow repo instructions: use `bun run test`, never `bun test`; all of
+  `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion when
+  code changes require them.
+
+### Acceptance Criteria
+
+- A running `OrchestrationEngine` catches up command state before deciding a
+  command when events were appended/projected outside that engine instance.
+- `thread.create` succeeds for a project added externally after engine
+  bootstrap.
+- Focused regression coverage proves the stale in-memory command read model
+  failure path.
+- The fix commit is merged to the intended branch and pushed to GitHub.
+
+### Status
+
+- Implementation verified; commit/merge/push in progress.
+
+### Verification
+
+- Passed: focused regression test
+  `bun run --filter t3 test -- src/orchestration/Layers/OrchestrationEngine.test.ts -t "catches up command state"`.
+- Verified regression catch: temporarily removed the pre-decision catch-up and
+  the focused test failed with the missing-project invariant.
+- Passed: full orchestration engine test file
+  `bun run --filter t3 test -- src/orchestration/Layers/OrchestrationEngine.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing unrelated warnings only.
+- Passed: `bun typecheck`.
+- Pending: post-push branch verification.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Retire Stale Mobile Track Sync Workflow
 
 Stop the daily GitHub Actions failure caused by the obsolete mobile-track sync
