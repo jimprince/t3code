@@ -1,5 +1,100 @@
 # Agent Requirements
 
+## Current Task: Publish Stale OpenCode Working Fix
+
+Commit the verified stale OpenCode `Working` status fix, push it to GitHub,
+open a pull request, and merge through that pull request.
+
+### Current User Requirements
+
+- Commit the existing verified stale OpenCode Working status fix.
+- Push the branch to GitHub.
+- Open a pull request for the fix.
+- Merge the change through the pull request.
+
+### Constraints
+
+- Stage only the intended repo changes for the stale Working fix.
+- Preserve the verification evidence already collected for the implementation.
+- Use the GitHub PR flow; do not bypass review infrastructure with a direct
+  push to the base branch.
+
+### Acceptance Criteria
+
+- A commit exists containing only the intended fix/test/tracker changes.
+- The branch is pushed to GitHub.
+- A pull request exists for that branch against the repository default branch.
+- The pull request is merged successfully.
+
+### Status
+
+- In progress.
+
+### Verification
+
+- Pending PR creation and merge.
+
+### Open Questions / Proposed Changes
+
+- None.
+
+## Current Task: Fix Stale OpenCode Working Status
+
+Investigate and fix the stale `Working` status observed on thread
+`46c06c73-cf76-498e-b017-d577f833d6a6`, after double-checking and rejecting
+the proposed `apps/server/src/ws.ts` projection-race workaround.
+
+### Current User Requirements
+
+- Implement the real fix for stale/out-of-sync Working status.
+- Do not apply the `ws.ts` workaround as the primary fix if the underlying bug
+  is lifecycle ingestion.
+- Add regression coverage for the OpenCode/stale-active-turn scenario.
+- Verify the fix with the repo's required commands.
+
+### Constraints
+
+- Preserve existing lifecycle guard behavior that prevents unrelated turn
+  completions from clearing the current active turn.
+- Follow repo instructions: use `bun run test`, never `bun test`; all of
+  `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion.
+- Keep changes scoped to provider lifecycle state handling and tests unless
+  documentation needs a narrow update.
+
+### Acceptance Criteria
+
+- A thread whose projected `activeTurnId` is stale can recover when a new
+  provider-scoped `turn.started` arrives for the same thread.
+- The recovered active turn's `turn.completed` event emits a `ready`
+  `thread.session-set` and clears `activeTurnId`.
+- Non-active turn completions still cannot clear an unrelated active turn.
+- Focused regression test fails before the fix and passes after it.
+- Required repo checks pass locally.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Verified regression catch: before the implementation change, the focused test
+  `bun run --filter t3 test -- src/orchestration/Layers/ProviderRuntimeIngestion.test.ts -t "queued provider turn start"`
+  timed out waiting for the stale active turn to recover.
+- Passed after fix: focused regression
+  `bun run --filter t3 test -- src/orchestration/Layers/ProviderRuntimeIngestion.test.ts -t "queued provider turn start"`.
+- Passed: full ingestion suite
+  `bun run --filter t3 test -- src/orchestration/Layers/ProviderRuntimeIngestion.test.ts`
+  (40 tests).
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+- Passed: `bun run test` (13/13 Turbo tasks successful; server suite 125 test
+  files passed, 1048 tests passed, 1 file skipped).
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Fix Nightly Release Build After Goal Command
 
 Troubleshoot and fix the failed nightly release build that prevented the `/goal`
