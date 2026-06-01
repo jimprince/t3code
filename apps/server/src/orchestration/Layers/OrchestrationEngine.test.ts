@@ -2,6 +2,7 @@ import {
   CheckpointRef,
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
+  EventId,
   MessageId,
   ProjectId,
   ThreadId,
@@ -40,6 +41,7 @@ import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts"
 import { ServerConfig } from "../../config.ts";
 
 const asProjectId = (value: string): ProjectId => ProjectId.make(value);
+const asEventId = (value: string): EventId => EventId.make(value);
 const asMessageId = (value: string): MessageId => MessageId.make(value);
 const asTurnId = (value: string): TurnId => TurnId.make(value);
 const asCheckpointRef = (value: string): CheckpointRef => CheckpointRef.make(value);
@@ -228,6 +230,123 @@ describe("OrchestrationEngine", () => {
 
     expect(result.sequence).toBe(8);
     expect(fullSnapshotReadCount).toBe(0);
+
+    await runtime.dispose();
+  });
+
+  it("catches up command state with events appended outside the running engine", async () => {
+    type StoredEvent =
+      ReturnType<OrchestrationEventStoreShape["append"]> extends Effect.Effect<infer A, any, any>
+        ? A
+        : never;
+    const events: StoredEvent[] = [];
+    let nextSequence = 1;
+    const createdAt = now();
+    const projectId = asProjectId("project-external-create");
+
+    const eventStore: OrchestrationEventStoreShape = {
+      append: (event) =>
+        Effect.sync(() => {
+          const savedEvent = {
+            ...event,
+            sequence: nextSequence,
+          } as StoredEvent;
+          nextSequence += 1;
+          events.push(savedEvent);
+          return savedEvent;
+        }),
+      readFromSequence: (sequenceExclusive) =>
+        Stream.fromIterable(events.filter((event) => event.sequence > sequenceExclusive)),
+      readAll: () => Stream.fromIterable(events),
+    };
+
+    const projectionSnapshot = {
+      snapshotSequence: 0,
+      updatedAt: "1970-01-01T00:00:00.000Z",
+      projects: [],
+      threads: [],
+    };
+
+    const layer = OrchestrationEngineLive.pipe(
+      Layer.provide(
+        Layer.succeed(ProjectionSnapshotQuery, {
+          getCommandReadModel: () => Effect.succeed(projectionSnapshot),
+          getSnapshot: () => Effect.succeed(projectionSnapshot),
+          getShellSnapshot: () => Effect.succeed(projectionSnapshot),
+          getArchivedShellSnapshot: () => Effect.succeed(projectionSnapshot),
+          getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
+          getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
+          getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+          getProjectShellById: () => Effect.succeed(Option.none()),
+          getFirstActiveThreadIdByProjectId: () => Effect.succeed(Option.none()),
+          getThreadCheckpointContext: () => Effect.succeed(Option.none()),
+          getFullThreadDiffContext: () => Effect.succeed(Option.none()),
+          getThreadShellById: () => Effect.succeed(Option.none()),
+          getThreadShellByIdIncludingArchived: () => Effect.succeed(Option.none()),
+          getThreadDetailById: () => Effect.succeed(Option.none()),
+        }),
+      ),
+      Layer.provide(
+        Layer.succeed(OrchestrationProjectionPipeline, {
+          bootstrap: Effect.void,
+          projectEvent: () => Effect.void,
+        } satisfies OrchestrationProjectionPipelineShape),
+      ),
+      Layer.provide(Layer.succeed(OrchestrationEventStore, eventStore)),
+      Layer.provide(OrchestrationCommandReceiptRepositoryLive),
+      Layer.provide(SqlitePersistenceMemory),
+    );
+
+    const runtime = ManagedRuntime.make(layer);
+    const engine = await runtime.runPromise(Effect.service(OrchestrationEngineService));
+
+    events.push({
+      sequence: nextSequence,
+      eventId: asEventId("evt-project-external-create"),
+      type: "project.created",
+      aggregateKind: "project",
+      aggregateId: projectId,
+      occurredAt: createdAt,
+      commandId: CommandId.make("cmd-project-external-create"),
+      causationEventId: null,
+      correlationId: CommandId.make("cmd-project-external-create"),
+      metadata: {},
+      payload: {
+        projectId,
+        title: "External Project",
+        workspaceRoot: "/tmp/project-external-create",
+        defaultModelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        scripts: [],
+        createdAt,
+        updatedAt: createdAt,
+      },
+    } satisfies StoredEvent);
+    nextSequence += 1;
+
+    const result = await runtime.runPromise(
+      engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-thread-external-create"),
+        threadId: ThreadId.make("thread-external-create"),
+        projectId,
+        title: "Thread from external project",
+        modelSelection: {
+          instanceId: ProviderInstanceId.make("codex"),
+          model: "gpt-5-codex",
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      }),
+    );
+
+    expect(result.sequence).toBe(2);
+    expect(events.map((event) => event.type)).toEqual(["project.created", "thread.created"]);
 
     await runtime.dispose();
   });

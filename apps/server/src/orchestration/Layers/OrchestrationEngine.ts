@@ -100,28 +100,28 @@ const makeOrchestrationEngine = Effect.gen(function* () {
       return nextReadModel;
     });
 
+  const catchUpCommandReadModel = Effect.gen(function* () {
+    const persistedEvents = yield* Stream.runCollect(
+      eventStore.readFromSequence(commandReadModel.snapshotSequence, Number.MAX_SAFE_INTEGER),
+    ).pipe(Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)));
+    if (persistedEvents.length === 0) {
+      return;
+    }
+
+    commandReadModel = yield* projectEventsOntoReadModel(commandReadModel, persistedEvents);
+
+    for (const persistedEvent of persistedEvents) {
+      yield* PubSub.publish(eventPubSub, persistedEvent);
+    }
+  });
+
   const processEnvelope = (envelope: CommandEnvelope): Effect.Effect<void> => {
-    const dispatchStartSequence = commandReadModel.snapshotSequence;
     let processingStartedAtMs = 0;
     const aggregateRef = commandToAggregateRef(envelope.command);
     const baseMetricAttributes = {
       commandType: envelope.command.type,
       aggregateKind: aggregateRef.aggregateKind,
     } as const;
-    const reconcileReadModelAfterDispatchFailure = Effect.gen(function* () {
-      const persistedEvents = yield* Stream.runCollect(
-        eventStore.readFromSequence(dispatchStartSequence),
-      ).pipe(Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)));
-      if (persistedEvents.length === 0) {
-        return;
-      }
-
-      commandReadModel = yield* projectEventsOntoReadModel(commandReadModel, persistedEvents);
-
-      for (const persistedEvent of persistedEvents) {
-        yield* PubSub.publish(eventPubSub, persistedEvent);
-      }
-    });
 
     return Effect.exit(
       Effect.gen(function* () {
@@ -132,6 +132,8 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           "orchestration.aggregate_kind": aggregateRef.aggregateKind,
           "orchestration.aggregate_id": aggregateRef.aggregateId,
         });
+
+        yield* catchUpCommandReadModel;
 
         const existingReceipt = yield* commandReceiptRepository.getByCommandId({
           commandId: envelope.command.commandId,
@@ -262,7 +264,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
           const error = Cause.squash(exit.cause) as OrchestrationDispatchError;
           if (!isOrchestrationCommandPreviouslyRejectedError(error)) {
-            yield* reconcileReadModelAfterDispatchFailure.pipe(
+            yield* catchUpCommandReadModel.pipe(
               Effect.catch(() =>
                 Effect.logWarning(
                   "failed to reconcile orchestration read model after dispatch failure",
