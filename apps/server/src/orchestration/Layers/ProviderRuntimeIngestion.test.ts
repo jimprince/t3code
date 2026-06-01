@@ -674,6 +674,68 @@ describe("ProviderRuntimeIngestion", () => {
     );
   });
 
+  it("recovers same-turn running state when assistant completion already settled the active turn", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const turnId = asTurnId("turn-assistant-settled-without-terminal-lifecycle");
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started-assistant-settled-without-terminal-lifecycle"),
+      provider: ProviderDriverKind.make("opencode"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId,
+    });
+
+    await waitForThread(
+      harness.readModel,
+      (thread) => thread.session?.status === "running" && thread.session?.activeTurnId === turnId,
+    );
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-message-delta-assistant-settled-without-terminal-lifecycle"),
+      provider: ProviderDriverKind.make("opencode"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId,
+      itemId: asItemId("item-assistant-settled-without-terminal-lifecycle"),
+      payload: {
+        streamKind: "assistant_text",
+        delta: "Done.",
+      },
+    });
+
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-message-completed-assistant-settled-without-terminal-lifecycle"),
+      provider: ProviderDriverKind.make("opencode"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId,
+      itemId: asItemId("item-assistant-settled-without-terminal-lifecycle"),
+      payload: {
+        itemType: "assistant_message",
+        status: "completed",
+      },
+    });
+
+    const settledThread = await waitForThread(
+      harness.readModel,
+      (thread) =>
+        thread.session?.status === "ready" &&
+        thread.session.activeTurnId === null &&
+        thread.messages.some(
+          (message: ProviderRuntimeTestMessage) =>
+            message.turnId === turnId && message.role === "assistant" && !message.streaming,
+        ),
+    );
+
+    expect(settledThread.session?.status).toBe("ready");
+    expect(settledThread.session?.activeTurnId).toBeNull();
+  });
+
   it("ignores non-active turn completion when runtime omits thread id", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
