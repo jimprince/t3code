@@ -1663,6 +1663,40 @@ const make = Effect.gen(function* () {
           ),
         ),
       ).pipe(Effect.asVoid);
+
+      const refreshedThread = yield* resolveThreadShell(thread.id);
+      const refreshedSession = refreshedThread?.session ?? null;
+      const refreshedActiveTurnId = refreshedSession?.activeTurnId ?? null;
+      const settledActiveTurn =
+        refreshedActiveTurnId !== null
+          ? yield* projectionTurnRepository.getByTurnId({
+              threadId: thread.id,
+              turnId: refreshedActiveTurnId,
+            })
+          : Option.none();
+      if (
+        refreshedSession?.status === "running" &&
+        refreshedThread !== undefined &&
+        refreshedActiveTurnId !== null &&
+        Option.isSome(settledActiveTurn) &&
+        settledActiveTurn.value.state === "completed" &&
+        !refreshedThread.hasPendingApprovals &&
+        !refreshedThread.hasPendingUserInput
+      ) {
+        yield* orchestrationEngine.dispatch({
+          type: "thread.session.set",
+          commandId: providerCommandId(event, "same-turn-completed-session-set"),
+          threadId: thread.id,
+          session: {
+            ...refreshedSession,
+            status: "ready",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: now,
+          },
+          createdAt: now,
+        });
+      }
     });
 
   const processDomainEvent = (_event: TurnStartRequestedDomainEvent) => Effect.void;
