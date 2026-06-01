@@ -248,6 +248,7 @@ function mapThread(thread: OrchestrationThread, environmentId: EnvironmentId): T
     archivedAt: thread.archivedAt,
     updatedAt: thread.updatedAt,
     latestTurn: thread.latestTurn,
+    goal: thread.goal ?? null,
     pendingSourceProposedPlan: thread.latestTurn?.sourceProposedPlan,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
@@ -280,6 +281,7 @@ function mapThreadShell(
     updatedAt: thread.updatedAt,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
+    goal: thread.goal ?? null,
   };
   const session = thread.session ? mapSession(thread.session) : null;
   const turnState: ThreadTurnState = {
@@ -299,6 +301,7 @@ function mapThreadShell(
     latestTurn: thread.latestTurn,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
+    goal: thread.goal ?? null,
     latestUserMessageAt: thread.latestUserMessageAt,
     hasPendingApprovals: thread.hasPendingApprovals,
     hasPendingUserInput: thread.hasPendingUserInput,
@@ -328,6 +331,7 @@ function toThreadShell(thread: Thread): ThreadShell {
     updatedAt: thread.updatedAt,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
+    goal: thread.goal ?? null,
   };
 }
 
@@ -400,6 +404,7 @@ function sidebarThreadSummariesEqual(
     latestTurnsEqual(left.latestTurn, right.latestTurn) &&
     left.branch === right.branch &&
     left.worktreePath === right.worktreePath &&
+    left.goal === right.goal &&
     left.latestUserMessageAt === right.latestUserMessageAt &&
     left.hasPendingApprovals === right.hasPendingApprovals &&
     left.hasPendingUserInput === right.hasPendingUserInput &&
@@ -423,7 +428,8 @@ function threadShellsEqual(left: ThreadShell | undefined, right: ThreadShell): b
     left.archivedAt === right.archivedAt &&
     left.updatedAt === right.updatedAt &&
     left.branch === right.branch &&
-    left.worktreePath === right.worktreePath
+    left.worktreePath === right.worktreePath &&
+    left.goal === right.goal
   );
 }
 
@@ -1260,6 +1266,7 @@ function applyEnvironmentOrchestrationEvent(
           branch: event.payload.branch,
           worktreePath: event.payload.worktreePath,
           latestTurn: null,
+          goal: null,
           createdAt: event.payload.createdAt,
           updatedAt: event.payload.updatedAt,
           archivedAt: null,
@@ -1319,6 +1326,41 @@ function applyEnvironmentOrchestrationEvent(
         interactionMode: event.payload.interactionMode,
         updatedAt: event.payload.updatedAt,
       }));
+
+    case "thread.goal-set":
+      return updateThreadState(state, event.payload.threadId, (thread) => ({
+        ...thread,
+        goal: event.payload.goal,
+        updatedAt: event.payload.goal.updatedAt,
+      }));
+
+    case "thread.goal-cleared":
+      return updateThreadState(state, event.payload.threadId, (thread) => ({
+        ...thread,
+        goal: null,
+        updatedAt: event.payload.updatedAt,
+      }));
+
+    case "thread.goal-evaluated":
+      return updateThreadState(state, event.payload.threadId, (thread) => {
+        if (!thread.goal) return thread;
+        return {
+          ...thread,
+          goal: {
+            ...thread.goal,
+            status: event.payload.achieved ? "achieved" : "active",
+            updatedAt: event.payload.updatedAt,
+            achievedAt: event.payload.achieved ? event.payload.evaluatedAt : thread.goal.achievedAt,
+            lastEvaluatedAt: event.payload.evaluatedAt,
+            lastReason: event.payload.reason,
+            lastTurnId: event.payload.turnId,
+            continuationCount: event.payload.continuationRequested
+              ? thread.goal.continuationCount + 1
+              : thread.goal.continuationCount,
+          },
+          updatedAt: event.payload.updatedAt,
+        };
+      });
 
     case "thread.turn-start-requested":
       return updateThreadState(state, event.payload.threadId, (thread) => ({

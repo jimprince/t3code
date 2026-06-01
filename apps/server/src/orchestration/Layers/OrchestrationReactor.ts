@@ -6,6 +6,7 @@ import {
   type OrchestrationReactorShape,
 } from "../Services/OrchestrationReactor.ts";
 import { CheckpointReactor } from "../Services/CheckpointReactor.ts";
+import { GoalReactor } from "../Services/GoalReactor.ts";
 import { ProviderCommandReactor } from "../Services/ProviderCommandReactor.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ThreadArchiveCleanupReactor } from "../Services/ThreadArchiveCleanupReactor.ts";
@@ -15,6 +16,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
   const providerRuntimeIngestion = yield* ProviderRuntimeIngestionService;
   const providerCommandReactor = yield* ProviderCommandReactor;
   const checkpointReactor = yield* CheckpointReactor;
+  const goalReactor = yield* GoalReactor;
   const threadArchiveCleanupReactor = yield* ThreadArchiveCleanupReactor;
   const threadDeletionReactor = yield* ThreadDeletionReactor;
 
@@ -22,6 +24,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
     yield* providerRuntimeIngestion.start();
     yield* providerCommandReactor.start();
     yield* checkpointReactor.start();
+    yield* goalReactor.start();
     yield* threadArchiveCleanupReactor.start();
     yield* threadDeletionReactor.start();
   });

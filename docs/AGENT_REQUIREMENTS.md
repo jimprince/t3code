@@ -1,5 +1,66 @@
 # Agent Requirements
 
+## Current Task: Add T3 Code Goal Command
+
+Implement a T3 Code `/goal` command similar to Claude Code's goal loop, using
+T3-native orchestration rather than provider-specific slash-command passthrough.
+
+### Current User Requirements
+
+- Implement `/goal` for T3 Code based on the researched Claude Code/Gemini
+  behavior and the proposed detailed implementation plan.
+- `/goal <condition>` must set an active completion goal and start work toward
+  it.
+- `/goal` must expose current goal status without sending a provider turn.
+- `/goal clear|stop|off|reset|none|cancel` must clear the active goal without
+  sending a provider turn.
+- After each completed provider turn, T3 Code should evaluate whether the active
+  goal is satisfied and continue with another turn when it is not.
+- The evaluator must judge only transcript-visible evidence.
+- Goal state must be represented in T3 orchestration state so the web UI can
+  reconnect without losing visibility.
+
+### Constraints
+
+- Follow repo instructions: `bun fmt`, `bun lint`, and `bun typecheck` must pass
+  before completion.
+- Never run `bun test`; use `bun run test` or package test scripts for Vitest.
+- Keep the goal loop server-side and provider-agnostic where practical.
+- Do not silently continue when a thread is blocked on approval, user input, or
+  provider/session error.
+- Avoid runaway loops with explicit server-side caps.
+
+### Acceptance Criteria
+
+- Built-in slash command parsing and menu support `/goal` while preserving
+  existing `/model`, `/plan`, and `/default` behavior.
+- Setting a goal records persisted thread goal state and dispatches the initial
+  provider turn.
+- Status and clear subcommands are handled locally/orchestrationally and do not
+  reach the provider as normal prompts.
+- Goal evaluation records the latest reason and marks the goal achieved when
+  the transcript proves the condition.
+- Unmet goal evaluation dispatches at most one continuation turn per completed
+  provider turn.
+- Focused regression coverage exercises parser, orchestration state, evaluator
+  prompt/schema, and goal continuation behavior.
+
+### Status
+
+- Completed.
+
+### Verification
+
+- Passed: `bun run test src/composer-logic.test.ts` in `apps/web`.
+- Passed: `bun run test src/textGeneration/TextGenerationPrompts.test.ts src/textGeneration/TextGeneration.test.ts src/orchestration/Layers/OrchestrationReactor.test.ts` in `apps/server`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with warnings only.
+- Passed: `bun typecheck`.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Retire Stale Mobile Track Sync Workflow
 
 Stop the daily GitHub Actions failure caused by the obsolete mobile-track sync

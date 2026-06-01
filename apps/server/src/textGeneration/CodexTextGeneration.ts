@@ -23,6 +23,7 @@ import {
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildGoalEvaluationPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
@@ -105,7 +106,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "evaluateGoal",
     value: unknown,
   ): Effect.Effect<string, TextGenerationError> =>
     encodeJsonString(value).pipe(
@@ -124,7 +126,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "evaluateGoal",
     attachments: BranchNameGenerationInput["attachments"],
   ): Effect.fn.Return<MaterializedImageAttachments, TextGenerationError> {
     if (!attachments || attachments.length === 0) {
@@ -168,7 +171,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "evaluateGoal";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -408,10 +412,33 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
     } satisfies ThreadTitleGenerationResult;
   });
 
+  const evaluateGoal: TextGenerationShape["evaluateGoal"] = Effect.fn(
+    "CodexTextGeneration.evaluateGoal",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildGoalEvaluationPrompt({
+      goal: input.goal,
+      transcript: input.transcript,
+    });
+
+    const generated = yield* runCodexJson({
+      operation: "evaluateGoal",
+      cwd: input.cwd,
+      prompt,
+      outputSchemaJson: outputSchema,
+      modelSelection: input.modelSelection,
+    });
+
+    return {
+      achieved: generated.achieved,
+      reason: generated.reason.trim(),
+    };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    evaluateGoal,
   } satisfies TextGenerationShape;
 });
