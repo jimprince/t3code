@@ -104,6 +104,12 @@ interface FakeGitTextGeneration {
     message: string;
     modelSelection: ModelSelection;
   }) => Effect.Effect<{ title: string }, TextGenerationError>;
+  evaluateGoal: (input: {
+    cwd: string;
+    goal: string;
+    transcript: string;
+    modelSelection: ModelSelection;
+  }) => Effect.Effect<{ achieved: boolean; reason: string }, TextGenerationError>;
 }
 
 type FakePullRequest = NonNullable<FakeGhScenario["pullRequest"]>;
@@ -333,6 +339,11 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
       Effect.succeed({
         title: "Update workflow",
       }),
+    evaluateGoal: () =>
+      Effect.succeed({
+        achieved: false,
+        reason: "not evaluated in git manager tests",
+      }),
     ...overrides,
   };
 
@@ -376,6 +387,17 @@ function createTextGeneration(overrides: Partial<FakeGitTextGeneration> = {}): T
           (cause) =>
             new TextGenerationError({
               operation: "generateThreadTitle",
+              detail: "fake text generation failed",
+              ...(cause !== undefined ? { cause } : {}),
+            }),
+        ),
+      ),
+    evaluateGoal: (input) =>
+      implementation.evaluateGoal(input).pipe(
+        Effect.mapError(
+          (cause) =>
+            new TextGenerationError({
+              operation: "evaluateGoal",
               detail: "fake text generation failed",
               ...(cause !== undefined ? { cause } : {}),
             }),

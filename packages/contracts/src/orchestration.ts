@@ -330,6 +330,22 @@ export const OrchestrationLatestTurn = Schema.Struct({
 });
 export type OrchestrationLatestTurn = typeof OrchestrationLatestTurn.Type;
 
+export const OrchestrationThreadGoalStatus = Schema.Literals(["active", "achieved"]);
+export type OrchestrationThreadGoalStatus = typeof OrchestrationThreadGoalStatus.Type;
+
+export const OrchestrationThreadGoal = Schema.Struct({
+  goal: TrimmedNonEmptyString.check(Schema.isMaxLength(8_000)),
+  status: OrchestrationThreadGoalStatus,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  achievedAt: Schema.NullOr(IsoDateTime),
+  lastEvaluatedAt: Schema.NullOr(IsoDateTime),
+  lastReason: Schema.NullOr(Schema.String),
+  lastTurnId: Schema.NullOr(TurnId),
+  continuationCount: NonNegativeInt,
+});
+export type OrchestrationThreadGoal = typeof OrchestrationThreadGoal.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -342,6 +358,7 @@ export const OrchestrationThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
+  goal: Schema.optionalKey(Schema.NullOr(OrchestrationThreadGoal)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -388,6 +405,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
+  goal: Schema.optionalKey(Schema.NullOr(OrchestrationThreadGoal)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -539,6 +557,21 @@ const ThreadInteractionModeSetCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadGoalSetCommand = Schema.Struct({
+  type: Schema.Literal("thread.goal.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  goal: OrchestrationThreadGoal.fields.goal,
+  createdAt: IsoDateTime,
+});
+
+const ThreadGoalClearCommand = Schema.Struct({
+  type: Schema.Literal("thread.goal.clear"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  createdAt: IsoDateTime,
+});
+
 const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
@@ -656,6 +689,8 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
+  ThreadGoalSetCommand,
+  ThreadGoalClearCommand,
   ThreadTurnStartCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
@@ -677,6 +712,8 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
+  ThreadGoalSetCommand,
+  ThreadGoalClearCommand,
   ClientThreadTurnStartCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
@@ -751,6 +788,17 @@ const ThreadRevertCompleteCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadGoalEvaluationRecordCommand = Schema.Struct({
+  type: Schema.Literal("thread.goal.evaluation.record"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  turnId: TurnId,
+  achieved: Schema.Boolean,
+  reason: Schema.String,
+  continuationRequested: Schema.Boolean,
+  createdAt: IsoDateTime,
+});
+
 const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
@@ -759,6 +807,7 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
   ThreadRevertCompleteCommand,
+  ThreadGoalEvaluationRecordCommand,
 ]);
 export type InternalOrchestrationCommand = typeof InternalOrchestrationCommand.Type;
 
@@ -779,6 +828,9 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.meta-updated",
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
+  "thread.goal-set",
+  "thread.goal-cleared",
+  "thread.goal-evaluated",
   "thread.message-sent",
   "thread.turn-start-requested",
   "thread.turn-interrupt-requested",
@@ -875,6 +927,27 @@ export const ThreadInteractionModeSetPayload = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadGoalSetPayload = Schema.Struct({
+  threadId: ThreadId,
+  goal: OrchestrationThreadGoal,
+});
+
+export const ThreadGoalClearedPayload = Schema.Struct({
+  threadId: ThreadId,
+  clearedAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadGoalEvaluatedPayload = Schema.Struct({
+  threadId: ThreadId,
+  turnId: TurnId,
+  achieved: Schema.Boolean,
+  reason: Schema.String,
+  continuationRequested: Schema.Boolean,
+  evaluatedAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
 
@@ -1036,6 +1109,21 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.interaction-mode-set"),
     payload: ThreadInteractionModeSetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.goal-set"),
+    payload: ThreadGoalSetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.goal-cleared"),
+    payload: ThreadGoalClearedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.goal-evaluated"),
+    payload: ThreadGoalEvaluatedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
