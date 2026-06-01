@@ -47,6 +47,7 @@ import { readLocalApi } from "../localApi";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import {
   collapseExpandedComposerCursor,
+  parseComposerGoalSlashCommand,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
 import {
@@ -334,6 +335,24 @@ function formatOutgoingPrompt(params: {
   const caps = getProviderModelCapabilities(params.models, params.model, params.provider);
   const promptEffort = resolvePromptInjectedEffort(caps, params.effort);
   return applyClaudePromptEffortPrefix(params.text, promptEffort);
+}
+
+function formatGoalInitialPrompt(goal: string): string {
+  return [
+    `Active T3 goal: ${goal}`,
+    "",
+    "Work toward this goal until it is satisfied. When you believe it is satisfied, state the concrete transcript-visible evidence and any verification performed.",
+  ].join("\n");
+}
+
+function formatGoalStatus(goal: Thread["goal"]): { title: string; description: string } {
+  if (!goal) {
+    return { title: "No active goal", description: "Use /goal <condition> to start one." };
+  }
+  return {
+    title: goal.status === "achieved" ? "Goal achieved" : "Active goal",
+    description: goal.lastReason ? `${goal.goal}\n${goal.lastReason}` : goal.goal,
+  };
 }
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
@@ -2894,6 +2913,10 @@ export default function ChatView(props: ChatViewProps) {
       composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
+    const goalSlashCommand =
+      composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
+        ? parseComposerGoalSlashCommand(trimmed)
+        : null;
     if (standaloneSlashCommand) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
@@ -2901,6 +2924,30 @@ export default function ChatView(props: ChatViewProps) {
       composerRef.current?.resetCursorState();
       return;
     }
+    if (goalSlashCommand?.type === "status") {
+      const status = formatGoalStatus(activeThread.goal);
+      toastManager.add(stackedThreadToast({ type: "info", ...status }));
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
+    }
+    if (goalSlashCommand?.type === "clear") {
+      await api.orchestration.dispatchCommand({
+        type: "thread.goal.clear",
+        commandId: newCommandId(),
+        threadId: activeThread.id,
+        createdAt: new Date().toISOString(),
+      });
+      toastManager.add(
+        stackedThreadToast({ type: "success", title: "Goal cleared", description: "" }),
+      );
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
+    }
+    const goalToSet = goalSlashCommand?.type === "set" ? goalSlashCommand.goal : null;
     if (!hasSendableContent) {
       if (expiredTerminalContextCount > 0) {
         const toastCopy = buildExpiredTerminalContextToastCopy(
@@ -2940,7 +2987,7 @@ export default function ChatView(props: ChatViewProps) {
     const composerImagesSnapshot = [...composerImages];
     const composerTerminalContextsSnapshot = [...sendableComposerTerminalContexts];
     const messageTextForSend = appendTerminalContextsToPrompt(
-      promptForSend,
+      goalToSet ? formatGoalInitialPrompt(goalToSet) : promptForSend,
       composerTerminalContextsSnapshot,
     );
     const messageIdForSend = newMessageId();
@@ -3016,7 +3063,7 @@ export default function ChatView(props: ChatViewProps) {
           firstComposerImageName = firstComposerImage.name;
         }
       }
-      let titleSeed = trimmed;
+      let titleSeed = goalToSet ?? trimmed;
       if (!titleSeed) {
         if (firstComposerImageName) {
           titleSeed = `Image: ${firstComposerImageName}`;
@@ -3084,6 +3131,16 @@ export default function ChatView(props: ChatViewProps) {
             }
           : undefined;
       beginLocalDispatch({ preparingWorktree: false });
+      const shouldSetGoalBeforeTurn = Boolean(goalToSet && isServerThread);
+      if (goalToSet && shouldSetGoalBeforeTurn) {
+        await api.orchestration.dispatchCommand({
+          type: "thread.goal.set",
+          commandId: newCommandId(),
+          threadId: threadIdForSend,
+          goal: goalToSet,
+          createdAt: messageCreatedAt,
+        });
+      }
       await api.orchestration.dispatchCommand({
         type: "thread.turn.start",
         commandId: newCommandId(),
@@ -3102,6 +3159,15 @@ export default function ChatView(props: ChatViewProps) {
         createdAt: messageCreatedAt,
       });
       turnStartSucceeded = true;
+      if (goalToSet && !shouldSetGoalBeforeTurn) {
+        await api.orchestration.dispatchCommand({
+          type: "thread.goal.set",
+          commandId: newCommandId(),
+          threadId: threadIdForSend,
+          goal: goalToSet,
+          createdAt: messageCreatedAt,
+        });
+      }
     })().catch(async (err: unknown) => {
       if (
         !turnStartSucceeded &&
