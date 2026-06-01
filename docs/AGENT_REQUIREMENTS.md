@@ -370,8 +370,80 @@ fork deployment/release path is working as expected.
 
 - None.
 
+## Current Task: Recover Same-Turn Stale OpenCode Working State
+
+Fix the remaining stale OpenCode `Working` state for thread
+`d0f70f77-0feb-4c27-8ce1-d6615175402f`, where the latest turn is already
+projected as completed but the thread/session runtime rows remain `running` for
+the same active turn.
+
+### Current User Requirements
+
+- Continue with next steps if the path is clear.
+- Fix the remaining sync/status problem for thread
+  `d0f70f77-0feb-4c27-8ce1-d6615175402f`.
+- Determine whether the thread is actually waiting for user input/approval,
+  still running, or stuck due to stale provider/session projection state.
+- Add focused regression coverage for the confirmed same-turn stale `running`
+  failure mode.
+- Do not apply a UI-only masking fix while persisted provider/session projection
+  state remains stale.
+- Commit, merge, and push the OpenCode stale-working fix.
+
+### Constraints
+
+- Follow repo instructions: `bun fmt`, `bun lint`, and `bun typecheck` must pass
+  before completion.
+- Do not run `bun test`; use `bun run test` for Vitest.
+- Keep the OpenCode status fix scoped to provider/thread lifecycle state.
+- Do not treat `finish: "tool-calls"` as terminal.
+- Do not clear `running` while the turn is still genuinely waiting for approval
+  or user input.
+- Preserve existing OpenCode session-resume behavior.
+
+### Acceptance Criteria
+
+- A thread whose latest active OpenCode turn is already projected completed no
+  longer remains `Working` because `thread.session` stayed `running` for the same
+  turn.
+- Same-turn completed projection state self-heals stale `running` thread-session
+  state without requiring a later terminal provider lifecycle event.
+- Focused regression coverage proves same-turn completed projection state clears
+  stale `running` lifecycle state.
+- The fix is committed, merged to `main`, and pushed to the remote.
+
+### Status
+
+- Complete: confirmed the remaining issue is not a real approval/user-input wait
+  (`pending_approval_count=0`, `pending_user_input_count=0`) and is not the
+  previously fixed stale-active-turn mismatch; it is same-turn stale lifecycle
+  state after `projection_turns` recorded completion.
+- Complete: provider runtime ingestion now reconciles a running active turn whose
+  projection turn row is already `completed`, but only when the refreshed thread
+  has no pending approvals or user-input requests.
+
+### Verification
+
+- Verified regression catch: before the fix, `bun run --filter t3 test -- src/orchestration/Layers/ProviderRuntimeIngestion.test.ts -t "recovers same-turn running state"` failed with `Timed out waiting for thread state`.
+- Passed: `bun run --filter t3 test -- src/orchestration/Layers/ProviderRuntimeIngestion.test.ts -t "recovers same-turn running state"`.
+- Passed: `bun run --filter t3 test -- src/orchestration/Layers/ProviderRuntimeIngestion.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Active Requirements
 
+- Investigate and fix the remaining sync/status problem for thread
+  `d0f70f77-0feb-4c27-8ce1-d6615175402f`, which shows a Clarification &
+  Consent prompt while the UI/sidebar still display `Working` for an extended
+  period.
+- Determine whether the thread is actually waiting for user input/approval,
+  still running, or stuck due to stale provider/session projection state.
+- Add focused regression coverage for the confirmed sync/status failure mode.
 - Double-check the proposed OpenCode stale "Working" shell-stream fix before
   applying it.
 - Do not apply a fix that only masks stale UI state if the persisted
@@ -381,6 +453,9 @@ fork deployment/release path is working as expected.
 - Fix OpenCode-backed threads so completed threads do not continue to display
   as "Working" in the sidebar or conversation footer after the agent has
   finished responding.
+- Fix the remaining same-turn stale lifecycle case where the latest projected
+  turn is already completed but `projection_thread_sessions` and
+  `provider_session_runtime` still report `running` for that same turn.
 - Commit, merge, and push the OpenCode stale-working fix.
 - Use the local Mac as an on-demand GitHub Actions build worker for T3 Code
   macOS arm64 builds to reduce remote build latency.
@@ -1975,6 +2050,9 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Follow repo instructions: `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion.
 - Do not run `bun test`; use `bun run test` for Vitest.
 - Keep the OpenCode status fix scoped to provider/thread lifecycle state.
+- Do not treat `finish: "tool-calls"` as terminal.
+- Do not clear `running` while the turn is still genuinely waiting for approval
+  or user input.
 - Preserve existing OpenCode session-resume behavior.
 - Keep the new-thread fix scoped to the new-thread/worktree failure path.
 - Keep release workflow changes scoped to the push-triggered fork build path,
@@ -1993,6 +2071,8 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
   finished.
 - The web UI no longer derives "Working" for a completed OpenCode-backed thread
   once the latest turn is settled.
+- A same-turn completed projection self-heals stale `running` thread-session
+  state without requiring a later terminal provider lifecycle event.
 - Focused regression coverage proves the completed OpenCode path clears working
   state.
 - The OpenCode stale-working fix is committed, merged to the intended branch,
@@ -2032,6 +2112,9 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 
 ## Status
 
+- In progress: investigating thread
+  `d0f70f77-0feb-4c27-8ce1-d6615175402f` after screenshots showed a
+  clarification prompt but stale `Working` status.
 - Complete: double-check showed `OrchestrationEngine` projects events before
   publishing shell-stream events, so a WebSocket-before-SQLite projection race is
   not the supported root cause.
@@ -2044,6 +2127,14 @@ Repair the T3 Code fork automation so the fork follows upstream stable and night
 - Complete: provider runtime ingestion now accepts lifecycle events for the
   provider runtime's current active turn when the persisted projected active turn
   is stale, allowing the next current-turn completion to clear `Working`.
+- Complete: the remaining thread
+  `d0f70f77-0feb-4c27-8ce1-d6615175402f` has the same active turn marked
+  completed in `projection_turns`, while `projection_thread_sessions` and
+  `provider_session_runtime` still report `running`; this requires same-turn
+  lifecycle reconciliation rather than the existing stale-active-turn recovery.
+- Complete: same-turn lifecycle reconciliation now clears the thread session
+  when the projected active turn is completed and no approval/user-input request
+  is pending.
 - Complete: OpenCode terminal assistant-message updates now settle the active
   turn when OpenCode omits a `session.status` idle event, clearing stale
   "Working" UI state while preserving resume behavior.
