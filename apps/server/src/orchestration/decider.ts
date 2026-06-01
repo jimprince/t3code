@@ -388,6 +388,62 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.goal.set": {
+      yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.goal-set",
+        payload: {
+          threadId: command.threadId,
+          goal: {
+            goal: command.goal,
+            status: "active",
+            createdAt: command.createdAt,
+            updatedAt: command.createdAt,
+            achievedAt: null,
+            lastEvaluatedAt: null,
+            lastReason: null,
+            lastTurnId: null,
+            continuationCount: 0,
+          },
+        },
+      };
+    }
+
+    case "thread.goal.clear": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (thread.goal == null) {
+        return [];
+      }
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.goal-cleared",
+        payload: {
+          threadId: command.threadId,
+          clearedAt: command.createdAt,
+          updatedAt: command.createdAt,
+        },
+      };
+    }
+
     case "thread.turn.start": {
       const targetThread = yield* requireThread({
         readModel,
@@ -721,6 +777,39 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           turnCount: command.turnCount,
+        },
+      };
+    }
+
+    case "thread.goal.evaluation.record": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      const goal = thread.goal ?? null;
+      if (goal === null || goal.status !== "active") {
+        return [];
+      }
+      if (goal.lastTurnId === command.turnId) {
+        return [];
+      }
+      return {
+        ...withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        }),
+        type: "thread.goal-evaluated",
+        payload: {
+          threadId: command.threadId,
+          turnId: command.turnId,
+          achieved: command.achieved,
+          reason: command.reason,
+          continuationRequested: command.continuationRequested,
+          evaluatedAt: command.createdAt,
+          updatedAt: command.createdAt,
         },
       };
     }
