@@ -1225,6 +1225,14 @@ const make = Effect.gen(function* () {
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
       const missingTurnForActiveTurn = activeTurnId !== null && eventTurnId === undefined;
+      // Provider runtime state is authoritative when a persisted projection is
+      // stuck on an older active turn from a missed completion event.
+      const expectedProviderTurnId =
+        conflictsWithActiveTurn &&
+        (event.type === "turn.started" || event.type === "turn.completed")
+          ? yield* getExpectedProviderTurnIdForThread(thread.id)
+          : undefined;
+      const matchesCurrentProviderTurn = sameId(expectedProviderTurnId, eventTurnId);
 
       // A turn.started that conflicts with the active turn is legitimate when
       // the server itself has a turn start pending for this thread AND the
@@ -1253,14 +1261,21 @@ const make = Effect.gen(function* () {
           case "thread.started":
             return true;
           case "turn.started":
-            return !conflictsWithActiveTurn || conflictingTurnStartIsPendingTurnStart;
+            return (
+              !conflictsWithActiveTurn ||
+              conflictingTurnStartIsPendingTurnStart ||
+              matchesCurrentProviderTurn
+            );
           case "turn.completed":
-            if (conflictsWithActiveTurn || missingTurnForActiveTurn) {
+            if (
+              (conflictsWithActiveTurn && !matchesCurrentProviderTurn) ||
+              missingTurnForActiveTurn
+            ) {
               return false;
             }
             // Only the active turn may close the lifecycle state.
             if (activeTurnId !== null && eventTurnId !== undefined) {
-              return sameId(activeTurnId, eventTurnId);
+              return sameId(activeTurnId, eventTurnId) || matchesCurrentProviderTurn;
             }
             // If no active turn is tracked, accept completion scoped to this thread.
             return true;
