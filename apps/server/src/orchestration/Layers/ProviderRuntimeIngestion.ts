@@ -1246,6 +1246,12 @@ const make = Effect.gen(function* () {
           ? yield* getExpectedProviderTurnIdForThread(thread.id)
           : undefined;
       const matchesCurrentProviderTurn = sameId(expectedProviderTurnId, eventTurnId);
+      const providerHasNoCurrentTurn = expectedProviderTurnId === undefined;
+      // A queued turn.started can be processed after the provider has already
+      // completed and gone idle; in that case the event itself is the ordered
+      // evidence needed to advance a stale projected active turn.
+      const eventIsNotOlderThanProjectedSession =
+        thread.session?.updatedAt === undefined || event.createdAt >= thread.session.updatedAt;
 
       const shouldApplyThreadLifecycle = (() => {
         if (!STRICT_PROVIDER_LIFECYCLE_GUARD) {
@@ -1258,7 +1264,11 @@ const make = Effect.gen(function* () {
           case "thread.started":
             return true;
           case "turn.started":
-            return !conflictsWithActiveTurn || matchesCurrentProviderTurn;
+            return (
+              !conflictsWithActiveTurn ||
+              matchesCurrentProviderTurn ||
+              (providerHasNoCurrentTurn && eventIsNotOlderThanProjectedSession)
+            );
           case "turn.completed":
             if (
               (conflictsWithActiveTurn && !matchesCurrentProviderTurn) ||
