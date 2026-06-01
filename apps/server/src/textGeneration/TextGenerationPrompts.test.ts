@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildGoalEvaluationPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
@@ -133,6 +134,19 @@ describe("buildThreadTitlePrompt", () => {
     expect(result.prompt).toContain("thread.png");
     expect(result.prompt).toContain("image/png");
     expect(result.prompt).toContain("67890 bytes");
+  });
+});
+
+describe("buildGoalEvaluationPrompt", () => {
+  it("requires transcript-visible evidence only", () => {
+    const result = buildGoalEvaluationPrompt({
+      goal: "Fix the failing lint check",
+      transcript: "USER: fix lint\nASSISTANT: I will fix it",
+    });
+
+    expect(result.prompt).toContain("Use only the transcript-visible evidence");
+    expect(result.prompt).toContain("Fix the failing lint check");
+    expect(result.prompt).toContain("USER: fix lint");
   });
 });
 
