@@ -544,6 +544,12 @@ reconnect the environment.
 
 ## Active Requirements
 
+- Double-check the proposed OpenCode stale "Working" shell-stream fix before
+  applying it.
+- Do not apply a fix that only masks stale UI state if the persisted
+  provider/session projection is still stale.
+- If the proposed fix is incomplete, implement the smaller root-cause fix that
+  clears completed OpenCode-backed threads from `Working` reliably.
 - Fix OpenCode-backed threads so completed threads do not continue to display
   as "Working" in the sidebar or conversation footer after the agent has
   finished responding.
@@ -644,6 +650,18 @@ reconnect the environment.
 
 ## Status
 
+- Complete: double-check showed `OrchestrationEngine` projects events before
+  publishing shell-stream events, so a WebSocket-before-SQLite projection race is
+  not the supported root cause.
+- Complete: live `state.sqlite` for thread
+  `46c06c73-cf76-498e-b017-d577f833d6a6` still has
+  `projection_thread_sessions.status = 'running'` with stale active turn
+  `opencode-turn-d1655dab-df05-4577-9bb3-250dfb73453b`, while later OpenCode
+  turns are completed. The fix must repair provider lifecycle/session state, not
+  only shell-stream event mapping.
+- Complete: provider runtime ingestion now accepts lifecycle events for the
+  provider runtime's current active turn when the persisted projected active turn
+  is stale, allowing the next current-turn completion to clear `Working`.
 - Complete: OpenCode terminal assistant-message updates now settle the active
   turn when OpenCode omits a `session.status` idle event, clearing stale
   "Working" UI state while preserving resume behavior.
@@ -739,6 +757,13 @@ reconnect the environment.
   `runner="macos-15"`.
 - Passed: runner resolution simulation with a fake online runner emits
   `runner=["self-hosted","macOS","ARM64","t3code-mac-arm64"]`.
+- Verified regression catch: the new stale-active-turn provider ingestion test
+  failed before the fix with `Timed out waiting for thread state`.
+- Passed: `bun run --filter t3 test -- src/orchestration/Layers/ProviderRuntimeIngestion.test.ts -t "recovers lifecycle state"`.
+- Passed: `bun run --filter t3 test -- src/orchestration/Layers/ProviderRuntimeIngestion.test.ts`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings only.
+- Passed: `bun typecheck`.
 
 ## User-Approved Requirement Changes
 
