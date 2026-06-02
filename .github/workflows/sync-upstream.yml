@@ -309,14 +309,17 @@ jobs:
               git add -- "$f"
             done
 
-            # Continue. If the resulting commit is empty (it only touched
-            # auto-resolved files), --continue will fail; --skip handles it.
-            if ! GIT_EDITOR=true git rebase --continue; then
-              if [[ -d .git/rebase-merge || -d .git/rebase-apply ]]; then
-                git rebase --skip || break
-              fi
-            fi
+            # If continuing hits a later conflict, keep the rebase state and
+            # let the next loop iteration inspect that conflict. Only the
+            # no-conflict branch above is allowed to skip an empty commit.
+            GIT_EDITOR=true git rebase --continue || true
           done
+
+          mapfile -t unresolved < <(git diff --name-only --diff-filter=U | sort -u)
+          if [[ -d .git/rebase-merge || -d .git/rebase-apply || ${#unresolved[@]} -gt 0 ]]; then
+            echo "Rebase stopped before completion."
+            fail_with_conflicts "$(printf '%s\n' "${unresolved[@]}")"
+          fi
 
           echo "status=clean" >> "$GITHUB_OUTPUT"
           echo "Rebase completed (some version-bump conflicts auto-resolved to upstream)."
