@@ -163,7 +163,8 @@ jobs:
               printf '  %s\n' "${synced[@]}"
               echo "Nothing to do."
             else
-              fork_latest=$(git tag --list 'v*' --sort=-creatordate | head -n 1)
+              mapfile -t fork_tags < <(git tag --list 'v*' --sort=-creatordate)
+              fork_latest="${fork_tags[0]:-}"
               echo "needed=true" >> "$GITHUB_OUTPUT"
               echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
               if [[ ${#stale[@]} -gt 0 ]]; then
@@ -178,7 +179,12 @@ jobs:
               echo "needed=false" >> "$GITHUB_OUTPUT"
               echo "Fork already has upstream-containing $upstream_tag. Nothing to do."
             else
-              fork_latest=$(git tag --list 'v*' | sort -V | tail -1)
+              mapfile -t fork_tags < <(git tag --list 'v*' | sort -V)
+              if [[ ${#fork_tags[@]} -eq 0 ]]; then
+                fork_latest=""
+              else
+                fork_latest="${fork_tags[-1]}"
+              fi
               echo "needed=true" >> "$GITHUB_OUTPUT"
               echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
               if git rev-parse --verify "${upstream_tag}^{commit}" >/dev/null 2>&1; then
