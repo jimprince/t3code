@@ -1,5 +1,74 @@
 # Agent Requirements
 
+## Current Task: Repair Fork Nightly Upstream Rebase Logic
+
+Fix the fork release automation so push-triggered fork nightlies are built from
+the latest upstream nightly plus fork commits, rather than stamping the current
+fork `main` with the latest upstream nightly version while leaving upstream
+commits behind.
+
+### Current User Requirements
+
+- Fix the workflow logic that allowed fork nightly tags such as
+  `v0.0.25-nightly.20260530.413-fork.N` to exist without containing the
+  upstream nightly tag commit.
+- Make push-triggered fork nightlies rebase fork commits onto the latest upstream
+  nightly before stamping package versions, updating `main`, and tagging the
+  release.
+- Make scheduled upstream sync treat malformed existing fork-nightly tags as not
+  synced, so a corrected `-fork.N` can be published.
+- Keep the local remote-upgrade fix intact and separate from this workflow fix.
+- Commit and push the workflow/docs fix, then run only the nightly upstream sync
+  path; stable releases are not needed for this task.
+
+### Constraints
+
+- Follow repo checks: `bun fmt`, `bun lint`, and `bun typecheck` must pass before
+  completion.
+- Do not run `bun test`; use package test scripts via `bun run test` or focused
+  commands when tests are needed.
+- Do not delete or rewrite existing malformed remote fork-nightly tags/releases
+  unless explicitly approved.
+- Do not run or dispatch stable release/sync paths for this task.
+
+### Acceptance Criteria
+
+- `fork-push-nightly.yml` rebases onto the latest upstream nightly tag before
+  creating the next fork-nightly tag.
+- `sync-upstream.yml` skips a nightly only when an existing fork-nightly tag for
+  that upstream tag contains the upstream tag commit as an ancestor.
+- Repo release instructions document that fork nightlies must have upstream tag
+  ancestry.
+- Static workflow validation and required repo checks pass locally.
+- A nightly-only sync dispatch publishes or attempts to publish a corrected fork
+  nightly, with no stable sync dispatch from this task.
+
+### Status
+
+- Workflow/docs fix prepared in a clean `origin/main` worktree.
+- Push/nightly sync verification in progress.
+
+### Verification
+
+- Passed in the original worktree: workflow YAML parsed with Ruby YAML for
+  `.github/workflows/sync-upstream.yml` and
+  `.github/workflows/fork-push-nightly.yml`.
+- Passed in the original worktree: workflow `run:` blocks parsed with `bash -n`
+  after sanitizing GitHub expression placeholders.
+- Passed in the original worktree: verified `git fetch upstream main` creates
+  `upstream/main`, which both workflows use as the rebase boundary.
+- Passed in the original worktree: `bun fmt`.
+- Passed in the original worktree: `bun lint` with 10 existing warnings and 0
+  errors.
+- Passed in the original worktree: `bun typecheck`.
+- Pending: clean-worktree checks, push, nightly sync run, ancestry/assets
+  verification.
+- Not run: `bun test`, per repo instructions.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Publish Stale OpenCode Working Fix
 
 Commit the verified stale OpenCode `Working` status fix, push it to GitHub,
