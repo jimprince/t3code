@@ -97,7 +97,8 @@ versioning axis for the fork.
   version in `package.json` or invent release numbers.
 - Normal pushes to `main` that affect packaged app/runtime output run
   `.github/workflows/fork-push-nightly.yml`, which publishes the fork
-  changes through the nightly feed by tagging the latest upstream nightly as
+  changes through the nightly feed. The workflow rebases fork commits onto the
+  latest upstream nightly tag, stamps package versions, and tags the result as
   `${upstream_nightly_tag}-fork.N`. These pushes do **not** create stable/latest
   `vNEXT-fork.N` releases. The next upstream stable sync rebases the fork
   commits onto the upstream stable tag and publishes the integrated stable
@@ -121,8 +122,11 @@ versioning axis for the fork.
        each successive fork rebuild as an upgrade,
     3. lets a manual reroll on the same upstream commit publish as an upgrade
        when you dispatch `release.yml` with the next explicit `-fork.N`.
-       `sync-upstream.yml` intentionally skips once any fork tag exists for an
-       upstream nightly; use manual release dispatch for same-upstream rerolls.
+       Fork nightly tags must contain the upstream nightly tag commit as an
+       ancestor. `sync-upstream.yml` intentionally skips only when an existing
+       fork tag for that upstream nightly has that ancestry; malformed tags do
+       not block a corrected sync. Use manual release dispatch for intentional
+       same-upstream rerolls.
 - Workflows require `GH_PAT` in secrets for tag/commit pushes that need to
   trigger follow-on workflows or modify workflow files. Release creation uses
   `GH_PAT` when present, with the workflow-scoped `GITHUB_TOKEN` as fallback;
@@ -337,10 +341,10 @@ We did this once (shipped `v0.0.21` pre-emptively before upstream); we deleted
 the tag + release to unblock sync-upstream. Don't repeat that. Fork-only
 builds always use `-fork.N`.
 
-Long-term fix would be changing sync-upstream's "already synced?" check from
-tag-existence to commit-equality (does our `refs/tags/vX` actually contain
-upstream's `refs/tags/vX` as ancestor?). Until then, the `-fork.N` convention
-sidesteps the whole class of problem.
+`sync-upstream.yml` now checks tag ancestry, not only tag existence: an existing
+fork tag must contain upstream's `refs/tags/vX` as an ancestor before it counts
+as already synced. The `-fork.N` convention still avoids pre-claiming the exact
+future upstream stable tag name.
 
 ## Fork-only stable auto-releases
 
