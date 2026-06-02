@@ -109,6 +109,10 @@ versioning axis for the fork.
   force-pushes `main` plus a release tag that points at the stamped commit.
   Pushing the release tag is what drives the build: `release.yml` has no
   `schedule:` trigger and fires only on tag pushes (and `workflow_dispatch`).
+  Rebase conflict auto-resolution is intentionally asymmetric: package version
+  files resolve to upstream and are re-stamped later, while
+  `.github/workflows/release.yml` resolves to the fork side because this fork's
+  release matrix and runner fallback are deliberately custom.
 - Tag scheme by channel:
   - **stable**: `${upstream_tag}` verbatim (e.g. `v0.0.21`). The fork and
     upstream share the tag name; the commit on the fork is upstream's commit

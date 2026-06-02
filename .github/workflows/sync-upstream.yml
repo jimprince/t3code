@@ -213,12 +213,17 @@ jobs:
           # creates perpetual conflicts with upstream's own version bumps.
           # Auto-resolving to upstream is safe because finalize will rewrite
           # them again after the next fork release builds.
-          AUTO_RESOLVE_FILES: |
+          UPSTREAM_RESOLVE_FILES: |
             apps/desktop/package.json
             apps/server/package.json
             apps/web/package.json
             packages/contracts/package.json
             bun.lock
+          # release.yml is fork-owned: the fork intentionally keeps a minimal
+          # macOS/headless matrix and local-runner fallback that upstream does
+          # not have. During rebase, "theirs" is the fork commit being replayed.
+          FORK_RESOLVE_FILES: |
+            .github/workflows/release.yml
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
@@ -228,12 +233,21 @@ jobs:
           echo "Fork commits being replayed (relative to upstream/main):"
           git log --oneline upstream/main..HEAD
 
-          # Build allowlist as a sorted unique set
-          mapfile -t ALLOW < <(echo "$AUTO_RESOLVE_FILES" | sed '/^$/d' | sort -u)
+          # Build allowlists as sorted unique sets.
+          mapfile -t UPSTREAM_ALLOW < <(echo "$UPSTREAM_RESOLVE_FILES" | sed '/^$/d' | sort -u)
+          mapfile -t FORK_ALLOW < <(echo "$FORK_RESOLVE_FILES" | sed '/^$/d' | sort -u)
 
-          is_allowed() {
+          is_upstream_allowed() {
             local f="$1"
-            for a in "${ALLOW[@]}"; do
+            for a in "${UPSTREAM_ALLOW[@]}"; do
+              [[ "$f" == "$a" ]] && return 0
+            done
+            return 1
+          }
+
+          is_fork_allowed() {
+            local f="$1"
+            for a in "${FORK_ALLOW[@]}"; do
               [[ "$f" == "$a" ]] && return 0
             done
             return 1
@@ -272,7 +286,9 @@ jobs:
 
             unknown=()
             for f in "${conflicted[@]}"; do
-              is_allowed "$f" || unknown+=("$f")
+              if ! is_upstream_allowed "$f" && ! is_fork_allowed "$f"; then
+                unknown+=("$f")
+              fi
             done
 
             if [[ ${#unknown[@]} -gt 0 ]]; then
@@ -281,11 +297,15 @@ jobs:
               fail_with_conflicts "$(printf '%s\n' "${conflicted[@]}")"
             fi
 
-            echo "Auto-resolving (taking upstream) for: ${conflicted[*]}"
+            echo "Auto-resolving allowed conflicts for: ${conflicted[*]}"
             for f in "${conflicted[@]}"; do
-              # During rebase, "ours" = upstream (the new base),
-              # "theirs" = the fork commit being replayed. We want upstream.
-              git checkout --ours -- "$f"
+              if is_upstream_allowed "$f"; then
+                # During rebase, "ours" = upstream (the new base).
+                git checkout --ours -- "$f"
+              else
+                # During rebase, "theirs" = the fork commit being replayed.
+                git checkout --theirs -- "$f"
+              fi
               git add -- "$f"
             done
 
