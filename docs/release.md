@@ -62,6 +62,11 @@ For both channels, `sync-upstream.yml` rebases fork commits onto the selected
 upstream tag, stamps package versions to the derived fork release version, and
 pushes the release tag at that stamped commit.
 
+During that rebase, package version files are auto-resolved to upstream and
+re-stamped later. `.github/workflows/release.yml` is auto-resolved to the fork
+side because the fork intentionally owns its reduced macOS/headless release
+matrix and local-runner fallback.
+
 Check both channels:
 
 ```bash
