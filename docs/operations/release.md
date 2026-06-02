@@ -30,11 +30,12 @@ Docs, workflow maintenance, release helper scripts, and other repo plumbing
 should not create push nightlies. Use manual `release.yml` dispatch if a
 maintenance-only commit genuinely needs to ship as a desktop update.
 
-Before pushing `${upstream_nightly_tag}-fork.N`, the workflow stamps the
-releasable package versions and lockfile, then tags the stamped commit. That
-package stamp is required because the headless `t3` server reports its version
-from `apps/server/package.json`. The next upstream stable sync rebases these
-fork commits onto the stable tag and publishes the integrated stable release.
+Before pushing `${upstream_nightly_tag}-fork.N`, the workflow fetches the latest
+upstream nightly tag, rebases fork commits onto that tag, stamps the releasable
+package versions and lockfile, then tags the stamped commit. That package stamp
+is required because the headless `t3` server reports its version from
+`apps/server/package.json`. The next upstream stable sync rebases these fork
+commits onto the stable tag and publishes the integrated stable release.
 
 ## Normal Commands
 
@@ -75,10 +76,11 @@ t3code-mac-runner stop
 
 ## Rerolling A Nightly For Updater Testing
 
-`sync-upstream.yml` skips an upstream nightly once any
-`${upstream_tag}-fork.*` tag exists. To publish another build from the same
-upstream nightly, dispatch `release.yml` directly with the next `-fork.N`
-version.
+`sync-upstream.yml` skips an upstream nightly only once an existing
+`${upstream_tag}-fork.*` tag contains the upstream nightly tag commit. Malformed
+historical fork tags do not block a corrected sync. To intentionally publish
+another build from the same upstream nightly after a good tag exists, dispatch
+`release.yml` directly with the next `-fork.N` version.
 Manual dispatch also accepts `target_ref` when the fixed workflow on `main`
 should build and publish a specific existing tag or commit.
 
