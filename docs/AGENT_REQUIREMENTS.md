@@ -61,12 +61,18 @@ commits behind.
 - Passed in the original worktree: `bun lint` with 10 existing warnings and 0
   errors.
 - Passed in the original worktree: `bun typecheck`.
-- Pending: clean-worktree checks, push, nightly sync run, ancestry/assets
-  verification.
+- Passed in the clean temp worktree: workflow YAML parse, workflow `run:` block
+  `bash -n`, `git diff --check`, `bun fmt`, `bun lint` with existing warnings
+  and 0 errors, and `bun typecheck`.
+- Pending: push, nightly sync run, ancestry/assets verification.
 - Failed then patched: nightly sync run `26798562859` reached the corrected
   ancestry path, then exited 141 because `git tag --sort=-creatordate | head`
   tripped `pipefail` after `head` closed the pipe. Replaced that lookup with
   `mapfile` array handling before rerunning nightly sync.
+- Failed then patched: nightly sync run `26798640634` reached the rebase and
+  stopped on `.github/workflows/release.yml`. This file is fork-owned, so the
+  workflow now auto-resolves release workflow conflicts to the fork side while
+  continuing to resolve package version conflicts to upstream.
 - Not run: `bun test`, per repo instructions.
 
 ### Open Questions / Proposed Changes
