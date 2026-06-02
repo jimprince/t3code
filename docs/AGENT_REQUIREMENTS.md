@@ -63,6 +63,10 @@ commits behind.
 - Passed in the original worktree: `bun typecheck`.
 - Pending: clean-worktree checks, push, nightly sync run, ancestry/assets
   verification.
+- Failed then patched: nightly sync run `26798562859` reached the corrected
+  ancestry path, then exited 141 because `git tag --sort=-creatordate | head`
+  tripped `pipefail` after `head` closed the pipe. Replaced that lookup with
+  `mapfile` array handling before rerunning nightly sync.
 - Not run: `bun test`, per repo instructions.
 
 ### Open Questions / Proposed Changes
