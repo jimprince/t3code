@@ -103,12 +103,22 @@ jobs:
           echo "Fork commits being replayed (relative to upstream/main):"
           git log --oneline upstream/main..HEAD
 
-          AUTO_RESOLVE_FILES=$'apps/desktop/package.json\napps/server/package.json\napps/web/package.json\npackages/contracts/package.json\nbun.lock'
-          mapfile -t ALLOW < <(printf '%s\n' "$AUTO_RESOLVE_FILES" | sed '/^$/d' | sort -u)
+          UPSTREAM_RESOLVE_FILES=$'apps/desktop/package.json\napps/server/package.json\napps/web/package.json\npackages/contracts/package.json\nbun.lock'
+          FORK_RESOLVE_FILES=$'.github/workflows/release.yml'
+          mapfile -t UPSTREAM_ALLOW < <(printf '%s\n' "$UPSTREAM_RESOLVE_FILES" | sed '/^$/d' | sort -u)
+          mapfile -t FORK_ALLOW < <(printf '%s\n' "$FORK_RESOLVE_FILES" | sed '/^$/d' | sort -u)
 
-          is_allowed() {
+          is_upstream_allowed() {
             local f="$1"
-            for a in "${ALLOW[@]}"; do
+            for a in "${UPSTREAM_ALLOW[@]}"; do
+              [[ "$f" == "$a" ]] && return 0
+            done
+            return 1
+          }
+
+          is_fork_allowed() {
+            local f="$1"
+            for a in "${FORK_ALLOW[@]}"; do
               [[ "$f" == "$a" ]] && return 0
             done
             return 1
@@ -125,7 +135,9 @@ jobs:
 
               unknown=()
               for f in "${conflicted[@]}"; do
-                is_allowed "$f" || unknown+=("$f")
+                if ! is_upstream_allowed "$f" && ! is_fork_allowed "$f"; then
+                  unknown+=("$f")
+                fi
               done
 
               if [[ ${#unknown[@]} -gt 0 ]]; then
@@ -136,9 +148,15 @@ jobs:
                 exit 1
               fi
 
-              echo "Auto-resolving version stamp conflicts by taking upstream for: ${conflicted[*]}"
+              echo "Auto-resolving allowed conflicts for: ${conflicted[*]}"
               for f in "${conflicted[@]}"; do
-                git checkout --ours -- "$f"
+                if is_upstream_allowed "$f"; then
+                  # During rebase, "ours" = upstream (the new base).
+                  git checkout --ours -- "$f"
+                else
+                  # During rebase, "theirs" = the fork commit being replayed.
+                  git checkout --theirs -- "$f"
+                fi
                 git add -- "$f"
               done
 
