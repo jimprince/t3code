@@ -160,12 +160,21 @@ jobs:
                 git add -- "$f"
               done
 
-              if ! GIT_EDITOR=true git rebase --continue; then
-                if [[ -d .git/rebase-merge || -d .git/rebase-apply ]]; then
-                  git rebase --skip || break
-                fi
-              fi
+              # If continuing hits a later conflict, keep the rebase state and
+              # let the next loop iteration inspect that conflict. Only the
+              # no-conflict branch above is allowed to skip an empty commit.
+              GIT_EDITOR=true git rebase --continue || true
             done
+
+            mapfile -t unresolved < <(git diff --name-only --diff-filter=U | sort -u)
+            if [[ -d .git/rebase-merge || -d .git/rebase-apply || ${#unresolved[@]} -gt 0 ]]; then
+              echo "::error::Rebase stopped before completion while syncing push nightly to $upstream_tag."
+              if [[ ${#unresolved[@]} -gt 0 ]]; then
+                printf '::error::  %s\n' "${unresolved[@]}"
+              fi
+              git rebase --abort || true
+              exit 1
+            fi
           fi
 
           echo "Rebase completed."
