@@ -11,8 +11,9 @@ name: Sync Upstream
 #   - nightly channel: ${upstream_tag}-fork.<N> (e.g.
 #     v0.0.21-nightly.20260421.88-fork.1), where N auto-increments per
 #     upstream nightly tag. The -fork suffix keeps fork artifacts
-#     distinguishable. sync-upstream skips once any fork tag exists for the
-#     same upstream nightly; reroll the same upstream commit by manually
+#     distinguishable. sync-upstream skips once an existing fork tag contains
+#     the same upstream nightly commit; malformed historical fork tags do not
+#     block a corrected sync. Reroll the same upstream commit by manually
 #     dispatching release.yml with the next explicit -fork.N version.
 #
 # On rebase conflict: fails loudly with instructions to resolve locally.
@@ -124,33 +125,65 @@ jobs:
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
+          upstream_ref="refs/tags/upstream/${upstream_tag}"
+
+          ensure_upstream_remote() {
+            if ! git remote get-url upstream >/dev/null 2>&1; then
+              git remote add upstream https://github.com/pingdotgg/t3code.git
+            fi
+          }
+
+          contains_upstream_tag() {
+            local candidate="$1"
+            git merge-base --is-ancestor "${upstream_ref}^{commit}" "${candidate}^{commit}" >/dev/null 2>&1
+          }
+
+          ensure_upstream_remote
+          git fetch upstream "+refs/tags/${upstream_tag}:${upstream_ref}"
 
           if [[ "$CHANNEL" == "nightly" ]]; then
             # Nightly: the fork publishes tags of the form
-            # "${upstream_tag}-fork.<N>". If any such tag already exists, we've
-            # already rolled this upstream nightly — skip. (A rebuild is still
-            # possible by manually deleting the fork tags.)
-            existing=$(git tag --list "${upstream_tag}-fork.*")
-            if [[ -n "$existing" ]]; then
+            # "${upstream_tag}-fork.<N>". A tag only proves sync if its commit
+            # contains the upstream nightly tag; malformed push-nightly tags from
+            # before this ancestry check must not block a corrected reroll.
+            mapfile -t existing < <(git tag --list "${upstream_tag}-fork.*")
+            synced=()
+            stale=()
+            for tag in "${existing[@]}"; do
+              if contains_upstream_tag "$tag"; then
+                synced+=("$tag")
+              else
+                stale+=("$tag")
+              fi
+            done
+
+            if [[ ${#synced[@]} -gt 0 ]]; then
               echo "needed=false" >> "$GITHUB_OUTPUT"
-              echo "Fork already has a build for $upstream_tag:"
-              echo "$existing" | sed 's/^/  /'
+              echo "Fork already has upstream-containing build(s) for $upstream_tag:"
+              printf '  %s\n' "${synced[@]}"
               echo "Nothing to do."
             else
               fork_latest=$(git tag --list 'v*' --sort=-creatordate | head -n 1)
               echo "needed=true" >> "$GITHUB_OUTPUT"
               echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
+              if [[ ${#stale[@]} -gt 0 ]]; then
+                echo "Existing fork tag(s) do not contain $upstream_tag and will not block sync:"
+                printf '  %s\n' "${stale[@]}"
+              fi
               echo "Upstream nightly at $upstream_tag, fork has no build yet (latest fork tag: $fork_latest). Syncing..."
             fi
           else
             # Stable: fork tag == upstream tag exactly.
-            if git rev-parse --verify "$upstream_tag" >/dev/null 2>&1; then
+            if git rev-parse --verify "${upstream_tag}^{commit}" >/dev/null 2>&1 && contains_upstream_tag "$upstream_tag"; then
               echo "needed=false" >> "$GITHUB_OUTPUT"
-              echo "Fork already has $upstream_tag. Nothing to do."
+              echo "Fork already has upstream-containing $upstream_tag. Nothing to do."
             else
               fork_latest=$(git tag --list 'v*' | sort -V | tail -1)
               echo "needed=true" >> "$GITHUB_OUTPUT"
               echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
+              if git rev-parse --verify "${upstream_tag}^{commit}" >/dev/null 2>&1; then
+                echo "Existing fork tag $upstream_tag does not contain upstream $upstream_tag; syncing corrected tag."
+              fi
               echo "Upstream at $upstream_tag, fork at $fork_latest. Syncing..."
             fi
           fi
@@ -159,9 +192,11 @@ jobs:
         if: steps.check.outputs.needed == 'true'
         run: |
           upstream_tag="${{ steps.upstream.outputs.tag }}"
-          git remote add upstream https://github.com/pingdotgg/t3code.git
+          if ! git remote get-url upstream >/dev/null 2>&1; then
+            git remote add upstream https://github.com/pingdotgg/t3code.git
+          fi
           git fetch upstream main
-          git fetch upstream "refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}"
+          git fetch upstream "+refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}"
 
       - name: Rebase fork commits onto upstream tag
         if: steps.check.outputs.needed == 'true'
