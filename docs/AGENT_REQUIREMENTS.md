@@ -45,8 +45,10 @@ commits behind.
 
 ### Status
 
-- Workflow/docs fix prepared in a clean `origin/main` worktree.
-- Push/nightly sync verification in progress.
+- Workflow/docs safety fixes prepared in a clean `origin/main` worktree.
+- Corrected nightly publication remains blocked by real upstream integration
+  conflicts after the workflow now fails safely instead of continuing with an
+  incomplete rebase.
 
 ### Verification
 
@@ -64,7 +66,8 @@ commits behind.
 - Passed in the clean temp worktree: workflow YAML parse, workflow `run:` block
   `bash -n`, `git diff --check`, `bun fmt`, `bun lint` with existing warnings
   and 0 errors, and `bun typecheck`.
-- Pending: push, nightly sync run, ancestry/assets verification.
+- Pending: resolve upstream integration conflicts, rerun nightly sync,
+  ancestry/assets verification.
 - Failed then patched: nightly sync run `26798562859` reached the corrected
   ancestry path, then exited 141 because `git tag --sort=-creatordate | head`
   tripped `pipefail` after `head` closed the pipe. Replaced that lookup with
@@ -73,6 +76,22 @@ commits behind.
   stopped on `.github/workflows/release.yml`. This file is fork-owned, so the
   workflow now auto-resolves release workflow conflicts to the fork side while
   continuing to resolve package version conflicts to upstream.
+- Failed then patched: nightly sync run `26798858130` auto-resolved
+  `.github/workflows/release.yml`, then hit a later conflict. The rebase loop
+  incorrectly tried `git rebase --skip` from inside the `--continue` failure
+  path and could mark an incomplete rebase as clean. The loop now preserves
+  later conflicts for the next inspection pass and verifies no rebase/unmerged
+  state remains before reporting `clean`.
+- Passed after that patch in the clean temp worktree: workflow YAML parse,
+  workflow `run:` block `bash -n`, `git diff --check`, `bun fmt`, `bun lint`
+  with existing warnings and 0 errors, and `bun typecheck`.
+- Remaining blocker: publishing a corrected nightly now requires resolving real
+  upstream integration conflicts, not just release workflow automation. Local
+  repros showed commit-by-commit rebase conflicts beyond the auto-resolved
+  workflow/version files, including historical fork changes in
+  `scripts/build-desktop-artifact.ts`, remote pairing/runtime files, and later
+  connection runtime files. Do not force-publish until those are resolved and
+  tested as code changes.
 - Not run: `bun test`, per repo instructions.
 
 ### Open Questions / Proposed Changes
