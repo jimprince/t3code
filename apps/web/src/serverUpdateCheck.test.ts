@@ -1,4 +1,5 @@
 import { DEFAULT_SERVER_SETTINGS, EnvironmentId, type ServerConfig } from "@t3tools/contracts";
+import type { WsRpcClient } from "@t3tools/client-runtime";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { APP_VERSION } from "./branding";
@@ -7,7 +8,6 @@ import {
   maybeRequestHeadlessUpdateCheck,
   resetHeadlessUpdateCheckRequestsForTests,
 } from "./serverUpdateCheck";
-import type { WsRpcClient } from "./rpc/wsRpcClient";
 
 const environmentId = EnvironmentId.make("environment-update-check");
 

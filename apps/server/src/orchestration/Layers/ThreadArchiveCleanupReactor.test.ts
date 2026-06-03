@@ -155,12 +155,14 @@ describe("ThreadArchiveCleanupReactor", () => {
         Layer.provideMerge(
           Layer.succeed(TerminalManager, {
             open: () => unsupported(),
+            attachStream: () => unsupported(),
             write: () => unsupported(),
             resize: () => unsupported(),
             clear: () => unsupported(),
             restart: () => unsupported(),
             close,
             subscribe: () => Effect.succeed(() => undefined),
+            subscribeMetadata: () => Effect.succeed(() => undefined),
           }),
         ),
       ),

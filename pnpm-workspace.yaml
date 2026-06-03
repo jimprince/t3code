@@ -33,6 +33,7 @@ catalog:
   "@types/node": 24.12.4
   "@typescript/native-preview": 7.0.0-dev.20260604.1
   jose: 6.2.2
+  tsdown: ^0.20.3
   typescript: ~6.0.3
   vitest: npm:@voidzero-dev/vite-plus-test@0.1.24
   vite: npm:@voidzero-dev/vite-plus-core@0.1.24
