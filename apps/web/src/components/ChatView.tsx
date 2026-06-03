@@ -1787,6 +1787,19 @@ export default function ChatView(props: ChatViewProps) {
       deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
   );
+  const isThreadDetailLoading = Boolean(
+    isServerThread &&
+    activeThread &&
+    timelineEntries.length === 0 &&
+    activeThread.messages.length === 0 &&
+    activeThread.activities.length === 0 &&
+    activeThread.proposedPlans.length === 0 &&
+    activeThread.turnDiffSummaries.length === 0 &&
+    (activeThread.latestTurn !== null ||
+      activeThread.session !== null ||
+      activeThread.goal !== null ||
+      activeThread.pendingSourceProposedPlan !== undefined),
+  );
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
   const turnDiffSummaryByAssistantMessageId = useMemo(() => {
@@ -3870,6 +3883,7 @@ export default function ChatView(props: ChatViewProps) {
             <MessagesTimeline
               key={activeThread.id}
               isWorking={isWorking}
+              isThreadDetailLoading={isThreadDetailLoading}
               activeTurnInProgress={isWorking || !latestTurnSettled}
               activeTurnId={activeLatestTurn?.turnId ?? null}
               activeTurnStartedAt={activeWorkStartedAt}

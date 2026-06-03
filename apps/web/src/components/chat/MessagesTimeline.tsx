@@ -116,6 +116,7 @@ const EMPTY_TIMELINE_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "d
 
 interface MessagesTimelineProps {
   isWorking: boolean;
+  isThreadDetailLoading?: boolean;
   activeTurnInProgress: boolean;
   activeTurnId?: TurnId | null;
   activeTurnStartedAt: string | null;
@@ -145,6 +146,7 @@ interface MessagesTimelineProps {
 
 export const MessagesTimeline = memo(function MessagesTimeline({
   isWorking,
+  isThreadDetailLoading = false,
   activeTurnInProgress,
   activeTurnId,
   activeTurnStartedAt,
@@ -265,6 +267,27 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   );
 
   if (rows.length === 0 && !isWorking) {
+    if (isThreadDetailLoading) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex flex-col items-center gap-3 text-sm text-muted-foreground"
+          >
+            <p>Loading conversation...</p>
+            <div
+              role="progressbar"
+              aria-label="Loading conversation"
+              className="h-1 w-48 overflow-hidden rounded-full bg-muted"
+            >
+              <div className="h-full w-2/3 rounded-full bg-primary/60 motion-safe:animate-pulse" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-sm text-muted-foreground/30">
