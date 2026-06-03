@@ -1,5 +1,58 @@
 # Agent Requirements
 
+## Current Task: Resolve Nightly 20260603.451 Rebase Conflict
+
+Resolve the fork nightly rebase conflict against upstream
+`v0.0.25-nightly.20260603.451`, preserve the fork release/build behavior, and
+publish or prepare the corrected fork nightly path.
+
+### Current User Requirements
+
+- Work on fixing the upstream rebase conflict blocking fork nightly automation.
+- Resolve the conflict in `scripts/build-desktop-artifact.ts` without losing
+  fork-specific release identity, updater channel, or artifact behavior.
+- Keep the previously pushed thread-detail hydration fix in the rebased history.
+- Verify the resolved fork state with the repo's required checks before pushing.
+- If safe, push the corrected rebased `main` and create/push the next fork
+  nightly tag for upstream `v0.0.25-nightly.20260603.451`.
+
+### Constraints
+
+- Follow repo instructions: use `bun run test`, never `bun test`; all of
+  `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion when
+  code changes require them.
+- Do not delete remote releases or tags unless explicitly approved.
+- Preserve the maintained-fork model: fork commits rebased on upstream tags,
+  nightly tags use `-fork.N`, and upstream package versions are re-stamped to
+  fork release versions before publishing.
+- Avoid force-pushing unless the local rebased `main` is verified and a
+  `--force-with-lease` push is the required sync operation.
+
+### Acceptance Criteria
+
+- Local `main` is rebased onto
+  `refs/tags/upstream/v0.0.25-nightly.20260603.451`.
+- `scripts/build-desktop-artifact.ts` resolves the upstream/fork conflict while
+  preserving fork app identity and nightly updater behavior.
+- The rebased history still includes `fix: recover missing thread detail
+  hydration`.
+- Required local checks pass on the rebased tree.
+- The corrected `main` is pushed with `--force-with-lease` and a valid
+  `v0.0.25-nightly.20260603.451-fork.N` tag is pushed, or the exact remaining
+  blocker is reported.
+
+### Status
+
+- In progress.
+
+### Verification
+
+- Pending.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Stabilize Thread Detail Hydration UI
 
 Diagnose why a remote T3 Code thread can appear in the sidebar while the main
