@@ -1,7 +1,7 @@
 import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
+import type { WsRpcClient } from "@t3tools/client-runtime";
 
 import { APP_VERSION } from "./branding";
-import type { WsRpcClient } from "./rpc/wsRpcClient";
 import { isClientVersionNewerThanServer } from "./versionSkew";
 
 const HEADLESS_UPDATE_CHECK_REQUEST_COOLDOWN_MS = 30 * 60 * 1000;
