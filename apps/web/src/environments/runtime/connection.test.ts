@@ -57,9 +57,9 @@ function createTestClient(options?: {
       getTurnDiff: vi.fn(async () => undefined),
       getFullThreadDiff: vi.fn(async () => undefined),
       subscribeShell: vi.fn(
-        (listener: (event: any) => void, options?: { onResubscribe?: () => void }) => {
+        (listener: (event: any) => void, subscribeOptions?: { onResubscribe?: () => void }) => {
           shellListeners.add(listener);
-          shellResubscribe = options?.onResubscribe;
+          shellResubscribe = subscribeOptions?.onResubscribe;
           if (options?.emitInitialSnapshot !== false) {
             queueMicrotask(() => {
               listener({
@@ -75,7 +75,7 @@ function createTestClient(options?: {
           }
           return () => {
             shellListeners.delete(listener);
-            if (shellResubscribe === options?.onResubscribe) {
+            if (shellResubscribe === subscribeOptions?.onResubscribe) {
               shellResubscribe = undefined;
             }
           };
