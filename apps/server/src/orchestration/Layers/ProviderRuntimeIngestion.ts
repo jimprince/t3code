@@ -1230,7 +1230,7 @@ const make = Effect.gen(function* () {
 
       yield* orchestrationEngine.dispatch({
         type: "thread.turn.diff.complete",
-        commandId: providerCommandId(input.event, input.commandTag),
+        commandId: yield* providerCommandId(input.event, input.commandTag),
         threadId: input.threadId,
         turnId: input.turnId,
         completedAt: input.completedAt,
@@ -1603,7 +1603,7 @@ const make = Effect.gen(function* () {
           ) {
             yield* orchestrationEngine.dispatch({
               type: "thread.session.set",
-              commandId: providerCommandId(event, "opencode-assistant-session-set"),
+              commandId: yield* providerCommandId(event, "opencode-assistant-session-set"),
               threadId: thread.id,
               session: {
                 ...refreshedSession,

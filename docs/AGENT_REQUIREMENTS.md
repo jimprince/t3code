@@ -43,12 +43,30 @@ artifacts.
 
 ### Status
 
-- In progress in clean temp worktree
+- Rebase resolved and locally verified in clean temp worktree
   `/var/folders/vl/yhz42_xn4h16p23jhkzsy_dr0000gn/T/opencode/t3code-nightly-439-20260602180134`.
+- Pending: stamp/push corrected fork nightly tag, monitor release workflow, and
+  verify release assets/ancestry on the pushed tag.
 
 ### Verification
 
-- Pending.
+- Passed: upstream ancestry check for the rebased detached `HEAD` against
+  `refs/tags/upstream/v0.0.25-nightly.20260602.439`.
+- Passed: `bun install --frozen-lockfile`.
+- Passed: focused shared remote tests,
+  `bun run --filter @t3tools/shared test src/remote.test.ts`.
+- Passed: focused client-runtime tests,
+  `bun run --filter @t3tools/client-runtime test src/wsRpcClient.test.ts src/wsTransport.test.ts`.
+- Passed: focused web runtime/composer tests, including affected update-check
+  tests.
+- Passed: focused browser test for `ThreadTerminalDrawer.browser.tsx`.
+- Passed: focused server orchestration/text-generation tests.
+- Passed: release artifact script tests.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with 10 existing warnings and 0 errors. One earlier retry
+  was SIGKILLed while building the oxlint plugin, but the plugin build and exact
+  lint script both passed afterward.
+- Passed: `bun typecheck`.
 
 ### Open Questions / Proposed Changes
 
