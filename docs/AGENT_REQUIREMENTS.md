@@ -1,5 +1,70 @@
 # Agent Requirements
 
+## Current Task: Stabilize Thread Detail Hydration UI
+
+Diagnose why a remote T3 Code thread can appear in the sidebar while the main
+conversation pane renders as empty, then make the UI/state path less likely to
+get stuck after reconnects or slow detail loading.
+
+### Current User Requirements
+
+- Determine from the underlying code which explanation is more likely: true
+  empty/missing conversation data versus delayed or missed thread-detail
+  loading.
+- Adjust or replace the fragile path so the same UI state issue is less likely
+  to recur.
+- If a conversation is still loading, show an honest visible loading state such
+  as a progress bar instead of "Send a message to start the conversation."
+- Keep the fix focused on T3 Code UI/backend state reliability.
+- Commit the verified changes, merge if safe/appropriate, and push to
+  `origin`.
+
+### Constraints
+
+- Preserve existing thread data and orchestration behavior.
+- Follow repo instructions: use `bun run test`, never `bun test`; all of
+  `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion when
+  code changes require them.
+- Avoid broad rewrites unless the code evidence shows they are necessary.
+
+### Acceptance Criteria
+
+- Existing server threads with shell/latest-turn state but missing detail
+  content no longer render as a brand-new empty conversation.
+- Retained/cached thread-detail subscriptions can recover by requesting a fresh
+  detail snapshot when detail content is missing.
+- Oversized thread-detail snapshots are reduced where safe so hydration is less
+  fragile.
+- Focused regression tests cover the stale/missing detail path and loading
+  empty-state UI.
+- A local commit exists for the fix and is pushed to `origin`, or any unsafe
+  merge/push condition is explicitly reported with the exact blocker.
+
+### Status
+
+- Implementation completed, rebased onto current `origin/main`, and verified;
+  push in progress.
+
+### Verification
+
+- Code inspection found the likely failure mode: the shell/sidebar snapshot can
+  show a thread while the separate detail subscription has not hydrated message
+  and activity slices. A warm cached detail subscription previously did not
+  force a fresh snapshot when those slices were still empty.
+- Focused regression tests passed:
+  `bun run --filter @t3tools/web test -- src/environments/runtime/service.threadSubscriptions.test.ts src/components/chat/MessagesTimeline.test.tsx`.
+- Server detail snapshot regression passed:
+  `bun run --filter t3 test -- src/orchestration/Layers/ProjectionSnapshotQuery.test.ts`.
+- Verified the server activity-cap regression test catches the bug by
+  temporarily raising the cap and observing the expected test failure.
+- Full repo verification passed on the rebased tree under nvm Node 22.22.1:
+  `bun fmt`, `bun lint` (existing warnings only), `bun typecheck`, and
+  `bun run test`.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Publish Corrected Nightly 20260602.439
 
 Resolve the upstream nightly rebase conflict, publish an ancestry-correct fork

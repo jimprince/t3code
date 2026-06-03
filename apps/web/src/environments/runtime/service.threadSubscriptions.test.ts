@@ -347,6 +347,42 @@ describe("retainThreadDetailSubscription", () => {
     await resetEnvironmentServiceForTests();
   });
 
+  it("refreshes a warm cached thread detail subscription when a started thread never hydrated", async () => {
+    const {
+      retainThreadDetailSubscription,
+      startEnvironmentConnectionService,
+      resetEnvironmentServiceForTests,
+    } = await import("./service");
+
+    const stop = startEnvironmentConnectionService(new QueryClient());
+    const environmentId = EnvironmentId.make("env-1");
+    const threadId = ThreadId.make("thread-missing-detail");
+    const connectionInput = mockCreateEnvironmentConnection.mock.calls[0]?.[0];
+    expect(connectionInput).toBeDefined();
+
+    connectionInput.syncShellSnapshot(
+      makeThreadShellSnapshot({
+        threadId,
+        sessionStatus: "running",
+      }),
+      environmentId,
+    );
+
+    const releaseFirst = retainThreadDetailSubscription(environmentId, threadId);
+    expect(mockSubscribeThread).toHaveBeenCalledTimes(1);
+
+    releaseFirst();
+    expect(mockThreadUnsubscribe).not.toHaveBeenCalled();
+
+    const releaseSecond = retainThreadDetailSubscription(environmentId, threadId);
+    expect(mockThreadUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(mockSubscribeThread).toHaveBeenCalledTimes(2);
+
+    releaseSecond();
+    stop();
+    await resetEnvironmentServiceForTests();
+  });
+
   it("does not start the primary connection until the known environment has an id", async () => {
     mockGetPrimaryKnownEnvironment.mockReturnValue({
       id: "env-1",

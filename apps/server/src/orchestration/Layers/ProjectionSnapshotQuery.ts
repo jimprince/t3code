@@ -62,6 +62,7 @@ import {
 const decodeReadModel = Schema.decodeUnknownEffect(OrchestrationReadModel);
 const decodeShellSnapshot = Schema.decodeUnknownEffect(OrchestrationShellSnapshot);
 const decodeThread = Schema.decodeUnknownEffect(OrchestrationThread);
+const THREAD_DETAIL_ACTIVITY_LIMIT = 500;
 const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
   Struct.assign({
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
@@ -117,6 +118,10 @@ const ProjectIdLookupInput = Schema.Struct({
 });
 const ThreadIdLookupInput = Schema.Struct({
   threadId: ThreadId,
+});
+const ThreadActivityLimitLookupInput = Schema.Struct({
+  threadId: ThreadId,
+  limit: NonNegativeInt,
 });
 const ProjectionProjectLookupRowSchema = ProjectionProjectDbRowSchema;
 const ProjectionThreadIdLookupRowSchema = Schema.Struct({
@@ -844,11 +849,30 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
-  const listThreadActivityRowsByThread = SqlSchema.findAll({
-    Request: ThreadIdLookupInput,
+  const listRecentThreadActivityRowsByThread = SqlSchema.findAll({
+    Request: ThreadActivityLimitLookupInput,
     Result: ProjectionThreadActivityDbRowSchema,
-    execute: ({ threadId }) =>
+    execute: ({ threadId, limit }) =>
       sql`
+        WITH recent_activities AS (
+          SELECT
+            activity_id,
+            thread_id,
+            turn_id,
+            tone,
+            kind,
+            summary,
+            payload_json,
+            sequence,
+            created_at
+          FROM projection_thread_activities
+          WHERE thread_id = ${threadId}
+          ORDER BY
+            sequence DESC,
+            created_at DESC,
+            activity_id DESC
+          LIMIT ${limit}
+        )
         SELECT
           activity_id AS "activityId",
           thread_id AS "threadId",
@@ -859,8 +883,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           payload_json AS "payload",
           sequence,
           created_at AS "createdAt"
-        FROM projection_thread_activities
-        WHERE thread_id = ${threadId}
+        FROM recent_activities
         ORDER BY
           sequence ASC,
           created_at ASC,
@@ -1984,7 +2007,10 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             ),
           ),
         ),
-        listThreadActivityRowsByThread({ threadId }).pipe(
+        listRecentThreadActivityRowsByThread({
+          threadId,
+          limit: THREAD_DETAIL_ACTIVITY_LIMIT,
+        }).pipe(
           Effect.mapError(
             toPersistenceSqlOrDecodeError(
               "ProjectionSnapshotQuery.getThreadDetailById:listActivities:query",
