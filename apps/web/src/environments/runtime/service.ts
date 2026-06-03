@@ -388,6 +388,41 @@ function shouldEvictThreadDetailSubscription(entry: ThreadDetailSubscriptionEntr
   return entry.refCount === 0 && !isNonIdleThreadDetailSubscription(entry);
 }
 
+function hasStartedThreadWithoutHydratedDetail(entry: ThreadDetailSubscriptionEntry): boolean {
+  const thread = selectThreadByRef(
+    useStore.getState(),
+    scopeThreadRef(entry.environmentId, entry.threadId),
+  );
+  if (!thread) {
+    return false;
+  }
+
+  const hasHydratedDetail =
+    thread.messages.length > 0 ||
+    thread.activities.length > 0 ||
+    thread.proposedPlans.length > 0 ||
+    thread.turnDiffSummaries.length > 0;
+  if (hasHydratedDetail) {
+    return false;
+  }
+
+  return (
+    thread.latestTurn !== null ||
+    thread.session !== null ||
+    thread.goal !== null ||
+    thread.pendingSourceProposedPlan !== undefined
+  );
+}
+
+function refreshThreadDetailSubscription(entry: ThreadDetailSubscriptionEntry): void {
+  if (entry.unsubscribe === NOOP) {
+    return;
+  }
+
+  entry.unsubscribe();
+  entry.unsubscribe = NOOP;
+}
+
 function attachThreadDetailSubscription(entry: ThreadDetailSubscriptionEntry): boolean {
   if (entry.unsubscribeConnectionListener !== null) {
     entry.unsubscribeConnectionListener();
@@ -567,6 +602,9 @@ export function retainThreadDetailSubscription(
   const existing = threadDetailSubscriptions.get(key);
   if (existing) {
     clearThreadDetailSubscriptionEviction(existing);
+    if (existing.refCount === 0 && hasStartedThreadWithoutHydratedDetail(existing)) {
+      refreshThreadDetailSubscription(existing);
+    }
     existing.refCount += 1;
     existing.lastAccessedAt = Date.now();
     if (!attachThreadDetailSubscription(existing)) {
