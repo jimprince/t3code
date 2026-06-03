@@ -1,5 +1,59 @@
 # Agent Requirements
 
+## Current Task: Publish Corrected Nightly 20260602.439
+
+Resolve the upstream nightly rebase conflict, publish an ancestry-correct fork
+nightly for upstream `v0.0.25-nightly.20260602.439`, and verify the release
+artifacts.
+
+### Current User Requirements
+
+- Rebase fork `main` onto upstream nightly `v0.0.25-nightly.20260602.439`.
+- Resolve the reported conflict in `scripts/build-desktop-artifact.ts` without
+  losing fork release identity/build behavior.
+- Publish the next fork nightly tag for that upstream nightly.
+- Verify the published release has the required macOS nightly updater assets and
+  Linux headless tarball.
+- Verify the new fork nightly tag contains the upstream nightly tag commit as an
+  ancestor.
+
+### Constraints
+
+- Keep local remote-upgrade WIP separate and untouched.
+- Work only in a clean temp worktree for this release integration.
+- Do not run or dispatch stable release/sync paths.
+- Do not delete or rewrite existing malformed remote fork-nightly tags/releases
+  unless explicitly approved.
+- Follow repo checks: `bun fmt`, `bun lint`, and `bun typecheck` must pass before
+  completion.
+- Do not run `bun test`; use package test scripts via `bun run test` or focused
+  commands when tests are needed.
+
+### Acceptance Criteria
+
+- Fork `main` is rebased onto upstream `v0.0.25-nightly.20260602.439` and pushed
+  with `--force-with-lease`.
+- A new `v0.0.25-nightly.20260602.439-fork.N` tag is pushed at the stamped
+  release commit.
+- The release workflow completes successfully for that tag.
+- `nightly-mac.yml`, macOS arm64 DMG/ZIP/blockmaps, and
+  `t3-headless-0.0.25-nightly.20260602.439-fork.N-linux-x64.tar.gz` are present.
+- `git merge-base --is-ancestor upstream/v0.0.25-nightly.20260602.439 <new-tag>`
+  succeeds.
+
+### Status
+
+- In progress in clean temp worktree
+  `/var/folders/vl/yhz42_xn4h16p23jhkzsy_dr0000gn/T/opencode/t3code-nightly-439-20260602180134`.
+
+### Verification
+
+- Pending.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Repair Fork Nightly Upstream Rebase Logic
 
 Fix the fork release automation so push-triggered fork nightlies are built from
