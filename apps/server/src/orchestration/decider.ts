@@ -395,12 +395,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         threadId: command.threadId,
       });
       return {
-        ...withEventBase({
+        ...(yield* withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
           occurredAt: command.createdAt,
           commandId: command.commandId,
-        }),
+        })),
         type: "thread.goal-set",
         payload: {
           threadId: command.threadId,
@@ -429,12 +429,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         return [];
       }
       return {
-        ...withEventBase({
+        ...(yield* withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
           occurredAt: command.createdAt,
           commandId: command.commandId,
-        }),
+        })),
         type: "thread.goal-cleared",
         payload: {
           threadId: command.threadId,
@@ -795,12 +795,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         return [];
       }
       return {
-        ...withEventBase({
+        ...(yield* withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
           occurredAt: command.createdAt,
           commandId: command.commandId,
-        }),
+        })),
         type: "thread.goal-evaluated",
         payload: {
           threadId: command.threadId,

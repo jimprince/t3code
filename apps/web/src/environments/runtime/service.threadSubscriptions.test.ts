@@ -146,6 +146,7 @@ vi.mock("@t3tools/client-runtime", async (importOriginal) => {
       getTraceDiagnostics: vi.fn(),
       getProcessDiagnostics: vi.fn(),
       getProcessResourceHistory: vi.fn(),
+      requestHeadlessUpdateCheck: vi.fn(),
       signalProcess: vi.fn(),
     },
   };

@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit",
+    "build": "tsdown",
+    "typecheck": "tsgo --noEmit",
     "test": "bun run build && vitest run --exclude 'dist/**'"
   },
   "dependencies": {
@@ -13,8 +13,10 @@
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
     "@types/bun": "catalog:",
+    "tsdown": "catalog:",
     "vitest": "catalog:"
   }
 }
