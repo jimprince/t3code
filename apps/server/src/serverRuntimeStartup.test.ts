@@ -287,6 +287,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation fa
         getThreadCheckpointContext: () => Effect.succeed(Option.none()),
         getFullThreadDiffContext: () => Effect.succeed(Option.none()),
         getThreadShellById: () => Effect.die("unused"),
+        getThreadShellByIdIncludingArchived: () => Effect.die("unused"),
         getThreadDetailById: () => Effect.die("unused"),
       }),
       Effect.provideService(OrchestrationEngineService, {
