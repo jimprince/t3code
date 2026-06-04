@@ -384,6 +384,7 @@ jobs:
           # Dispatch the release workflow explicitly so scheduled syncs still
           # publish artifacts without requiring a long-lived PAT secret.
           gh workflow run release.yml \
+            --repo "$GITHUB_REPOSITORY" \
             --ref main \
             -f version="$new_tag" \
             -f target_ref="$new_tag"
