@@ -1,5 +1,80 @@
 # Agent Requirements
 
+## Current Task: Repair Auth Scope Migration Collision
+
+Diagnose and fix the local T3 Code pairing failure where the pair screen shows
+`Failed to bootstrap auth session (500)` after updating to the rebased fork.
+
+### Current User Requirements
+
+- Determine why T3 Code cannot bootstrap or pair after reconnect/relaunch.
+- Fix the underlying T3 Code state issue so the UI does not keep hitting this
+  pairing/auth 500 after fork rebases.
+- Preserve existing user state where possible, but safely invalidate stale auth
+  credentials/sessions if required by the auth authorization-scope cutover.
+- Add a durable code-level repair so affected installs recover automatically,
+  instead of only patching the local database by hand.
+
+### Constraints
+
+- Do not revert or overwrite unrelated dirty OpenCode provider work currently
+  present in the worktree.
+- Back up local SQLite state before manually repairing the installed app's
+  database.
+- Keep migration behavior idempotent for installs that already have the scoped
+  auth schema.
+- Follow repo instructions: use `bun run test`, never `bun test`; run focused
+  verification for the migration change.
+
+### Acceptance Criteria
+
+- A database where migration id `31` was previously consumed by the old fork
+  `ProjectionThreadGoals` migration is repaired to scoped auth tables.
+- `auth_pairing_links` and `auth_sessions` end up with `scopes` columns and no
+  stale `role` columns after the repair migration runs.
+- Existing stale auth rows are invalidated by recreating the auth tables, matching
+  the original authorization-scope migration's safety model.
+- The local installed app database is backed up and repaired so pairing can
+  proceed again.
+- Focused regression tests cover the migration collision.
+
+### Status
+
+- Root cause identified: the local DB recorded migration id `31` as
+  `ProjectionThreadGoals` before the rebase; after the rebase, upstream
+  `031_AuthAuthorizationScopes` was skipped while current auth code expected
+  `scopes` columns.
+- Added idempotent migration `033_RepairAuthAuthorizationScopes` to repair
+  installs that skipped the upstream scoped-auth migration because migration id
+  `31` had already been recorded by the fork.
+- Added regression coverage for the migration-collision path.
+- Backed up and manually repaired the installed local app database at
+  `~/.t3/userdata/state.sqlite`; backup:
+  `~/.t3/userdata/state.sqlite.backup-20260603-194805`.
+- Relaunched T3 Code after the DB repair.
+
+### Verification
+
+- Confirmed regression test failure before implementation under Node 22.22.1:
+  `bun run --filter t3 test -- src/persistence/Migrations/033_RepairAuthAuthorizationScopes.test.ts`
+  failed because `auth_pairing_links` still lacked `scopes`.
+- Passed under Node 22.22.1:
+  `bun run --filter t3 test -- src/persistence/Migrations/031_AuthAuthorizationScopes.test.ts src/persistence/Migrations/033_RepairAuthAuthorizationScopes.test.ts`.
+- Passed: `bun fmt` on the touched migration/tracker files.
+- Passed: `bun lint` with existing warnings and 0 errors.
+- Passed: `bun typecheck`.
+- Confirmed local repaired schema: `auth_pairing_links` and `auth_sessions`
+  have `scopes` columns, no `role` columns, and no stale auth rows.
+- Confirmed local auth endpoint now returns HTTP 200:
+  `GET http://127.0.0.1:3773/api/auth/session`.
+- Note: one test attempt under default Node 22.15.1 failed before executing the
+  regression because that Node version lacks the required `node:sqlite`
+  `StatementSync.columns` API; rerunning under Node 22.22.1 verified the test.
+
+### Open Questions / Proposed Changes
+
+- None.
+
 ## Current Task: Stabilize OpenCode Provider Probe Server Lifecycle
 
 Diagnose and fix repeated local OpenCode server starts/stops caused by provider
@@ -74,7 +149,6 @@ while the dev server is otherwise healthy.
 ### Open Questions / Proposed Changes
 
 - None.
-
 
 ## Current Task: Resolve Nightly 20260603.451 Rebase Conflict
 
@@ -199,6 +273,11 @@ publish or prepare the corrected fork nightly path.
 - Confirmed: `.github/workflows/release.yml` publish steps used
   `token: ${{ github.token }}` even though `LLM_INSTRUCTIONS.md` documents
   `GH_PAT` as the preferred release creation token with workflow-token fallback.
+- Confirmed: after switching to `secrets.GH_PAT || github.token`, release run
+  `26923498300` still failed at publish because the configured `GH_PAT` secret
+  is present but stale/invalid (`Bad credentials`). Static expression fallback
+  is therefore insufficient; the workflow must validate candidate tokens and
+  retry with the workflow token when a PAT is unusable.
 
 ### Open Questions / Proposed Changes
 
