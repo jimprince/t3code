@@ -552,7 +552,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
-          token: ${{ github.token }}
+          token: ${{ secrets.GH_PAT || github.token }}
 
       - name: Publish first release
         if: needs.preflight.outputs.previous_tag == ''
@@ -571,7 +571,7 @@ jobs:
             release-assets/*.blockmap
             release-assets/*.yml
           fail_on_unmatched_files: false
-          token: ${{ github.token }}
+          token: ${{ secrets.GH_PAT || github.token }}
 
   finalize:
     name: Finalize release
