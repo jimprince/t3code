@@ -13,16 +13,16 @@ export interface AuthSessionState {
   expiresAt?: string;
 }
 
-export interface AuthBearerBootstrapResult {
-  authenticated: true;
-  role: string;
-  sessionMethod: "bearer-session-token";
-  expiresAt: string;
-  sessionToken: string;
+export interface AuthAccessTokenResult {
+  access_token: string;
+  token_type: "Bearer";
+  issued_token_type: string;
+  expires_in: number;
+  scope?: string;
 }
 
-export interface AuthWebSocketTokenResult {
-  token: string;
+export interface AuthWebSocketTicketResult {
+  ticket: string;
   expiresAt: string;
 }
 
