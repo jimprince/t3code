@@ -1,5 +1,63 @@
 # Agent Requirements
 
+## Current Task: Follow And Complete Nightly Build
+
+Monitor the fork nightly build after the disconnect-message merge, recover from
+CI/release automation blockers if needed, and verify that the updater-visible
+nightly release completes with the intended macOS and Linux/headless assets.
+
+### Current User Requirements
+
+- Follow the build after the `main` push.
+- Make sure the nightly build completes.
+- If the build fails for an actionable automation reason, fix the blocker and
+  re-run the nightly path.
+
+### Constraints
+
+- Preserve the already-verified disconnect-message implementation.
+- Do not treat stale/racing fork-push-nightly failures as success unless the
+  latest updater-visible release includes the intended commits and assets.
+- Follow repo release instructions in `LLM_INSTRUCTIONS.md`.
+- Avoid deleting remote tags/releases unless a bad updater-visible artifact
+  requires cleanup and the exact target is confirmed first.
+
+### Acceptance Criteria
+
+- A fork nightly release is published for the current `main` content.
+- The release contains both active deliverable lanes: macOS Electron app assets
+  and Linux/headless tarball.
+- `origin/main` contains the disconnect-message feature commit.
+- Any automation fix needed to make the nightly path complete is committed and
+  pushed.
+
+### Status
+
+- Found `Fork Push Nightly` race: older queued push runs can force-push a
+  generated release-prep commit and make newer runs fail stale or rebase against
+  tracker conflicts.
+- `v0.0.25-nightly.20260603.451-fork.3` release run is in progress, but its
+  generated `origin/main` commit does not contain the disconnect-message feature
+  commit, so it is not sufficient for this task.
+- Merged the generated `fork.3` release-prep commit back into local `main`.
+- Patched `fork-push-nightly.yml` and `sync-upstream.yml` so
+  `docs/AGENT_REQUIREMENTS.md` conflicts auto-resolve to the current rebased
+  tree instead of blocking release rebases.
+
+### Verification
+
+- Confirmed `d592b1bf2` and merge commit `19690a8f6` are not ancestors of
+  current `origin/main` after the older fork-push-nightly run.
+- Passed: `git diff --check`.
+- Passed: `actionlint` for `fork-push-nightly.yml` and `sync-upstream.yml`.
+- Passed: YAML parse for `fork-push-nightly.yml` and `sync-upstream.yml`.
+
+### Open Questions / Proposed Changes
+
+- Proposed fix: make release rebases auto-resolve `docs/AGENT_REQUIREMENTS.md`
+  to the current rebase tree so tracker-only conflicts do not block
+  updater-visible package builds.
+
 ## Current Task: Repair Auth Scope Migration Collision
 
 Diagnose and fix the local T3 Code pairing failure where the pair screen shows
