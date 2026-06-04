@@ -353,12 +353,18 @@ export const MessagesTimeline = memo(function MessagesTimeline({
           <div
             role="status"
             aria-live="polite"
-            className="flex flex-col items-center gap-3 text-sm text-muted-foreground"
+            className="flex max-w-sm flex-col items-center gap-3 px-6 text-center text-sm text-muted-foreground"
           >
-            <p>Loading conversation...</p>
+            <div className="space-y-1.5">
+              <p className="font-medium text-foreground/80">Refreshing conversation state...</p>
+              <p className="text-xs leading-relaxed">
+                The sidebar has backend activity for this thread, but the conversation detail has
+                not arrived yet.
+              </p>
+            </div>
             <div
               role="progressbar"
-              aria-label="Loading conversation"
+              aria-label="Refreshing conversation state"
               className="h-1 w-48 overflow-hidden rounded-full bg-muted"
             >
               <div className="h-full w-2/3 rounded-full bg-primary/60 motion-safe:animate-pulse" />

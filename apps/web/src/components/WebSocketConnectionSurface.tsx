@@ -37,8 +37,29 @@ function formatRetryCountdown(nextRetryAt: string, nowMs: number): string {
   return `${Math.max(1, Math.ceil(remainingMs / 1000))}s`;
 }
 
-function describeOfflineToast(): string {
-  return "WebSocket disconnected. Waiting for network.";
+function sentence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return /[.!?]$/u.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function formatSocketEndpoint(socketUrl: string | null): string | null {
+  if (!socketUrl) {
+    return null;
+  }
+
+  try {
+    const url = new URL(socketUrl);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
 }
 
 function formatReconnectAttemptLabel(status: WsConnectionStatus): string {
@@ -49,8 +70,53 @@ function formatReconnectAttemptLabel(status: WsConnectionStatus): string {
   return `Attempt ${reconnectAttempt}/${status.reconnectMaxAttempts}`;
 }
 
-function describeExhaustedToast(): string {
-  return "Retries exhausted trying to reconnect";
+function buildDisconnectDiagnostics(status: WsConnectionStatus): string {
+  const details: string[] = [];
+  const closeReason = status.closeReason?.trim() || null;
+  const lastError = status.lastError?.trim() || null;
+  const endpoint = formatSocketEndpoint(status.socketUrl);
+
+  if (closeReason) {
+    details.push(sentence(`Close ${status.closeCode ?? "unknown"}: ${closeReason}`));
+  } else if (status.closeCode !== null) {
+    details.push(sentence(`Close code ${status.closeCode}`));
+  }
+
+  if (lastError && lastError !== closeReason) {
+    details.push(sentence(`Last error: ${lastError}`));
+  }
+
+  if (endpoint) {
+    details.push(sentence(`Endpoint: ${endpoint}`));
+  }
+
+  return details.join(" ");
+}
+
+export function buildOfflineToastDescription(status: WsConnectionStatus): string {
+  const diagnostics = buildDisconnectDiagnostics(status);
+  return [
+    `${getConnectionDisplayName(status)} disconnected while this browser is offline.`,
+    diagnostics,
+    "Reconnect will resume when the network is back.",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function buildExhaustedToastDescription(status: WsConnectionStatus): string {
+  const diagnostics =
+    buildDisconnectDiagnostics(status) || "The WebSocket connection did not recover.";
+  return `${diagnostics} Retries exhausted. Use Retry to start a fresh connection.`;
+}
+
+export function buildReconnectToastDescription(status: WsConnectionStatus, nowMs: number): string {
+  const diagnostics = buildDisconnectDiagnostics(status) || "The WebSocket connection dropped.";
+  const retry =
+    status.nextRetryAt === null
+      ? `Retrying now. ${formatReconnectAttemptLabel(status)}.`
+      : `Retrying in ${formatRetryCountdown(status.nextRetryAt, nowMs)}. ${formatReconnectAttemptLabel(status)}.`;
+  return `${diagnostics} ${retry}`;
 }
 
 function getConnectionDisplayName(status: WsConnectionStatus): string {
@@ -289,7 +355,7 @@ export function WebSocketConnectionCoordinator() {
             data: {
               hideCopyButton: true,
             },
-            description: describeOfflineToast(),
+            description: buildOfflineToastDescription(status),
             timeout: 0,
             title: "Offline",
             type: "warning",
@@ -303,7 +369,7 @@ export function WebSocketConnectionCoordinator() {
               data: {
                 hideCopyButton: true,
               },
-              description: describeExhaustedToast(),
+              description: buildExhaustedToastDescription(status),
               timeout: 0,
               title: buildReconnectTitle(status),
               type: "error",
@@ -316,10 +382,7 @@ export function WebSocketConnectionCoordinator() {
               data: {
                 hideCopyButton: true,
               },
-              description:
-                status.nextRetryAt === null
-                  ? `Reconnecting... ${formatReconnectAttemptLabel(status)}`
-                  : `Reconnecting in ${formatRetryCountdown(status.nextRetryAt, nowMs)}... ${formatReconnectAttemptLabel(status)}`,
+              description: buildReconnectToastDescription(status, nowMs),
               timeout: 0,
               title: buildReconnectTitle(status),
               type: "loading",
