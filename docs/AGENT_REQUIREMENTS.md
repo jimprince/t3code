@@ -65,6 +65,13 @@ publish or prepare the corrected fork nightly path.
   `fork-push-nightly.yml` and `sync-upstream.yml` to `${GITHUB_REPOSITORY}`,
   then manually dispatch the already-created `fork.2` release after the
   workflow fix is pushed.
+- Follow-up found: manual `fork.2` release run built and validated macOS and
+  Linux headless artifacts, but publish failed because `release.yml` hardcoded
+  `github.token` instead of the documented `GH_PAT`-with-fallback release
+  token path.
+- Follow-up in progress: patch `release.yml` publish steps to use
+  `secrets.GH_PAT || github.token`, then verify and rerun or publish the
+  already-built `fork.2` assets.
 
 ### Verification
 
@@ -109,6 +116,13 @@ publish or prepare the corrected fork nightly path.
   `go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/fork-push-nightly.yml .github/workflows/sync-upstream.yml`.
 - Passed: follow-up workflow/docs checks, `bun fmt`, `git diff --check`, and
   `bun lint` with existing warnings and 0 errors.
+- Confirmed: manual release workflow `26922756853` passed preflight, macOS
+  arm64 build, Linux headless build/smoke test, asset validation, and macOS
+  updater manifest merge; it failed only at `softprops/action-gh-release`
+  release creation with HTTP 403 `Resource not accessible by integration`.
+- Confirmed: `.github/workflows/release.yml` publish steps used
+  `token: ${{ github.token }}` even though `LLM_INSTRUCTIONS.md` documents
+  `GH_PAT` as the preferred release creation token with workflow-token fallback.
 
 ### Open Questions / Proposed Changes
 
