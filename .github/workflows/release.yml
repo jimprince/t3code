@@ -535,43 +535,92 @@ jobs:
           done
 
       - name: Publish release
-        if: needs.preflight.outputs.previous_tag != ''
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.preflight.outputs.tag }}
-          target_commitish: ${{ needs.preflight.outputs.ref }}
-          name: ${{ needs.preflight.outputs.release_name }}
-          generate_release_notes: true
-          previous_tag: ${{ needs.preflight.outputs.previous_tag }}
-          prerelease: ${{ needs.preflight.outputs.is_prerelease }}
-          make_latest: ${{ needs.preflight.outputs.make_latest }}
-          files: |
-            release-assets/*.dmg
-            release-assets/*.zip
-            release-assets/*.tar.gz
-            release-assets/*.blockmap
-            release-assets/*.yml
-          fail_on_unmatched_files: false
-          token: ${{ secrets.GH_PAT || github.token }}
+        shell: bash
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+          RELEASE_TARGET: ${{ needs.preflight.outputs.ref }}
+          RELEASE_NAME: ${{ needs.preflight.outputs.release_name }}
+          RELEASE_PREVIOUS_TAG: ${{ needs.preflight.outputs.previous_tag }}
+          RELEASE_PRERELEASE: ${{ needs.preflight.outputs.is_prerelease }}
+          RELEASE_MAKE_LATEST: ${{ needs.preflight.outputs.make_latest }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
 
-      - name: Publish first release
-        if: needs.preflight.outputs.previous_tag == ''
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.preflight.outputs.tag }}
-          target_commitish: ${{ needs.preflight.outputs.ref }}
-          name: ${{ needs.preflight.outputs.release_name }}
-          generate_release_notes: true
-          prerelease: ${{ needs.preflight.outputs.is_prerelease }}
-          make_latest: ${{ needs.preflight.outputs.make_latest }}
-          files: |
+          release_files=(
             release-assets/*.dmg
             release-assets/*.zip
             release-assets/*.tar.gz
             release-assets/*.blockmap
             release-assets/*.yml
-          fail_on_unmatched_files: false
-          token: ${{ secrets.GH_PAT || github.token }}
+          )
+          if (( ${#release_files[@]} == 0 )); then
+            echo "No release files were found after validation." >&2
+            exit 1
+          fi
+
+          create_args=(
+            --repo "$RELEASE_REPO"
+            --verify-tag
+            --target "$RELEASE_TARGET"
+            --title "$RELEASE_NAME"
+            --generate-notes
+            "--latest=$RELEASE_MAKE_LATEST"
+          )
+          if [[ -n "$RELEASE_PREVIOUS_TAG" ]]; then
+            create_args+=(--notes-start-tag "$RELEASE_PREVIOUS_TAG")
+          fi
+          if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
+            create_args+=(--prerelease)
+          fi
+
+          token_names=()
+          tokens=()
+          if [[ -n "${GH_PAT:-}" ]]; then
+            token_names+=("GH_PAT")
+            tokens+=("$GH_PAT")
+          fi
+          token_names+=("GITHUB_TOKEN")
+          tokens+=("$GITHUB_TOKEN")
+
+          last_error="$RUNNER_TEMP/release-publish-error.log"
+          for index in "${!tokens[@]}"; do
+            token_name="${token_names[$index]}"
+            token="${tokens[$index]}"
+
+            if ! GH_TOKEN="$token" gh api "repos/$RELEASE_REPO" >/dev/null 2>"$last_error"; then
+              echo "::warning::$token_name cannot access $RELEASE_REPO; trying next token."
+              continue
+            fi
+
+            if GH_TOKEN="$token" gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
+              edit_args=(--repo "$RELEASE_REPO" --target "$RELEASE_TARGET" --title "$RELEASE_NAME")
+              if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
+                edit_args+=(--prerelease)
+              fi
+              if [[ "$RELEASE_MAKE_LATEST" == "true" ]]; then
+                edit_args+=(--latest)
+              fi
+
+              if GH_TOKEN="$token" gh release edit "$RELEASE_TAG" "${edit_args[@]}" >"$last_error" 2>&1 &&
+                GH_TOKEN="$token" gh release upload "$RELEASE_TAG" "${release_files[@]}" --repo "$RELEASE_REPO" --clobber >"$last_error" 2>&1; then
+                echo "Updated GitHub release $RELEASE_TAG with $token_name."
+                exit 0
+              fi
+            elif GH_TOKEN="$token" gh release create "$RELEASE_TAG" "${release_files[@]}" "${create_args[@]}" >"$last_error" 2>&1; then
+              echo "Created GitHub release $RELEASE_TAG with $token_name."
+              exit 0
+            fi
+
+            echo "::warning::$token_name failed to publish release $RELEASE_TAG; trying next token."
+          done
+
+          echo "Failed to publish release $RELEASE_TAG with all available tokens." >&2
+          cat "$last_error" >&2
+          exit 1
 
   finalize:
     name: Finalize release
