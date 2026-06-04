@@ -22,7 +22,9 @@ import {
   OpenCodeRuntime,
   openCodeRuntimeErrorDetail,
   type OpenCodeInventory,
+  type OpenCodeServerConnection,
 } from "../opencodeRuntime.ts";
+import type { OpenCodeServerPool } from "../OpenCodeServerPool.ts";
 import type { Agent, ProviderListResponse } from "@opencode-ai/sdk/v2";
 
 const PROVIDER = ProviderDriverKind.make("opencode");
@@ -298,10 +300,15 @@ export const makePendingOpenCodeProvider = (
     });
   });
 
+export interface CheckOpenCodeProviderStatusOptions {
+  readonly serverPool?: OpenCodeServerPool;
+}
+
 export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatus")(function* (
   openCodeSettings: OpenCodeSettings,
   cwd: string,
   environment: NodeJS.ProcessEnv = process.env,
+  options: CheckOpenCodeProviderStatusOptions = {},
 ): Effect.fn.Return<ServerProviderDraft, never, OpenCodeRuntime> {
   const openCodeRuntime = yield* OpenCodeRuntime;
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
@@ -407,27 +414,42 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
     }
   }
 
-  const inventoryExit = yield* Effect.exit(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const server = yield* openCodeRuntime.connectToOpenCodeServer({
-          binaryPath: openCodeSettings.binaryPath,
-          serverUrl: openCodeSettings.serverUrl,
-          environment,
-        });
-        return yield* openCodeRuntime.loadOpenCodeInventory(
-          openCodeRuntime.createOpenCodeSdkClient({
-            baseUrl: server.url,
-            directory: cwd,
-            ...(isExternalServer && openCodeSettings.serverPassword
-              ? { serverPassword: openCodeSettings.serverPassword }
-              : {}),
+  const loadInventoryFromServer = (server: Pick<OpenCodeServerConnection, "url">) =>
+    openCodeRuntime.loadOpenCodeInventory(
+      openCodeRuntime.createOpenCodeSdkClient({
+        baseUrl: server.url,
+        directory: cwd,
+        ...(isExternalServer && openCodeSettings.serverPassword
+          ? { serverPassword: openCodeSettings.serverPassword }
+          : {}),
+      }),
+    );
+
+  const loadInventory =
+    options.serverPool !== undefined
+      ? options.serverPool.withServer(
+          {
+            binaryPath: openCodeSettings.binaryPath,
+            serverUrl: openCodeSettings.serverUrl,
+            environment,
+          },
+          loadInventoryFromServer,
+        )
+      : Effect.scoped(
+          Effect.gen(function* () {
+            const server = yield* openCodeRuntime.connectToOpenCodeServer({
+              binaryPath: openCodeSettings.binaryPath,
+              serverUrl: openCodeSettings.serverUrl,
+              environment,
+            });
+            return yield* loadInventoryFromServer(server);
           }),
         );
-      }).pipe(
-        Effect.mapError(
-          (cause) => new OpenCodeProbeError({ cause, detail: openCodeRuntimeErrorDetail(cause) }),
-        ),
+
+  const inventoryExit = yield* Effect.exit(
+    loadInventory.pipe(
+      Effect.mapError(
+        (cause) => new OpenCodeProbeError({ cause, detail: openCodeRuntimeErrorDetail(cause) }),
       ),
     ),
   );
