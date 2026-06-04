@@ -9,6 +9,23 @@ const srcPath = fileURLToPath(new URL("./src", import.meta.url));
 export default mergeConfig(
   viteConfig,
   defineConfig({
+    optimizeDeps: {
+      include: [
+        "@dnd-kit/core",
+        "@dnd-kit/modifiers",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
+        "@pierre/diffs",
+        "@pierre/diffs/react",
+        "@pierre/diffs/worker/worker.js",
+        "effect/Array",
+        "effect/Order",
+        "react-dom",
+        "react-dom/client",
+        "react-markdown",
+        "remark-gfm",
+      ],
+    },
     resolve: {
       alias: {
         "~": srcPath,
