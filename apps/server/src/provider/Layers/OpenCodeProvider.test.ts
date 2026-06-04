@@ -2,13 +2,16 @@ import assert from "node:assert/strict";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
+import * as TestClock from "effect/testing/TestClock";
 import { beforeEach } from "vitest";
 
 import { OpenCodeSettings } from "@t3tools/contracts";
 import { ServerConfig } from "../../config.ts";
+import { makeOpenCodeServerPool } from "../OpenCodeServerPool.ts";
 import {
   OpenCodeRuntime,
   OpenCodeRuntimeError,
@@ -34,6 +37,7 @@ const runtimeMock = {
     runVersionError: null as Error | null,
     versionStdout: DEFAULT_VERSION_STDOUT,
     inventoryError: null as Error | null,
+    startCalls: 0,
     closeCalls: 0,
     inventory: {
       providerList: { connected: [] as string[], all: [] as unknown[], default: {} },
@@ -44,6 +48,7 @@ const runtimeMock = {
     this.state.runVersionError = null;
     this.state.versionStdout = DEFAULT_VERSION_STDOUT;
     this.state.inventoryError = null;
+    this.state.startCalls = 0;
     this.state.closeCalls = 0;
     this.state.inventory = {
       providerList: { connected: [], all: [] as unknown[], default: {} },
@@ -54,10 +59,18 @@ const runtimeMock = {
 
 const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
   startOpenCodeServerProcess: () =>
-    Effect.succeed({
-      url: "http://127.0.0.1:4301",
-      processId: 43_001,
-      exitCode: Effect.never,
+    Effect.gen(function* () {
+      runtimeMock.state.startCalls += 1;
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          runtimeMock.state.closeCalls += 1;
+        }),
+      );
+      return {
+        url: "http://127.0.0.1:4301",
+        processId: 43_001,
+        exitCode: Effect.never,
+      };
     }),
   connectToOpenCodeServer: ({ serverUrl }) =>
     Effect.gen(function* () {
@@ -202,6 +215,32 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
 
       assert.equal(runtimeMock.state.closeCalls, 1);
     }),
+  );
+
+  it.effect("reuses a pooled local OpenCode server across provider refreshes", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const pool = yield* makeOpenCodeServerPool({
+          idleTtl: Duration.minutes(10),
+        });
+
+        yield* checkOpenCodeProviderStatus(makeOpenCodeSettings(), process.cwd(), process.env, {
+          serverPool: pool,
+        });
+        yield* checkOpenCodeProviderStatus(makeOpenCodeSettings(), process.cwd(), process.env, {
+          serverPool: pool,
+        });
+
+        assert.equal(runtimeMock.state.startCalls, 1);
+        assert.equal(runtimeMock.state.closeCalls, 0);
+
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(Duration.millis(600_001));
+        yield* Effect.yieldNow;
+
+        assert.equal(runtimeMock.state.closeCalls, 1);
+      }),
+    ).pipe(Effect.provide(TestClock.layer())),
   );
 });
 
