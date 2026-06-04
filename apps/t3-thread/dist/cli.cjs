@@ -39175,6 +39175,9 @@ function buildProjectDeleteCommand(input) {
 
 // src/http.ts
 var PAIRING_TOKEN_PARAM = "token";
+var TOKEN_EXCHANGE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:token-exchange";
+var ENVIRONMENT_BOOTSTRAP_TOKEN_TYPE = "urn:t3:params:oauth:token-type:environment-bootstrap";
+var ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token";
 function readHashParams(url) {
   return new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
 }
@@ -39295,13 +39298,33 @@ async function fetchEnvironmentDescriptor(httpBaseUrl) {
     pathname: "/.well-known/t3/environment"
   });
 }
-async function bootstrapBearerSession(input) {
-  return fetchRemoteJson({
-    httpBaseUrl: input.httpBaseUrl,
-    pathname: "/api/auth/bootstrap/bearer",
-    method: "POST",
-    body: { credential: input.credential }
+async function exchangePairingCredential(input) {
+  const requestUrl = new URL("/oauth/token", input.httpBaseUrl).toString();
+  const form = new URLSearchParams({
+    grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+    subject_token: input.credential,
+    subject_token_type: ENVIRONMENT_BOOTSTRAP_TOKEN_TYPE,
+    requested_token_type: ACCESS_TOKEN_TYPE
   });
+  if (input.clientLabel) {
+    form.set("client_label", input.clientLabel);
+  }
+  let response;
+  try {
+    response = await fetch(requestUrl, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form.toString()
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`
+    );
+  }
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Token exchange failed (${response.status}).`));
+  }
+  return await response.json();
 }
 async function fetchSessionState(input) {
   return fetchRemoteJson({
@@ -39310,16 +39333,16 @@ async function fetchSessionState(input) {
     bearerToken: input.bearerToken
   });
 }
-async function issueWebSocketToken(input) {
+async function issueWebSocketTicket(input) {
   return fetchRemoteJson({
     httpBaseUrl: input.httpBaseUrl,
-    pathname: "/api/auth/ws-token",
+    pathname: "/api/auth/websocket-ticket",
     method: "POST",
     bearerToken: input.bearerToken
   });
 }
 async function resolveWebSocketUrl(input) {
-  const issued = await issueWebSocketToken({
+  const issued = await issueWebSocketTicket({
     httpBaseUrl: input.httpBaseUrl,
     bearerToken: input.bearerToken
   });
@@ -39327,7 +39350,7 @@ async function resolveWebSocketUrl(input) {
   url.pathname = "/ws";
   url.search = "";
   url.hash = "";
-  url.searchParams.set("wsToken", issued.token);
+  url.searchParams.set("wsTicket", issued.ticket);
   return url.toString();
 }
 
@@ -47642,20 +47665,22 @@ var RemoteEnvironmentClient = class {
     this.environment = environment;
   }
   static async pair(input) {
-    const [descriptor, bootstrap] = await Promise.all([
+    const [descriptor, exchange] = await Promise.all([
       fetchEnvironmentDescriptor(input.httpBaseUrl),
-      bootstrapBearerSession({
+      exchangePairingCredential({
         httpBaseUrl: input.httpBaseUrl,
-        credential: input.credential
+        credential: input.credential,
+        clientLabel: `t3-thread:${input.name}`
       })
     ]);
     const session = await fetchSessionState({
       httpBaseUrl: input.httpBaseUrl,
-      bearerToken: bootstrap.sessionToken
+      bearerToken: exchange.access_token
     });
-    if (!session.auth.sessionMethods.includes("bearer-session-token")) {
-      throw new Error("Remote environment did not confirm bearer-session-token support.");
+    if (!session.authenticated) {
+      throw new Error("Remote environment did not authenticate the exchanged access token.");
     }
+    const expiresAt = new Date(Date.now() + Math.max(0, exchange.expires_in) * 1e3).toISOString();
     return {
       name: input.name,
       httpBaseUrl: input.httpBaseUrl,
@@ -47663,8 +47688,8 @@ var RemoteEnvironmentClient = class {
       environmentId: descriptor.environmentId,
       label: descriptor.label,
       serverVersion: descriptor.serverVersion,
-      bearerToken: bootstrap.sessionToken,
-      expiresAt: bootstrap.expiresAt,
+      bearerToken: exchange.access_token,
+      expiresAt,
       pairedAt: nowIso()
     };
   }
