@@ -34,8 +34,7 @@ publish or prepare the corrected fork nightly path.
   `refs/tags/upstream/v0.0.25-nightly.20260603.451`.
 - `scripts/build-desktop-artifact.ts` resolves the upstream/fork conflict while
   preserving fork app identity and nightly updater behavior.
-- The rebased history still includes `fix: recover missing thread detail
-  hydration`.
+- The rebased history still includes `fix: recover missing thread detail hydration`.
 - Required local checks pass on the rebased tree.
 - The corrected `main` is pushed with `--force-with-lease` and a valid
   `v0.0.25-nightly.20260603.451-fork.N` tag is pushed, or the exact remaining
@@ -43,11 +42,29 @@ publish or prepare the corrected fork nightly path.
 
 ### Status
 
-- In progress.
+- Rebase onto upstream `v0.0.25-nightly.20260603.451` completed locally.
+- Resolved the desktop artifact conflict by preserving fork executable identity
+  while keeping upstream Linux icon directory staging.
+- Resolved the WebSocket conflict by preserving upstream scoped environment auth
+  and re-adding the fork headless update-check RPC with an explicit auth scope
+  and contract error schema.
+- Resolved the migration-number collision by preserving upstream
+  `031_AuthAuthorizationScopes` and renumbering fork goal migration to
+  `032_ProjectionThreadGoals`.
+- Pending: push rewritten `main`, push fork nightly tag, and verify release
+  workflow/assets.
 
 ### Verification
 
-- Pending.
+- Passed: upstream ancestry check,
+  `git merge-base --is-ancestor refs/tags/upstream/v0.0.25-nightly.20260603.451 HEAD`.
+- Passed: rebased history still includes
+  `fix: recover missing thread detail hydration`.
+- Passed: `bun install --frozen-lockfile`.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with 11 warnings and 0 errors.
+- Passed: `bun typecheck`.
+- Passed: `bun run test`.
 
 ### Open Questions / Proposed Changes
 
