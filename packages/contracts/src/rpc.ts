@@ -271,6 +271,7 @@ export const WsServerRequestHeadlessUpdateCheckRpc = Rpc.make(
   {
     payload: ServerHeadlessUpdateCheckInput,
     success: ServerHeadlessUpdateCheckResult,
+    error: EnvironmentAuthorizationError,
   },
 );
 
