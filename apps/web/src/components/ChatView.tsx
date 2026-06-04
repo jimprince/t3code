@@ -156,6 +156,7 @@ import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/Compos
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
+  buildEnvironmentUnavailableDescription,
   buildLocalDraftThread,
   collectUserMessageBlobPreviewUrls,
   createLocalDispatchSnapshot,
@@ -234,6 +235,8 @@ type EnvironmentUnavailableState = {
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly connectionState: "connecting" | "disconnected" | "error";
+  readonly endpoint: string | null;
+  readonly lastError: string | null;
 };
 
 type ThreadPlanCatalogEntry = Pick<Thread, "id" | "proposedPlans">;
@@ -1180,12 +1183,20 @@ export default function ChatView(props: ChatViewProps) {
         activeSavedEnvironmentConnectionState === "error"
           ? activeSavedEnvironmentConnectionState
           : "disconnected",
+      endpoint:
+        activeSavedEnvironmentRecord?.httpBaseUrl ??
+        activeSavedEnvironmentRecord?.wsBaseUrl ??
+        null,
+      lastError: activeSavedEnvironmentRuntime?.lastError ?? null,
     };
   }, [
     activeEnvironmentUnavailable,
     activeEnvironmentUnavailableLabel,
+    activeSavedEnvironmentRecord?.httpBaseUrl,
+    activeSavedEnvironmentRecord?.wsBaseUrl,
     activeSavedEnvironmentConnectionState,
     activeSavedEnvironmentId,
+    activeSavedEnvironmentRuntime?.lastError,
   ]);
   const [reconnectingEnvironmentId, setReconnectingEnvironmentId] = useState<EnvironmentId | null>(
     null,
@@ -1463,7 +1474,11 @@ export default function ChatView(props: ChatViewProps) {
               : "disconnected"}
           </>
         ),
-        description: "Reconnect this environment before sending messages or running actions.",
+        description: buildEnvironmentUnavailableDescription({
+          connectionState: activeEnvironmentUnavailableState.connectionState,
+          endpoint: activeEnvironmentUnavailableState.endpoint,
+          lastError: activeEnvironmentUnavailableState.lastError,
+        }),
         actions: (
           <>
             <Button
