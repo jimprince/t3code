@@ -51,8 +51,12 @@ publish or prepare the corrected fork nightly path.
 - Resolved the migration-number collision by preserving upstream
   `031_AuthAuthorizationScopes` and renumbering fork goal migration to
   `032_ProjectionThreadGoals`.
-- Pending: push rewritten `main`, push fork nightly tag, and verify release
-  workflow/assets.
+- Pushed rewritten `main` with `--force-with-lease` and pushed
+  `v0.0.25-nightly.20260603.451-fork.1`.
+- Release workflow completed successfully and published the fork prerelease.
+- Follow-up completed locally: normal `main` CI exposed a browser-test cold
+  optimizer failure after the release was already published, so browser test
+  dependency optimization was hardened in `apps/web/vitest.browser.config.ts`.
 
 ### Verification
 
@@ -65,6 +69,28 @@ publish or prepare the corrected fork nightly path.
 - Passed: `bun lint` with 11 warnings and 0 errors.
 - Passed: `bun typecheck`.
 - Passed: `bun run test`.
+- Passed: release workflow `26921065695` with preflight, macOS arm64, Linux
+  headless, and publish jobs green.
+- Passed: release asset verification for `nightly-mac.yml`, macOS arm64 DMG,
+  ZIP, blockmaps, and
+  `t3-headless-0.0.25-nightly.20260603.451-fork.1-linux-x64.tar.gz`.
+- Passed: fork tag ancestry check,
+  `git merge-base --is-ancestor refs/tags/upstream/v0.0.25-nightly.20260603.451 refs/tags/v0.0.25-nightly.20260603.451-fork.1`.
+- Confirmed: `main` CI run `26921066922` failed the browser test command
+  because Vite optimized dependencies after browser tests began, reloaded the
+  graph, and `ChatView.browser.tsx` failed to dynamically import
+  `src/router.ts`.
+- Passed: focused local reproduction after browser config hardening,
+  `bun run --cwd apps/web test:browser -- src/components/ChatView.browser.tsx`.
+- Passed: full local browser suite,
+  `bun run --cwd apps/web test:browser`.
+- Passed: follow-up local verification, `bun fmt`, `bun lint` with existing
+  warnings and 0 errors, and `bun typecheck`.
+- Passed: full repo test suite under nvm Node 22.22.1,
+  `bun run test` (`127` files passed, `1073` tests passed, `4` skipped).
+- Note: one `bun run test` attempt under Node 22.15.1 failed before verification
+  because that Node version lacks the required `node:sqlite`
+  `StatementSync.columns` API; rerunning with Node 22.22.1 passed.
 
 ### Open Questions / Proposed Changes
 
