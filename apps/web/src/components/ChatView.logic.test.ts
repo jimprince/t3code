@@ -14,6 +14,7 @@ import { type Thread } from "../types";
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
+  buildEnvironmentUnavailableDescription,
   createLocalDispatchSnapshot,
   deriveComposerSendState,
   getStartedThreadModelChangeBlockReason,
@@ -155,6 +156,44 @@ describe("getStartedThreadModelChangeBlockReason", () => {
       description:
         "This provider does not allow switching models after a conversation has started.",
     });
+  });
+});
+
+describe("buildEnvironmentUnavailableDescription", () => {
+  it("surfaces the saved backend endpoint and last disconnect error", () => {
+    expect(
+      buildEnvironmentUnavailableDescription({
+        connectionState: "error",
+        endpoint: "https://user:pass@remote.example.test/?token=secret",
+        lastError: "WebSocket closed unexpectedly.",
+      }),
+    ).toBe(
+      "Reconnect this environment before sending messages or running actions. Last error: WebSocket closed unexpectedly. Remote backend: https://remote.example.test/.",
+    );
+  });
+
+  it("explains disconnected saved environments even when no error was recorded", () => {
+    expect(
+      buildEnvironmentUnavailableDescription({
+        connectionState: "disconnected",
+        endpoint: "https://remote.example.test/",
+        lastError: null,
+      }),
+    ).toBe(
+      "Reconnect this environment before sending messages or running actions. The saved remote backend connection is not active. Remote backend: https://remote.example.test/.",
+    );
+  });
+
+  it("uses connecting copy while reconnect is in progress", () => {
+    expect(
+      buildEnvironmentUnavailableDescription({
+        connectionState: "connecting",
+        endpoint: null,
+        lastError: null,
+      }),
+    ).toBe(
+      "Waiting for this environment to finish connecting before sending messages or running actions.",
+    );
   });
 });
 
