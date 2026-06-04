@@ -1,5 +1,81 @@
 # Agent Requirements
 
+## Current Task: Stabilize OpenCode Provider Probe Server Lifecycle
+
+Diagnose and fix repeated local OpenCode server starts/stops caused by provider
+status refreshes so T3 Code does not churn background provider probe processes
+while the dev server is otherwise healthy.
+
+### Current User Requirements
+
+- Implement the previously planned proper fix for repeated OpenCode provider
+  probe connect/disconnect logs on t3-code.
+- Keep standalone provider checks correct, including closing local probe scopes
+  when no shared lifecycle owner is supplied.
+- Share local OpenCode probe server lifecycle across managed provider refreshes
+  instead of starting and stopping a process on every refresh.
+- Preserve external `serverUrl` behavior: never start or close a local probe
+  server for an externally managed OpenCode server.
+- Cover the lifecycle behavior with focused regression tests.
+
+### Constraints
+
+- Follow repo instructions: use `bun run test`, never `bun test`; all of
+  `bun fmt`, `bun lint`, and `bun typecheck` must pass before completion when
+  code changes require them.
+- Do not change OpenCode adapter session server lifecycle or text-generation
+  shared-server behavior unless directly required by the provider probe fix.
+- Preserve provider status output and error wording except where lifecycle
+  ownership requires an internal implementation change.
+
+### Acceptance Criteria
+
+- Managed OpenCode provider refreshes reuse a shared local `opencode serve`
+  process across snapshot refreshes.
+- The shared probe server idles out after a bounded TTL and is closed when the
+  driver scope shuts down.
+- Direct standalone provider checks still close their local server scope at the
+  end of the check.
+- External OpenCode server checks continue to avoid local process management.
+- Focused tests fail if the shared provider probe pool is bypassed.
+
+### Status
+
+- Implementation completed.
+- Added a scoped `OpenCodeServerPool` for provider probes. It owns at most one
+  local `opencode serve` process, ref-counts active probe users, cancels pending
+  idle shutdown on reuse, closes after a 10-minute idle TTL, and closes on
+  owning scope shutdown.
+- Wired OpenCode driver instances to create one provider-probe pool and pass it
+  to managed provider status refreshes.
+- Kept standalone `checkOpenCodeProviderStatus` behavior unchanged when no pool
+  is supplied; direct local checks still close their scoped local server.
+- Kept configured external `serverUrl` checks outside local process management.
+
+### Verification
+
+- Passed: focused OpenCode lifecycle tests,
+  `bun run --filter t3 test -- src/provider/OpenCodeServerPool.test.ts src/provider/Layers/OpenCodeProvider.test.ts src/textGeneration/OpenCodeTextGeneration.test.ts`.
+- Confirmed regression coverage: temporarily bypassing the supplied provider
+  pool made
+  `bun run --filter t3 test -- src/provider/Layers/OpenCodeProvider.test.ts`
+  fail at the pooled-refresh assertion; restoring the implementation made the
+  focused suite pass again.
+- Passed: `bun fmt`.
+- Passed: `bun lint` with existing warnings and 0 errors.
+- Passed: `bun typecheck`.
+- Passed under Node 22.22.1:
+  `bun run --filter t3 test` (`128` files passed, `1079` tests passed,
+  `1` file skipped, `4` tests skipped).
+- Note: one server test attempt under default Node 22.15.1 failed because that
+  Node version lacks the required `node:sqlite` `StatementSync.columns` API;
+  rerunning under Node 22.22.1 passed.
+
+### Open Questions / Proposed Changes
+
+- None.
+
+
 ## Current Task: Resolve Nightly 20260603.451 Rebase Conflict
 
 Resolve the fork nightly rebase conflict against upstream
