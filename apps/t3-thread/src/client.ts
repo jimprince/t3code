@@ -11,7 +11,7 @@ import {
   resolveProjectTarget,
 } from "./projects.js";
 import {
-  bootstrapBearerSession,
+  exchangePairingCredential,
   fetchEnvironmentDescriptor,
   fetchSessionState,
   resolveWebSocketUrl,
@@ -50,22 +50,25 @@ export class RemoteEnvironmentClient {
     wsBaseUrl: string;
     credential: string;
   }): Promise<SavedEnvironment> {
-    const [descriptor, bootstrap] = await Promise.all([
+    const [descriptor, exchange] = await Promise.all([
       fetchEnvironmentDescriptor(input.httpBaseUrl),
-      bootstrapBearerSession({
+      exchangePairingCredential({
         httpBaseUrl: input.httpBaseUrl,
         credential: input.credential,
+        clientLabel: `t3-thread:${input.name}`,
       }),
     ]);
 
     const session = await fetchSessionState({
       httpBaseUrl: input.httpBaseUrl,
-      bearerToken: bootstrap.sessionToken,
+      bearerToken: exchange.access_token,
     });
 
-    if (!session.auth.sessionMethods.includes("bearer-session-token")) {
-      throw new Error("Remote environment did not confirm bearer-session-token support.");
+    if (!session.authenticated) {
+      throw new Error("Remote environment did not authenticate the exchanged access token.");
     }
+
+    const expiresAt = new Date(Date.now() + Math.max(0, exchange.expires_in) * 1000).toISOString();
 
     return {
       name: input.name,
@@ -74,8 +77,8 @@ export class RemoteEnvironmentClient {
       environmentId: descriptor.environmentId,
       label: descriptor.label,
       serverVersion: descriptor.serverVersion,
-      bearerToken: bootstrap.sessionToken,
-      expiresAt: bootstrap.expiresAt,
+      bearerToken: exchange.access_token,
+      expiresAt,
       pairedAt: nowIso(),
     };
   }
