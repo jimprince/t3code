@@ -103,7 +103,11 @@ jobs:
           echo "Fork commits being replayed (relative to upstream/main):"
           git log --oneline upstream/main..HEAD
 
-          UPSTREAM_RESOLVE_FILES=$'apps/desktop/package.json\napps/server/package.json\napps/web/package.json\npackages/contracts/package.json\nbun.lock'
+          # Keep agent tracker-only conflicts from blocking updater-visible
+          # package builds. During rebase, "ours" is the current rebased tree,
+          # so this preserves prior tracker state instead of letting one
+          # replayed commit overwrite it.
+          UPSTREAM_RESOLVE_FILES=$'apps/desktop/package.json\napps/server/package.json\napps/web/package.json\npackages/contracts/package.json\nbun.lock\ndocs/AGENT_REQUIREMENTS.md'
           FORK_RESOLVE_FILES=$'.github/workflows/release.yml'
           mapfile -t UPSTREAM_ALLOW < <(printf '%s\n' "$UPSTREAM_RESOLVE_FILES" | sed '/^$/d' | sort -u)
           mapfile -t FORK_ALLOW < <(printf '%s\n' "$FORK_RESOLVE_FILES" | sed '/^$/d' | sort -u)

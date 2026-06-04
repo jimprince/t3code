@@ -219,6 +219,11 @@ jobs:
             apps/web/package.json
             packages/contracts/package.json
             bun.lock
+            docs/AGENT_REQUIREMENTS.md
+          # docs/AGENT_REQUIREMENTS.md is agent execution metadata, not a
+          # packaged runtime artifact. Resolve tracker-only conflicts to the
+          # current rebased tree so release syncs are not blocked by status-log
+          # edits from individual task commits.
           # release.yml is fork-owned: the fork intentionally keeps a minimal
           # macOS/headless matrix and local-runner fallback that upstream does
           # not have. During rebase, "theirs" is the fork commit being replayed.
