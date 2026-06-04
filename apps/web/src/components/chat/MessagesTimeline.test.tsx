@@ -143,7 +143,11 @@ describe("MessagesTimeline", () => {
       <MessagesTimeline {...buildProps()} timelineEntries={[]} isThreadDetailLoading />,
     );
 
-    expect(markup).toContain("Loading conversation...");
+    expect(markup).toContain("Refreshing conversation state...");
+    expect(markup).toContain(
+      "The sidebar has backend activity for this thread, but the conversation detail has not arrived yet.",
+    );
+    expect(markup).toContain('aria-label="Refreshing conversation state"');
     expect(markup).toContain('role="progressbar"');
     expect(markup).not.toContain("Send a message to start the conversation.");
   }, 20_000);
