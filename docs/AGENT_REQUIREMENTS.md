@@ -57,6 +57,14 @@ publish or prepare the corrected fork nightly path.
 - Follow-up completed locally: normal `main` CI exposed a browser-test cold
   optimizer failure after the release was already published, so browser test
   dependency optimization was hardened in `apps/web/vitest.browser.config.ts`.
+- A follow-up main push created
+  `v0.0.25-nightly.20260603.451-fork.2`, but `fork-push-nightly.yml` failed
+  after tagging because `gh workflow run release.yml` targeted
+  `pingdotgg/t3code` instead of the fork repository.
+- Follow-up in progress: pin release workflow dispatches in
+  `fork-push-nightly.yml` and `sync-upstream.yml` to `${GITHUB_REPOSITORY}`,
+  then manually dispatch the already-created `fork.2` release after the
+  workflow fix is pushed.
 
 ### Verification
 
@@ -91,6 +99,16 @@ publish or prepare the corrected fork nightly path.
 - Note: one `bun run test` attempt under Node 22.15.1 failed before verification
   because that Node version lacks the required `node:sqlite`
   `StatementSync.columns` API; rerunning with Node 22.22.1 passed.
+- Confirmed: `fork-push-nightly.yml` run `26922460955` rebased cleanly, pushed
+  release commit `d7f40ce6d`, and pushed
+  `v0.0.25-nightly.20260603.451-fork.2`, then failed dispatch with HTTP 403
+  against `pingdotgg/t3code`.
+- Confirmed: release `v0.0.25-nightly.20260603.451-fork.2` does not exist yet
+  on `jimprince/t3code`; only the tag exists.
+- Passed: workflow static validation,
+  `go run github.com/rhysd/actionlint/cmd/actionlint@latest .github/workflows/fork-push-nightly.yml .github/workflows/sync-upstream.yml`.
+- Passed: follow-up workflow/docs checks, `bun fmt`, `git diff --check`, and
+  `bun lint` with existing warnings and 0 errors.
 
 ### Open Questions / Proposed Changes
 
