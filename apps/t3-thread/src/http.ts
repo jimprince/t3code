@@ -1,11 +1,18 @@
 import type {
-  AuthBearerBootstrapResult,
+  AuthAccessTokenResult,
   AuthSessionState,
-  AuthWebSocketTokenResult,
+  AuthWebSocketTicketResult,
   ExecutionEnvironmentDescriptor,
 } from "./types.js";
 
 const PAIRING_TOKEN_PARAM = "token";
+
+// RFC 8693 OAuth token-exchange constants for the T3 environment bootstrap flow.
+// The server replaced POST /api/auth/bootstrap/bearer with POST /oauth/token:
+// a pairing credential (bootstrap token) is exchanged for a Bearer access token.
+const TOKEN_EXCHANGE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:token-exchange";
+const ENVIRONMENT_BOOTSTRAP_TOKEN_TYPE = "urn:t3:params:oauth:token-type:environment-bootstrap";
+const ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token";
 
 function readHashParams(url: URL): URLSearchParams {
   return new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
@@ -161,16 +168,40 @@ export async function fetchEnvironmentDescriptor(
   });
 }
 
-export async function bootstrapBearerSession(input: {
+export async function exchangePairingCredential(input: {
   httpBaseUrl: string;
   credential: string;
-}): Promise<AuthBearerBootstrapResult> {
-  return fetchRemoteJson<AuthBearerBootstrapResult>({
-    httpBaseUrl: input.httpBaseUrl,
-    pathname: "/api/auth/bootstrap/bearer",
-    method: "POST",
-    body: { credential: input.credential },
+  clientLabel?: string;
+}): Promise<AuthAccessTokenResult> {
+  const requestUrl = new URL("/oauth/token", input.httpBaseUrl).toString();
+  const form = new URLSearchParams({
+    grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+    subject_token: input.credential,
+    subject_token_type: ENVIRONMENT_BOOTSTRAP_TOKEN_TYPE,
+    requested_token_type: ACCESS_TOKEN_TYPE,
   });
+  if (input.clientLabel) {
+    form.set("client_label", input.clientLabel);
+  }
+
+  let response: Response;
+  try {
+    response = await fetch(requestUrl, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`,
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Token exchange failed (${response.status}).`));
+  }
+
+  return (await response.json()) as AuthAccessTokenResult;
 }
 
 export async function fetchSessionState(input: {
@@ -184,13 +215,13 @@ export async function fetchSessionState(input: {
   });
 }
 
-export async function issueWebSocketToken(input: {
+export async function issueWebSocketTicket(input: {
   httpBaseUrl: string;
   bearerToken: string;
-}): Promise<AuthWebSocketTokenResult> {
-  return fetchRemoteJson<AuthWebSocketTokenResult>({
+}): Promise<AuthWebSocketTicketResult> {
+  return fetchRemoteJson<AuthWebSocketTicketResult>({
     httpBaseUrl: input.httpBaseUrl,
-    pathname: "/api/auth/ws-token",
+    pathname: "/api/auth/websocket-ticket",
     method: "POST",
     bearerToken: input.bearerToken,
   });
@@ -201,7 +232,7 @@ export async function resolveWebSocketUrl(input: {
   wsBaseUrl: string;
   bearerToken: string;
 }): Promise<string> {
-  const issued = await issueWebSocketToken({
+  const issued = await issueWebSocketTicket({
     httpBaseUrl: input.httpBaseUrl,
     bearerToken: input.bearerToken,
   });
@@ -209,6 +240,6 @@ export async function resolveWebSocketUrl(input: {
   url.pathname = "/ws";
   url.search = "";
   url.hash = "";
-  url.searchParams.set("wsToken", issued.token);
+  url.searchParams.set("wsTicket", issued.ticket);
   return url.toString();
 }
