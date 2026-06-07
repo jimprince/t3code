@@ -147,15 +147,18 @@ tracked as non-secret config in `apps/mobile/fork.config.json`:
 `.github/workflows/mobile-eas-development.yml` runs on pushes to `main` that
 touch mobile/runtime paths and can also be dispatched manually. It uses the
 current Vite+/pnpm setup, runs `vp check`, `vp run typecheck`, and the mobile
-test suite, then publishes an iOS EAS update to the `development` channel.
+test suite, then deploys the iOS development lane with Expo fingerprinting. If
+an existing EAS development build matches the current native fingerprint, the
+workflow publishes an EAS update to the `development` branch/channel; if the
+native fingerprint changed, Expo starts a new compatible iOS development build
+instead of serving incompatible OTA bytecode to an older app binary.
 `EXPO_TOKEN` must exist as a repository secret; do not print or inspect its
 value.
 
 Manual dispatch:
 
 ```bash
-gh workflow run mobile-eas-development.yml --repo jimprince/t3code \
-  -f message="manual mobile development update"
+gh workflow run mobile-eas-development.yml --repo jimprince/t3code
 ```
 
 Check recent mobile updates:
@@ -164,6 +167,15 @@ Check recent mobile updates:
 gh run list --repo jimprince/t3code \
   --workflow mobile-eas-development.yml \
   --limit 10
+```
+
+If a bad development OTA update was published for an older runtime, roll that
+runtime back to the embedded bundle:
+
+```bash
+gh workflow run mobile-eas-development-rollback.yml --repo jimprince/t3code \
+  -f runtime_version=0.1.0 \
+  -f message="rollback bad Hermes bytecode update"
 ```
 
 PRs still use `mobile-eas-preview.yml`, which deploys preview builds/updates
