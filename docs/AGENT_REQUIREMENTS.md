@@ -44,6 +44,8 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   production installs must retain/build `node-pty`'s native `pty.node` payload.
 - `Fork Push Nightly` must trigger for headless artifact builder changes, not
   only desktop artifact builder changes.
+- Main-branch CI must not remain queued behind an unavailable
+  `blacksmith-12vcpu-macos-26` runner for mobile native static analysis.
 - Local verification passes: `vp check`, `vp run typecheck`, plus any
   focused launcher/release smoke test identified during the fix.
 - GitHub Actions no longer fails on the same `electron-launcher.mjs` rebase
@@ -64,6 +66,8 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
 - [x] Fix follow-on headless artifact smoke failure from missing `node-pty`
       native payload.
 - [x] Add headless artifact builder to `Fork Push Nightly` trigger paths.
+- [x] Move CI mobile native static analysis off the unavailable Blacksmith
+      macOS runner label and onto GitHub-hosted `macos-15`.
 - [x] Recheck GitHub Actions.
       Latest `Fork Push Nightly` run succeeded and created
       `v0.0.25-nightly.20260606.480-fork.1`; follow-on `Release` reached
@@ -126,6 +130,10 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   `vp run smoke:headless:artifact --artifact /tmp/t3-headless-artifact-check/t3-headless-0.0.25-native-check-linux-x64.tar.gz --version 0.0.25-nightly.20260606.480-fork.3`.
 - After headless trigger-path fix: `scripts/build-headless-artifact.ts` is
   included in `.github/workflows/fork-push-nightly.yml` push path filters.
+- CI runner queue fix: `.github/workflows/ci.yml` now runs
+  `Mobile Native Static Analysis` on GitHub-hosted `macos-15` instead of the
+  unavailable `blacksmith-12vcpu-macos-26` label that left multiple CI runs
+  queued indefinitely.
 - GitHub Actions: latest `Fork Push Nightly` run created
   `v0.0.25-nightly.20260606.480-fork.4`; latest `Release` run
   `27080381937` passed preflight, headless Linux x64 build + smoke, macOS
