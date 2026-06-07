@@ -343,6 +343,13 @@ const makeOrchestrationEngine = Effect.gen(function* () {
     get streamDomainEvents(): OrchestrationEngineShape["streamDomainEvents"] {
       return Stream.fromPubSub(eventPubSub);
     },
+    // Like `streamDomainEvents` but registers the subscription eagerly (when
+    // this effect completes) rather than lazily (when the stream is run). This
+    // lets the WS layer subscribe before reading a thread snapshot so the
+    // snapshot→live handoff cannot drop events. `Stream.fromSubscription`
+    // consumes the already-registered subscription; the scope from
+    // `PubSub.subscribe` keeps it alive for the caller's scope.
+    subscribeDomainEvents: Effect.map(PubSub.subscribe(eventPubSub), Stream.fromSubscription),
   } satisfies OrchestrationEngineShape;
 });
 

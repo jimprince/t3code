@@ -27,8 +27,23 @@ const mockRemoteHttpRunPromise = vi.fn((effect: Promise<unknown>) => effect);
 const mockConnectionReconnects: Array<ReturnType<typeof vi.fn>> = [];
 let savedEnvironmentRegistryListener: (() => void) | null = null;
 
-function MockWsTransport() {
-  return undefined;
+type MockWsTransportInstance = {
+  lifecycleHandlers:
+    | {
+        readonly onHeartbeatTimeout?: () => void;
+      }
+    | undefined;
+};
+
+const mockWsTransportInstances: MockWsTransportInstance[] = [];
+
+function MockWsTransport(
+  this: MockWsTransportInstance,
+  _url?: unknown,
+  lifecycleHandlers?: MockWsTransportInstance["lifecycleHandlers"],
+) {
+  this.lifecycleHandlers = lifecycleHandlers;
+  mockWsTransportInstances.push(this);
 }
 
 vi.mock("../primary", () => ({
@@ -318,6 +333,7 @@ describe("retainThreadDetailSubscription", () => {
       scopes: ["orchestration:read"],
     });
     mockConnectionReconnects.length = 0;
+    mockWsTransportInstances.length = 0;
   });
 
   afterEach(async () => {
@@ -633,6 +649,43 @@ describe("retainThreadDetailSubscription", () => {
 
     visibilityState = "visible";
     documentTarget.dispatchEvent(new Event("visibilitychange"));
+    expect(mockConnectionReconnects[0]).toHaveBeenCalledTimes(1);
+
+    stop();
+    await resetEnvironmentServiceForTests();
+  });
+
+  it("reconnects stale environment streams on heartbeat timeout while the tab is focused", async () => {
+    let visibilityState: DocumentVisibilityState = "visible";
+    const documentTarget = new EventTarget();
+    const windowTarget = new EventTarget();
+    vi.stubGlobal("document", {
+      addEventListener: documentTarget.addEventListener.bind(documentTarget),
+      hasFocus: vi.fn(() => true),
+      removeEventListener: documentTarget.removeEventListener.bind(documentTarget),
+      get visibilityState() {
+        return visibilityState;
+      },
+    });
+    vi.stubGlobal("window", {
+      addEventListener: windowTarget.addEventListener.bind(windowTarget),
+      removeEventListener: windowTarget.removeEventListener.bind(windowTarget),
+    });
+
+    const { resetEnvironmentServiceForTests, startEnvironmentConnectionService } =
+      await import("./service");
+
+    const stop = startEnvironmentConnectionService(new QueryClient());
+    expect(mockConnectionReconnects).toHaveLength(1);
+    const onHeartbeatTimeout = mockWsTransportInstances[0]?.lifecycleHandlers?.onHeartbeatTimeout;
+    expect(onHeartbeatTimeout).toEqual(expect.any(Function));
+
+    visibilityState = "hidden";
+    onHeartbeatTimeout?.();
+    expect(mockConnectionReconnects[0]).not.toHaveBeenCalled();
+
+    visibilityState = "visible";
+    onHeartbeatTimeout?.();
     expect(mockConnectionReconnects[0]).toHaveBeenCalledTimes(1);
 
     stop();

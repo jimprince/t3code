@@ -13,6 +13,7 @@
 import type { OrchestrationCommand, OrchestrationEvent } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
+import type * as Scope from "effect/Scope";
 import type * as Stream from "effect/Stream";
 
 import type { OrchestrationDispatchError } from "../Errors.ts";
@@ -49,8 +50,32 @@ export interface OrchestrationEngineShape {
    * Stream persisted domain events in dispatch order.
    *
    * This is a hot runtime stream (new events only), not a historical replay.
+   *
+   * Subscription is lazy: it registers when the returned stream is *run*. For
+   * the snapshot→live handoff use {@link subscribeDomainEvents} instead, which
+   * registers the subscription eagerly so no event is lost between reading a
+   * snapshot and attaching to the live feed.
    */
   readonly streamDomainEvents: Stream.Stream<OrchestrationEvent>;
+
+  /**
+   * Eagerly subscribe to the live domain event feed.
+   *
+   * The subscription is registered as soon as this effect completes (before the
+   * returned stream is consumed), so a caller can subscribe *first*, then read a
+   * snapshot, and replay the buffered live events filtered to those past the
+   * snapshot sequence — losing none and double-applying none. Domain events are
+   * published only after their projection transaction commits, so the snapshot
+   * sequence is an exact cut point.
+   *
+   * The subscription is scoped: it is released when the surrounding scope (e.g.
+   * the RPC stream's scope) closes.
+   */
+  readonly subscribeDomainEvents: Effect.Effect<
+    Stream.Stream<OrchestrationEvent>,
+    never,
+    Scope.Scope
+  >;
 }
 
 /**

@@ -887,8 +887,18 @@ const makeWsRpcLayer = (currentSession: AuthenticatedSession) =>
           observeRpcStreamEffect(
             ORCHESTRATION_WS_METHODS.subscribeThread,
             Effect.gen(function* () {
-              const [threadDetail, snapshotSequence] = yield* Effect.all([
-                projectionSnapshotQuery.getThreadDetailById(input.threadId).pipe(
+              // Subscribe to the live event feed BEFORE reading the snapshot.
+              // Domain events are published only after their projection
+              // transaction commits (OrchestrationEngine.processEnvelope), so
+              // subscribing first and then dropping live events at or below the
+              // snapshot sequence makes the snapshot→live handoff lose no events
+              // and double-apply none — the detail reducer's streaming text
+              // deltas are not idempotent, so a duplicate would corrupt state.
+              const liveEvents = yield* orchestrationEngine.subscribeDomainEvents;
+
+              const threadDetailSnapshot = yield* projectionSnapshotQuery
+                .getThreadDetailSnapshotById(input.threadId)
+                .pipe(
                   Effect.mapError(
                     (cause) =>
                       new OrchestrationGetSnapshotError({
@@ -896,29 +906,21 @@ const makeWsRpcLayer = (currentSession: AuthenticatedSession) =>
                         cause,
                       }),
                   ),
-                ),
-                projectionSnapshotQuery.getSnapshotSequence().pipe(
-                  Effect.map(({ snapshotSequence }) => snapshotSequence),
-                  Effect.mapError(
-                    (cause) =>
-                      new OrchestrationGetSnapshotError({
-                        message: "Failed to load orchestration snapshot sequence",
-                        cause,
-                      }),
-                  ),
-                ),
-              ]);
+                );
 
-              if (Option.isNone(threadDetail)) {
+              if (Option.isNone(threadDetailSnapshot)) {
                 return yield* new OrchestrationGetSnapshotError({
                   message: `Thread ${input.threadId} was not found`,
                   cause: input.threadId,
                 });
               }
 
-              const liveStream = orchestrationEngine.streamDomainEvents.pipe(
+              const { snapshotSequence, thread } = threadDetailSnapshot.value;
+
+              const liveStream = liveEvents.pipe(
                 Stream.filter(
                   (event) =>
+                    event.sequence > snapshotSequence &&
                     event.aggregateKind === "thread" &&
                     event.aggregateId === input.threadId &&
                     isThreadDetailEvent(event),
@@ -934,7 +936,7 @@ const makeWsRpcLayer = (currentSession: AuthenticatedSession) =>
                   kind: "snapshot" as const,
                   snapshot: {
                     snapshotSequence,
-                    thread: threadDetail.value,
+                    thread,
                   },
                 }),
                 liveStream,
