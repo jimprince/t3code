@@ -1,0 +1,102 @@
+name: Mobile EAS Development Update
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mobile-eas-development.yml"
+      - "apps/mobile/**"
+      - "packages/client-runtime/**"
+      - "packages/contracts/**"
+      - "packages/shared/**"
+      - "scripts/lib/public-config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+  workflow_dispatch:
+    inputs:
+      message:
+        description: "EAS update message"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-eas-development-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-development-update:
+    name: Verify and publish iOS development update
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      APP_VARIANT: development
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - name: Require Expo token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN repository secret is required to publish EAS updates." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Expose pnpm
+        run: |
+          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
+          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
+          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
+          "$vp_pnpm_bin/pnpm" --version
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Check
+        run: vp check
+
+      - name: Typecheck
+        run: vp run typecheck
+
+      - name: Mobile test suite
+        run: vp run --filter @t3tools/mobile test
+
+      - name: Pull development environment variables
+        working-directory: apps/mobile
+        run: eas env:pull development --non-interactive
+
+      - name: Publish iOS development update
+        working-directory: apps/mobile
+        env:
+          UPDATE_MESSAGE: ${{ inputs.message }}
+        run: |
+          if [ -z "$UPDATE_MESSAGE" ]; then
+            UPDATE_MESSAGE="main ${GITHUB_SHA::7}"
+          fi
+
+          APP_VARIANT=development \
+          CI=1 \
+          EXPO_NO_GIT_STATUS=1 \
+          eas update \
+            --channel development \
+            --environment development \
+            --platform ios \
+            --message "$UPDATE_MESSAGE"
