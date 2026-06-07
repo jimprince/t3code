@@ -49,8 +49,10 @@ version.
 - [x] Run local verification.
 - [x] Commit, push, and trigger live EAS/GitHub Actions.
 - [x] Roll back the bad `0.1.0` development update to embedded.
-- [ ] Push the follow-up EAS build-environment fix and trigger the live
+- [x] Push the follow-up EAS build-environment fix and trigger the live
       fingerprint workflow.
+- [ ] Push the App Store Connect credential wiring for widget-extension iOS
+      builds and verify the live fingerprint workflow.
 
 ### Verification
 
@@ -85,6 +87,20 @@ version.
 development`; the `development` build profile must carry that environment.
 - Passed after the follow-up build-environment fix: workflow/eas config parse,
   `git diff --check`, `pnpm exec vp check`,
+  `pnpm exec vp run --filter @t3tools/mobile typecheck`,
+  `pnpm exec vp run typecheck`, and
+  `pnpm exec vp run --filter @t3tools/mobile test` (`32` files, `146` tests).
+- Failed: live fingerprint run `27083419318` reached the deploy step, computed
+  fingerprint `1d2222557b55fc5f08856ea7d9ad36fedd17c195`, found no matching
+  iOS build, and then failed to start a new build because EAS had credentials
+  for `com.brad.t3code.dev` but not the widget extension target
+  `com.brad.t3code.dev.widgets`.
+- Follow-up in progress: replace the black-box fingerprint deploy action with
+  explicit EAS CLI commands that pass the existing App Store Connect API key to
+  EAS and use `--refresh-ad-hoc-provisioning-profile` before publishing the
+  development update.
+- Passed after the App Store Connect credential wiring: workflow/eas config
+  parse, `git diff --check`, `pnpm exec vp check`,
   `pnpm exec vp run --filter @t3tools/mobile typecheck`,
   `pnpm exec vp run typecheck`, and
   `pnpm exec vp run --filter @t3tools/mobile test` (`32` files, `146` tests).
