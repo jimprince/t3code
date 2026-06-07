@@ -1,5 +1,81 @@
 # Agent Requirements
 
+## Current Task: Reintroduce Main-Based Mobile EAS Updates
+
+The iOS app now exists on `main`, but the fork-specific EAS identity and the old
+EAS update workflow still live only on the stale `origin/feature/mobile-track`
+branch. Main currently points at upstream's Expo account/project, so CI would not
+update Brad's EAS project.
+
+### Current User Requirements
+
+- Track down and preserve the fork-specific mobile EAS identity previously used
+  by `feature/mobile-track`.
+- Stop relying on the stale `feature/mobile-track` branch for mobile publishing.
+- Continue updating Brad's EAS project as part of CI/CD from `main`.
+- Keep the current upstream mobile app on `main`; do not replace it with the old
+  stale branch tree.
+- Commit the fix, merge it into local `main`, push `main` to `origin`, and
+  verify the live GitHub Actions/EAS publish path.
+
+### Constraints
+
+- Follow fork release/sync rules in `LLM_INSTRUCTIONS.md`.
+- Do not read or print secret values. Workflows may reference existing GitHub
+  secrets such as `EXPO_TOKEN`, but secret values must stay opaque.
+- Use the Vite+/pnpm toolchain now present on `main`; do not revive the old
+  Bun-based `feature/mobile-track` workflow.
+- Required completion gates for project work: `vp check` and
+  `vp run typecheck` must pass before considering the task complete.
+- Preserve unrelated user changes.
+
+### Acceptance Criteria
+
+- `apps/mobile/app.config.ts` resolves fork-owned EAS owner/project and mobile
+  bundle/package/scheme identity from tracked non-secret fork configuration.
+- `main` has a GitHub Actions workflow that verifies and publishes iOS EAS
+  development updates to Brad's EAS project on relevant pushes and via manual
+  dispatch.
+- The stale `feature/mobile-track` conflict-promotion branch workflow is no
+  longer part of the active main CI/CD surface.
+- Repo instructions/docs accurately describe the mobile EAS lane as main-based,
+  not branch-based.
+- Local verification passes: workflow YAML parse/static checks, mobile Expo
+  config inspection, `vp check`, and `vp run typecheck`.
+- After merge/push, GitHub Actions runs the new EAS update lane and publishes
+  an iOS update to Brad's EAS development channel.
+
+### Status
+
+- [x] Investigated current mobile/EAS branch and workflow state.
+- [x] Port fork EAS identity onto `main`.
+- [x] Add main-based iOS EAS development update workflow.
+- [x] Retire stale branch-specific mobile-track workflow.
+- [x] Update repo docs/instructions for the new lane.
+- [x] Run local verification.
+- [ ] Commit, merge to `main`, and push.
+- [ ] Verify live GitHub Actions/EAS publish.
+
+### Verification
+
+- Passed: resolved Expo development config targets owner `jimprince`, EAS
+  project `c148e0df-ed1f-4673-9c07-403ea56b6d1b`, update URL
+  `https://u.expo.dev/c148e0df-ed1f-4673-9c07-403ea56b6d1b`, scheme
+  `t3code-brad-dev`, iOS bundle `com.brad.t3code.dev`, Apple team
+  `CBCQ6MJF4B`, and Android package `com.brad.t3code.dev`.
+- Passed: resolved Expo preview and production configs target the same fork EAS
+  owner/project with `t3code-brad-preview` / `com.brad.t3code.preview` and
+  `t3code-brad` / `com.brad.t3code`.
+- Passed: workflow YAML parses for all `.github/workflows/*.yml`.
+- Passed: `git diff --check`.
+- Passed: `pnpm exec vp check`.
+- Passed: `pnpm exec vp run --filter @t3tools/mobile typecheck`.
+- Passed: `pnpm exec vp run --filter @t3tools/mobile test` (`32` files,
+  `146` tests).
+- Passed: `pnpm exec vp run typecheck`.
+
+---
+
 ## Current Task: Repair Nightly Upstream Sync Rebase Conflict
 
 The scheduled `Sync Upstream` nightly workflow and the latest `Fork Push

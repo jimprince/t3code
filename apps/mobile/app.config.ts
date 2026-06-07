@@ -1,13 +1,34 @@
+// @effect-diagnostics nodeBuiltinImport:off - Expo evaluates app.config.ts in Node before the app runtime exists.
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeUtil from "node:util";
 import type { ExpoConfig } from "expo/config";
 
-import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
+import forkConfig from "./fork.config.json";
 
 type AppVariant = "development" | "preview" | "production";
+type Environment = Readonly<Record<string, string | undefined>>;
+
+type ForkConfig = {
+  readonly appleTeamId?: string | null;
+  readonly iosBundleIdBase?: string | null;
+  readonly androidPackageBase?: string | null;
+  readonly schemeBase?: string | null;
+  readonly easProjectId?: string | null;
+  readonly easOwner?: string | null;
+};
+
+const FORK: ForkConfig = forkConfig;
+const UPSTREAM_EAS_PROJECT_ID = "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
+const UPSTREAM_EAS_OWNER = "pingdotgg";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
+const EAS_PROJECT_ID = nonEmpty(FORK.easProjectId) ?? UPSTREAM_EAS_PROJECT_ID;
+const EAS_OWNER = nonEmpty(FORK.easOwner) ?? UPSTREAM_EAS_OWNER;
+const APPLE_TEAM_ID = nonEmpty(FORK.appleTeamId);
 
 const VARIANT_CONFIG: Record<
   AppVariant,
@@ -53,7 +74,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
   }
 }
 
-const variant = VARIANT_CONFIG[APP_VARIANT];
+const variant = applyForkOverrides(VARIANT_CONFIG[APP_VARIANT], APP_VARIANT);
 
 const config: ExpoConfig = {
   name: variant.appName,
@@ -69,7 +90,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: "automatic",
   updates: {
     enabled: true,
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
@@ -77,6 +98,7 @@ const config: ExpoConfig = {
     icon: variant.iosIcon,
     supportsTablet: true,
     bundleIdentifier: variant.iosBundleIdentifier,
+    ...(APPLE_TEAM_ID ? { appleTeamId: APPLE_TEAM_ID } : {}),
     infoPlist: {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
@@ -167,10 +189,110 @@ const config: ExpoConfig = {
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      projectId: EAS_PROJECT_ID,
     },
   },
-  owner: "pingdotgg",
+  owner: EAS_OWNER,
 };
+
+function applyForkOverrides(
+  base: (typeof VARIANT_CONFIG)[AppVariant],
+  appVariant: AppVariant,
+): (typeof VARIANT_CONFIG)[AppVariant] {
+  const variantSlug =
+    appVariant === "production" ? "" : appVariant === "development" ? ".dev" : ".preview";
+  const schemeSlug =
+    appVariant === "production" ? "" : appVariant === "development" ? "-dev" : "-preview";
+
+  const iosBundleIdBase = nonEmpty(FORK.iosBundleIdBase);
+  const androidPackageBase = nonEmpty(FORK.androidPackageBase);
+  const schemeBase = nonEmpty(FORK.schemeBase);
+
+  return {
+    ...base,
+    iosBundleIdentifier: iosBundleIdBase
+      ? `${iosBundleIdBase}${variantSlug}`
+      : base.iosBundleIdentifier,
+    androidPackage: androidPackageBase
+      ? `${androidPackageBase}${variantSlug}`
+      : base.androidPackage,
+    scheme: schemeBase ? `${schemeBase}${schemeSlug}` : base.scheme,
+  };
+}
+
+function nonEmpty(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function loadRepoEnv({ baseEnv = process.env }: { readonly baseEnv?: Environment } = {}): Record<
+  string,
+  string | undefined
+> {
+  const repoRoot = NodePath.resolve(process.cwd(), "../..");
+  const rootEnv = readEnvFile(NodePath.join(repoRoot, ".env"));
+  const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
+  const publicConfig = resolvePublicConfig(baseEnv, localEnv, rootEnv);
+
+  return {
+    ...rootEnv,
+    ...localEnv,
+    ...baseEnv,
+    ...(publicConfig.clerkPublishableKey
+      ? {
+          T3CODE_CLERK_PUBLISHABLE_KEY: publicConfig.clerkPublishableKey,
+          VITE_CLERK_PUBLISHABLE_KEY: publicConfig.clerkPublishableKey,
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: publicConfig.clerkPublishableKey,
+        }
+      : {}),
+    ...(publicConfig.clerkJwtTemplate
+      ? {
+          T3CODE_CLERK_JWT_TEMPLATE: publicConfig.clerkJwtTemplate,
+          VITE_CLERK_JWT_TEMPLATE: publicConfig.clerkJwtTemplate,
+          EXPO_PUBLIC_CLERK_JWT_TEMPLATE: publicConfig.clerkJwtTemplate,
+        }
+      : {}),
+    ...(publicConfig.relayUrl
+      ? {
+          T3CODE_RELAY_URL: publicConfig.relayUrl,
+          VITE_T3CODE_RELAY_URL: publicConfig.relayUrl,
+        }
+      : {}),
+  };
+}
+
+function resolvePublicConfig(...sources: readonly Environment[]) {
+  return {
+    clerkPublishableKey: firstNonEmpty(
+      sources,
+      "T3CODE_CLERK_PUBLISHABLE_KEY",
+      "VITE_CLERK_PUBLISHABLE_KEY",
+      "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
+    ),
+    clerkJwtTemplate: firstNonEmpty(
+      sources,
+      "T3CODE_CLERK_JWT_TEMPLATE",
+      "VITE_CLERK_JWT_TEMPLATE",
+      "EXPO_PUBLIC_CLERK_JWT_TEMPLATE",
+    ),
+    relayUrl: firstNonEmpty(sources, "T3CODE_RELAY_URL", "VITE_T3CODE_RELAY_URL"),
+  };
+}
+
+function firstNonEmpty(sources: readonly Environment[], ...names: readonly string[]) {
+  for (const source of sources) {
+    for (const name of names) {
+      const value = source[name]?.trim();
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return undefined;
+}
+
+function readEnvFile(path: string): Record<string, string | undefined> {
+  return NodeFS.existsSync(path) ? NodeUtil.parseEnv(NodeFS.readFileSync(path, "utf8")) : {};
+}
 
 export default config;
