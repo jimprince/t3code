@@ -83,7 +83,13 @@ things specific to the fork relationship.
    non-interactive CI. The workflow must also export
    `EXPO_APPLE_TEAM_ID=CBCQ6MJF4B` and
    `EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION` to avoid a CI prompt for
-   Apple team type.
+   Apple team type. If the workflow reaches `Handling Apple ad hoc
+   provisioning profiles` and fails with Apple 403 (`Access forbidden`), the
+   workflow is past the known prompt/auth failures; an Apple Developer team
+   admin must grant the App Store Connect key or account enough access to
+   create/refresh ad hoc profiles, including the widget extension bundle ID
+   `com.brad.t3code.dev.widgets`, or pre-create the remote EAS credentials
+   interactively.
 
 5. Stop the runner when done:
 
@@ -223,8 +229,10 @@ Remote build status in this fork is a three-part answer:
    extension target, so CI uses the existing App Store Connect API key secrets
    to refresh ad hoc provisioning profiles when starting a new build. The
    workflow exports `EXPO_APPLE_TEAM_ID` and `EXPO_APPLE_TEAM_TYPE` so EAS does
-   not prompt for Apple team type in CI. Mobile is not built by `release.yml`;
-   it is deployed by
+   not prompt for Apple team type in CI. Apple 403 at the ad hoc profile step
+   means the Apple team/API key cannot manage the required profiles; fix that
+   in Apple/EAS credentials rather than weakening the fingerprint update guard.
+   Mobile is not built by `release.yml`; it is deployed by
    `.github/workflows/mobile-eas-development.yml` when mobile/runtime paths
    change or when manually dispatched. Bad development OTA updates can be
    recovered with
