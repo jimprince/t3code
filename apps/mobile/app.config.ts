@@ -26,6 +26,9 @@ const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
+const MOBILE_RUNTIME_VERSION_POLICY =
+  process.env.MOBILE_VERSION_POLICY ??
+  (APP_VARIANT === "development" ? "fingerprint" : "appVersion");
 const EAS_PROJECT_ID = nonEmpty(FORK.easProjectId) ?? UPSTREAM_EAS_PROJECT_ID;
 const EAS_OWNER = nonEmpty(FORK.easOwner) ?? UPSTREAM_EAS_OWNER;
 const APPLE_TEAM_ID = nonEmpty(FORK.appleTeamId);
@@ -83,7 +86,7 @@ const config: ExpoConfig = {
   scheme: variant.scheme,
   version: "0.1.0",
   runtimeVersion: {
-    policy: process.env.MOBILE_VERSION_POLICY ?? "appVersion",
+    policy: MOBILE_RUNTIME_VERSION_POLICY,
   },
   orientation: "portrait",
   icon: "./assets/icon.png",
