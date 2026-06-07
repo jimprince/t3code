@@ -1,6 +1,106 @@
 # Agent Requirements
 
-## Current Task: Follow And Complete Nightly Build
+## Current Task: Orchestration ↔ UI State-Detachment Fixes
+
+The UI ("model manager" = orchestration engine) detaches from backend thread
+state: running-when-stopped, finished-when-running, idle-when-running, or stuck
+"waiting for plan/choice". Root cause (see assessment): the **thread-detail
+stream lacks the gap-recovery the shell stream has**, plus split run-state
+signals.
+
+### Current User Requirements
+
+- **R1a (server):** `subscribeThread`/`subscribeShell` must not drop events in
+  the snapshot→live concat window — subscribe to the live event feed before
+  reading the snapshot and de-dup live events by sequence.
+- **R1b (client):** The detail stream must reconcile sequence like the shell
+  stream (honor `snapshotSequence`, detect gaps, replay) — a single dropped event
+  must not require a full resubscribe to heal.
+- **R2:** One authoritative run-state derivation from `{session.status,
+latestTurn.state}`; `phase` and `latestTurnSettled` must not disagree.
+- **R3:** Don't let the duplicate web-store reducer diverge from the shared
+  reducer for run-state events.
+- **R4:** "Waiting for choice/plan" must not disagree with the sidebar booleans
+  (transitively satisfied by R1 if not done fully this pass).
+- **R5:** Stale-heartbeat reconnect must fire on a focused tab, not only on
+  browser resume.
+
+### Constraints
+
+- Fork repo; do not touch versioning/release files (see `LLM_INSTRUCTIONS.md`).
+- TDD/regression mandate: each fix needs a test that fails before / passes after.
+- Do not regress the working shell-stream recovery.
+
+### Acceptance Criteria
+
+- Event published in the concat window (R1a) and a gapped/out-of-order detail
+  event (R1b) both leave UI thread state matching the authoritative projection.
+- Split `session-set` vs `turn-diff-completed` cannot leave the spinner
+  stuck-on/stuck-off (R2 regression test).
+- A stale WebSocket heartbeat while the browser tab is focused triggers a
+  reconnect path without waiting for a browser hide/show resume cycle (R5
+  regression test).
+
+### Status
+
+- [x] R1a server ordering — IMPLEMENTED (the right fix; root cause). WS
+      `subscribeThread` now subscribes to the live feed BEFORE reading the snapshot
+      and drops live events at or below the snapshot sequence. Correctness rests on
+      `OrchestrationEngine.processEnvelope` publishing only AFTER the projection
+      transaction commits (verified), so `snapshotSequence` is an exact cut point.
+      Changes:
+  - `OrchestrationEngine` (Service+Layer): added eager
+    `subscribeDomainEvents` (`PubSub.subscribe` + `Stream.fromSubscription`).
+  - `ProjectionSnapshotQuery` (Service+Layer): added atomic
+    `getThreadDetailSnapshotById` → `{snapshotSequence, thread}` in one
+    `sql.withTransaction` (mirrors `getShellSnapshot`).
+  - `ws.ts subscribeThread`: subscribe-first, snapshot, filter
+    `sequence > snapshotSequence`.
+    VERIFIED: `apps/server` `tsgo --noEmit` clean; new
+    `SubscribeThreadStreamRace.test.ts` (atomic cut point + eager-subscribe
+    no-drop) passes; break-the-fix confirmed (lazy `streamDomainEvents` →
+    `TimeoutError`); all 8 touched server suites green (56 tests). Interface-stub
+    updates + test authored via `codex exec` (gpt-5.5), reviewed and re-verified
+    locally.
+  - `subscribeShell` left as-is: gap-tolerant by design (full-entity upserts +
+    client monotonic guard). Same eager-subscribe is a cheap follow-up to close
+    the rarer `thread-removed`/`project-removed` miss window.
+- [~] R1b client detail reconciliation — NOT NEEDED given R1a. Within a WS
+  connection TCP guarantees ordered delivery; reconnect re-snapshots; R1a closes
+  the only remaining (server concat) gap. No per-thread sequencing required.
+- [x] R2 authoritative run-state — DONE & VERIFIED. `isLatestTurnSettled` now
+      trusts the session over turn timestamps (`apps/web/src/session-logic.ts`).
+      4 regression tests added; break-the-fix confirmed; 55/55 pass.
+      NOT YET RUN: `ChatView.browser.tsx` Playwright suite (spinner assertions).
+- [ ] R3 reducer unification — NOT STARTED (R2 covers the session-stop symptom
+      without touching the reducer this pass).
+- [ ] R4 pending state — NOT STARTED.
+- [x] R5 liveness watchdog — DONE & VERIFIED. The web environment runtime now
+      consumes `onHeartbeatTimeout` for primary and saved environment transports.
+      It reconnects the affected environment immediately when the browser tab is
+      visible/focused, skips hidden tabs so resume handling remains authoritative,
+      and rate-limits reconnect attempts per environment.
+
+R1a, R2, and R5 are implemented and verified in this worktree. R3/R4 remain
+tracked as follow-up cleanup; R1a stopped feeding the event gaps that made them
+bug-prone.
+
+### Verification
+
+- Passed: `bun run --filter @t3tools/web test -- src/environments/runtime/service.threadSubscriptions.test.ts src/environments/runtime/connection.test.ts src/session-logic.test.ts`
+  (`3` files, `71` tests).
+- Passed: R5 break-the-fix check. Removing the primary `onHeartbeatTimeout`
+  hookup made the new focused-tab heartbeat regression fail at the missing
+  handler assertion; restoring the hookup made it pass.
+- Passed: `bun fmt`.
+- Passed: `bun lint` (`11` existing warnings, `0` errors).
+- Passed: `bun run --filter @t3tools/web typecheck`.
+- Passed: repo-wide `bun typecheck` after repairing the local worktree install
+  with `bun install --frozen-lockfile` (no manifest or lockfile changes).
+
+---
+
+## Previous Task: Follow And Complete Nightly Build
 
 Monitor the fork nightly build after the disconnect-message merge, recover from
 CI/release automation blockers if needed, and verify that the updater-visible
