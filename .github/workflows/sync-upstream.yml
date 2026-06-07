@@ -99,17 +99,13 @@ jobs:
           fetch-depth: 0
           token: ${{ github.token }}
 
-      - name: Setup Bun
+      - name: Setup Vite+
         if: steps.channel.outputs.selected == 'true'
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version-file: package.json
-
-      - name: Setup Node
-        if: steps.channel.outputs.selected == 'true'
-        uses: actions/setup-node@v6
+        uses: voidzero-dev/setup-vp@v1
         with:
           node-version-file: package.json
+          cache: true
+          run-install: false
 
       - name: Configure git
         if: steps.channel.outputs.selected == 'true'
@@ -218,7 +214,7 @@ jobs:
             apps/server/package.json
             apps/web/package.json
             packages/contracts/package.json
-            bun.lock
+            pnpm-lock.yaml
             docs/AGENT_REQUIREMENTS.md
           # docs/AGENT_REQUIREMENTS.md is agent execution metadata, not a
           # packaged runtime artifact. Resolve tracker-only conflicts to the
@@ -360,13 +356,13 @@ jobs:
           fi
 
           version="${new_tag#v}"
-          bun install --frozen-lockfile --ignore-scripts
+          vp install --frozen-lockfile --ignore-scripts
           node scripts/update-release-package-versions.ts "$version"
-          bunx oxfmt apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json
-          bun install --lockfile-only --ignore-scripts
+          vp fmt apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json
+          vp install --lockfile-only --ignore-scripts
 
-          if ! git diff --quiet -- apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock; then
-            git add apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json bun.lock
+          if ! git diff --quiet -- apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json pnpm-lock.yaml; then
+            git add apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json pnpm-lock.yaml
             git commit -m "chore(release): prepare $new_tag"
           else
             echo "Package versions already match $version."

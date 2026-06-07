@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+
 import rootPackageJson from "../package.json" with { type: "json" };
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
 
@@ -18,6 +20,7 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import { parse as parseYaml } from "yaml";
 
 const HeadlessPlatform = Schema.Literals(["linux"]);
 const HeadlessArch = Schema.Literals(["x64"]);
@@ -50,9 +53,22 @@ interface HeadlessPackageJson {
   readonly description: string;
   readonly type: string;
   readonly engines: Record<string, string>;
+  readonly packageManager: string;
   readonly dependencies: Record<string, string>;
   readonly overrides: Record<string, string>;
 }
+
+interface PnpmWorkspaceConfig {
+  readonly catalog?: Record<string, string>;
+  readonly overrides?: Record<string, string>;
+}
+
+const pnpmWorkspaceConfig = parseYaml(
+  readFileSync(new URL("../pnpm-workspace.yaml", import.meta.url), "utf8"),
+) as PnpmWorkspaceConfig;
+
+const workspaceCatalog = pnpmWorkspaceConfig.catalog ?? {};
+const workspaceOverrides = pnpmWorkspaceConfig.overrides ?? {};
 
 class HeadlessBuildError extends Data.TaggedError("HeadlessBuildError")<{
   readonly message: string;
@@ -103,7 +119,7 @@ export function resolveHeadlessArtifactName(
 export function resolveHeadlessRuntimeDependencies(): Record<string, string> {
   return resolveCatalogDependencies(
     serverPackageJson.dependencies,
-    rootPackageJson.workspaces.catalog,
+    workspaceCatalog,
     "apps/server",
   );
 }
@@ -116,12 +132,9 @@ export function createHeadlessPackageJson(version: string): HeadlessPackageJson 
     description: "T3 Code headless server runtime",
     type: "module",
     engines: serverPackageJson.engines,
+    packageManager: rootPackageJson.packageManager,
     dependencies: resolveHeadlessRuntimeDependencies(),
-    overrides: resolveCatalogDependencies(
-      rootPackageJson.overrides,
-      rootPackageJson.workspaces.catalog,
-      "apps/server",
-    ),
+    overrides: resolveCatalogDependencies(workspaceOverrides, workspaceCatalog, "apps/server"),
   };
 }
 
@@ -172,7 +185,7 @@ const buildHeadlessArtifact = Effect.fn("buildHeadlessArtifact")(function* (
         cwd: repoRoot,
         ...commandOutputOptions(options.verbose),
         shell: process.platform === "win32",
-      })`bun run build --filter=@t3tools/web --filter=t3`,
+      })`vp run --filter @t3tools/web --filter t3 build`,
     );
   }
 
@@ -216,7 +229,7 @@ const buildHeadlessArtifact = Effect.fn("buildHeadlessArtifact")(function* (
       cwd: artifactRoot,
       ...commandOutputOptions(options.verbose),
       shell: process.platform === "win32",
-    })`bun install --production`,
+    })`vp install --prod --no-optional`,
   );
 
   for (const requiredPath of [
