@@ -71,10 +71,10 @@ things specific to the fork relationship.
    fork build succeeded, report the active fork deliverable lanes separately:
    mac Electron app and Linux/headless app. Both come from the main-branch
    `Release` workflow (`release.yml`) and its published GitHub release assets.
-   The old mobile drift workflow was retired after upstream deleted
-   `t3code/mobile-remote-connect`; do not treat mobile EAS status as part of
-   the desktop/headless fork release result unless a new mobile release lane is
-   explicitly reintroduced.
+   The old `feature/mobile-track` drift workflow was retired after upstream
+   deleted `t3code/mobile-remote-connect`. Mobile EAS updates are now a
+   main-based lane: inspect `Mobile EAS Development Update` separately from the
+   desktop/headless fork release result.
 
 5. Stop the runner when done:
 
@@ -207,9 +207,11 @@ Remote build status in this fork is a three-part answer:
    and published the mac updater manifest plus dmg/zip assets.
 2. Linux/headless app: the `Release` workflow's Linux x64 matrix leg succeeded
    and published `t3-headless-<version>-linux-x64.tar.gz`.
-3. Mobile app: the `feature/mobile-track` branch's `Mobile Track EAS Update`
-   workflow succeeded and published an iOS EAS update to the development
-   channel. Mobile is not built by `release.yml` on `main`.
+3. Mobile app: the `Mobile EAS Development Update` workflow on `main`
+   succeeded and published an iOS EAS update to the `jimprince` development
+   channel. Mobile is not built by `release.yml`; it is updated by
+   `.github/workflows/mobile-eas-development.yml` when mobile/runtime paths
+   change or when manually dispatched.
 
 - macOS arm64 prefers the local self-hosted `t3code-mac-arm64` runner when it
   is online and idle. If it is offline or busy during preflight, the workflow
