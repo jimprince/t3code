@@ -60,6 +60,9 @@ interface HeadlessPackageJson {
   readonly packageManager: string;
   readonly dependencies: Record<string, string>;
   readonly overrides: Record<string, string>;
+  readonly pnpm: {
+    readonly onlyBuiltDependencies: ReadonlyArray<string>;
+  };
 }
 
 class HeadlessBuildError extends Data.TaggedError("HeadlessBuildError")<{
@@ -144,6 +147,9 @@ export function createHeadlessPackageJson(
       workspaceConfig.catalog ?? {},
       "apps/server",
     ),
+    pnpm: {
+      onlyBuiltDependencies: ["node-pty"],
+    },
   };
 }
 
@@ -247,8 +253,31 @@ const buildHeadlessArtifact = Effect.fn("buildHeadlessArtifact")(function* (
       cwd: artifactRoot,
       ...commandOutputOptions(options.verbose),
       shell: process.platform === "win32",
-    })`vp install --prod --no-optional`,
+    })`vp install --prod`,
   );
+
+  const nodePtyNativeModuleCandidates = [
+    path.join(artifactRoot, "node_modules/node-pty/build/Release/pty.node"),
+    path.join(artifactRoot, "node_modules/node-pty/build/Debug/pty.node"),
+    path.join(
+      artifactRoot,
+      "node_modules/node-pty/prebuilds",
+      `${process.platform}-${process.arch}`,
+      "pty.node",
+    ),
+  ];
+  let hasNodePtyNativeModule = false;
+  for (const candidate of nodePtyNativeModuleCandidates) {
+    if (yield* fs.exists(candidate)) {
+      hasNodePtyNativeModule = true;
+      break;
+    }
+  }
+  if (!hasNodePtyNativeModule) {
+    return yield* new HeadlessBuildError({
+      message: `Missing node-pty native module. Checked: ${nodePtyNativeModuleCandidates.join(", ")}`,
+    });
+  }
 
   for (const requiredPath of [
     path.join(artifactRoot, "bin/t3"),
