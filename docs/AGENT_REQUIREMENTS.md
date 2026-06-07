@@ -47,7 +47,10 @@ version.
 - [x] Move the development EAS lane to fingerprint runtime matching.
 - [x] Update docs.
 - [x] Run local verification.
-- [ ] Commit, push, and verify live EAS/GitHub Actions.
+- [x] Commit, push, and trigger live EAS/GitHub Actions.
+- [x] Roll back the bad `0.1.0` development update to embedded.
+- [ ] Push the follow-up EAS build-environment fix and trigger the live
+      fingerprint workflow.
 
 ### Verification
 
@@ -68,6 +71,23 @@ version.
 - Passed: `pnpm exec vp run typecheck`.
 - Passed: `pnpm exec vp run --filter @t3tools/mobile test` (`32` files,
   `146` tests).
+- Commit `7457e23bb20359917207f7b87fea1befed178645`
+  (`ci: protect mobile eas updates with fingerprinting`) was pushed to
+  `origin/main`.
+- Passed: `Mobile EAS Development Rollback` run `27083207951` published a
+  rollback-to-embedded iOS update on branch `development`, runtime version
+  `0.1.0`, update group `d5b0cc72-1690-4897-8f27-892dcdb114e9`, iOS update
+  `019ea072-5e8b-71c0-b695-7550181d472a`.
+- Failed: first live fingerprint run `27083206315` correctly computed a new
+  iOS fingerprint runtime `45e387ba8731aca98825f89d7f2f1b362317570e` and
+  attempted to start a matching build, but the Expo fingerprint action invokes
+  `eas build --profile development` without passing `--environment
+development`; the `development` build profile must carry that environment.
+- Passed after the follow-up build-environment fix: workflow/eas config parse,
+  `git diff --check`, `pnpm exec vp check`,
+  `pnpm exec vp run --filter @t3tools/mobile typecheck`,
+  `pnpm exec vp run typecheck`, and
+  `pnpm exec vp run --filter @t3tools/mobile test` (`32` files, `146` tests).
 
 ---
 
