@@ -43,6 +43,7 @@ function makeHarness(input: { readonly isDevelopment: boolean }): CloudAuthHarne
       isPackaged: !input.isDevelopment,
       resourcesPath: "/tmp/t3-code-test/resources",
       runningUnderArm64Translation: false,
+      desktopFlavor: input.isDevelopment ? "dev" : "stable",
     }),
     name: Effect.succeed("T3 Code"),
     whenReady: Effect.void,

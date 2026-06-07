@@ -136,11 +136,11 @@ versioning axis for the fork.
   `GH_PAT` when present, with the workflow-scoped `GITHUB_TOKEN` as fallback;
   this avoids GitHub's intermittent `Resource not accessible by integration`
   failure during release creation.
-- Release publish/finalize jobs use `bun install --ignore-scripts` because
-  they only need helper scripts and artifact upload. Nightly preflight and
-  Linux build installs also use `--ignore-scripts` so native dependency
-  lifecycle hangs do not block macOS updater releases. Keep full dependency
-  lifecycle scripts for stable preflight/build jobs.
+- Release publish/finalize jobs use `vp install --ignore-scripts` because they
+  only need helper scripts and artifact upload. Nightly preflight and Linux
+  build installs also use `--ignore-scripts` so native dependency lifecycle
+  hangs do not block macOS updater releases. Keep full dependency lifecycle
+  scripts for stable preflight/build jobs.
 
 If you need to put fork patches on top of upstream, push normal commits to
 `main`. The next sync rebases them forward automatically.
@@ -237,7 +237,7 @@ Remote build status in this fork is a three-part answer:
   `server.requestHeadlessUpdateCheck` RPC when a Linux server reports an older
   version. That RPC must start the existing user systemd upgrade service; do
   not run the updater as an in-process child of the server being restarted.
-- The 2-attempt retry wrapper around `bun run dist:desktop:artifact` absorbs
+- The 2-attempt retry wrapper around `vp run dist:desktop:artifact` absorbs
   transient flakes (macOS `hdiutil: Device not configured`, native-dep network
   hiccups). Don't remove it.
 
