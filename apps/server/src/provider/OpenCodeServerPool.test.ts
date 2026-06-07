@@ -9,7 +9,7 @@ import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
 import * as Scope from "effect/Scope";
 import * as TestClock from "effect/testing/TestClock";
-import { beforeEach } from "vitest";
+import { beforeEach } from "vite-plus/test";
 
 import { makeOpenCodeServerPool, type OpenCodeServerPool } from "./OpenCodeServerPool.ts";
 import { OpenCodeRuntime, type OpenCodeRuntimeShape } from "./opencodeRuntime.ts";
