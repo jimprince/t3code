@@ -38,6 +38,8 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   paths.
 - Release preflight typecheck does not fail on the CI-only
   `effect(nodeBuiltinImport)` rule in the headless artifact script.
+- Release preflight typecheck does not fail on direct `vitest` imports from
+  packages that only declare/use the Vite+ test surface.
 - Local verification passes: `vp check`, `vp run typecheck`, plus any
   focused launcher/release smoke test identified during the fix.
 - GitHub Actions no longer fails on the same `electron-launcher.mjs` rebase
@@ -53,6 +55,8 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
 - [x] Push with `--force-with-lease`.
 - [x] Fix follow-on release preflight typecheck failure in
       `scripts/build-headless-artifact.ts`.
+- [x] Fix follow-on release preflight typecheck failure from direct `vitest`
+      imports in package test files.
 - [~] Recheck GitHub Actions.
   Latest `Fork Push Nightly` run succeeded and created
   `v0.0.25-nightly.20260606.480-fork.1`; follow-on `Release` reached
@@ -60,7 +64,9 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   `scripts/build-headless-artifact.ts` imported `node:fs` directly for
   `readFileSync`. A follow-up fix now mirrors the existing Effect
   `FileSystem` + `@t3tools/shared/schemaYaml` workspace-config pattern from
-  `scripts/build-desktop-artifact.ts`.
+  `scripts/build-desktop-artifact.ts`. The `fork.2` rerun then reached the same
+  preflight lane and failed on undeclared direct `vitest` imports in package
+  test files.
 
 ### Verification
 
@@ -85,6 +91,13 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   `vp run --filter @t3tools/scripts test build-headless-artifact.test.ts`.
 - After release preflight fix: passed `vp check`.
 - After release preflight fix: passed `vp run typecheck`.
+- After direct `vitest` import fix: passed `vp run typecheck`.
+- After direct `vitest` import fix: passed
+  `vp run --filter @t3tools/web test src/serverUpdateCheck.test.ts`.
+- After direct `vitest` import fix: passed
+  `vp run --filter t3 test src/headlessUpdateCheck.test.ts src/provider/OpenCodeServerPool.test.ts src/orchestration/Layers/ThreadArchiveCleanupReactor.test.ts`.
+- After direct `vitest` import fix: passed
+  `vp run --filter @t3tools/desktop test src/updates/updateChannels.test.ts`.
 
 ---
 
