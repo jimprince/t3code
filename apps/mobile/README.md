@@ -77,8 +77,10 @@ Pushes to `main` that touch mobile/runtime paths run
 development lane with explicit EAS CLI build/update commands. The iOS app has a
 widget extension, so CI also requires the existing `APPLE_API_KEY`,
 `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` secrets to refresh ad hoc
-provisioning profiles when a new fingerprint needs a new internal build. Manual
-dispatch is also supported from `.github/workflows/mobile-eas-development.yml`.
+provisioning profiles when a new fingerprint needs a new internal build.
+Internal iOS profiles use `enterpriseProvisioning: "adhoc"` so EAS can run
+non-interactively. Manual dispatch is also supported from
+`.github/workflows/mobile-eas-development.yml`.
 
 If an incompatible development OTA update is published, use
 `.github/workflows/mobile-eas-development-rollback.yml` to roll the affected
