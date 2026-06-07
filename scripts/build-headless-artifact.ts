@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
-
+import { fromYaml } from "@t3tools/shared/schemaYaml";
 import rootPackageJson from "../package.json" with { type: "json" };
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
 
@@ -20,11 +19,16 @@ import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { parse as parseYaml } from "yaml";
 
 const HeadlessPlatform = Schema.Literals(["linux"]);
 const HeadlessArch = Schema.Literals(["x64"]);
 const encodeJsonString = Schema.encodeEffect(Schema.UnknownFromJsonString);
+const HeadlessWorkspaceConfig = Schema.Struct({
+  catalog: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  overrides: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+});
+export type HeadlessWorkspaceConfig = typeof HeadlessWorkspaceConfig.Type;
+const decodeHeadlessWorkspaceConfig = Schema.decodeEffect(fromYaml(HeadlessWorkspaceConfig));
 
 interface BuildCliInput {
   readonly platform: Option.Option<typeof HeadlessPlatform.Type>;
@@ -58,18 +62,6 @@ interface HeadlessPackageJson {
   readonly overrides: Record<string, string>;
 }
 
-interface PnpmWorkspaceConfig {
-  readonly catalog?: Record<string, string>;
-  readonly overrides?: Record<string, string>;
-}
-
-const pnpmWorkspaceConfig = parseYaml(
-  readFileSync(new URL("../pnpm-workspace.yaml", import.meta.url), "utf8"),
-) as PnpmWorkspaceConfig;
-
-const workspaceCatalog = pnpmWorkspaceConfig.catalog ?? {};
-const workspaceOverrides = pnpmWorkspaceConfig.overrides ?? {};
-
 class HeadlessBuildError extends Data.TaggedError("HeadlessBuildError")<{
   readonly message: string;
   readonly cause?: unknown;
@@ -78,6 +70,14 @@ class HeadlessBuildError extends Data.TaggedError("HeadlessBuildError")<{
 const RepoRoot = Effect.service(Path.Path).pipe(
   Effect.flatMap((path) => path.fromFileUrl(new URL("..", import.meta.url))),
 );
+
+export const readHeadlessWorkspaceConfig = Effect.fn("readHeadlessWorkspaceConfig")(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const repoRoot = yield* RepoRoot;
+  const workspaceYaml = yield* fs.readFileString(path.join(repoRoot, "pnpm-workspace.yaml"));
+  return yield* decodeHeadlessWorkspaceConfig(workspaceYaml);
+});
 
 const commandOutputOptions = (verbose: boolean) =>
   ({
@@ -116,15 +116,20 @@ export function resolveHeadlessArtifactName(
   return `${resolveHeadlessArtifactBaseName(version, platform, arch)}.tar.gz`;
 }
 
-export function resolveHeadlessRuntimeDependencies(): Record<string, string> {
+export function resolveHeadlessRuntimeDependencies(
+  workspaceConfig: HeadlessWorkspaceConfig,
+): Record<string, string> {
   return resolveCatalogDependencies(
     serverPackageJson.dependencies,
-    workspaceCatalog,
+    workspaceConfig.catalog ?? {},
     "apps/server",
   );
 }
 
-export function createHeadlessPackageJson(version: string): HeadlessPackageJson {
+export function createHeadlessPackageJson(
+  version: string,
+  workspaceConfig: HeadlessWorkspaceConfig,
+): HeadlessPackageJson {
   return {
     name: "t3-code-headless",
     version,
@@ -133,8 +138,12 @@ export function createHeadlessPackageJson(version: string): HeadlessPackageJson 
     type: "module",
     engines: serverPackageJson.engines,
     packageManager: rootPackageJson.packageManager,
-    dependencies: resolveHeadlessRuntimeDependencies(),
-    overrides: resolveCatalogDependencies(workspaceOverrides, workspaceCatalog, "apps/server"),
+    dependencies: resolveHeadlessRuntimeDependencies(workspaceConfig),
+    overrides: resolveCatalogDependencies(
+      workspaceConfig.overrides ?? {},
+      workspaceConfig.catalog ?? {},
+      "apps/server",
+    ),
   };
 }
 
@@ -175,6 +184,7 @@ const buildHeadlessArtifact = Effect.fn("buildHeadlessArtifact")(function* (
   const repoRoot = yield* RepoRoot;
   const path = yield* Path.Path;
   const fs = yield* FileSystem.FileSystem;
+  const workspaceConfig = yield* readHeadlessWorkspaceConfig();
   const serverDist = path.join(repoRoot, "apps/server/dist");
   const bundledClientEntry = path.join(serverDist, "client/index.html");
 
@@ -218,9 +228,17 @@ const buildHeadlessArtifact = Effect.fn("buildHeadlessArtifact")(function* (
   yield* fs.makeDirectory(stageBinDir, { recursive: true });
   yield* fs.copy(serverDist, path.join(stageServerDir, "dist"));
   yield* writeEntrypoint(stageBinDir);
+  const packageJson = yield* Effect.try({
+    try: () => createHeadlessPackageJson(options.version, workspaceConfig),
+    catch: (cause) =>
+      new HeadlessBuildError({
+        message: "Could not resolve headless runtime package.json.",
+        cause,
+      }),
+  });
   yield* fs.writeFileString(
     path.join(artifactRoot, "package.json"),
-    `${yield* encodeJsonString(createHeadlessPackageJson(options.version))}\n`,
+    `${yield* encodeJsonString(packageJson)}\n`,
   );
 
   yield* Effect.log("[headless-artifact] Installing staged production dependencies...");
