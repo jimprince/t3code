@@ -10,6 +10,7 @@
         "MOBILE_VERSION_POLICY": "fingerprint"
       },
       "channel": "development",
+      "environment": "development",
       "developmentClient": true,
       "distribution": "internal"
     },
