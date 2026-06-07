@@ -94,6 +94,8 @@ jobs:
             echo "EXPO_ASC_API_KEY_PATH=$key_path"
             echo "EXPO_ASC_KEY_ID=$APPLE_API_KEY_ID"
             echo "EXPO_ASC_ISSUER_ID=$APPLE_API_ISSUER"
+            echo "EXPO_APPLE_TEAM_ID=CBCQ6MJF4B"
+            echo "EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION"
           } >> "$GITHUB_ENV"
 
       - name: Deploy with fingerprint check

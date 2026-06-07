@@ -105,13 +105,24 @@ development`; the `development` build profile must carry that environment.
   `pnpm exec vp run typecheck`, and
   `pnpm exec vp run --filter @t3tools/mobile test` (`32` files, `146` tests).
 - Failed: live run `27083622008` authenticated with the App Store Connect key
-  but still prompted for Apple team provisioning type (`Select your Apple Team
-Type`) while setting up internal distribution credentials. Follow-up in
-  progress: set internal iOS EAS profiles to `enterpriseProvisioning: "adhoc"`
-  so CI never prompts for that choice.
-- Passed after setting internal iOS EAS profiles to ad hoc provisioning:
+  but still prompted for Apple team type (`Select your Apple Team Type`) while
+  setting up internal distribution credentials. A nested
+  `ios.enterpriseProvisioning: "adhoc"` attempt passed local validation but did
+  not satisfy the EAS credential prompt.
+- Passed after the nested ad hoc provisioning attempt:
   workflow/eas config parse, development Expo config inspection,
   `git diff --check`, `pnpm exec vp check`,
+  `pnpm exec vp run --filter @t3tools/mobile typecheck`,
+  `pnpm exec vp run typecheck`, and
+  `pnpm exec vp run --filter @t3tools/mobile test` (`32` files, `146` tests).
+- Failed: live run `27083712094` still prompted for Apple team type because
+  root-level `enterpriseProvisioning` is rejected by EAS schema, and the actual
+  prompt is controlled by `EXPO_APPLE_TEAM_TYPE`. Follow-up in progress: export
+  `EXPO_APPLE_TEAM_ID=CBCQ6MJF4B` and
+  `EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION` in the mobile workflow's EAS
+  credential step.
+- Passed after exporting EAS Apple team ID/type in the workflow: workflow/eas
+  config parse, `git diff --check`, `pnpm exec vp check`,
   `pnpm exec vp run --filter @t3tools/mobile typecheck`,
   `pnpm exec vp run typecheck`, and
   `pnpm exec vp run --filter @t3tools/mobile test` (`32` files, `146` tests).
