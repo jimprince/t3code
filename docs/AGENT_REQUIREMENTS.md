@@ -53,8 +53,8 @@ update Brad's EAS project.
 - [x] Retire stale branch-specific mobile-track workflow.
 - [x] Update repo docs/instructions for the new lane.
 - [x] Run local verification.
-- [ ] Commit, merge to `main`, and push.
-- [ ] Verify live GitHub Actions/EAS publish.
+- [x] Commit, merge to `main`, and push.
+- [x] Verify live GitHub Actions/EAS publish.
 
 ### Verification
 
@@ -73,6 +73,19 @@ update Brad's EAS project.
 - Passed: `pnpm exec vp run --filter @t3tools/mobile test` (`32` files,
   `146` tests).
 - Passed: `pnpm exec vp run typecheck`.
+- Commit `41c14c974db4542a00569d2c61f9cc313376d838`
+  (`ci: publish mobile eas updates from main`) was pushed as a fast-forward to
+  `origin/main`.
+- GitHub Actions passed: `Mobile EAS Development Update` run `27082128760`
+  completed successfully on `main`.
+- EAS publish verified from run `27082128760`: branch `development`, runtime
+  version `0.1.0`, platform `ios`, update group
+  `8960c545-2c3b-49e2-a5a2-0aeda655ab53`, iOS update
+  `019ea040-77fe-7f7f-9009-d7283e204ef6`, message `main 41c14c9`, dashboard
+  `https://expo.dev/accounts/jimprince/projects/t3-code/updates/8960c545-2c3b-49e2-a5a2-0aeda655ab53`.
+- GitHub Actions passed: `CI` run `27082128753` completed successfully on
+  `main` after Check, Browser Test, Release Smoke, Test, and Mobile Native
+  Static Analysis jobs passed.
 
 ---
 
