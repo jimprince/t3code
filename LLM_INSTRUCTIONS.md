@@ -76,7 +76,11 @@ things specific to the fork relationship.
    main-based lane: inspect `Mobile EAS Development Update` separately from the
    desktop/headless fork release result. The development lane uses Expo
    fingerprinting, so a native runtime change should start or select a matching
-   iOS development build instead of publishing an incompatible OTA update.
+   iOS development build instead of publishing an incompatible OTA update. The
+   iOS build step also needs the existing `APPLE_API_KEY`, `APPLE_API_KEY_ID`,
+   and `APPLE_API_ISSUER` secrets so EAS can refresh ad hoc provisioning
+   profiles for both the app target and the widget extension target in
+   non-interactive CI.
 
 5. Stop the runner when done:
 
@@ -212,10 +216,13 @@ Remote build status in this fork is a three-part answer:
 3. Mobile app: the `Mobile EAS Development Update` workflow on `main`
    succeeded and either published an iOS EAS update to the `jimprince`
    development channel or started a matching iOS development build when the
-   native fingerprint changed. Mobile is not built by `release.yml`; it is
-   deployed by `.github/workflows/mobile-eas-development.yml` when
-   mobile/runtime paths change or when manually dispatched. Bad development OTA
-   updates can be recovered with
+   native fingerprint changed. The iOS development build includes the widget
+   extension target, so CI uses the existing App Store Connect API key secrets
+   to refresh ad hoc provisioning profiles when starting a new build. Mobile is
+   not built by `release.yml`; it is deployed by
+   `.github/workflows/mobile-eas-development.yml` when mobile/runtime paths
+   change or when manually dispatched. Bad development OTA updates can be
+   recovered with
    `.github/workflows/mobile-eas-development-rollback.yml`.
 
 - macOS arm64 prefers the local self-hosted `t3code-mac-arm64` runner when it

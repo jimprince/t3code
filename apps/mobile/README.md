@@ -74,7 +74,10 @@ CI uses Expo fingerprinting for development and preview dev-client builds to reu
 
 Pushes to `main` that touch mobile/runtime paths run
 `Mobile EAS Development Update`, which verifies the repo and deploys the iOS
-development lane through Expo's fingerprint-aware build/update action. Manual
+development lane with explicit EAS CLI build/update commands. The iOS app has a
+widget extension, so CI also requires the existing `APPLE_API_KEY`,
+`APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` secrets to refresh ad hoc
+provisioning profiles when a new fingerprint needs a new internal build. Manual
 dispatch is also supported from `.github/workflows/mobile-eas-development.yml`.
 
 If an incompatible development OTA update is published, use
