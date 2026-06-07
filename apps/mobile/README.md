@@ -78,7 +78,8 @@ development lane with explicit EAS CLI build/update commands. The iOS app has a
 widget extension, so CI also requires the existing `APPLE_API_KEY`,
 `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` secrets to refresh ad hoc
 provisioning profiles when a new fingerprint needs a new internal build.
-Internal iOS profiles use `enterpriseProvisioning: "adhoc"` so EAS can run
+The workflow exports `EXPO_APPLE_TEAM_ID` and
+`EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION` so EAS can run
 non-interactively. Manual dispatch is also supported from
 `.github/workflows/mobile-eas-development.yml`.
 
