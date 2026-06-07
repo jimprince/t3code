@@ -74,7 +74,9 @@ things specific to the fork relationship.
    The old `feature/mobile-track` drift workflow was retired after upstream
    deleted `t3code/mobile-remote-connect`. Mobile EAS updates are now a
    main-based lane: inspect `Mobile EAS Development Update` separately from the
-   desktop/headless fork release result.
+   desktop/headless fork release result. The development lane uses Expo
+   fingerprinting, so a native runtime change should start or select a matching
+   iOS development build instead of publishing an incompatible OTA update.
 
 5. Stop the runner when done:
 
@@ -208,10 +210,13 @@ Remote build status in this fork is a three-part answer:
 2. Linux/headless app: the `Release` workflow's Linux x64 matrix leg succeeded
    and published `t3-headless-<version>-linux-x64.tar.gz`.
 3. Mobile app: the `Mobile EAS Development Update` workflow on `main`
-   succeeded and published an iOS EAS update to the `jimprince` development
-   channel. Mobile is not built by `release.yml`; it is updated by
-   `.github/workflows/mobile-eas-development.yml` when mobile/runtime paths
-   change or when manually dispatched.
+   succeeded and either published an iOS EAS update to the `jimprince`
+   development channel or started a matching iOS development build when the
+   native fingerprint changed. Mobile is not built by `release.yml`; it is
+   deployed by `.github/workflows/mobile-eas-development.yml` when
+   mobile/runtime paths change or when manually dispatched. Bad development OTA
+   updates can be recovered with
+   `.github/workflows/mobile-eas-development-rollback.yml`.
 
 - macOS arm64 prefers the local self-hosted `t3code-mac-arm64` runner when it
   is online and idle. If it is offline or busy during preflight, the workflow

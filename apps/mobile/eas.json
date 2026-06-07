@@ -6,7 +6,8 @@
   "build": {
     "development": {
       "env": {
-        "APP_VARIANT": "development"
+        "APP_VARIANT": "development",
+        "MOBILE_VERSION_POLICY": "fingerprint"
       },
       "channel": "development",
       "developmentClient": true,
