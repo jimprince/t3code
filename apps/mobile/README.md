@@ -70,12 +70,16 @@ This fork resolves its EAS owner/project and app identifiers from
 updates at Brad's `jimprince/t3-code` EAS project while preserving upstream's
 mobile app code on `main`.
 
-CI uses Expo fingerprinting with the `preview:dev` profile to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and default local builds continue to use the `appVersion` runtime policy.
+CI uses Expo fingerprinting for development and preview dev-client builds to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and persistent preview builds continue to use the `appVersion` runtime policy.
 
 Pushes to `main` that touch mobile/runtime paths run
-`Mobile EAS Development Update`, which verifies the repo and publishes an iOS
-update to the `development` channel. Manual dispatch is also supported from
-`.github/workflows/mobile-eas-development.yml`.
+`Mobile EAS Development Update`, which verifies the repo and deploys the iOS
+development lane through Expo's fingerprint-aware build/update action. Manual
+dispatch is also supported from `.github/workflows/mobile-eas-development.yml`.
+
+If an incompatible development OTA update is published, use
+`.github/workflows/mobile-eas-development-rollback.yml` to roll the affected
+runtime version back to the embedded bundle.
 
 For preview or production EAS environments, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
 `T3CODE_CLERK_JWT_TEMPLATE`, and `T3CODE_RELAY_URL`
