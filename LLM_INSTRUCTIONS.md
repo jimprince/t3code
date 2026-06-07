@@ -80,7 +80,8 @@ things specific to the fork relationship.
    iOS build step also needs the existing `APPLE_API_KEY`, `APPLE_API_KEY_ID`,
    and `APPLE_API_ISSUER` secrets so EAS can refresh ad hoc provisioning
    profiles for both the app target and the widget extension target in
-   non-interactive CI.
+   non-interactive CI. Internal iOS EAS profiles must keep
+   `enterpriseProvisioning: "adhoc"` to avoid a CI prompt for Apple team type.
 
 5. Stop the runner when done:
 
@@ -218,8 +219,10 @@ Remote build status in this fork is a three-part answer:
    development channel or started a matching iOS development build when the
    native fingerprint changed. The iOS development build includes the widget
    extension target, so CI uses the existing App Store Connect API key secrets
-   to refresh ad hoc provisioning profiles when starting a new build. Mobile is
-   not built by `release.yml`; it is deployed by
+   to refresh ad hoc provisioning profiles when starting a new build. Internal
+   iOS profiles use `enterpriseProvisioning: "adhoc"` so EAS does not prompt
+   for Apple team type in CI. Mobile is not built by `release.yml`; it is
+   deployed by
    `.github/workflows/mobile-eas-development.yml` when mobile/runtime paths
    change or when manually dispatched. Bad development OTA updates can be
    recovered with

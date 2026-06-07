@@ -104,6 +104,17 @@ development`; the `development` build profile must carry that environment.
   `pnpm exec vp run --filter @t3tools/mobile typecheck`,
   `pnpm exec vp run typecheck`, and
   `pnpm exec vp run --filter @t3tools/mobile test` (`32` files, `146` tests).
+- Failed: live run `27083622008` authenticated with the App Store Connect key
+  but still prompted for Apple team provisioning type (`Select your Apple Team
+Type`) while setting up internal distribution credentials. Follow-up in
+  progress: set internal iOS EAS profiles to `enterpriseProvisioning: "adhoc"`
+  so CI never prompts for that choice.
+- Passed after setting internal iOS EAS profiles to ad hoc provisioning:
+  workflow/eas config parse, development Expo config inspection,
+  `git diff --check`, `pnpm exec vp check`,
+  `pnpm exec vp run --filter @t3tools/mobile typecheck`,
+  `pnpm exec vp run typecheck`, and
+  `pnpm exec vp run --filter @t3tools/mobile test` (`32` files, `146` tests).
 
 ---
 
