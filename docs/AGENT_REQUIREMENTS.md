@@ -36,6 +36,8 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
 - Fork-owned CI/release/sync workflows are compatible with the rebased
   `pnpm`/Vite+ toolchain and do not reference removed `bun.lock` release-stamp
   paths.
+- Release preflight typecheck does not fail on the CI-only
+  `effect(nodeBuiltinImport)` rule in the headless artifact script.
 - Local verification passes: `vp check`, `vp run typecheck`, plus any
   focused launcher/release smoke test identified during the fix.
 - GitHub Actions no longer fails on the same `electron-launcher.mjs` rebase
@@ -48,8 +50,17 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
       `v0.0.25-nightly.20260606.480`.
 - [x] Update fork workflows for the rebased `pnpm`/Vite+ toolchain.
 - [x] Run local verification.
-- [ ] Push with `--force-with-lease`.
-- [ ] Recheck GitHub Actions.
+- [x] Push with `--force-with-lease`.
+- [x] Fix follow-on release preflight typecheck failure in
+      `scripts/build-headless-artifact.ts`.
+- [~] Recheck GitHub Actions.
+  Latest `Fork Push Nightly` run succeeded and created
+  `v0.0.25-nightly.20260606.480-fork.1`; follow-on `Release` reached
+  preflight, then failed in `vp run typecheck` because
+  `scripts/build-headless-artifact.ts` imported `node:fs` directly for
+  `readFileSync`. A follow-up fix now mirrors the existing Effect
+  `FileSystem` + `@t3tools/shared/schemaYaml` workspace-config pattern from
+  `scripts/build-desktop-artifact.ts`.
 
 ### Verification
 
@@ -68,6 +79,12 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   on `PATH`.
 - Passed: full `vp run test` (`138` files passed, `1` skipped; `1169` tests
   passed, `4` skipped).
+- After release preflight fix: passed
+  `vp run --filter @t3tools/scripts typecheck`.
+- After release preflight fix: passed
+  `vp run --filter @t3tools/scripts test build-headless-artifact.test.ts`.
+- After release preflight fix: passed `vp check`.
+- After release preflight fix: passed `vp run typecheck`.
 
 ---
 
