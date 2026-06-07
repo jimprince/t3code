@@ -51,8 +51,11 @@ version.
 - [x] Roll back the bad `0.1.0` development update to embedded.
 - [x] Push the follow-up EAS build-environment fix and trigger the live
       fingerprint workflow.
-- [ ] Push the App Store Connect credential wiring for widget-extension iOS
-      builds and verify the live fingerprint workflow.
+- [x] Push the App Store Connect credential wiring for widget-extension iOS
+      builds.
+- [ ] Resolve Apple Developer permission/credential access for non-interactive
+      ad hoc provisioning profile refresh, then rerun the live fingerprint
+      workflow.
 
 ### Verification
 
@@ -126,6 +129,19 @@ development`; the `development` build profile must carry that environment.
   `pnpm exec vp run --filter @t3tools/mobile typecheck`,
   `pnpm exec vp run typecheck`, and
   `pnpm exec vp run --filter @t3tools/mobile test` (`32` files, `146` tests).
+- Passed: `CI` run `27083842635` completed successfully after Browser Test,
+  Mobile Native Static Analysis, Check, Release Smoke, and Test jobs passed.
+- Passed: `Deploy T3 Cloud relay` run `27083842636` completed successfully
+  through the configured skip path.
+- Failed: live `Mobile EAS Development Update` run `27083842630` got past
+  Apple team selection, computed fingerprint
+  `1d2222557b55fc5f08856ea7d9ad36fedd17c195`, found no matching iOS build,
+  and attempted to start a matching development build. EAS then failed while
+  handling Apple ad hoc provisioning profiles with Apple 403
+  (`Access forbidden`). The workflow now reaches the correct credential setup
+  path; the remaining blocker is Apple Developer/App Store Connect permissions
+  for creating or refreshing ad hoc provisioning profiles for
+  `com.brad.t3code.dev` and `com.brad.t3code.dev.widgets`.
 
 ---
 
