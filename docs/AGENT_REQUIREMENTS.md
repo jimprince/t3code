@@ -40,6 +40,10 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   `effect(nodeBuiltinImport)` rule in the headless artifact script.
 - Release preflight typecheck does not fail on direct `vitest` imports from
   packages that only declare/use the Vite+ test surface.
+- Headless release artifact smoke test must start the packaged server; staged
+  production installs must retain/build `node-pty`'s native `pty.node` payload.
+- `Fork Push Nightly` must trigger for headless artifact builder changes, not
+  only desktop artifact builder changes.
 - Local verification passes: `vp check`, `vp run typecheck`, plus any
   focused launcher/release smoke test identified during the fix.
 - GitHub Actions no longer fails on the same `electron-launcher.mjs` rebase
@@ -57,6 +61,9 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
       `scripts/build-headless-artifact.ts`.
 - [x] Fix follow-on release preflight typecheck failure from direct `vitest`
       imports in package test files.
+- [x] Fix follow-on headless artifact smoke failure from missing `node-pty`
+      native payload.
+- [x] Add headless artifact builder to `Fork Push Nightly` trigger paths.
 - [~] Recheck GitHub Actions.
   Latest `Fork Push Nightly` run succeeded and created
   `v0.0.25-nightly.20260606.480-fork.1`; follow-on `Release` reached
@@ -66,7 +73,10 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   `FileSystem` + `@t3tools/shared/schemaYaml` workspace-config pattern from
   `scripts/build-desktop-artifact.ts`. The `fork.2` rerun then reached the same
   preflight lane and failed on undeclared direct `vitest` imports in package
-  test files.
+  test files. The `fork.3` rerun passed preflight and built the headless
+  artifact, then failed smoke because the staged runtime install used
+  a generated package without the repo's `pnpm.onlyBuiltDependencies`
+  allowance, so `node-pty` had no native `pty.node`.
 
 ### Verification
 
@@ -98,6 +108,20 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   `vp run --filter t3 test src/headlessUpdateCheck.test.ts src/provider/OpenCodeServerPool.test.ts src/orchestration/Layers/ThreadArchiveCleanupReactor.test.ts`.
 - After direct `vitest` import fix: passed
   `vp run --filter @t3tools/desktop test src/updates/updateChannels.test.ts`.
+- After headless native-payload fix: passed
+  `vp run --filter @t3tools/scripts test build-headless-artifact.test.ts`.
+- After headless native-payload fix: passed
+  `vp run --filter @t3tools/scripts typecheck`.
+- After headless native-payload fix: passed `vp run typecheck`.
+- After headless native-payload fix: passed `vp check`.
+- After headless native-payload fix: passed local
+  `vp run dist:headless:artifact --platform linux --arch x64 --build-version 0.0.25-native-check --output-dir /tmp/t3-headless-artifact-check`;
+  this exercised staged production install and the new `node-pty` native-module
+  check on the host.
+- After headless native-payload fix: passed local
+  `vp run smoke:headless:artifact --artifact /tmp/t3-headless-artifact-check/t3-headless-0.0.25-native-check-linux-x64.tar.gz --version 0.0.25-nightly.20260606.480-fork.3`.
+- After headless trigger-path fix: `scripts/build-headless-artifact.ts` is
+  included in `.github/workflows/fork-push-nightly.yml` push path filters.
 
 ---
 

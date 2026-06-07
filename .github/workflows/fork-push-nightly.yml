@@ -18,6 +18,7 @@ on:
       - "assets/**"
       - "packages/**"
       - "scripts/build-desktop-artifact.ts"
+      - "scripts/build-headless-artifact.ts"
       - "scripts/lib/brand-assets.ts"
       - "package.json"
       - "pnpm-lock.yaml"
