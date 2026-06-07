@@ -16,11 +16,6 @@ on:
       - "pnpm-workspace.yaml"
       - "turbo.json"
   workflow_dispatch:
-    inputs:
-      message:
-        description: "EAS update message"
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -37,6 +32,7 @@ jobs:
     env:
       APP_VARIANT: development
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      MOBILE_VERSION_POLICY: fingerprint
       NODE_OPTIONS: --max-old-space-size=8192
     steps:
       - name: Require Expo token
@@ -83,20 +79,14 @@ jobs:
         working-directory: apps/mobile
         run: eas env:pull development --non-interactive
 
-      - name: Publish iOS development update
-        working-directory: apps/mobile
+      - name: Deploy with fingerprint check
+        uses: expo/expo-github-action/continuous-deploy-fingerprint@main
         env:
-          UPDATE_MESSAGE: ${{ inputs.message }}
-        run: |
-          if [ -z "$UPDATE_MESSAGE" ]; then
-            UPDATE_MESSAGE="main ${GITHUB_SHA::7}"
-          fi
-
-          APP_VARIANT=development \
-          CI=1 \
-          EXPO_NO_GIT_STATUS=1 \
-          eas update \
-            --channel development \
-            --environment development \
-            --platform ios \
-            --message "$UPDATE_MESSAGE"
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        with:
+          profile: development
+          branch: development
+          platform: ios
+          environment: development
+          working-directory: apps/mobile
+          github-token: ${{ secrets.GITHUB_TOKEN }}

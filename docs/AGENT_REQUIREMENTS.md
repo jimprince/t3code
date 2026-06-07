@@ -1,5 +1,76 @@
 # Agent Requirements
 
+## Current Task: Repair Mobile EAS Hermes Runtime Mismatch
+
+The installed iOS development app is failing on launch with
+`wrong bytecode version (expected 96 but got 98)`. The latest EAS development
+update was published with runtime version `0.1.0`, while the installed native
+binary appears to have an older Hermes/runtime bytecode version. The current
+development lane uses `runtimeVersion.policy = appVersion`, so native runtime
+changes can still publish incompatible OTA updates under the same runtime
+version.
+
+### Current User Requirements
+
+- Troubleshoot the iOS launch failure from the EAS update bytecode mismatch.
+- Restore the installed development app to a runnable state if possible.
+- Fix the CI/CD path so future development EAS updates do not target
+  incompatible native runtimes.
+
+### Constraints
+
+- Do not read or print secret values; workflows may reference `EXPO_TOKEN`.
+- Preserve the fork EAS identity already configured for Brad's EAS project.
+- Keep production/default local builds on their existing release model unless
+  a change is required for the development lane.
+- Required completion gates for project work remain `vp check` and
+  `vp run typecheck`; use focused mobile checks where appropriate.
+
+### Acceptance Criteria
+
+- A rollback path exists for the bad `development` iOS runtime `0.1.0` update.
+- Development builds and development updates use Expo fingerprint runtime
+  matching instead of raw `appVersion` matching.
+- Main-based mobile CI/CD either finds a compatible development build or starts
+  one before publishing updates.
+- Docs/instructions explain the development lane's fingerprint behavior and
+  rollback recovery command.
+- Live GitHub Actions/EAS verification confirms the rollback/fingerprint lane
+  works, or any required manual step is called out explicitly.
+
+### Status
+
+- [x] Identified likely root cause: `appVersion` runtime policy served an
+      Expo/RN/Hermes 98 OTA bundle to an older iOS dev binary expecting Hermes
+      bytecode 96.
+- [x] Add rollback workflow/command for the bad iOS `development` runtime.
+- [x] Move the development EAS lane to fingerprint runtime matching.
+- [x] Update docs.
+- [x] Run local verification.
+- [ ] Commit, push, and verify live EAS/GitHub Actions.
+
+### Verification
+
+- Confirmed current development Expo config resolves `runtimeVersion.policy` to
+  `appVersion` and `version` to `0.1.0`.
+- Confirmed the published EAS update from run `27082128760` used runtime
+  version `0.1.0`, matching the unsafe policy.
+- Passed: workflow YAML parses for all `.github/workflows/*.yml`.
+- Passed: `git diff --check`.
+- Passed: development Expo config now resolves `runtimeVersion.policy` to
+  `fingerprint` while preserving owner `jimprince`, EAS project
+  `c148e0df-ed1f-4673-9c07-403ea56b6d1b`, scheme `t3code-brad-dev`, and iOS
+  bundle `com.brad.t3code.dev`.
+- Passed: production and preview Expo configs still resolve
+  `runtimeVersion.policy` to `appVersion`.
+- Passed: `pnpm exec vp check`.
+- Passed: `pnpm exec vp run --filter @t3tools/mobile typecheck`.
+- Passed: `pnpm exec vp run typecheck`.
+- Passed: `pnpm exec vp run --filter @t3tools/mobile test` (`32` files,
+  `146` tests).
+
+---
+
 ## Current Task: Reintroduce Main-Based Mobile EAS Updates
 
 The iOS app now exists on `main`, but the fork-specific EAS identity and the old
