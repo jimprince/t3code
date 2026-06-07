@@ -1,5 +1,56 @@
 # Agent Requirements
 
+## Current Task: Repair Nightly Upstream Sync Rebase Conflict
+
+The scheduled `Sync Upstream` nightly workflow and the latest `Fork Push
+Nightly` workflow are failing while rebasing fork commits onto upstream nightly
+`v0.0.25-nightly.20260606.480`.
+
+### Current User Requirements
+
+- Resolve the upstream nightly rebase conflict that is blocking fork release
+  automation.
+- Preserve the fork branding/app identity behavior while incorporating upstream
+  launcher changes.
+- Push the corrected `main` state so release automation can proceed.
+- Verify the result locally before pushing.
+
+### Constraints
+
+- Follow fork release/sync rules in `LLM_INSTRUCTIONS.md`.
+- Do not blindly add `apps/desktop/scripts/electron-launcher.mjs` to the
+  workflow auto-resolve allowlist unless that is proven safe.
+- Preserve unrelated user changes; the worktree should be clean before and
+  after the repair except for intentional commits/rebase results.
+- Required completion gates for repo work: `bun fmt`, `bun lint`, and
+  `bun typecheck` must pass. Use `bun run test`, never `bun test`.
+- History rewrite/push must use `--force-with-lease`.
+
+### Acceptance Criteria
+
+- `origin/main` is rebased onto upstream
+  `v0.0.25-nightly.20260606.480`.
+- `apps/desktop/scripts/electron-launcher.mjs` is resolved manually with both
+  upstream launcher behavior and fork identity preserved.
+- Local verification passes: `bun fmt`, `bun lint`, `bun typecheck`, plus any
+  focused launcher/release smoke test identified during the fix.
+- GitHub Actions no longer fails on the same `electron-launcher.mjs` rebase
+  conflict after the push/retry path.
+
+### Status
+
+- [ ] Inspect the launcher conflict locally.
+- [ ] Resolve and continue the rebase.
+- [ ] Run local verification.
+- [ ] Push with `--force-with-lease`.
+- [ ] Recheck GitHub Actions.
+
+### Verification
+
+- Pending.
+
+---
+
 ## Current Task: Orchestration ↔ UI State-Detachment Fixes
 
 The UI ("model manager" = orchestration engine) detaches from backend thread
