@@ -1,11 +1,23 @@
-import { describe, expect, it } from "vite-plus/test";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as Effect from "effect/Effect";
+import { beforeAll, describe, expect, it } from "vite-plus/test";
 
 import {
   createHeadlessPackageJson,
+  type HeadlessWorkspaceConfig,
+  readHeadlessWorkspaceConfig,
   resolveHeadlessArtifactName,
   resolveHeadlessRuntimeDependencies,
 } from "./build-headless-artifact.ts";
 import { collectClientAssetReferences } from "./lib/client-assets.ts";
+
+let workspaceConfig: HeadlessWorkspaceConfig;
+
+beforeAll(async () => {
+  workspaceConfig = await Effect.runPromise(
+    readHeadlessWorkspaceConfig().pipe(Effect.provide(NodeServices.layer)),
+  );
+});
 
 describe("build-headless-artifact", () => {
   it("names linux-x64 artifacts with version and platform", () => {
@@ -15,7 +27,7 @@ describe("build-headless-artifact", () => {
   });
 
   it("resolves server runtime dependencies without catalog placeholders", () => {
-    const dependencies = resolveHeadlessRuntimeDependencies();
+    const dependencies = resolveHeadlessRuntimeDependencies(workspaceConfig);
 
     expect(dependencies.effect).not.toBe("catalog:");
     expect(dependencies["@effect/platform-node"]).not.toBe("catalog:");
@@ -25,7 +37,7 @@ describe("build-headless-artifact", () => {
   });
 
   it("creates a production package that documents the Node runtime requirement", () => {
-    const packageJson = createHeadlessPackageJson("0.0.23-test.1");
+    const packageJson = createHeadlessPackageJson("0.0.23-test.1", workspaceConfig);
 
     expect(packageJson.version).toBe("0.0.23-test.1");
     expect(packageJson.engines.node).toContain("^22.16");
