@@ -15,7 +15,7 @@ import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { TerminalManager, type TerminalManagerShape } from "../../terminal/Services/Manager.ts";
 import { OrchestrationListenerCallbackError } from "../Errors.ts";
