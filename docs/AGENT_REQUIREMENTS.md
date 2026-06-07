@@ -64,19 +64,23 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
 - [x] Fix follow-on headless artifact smoke failure from missing `node-pty`
       native payload.
 - [x] Add headless artifact builder to `Fork Push Nightly` trigger paths.
-- [~] Recheck GitHub Actions.
-  Latest `Fork Push Nightly` run succeeded and created
-  `v0.0.25-nightly.20260606.480-fork.1`; follow-on `Release` reached
-  preflight, then failed in `vp run typecheck` because
-  `scripts/build-headless-artifact.ts` imported `node:fs` directly for
-  `readFileSync`. A follow-up fix now mirrors the existing Effect
-  `FileSystem` + `@t3tools/shared/schemaYaml` workspace-config pattern from
-  `scripts/build-desktop-artifact.ts`. The `fork.2` rerun then reached the same
-  preflight lane and failed on undeclared direct `vitest` imports in package
-  test files. The `fork.3` rerun passed preflight and built the headless
-  artifact, then failed smoke because the staged runtime install used
-  a generated package without the repo's `pnpm.onlyBuiltDependencies`
-  allowance, so `node-pty` had no native `pty.node`.
+- [x] Recheck GitHub Actions.
+      Latest `Fork Push Nightly` run succeeded and created
+      `v0.0.25-nightly.20260606.480-fork.1`; follow-on `Release` reached
+      preflight, then failed in `vp run typecheck` because
+      `scripts/build-headless-artifact.ts` imported `node:fs` directly for
+      `readFileSync`. A follow-up fix now mirrors the existing Effect
+      `FileSystem` + `@t3tools/shared/schemaYaml` workspace-config pattern from
+      `scripts/build-desktop-artifact.ts`. The `fork.2` rerun then reached the same
+      preflight lane and failed on undeclared direct `vitest` imports in package
+      test files. The `fork.3` rerun passed preflight and built the headless
+      artifact, then failed smoke because the staged runtime install used
+      a generated package without the repo's `pnpm.onlyBuiltDependencies`
+      allowance, so `node-pty` had no native `pty.node`.
+      The `fork.4` rerun passed: `Fork Push Nightly` created
+      `v0.0.25-nightly.20260606.480-fork.4`, release run `27080381937`
+      completed successfully, and GitHub published the macOS arm64 desktop
+      artifacts, `nightly-mac.yml`, and the Linux x64 headless tarball.
 
 ### Verification
 
@@ -122,6 +126,19 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   `vp run smoke:headless:artifact --artifact /tmp/t3-headless-artifact-check/t3-headless-0.0.25-native-check-linux-x64.tar.gz --version 0.0.25-nightly.20260606.480-fork.3`.
 - After headless trigger-path fix: `scripts/build-headless-artifact.ts` is
   included in `.github/workflows/fork-push-nightly.yml` push path filters.
+- GitHub Actions: latest `Fork Push Nightly` run created
+  `v0.0.25-nightly.20260606.480-fork.4`; latest `Release` run
+  `27080381937` passed preflight, headless Linux x64 build + smoke, macOS
+  arm64 build, and `Publish GitHub Release`.
+- GitHub release verified: `v0.0.25-nightly.20260606.480-fork.4` is a
+  pre-release published at `2026-06-07T02:42:13Z` with
+  `T3-Code-Fork-0.0.25-nightly.20260606.480-fork.4-arm64.dmg`,
+  `T3-Code-Fork-0.0.25-nightly.20260606.480-fork.4-arm64.zip`,
+  `nightly-mac.yml`, and
+  `t3-headless-0.0.25-nightly.20260606.480-fork.4-linux-x64.tar.gz`.
+- GitHub updater feed verified: downloaded `nightly-mac.yml` reports
+  `version: 0.0.25-nightly.20260606.480-fork.4` and references the forked
+  arm64 zip and dmg assets.
 
 ---
 
