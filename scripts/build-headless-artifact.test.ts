@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import {
   createHeadlessPackageJson,
@@ -29,6 +29,7 @@ describe("build-headless-artifact", () => {
 
     expect(packageJson.version).toBe("0.0.23-test.1");
     expect(packageJson.engines.node).toContain("^22.16");
+    expect(packageJson.packageManager).toBe("pnpm@10.24.0");
     expect(packageJson.dependencies["node-pty"]).toBeDefined();
   });
 });
