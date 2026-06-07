@@ -130,73 +130,44 @@ three lanes separately:
    mac assets.
 2. Linux/headless app: the `Release` workflow's Linux x64 build and published
    `t3-headless-<version>-linux-x64.tar.gz` asset.
-3. Mobile app: the separate `feature/mobile-track` `Mobile Track EAS Update`
-   workflow and its EAS publish result. Mobile is not part of `release.yml` on
-   `main`.
+3. Mobile app: the `Mobile EAS Development Update` workflow on `main` and its
+   EAS publish result. Mobile is not part of `release.yml`.
 
-`mobile-track-sync.yml` runs from default branch `main` on a schedule/manual
-dispatch and operates on `feature/mobile-track`. It checks whether the mobile
-branch is behind `upstream/t3code/mobile-remote-connect`; if the rebase is
-clean, it verifies, force-with-lease pushes the branch, and publishes an EAS
-update. If the rebase conflicts, it aborts the rebase, dispatches a
-`mobile-track-conflict` repository_dispatch event with only metadata, and fails
-without pushing `feature/mobile-track` or publishing EAS.
+## Mobile EAS Development Lane
 
-## Mobile Conflict Sandbox
+The mobile app now lives on `main`; the old `feature/mobile-track` drift branch
+and conflict-promotion workflow are retired. Fork-specific mobile identity is
+tracked as non-secret config in `apps/mobile/fork.config.json`:
 
-Conflicted mobile-track updates are resolved as candidate PRs, not as trusted
-worker edits on the dev VM. The trusted dev-VM controller is
-`scripts/mobile-conflict-controller.ts`; it accepts GitHub webhooks at
-`/github/webhook`, verifies `X-Hub-Signature-256`, allowlists
-`jimprince/t3code`, queues one job at a time, and starts the resolver in Docker.
+- EAS owner: `jimprince`
+- EAS project: `c148e0df-ed1f-4673-9c07-403ea56b6d1b`
+- iOS bundle base: `com.brad.t3code`
+- scheme base: `t3code-brad`
 
-Build the resolver image from the repo root:
+`.github/workflows/mobile-eas-development.yml` runs on pushes to `main` that
+touch mobile/runtime paths and can also be dispatched manually. It uses the
+current Vite+/pnpm setup, runs `vp check`, `vp run typecheck`, and the mobile
+test suite, then publishes an iOS EAS update to the `development` channel.
+`EXPO_TOKEN` must exist as a repository secret; do not print or inspect its
+value.
 
-```bash
-docker build -f ops/mobile-conflict-resolver/Dockerfile \
-  -t t3code-mobile-conflict-resolver:latest .
-```
-
-Run the controller with local-only secrets supplied by the host service manager:
+Manual dispatch:
 
 ```bash
-MOBILE_CONFLICT_WEBHOOK_SECRET=<github-webhook-secret> \
-MOBILE_CONFLICT_RESOLVER_GITHUB_TOKEN=<short-lived-fine-grained-token> \
-MOBILE_CONFLICT_WORKSPACE_ROOT=/var/lib/t3code-mobile-conflicts/jobs \
-MOBILE_CONFLICT_ALLOWED_REPOS=jimprince/t3code \
-MOBILE_CONFLICT_RESOLVER_IMAGE=t3code-mobile-conflict-resolver:latest \
-node scripts/mobile-conflict-controller.ts
+gh workflow run mobile-eas-development.yml --repo jimprince/t3code \
+  -f message="manual mobile development update"
 ```
 
-A hardened systemd template is provided at
-`ops/mobile-conflict-controller/t3code-mobile-conflict-controller.service`.
-Install the repo on the dev VM at `/opt/t3code`, put only these local secrets
-in `/etc/t3code/mobile-conflict-controller.env`, and keep that env file out of
-git:
+Check recent mobile updates:
 
-```ini
-MOBILE_CONFLICT_WEBHOOK_SECRET=...
-MOBILE_CONFLICT_RESOLVER_GITHUB_TOKEN=...
+```bash
+gh run list --repo jimprince/t3code \
+  --workflow mobile-eas-development.yml \
+  --limit 10
 ```
 
-The Docker invocation deliberately mounts only one temporary job workspace. It
-does not mount `/home/brad`, `.ssh`, `.config`, the Docker socket, T3 state,
-EAS credentials, or shared service volumes. The resolver runs as UID/GID
-`10001`, with `--read-only`, `--cap-drop ALL`, `no-new-privileges`, a tmpfs
-`/tmp`, and resource limits. Repository contents and conflict markers are
-untrusted input; the resolver may edit only its fresh clone under `/workspace`.
-
-The resolver pushes only
-`automation/mobile-track-conflict/<sync-run-id>` and opens or updates a PR
-against `feature/mobile-track`. The PR body records the upstream SHA, original
-mobile SHA, conflicted files, resolver summary, and check results. It receives
-no `EXPO_TOKEN` and cannot publish EAS.
-
-Promotion remains manual. After review, either merge the PR through GitHub or
-use `mobile-track-conflict-promote.yml` with the candidate branch and the
-original `expected_mobile_sha`. The promote workflow refuses stale candidates
-if `feature/mobile-track` moved, reruns mobile checks, pushes with
-`--force-with-lease`, and only then can publish the EAS update.
+PRs still use `mobile-eas-preview.yml`, which deploys preview builds/updates
+with Expo fingerprinting and the `preview:dev` EAS profile.
 
 Do not re-add Linux Electron/AppImage, Windows, or macOS x64 unless the user
 explicitly changes the support target.
