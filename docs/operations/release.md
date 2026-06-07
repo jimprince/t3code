@@ -150,10 +150,18 @@ current Vite+/pnpm setup, runs `vp check`, `vp run typecheck`, and the mobile
 test suite, then deploys the iOS development lane with Expo fingerprinting. If
 an existing EAS development build matches the current native fingerprint, the
 workflow publishes an EAS update to the `development` branch/channel; if the
-native fingerprint changed, Expo starts a new compatible iOS development build
-instead of serving incompatible OTA bytecode to an older app binary.
-`EXPO_TOKEN` must exist as a repository secret; do not print or inspect its
-value.
+native fingerprint changed, the workflow starts a new compatible iOS
+development build before publishing the update. This prevents incompatible OTA
+bytecode from being served to an older app binary.
+
+The iOS app includes a widget extension target, so native development builds
+need ad hoc credentials for both `com.brad.t3code.dev` and
+`com.brad.t3code.dev.widgets`. The workflow writes the existing
+`APPLE_API_KEY`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` secrets to EAS's
+`EXPO_ASC_*` environment variables and runs `eas build
+--refresh-ad-hoc-provisioning-profile` when a matching build is missing.
+`EXPO_TOKEN` must also exist as a repository secret. Do not print or inspect
+secret values.
 
 Manual dispatch:
 
