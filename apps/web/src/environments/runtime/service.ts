@@ -146,6 +146,7 @@ let activeService: EnvironmentServiceState | null = null;
 let needsProviderInvalidation = false;
 let lastBrowserHiddenAt: number | null = null;
 let lastBrowserResumeReconnectAt = Number.NEGATIVE_INFINITY;
+const lastHeartbeatTimeoutReconnectAtByEnvironment = new Map<EnvironmentId, number>();
 
 // TODO(CLIENT-RUNTIME MIGRATION - DO NOT EXPAND THIS WEB-ONLY COPY):
 // This file still owns web's legacy thread-detail subscription cache. Mobile
@@ -164,6 +165,7 @@ let lastBrowserResumeReconnectAt = Number.NEGATIVE_INFINITY;
 const THREAD_DETAIL_SUBSCRIPTION_IDLE_EVICTION_MS = 15 * 60 * 1000;
 const MAX_CACHED_THREAD_DETAIL_SUBSCRIPTIONS = 32;
 const BROWSER_RESUME_RECONNECT_COOLDOWN_MS = 2_000;
+const HEARTBEAT_TIMEOUT_RECONNECT_COOLDOWN_MS = 2_000;
 const INITIAL_SERVER_CONFIG_SNAPSHOT_WAIT_MS = 150;
 const NOOP = () => undefined;
 const SSH_HTTP_STATUS_RE = /^\[ssh_http:(\d+)\]\s/u;
@@ -1197,12 +1199,18 @@ function createPrimaryEnvironmentClient(
     );
   }
   const connectionLabel = knownEnvironment?.label ?? null;
+  const environmentId = knownEnvironment?.environmentId ?? null;
 
   return createWsRpcClient(
     new WsTransport(wsBaseUrl, {
       getConnectionLabel: () => connectionLabel,
       getVersionMismatchHint: () =>
         resolveServerConfigVersionMismatch(getServerConfig())?.hint ?? null,
+      onHeartbeatTimeout: () => {
+        if (environmentId) {
+          reconnectEnvironmentConnectionAfterHeartbeatTimeout(environmentId);
+        }
+      },
     }),
   );
 }
@@ -1317,6 +1325,9 @@ function createSavedEnvironmentClient(
               ),
             ),
           );
+        },
+        onHeartbeatTimeout: () => {
+          reconnectEnvironmentConnectionAfterHeartbeatTimeout(environmentId);
         },
       },
     ),
@@ -1723,6 +1734,44 @@ function reconnectEnvironmentConnectionsAfterBrowserResume(reason: string): void
   }
 }
 
+function isBrowserTabFocusedForHeartbeatReconnect(): boolean {
+  if (typeof document === "undefined") {
+    return true;
+  }
+
+  if (document.visibilityState !== "visible") {
+    return false;
+  }
+
+  return typeof document.hasFocus !== "function" || document.hasFocus();
+}
+
+function reconnectEnvironmentConnectionAfterHeartbeatTimeout(environmentId: EnvironmentId): void {
+  if (!isBrowserTabFocusedForHeartbeatReconnect()) {
+    return;
+  }
+
+  const now = Date.now();
+  const lastReconnectAt =
+    lastHeartbeatTimeoutReconnectAtByEnvironment.get(environmentId) ?? Number.NEGATIVE_INFINITY;
+  if (now - lastReconnectAt < HEARTBEAT_TIMEOUT_RECONNECT_COOLDOWN_MS) {
+    return;
+  }
+
+  const connection = environmentConnections.get(environmentId);
+  if (!connection) {
+    return;
+  }
+
+  lastHeartbeatTimeoutReconnectAtByEnvironment.set(environmentId, now);
+  void connection.reconnect().catch((error) => {
+    console.warn("Environment reconnect after heartbeat timeout failed", {
+      environmentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
 function subscribeBrowserResumeReconnects(): () => void {
   if (typeof document === "undefined" || typeof window === "undefined") {
     return NOOP;
@@ -2082,6 +2131,7 @@ export async function resetEnvironmentServiceForTests(): Promise<void> {
   stopActiveService();
   lastBrowserHiddenAt = null;
   lastBrowserResumeReconnectAt = Number.NEGATIVE_INFINITY;
+  lastHeartbeatTimeoutReconnectAtByEnvironment.clear();
   lastAppliedProjectionVersionByEnvironment.clear();
   pendingSavedEnvironmentConnections.clear();
   savedEnvironmentConnectionAttempts.clear();
