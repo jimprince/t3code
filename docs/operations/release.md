@@ -160,6 +160,8 @@ need ad hoc credentials for both `com.brad.t3code.dev` and
 `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` secrets to EAS's
 `EXPO_ASC_*` environment variables and runs `eas build
 --refresh-ad-hoc-provisioning-profile` when a matching build is missing.
+Internal iOS build profiles set `enterpriseProvisioning: "adhoc"` so EAS does
+not prompt for the Apple team provisioning type in CI.
 `EXPO_TOKEN` must also exist as a repository secret. Do not print or inspect
 secret values.
 

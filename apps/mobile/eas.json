@@ -12,7 +12,10 @@
       "channel": "development",
       "environment": "development",
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "enterpriseProvisioning": "adhoc"
+      }
     },
     "preview": {
       "env": {
@@ -20,7 +23,10 @@
       },
       "channel": "preview",
       "environment": "preview",
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "enterpriseProvisioning": "adhoc"
+      }
     },
     "preview:dev": {
       "env": {
@@ -31,6 +37,9 @@
       "environment": "preview",
       "developmentClient": true,
       "distribution": "internal",
+      "ios": {
+        "enterpriseProvisioning": "adhoc"
+      },
       "android": {
         "buildType": "apk"
       }
