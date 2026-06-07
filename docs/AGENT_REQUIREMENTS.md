@@ -22,8 +22,9 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   workflow auto-resolve allowlist unless that is proven safe.
 - Preserve unrelated user changes; the worktree should be clean before and
   after the repair except for intentional commits/rebase results.
-- Required completion gates for repo work: `bun fmt`, `bun lint`, and
-  `bun typecheck` must pass. Use `bun run test`, never `bun test`.
+- Required completion gates for the rebased repo: `vp check` and
+  `vp run typecheck` must pass. Use `vp test` for built-in Vite+ tests and
+  `vp run test` when package `test` scripts are specifically needed.
 - History rewrite/push must use `--force-with-lease`.
 
 ### Acceptance Criteria
@@ -32,22 +33,41 @@ Nightly` workflow are failing while rebasing fork commits onto upstream nightly
   `v0.0.25-nightly.20260606.480`.
 - `apps/desktop/scripts/electron-launcher.mjs` is resolved manually with both
   upstream launcher behavior and fork identity preserved.
-- Local verification passes: `bun fmt`, `bun lint`, `bun typecheck`, plus any
+- Fork-owned CI/release/sync workflows are compatible with the rebased
+  `pnpm`/Vite+ toolchain and do not reference removed `bun.lock` release-stamp
+  paths.
+- Local verification passes: `vp check`, `vp run typecheck`, plus any
   focused launcher/release smoke test identified during the fix.
 - GitHub Actions no longer fails on the same `electron-launcher.mjs` rebase
-  conflict after the push/retry path.
+  conflict or on stale Bun setup after the push/retry path.
 
 ### Status
 
-- [ ] Inspect the launcher conflict locally.
-- [ ] Resolve and continue the rebase.
-- [ ] Run local verification.
+- [x] Inspect the launcher conflict locally.
+- [x] Resolve and complete the rebase onto upstream nightly
+      `v0.0.25-nightly.20260606.480`.
+- [x] Update fork workflows for the rebased `pnpm`/Vite+ toolchain.
+- [x] Run local verification.
 - [ ] Push with `--force-with-lease`.
 - [ ] Recheck GitHub Actions.
 
 ### Verification
 
-- Pending.
+- Rebase completed locally; generated stale `451-fork.*` release-stamp commits
+  were skipped so the next sync/release flow can stamp the current upstream
+  nightly instead of restoring `bun.lock`.
+- Passed: workflow YAML parse for all `.github/workflows/*.yml`.
+- Passed: `git diff --check`.
+- Passed: `vp check`.
+- Passed: `vp run typecheck`.
+- Passed: `vp run --filter @t3tools/scripts test build-headless-artifact.test.ts`.
+- Passed: `vp run --filter t3 test src/relay/AgentAwarenessRelay.test.ts src/orchestration/Layers/SubscribeThreadStreamRace.test.ts src/orchestration/Layers/ThreadArchiveCleanupReactor.test.ts`.
+- Passed: `vp run --filter @t3tools/desktop ensure:electron`, then
+  `vp run --filter @t3tools/desktop test src/app/DesktopCloudAuth.test.ts`.
+- Passed: `node scripts/release-smoke.ts` with `node_modules/.bin` and Node 24
+  on `PATH`.
+- Passed: full `vp run test` (`138` files passed, `1` skipped; `1169` tests
+  passed, `4` skipped).
 
 ---
 
