@@ -129,6 +129,7 @@ describe("ThreadArchiveCleanupReactor", () => {
             readEvents: () => Stream.empty,
             dispatch,
             streamDomainEvents: Stream.make(event),
+            subscribeDomainEvents: Effect.succeed(Stream.make(event)),
           }),
         ),
         Layer.provideMerge(
@@ -150,6 +151,7 @@ describe("ThreadArchiveCleanupReactor", () => {
                 ? Effect.succeed(Option.some(input.thread))
                 : Effect.succeed(Option.none()),
             getThreadDetailById: () => unsupported(),
+            getThreadDetailSnapshotById: () => unsupported(),
           }),
         ),
         Layer.provideMerge(
