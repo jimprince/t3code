@@ -84,7 +84,7 @@ things specific to the fork relationship.
    `EXPO_APPLE_TEAM_ID=CBCQ6MJF4B` and
    `EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION` to avoid a CI prompt for
    Apple team type. If the workflow reaches `Handling Apple ad hoc
-   provisioning profiles` and fails with Apple 403 (`Access forbidden`), the
+provisioning profiles` and fails with Apple 403 (`Access forbidden`), the
    workflow is past the known prompt/auth failures; an Apple Developer team
    admin must grant the App Store Connect key or account enough access to
    create/refresh ad hoc profiles, including the widget extension bundle ID
