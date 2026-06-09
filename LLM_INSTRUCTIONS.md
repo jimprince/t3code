@@ -10,6 +10,11 @@ things specific to the fork relationship.
 
 ## Fast path for release/update work
 
+Current policy: automatic nightly release rebases/builds are intentional. Do
+not disable the nightly lane to silence a failed nightly run; fix the rebase,
+workflow, or build failure. Mobile EAS is separate and still runs from its own
+workflow when mobile/runtime paths change.
+
 1. Optionally start the local macOS runner before a release that needs desktop
    macOS artifacts:
 
