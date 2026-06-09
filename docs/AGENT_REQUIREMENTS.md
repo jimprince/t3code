@@ -1,5 +1,49 @@
 # Agent Requirements
 
+## Current Task: Repair Nightly Release Rebase
+
+The fork's scheduled nightly sync failed on June 9, 2026 while rebasing onto
+upstream nightly `v0.0.27-nightly.20260609.512`. Brad clarified that nightly
+release rebases and builds should still run.
+
+### Current User Requirements
+
+- Keep automatic nightly release rebases/builds enabled.
+- Do not disable `sync-upstream.yml`, `fork-push-nightly.yml`, or nightly
+  `release.yml` behavior to silence failures.
+- Fix or work through the failed nightly rebase conflict.
+- Keep normal CI and mobile EAS workflows intact.
+
+### Constraints
+
+- Do not delete historical releases or tags.
+- Do not change app/runtime code except as required to resolve the rebase.
+- Keep docs accurate so future agents do not disable intentional nightly
+  automation.
+
+### Acceptance Criteria
+
+- Scheduled upstream sync remains enabled.
+- Main-push nightly release behavior remains enabled.
+- Release workflow keeps fork-nightly build behavior.
+- The failed `v0.0.27-nightly.20260609.512` rebase conflict is resolved or the
+  remaining manual blocker is documented precisely.
+- Workflow syntax/static checks pass.
+
+### Status
+
+- [x] Confirmed latest failed run was `Sync Upstream` run `27232720446`.
+- [x] Confirmed conflict file:
+      `apps/web/src/components/ChatView.logic.test.ts`.
+- [x] Reversed the draft manual-only workflow edits after Brad clarified
+      nightly rebases/builds should still run.
+- [x] Resolved the rebase conflict by keeping both upstream model-change tests
+      and fork remote-disconnect tests.
+- [ ] Stamp/tag the rebased nightly release.
+- [ ] Run local verification and push.
+
+---
+
 ## Current Task: Repair Mobile EAS Hermes Runtime Mismatch
 
 The installed iOS development app is failing on launch with
