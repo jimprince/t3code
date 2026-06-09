@@ -39,8 +39,24 @@ release rebases and builds should still run.
       nightly rebases/builds should still run.
 - [x] Resolved the rebase conflict by keeping both upstream model-change tests
       and fork remote-disconnect tests.
-- [ ] Stamp/tag the rebased nightly release.
-- [ ] Run local verification and push.
+- [x] Stamped the rebased nightly release as
+      `v0.0.27-nightly.20260609.512-fork.1`.
+- [x] Fixed the rebased Grok text-generation API drift by adding
+      `evaluateGoal`.
+- [x] Run local verification.
+- [ ] Tag, push, and verify live CI/release workflows.
+
+### Verification
+
+- Passed: `git diff --check HEAD`.
+- Passed: workflow YAML parse for `.github/workflows/*.yml`.
+- Passed: `actionlint` for active workflow files.
+- Passed: `vp check` under Node `24.13.1` (0 errors; 9 existing
+  `react/no-unstable-nested-components` warnings).
+- Passed: `vp run --filter t3 test -- src/textGeneration/GrokTextGeneration.test.ts`
+  under Node `24.13.1`; Vite+ ran the server suite (`143` files passed,
+  `2` skipped; `1206` tests passed, `7` skipped).
+- Passed: `vp run typecheck` under Node `24.13.1`.
 
 ---
 
