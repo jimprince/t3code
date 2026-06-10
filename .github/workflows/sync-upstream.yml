@@ -223,8 +223,12 @@ jobs:
           # release.yml is fork-owned: the fork intentionally keeps a minimal
           # macOS/headless matrix and local-runner fallback that upstream does
           # not have. During rebase, "theirs" is the fork commit being replayed.
+          # docs/operations/release.md is likewise fork-owned: it documents the
+          # fork's reduced release lanes and mobile EAS model, fully replacing
+          # upstream's release doc.
           FORK_RESOLVE_FILES: |
             .github/workflows/release.yml
+            docs/operations/release.md
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
