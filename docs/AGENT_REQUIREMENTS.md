@@ -1,5 +1,39 @@
 # Agent Requirements
 
+## Current Task: Repair Auth Pairing Migration Collision (proof_key_thumbprint)
+
+After the June 9 nightly (`512-fork.1`) rolled out, creating pairing
+credentials failed with HTTP 500 / `table auth_pairing_links has no column
+named proof_key_thumbprint` on both the dev-vm headless server and the Mac
+desktop app, and mobile clients were rejected with "Invalid session token
+payload" (old-format tokens after upstream's auth rework `a04c09a19`).
+
+### Root Cause
+
+Upstream renumbered migrations: the code expects
+`31=AuthAuthorizationScopes, 32=AuthPairingProofKeyThumbprint,
+33=ProjectionThreadGoals, 34=RepairAuthAuthorizationScopes`, but fork installs
+had already burned ledger ids 31-34 under the old numbering
+(`31/32=ProjectionThreadGoals`, `33/34=RepairAuthAuthorizationScopes`), so
+`032_AuthPairingProofKeyThumbprint` was silently skipped. The earlier repair
+(034) recreated the auth tables without the column because it predates it.
+Same collision class as the June 7 fix (`34b251ef0`).
+
+### Status
+
+- [x] Live-repaired both databases with the idempotent column add
+      (`ALTER TABLE auth_pairing_links ADD COLUMN proof_key_thumbprint TEXT`):
+      dev-vm `~/.local/share/t3code-dev/userdata/state.sqlite` and Mac
+      `~/.t3/userdata/state.sqlite` (2026-06-09).
+- [x] Added `035_RepairAuthPairingProofKeyThumbprint` migration + registry
+      entry so other installs self-heal on next upgrade.
+- [x] Regression test added; verified to fail when 035 is unregistered and
+      pass when registered. `vp test run` 2/2 passed; `tsgo --noEmit` clean.
+- [x] Verified pairing works post-repair: dev-vm `t3 auth pairing create`
+      succeeded (used for mobile re-pair).
+- [ ] Stale-token cleanup: mobile clients with pre-`512` session tokens must
+      re-pair; old tokens fail claims decode by design.
+
 ## Current Task: Repair Nightly Release Rebase
 
 The fork's scheduled nightly sync failed on June 9, 2026 while rebasing onto
