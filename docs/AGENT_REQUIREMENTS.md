@@ -113,9 +113,24 @@ version.
       fingerprint workflow.
 - [x] Push the App Store Connect credential wiring for widget-extension iOS
       builds.
-- [ ] Resolve Apple Developer permission/credential access for non-interactive
+- [x] Resolve Apple Developer permission/credential access for non-interactive
       ad hoc provisioning profile refresh, then rerun the live fingerprint
-      workflow.
+      workflow. Resolved 2026-06-09 with the manual-credentials policy (user
+      decision): the repo's ASC API key cannot create ad hoc profiles (Apple
+      403 — individual Apple account, only Account Holder interactive auth may
+      mint signing credentials), so Brad ran one interactive
+      `eas build --profile development --platform ios` locally. That created
+      ad hoc profiles for both `com.brad.t3code.dev` and
+      `com.brad.t3code.dev.widgets`, a push key, and registered build
+      `fca9e412-0167-4461-825e-46a42e4b998d` for fingerprint
+      `32a67679ee661c7908d3b28afe16afbe12e33231`. Live rerun 27250293982 then
+      passed: found the matching build, skipped `eas build`, and published the
+      development update. The workflow's ASC credential step and
+      `--refresh-ad-hoc-provisioning-profile` were removed; CI now consumes
+      stored EAS credentials only, and future fingerprint changes that need
+      new credentials are handled by repeating the interactive local build
+      (documented in `docs/operations/release.md` and
+      `apps/mobile/README.md`).
 
 ### Verification
 
