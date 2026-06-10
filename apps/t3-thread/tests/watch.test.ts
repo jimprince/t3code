@@ -14,6 +14,7 @@ import type {
 import {
   deliverPendingNotifications,
   detectAttentionEvents,
+  hasWatcherWork,
   type WatchClient,
   type WatchClientFactory,
 } from "../src/watch.js";
@@ -272,6 +273,36 @@ describe("watch flows", () => {
       expect(sentMessages[0]?.threadId).toBe("thread-coordinator-a");
       expect(state.notifications[0]?.status).toBe("delivered");
       expect(state.notifications[0]?.subscriberAgentName).toBeNull();
+    });
+  });
+
+  it("treats a subscribed running worker as outstanding watcher work", async () => {
+    await withTempState(async () => {
+      const { clientFactory } = createClientFactory({
+        sourceThread: makeThread({
+          latestTurn: {
+            turnId: "turn-running",
+            state: "running",
+            requestedAt: "2026-04-17T00:00:00.000Z",
+            startedAt: "2026-04-17T00:00:01.000Z",
+            completedAt: null,
+            assistantMessageId: null,
+          },
+          messages: [],
+        }),
+      });
+
+      await expect(hasWatcherWork({ env: "dev-vm", clientFactory })).resolves.toBe(true);
+    });
+  });
+
+  it("treats delivered notifications with no running subscriptions as idle", async () => {
+    await withTempState(async () => {
+      const { clientFactory } = createClientFactory({});
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+
+      await expect(hasWatcherWork({ env: "dev-vm", clientFactory })).resolves.toBe(false);
     });
   });
 });

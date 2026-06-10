@@ -308,3 +308,45 @@ export async function deliverPendingNotifications(
 
   return delivered;
 }
+
+export async function hasWatcherWork(
+  options: {
+    env?: string;
+    clientFactory?: WatchClientFactory;
+  } = {},
+): Promise<boolean> {
+  const clientFactory = options.clientFactory ?? createWatchClient;
+  const state = await loadState();
+
+  if (
+    state.notifications.some((notification) => {
+      if (!matchesEnvFilter(notification, options.env)) {
+        return false;
+      }
+      return notification.status !== "delivered";
+    })
+  ) {
+    return true;
+  }
+
+  const subscriptions = state.subscriptions.filter((subscription) => {
+    return !options.env || subscription.sourceEnvironment === options.env;
+  });
+  const seenSources = new Set<string>();
+
+  for (const subscription of subscriptions) {
+    if (seenSources.has(subscription.sourceThreadId)) {
+      continue;
+    }
+    seenSources.add(subscription.sourceThreadId);
+
+    const sourceEnvironment = requireEnvironment(state, subscription.sourceEnvironment);
+    const sourceClient = clientFactory(sourceEnvironment);
+    const sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
+    if (classifyThread(sourceThread).state === "running") {
+      return true;
+    }
+  }
+
+  return false;
+}

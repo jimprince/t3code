@@ -106,7 +106,8 @@ threads directly from that environment metadata and maps it to the saved environ
 
 - Use `--no-notify` to opt out.
 - Use `--notify <saved-agent-or-thread-id>` to route notifications to another subscriber.
-- The watcher is normally run by launchd via `t3-thread watch --interval 5`.
+- `create` and `subscribe` now best-effort spawn a singleton background watcher automatically when a notification route is attached.
+- The watcher self-exits after 15 minutes idle by default and can be forced manually with `t3-thread watch --ensure`.
 
 ## Docs
 
