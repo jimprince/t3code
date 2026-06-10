@@ -313,7 +313,10 @@ Current scope note:
 - `subscribe` / `unsubscribe` manage local routing state.
 - `subscribe` rejects self-subscriptions so a coordinator thread cannot watch itself.
 - `watch` polls the current snapshot-backed deployment in two phases: detection persists deduplicated notification events, then delivery claims pending events and attempts routed sends.
-- Normal deployment: the launchd user agent `network.homenetwork.t3-watcher` keeps `t3-thread watch --interval 5` running (plist at `~/Library/LaunchAgents/network.homenetwork.t3-watcher.plist`, log at `~/Library/Logs/t3-watcher.log`). The manual commands below are for ad hoc debugging — routine use does not require the operator to run the watcher.
+- `create` and `subscribe` best-effort spawn a detached singleton watcher automatically when they attach notification routes.
+- The watcher is guarded by `~/.config/t3-remote-agents/watch.pid`, keeps running while subscribed source threads are still active or notifications remain undelivered, and self-exits after 15 minutes idle by default (`--idle-exit 900`).
+- `t3-thread watch --ensure` spawns the background watcher if none is already running.
+- The legacy launchd agent remains optional for users who want a persistent watcher, but routine notification delivery no longer depends on it.
 
 Run one watcher scan:
 
@@ -326,6 +329,8 @@ Run the watcher continuously:
 
 ```bash
 t3-thread watch --interval 5
+t3-thread watch --interval 5 --idle-exit 0
+t3-thread watch --ensure
 ```
 
 Inspect routed notification events:
