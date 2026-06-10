@@ -156,14 +156,25 @@ bytecode from being served to an older app binary.
 
 The iOS app includes a widget extension target, so native development builds
 need ad hoc credentials for both `com.brad.t3code.dev` and
-`com.brad.t3code.dev.widgets`. The workflow writes the existing
-`APPLE_API_KEY`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER` secrets to EAS's
-`EXPO_ASC_*` environment variables and runs `eas build
---refresh-ad-hoc-provisioning-profile` when a matching build is missing.
-The workflow also exports `EXPO_APPLE_TEAM_ID=CBCQ6MJF4B` and
-`EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION` so EAS does not prompt for Apple
-team selection in CI.
-`EXPO_TOKEN` must also exist as a repository secret. Do not print or inspect
+`com.brad.t3code.dev.widgets`. iOS signing credentials are managed manually:
+the repo's App Store Connect API key cannot create ad hoc provisioning
+profiles (Apple returns 403 — on this individual Apple account only the
+Account Holder's interactive Apple ID auth may mint them), so CI never
+contacts Apple. Both targets' ad hoc profiles, the distribution certificate,
+and the push key are stored on EAS servers (created 2026-06-09 via an
+interactive local build). CI's non-interactive `eas build` consumes those
+stored credentials as-is.
+
+When the native fingerprint changes and CI reports a failed non-interactive
+build (or credentials expire / a new test device is added), refresh
+credentials with one interactive build from a `main` checkout:
+
+```bash
+cd apps/mobile
+APP_VARIANT=development eas build --profile development --platform ios
+```
+
+`EXPO_TOKEN` must exist as a repository secret. Do not print or inspect
 secret values.
 
 Manual dispatch:

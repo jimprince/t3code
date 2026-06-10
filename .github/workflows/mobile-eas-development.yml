@@ -76,28 +76,11 @@ jobs:
       - name: Mobile test suite
         run: vp run --filter @t3tools/mobile test
 
-      - name: Configure App Store Connect API key for EAS
-        env:
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-        run: |
-          if [ -z "$APPLE_API_KEY" ] || [ -z "$APPLE_API_KEY_ID" ] || [ -z "$APPLE_API_ISSUER" ]; then
-            echo "APPLE_API_KEY, APPLE_API_KEY_ID, and APPLE_API_ISSUER secrets are required to refresh iOS ad hoc credentials for EAS builds." >&2
-            exit 1
-          fi
-
-          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
-          printf '%s' "$APPLE_API_KEY" > "$key_path"
-          chmod 600 "$key_path"
-          {
-            echo "EXPO_ASC_API_KEY_PATH=$key_path"
-            echo "EXPO_ASC_KEY_ID=$APPLE_API_KEY_ID"
-            echo "EXPO_ASC_ISSUER_ID=$APPLE_API_ISSUER"
-            echo "EXPO_APPLE_TEAM_ID=CBCQ6MJF4B"
-            echo "EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION"
-          } >> "$GITHUB_ENV"
-
+      # iOS signing credentials are managed manually: the repo's ASC API key
+      # lacks permission to create ad hoc provisioning profiles (Apple 403),
+      # so CI never contacts Apple. When the native fingerprint changes, run
+      # one interactive build locally to mint/refresh credentials on EAS:
+      #   cd apps/mobile && APP_VARIANT=development eas build --profile development --platform ios
       - name: Deploy with fingerprint check
         working-directory: apps/mobile
         env:
@@ -129,13 +112,15 @@ jobs:
             echo "Existing iOS build found with matching fingerprint: $build_id"
           else
             echo "No existing iOS build found for fingerprint, starting a new build..."
-            eas build \
+            if ! eas build \
               --profile development \
               --platform ios \
               --non-interactive \
               --json \
-              --no-wait \
-              --refresh-ad-hoc-provisioning-profile > "$build_json"
+              --no-wait > "$build_json"; then
+              echo "::error::Non-interactive iOS build failed. If credentials are missing or expired, run one interactive build locally to refresh them: cd apps/mobile && APP_VARIANT=development eas build --profile development --platform ios" >&2
+              exit 1
+            fi
             build_id="$(node -e 'const fs = require("fs"); const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(builds[0]?.id ?? "");' "$build_json")"
             echo "Started iOS EAS build: $build_id"
           fi
