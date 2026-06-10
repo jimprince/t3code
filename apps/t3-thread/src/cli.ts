@@ -34,7 +34,8 @@ import {
   upsertEnvironment,
 } from "./state.js";
 import { wrapWithPreamble } from "./thread-preamble.js";
-import { deliverPendingNotifications, detectAttentionEvents } from "./watch.js";
+import { claimWatcherLease, ensureWatcherProcess } from "./watcher-process.js";
+import { deliverPendingNotifications, detectAttentionEvents, hasWatcherWork } from "./watch.js";
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
 import type { SavedAgent } from "./types.js";
 
@@ -149,6 +150,16 @@ function nowIso(): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function ensureNotificationWatcher(options: { env?: string; deliver?: boolean } = {}): Promise<void> {
+  await ensureWatcherProcess({
+    env: options.env,
+    intervalSeconds: 5,
+    idleExitSeconds: 900,
+    maxLifetimeSeconds: 86_400,
+    deliver: options.deliver ?? true,
+  });
 }
 
 const program = new Command();
@@ -496,6 +507,9 @@ agent
         result: null,
       };
     });
+    if (notifyCaller) {
+      void ensureNotificationWatcher({ env: options.env }).catch(() => {});
+    }
     printJson({
       name: options.name,
       environment: options.env,
@@ -655,6 +669,7 @@ agent
       },
       result: null,
     }));
+    void ensureNotificationWatcher({ env: source.environment }).catch(() => {});
     printJson(next);
   });
 
@@ -717,33 +732,89 @@ agent
   .description("Poll saved agents for attention-worthy transitions and route notifications to subscribers")
   .option("--env <name>", "optional saved environment filter")
   .option("--interval <seconds>", "poll interval in seconds", "5")
+  .option("--idle-exit <seconds>", "exit after this many idle seconds; 0 disables idle exit", "900")
+  .option("--max-lifetime <seconds>", "hard-stop the watcher after this many seconds; 0 disables the limit", "86400")
+  .option("--ensure", "spawn a detached singleton watcher if none is running, then exit")
   .option("--once", "run a single scan and exit")
   .option("--no-deliver", "record notification events but do not send messages to subscriber threads")
   .action(async (options) => {
     const intervalMs = Math.max(1, Number(options.interval)) * 1000;
+    const idleExitMs = Math.max(0, Number(options.idleExit)) * 1000;
+    const maxLifetimeMs = Math.max(0, Number(options.maxLifetime)) * 1000;
 
-    for (;;) {
-      const detectedNotifications = await detectAttentionEvents({
+    if (options.ensure) {
+      const ensured = await ensureWatcherProcess({
         env: options.env,
-      });
-      const deliveryResults = options.deliver
-        ? await deliverPendingNotifications({
-            env: options.env,
-          })
-        : [];
-      printJson({
-        scannedAt: nowIso(),
-        env: options.env ?? null,
+        intervalSeconds: Math.max(1, Number(options.interval)),
+        idleExitSeconds: Math.max(0, Number(options.idleExit)),
+        maxLifetimeSeconds: Math.max(0, Number(options.maxLifetime)),
         deliver: options.deliver,
-        detectedNotifications,
-        deliveryResults,
       });
+      printJson({
+        ensured: true,
+        ...ensured,
+        env: options.env ?? null,
+      });
+      return;
+    }
 
-      if (options.once) {
-        break;
+    const releaseLease = options.once ? null : await claimWatcherLease();
+    if (!options.once && !releaseLease) {
+      printJson({
+        started: false,
+        reason: "watcher already running",
+        env: options.env ?? null,
+      });
+      return;
+    }
+
+    const startedAt = Date.now();
+    let idleSince = 0;
+
+    try {
+      for (;;) {
+        const detectedNotifications = await detectAttentionEvents({
+          env: options.env,
+        });
+        const deliveryResults = options.deliver
+          ? await deliverPendingNotifications({
+              env: options.env,
+            })
+          : [];
+        const workRemaining = await hasWatcherWork({
+          env: options.env,
+        });
+        printJson({
+          scannedAt: nowIso(),
+          env: options.env ?? null,
+          deliver: options.deliver,
+          detectedNotifications,
+          deliveryResults,
+          workRemaining,
+        });
+
+        if (options.once) {
+          break;
+        }
+
+        const nowMs = Date.now();
+        if (maxLifetimeMs > 0 && nowMs - startedAt >= maxLifetimeMs) {
+          break;
+        }
+
+        if (workRemaining) {
+          idleSince = 0;
+        } else if (idleExitMs > 0) {
+          idleSince ||= nowMs;
+          if (nowMs - idleSince >= idleExitMs) {
+            break;
+          }
+        }
+
+        await sleep(intervalMs);
       }
-
-      await sleep(intervalMs);
+    } finally {
+      await releaseLease?.();
     }
   });
 
