@@ -53,12 +53,32 @@ function deriveRepositorySubtitle(identity: RepositoryIdentity | null | undefine
   return identity.canonicalKey;
 }
 
+// Project ordering must move only when a new user prompt reaches a thread,
+// never while an agent is merely streaming: `updatedAt` ticks on every
+// projection update while a thread runs, which made projects with running
+// threads continuously trade places.
+export function threadPromptActivityAt(thread: EnvironmentScopedThreadShell): string {
+  return thread.latestUserMessageAt ?? thread.createdAt;
+}
+
+export function latestPromptActivityAt(
+  threads: ReadonlyArray<EnvironmentScopedThreadShell>,
+): string | null {
+  let latest: string | null = null;
+  for (const thread of threads) {
+    const activityAt = threadPromptActivityAt(thread);
+    if (latest === null || new Date(activityAt).getTime() > new Date(latest).getTime()) {
+      latest = activityAt;
+    }
+  }
+  return latest;
+}
+
 function deriveProjectLatestActivity(
   project: EnvironmentScopedProjectShell,
   threads: ReadonlyArray<EnvironmentScopedThreadShell>,
 ): string {
-  const latestThread = threads[0];
-  return latestThread?.updatedAt ?? latestThread?.createdAt ?? project.updatedAt;
+  return latestPromptActivityAt(threads) ?? project.updatedAt;
 }
 
 export function groupProjectsByRepository(input: {
