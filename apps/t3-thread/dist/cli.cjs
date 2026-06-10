@@ -1193,7 +1193,7 @@ var require_command = __commonJS({
   "node_modules/commander/lib/command.js"(exports2) {
     var EventEmitter = require("node:events").EventEmitter;
     var childProcess = require("node:child_process");
-    var path3 = require("node:path");
+    var path4 = require("node:path");
     var fs = require("node:fs");
     var process2 = require("node:process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
@@ -2206,9 +2206,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
         let launchWithNode = false;
         const sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
         function findFile(baseDir, baseName) {
-          const localBin = path3.resolve(baseDir, baseName);
+          const localBin = path4.resolve(baseDir, baseName);
           if (fs.existsSync(localBin)) return localBin;
-          if (sourceExt.includes(path3.extname(baseName))) return void 0;
+          if (sourceExt.includes(path4.extname(baseName))) return void 0;
           const foundExt = sourceExt.find(
             (ext) => fs.existsSync(`${localBin}${ext}`)
           );
@@ -2226,17 +2226,17 @@ Expecting one of '${allowedValues.join("', '")}'`);
           } catch {
             resolvedScriptPath = this._scriptPath;
           }
-          executableDir = path3.resolve(
-            path3.dirname(resolvedScriptPath),
+          executableDir = path4.resolve(
+            path4.dirname(resolvedScriptPath),
             executableDir
           );
         }
         if (executableDir) {
           let localFile = findFile(executableDir, executableFile);
           if (!localFile && !subcommand._executableFile && this._scriptPath) {
-            const legacyName = path3.basename(
+            const legacyName = path4.basename(
               this._scriptPath,
-              path3.extname(this._scriptPath)
+              path4.extname(this._scriptPath)
             );
             if (legacyName !== this._name) {
               localFile = findFile(
@@ -2247,7 +2247,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
           }
           executableFile = localFile || executableFile;
         }
-        launchWithNode = sourceExt.includes(path3.extname(executableFile));
+        launchWithNode = sourceExt.includes(path4.extname(executableFile));
         let proc;
         if (process2.platform !== "win32") {
           if (launchWithNode) {
@@ -3162,7 +3162,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @return {Command}
        */
       nameFromFilename(filename) {
-        this._name = path3.basename(filename, path3.extname(filename));
+        this._name = path4.basename(filename, path4.extname(filename));
         return this;
       }
       /**
@@ -3176,9 +3176,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [path]
        * @return {(string|null|Command)}
        */
-      executableDir(path4) {
-        if (path4 === void 0) return this._executableDir;
-        this._executableDir = path4;
+      executableDir(path5) {
+        if (path5 === void 0) return this._executableDir;
+        this._executableDir = path5;
         return this;
       }
       /**
@@ -7108,16 +7108,16 @@ var require_filesystem = __commonJS({
     var LDD_PATH = "/usr/bin/ldd";
     var SELF_PATH = "/proc/self/exe";
     var MAX_LENGTH = 2048;
-    var readFileSync = (path3) => {
-      const fd = fs.openSync(path3, "r");
+    var readFileSync = (path4) => {
+      const fd = fs.openSync(path4, "r");
       const buffer3 = Buffer.alloc(MAX_LENGTH);
       const bytesRead = fs.readSync(fd, buffer3, 0, MAX_LENGTH, 0);
       fs.close(fd, () => {
       });
       return buffer3.subarray(0, bytesRead);
     };
-    var readFile2 = (path3) => new Promise((resolve2, reject) => {
-      fs.open(path3, "r", (err, fd) => {
+    var readFile3 = (path4) => new Promise((resolve2, reject) => {
+      fs.open(path4, "r", (err, fd) => {
         if (err) {
           reject(err);
         } else {
@@ -7134,7 +7134,7 @@ var require_filesystem = __commonJS({
       LDD_PATH,
       SELF_PATH,
       readFileSync,
-      readFile: readFile2
+      readFile: readFile3
     };
   }
 });
@@ -7182,7 +7182,7 @@ var require_detect_libc = __commonJS({
     "use strict";
     var childProcess = require("child_process");
     var { isLinux, getReport } = require_process();
-    var { LDD_PATH, SELF_PATH, readFile: readFile2, readFileSync } = require_filesystem();
+    var { LDD_PATH, SELF_PATH, readFile: readFile3, readFileSync } = require_filesystem();
     var { interpreterPath } = require_elf();
     var cachedFamilyInterpreter;
     var cachedFamilyFilesystem;
@@ -7236,11 +7236,11 @@ var require_detect_libc = __commonJS({
       }
       return null;
     };
-    var familyFromInterpreterPath = (path3) => {
-      if (path3) {
-        if (path3.includes("/ld-musl-")) {
+    var familyFromInterpreterPath = (path4) => {
+      if (path4) {
+        if (path4.includes("/ld-musl-")) {
           return MUSL;
-        } else if (path3.includes("/ld-linux-")) {
+        } else if (path4.includes("/ld-linux-")) {
           return GLIBC;
         }
       }
@@ -7262,7 +7262,7 @@ var require_detect_libc = __commonJS({
       }
       cachedFamilyFilesystem = null;
       try {
-        const lddContent = await readFile2(LDD_PATH);
+        const lddContent = await readFile3(LDD_PATH);
         cachedFamilyFilesystem = getFamilyFromLddContent(lddContent);
       } catch (e) {
       }
@@ -7286,9 +7286,9 @@ var require_detect_libc = __commonJS({
       }
       cachedFamilyInterpreter = null;
       try {
-        const selfContent = await readFile2(SELF_PATH);
-        const path3 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
+        const selfContent = await readFile3(SELF_PATH);
+        const path4 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7300,8 +7300,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = readFileSync(SELF_PATH);
-        const path3 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
+        const path4 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7348,7 +7348,7 @@ var require_detect_libc = __commonJS({
       }
       cachedVersionFilesystem = null;
       try {
-        const lddContent = await readFile2(LDD_PATH);
+        const lddContent = await readFile3(LDD_PATH);
         const versionMatch = lddContent.match(RE_GLIBC_VERSION);
         if (versionMatch) {
           cachedVersionFilesystem = versionMatch[1];
@@ -7435,7 +7435,7 @@ var require_detect_libc = __commonJS({
 var require_node_gyp_build = __commonJS({
   "node_modules/node-gyp-build-optional-packages/node-gyp-build.js"(exports2, module2) {
     var fs = require("fs");
-    var path3 = require("path");
+    var path4 = require("path");
     var url = require("url");
     var os2 = require("os");
     var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
@@ -7457,30 +7457,30 @@ var require_node_gyp_build = __commonJS({
       return runtimeRequire(load.resolve(dir));
     }
     load.resolve = load.path = function(dir) {
-      dir = path3.resolve(dir || ".");
+      dir = path4.resolve(dir || ".");
       var packageName = "";
       var packageNameError;
       try {
-        packageName = runtimeRequire(path3.join(dir, "package.json")).name;
+        packageName = runtimeRequire(path4.join(dir, "package.json")).name;
         var varName = packageName.toUpperCase().replace(/-/g, "_");
         if (process.env[varName + "_PREBUILD"]) dir = process.env[varName + "_PREBUILD"];
       } catch (err) {
         packageNameError = err;
       }
       if (!prebuildsOnly) {
-        var release2 = getFirst(path3.join(dir, "build/Release"), matchBuild);
+        var release2 = getFirst(path4.join(dir, "build/Release"), matchBuild);
         if (release2) return release2;
-        var debug = getFirst(path3.join(dir, "build/Debug"), matchBuild);
+        var debug = getFirst(path4.join(dir, "build/Debug"), matchBuild);
         if (debug) return debug;
       }
       var prebuild = resolve2(dir);
       if (prebuild) return prebuild;
-      var nearby = resolve2(path3.dirname(process.execPath));
+      var nearby = resolve2(path4.dirname(process.execPath));
       if (nearby) return nearby;
       var platformPackage = (packageName[0] == "@" ? "" : "@" + packageName + "/") + packageName + "-" + platform + "-" + arch;
       var packageResolutionError;
       try {
-        var prebuildPackage = path3.dirname(require("module").createRequire(url.pathToFileURL(path3.join(dir, "package.json"))).resolve(platformPackage));
+        var prebuildPackage = path4.dirname(require("module").createRequire(url.pathToFileURL(path4.join(dir, "package.json"))).resolve(platformPackage));
         return resolveFile(prebuildPackage);
       } catch (error) {
         packageResolutionError = error;
@@ -7507,16 +7507,16 @@ var require_node_gyp_build = __commonJS({
       }
       throw new Error(errMessage);
       function resolve2(dir2) {
-        var tuples = readdirSync(path3.join(dir2, "prebuilds")).map(parseTuple);
+        var tuples = readdirSync(path4.join(dir2, "prebuilds")).map(parseTuple);
         var tuple3 = tuples.filter(matchTuple(platform, arch)).sort(compareTuples)[0];
         if (!tuple3) return;
-        return resolveFile(path3.join(dir2, "prebuilds", tuple3.name));
+        return resolveFile(path4.join(dir2, "prebuilds", tuple3.name));
       }
       function resolveFile(prebuilds) {
         var parsed = readdirSync(prebuilds).map(parseTags);
         var candidates = parsed.filter(matchTags(runtime2, abi));
         var winner = candidates.sort(compareTags(runtime2))[0];
-        if (winner) return path3.join(prebuilds, winner.file);
+        if (winner) return path4.join(prebuilds, winner.file);
       }
     };
     function readdirSync(dir) {
@@ -7528,7 +7528,7 @@ var require_node_gyp_build = __commonJS({
     }
     function getFirst(dir, filter12) {
       var files = readdirSync(dir).filter(filter12);
-      return files[0] && path3.join(dir, files[0]);
+      return files[0] && path4.join(dir, files[0]);
     }
     function matchBuild(name) {
       return /\.node$/.test(name);
@@ -8425,8 +8425,8 @@ var CIRCULAR = "[Circular]";
 function formatPropertyKey(name) {
   return typeof name === "string" ? JSON.stringify(name) : String(name);
 }
-function formatPath(path3) {
-  return path3.map((key) => `[${formatPropertyKey(key)}]`).join("");
+function formatPath(path4) {
+  return path4.map((key) => `[${formatPropertyKey(key)}]`).join("");
 }
 function formatDate(date2) {
   try {
@@ -15055,9 +15055,9 @@ var Pointer = class extends Base {
    * The issue that occurred.
    */
   issue;
-  constructor(path3, issue) {
+  constructor(path4, issue) {
     super();
-    this.path = path3;
+    this.path = path4;
     this.issue = issue;
   }
 };
@@ -15265,50 +15265,50 @@ function makeFormatterStandardSchemaV1(options) {
 function getExpectedMessage(expected, actual) {
   return `Expected ${expected}, got ${actual}`;
 }
-function toDefaultIssues(issue, path3, leafHook, checkHook) {
+function toDefaultIssues(issue, path4, leafHook, checkHook) {
   switch (issue._tag) {
     case "Filter": {
       const message = checkHook(issue);
       if (message !== void 0) {
         return [{
-          path: path3,
+          path: path4,
           message
         }];
       }
       switch (issue.issue._tag) {
         case "InvalidValue":
           return [{
-            path: path3,
+            path: path4,
             message: getExpectedMessage(formatCheck(issue.filter), format(issue.actual))
           }];
         default:
-          return toDefaultIssues(issue.issue, path3, leafHook, checkHook);
+          return toDefaultIssues(issue.issue, path4, leafHook, checkHook);
       }
     }
     case "Encoding":
-      return toDefaultIssues(issue.issue, path3, leafHook, checkHook);
+      return toDefaultIssues(issue.issue, path4, leafHook, checkHook);
     case "Pointer":
-      return toDefaultIssues(issue.issue, [...path3, ...issue.path], leafHook, checkHook);
+      return toDefaultIssues(issue.issue, [...path4, ...issue.path], leafHook, checkHook);
     case "Composite":
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path3, leafHook, checkHook));
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path4, leafHook, checkHook));
     case "AnyOf": {
       const message = findMessage(issue);
       if (issue.issues.length === 0) {
         if (message !== void 0) return [{
-          path: path3,
+          path: path4,
           message
         }];
         const expected = getExpectedMessage(getExpected(issue.ast), format(issue.actual));
         return [{
-          path: path3,
+          path: path4,
           message: expected
         }];
       }
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path3, leafHook, checkHook));
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path4, leafHook, checkHook));
     }
     default:
       return [{
-        path: path3,
+        path: path4,
         message: leafHook(issue)
       }];
   }
@@ -15330,9 +15330,9 @@ var defaultFormatter = /* @__PURE__ */ makeFormatterDefault();
 function formatDefaultIssue(issue) {
   let out = issue.message;
   if (issue.path && issue.path.length > 0) {
-    const path3 = formatPath(issue.path);
+    const path4 = formatPath(issue.path);
     out += `
-  at ${path3}`;
+  at ${path4}`;
   }
   return out;
 }
@@ -21327,10 +21327,10 @@ function makeReducer3(combiner2) {
 }
 
 // node_modules/effect/dist/internal/errors.js
-function errorWithPath(message, path3) {
-  if (path3.length > 0) {
+function errorWithPath(message, path4) {
+  if (path4.length > 0) {
     message += `
-  at ${formatPath(path3)}`;
+  at ${formatPath(path4)}`;
   }
   return new Error(message);
 }
@@ -21432,10 +21432,10 @@ function getFilters(checks) {
 var memoized = /* @__PURE__ */ memoize((ast) => {
   return recur(ast, []);
 });
-function recur(ast, path3) {
+function recur(ast, path4) {
   const annotation = resolve(ast)?.toArbitrary;
   if (annotation) {
-    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path3)) : [];
+    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path4)) : [];
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
     return (fc, ctx) => applyChecks(ast, filters, annotation(typeParameters.map((tp) => tp(fc, resetContext(ctx))))(fc, f(ctx)));
@@ -21443,16 +21443,16 @@ function recur(ast, path3) {
   if (ast.checks) {
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
-    const lawc = recur(replaceChecks(ast, void 0), path3);
+    const lawc = recur(replaceChecks(ast, void 0), path4);
     return (fc, ctx) => applyChecks(ast, filters, lawc(fc, f(ctx)));
   }
-  return base(ast, path3);
+  return base(ast, path4);
 }
-function base(ast, path3) {
+function base(ast, path4) {
   switch (ast._tag) {
     case "Never":
     case "Declaration":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path3);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path4);
     case "Null":
       return (fc) => fc.constant(null);
     case "Void":
@@ -21491,14 +21491,14 @@ function base(ast, path3) {
     case "ObjectKeyword":
       return (fc) => fc.oneof(fc.object(), fc.array(fc.anything()));
     case "Enum":
-      return recur(enumsToLiterals(ast), path3);
+      return recur(enumsToLiterals(ast), path4);
     case "TemplateLiteral":
       return (fc) => fc.stringMatching(getTemplateLiteralRegExp(ast));
     case "Arrays":
       return (fc, ctx) => {
         const reset = resetContext(ctx);
         const elements = ast.elements.map((e, i) => {
-          const out2 = recur(e, [...path3, i])(fc, reset);
+          const out2 = recur(e, [...path4, i])(fc, reset);
           if (!isOptional(e)) {
             return out2.map(some2);
           }
@@ -21507,7 +21507,7 @@ function base(ast, path3) {
         let out = fc.tuple(...elements).map(getSomes);
         if (isReadonlyArrayNonEmpty(ast.rest)) {
           const len = ast.elements.length;
-          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path3, len + i])(fc, reset));
+          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path4, len + i])(fc, reset));
           const rest = array2(fc, ast.elements.length === 0 ? ctx : reset, head2);
           out = out.chain((as4) => {
             if (as4.length < len) {
@@ -21537,13 +21537,13 @@ function base(ast, path3) {
           if (!isOptional(ps.type)) {
             requiredKeys.push(name);
           }
-          pss[name] = recur(ps.type, [...path3, name])(fc, reset);
+          pss[name] = recur(ps.type, [...path4, name])(fc, reset);
         }
         let out = fc.record(pss, {
           requiredKeys
         });
         for (const is3 of ast.indexSignatures) {
-          const entry = fc.tuple(recur(is3.parameter, path3)(fc, reset), recur(is3.type, path3)(fc, reset));
+          const entry = fc.tuple(recur(is3.parameter, path4)(fc, reset), recur(is3.type, path4)(fc, reset));
           const entries3 = array2(fc, ast.propertySignatures.length === 0 ? ctx : reset, entry);
           out = out.chain((o) => {
             return entries3.map((entries4) => {
@@ -21557,11 +21557,11 @@ function base(ast, path3) {
         return out;
       };
     case "Union":
-      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path3)(fc, ctx)));
+      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path4)(fc, ctx)));
     case "Suspend": {
       const memo2 = arbitraryMemoMap.get(ast);
       if (memo2) return memo2;
-      const get11 = memoizeThunk(() => recur(ast.thunk(), path3));
+      const get11 = memoizeThunk(() => recur(ast.thunk(), path4));
       const out = (fc, ctx) => fc.constant(null).chain(() => get11()(fc, {
         ...ctx,
         isSuspend: true
@@ -21803,14 +21803,14 @@ var recur2 = /* @__PURE__ */ memoize((ast) => {
 var toEquivalence = /* @__PURE__ */ memoize((ast) => {
   return recur3(ast, []);
 });
-function recur3(ast, path3) {
+function recur3(ast, path4) {
   const annotation = resolve(ast)?.["toEquivalence"];
   if (annotation) {
-    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path3)) : []);
+    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path4)) : []);
   }
   switch (ast._tag) {
     case "Never":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path3);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path4);
     case "Declaration":
     case "Null":
     case "Undefined":
@@ -21829,9 +21829,9 @@ function recur3(ast, path3) {
     case "TemplateLiteral":
       return equals;
     case "Arrays": {
-      const elements = ast.elements.map((e, i) => recur3(e, [...path3, i]));
+      const elements = ast.elements.map((e, i) => recur3(e, [...path4, i]));
       const len = ast.elements.length;
-      const rest = ast.rest.map((r, i) => recur3(r, [...path3, len + i]));
+      const rest = ast.rest.map((r, i) => recur3(r, [...path4, len + i]));
       return make2((a, b) => {
         if (!Array.isArray(a) || !Array.isArray(b)) {
           return false;
@@ -21867,8 +21867,8 @@ function recur3(ast, path3) {
       if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
         return equals;
       }
-      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path3, ps.name]));
-      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path3));
+      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path4, ps.name]));
+      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path4));
       return make2((a, b) => {
         if (!isObject(a) || !isObject(b)) {
           return false;
@@ -21909,13 +21909,13 @@ function recur3(ast, path3) {
         for (let i = 0; i < candidates.length; i++) {
           const is3 = types[i];
           if (is3(a) && is3(b)) {
-            return recur3(candidates[i], path3)(a, b);
+            return recur3(candidates[i], path4)(a, b);
           }
         }
         return false;
       });
     case "Suspend": {
-      const get11 = memoizeThunk(() => recur3(ast.thunk(), path3));
+      const get11 = memoizeThunk(() => recur3(ast.thunk(), path4));
       return make2((a, b) => get11()(a, b));
     }
   }
@@ -22914,10 +22914,10 @@ function get6(oldValue, newValue) {
     const len2 = newValue.length;
     const shared = Math.min(len1, len2);
     for (let i = 0; i < shared; i++) {
-      const path3 = `/${i}`;
+      const path4 = `/${i}`;
       const patch = get6(oldValue[i], newValue[i]);
       for (const op of patch) {
-        prefixPathInPlace(op, path3);
+        prefixPathInPlace(op, path4);
         patches.push(op);
       }
     }
@@ -22942,25 +22942,25 @@ function get6(oldValue, newValue) {
     const allKeys = Array.from(/* @__PURE__ */ new Set([...keys1, ...keys22])).sort();
     for (const key of allKeys) {
       const esc = escapeToken(key);
-      const path3 = `/${esc}`;
+      const path4 = `/${esc}`;
       const hasKey1 = Object.hasOwn(oldValue, key);
       const hasKey2 = Object.hasOwn(newValue, key);
       if (hasKey1 && hasKey2) {
         const patch = get6(oldValue[key], newValue[key]);
         for (const op of patch) {
-          prefixPathInPlace(op, path3);
+          prefixPathInPlace(op, path4);
           patches.push(op);
         }
       } else if (!hasKey1 && hasKey2) {
         patches.push({
           op: "add",
-          path: path3,
+          path: path4,
           value: newValue[key]
         });
       } else if (hasKey1 && !hasKey2) {
         patches.push({
           op: "remove",
-          path: path3
+          path: path4
         });
       }
     }
@@ -23306,8 +23306,8 @@ var OptionalNode = class {
 var PathNode = class {
   _tag = "PathNode";
   path;
-  constructor(path3) {
-    this.path = path3;
+  constructor(path4) {
+    this.path = path4;
   }
 };
 var CheckNode = class {
@@ -23553,24 +23553,24 @@ var recur4 = /* @__PURE__ */ memoize((node) => {
       return {
         _tag: "LensNode",
         get: (s) => {
-          const path3 = node.path;
+          const path4 = node.path;
           let out = s;
-          for (let i = 0, n = path3.length; i < n; i++) {
-            out = out[path3[i]];
+          for (let i = 0, n = path4.length; i < n; i++) {
+            out = out[path4[i]];
           }
           return out;
         },
         set: (a, s) => {
-          const path3 = node.path;
+          const path4 = node.path;
           const out = cloneShallow(s);
           let current = out;
           let i = 0;
-          for (; i < path3.length - 1; i++) {
-            const key = path3[i];
+          for (; i < path4.length - 1; i++) {
+            const key = path4[i];
             current[key] = cloneShallow(current[key]);
             current = current[key];
           }
-          const finalKey = path3[i];
+          const finalKey = path4[i];
           current[finalKey] = a;
           return out;
         }
@@ -25843,10 +25843,10 @@ var RunExecution = class RunExecution2 {
     }
     return failures;
   }
-  static mergePaths(offsetPath, path3) {
-    if (offsetPath.length === 0) return path3;
+  static mergePaths(offsetPath, path4) {
+    if (offsetPath.length === 0) return path4;
     const offsetItems = offsetPath.split(":");
-    const remainingItems = path3.split(":");
+    const remainingItems = path4.split(":");
     const middle = +offsetItems[offsetItems.length - 1] + +remainingItems[0];
     return [
       ...offsetItems.slice(0, offsetItems.length - 1),
@@ -26033,15 +26033,15 @@ function* lazyToss(generator, seed, random2, examples) {
 function produce(producer) {
   return producer();
 }
-function pathWalk(path3, initialProducers, shrink) {
+function pathWalk(path4, initialProducers, shrink) {
   const producers = initialProducers;
-  const segments = path3.split(":").map((text2) => +text2);
+  const segments = path4.split(":").map((text2) => +text2);
   if (segments.length === 0) return producers.map(produce);
-  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path3}`);
+  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path4}`);
   let values2 = producers.drop(segments[0]).map(produce);
   for (const s of segments.slice(1)) {
     const valueToShrink = values2.getNthOrLast(0);
-    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path3}`);
+    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path4}`);
     values2 = shrink(valueToShrink).drop(s);
   }
   return values2;
@@ -31222,8 +31222,8 @@ function webQueryParameters(constraints = {}) {
   return buildUriQueryOrFragmentArbitrary(constraints.size);
 }
 function partsToUrlMapper(data) {
-  const [scheme, authority, path3] = data;
-  return `${scheme}://${authority}${path3}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
+  const [scheme, authority, path4] = data;
+  return `${scheme}://${authority}${path4}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
 }
 var UrlSplitRegex = /^([[A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?(#[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?$/;
 function partsToUrlUnmapper(value3) {
@@ -31232,13 +31232,13 @@ function partsToUrlUnmapper(value3) {
   if (m === null) throw new Error("Incompatible value received");
   const scheme = m[1];
   const authority = m[2];
-  const path3 = m[3];
+  const path4 = m[3];
   const query = m[4];
   const fragments = m[5];
   return [
     scheme,
     authority,
-    path3,
+    path4,
     query !== void 0 ? query.substring(1) : null,
     fragments !== void 0 ? fragments.substring(1) : null
   ];
@@ -40062,9 +40062,9 @@ var setUrl = /* @__PURE__ */ dual(2, (self, url) => {
   clone2.hash = "";
   return makeWith(self.method, clone2.toString(), urlParams2, hash3, self.headers, self.body);
 });
-var prependUrl = /* @__PURE__ */ dual(2, (self, path3) => {
-  if (path3 === "") return self;
-  return makeWith(self.method, joinSegments(path3, self.url), self.urlParams, self.hash, self.headers, self.body);
+var prependUrl = /* @__PURE__ */ dual(2, (self, path4) => {
+  if (path4 === "") return self;
+  return makeWith(self.method, joinSegments(path4, self.url), self.urlParams, self.hash, self.headers, self.body);
 });
 var joinSegments = (first, second) => {
   const endsWithSlash = first.endsWith("/");
@@ -47987,6 +47987,98 @@ function wrapWithPreamble(message) {
 ${message}`;
 }
 
+// src/watcher-process.ts
+var import_node_child_process = require("node:child_process");
+var import_promises2 = require("node:fs/promises");
+var import_node_path3 = __toESM(require("node:path"), 1);
+function watcherPidFile() {
+  return import_node_path3.default.join(import_node_path3.default.dirname(resolveStateFile()), "watch.pid");
+}
+function repoRootFromArgv() {
+  const entry = process.argv[1];
+  if (!entry) {
+    throw new Error("Cannot resolve watcher repo root from process.argv[1].");
+  }
+  return import_node_path3.default.resolve(import_node_path3.default.dirname(entry), "..");
+}
+async function readWatcherPid(pidFile) {
+  try {
+    const raw2 = (await (0, import_promises2.readFile)(pidFile, "utf8")).trim();
+    const pid = Number(raw2);
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ENOENT")) {
+      return null;
+    }
+    throw error;
+  }
+}
+function isProcessRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+async function claimWatcherLease() {
+  const pidFile = watcherPidFile();
+  await (0, import_promises2.mkdir)(import_node_path3.default.dirname(pidFile), { recursive: true });
+  const existingPid = await readWatcherPid(pidFile);
+  if (existingPid && existingPid !== process.pid && isProcessRunning(existingPid)) {
+    return null;
+  }
+  if (existingPid && !isProcessRunning(existingPid)) {
+    await (0, import_promises2.unlink)(pidFile).catch(() => {
+    });
+  }
+  await (0, import_promises2.writeFile)(pidFile, `${process.pid}
+`, "utf8");
+  return async () => {
+    const currentPid = await readWatcherPid(pidFile);
+    if (currentPid === process.pid) {
+      await (0, import_promises2.unlink)(pidFile).catch(() => {
+      });
+    }
+  };
+}
+async function ensureWatcherProcess(input) {
+  const pidFile = watcherPidFile();
+  await (0, import_promises2.mkdir)(import_node_path3.default.dirname(pidFile), { recursive: true });
+  const existingPid = await readWatcherPid(pidFile);
+  if (existingPid && isProcessRunning(existingPid)) {
+    return {
+      status: "already-running",
+      pid: existingPid
+    };
+  }
+  if (existingPid && !isProcessRunning(existingPid)) {
+    await (0, import_promises2.unlink)(pidFile).catch(() => {
+    });
+  }
+  const repoRoot = repoRootFromArgv();
+  const tsxPath = import_node_path3.default.join(repoRoot, "node_modules", ".bin", "tsx");
+  const cliEntry = import_node_path3.default.join(repoRoot, "src", "cli.ts");
+  const args2 = [cliEntry, "watch", "--interval", String(input.intervalSeconds), "--idle-exit", String(input.idleExitSeconds), "--max-lifetime", String(input.maxLifetimeSeconds)];
+  if (input.env) {
+    args2.push("--env", input.env);
+  }
+  if (!input.deliver) {
+    args2.push("--no-deliver");
+  }
+  const child = (0, import_node_child_process.spawn)(tsxPath, args2, {
+    cwd: repoRoot,
+    detached: true,
+    stdio: "ignore"
+  });
+  child.unref();
+  return {
+    status: "spawned",
+    pid: child.pid ?? -1
+  };
+}
+
 // src/watch.ts
 var import_node_crypto4 = require("node:crypto");
 
@@ -48261,6 +48353,35 @@ async function deliverPendingNotifications(options = {}) {
   }
   return delivered;
 }
+async function hasWatcherWork(options = {}) {
+  const clientFactory = options.clientFactory ?? createWatchClient;
+  const state = await loadState();
+  if (state.notifications.some((notification) => {
+    if (!matchesEnvFilter(notification, options.env)) {
+      return false;
+    }
+    return notification.status !== "delivered";
+  })) {
+    return true;
+  }
+  const subscriptions = state.subscriptions.filter((subscription) => {
+    return !options.env || subscription.sourceEnvironment === options.env;
+  });
+  const seenSources = /* @__PURE__ */ new Set();
+  for (const subscription of subscriptions) {
+    if (seenSources.has(subscription.sourceThreadId)) {
+      continue;
+    }
+    seenSources.add(subscription.sourceThreadId);
+    const sourceEnvironment = requireEnvironment(state, subscription.sourceEnvironment);
+    const sourceClient = clientFactory(sourceEnvironment);
+    const sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
+    if (classifyThread(sourceThread).state === "running") {
+      return true;
+    }
+  }
+  return false;
+}
 
 // src/cli.ts
 function printJson(value3) {
@@ -48349,6 +48470,15 @@ function nowIso3() {
 }
 function sleep4(ms) {
   return new Promise((resolve2) => setTimeout(resolve2, ms));
+}
+async function ensureNotificationWatcher(options = {}) {
+  await ensureWatcherProcess({
+    env: options.env,
+    intervalSeconds: 5,
+    idleExitSeconds: 900,
+    maxLifetimeSeconds: 86400,
+    deliver: options.deliver ?? true
+  });
 }
 var program2 = new Command();
 var AGENT_COMMAND_ALIASES = /* @__PURE__ */ new Set([
@@ -48608,6 +48738,10 @@ agent.command("create").requiredOption("--name <name>", "local agent name").requ
       result: null
     };
   });
+  if (notifyCaller) {
+    void ensureNotificationWatcher({ env: options.env }).catch(() => {
+    });
+  }
   printJson({
     name: options.name,
     environment: options.env,
@@ -48721,6 +48855,8 @@ agent.command("subscribe").description("Subscribe the calling T3 thread to atten
     },
     result: null
   }));
+  void ensureNotificationWatcher({ env: source.environment }).catch(() => {
+  });
   printJson(next);
 });
 agent.command("unsubscribe").description("Remove an attention subscription for the calling T3 thread").requiredOption("--watch <name>", "saved source agent name to stop watching").action(async (options) => {
@@ -48765,26 +48901,74 @@ agent.command("notifications").description("List saved routed notification event
   });
   printJson(notifications);
 });
-agent.command("watch").description("Poll saved agents for attention-worthy transitions and route notifications to subscribers").option("--env <name>", "optional saved environment filter").option("--interval <seconds>", "poll interval in seconds", "5").option("--once", "run a single scan and exit").option("--no-deliver", "record notification events but do not send messages to subscriber threads").action(async (options) => {
+agent.command("watch").description("Poll saved agents for attention-worthy transitions and route notifications to subscribers").option("--env <name>", "optional saved environment filter").option("--interval <seconds>", "poll interval in seconds", "5").option("--idle-exit <seconds>", "exit after this many idle seconds; 0 disables idle exit", "900").option("--max-lifetime <seconds>", "hard-stop the watcher after this many seconds; 0 disables the limit", "86400").option("--ensure", "spawn a detached singleton watcher if none is running, then exit").option("--once", "run a single scan and exit").option("--no-deliver", "record notification events but do not send messages to subscriber threads").action(async (options) => {
   const intervalMs = Math.max(1, Number(options.interval)) * 1e3;
-  for (; ; ) {
-    const detectedNotifications = await detectAttentionEvents({
-      env: options.env
+  const idleExitMs = Math.max(0, Number(options.idleExit)) * 1e3;
+  const maxLifetimeMs = Math.max(0, Number(options.maxLifetime)) * 1e3;
+  if (options.ensure) {
+    const ensured = await ensureWatcherProcess({
+      env: options.env,
+      intervalSeconds: Math.max(1, Number(options.interval)),
+      idleExitSeconds: Math.max(0, Number(options.idleExit)),
+      maxLifetimeSeconds: Math.max(0, Number(options.maxLifetime)),
+      deliver: options.deliver
     });
-    const deliveryResults = options.deliver ? await deliverPendingNotifications({
-      env: options.env
-    }) : [];
     printJson({
-      scannedAt: nowIso3(),
-      env: options.env ?? null,
-      deliver: options.deliver,
-      detectedNotifications,
-      deliveryResults
+      ensured: true,
+      ...ensured,
+      env: options.env ?? null
     });
-    if (options.once) {
-      break;
+    return;
+  }
+  const releaseLease = options.once ? null : await claimWatcherLease();
+  if (!options.once && !releaseLease) {
+    printJson({
+      started: false,
+      reason: "watcher already running",
+      env: options.env ?? null
+    });
+    return;
+  }
+  const startedAt = Date.now();
+  let idleSince = 0;
+  try {
+    for (; ; ) {
+      const detectedNotifications = await detectAttentionEvents({
+        env: options.env
+      });
+      const deliveryResults = options.deliver ? await deliverPendingNotifications({
+        env: options.env
+      }) : [];
+      const workRemaining = await hasWatcherWork({
+        env: options.env
+      });
+      printJson({
+        scannedAt: nowIso3(),
+        env: options.env ?? null,
+        deliver: options.deliver,
+        detectedNotifications,
+        deliveryResults,
+        workRemaining
+      });
+      if (options.once) {
+        break;
+      }
+      const nowMs = Date.now();
+      if (maxLifetimeMs > 0 && nowMs - startedAt >= maxLifetimeMs) {
+        break;
+      }
+      if (workRemaining) {
+        idleSince = 0;
+      } else if (idleExitMs > 0) {
+        idleSince ||= nowMs;
+        if (nowMs - idleSince >= idleExitMs) {
+          break;
+        }
+      }
+      await sleep4(intervalMs);
     }
-    await sleep4(intervalMs);
+  } finally {
+    await releaseLease?.();
   }
 });
 agent.command("status").argument("[name]", "agent name").action(async (name) => {

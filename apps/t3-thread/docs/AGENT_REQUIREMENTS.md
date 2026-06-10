@@ -1,5 +1,47 @@
 # Agent Requirements
 
+## Current Task Snapshot — Child Completion Notification Reliability
+
+### Active Requirements
+- Investigate why a parent/original T3 thread subscribed for child completion notifications does not reliably receive a notification when the child completes.
+- Orient against the intended behavior documented in `LLM_INSTRUCTIONS.md`, `docs/AGENT_OPERATIONS.md`, `docs/ACTIVE_COORDINATION.md`, and `~/.shared/skills/t3-threads/SKILL.md`.
+- Determine whether the root cause is in watcher lifecycle, subscription persistence, event detection, or delivery.
+- Reproduce the failure path if feasible.
+- Propose a fix and implement it if confidence is high and validation passes.
+- Preserve existing thread-to-thread notification routing semantics.
+- Rebuild committed `dist/cli.js` after any `src/` change.
+- Run `npm test` and report exact results.
+- Commit the completed work on branch `t3/fix-completion-notify` with a clear message.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Do not hand-edit `~/.config/t3-remote-agents/state.json` as a fix.
+- Keep `t3-thread` a thin wrapper over native T3 APIs.
+- Do not break existing notification routing for thread-to-thread cases.
+- Avoid destructive git operations and preserve unrelated work.
+
+### Acceptance Criteria
+- Root cause is identified with concrete file/line evidence.
+- Reproduction steps clearly state observed vs expected behavior if repro is possible.
+- Any implemented fix is covered by regression tests.
+- `npm run build` is run after `src/` changes and committed `dist/cli.js` is refreshed.
+- `npm test` passes, or any failure is reported exactly.
+- A commit exists on `t3/fix-completion-notify` with the completed fix or investigation result.
+
+### Status
+- Completed locally.
+
+### Validation Update
+- Root cause confirmed in the create/subscribe and watch command paths: subscriptions were persisted, but no on-demand watcher bootstrap or singleton idle-exit lifecycle existed in the implementation.
+- Added watcher bootstrap helpers and wired `create`/`subscribe` to best-effort spawn a singleton detached watcher when a notification route is attached.
+- Added watcher idle-work detection so the watcher stays alive while subscribed source threads are still running or undelivered notifications remain.
+- Added regression coverage for watcher-work detection and watcher singleton lease handling.
+- Updated `README.md` and `docs/AGENT_OPERATIONS.md` to document the on-demand watcher lifecycle and `watch --ensure` usage.
+- `npm ci` completed successfully in this worktree.
+- `npm test -- watch watcher-process` passed: 8 tests across 2 files.
+- `npm run build` passed and refreshed `dist/cli.cjs`.
+- `npm test` passed: 83 tests across 11 files.
+
 ## Current Task Snapshot - Protein Functional Topology Handoff Registration
 
 ### Active Requirements
