@@ -2009,6 +2009,14 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               environmentId: targetMember.environmentId,
               projectId: targetMember.id,
             },
+            confirmBranchFallback: (branch) =>
+              api.dialogs.confirm(
+                [
+                  `Branch "${branch}" already exists on ${targetLabel}.`,
+                  "Create a new worktree on a fallback branch and continue the thread there instead?",
+                  "The existing branch on the target machine is left untouched.",
+                ].join("\n"),
+              ),
             onProgress: (phase) => {
               toastManager.update(progressToastId, {
                 type: "loading",
