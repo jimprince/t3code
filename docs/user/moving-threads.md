@@ -19,8 +19,10 @@ the target confirms the import, so a failed move never loses the thread.
 - **Git state** — the thread branch and its `refs/t3/checkpoints/*` refs
   travel as a thin git bundle; a new worktree is created in the target clone,
   and uncommitted tracked changes plus untracked files are restored into it.
-  The target clone must already contain the commits the thread branch is
-  based on (fetch/pull first if the move reports missing commits). If the
+  If the target clone is missing the base commits the thread is
+  built on, the import automatically fetches the target's primary remote and
+  retries; the move only fails if the commits are not on the shared remote
+  either (push from the source, or pull on the target, then retry). If the
   thread's branch already exists on the target with different history or is
   checked out there (for example a thread working directly on `main`), the
   move asks whether to create a new worktree on a fallback branch named
