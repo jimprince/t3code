@@ -56,6 +56,7 @@ import { ThreadTransfer, type ThreadTransferShape } from "../Services/ThreadTran
 const QUIESCE_POLL_INTERVAL_MS = 250;
 const QUIESCE_POLL_ATTEMPTS = 60;
 const GIT_BUNDLE_TIMEOUT_MS = 120_000;
+const GIT_REMOTE_FETCH_TIMEOUT_MS = 180_000;
 const MAX_DIRTY_DIFF_BYTES = 64 * 1024 * 1024;
 const MAX_UNTRACKED_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_UNTRACKED_TOTAL_BYTES = 64 * 1024 * 1024;
@@ -207,6 +208,36 @@ const make = Effect.gen(function* () {
       Effect.map((result) => result.exitCode === 0 && result.stdout.trim() === "true"),
       Effect.orElseSucceed(() => false),
     );
+
+  /** Fetch the repository's primary remote so a stale target clone picks up
+   * the base commits a thin move bundle was built against. Best effort:
+   * returns the remote name on success, null when there is no remote or the
+   * fetch fails (offline targets keep the explicit error path). */
+  const fetchPrimaryRemote = (workspaceRoot: string) =>
+    Effect.gen(function* () {
+      const remotes = yield* git({
+        operation: "ThreadTransfer.import.listRemotes",
+        cwd: workspaceRoot,
+        args: ["remote"],
+        allowNonZeroExit: true,
+      });
+      const remoteNames = remotes.stdout
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0);
+      const remoteName = remoteNames.includes("origin") ? "origin" : remoteNames[0];
+      if (remoteName === undefined) {
+        return null;
+      }
+      const fetched = yield* git({
+        operation: "ThreadTransfer.import.remoteFetch",
+        cwd: workspaceRoot,
+        args: ["fetch", "--quiet", remoteName],
+        allowNonZeroExit: true,
+        timeoutMs: GIT_REMOTE_FETCH_TIMEOUT_MS,
+      });
+      return fetched.exitCode === 0 ? remoteName : null;
+    }).pipe(Effect.orElseSucceed(() => null));
 
   const awaitSessionQuiesced = (threadId: ThreadId) =>
     Effect.gen(function* () {
@@ -726,17 +757,32 @@ const make = Effect.gen(function* () {
         const bundlePath = path.join(bundleDir, "thread.bundle");
         yield* fs.writeFile(bundlePath, bundleBytes);
 
-        const verifyResult = yield* git({
+        const verifyBundle = git({
           operation: "ThreadTransfer.import.bundleVerify",
           cwd: workspaceRoot,
           args: ["bundle", "verify", bundlePath],
           allowNonZeroExit: true,
           timeoutMs: GIT_BUNDLE_TIMEOUT_MS,
         });
+        let verifyResult = yield* verifyBundle;
         if (verifyResult.exitCode !== 0) {
-          return yield* new OrchestrationImportThreadError({
-            message: `The target repository is missing commits this thread is based on (run a git fetch/pull in the target project first): ${verifyResult.stderr.trim()}`,
-          });
+          // Thin bundles assume the target already has the source's shared
+          // base commits. A stale clone is the common cause, and both
+          // projects share the same repository, so fetch the target's
+          // primary remote once and retry before failing.
+          const fetchedRemote = yield* fetchPrimaryRemote(workspaceRoot);
+          if (fetchedRemote !== null) {
+            verifyResult = yield* verifyBundle;
+          }
+          if (verifyResult.exitCode !== 0) {
+            return yield* new OrchestrationImportThreadError({
+              message: `The target repository is missing commits this thread is based on${
+                fetchedRemote !== null
+                  ? ` (even after fetching '${fetchedRemote}'; push the thread's base commits to the shared remote, or pull on the target project, then retry)`
+                  : " (the target project has no reachable git remote to fetch them from; run a git fetch/pull there first)"
+              }: ${verifyResult.stderr.trim()}`,
+            });
+          }
         }
 
         // Fetch exactly the refs the bundle advertises.
@@ -785,15 +831,21 @@ const make = Effect.gen(function* () {
         allowNonZeroExit: true,
       });
       if (branchAfterFetch.exitCode !== 0) {
-        const shaExists = yield* git({
+        const verifyTipSha = git({
           operation: "ThreadTransfer.import.branchTipShaVerify",
           cwd: workspaceRoot,
           args: ["rev-parse", "--verify", "--quiet", `${gitState.branchTipSha}^{commit}`],
           allowNonZeroExit: true,
         });
+        let shaExists = yield* verifyTipSha;
+        if (shaExists.exitCode !== 0) {
+          if ((yield* fetchPrimaryRemote(workspaceRoot)) !== null) {
+            shaExists = yield* verifyTipSha;
+          }
+        }
         if (shaExists.exitCode !== 0) {
           return yield* new OrchestrationImportThreadError({
-            message: `The target repository is missing commit ${gitState.branchTipSha} for branch '${gitState.branch}' (run a git fetch/pull in the target project first).`,
+            message: `The target repository is missing commit ${gitState.branchTipSha} for branch '${gitState.branch}' (fetching the target's remote did not provide it; push or pull the shared remote first).`,
           });
         }
         yield* git({

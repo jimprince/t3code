@@ -768,5 +768,125 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         expect(movedReadme).toBe("# changed on main\n");
       }).pipe(Effect.scoped),
     );
+
+    it.effect("fetches the target's remote when the move bundle needs newer base commits", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-move-stale-");
+        const originRepo = joinPath(root, "origin.git");
+        const sourceRepo = joinPath(root, "source-repo");
+        const targetRepo = joinPath(root, "target-repo");
+        const sourceWorktreesRoot = joinPath(root, "source-worktrees");
+        const targetWorktreesRoot = joinPath(root, "target-worktrees");
+        for (const dir of [originRepo, sourceRepo, sourceWorktreesRoot, targetWorktreesRoot]) {
+          yield* makeDirectory(dir);
+        }
+
+        // REGRESSION: thin bundles exclude history up to the source's
+        // merge-base with the shared remote. A target clone that has not
+        // fetched recently is missing those base commits; the import must
+        // fetch the target's remote and retry instead of failing with
+        // "Repository lacks these prerequisite commits".
+        yield* execGit(root, ["init", "--bare", "-b", "main", originRepo]);
+        yield* initRepo(sourceRepo);
+        yield* execGit(sourceRepo, ["remote", "add", "origin", originRepo]);
+        yield* execGit(sourceRepo, ["push", "--quiet", "origin", "main"]);
+        yield* execGit(root, ["clone", "--quiet", originRepo, targetRepo]);
+
+        // Advance shared history on the source and the remote only; the
+        // target clone stays stale.
+        yield* writeTextFile(joinPath(sourceRepo, "BASE.md"), "new base\n");
+        yield* execGit(sourceRepo, ["add", "."]);
+        yield* execGit(sourceRepo, ["commit", "-m", "advance main"]);
+        yield* execGit(sourceRepo, ["push", "--quiet", "origin", "main"]);
+        const advancedBaseSha = yield* execGit(sourceRepo, ["rev-parse", "refs/heads/main"]);
+        const targetLacksBase = yield* Effect.exit(
+          execGit(targetRepo, ["rev-parse", "--verify", `${advancedBaseSha}^{commit}`]),
+        );
+        expect(Exit.isFailure(targetLacksBase)).toBe(true);
+
+        const branch = "stale-test";
+        const sourceWorktree = joinPath(sourceWorktreesRoot, branch);
+        yield* execGit(sourceRepo, ["branch", branch]);
+        yield* execGit(sourceRepo, ["worktree", "add", sourceWorktree, branch]);
+        yield* writeTextFile(joinPath(sourceWorktree, "WORK.md"), "thread work\n");
+        yield* execGit(sourceWorktree, ["add", "."]);
+        yield* execGit(sourceWorktree, ["commit", "-m", "thread commit"]);
+
+        const source = yield* buildTransferSystem({
+          prefix: "t3-thread-move-stale-source-",
+          worktreesRoot: sourceWorktreesRoot,
+        });
+        const target = yield* buildTransferSystem({
+          prefix: "t3-thread-move-stale-target-",
+          worktreesRoot: targetWorktreesRoot,
+        });
+
+        const threadId = ThreadId.make("dddd1111-2222-4333-8444-555566667777");
+        const sourceProjectId = ProjectId.make("project-stale-source");
+        yield* source.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-stale-source-project"),
+          projectId: sourceProjectId,
+          title: "Stale Source Project",
+          workspaceRoot: sourceRepo,
+          createdAt: now(),
+        });
+        yield* source.engine.dispatch({
+          type: "thread.import",
+          commandId: CommandId.make("cmd-stale-source-seed"),
+          threadId,
+          projectId: sourceProjectId,
+          thread: {
+            id: threadId,
+            title: "Thread ahead of a stale clone",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("claude"),
+              model: "claude-fable-5",
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch,
+            goal: null,
+            createdAt: now(),
+            updatedAt: now(),
+            messages: [],
+            proposedPlans: [],
+            activities: [],
+            checkpoints: [],
+          },
+          branch,
+          worktreePath: sourceWorktree,
+          createdAt: now(),
+        });
+
+        const exported = yield* source.transfer.exportThread({ threadId });
+        expect(exported.bundle.git).not.toBeNull();
+        // Thin bundle: the advanced base commit is excluded, so the stale
+        // target cannot satisfy the prerequisites without fetching.
+        expect(exported.bundle.git!.bundleBase64).not.toBeNull();
+
+        const targetProjectId = ProjectId.make("project-stale-target");
+        yield* target.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-stale-target-project"),
+          projectId: targetProjectId,
+          title: "Stale Target Project",
+          workspaceRoot: targetRepo,
+          createdAt: now(),
+        });
+
+        const imported = yield* target.transfer.importThread({
+          projectId: targetProjectId,
+          bundle: exported.bundle,
+        });
+        expect(imported.worktreePath).not.toBeNull();
+
+        const sourceTip = yield* execGit(sourceRepo, ["rev-parse", `refs/heads/${branch}`]);
+        const targetTip = yield* execGit(targetRepo, ["rev-parse", `refs/heads/${branch}`]);
+        expect(targetTip).toBe(sourceTip);
+        const movedWork = yield* readTextFile(joinPath(imported.worktreePath!, "WORK.md"));
+        expect(movedWork).toBe("thread work\n");
+      }).pipe(Effect.scoped),
+    );
   });
 });
