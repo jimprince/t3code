@@ -56,10 +56,14 @@ import type { ServerRemoveKeybindingInput, ServerUpsertKeybindingInput } from ".
 import * as Schema from "effect/Schema";
 import type {
   ClientOrchestrationCommand,
+  OrchestrationExportThreadInput,
+  OrchestrationExportThreadResult,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetFullThreadDiffResult,
   OrchestrationGetTurnDiffInput,
   OrchestrationGetTurnDiffResult,
+  OrchestrationImportThreadInput,
+  OrchestrationImportThreadResult,
   OrchestrationShellSnapshot,
   OrchestrationShellStreamItem,
   OrchestrationSubscribeThreadInput,
@@ -618,5 +622,11 @@ export interface EnvironmentApi {
         onResubscribe?: () => void;
       },
     ) => () => void;
+    exportThread: (
+      input: OrchestrationExportThreadInput,
+    ) => Promise<OrchestrationExportThreadResult>;
+    importThread: (
+      input: OrchestrationImportThreadInput,
+    ) => Promise<OrchestrationImportThreadResult>;
   };
 }
