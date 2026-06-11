@@ -629,5 +629,144 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         }
       }).pipe(Effect.scoped),
     );
+
+    it.effect("falls back to a new branch when the thread branch is the target's own main", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-move-main-");
+        const sourceRepo = joinPath(root, "source-repo");
+        const targetRepo = joinPath(root, "target-repo");
+        const sourceWorktreesRoot = joinPath(root, "source-worktrees");
+        const targetWorktreesRoot = joinPath(root, "target-worktrees");
+        for (const dir of [sourceRepo, targetRepo, sourceWorktreesRoot, targetWorktreesRoot]) {
+          yield* makeDirectory(dir);
+        }
+
+        const source = yield* buildTransferSystem({
+          prefix: "t3-thread-move-main-source-",
+          worktreesRoot: sourceWorktreesRoot,
+        });
+        const target = yield* buildTransferSystem({
+          prefix: "t3-thread-move-main-target-",
+          worktreesRoot: targetWorktreesRoot,
+        });
+
+        const threadId = ThreadId.make("cccc1111-2222-4333-8444-555566667777");
+
+        // REGRESSION: a thread working directly on `main` (no dedicated
+        // worktree) must move even though the target repository has its own
+        // checked-out `main` pointing at different history. The old behavior
+        // failed the whole move with "Branch 'main' already exists in the
+        // target repository and points elsewhere".
+        yield* initRepo(sourceRepo);
+        yield* writeTextFile(joinPath(sourceRepo, "README.md"), "# changed on main\n");
+
+        const sourceProjectId = ProjectId.make("project-main-source");
+        yield* source.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-main-source-project"),
+          projectId: sourceProjectId,
+          title: "Main Source Project",
+          workspaceRoot: sourceRepo,
+          createdAt: now(),
+        });
+        const portable: PortableThread = {
+          id: threadId,
+          title: "Thread on main",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("claude"),
+            model: "claude-fable-5",
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: "main",
+          goal: null,
+          createdAt: now(),
+          updatedAt: now(),
+          messages: [
+            {
+              id: MessageId.make("message-main-1"),
+              role: "user",
+              text: "work on main",
+              turnId: null,
+              streaming: false,
+              createdAt: now(),
+              updatedAt: now(),
+            },
+          ],
+          proposedPlans: [],
+          activities: [],
+          checkpoints: [],
+        };
+        yield* source.engine.dispatch({
+          type: "thread.import",
+          commandId: CommandId.make("cmd-main-source-seed"),
+          threadId,
+          projectId: sourceProjectId,
+          thread: portable,
+          branch: "main",
+          worktreePath: null,
+          createdAt: now(),
+        });
+
+        const exported = yield* source.transfer.exportThread({ threadId });
+        expect(exported.bundle.git).not.toBeNull();
+        expect(exported.bundle.git!.branch).toBe("main");
+        expect(exported.bundle.git!.dirtyDiff).toContain("changed on main");
+
+        // Target repository: unrelated history, `main` checked out at root.
+        yield* initRepo(targetRepo);
+        yield* writeTextFile(joinPath(targetRepo, "OTHER.md"), "target only\n");
+        yield* execGit(targetRepo, ["add", "."]);
+        yield* execGit(targetRepo, ["commit", "-m", "target divergence"]);
+        const targetMainShaBefore = yield* execGit(targetRepo, ["rev-parse", "refs/heads/main"]);
+
+        const targetProjectId = ProjectId.make("project-main-target");
+        yield* target.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-main-target-project"),
+          projectId: targetProjectId,
+          title: "Main Target Project",
+          workspaceRoot: targetRepo,
+          createdAt: now(),
+        });
+
+        // Without consent the import refuses with a machine-readable reason
+        // (the UI uses it to offer the new-worktree fallback).
+        const refused = yield* Effect.exit(
+          target.transfer.importThread({
+            projectId: targetProjectId,
+            bundle: exported.bundle,
+          }),
+        );
+        expect(Exit.isFailure(refused)).toBe(true);
+        if (Exit.isFailure(refused)) {
+          const error = Cause.squash(refused.cause) as { reason?: string };
+          expect(error.reason).toBe("branch-conflict");
+        }
+
+        const imported = yield* target.transfer.importThread({
+          projectId: targetProjectId,
+          bundle: exported.bundle,
+          branchConflict: "new-worktree",
+        });
+        expect(imported.worktreePath).not.toBeNull();
+        expect(
+          imported.warnings.some((warning) => warning.includes("continues on new branch")),
+        ).toBe(true);
+
+        const movedThread = yield* target.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(movedThread).toBeDefined();
+        expect(movedThread!.branch).toMatch(/^main-moved-cccc1111/);
+
+        // The target's own main is untouched; the work landed on the
+        // fallback branch's worktree.
+        const targetMainShaAfter = yield* execGit(targetRepo, ["rev-parse", "refs/heads/main"]);
+        expect(targetMainShaAfter).toBe(targetMainShaBefore);
+        const movedReadme = yield* readTextFile(joinPath(imported.worktreePath!, "README.md"));
+        expect(movedReadme).toBe("# changed on main\n");
+      }).pipe(Effect.scoped),
+    );
   });
 });
