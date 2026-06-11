@@ -37,6 +37,7 @@ import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import {
+  describeErrorChain,
   encodeClaudeProjectDirName,
   isSafeRelativeFilePath,
   readClaudeSessionIdFromCursor,
@@ -233,6 +234,24 @@ describe("Claude session helpers", () => {
     expect(JSON.parse(lines[0]!)).toMatchObject({ cwd: "/new/cwd" });
     expect(JSON.parse(lines[1]!)).toMatchObject({ cwd: "/unrelated/cwd" });
     expect(lines[2]).toBe("not json at all");
+  });
+
+  plainIt("keeps nested SQL detail when flattening error chains", () => {
+    // REGRESSION: a failed import surfaced only the generic top-level
+    // "Failed to execute statement"; the underlying sqlite detail must be
+    // part of the message users copy from the failure toast.
+    const flattened = describeErrorChain(
+      {
+        _tag: "SqlError",
+        message: "Failed to execute statement",
+        cause: { message: "SQLITE_TOOBIG: string or blob too big" },
+      },
+      "fallback",
+    );
+    expect(flattened).toContain("SqlError: Failed to execute statement");
+    expect(flattened).toContain("SQLITE_TOOBIG");
+    expect(describeErrorChain(undefined, "fallback")).toBe("fallback");
+    expect(describeErrorChain("plain", "fallback")).toBe("plain");
   });
 
   plainIt("rejects unsafe untracked file paths", () => {

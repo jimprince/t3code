@@ -15,6 +15,92 @@ export interface ThreadMoveResult {
   readonly warnings: readonly string[];
 }
 
+/**
+ * Flatten an error plus its nested causes into diagnostic lines for the
+ * failure toast. The toast's copy button copies the full description, so
+ * everything needed to debug a failed move belongs here.
+ */
+export function collectErrorDiagnostics(error: unknown): string[] {
+  const lines: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (typeof current === "string") {
+      if (current.trim().length > 0) {
+        lines.push(current.trim());
+      }
+      break;
+    }
+    if (typeof current !== "object" || current === null || seen.has(current)) {
+      break;
+    }
+    seen.add(current);
+    const record = current as {
+      _tag?: unknown;
+      reason?: unknown;
+      operation?: unknown;
+      message?: unknown;
+      detail?: unknown;
+      cause?: unknown;
+    };
+    const segments: string[] = [];
+    if (typeof record._tag === "string") {
+      segments.push(record._tag);
+    } else if (current instanceof Error && current.name !== "Error") {
+      segments.push(current.name);
+    }
+    if (typeof record.reason === "string") {
+      segments.push(`reason=${record.reason}`);
+    }
+    if (typeof record.operation === "string") {
+      segments.push(record.operation);
+    }
+    if (typeof record.message === "string" && record.message.trim().length > 0) {
+      segments.push(record.message.trim());
+    }
+    if (typeof record.detail === "string" && record.detail.trim().length > 0) {
+      segments.push(record.detail.trim());
+    }
+    if (segments.length > 0) {
+      const line = segments.join(": ");
+      if (lines.at(-1) !== line) {
+        lines.push(line);
+      }
+    }
+    current = record.cause;
+  }
+  if (lines.length === 0) {
+    lines.push("An unknown error occurred.");
+  }
+  return lines;
+}
+
+/**
+ * Full diagnostic report for a failed move. The first line stays readable in
+ * the toast; the rest rides along for the copy button and bug reports.
+ */
+export function buildThreadMoveFailureReport(input: {
+  readonly error: unknown;
+  readonly threadTitle: string;
+  readonly source: ScopedThreadRef;
+  readonly sourceLabel: string | null;
+  readonly target: ThreadMoveTarget;
+  readonly targetLabel: string | null;
+  readonly phase: ThreadMovePhase | "preparing";
+}): string {
+  const [headline, ...causeLines] = collectErrorDiagnostics(input.error);
+  return [
+    headline,
+    "",
+    `Thread: "${input.threadTitle}" (${input.source.threadId})`,
+    `From: ${input.sourceLabel ?? input.source.environmentId} (env ${input.source.environmentId})`,
+    `To: ${input.targetLabel ?? input.target.environmentId} (env ${input.target.environmentId}, project ${input.target.projectId})`,
+    `Failed while: ${input.phase}`,
+    `At: ${new Date().toISOString()}`,
+    ...(causeLines.length > 0 ? ["Error chain:", ...causeLines.map((line) => `  ${line}`)] : []),
+  ].join("\n");
+}
+
 /** The import refused because the thread's branch already exists on the
  * target with different history or is checked out there. */
 export function isThreadMoveBranchConflict(error: unknown): boolean {
