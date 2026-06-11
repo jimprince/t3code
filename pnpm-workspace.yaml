@@ -40,6 +40,11 @@ catalog:
   vite-plus: 0.1.24
   yaml: ^2.9.0
 overrides:
+  # Pin to the version the @expo/metro-config patch targets. expo's ~56.0.13
+  # range otherwise resolves to newer publishes on fresh installs, which makes
+  # pnpm reject the whole install with ERR_PNPM_UNUSED_PATCH (seen with
+  # 56.0.14 in the release-smoke lockfile-only resolve).
+  "@expo/metro-config": "56.0.13"
   # Clerk publishes wallet auth integrations as required dependencies. T3 Code does
   # not support wallet auth, so keep that unused dependency tree out of installs.
   "@clerk/clerk-js>@base-org/account": "-"
