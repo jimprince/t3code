@@ -79,6 +79,7 @@ import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
+import { ThreadTransferLive } from "./orchestration/Layers/ThreadTransfer.ts";
 import {
   clearPersistedServerRuntimeState,
   makePersistedServerRuntimeState,
@@ -265,7 +266,18 @@ const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
 
 const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   // Core Services
-  Layer.provideMerge(CheckpointingLayerLive),
+  // Thread moves need the provider runtime repository (private to the
+  // provider session directory elsewhere) and a raw VcsProcess for git
+  // bundle/fetch/apply; everything else resolves from the merges below.
+  Layer.provideMerge(
+    Layer.mergeAll(
+      ThreadTransferLive.pipe(
+        Layer.provide(VcsProcess.layer),
+        Layer.provide(ProviderSessionRuntimeRepositoryLive),
+      ),
+      CheckpointingLayerLive,
+    ),
+  ),
   Layer.provideMerge(SourceControlProviderRegistryLayerLive),
   Layer.provideMerge(GitLayerLive),
   Layer.provideMerge(VcsLayerLive),
