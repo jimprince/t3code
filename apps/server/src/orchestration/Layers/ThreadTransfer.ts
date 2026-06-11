@@ -28,6 +28,7 @@ import {
   type PortableThread,
   type ThreadId,
   type ThreadMoveBundle,
+  type ThreadMoveBranchConflictResolution,
   type ThreadMoveGitState,
   type ThreadMoveProviderSession,
   type ThreadMoveUntrackedFile,
@@ -631,7 +632,9 @@ const make = Effect.gen(function* () {
 
   const restoreGitState = (input: {
     readonly gitState: ThreadMoveGitState;
+    readonly threadId: ThreadId;
     readonly workspaceRoot: string;
+    readonly branchConflict: ThreadMoveBranchConflictResolution;
     readonly warnings: string[];
   }) =>
     Effect.gen(function* () {
@@ -651,10 +654,70 @@ const make = Effect.gen(function* () {
         allowNonZeroExit: true,
       });
       const existingBranchSha = existingBranch.exitCode === 0 ? existingBranch.stdout.trim() : null;
-      if (existingBranchSha !== null && existingBranchSha !== gitState.branchTipSha) {
+
+      // A branch that is already checked out (e.g. the project root sitting
+      // on `main`) cannot host another worktree even at the same commit.
+      const worktreeList = yield* git({
+        operation: "ThreadTransfer.import.worktreeList",
+        cwd: workspaceRoot,
+        args: ["worktree", "list", "--porcelain"],
+        allowNonZeroExit: true,
+      });
+      const checkedOutBranches = new Set(
+        worktreeList.stdout
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line.startsWith("branch "))
+          .map((line) => line.slice("branch ".length)),
+      );
+
+      // Shared or diverged branches (a thread working directly on `main`,
+      // or a rare name collision) must not be overwritten or hijacked on
+      // the target. With the caller's consent the thread's work lands on a
+      // fallback branch at the exported tip; otherwise fail with a
+      // machine-readable reason so the client can ask the user and retry.
+      const branchUnavailable =
+        existingBranchSha !== null &&
+        (existingBranchSha !== gitState.branchTipSha ||
+          checkedOutBranches.has(`refs/heads/${gitState.branch}`));
+      if (branchUnavailable && input.branchConflict !== "new-worktree") {
         return yield* new OrchestrationImportThreadError({
-          message: `Branch '${gitState.branch}' already exists in the target repository and points elsewhere; resolve it before moving this thread.`,
+          message: `Branch '${gitState.branch}' already exists on the target machine (${
+            existingBranchSha !== gitState.branchTipSha
+              ? "it points at different history"
+              : "it is checked out"
+          }). Retry with the new-worktree option to continue the thread on a fallback branch.`,
+          reason: "branch-conflict",
         });
+      }
+      let targetBranch = gitState.branch;
+      if (branchUnavailable) {
+        const suffix =
+          input.threadId
+            .replace(/[^a-zA-Z0-9]/g, "")
+            .slice(0, 8)
+            .toLowerCase() || "thread";
+        let candidate = `${gitState.branch}-moved-${suffix}`;
+        for (let attempt = 2; ; attempt += 1) {
+          const candidateExists = yield* git({
+            operation: "ThreadTransfer.import.fallbackBranchLookup",
+            cwd: workspaceRoot,
+            args: ["rev-parse", "--verify", "--quiet", `refs/heads/${candidate}`],
+            allowNonZeroExit: true,
+          });
+          if (candidateExists.exitCode !== 0) {
+            break;
+          }
+          candidate = `${gitState.branch}-moved-${suffix}-${attempt}`;
+        }
+        targetBranch = candidate;
+        warnings.push(
+          `Branch '${gitState.branch}' on the target machine is already in use (${
+            existingBranchSha !== gitState.branchTipSha
+              ? "it points at different history"
+              : "it is checked out"
+          }), so the moved thread continues on new branch '${targetBranch}' at the exported state.`,
+        );
       }
 
       if (gitState.bundleBase64 !== null) {
@@ -690,11 +753,17 @@ const make = Effect.gen(function* () {
           .map((line) => line.split(/\s+/)[1])
           .filter((ref): ref is string => ref !== undefined && ref !== "HEAD");
         if (bundledRefs.length > 0) {
-          const refspecs = bundledRefs.map((ref) =>
-            existingBranchSha !== null && ref === `refs/heads/${gitState.branch}`
-              ? `${ref}:${ref}` // same tip; non-forced no-op fetch
-              : `+${ref}:${ref}`,
-          );
+          const refspecs = bundledRefs.map((ref) => {
+            if (ref !== `refs/heads/${gitState.branch}`) {
+              return `+${ref}:${ref}`;
+            }
+            if (targetBranch !== gitState.branch) {
+              // Land the bundle's branch on the fresh fallback name.
+              return `+${ref}:refs/heads/${targetBranch}`;
+            }
+            // Same tip already present: non-forced no-op fetch.
+            return existingBranchSha !== null ? `${ref}:${ref}` : `+${ref}:${ref}`;
+          });
           yield* git({
             operation: "ThreadTransfer.import.bundleFetch",
             cwd: workspaceRoot,
@@ -712,7 +781,7 @@ const make = Effect.gen(function* () {
       const branchAfterFetch = yield* git({
         operation: "ThreadTransfer.import.branchVerify",
         cwd: workspaceRoot,
-        args: ["rev-parse", "--verify", "--quiet", `refs/heads/${gitState.branch}`],
+        args: ["rev-parse", "--verify", "--quiet", `refs/heads/${targetBranch}`],
         allowNonZeroExit: true,
       });
       if (branchAfterFetch.exitCode !== 0) {
@@ -730,13 +799,13 @@ const make = Effect.gen(function* () {
         yield* git({
           operation: "ThreadTransfer.import.branchCreate",
           cwd: workspaceRoot,
-          args: ["branch", gitState.branch, gitState.branchTipSha],
+          args: ["branch", targetBranch, gitState.branchTipSha],
         });
       }
 
       const worktree = yield* gitWorkflow.createWorktree({
         cwd: workspaceRoot,
-        refName: gitState.branch,
+        refName: targetBranch,
         path: null,
       });
       const worktreePath = worktree.worktree.path;
@@ -786,7 +855,7 @@ const make = Effect.gen(function* () {
         ),
       );
 
-      return { branch: gitState.branch, worktreePath, checkpointsRestored: true };
+      return { branch: targetBranch, worktreePath, checkpointsRestored: true };
     });
 
   const transplantProviderSession = (input: {
@@ -865,7 +934,9 @@ const make = Effect.gen(function* () {
       if (input.bundle.git !== null) {
         const restored = yield* restoreGitState({
           gitState: input.bundle.git,
+          threadId: portable.id,
           workspaceRoot: project.workspaceRoot,
+          branchConflict: input.branchConflict ?? "fail",
           warnings,
         });
         branch = restored.branch;

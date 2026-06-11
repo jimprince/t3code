@@ -571,9 +571,21 @@ export const OrchestrationExportThreadResult = Schema.Struct({
 });
 export type OrchestrationExportThreadResult = typeof OrchestrationExportThreadResult.Type;
 
+/**
+ * How the importer should react when the thread's branch already exists on
+ * the target with different history or is checked out there. Default is
+ * "fail" with a machine-readable `reason: "branch-conflict"` so clients can
+ * offer the fallback as an explicit user choice and retry with
+ * "new-worktree" (a fallback branch at the exported tip + fresh worktree;
+ * the target's own branch is never modified).
+ */
+export const ThreadMoveBranchConflictResolution = Schema.Literals(["fail", "new-worktree"]);
+export type ThreadMoveBranchConflictResolution = typeof ThreadMoveBranchConflictResolution.Type;
+
 export const OrchestrationImportThreadInput = Schema.Struct({
   projectId: ProjectId,
   bundle: ThreadMoveBundle,
+  branchConflict: Schema.optional(ThreadMoveBranchConflictResolution),
 });
 export type OrchestrationImportThreadInput = typeof OrchestrationImportThreadInput.Type;
 
@@ -1518,6 +1530,8 @@ export class OrchestrationImportThreadError extends Schema.TaggedErrorClass<Orch
   "OrchestrationImportThreadError",
   {
     message: TrimmedNonEmptyString,
+    /** Machine-readable failure class for client-side recovery flows. */
+    reason: Schema.optional(Schema.Literal("branch-conflict")),
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}

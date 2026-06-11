@@ -20,7 +20,12 @@ the target confirms the import, so a failed move never loses the thread.
   travel as a thin git bundle; a new worktree is created in the target clone,
   and uncommitted tracked changes plus untracked files are restored into it.
   The target clone must already contain the commits the thread branch is
-  based on (fetch/pull first if the move reports missing commits).
+  based on (fetch/pull first if the move reports missing commits). If the
+  thread's branch already exists on the target with different history or is
+  checked out there (for example a thread working directly on `main`), the
+  move asks whether to create a new worktree on a fallback branch named
+  `<branch>-moved-<thread-id-prefix>` at the exported tip; the target's own
+  branch is never modified.
 - **Agent memory (Claude)** — the Claude Code session transcript is copied
   under the target machine's `~/.claude/projects/<new-worktree>` directory and
   the resume cursor is preserved, so the next turn resumes with full native
