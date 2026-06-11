@@ -139,17 +139,65 @@ export function isSafeRelativeFilePath(filePath: string): boolean {
   return segments.every((segment) => segment !== "..");
 }
 
-function toMessage(cause: unknown, fallback: string): string {
-  if (cause instanceof Error && cause.message.trim().length > 0) {
-    return cause.message;
-  }
-  if (typeof cause === "object" && cause !== null && "message" in cause) {
-    const message = (cause as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim().length > 0) {
-      return message;
+/**
+ * Flatten an error and its cause chain into one diagnostic string. Generic
+ * top-level messages ("Failed to execute statement") are useless without the
+ * underlying detail, so collect `_tag`/`operation`/`message`/`detail` from up
+ * to six nested causes and join them.
+ */
+export function describeErrorChain(cause: unknown, fallback: string): string {
+  const parts: string[] = [];
+  const seen = new Set<unknown>();
+  let current: unknown = cause;
+  for (let depth = 0; depth < 6; depth += 1) {
+    if (typeof current === "string") {
+      if (current.trim().length > 0) {
+        parts.push(current.trim());
+      }
+      break;
     }
+    if (typeof current !== "object" || current === null || seen.has(current)) {
+      break;
+    }
+    seen.add(current);
+    const record = current as {
+      _tag?: unknown;
+      operation?: unknown;
+      message?: unknown;
+      detail?: unknown;
+      cause?: unknown;
+    };
+    const segments: string[] = [];
+    if (typeof record._tag === "string" && record._tag.trim().length > 0) {
+      segments.push(record._tag.trim());
+    } else if (current instanceof Error && current.name !== "Error") {
+      segments.push(current.name);
+    }
+    if (typeof record.operation === "string" && record.operation.trim().length > 0) {
+      segments.push(record.operation.trim());
+    }
+    if (typeof record.message === "string" && record.message.trim().length > 0) {
+      segments.push(record.message.trim());
+    }
+    if (typeof record.detail === "string" && record.detail.trim().length > 0) {
+      segments.push(record.detail.trim());
+    }
+    if (segments.length > 0) {
+      const part = segments.join(": ");
+      if (parts.at(-1) !== part) {
+        parts.push(part);
+      }
+    }
+    current = record.cause;
   }
-  return fallback;
+  if (parts.length === 0) {
+    return fallback;
+  }
+  return parts.join(" — caused by: ");
+}
+
+function toMessage(cause: unknown, fallback: string): string {
+  return describeErrorChain(cause, fallback);
 }
 
 const isExportThreadError = Schema.is(OrchestrationExportThreadError);

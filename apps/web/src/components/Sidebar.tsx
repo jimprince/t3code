@@ -87,7 +87,11 @@ import {
 import { useModelPickerOpen } from "../modelPickerOpenState";
 import { useShortcutModifierState } from "../shortcutModifierState";
 import { useVcsStatus } from "../lib/vcsStatusState";
-import { moveThreadToEnvironment } from "../lib/threadMove";
+import {
+  buildThreadMoveFailureReport,
+  moveThreadToEnvironment,
+  type ThreadMovePhase,
+} from "../lib/threadMove";
 import { readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
@@ -2002,6 +2006,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           description: "Exporting from the source machine",
           timeout: 0,
         });
+        let movePhase: ThreadMovePhase | "preparing" = "preparing";
         try {
           const moved = await moveThreadToEnvironment({
             source: threadRef,
@@ -2018,6 +2023,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
                 ].join("\n"),
               ),
             onProgress: (phase) => {
+              movePhase = phase;
               toastManager.update(progressToastId, {
                 type: "loading",
                 title: "Moving thread…",
@@ -2057,12 +2063,28 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             }),
           );
         } catch (error) {
+          // The toast clamps long bodies visually; its copy button copies
+          // this full report, so include everything a bug hunt needs.
           toastManager.update(
             progressToastId,
             stackedThreadToast({
               type: "error",
               title: "Failed to move thread",
-              description: error instanceof Error ? error.message : "An error occurred.",
+              description: buildThreadMoveFailureReport({
+                error,
+                threadTitle: thread.title,
+                source: threadRef,
+                sourceLabel:
+                  project.memberProjects.find(
+                    (member) => member.environmentId === thread.environmentId,
+                  )?.environmentLabel ?? null,
+                target: {
+                  environmentId: targetMember.environmentId,
+                  projectId: targetMember.id,
+                },
+                targetLabel,
+                phase: movePhase,
+              }),
               timeout: 0,
             }),
           );
