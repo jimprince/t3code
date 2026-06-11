@@ -170,6 +170,8 @@ export interface WsRpcClient {
     >;
     readonly subscribeShell: RpcStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeShell>;
     readonly subscribeThread: RpcInputStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeThread>;
+    readonly exportThread: RpcUnaryMethod<typeof ORCHESTRATION_WS_METHODS.exportThread>;
+    readonly importThread: RpcUnaryMethod<typeof ORCHESTRATION_WS_METHODS.importThread>;
   };
 }
 
@@ -376,6 +378,10 @@ export function createWsRpcClient(
           listener,
           subscriptionOptions(options, ORCHESTRATION_WS_METHODS.subscribeThread),
         ),
+      exportThread: (input) =>
+        transport.request((client) => client[ORCHESTRATION_WS_METHODS.exportThread](input)),
+      importThread: (input) =>
+        transport.request((client) => client[ORCHESTRATION_WS_METHODS.importThread](input)),
     },
   };
 }

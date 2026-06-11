@@ -86,6 +86,7 @@ import {
   ProjectionSnapshotQuery,
   type ProjectionSnapshotQueryShape,
 } from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ThreadTransfer } from "./orchestration/Services/ThreadTransfer.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { PersistenceSqlError } from "./persistence/Errors.ts";
 import {
@@ -579,6 +580,7 @@ const buildAppUnderTest = (options?: {
           ...options?.layers?.externalLauncher,
         }),
       ),
+      Layer.provide(Layer.mock(ThreadTransfer)({})),
       Layer.provide(
         Layer.mock(ProcessDiagnostics.ProcessDiagnostics)({
           read: Effect.succeed({

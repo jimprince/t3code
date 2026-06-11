@@ -1,5 +1,113 @@
 # Agent Requirements
 
+## Current Task: Move Thread To Another Machine (Phases 1–3)
+
+Implement cross-environment thread moves: a thread on one machine's T3 server
+can be exported and imported into a project on another machine's T3 server,
+keeping (1) full visible history, (2) git state (branch, checkpoints,
+uncommitted changes), and (3) provider conversational context (agent memory).
+
+### Current User Requirements
+
+- Phase 1 — History move: new server RPCs `thread.export` / `thread.import`
+  that transfer the thread's event-log slice so the imported thread shows the
+  full message/turn/activity history on the target environment.
+- Phase 2 — Git continuity: the export bundle carries the thread branch +
+  `refs/t3/checkpoints/<threadId>/*` refs (git bundle) plus a patch of
+  uncommitted worktree changes; import recreates the worktree and applies them.
+- Phase 3 — Agent-memory continuity: export resolves the provider session file
+  from the resume cursor (Claude first), includes it in the bundle; import
+  writes it under the target machine's provider session path for the new cwd
+  and rewrites the resume cursor so the next turn resumes with context.
+- Client UX: "Move to machine…" in the thread context menu, listing other
+  known environments that have a project with matching `RepositoryIdentity`;
+  client orchestrates export→import across its two connections.
+- Source thread is archived only after the target confirms a successful import.
+
+### Constraints
+
+- Fork repo: do not touch versioning/release files (`LLM_INSTRUCTIONS.md`).
+- Export must quiesce: interrupt active turn / stop provider session first.
+- Import must be idempotent enough to not corrupt on retry (reject if the
+  threadId already exists on the target).
+- Bundle is versioned; import rejects unknown newer versions.
+- Move keeps the same `threadId` (UUIDs are collision-free across machines).
+- Toolchain: pnpm + Vite+ (`vp check`, `vp run typecheck`, `vp test`/`vp run test`)
+  under Node 24.13.1. Regression mandate: tests must be seen to fail.
+
+### Acceptance Criteria
+
+- Export RPC on a thread returns a versioned bundle containing the event
+  slice, git bundle + dirty patch (when the project is a git repo), and the
+  Claude provider session file when resolvable.
+- Import RPC on a second server instance recreates the thread under a target
+  project: history visible, branch/checkpoint refs present, worktree
+  recreated with the dirty changes, and the Claude session resumable (cursor
+  points at the transplanted session file).
+- Importing a bundle whose threadId already exists fails cleanly.
+- Web UI exposes "Move to machine…" with matching-repo target environments,
+  runs the move, archives the source thread on success.
+- `vp check` and `vp run typecheck` pass; focused server + web tests pass.
+
+### Status
+
+- [x] Mapped server APIs (event store, engine command path, checkpoints,
+      Claude session file resolution, worktree service).
+- [x] Contracts: `ThreadMoveBundle`/`PortableThread` schemas, the
+      `orchestration.exportThread` / `orchestration.importThread` WS RPCs,
+      error classes, and the internal `thread.import` command
+      (`packages/contracts/src/{orchestration,rpc,ipc}.ts`).
+- [x] Server: `ThreadTransfer` service
+      (`apps/server/src/orchestration/{Services,Layers}/ThreadTransfer.ts`) —
+      export quiesces the session (interrupt + stop + poll), packages a thin
+      git bundle (branch + `refs/t3/checkpoints/*`, merge-base basis against
+      `origin/HEAD`, empty-bundle fallback to `branchTipSha`), dirty tracked
+      diff + untracked files (size-capped), and the Claude session JSONL
+      resolved from the resume cursor; import verifies/fetches the bundle,
+      recreates the worktree, applies dirty state, transplants the Claude
+      transcript under the new cwd (with `cwd` field rewrite) + provider
+      runtime row, then replays the portable thread via the `thread.import`
+      decider expansion into existing event types (no new event type, no
+      migration). Active imported goals get `lastTurnId` pinned to the final
+      imported turn so GoalReactor cannot auto-fire after a move.
+- [x] WS wiring: scope map (operate for both), handlers, layer provided in
+      `server.ts` runtime graph; `server.test.ts` mocks the service.
+- [x] Web client: `apps/web/src/lib/threadMove.ts` (client carries the bundle
+      between its two environment connections; archive deferred to caller),
+      "Move to machine…" context-menu item + target picker + progress/warning
+      toasts in `Sidebar.tsx`; source archived via `archiveThread` only after
+      import succeeds. Client runtime + EnvironmentApi expose the new RPCs.
+- [x] Tests (`apps/server/src/orchestration/Layers/ThreadTransfer.test.ts`):
+      Claude helper units, `thread.import` replay (incl. goal guard +
+      duplicate rejection), and a full two-environment round trip with real
+      git repos (branch, checkpoint ref, dirty diff, untracked file, Claude
+      session transplant, duplicate-import rejection).
+- [x] Verification gates.
+- [x] Docs: `docs/user/moving-threads.md` linked from `docs/README.md`.
+
+### Verification
+
+- Passed: `pnpm exec vp run typecheck` (full repo, 0 errors; ran under Node
+  22.22.1).
+- Passed: `pnpm exec vp check` (0 errors; 13 pre-existing warnings).
+- Passed: `pnpm exec vp run --filter t3 test
+src/orchestration/Layers/ThreadTransfer.test.ts` (6 tests).
+- Passed: full `vp run -r test` across the workspace; the only failure is
+  `apps/web/src/cloud/linkEnvironment.test.ts` ("preserves relay transport
+  failures while linking environments"), verified pre-existing by re-running
+  it on a clean tree (`git stash` → still fails).
+- Passed: full server suite during the session (145 files, 1214 tests).
+- Regression check (mandated break-the-fix): removing the decider's goal
+  `lastTurnId` override made the new test fail with
+  `expected 'turn-1' to be 'turn-2'`; restoring it passed again.
+- Known limitations (by design, surfaced as warnings in the move result):
+  non-Claude providers move history only; image attachment blobs and live
+  terminals do not move; oversized dirty diffs / untracked files / session
+  transcripts are skipped with warnings; the target clone must already
+  contain the bundle's basis commits.
+
+---
+
 ## Current Task: Repair Auth Pairing Migration Collision (proof_key_thumbprint)
 
 After the June 9 nightly (`512-fork.1`) rolled out, creating pairing
