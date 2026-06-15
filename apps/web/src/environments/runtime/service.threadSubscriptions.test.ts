@@ -25,6 +25,7 @@ const mockFetchRemoteSessionState = vi.fn();
 const mockResolveRemoteWebSocketConnectionUrl = vi.fn(async () => "ws://remote.example.test/ws");
 const mockRemoteHttpRunPromise = vi.fn((effect: Promise<unknown>) => effect);
 const mockConnectionReconnects: Array<ReturnType<typeof vi.fn>> = [];
+const mockConnectionLivenessChecks: Array<ReturnType<typeof vi.fn>> = [];
 let savedEnvironmentRegistryListener: (() => void) | null = null;
 
 type MockWsTransportInstance = {
@@ -291,7 +292,9 @@ describe("retainThreadDetailSubscription", () => {
     });
     mockCreateEnvironmentConnection.mockImplementation((input) => {
       const reconnect = vi.fn(async () => undefined);
+      const verifyLiveness = vi.fn(async () => true);
       mockConnectionReconnects.push(reconnect);
+      mockConnectionLivenessChecks.push(verifyLiveness);
       queueMicrotask(() => {
         input.onConfigSnapshot?.({
           environment: {
@@ -309,6 +312,7 @@ describe("retainThreadDetailSubscription", () => {
         knownEnvironment: input.knownEnvironment,
         client: input.client,
         ensureBootstrapped: vi.fn(async () => undefined),
+        verifyLiveness,
         reconnect,
         dispose: vi.fn(async () => undefined),
       };
@@ -335,6 +339,7 @@ describe("retainThreadDetailSubscription", () => {
       scopes: ["orchestration:read"],
     });
     mockConnectionReconnects.length = 0;
+    mockConnectionLivenessChecks.length = 0;
     mockWsTransportInstances.length = 0;
   });
 
@@ -565,7 +570,9 @@ describe("retainThreadDetailSubscription", () => {
       await import("./service");
     mockCreateEnvironmentConnection.mockImplementation((input) => {
       const reconnect = vi.fn(async () => undefined);
+      const verifyLiveness = vi.fn(async () => true);
       mockConnectionReconnects.push(reconnect);
+      mockConnectionLivenessChecks.push(verifyLiveness);
       queueMicrotask(() => {
         input.onConfigSnapshot?.({
           environment: {
@@ -581,11 +588,9 @@ describe("retainThreadDetailSubscription", () => {
         kind: input.kind,
         environmentId: input.knownEnvironment.environmentId,
         knownEnvironment: input.knownEnvironment,
-        client: {
-          ...input.client,
-          isHeartbeatFresh: vi.fn(() => true),
-        },
+        client: input.client,
         ensureBootstrapped: vi.fn(async () => undefined),
+        verifyLiveness,
         reconnect,
         dispose: vi.fn(async () => undefined),
       };
@@ -600,6 +605,9 @@ describe("retainThreadDetailSubscription", () => {
 
     visibilityState = "visible";
     documentTarget.dispatchEvent(new Event("visibilitychange"));
+    await vi.waitFor(() => {
+      expect(mockConnectionLivenessChecks[0]).toHaveBeenCalledTimes(1);
+    });
     expect(mockConnectionReconnects[0]).not.toHaveBeenCalled();
 
     stop();
@@ -644,6 +652,7 @@ describe("retainThreadDetailSubscription", () => {
 
     const stop = startEnvironmentConnectionService(new QueryClient());
     expect(mockConnectionReconnects).toHaveLength(1);
+    mockConnectionLivenessChecks[0]?.mockResolvedValue(false);
 
     visibilityState = "hidden";
     documentTarget.dispatchEvent(new Event("visibilitychange"));
@@ -651,7 +660,9 @@ describe("retainThreadDetailSubscription", () => {
 
     visibilityState = "visible";
     documentTarget.dispatchEvent(new Event("visibilitychange"));
-    expect(mockConnectionReconnects[0]).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(mockConnectionReconnects[0]).toHaveBeenCalledTimes(1);
+    });
 
     stop();
     await resetEnvironmentServiceForTests();

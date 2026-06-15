@@ -186,6 +186,62 @@ describe("createEnvironmentConnection", () => {
     await connection.dispose();
   });
 
+  it("reports liveness when the config probe resolves", async () => {
+    const environmentId = EnvironmentId.make("env-1");
+    const { client } = createTestClient();
+
+    const connection = createEnvironmentConnection({
+      kind: "saved",
+      knownEnvironment: {
+        id: "env-1",
+        label: "Remote env",
+        source: "manual",
+        target: {
+          httpBaseUrl: "http://example.test",
+          wsBaseUrl: "ws://example.test",
+        },
+        environmentId,
+      },
+      client,
+      applyShellEvent: vi.fn(),
+      syncShellSnapshot: vi.fn(),
+    });
+
+    await expect(connection.verifyLiveness()).resolves.toBe(true);
+    expect(client.server.getConfig).toHaveBeenCalled();
+
+    await connection.dispose();
+  });
+
+  it("reports not-alive when the config probe does not answer before the timeout", async () => {
+    const environmentId = EnvironmentId.make("env-1");
+    const { client } = createTestClient();
+    (client.server.getConfig as ReturnType<typeof vi.fn>).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+
+    const connection = createEnvironmentConnection({
+      kind: "saved",
+      knownEnvironment: {
+        id: "env-1",
+        label: "Remote env",
+        source: "manual",
+        target: {
+          httpBaseUrl: "http://example.test",
+          wsBaseUrl: "ws://example.test",
+        },
+        environmentId,
+      },
+      client,
+      applyShellEvent: vi.fn(),
+      syncShellSnapshot: vi.fn(),
+    });
+
+    await expect(connection.verifyLiveness(10)).resolves.toBe(false);
+
+    await connection.dispose();
+  });
+
   it("rejects welcome/config identity drift", async () => {
     const environmentId = EnvironmentId.make("env-1");
     const { client, emitWelcome } = createTestClient();

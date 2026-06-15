@@ -165,6 +165,7 @@ const lastHeartbeatTimeoutReconnectAtByEnvironment = new Map<EnvironmentId, numb
 const THREAD_DETAIL_SUBSCRIPTION_IDLE_EVICTION_MS = 15 * 60 * 1000;
 const MAX_CACHED_THREAD_DETAIL_SUBSCRIPTIONS = 32;
 const BROWSER_RESUME_RECONNECT_COOLDOWN_MS = 2_000;
+const BROWSER_RESUME_LIVENESS_PROBE_TIMEOUT_MS = 4_000;
 const HEARTBEAT_TIMEOUT_RECONNECT_COOLDOWN_MS = 2_000;
 const INITIAL_SERVER_CONFIG_SNAPSHOT_WAIT_MS = 150;
 const NOOP = () => undefined;
@@ -1718,19 +1719,28 @@ function reconnectEnvironmentConnectionsAfterBrowserResume(reason: string): void
   if (now - lastBrowserResumeReconnectAt < BROWSER_RESUME_RECONNECT_COOLDOWN_MS) {
     return;
   }
+  lastBrowserResumeReconnectAt = now;
 
   for (const connection of environmentConnections.values()) {
-    if (connection.client.isHeartbeatFresh()) {
-      continue;
-    }
-    lastBrowserResumeReconnectAt = now;
-    void connection.reconnect().catch((error) => {
-      console.warn("Environment reconnect after browser resume failed", {
-        environmentId: connection.environmentId,
-        reason,
-        error: error instanceof Error ? error.message : String(error),
+    // A mobile OS can silently kill a backgrounded socket while the heartbeat
+    // timestamp still looks fresh, so actively probe the connection instead of
+    // trusting the last pong. A live connection answers immediately and is left
+    // alone; a dead one fails the probe and gets reconnected.
+    void connection
+      .verifyLiveness(BROWSER_RESUME_LIVENESS_PROBE_TIMEOUT_MS)
+      .then((alive) => {
+        if (alive) {
+          return;
+        }
+        return connection.reconnect();
+      })
+      .catch((error) => {
+        console.warn("Environment reconnect after browser resume failed", {
+          environmentId: connection.environmentId,
+          reason,
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
-    });
   }
 }
 
