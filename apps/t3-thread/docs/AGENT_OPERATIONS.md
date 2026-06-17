@@ -155,17 +155,38 @@ Attach a saved name to an existing thread:
 t3-thread attach --name <agent> --env <environment> --thread <thread-id> --project <project-id>
 ```
 
+For common lifecycle commands you can now use the raw thread UUID directly
+without attaching first. The CLI resolves raw UUIDs by:
+
+1. checking saved mappings first
+2. scanning paired environments next
+3. inferring environment and project metadata from the remote thread shell
+4. reporting the paired environments checked if the UUID is not found
+
+Examples:
+
+```bash
+t3-thread status <thread-id>
+t3-thread result <thread-id> --final-message
+t3-thread send <thread-id> "Continue from the last checkpoint."
+```
+
+Attach is still the right move when you want a persistent local alias or local
+read-state features such as `result --mark-seen`.
+
 Check compact status:
 
 ```bash
 t3-thread status
 t3-thread status <agent>
+t3-thread status <thread-id>
 ```
 
 Inspect the recent work log for provider/runtime failures:
 
 ```bash
 t3-thread worklog <agent> --tail 10
+t3-thread worklog <thread-id> --tail 10
 ```
 
 See which agents need attention:
@@ -179,16 +200,22 @@ Send follow-up instructions:
 
 ```bash
 t3-thread send <agent> "Narrow the fix."
+t3-thread send <thread-id> "Narrow the fix."
 t3-thread clarify <agent> "What is blocking you?"
+t3-thread clarify <thread-id> "What is blocking you?"
 t3-thread revise <agent> "Redo this without touching generated files."
+t3-thread revise <thread-id> "Redo this without touching generated files."
 t3-thread complete <agent>
+t3-thread complete <thread-id>
 ```
 
 Wait for a state transition:
 
 ```bash
 t3-thread wait <agent> --for completion --timeout 600 --interval 5
+t3-thread wait <thread-id> --for completion --timeout 600 --interval 5
 t3-thread wait <agent> --for attention
+t3-thread wait <thread-id> --for attention
 ```
 
 Review output only when needed:
@@ -197,17 +224,20 @@ Review output only when needed:
 t3-thread result <agent> --assistant-only --tail 1
 t3-thread result <agent> --assistant-only --tail 1 --mark-seen
 t3-thread result <agent> --wait 120 --final-message
+t3-thread result <thread-id> --wait 120 --final-message
 ```
 
 Notes:
 
 - `--final-message` returns the terminal assistant message for the latest turn. It first scans the thread for the last assistant message whose `turnId` matches `latestTurn.turnId`, then falls back to `latestTurn.assistantMessageId`, and finally returns nothing if neither resolves. This avoids returning a stale setup/progress message when T3 pins `assistantMessageId` to an early message in the turn.
 - `--wait <seconds>` waits for the current/latest turn to complete before reading, so the common “wait, then fetch the final answer” path can happen in one command.
+- `--mark-seen` still requires a saved agent name because read/ack state is stored in local CLI state, not in T3.
 
 Archive a stale remote thread through T3 RPC:
 
 ```bash
 t3-thread archive <agent>
+t3-thread archive <thread-id>
 ```
 
 Forget a saved local mapping after the thread is archived or otherwise no longer needed:
@@ -253,9 +283,10 @@ Register the calling T3 thread as a subscriber for a saved source agent:
 
 ```bash
 t3-thread subscribe --watch <agent>
+t3-thread subscribe --watch <thread-id>
 ```
 
-This works for the raw calling thread even when it is not saved locally, as long as the thread can be found in a paired environment.
+This works for the raw calling thread even when it is not saved locally, and the watched source can now be either a saved agent name or a raw thread UUID as long as it can be found in a paired environment.
 
 Create a worker and use the default caller auto-subscription:
 
