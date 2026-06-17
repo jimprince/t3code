@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 
+import { assertSavedAgentCapability, resolveAgentTarget } from "./agent-targets.js";
 import { buildFollowUpMessage } from "./agentPrompts.js";
 import { RemoteEnvironmentClient } from "./client.js";
 import { resolvePairingTarget } from "./http.js";
@@ -54,14 +55,34 @@ function collectOption(value: string, previous: string[] = []): string[] {
 
 async function withAgent(
   agentName: string,
-): Promise<{ state: Awaited<ReturnType<typeof loadState>>; agent: SavedAgent; client: RemoteEnvironmentClient }> {
+): Promise<{
+  state: Awaited<ReturnType<typeof loadState>>;
+  agent: SavedAgent;
+  client: RemoteEnvironmentClient;
+  saved: boolean;
+  target: Awaited<ReturnType<typeof resolveAgentTarget>>;
+}> {
   const state = await loadState();
-  const agent = requireAgent(state, agentName);
-  const environment = requireEnvironment(state, agent.environment);
+  const agentTarget = await resolveAgentTarget(state, agentName, {
+    clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
+  });
+  const environment = requireEnvironment(state, agentTarget.environment);
   return {
     state,
-    agent,
+    agent:
+      agentTarget.savedAgent ??
+      {
+        name: agentTarget.threadId,
+        environment: agentTarget.environment,
+        threadId: agentTarget.threadId,
+        projectId: agentTarget.projectId,
+        title: agentTarget.title,
+        createdAt: new Date().toISOString(),
+        lastSeenAssistantMessageId: null,
+      },
     client: new RemoteEnvironmentClient(environment),
+    saved: agentTarget.savedAgent !== null,
+    target: agentTarget,
   };
 }
 
@@ -565,11 +586,12 @@ agent
   .argument("<name>", "agent name")
   .description("Archive the remote thread for a saved agent via T3 RPC")
   .action(async (name) => {
-    const { agent: savedAgent, client } = await withAgent(name);
+    const { agent: savedAgent, client, saved } = await withAgent(name);
     const archived = await client.archiveThread(savedAgent.threadId);
     printJson({
-      agent: savedAgent.name,
+      agent: saved ? savedAgent.name : null,
       threadId: savedAgent.threadId,
+      environment: savedAgent.environment,
       archived,
     });
   });
@@ -649,11 +671,18 @@ agent
 
 agent
   .command("subscribe")
-  .description("Subscribe the calling T3 thread to attention from a saved source agent")
-  .requiredOption("--watch <name>", "saved source agent name to watch")
+  .description("Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID")
+  .requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch")
   .action(async (options) => {
     const { state, caller } = await withCallerFromEnv();
-    const source = requireAgent(state, options.watch);
+    const resolvedSource = await resolveAgentTarget(state, options.watch, {
+      clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
+    });
+    const source = {
+      threadId: resolvedSource.threadId,
+      name: resolvedSource.savedAgent?.name ?? null,
+      environment: resolvedSource.environment,
+    };
     assertNotSelfSubscription(caller, source);
     const now = new Date().toISOString();
     const existing = state.subscriptions.find(
@@ -820,7 +849,7 @@ agent
 
 agent
   .command("status")
-  .argument("[name]", "agent name")
+  .argument("[name]", "agent name or raw thread UUID")
   .action(async (name) => {
     if (!name) {
       const state = await loadState();
@@ -836,22 +865,24 @@ agent
       return;
     }
 
-    const { agent: savedAgent, client } = await withAgent(name);
+    const { agent: savedAgent, client, saved } = await withAgent(name);
     const thread = await client.findThread(savedAgent.threadId);
     const status = classifyThread(thread);
     const latestAssistant = getLatestAssistantMessage(thread);
     printJson({
-      agent: savedAgent.name,
+      agent: saved ? savedAgent.name : null,
       environment: savedAgent.environment,
       threadId: savedAgent.threadId,
       title: savedAgent.title,
+      projectId: savedAgent.projectId,
+      saved,
       state: status.state,
       reason: status.reason,
       latestTurn: thread.latestTurn,
       session: thread.session,
       proposedPlans: thread.proposedPlans.length,
       messageCount: thread.messages.length,
-      hasNewOutput: hasNewAssistantOutput(savedAgent, thread),
+      hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, thread) : null,
       latestAssistantMessageId: latestAssistant?.id ?? null,
       latestAssistantPreview: latestAssistant ? summarizeMessageText(latestAssistant.text) : null,
     });
@@ -859,15 +890,16 @@ agent
 
 agent
   .command("worklog")
-  .argument("<name>", "agent name")
+  .argument("<name>", "agent name or raw thread UUID")
   .option("--tail <count>", "number of activity rows to show", "10")
   .action(async (name, options) => {
-    const { agent: savedAgent, client } = await withAgent(name);
+    const { agent: savedAgent, client, saved } = await withAgent(name);
     const thread = await client.getThreadDetail(savedAgent.threadId);
     const tailCount = Math.max(1, Number(options.tail));
     printJson({
-      agent: savedAgent.name,
+      agent: saved ? savedAgent.name : null,
       threadId: savedAgent.threadId,
+      environment: savedAgent.environment,
       activities: thread.activities.slice(-tailCount),
     });
   });
@@ -893,17 +925,18 @@ agent
 
 agent
   .command("send")
-  .argument("<name>", "agent name")
+  .argument("<name>", "agent name or raw thread UUID")
   .argument("<message...>", "message text")
   .action(async (name, messageParts: string[]) => {
-    const { agent: savedAgent, client } = await withAgent(name);
+    const { agent: savedAgent, client, saved } = await withAgent(name);
     await client.sendMessage({
       threadId: savedAgent.threadId,
       text: messageParts.join(" ").trim(),
     });
     printJson({
-      agent: savedAgent.name,
+      agent: saved ? savedAgent.name : null,
       threadId: savedAgent.threadId,
+      environment: savedAgent.environment,
       dispatched: true,
     });
   });
@@ -911,17 +944,18 @@ agent
 for (const kind of ["clarify", "revise", "complete"] as const) {
   agent
     .command(kind)
-    .argument("<name>", "agent name")
+    .argument("<name>", "agent name or raw thread UUID")
     .argument("[message...]", "optional follow-up text")
     .action(async (name, messageParts: string[]) => {
-      const { agent: savedAgent, client } = await withAgent(name);
+      const { agent: savedAgent, client, saved } = await withAgent(name);
       await client.sendMessage({
         threadId: savedAgent.threadId,
         text: buildFollowUpMessage(kind, messageParts.join(" ")),
       });
       printJson({
-        agent: savedAgent.name,
+        agent: saved ? savedAgent.name : null,
         threadId: savedAgent.threadId,
+        environment: savedAgent.environment,
         dispatched: kind,
       });
     });
@@ -942,12 +976,12 @@ agent
 
 agent
   .command("wait")
-  .argument("<name>", "agent name")
+  .argument("<name>", "agent name or raw thread UUID")
   .option("--for <goal>", "completion|attention|idle|running", "completion")
   .option("--timeout <seconds>", "timeout in seconds", "300")
   .option("--interval <seconds>", "poll interval in seconds", "5")
   .action(async (name, options) => {
-    const { agent: savedAgent, client } = await withAgent(name);
+    const { agent: savedAgent, client, saved } = await withAgent(name);
     const thread = await client.waitForThread({
       threadId: savedAgent.threadId,
       goal: options.for,
@@ -956,8 +990,9 @@ agent
     });
     const status = classifyThread(thread);
     printJson({
-      agent: savedAgent.name,
+      agent: saved ? savedAgent.name : null,
       threadId: savedAgent.threadId,
+      environment: savedAgent.environment,
       state: status.state,
       reason: status.reason,
       latestTurn: thread.latestTurn,
@@ -966,7 +1001,7 @@ agent
 
 agent
   .command("result")
-  .argument("<name>", "agent name")
+  .argument("<name>", "agent name or raw thread UUID")
   .option("--tail <count>", "number of messages to show", "1")
   .option("--assistant-only", "only show assistant messages")
   .option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading")
@@ -974,7 +1009,7 @@ agent
   .option("--final-message", "return the terminal assistant message for the latest turn when available")
   .option("--mark-seen", "record the latest assistant message as reviewed")
   .action(async (name, options) => {
-    const { agent: savedAgent, client } = await withAgent(name);
+    const { agent: savedAgent, client, saved, target } = await withAgent(name);
     const detail = options.wait
       ? await client.waitForThread({
           threadId: savedAgent.threadId,
@@ -994,6 +1029,9 @@ agent
       : options.assistantOnly
         ? detail.messages.filter((message) => message.role === "assistant")
         : detail.messages;
+    if (options.markSeen) {
+      assertSavedAgentCapability(target, "`result --mark-seen`");
+    }
     let markedSeen = false;
     if (options.markSeen && latestAssistant) {
       await updateState(async (state) => {
@@ -1012,9 +1050,11 @@ agent
       markedSeen = true;
     }
     printJson({
-      agent: savedAgent.name,
+      agent: saved ? savedAgent.name : null,
       threadId: savedAgent.threadId,
-      hasNewOutput: hasNewAssistantOutput(savedAgent, detail),
+      environment: savedAgent.environment,
+      saved,
+      hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, detail) : null,
       latestAssistantMessageId: latestAssistant?.id ?? null,
       latestTurnAssistantMessageId: detail.latestTurn?.assistantMessageId ?? null,
       markedSeen,
