@@ -1,5 +1,49 @@
 # Agent Requirements
 
+## Current Task Snapshot — Raw Thread UUID Direct Lifecycle Support
+
+### Active Requirements
+- Add first-class support for using a raw T3 thread UUID directly, without a prior manual `attach`, for common lifecycle commands where feasible.
+- Support either a saved agent name or a raw thread UUID for: `status`, `result`, `worklog`, `send`, `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe`.
+- When a raw UUID is provided, resolve it by checking saved mappings first and then paired environments, infer environment/project metadata from the remote thread listing, and proceed without requiring a manual attach step.
+- Preserve existing saved-name behavior and keep `attach` available for explicit persistent aliases.
+- If a raw UUID cannot be found, report the paired environments checked and give a clear error.
+- Update docs and instructions to reflect the new direct-UUID workflow:
+  - `README.md`
+  - `docs/AGENT_OPERATIONS.md`
+  - `/Users/brad/.shared/skills/t3-threads/SKILL.md`
+- Add focused regression tests for raw UUID resolution and unsupported/not-found cases.
+- Run focused tests, `npm run build`, dist freshness validation if required, and `npm test` if feasible.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+- Avoid broad rewrites; prefer a shared resolver used by the affected commands.
+- Preserve existing saved-name workflows and compatibility aliases.
+- Preserve unrelated dirty work already present in the repo.
+
+### Acceptance Criteria
+- Operators and agents can run commands like `t3-thread status <uuid>`, `t3-thread result <uuid>`, and `t3-thread send <uuid> "..."` without first running `attach`.
+- Raw UUID resolution prefers a saved mapping when one exists for that thread id.
+- When the UUID is unsaved, the CLI resolves the thread by scanning paired environments and uses remote metadata to continue.
+- Not-found errors name the paired environments checked.
+- Focused regression tests cover direct UUID resolution plus not-found or unsupported cases.
+- Updated docs and shared skill describe the direct-UUID workflow and clarify that manual attach is now optional for common lifecycle commands.
+
+### Status
+- Completed locally.
+
+### Validation Update
+- Added a UUID-aware lifecycle target resolver in `src/agent-targets.ts`.
+- Lifecycle commands now accept either a saved agent name or a raw thread UUID for: `status`, `result`, `worklog`, `send`, `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe --watch`.
+- Raw UUID resolution now prefers an existing saved mapping, then scans paired environments and infers environment/project metadata from the remote thread shell.
+- Not-found raw UUID errors now report the paired environments checked.
+- `result --mark-seen` is explicitly rejected for unsaved raw UUID targets because read state is stored locally.
+- Updated `README.md`, `docs/AGENT_OPERATIONS.md`, and the shared `t3-threads` skill to document the direct-UUID workflow and the remaining `attach` use cases.
+- Added focused regression coverage in `tests/agent-targets.test.ts` for saved-name preference, unsaved raw UUID resolution, preferred-environment ordering, paired-environment not-found errors, and unsupported saved-state-only behavior.
+- Fresh-agent validation via `subagents codex` passed: a new agent discovered the updated UUID-direct lifecycle workflow, correctly identified the covered commands, and called out the remaining saved-alias-only cases.
+- Validation passed: `npm ci`, `npm test -- agent-targets state`, `npm run build`, `npm test -- dist-freshness`, and `npm test`.
+
 ## Current Task Snapshot — Child Completion Notification Reliability
 
 ### Active Requirements
