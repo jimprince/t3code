@@ -7664,6 +7664,300 @@ var {
   Help
 } = import_index.default;
 
+// src/state.ts
+var import_promises = require("node:fs/promises");
+var import_node_os = __toESM(require("node:os"), 1);
+var import_node_path = __toESM(require("node:path"), 1);
+var import_node_crypto = require("node:crypto");
+var DEFAULT_STATE_DIR = import_node_path.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
+var DEFAULT_STATE_FILE = import_node_path.default.join(DEFAULT_STATE_DIR, "state.json");
+var STATE_LOCK_TIMEOUT_MS = 1e4;
+var STATE_LOCK_RETRY_MS = 50;
+var EMPTY_STATE = {
+  version: 1,
+  environments: [],
+  agents: [],
+  subscriptions: [],
+  notifications: []
+};
+function resolveStateFile() {
+  return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
+}
+async function ensureStateDir(stateFile) {
+  await (0, import_promises.mkdir)(import_node_path.default.dirname(stateFile), { recursive: true });
+}
+function normalizeState(parsed) {
+  return {
+    version: 1,
+    environments: Array.isArray(parsed.environments) ? parsed.environments : [],
+    agents: Array.isArray(parsed.agents) ? parsed.agents : [],
+    subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
+    notifications: Array.isArray(parsed.notifications) ? parsed.notifications : []
+  };
+}
+async function loadStateFromFile(stateFile) {
+  try {
+    const raw2 = await (0, import_promises.readFile)(stateFile, "utf8");
+    const parsed = JSON.parse(raw2);
+    return normalizeState(parsed);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ENOENT")) {
+      return structuredClone(EMPTY_STATE);
+    }
+    throw error;
+  }
+}
+async function loadState() {
+  return loadStateFromFile(resolveStateFile());
+}
+async function saveStateToFile(stateFile, state) {
+  await ensureStateDir(stateFile);
+  const tempFile = import_node_path.default.join(import_node_path.default.dirname(stateFile), `.${import_node_path.default.basename(stateFile)}.${(0, import_node_crypto.randomUUID)()}.tmp`);
+  await (0, import_promises.writeFile)(tempFile, `${JSON.stringify(state, null, 2)}
+`, "utf8");
+  await (0, import_promises.rename)(tempFile, stateFile);
+}
+async function sleep(ms) {
+  await new Promise((resolve2) => setTimeout(resolve2, ms));
+}
+async function withStateLock(stateFile, task) {
+  await ensureStateDir(stateFile);
+  const lockFile = `${stateFile}.lock`;
+  const startedAt = Date.now();
+  for (; ; ) {
+    try {
+      const handle = await (0, import_promises.open)(lockFile, "wx");
+      try {
+        await handle.writeFile(`${process.pid}
+`, "utf8");
+        return await task();
+      } finally {
+        await handle.close();
+        await (0, import_promises.unlink)(lockFile).catch(() => {
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("EEXIST")) {
+        throw error;
+      }
+      if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
+        throw new Error(`Timed out waiting for state lock '${lockFile}'.`);
+      }
+      await sleep(STATE_LOCK_RETRY_MS);
+    }
+  }
+}
+async function updateState(mutator) {
+  const stateFile = resolveStateFile();
+  return withStateLock(stateFile, async () => {
+    const current = await loadStateFromFile(stateFile);
+    const { state, result: result4 } = await mutator(current);
+    await saveStateToFile(stateFile, state);
+    return result4;
+  });
+}
+function upsertEnvironment(environments, next) {
+  const remaining = environments.filter((env) => env.name !== next.name);
+  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
+}
+function upsertAgent(agents, next) {
+  const remaining = agents.filter((agent2) => agent2.name !== next.name);
+  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
+}
+function removeAgent(agents, name) {
+  return agents.filter((agent2) => agent2.name !== name).sort((a, b) => a.name.localeCompare(b.name));
+}
+function upsertSubscription(subscriptions, next) {
+  const remaining = subscriptions.filter(
+    (subscription) => !(subscription.subscriberThreadId === next.subscriberThreadId && subscription.sourceThreadId === next.sourceThreadId)
+  );
+  return [...remaining, next].sort(
+    (a, b) => `${a.subscriberAgentName ?? a.subscriberThreadId}:${a.sourceAgentName ?? a.sourceThreadId}`.localeCompare(
+      `${b.subscriberAgentName ?? b.subscriberThreadId}:${b.sourceAgentName ?? b.sourceThreadId}`
+    )
+  );
+}
+function removeSubscription(subscriptions, input) {
+  return subscriptions.filter(
+    (subscription) => !(subscription.subscriberThreadId === input.subscriberThreadId && subscription.sourceThreadId === input.sourceThreadId)
+  );
+}
+function upsertNotification(notifications, next) {
+  const remaining = notifications.filter((notification) => notification.eventKey !== next.eventKey);
+  return [...remaining, next].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+function findAgentByThreadId(state, threadId) {
+  return state.agents.find((agent2) => agent2.threadId === threadId) ?? null;
+}
+function resolveCallerThreadId(env = process.env) {
+  const value3 = env.T3_THREAD_ID?.trim();
+  return value3 ? value3 : null;
+}
+function resolveCallerEnvironmentMetadata(env = process.env) {
+  const environmentName = env.T3_ENVIRONMENT_NAME?.trim();
+  const environmentId = env.T3_ENVIRONMENT_ID?.trim();
+  if (!environmentName || !environmentId) {
+    return null;
+  }
+  return {
+    environmentName,
+    environmentId
+  };
+}
+function resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment = null) {
+  const savedAgent = findAgentByThreadId(state, threadId);
+  if (savedAgent) {
+    return {
+      threadId: savedAgent.threadId,
+      name: savedAgent.name,
+      environment: savedAgent.environment
+    };
+  }
+  if (!callerEnvironment) {
+    return null;
+  }
+  const savedEnvironment = state.environments.find(
+    (environment) => environment.environmentId === callerEnvironment.environmentId || environment.name === callerEnvironment.environmentName || environment.label === callerEnvironment.environmentName
+  );
+  return {
+    threadId,
+    name: null,
+    environment: savedEnvironment?.name ?? callerEnvironment.environmentName
+  };
+}
+function resolveNotifyPreference(notify, env = process.env) {
+  if (notify === false) {
+    return { kind: "none" };
+  }
+  if (typeof notify === "string") {
+    const value3 = notify.trim();
+    if (!value3) {
+      throw new Error("`--notify` subscriber value cannot be empty.");
+    }
+    return {
+      kind: "explicit",
+      subscriber: value3
+    };
+  }
+  const callerThreadId = resolveCallerThreadId(env);
+  if (callerThreadId) {
+    return { kind: "caller" };
+  }
+  if (notify === true) {
+    throw new Error(
+      "T3_THREAD_ID is not set. Bare `agent create --notify` must run inside a T3 thread or specify `--notify <subscriber>`."
+    );
+  }
+  return { kind: "none" };
+}
+function requireEnvironment(state, name) {
+  const found = state.environments.find((env) => env.name === name);
+  if (!found) {
+    throw new Error(`Unknown environment '${name}'.`);
+  }
+  return found;
+}
+function requireAgent(state, name) {
+  const found = state.agents.find((agent2) => agent2.name === name);
+  if (!found) {
+    throw new Error(`Unknown agent '${name}'.`);
+  }
+  return found;
+}
+function buildSubscriptionRecord(caller, source, now2, existing) {
+  return {
+    subscriberThreadId: caller.threadId,
+    subscriberAgentName: caller.name,
+    subscriberEnvironment: caller.environment,
+    sourceThreadId: source.threadId,
+    sourceAgentName: source.name,
+    sourceEnvironment: source.environment,
+    createdAt: existing?.createdAt ?? now2,
+    updatedAt: now2
+  };
+}
+function assertNotSelfSubscription(caller, source) {
+  if (caller.threadId === source.threadId) {
+    throw new Error(`Subscriber '${caller.name ?? caller.threadId}' cannot subscribe to itself.`);
+  }
+}
+
+// src/agent-targets.ts
+var THREAD_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function orderedEnvironmentNames(state, preferredEnvironment) {
+  return [
+    ...preferredEnvironment ? [preferredEnvironment] : [],
+    ...state.environments.map((environment) => environment.name)
+  ].filter((value3, index2, list) => list.indexOf(value3) === index2);
+}
+function isRawThreadUuid(value3) {
+  return THREAD_UUID_PATTERN.test(value3.trim());
+}
+function assertSavedAgentCapability(target2, capability) {
+  if (!target2.savedAgent) {
+    throw new Error(`${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`);
+  }
+}
+function resolveSavedAgentTarget(state, input) {
+  const savedByName = state.agents.find((agent2) => agent2.name === input);
+  if (savedByName) {
+    return {
+      input,
+      environment: savedByName.environment,
+      threadId: savedByName.threadId,
+      projectId: savedByName.projectId,
+      title: savedByName.title,
+      savedAgent: savedByName
+    };
+  }
+  const savedByThreadId = findAgentByThreadId(state, input);
+  if (!savedByThreadId) {
+    return null;
+  }
+  return {
+    input,
+    environment: savedByThreadId.environment,
+    threadId: savedByThreadId.threadId,
+    projectId: savedByThreadId.projectId,
+    title: savedByThreadId.title,
+    savedAgent: savedByThreadId
+  };
+}
+async function resolveAgentTarget(state, input, options) {
+  const local = resolveSavedAgentTarget(state, input);
+  if (local) {
+    return {
+      ...local,
+      checkedEnvironments: [local.environment]
+    };
+  }
+  if (!isRawThreadUuid(input)) {
+    throw new Error(`Unknown agent '${input}'.`);
+  }
+  const checkedEnvironments = [];
+  for (const environmentName of orderedEnvironmentNames(state, options.preferredEnvironment)) {
+    checkedEnvironments.push(environmentName);
+    requireEnvironment(state, environmentName);
+    const client = options.clientFactory(environmentName);
+    const thread = (await client.listThreads()).find((candidate) => candidate.id === input);
+    if (thread) {
+      return {
+        input,
+        environment: environmentName,
+        threadId: thread.id,
+        projectId: thread.projectId,
+        title: thread.title,
+        savedAgent: null,
+        checkedEnvironments
+      };
+    }
+  }
+  const checked = checkedEnvironments.length > 0 ? checkedEnvironments.join(", ") : "(none)";
+  throw new Error(`Unknown thread '${input}'. Checked paired environments: ${checked}.`);
+}
+
 // src/agentPrompts.ts
 function buildFollowUpMessage(kind, message) {
   const trimmed = message?.trim() ?? "";
@@ -7677,10 +7971,10 @@ function buildFollowUpMessage(kind, message) {
 }
 
 // src/client.ts
-var import_node_crypto = require("node:crypto");
+var import_node_crypto2 = require("node:crypto");
 
 // src/projects.ts
-var import_node_path = __toESM(require("node:path"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
 
 // node_modules/effect/dist/Pipeable.js
 var pipeArguments = (self, args2) => {
@@ -11630,13 +11924,13 @@ var isSuccess3 = /* @__PURE__ */ matchEager({
   onFailure: () => false,
   onSuccess: () => true
 });
-var delay = /* @__PURE__ */ dual(2, (self, duration) => andThen2(sleep(duration), self));
-var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => raceFirst(self, flatMap3(sleep(options.duration), options.orElse)));
+var delay = /* @__PURE__ */ dual(2, (self, duration) => andThen2(sleep2(duration), self));
+var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => raceFirst(self, flatMap3(sleep2(options.duration), options.orElse)));
 var timeout = /* @__PURE__ */ dual(2, (self, duration) => timeoutOrElse(self, {
   duration,
   orElse: () => fail3(new TimeoutError())
 }));
-var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as2(sleep(duration), none2())));
+var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as2(sleep2(duration), none2())));
 var timed = (self) => clockWith((clock) => {
   const start = clock.currentTimeNanosUnsafe();
   return map5(self, (a) => [nanos(clock.currentTimeNanosUnsafe() - start), a]);
@@ -12501,7 +12795,7 @@ var processOrPerformanceNow = /* @__PURE__ */ (function() {
   return () => origin + processHrtime.bigint();
 })();
 var clockWith = (f) => withFiber((fiber3) => f(fiber3.getRef(ClockRef)));
-var sleep = (duration) => clockWith((clock) => clock.sleep(fromInputUnsafe(duration)));
+var sleep2 = (duration) => clockWith((clock) => clock.sleep(fromInputUnsafe(duration)));
 var currentTimeMillis = /* @__PURE__ */ clockWith((clock) => clock.currentTimeMillis);
 var TimeoutErrorTypeId = "~effect/Cause/TimeoutError";
 var TimeoutError = class extends (/* @__PURE__ */ TaggedError("TimeoutError")) {
@@ -12954,7 +13248,7 @@ __export(Effect_exports, {
   scopedWith: () => scopedWith2,
   service: () => service2,
   serviceOption: () => serviceOption2,
-  sleep: () => sleep2,
+  sleep: () => sleep3,
   spanAnnotations: () => spanAnnotations2,
   spanLinks: () => spanLinks2,
   succeed: () => succeed6,
@@ -13946,7 +14240,7 @@ var toStepWithMetadata = (schedule4) => clockWith((clock) => map5(toStep(schedul
       const meta = metaFn(now2, input);
       meta.output = output;
       meta.duration = duration;
-      return as2(sleep(duration), meta);
+      return as2(sleep2(duration), meta);
     });
   });
 }));
@@ -14443,7 +14737,7 @@ var timeout2 = timeout;
 var timeoutOption2 = timeoutOption;
 var timeoutOrElse2 = timeoutOrElse;
 var delay2 = delay;
-var sleep2 = sleep;
+var sleep3 = sleep2;
 var timed2 = timed;
 var raceAll2 = raceAll;
 var raceAllFirst2 = raceAllFirst;
@@ -36766,7 +37060,7 @@ var get8 = /* @__PURE__ */ fnUntraced2(function* (self_) {
     } else if (!isFinite3) {
       return void_4;
     }
-    state.fiber = sleep2(self.idleTimeToLive).pipe(flatMap5(() => {
+    state.fiber = sleep3(self.idleTimeToLive).pipe(flatMap5(() => {
       if (self.state._tag === "Acquired" && self.state.refCount === 0) {
         self.state = stateEmpty;
         return close(state.scope, void_3);
@@ -37005,7 +37299,7 @@ var timeoutOrElse3 = /* @__PURE__ */ dual(2, (self, options) => {
       while (true) {
         yield* latch.await;
         if (deadline === void 0) continue;
-        yield* sleep2(deadline - clock.currentTimeMillisUnsafe());
+        yield* sleep3(deadline - clock.currentTimeMillisUnsafe());
         if (deadline === void 0) continue;
         const remaining = deadline - clock.currentTimeMillisUnsafe();
         if (remaining > 0) continue;
@@ -37668,7 +37962,7 @@ var debounce = /* @__PURE__ */ dual(2, (self, duration) => transformPull2(self, 
   const sleepLoop = suspend3(function loop() {
     const now2 = clock.currentTimeMillisUnsafe();
     const timeMs = emitAtMs < now2 ? durationMs : Math.min(durationMs, emitAtMs - now2);
-    return flatMap5(raceFirst2(sleep2(timeMs), endLatch.await), () => {
+    return flatMap5(raceFirst2(sleep3(timeMs), endLatch.await), () => {
       const now3 = clock.currentTimeMillisUnsafe();
       if (now3 < emitAtMs) {
         return loop();
@@ -37745,7 +38039,7 @@ var throttleShapeEffect = (self, cost, units, duration, burst) => transformPull2
     const waitCycles = -remaining / units;
     const delayMs = Math.max(0, waitCycles * durationMs);
     if (delayMs > 0) {
-      return flatMap5(sleep2(delayMs), () => {
+      return flatMap5(sleep3(delayMs), () => {
         tokens = remaining;
         timestampMs = currentMs;
         return succeed6(arr);
@@ -38740,12 +39034,12 @@ function normalizeProjectPath(workspaceRoot) {
     throw new Error("Project path must be absolute; shell-expand '~' before passing it to t3-thread.");
   }
   const isWindowsPath = /^[A-Za-z]:[\\/]/.test(trimmed) || /^\\\\/.test(trimmed);
-  if (!import_node_path.default.posix.isAbsolute(trimmed) && !isWindowsPath) {
+  if (!import_node_path2.default.posix.isAbsolute(trimmed) && !isWindowsPath) {
     throw new Error(`Project path must be absolute: ${workspaceRoot}`);
   }
-  const normalized = isWindowsPath ? import_node_path.default.win32.normalize(trimmed) : import_node_path.default.posix.normalize(trimmed);
+  const normalized = isWindowsPath ? import_node_path2.default.win32.normalize(trimmed) : import_node_path2.default.posix.normalize(trimmed);
   if (isWindowsPath) {
-    const parsed = import_node_path.default.win32.parse(normalized);
+    const parsed = import_node_path2.default.win32.parse(normalized);
     return normalized === parsed.root ? normalized : normalized.replace(/[\\/]+$/, "");
   }
   return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
@@ -38762,7 +39056,7 @@ function deriveProjectTitle(workspaceRoot, explicitTitle) {
     return normalizeProjectTitle(explicitTitle);
   }
   const normalized = normalizeProjectPath(workspaceRoot);
-  const baseName = (import_node_path.default.win32.isAbsolute(normalized) ? import_node_path.default.win32.basename(normalized) : import_node_path.default.posix.basename(normalized)).trim();
+  const baseName = (import_node_path2.default.win32.isAbsolute(normalized) ? import_node_path2.default.win32.basename(normalized) : import_node_path2.default.posix.basename(normalized)).trim();
   return baseName || "project";
 }
 function parseModelOptionEntries(entries3 = []) {
@@ -47411,7 +47705,7 @@ var RemoteEnvironmentClient = class {
         `An active project already exists for '${existingProject.workspaceRoot}' (${existingProject.id}).`
       );
     }
-    const projectId = (0, import_node_crypto.randomUUID)();
+    const projectId = (0, import_node_crypto2.randomUUID)();
     const title = deriveProjectTitle(input.workspaceRoot, input.title);
     const defaultModelSelection = buildModelSelection({
       provider: input.provider,
@@ -47420,7 +47714,7 @@ var RemoteEnvironmentClient = class {
       noDefault: input.noDefaultModel
     });
     const command = buildProjectCreateCommand({
-      commandId: (0, import_node_crypto.randomUUID)(),
+      commandId: (0, import_node_crypto2.randomUUID)(),
       projectId,
       title,
       workspaceRoot: input.workspaceRoot,
@@ -47445,7 +47739,7 @@ var RemoteEnvironmentClient = class {
     const snapshot = await this.getShellSnapshot();
     const project2 = resolveProjectTarget(snapshot.projects, input.identifier);
     const command = buildProjectMetaUpdateCommand({
-      commandId: (0, import_node_crypto.randomUUID)(),
+      commandId: (0, import_node_crypto2.randomUUID)(),
       projectId: project2.id,
       title: input.title
     });
@@ -47470,7 +47764,7 @@ var RemoteEnvironmentClient = class {
       clear: input.clear
     });
     const command = buildProjectMetaUpdateCommand({
-      commandId: (0, import_node_crypto.randomUUID)(),
+      commandId: (0, import_node_crypto2.randomUUID)(),
       projectId: project2.id,
       defaultModelSelection
     });
@@ -47495,7 +47789,7 @@ var RemoteEnvironmentClient = class {
       );
     }
     const command = buildProjectDeleteCommand({
-      commandId: (0, import_node_crypto.randomUUID)(),
+      commandId: (0, import_node_crypto2.randomUUID)(),
       projectId: project2.id,
       force: input.force
     });
@@ -47537,7 +47831,7 @@ var RemoteEnvironmentClient = class {
       provider: input.provider,
       model: input.model
     }) ?? DEFAULT_MODEL_SELECTION : project2.defaultModelSelection ?? DEFAULT_MODEL_SELECTION;
-    const threadId = (0, import_node_crypto.randomUUID)();
+    const threadId = (0, import_node_crypto2.randomUUID)();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
     const createdAt = nowIso();
@@ -47545,10 +47839,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: (0, import_node_crypto.randomUUID)(),
+        commandId: (0, import_node_crypto2.randomUUID)(),
         threadId,
         message: {
-          messageId: (0, import_node_crypto.randomUUID)(),
+          messageId: (0, import_node_crypto2.randomUUID)(),
           role: "user",
           text: initialMessage,
           attachments: []
@@ -47600,10 +47894,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: (0, import_node_crypto.randomUUID)(),
+        commandId: (0, import_node_crypto2.randomUUID)(),
         threadId: thread.id,
         message: {
-          messageId: (0, import_node_crypto.randomUUID)(),
+          messageId: (0, import_node_crypto2.randomUUID)(),
           role: "user",
           text: input.text,
           attachments: []
@@ -47622,7 +47916,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.interrupt",
-        commandId: (0, import_node_crypto.randomUUID)(),
+        commandId: (0, import_node_crypto2.randomUUID)(),
         threadId: thread.id,
         turnId: thread.latestTurn?.turnId,
         createdAt: nowIso()
@@ -47640,7 +47934,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.archive",
-        commandId: (0, import_node_crypto.randomUUID)(),
+        commandId: (0, import_node_crypto2.randomUUID)(),
         threadId: thread.id
       });
       return true;
@@ -47752,226 +48046,6 @@ function formatInboxLine(overview) {
     formatOverviewLine(overview),
     overview.latestAssistantPreview ? `:: ${overview.latestAssistantPreview}` : ""
   ].join(" ").trim();
-}
-
-// src/state.ts
-var import_promises = require("node:fs/promises");
-var import_node_os = __toESM(require("node:os"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
-var import_node_crypto2 = require("node:crypto");
-var DEFAULT_STATE_DIR = import_node_path2.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
-var DEFAULT_STATE_FILE = import_node_path2.default.join(DEFAULT_STATE_DIR, "state.json");
-var STATE_LOCK_TIMEOUT_MS = 1e4;
-var STATE_LOCK_RETRY_MS = 50;
-var EMPTY_STATE = {
-  version: 1,
-  environments: [],
-  agents: [],
-  subscriptions: [],
-  notifications: []
-};
-function resolveStateFile() {
-  return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
-}
-async function ensureStateDir(stateFile) {
-  await (0, import_promises.mkdir)(import_node_path2.default.dirname(stateFile), { recursive: true });
-}
-function normalizeState(parsed) {
-  return {
-    version: 1,
-    environments: Array.isArray(parsed.environments) ? parsed.environments : [],
-    agents: Array.isArray(parsed.agents) ? parsed.agents : [],
-    subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
-    notifications: Array.isArray(parsed.notifications) ? parsed.notifications : []
-  };
-}
-async function loadStateFromFile(stateFile) {
-  try {
-    const raw2 = await (0, import_promises.readFile)(stateFile, "utf8");
-    const parsed = JSON.parse(raw2);
-    return normalizeState(parsed);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("ENOENT")) {
-      return structuredClone(EMPTY_STATE);
-    }
-    throw error;
-  }
-}
-async function loadState() {
-  return loadStateFromFile(resolveStateFile());
-}
-async function saveStateToFile(stateFile, state) {
-  await ensureStateDir(stateFile);
-  const tempFile = import_node_path2.default.join(import_node_path2.default.dirname(stateFile), `.${import_node_path2.default.basename(stateFile)}.${(0, import_node_crypto2.randomUUID)()}.tmp`);
-  await (0, import_promises.writeFile)(tempFile, `${JSON.stringify(state, null, 2)}
-`, "utf8");
-  await (0, import_promises.rename)(tempFile, stateFile);
-}
-async function sleep3(ms) {
-  await new Promise((resolve2) => setTimeout(resolve2, ms));
-}
-async function withStateLock(stateFile, task) {
-  await ensureStateDir(stateFile);
-  const lockFile = `${stateFile}.lock`;
-  const startedAt = Date.now();
-  for (; ; ) {
-    try {
-      const handle = await (0, import_promises.open)(lockFile, "wx");
-      try {
-        await handle.writeFile(`${process.pid}
-`, "utf8");
-        return await task();
-      } finally {
-        await handle.close();
-        await (0, import_promises.unlink)(lockFile).catch(() => {
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("EEXIST")) {
-        throw error;
-      }
-      if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
-        throw new Error(`Timed out waiting for state lock '${lockFile}'.`);
-      }
-      await sleep3(STATE_LOCK_RETRY_MS);
-    }
-  }
-}
-async function updateState(mutator) {
-  const stateFile = resolveStateFile();
-  return withStateLock(stateFile, async () => {
-    const current = await loadStateFromFile(stateFile);
-    const { state, result: result4 } = await mutator(current);
-    await saveStateToFile(stateFile, state);
-    return result4;
-  });
-}
-function upsertEnvironment(environments, next) {
-  const remaining = environments.filter((env) => env.name !== next.name);
-  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
-}
-function upsertAgent(agents, next) {
-  const remaining = agents.filter((agent2) => agent2.name !== next.name);
-  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
-}
-function removeAgent(agents, name) {
-  return agents.filter((agent2) => agent2.name !== name).sort((a, b) => a.name.localeCompare(b.name));
-}
-function upsertSubscription(subscriptions, next) {
-  const remaining = subscriptions.filter(
-    (subscription) => !(subscription.subscriberThreadId === next.subscriberThreadId && subscription.sourceThreadId === next.sourceThreadId)
-  );
-  return [...remaining, next].sort(
-    (a, b) => `${a.subscriberAgentName ?? a.subscriberThreadId}:${a.sourceAgentName ?? a.sourceThreadId}`.localeCompare(
-      `${b.subscriberAgentName ?? b.subscriberThreadId}:${b.sourceAgentName ?? b.sourceThreadId}`
-    )
-  );
-}
-function removeSubscription(subscriptions, input) {
-  return subscriptions.filter(
-    (subscription) => !(subscription.subscriberThreadId === input.subscriberThreadId && subscription.sourceThreadId === input.sourceThreadId)
-  );
-}
-function upsertNotification(notifications, next) {
-  const remaining = notifications.filter((notification) => notification.eventKey !== next.eventKey);
-  return [...remaining, next].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-}
-function findAgentByThreadId(state, threadId) {
-  return state.agents.find((agent2) => agent2.threadId === threadId) ?? null;
-}
-function resolveCallerThreadId(env = process.env) {
-  const value3 = env.T3_THREAD_ID?.trim();
-  return value3 ? value3 : null;
-}
-function resolveCallerEnvironmentMetadata(env = process.env) {
-  const environmentName = env.T3_ENVIRONMENT_NAME?.trim();
-  const environmentId = env.T3_ENVIRONMENT_ID?.trim();
-  if (!environmentName || !environmentId) {
-    return null;
-  }
-  return {
-    environmentName,
-    environmentId
-  };
-}
-function resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment = null) {
-  const savedAgent = findAgentByThreadId(state, threadId);
-  if (savedAgent) {
-    return {
-      threadId: savedAgent.threadId,
-      name: savedAgent.name,
-      environment: savedAgent.environment
-    };
-  }
-  if (!callerEnvironment) {
-    return null;
-  }
-  const savedEnvironment = state.environments.find(
-    (environment) => environment.environmentId === callerEnvironment.environmentId || environment.name === callerEnvironment.environmentName || environment.label === callerEnvironment.environmentName
-  );
-  return {
-    threadId,
-    name: null,
-    environment: savedEnvironment?.name ?? callerEnvironment.environmentName
-  };
-}
-function resolveNotifyPreference(notify, env = process.env) {
-  if (notify === false) {
-    return { kind: "none" };
-  }
-  if (typeof notify === "string") {
-    const value3 = notify.trim();
-    if (!value3) {
-      throw new Error("`--notify` subscriber value cannot be empty.");
-    }
-    return {
-      kind: "explicit",
-      subscriber: value3
-    };
-  }
-  const callerThreadId = resolveCallerThreadId(env);
-  if (callerThreadId) {
-    return { kind: "caller" };
-  }
-  if (notify === true) {
-    throw new Error(
-      "T3_THREAD_ID is not set. Bare `agent create --notify` must run inside a T3 thread or specify `--notify <subscriber>`."
-    );
-  }
-  return { kind: "none" };
-}
-function requireEnvironment(state, name) {
-  const found = state.environments.find((env) => env.name === name);
-  if (!found) {
-    throw new Error(`Unknown environment '${name}'.`);
-  }
-  return found;
-}
-function requireAgent(state, name) {
-  const found = state.agents.find((agent2) => agent2.name === name);
-  if (!found) {
-    throw new Error(`Unknown agent '${name}'.`);
-  }
-  return found;
-}
-function buildSubscriptionRecord(caller, source, now2, existing) {
-  return {
-    subscriberThreadId: caller.threadId,
-    subscriberAgentName: caller.name,
-    subscriberEnvironment: caller.environment,
-    sourceThreadId: source.threadId,
-    sourceAgentName: source.name,
-    sourceEnvironment: source.environment,
-    createdAt: existing?.createdAt ?? now2,
-    updatedAt: now2
-  };
-}
-function assertNotSelfSubscription(caller, source) {
-  if (caller.threadId === source.threadId) {
-    throw new Error(`Subscriber '${caller.name ?? caller.threadId}' cannot subscribe to itself.`);
-  }
 }
 
 // src/thread-preamble.ts
@@ -48397,12 +48471,24 @@ function collectOption(value3, previous = []) {
 }
 async function withAgent(agentName) {
   const state = await loadState();
-  const agent2 = requireAgent(state, agentName);
-  const environment = requireEnvironment(state, agent2.environment);
+  const agentTarget = await resolveAgentTarget(state, agentName, {
+    clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName))
+  });
+  const environment = requireEnvironment(state, agentTarget.environment);
   return {
     state,
-    agent: agent2,
-    client: new RemoteEnvironmentClient(environment)
+    agent: agentTarget.savedAgent ?? {
+      name: agentTarget.threadId,
+      environment: agentTarget.environment,
+      threadId: agentTarget.threadId,
+      projectId: agentTarget.projectId,
+      title: agentTarget.title,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      lastSeenAssistantMessageId: null
+    },
+    client: new RemoteEnvironmentClient(environment),
+    saved: agentTarget.savedAgent !== null,
+    target: agentTarget
   };
 }
 function toSubscriptionEndpoint(agent2) {
@@ -48417,11 +48503,11 @@ async function resolveThreadEndpoint(state, threadId, preferredEnvironment, call
   if (localEndpoint) {
     return localEndpoint;
   }
-  const orderedEnvironmentNames = [
+  const orderedEnvironmentNames2 = [
     ...preferredEnvironment ? [preferredEnvironment] : [],
     ...state.environments.map((environment) => environment.name)
   ].filter((value3, index2, list) => list.indexOf(value3) === index2);
-  for (const environmentName of orderedEnvironmentNames) {
+  for (const environmentName of orderedEnvironmentNames2) {
     const environment = requireEnvironment(state, environmentName);
     const client = new RemoteEnvironmentClient(environment);
     const threads = await client.listThreads();
@@ -48781,11 +48867,12 @@ agent.command("list").action(async () => {
   printJson(state.agents);
 });
 agent.command("archive").argument("<name>", "agent name").description("Archive the remote thread for a saved agent via T3 RPC").action(async (name) => {
-  const { agent: savedAgent, client } = await withAgent(name);
+  const { agent: savedAgent, client, saved } = await withAgent(name);
   const archived = await client.archiveThread(savedAgent.threadId);
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     threadId: savedAgent.threadId,
+    environment: savedAgent.environment,
     archived
   });
 });
@@ -48839,9 +48926,16 @@ agent.command("subscriptions").description("List saved attention-routing subscri
   });
   printJson(subscriptions);
 });
-agent.command("subscribe").description("Subscribe the calling T3 thread to attention from a saved source agent").requiredOption("--watch <name>", "saved source agent name to watch").action(async (options) => {
+agent.command("subscribe").description("Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID").requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch").action(async (options) => {
   const { state, caller } = await withCallerFromEnv();
-  const source = requireAgent(state, options.watch);
+  const resolvedSource = await resolveAgentTarget(state, options.watch, {
+    clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName))
+  });
+  const source = {
+    threadId: resolvedSource.threadId,
+    name: resolvedSource.savedAgent?.name ?? null,
+    environment: resolvedSource.environment
+  };
   assertNotSelfSubscription(caller, source);
   const now2 = (/* @__PURE__ */ new Date()).toISOString();
   const existing = state.subscriptions.find(
@@ -48971,7 +49065,7 @@ agent.command("watch").description("Poll saved agents for attention-worthy trans
     await releaseLease?.();
   }
 });
-agent.command("status").argument("[name]", "agent name").action(async (name) => {
+agent.command("status").argument("[name]", "agent name or raw thread UUID").action(async (name) => {
   if (!name) {
     const state = await loadState();
     const summaries = await Promise.all(
@@ -48985,33 +49079,36 @@ agent.command("status").argument("[name]", "agent name").action(async (name) => 
     printLines(summaries.map(formatOverviewLine));
     return;
   }
-  const { agent: savedAgent, client } = await withAgent(name);
+  const { agent: savedAgent, client, saved } = await withAgent(name);
   const thread = await client.findThread(savedAgent.threadId);
   const status = classifyThread(thread);
   const latestAssistant = getLatestAssistantMessage(thread);
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     environment: savedAgent.environment,
     threadId: savedAgent.threadId,
     title: savedAgent.title,
+    projectId: savedAgent.projectId,
+    saved,
     state: status.state,
     reason: status.reason,
     latestTurn: thread.latestTurn,
     session: thread.session,
     proposedPlans: thread.proposedPlans.length,
     messageCount: thread.messages.length,
-    hasNewOutput: hasNewAssistantOutput(savedAgent, thread),
+    hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, thread) : null,
     latestAssistantMessageId: latestAssistant?.id ?? null,
     latestAssistantPreview: latestAssistant ? summarizeMessageText(latestAssistant.text) : null
   });
 });
-agent.command("worklog").argument("<name>", "agent name").option("--tail <count>", "number of activity rows to show", "10").action(async (name, options) => {
-  const { agent: savedAgent, client } = await withAgent(name);
+agent.command("worklog").argument("<name>", "agent name or raw thread UUID").option("--tail <count>", "number of activity rows to show", "10").action(async (name, options) => {
+  const { agent: savedAgent, client, saved } = await withAgent(name);
   const thread = await client.getThreadDetail(savedAgent.threadId);
   const tailCount = Math.max(1, Number(options.tail));
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     threadId: savedAgent.threadId,
+    environment: savedAgent.environment,
     activities: thread.activities.slice(-tailCount)
   });
 });
@@ -49028,28 +49125,30 @@ agent.command("inbox").option("--env <name>", "optional saved environment filter
   );
   printLines(summaries.filter(needsAttention).map(formatInboxLine));
 });
-agent.command("send").argument("<name>", "agent name").argument("<message...>", "message text").action(async (name, messageParts) => {
-  const { agent: savedAgent, client } = await withAgent(name);
+agent.command("send").argument("<name>", "agent name or raw thread UUID").argument("<message...>", "message text").action(async (name, messageParts) => {
+  const { agent: savedAgent, client, saved } = await withAgent(name);
   await client.sendMessage({
     threadId: savedAgent.threadId,
     text: messageParts.join(" ").trim()
   });
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     threadId: savedAgent.threadId,
+    environment: savedAgent.environment,
     dispatched: true
   });
 });
 for (const kind of ["clarify", "revise", "complete"]) {
-  agent.command(kind).argument("<name>", "agent name").argument("[message...]", "optional follow-up text").action(async (name, messageParts) => {
-    const { agent: savedAgent, client } = await withAgent(name);
+  agent.command(kind).argument("<name>", "agent name or raw thread UUID").argument("[message...]", "optional follow-up text").action(async (name, messageParts) => {
+    const { agent: savedAgent, client, saved } = await withAgent(name);
     await client.sendMessage({
       threadId: savedAgent.threadId,
       text: buildFollowUpMessage(kind, messageParts.join(" "))
     });
     printJson({
-      agent: savedAgent.name,
+      agent: saved ? savedAgent.name : null,
       threadId: savedAgent.threadId,
+      environment: savedAgent.environment,
       dispatched: kind
     });
   });
@@ -49063,8 +49162,8 @@ agent.command("interrupt").argument("<name>", "agent name").action(async (name) 
     interrupted: true
   });
 });
-agent.command("wait").argument("<name>", "agent name").option("--for <goal>", "completion|attention|idle|running", "completion").option("--timeout <seconds>", "timeout in seconds", "300").option("--interval <seconds>", "poll interval in seconds", "5").action(async (name, options) => {
-  const { agent: savedAgent, client } = await withAgent(name);
+agent.command("wait").argument("<name>", "agent name or raw thread UUID").option("--for <goal>", "completion|attention|idle|running", "completion").option("--timeout <seconds>", "timeout in seconds", "300").option("--interval <seconds>", "poll interval in seconds", "5").action(async (name, options) => {
+  const { agent: savedAgent, client, saved } = await withAgent(name);
   const thread = await client.waitForThread({
     threadId: savedAgent.threadId,
     goal: options.for,
@@ -49073,15 +49172,16 @@ agent.command("wait").argument("<name>", "agent name").option("--for <goal>", "c
   });
   const status = classifyThread(thread);
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     threadId: savedAgent.threadId,
+    environment: savedAgent.environment,
     state: status.state,
     reason: status.reason,
     latestTurn: thread.latestTurn
   });
 });
-agent.command("result").argument("<name>", "agent name").option("--tail <count>", "number of messages to show", "1").option("--assistant-only", "only show assistant messages").option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading").option("--interval <seconds>", "poll interval in seconds while waiting", "2").option("--final-message", "return the terminal assistant message for the latest turn when available").option("--mark-seen", "record the latest assistant message as reviewed").action(async (name, options) => {
-  const { agent: savedAgent, client } = await withAgent(name);
+agent.command("result").argument("<name>", "agent name or raw thread UUID").option("--tail <count>", "number of messages to show", "1").option("--assistant-only", "only show assistant messages").option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading").option("--interval <seconds>", "poll interval in seconds while waiting", "2").option("--final-message", "return the terminal assistant message for the latest turn when available").option("--mark-seen", "record the latest assistant message as reviewed").action(async (name, options) => {
+  const { agent: savedAgent, client, saved, target: target2 } = await withAgent(name);
   const detail = options.wait ? await client.waitForThread({
     threadId: savedAgent.threadId,
     goal: "completion",
@@ -49091,6 +49191,9 @@ agent.command("result").argument("<name>", "agent name").option("--tail <count>"
   const tailCount = Math.max(1, Number(options.tail));
   const latestAssistant = options.finalMessage ? getLatestTurnAssistantMessage(detail) ?? getLatestAssistantMessage(detail) : getLatestAssistantMessage(detail);
   const messages = options.finalMessage ? latestAssistant ? [latestAssistant] : [] : options.assistantOnly ? detail.messages.filter((message) => message.role === "assistant") : detail.messages;
+  if (options.markSeen) {
+    assertSavedAgentCapability(target2, "`result --mark-seen`");
+  }
   let markedSeen = false;
   if (options.markSeen && latestAssistant) {
     await updateState(async (state) => {
@@ -49109,9 +49212,11 @@ agent.command("result").argument("<name>", "agent name").option("--tail <count>"
     markedSeen = true;
   }
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     threadId: savedAgent.threadId,
-    hasNewOutput: hasNewAssistantOutput(savedAgent, detail),
+    environment: savedAgent.environment,
+    saved,
+    hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, detail) : null,
     latestAssistantMessageId: latestAssistant?.id ?? null,
     latestTurnAssistantMessageId: detail.latestTurn?.assistantMessageId ?? null,
     markedSeen,
