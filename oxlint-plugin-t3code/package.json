@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "tsdown",
     "typecheck": "tsgo --noEmit",
     "test": "vp test run"
   },
@@ -12,7 +13,9 @@
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
+    "tsdown": "catalog:",
     "vite-plus": "catalog:"
   }
 }

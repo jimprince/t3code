@@ -1,0 +1,152 @@
+name: Mobile EAS Development Update
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/mobile-eas-development.yml"
+      - "apps/mobile/**"
+      - "packages/client-runtime/**"
+      - "packages/contracts/**"
+      - "packages/shared/**"
+      - "scripts/lib/public-config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "turbo.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-eas-development-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-development-update:
+    name: Verify and publish iOS development update
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      APP_VARIANT: development
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_NO_GIT_STATUS: "1"
+      MOBILE_VERSION_POLICY: fingerprint
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - name: Require Expo token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN repository secret is required to publish EAS updates." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Expose pnpm
+        run: |
+          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
+          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
+          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
+          "$vp_pnpm_bin/pnpm" --version
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Check
+        run: vp check
+
+      - name: Typecheck
+        run: vp run typecheck
+
+      - name: Mobile test suite
+        run: vp run --filter @t3tools/mobile test
+
+      # iOS signing credentials are managed manually: the repo's ASC API key
+      # lacks permission to create ad hoc provisioning profiles (Apple 403),
+      # so CI never contacts Apple. When the native fingerprint changes, run
+      # one interactive build locally to mint/refresh credentials on EAS:
+      #   cd apps/mobile && APP_VARIANT=development eas build --profile development --platform ios
+      - name: Deploy with fingerprint check
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          fingerprint_json="$RUNNER_TEMP/mobile-ios-fingerprint.json"
+          builds_json="$RUNNER_TEMP/mobile-ios-builds.json"
+          build_json="$RUNNER_TEMP/mobile-ios-build.json"
+          update_json="$RUNNER_TEMP/mobile-ios-update.json"
+
+          eas env:exec --non-interactive development \
+            "npx expo-updates fingerprint:generate --platform ios" > "$fingerprint_json"
+          fingerprint_hash="$(node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (!data.hash) process.exit(1); console.log(data.hash);' "$fingerprint_json")"
+          echo "iOS fingerprint: $fingerprint_hash"
+
+          eas build:list \
+            --platform ios \
+            --buildProfile development \
+            --runtimeVersion "$fingerprint_hash" \
+            --limit 1 \
+            --json \
+            --non-interactive > "$builds_json"
+
+          build_id="$(node -e 'const fs = require("fs"); const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const valid = new Set(["NEW", "IN_QUEUE", "IN_PROGRESS", "FINISHED"]); const build = builds.find((item) => valid.has(item.status)); process.stdout.write(build?.id ?? "");' "$builds_json")"
+
+          if [ -n "$build_id" ]; then
+            echo "Existing iOS build found with matching fingerprint: $build_id"
+          else
+            echo "No existing iOS build found for fingerprint, starting a new build..."
+            if ! eas build \
+              --profile development \
+              --platform ios \
+              --non-interactive \
+              --json \
+              --no-wait > "$build_json"; then
+              echo "::error::Non-interactive iOS build failed. If credentials are missing or expired, run one interactive build locally to refresh them: cd apps/mobile && APP_VARIANT=development eas build --profile development --platform ios" >&2
+              exit 1
+            fi
+            build_id="$(node -e 'const fs = require("fs"); const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(builds[0]?.id ?? "");' "$build_json")"
+            echo "Started iOS EAS build: $build_id"
+          fi
+
+          if [ -z "$build_id" ]; then
+            echo "EAS did not return an iOS build id." >&2
+            exit 1
+          fi
+
+          eas update \
+            --branch development \
+            --platform ios \
+            --message "main ${GITHUB_SHA::7}" \
+            --non-interactive \
+            --json \
+            --environment development > "$update_json"
+
+          update_id="$(node -e 'const fs = require("fs"); const updates = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const update = Array.isArray(updates) ? updates.find((item) => item.platform === "ios") : undefined; process.stdout.write(update?.id ?? "");' "$update_json")"
+          if [ -z "$update_id" ]; then
+            echo "EAS did not return an iOS update id." >&2
+            exit 1
+          fi
+
+          {
+            echo "### Mobile EAS development deploy"
+            echo "- iOS fingerprint: \`$fingerprint_hash\`"
+            echo "- iOS build: \`$build_id\`"
+            echo "- iOS update: \`$update_id\`"
+          } >> "$GITHUB_STEP_SUMMARY"
