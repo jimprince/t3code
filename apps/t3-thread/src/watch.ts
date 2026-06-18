@@ -73,7 +73,14 @@ export async function scanAttentionNotifications(
   for (const sourceAgent of scopedAgents) {
     const sourceEnvironment = requireEnvironment(state, sourceAgent.environment);
     const sourceClient = clientFactory(sourceEnvironment);
-    const sourceThread = await sourceClient.findThread(sourceAgent.threadId);
+    let sourceThread: OrchestrationThread;
+    try {
+      sourceThread = await sourceClient.findThread(sourceAgent.threadId);
+    } catch {
+      // Saved agents/subscriptions can outlive remote threads. A stale source
+      // should not prevent detection for every other watched route.
+      continue;
+    }
     const overview = buildAgentOverview(sourceAgent, sourceThread);
     if (!needsAttention(overview)) {
       continue;
@@ -342,7 +349,13 @@ export async function hasWatcherWork(
 
     const sourceEnvironment = requireEnvironment(state, subscription.sourceEnvironment);
     const sourceClient = clientFactory(sourceEnvironment);
-    const sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
+    let sourceThread: OrchestrationThread;
+    try {
+      sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
+    } catch {
+      // Stale source subscriptions should not keep an on-demand watcher alive.
+      continue;
+    }
     if (classifyThread(sourceThread).state === "running") {
       return true;
     }

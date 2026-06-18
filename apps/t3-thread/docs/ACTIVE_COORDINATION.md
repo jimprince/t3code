@@ -23,11 +23,20 @@ t3-thread status <saved-agent-name>
 - Runtime state remains in `~/.config/t3-remote-agents/state.json`.
 - Creation uses T3 Code's native `thread.turn.start` bootstrap flow.
 - T3 chooses and records worktree paths; callers do not pass `--worktree`.
-- The watcher plist runs `t3-thread watch --interval 5`.
+- The notification watcher is on-demand by default: `create`/`subscribe` ensure a singleton watcher process when notifications are configured, and the watcher exits after its idle window when nothing is in flight. The launchd plist is optional/manual only.
 
 ## Coordination Source
 
 Project/task coordination for target repos may still live in the target repo tracker or in HomeNetwork's historical coordination board. This file records CLI-level state only.
+
+## Recent Retired Work
+
+- 2026-06-18: Retired stale saved worker mappings/subscriptions after direct raw thread UUID lifecycle-command support was folded into the local dirty cleanup.
+  - Project id: `6ad68f3a-4431-4121-ab23-4d431fce6c9f`
+  - Worker saved name: `t3-thread-uuid-direct`
+  - Thread id: `ddbd58d0-6b5b-4036-a599-d4240a998600`
+  - Branch: `t3/raw-thread-id-direct`
+  - Cleanup: `t3-thread forget t3-thread-uuid-direct` removed the stale saved mapping and related source subscription.
 
 ## Active Handoffs
 

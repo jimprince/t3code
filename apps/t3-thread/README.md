@@ -146,8 +146,17 @@ threads directly from that environment metadata and maps it to the saved environ
 
 - Use `--no-notify` to opt out.
 - Use `--notify <saved-agent-or-thread-id>` to route notifications to another subscriber.
-- `create` and `subscribe` now best-effort spawn a singleton background watcher automatically when a notification route is attached.
-- The watcher self-exits after 15 minutes idle by default and can be forced manually with `t3-thread watch --ensure`.
+
+### Watcher lifecycle (on-demand)
+
+`create` (with a notify subscription) and `subscribe` auto-spawn a detached background watcher if none is running — best-effort, never blocks the command. It is a singleton (pidfile `~/.config/t3-remote-agents/watch.pid`) and self-exits when idle:
+
+- `--idle-exit <seconds>` (default 900): exit after this long with nothing in flight. It stays alive while any subscribed source thread is still running or any notification is undelivered, so completions are never missed. `0` disables.
+- `--max-lifetime <seconds>` (default 86400): hard runtime backstop.
+- `t3-thread watch --ensure`: spawn one if absent, else no-op (then exit).
+- `t3-thread watch --once`: single throwaway scan (no pidfile/idle logic).
+
+The launchd agent `~/Library/LaunchAgents/network.homenetwork.t3-watcher.plist` is **not** auto-loaded; load it manually only if you want a persistent 24/7 watcher.
 
 ## Docs
 

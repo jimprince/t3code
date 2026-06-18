@@ -276,6 +276,27 @@ describe("watch flows", () => {
     });
   });
 
+  it("skips subscribed source agents whose remote thread no longer exists", async () => {
+    // REGRESSION: stale saved agents/subscriptions should not make
+    // `watch --once --no-deliver` fail for every other route.
+    await withTempState(async () => {
+      const clientFactory: WatchClientFactory = () => ({
+        async findThread() {
+          throw new Error("Thread thread-worker-a was not found");
+        },
+        async sendMessage() {
+          throw new Error("sendMessage should not be called");
+        },
+      });
+
+      const detected = await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      const state = await loadState();
+
+      expect(detected).toEqual([]);
+      expect(state.notifications).toEqual([]);
+    });
+  });
+
   it("treats a subscribed running worker as outstanding watcher work", async () => {
     await withTempState(async () => {
       const { clientFactory } = createClientFactory({

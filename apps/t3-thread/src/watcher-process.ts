@@ -89,7 +89,16 @@ export async function ensureWatcherProcess(input: {
   const repoRoot = repoRootFromArgv();
   const tsxPath = path.join(repoRoot, "node_modules", ".bin", "tsx");
   const cliEntry = path.join(repoRoot, "src", "cli.ts");
-  const args = [cliEntry, "watch", "--interval", String(input.intervalSeconds), "--idle-exit", String(input.idleExitSeconds), "--max-lifetime", String(input.maxLifetimeSeconds)];
+  const args = [
+    cliEntry,
+    "watch",
+    "--interval",
+    String(input.intervalSeconds),
+    "--idle-exit",
+    String(input.idleExitSeconds),
+    "--max-lifetime",
+    String(input.maxLifetimeSeconds),
+  ];
 
   if (input.env) {
     args.push("--env", input.env);

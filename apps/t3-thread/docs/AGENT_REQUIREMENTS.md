@@ -79,6 +79,7 @@
 - Root cause confirmed in the create/subscribe and watch command paths: subscriptions were persisted, but no on-demand watcher bootstrap or singleton idle-exit lifecycle existed in the implementation.
 - Added watcher bootstrap helpers and wired `create`/`subscribe` to best-effort spawn a singleton detached watcher when a notification route is attached.
 - Added watcher idle-work detection so the watcher stays alive while subscribed source threads are still running or undelivered notifications remain.
+- Added stale-source hardening so vanished saved source threads/subscriptions do not make watcher scans or idle-work checks fail globally.
 - Added regression coverage for watcher-work detection and watcher singleton lease handling.
 - Updated `README.md` and `docs/AGENT_OPERATIONS.md` to document the on-demand watcher lifecycle and `watch --ensure` usage.
 - `npm ci` completed successfully in this worktree.

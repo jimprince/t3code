@@ -48286,7 +48286,16 @@ async function ensureWatcherProcess(input) {
   const repoRoot = repoRootFromArgv();
   const tsxPath = import_node_path3.default.join(repoRoot, "node_modules", ".bin", "tsx");
   const cliEntry = import_node_path3.default.join(repoRoot, "src", "cli.ts");
-  const args2 = [cliEntry, "watch", "--interval", String(input.intervalSeconds), "--idle-exit", String(input.idleExitSeconds), "--max-lifetime", String(input.maxLifetimeSeconds)];
+  const args2 = [
+    cliEntry,
+    "watch",
+    "--interval",
+    String(input.intervalSeconds),
+    "--idle-exit",
+    String(input.idleExitSeconds),
+    "--max-lifetime",
+    String(input.maxLifetimeSeconds)
+  ];
   if (input.env) {
     args2.push("--env", input.env);
   }
@@ -48401,7 +48410,12 @@ async function scanAttentionNotifications(state, options = {}) {
   for (const sourceAgent of scopedAgents) {
     const sourceEnvironment = requireEnvironment(state, sourceAgent.environment);
     const sourceClient = clientFactory(sourceEnvironment);
-    const sourceThread = await sourceClient.findThread(sourceAgent.threadId);
+    let sourceThread;
+    try {
+      sourceThread = await sourceClient.findThread(sourceAgent.threadId);
+    } catch {
+      continue;
+    }
     const overview = buildAgentOverview(sourceAgent, sourceThread);
     if (!needsAttention(overview)) {
       continue;
@@ -48601,7 +48615,12 @@ async function hasWatcherWork(options = {}) {
     seenSources.add(subscription.sourceThreadId);
     const sourceEnvironment = requireEnvironment(state, subscription.sourceEnvironment);
     const sourceClient = clientFactory(sourceEnvironment);
-    const sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
+    let sourceThread;
+    try {
+      sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
+    } catch {
+      continue;
+    }
     if (classifyThread(sourceThread).state === "running") {
       return true;
     }
