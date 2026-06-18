@@ -4,6 +4,7 @@ const PAIRING_TOKEN_PARAM = "token";
 const HOSTED_PAIRING_HOST_PARAM = "host";
 const HOSTED_PAIRING_LABEL_PARAM = "label";
 const SUPPORTED_REMOTE_BACKEND_PROTOCOLS = new Set(["http:", "https:", "ws:", "wss:"]);
+const DEFAULT_LOCAL_T3_BACKEND_PORT = "3773";
 
 export const readHashParams = (url: URL): URLSearchParams =>
   new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
@@ -72,6 +73,39 @@ export type RemotePairingTargetError = typeof RemotePairingTargetError.Type;
 const hasSupportedRemoteBackendProtocol = (url: URL): boolean =>
   SUPPORTED_REMOTE_BACKEND_PROTOCOLS.has(url.protocol);
 
+function isPrivateIpv4Address(hostname: string): boolean {
+  const parts = hostname.split(".");
+  if (parts.length !== 4) {
+    return false;
+  }
+
+  const octets = parts.map((part) => Number.parseInt(part, 10));
+  if (
+    octets.some((octet, index) => !/^\d+$/.test(parts[index] ?? "") || octet < 0 || octet > 255)
+  ) {
+    return false;
+  }
+
+  const [first = 0, second = 0] = octets;
+  return (
+    first === 10 ||
+    first === 127 ||
+    (first === 100 && second >= 64 && second <= 127) ||
+    (first === 172 && second <= 31 && second >= 16) ||
+    (first === 192 && second === 168) ||
+    (first === 169 && second === 254)
+  );
+}
+
+function isLocalRemoteHost(hostname: string): boolean {
+  const normalizedHostname = hostname.toLowerCase();
+  return (
+    normalizedHostname === "localhost" ||
+    normalizedHostname.endsWith(".local") ||
+    isPrivateIpv4Address(normalizedHostname)
+  );
+}
+
 const normalizeRemoteBaseUrl = (
   rawValue: string,
   source: RemoteBackendUrlInvalidError["source"],
@@ -96,6 +130,10 @@ const normalizeRemoteBaseUrl = (
       source,
       protocol: url.protocol,
     });
+  }
+  if (isLocalRemoteHost(url.hostname) && url.port === "") {
+    url.protocol = "http:";
+    url.port = DEFAULT_LOCAL_T3_BACKEND_PORT;
   }
   url.pathname = "/";
   url.search = "";
