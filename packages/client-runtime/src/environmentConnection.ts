@@ -1,3 +1,7 @@
+import * as Duration from "effect/Duration";
+import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
+
 import type {
   EnvironmentId,
   OrchestrationShellSnapshot,
@@ -10,12 +14,15 @@ import type {
 import type { KnownEnvironment } from "./knownEnvironment.ts";
 import type { WsRpcClient } from "./wsRpcClient.ts";
 
+const LIVENESS_PROBE_TIMEOUT_MS = 4_000;
+
 export interface EnvironmentConnection {
   readonly kind: "primary" | "saved";
   readonly environmentId: EnvironmentId;
   readonly knownEnvironment: KnownEnvironment;
   readonly client: WsRpcClient;
   readonly ensureBootstrapped: () => Promise<void>;
+  readonly verifyLiveness: (timeoutMs?: number) => Promise<boolean>;
   readonly reconnect: () => Promise<void>;
   readonly dispose: () => Promise<void>;
 }
@@ -125,6 +132,7 @@ export function createEnvironmentConnection(
   }
 
   let disposed = false;
+  let reconnecting = false;
   const bootstrapGate = createBootstrapGate();
   const shouldObserveLifecycle = input.kind === "saved" || input.onWelcome !== undefined;
   const shouldObserveConfig = input.kind === "saved" || input.onConfigSnapshot !== undefined;
@@ -185,7 +193,9 @@ export function createEnvironmentConnection(
           return;
         }
 
-        bootstrapGate.reset();
+        if (!reconnecting) {
+          bootstrapGate.reset();
+        }
         input.onShellResubscribe?.(environmentId);
       },
     },
@@ -221,12 +231,23 @@ export function createEnvironmentConnection(
       disposed
         ? Promise.reject(new EnvironmentConnectionDisposedError(environmentId))
         : bootstrapGate.wait(),
+    verifyLiveness: (timeoutMs: number = LIVENESS_PROBE_TIMEOUT_MS) =>
+      disposed
+        ? Promise.resolve(false)
+        : Effect.runPromise(
+            Effect.tryPromise(() => input.client.server.getConfig()).pipe(
+              Effect.timeout(Duration.millis(timeoutMs)),
+              Effect.option,
+              Effect.map(Option.isSome),
+            ),
+          ),
     reconnect: async () => {
       if (disposed) {
         throw new EnvironmentConnectionDisposedError(environmentId);
       }
 
       bootstrapGate.reset();
+      reconnecting = true;
       try {
         await input.client.reconnect();
         await input.refreshMetadata?.();
@@ -234,6 +255,8 @@ export function createEnvironmentConnection(
       } catch (error) {
         bootstrapGate.reject(error);
         throw error;
+      } finally {
+        reconnecting = false;
       }
     },
     dispose: async () => {
