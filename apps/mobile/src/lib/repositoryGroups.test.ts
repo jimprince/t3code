@@ -79,6 +79,7 @@ describe("groupProjectsByRepository", () => {
         title: "Fix reconnect flow",
         modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
         updatedAt: "2026-04-02T12:00:00.000Z",
+        latestUserMessageAt: "2026-04-02T12:00:00.000Z",
       }),
       makeThread({
         environmentId: EnvironmentId.make("env-local"),
@@ -87,6 +88,7 @@ describe("groupProjectsByRepository", () => {
         title: "Polish mobile shell",
         modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
         updatedAt: "2026-04-03T12:00:00.000Z",
+        latestUserMessageAt: "2026-04-03T12:00:00.000Z",
       }),
     ];
 
@@ -143,6 +145,7 @@ describe("groupProjectsByRepository", () => {
         title: "Older thread",
         modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
         updatedAt: "2026-04-02T12:00:00.000Z",
+        latestUserMessageAt: "2026-04-02T12:00:00.000Z",
       }),
       makeThread({
         environmentId: EnvironmentId.make("env-local"),
@@ -151,6 +154,7 @@ describe("groupProjectsByRepository", () => {
         title: "Newer thread",
         modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
         updatedAt: "2026-04-04T12:00:00.000Z",
+        latestUserMessageAt: "2026-04-04T12:00:00.000Z",
       }),
       makeThread({
         environmentId: EnvironmentId.make("env-local"),
@@ -159,6 +163,7 @@ describe("groupProjectsByRepository", () => {
         title: "Newest thread",
         modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
         updatedAt: "2026-04-05T12:00:00.000Z",
+        latestUserMessageAt: "2026-04-05T12:00:00.000Z",
       }),
     ];
 
@@ -169,6 +174,95 @@ describe("groupProjectsByRepository", () => {
       "newer-thread",
       "older-thread",
     ]);
+  });
+
+  it("ignores agent streaming activity when ordering projects", () => {
+    const projects = [
+      makeProject({
+        environmentId: EnvironmentId.make("env-local"),
+        id: ProjectId.make("busy-project"),
+        title: "Busy",
+      }),
+      makeProject({
+        environmentId: EnvironmentId.make("env-local"),
+        id: ProjectId.make("prompted-project"),
+        title: "Prompted",
+      }),
+    ];
+
+    const threads = [
+      // Running agent: updatedAt churns far ahead of the last user prompt.
+      makeThread({
+        environmentId: EnvironmentId.make("env-local"),
+        id: ThreadId.make("busy-thread"),
+        projectId: ProjectId.make("busy-project"),
+        title: "Busy thread",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        updatedAt: "2026-04-09T12:00:00.000Z",
+        latestUserMessageAt: "2026-04-02T12:00:00.000Z",
+      }),
+      makeThread({
+        environmentId: EnvironmentId.make("env-local"),
+        id: ThreadId.make("prompted-thread"),
+        projectId: ProjectId.make("prompted-project"),
+        title: "Prompted thread",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        updatedAt: "2026-04-03T12:00:00.000Z",
+        latestUserMessageAt: "2026-04-03T12:00:00.000Z",
+      }),
+    ];
+
+    const groups = groupProjectsByRepository({ projects, threads });
+
+    // REGRESSION: a streaming agent's updatedAt must not drag its project to
+    // the top; only the latest user prompt may move a project.
+    expect(groups.map((group) => group.title)).toEqual(["Prompted", "Busy"]);
+    expect(groups[1]?.latestActivityAt).toBe("2026-04-02T12:00:00.000Z");
+  });
+
+  it("falls back to thread createdAt, not updatedAt, when no user prompt exists", () => {
+    const projects = [
+      makeProject({
+        environmentId: EnvironmentId.make("env-local"),
+        id: ProjectId.make("automation-project"),
+        title: "Automation",
+      }),
+      makeProject({
+        environmentId: EnvironmentId.make("env-local"),
+        id: ProjectId.make("prompted-project"),
+        title: "Prompted",
+      }),
+    ];
+
+    const threads = [
+      // Automation-created thread with no user messages and a hot updatedAt.
+      makeThread({
+        environmentId: EnvironmentId.make("env-local"),
+        id: ThreadId.make("automation-thread"),
+        projectId: ProjectId.make("automation-project"),
+        title: "Automation thread",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        createdAt: "2026-04-01T12:00:00.000Z",
+        updatedAt: "2026-04-09T12:00:00.000Z",
+        latestUserMessageAt: null,
+      }),
+      makeThread({
+        environmentId: EnvironmentId.make("env-local"),
+        id: ThreadId.make("prompted-thread"),
+        projectId: ProjectId.make("prompted-project"),
+        title: "Prompted thread",
+        modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+        updatedAt: "2026-04-02T12:00:00.000Z",
+        latestUserMessageAt: "2026-04-02T12:00:00.000Z",
+      }),
+    ];
+
+    const groups = groupProjectsByRepository({ projects, threads });
+
+    // REGRESSION: promptless threads sort by createdAt so running automation
+    // cannot reshuffle the project list.
+    expect(groups.map((group) => group.title)).toEqual(["Prompted", "Automation"]);
+    expect(groups[1]?.latestActivityAt).toBe("2026-04-01T12:00:00.000Z");
   });
 
   it("falls back to a scoped project key when repository identity is unavailable", () => {
