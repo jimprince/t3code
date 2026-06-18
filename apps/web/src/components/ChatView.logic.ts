@@ -178,8 +178,15 @@ export function readFileAsDataUrl(file: File): Promise<string> {
 export function resolveSendEnvMode(input: {
   requestedEnvMode: DraftThreadEnvMode;
   isGitRepo: boolean;
+  hasWorktreeBaseRef: boolean;
 }): DraftThreadEnvMode {
-  return input.isGitRepo ? input.requestedEnvMode : "local";
+  if (!input.isGitRepo) {
+    return "local";
+  }
+  if (input.requestedEnvMode === "worktree" && !input.hasWorktreeBaseRef) {
+    return "local";
+  }
+  return input.requestedEnvMode;
 }
 
 export function cloneComposerImageForRetry(
@@ -247,6 +254,60 @@ export function buildExpiredTerminalContextToastCopy(
     title: `${noun} omitted from message`,
     description: "Re-add it if you want that terminal output included.",
   };
+}
+
+export type EnvironmentUnavailableConnectionState = "connecting" | "disconnected" | "error";
+
+function sentence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return /[.!?]$/u.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function formatRemoteBackendEndpoint(endpoint: string | null | undefined): string | null {
+  const trimmed = endpoint?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function buildEnvironmentUnavailableDescription(input: {
+  readonly connectionState: EnvironmentUnavailableConnectionState;
+  readonly endpoint?: string | null;
+  readonly lastError?: string | null;
+}): string {
+  const lead =
+    input.connectionState === "connecting"
+      ? "Waiting for this environment to finish connecting before sending messages or running actions."
+      : "Reconnect this environment before sending messages or running actions.";
+  const details: string[] = [lead];
+  const lastError = input.lastError?.trim();
+  const endpoint = formatRemoteBackendEndpoint(input.endpoint);
+
+  if (lastError) {
+    details.push(sentence(`Last error: ${lastError}`));
+  } else if (input.connectionState === "disconnected") {
+    details.push("The saved remote backend connection is not active.");
+  }
+
+  if (endpoint) {
+    details.push(sentence(`Remote backend: ${endpoint}`));
+  }
+
+  return details.join(" ");
 }
 
 export function threadHasStarted(thread: Thread | null | undefined): boolean {
