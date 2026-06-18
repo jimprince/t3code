@@ -10,8 +10,9 @@ import {
   listThreadsForProject,
   resolveProjectTarget,
 } from "./projects.js";
+import type { ProviderModelInventory } from "./projects.js";
 import {
-  bootstrapBearerSession,
+  exchangePairingCredential,
   fetchEnvironmentDescriptor,
   fetchSessionState,
   resolveWebSocketUrl,
@@ -27,6 +28,7 @@ import type {
   OrchestrationThreadShell,
   SavedEnvironment,
 } from "./types.js";
+import type { ServerConfig, ServerProvider } from "./vendor/t3contracts/server.js";
 
 const DEFAULT_MODEL_SELECTION: ModelSelection = {
   provider: "codex",
@@ -35,6 +37,35 @@ const DEFAULT_MODEL_SELECTION: ModelSelection = {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+function providerIdFromSnapshot(provider: ServerProvider): string | null {
+  return provider.instanceId ?? provider.provider ?? provider.driver ?? null;
+}
+
+function providerInventoryFromConfig(config: ServerConfig): ProviderModelInventory[] {
+  return config.providers.flatMap((provider) => {
+    const providerId = providerIdFromSnapshot(provider);
+    if (!providerId) {
+      return [];
+    }
+    return [
+      {
+        provider: providerId,
+        ...(provider.displayName ? { displayName: provider.displayName } : {}),
+        ...(provider.driver ? { driver: provider.driver } : {}),
+        enabled: provider.enabled,
+        installed: provider.installed,
+        status: provider.status,
+        models: provider.models.map((model) => ({
+          slug: model.slug,
+          name: model.name,
+          ...(model.shortName ? { shortName: model.shortName } : {}),
+          isCustom: model.isCustom,
+        })),
+      },
+    ];
+  });
 }
 
 export class RemoteEnvironmentClient {
@@ -50,22 +81,25 @@ export class RemoteEnvironmentClient {
     wsBaseUrl: string;
     credential: string;
   }): Promise<SavedEnvironment> {
-    const [descriptor, bootstrap] = await Promise.all([
+    const [descriptor, exchange] = await Promise.all([
       fetchEnvironmentDescriptor(input.httpBaseUrl),
-      bootstrapBearerSession({
+      exchangePairingCredential({
         httpBaseUrl: input.httpBaseUrl,
         credential: input.credential,
+        clientLabel: `t3-thread:${input.name}`,
       }),
     ]);
 
     const session = await fetchSessionState({
       httpBaseUrl: input.httpBaseUrl,
-      bearerToken: bootstrap.sessionToken,
+      bearerToken: exchange.access_token,
     });
 
-    if (!session.auth.sessionMethods.includes("bearer-session-token")) {
-      throw new Error("Remote environment did not confirm bearer-session-token support.");
+    if (!session.authenticated) {
+      throw new Error("Remote environment did not authenticate the exchanged access token.");
     }
+
+    const expiresAt = new Date(Date.now() + Math.max(0, exchange.expires_in) * 1000).toISOString();
 
     return {
       name: input.name,
@@ -74,14 +108,35 @@ export class RemoteEnvironmentClient {
       environmentId: descriptor.environmentId,
       label: descriptor.label,
       serverVersion: descriptor.serverVersion,
-      bearerToken: bootstrap.sessionToken,
-      expiresAt: bootstrap.expiresAt,
+      bearerToken: exchange.access_token,
+      expiresAt,
       pairedAt: nowIso(),
     };
   }
 
   async describe(): Promise<ExecutionEnvironmentDescriptor> {
     return fetchEnvironmentDescriptor(this.environment.httpBaseUrl);
+  }
+
+  async getServerConfig(): Promise<ServerConfig> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request<ServerConfig>("serverGetConfig", {});
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async listModels(): Promise<ProviderModelInventory[]> {
+    return providerInventoryFromConfig(await this.getServerConfig());
+  }
+
+  private async getProviderModelsOrNull(): Promise<ProviderModelInventory[] | null> {
+    try {
+      return await this.listModels();
+    } catch {
+      return null;
+    }
   }
 
   async getShellSnapshot(): Promise<{
@@ -139,11 +194,13 @@ export class RemoteEnvironmentClient {
 
     const projectId = randomUUID();
     const title = deriveProjectTitle(input.workspaceRoot, input.title);
+    const providerModels = input.noDefaultModel ? null : await this.getProviderModelsOrNull();
     const defaultModelSelection = buildModelSelection({
       provider: input.provider,
       model: input.model,
       optionEntries: input.modelOptionEntries,
       noDefault: input.noDefaultModel,
+      providerModels,
     });
     const command = buildProjectCreateCommand({
       commandId: randomUUID(),
@@ -201,11 +258,13 @@ export class RemoteEnvironmentClient {
   }): Promise<OrchestrationProjectShell> {
     const snapshot = await this.getShellSnapshot();
     const project = resolveProjectTarget(snapshot.projects, input.identifier);
+    const providerModels = input.clear ? null : await this.getProviderModelsOrNull();
     const defaultModelSelection = buildModelSelection({
       provider: input.provider,
       model: input.model,
       optionEntries: input.modelOptionEntries,
       clear: input.clear,
+      providerModels,
     });
     const command = buildProjectMetaUpdateCommand({
       commandId: randomUUID(),
@@ -299,13 +358,17 @@ export class RemoteEnvironmentClient {
       throw new Error("agent create requires a non-empty initial message.");
     }
 
+    const providerModels = await this.getProviderModelsOrNull();
     const modelSelection =
       input.model || input.provider
         ? (buildModelSelection({
             provider: input.provider,
             model: input.model,
+            providerModels,
           }) ?? DEFAULT_MODEL_SELECTION)
-        : (project.defaultModelSelection ?? DEFAULT_MODEL_SELECTION);
+        : (project.defaultModelSelection ??
+          buildModelSelection({ providerModels }) ??
+          DEFAULT_MODEL_SELECTION);
 
     const threadId = randomUUID();
     const runtimeMode = input.runtimeMode ?? "full-access";

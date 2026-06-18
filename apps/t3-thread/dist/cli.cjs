@@ -38974,21 +38974,25 @@ var ContextWindowOption = Schema_exports.Struct({
   isDefault: Schema_exports.optional(Schema_exports.Boolean)
 });
 var ModelCapabilities = Schema_exports.Struct({
-  reasoningEffortLevels: Schema_exports.Array(EffortOption),
-  supportsFastMode: Schema_exports.Boolean,
-  supportsThinkingToggle: Schema_exports.Boolean,
-  contextWindowOptions: Schema_exports.Array(ContextWindowOption),
-  promptInjectedEffortLevels: Schema_exports.Array(TrimmedNonEmptyString)
+  reasoningEffortLevels: Schema_exports.optional(Schema_exports.Array(EffortOption)),
+  supportsFastMode: Schema_exports.optional(Schema_exports.Boolean),
+  supportsThinkingToggle: Schema_exports.optional(Schema_exports.Boolean),
+  contextWindowOptions: Schema_exports.optional(Schema_exports.Array(ContextWindowOption)),
+  promptInjectedEffortLevels: Schema_exports.optional(Schema_exports.Array(TrimmedNonEmptyString)),
+  optionDescriptors: Schema_exports.optional(Schema_exports.Array(Schema_exports.Unknown))
 });
 var DEFAULT_MODEL_BY_PROVIDER = {
   codex: "gpt-5.4",
   claudeAgent: "claude-sonnet-4-6",
+  cursor: "auto",
+  grok: "grok-build",
   opencode: "google/antigravity-gemini-3.5-flash-high"
 };
 var DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
 var DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER = {
   codex: "gpt-5.4-mini",
   claudeAgent: "claude-haiku-4-5",
+  cursor: "composer-2",
   opencode: "google/antigravity-gemini-3.5-flash-low"
 };
 var MODEL_SLUG_ALIASES_BY_PROVIDER = {
@@ -39001,7 +39005,11 @@ var MODEL_SLUG_ALIASES_BY_PROVIDER = {
     "gpt-5.3-spark": "gpt-5.3-codex-spark"
   },
   claudeAgent: {
-    opus: "claude-opus-4-6",
+    opus: "claude-opus-4-8",
+    "opus-4.8": "claude-opus-4-8",
+    "claude-opus-4.8": "claude-opus-4-8",
+    "opus-4.7": "claude-opus-4-7",
+    "claude-opus-4.7": "claude-opus-4-7",
     "opus-4.6": "claude-opus-4-6",
     "claude-opus-4.6": "claude-opus-4-6",
     "claude-opus-4-6-20251117": "claude-opus-4-6",
@@ -39013,6 +39021,17 @@ var MODEL_SLUG_ALIASES_BY_PROVIDER = {
     "haiku-4.5": "claude-haiku-4-5",
     "claude-haiku-4.5": "claude-haiku-4-5",
     "claude-haiku-4-5-20251001": "claude-haiku-4-5"
+  },
+  cursor: {
+    composer: "composer-2",
+    "composer-1.5": "composer-1.5",
+    "composer-1": "composer-1.5",
+    "opus-4.6-thinking": "claude-opus-4-6",
+    "opus-4.6": "claude-opus-4-6",
+    "sonnet-4.6-thinking": "claude-sonnet-4-6",
+    "sonnet-4.6": "claude-sonnet-4-6",
+    "opus-4.5-thinking": "claude-opus-4-5",
+    "opus-4.5": "claude-opus-4-5"
   },
   opencode: {
     "antigravity-gemini-3.5-flash-high": "google/antigravity-gemini-3.5-flash-high",
@@ -39084,15 +39103,41 @@ function parseModelOptionEntries(entries3 = []) {
   }
   return options;
 }
-function resolveModelSlug(provider, model) {
+function findProviderInventory(provider, providerModels) {
+  return providerModels?.find((candidate) => candidate.provider === provider) ?? null;
+}
+function resolveLiveDefaultModel(provider, providerModels) {
+  const inventory = findProviderInventory(provider, providerModels);
+  if (!inventory) {
+    return null;
+  }
+  return inventory.models.find((model) => !model.isCustom)?.slug ?? inventory.models[0]?.slug ?? null;
+}
+function resolveLiveModelSlug(provider, model, providerModels) {
+  const inventory = findProviderInventory(provider, providerModels);
+  if (!inventory) {
+    return null;
+  }
+  const direct = inventory.models.find((candidate) => candidate.slug === model);
+  if (direct) {
+    return direct.slug;
+  }
+  const lowered = model.toLowerCase();
+  const named = inventory.models.find(
+    (candidate) => candidate.name?.toLowerCase() === lowered || candidate.shortName?.toLowerCase() === lowered
+  );
+  return named?.slug ?? null;
+}
+function resolveModelSlug(provider, model, providerModels) {
   const providerDefaults = DEFAULT_MODEL_BY_PROVIDER;
   const providerAliases = MODEL_SLUG_ALIASES_BY_PROVIDER;
   const trimmedModel = model?.trim();
-  const fallbackModel = providerDefaults[provider] ?? DEFAULT_MODEL;
+  const fallbackModel = resolveLiveDefaultModel(provider, providerModels) ?? providerDefaults[provider] ?? DEFAULT_MODEL;
   if (!trimmedModel) {
     return fallbackModel;
   }
-  return providerAliases[provider]?.[trimmedModel] ?? trimmedModel;
+  const aliased = providerAliases[provider]?.[trimmedModel] ?? trimmedModel;
+  return resolveLiveModelSlug(provider, aliased, providerModels) ?? aliased;
 }
 function buildModelSelection(input) {
   if (input.clear) {
@@ -39108,7 +39153,7 @@ function buildModelSelection(input) {
     return null;
   }
   const provider = input.provider?.trim() || "codex";
-  const model = resolveModelSlug(provider, input.model);
+  const model = resolveModelSlug(provider, input.model, input.providerModels);
   const options = parseModelOptionEntries(input.optionEntries);
   return {
     provider,
@@ -39175,6 +39220,9 @@ function buildProjectDeleteCommand(input) {
 
 // src/http.ts
 var PAIRING_TOKEN_PARAM = "token";
+var TOKEN_EXCHANGE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:token-exchange";
+var ENVIRONMENT_BOOTSTRAP_TOKEN_TYPE = "urn:t3:params:oauth:token-type:environment-bootstrap";
+var ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token";
 function readHashParams(url) {
   return new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
 }
@@ -39295,13 +39343,33 @@ async function fetchEnvironmentDescriptor(httpBaseUrl) {
     pathname: "/.well-known/t3/environment"
   });
 }
-async function bootstrapBearerSession(input) {
-  return fetchRemoteJson({
-    httpBaseUrl: input.httpBaseUrl,
-    pathname: "/api/auth/bootstrap/bearer",
-    method: "POST",
-    body: { credential: input.credential }
+async function exchangePairingCredential(input) {
+  const requestUrl = new URL("/oauth/token", input.httpBaseUrl).toString();
+  const form = new URLSearchParams({
+    grant_type: TOKEN_EXCHANGE_GRANT_TYPE,
+    subject_token: input.credential,
+    subject_token_type: ENVIRONMENT_BOOTSTRAP_TOKEN_TYPE,
+    requested_token_type: ACCESS_TOKEN_TYPE
   });
+  if (input.clientLabel) {
+    form.set("client_label", input.clientLabel);
+  }
+  let response;
+  try {
+    response = await fetch(requestUrl, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: form.toString()
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`
+    );
+  }
+  if (!response.ok) {
+    throw new Error(await readErrorMessage(response, `Token exchange failed (${response.status}).`));
+  }
+  return await response.json();
 }
 async function fetchSessionState(input) {
   return fetchRemoteJson({
@@ -39310,16 +39378,16 @@ async function fetchSessionState(input) {
     bearerToken: input.bearerToken
   });
 }
-async function issueWebSocketToken(input) {
+async function issueWebSocketTicket(input) {
   return fetchRemoteJson({
     httpBaseUrl: input.httpBaseUrl,
-    pathname: "/api/auth/ws-token",
+    pathname: "/api/auth/websocket-ticket",
     method: "POST",
     bearerToken: input.bearerToken
   });
 }
 async function resolveWebSocketUrl(input) {
-  const issued = await issueWebSocketToken({
+  const issued = await issueWebSocketTicket({
     httpBaseUrl: input.httpBaseUrl,
     bearerToken: input.bearerToken
   });
@@ -39327,7 +39395,7 @@ async function resolveWebSocketUrl(input) {
   url.pathname = "/ws";
   url.search = "";
   url.hash = "";
-  url.searchParams.set("wsToken", issued.token);
+  url.searchParams.set("wsTicket", issued.ticket);
   return url.toString();
 }
 
@@ -44961,7 +45029,11 @@ var ORCHESTRATION_WS_METHODS = {
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread"
 };
-var ProviderKind = Schema_exports.Literals(["codex", "claudeAgent", "opencode"]);
+var ProviderSlug = TrimmedNonEmptyString.check(
+  Schema_exports.isMaxLength(64),
+  Schema_exports.isPattern(/^[a-zA-Z][a-zA-Z0-9_-]*$/)
+);
+var ProviderKind = ProviderSlug;
 var ProviderApprovalPolicy = Schema_exports.Literals([
   "untrusted",
   "on-failure",
@@ -44973,78 +45045,91 @@ var ProviderSandboxMode = Schema_exports.Literals([
   "workspace-write",
   "danger-full-access"
 ]);
-var LegacyModelOptionEntry = Schema_exports.Struct({
-  id: TrimmedNonEmptyString,
-  value: Schema_exports.Unknown
+var ModelOptionRecord = Schema_exports.Record(TrimmedNonEmptyString, Schema_exports.Unknown);
+function normalizeModelOptions(value3) {
+  if (value3 === void 0) {
+    return void 0;
+  }
+  if (Array.isArray(value3)) {
+    const options = {};
+    for (const entry of value3) {
+      if (entry === null || typeof entry !== "object") {
+        continue;
+      }
+      const rawEntry = entry;
+      const id2 = typeof rawEntry.id === "string" ? rawEntry.id.trim() : "";
+      if (!id2) {
+        continue;
+      }
+      options[id2] = rawEntry.value;
+    }
+    return Object.keys(options).length > 0 ? options : void 0;
+  }
+  if (value3 !== null && typeof value3 === "object") {
+    const options = {};
+    for (const [rawKey, optionValue] of Object.entries(value3)) {
+      const key = rawKey.trim();
+      if (key) {
+        options[key] = optionValue;
+      }
+    }
+    return Object.keys(options).length > 0 ? options : void 0;
+  }
+  return void 0;
+}
+function encodeModelOptions(options) {
+  if (options === void 0) {
+    return void 0;
+  }
+  const entries3 = [];
+  for (const [rawKey, rawValue] of Object.entries(options)) {
+    const id2 = rawKey.trim();
+    if (!id2) {
+      continue;
+    }
+    if (typeof rawValue === "boolean") {
+      entries3.push({ id: id2, value: rawValue });
+    } else if (typeof rawValue === "string") {
+      const value3 = rawValue.trim();
+      if (value3) {
+        entries3.push({ id: id2, value: value3 });
+      }
+    }
+  }
+  return entries3.length > 0 ? entries3 : void 0;
+}
+var ModelSelectionSource = Schema_exports.Struct({
+  provider: Schema_exports.optional(Schema_exports.Unknown),
+  instanceId: Schema_exports.optional(Schema_exports.Unknown),
+  model: Schema_exports.Unknown,
+  options: Schema_exports.optional(Schema_exports.Unknown)
 });
-var LegacyCodexModelOptions = Schema_exports.Array(LegacyModelOptionEntry).pipe(
+var ModelSelectionTarget = Schema_exports.Struct({
+  provider: ProviderKind,
+  model: TrimmedNonEmptyString,
+  options: Schema_exports.optionalKey(ModelOptionRecord)
+});
+var ModelSelection = ModelSelectionSource.pipe(
   Schema_exports.decodeTo(
-    CodexModelOptions,
+    ModelSelectionTarget,
     transformOrFail2({
-      decode: (entries3) => Effect_exports.succeed(Object.fromEntries(entries3.map(({ id: id2, value: value3 }) => [id2, value3]))),
-      encode: (options) => Effect_exports.succeed(Object.entries(options).map(([id2, value3]) => ({ id: id2, value: value3 })))
-    })
-  )
-);
-var LegacyClaudeModelOptions = Schema_exports.Array(LegacyModelOptionEntry).pipe(
-  Schema_exports.decodeTo(
-    ClaudeModelOptions,
-    transformOrFail2({
-      decode: (entries3) => Effect_exports.succeed(Object.fromEntries(entries3.map(({ id: id2, value: value3 }) => [id2, value3]))),
-      encode: (options) => Effect_exports.succeed(Object.entries(options).map(([id2, value3]) => ({ id: id2, value: value3 })))
-    })
-  )
-);
-var CodexModelSelection = Schema_exports.Struct({
-  provider: Schema_exports.Literal("codex"),
-  model: TrimmedNonEmptyString,
-  options: Schema_exports.optionalKey(Schema_exports.Union([CodexModelOptions, LegacyCodexModelOptions]))
-});
-var ClaudeModelSelection = Schema_exports.Struct({
-  provider: Schema_exports.Literal("claudeAgent"),
-  model: TrimmedNonEmptyString,
-  options: Schema_exports.optionalKey(Schema_exports.Union([ClaudeModelOptions, LegacyClaudeModelOptions]))
-});
-var OpenCodeModelSelection = Schema_exports.Struct({
-  provider: Schema_exports.Literal("opencode"),
-  model: TrimmedNonEmptyString,
-  options: Schema_exports.optionalKey(OpenCodeModelOptions)
-});
-var LegacyInstanceModelSelection = Schema_exports.Struct({
-  instanceId: ProviderKind,
-  model: TrimmedNonEmptyString,
-  options: Schema_exports.optionalKey(
-    Schema_exports.Union([
-      CodexModelOptions,
-      ClaudeModelOptions,
-      OpenCodeModelOptions,
-      LegacyCodexModelOptions,
-      LegacyClaudeModelOptions
-    ])
-  )
-}).pipe(
-  Schema_exports.decodeTo(
-    Schema_exports.Union([CodexModelSelection, ClaudeModelSelection, OpenCodeModelSelection]),
-    transformOrFail2({
-      decode: ({ instanceId, model, options }) => Effect_exports.succeed({
-        provider: instanceId,
-        model,
-        ...options === void 0 ? {} : { options }
-      }),
+      decode: (raw2) => {
+        const provider = raw2.instanceId !== void 0 ? raw2.instanceId : typeof raw2.provider === "string" ? raw2.provider : void 0;
+        const options = normalizeModelOptions(raw2.options);
+        return Effect_exports.succeed({
+          provider,
+          model: raw2.model,
+          ...options === void 0 ? {} : { options }
+        });
+      },
       encode: ({ provider, model, options }) => Effect_exports.succeed({
         instanceId: provider,
         model,
-        ...options === void 0 ? {} : { options }
+        ...options === void 0 ? {} : { options: encodeModelOptions(options) ?? options }
       })
     })
   )
 );
-var ModelSelection = Schema_exports.Union([
-  CodexModelSelection,
-  ClaudeModelSelection,
-  OpenCodeModelSelection,
-  LegacyInstanceModelSelection
-]);
 var RuntimeMode = Schema_exports.Literals([
   "approval-required",
   "auto-accept-edits",
@@ -46065,7 +46150,9 @@ var ServerAuthPolicy = Schema_exports.Literals([
 var ServerAuthBootstrapMethod = Schema_exports.Literals(["desktop-bootstrap", "one-time-token"]);
 var ServerAuthSessionMethod = Schema_exports.Literals([
   "browser-session-cookie",
-  "bearer-session-token"
+  "bearer-session-token",
+  "bearer-access-token",
+  "dpop-access-token"
 ]);
 var AuthSessionRole = Schema_exports.Literals(["owner", "client"]);
 var ServerAuthDescriptor = Schema_exports.Struct({
@@ -47091,11 +47178,14 @@ var ServerProviderAuthStatus = Schema_exports.Literals([
 var ServerProviderAuth = Schema_exports.Struct({
   status: ServerProviderAuthStatus,
   type: Schema_exports.optional(TrimmedNonEmptyString),
-  label: Schema_exports.optional(TrimmedNonEmptyString)
+  label: Schema_exports.optional(TrimmedNonEmptyString),
+  email: Schema_exports.optional(TrimmedNonEmptyString)
 });
 var ServerProviderModel = Schema_exports.Struct({
   slug: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
+  shortName: Schema_exports.optional(TrimmedNonEmptyString),
+  subProvider: Schema_exports.optional(TrimmedNonEmptyString),
   isCustom: Schema_exports.Boolean,
   capabilities: Schema_exports.NullOr(ModelCapabilities)
 });
@@ -47117,7 +47207,15 @@ var ServerProviderSkill = Schema_exports.Struct({
   shortDescription: Schema_exports.optional(TrimmedNonEmptyString)
 });
 var ServerProvider = Schema_exports.Struct({
-  provider: ProviderKind,
+  provider: Schema_exports.optional(ProviderKind),
+  instanceId: Schema_exports.optional(ProviderKind),
+  driver: Schema_exports.optional(ProviderKind),
+  displayName: Schema_exports.optional(TrimmedNonEmptyString),
+  accentColor: Schema_exports.optional(TrimmedNonEmptyString),
+  badgeLabel: Schema_exports.optional(TrimmedNonEmptyString),
+  availability: Schema_exports.optional(Schema_exports.Literals(["available", "unavailable"])),
+  showInteractionModeToggle: Schema_exports.optional(Schema_exports.Boolean),
+  requiresNewThreadForModelChange: Schema_exports.optional(Schema_exports.Boolean),
   enabled: Schema_exports.Boolean,
   installed: Schema_exports.Boolean,
   version: Schema_exports.NullOr(TrimmedNonEmptyString),
@@ -47145,7 +47243,7 @@ var ServerConfig = Schema_exports.Struct({
   auth: ServerAuthDescriptor,
   cwd: TrimmedNonEmptyString,
   keybindingsConfigPath: TrimmedNonEmptyString,
-  keybindings: ResolvedKeybindingsConfig,
+  keybindings: Schema_exports.Array(Schema_exports.Unknown),
   issues: ServerConfigIssues,
   providers: ServerProviders,
   availableEditors: Schema_exports.Array(EditorId),
@@ -47505,6 +47603,7 @@ var WsRpcGroup = make37(
 
 // src/rpc.ts
 var RPC_METHODS = {
+  serverGetConfig: WS_METHODS.serverGetConfig,
   dispatchCommand: ORCHESTRATION_WS_METHODS.dispatchCommand,
   getTurnDiff: ORCHESTRATION_WS_METHODS.getTurnDiff,
   getFullThreadDiff: ORCHESTRATION_WS_METHODS.getFullThreadDiff,
@@ -47636,26 +47735,55 @@ var DEFAULT_MODEL_SELECTION = {
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
+function providerIdFromSnapshot(provider) {
+  return provider.instanceId ?? provider.provider ?? provider.driver ?? null;
+}
+function providerInventoryFromConfig(config) {
+  return config.providers.flatMap((provider) => {
+    const providerId = providerIdFromSnapshot(provider);
+    if (!providerId) {
+      return [];
+    }
+    return [
+      {
+        provider: providerId,
+        ...provider.displayName ? { displayName: provider.displayName } : {},
+        ...provider.driver ? { driver: provider.driver } : {},
+        enabled: provider.enabled,
+        installed: provider.installed,
+        status: provider.status,
+        models: provider.models.map((model) => ({
+          slug: model.slug,
+          name: model.name,
+          ...model.shortName ? { shortName: model.shortName } : {},
+          isCustom: model.isCustom
+        }))
+      }
+    ];
+  });
+}
 var RemoteEnvironmentClient = class {
   environment;
   constructor(environment) {
     this.environment = environment;
   }
   static async pair(input) {
-    const [descriptor, bootstrap] = await Promise.all([
+    const [descriptor, exchange] = await Promise.all([
       fetchEnvironmentDescriptor(input.httpBaseUrl),
-      bootstrapBearerSession({
+      exchangePairingCredential({
         httpBaseUrl: input.httpBaseUrl,
-        credential: input.credential
+        credential: input.credential,
+        clientLabel: `t3-thread:${input.name}`
       })
     ]);
     const session = await fetchSessionState({
       httpBaseUrl: input.httpBaseUrl,
-      bearerToken: bootstrap.sessionToken
+      bearerToken: exchange.access_token
     });
-    if (!session.auth.sessionMethods.includes("bearer-session-token")) {
-      throw new Error("Remote environment did not confirm bearer-session-token support.");
+    if (!session.authenticated) {
+      throw new Error("Remote environment did not authenticate the exchanged access token.");
     }
+    const expiresAt = new Date(Date.now() + Math.max(0, exchange.expires_in) * 1e3).toISOString();
     return {
       name: input.name,
       httpBaseUrl: input.httpBaseUrl,
@@ -47663,13 +47791,31 @@ var RemoteEnvironmentClient = class {
       environmentId: descriptor.environmentId,
       label: descriptor.label,
       serverVersion: descriptor.serverVersion,
-      bearerToken: bootstrap.sessionToken,
-      expiresAt: bootstrap.expiresAt,
+      bearerToken: exchange.access_token,
+      expiresAt,
       pairedAt: nowIso()
     };
   }
   async describe() {
     return fetchEnvironmentDescriptor(this.environment.httpBaseUrl);
+  }
+  async getServerConfig() {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request("serverGetConfig", {});
+    } finally {
+      await rpc.dispose();
+    }
+  }
+  async listModels() {
+    return providerInventoryFromConfig(await this.getServerConfig());
+  }
+  async getProviderModelsOrNull() {
+    try {
+      return await this.listModels();
+    } catch {
+      return null;
+    }
   }
   async getShellSnapshot() {
     const rpc = await this.openRpc();
@@ -47707,11 +47853,13 @@ var RemoteEnvironmentClient = class {
     }
     const projectId = (0, import_node_crypto2.randomUUID)();
     const title = deriveProjectTitle(input.workspaceRoot, input.title);
+    const providerModels = input.noDefaultModel ? null : await this.getProviderModelsOrNull();
     const defaultModelSelection = buildModelSelection({
       provider: input.provider,
       model: input.model,
       optionEntries: input.modelOptionEntries,
-      noDefault: input.noDefaultModel
+      noDefault: input.noDefaultModel,
+      providerModels
     });
     const command = buildProjectCreateCommand({
       commandId: (0, import_node_crypto2.randomUUID)(),
@@ -47757,11 +47905,13 @@ var RemoteEnvironmentClient = class {
   async setProjectDefaultModel(input) {
     const snapshot = await this.getShellSnapshot();
     const project2 = resolveProjectTarget(snapshot.projects, input.identifier);
+    const providerModels = input.clear ? null : await this.getProviderModelsOrNull();
     const defaultModelSelection = buildModelSelection({
       provider: input.provider,
       model: input.model,
       optionEntries: input.modelOptionEntries,
-      clear: input.clear
+      clear: input.clear,
+      providerModels
     });
     const command = buildProjectMetaUpdateCommand({
       commandId: (0, import_node_crypto2.randomUUID)(),
@@ -47827,10 +47977,12 @@ var RemoteEnvironmentClient = class {
     if (!initialMessage) {
       throw new Error("agent create requires a non-empty initial message.");
     }
+    const providerModels = await this.getProviderModelsOrNull();
     const modelSelection = input.model || input.provider ? buildModelSelection({
       provider: input.provider,
-      model: input.model
-    }) ?? DEFAULT_MODEL_SELECTION : project2.defaultModelSelection ?? DEFAULT_MODEL_SELECTION;
+      model: input.model,
+      providerModels
+    }) ?? DEFAULT_MODEL_SELECTION : project2.defaultModelSelection ?? buildModelSelection({ providerModels }) ?? DEFAULT_MODEL_SELECTION;
     const threadId = (0, import_node_crypto2.randomUUID)();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
@@ -48600,6 +48752,7 @@ program2.addHelpText(
   `
 Direct thread commands:
   project      Manage T3 Code projects on a paired environment
+  models       List live provider/model slugs from a paired environment
   create       Create and start a branch-pinned T3 worker thread
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
@@ -48609,6 +48762,7 @@ Direct thread commands:
 
 Examples:
   t3-thread project list --env dev-vm
+  t3-thread models --env dev-vm
   t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
   t3-thread create --name worker-a --env local-mbp --project PROJECT_ID --title "Worker A" --branch t3/worker-a --message "Fix the issue."
   t3-thread status worker-a
@@ -48665,6 +48819,12 @@ program2.command("threads").requiredOption("--env <name>", "saved environment na
   const client = new RemoteEnvironmentClient(environment);
   const threads = await client.listThreads();
   printLines(threads.map(formatThreadLine));
+});
+program2.command("models").requiredOption("--env <name>", "saved environment name").description("List live provider/model slugs from a paired T3 Code environment").action(async (options) => {
+  const state = await loadState();
+  const environment = requireEnvironment(state, options.env);
+  const client = new RemoteEnvironmentClient(environment);
+  printJson(await client.listModels());
 });
 program2.command("projects").requiredOption("--env <name>", "saved environment name").description("List remote projects so agents can target the correct project id").action(async (options) => {
   const state = await loadState();
@@ -48728,9 +48888,9 @@ project.command("rename").requiredOption("--env <name>", "saved environment name
     renamed: true
   });
 });
-project.command("set-model").requiredOption("--env <name>", "saved environment name").argument("<project>", "project id or absolute workspace root").option("--provider <provider>", "default model provider").option("--model <model>", "default model slug").option("--model-option <key=value>", "default model option; may be repeated", collectOption, []).option("--clear", "clear the project default model selection").description("Set or clear a project's default model selection").action(async (identifier2, options) => {
-  if (!options.clear && (!options.provider || !options.model)) {
-    throw new Error("project set-model requires --provider and --model, or --clear.");
+project.command("set-model").requiredOption("--env <name>", "saved environment name").argument("<project>", "project id or absolute workspace root").option("--provider <provider>", "default model provider").option("--model <model>", "default model slug; defaults to the provider's live app model").option("--model-option <key=value>", "default model option; may be repeated", collectOption, []).option("--clear", "clear the project default model selection").description("Set or clear a project's default model selection").action(async (identifier2, options) => {
+  if (!options.clear && !options.provider) {
+    throw new Error("project set-model requires --provider, or --clear.");
   }
   const state = await loadState();
   const environment = requireEnvironment(state, options.env);
