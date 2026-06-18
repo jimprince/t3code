@@ -147,7 +147,7 @@ Post-create reliability checklist:
 - no flag: if `T3_THREAD_ID` is not set, create still succeeds without a subscription
 - `--no-notify` disables the default caller subscription
 - bare `--notify` requires `T3_THREAD_ID` to be set and forces caller subscription explicitly
-- bare `--notify` resolves the caller thread from paired environments even when it is not saved in local agent state
+- bare `--notify` resolves the caller from saved state first, then `T3_ENVIRONMENT_NAME`/`T3_ENVIRONMENT_ID`, then paired-environment scanning as a fallback
 - `--notify <subscriber>` accepts a saved agent name or saved thread id and does not require `T3_THREAD_ID`
 - persists the same subscription you would otherwise create manually with `agent subscribe --watch <new-agent>`
 - does not replace manual `subscribe`; it is the create-time ownership wiring path
@@ -355,10 +355,8 @@ Current scope note:
 - `subscribe` / `unsubscribe` manage local routing state.
 - `subscribe` rejects self-subscriptions so a coordinator thread cannot watch itself.
 - `watch` polls the current snapshot-backed deployment in two phases: detection persists deduplicated notification events, then delivery claims pending events and attempts routed sends.
-- `create` and `subscribe` best-effort spawn a detached singleton watcher automatically when they attach notification routes.
-- The watcher is guarded by `~/.config/t3-remote-agents/watch.pid`, keeps running while subscribed source threads are still active or notifications remain undelivered, and self-exits after 15 minutes idle by default (`--idle-exit 900`).
-- `t3-thread watch --ensure` spawns the background watcher if none is already running.
-- The legacy launchd agent remains optional for users who want a persistent watcher, but routine notification delivery no longer depends on it.
+- Normal deployment: `create` with notification routing and `subscribe` best-effort ensure a singleton detached watcher is running. The watcher uses `~/.config/t3-remote-agents/watch.pid`, exits after its idle window when no subscribed source is in flight and no notification is undelivered, and has a max-lifetime backstop.
+- The launchd user agent `network.homenetwork.t3-watcher` is optional/manual only. Use it only if you intentionally want a persistent 24/7 watcher.
 
 Run one watcher scan:
 
@@ -367,12 +365,12 @@ t3-thread watch --once
 t3-thread watch --once --no-deliver
 ```
 
-Run the watcher continuously:
+Run or ensure the watcher manually:
 
 ```bash
-t3-thread watch --interval 5
-t3-thread watch --interval 5 --idle-exit 0
 t3-thread watch --ensure
+t3-thread watch --interval 5 --idle-exit 900
+t3-thread watch --interval 5 --idle-exit 0
 ```
 
 Inspect routed notification events:
