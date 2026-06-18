@@ -73,7 +73,14 @@ export async function scanAttentionNotifications(
   for (const sourceAgent of scopedAgents) {
     const sourceEnvironment = requireEnvironment(state, sourceAgent.environment);
     const sourceClient = clientFactory(sourceEnvironment);
-    const sourceThread = await sourceClient.findThread(sourceAgent.threadId);
+    let sourceThread: OrchestrationThread;
+    try {
+      sourceThread = await sourceClient.findThread(sourceAgent.threadId);
+    } catch {
+      // Saved agents/subscriptions can outlive remote threads. A stale source
+      // should not prevent detection for every other watched route.
+      continue;
+    }
     const overview = buildAgentOverview(sourceAgent, sourceThread);
     if (!needsAttention(overview)) {
       continue;
@@ -112,6 +119,58 @@ export async function scanAttentionNotifications(
   }
 
   return scanned;
+}
+
+const UNDELIVERED_STATUSES = new Set(["pending", "delivering", "delivery-failed"]);
+const IN_FLIGHT_SOURCE_STATES = new Set(["running", "starting", "ready"]);
+
+/**
+ * True when the watcher still has something to do: any undelivered notification, or any
+ * subscribed source thread that is still actively in flight. Used as the idle-exit guard
+ * so the watcher never quits while a watched thread could still produce a completion.
+ * Unreachable source threads are treated as not-in-flight (so an unpaired/dead env lets
+ * the watcher idle out instead of spinning forever).
+ */
+export async function hasActiveWork(
+  options: { env?: string; clientFactory?: WatchClientFactory } = {},
+): Promise<boolean> {
+  const clientFactory = options.clientFactory ?? createWatchClient;
+  const state = await loadState();
+
+  const undelivered = state.notifications.some(
+    (notification) =>
+      UNDELIVERED_STATUSES.has(notification.status) && matchesEnvFilter(notification, options.env),
+  );
+  if (undelivered) {
+    return true;
+  }
+
+  const subscribedSourceThreadIds = new Set(
+    state.subscriptions.map((subscription) => subscription.sourceThreadId),
+  );
+  if (subscribedSourceThreadIds.size === 0) {
+    return false;
+  }
+
+  for (const agent of state.agents) {
+    if (!subscribedSourceThreadIds.has(agent.threadId)) {
+      continue;
+    }
+    if (options.env && agent.environment !== options.env) {
+      continue;
+    }
+    try {
+      const environment = requireEnvironment(state, agent.environment);
+      const thread = await clientFactory(environment).findThread(agent.threadId);
+      if (IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)) {
+        return true;
+      }
+    } catch {
+      // Unreachable env/thread → treat as not in flight.
+    }
+  }
+
+  return false;
 }
 
 export async function detectAttentionEvents(

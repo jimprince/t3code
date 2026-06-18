@@ -1,53 +1,69 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { claimWatcherLease } from "../src/watcher-process.js";
+import {
+  clearOwnWatcherPid,
+  ensureWatcherRunning,
+  isWatcherRunning,
+  readWatcherPid,
+  watcherPidFile,
+  writeWatcherPid,
+} from "../src/watcher-process.js";
 
-async function withTempStateDir(test: (stateFile: string) => Promise<void>): Promise<void> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "t3-thread-watcher-process-test-"));
-  const stateFile = path.join(tempDir, "state.json");
-  const previousStateFile = process.env.T3_AGENT_STATE_FILE;
-  process.env.T3_AGENT_STATE_FILE = stateFile;
+let tempDir: string;
+let previousStateFile: string | undefined;
 
-  try {
-    await test(stateFile);
-  } finally {
-    if (previousStateFile === undefined) {
-      delete process.env.T3_AGENT_STATE_FILE;
-    } else {
-      process.env.T3_AGENT_STATE_FILE = previousStateFile;
-    }
-    await rm(tempDir, { recursive: true, force: true });
+beforeEach(async () => {
+  tempDir = await mkdtemp(path.join(os.tmpdir(), "t3-thread-watcher-test-"));
+  previousStateFile = process.env.T3_AGENT_STATE_FILE;
+  process.env.T3_AGENT_STATE_FILE = path.join(tempDir, "state.json");
+});
+
+afterEach(async () => {
+  if (previousStateFile === undefined) {
+    delete process.env.T3_AGENT_STATE_FILE;
+  } else {
+    process.env.T3_AGENT_STATE_FILE = previousStateFile;
   }
-}
+  await rm(tempDir, { recursive: true, force: true });
+});
 
-describe("watcher process helpers", () => {
-  it("claims and releases the singleton watcher lease", async () => {
-    await withTempStateDir(async (stateFile) => {
-      const release = await claimWatcherLease();
-      expect(release).not.toBeNull();
-
-      const pidFile = path.join(path.dirname(stateFile), "watch.pid");
-      await writeFile(pidFile, `${process.pid + 100000}\n`, "utf8");
-      await expect(claimWatcherLease()).resolves.not.toBeNull();
-
-      await release?.();
-      const nextRelease = await claimWatcherLease();
-      expect(nextRelease).not.toBeNull();
-      await nextRelease?.();
-    });
+describe("watcher pidfile / singleton guard", () => {
+  it("places the pidfile next to the state file", () => {
+    expect(watcherPidFile()).toBe(path.join(tempDir, "watch.pid"));
   });
 
-  it("replaces a stale watcher pidfile", async () => {
-    await withTempStateDir(async (stateFile) => {
-      const pidFile = path.join(path.dirname(stateFile), "watch.pid");
-      await writeFile(pidFile, "999999\n", "utf8");
+  it("returns null pid and not-running when no pidfile exists", async () => {
+    expect(await readWatcherPid()).toBeNull();
+    expect(await isWatcherRunning()).toBe(false);
+  });
 
-      const release = await claimWatcherLease();
-      expect(release).not.toBeNull();
-      await release?.();
-    });
+  it("ignores a pidfile that points at the current process (self is not 'another' watcher)", async () => {
+    await writeWatcherPid();
+    expect(await readWatcherPid()).toBe(process.pid);
+    expect(await isWatcherRunning()).toBe(false);
+  });
+
+  it("treats a stale/dead pid as not running and does not clear a foreign pidfile", async () => {
+    await writeFile(watcherPidFile(), "999999999\n", "utf8");
+    expect(await isWatcherRunning()).toBe(false);
+    await clearOwnWatcherPid(); // not our pid → must leave it
+    expect((await readFile(watcherPidFile(), "utf8")).trim()).toBe("999999999");
+  });
+
+  it("does NOT spawn a second watcher when a live one already owns the pidfile", async () => {
+    // A long-lived child stands in for a running watcher.
+    const child = spawn("sleep", ["30"], { stdio: "ignore" });
+    try {
+      await writeFile(watcherPidFile(), `${child.pid}\n`, "utf8");
+      expect(await isWatcherRunning()).toBe(true);
+      // Singleton: ensureWatcherRunning must be a no-op (returns false, spawns nothing).
+      expect(await ensureWatcherRunning()).toBe(false);
+    } finally {
+      child.kill("SIGKILL");
+    }
   });
 });
