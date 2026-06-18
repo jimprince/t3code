@@ -295,11 +295,19 @@ export function isLatestTurnSettled(
   latestTurn: LatestTurnTiming | null,
   session: SessionActivityState | null,
 ): boolean {
+  // The session is authoritative about whether work is in flight. When a
+  // session exists, trust its status rather than the turn timestamps: a session
+  // that is no longer `running` has no in-flight turn even if the matching
+  // `thread.turn-diff-completed` / `thread.session-set` event was dropped (e.g.
+  // in the snapshot→live stream gap). Reading `completedAt` first is what
+  // previously stranded the UI in a permanent "working" state ("says running
+  // when it's not").
+  if (session) {
+    return session.orchestrationStatus !== "running";
+  }
+  // No session signal — fall back to the turn's own timing.
   if (!latestTurn?.startedAt) return false;
-  if (!latestTurn.completedAt) return false;
-  if (!session) return true;
-  if (session.status === "running") return false;
-  return true;
+  return latestTurn.completedAt != null;
 }
 
 export function deriveActiveWorkStartedAt(

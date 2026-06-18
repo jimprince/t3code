@@ -101,6 +101,12 @@ import {
 } from "../keybindings";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
+import { useVcsStatus } from "../lib/vcsStatusState";
+import {
+  buildThreadMoveFailureReport,
+  moveThreadToEnvironment,
+  type ThreadMovePhase,
+} from "../lib/threadMove";
 import { readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
@@ -2108,12 +2114,16 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       );
       const threadWorkspacePath =
         thread.worktreePath ?? threadProject?.workspaceRoot ?? project.workspaceRoot ?? null;
+      const moveTargets = project.memberProjects.filter(
+        (member) => member.environmentId !== thread.environmentId,
+      );
       const clicked = await api.contextMenu.show(
         [
           { id: "rename", label: "Rename thread" },
           { id: "mark-unread", label: "Mark unread" },
           { id: "copy-path", label: "Copy Path" },
           { id: "copy-thread-id", label: "Copy Thread ID" },
+          ...(moveTargets.length > 0 ? [{ id: "move-to-machine", label: "Move to machine…" }] : []),
           { id: "delete", label: "Delete", destructive: true, icon: "trash" },
         ],
         position,
@@ -2146,6 +2156,119 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         copyThreadIdToClipboard(thread.id, { threadId: thread.id });
         return;
       }
+      if (clicked === "move-to-machine") {
+        const targetKey =
+          moveTargets.length === 1
+            ? moveTargets[0]!.physicalProjectKey
+            : await api.contextMenu.show(
+                moveTargets.map((member) => ({
+                  id: member.physicalProjectKey,
+                  label: formatProjectMemberActionLabel(member, project.groupedProjectCount),
+                })),
+                position,
+              );
+        const targetMember = moveTargets.find((member) => member.physicalProjectKey === targetKey);
+        if (!targetMember) return;
+
+        const targetLabel = targetMember.environmentLabel ?? targetMember.workspaceRoot;
+        const confirmLines = [`Move thread "${thread.title}" to ${targetLabel}?`];
+        if (thread.session?.status === "running") {
+          confirmLines.push("The active turn will be interrupted before the move.");
+        }
+        const confirmed = await api.dialogs.confirm(confirmLines.join("\n"));
+        if (!confirmed) return;
+
+        const progressToastId = toastManager.add({
+          type: "loading",
+          title: "Moving thread…",
+          description: "Exporting from the source machine",
+          timeout: 0,
+        });
+        let movePhase: ThreadMovePhase | "preparing" = "preparing";
+        try {
+          const moved = await moveThreadToEnvironment({
+            source: threadRef,
+            target: {
+              environmentId: targetMember.environmentId,
+              projectId: targetMember.id,
+            },
+            confirmBranchFallback: (branch) =>
+              api.dialogs.confirm(
+                [
+                  `Branch "${branch}" already exists on ${targetLabel}.`,
+                  "Create a new worktree on a fallback branch and continue the thread there instead?",
+                  "The existing branch on the target machine is left untouched.",
+                ].join("\n"),
+              ),
+            onProgress: (phase) => {
+              movePhase = phase;
+              toastManager.update(progressToastId, {
+                type: "loading",
+                title: "Moving thread…",
+                description:
+                  phase === "importing"
+                    ? `Importing on ${targetLabel}`
+                    : "Exporting from the source machine",
+              });
+            },
+          });
+
+          // Archive the source copy only after the target confirmed the
+          // import, so a failed move never loses the thread.
+          let archiveFailed = false;
+          try {
+            await archiveThread(threadRef);
+          } catch {
+            archiveFailed = true;
+          }
+
+          const followUpNotes = [
+            ...moved.warnings,
+            ...(archiveFailed
+              ? ["The source copy could not be archived; archive it manually."]
+              : []),
+          ];
+          toastManager.update(
+            progressToastId,
+            stackedThreadToast({
+              type: followUpNotes.length > 0 ? "warning" : "success",
+              title: "Thread moved",
+              description:
+                followUpNotes.length > 0
+                  ? followUpNotes.join("\n")
+                  : `"${thread.title}" now runs on ${targetLabel}.`,
+              timeout: followUpNotes.length > 0 ? 0 : 8000,
+            }),
+          );
+        } catch (error) {
+          // The toast clamps long bodies visually; its copy button copies
+          // this full report, so include everything a bug hunt needs.
+          toastManager.update(
+            progressToastId,
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to move thread",
+              description: buildThreadMoveFailureReport({
+                error,
+                threadTitle: thread.title,
+                source: threadRef,
+                sourceLabel:
+                  project.memberProjects.find(
+                    (member) => member.environmentId === thread.environmentId,
+                  )?.environmentLabel ?? null,
+                target: {
+                  environmentId: targetMember.environmentId,
+                  projectId: targetMember.id,
+                },
+                targetLabel,
+                phase: movePhase,
+              }),
+              timeout: 0,
+            }),
+          );
+        }
+        return;
+      }
       if (clicked !== "delete") return;
       if (appSettingsConfirmThreadDelete) {
         const confirmed = await api.dialogs.confirm(
@@ -2172,6 +2295,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     },
     [
       appSettingsConfirmThreadDelete,
+      archiveThread,
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
@@ -2179,6 +2303,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       memberProjectByScopedKey,
       project.workspaceRoot,
       startThreadRename,
+      project.groupedProjectCount,
+      project.memberProjects,
     ],
   );
 
