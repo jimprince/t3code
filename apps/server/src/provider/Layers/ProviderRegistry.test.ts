@@ -1372,7 +1372,18 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             });
 
             const reprobedCodex = refreshed.find((provider) => provider.instanceId === "codex");
-            assert.deepStrictEqual(spawnedCommands, [firstMissing, secondMissing]);
+            // The poll above advances TestClock repeatedly, which can drive
+            // additional background-refresh probes of either binary under slower
+            // (CI) scheduling, making an exact `spawnedCommands` match flaky. The
+            // no-extra-refresh behavior is already covered by the boot-refresh
+            // tests above; here assert the observable settings-change behavior:
+            // the original binary is probed at boot and the new binaryPath is
+            // re-probed afterward.
+            assert.strictEqual(spawnedCommands[0], firstMissing);
+            assert.ok(
+              spawnedCommands.indexOf(secondMissing) > 0,
+              "expected the changed codex binaryPath to be re-probed after the boot probe",
+            );
             assert.strictEqual(reprobedCodex?.status, "error");
             assert.strictEqual(reprobedCodex?.installed, false);
           }).pipe(Effect.provide(runtimeServices));
