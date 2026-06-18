@@ -1,5 +1,95 @@
 # Agent Requirements
 
+## Current Task Snapshot - Direct Raw Thread UUID Lifecycle Commands
+
+### Active Requirements
+- Implement first-class support for using a raw T3 `threadId` UUID directly with common `t3-thread` lifecycle commands.
+- Remove the need for agents/operators to manually run `attach --name continued-<shortid> ...` before `status`, `result`, `send`, and related commands when the thread already exists.
+- Preserve existing saved-agent-name behavior and keep explicit `attach` available for persistent aliases.
+- Resolve raw UUIDs by checking saved mappings first, then paired environments, with clear not-found errors that state which environments were checked.
+
+### Constraints
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+- Preserve unrelated dirty work already present in this repository.
+- Update repo docs and the shared `t3-threads` skill when command behavior changes.
+- Do not remove the deprecated `t3-agent` compatibility alias.
+
+### Acceptance Criteria
+- Common lifecycle commands accept either a saved agent name or a raw thread UUID where feasible.
+- Raw UUID lookup infers the environment/project metadata needed to operate without creating a temporary saved mapping.
+- Focused regression tests cover raw UUID resolution and not-found/unsupported cases.
+- Verification includes relevant focused tests, build, dist freshness validation if source changes require it, and full test run if feasible.
+
+### Status
+- Completed and folded into the local cleanup commit.
+- Original worker `t3-thread-uuid-direct` used remote thread id `ddbd58d0-6b5b-4036-a599-d4240a998600` in `local-mbp`, project `6ad68f3a-4431-4121-ab23-4d431fce6c9f`, branch `t3/raw-thread-id-direct`.
+- The stale saved mapping and related local subscription were removed during watcher-route cleanup.
+
+## Current Task Snapshot - Existing Thread Continuation Workflow
+
+### Active Requirements
+- Document the operator workflow for prompts like `continue this thread: <uuid>`.
+- Treat the UUID as an existing T3 Code `threadId`, not as a request to create a new worker.
+- Keep the workflow aligned with the shared `t3-threads` skill and user preferences.
+
+### Constraints
+- Do not change CLI behavior in this docs-only pass.
+- Preserve unrelated dirty work already present in this repository.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+
+### Acceptance Criteria
+- `docs/AGENT_OPERATIONS.md` tells operators how to resolve, attach, inspect, and continue an existing thread by UUID.
+- `README.md` exposes the common commands needed for existing-thread continuation.
+
+### Status
+- Completed. Added the existing-thread continuation workflow to `docs/AGENT_OPERATIONS.md` and exposed the relevant commands in `README.md`.
+
+## Current Task Snapshot - K1 CFS Open MMU Handoff Registration
+
+### Active Requirements
+- Register `/Users/brad/Programming/k1-cfs-open-mmu` as a project in the local `local-mbp` T3 Code environment.
+- Create a real T3 worker thread for the K1 CFS Open MMU handoff.
+- Verify creation with a returned remote `threadId` and status check.
+- Record the active project/thread handoff state for future agents.
+
+### Constraints
+- Use `t3-thread`, not the deprecated `t3-agent` command.
+- Do not fabricate a thread id; a worker exists only after `t3-thread create` returns `threadId`.
+- Do not initialize git or create a branch implicitly; the target project folder is not currently a git repository.
+- Preserve all printer safety constraints in the worker brief.
+
+### Acceptance Criteria
+- `local-mbp` contains a T3 project for `/Users/brad/Programming/k1-cfs-open-mmu`.
+- Saved worker `k1-cfs-open-mmu-handoff` exists with a real thread id.
+- `t3-thread status k1-cfs-open-mmu-handoff` reports a non-error state.
+- `docs/ACTIVE_COORDINATION.md` records the live handoff state.
+
+### Status
+- Completed handoff: project id `dbad92eb-0b76-4818-90c7-fdc576652235`; worker `k1-cfs-open-mmu-handoff`; thread id `c313ba2a-9b66-4b69-b7b8-02e334703d9f`; first turn completed. The worker performed read-only orientation, made no file/printer changes, confirmed the unsafe `CFS_WIPE_NOZZLE` purge-station X-motion blocker, and recommended the next supervised step be disabling that call and no-oping `BOX_NOZZLE_CLEAN` before any print/toolchange retry.
+
+## Current Task Snapshot - Ice Menu Bar Handoff Registration
+
+### Active Requirements
+- Register `/Users/brad/Programming/Ice` as a project in the local `local-mbp` T3 Code environment.
+- Create a real T3 worker thread for continuing the Ice menu-bar/notch debugging handoff.
+- Verify creation with a returned remote `threadId` and status check.
+- Record the active project/thread handoff state for future agents.
+
+### Constraints
+- Use `t3-thread`, not the deprecated `t3-agent` command.
+- Do not fabricate a thread id; a worker exists only after `t3-thread create` returns `threadId`.
+- Preserve the current dirty Ice checkout; do not silently commit, reset, or discard local patches.
+- The handoff must explicitly tell the worker that current Ice patches are uncommitted in `/Users/brad/Programming/Ice`.
+
+### Acceptance Criteria
+- `local-mbp` contains a T3 project for `/Users/brad/Programming/Ice`.
+- Saved worker `ice-menu-bar-handoff` exists with a real thread id.
+- `t3-thread status ice-menu-bar-handoff` reports a non-error state.
+- `docs/ACTIVE_COORDINATION.md` records the live handoff state.
+
+### Status
+- Completed initial handoff: project id `3f22d089-cf55-49ed-ab93-c6affc99a85b`; worker `ice-menu-bar-handoff`; thread id `5e3f4e94-01fe-4375-a3bc-7de57951fd0b`; initial status `running`.
+
 ## Current Task Snapshot - Protein Functional Topology Handoff Registration
 
 ### Active Requirements
@@ -539,3 +629,36 @@
 
 ### Status
 - Completed.
+
+## Current Task Snapshot — On-Demand Watcher Lifecycle
+
+### Active Requirements
+- The notification watcher must auto-launch when `t3-thread create` (and `subscribe`) runs if no watcher is already running.
+- The watcher must have an exit criteria so it does not run indefinitely.
+- Approved design (user, 2026-06-04): on-demand + idle-exit; drop launchd `KeepAlive`/`RunAtLoad` (keep the plist for manual `load`). Idle window = 15 min.
+
+### Constraints
+- Auto-launch must be a singleton (pidfile guard) — never spawn duplicate watchers.
+- Idle-exit must NOT fire while any subscribed source thread is still in flight (running) or any notification is undelivered, or completions would be missed.
+- Auto-launch hook must be best-effort: failure to spawn the watcher must never break `create`/`subscribe`.
+- Keep the CLI a thin wrapper; reuse existing state/lock + detect/deliver primitives.
+
+### Acceptance Criteria
+- `create`/`subscribe` spawn a detached watcher when none is running; a second invocation does not double-spawn (pidfile).
+- `watch` accepts `--idle-exit <seconds>` (default 900) and `--max-lifetime <seconds>` backstop; exits cleanly when idle with nothing in flight.
+- Watcher stays alive while a subscribed source thread is `running` or notifications are undelivered.
+- launchd plist no longer auto-restarts; `npm run build` refreshes `dist/cli.cjs`; `npm test` passes (incl. dist-freshness).
+- README, `~/.shared/skills/t3-threads/SKILL.md`, and LLM_INSTRUCTIONS maintenance note updated.
+- Watcher scans must tolerate stale saved source mappings whose remote thread has already vanished.
+
+### Status
+- Completed.
+
+### Validation
+- `npm run build` refreshes `dist/cli.cjs`; `npm test` → 11 files / 88 tests pass (incl. dist-freshness).
+- Added `hasActiveWork` idle-exit guard + tests; verified the "still running" regression test FAILS when the guard is broken, then restored.
+- Added stale-source hardening so `watch --once --no-deliver` skips vanished source threads instead of failing the whole scan.
+- Live (isolated temp state): idle-exit fires (`exit: idle`), pidfile is written then removed, and a second concurrent `watch` is skipped (singleton).
+- Live: `watch --ensure` spawns a detached watcher (`spawned: true`), a second `--ensure` no-ops (`spawned: false`), and the spawned watcher idle-exits + cleans its pidfile. create/subscribe call the same `ensureWatcherRunning()`.
+- launchd plist set to `RunAtLoad`/`KeepAlive` off and booted out; on-demand spawning is now the path.
+- All requirements/acceptance criteria met. The auto-spawn-from-`create` path was validated via the shared `ensureWatcherRunning()` (exercised live through `--ensure`) rather than a live `create` to avoid polluting real remote state.
