@@ -1,6 +1,22 @@
 # CI quality gates
 
-- `.github/workflows/ci.yml` runs `vp check` (lint + typecheck), `vpr typecheck`, and `vp run test` on pull requests and pushes to `main`.
-- `.github/workflows/release.yml` builds macOS (`arm64` and `x64`), Linux (`x64`), and Windows (`x64`) desktop artifacts from a single `v*.*.*` tag and publishes one GitHub release.
-- The release workflow auto-enables signing only when platform credentials are present. macOS passkey builds additionally require `APPLE_TEAM_ID` and the `MACOS_PROVISIONING_PROFILE` secret; Windows uses Azure Trusted Signing. Without the core signing credentials, it still releases unsigned artifacts.
-- See [Release Checklist](./release.md) for the full release/signing setup checklist.
+- `.github/workflows/ci.yml` runs Vite+ install, `vp check`,
+  `vp run typecheck`, desktop build verification, repo tests, browser tests,
+  mobile native static analysis, and release-smoke checks on pull requests and
+  pushes to `main`.
+- `.github/workflows/release.yml` publishes the fork release artifacts from
+  release tags: macOS arm64 desktop DMG/zip/updater manifest plus the Linux x64
+  headless tarball.
+- `.github/workflows/mobile-eas-development.yml` deploys the iOS development
+  EAS lane for Brad's EAS project from relevant `main` pushes or manual
+  dispatch, using Expo fingerprinting to avoid publishing updates to
+  incompatible native runtimes. CI never contacts Apple: new iOS development
+  builds consume the signing credentials already stored on EAS, and credential
+  refreshes are done manually via an interactive local `eas build` (see
+  [Release Workflow](./release.md), "Mobile EAS Development Lane").
+- `.github/workflows/mobile-eas-development-rollback.yml` manually rolls a bad
+  iOS development runtime back to the embedded bundle.
+- `.github/workflows/mobile-eas-preview.yml` handles PR preview mobile
+  builds/updates with Expo fingerprinting.
+- See [Release Workflow](./release.md) for the full fork release and mobile
+  EAS model.
