@@ -14,6 +14,7 @@ import type {
   OrchestrationReadModel,
   OrchestrationShellSnapshot,
   OrchestrationThread,
+  OrchestrationThreadDetailSnapshot,
   OrchestrationThreadShell,
   ProjectId,
   ThreadId,
@@ -152,11 +153,33 @@ export interface ProjectionSnapshotQueryShape {
   ) => Effect.Effect<Option.Option<OrchestrationThreadShell>, ProjectionRepositoryError>;
 
   /**
+   * Read a single non-deleted thread shell row by id, including archived
+   * threads. Use for lifecycle cleanup paths that must still operate after
+   * archive removes a thread from active navigation queries.
+   */
+  readonly getThreadShellByIdIncludingArchived: (
+    threadId: ThreadId,
+  ) => Effect.Effect<Option.Option<OrchestrationThreadShell>, ProjectionRepositoryError>;
+
+  /**
    * Read a single active thread detail snapshot by id.
    */
   readonly getThreadDetailById: (
     threadId: ThreadId,
   ) => Effect.Effect<Option.Option<OrchestrationThread>, ProjectionRepositoryError>;
+
+  /**
+   * Read a single active thread detail snapshot together with the projection
+   * sequence it reflects, in one consistent transaction.
+   *
+   * The paired `snapshotSequence` is an exact cut point: every domain event at
+   * or below it is already reflected in `thread`. The WS layer uses it to drop
+   * live events that the snapshot already contains, so the snapshot→live
+   * handoff neither loses nor double-applies events.
+   */
+  readonly getThreadDetailSnapshotById: (
+    threadId: ThreadId,
+  ) => Effect.Effect<Option.Option<OrchestrationThreadDetailSnapshot>, ProjectionRepositoryError>;
 }
 
 /**
