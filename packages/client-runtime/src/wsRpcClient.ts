@@ -66,8 +66,8 @@ interface GitRunStackedActionOptions {
 
 export interface WsRpcClient {
   readonly dispose: () => Promise<void>;
+  readonly isHeartbeatFresh: (maxAgeMs?: number) => boolean;
   readonly reconnect: () => Promise<void>;
-  readonly isHeartbeatFresh: () => boolean;
   readonly terminal: {
     readonly open: RpcUnaryMethod<typeof WS_METHODS.terminalOpen>;
     readonly attach: RpcInputStreamMethod<typeof WS_METHODS.terminalAttach>;
@@ -172,6 +172,9 @@ export interface WsRpcClient {
       typeof WS_METHODS.serverGetProcessResourceHistory
     >;
     readonly signalProcess: RpcUnaryMethod<typeof WS_METHODS.serverSignalProcess>;
+    readonly requestHeadlessUpdateCheck: RpcUnaryMethod<
+      typeof WS_METHODS.serverRequestHeadlessUpdateCheck
+    >;
   };
   readonly cloud: {
     readonly getRelayClientStatus: RpcUnaryNoArgMethod<typeof WS_METHODS.cloudGetRelayClientStatus>;
@@ -188,6 +191,8 @@ export interface WsRpcClient {
     >;
     readonly subscribeShell: RpcStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeShell>;
     readonly subscribeThread: RpcInputStreamMethod<typeof ORCHESTRATION_WS_METHODS.subscribeThread>;
+    readonly exportThread: RpcUnaryMethod<typeof ORCHESTRATION_WS_METHODS.exportThread>;
+    readonly importThread: RpcUnaryMethod<typeof ORCHESTRATION_WS_METHODS.importThread>;
   };
 }
 
@@ -202,7 +207,7 @@ export function createWsRpcClient(
 ): WsRpcClient {
   return {
     dispose: () => transport.dispose(),
-    isHeartbeatFresh: () => transport.isHeartbeatFresh(),
+    isHeartbeatFresh: (maxAgeMs?: number) => transport.isHeartbeatFresh(maxAgeMs),
     reconnect: async () => {
       options?.beforeReconnect?.();
       await transport.reconnect();
@@ -391,6 +396,8 @@ export function createWsRpcClient(
         transport.request((client) => client[WS_METHODS.serverGetProcessResourceHistory](input)),
       signalProcess: (input) =>
         transport.request((client) => client[WS_METHODS.serverSignalProcess](input)),
+      requestHeadlessUpdateCheck: (input) =>
+        transport.request((client) => client[WS_METHODS.serverRequestHeadlessUpdateCheck](input)),
     },
     cloud: {
       getRelayClientStatus: () =>
@@ -435,6 +442,10 @@ export function createWsRpcClient(
           listener,
           subscriptionOptions(options, ORCHESTRATION_WS_METHODS.subscribeThread),
         ),
+      exportThread: (input) =>
+        transport.request((client) => client[ORCHESTRATION_WS_METHODS.exportThread](input)),
+      importThread: (input) =>
+        transport.request((client) => client[ORCHESTRATION_WS_METHODS.importThread](input)),
     },
   };
 }
