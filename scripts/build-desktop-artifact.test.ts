@@ -33,8 +33,21 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.equal(resolveDesktopUpdateChannel("0.0.17"), "latest");
   });
 
+  it("routes fork-published nightly versions to the nightly updater channel", () => {
+    // sync-upstream.yml tags fork nightlies as vX.Y.Z-nightly.YYYYMMDD.R-fork.N
+    // so electron-updater picks up upgrades. The packager must agree.
+    assert.equal(resolveDesktopUpdateChannel("0.0.21-nightly.20260421.88-fork.1"), "nightly");
+    assert.equal(resolveDesktopUpdateChannel("0.0.22-nightly.20260423.108-fork.3"), "nightly");
+  });
+
+  it("keeps stable -fork.N interim versions on the latest channel", () => {
+    // Stable fork-only patch builds (vX.Y.Z-fork.N per LLM_INSTRUCTIONS.md)
+    // must still go to the `latest` channel, not the nightly one.
+    assert.equal(resolveDesktopUpdateChannel("0.0.22-fork.1"), "latest");
+  });
+
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Alpha)");
+    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Fork)");
     assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
   });
 
@@ -323,6 +336,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("resolves default platform and architecture from host references", () =>
     Effect.gen(function* () {
       const resolved = yield* resolveBuildOptions({
+        flavor: Option.none(),
         platform: Option.none(),
         target: Option.none(),
         arch: Option.none(),
@@ -360,6 +374,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("preserves explicit false boolean flags over true env defaults", () =>
     Effect.gen(function* () {
       const resolved = yield* resolveBuildOptions({
+        flavor: Option.none(),
         platform: Option.some("mac"),
         target: Option.none(),
         arch: Option.some("arm64"),
