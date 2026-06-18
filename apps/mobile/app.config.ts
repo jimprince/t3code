@@ -1,90 +1,70 @@
+// @effect-diagnostics nodeBuiltinImport:off - Expo evaluates app.config.ts in Node before the app runtime exists.
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
+import * as NodeUtil from "node:util";
 import type { ExpoConfig } from "expo/config";
 
-import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
-import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
+import forkConfig from "./fork.config.json";
 
 type AppVariant = "development" | "preview" | "production";
+type Environment = Readonly<Record<string, string | undefined>>;
+
+type ForkConfig = {
+  readonly appleTeamId?: string | null;
+  readonly iosBundleIdBase?: string | null;
+  readonly androidPackageBase?: string | null;
+  readonly schemeBase?: string | null;
+  readonly easProjectId?: string | null;
+  readonly easOwner?: string | null;
+};
+
+const FORK: ForkConfig = forkConfig;
+const UPSTREAM_EAS_PROJECT_ID = "d763fcb8-d37c-41ea-a773-b54a0ab4a454";
+const UPSTREAM_EAS_OWNER = "pingdotgg";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
-const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
+const MOBILE_RUNTIME_VERSION_POLICY =
+  process.env.MOBILE_VERSION_POLICY ??
+  (APP_VARIANT === "development" ? "fingerprint" : "appVersion");
+const EAS_PROJECT_ID = nonEmpty(FORK.easProjectId) ?? UPSTREAM_EAS_PROJECT_ID;
+const EAS_OWNER = nonEmpty(FORK.easOwner) ?? UPSTREAM_EAS_OWNER;
+const APPLE_TEAM_ID = nonEmpty(FORK.appleTeamId);
 
-const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
-const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
-
-const fromRepoRoot = (relativePath: string) => `../../${relativePath}`;
-
-if (
-  isIosPersonalTeamBuild &&
-  (!personalTeamBundleIdentifier ||
-    !IOS_BUNDLE_IDENTIFIER_PATTERN.test(personalTeamBundleIdentifier))
-) {
-  throw new Error(
-    "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_PERSONAL_TEAM=1.",
-  );
-}
-
-const DEVELOPMENT_ASSETS = {
-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIconComposerProject),
-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.developmentIosIconPng),
-  androidAdaptiveForeground: fromRepoRoot(BRAND_ASSET_PATHS.developmentUniversalIconPng),
-  androidAdaptiveBackgroundColor: "#00639B",
-  androidMonochromeIcon: "./assets/android-icon-mark.png",
-  androidNotificationIcon: "./assets/android-notification-icon.png",
-  androidNotificationColor: "#00639B",
-} as const;
-
-const PREVIEW_ASSETS = {
-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIconComposerProject),
-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.nightlyIosIconPng),
-  androidAdaptiveForeground: fromRepoRoot(BRAND_ASSET_PATHS.nightlyLinuxIconPng),
-  androidAdaptiveBackgroundColor: "#111533",
-  androidMonochromeIcon: "./assets/android-icon-mark.png",
-  androidNotificationIcon: "./assets/android-notification-icon.png",
-  androidNotificationColor: "#7565C7",
-} as const;
-
-const RELEASE_ASSETS = {
-  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
-  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIconComposerProject),
-  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.productionIosIconPng),
-  androidAdaptiveForeground: "./assets/android-icon-mark.png",
-  androidAdaptiveBackgroundColor: "#000000",
-  androidMonochromeIcon: "./assets/android-icon-mark.png",
-  androidNotificationIcon: "./assets/android-notification-icon.png",
-  androidNotificationColor: "#FFFFFF",
-} as const;
-
-const VARIANT_CONFIG = {
+const VARIANT_CONFIG: Record<
+  AppVariant,
+  {
+    readonly appName: string;
+    readonly scheme: string;
+    readonly iosIcon: string;
+    readonly iosBundleIdentifier: string;
+    readonly androidPackage: string;
+  }
+> = {
   development: {
     appName: "T3 Code Dev",
     scheme: "t3code-dev",
+    iosIcon: "./assets/icon-composer-dev.icon",
     iosBundleIdentifier: "com.t3tools.t3code.dev",
     androidPackage: "com.t3tools.t3code.dev",
-    relyingParty: "clerk.t3.codes",
-    assets: DEVELOPMENT_ASSETS,
   },
   preview: {
     appName: "T3 Code Preview",
     scheme: "t3code-preview",
+    iosIcon: "./assets/icon-composer-prod.icon",
     iosBundleIdentifier: "com.t3tools.t3code.preview",
     androidPackage: "com.t3tools.t3code.preview",
-    relyingParty: "clerk.t3.codes",
-    assets: PREVIEW_ASSETS,
   },
   production: {
     appName: "T3 Code",
     scheme: "t3code",
+    iosIcon: "./assets/icon-composer-prod.icon",
     iosBundleIdentifier: "com.t3tools.t3code",
     androidPackage: "com.t3tools.t3code",
-    relyingParty: "clerk.t3.codes",
-    assets: RELEASE_ASSETS,
   },
-} as const;
+};
 
 function resolveAppVariant(value: string | undefined): AppVariant {
   switch (value) {
@@ -97,64 +77,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
   }
 }
 
-const variant = VARIANT_CONFIG[APP_VARIANT];
-const iosBundleIdentifier = isIosPersonalTeamBuild
-  ? personalTeamBundleIdentifier!
-  : variant.iosBundleIdentifier;
-
-const dmSansFonts = {
-  regular: "@expo-google-fonts/dm-sans/400Regular/DMSans_400Regular.ttf",
-  medium: "@expo-google-fonts/dm-sans/500Medium/DMSans_500Medium.ttf",
-  bold: "@expo-google-fonts/dm-sans/700Bold/DMSans_700Bold.ttf",
-} as const;
-
-const widgetsPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
-  "expo-widgets",
-  {
-    bundleIdentifier: `${iosBundleIdentifier}.widgets`,
-    groupIdentifier: `group.${iosBundleIdentifier}`,
-    enablePushNotifications: true,
-    // Agent activity can update many times an hour; without the
-    // frequent-updates entitlement iOS throttles the update budget sooner.
-    frequentUpdates: true,
-    widgets: [
-      {
-        name: "AgentActivity",
-        displayName: "Agent Activity",
-        description: "Shows the current state of active T3 Code agents.",
-        supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
-      },
-    ],
-  },
-];
-
-const sharingPlugin: NonNullable<ExpoConfig["plugins"]>[number] = [
-  "expo-sharing",
-  {
-    ios: {
-      // Personal Teams cannot sign App Groups or extension targets. Keep the
-      // reduced-capability local build usable while release builds expose the
-      // real system share target.
-      enabled: !isIosPersonalTeamBuild,
-      extensionBundleIdentifier: `${iosBundleIdentifier}.sharing`,
-      appGroupId: `group.${iosBundleIdentifier}`,
-      activationRule: {
-        supportsText: true,
-        supportsWebUrlWithMaxCount: 1,
-        supportsImageWithMaxCount: 8,
-      },
-    },
-    android: {
-      enabled: true,
-      singleShareMimeTypes: ["text/plain", "image/*"],
-      multipleShareMimeTypes: ["image/*"],
-    },
-  },
-];
-
-// These aliases match the fonts' PostScript names on iOS. Register the same
-// names on Android so React Native and the native composer use one set of
-// family names without waiting for runtime font loading.
+const variant = applyForkOverrides(VARIANT_CONFIG[APP_VARIANT], APP_VARIANT);
 
 const config: ExpoConfig = {
   name: variant.appName,
@@ -163,33 +86,22 @@ const config: ExpoConfig = {
   scheme: variant.scheme,
   version: "0.1.0",
   runtimeVersion: {
-    // Fingerprint (not appVersion) so an OTA only reaches binaries whose native
-    // project — native deps, config plugins, AND patches/ — matches the update.
-    // With appVersion, every 0.1.0 build shares a runtime version, so a JS update
-    // could land on a binary missing the native changes it needs and crash.
-    policy: process.env.MOBILE_VERSION_POLICY ?? "fingerprint",
+    policy: MOBILE_RUNTIME_VERSION_POLICY,
   },
   orientation: "portrait",
-  icon: variant.assets.appIcon,
+  icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
   updates: {
     enabled: true,
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+    url: `https://u.expo.dev/${EAS_PROJECT_ID}`,
     checkAutomatically: "ON_LOAD",
     fallbackToCacheTimeout: 0,
   },
   ios: {
-    icon: variant.assets.iosIcon,
+    icon: variant.iosIcon,
     supportsTablet: true,
-    bundleIdentifier: iosBundleIdentifier,
-    // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
-    // does not fall back to a personal team (which cannot sign app groups,
-    // Sign in with Apple, or push notification entitlements).
-    appleTeamId: "ARK85ZXQ4Z",
-    associatedDomains: [
-      `applinks:${variant.relyingParty}`,
-      `webcredentials:${variant.relyingParty}`,
-    ],
+    bundleIdentifier: variant.iosBundleIdentifier,
+    ...(APPLE_TEAM_ID ? { appleTeamId: APPLE_TEAM_ID } : {}),
     infoPlist: {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
@@ -200,94 +112,41 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    icon: variant.assets.appIcon,
+    icon: "./assets/icon.png",
     package: variant.androidPackage,
     adaptiveIcon: {
-      backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
-      foregroundImage: variant.assets.androidAdaptiveForeground,
-      monochromeImage: variant.assets.androidMonochromeIcon,
+      backgroundColor: "#E6F4FE",
+      foregroundImage: "./assets/android-icon-foreground.png",
+      backgroundImage: "./assets/android-icon-background.png",
+      monochromeImage: "./assets/android-icon-monochrome.png",
     },
-    // Opts into OnBackInvokedCallback-based back dispatch (Android 13+).
-    // JS back handling survives it via react-native's Android 16 shim plus
-    // withAndroidPredictiveBackCompat on Android 13-15.
-    predictiveBackGestureEnabled: true,
+    predictiveBackGestureEnabled: false,
   },
   web: {
-    favicon: variant.assets.appIcon,
+    favicon: "./assets/favicon.png",
   },
   plugins: [
-    "expo-asset",
-    [
-      "expo-font",
-      {
-        ios: {
-          fonts: [dmSansFonts.regular, dmSansFonts.medium, dmSansFonts.bold],
-        },
-        android: {
-          fonts: [
-            {
-              fontFamily: "DMSans-Regular",
-              fontDefinitions: [{ path: dmSansFonts.regular, weight: 400 }],
-            },
-            {
-              fontFamily: "DMSans-Medium",
-              fontDefinitions: [{ path: dmSansFonts.medium, weight: 500 }],
-            },
-            {
-              fontFamily: "DMSans-Bold",
-              fontDefinitions: [{ path: dmSansFonts.bold, weight: 700 }],
-            },
-          ],
-        },
-      },
-    ],
+    "expo-router",
+    "expo-font",
     "expo-secure-store",
-    "expo-sqlite",
-    ...(isIosPersonalTeamBuild
-      ? [sharingPlugin]
-      : ["./plugins/withShareExtensionDisplayName.cjs", sharingPlugin]),
-    [
-      "expo-notifications",
-      {
-        icon: variant.assets.androidNotificationIcon,
-        color: variant.assets.androidNotificationColor,
-        mode: APP_VARIANT === "development" ? "development" : "production",
-      },
-    ],
-    // appleSignIn must be gated here: withoutIosPersonalTeamCapabilities.cjs runs before
-    // plugins earlier in this array, so it cannot strip the entitlement Clerk would add.
-    ["@clerk/expo", { theme: "./clerk-theme.json", appleSignIn: !isIosPersonalTeamBuild }],
+    ["@clerk/expo", { theme: "./clerk-theme.json" }],
     "expo-web-browser",
-    [
-      "expo-quick-actions",
-      {
-        // Adaptive launcher-shortcut icon; referenced by resource name from
-        // the shortcut items set in src/features/shortcuts.
-        androidIcons: {
-          shortcut_icon: {
-            foregroundImage: variant.assets.androidAdaptiveForeground,
-            backgroundColor: variant.assets.androidAdaptiveBackgroundColor,
-          },
-        },
-      },
-    ],
     [
       "expo-camera",
       {
         cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
         barcodeScannerEnabled: true,
-        recordAudioAndroid: false,
       },
     ],
     [
       "expo-splash-screen",
       {
-        image: variant.assets.splashIcon,
+        image: "./assets/splash-icon.png",
         resizeMode: "contain",
         backgroundColor: "#ffffff",
         imageWidth: 220,
         dark: {
-          image: variant.assets.splashIcon,
+          image: "./assets/splash-icon.png",
           backgroundColor: "#0a0a0a",
         },
       },
@@ -305,24 +164,26 @@ const config: ExpoConfig = {
         },
       },
     ],
-    "./plugins/withIosCocoaPodsUuidCache.cjs",
-    // Must be listed BEFORE expo-widgets: same-type mods run last-registered-
-    // first, so registering earlier makes this plugin's mods run AFTER
-    // expo-widgets' — its dangerous mod wipes ios/ExpoWidgetsTarget/ (which
-    // would delete the asset catalog) and its xcodeproj mod creates the widget
-    // target (which must exist before the compile phase can be attached).
-    ...(!isIosPersonalTeamBuild ? ["./plugins/withWidgetLogoAsset.cjs", widgetsPlugin] : []),
-    "./plugins/withIosSceneLifecycle.cjs",
+    [
+      "expo-widgets",
+      {
+        bundleIdentifier: `${variant.iosBundleIdentifier}.widgets`,
+        groupIdentifier: `group.${variant.iosBundleIdentifier}`,
+        enablePushNotifications: true,
+        widgets: [
+          {
+            name: "AgentActivity",
+            displayName: "Agent Activity",
+            description: "Shows the current state of active T3 Code agents.",
+            supportedFamilies: ["systemSmall", "systemMedium", "accessoryRectangular"],
+          },
+        ],
+      },
+    ],
     "./plugins/withAndroidCleartextTraffic.cjs",
-    "./plugins/withAndroidGradleHeap.cjs",
-    "./plugins/withAndroidModernPopupMenu.cjs",
-    "./plugins/withAndroidModernAlertDialog.cjs",
-    "./plugins/withAndroidPredictiveBackCompat.cjs",
-    ...(isIosPersonalTeamBuild ? ["./plugins/withoutIosPersonalTeamCapabilities.cjs"] : []),
   ],
   extra: {
     appVariant: APP_VARIANT,
-    iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
     },
@@ -330,25 +191,116 @@ const config: ExpoConfig = {
       publishableKey: repoEnv.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? null,
       jwtTemplate: repoEnv.EXPO_PUBLIC_CLERK_JWT_TEMPLATE ?? null,
     },
-    // Native Google sign-in credentials. @clerk/expo reads these from `extra`
-    // under their exact env-var names (not nested), and its config plugin reads
-    // the iOS URL scheme at prebuild to register it in Info.plist.
-    // Unset values must be omitted (not null): the public manifest serializes
-    // null to {}, which is truthy and would defeat Clerk's fallback checks.
-    EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_WEB_CLIENT_ID,
-    EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_IOS_CLIENT_ID,
-    EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_ANDROID_CLIENT_ID,
-    EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME: repoEnv.EXPO_PUBLIC_CLERK_GOOGLE_IOS_URL_SCHEME,
     observability: {
       tracesUrl: repoEnv.EXPO_PUBLIC_OTLP_TRACES_URL ?? "https://api.axiom.co/v1/traces",
       tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
     eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+      projectId: EAS_PROJECT_ID,
     },
   },
-  owner: "pingdotgg",
+  owner: EAS_OWNER,
 };
+
+function applyForkOverrides(
+  base: (typeof VARIANT_CONFIG)[AppVariant],
+  appVariant: AppVariant,
+): (typeof VARIANT_CONFIG)[AppVariant] {
+  const variantSlug =
+    appVariant === "production" ? "" : appVariant === "development" ? ".dev" : ".preview";
+  const schemeSlug =
+    appVariant === "production" ? "" : appVariant === "development" ? "-dev" : "-preview";
+
+  const iosBundleIdBase = nonEmpty(FORK.iosBundleIdBase);
+  const androidPackageBase = nonEmpty(FORK.androidPackageBase);
+  const schemeBase = nonEmpty(FORK.schemeBase);
+
+  return {
+    ...base,
+    iosBundleIdentifier: iosBundleIdBase
+      ? `${iosBundleIdBase}${variantSlug}`
+      : base.iosBundleIdentifier,
+    androidPackage: androidPackageBase
+      ? `${androidPackageBase}${variantSlug}`
+      : base.androidPackage,
+    scheme: schemeBase ? `${schemeBase}${schemeSlug}` : base.scheme,
+  };
+}
+
+function nonEmpty(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function loadRepoEnv({ baseEnv = process.env }: { readonly baseEnv?: Environment } = {}): Record<
+  string,
+  string | undefined
+> {
+  const repoRoot = NodePath.resolve(process.cwd(), "../..");
+  const rootEnv = readEnvFile(NodePath.join(repoRoot, ".env"));
+  const localEnv = readEnvFile(NodePath.join(repoRoot, ".env.local"));
+  const publicConfig = resolvePublicConfig(baseEnv, localEnv, rootEnv);
+
+  return {
+    ...rootEnv,
+    ...localEnv,
+    ...baseEnv,
+    ...(publicConfig.clerkPublishableKey
+      ? {
+          T3CODE_CLERK_PUBLISHABLE_KEY: publicConfig.clerkPublishableKey,
+          VITE_CLERK_PUBLISHABLE_KEY: publicConfig.clerkPublishableKey,
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: publicConfig.clerkPublishableKey,
+        }
+      : {}),
+    ...(publicConfig.clerkJwtTemplate
+      ? {
+          T3CODE_CLERK_JWT_TEMPLATE: publicConfig.clerkJwtTemplate,
+          VITE_CLERK_JWT_TEMPLATE: publicConfig.clerkJwtTemplate,
+          EXPO_PUBLIC_CLERK_JWT_TEMPLATE: publicConfig.clerkJwtTemplate,
+        }
+      : {}),
+    ...(publicConfig.relayUrl
+      ? {
+          T3CODE_RELAY_URL: publicConfig.relayUrl,
+          VITE_T3CODE_RELAY_URL: publicConfig.relayUrl,
+        }
+      : {}),
+  };
+}
+
+function resolvePublicConfig(...sources: readonly Environment[]) {
+  return {
+    clerkPublishableKey: firstNonEmpty(
+      sources,
+      "T3CODE_CLERK_PUBLISHABLE_KEY",
+      "VITE_CLERK_PUBLISHABLE_KEY",
+      "EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY",
+    ),
+    clerkJwtTemplate: firstNonEmpty(
+      sources,
+      "T3CODE_CLERK_JWT_TEMPLATE",
+      "VITE_CLERK_JWT_TEMPLATE",
+      "EXPO_PUBLIC_CLERK_JWT_TEMPLATE",
+    ),
+    relayUrl: firstNonEmpty(sources, "T3CODE_RELAY_URL", "VITE_T3CODE_RELAY_URL"),
+  };
+}
+
+function firstNonEmpty(sources: readonly Environment[], ...names: readonly string[]) {
+  for (const source of sources) {
+    for (const name of names) {
+      const value = source[name]?.trim();
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return undefined;
+}
+
+function readEnvFile(path: string): Record<string, string | undefined> {
+  return NodeFS.existsSync(path) ? NodeUtil.parseEnv(NodeFS.readFileSync(path, "utf8")) : {};
+}
 
 export default config;
