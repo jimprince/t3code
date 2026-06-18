@@ -4,7 +4,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { describe } from "vite-plus/test";
-import { ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexRpc from "effect-codex-app-server/rpc";
 
@@ -13,6 +13,7 @@ import {
   CODEX_PLAN_MODE_DEVELOPER_INSTRUCTIONS,
 } from "../CodexDeveloperInstructions.ts";
 import {
+  buildCodexChildEnv,
   buildTurnStartParams,
   hasConfiguredMcpServer,
   isRecoverableThreadResumeError,
@@ -342,4 +343,78 @@ describe("openCodexThread", () => {
       NodeAssert.equal(error.errorMessage, "timed out waiting for server");
     }),
   );
+});
+
+describe("buildCodexChildEnv", () => {
+  it("injects T3 thread and environment metadata while preserving the base env", () => {
+    const env = buildCodexChildEnv({
+      threadId: ThreadId.make("thread-env-test"),
+      environmentId: EnvironmentId.make("environment-env-test"),
+      environmentName: "local-mbp",
+      environment: { EXISTING_ENV: "kept" },
+      homePath: "/tmp/codex-home",
+    });
+
+    assert.equal(env.T3_THREAD_ID, "thread-env-test");
+    assert.equal(env.T3_ENVIRONMENT_ID, "environment-env-test");
+    assert.equal(env.T3_ENVIRONMENT_NAME, "local-mbp");
+    assert.equal(env.CODEX_HOME, "/tmp/codex-home");
+    assert.equal(env.EXISTING_ENV, "kept");
+  });
+
+  it("injects T3_THREAD_ID without optional environment metadata or CODEX_HOME", () => {
+    const previousEnvironmentId = process.env.T3_ENVIRONMENT_ID;
+    const previousEnvironmentName = process.env.T3_ENVIRONMENT_NAME;
+    delete process.env.T3_ENVIRONMENT_ID;
+    delete process.env.T3_ENVIRONMENT_NAME;
+    try {
+      const env = buildCodexChildEnv({
+        threadId: ThreadId.make("thread-env-test"),
+        environment: {},
+      });
+
+      assert.equal(env.T3_THREAD_ID, "thread-env-test");
+      assert.equal(env.T3_ENVIRONMENT_ID, undefined);
+      assert.equal(env.T3_ENVIRONMENT_NAME, undefined);
+      assert.equal(env.CODEX_HOME, undefined);
+    } finally {
+      if (previousEnvironmentId === undefined) {
+        delete process.env.T3_ENVIRONMENT_ID;
+      } else {
+        process.env.T3_ENVIRONMENT_ID = previousEnvironmentId;
+      }
+      if (previousEnvironmentName === undefined) {
+        delete process.env.T3_ENVIRONMENT_NAME;
+      } else {
+        process.env.T3_ENVIRONMENT_NAME = previousEnvironmentName;
+      }
+    }
+  });
+
+  it("uses process-level T3 environment metadata when no runtime override is supplied", () => {
+    const previousEnvironmentId = process.env.T3_ENVIRONMENT_ID;
+    const previousEnvironmentName = process.env.T3_ENVIRONMENT_NAME;
+    process.env.T3_ENVIRONMENT_ID = "environment-process";
+    process.env.T3_ENVIRONMENT_NAME = "process-env";
+    try {
+      const env = buildCodexChildEnv({
+        threadId: ThreadId.make("thread-env-test"),
+        environment: {},
+      });
+
+      assert.equal(env.T3_ENVIRONMENT_ID, "environment-process");
+      assert.equal(env.T3_ENVIRONMENT_NAME, "process-env");
+    } finally {
+      if (previousEnvironmentId === undefined) {
+        delete process.env.T3_ENVIRONMENT_ID;
+      } else {
+        process.env.T3_ENVIRONMENT_ID = previousEnvironmentId;
+      }
+      if (previousEnvironmentName === undefined) {
+        delete process.env.T3_ENVIRONMENT_NAME;
+      } else {
+        process.env.T3_ENVIRONMENT_NAME = previousEnvironmentName;
+      }
+    }
+  });
 });
