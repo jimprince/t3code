@@ -45,12 +45,14 @@ import {
   primaryServerConfigAtom,
   primaryServerConfigEventAtom,
   primaryServerWelcomeAtom,
+  serverEnvironment,
 } from "../state/server";
 import { readProject, setActiveEnvironmentId, useActiveEnvironmentId } from "../state/entities";
 import {
   createKeybindingsUpdateToastController,
   type KeybindingsUpdateToastController,
 } from "../components/KeybindingsUpdateToast.logic";
+import { maybeRequestHeadlessUpdateCheck } from "../serverUpdateCheck";
 
 export const Route = createRootRoute({
   beforeLoad: async ({ location }) => {
@@ -132,6 +134,7 @@ function RootRouteView() {
         <SlowRpcRequestToastCoordinator />
         <HostedStaticEnvironmentBootstrap />
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
+        {primaryEnvironmentAuthenticated ? <HeadlessUpdateCheckBootstrap /> : null}
         {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
         {appShell}
       </AnchoredToastProvider>
@@ -253,6 +256,37 @@ function errorDetails(error: unknown): string {
   } catch {
     return "No additional error details are available.";
   }
+}
+
+function HeadlessUpdateCheckBootstrap() {
+  const primaryEnvironment = usePrimaryEnvironment();
+  const serverConfig = useAtomValue(primaryServerConfigAtom);
+  const requestHeadlessUpdateCheck = useAtomCommand(serverEnvironment.requestHeadlessUpdateCheck, {
+    reportFailure: false,
+  });
+
+  useEffect(() => {
+    if (!primaryEnvironment || !serverConfig) {
+      return;
+    }
+
+    maybeRequestHeadlessUpdateCheck({
+      environmentId: primaryEnvironment.environmentId,
+      serverConfig,
+      request: async (input) => {
+        const result = await requestHeadlessUpdateCheck({
+          environmentId: primaryEnvironment.environmentId,
+          input,
+        });
+        if (result._tag === "Failure") {
+          throw squashAtomCommandFailure(result);
+        }
+        return result.value;
+      },
+    });
+  }, [primaryEnvironment, requestHeadlessUpdateCheck, serverConfig]);
+
+  return null;
 }
 
 function AuthenticatedTracingBootstrap() {
