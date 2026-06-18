@@ -14,7 +14,7 @@ import type {
 import {
   deliverPendingNotifications,
   detectAttentionEvents,
-  hasWatcherWork,
+  hasActiveWork,
   type WatchClient,
   type WatchClientFactory,
 } from "../src/watch.js";
@@ -276,33 +276,69 @@ describe("watch flows", () => {
     });
   });
 
-  it("treats a subscribed running worker as outstanding watcher work", async () => {
+  it("skips subscribed source agents whose remote thread no longer exists", async () => {
+    // REGRESSION: stale saved agents/subscriptions should not make
+    // `watch --once --no-deliver` fail for every other route.
     await withTempState(async () => {
-      const { clientFactory } = createClientFactory({
-        sourceThread: makeThread({
-          latestTurn: {
-            turnId: "turn-running",
-            state: "running",
-            requestedAt: "2026-04-17T00:00:00.000Z",
-            startedAt: "2026-04-17T00:00:01.000Z",
-            completedAt: null,
-            assistantMessageId: null,
-          },
-          messages: [],
-        }),
+      const clientFactory: WatchClientFactory = () => ({
+        async findThread() {
+          throw new Error("Thread thread-worker-a was not found");
+        },
+        async sendMessage() {
+          throw new Error("sendMessage should not be called");
+        },
       });
 
-      await expect(hasWatcherWork({ env: "dev-vm", clientFactory })).resolves.toBe(true);
+      const detected = await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      const state = await loadState();
+
+      expect(detected).toEqual([]);
+      expect(state.notifications).toEqual([]);
+    });
+  });
+});
+
+describe("hasActiveWork (idle-exit guard)", () => {
+  it("returns false when nothing is subscribed and no notifications are pending", async () => {
+    await withTempState(async () => {
+      await saveState({ ...makeState(), subscriptions: [], notifications: [] });
+      const { clientFactory } = createClientFactory({});
+      expect(await hasActiveWork({ env: "dev-vm", clientFactory })).toBe(false);
     });
   });
 
-  it("treats delivered notifications with no running subscriptions as idle", async () => {
+  it("returns true while a subscribed source thread is still running", async () => {
+    // REGRESSION: the watcher must not idle-exit while a watched thread is mid-run,
+    // or it would never deliver the completion it exists to deliver.
+    await withTempState(async () => {
+      const runningSource = makeThread({
+        latestTurn: {
+          turnId: "turn-1",
+          state: "running",
+          requestedAt: "2026-04-17T00:00:00.000Z",
+          startedAt: "2026-04-17T00:00:01.000Z",
+          completedAt: null,
+          assistantMessageId: null,
+        },
+        messages: [],
+      });
+      const { clientFactory } = createClientFactory({ sourceThread: runningSource });
+      expect(await hasActiveWork({ env: "dev-vm", clientFactory })).toBe(true);
+    });
+  });
+
+  it("returns false when the subscribed source completed and nothing is undelivered", async () => {
+    await withTempState(async () => {
+      const { clientFactory } = createClientFactory({});
+      expect(await hasActiveWork({ env: "dev-vm", clientFactory })).toBe(false);
+    });
+  });
+
+  it("returns true while a detected notification is still undelivered", async () => {
     await withTempState(async () => {
       const { clientFactory } = createClientFactory({});
       await detectAttentionEvents({ env: "dev-vm", clientFactory });
-      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
-
-      await expect(hasWatcherWork({ env: "dev-vm", clientFactory })).resolves.toBe(false);
+      expect(await hasActiveWork({ env: "dev-vm", clientFactory })).toBe(true);
     });
   });
 });
