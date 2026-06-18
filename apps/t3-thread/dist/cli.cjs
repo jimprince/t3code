@@ -1193,7 +1193,7 @@ var require_command = __commonJS({
   "node_modules/commander/lib/command.js"(exports2) {
     var EventEmitter = require("node:events").EventEmitter;
     var childProcess = require("node:child_process");
-    var path4 = require("node:path");
+    var path3 = require("node:path");
     var fs = require("node:fs");
     var process2 = require("node:process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
@@ -2206,9 +2206,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
         let launchWithNode = false;
         const sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
         function findFile(baseDir, baseName) {
-          const localBin = path4.resolve(baseDir, baseName);
+          const localBin = path3.resolve(baseDir, baseName);
           if (fs.existsSync(localBin)) return localBin;
-          if (sourceExt.includes(path4.extname(baseName))) return void 0;
+          if (sourceExt.includes(path3.extname(baseName))) return void 0;
           const foundExt = sourceExt.find(
             (ext) => fs.existsSync(`${localBin}${ext}`)
           );
@@ -2226,17 +2226,17 @@ Expecting one of '${allowedValues.join("', '")}'`);
           } catch {
             resolvedScriptPath = this._scriptPath;
           }
-          executableDir = path4.resolve(
-            path4.dirname(resolvedScriptPath),
+          executableDir = path3.resolve(
+            path3.dirname(resolvedScriptPath),
             executableDir
           );
         }
         if (executableDir) {
           let localFile = findFile(executableDir, executableFile);
           if (!localFile && !subcommand._executableFile && this._scriptPath) {
-            const legacyName = path4.basename(
+            const legacyName = path3.basename(
               this._scriptPath,
-              path4.extname(this._scriptPath)
+              path3.extname(this._scriptPath)
             );
             if (legacyName !== this._name) {
               localFile = findFile(
@@ -2247,7 +2247,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
           }
           executableFile = localFile || executableFile;
         }
-        launchWithNode = sourceExt.includes(path4.extname(executableFile));
+        launchWithNode = sourceExt.includes(path3.extname(executableFile));
         let proc;
         if (process2.platform !== "win32") {
           if (launchWithNode) {
@@ -3162,7 +3162,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @return {Command}
        */
       nameFromFilename(filename) {
-        this._name = path4.basename(filename, path4.extname(filename));
+        this._name = path3.basename(filename, path3.extname(filename));
         return this;
       }
       /**
@@ -3176,9 +3176,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [path]
        * @return {(string|null|Command)}
        */
-      executableDir(path5) {
-        if (path5 === void 0) return this._executableDir;
-        this._executableDir = path5;
+      executableDir(path4) {
+        if (path4 === void 0) return this._executableDir;
+        this._executableDir = path4;
         return this;
       }
       /**
@@ -7108,16 +7108,16 @@ var require_filesystem = __commonJS({
     var LDD_PATH = "/usr/bin/ldd";
     var SELF_PATH = "/proc/self/exe";
     var MAX_LENGTH = 2048;
-    var readFileSync = (path4) => {
-      const fd = fs.openSync(path4, "r");
+    var readFileSync = (path3) => {
+      const fd = fs.openSync(path3, "r");
       const buffer3 = Buffer.alloc(MAX_LENGTH);
       const bytesRead = fs.readSync(fd, buffer3, 0, MAX_LENGTH, 0);
       fs.close(fd, () => {
       });
       return buffer3.subarray(0, bytesRead);
     };
-    var readFile3 = (path4) => new Promise((resolve2, reject) => {
-      fs.open(path4, "r", (err, fd) => {
+    var readFile2 = (path3) => new Promise((resolve2, reject) => {
+      fs.open(path3, "r", (err, fd) => {
         if (err) {
           reject(err);
         } else {
@@ -7134,7 +7134,7 @@ var require_filesystem = __commonJS({
       LDD_PATH,
       SELF_PATH,
       readFileSync,
-      readFile: readFile3
+      readFile: readFile2
     };
   }
 });
@@ -7182,7 +7182,7 @@ var require_detect_libc = __commonJS({
     "use strict";
     var childProcess = require("child_process");
     var { isLinux, getReport } = require_process();
-    var { LDD_PATH, SELF_PATH, readFile: readFile3, readFileSync } = require_filesystem();
+    var { LDD_PATH, SELF_PATH, readFile: readFile2, readFileSync } = require_filesystem();
     var { interpreterPath } = require_elf();
     var cachedFamilyInterpreter;
     var cachedFamilyFilesystem;
@@ -7236,11 +7236,11 @@ var require_detect_libc = __commonJS({
       }
       return null;
     };
-    var familyFromInterpreterPath = (path4) => {
-      if (path4) {
-        if (path4.includes("/ld-musl-")) {
+    var familyFromInterpreterPath = (path3) => {
+      if (path3) {
+        if (path3.includes("/ld-musl-")) {
           return MUSL;
-        } else if (path4.includes("/ld-linux-")) {
+        } else if (path3.includes("/ld-linux-")) {
           return GLIBC;
         }
       }
@@ -7262,7 +7262,7 @@ var require_detect_libc = __commonJS({
       }
       cachedFamilyFilesystem = null;
       try {
-        const lddContent = await readFile3(LDD_PATH);
+        const lddContent = await readFile2(LDD_PATH);
         cachedFamilyFilesystem = getFamilyFromLddContent(lddContent);
       } catch (e) {
       }
@@ -7286,9 +7286,9 @@ var require_detect_libc = __commonJS({
       }
       cachedFamilyInterpreter = null;
       try {
-        const selfContent = await readFile3(SELF_PATH);
-        const path4 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
+        const selfContent = await readFile2(SELF_PATH);
+        const path3 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7300,8 +7300,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = readFileSync(SELF_PATH);
-        const path4 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
+        const path3 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7348,7 +7348,7 @@ var require_detect_libc = __commonJS({
       }
       cachedVersionFilesystem = null;
       try {
-        const lddContent = await readFile3(LDD_PATH);
+        const lddContent = await readFile2(LDD_PATH);
         const versionMatch = lddContent.match(RE_GLIBC_VERSION);
         if (versionMatch) {
           cachedVersionFilesystem = versionMatch[1];
@@ -7435,7 +7435,7 @@ var require_detect_libc = __commonJS({
 var require_node_gyp_build = __commonJS({
   "node_modules/node-gyp-build-optional-packages/node-gyp-build.js"(exports2, module2) {
     var fs = require("fs");
-    var path4 = require("path");
+    var path3 = require("path");
     var url = require("url");
     var os2 = require("os");
     var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
@@ -7457,30 +7457,30 @@ var require_node_gyp_build = __commonJS({
       return runtimeRequire(load.resolve(dir));
     }
     load.resolve = load.path = function(dir) {
-      dir = path4.resolve(dir || ".");
+      dir = path3.resolve(dir || ".");
       var packageName = "";
       var packageNameError;
       try {
-        packageName = runtimeRequire(path4.join(dir, "package.json")).name;
+        packageName = runtimeRequire(path3.join(dir, "package.json")).name;
         var varName = packageName.toUpperCase().replace(/-/g, "_");
         if (process.env[varName + "_PREBUILD"]) dir = process.env[varName + "_PREBUILD"];
       } catch (err) {
         packageNameError = err;
       }
       if (!prebuildsOnly) {
-        var release2 = getFirst(path4.join(dir, "build/Release"), matchBuild);
+        var release2 = getFirst(path3.join(dir, "build/Release"), matchBuild);
         if (release2) return release2;
-        var debug = getFirst(path4.join(dir, "build/Debug"), matchBuild);
+        var debug = getFirst(path3.join(dir, "build/Debug"), matchBuild);
         if (debug) return debug;
       }
       var prebuild = resolve2(dir);
       if (prebuild) return prebuild;
-      var nearby = resolve2(path4.dirname(process.execPath));
+      var nearby = resolve2(path3.dirname(process.execPath));
       if (nearby) return nearby;
       var platformPackage = (packageName[0] == "@" ? "" : "@" + packageName + "/") + packageName + "-" + platform + "-" + arch;
       var packageResolutionError;
       try {
-        var prebuildPackage = path4.dirname(require("module").createRequire(url.pathToFileURL(path4.join(dir, "package.json"))).resolve(platformPackage));
+        var prebuildPackage = path3.dirname(require("module").createRequire(url.pathToFileURL(path3.join(dir, "package.json"))).resolve(platformPackage));
         return resolveFile(prebuildPackage);
       } catch (error) {
         packageResolutionError = error;
@@ -7507,16 +7507,16 @@ var require_node_gyp_build = __commonJS({
       }
       throw new Error(errMessage);
       function resolve2(dir2) {
-        var tuples = readdirSync(path4.join(dir2, "prebuilds")).map(parseTuple);
+        var tuples = readdirSync(path3.join(dir2, "prebuilds")).map(parseTuple);
         var tuple3 = tuples.filter(matchTuple(platform, arch)).sort(compareTuples)[0];
         if (!tuple3) return;
-        return resolveFile(path4.join(dir2, "prebuilds", tuple3.name));
+        return resolveFile(path3.join(dir2, "prebuilds", tuple3.name));
       }
       function resolveFile(prebuilds) {
         var parsed = readdirSync(prebuilds).map(parseTags);
         var candidates = parsed.filter(matchTags(runtime2, abi));
         var winner = candidates.sort(compareTags(runtime2))[0];
-        if (winner) return path4.join(prebuilds, winner.file);
+        if (winner) return path3.join(prebuilds, winner.file);
       }
     };
     function readdirSync(dir) {
@@ -7528,7 +7528,7 @@ var require_node_gyp_build = __commonJS({
     }
     function getFirst(dir, filter12) {
       var files = readdirSync(dir).filter(filter12);
-      return files[0] && path4.join(dir, files[0]);
+      return files[0] && path3.join(dir, files[0]);
     }
     function matchBuild(name) {
       return /\.node$/.test(name);
@@ -7664,300 +7664,6 @@ var {
   Help
 } = import_index.default;
 
-// src/state.ts
-var import_promises = require("node:fs/promises");
-var import_node_os = __toESM(require("node:os"), 1);
-var import_node_path = __toESM(require("node:path"), 1);
-var import_node_crypto = require("node:crypto");
-var DEFAULT_STATE_DIR = import_node_path.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
-var DEFAULT_STATE_FILE = import_node_path.default.join(DEFAULT_STATE_DIR, "state.json");
-var STATE_LOCK_TIMEOUT_MS = 1e4;
-var STATE_LOCK_RETRY_MS = 50;
-var EMPTY_STATE = {
-  version: 1,
-  environments: [],
-  agents: [],
-  subscriptions: [],
-  notifications: []
-};
-function resolveStateFile() {
-  return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
-}
-async function ensureStateDir(stateFile) {
-  await (0, import_promises.mkdir)(import_node_path.default.dirname(stateFile), { recursive: true });
-}
-function normalizeState(parsed) {
-  return {
-    version: 1,
-    environments: Array.isArray(parsed.environments) ? parsed.environments : [],
-    agents: Array.isArray(parsed.agents) ? parsed.agents : [],
-    subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
-    notifications: Array.isArray(parsed.notifications) ? parsed.notifications : []
-  };
-}
-async function loadStateFromFile(stateFile) {
-  try {
-    const raw2 = await (0, import_promises.readFile)(stateFile, "utf8");
-    const parsed = JSON.parse(raw2);
-    return normalizeState(parsed);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("ENOENT")) {
-      return structuredClone(EMPTY_STATE);
-    }
-    throw error;
-  }
-}
-async function loadState() {
-  return loadStateFromFile(resolveStateFile());
-}
-async function saveStateToFile(stateFile, state) {
-  await ensureStateDir(stateFile);
-  const tempFile = import_node_path.default.join(import_node_path.default.dirname(stateFile), `.${import_node_path.default.basename(stateFile)}.${(0, import_node_crypto.randomUUID)()}.tmp`);
-  await (0, import_promises.writeFile)(tempFile, `${JSON.stringify(state, null, 2)}
-`, "utf8");
-  await (0, import_promises.rename)(tempFile, stateFile);
-}
-async function sleep(ms) {
-  await new Promise((resolve2) => setTimeout(resolve2, ms));
-}
-async function withStateLock(stateFile, task) {
-  await ensureStateDir(stateFile);
-  const lockFile = `${stateFile}.lock`;
-  const startedAt = Date.now();
-  for (; ; ) {
-    try {
-      const handle = await (0, import_promises.open)(lockFile, "wx");
-      try {
-        await handle.writeFile(`${process.pid}
-`, "utf8");
-        return await task();
-      } finally {
-        await handle.close();
-        await (0, import_promises.unlink)(lockFile).catch(() => {
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("EEXIST")) {
-        throw error;
-      }
-      if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
-        throw new Error(`Timed out waiting for state lock '${lockFile}'.`);
-      }
-      await sleep(STATE_LOCK_RETRY_MS);
-    }
-  }
-}
-async function updateState(mutator) {
-  const stateFile = resolveStateFile();
-  return withStateLock(stateFile, async () => {
-    const current = await loadStateFromFile(stateFile);
-    const { state, result: result4 } = await mutator(current);
-    await saveStateToFile(stateFile, state);
-    return result4;
-  });
-}
-function upsertEnvironment(environments, next) {
-  const remaining = environments.filter((env) => env.name !== next.name);
-  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
-}
-function upsertAgent(agents, next) {
-  const remaining = agents.filter((agent2) => agent2.name !== next.name);
-  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
-}
-function removeAgent(agents, name) {
-  return agents.filter((agent2) => agent2.name !== name).sort((a, b) => a.name.localeCompare(b.name));
-}
-function upsertSubscription(subscriptions, next) {
-  const remaining = subscriptions.filter(
-    (subscription) => !(subscription.subscriberThreadId === next.subscriberThreadId && subscription.sourceThreadId === next.sourceThreadId)
-  );
-  return [...remaining, next].sort(
-    (a, b) => `${a.subscriberAgentName ?? a.subscriberThreadId}:${a.sourceAgentName ?? a.sourceThreadId}`.localeCompare(
-      `${b.subscriberAgentName ?? b.subscriberThreadId}:${b.sourceAgentName ?? b.sourceThreadId}`
-    )
-  );
-}
-function removeSubscription(subscriptions, input) {
-  return subscriptions.filter(
-    (subscription) => !(subscription.subscriberThreadId === input.subscriberThreadId && subscription.sourceThreadId === input.sourceThreadId)
-  );
-}
-function upsertNotification(notifications, next) {
-  const remaining = notifications.filter((notification) => notification.eventKey !== next.eventKey);
-  return [...remaining, next].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-}
-function findAgentByThreadId(state, threadId) {
-  return state.agents.find((agent2) => agent2.threadId === threadId) ?? null;
-}
-function resolveCallerThreadId(env = process.env) {
-  const value3 = env.T3_THREAD_ID?.trim();
-  return value3 ? value3 : null;
-}
-function resolveCallerEnvironmentMetadata(env = process.env) {
-  const environmentName = env.T3_ENVIRONMENT_NAME?.trim();
-  const environmentId = env.T3_ENVIRONMENT_ID?.trim();
-  if (!environmentName || !environmentId) {
-    return null;
-  }
-  return {
-    environmentName,
-    environmentId
-  };
-}
-function resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment = null) {
-  const savedAgent = findAgentByThreadId(state, threadId);
-  if (savedAgent) {
-    return {
-      threadId: savedAgent.threadId,
-      name: savedAgent.name,
-      environment: savedAgent.environment
-    };
-  }
-  if (!callerEnvironment) {
-    return null;
-  }
-  const savedEnvironment = state.environments.find(
-    (environment) => environment.environmentId === callerEnvironment.environmentId || environment.name === callerEnvironment.environmentName || environment.label === callerEnvironment.environmentName
-  );
-  return {
-    threadId,
-    name: null,
-    environment: savedEnvironment?.name ?? callerEnvironment.environmentName
-  };
-}
-function resolveNotifyPreference(notify, env = process.env) {
-  if (notify === false) {
-    return { kind: "none" };
-  }
-  if (typeof notify === "string") {
-    const value3 = notify.trim();
-    if (!value3) {
-      throw new Error("`--notify` subscriber value cannot be empty.");
-    }
-    return {
-      kind: "explicit",
-      subscriber: value3
-    };
-  }
-  const callerThreadId = resolveCallerThreadId(env);
-  if (callerThreadId) {
-    return { kind: "caller" };
-  }
-  if (notify === true) {
-    throw new Error(
-      "T3_THREAD_ID is not set. Bare `agent create --notify` must run inside a T3 thread or specify `--notify <subscriber>`."
-    );
-  }
-  return { kind: "none" };
-}
-function requireEnvironment(state, name) {
-  const found = state.environments.find((env) => env.name === name);
-  if (!found) {
-    throw new Error(`Unknown environment '${name}'.`);
-  }
-  return found;
-}
-function requireAgent(state, name) {
-  const found = state.agents.find((agent2) => agent2.name === name);
-  if (!found) {
-    throw new Error(`Unknown agent '${name}'.`);
-  }
-  return found;
-}
-function buildSubscriptionRecord(caller, source, now2, existing) {
-  return {
-    subscriberThreadId: caller.threadId,
-    subscriberAgentName: caller.name,
-    subscriberEnvironment: caller.environment,
-    sourceThreadId: source.threadId,
-    sourceAgentName: source.name,
-    sourceEnvironment: source.environment,
-    createdAt: existing?.createdAt ?? now2,
-    updatedAt: now2
-  };
-}
-function assertNotSelfSubscription(caller, source) {
-  if (caller.threadId === source.threadId) {
-    throw new Error(`Subscriber '${caller.name ?? caller.threadId}' cannot subscribe to itself.`);
-  }
-}
-
-// src/agent-targets.ts
-var THREAD_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-function orderedEnvironmentNames(state, preferredEnvironment) {
-  return [
-    ...preferredEnvironment ? [preferredEnvironment] : [],
-    ...state.environments.map((environment) => environment.name)
-  ].filter((value3, index2, list) => list.indexOf(value3) === index2);
-}
-function isRawThreadUuid(value3) {
-  return THREAD_UUID_PATTERN.test(value3.trim());
-}
-function assertSavedAgentCapability(target2, capability) {
-  if (!target2.savedAgent) {
-    throw new Error(`${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`);
-  }
-}
-function resolveSavedAgentTarget(state, input) {
-  const savedByName = state.agents.find((agent2) => agent2.name === input);
-  if (savedByName) {
-    return {
-      input,
-      environment: savedByName.environment,
-      threadId: savedByName.threadId,
-      projectId: savedByName.projectId,
-      title: savedByName.title,
-      savedAgent: savedByName
-    };
-  }
-  const savedByThreadId = findAgentByThreadId(state, input);
-  if (!savedByThreadId) {
-    return null;
-  }
-  return {
-    input,
-    environment: savedByThreadId.environment,
-    threadId: savedByThreadId.threadId,
-    projectId: savedByThreadId.projectId,
-    title: savedByThreadId.title,
-    savedAgent: savedByThreadId
-  };
-}
-async function resolveAgentTarget(state, input, options) {
-  const local = resolveSavedAgentTarget(state, input);
-  if (local) {
-    return {
-      ...local,
-      checkedEnvironments: [local.environment]
-    };
-  }
-  if (!isRawThreadUuid(input)) {
-    throw new Error(`Unknown agent '${input}'.`);
-  }
-  const checkedEnvironments = [];
-  for (const environmentName of orderedEnvironmentNames(state, options.preferredEnvironment)) {
-    checkedEnvironments.push(environmentName);
-    requireEnvironment(state, environmentName);
-    const client = options.clientFactory(environmentName);
-    const thread = (await client.listThreads()).find((candidate) => candidate.id === input);
-    if (thread) {
-      return {
-        input,
-        environment: environmentName,
-        threadId: thread.id,
-        projectId: thread.projectId,
-        title: thread.title,
-        savedAgent: null,
-        checkedEnvironments
-      };
-    }
-  }
-  const checked = checkedEnvironments.length > 0 ? checkedEnvironments.join(", ") : "(none)";
-  throw new Error(`Unknown thread '${input}'. Checked paired environments: ${checked}.`);
-}
-
 // src/agentPrompts.ts
 function buildFollowUpMessage(kind, message) {
   const trimmed = message?.trim() ?? "";
@@ -7971,10 +7677,10 @@ function buildFollowUpMessage(kind, message) {
 }
 
 // src/client.ts
-var import_node_crypto2 = require("node:crypto");
+var import_node_crypto = require("node:crypto");
 
 // src/projects.ts
-var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_path = __toESM(require("node:path"), 1);
 
 // node_modules/effect/dist/Pipeable.js
 var pipeArguments = (self, args2) => {
@@ -8719,8 +8425,8 @@ var CIRCULAR = "[Circular]";
 function formatPropertyKey(name) {
   return typeof name === "string" ? JSON.stringify(name) : String(name);
 }
-function formatPath(path4) {
-  return path4.map((key) => `[${formatPropertyKey(key)}]`).join("");
+function formatPath(path3) {
+  return path3.map((key) => `[${formatPropertyKey(key)}]`).join("");
 }
 function formatDate(date2) {
   try {
@@ -11924,13 +11630,13 @@ var isSuccess3 = /* @__PURE__ */ matchEager({
   onFailure: () => false,
   onSuccess: () => true
 });
-var delay = /* @__PURE__ */ dual(2, (self, duration) => andThen2(sleep2(duration), self));
-var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => raceFirst(self, flatMap3(sleep2(options.duration), options.orElse)));
+var delay = /* @__PURE__ */ dual(2, (self, duration) => andThen2(sleep(duration), self));
+var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => raceFirst(self, flatMap3(sleep(options.duration), options.orElse)));
 var timeout = /* @__PURE__ */ dual(2, (self, duration) => timeoutOrElse(self, {
   duration,
   orElse: () => fail3(new TimeoutError())
 }));
-var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as2(sleep2(duration), none2())));
+var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as2(sleep(duration), none2())));
 var timed = (self) => clockWith((clock) => {
   const start = clock.currentTimeNanosUnsafe();
   return map5(self, (a) => [nanos(clock.currentTimeNanosUnsafe() - start), a]);
@@ -12795,7 +12501,7 @@ var processOrPerformanceNow = /* @__PURE__ */ (function() {
   return () => origin + processHrtime.bigint();
 })();
 var clockWith = (f) => withFiber((fiber3) => f(fiber3.getRef(ClockRef)));
-var sleep2 = (duration) => clockWith((clock) => clock.sleep(fromInputUnsafe(duration)));
+var sleep = (duration) => clockWith((clock) => clock.sleep(fromInputUnsafe(duration)));
 var currentTimeMillis = /* @__PURE__ */ clockWith((clock) => clock.currentTimeMillis);
 var TimeoutErrorTypeId = "~effect/Cause/TimeoutError";
 var TimeoutError = class extends (/* @__PURE__ */ TaggedError("TimeoutError")) {
@@ -13248,7 +12954,7 @@ __export(Effect_exports, {
   scopedWith: () => scopedWith2,
   service: () => service2,
   serviceOption: () => serviceOption2,
-  sleep: () => sleep3,
+  sleep: () => sleep2,
   spanAnnotations: () => spanAnnotations2,
   spanLinks: () => spanLinks2,
   succeed: () => succeed6,
@@ -14240,7 +13946,7 @@ var toStepWithMetadata = (schedule4) => clockWith((clock) => map5(toStep(schedul
       const meta = metaFn(now2, input);
       meta.output = output;
       meta.duration = duration;
-      return as2(sleep2(duration), meta);
+      return as2(sleep(duration), meta);
     });
   });
 }));
@@ -14737,7 +14443,7 @@ var timeout2 = timeout;
 var timeoutOption2 = timeoutOption;
 var timeoutOrElse2 = timeoutOrElse;
 var delay2 = delay;
-var sleep3 = sleep2;
+var sleep2 = sleep;
 var timed2 = timed;
 var raceAll2 = raceAll;
 var raceAllFirst2 = raceAllFirst;
@@ -15349,9 +15055,9 @@ var Pointer = class extends Base {
    * The issue that occurred.
    */
   issue;
-  constructor(path4, issue) {
+  constructor(path3, issue) {
     super();
-    this.path = path4;
+    this.path = path3;
     this.issue = issue;
   }
 };
@@ -15559,50 +15265,50 @@ function makeFormatterStandardSchemaV1(options) {
 function getExpectedMessage(expected, actual) {
   return `Expected ${expected}, got ${actual}`;
 }
-function toDefaultIssues(issue, path4, leafHook, checkHook) {
+function toDefaultIssues(issue, path3, leafHook, checkHook) {
   switch (issue._tag) {
     case "Filter": {
       const message = checkHook(issue);
       if (message !== void 0) {
         return [{
-          path: path4,
+          path: path3,
           message
         }];
       }
       switch (issue.issue._tag) {
         case "InvalidValue":
           return [{
-            path: path4,
+            path: path3,
             message: getExpectedMessage(formatCheck(issue.filter), format(issue.actual))
           }];
         default:
-          return toDefaultIssues(issue.issue, path4, leafHook, checkHook);
+          return toDefaultIssues(issue.issue, path3, leafHook, checkHook);
       }
     }
     case "Encoding":
-      return toDefaultIssues(issue.issue, path4, leafHook, checkHook);
+      return toDefaultIssues(issue.issue, path3, leafHook, checkHook);
     case "Pointer":
-      return toDefaultIssues(issue.issue, [...path4, ...issue.path], leafHook, checkHook);
+      return toDefaultIssues(issue.issue, [...path3, ...issue.path], leafHook, checkHook);
     case "Composite":
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path4, leafHook, checkHook));
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path3, leafHook, checkHook));
     case "AnyOf": {
       const message = findMessage(issue);
       if (issue.issues.length === 0) {
         if (message !== void 0) return [{
-          path: path4,
+          path: path3,
           message
         }];
         const expected = getExpectedMessage(getExpected(issue.ast), format(issue.actual));
         return [{
-          path: path4,
+          path: path3,
           message: expected
         }];
       }
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path4, leafHook, checkHook));
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path3, leafHook, checkHook));
     }
     default:
       return [{
-        path: path4,
+        path: path3,
         message: leafHook(issue)
       }];
   }
@@ -15624,9 +15330,9 @@ var defaultFormatter = /* @__PURE__ */ makeFormatterDefault();
 function formatDefaultIssue(issue) {
   let out = issue.message;
   if (issue.path && issue.path.length > 0) {
-    const path4 = formatPath(issue.path);
+    const path3 = formatPath(issue.path);
     out += `
-  at ${path4}`;
+  at ${path3}`;
   }
   return out;
 }
@@ -21621,10 +21327,10 @@ function makeReducer3(combiner2) {
 }
 
 // node_modules/effect/dist/internal/errors.js
-function errorWithPath(message, path4) {
-  if (path4.length > 0) {
+function errorWithPath(message, path3) {
+  if (path3.length > 0) {
     message += `
-  at ${formatPath(path4)}`;
+  at ${formatPath(path3)}`;
   }
   return new Error(message);
 }
@@ -21726,10 +21432,10 @@ function getFilters(checks) {
 var memoized = /* @__PURE__ */ memoize((ast) => {
   return recur(ast, []);
 });
-function recur(ast, path4) {
+function recur(ast, path3) {
   const annotation = resolve(ast)?.toArbitrary;
   if (annotation) {
-    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path4)) : [];
+    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path3)) : [];
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
     return (fc, ctx) => applyChecks(ast, filters, annotation(typeParameters.map((tp) => tp(fc, resetContext(ctx))))(fc, f(ctx)));
@@ -21737,16 +21443,16 @@ function recur(ast, path4) {
   if (ast.checks) {
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
-    const lawc = recur(replaceChecks(ast, void 0), path4);
+    const lawc = recur(replaceChecks(ast, void 0), path3);
     return (fc, ctx) => applyChecks(ast, filters, lawc(fc, f(ctx)));
   }
-  return base(ast, path4);
+  return base(ast, path3);
 }
-function base(ast, path4) {
+function base(ast, path3) {
   switch (ast._tag) {
     case "Never":
     case "Declaration":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path4);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path3);
     case "Null":
       return (fc) => fc.constant(null);
     case "Void":
@@ -21785,14 +21491,14 @@ function base(ast, path4) {
     case "ObjectKeyword":
       return (fc) => fc.oneof(fc.object(), fc.array(fc.anything()));
     case "Enum":
-      return recur(enumsToLiterals(ast), path4);
+      return recur(enumsToLiterals(ast), path3);
     case "TemplateLiteral":
       return (fc) => fc.stringMatching(getTemplateLiteralRegExp(ast));
     case "Arrays":
       return (fc, ctx) => {
         const reset = resetContext(ctx);
         const elements = ast.elements.map((e, i) => {
-          const out2 = recur(e, [...path4, i])(fc, reset);
+          const out2 = recur(e, [...path3, i])(fc, reset);
           if (!isOptional(e)) {
             return out2.map(some2);
           }
@@ -21801,7 +21507,7 @@ function base(ast, path4) {
         let out = fc.tuple(...elements).map(getSomes);
         if (isReadonlyArrayNonEmpty(ast.rest)) {
           const len = ast.elements.length;
-          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path4, len + i])(fc, reset));
+          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path3, len + i])(fc, reset));
           const rest = array2(fc, ast.elements.length === 0 ? ctx : reset, head2);
           out = out.chain((as4) => {
             if (as4.length < len) {
@@ -21831,13 +21537,13 @@ function base(ast, path4) {
           if (!isOptional(ps.type)) {
             requiredKeys.push(name);
           }
-          pss[name] = recur(ps.type, [...path4, name])(fc, reset);
+          pss[name] = recur(ps.type, [...path3, name])(fc, reset);
         }
         let out = fc.record(pss, {
           requiredKeys
         });
         for (const is3 of ast.indexSignatures) {
-          const entry = fc.tuple(recur(is3.parameter, path4)(fc, reset), recur(is3.type, path4)(fc, reset));
+          const entry = fc.tuple(recur(is3.parameter, path3)(fc, reset), recur(is3.type, path3)(fc, reset));
           const entries3 = array2(fc, ast.propertySignatures.length === 0 ? ctx : reset, entry);
           out = out.chain((o) => {
             return entries3.map((entries4) => {
@@ -21851,11 +21557,11 @@ function base(ast, path4) {
         return out;
       };
     case "Union":
-      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path4)(fc, ctx)));
+      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path3)(fc, ctx)));
     case "Suspend": {
       const memo2 = arbitraryMemoMap.get(ast);
       if (memo2) return memo2;
-      const get11 = memoizeThunk(() => recur(ast.thunk(), path4));
+      const get11 = memoizeThunk(() => recur(ast.thunk(), path3));
       const out = (fc, ctx) => fc.constant(null).chain(() => get11()(fc, {
         ...ctx,
         isSuspend: true
@@ -22097,14 +21803,14 @@ var recur2 = /* @__PURE__ */ memoize((ast) => {
 var toEquivalence = /* @__PURE__ */ memoize((ast) => {
   return recur3(ast, []);
 });
-function recur3(ast, path4) {
+function recur3(ast, path3) {
   const annotation = resolve(ast)?.["toEquivalence"];
   if (annotation) {
-    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path4)) : []);
+    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path3)) : []);
   }
   switch (ast._tag) {
     case "Never":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path4);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path3);
     case "Declaration":
     case "Null":
     case "Undefined":
@@ -22123,9 +21829,9 @@ function recur3(ast, path4) {
     case "TemplateLiteral":
       return equals;
     case "Arrays": {
-      const elements = ast.elements.map((e, i) => recur3(e, [...path4, i]));
+      const elements = ast.elements.map((e, i) => recur3(e, [...path3, i]));
       const len = ast.elements.length;
-      const rest = ast.rest.map((r, i) => recur3(r, [...path4, len + i]));
+      const rest = ast.rest.map((r, i) => recur3(r, [...path3, len + i]));
       return make2((a, b) => {
         if (!Array.isArray(a) || !Array.isArray(b)) {
           return false;
@@ -22161,8 +21867,8 @@ function recur3(ast, path4) {
       if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
         return equals;
       }
-      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path4, ps.name]));
-      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path4));
+      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path3, ps.name]));
+      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path3));
       return make2((a, b) => {
         if (!isObject(a) || !isObject(b)) {
           return false;
@@ -22203,13 +21909,13 @@ function recur3(ast, path4) {
         for (let i = 0; i < candidates.length; i++) {
           const is3 = types[i];
           if (is3(a) && is3(b)) {
-            return recur3(candidates[i], path4)(a, b);
+            return recur3(candidates[i], path3)(a, b);
           }
         }
         return false;
       });
     case "Suspend": {
-      const get11 = memoizeThunk(() => recur3(ast.thunk(), path4));
+      const get11 = memoizeThunk(() => recur3(ast.thunk(), path3));
       return make2((a, b) => get11()(a, b));
     }
   }
@@ -23208,10 +22914,10 @@ function get6(oldValue, newValue) {
     const len2 = newValue.length;
     const shared = Math.min(len1, len2);
     for (let i = 0; i < shared; i++) {
-      const path4 = `/${i}`;
+      const path3 = `/${i}`;
       const patch = get6(oldValue[i], newValue[i]);
       for (const op of patch) {
-        prefixPathInPlace(op, path4);
+        prefixPathInPlace(op, path3);
         patches.push(op);
       }
     }
@@ -23236,25 +22942,25 @@ function get6(oldValue, newValue) {
     const allKeys = Array.from(/* @__PURE__ */ new Set([...keys1, ...keys22])).sort();
     for (const key of allKeys) {
       const esc = escapeToken(key);
-      const path4 = `/${esc}`;
+      const path3 = `/${esc}`;
       const hasKey1 = Object.hasOwn(oldValue, key);
       const hasKey2 = Object.hasOwn(newValue, key);
       if (hasKey1 && hasKey2) {
         const patch = get6(oldValue[key], newValue[key]);
         for (const op of patch) {
-          prefixPathInPlace(op, path4);
+          prefixPathInPlace(op, path3);
           patches.push(op);
         }
       } else if (!hasKey1 && hasKey2) {
         patches.push({
           op: "add",
-          path: path4,
+          path: path3,
           value: newValue[key]
         });
       } else if (hasKey1 && !hasKey2) {
         patches.push({
           op: "remove",
-          path: path4
+          path: path3
         });
       }
     }
@@ -23600,8 +23306,8 @@ var OptionalNode = class {
 var PathNode = class {
   _tag = "PathNode";
   path;
-  constructor(path4) {
-    this.path = path4;
+  constructor(path3) {
+    this.path = path3;
   }
 };
 var CheckNode = class {
@@ -23847,24 +23553,24 @@ var recur4 = /* @__PURE__ */ memoize((node) => {
       return {
         _tag: "LensNode",
         get: (s) => {
-          const path4 = node.path;
+          const path3 = node.path;
           let out = s;
-          for (let i = 0, n = path4.length; i < n; i++) {
-            out = out[path4[i]];
+          for (let i = 0, n = path3.length; i < n; i++) {
+            out = out[path3[i]];
           }
           return out;
         },
         set: (a, s) => {
-          const path4 = node.path;
+          const path3 = node.path;
           const out = cloneShallow(s);
           let current = out;
           let i = 0;
-          for (; i < path4.length - 1; i++) {
-            const key = path4[i];
+          for (; i < path3.length - 1; i++) {
+            const key = path3[i];
             current[key] = cloneShallow(current[key]);
             current = current[key];
           }
-          const finalKey = path4[i];
+          const finalKey = path3[i];
           current[finalKey] = a;
           return out;
         }
@@ -26137,10 +25843,10 @@ var RunExecution = class RunExecution2 {
     }
     return failures;
   }
-  static mergePaths(offsetPath, path4) {
-    if (offsetPath.length === 0) return path4;
+  static mergePaths(offsetPath, path3) {
+    if (offsetPath.length === 0) return path3;
     const offsetItems = offsetPath.split(":");
-    const remainingItems = path4.split(":");
+    const remainingItems = path3.split(":");
     const middle = +offsetItems[offsetItems.length - 1] + +remainingItems[0];
     return [
       ...offsetItems.slice(0, offsetItems.length - 1),
@@ -26327,15 +26033,15 @@ function* lazyToss(generator, seed, random2, examples) {
 function produce(producer) {
   return producer();
 }
-function pathWalk(path4, initialProducers, shrink) {
+function pathWalk(path3, initialProducers, shrink) {
   const producers = initialProducers;
-  const segments = path4.split(":").map((text2) => +text2);
+  const segments = path3.split(":").map((text2) => +text2);
   if (segments.length === 0) return producers.map(produce);
-  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path4}`);
+  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path3}`);
   let values2 = producers.drop(segments[0]).map(produce);
   for (const s of segments.slice(1)) {
     const valueToShrink = values2.getNthOrLast(0);
-    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path4}`);
+    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path3}`);
     values2 = shrink(valueToShrink).drop(s);
   }
   return values2;
@@ -31516,8 +31222,8 @@ function webQueryParameters(constraints = {}) {
   return buildUriQueryOrFragmentArbitrary(constraints.size);
 }
 function partsToUrlMapper(data) {
-  const [scheme, authority, path4] = data;
-  return `${scheme}://${authority}${path4}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
+  const [scheme, authority, path3] = data;
+  return `${scheme}://${authority}${path3}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
 }
 var UrlSplitRegex = /^([[A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?(#[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?$/;
 function partsToUrlUnmapper(value3) {
@@ -31526,13 +31232,13 @@ function partsToUrlUnmapper(value3) {
   if (m === null) throw new Error("Incompatible value received");
   const scheme = m[1];
   const authority = m[2];
-  const path4 = m[3];
+  const path3 = m[3];
   const query = m[4];
   const fragments = m[5];
   return [
     scheme,
     authority,
-    path4,
+    path3,
     query !== void 0 ? query.substring(1) : null,
     fragments !== void 0 ? fragments.substring(1) : null
   ];
@@ -37060,7 +36766,7 @@ var get8 = /* @__PURE__ */ fnUntraced2(function* (self_) {
     } else if (!isFinite3) {
       return void_4;
     }
-    state.fiber = sleep3(self.idleTimeToLive).pipe(flatMap5(() => {
+    state.fiber = sleep2(self.idleTimeToLive).pipe(flatMap5(() => {
       if (self.state._tag === "Acquired" && self.state.refCount === 0) {
         self.state = stateEmpty;
         return close(state.scope, void_3);
@@ -37299,7 +37005,7 @@ var timeoutOrElse3 = /* @__PURE__ */ dual(2, (self, options) => {
       while (true) {
         yield* latch.await;
         if (deadline === void 0) continue;
-        yield* sleep3(deadline - clock.currentTimeMillisUnsafe());
+        yield* sleep2(deadline - clock.currentTimeMillisUnsafe());
         if (deadline === void 0) continue;
         const remaining = deadline - clock.currentTimeMillisUnsafe();
         if (remaining > 0) continue;
@@ -37962,7 +37668,7 @@ var debounce = /* @__PURE__ */ dual(2, (self, duration) => transformPull2(self, 
   const sleepLoop = suspend3(function loop() {
     const now2 = clock.currentTimeMillisUnsafe();
     const timeMs = emitAtMs < now2 ? durationMs : Math.min(durationMs, emitAtMs - now2);
-    return flatMap5(raceFirst2(sleep3(timeMs), endLatch.await), () => {
+    return flatMap5(raceFirst2(sleep2(timeMs), endLatch.await), () => {
       const now3 = clock.currentTimeMillisUnsafe();
       if (now3 < emitAtMs) {
         return loop();
@@ -38039,7 +37745,7 @@ var throttleShapeEffect = (self, cost, units, duration, burst) => transformPull2
     const waitCycles = -remaining / units;
     const delayMs = Math.max(0, waitCycles * durationMs);
     if (delayMs > 0) {
-      return flatMap5(sleep3(delayMs), () => {
+      return flatMap5(sleep2(delayMs), () => {
         tokens = remaining;
         timestampMs = currentMs;
         return succeed6(arr);
@@ -38974,21 +38680,25 @@ var ContextWindowOption = Schema_exports.Struct({
   isDefault: Schema_exports.optional(Schema_exports.Boolean)
 });
 var ModelCapabilities = Schema_exports.Struct({
-  reasoningEffortLevels: Schema_exports.Array(EffortOption),
-  supportsFastMode: Schema_exports.Boolean,
-  supportsThinkingToggle: Schema_exports.Boolean,
-  contextWindowOptions: Schema_exports.Array(ContextWindowOption),
-  promptInjectedEffortLevels: Schema_exports.Array(TrimmedNonEmptyString)
+  reasoningEffortLevels: Schema_exports.optional(Schema_exports.Array(EffortOption)),
+  supportsFastMode: Schema_exports.optional(Schema_exports.Boolean),
+  supportsThinkingToggle: Schema_exports.optional(Schema_exports.Boolean),
+  contextWindowOptions: Schema_exports.optional(Schema_exports.Array(ContextWindowOption)),
+  promptInjectedEffortLevels: Schema_exports.optional(Schema_exports.Array(TrimmedNonEmptyString)),
+  optionDescriptors: Schema_exports.optional(Schema_exports.Array(Schema_exports.Unknown))
 });
 var DEFAULT_MODEL_BY_PROVIDER = {
   codex: "gpt-5.4",
   claudeAgent: "claude-sonnet-4-6",
+  cursor: "auto",
+  grok: "grok-build",
   opencode: "google/antigravity-gemini-3.5-flash-high"
 };
 var DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
 var DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER = {
   codex: "gpt-5.4-mini",
   claudeAgent: "claude-haiku-4-5",
+  cursor: "composer-2",
   opencode: "google/antigravity-gemini-3.5-flash-low"
 };
 var MODEL_SLUG_ALIASES_BY_PROVIDER = {
@@ -39001,7 +38711,11 @@ var MODEL_SLUG_ALIASES_BY_PROVIDER = {
     "gpt-5.3-spark": "gpt-5.3-codex-spark"
   },
   claudeAgent: {
-    opus: "claude-opus-4-6",
+    opus: "claude-opus-4-8",
+    "opus-4.8": "claude-opus-4-8",
+    "claude-opus-4.8": "claude-opus-4-8",
+    "opus-4.7": "claude-opus-4-7",
+    "claude-opus-4.7": "claude-opus-4-7",
     "opus-4.6": "claude-opus-4-6",
     "claude-opus-4.6": "claude-opus-4-6",
     "claude-opus-4-6-20251117": "claude-opus-4-6",
@@ -39013,6 +38727,17 @@ var MODEL_SLUG_ALIASES_BY_PROVIDER = {
     "haiku-4.5": "claude-haiku-4-5",
     "claude-haiku-4.5": "claude-haiku-4-5",
     "claude-haiku-4-5-20251001": "claude-haiku-4-5"
+  },
+  cursor: {
+    composer: "composer-2",
+    "composer-1.5": "composer-1.5",
+    "composer-1": "composer-1.5",
+    "opus-4.6-thinking": "claude-opus-4-6",
+    "opus-4.6": "claude-opus-4-6",
+    "sonnet-4.6-thinking": "claude-sonnet-4-6",
+    "sonnet-4.6": "claude-sonnet-4-6",
+    "opus-4.5-thinking": "claude-opus-4-5",
+    "opus-4.5": "claude-opus-4-5"
   },
   opencode: {
     "antigravity-gemini-3.5-flash-high": "google/antigravity-gemini-3.5-flash-high",
@@ -39034,12 +38759,12 @@ function normalizeProjectPath(workspaceRoot) {
     throw new Error("Project path must be absolute; shell-expand '~' before passing it to t3-thread.");
   }
   const isWindowsPath = /^[A-Za-z]:[\\/]/.test(trimmed) || /^\\\\/.test(trimmed);
-  if (!import_node_path2.default.posix.isAbsolute(trimmed) && !isWindowsPath) {
+  if (!import_node_path.default.posix.isAbsolute(trimmed) && !isWindowsPath) {
     throw new Error(`Project path must be absolute: ${workspaceRoot}`);
   }
-  const normalized = isWindowsPath ? import_node_path2.default.win32.normalize(trimmed) : import_node_path2.default.posix.normalize(trimmed);
+  const normalized = isWindowsPath ? import_node_path.default.win32.normalize(trimmed) : import_node_path.default.posix.normalize(trimmed);
   if (isWindowsPath) {
-    const parsed = import_node_path2.default.win32.parse(normalized);
+    const parsed = import_node_path.default.win32.parse(normalized);
     return normalized === parsed.root ? normalized : normalized.replace(/[\\/]+$/, "");
   }
   return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
@@ -39056,7 +38781,7 @@ function deriveProjectTitle(workspaceRoot, explicitTitle) {
     return normalizeProjectTitle(explicitTitle);
   }
   const normalized = normalizeProjectPath(workspaceRoot);
-  const baseName = (import_node_path2.default.win32.isAbsolute(normalized) ? import_node_path2.default.win32.basename(normalized) : import_node_path2.default.posix.basename(normalized)).trim();
+  const baseName = (import_node_path.default.win32.isAbsolute(normalized) ? import_node_path.default.win32.basename(normalized) : import_node_path.default.posix.basename(normalized)).trim();
   return baseName || "project";
 }
 function parseModelOptionEntries(entries3 = []) {
@@ -39084,15 +38809,41 @@ function parseModelOptionEntries(entries3 = []) {
   }
   return options;
 }
-function resolveModelSlug(provider, model) {
+function findProviderInventory(provider, providerModels) {
+  return providerModels?.find((candidate) => candidate.provider === provider) ?? null;
+}
+function resolveLiveDefaultModel(provider, providerModels) {
+  const inventory = findProviderInventory(provider, providerModels);
+  if (!inventory) {
+    return null;
+  }
+  return inventory.models.find((model) => !model.isCustom)?.slug ?? inventory.models[0]?.slug ?? null;
+}
+function resolveLiveModelSlug(provider, model, providerModels) {
+  const inventory = findProviderInventory(provider, providerModels);
+  if (!inventory) {
+    return null;
+  }
+  const direct = inventory.models.find((candidate) => candidate.slug === model);
+  if (direct) {
+    return direct.slug;
+  }
+  const lowered = model.toLowerCase();
+  const named = inventory.models.find(
+    (candidate) => candidate.name?.toLowerCase() === lowered || candidate.shortName?.toLowerCase() === lowered
+  );
+  return named?.slug ?? null;
+}
+function resolveModelSlug(provider, model, providerModels) {
   const providerDefaults = DEFAULT_MODEL_BY_PROVIDER;
   const providerAliases = MODEL_SLUG_ALIASES_BY_PROVIDER;
   const trimmedModel = model?.trim();
-  const fallbackModel = providerDefaults[provider] ?? DEFAULT_MODEL;
+  const fallbackModel = resolveLiveDefaultModel(provider, providerModels) ?? providerDefaults[provider] ?? DEFAULT_MODEL;
   if (!trimmedModel) {
     return fallbackModel;
   }
-  return providerAliases[provider]?.[trimmedModel] ?? trimmedModel;
+  const aliased = providerAliases[provider]?.[trimmedModel] ?? trimmedModel;
+  return resolveLiveModelSlug(provider, aliased, providerModels) ?? aliased;
 }
 function buildModelSelection(input) {
   if (input.clear) {
@@ -39108,7 +38859,7 @@ function buildModelSelection(input) {
     return null;
   }
   const provider = input.provider?.trim() || "codex";
-  const model = resolveModelSlug(provider, input.model);
+  const model = resolveModelSlug(provider, input.model, input.providerModels);
   const options = parseModelOptionEntries(input.optionEntries);
   return {
     provider,
@@ -40379,9 +40130,9 @@ var setUrl = /* @__PURE__ */ dual(2, (self, url) => {
   clone2.hash = "";
   return makeWith(self.method, clone2.toString(), urlParams2, hash3, self.headers, self.body);
 });
-var prependUrl = /* @__PURE__ */ dual(2, (self, path4) => {
-  if (path4 === "") return self;
-  return makeWith(self.method, joinSegments(path4, self.url), self.urlParams, self.hash, self.headers, self.body);
+var prependUrl = /* @__PURE__ */ dual(2, (self, path3) => {
+  if (path3 === "") return self;
+  return makeWith(self.method, joinSegments(path3, self.url), self.urlParams, self.hash, self.headers, self.body);
 });
 var joinSegments = (first, second) => {
   const endsWithSlash = first.endsWith("/");
@@ -44984,7 +44735,11 @@ var ORCHESTRATION_WS_METHODS = {
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread"
 };
-var ProviderKind = Schema_exports.Literals(["codex", "claudeAgent", "opencode"]);
+var ProviderSlug = TrimmedNonEmptyString.check(
+  Schema_exports.isMaxLength(64),
+  Schema_exports.isPattern(/^[a-zA-Z][a-zA-Z0-9_-]*$/)
+);
+var ProviderKind = ProviderSlug;
 var ProviderApprovalPolicy = Schema_exports.Literals([
   "untrusted",
   "on-failure",
@@ -44996,78 +44751,91 @@ var ProviderSandboxMode = Schema_exports.Literals([
   "workspace-write",
   "danger-full-access"
 ]);
-var LegacyModelOptionEntry = Schema_exports.Struct({
-  id: TrimmedNonEmptyString,
-  value: Schema_exports.Unknown
+var ModelOptionRecord = Schema_exports.Record(TrimmedNonEmptyString, Schema_exports.Unknown);
+function normalizeModelOptions(value3) {
+  if (value3 === void 0) {
+    return void 0;
+  }
+  if (Array.isArray(value3)) {
+    const options = {};
+    for (const entry of value3) {
+      if (entry === null || typeof entry !== "object") {
+        continue;
+      }
+      const rawEntry = entry;
+      const id2 = typeof rawEntry.id === "string" ? rawEntry.id.trim() : "";
+      if (!id2) {
+        continue;
+      }
+      options[id2] = rawEntry.value;
+    }
+    return Object.keys(options).length > 0 ? options : void 0;
+  }
+  if (value3 !== null && typeof value3 === "object") {
+    const options = {};
+    for (const [rawKey, optionValue] of Object.entries(value3)) {
+      const key = rawKey.trim();
+      if (key) {
+        options[key] = optionValue;
+      }
+    }
+    return Object.keys(options).length > 0 ? options : void 0;
+  }
+  return void 0;
+}
+function encodeModelOptions(options) {
+  if (options === void 0) {
+    return void 0;
+  }
+  const entries3 = [];
+  for (const [rawKey, rawValue] of Object.entries(options)) {
+    const id2 = rawKey.trim();
+    if (!id2) {
+      continue;
+    }
+    if (typeof rawValue === "boolean") {
+      entries3.push({ id: id2, value: rawValue });
+    } else if (typeof rawValue === "string") {
+      const value3 = rawValue.trim();
+      if (value3) {
+        entries3.push({ id: id2, value: value3 });
+      }
+    }
+  }
+  return entries3.length > 0 ? entries3 : void 0;
+}
+var ModelSelectionSource = Schema_exports.Struct({
+  provider: Schema_exports.optional(Schema_exports.Unknown),
+  instanceId: Schema_exports.optional(Schema_exports.Unknown),
+  model: Schema_exports.Unknown,
+  options: Schema_exports.optional(Schema_exports.Unknown)
 });
-var LegacyCodexModelOptions = Schema_exports.Array(LegacyModelOptionEntry).pipe(
+var ModelSelectionTarget = Schema_exports.Struct({
+  provider: ProviderKind,
+  model: TrimmedNonEmptyString,
+  options: Schema_exports.optionalKey(ModelOptionRecord)
+});
+var ModelSelection = ModelSelectionSource.pipe(
   Schema_exports.decodeTo(
-    CodexModelOptions,
+    ModelSelectionTarget,
     transformOrFail2({
-      decode: (entries3) => Effect_exports.succeed(Object.fromEntries(entries3.map(({ id: id2, value: value3 }) => [id2, value3]))),
-      encode: (options) => Effect_exports.succeed(Object.entries(options).map(([id2, value3]) => ({ id: id2, value: value3 })))
-    })
-  )
-);
-var LegacyClaudeModelOptions = Schema_exports.Array(LegacyModelOptionEntry).pipe(
-  Schema_exports.decodeTo(
-    ClaudeModelOptions,
-    transformOrFail2({
-      decode: (entries3) => Effect_exports.succeed(Object.fromEntries(entries3.map(({ id: id2, value: value3 }) => [id2, value3]))),
-      encode: (options) => Effect_exports.succeed(Object.entries(options).map(([id2, value3]) => ({ id: id2, value: value3 })))
-    })
-  )
-);
-var CodexModelSelection = Schema_exports.Struct({
-  provider: Schema_exports.Literal("codex"),
-  model: TrimmedNonEmptyString,
-  options: Schema_exports.optionalKey(Schema_exports.Union([CodexModelOptions, LegacyCodexModelOptions]))
-});
-var ClaudeModelSelection = Schema_exports.Struct({
-  provider: Schema_exports.Literal("claudeAgent"),
-  model: TrimmedNonEmptyString,
-  options: Schema_exports.optionalKey(Schema_exports.Union([ClaudeModelOptions, LegacyClaudeModelOptions]))
-});
-var OpenCodeModelSelection = Schema_exports.Struct({
-  provider: Schema_exports.Literal("opencode"),
-  model: TrimmedNonEmptyString,
-  options: Schema_exports.optionalKey(OpenCodeModelOptions)
-});
-var LegacyInstanceModelSelection = Schema_exports.Struct({
-  instanceId: ProviderKind,
-  model: TrimmedNonEmptyString,
-  options: Schema_exports.optionalKey(
-    Schema_exports.Union([
-      CodexModelOptions,
-      ClaudeModelOptions,
-      OpenCodeModelOptions,
-      LegacyCodexModelOptions,
-      LegacyClaudeModelOptions
-    ])
-  )
-}).pipe(
-  Schema_exports.decodeTo(
-    Schema_exports.Union([CodexModelSelection, ClaudeModelSelection, OpenCodeModelSelection]),
-    transformOrFail2({
-      decode: ({ instanceId, model, options }) => Effect_exports.succeed({
-        provider: instanceId,
-        model,
-        ...options === void 0 ? {} : { options }
-      }),
+      decode: (raw2) => {
+        const provider = raw2.instanceId !== void 0 ? raw2.instanceId : typeof raw2.provider === "string" ? raw2.provider : void 0;
+        const options = normalizeModelOptions(raw2.options);
+        return Effect_exports.succeed({
+          provider,
+          model: raw2.model,
+          ...options === void 0 ? {} : { options }
+        });
+      },
       encode: ({ provider, model, options }) => Effect_exports.succeed({
         instanceId: provider,
         model,
-        ...options === void 0 ? {} : { options }
+        ...options === void 0 ? {} : { options: encodeModelOptions(options) ?? options }
       })
     })
   )
 );
-var ModelSelection = Schema_exports.Union([
-  CodexModelSelection,
-  ClaudeModelSelection,
-  OpenCodeModelSelection,
-  LegacyInstanceModelSelection
-]);
 var RuntimeMode = Schema_exports.Literals([
   "approval-required",
   "auto-accept-edits",
@@ -46088,7 +45856,9 @@ var ServerAuthPolicy = Schema_exports.Literals([
 var ServerAuthBootstrapMethod = Schema_exports.Literals(["desktop-bootstrap", "one-time-token"]);
 var ServerAuthSessionMethod = Schema_exports.Literals([
   "browser-session-cookie",
-  "bearer-session-token"
+  "bearer-session-token",
+  "bearer-access-token",
+  "dpop-access-token"
 ]);
 var AuthSessionRole = Schema_exports.Literals(["owner", "client"]);
 var ServerAuthDescriptor = Schema_exports.Struct({
@@ -47114,11 +46884,14 @@ var ServerProviderAuthStatus = Schema_exports.Literals([
 var ServerProviderAuth = Schema_exports.Struct({
   status: ServerProviderAuthStatus,
   type: Schema_exports.optional(TrimmedNonEmptyString),
-  label: Schema_exports.optional(TrimmedNonEmptyString)
+  label: Schema_exports.optional(TrimmedNonEmptyString),
+  email: Schema_exports.optional(TrimmedNonEmptyString)
 });
 var ServerProviderModel = Schema_exports.Struct({
   slug: TrimmedNonEmptyString,
   name: TrimmedNonEmptyString,
+  shortName: Schema_exports.optional(TrimmedNonEmptyString),
+  subProvider: Schema_exports.optional(TrimmedNonEmptyString),
   isCustom: Schema_exports.Boolean,
   capabilities: Schema_exports.NullOr(ModelCapabilities)
 });
@@ -47140,7 +46913,15 @@ var ServerProviderSkill = Schema_exports.Struct({
   shortDescription: Schema_exports.optional(TrimmedNonEmptyString)
 });
 var ServerProvider = Schema_exports.Struct({
-  provider: ProviderKind,
+  provider: Schema_exports.optional(ProviderKind),
+  instanceId: Schema_exports.optional(ProviderKind),
+  driver: Schema_exports.optional(ProviderKind),
+  displayName: Schema_exports.optional(TrimmedNonEmptyString),
+  accentColor: Schema_exports.optional(TrimmedNonEmptyString),
+  badgeLabel: Schema_exports.optional(TrimmedNonEmptyString),
+  availability: Schema_exports.optional(Schema_exports.Literals(["available", "unavailable"])),
+  showInteractionModeToggle: Schema_exports.optional(Schema_exports.Boolean),
+  requiresNewThreadForModelChange: Schema_exports.optional(Schema_exports.Boolean),
   enabled: Schema_exports.Boolean,
   installed: Schema_exports.Boolean,
   version: Schema_exports.NullOr(TrimmedNonEmptyString),
@@ -47168,7 +46949,7 @@ var ServerConfig = Schema_exports.Struct({
   auth: ServerAuthDescriptor,
   cwd: TrimmedNonEmptyString,
   keybindingsConfigPath: TrimmedNonEmptyString,
-  keybindings: ResolvedKeybindingsConfig,
+  keybindings: Schema_exports.Array(Schema_exports.Unknown),
   issues: ServerConfigIssues,
   providers: ServerProviders,
   availableEditors: Schema_exports.Array(EditorId),
@@ -47528,6 +47309,7 @@ var WsRpcGroup = make37(
 
 // src/rpc.ts
 var RPC_METHODS = {
+  serverGetConfig: WS_METHODS.serverGetConfig,
   dispatchCommand: ORCHESTRATION_WS_METHODS.dispatchCommand,
   getTurnDiff: ORCHESTRATION_WS_METHODS.getTurnDiff,
   getFullThreadDiff: ORCHESTRATION_WS_METHODS.getFullThreadDiff,
@@ -47659,6 +47441,33 @@ var DEFAULT_MODEL_SELECTION = {
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
+function providerIdFromSnapshot(provider) {
+  return provider.instanceId ?? provider.provider ?? provider.driver ?? null;
+}
+function providerInventoryFromConfig(config) {
+  return config.providers.flatMap((provider) => {
+    const providerId = providerIdFromSnapshot(provider);
+    if (!providerId) {
+      return [];
+    }
+    return [
+      {
+        provider: providerId,
+        ...provider.displayName ? { displayName: provider.displayName } : {},
+        ...provider.driver ? { driver: provider.driver } : {},
+        enabled: provider.enabled,
+        installed: provider.installed,
+        status: provider.status,
+        models: provider.models.map((model) => ({
+          slug: model.slug,
+          name: model.name,
+          ...model.shortName ? { shortName: model.shortName } : {},
+          isCustom: model.isCustom
+        }))
+      }
+    ];
+  });
+}
 var RemoteEnvironmentClient = class {
   environment;
   constructor(environment) {
@@ -47696,6 +47505,24 @@ var RemoteEnvironmentClient = class {
   async describe() {
     return fetchEnvironmentDescriptor(this.environment.httpBaseUrl);
   }
+  async getServerConfig() {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request("serverGetConfig", {});
+    } finally {
+      await rpc.dispose();
+    }
+  }
+  async listModels() {
+    return providerInventoryFromConfig(await this.getServerConfig());
+  }
+  async getProviderModelsOrNull() {
+    try {
+      return await this.listModels();
+    } catch {
+      return null;
+    }
+  }
   async getShellSnapshot() {
     const rpc = await this.openRpc();
     try {
@@ -47730,16 +47557,18 @@ var RemoteEnvironmentClient = class {
         `An active project already exists for '${existingProject.workspaceRoot}' (${existingProject.id}).`
       );
     }
-    const projectId = (0, import_node_crypto2.randomUUID)();
+    const projectId = (0, import_node_crypto.randomUUID)();
     const title = deriveProjectTitle(input.workspaceRoot, input.title);
+    const providerModels = input.noDefaultModel ? null : await this.getProviderModelsOrNull();
     const defaultModelSelection = buildModelSelection({
       provider: input.provider,
       model: input.model,
       optionEntries: input.modelOptionEntries,
-      noDefault: input.noDefaultModel
+      noDefault: input.noDefaultModel,
+      providerModels
     });
     const command = buildProjectCreateCommand({
-      commandId: (0, import_node_crypto2.randomUUID)(),
+      commandId: (0, import_node_crypto.randomUUID)(),
       projectId,
       title,
       workspaceRoot: input.workspaceRoot,
@@ -47764,7 +47593,7 @@ var RemoteEnvironmentClient = class {
     const snapshot = await this.getShellSnapshot();
     const project2 = resolveProjectTarget(snapshot.projects, input.identifier);
     const command = buildProjectMetaUpdateCommand({
-      commandId: (0, import_node_crypto2.randomUUID)(),
+      commandId: (0, import_node_crypto.randomUUID)(),
       projectId: project2.id,
       title: input.title
     });
@@ -47782,14 +47611,16 @@ var RemoteEnvironmentClient = class {
   async setProjectDefaultModel(input) {
     const snapshot = await this.getShellSnapshot();
     const project2 = resolveProjectTarget(snapshot.projects, input.identifier);
+    const providerModels = input.clear ? null : await this.getProviderModelsOrNull();
     const defaultModelSelection = buildModelSelection({
       provider: input.provider,
       model: input.model,
       optionEntries: input.modelOptionEntries,
-      clear: input.clear
+      clear: input.clear,
+      providerModels
     });
     const command = buildProjectMetaUpdateCommand({
-      commandId: (0, import_node_crypto2.randomUUID)(),
+      commandId: (0, import_node_crypto.randomUUID)(),
       projectId: project2.id,
       defaultModelSelection
     });
@@ -47814,7 +47645,7 @@ var RemoteEnvironmentClient = class {
       );
     }
     const command = buildProjectDeleteCommand({
-      commandId: (0, import_node_crypto2.randomUUID)(),
+      commandId: (0, import_node_crypto.randomUUID)(),
       projectId: project2.id,
       force: input.force
     });
@@ -47852,11 +47683,13 @@ var RemoteEnvironmentClient = class {
     if (!initialMessage) {
       throw new Error("agent create requires a non-empty initial message.");
     }
+    const providerModels = await this.getProviderModelsOrNull();
     const modelSelection = input.model || input.provider ? buildModelSelection({
       provider: input.provider,
-      model: input.model
-    }) ?? DEFAULT_MODEL_SELECTION : project2.defaultModelSelection ?? DEFAULT_MODEL_SELECTION;
-    const threadId = (0, import_node_crypto2.randomUUID)();
+      model: input.model,
+      providerModels
+    }) ?? DEFAULT_MODEL_SELECTION : project2.defaultModelSelection ?? buildModelSelection({ providerModels }) ?? DEFAULT_MODEL_SELECTION;
+    const threadId = (0, import_node_crypto.randomUUID)();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
     const createdAt = nowIso();
@@ -47864,10 +47697,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: (0, import_node_crypto2.randomUUID)(),
+        commandId: (0, import_node_crypto.randomUUID)(),
         threadId,
         message: {
-          messageId: (0, import_node_crypto2.randomUUID)(),
+          messageId: (0, import_node_crypto.randomUUID)(),
           role: "user",
           text: initialMessage,
           attachments: []
@@ -47919,10 +47752,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: (0, import_node_crypto2.randomUUID)(),
+        commandId: (0, import_node_crypto.randomUUID)(),
         threadId: thread.id,
         message: {
-          messageId: (0, import_node_crypto2.randomUUID)(),
+          messageId: (0, import_node_crypto.randomUUID)(),
           role: "user",
           text: input.text,
           attachments: []
@@ -47941,7 +47774,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.interrupt",
-        commandId: (0, import_node_crypto2.randomUUID)(),
+        commandId: (0, import_node_crypto.randomUUID)(),
         threadId: thread.id,
         turnId: thread.latestTurn?.turnId,
         createdAt: nowIso()
@@ -47959,7 +47792,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.archive",
-        commandId: (0, import_node_crypto2.randomUUID)(),
+        commandId: (0, import_node_crypto.randomUUID)(),
         threadId: thread.id
       });
       return true;
@@ -48073,6 +47906,226 @@ function formatInboxLine(overview) {
   ].join(" ").trim();
 }
 
+// src/state.ts
+var import_promises = require("node:fs/promises");
+var import_node_os = __toESM(require("node:os"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
+var import_node_crypto2 = require("node:crypto");
+var DEFAULT_STATE_DIR = import_node_path2.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
+var DEFAULT_STATE_FILE = import_node_path2.default.join(DEFAULT_STATE_DIR, "state.json");
+var STATE_LOCK_TIMEOUT_MS = 1e4;
+var STATE_LOCK_RETRY_MS = 50;
+var EMPTY_STATE = {
+  version: 1,
+  environments: [],
+  agents: [],
+  subscriptions: [],
+  notifications: []
+};
+function resolveStateFile() {
+  return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
+}
+async function ensureStateDir(stateFile) {
+  await (0, import_promises.mkdir)(import_node_path2.default.dirname(stateFile), { recursive: true });
+}
+function normalizeState(parsed) {
+  return {
+    version: 1,
+    environments: Array.isArray(parsed.environments) ? parsed.environments : [],
+    agents: Array.isArray(parsed.agents) ? parsed.agents : [],
+    subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
+    notifications: Array.isArray(parsed.notifications) ? parsed.notifications : []
+  };
+}
+async function loadStateFromFile(stateFile) {
+  try {
+    const raw2 = await (0, import_promises.readFile)(stateFile, "utf8");
+    const parsed = JSON.parse(raw2);
+    return normalizeState(parsed);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ENOENT")) {
+      return structuredClone(EMPTY_STATE);
+    }
+    throw error;
+  }
+}
+async function loadState() {
+  return loadStateFromFile(resolveStateFile());
+}
+async function saveStateToFile(stateFile, state) {
+  await ensureStateDir(stateFile);
+  const tempFile = import_node_path2.default.join(import_node_path2.default.dirname(stateFile), `.${import_node_path2.default.basename(stateFile)}.${(0, import_node_crypto2.randomUUID)()}.tmp`);
+  await (0, import_promises.writeFile)(tempFile, `${JSON.stringify(state, null, 2)}
+`, "utf8");
+  await (0, import_promises.rename)(tempFile, stateFile);
+}
+async function sleep3(ms) {
+  await new Promise((resolve2) => setTimeout(resolve2, ms));
+}
+async function withStateLock(stateFile, task) {
+  await ensureStateDir(stateFile);
+  const lockFile = `${stateFile}.lock`;
+  const startedAt = Date.now();
+  for (; ; ) {
+    try {
+      const handle = await (0, import_promises.open)(lockFile, "wx");
+      try {
+        await handle.writeFile(`${process.pid}
+`, "utf8");
+        return await task();
+      } finally {
+        await handle.close();
+        await (0, import_promises.unlink)(lockFile).catch(() => {
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("EEXIST")) {
+        throw error;
+      }
+      if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
+        throw new Error(`Timed out waiting for state lock '${lockFile}'.`);
+      }
+      await sleep3(STATE_LOCK_RETRY_MS);
+    }
+  }
+}
+async function updateState(mutator) {
+  const stateFile = resolveStateFile();
+  return withStateLock(stateFile, async () => {
+    const current = await loadStateFromFile(stateFile);
+    const { state, result: result4 } = await mutator(current);
+    await saveStateToFile(stateFile, state);
+    return result4;
+  });
+}
+function upsertEnvironment(environments, next) {
+  const remaining = environments.filter((env) => env.name !== next.name);
+  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
+}
+function upsertAgent(agents, next) {
+  const remaining = agents.filter((agent2) => agent2.name !== next.name);
+  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
+}
+function removeAgent(agents, name) {
+  return agents.filter((agent2) => agent2.name !== name).sort((a, b) => a.name.localeCompare(b.name));
+}
+function upsertSubscription(subscriptions, next) {
+  const remaining = subscriptions.filter(
+    (subscription) => !(subscription.subscriberThreadId === next.subscriberThreadId && subscription.sourceThreadId === next.sourceThreadId)
+  );
+  return [...remaining, next].sort(
+    (a, b) => `${a.subscriberAgentName ?? a.subscriberThreadId}:${a.sourceAgentName ?? a.sourceThreadId}`.localeCompare(
+      `${b.subscriberAgentName ?? b.subscriberThreadId}:${b.sourceAgentName ?? b.sourceThreadId}`
+    )
+  );
+}
+function removeSubscription(subscriptions, input) {
+  return subscriptions.filter(
+    (subscription) => !(subscription.subscriberThreadId === input.subscriberThreadId && subscription.sourceThreadId === input.sourceThreadId)
+  );
+}
+function upsertNotification(notifications, next) {
+  const remaining = notifications.filter((notification) => notification.eventKey !== next.eventKey);
+  return [...remaining, next].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+function findAgentByThreadId(state, threadId) {
+  return state.agents.find((agent2) => agent2.threadId === threadId) ?? null;
+}
+function resolveCallerThreadId(env = process.env) {
+  const value3 = env.T3_THREAD_ID?.trim();
+  return value3 ? value3 : null;
+}
+function resolveCallerEnvironmentMetadata(env = process.env) {
+  const environmentName = env.T3_ENVIRONMENT_NAME?.trim();
+  const environmentId = env.T3_ENVIRONMENT_ID?.trim();
+  if (!environmentName || !environmentId) {
+    return null;
+  }
+  return {
+    environmentName,
+    environmentId
+  };
+}
+function resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment = null) {
+  const savedAgent = findAgentByThreadId(state, threadId);
+  if (savedAgent) {
+    return {
+      threadId: savedAgent.threadId,
+      name: savedAgent.name,
+      environment: savedAgent.environment
+    };
+  }
+  if (!callerEnvironment) {
+    return null;
+  }
+  const savedEnvironment = state.environments.find(
+    (environment) => environment.environmentId === callerEnvironment.environmentId || environment.name === callerEnvironment.environmentName || environment.label === callerEnvironment.environmentName
+  );
+  return {
+    threadId,
+    name: null,
+    environment: savedEnvironment?.name ?? callerEnvironment.environmentName
+  };
+}
+function resolveNotifyPreference(notify, env = process.env) {
+  if (notify === false) {
+    return { kind: "none" };
+  }
+  if (typeof notify === "string") {
+    const value3 = notify.trim();
+    if (!value3) {
+      throw new Error("`--notify` subscriber value cannot be empty.");
+    }
+    return {
+      kind: "explicit",
+      subscriber: value3
+    };
+  }
+  const callerThreadId = resolveCallerThreadId(env);
+  if (callerThreadId) {
+    return { kind: "caller" };
+  }
+  if (notify === true) {
+    throw new Error(
+      "T3_THREAD_ID is not set. Bare `agent create --notify` must run inside a T3 thread or specify `--notify <subscriber>`."
+    );
+  }
+  return { kind: "none" };
+}
+function requireEnvironment(state, name) {
+  const found = state.environments.find((env) => env.name === name);
+  if (!found) {
+    throw new Error(`Unknown environment '${name}'.`);
+  }
+  return found;
+}
+function requireAgent(state, name) {
+  const found = state.agents.find((agent2) => agent2.name === name);
+  if (!found) {
+    throw new Error(`Unknown agent '${name}'.`);
+  }
+  return found;
+}
+function buildSubscriptionRecord(caller, source, now2, existing) {
+  return {
+    subscriberThreadId: caller.threadId,
+    subscriberAgentName: caller.name,
+    subscriberEnvironment: caller.environment,
+    sourceThreadId: source.threadId,
+    sourceAgentName: source.name,
+    sourceEnvironment: source.environment,
+    createdAt: existing?.createdAt ?? now2,
+    updatedAt: now2
+  };
+}
+function assertNotSelfSubscription(caller, source) {
+  if (caller.threadId === source.threadId) {
+    throw new Error(`Subscriber '${caller.name ?? caller.threadId}' cannot subscribe to itself.`);
+  }
+}
+
 // src/thread-preamble.ts
 var THREAD_PREAMBLE = [
   "You are a T3 worker thread. Before acting on the brief below, read and follow:",
@@ -48084,98 +48137,6 @@ var THREAD_PREAMBLE = [
 function wrapWithPreamble(message) {
   return `${THREAD_PREAMBLE}
 ${message}`;
-}
-
-// src/watcher-process.ts
-var import_node_child_process = require("node:child_process");
-var import_promises2 = require("node:fs/promises");
-var import_node_path3 = __toESM(require("node:path"), 1);
-function watcherPidFile() {
-  return import_node_path3.default.join(import_node_path3.default.dirname(resolveStateFile()), "watch.pid");
-}
-function repoRootFromArgv() {
-  const entry = process.argv[1];
-  if (!entry) {
-    throw new Error("Cannot resolve watcher repo root from process.argv[1].");
-  }
-  return import_node_path3.default.resolve(import_node_path3.default.dirname(entry), "..");
-}
-async function readWatcherPid(pidFile) {
-  try {
-    const raw2 = (await (0, import_promises2.readFile)(pidFile, "utf8")).trim();
-    const pid = Number(raw2);
-    return Number.isInteger(pid) && pid > 0 ? pid : null;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("ENOENT")) {
-      return null;
-    }
-    throw error;
-  }
-}
-function isProcessRunning(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-async function claimWatcherLease() {
-  const pidFile = watcherPidFile();
-  await (0, import_promises2.mkdir)(import_node_path3.default.dirname(pidFile), { recursive: true });
-  const existingPid = await readWatcherPid(pidFile);
-  if (existingPid && existingPid !== process.pid && isProcessRunning(existingPid)) {
-    return null;
-  }
-  if (existingPid && !isProcessRunning(existingPid)) {
-    await (0, import_promises2.unlink)(pidFile).catch(() => {
-    });
-  }
-  await (0, import_promises2.writeFile)(pidFile, `${process.pid}
-`, "utf8");
-  return async () => {
-    const currentPid = await readWatcherPid(pidFile);
-    if (currentPid === process.pid) {
-      await (0, import_promises2.unlink)(pidFile).catch(() => {
-      });
-    }
-  };
-}
-async function ensureWatcherProcess(input) {
-  const pidFile = watcherPidFile();
-  await (0, import_promises2.mkdir)(import_node_path3.default.dirname(pidFile), { recursive: true });
-  const existingPid = await readWatcherPid(pidFile);
-  if (existingPid && isProcessRunning(existingPid)) {
-    return {
-      status: "already-running",
-      pid: existingPid
-    };
-  }
-  if (existingPid && !isProcessRunning(existingPid)) {
-    await (0, import_promises2.unlink)(pidFile).catch(() => {
-    });
-  }
-  const repoRoot = repoRootFromArgv();
-  const tsxPath = import_node_path3.default.join(repoRoot, "node_modules", ".bin", "tsx");
-  const cliEntry = import_node_path3.default.join(repoRoot, "src", "cli.ts");
-  const args2 = [cliEntry, "watch", "--interval", String(input.intervalSeconds), "--idle-exit", String(input.idleExitSeconds), "--max-lifetime", String(input.maxLifetimeSeconds)];
-  if (input.env) {
-    args2.push("--env", input.env);
-  }
-  if (!input.deliver) {
-    args2.push("--no-deliver");
-  }
-  const child = (0, import_node_child_process.spawn)(tsxPath, args2, {
-    cwd: repoRoot,
-    detached: true,
-    stdio: "ignore"
-  });
-  child.unref();
-  return {
-    status: "spawned",
-    pid: child.pid ?? -1
-  };
 }
 
 // src/watch.ts
@@ -48452,35 +48413,6 @@ async function deliverPendingNotifications(options = {}) {
   }
   return delivered;
 }
-async function hasWatcherWork(options = {}) {
-  const clientFactory = options.clientFactory ?? createWatchClient;
-  const state = await loadState();
-  if (state.notifications.some((notification) => {
-    if (!matchesEnvFilter(notification, options.env)) {
-      return false;
-    }
-    return notification.status !== "delivered";
-  })) {
-    return true;
-  }
-  const subscriptions = state.subscriptions.filter((subscription) => {
-    return !options.env || subscription.sourceEnvironment === options.env;
-  });
-  const seenSources = /* @__PURE__ */ new Set();
-  for (const subscription of subscriptions) {
-    if (seenSources.has(subscription.sourceThreadId)) {
-      continue;
-    }
-    seenSources.add(subscription.sourceThreadId);
-    const sourceEnvironment = requireEnvironment(state, subscription.sourceEnvironment);
-    const sourceClient = clientFactory(sourceEnvironment);
-    const sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
-    if (classifyThread(sourceThread).state === "running") {
-      return true;
-    }
-  }
-  return false;
-}
 
 // src/cli.ts
 function printJson(value3) {
@@ -48496,24 +48428,12 @@ function collectOption(value3, previous = []) {
 }
 async function withAgent(agentName) {
   const state = await loadState();
-  const agentTarget = await resolveAgentTarget(state, agentName, {
-    clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName))
-  });
-  const environment = requireEnvironment(state, agentTarget.environment);
+  const agent2 = requireAgent(state, agentName);
+  const environment = requireEnvironment(state, agent2.environment);
   return {
     state,
-    agent: agentTarget.savedAgent ?? {
-      name: agentTarget.threadId,
-      environment: agentTarget.environment,
-      threadId: agentTarget.threadId,
-      projectId: agentTarget.projectId,
-      title: agentTarget.title,
-      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-      lastSeenAssistantMessageId: null
-    },
-    client: new RemoteEnvironmentClient(environment),
-    saved: agentTarget.savedAgent !== null,
-    target: agentTarget
+    agent: agent2,
+    client: new RemoteEnvironmentClient(environment)
   };
 }
 function toSubscriptionEndpoint(agent2) {
@@ -48528,11 +48448,11 @@ async function resolveThreadEndpoint(state, threadId, preferredEnvironment, call
   if (localEndpoint) {
     return localEndpoint;
   }
-  const orderedEnvironmentNames2 = [
+  const orderedEnvironmentNames = [
     ...preferredEnvironment ? [preferredEnvironment] : [],
     ...state.environments.map((environment) => environment.name)
   ].filter((value3, index2, list) => list.indexOf(value3) === index2);
-  for (const environmentName of orderedEnvironmentNames2) {
+  for (const environmentName of orderedEnvironmentNames) {
     const environment = requireEnvironment(state, environmentName);
     const client = new RemoteEnvironmentClient(environment);
     const threads = await client.listThreads();
@@ -48582,15 +48502,6 @@ function nowIso3() {
 function sleep4(ms) {
   return new Promise((resolve2) => setTimeout(resolve2, ms));
 }
-async function ensureNotificationWatcher(options = {}) {
-  await ensureWatcherProcess({
-    env: options.env,
-    intervalSeconds: 5,
-    idleExitSeconds: 900,
-    maxLifetimeSeconds: 86400,
-    deliver: options.deliver ?? true
-  });
-}
 var program2 = new Command();
 var AGENT_COMMAND_ALIASES = /* @__PURE__ */ new Set([
   "create",
@@ -48625,6 +48536,7 @@ program2.addHelpText(
   `
 Direct thread commands:
   project      Manage T3 Code projects on a paired environment
+  models       List live provider/model slugs from a paired environment
   create       Create and start a branch-pinned T3 worker thread
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
@@ -48634,6 +48546,7 @@ Direct thread commands:
 
 Examples:
   t3-thread project list --env dev-vm
+  t3-thread models --env dev-vm
   t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
   t3-thread create --name worker-a --env local-mbp --project PROJECT_ID --title "Worker A" --branch t3/worker-a --message "Fix the issue."
   t3-thread status worker-a
@@ -48690,6 +48603,12 @@ program2.command("threads").requiredOption("--env <name>", "saved environment na
   const client = new RemoteEnvironmentClient(environment);
   const threads = await client.listThreads();
   printLines(threads.map(formatThreadLine));
+});
+program2.command("models").requiredOption("--env <name>", "saved environment name").description("List live provider/model slugs from a paired T3 Code environment").action(async (options) => {
+  const state = await loadState();
+  const environment = requireEnvironment(state, options.env);
+  const client = new RemoteEnvironmentClient(environment);
+  printJson(await client.listModels());
 });
 program2.command("projects").requiredOption("--env <name>", "saved environment name").description("List remote projects so agents can target the correct project id").action(async (options) => {
   const state = await loadState();
@@ -48753,9 +48672,9 @@ project.command("rename").requiredOption("--env <name>", "saved environment name
     renamed: true
   });
 });
-project.command("set-model").requiredOption("--env <name>", "saved environment name").argument("<project>", "project id or absolute workspace root").option("--provider <provider>", "default model provider").option("--model <model>", "default model slug").option("--model-option <key=value>", "default model option; may be repeated", collectOption, []).option("--clear", "clear the project default model selection").description("Set or clear a project's default model selection").action(async (identifier2, options) => {
-  if (!options.clear && (!options.provider || !options.model)) {
-    throw new Error("project set-model requires --provider and --model, or --clear.");
+project.command("set-model").requiredOption("--env <name>", "saved environment name").argument("<project>", "project id or absolute workspace root").option("--provider <provider>", "default model provider").option("--model <model>", "default model slug; defaults to the provider's live app model").option("--model-option <key=value>", "default model option; may be repeated", collectOption, []).option("--clear", "clear the project default model selection").description("Set or clear a project's default model selection").action(async (identifier2, options) => {
+  if (!options.clear && !options.provider) {
+    throw new Error("project set-model requires --provider, or --clear.");
   }
   const state = await loadState();
   const environment = requireEnvironment(state, options.env);
@@ -48849,10 +48768,6 @@ agent.command("create").requiredOption("--name <name>", "local agent name").requ
       result: null
     };
   });
-  if (notifyCaller) {
-    void ensureNotificationWatcher({ env: options.env }).catch(() => {
-    });
-  }
   printJson({
     name: options.name,
     environment: options.env,
@@ -48892,12 +48807,11 @@ agent.command("list").action(async () => {
   printJson(state.agents);
 });
 agent.command("archive").argument("<name>", "agent name").description("Archive the remote thread for a saved agent via T3 RPC").action(async (name) => {
-  const { agent: savedAgent, client, saved } = await withAgent(name);
+  const { agent: savedAgent, client } = await withAgent(name);
   const archived = await client.archiveThread(savedAgent.threadId);
   printJson({
-    agent: saved ? savedAgent.name : null,
+    agent: savedAgent.name,
     threadId: savedAgent.threadId,
-    environment: savedAgent.environment,
     archived
   });
 });
@@ -48951,16 +48865,9 @@ agent.command("subscriptions").description("List saved attention-routing subscri
   });
   printJson(subscriptions);
 });
-agent.command("subscribe").description("Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID").requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch").action(async (options) => {
+agent.command("subscribe").description("Subscribe the calling T3 thread to attention from a saved source agent").requiredOption("--watch <name>", "saved source agent name to watch").action(async (options) => {
   const { state, caller } = await withCallerFromEnv();
-  const resolvedSource = await resolveAgentTarget(state, options.watch, {
-    clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName))
-  });
-  const source = {
-    threadId: resolvedSource.threadId,
-    name: resolvedSource.savedAgent?.name ?? null,
-    environment: resolvedSource.environment
-  };
+  const source = requireAgent(state, options.watch);
   assertNotSelfSubscription(caller, source);
   const now2 = (/* @__PURE__ */ new Date()).toISOString();
   const existing = state.subscriptions.find(
@@ -48974,8 +48881,6 @@ agent.command("subscribe").description("Subscribe the calling T3 thread to atten
     },
     result: null
   }));
-  void ensureNotificationWatcher({ env: source.environment }).catch(() => {
-  });
   printJson(next);
 });
 agent.command("unsubscribe").description("Remove an attention subscription for the calling T3 thread").requiredOption("--watch <name>", "saved source agent name to stop watching").action(async (options) => {
@@ -49020,77 +48925,29 @@ agent.command("notifications").description("List saved routed notification event
   });
   printJson(notifications);
 });
-agent.command("watch").description("Poll saved agents for attention-worthy transitions and route notifications to subscribers").option("--env <name>", "optional saved environment filter").option("--interval <seconds>", "poll interval in seconds", "5").option("--idle-exit <seconds>", "exit after this many idle seconds; 0 disables idle exit", "900").option("--max-lifetime <seconds>", "hard-stop the watcher after this many seconds; 0 disables the limit", "86400").option("--ensure", "spawn a detached singleton watcher if none is running, then exit").option("--once", "run a single scan and exit").option("--no-deliver", "record notification events but do not send messages to subscriber threads").action(async (options) => {
+agent.command("watch").description("Poll saved agents for attention-worthy transitions and route notifications to subscribers").option("--env <name>", "optional saved environment filter").option("--interval <seconds>", "poll interval in seconds", "5").option("--once", "run a single scan and exit").option("--no-deliver", "record notification events but do not send messages to subscriber threads").action(async (options) => {
   const intervalMs = Math.max(1, Number(options.interval)) * 1e3;
-  const idleExitMs = Math.max(0, Number(options.idleExit)) * 1e3;
-  const maxLifetimeMs = Math.max(0, Number(options.maxLifetime)) * 1e3;
-  if (options.ensure) {
-    const ensured = await ensureWatcherProcess({
-      env: options.env,
-      intervalSeconds: Math.max(1, Number(options.interval)),
-      idleExitSeconds: Math.max(0, Number(options.idleExit)),
-      maxLifetimeSeconds: Math.max(0, Number(options.maxLifetime)),
-      deliver: options.deliver
+  for (; ; ) {
+    const detectedNotifications = await detectAttentionEvents({
+      env: options.env
     });
+    const deliveryResults = options.deliver ? await deliverPendingNotifications({
+      env: options.env
+    }) : [];
     printJson({
-      ensured: true,
-      ...ensured,
-      env: options.env ?? null
+      scannedAt: nowIso3(),
+      env: options.env ?? null,
+      deliver: options.deliver,
+      detectedNotifications,
+      deliveryResults
     });
-    return;
-  }
-  const releaseLease = options.once ? null : await claimWatcherLease();
-  if (!options.once && !releaseLease) {
-    printJson({
-      started: false,
-      reason: "watcher already running",
-      env: options.env ?? null
-    });
-    return;
-  }
-  const startedAt = Date.now();
-  let idleSince = 0;
-  try {
-    for (; ; ) {
-      const detectedNotifications = await detectAttentionEvents({
-        env: options.env
-      });
-      const deliveryResults = options.deliver ? await deliverPendingNotifications({
-        env: options.env
-      }) : [];
-      const workRemaining = await hasWatcherWork({
-        env: options.env
-      });
-      printJson({
-        scannedAt: nowIso3(),
-        env: options.env ?? null,
-        deliver: options.deliver,
-        detectedNotifications,
-        deliveryResults,
-        workRemaining
-      });
-      if (options.once) {
-        break;
-      }
-      const nowMs = Date.now();
-      if (maxLifetimeMs > 0 && nowMs - startedAt >= maxLifetimeMs) {
-        break;
-      }
-      if (workRemaining) {
-        idleSince = 0;
-      } else if (idleExitMs > 0) {
-        idleSince ||= nowMs;
-        if (nowMs - idleSince >= idleExitMs) {
-          break;
-        }
-      }
-      await sleep4(intervalMs);
+    if (options.once) {
+      break;
     }
-  } finally {
-    await releaseLease?.();
+    await sleep4(intervalMs);
   }
 });
-agent.command("status").argument("[name]", "agent name or raw thread UUID").action(async (name) => {
+agent.command("status").argument("[name]", "agent name").action(async (name) => {
   if (!name) {
     const state = await loadState();
     const summaries = await Promise.all(
@@ -49104,36 +48961,33 @@ agent.command("status").argument("[name]", "agent name or raw thread UUID").acti
     printLines(summaries.map(formatOverviewLine));
     return;
   }
-  const { agent: savedAgent, client, saved } = await withAgent(name);
+  const { agent: savedAgent, client } = await withAgent(name);
   const thread = await client.findThread(savedAgent.threadId);
   const status = classifyThread(thread);
   const latestAssistant = getLatestAssistantMessage(thread);
   printJson({
-    agent: saved ? savedAgent.name : null,
+    agent: savedAgent.name,
     environment: savedAgent.environment,
     threadId: savedAgent.threadId,
     title: savedAgent.title,
-    projectId: savedAgent.projectId,
-    saved,
     state: status.state,
     reason: status.reason,
     latestTurn: thread.latestTurn,
     session: thread.session,
     proposedPlans: thread.proposedPlans.length,
     messageCount: thread.messages.length,
-    hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, thread) : null,
+    hasNewOutput: hasNewAssistantOutput(savedAgent, thread),
     latestAssistantMessageId: latestAssistant?.id ?? null,
     latestAssistantPreview: latestAssistant ? summarizeMessageText(latestAssistant.text) : null
   });
 });
-agent.command("worklog").argument("<name>", "agent name or raw thread UUID").option("--tail <count>", "number of activity rows to show", "10").action(async (name, options) => {
-  const { agent: savedAgent, client, saved } = await withAgent(name);
+agent.command("worklog").argument("<name>", "agent name").option("--tail <count>", "number of activity rows to show", "10").action(async (name, options) => {
+  const { agent: savedAgent, client } = await withAgent(name);
   const thread = await client.getThreadDetail(savedAgent.threadId);
   const tailCount = Math.max(1, Number(options.tail));
   printJson({
-    agent: saved ? savedAgent.name : null,
+    agent: savedAgent.name,
     threadId: savedAgent.threadId,
-    environment: savedAgent.environment,
     activities: thread.activities.slice(-tailCount)
   });
 });
@@ -49150,30 +49004,28 @@ agent.command("inbox").option("--env <name>", "optional saved environment filter
   );
   printLines(summaries.filter(needsAttention).map(formatInboxLine));
 });
-agent.command("send").argument("<name>", "agent name or raw thread UUID").argument("<message...>", "message text").action(async (name, messageParts) => {
-  const { agent: savedAgent, client, saved } = await withAgent(name);
+agent.command("send").argument("<name>", "agent name").argument("<message...>", "message text").action(async (name, messageParts) => {
+  const { agent: savedAgent, client } = await withAgent(name);
   await client.sendMessage({
     threadId: savedAgent.threadId,
     text: messageParts.join(" ").trim()
   });
   printJson({
-    agent: saved ? savedAgent.name : null,
+    agent: savedAgent.name,
     threadId: savedAgent.threadId,
-    environment: savedAgent.environment,
     dispatched: true
   });
 });
 for (const kind of ["clarify", "revise", "complete"]) {
-  agent.command(kind).argument("<name>", "agent name or raw thread UUID").argument("[message...]", "optional follow-up text").action(async (name, messageParts) => {
-    const { agent: savedAgent, client, saved } = await withAgent(name);
+  agent.command(kind).argument("<name>", "agent name").argument("[message...]", "optional follow-up text").action(async (name, messageParts) => {
+    const { agent: savedAgent, client } = await withAgent(name);
     await client.sendMessage({
       threadId: savedAgent.threadId,
       text: buildFollowUpMessage(kind, messageParts.join(" "))
     });
     printJson({
-      agent: saved ? savedAgent.name : null,
+      agent: savedAgent.name,
       threadId: savedAgent.threadId,
-      environment: savedAgent.environment,
       dispatched: kind
     });
   });
@@ -49187,8 +49039,8 @@ agent.command("interrupt").argument("<name>", "agent name").action(async (name) 
     interrupted: true
   });
 });
-agent.command("wait").argument("<name>", "agent name or raw thread UUID").option("--for <goal>", "completion|attention|idle|running", "completion").option("--timeout <seconds>", "timeout in seconds", "300").option("--interval <seconds>", "poll interval in seconds", "5").action(async (name, options) => {
-  const { agent: savedAgent, client, saved } = await withAgent(name);
+agent.command("wait").argument("<name>", "agent name").option("--for <goal>", "completion|attention|idle|running", "completion").option("--timeout <seconds>", "timeout in seconds", "300").option("--interval <seconds>", "poll interval in seconds", "5").action(async (name, options) => {
+  const { agent: savedAgent, client } = await withAgent(name);
   const thread = await client.waitForThread({
     threadId: savedAgent.threadId,
     goal: options.for,
@@ -49197,16 +49049,15 @@ agent.command("wait").argument("<name>", "agent name or raw thread UUID").option
   });
   const status = classifyThread(thread);
   printJson({
-    agent: saved ? savedAgent.name : null,
+    agent: savedAgent.name,
     threadId: savedAgent.threadId,
-    environment: savedAgent.environment,
     state: status.state,
     reason: status.reason,
     latestTurn: thread.latestTurn
   });
 });
-agent.command("result").argument("<name>", "agent name or raw thread UUID").option("--tail <count>", "number of messages to show", "1").option("--assistant-only", "only show assistant messages").option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading").option("--interval <seconds>", "poll interval in seconds while waiting", "2").option("--final-message", "return the terminal assistant message for the latest turn when available").option("--mark-seen", "record the latest assistant message as reviewed").action(async (name, options) => {
-  const { agent: savedAgent, client, saved, target: target2 } = await withAgent(name);
+agent.command("result").argument("<name>", "agent name").option("--tail <count>", "number of messages to show", "1").option("--assistant-only", "only show assistant messages").option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading").option("--interval <seconds>", "poll interval in seconds while waiting", "2").option("--final-message", "return the terminal assistant message for the latest turn when available").option("--mark-seen", "record the latest assistant message as reviewed").action(async (name, options) => {
+  const { agent: savedAgent, client } = await withAgent(name);
   const detail = options.wait ? await client.waitForThread({
     threadId: savedAgent.threadId,
     goal: "completion",
@@ -49216,9 +49067,6 @@ agent.command("result").argument("<name>", "agent name or raw thread UUID").opti
   const tailCount = Math.max(1, Number(options.tail));
   const latestAssistant = options.finalMessage ? getLatestTurnAssistantMessage(detail) ?? getLatestAssistantMessage(detail) : getLatestAssistantMessage(detail);
   const messages = options.finalMessage ? latestAssistant ? [latestAssistant] : [] : options.assistantOnly ? detail.messages.filter((message) => message.role === "assistant") : detail.messages;
-  if (options.markSeen) {
-    assertSavedAgentCapability(target2, "`result --mark-seen`");
-  }
   let markedSeen = false;
   if (options.markSeen && latestAssistant) {
     await updateState(async (state) => {
@@ -49237,11 +49085,9 @@ agent.command("result").argument("<name>", "agent name or raw thread UUID").opti
     markedSeen = true;
   }
   printJson({
-    agent: saved ? savedAgent.name : null,
+    agent: savedAgent.name,
     threadId: savedAgent.threadId,
-    environment: savedAgent.environment,
-    saved,
-    hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, detail) : null,
+    hasNewOutput: hasNewAssistantOutput(savedAgent, detail),
     latestAssistantMessageId: latestAssistant?.id ?? null,
     latestTurnAssistantMessageId: detail.latestTurn?.assistantMessageId ?? null,
     markedSeen,
