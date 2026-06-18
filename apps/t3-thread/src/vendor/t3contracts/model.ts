@@ -1,6 +1,5 @@
 import { Schema } from "effect";
 import { TrimmedNonEmptyString } from "./baseSchemas";
-import type { ProviderKind } from "./orchestration";
 
 export const CODEX_REASONING_EFFORT_OPTIONS = ["xhigh", "high", "medium", "low"] as const;
 export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_OPTIONS)[number];
@@ -47,30 +46,34 @@ export const ContextWindowOption = Schema.Struct({
 export type ContextWindowOption = typeof ContextWindowOption.Type;
 
 export const ModelCapabilities = Schema.Struct({
-  reasoningEffortLevels: Schema.Array(EffortOption),
-  supportsFastMode: Schema.Boolean,
-  supportsThinkingToggle: Schema.Boolean,
-  contextWindowOptions: Schema.Array(ContextWindowOption),
-  promptInjectedEffortLevels: Schema.Array(TrimmedNonEmptyString),
+  reasoningEffortLevels: Schema.optional(Schema.Array(EffortOption)),
+  supportsFastMode: Schema.optional(Schema.Boolean),
+  supportsThinkingToggle: Schema.optional(Schema.Boolean),
+  contextWindowOptions: Schema.optional(Schema.Array(ContextWindowOption)),
+  promptInjectedEffortLevels: Schema.optional(Schema.Array(TrimmedNonEmptyString)),
+  optionDescriptors: Schema.optional(Schema.Array(Schema.Unknown)),
 });
 export type ModelCapabilities = typeof ModelCapabilities.Type;
 
-export const DEFAULT_MODEL_BY_PROVIDER: Record<ProviderKind, string> = {
+export const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
   codex: "gpt-5.4",
   claudeAgent: "claude-sonnet-4-6",
+  cursor: "auto",
+  grok: "grok-build",
   opencode: "google/antigravity-gemini-3.5-flash-high",
 };
 
 export const DEFAULT_MODEL = DEFAULT_MODEL_BY_PROVIDER.codex;
 
 /** Per-provider text generation model defaults. */
-export const DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER: Record<ProviderKind, string> = {
+export const DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER: Record<string, string> = {
   codex: "gpt-5.4-mini",
   claudeAgent: "claude-haiku-4-5",
+  cursor: "composer-2",
   opencode: "google/antigravity-gemini-3.5-flash-low",
 };
 
-export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string, string>> = {
+export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<string, Record<string, string>> = {
   codex: {
     "gpt-5-codex": "gpt-5.4",
     "5.4": "gpt-5.4",
@@ -80,7 +83,11 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string,
     "gpt-5.3-spark": "gpt-5.3-codex-spark",
   },
   claudeAgent: {
-    opus: "claude-opus-4-6",
+    opus: "claude-opus-4-8",
+    "opus-4.8": "claude-opus-4-8",
+    "claude-opus-4.8": "claude-opus-4-8",
+    "opus-4.7": "claude-opus-4-7",
+    "claude-opus-4.7": "claude-opus-4-7",
     "opus-4.6": "claude-opus-4-6",
     "claude-opus-4.6": "claude-opus-4-6",
     "claude-opus-4-6-20251117": "claude-opus-4-6",
@@ -92,6 +99,17 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string,
     "haiku-4.5": "claude-haiku-4-5",
     "claude-haiku-4.5": "claude-haiku-4-5",
     "claude-haiku-4-5-20251001": "claude-haiku-4-5",
+  },
+  cursor: {
+    composer: "composer-2",
+    "composer-1.5": "composer-1.5",
+    "composer-1": "composer-1.5",
+    "opus-4.6-thinking": "claude-opus-4-6",
+    "opus-4.6": "claude-opus-4-6",
+    "sonnet-4.6-thinking": "claude-sonnet-4-6",
+    "sonnet-4.6": "claude-sonnet-4-6",
+    "opus-4.5-thinking": "claude-opus-4-5",
+    "opus-4.5": "claude-opus-4-5",
   },
   opencode: {
     "antigravity-gemini-3.5-flash-high": "google/antigravity-gemini-3.5-flash-high",
@@ -105,8 +123,10 @@ export const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<ProviderKind, Record<string,
 
 // ── Provider display names ────────────────────────────────────────────
 
-export const PROVIDER_DISPLAY_NAMES: Record<ProviderKind, string> = {
+export const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
   codex: "Codex",
   claudeAgent: "Claude",
+  cursor: "Cursor",
+  grok: "Grok",
   opencode: "OpenCode",
 };
