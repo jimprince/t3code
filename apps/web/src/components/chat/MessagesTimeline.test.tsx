@@ -137,6 +137,21 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("shows a loading progress state instead of the new-thread placeholder while detail hydrates", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[]} isThreadDetailLoading />,
+    );
+
+    expect(markup).toContain("Refreshing conversation state...");
+    expect(markup).toContain(
+      "The sidebar has backend activity for this thread, but the conversation detail has not arrived yet.",
+    );
+    expect(markup).toContain('aria-label="Refreshing conversation state"');
+    expect(markup).toContain('role="progressbar"');
+    expect(markup).not.toContain("Send a message to start the conversation.");
+  }, 20_000);
+
   it("renders collapse controls for long user messages", async () => {
     const { MessagesTimeline } = await import("./MessagesTimeline");
     const markup = renderToStaticMarkup(
