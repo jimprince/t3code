@@ -7,6 +7,23 @@ import {
 } from "./vendor/t3contracts/model.js";
 import type { ModelSelection, OrchestrationProjectShell, OrchestrationThreadShell } from "./types.js";
 
+export type ProviderModelInfo = {
+  slug: string;
+  name?: string;
+  shortName?: string;
+  isCustom?: boolean;
+};
+
+export type ProviderModelInventory = {
+  provider: string;
+  displayName?: string;
+  driver?: string;
+  enabled?: boolean;
+  installed?: boolean;
+  status?: string;
+  models: ProviderModelInfo[];
+};
+
 export type ProjectCreateCommandInput = {
   commandId: string;
   projectId: string;
@@ -97,15 +114,67 @@ export function parseModelOptionEntries(entries: string[] = []): Record<string, 
   return options;
 }
 
-function resolveModelSlug(provider: string, model?: string): string {
+function findProviderInventory(
+  provider: string,
+  providerModels?: ReadonlyArray<ProviderModelInventory> | null,
+): ProviderModelInventory | null {
+  return providerModels?.find((candidate) => candidate.provider === provider) ?? null;
+}
+
+function resolveLiveDefaultModel(
+  provider: string,
+  providerModels?: ReadonlyArray<ProviderModelInventory> | null,
+): string | null {
+  const inventory = findProviderInventory(provider, providerModels);
+  if (!inventory) {
+    return null;
+  }
+  return (
+    inventory.models.find((model) => !model.isCustom)?.slug ??
+    inventory.models[0]?.slug ??
+    null
+  );
+}
+
+function resolveLiveModelSlug(
+  provider: string,
+  model: string,
+  providerModels?: ReadonlyArray<ProviderModelInventory> | null,
+): string | null {
+  const inventory = findProviderInventory(provider, providerModels);
+  if (!inventory) {
+    return null;
+  }
+
+  const direct = inventory.models.find((candidate) => candidate.slug === model);
+  if (direct) {
+    return direct.slug;
+  }
+
+  const lowered = model.toLowerCase();
+  const named = inventory.models.find(
+    (candidate) =>
+      candidate.name?.toLowerCase() === lowered ||
+      candidate.shortName?.toLowerCase() === lowered,
+  );
+  return named?.slug ?? null;
+}
+
+function resolveModelSlug(
+  provider: string,
+  model?: string,
+  providerModels?: ReadonlyArray<ProviderModelInventory> | null,
+): string {
   const providerDefaults = DEFAULT_MODEL_BY_PROVIDER as Record<string, string>;
   const providerAliases = MODEL_SLUG_ALIASES_BY_PROVIDER as Record<string, Record<string, string>>;
   const trimmedModel = model?.trim();
-  const fallbackModel = providerDefaults[provider] ?? DEFAULT_MODEL;
+  const fallbackModel =
+    resolveLiveDefaultModel(provider, providerModels) ?? providerDefaults[provider] ?? DEFAULT_MODEL;
   if (!trimmedModel) {
     return fallbackModel;
   }
-  return providerAliases[provider]?.[trimmedModel] ?? trimmedModel;
+  const aliased = providerAliases[provider]?.[trimmedModel] ?? trimmedModel;
+  return resolveLiveModelSlug(provider, aliased, providerModels) ?? aliased;
 }
 
 export function buildModelSelection(input: {
@@ -114,6 +183,7 @@ export function buildModelSelection(input: {
   optionEntries?: string[];
   clear?: boolean;
   noDefault?: boolean;
+  providerModels?: ReadonlyArray<ProviderModelInventory> | null;
 }): ModelSelection | null {
   if (input.clear) {
     if (input.provider || input.model || (input.optionEntries?.length ?? 0) > 0 || input.noDefault) {
@@ -130,7 +200,7 @@ export function buildModelSelection(input: {
   }
 
   const provider = input.provider?.trim() || "codex";
-  const model = resolveModelSlug(provider, input.model);
+  const model = resolveModelSlug(provider, input.model, input.providerModels);
   const options = parseModelOptionEntries(input.optionEntries);
   return {
     provider,
