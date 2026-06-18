@@ -2,6 +2,7 @@ import {
   ApprovalRequestId,
   DEFAULT_MODEL,
   EventId,
+  type EnvironmentId,
   ProviderDriverKind,
   ProviderItemId,
   type ProviderInstanceId,
@@ -94,6 +95,10 @@ type CodexThreadItem =
 
 export interface CodexSessionRuntimeOptions {
   readonly threadId: ThreadId;
+  readonly t3Environment?: {
+    readonly id: EnvironmentId;
+    readonly name: string;
+  };
   readonly providerInstanceId?: ProviderInstanceId;
   readonly binaryPath: string;
   readonly homePath?: string;
@@ -424,6 +429,24 @@ export function isRecoverableThreadResumeError(error: unknown): boolean {
   return RECOVERABLE_THREAD_RESUME_ERROR_SNIPPETS.some((snippet) => message.includes(snippet));
 }
 
+export function buildCodexChildEnv(input: {
+  readonly threadId: ThreadId;
+  readonly environmentId?: EnvironmentId;
+  readonly environmentName?: string;
+  readonly environment?: NodeJS.ProcessEnv;
+  readonly homePath?: string;
+}): NodeJS.ProcessEnv {
+  const environmentId = input.environmentId ?? process.env.T3_ENVIRONMENT_ID;
+  const environmentName = input.environmentName ?? process.env.T3_ENVIRONMENT_NAME;
+  return {
+    ...(input.environment ?? process.env),
+    T3_THREAD_ID: String(input.threadId),
+    ...(environmentId ? { T3_ENVIRONMENT_ID: String(environmentId) } : {}),
+    ...(environmentName ? { T3_ENVIRONMENT_NAME: environmentName } : {}),
+    ...(input.homePath ? { CODEX_HOME: input.homePath } : {}),
+  };
+}
+
 type CodexThreadOpenResponse =
   | CodexRpc.ClientRequestResponsesByMethod["thread/start"]
   | CodexRpc.ClientRequestResponsesByMethod["thread/resume"];
@@ -712,10 +735,17 @@ export const makeCodexSessionRuntime = (
     // `child_process.spawn`; `expandHomePath` lets a configured
     // `CODEX_HOME=~/.codex_work` reach codex as an absolute path.
     const resolvedHomePath = options.homePath ? expandHomePath(options.homePath) : undefined;
-    const env = {
-      ...options.environment,
-      ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
-    };
+    const env = buildCodexChildEnv({
+      threadId: options.threadId,
+      ...(options.t3Environment
+        ? {
+            environmentId: options.t3Environment.id,
+            environmentName: options.t3Environment.name,
+          }
+        : {}),
+      ...(options.environment ? { environment: options.environment } : {}),
+      ...(resolvedHomePath ? { homePath: resolvedHomePath } : {}),
+    });
     const extendEnv = options.environment === undefined;
     const spawnCommand = yield* resolveSpawnCommand(
       options.binaryPath,
