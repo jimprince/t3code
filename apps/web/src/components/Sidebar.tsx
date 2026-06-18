@@ -117,6 +117,7 @@ import { projectEnvironment } from "../state/projects";
 import { useEnvironmentQuery } from "../state/query";
 import { threadEnvironment, useEnvironmentThread } from "../state/threads";
 import { vcsEnvironment } from "../state/vcs";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { useEnvironment, useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
   buildThreadRouteParams,
@@ -1110,6 +1111,12 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     reportFailure: false,
   });
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
+    reportFailure: false,
+  });
+  const exportThreadForMove = useAtomCommand(orchestrationEnvironment.exportThread, {
+    reportFailure: false,
+  });
+  const importThreadForMove = useAtomCommand(orchestrationEnvironment.importThread, {
     reportFailure: false,
   });
   const updateSettings = useUpdateSettings();
@@ -2192,6 +2199,26 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               environmentId: targetMember.environmentId,
               projectId: targetMember.id,
             },
+            exportThread: async (request) => {
+              const result = await exportThreadForMove({
+                environmentId: threadRef.environmentId,
+                input: request,
+              });
+              if (result._tag === "Failure") {
+                throw squashAtomCommandFailure(result);
+              }
+              return result.value;
+            },
+            importThread: async (request) => {
+              const result = await importThreadForMove({
+                environmentId: targetMember.environmentId,
+                input: request,
+              });
+              if (result._tag === "Failure") {
+                throw squashAtomCommandFailure(result);
+              }
+              return result.value;
+            },
             confirmBranchFallback: (branch) =>
               api.dialogs.confirm(
                 [
@@ -2299,6 +2326,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      exportThreadForMove,
+      importThreadForMove,
       markThreadUnread,
       memberProjectByScopedKey,
       project.workspaceRoot,
