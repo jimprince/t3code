@@ -4,9 +4,10 @@ import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as Socket from "effect/unstable/socket/Socket";
 
 import { ORCHESTRATION_WS_METHODS } from "./vendor/t3contracts/orchestration.js";
-import { WsRpcGroup } from "./vendor/t3contracts/rpc.js";
+import { WS_METHODS, WsRpcGroup } from "./vendor/t3contracts/rpc.js";
 
 const RPC_METHODS = {
+  serverGetConfig: WS_METHODS.serverGetConfig,
   dispatchCommand: ORCHESTRATION_WS_METHODS.dispatchCommand,
   getTurnDiff: ORCHESTRATION_WS_METHODS.getTurnDiff,
   getFullThreadDiff: ORCHESTRATION_WS_METHODS.getFullThreadDiff,
@@ -46,7 +47,7 @@ export class T3RpcClient {
   }
 
   async request<T>(
-    method: "dispatchCommand" | "getTurnDiff" | "getFullThreadDiff",
+    method: "serverGetConfig" | "dispatchCommand" | "getTurnDiff" | "getFullThreadDiff",
     input: unknown,
   ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<

@@ -66,6 +66,8 @@ export type ServerAuthBootstrapMethod = typeof ServerAuthBootstrapMethod.Type;
 export const ServerAuthSessionMethod = Schema.Literals([
   "browser-session-cookie",
   "bearer-session-token",
+  "bearer-access-token",
+  "dpop-access-token",
 ]);
 export type ServerAuthSessionMethod = typeof ServerAuthSessionMethod.Type;
 
