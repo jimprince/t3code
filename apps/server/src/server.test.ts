@@ -79,6 +79,7 @@ import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import { OrchestrationListenerCallbackError } from "./orchestration/Errors.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ThreadTransfer } from "./orchestration/Services/ThreadTransfer.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { PersistenceSqlError } from "./persistence/Errors.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
@@ -677,9 +678,11 @@ const buildAppUnderTest = (options?: {
           readEvents: () => Stream.empty,
           dispatch: () => Effect.succeed({ sequence: 0 }),
           streamDomainEvents: Stream.empty,
+          subscribeDomainEvents: Effect.succeed(Stream.empty),
           ...options?.layers?.orchestrationEngine,
         }),
       ),
+      Layer.provide(Layer.mock(ThreadTransfer)({})),
       Layer.provide(
         Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
           getCommandReadModel: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
