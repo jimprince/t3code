@@ -65,7 +65,33 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 
 ## EAS Builds
 
-CI uses Expo fingerprinting with the `preview:dev` profile to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and default local builds continue to use the `appVersion` runtime policy.
+This fork resolves its EAS owner/project and app identifiers from
+`fork.config.json`. The tracked values are non-secret and point development
+updates at Brad's `jimprince/t3-code` EAS project while preserving upstream's
+mobile app code on `main`.
+
+CI uses Expo fingerprinting for development and preview dev-client builds to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and persistent preview builds continue to use the `appVersion` runtime policy.
+
+Pushes to `main` that touch mobile/runtime paths run
+`Mobile EAS Development Update`, which verifies the repo and deploys the iOS
+development lane with explicit EAS CLI build/update commands. The iOS app has a
+widget extension, so ad hoc credentials exist for both `com.brad.t3code.dev`
+and `com.brad.t3code.dev.widgets`. CI never contacts Apple: it consumes the
+signing credentials stored on EAS servers. When the native fingerprint changes
+and stored credentials are missing or expired, refresh them with one
+interactive local build (Apple ID auth):
+
+```bash
+cd apps/mobile
+APP_VARIANT=development eas build --profile development --platform ios
+```
+
+Manual dispatch is also supported from
+`.github/workflows/mobile-eas-development.yml`.
+
+If an incompatible development OTA update is published, use
+`.github/workflows/mobile-eas-development-rollback.yml` to roll the affected
+runtime version back to the embedded bundle.
 
 For preview or production EAS environments, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
 `T3CODE_CLERK_JWT_TEMPLATE`, and `T3CODE_RELAY_URL`
