@@ -20,6 +20,7 @@ import { resolveAttachmentPath } from "../attachmentStore.ts";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildGoalEvaluationPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
@@ -161,7 +162,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "evaluateGoal";
   }) =>
     sharedServerMutex.withPermit(
       Effect.gen(function* () {
@@ -271,7 +273,8 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "evaluateGoal";
     readonly cwd: string;
     readonly prompt: string;
     readonly outputSchemaJson: S;
@@ -459,10 +462,32 @@ export const makeOpenCodeTextGeneration = Effect.fn("makeOpenCodeTextGeneration"
     };
   });
 
+  const evaluateGoal: TextGenerationShape["evaluateGoal"] = Effect.fn(
+    "OpenCodeTextGeneration.evaluateGoal",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildGoalEvaluationPrompt({
+      goal: input.goal,
+      transcript: input.transcript,
+    });
+    const generated = yield* runOpenCodeJson({
+      operation: "evaluateGoal",
+      cwd: input.cwd,
+      prompt,
+      outputSchemaJson: outputSchema,
+      modelSelection: input.modelSelection,
+    });
+
+    return {
+      achieved: generated.achieved,
+      reason: generated.reason.trim(),
+    };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    evaluateGoal,
   } satisfies TextGenerationShape;
 });
