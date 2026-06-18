@@ -9,3 +9,4 @@
 - [Providers](./providers/codex.md)
 - [Reference](./reference/encyclopedia.md)
 - [User guides](./user/keybindings.md)
+- [Moving threads between machines](./user/moving-threads.md)
