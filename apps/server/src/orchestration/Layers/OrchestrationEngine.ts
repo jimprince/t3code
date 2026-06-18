@@ -102,28 +102,28 @@ const makeOrchestrationEngine = Effect.gen(function* () {
       return nextReadModel;
     });
 
+  const catchUpCommandReadModel = Effect.gen(function* () {
+    const persistedEvents = yield* Stream.runCollect(
+      eventStore.readFromSequence(commandReadModel.snapshotSequence, Number.MAX_SAFE_INTEGER),
+    ).pipe(Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)));
+    if (persistedEvents.length === 0) {
+      return;
+    }
+
+    commandReadModel = yield* projectEventsOntoReadModel(commandReadModel, persistedEvents);
+
+    for (const persistedEvent of persistedEvents) {
+      yield* PubSub.publish(eventPubSub, persistedEvent);
+    }
+  });
+
   const processEnvelope = (envelope: CommandEnvelope): Effect.Effect<void> => {
-    const dispatchStartSequence = commandReadModel.snapshotSequence;
     let processingStartedAtMs = 0;
     const aggregateRef = commandToAggregateRef(envelope.command);
     const baseMetricAttributes = {
       commandType: envelope.command.type,
       aggregateKind: aggregateRef.aggregateKind,
     } as const;
-    const reconcileReadModelAfterDispatchFailure = Effect.gen(function* () {
-      const persistedEvents = yield* Stream.runCollect(
-        eventStore.readFromSequence(dispatchStartSequence),
-      ).pipe(Effect.map((chunk): OrchestrationEvent[] => Array.from(chunk)));
-      if (persistedEvents.length === 0) {
-        return;
-      }
-
-      commandReadModel = yield* projectEventsOntoReadModel(commandReadModel, persistedEvents);
-
-      for (const persistedEvent of persistedEvents) {
-        yield* PubSub.publish(eventPubSub, persistedEvent);
-      }
-    });
 
     return Effect.exit(
       Effect.gen(function* () {
@@ -134,6 +134,8 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           "orchestration.aggregate_kind": aggregateRef.aggregateKind,
           "orchestration.aggregate_id": aggregateRef.aggregateId,
         });
+
+        yield* catchUpCommandReadModel;
 
         const existingReceipt = yield* commandReceiptRepository.getByCommandId({
           commandId: envelope.command.commandId,
@@ -181,10 +183,22 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
               const lastSavedEvent = committedEvents.at(-1) ?? null;
               if (lastSavedEvent === null) {
-                return yield* new OrchestrationCommandInvariantError({
-                  commandType: envelope.command.type,
-                  detail: "Command produced no events.",
+                const acceptedAt = yield* nowIso;
+                yield* commandReceiptRepository.upsert({
+                  commandId: envelope.command.commandId,
+                  aggregateKind: aggregateRef.aggregateKind,
+                  aggregateId: aggregateRef.aggregateId,
+                  acceptedAt,
+                  resultSequence: commandReadModel.snapshotSequence,
+                  status: "accepted",
+                  error: null,
                 });
+
+                return {
+                  committedEvents,
+                  lastSequence: commandReadModel.snapshotSequence,
+                  nextCommandReadModel,
+                } as const;
               }
 
               yield* commandReceiptRepository.upsert({
@@ -263,7 +277,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
           const error = Cause.squash(exit.cause) as OrchestrationDispatchError;
           if (!isOrchestrationCommandPreviouslyRejectedError(error)) {
-            yield* reconcileReadModelAfterDispatchFailure.pipe(
+            yield* catchUpCommandReadModel.pipe(
               Effect.catch(() =>
                 Effect.logWarning(
                   "failed to reconcile orchestration read model after dispatch failure",
@@ -329,6 +343,13 @@ const makeOrchestrationEngine = Effect.gen(function* () {
     get streamDomainEvents(): OrchestrationEngineShape["streamDomainEvents"] {
       return Stream.fromPubSub(eventPubSub);
     },
+    // Like `streamDomainEvents` but registers the subscription eagerly (when
+    // this effect completes) rather than lazily (when the stream is run). This
+    // lets the WS layer subscribe before reading a thread snapshot so the
+    // snapshot→live handoff cannot drop events. `Stream.fromSubscription`
+    // consumes the already-registered subscription; the scope from
+    // `PubSub.subscribe` keeps it alive for the caller's scope.
+    subscribeDomainEvents: Effect.map(PubSub.subscribe(eventPubSub), Stream.fromSubscription),
   } satisfies OrchestrationEngineShape;
 });
 

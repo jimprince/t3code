@@ -2093,4 +2093,52 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
     expect(thread?.session?.activeTurnId).toBeNull();
   });
+
+  it("reacts to thread.session.stop after archive by stopping the provider session", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const threadId = ThreadId.make("thread-1");
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-for-archived-stop"),
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex_work"),
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make("cmd-archive-before-session-stop"),
+        threadId,
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.stop",
+        commandId: CommandId.make("cmd-session-stop-archived"),
+        threadId,
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.stopSession.mock.calls.length === 1);
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === threadId);
+    expect(thread?.archivedAt).not.toBeNull();
+    expect(thread?.session?.status).toBe("stopped");
+    expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
+    expect(thread?.session?.activeTurnId).toBeNull();
+  });
 });
