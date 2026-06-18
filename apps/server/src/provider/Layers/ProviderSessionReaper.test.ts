@@ -60,6 +60,7 @@ const unsupported = () => Effect.die(new Error("Unsupported provider call in tes
 function makeReadModel(
   threads: ReadonlyArray<{
     readonly id: ThreadId;
+    readonly archivedAt?: string | null;
     readonly session: {
       readonly threadId: ThreadId;
       readonly status: "starting" | "running" | "ready" | "interrupted" | "stopped" | "error";
@@ -100,7 +101,6 @@ function makeReadModel(
       worktreePath: null,
       createdAt: now,
       updatedAt: now,
-      archivedAt: null,
       latestUserMessageAt: null,
       hasPendingApprovals: false,
       hasPendingUserInput: false,
@@ -108,6 +108,7 @@ function makeReadModel(
       latestTurn: null,
       messages: [],
       session: thread.session,
+      archivedAt: thread.archivedAt ?? null,
       activities: [],
       proposedPlans: [],
       checkpoints: [],
@@ -209,7 +210,14 @@ describe("ProviderSessionReaper", () => {
                 ? Option.some(input.readModel.threads.find((thread) => thread.id === threadId)!)
                 : Option.none(),
             ),
+          getThreadShellByIdIncludingArchived: (threadId) =>
+            Effect.succeed(
+              input.readModel.threads.find((thread) => thread.id === threadId)
+                ? Option.some(input.readModel.threads.find((thread) => thread.id === threadId)!)
+                : Option.none(),
+            ),
           getThreadDetailById: () => Effect.die("unused"),
+          getThreadDetailSnapshotById: () => Effect.die("unused"),
         }),
       ),
       Layer.provideMerge(NodeServices.layer),
@@ -359,6 +367,53 @@ describe("ProviderSessionReaper", () => {
     expect(harness.stopSession).not.toHaveBeenCalled();
     const remaining = await runtime!.runPromise(repository.getByThreadId({ threadId }));
     expect(Option.isSome(remaining)).toBe(true);
+  });
+
+  it("reaps archived sessions immediately even within the inactivity threshold", async () => {
+    const threadId = ThreadId.make("thread-reaper-archived-fresh");
+    const now = DateTime.formatIso(await Effect.runPromise(DateTime.now));
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          archivedAt: now,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "claudeAgent",
+            runtimeMode: "full-access",
+            activeTurnId: TurnId.make("turn-archived-active"),
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(Effect.service(ProviderSessionRuntimeRepository));
+
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "claudeAgent",
+        providerInstanceId: null,
+        adapterKey: "claudeAgent",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: now,
+        resumeCursor: {
+          opaque: "resume-archived-fresh",
+        },
+        runtimePayload: null,
+      }),
+    );
+
+    const reaper = await runtime!.runPromise(Effect.service(ProviderSessionReaper));
+    scope = await Effect.runPromise(Scope.make("sequential"));
+    await Effect.runPromise(reaper.start().pipe(Scope.provide(scope)));
+
+    await waitFor(() => harness.stopSession.mock.calls.length === 1);
+
+    expect(harness.stopSession.mock.calls[0]?.[0]).toEqual({ threadId });
   });
 
   it("skips persisted sessions that are already marked stopped", async () => {
