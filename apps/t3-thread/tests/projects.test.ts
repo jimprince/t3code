@@ -134,6 +134,44 @@ describe("project helpers", () => {
     });
   });
 
+  it("uses live server model defaults when available", () => {
+    expect(
+      buildModelSelection({
+        provider: "codex",
+        providerModels: [
+          {
+            provider: "codex",
+            models: [
+              { slug: "custom-codex", name: "Custom Codex", isCustom: true },
+              { slug: "gpt-5.7", name: "GPT 5.7", isCustom: false },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({
+      provider: "codex",
+      model: "gpt-5.7",
+    });
+  });
+
+  it("resolves live server model display names to slugs", () => {
+    expect(
+      buildModelSelection({
+        provider: "codex",
+        model: "GPT 5.7",
+        providerModels: [
+          {
+            provider: "codex",
+            models: [{ slug: "gpt-5.7", name: "GPT 5.7", isCustom: false }],
+          },
+        ],
+      }),
+    ).toEqual({
+      provider: "codex",
+      model: "gpt-5.7",
+    });
+  });
+
   it("builds a custom model selection", () => {
     expect(
       buildModelSelection({
@@ -160,6 +198,41 @@ describe("project helpers", () => {
     ).toEqual({
       provider: "opencode",
       model: "google/antigravity-gemini-3.5-flash-high",
+    });
+  });
+
+  it("mirrors app model aliases for cursor", () => {
+    expect(
+      buildModelSelection({
+        provider: "cursor",
+        model: "composer",
+      }),
+    ).toEqual({
+      provider: "cursor",
+      model: "composer-2",
+    });
+  });
+
+  it("uses app default models for app-visible providers", () => {
+    expect(
+      buildModelSelection({
+        provider: "grok",
+      }),
+    ).toEqual({
+      provider: "grok",
+      model: "grok-build",
+    });
+  });
+
+  it("passes through custom provider instances and app model slugs", () => {
+    expect(
+      buildModelSelection({
+        provider: "codex_personal",
+        model: "gpt-5.5",
+      }),
+    ).toEqual({
+      provider: "codex_personal",
+      model: "gpt-5.5",
     });
   });
 
