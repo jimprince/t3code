@@ -14,6 +14,7 @@ import { AppText as Text } from "../../components/AppText";
 import { EmptyState } from "../../components/EmptyState";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import type { SavedRemoteConnection } from "../../lib/connection";
+import { latestPromptActivityAt } from "../../lib/repositoryGroups";
 import { scopedProjectKey } from "../../lib/scopedEntities";
 import { relativeTime } from "../../lib/time";
 import type { RemoteCatalogState } from "../../state/use-remote-catalog";
@@ -38,12 +39,16 @@ interface ProjectGroup {
   readonly threads: ReadonlyArray<EnvironmentScopedThreadShell>;
 }
 
+// Prompt-based so running agents don't continuously reorder projects; see
+// latestPromptActivityAt in lib/repositoryGroups.
 const projectGroupActivityOrder = Order.mapInput(
   Order.Struct({
     activityAt: Order.flip(Order.Number),
   }),
   (group: ProjectGroup) => ({
-    activityAt: new Date(group.threads[0]!.updatedAt ?? group.threads[0]!.createdAt).getTime(),
+    activityAt: new Date(
+      latestPromptActivityAt(group.threads) ?? group.threads[0]!.createdAt,
+    ).getTime(),
   }),
 );
 
