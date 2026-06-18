@@ -109,4 +109,43 @@ describe("remote", () => {
     expect(hostError).toMatchObject({ source: "direct-host" });
     expect((hostError as RemoteBackendUrlInvalidError).cause).toBeInstanceOf(TypeError);
   });
+
+  it("defaults bare LAN hosts to the local T3 backend endpoint", () => {
+    expect(
+      resolveRemotePairingTarget({
+        host: "192.168.50.131",
+        pairingCode: "pairing-token",
+      }),
+    ).toEqual({
+      credential: "pairing-token",
+      httpBaseUrl: "http://192.168.50.131:3773/",
+      wsBaseUrl: "ws://192.168.50.131:3773/",
+    });
+  });
+
+  it("defaults bare Tailscale hosts to the local T3 backend endpoint", () => {
+    expect(
+      resolveRemotePairingTarget({
+        host: "100.64.0.4",
+        pairingCode: "pairing-token",
+      }),
+    ).toEqual({
+      credential: "pairing-token",
+      httpBaseUrl: "http://100.64.0.4:3773/",
+      wsBaseUrl: "ws://100.64.0.4:3773/",
+    });
+  });
+
+  it("repairs scheme-only LAN host entries that would otherwise try HTTPS port 443", () => {
+    expect(
+      resolveRemotePairingTarget({
+        host: "https://192.168.50.131",
+        pairingCode: "pairing-token",
+      }),
+    ).toEqual({
+      credential: "pairing-token",
+      httpBaseUrl: "http://192.168.50.131:3773/",
+      wsBaseUrl: "ws://192.168.50.131:3773/",
+    });
+  });
 });
