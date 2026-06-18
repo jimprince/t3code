@@ -14,6 +14,7 @@ import { type ThreadTitleGenerationResult, type TextGenerationShape } from "./Te
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildGoalEvaluationPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
@@ -36,7 +37,8 @@ function mapGrokAcpError(
     | "generateCommitMessage"
     | "generatePrContent"
     | "generateBranchName"
-    | "generateThreadTitle",
+    | "generateThreadTitle"
+    | "evaluateGoal",
   detail: string,
   cause: unknown,
 ): TextGenerationError {
@@ -73,7 +75,8 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "evaluateGoal";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -263,10 +266,33 @@ export const makeGrokTextGeneration = Effect.fn("makeGrokTextGeneration")(functi
     } satisfies ThreadTitleGenerationResult;
   });
 
+  const evaluateGoal: TextGenerationShape["evaluateGoal"] = Effect.fn(
+    "GrokTextGeneration.evaluateGoal",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildGoalEvaluationPrompt({
+      goal: input.goal,
+      transcript: input.transcript,
+    });
+
+    const generated = yield* runGrokJson({
+      operation: "evaluateGoal",
+      cwd: input.cwd,
+      prompt,
+      outputSchemaJson: outputSchema,
+      modelSelection: input.modelSelection,
+    });
+
+    return {
+      achieved: generated.achieved,
+      reason: generated.reason.trim(),
+    };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    evaluateGoal,
   } satisfies TextGenerationShape;
 });
