@@ -41,11 +41,13 @@ const DEFAULT_OPENCODE_SERVER_TIMEOUT_MS = 30_000;
 const DEFAULT_HOSTNAME = "127.0.0.1";
 export interface OpenCodeServerProcess {
   readonly url: string;
+  readonly processId: number | null;
   readonly exitCode: Effect.Effect<number, never>;
 }
 
 export interface OpenCodeServerConnection {
   readonly url: string;
+  readonly processId: number | null;
   readonly exitCode: Effect.Effect<number, never> | null;
   readonly external: boolean;
 }
@@ -378,7 +380,11 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
                 // any serve process left in that group.
               }
             });
-      const terminateChild = killOpenCodeProcessGroup("SIGTERM").pipe(
+      const terminateChild = Effect.logInfo("opencode server process stopping", {
+        processId: child.pid,
+        port,
+      }).pipe(
+        Effect.andThen(killOpenCodeProcessGroup("SIGTERM")),
         Effect.andThen(Effect.sleep("1 second")),
         Effect.andThen(killOpenCodeProcessGroup("SIGKILL")),
         Effect.ignore,
@@ -467,13 +473,20 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         });
       }
 
-      return {
+      const server = {
         url: readyOption.value,
+        processId: typeof child.pid === "number" ? child.pid : null,
         exitCode: child.exitCode.pipe(
           Effect.map(Number),
           Effect.orElseSucceed(() => 0),
         ),
       } satisfies OpenCodeServerProcess;
+      yield* Effect.logInfo("opencode server process started", {
+        processId: server.processId,
+        port,
+        url: server.url,
+      });
+      return server;
     });
 
   const connectToOpenCodeServer: OpenCodeRuntimeShape["connectToOpenCodeServer"] = (input) => {
@@ -482,6 +495,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       // We don't own externally-configured servers — no scope interaction.
       return Effect.succeed({
         url: serverUrl,
+        processId: null,
         exitCode: null,
         external: true,
       });
@@ -496,6 +510,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
     }).pipe(
       Effect.map((server) => ({
         url: server.url,
+        processId: server.processId,
         exitCode: server.exitCode,
         external: false,
       })),
