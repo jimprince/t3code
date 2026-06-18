@@ -1,6 +1,5 @@
 import { Effect, Option, Schema, SchemaIssue, Struct } from "effect";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import { ClaudeModelOptions, CodexModelOptions, OpenCodeModelOptions } from "./model";
 import { RepositoryIdentity } from "./environment";
 import {
   ApprovalRequestId,
@@ -26,7 +25,12 @@ export const ORCHESTRATION_WS_METHODS = {
   subscribeThread: "orchestration.subscribeThread",
 } as const;
 
-export const ProviderKind = Schema.Literals(["codex", "claudeAgent", "opencode"]);
+const ProviderSlug = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(64),
+  Schema.isPattern(/^[a-zA-Z][a-zA-Z0-9_-]*$/),
+);
+
+export const ProviderKind = ProviderSlug;
 export type ProviderKind = typeof ProviderKind.Type;
 export const ProviderApprovalPolicy = Schema.Literals([
   "untrusted",
@@ -44,95 +48,118 @@ export type ProviderSandboxMode = typeof ProviderSandboxMode.Type;
 
 export const DEFAULT_PROVIDER_KIND: ProviderKind = "codex";
 
-const LegacyModelOptionEntry = Schema.Struct({
-  id: TrimmedNonEmptyString,
-  value: Schema.Unknown,
+const ModelOptionRecord = Schema.Record(TrimmedNonEmptyString, Schema.Unknown);
+
+type ModelOptionRecordType = typeof ModelOptionRecord.Type;
+
+function normalizeModelOptions(value: unknown): ModelOptionRecordType | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    const options: Record<string, unknown> = {};
+    for (const entry of value) {
+      if (entry === null || typeof entry !== "object") {
+        continue;
+      }
+      const rawEntry = entry as Record<string, unknown>;
+      const id = typeof rawEntry.id === "string" ? rawEntry.id.trim() : "";
+      if (!id) {
+        continue;
+      }
+      options[id] = rawEntry.value;
+    }
+    return Object.keys(options).length > 0 ? options : undefined;
+  }
+
+  if (value !== null && typeof value === "object") {
+    const options: Record<string, unknown> = {};
+    for (const [rawKey, optionValue] of Object.entries(value)) {
+      const key = rawKey.trim();
+      if (key) {
+        options[key] = optionValue;
+      }
+    }
+    return Object.keys(options).length > 0 ? options : undefined;
+  }
+
+  return undefined;
+}
+
+function encodeModelOptions(options: ModelOptionRecordType | undefined):
+  | ReadonlyArray<{ id: string; value: string | boolean }>
+  | undefined {
+  if (options === undefined) {
+    return undefined;
+  }
+
+  const entries: Array<{ id: string; value: string | boolean }> = [];
+  for (const [rawKey, rawValue] of Object.entries(options)) {
+    const id = rawKey.trim();
+    if (!id) {
+      continue;
+    }
+    if (typeof rawValue === "boolean") {
+      entries.push({ id, value: rawValue });
+    } else if (typeof rawValue === "string") {
+      const value = rawValue.trim();
+      if (value) {
+        entries.push({ id, value });
+      }
+    }
+  }
+  return entries.length > 0 ? entries : undefined;
+}
+
+const ModelSelectionSource = Schema.Struct({
+  provider: Schema.optional(Schema.Unknown),
+  instanceId: Schema.optional(Schema.Unknown),
+  model: Schema.Unknown,
+  options: Schema.optional(Schema.Unknown),
 });
 
-const LegacyCodexModelOptions = Schema.Array(LegacyModelOptionEntry).pipe(
+const ModelSelectionTarget = Schema.Struct({
+  provider: ProviderKind,
+  model: TrimmedNonEmptyString,
+  options: Schema.optionalKey(ModelOptionRecord),
+});
+
+export const ModelSelection = ModelSelectionSource.pipe(
   Schema.decodeTo(
-    CodexModelOptions,
+    ModelSelectionTarget,
     SchemaTransformation.transformOrFail({
-      decode: (entries) =>
-        Effect.succeed(Object.fromEntries(entries.map(({ id, value }) => [id, value]))),
-      encode: (options) =>
-        Effect.succeed(Object.entries(options).map(([id, value]) => ({ id, value }))),
-    }),
-  ),
-);
-
-const LegacyClaudeModelOptions = Schema.Array(LegacyModelOptionEntry).pipe(
-  Schema.decodeTo(
-    ClaudeModelOptions,
-    SchemaTransformation.transformOrFail({
-      decode: (entries) =>
-        Effect.succeed(Object.fromEntries(entries.map(({ id, value }) => [id, value]))),
-      encode: (options) =>
-        Effect.succeed(Object.entries(options).map(([id, value]) => ({ id, value }))),
-    }),
-  ),
-);
-
-export const CodexModelSelection = Schema.Struct({
-  provider: Schema.Literal("codex"),
-  model: TrimmedNonEmptyString,
-  options: Schema.optionalKey(Schema.Union([CodexModelOptions, LegacyCodexModelOptions])),
-});
-export type CodexModelSelection = typeof CodexModelSelection.Type;
-
-export const ClaudeModelSelection = Schema.Struct({
-  provider: Schema.Literal("claudeAgent"),
-  model: TrimmedNonEmptyString,
-  options: Schema.optionalKey(Schema.Union([ClaudeModelOptions, LegacyClaudeModelOptions])),
-});
-export type ClaudeModelSelection = typeof ClaudeModelSelection.Type;
-
-export const OpenCodeModelSelection = Schema.Struct({
-  provider: Schema.Literal("opencode"),
-  model: TrimmedNonEmptyString,
-  options: Schema.optionalKey(OpenCodeModelOptions),
-});
-export type OpenCodeModelSelection = typeof OpenCodeModelSelection.Type;
-
-const LegacyInstanceModelSelection = Schema.Struct({
-  instanceId: ProviderKind,
-  model: TrimmedNonEmptyString,
-  options: Schema.optionalKey(
-    Schema.Union([
-      CodexModelOptions,
-      ClaudeModelOptions,
-      OpenCodeModelOptions,
-      LegacyCodexModelOptions,
-      LegacyClaudeModelOptions,
-    ]),
-  ),
-}).pipe(
-  Schema.decodeTo(
-    Schema.Union([CodexModelSelection, ClaudeModelSelection, OpenCodeModelSelection]),
-    SchemaTransformation.transformOrFail({
-      decode: ({ instanceId, model, options }) =>
-        Effect.succeed({
-          provider: instanceId,
-          model,
+      decode: (raw) => {
+        const provider =
+          raw.instanceId !== undefined
+            ? raw.instanceId
+            : typeof raw.provider === "string"
+              ? raw.provider
+              : undefined;
+        const options = normalizeModelOptions(raw.options);
+        return Effect.succeed({
+          provider,
+          model: raw.model,
           ...(options === undefined ? {} : { options }),
-        }),
+        } as typeof ModelSelectionTarget.Encoded);
+      },
       encode: ({ provider, model, options }) =>
         Effect.succeed({
           instanceId: provider,
           model,
-          ...(options === undefined ? {} : { options }),
-        }),
+          ...(options === undefined ? {} : { options: encodeModelOptions(options) ?? options }),
+        } as typeof ModelSelectionSource.Encoded),
     }),
   ),
 );
-
-export const ModelSelection = Schema.Union([
-  CodexModelSelection,
-  ClaudeModelSelection,
-  OpenCodeModelSelection,
-  LegacyInstanceModelSelection,
-]);
 export type ModelSelection = typeof ModelSelection.Type;
+
+export const CodexModelSelection = ModelSelection;
+export type CodexModelSelection = typeof CodexModelSelection.Type;
+export const ClaudeModelSelection = ModelSelection;
+export type ClaudeModelSelection = typeof ClaudeModelSelection.Type;
+export const OpenCodeModelSelection = ModelSelection;
+export type OpenCodeModelSelection = typeof OpenCodeModelSelection.Type;
 
 export const RuntimeMode = Schema.Literals([
   "approval-required",
