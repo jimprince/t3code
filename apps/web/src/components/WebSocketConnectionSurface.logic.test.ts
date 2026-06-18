@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import type { WsConnectionStatus } from "../rpc/wsConnectionState";
-import { shouldAutoReconnect, shouldRestartStalledReconnect } from "./WebSocketConnectionSurface";
+import {
+  buildExhaustedToastDescription,
+  buildOfflineToastDescription,
+  buildReconnectToastDescription,
+  shouldAutoReconnect,
+  shouldRestartStalledReconnect,
+} from "./WebSocketConnectionSurface";
 
 function makeStatus(overrides: Partial<WsConnectionStatus> = {}): WsConnectionStatus {
   return {
@@ -110,5 +116,61 @@ describe("WebSocketConnectionSurface.logic", () => {
         "2026-04-03T20:00:01.000Z",
       ),
     ).toBe(false);
+  });
+
+  it("describes websocket close details and retry timing without leaking credentials or query tokens", () => {
+    expect(
+      buildReconnectToastDescription(
+        makeStatus({
+          closeCode: 1012,
+          closeReason: "service restart",
+          connectionLabel: "Remote Mac",
+          hasConnected: true,
+          nextRetryAt: "2026-04-03T20:00:05.000Z",
+          phase: "disconnected",
+          reconnectAttemptCount: 2,
+          reconnectPhase: "waiting",
+          socketUrl: "wss://user:pass@remote.example.test/ws?ticket=secret-token#fragment",
+        }),
+        Date.parse("2026-04-03T20:00:01.000Z"),
+      ),
+    ).toBe(
+      "Close 1012: service restart. Endpoint: wss://remote.example.test/ws. Retrying in 4s. Attempt 2/8.",
+    );
+  });
+
+  it("includes last error details when reconnect retries are exhausted", () => {
+    expect(
+      buildExhaustedToastDescription(
+        makeStatus({
+          connectionLabel: "Remote Mac",
+          hasConnected: true,
+          lastError: "Unable to connect to the T3 server WebSocket.",
+          phase: "disconnected",
+          reconnectAttemptCount: 8,
+          reconnectPhase: "exhausted",
+          socketUrl: "wss://remote.example.test/ws",
+        }),
+      ),
+    ).toBe(
+      "Last error: Unable to connect to the T3 server WebSocket. Endpoint: wss://remote.example.test/ws. Retries exhausted. Use Retry to start a fresh connection.",
+    );
+  });
+
+  it("explains that offline disconnects wait for browser network recovery", () => {
+    expect(
+      buildOfflineToastDescription(
+        makeStatus({
+          closeCode: 1006,
+          connectionLabel: "Remote Mac",
+          disconnectedAt: "2026-04-03T20:00:00.000Z",
+          hasConnected: true,
+          online: false,
+          phase: "disconnected",
+        }),
+      ),
+    ).toBe(
+      "Remote Mac disconnected while this browser is offline. Close code 1006. Reconnect will resume when the network is back.",
+    );
   });
 });

@@ -25,10 +25,26 @@ const mockFetchRemoteSessionState = vi.fn();
 const mockResolveRemoteWebSocketConnectionUrl = vi.fn(async () => "ws://remote.example.test/ws");
 const mockRemoteHttpRunPromise = vi.fn((effect: Promise<unknown>) => effect);
 const mockConnectionReconnects: Array<ReturnType<typeof vi.fn>> = [];
+const mockConnectionLivenessChecks: Array<ReturnType<typeof vi.fn>> = [];
 let savedEnvironmentRegistryListener: (() => void) | null = null;
 
-function MockWsTransport() {
-  return undefined;
+type MockWsTransportInstance = {
+  lifecycleHandlers:
+    | {
+        readonly onHeartbeatTimeout?: () => void;
+      }
+    | undefined;
+};
+
+const mockWsTransportInstances: MockWsTransportInstance[] = [];
+
+function MockWsTransport(
+  this: MockWsTransportInstance,
+  _url?: unknown,
+  lifecycleHandlers?: MockWsTransportInstance["lifecycleHandlers"],
+) {
+  this.lifecycleHandlers = lifecycleHandlers;
+  mockWsTransportInstances.push(this);
 }
 
 vi.mock("../primary", () => ({
@@ -92,6 +108,8 @@ vi.mock("@t3tools/client-runtime", async (importOriginal) => {
       getArchivedShellSnapshot: vi.fn(),
       subscribeShell: vi.fn(() => () => undefined),
       subscribeThread: mockSubscribeThread,
+      exportThread: vi.fn(),
+      importThread: vi.fn(),
     },
     terminal: {
       open: vi.fn(),
@@ -172,6 +190,7 @@ vi.mock("@t3tools/client-runtime", async (importOriginal) => {
       getTraceDiagnostics: vi.fn(),
       getProcessDiagnostics: vi.fn(),
       getProcessResourceHistory: vi.fn(),
+      requestHeadlessUpdateCheck: vi.fn(),
       signalProcess: vi.fn(),
     },
   };
@@ -292,7 +311,9 @@ describe("retainThreadDetailSubscription", () => {
     });
     mockCreateEnvironmentConnection.mockImplementation((input) => {
       const reconnect = vi.fn(async () => undefined);
+      const verifyLiveness = vi.fn(async () => true);
       mockConnectionReconnects.push(reconnect);
+      mockConnectionLivenessChecks.push(verifyLiveness);
       queueMicrotask(() => {
         input.onConfigSnapshot?.({
           environment: {
@@ -310,6 +331,7 @@ describe("retainThreadDetailSubscription", () => {
         knownEnvironment: input.knownEnvironment,
         client: input.client,
         ensureBootstrapped: vi.fn(async () => undefined),
+        verifyLiveness,
         reconnect,
         dispose: vi.fn(async () => undefined),
       };
@@ -336,6 +358,8 @@ describe("retainThreadDetailSubscription", () => {
       scopes: ["orchestration:read"],
     });
     mockConnectionReconnects.length = 0;
+    mockConnectionLivenessChecks.length = 0;
+    mockWsTransportInstances.length = 0;
   });
 
   afterEach(async () => {
@@ -372,6 +396,42 @@ describe("retainThreadDetailSubscription", () => {
     await vi.advanceTimersByTimeAsync(28 * 60 * 1000);
     expect(mockThreadUnsubscribe).toHaveBeenCalledTimes(1);
 
+    stop();
+    await resetEnvironmentServiceForTests();
+  });
+
+  it("refreshes a warm cached thread detail subscription when a started thread never hydrated", async () => {
+    const {
+      retainThreadDetailSubscription,
+      startEnvironmentConnectionService,
+      resetEnvironmentServiceForTests,
+    } = await import("./service");
+
+    const stop = startEnvironmentConnectionService(new QueryClient());
+    const environmentId = EnvironmentId.make("env-1");
+    const threadId = ThreadId.make("thread-missing-detail");
+    const connectionInput = mockCreateEnvironmentConnection.mock.calls[0]?.[0];
+    expect(connectionInput).toBeDefined();
+
+    connectionInput.syncShellSnapshot(
+      makeThreadShellSnapshot({
+        threadId,
+        sessionStatus: "running",
+      }),
+      environmentId,
+    );
+
+    const releaseFirst = retainThreadDetailSubscription(environmentId, threadId);
+    expect(mockSubscribeThread).toHaveBeenCalledTimes(1);
+
+    releaseFirst();
+    expect(mockThreadUnsubscribe).not.toHaveBeenCalled();
+
+    const releaseSecond = retainThreadDetailSubscription(environmentId, threadId);
+    expect(mockThreadUnsubscribe).toHaveBeenCalledTimes(1);
+    expect(mockSubscribeThread).toHaveBeenCalledTimes(2);
+
+    releaseSecond();
     stop();
     await resetEnvironmentServiceForTests();
   });
@@ -529,7 +589,9 @@ describe("retainThreadDetailSubscription", () => {
       await import("./service");
     mockCreateEnvironmentConnection.mockImplementation((input) => {
       const reconnect = vi.fn(async () => undefined);
+      const verifyLiveness = vi.fn(async () => true);
       mockConnectionReconnects.push(reconnect);
+      mockConnectionLivenessChecks.push(verifyLiveness);
       queueMicrotask(() => {
         input.onConfigSnapshot?.({
           environment: {
@@ -545,11 +607,9 @@ describe("retainThreadDetailSubscription", () => {
         kind: input.kind,
         environmentId: input.knownEnvironment.environmentId,
         knownEnvironment: input.knownEnvironment,
-        client: {
-          ...input.client,
-          isHeartbeatFresh: vi.fn(() => true),
-        },
+        client: input.client,
         ensureBootstrapped: vi.fn(async () => undefined),
+        verifyLiveness,
         reconnect,
         dispose: vi.fn(async () => undefined),
       };
@@ -564,6 +624,9 @@ describe("retainThreadDetailSubscription", () => {
 
     visibilityState = "visible";
     documentTarget.dispatchEvent(new Event("visibilitychange"));
+    await vi.waitFor(() => {
+      expect(mockConnectionLivenessChecks[0]).toHaveBeenCalledTimes(1);
+    });
     expect(mockConnectionReconnects[0]).not.toHaveBeenCalled();
 
     stop();
@@ -608,6 +671,7 @@ describe("retainThreadDetailSubscription", () => {
 
     const stop = startEnvironmentConnectionService(new QueryClient());
     expect(mockConnectionReconnects).toHaveLength(1);
+    mockConnectionLivenessChecks[0]?.mockResolvedValue(false);
 
     visibilityState = "hidden";
     documentTarget.dispatchEvent(new Event("visibilitychange"));
@@ -615,6 +679,45 @@ describe("retainThreadDetailSubscription", () => {
 
     visibilityState = "visible";
     documentTarget.dispatchEvent(new Event("visibilitychange"));
+    await vi.waitFor(() => {
+      expect(mockConnectionReconnects[0]).toHaveBeenCalledTimes(1);
+    });
+
+    stop();
+    await resetEnvironmentServiceForTests();
+  });
+
+  it("reconnects stale environment streams on heartbeat timeout while the tab is focused", async () => {
+    let visibilityState: DocumentVisibilityState = "visible";
+    const documentTarget = new EventTarget();
+    const windowTarget = new EventTarget();
+    vi.stubGlobal("document", {
+      addEventListener: documentTarget.addEventListener.bind(documentTarget),
+      hasFocus: vi.fn(() => true),
+      removeEventListener: documentTarget.removeEventListener.bind(documentTarget),
+      get visibilityState() {
+        return visibilityState;
+      },
+    });
+    vi.stubGlobal("window", {
+      addEventListener: windowTarget.addEventListener.bind(windowTarget),
+      removeEventListener: windowTarget.removeEventListener.bind(windowTarget),
+    });
+
+    const { resetEnvironmentServiceForTests, startEnvironmentConnectionService } =
+      await import("./service");
+
+    const stop = startEnvironmentConnectionService(new QueryClient());
+    expect(mockConnectionReconnects).toHaveLength(1);
+    const onHeartbeatTimeout = mockWsTransportInstances[0]?.lifecycleHandlers?.onHeartbeatTimeout;
+    expect(onHeartbeatTimeout).toEqual(expect.any(Function));
+
+    visibilityState = "hidden";
+    onHeartbeatTimeout?.();
+    expect(mockConnectionReconnects[0]).not.toHaveBeenCalled();
+
+    visibilityState = "visible";
+    onHeartbeatTimeout?.();
     expect(mockConnectionReconnects[0]).toHaveBeenCalledTimes(1);
 
     stop();

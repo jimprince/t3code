@@ -4,7 +4,10 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { createEnvironmentConnection } from "./connection";
 import type { WsRpcClient } from "@t3tools/client-runtime";
 
-function createTestClient(config?: { readonly emitInitialSnapshot?: boolean }) {
+function createTestClient(options?: {
+  readonly emitInitialSnapshot?: boolean;
+  readonly emitSnapshotBeforeResubscribe?: boolean;
+}) {
   const lifecycleListeners = new Set<(event: any) => void>();
   const configListeners = new Set<(event: any) => void>();
   const shellListeners = new Set<(event: any) => void>();
@@ -12,7 +15,21 @@ function createTestClient(config?: { readonly emitInitialSnapshot?: boolean }) {
 
   const client = {
     dispose: vi.fn(async () => undefined),
+    isHeartbeatFresh: vi.fn(() => true),
     reconnect: vi.fn(async () => {
+      if (options?.emitSnapshotBeforeResubscribe) {
+        for (const listener of shellListeners) {
+          listener({
+            kind: "snapshot",
+            snapshot: {
+              snapshotSequence: 2,
+              projects: [],
+              threads: [],
+              updatedAt: "2026-04-12T00:00:01.000Z",
+            },
+          });
+        }
+      }
       shellResubscribe?.();
     }),
     server: {
@@ -40,10 +57,10 @@ function createTestClient(config?: { readonly emitInitialSnapshot?: boolean }) {
       getTurnDiff: vi.fn(async () => undefined),
       getFullThreadDiff: vi.fn(async () => undefined),
       subscribeShell: vi.fn(
-        (listener: (event: any) => void, options?: { onResubscribe?: () => void }) => {
+        (listener: (event: any) => void, subscribeOptions?: { onResubscribe?: () => void }) => {
           shellListeners.add(listener);
-          shellResubscribe = options?.onResubscribe;
-          if (config?.emitInitialSnapshot !== false) {
+          shellResubscribe = subscribeOptions?.onResubscribe;
+          if (options?.emitInitialSnapshot !== false) {
             queueMicrotask(() => {
               listener({
                 kind: "snapshot",
@@ -58,7 +75,7 @@ function createTestClient(config?: { readonly emitInitialSnapshot?: boolean }) {
           }
           return () => {
             shellListeners.delete(listener);
-            if (shellResubscribe === options?.onResubscribe) {
+            if (shellResubscribe === subscribeOptions?.onResubscribe) {
               shellResubscribe = undefined;
             }
           };
@@ -169,6 +186,62 @@ describe("createEnvironmentConnection", () => {
     await connection.dispose();
   });
 
+  it("reports liveness when the config probe resolves", async () => {
+    const environmentId = EnvironmentId.make("env-1");
+    const { client } = createTestClient();
+
+    const connection = createEnvironmentConnection({
+      kind: "saved",
+      knownEnvironment: {
+        id: "env-1",
+        label: "Remote env",
+        source: "manual",
+        target: {
+          httpBaseUrl: "http://example.test",
+          wsBaseUrl: "ws://example.test",
+        },
+        environmentId,
+      },
+      client,
+      applyShellEvent: vi.fn(),
+      syncShellSnapshot: vi.fn(),
+    });
+
+    await expect(connection.verifyLiveness()).resolves.toBe(true);
+    expect(client.server.getConfig).toHaveBeenCalled();
+
+    await connection.dispose();
+  });
+
+  it("reports not-alive when the config probe does not answer before the timeout", async () => {
+    const environmentId = EnvironmentId.make("env-1");
+    const { client } = createTestClient();
+    (client.server.getConfig as ReturnType<typeof vi.fn>).mockImplementation(
+      () => new Promise(() => undefined),
+    );
+
+    const connection = createEnvironmentConnection({
+      kind: "saved",
+      knownEnvironment: {
+        id: "env-1",
+        label: "Remote env",
+        source: "manual",
+        target: {
+          httpBaseUrl: "http://example.test",
+          wsBaseUrl: "ws://example.test",
+        },
+        environmentId,
+      },
+      client,
+      applyShellEvent: vi.fn(),
+      syncShellSnapshot: vi.fn(),
+    });
+
+    await expect(connection.verifyLiveness(10)).resolves.toBe(false);
+
+    await connection.dispose();
+  });
+
   it("rejects welcome/config identity drift", async () => {
     const environmentId = EnvironmentId.make("env-1");
     const { client, emitWelcome } = createTestClient();
@@ -230,6 +303,45 @@ describe("createEnvironmentConnection", () => {
 
     expect(client.reconnect).toHaveBeenCalledTimes(1);
     expect(syncShellSnapshot).toHaveBeenCalledTimes(2);
+    expect(syncShellSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshotSequence: 2 }),
+      environmentId,
+    );
+
+    await connection.dispose();
+  });
+
+  it("does not hang when the reconnect snapshot arrives before the stream start hook settles", async () => {
+    const environmentId = EnvironmentId.make("env-1");
+    const { client } = createTestClient({ emitSnapshotBeforeResubscribe: true });
+    const syncShellSnapshot = vi.fn();
+
+    const connection = createEnvironmentConnection({
+      kind: "saved",
+      knownEnvironment: {
+        id: "env-1",
+        label: "Remote env",
+        source: "manual",
+        target: {
+          httpBaseUrl: "http://example.test",
+          wsBaseUrl: "ws://example.test",
+        },
+        environmentId,
+      },
+      client,
+      applyShellEvent: vi.fn(),
+      syncShellSnapshot,
+      applyTerminalEvent: vi.fn(),
+    });
+
+    await connection.ensureBootstrapped();
+
+    const result = await Promise.race([
+      connection.reconnect().then(() => "resolved" as const),
+      new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 20)),
+    ]);
+
+    expect(result).toBe("resolved");
     expect(syncShellSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({ snapshotSequence: 2 }),
       environmentId,

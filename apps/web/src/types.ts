@@ -3,6 +3,7 @@ import type {
   ModelSelection,
   OrchestrationLatestTurn,
   OrchestrationProposedPlanId,
+  OrchestrationThreadGoal,
   RepositoryIdentity,
   OrchestrationSessionStatus,
   OrchestrationThreadActivity,
@@ -111,6 +112,7 @@ export interface Thread {
   archivedAt: string | null;
   updatedAt?: string | undefined;
   latestTurn: OrchestrationLatestTurn | null;
+  goal?: OrchestrationThreadGoal | null | undefined;
   pendingSourceProposedPlan?: OrchestrationLatestTurn["sourceProposedPlan"];
   branch: string | null;
   worktreePath: string | null;
@@ -133,6 +135,7 @@ export interface ThreadShell {
   updatedAt?: string | undefined;
   branch: string | null;
   worktreePath: string | null;
+  goal?: OrchestrationThreadGoal | null | undefined;
 }
 
 export interface ThreadTurnState {
@@ -153,6 +156,7 @@ export interface SidebarThreadSummary {
   latestTurn: OrchestrationLatestTurn | null;
   branch: string | null;
   worktreePath: string | null;
+  goal?: OrchestrationThreadGoal | null | undefined;
   latestUserMessageAt: string | null;
   hasPendingApprovals: boolean;
   hasPendingUserInput: boolean;

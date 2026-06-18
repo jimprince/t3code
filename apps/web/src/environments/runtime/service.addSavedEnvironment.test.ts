@@ -78,6 +78,10 @@ const mockDisconnectSshEnvironment = vi.fn();
 const mockFetchSshEnvironmentDescriptor = vi.fn();
 const mockToPersistedSavedEnvironmentRecord = vi.fn((record) => record);
 const mockCreateEnvironmentConnection = vi.fn();
+const mockWsTransport = vi.fn(function WsTransport(connect: () => Promise<string>) {
+  mockWsTransportConnectors.push(connect);
+  return {};
+});
 const mockClientGetConfig = vi.fn(async () => ({
   environment: {
     environmentId: EnvironmentId.make("environment-1"),
@@ -135,6 +139,7 @@ vi.mock("./catalog", () => ({
   },
   useSavedEnvironmentRuntimeStore: {
     getState: () => ({
+      byId: {},
       ensure: vi.fn(),
       patch: mockPatchRuntime,
       clear: mockClearRuntime,
@@ -179,10 +184,7 @@ vi.mock("@t3tools/client-runtime", async (importOriginal) => {
 });
 
 vi.mock("../../rpc/wsTransport", () => ({
-  WsTransport: vi.fn(function WsTransport(connect: () => Promise<string>) {
-    mockWsTransportConnectors.push(connect);
-    return {};
-  }),
+  WsTransport: mockWsTransport,
 }));
 
 describe("addSavedEnvironment", () => {
