@@ -1193,7 +1193,7 @@ var require_command = __commonJS({
   "node_modules/commander/lib/command.js"(exports2) {
     var EventEmitter = require("node:events").EventEmitter;
     var childProcess = require("node:child_process");
-    var path3 = require("node:path");
+    var path4 = require("node:path");
     var fs = require("node:fs");
     var process2 = require("node:process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
@@ -2206,9 +2206,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
         let launchWithNode = false;
         const sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
         function findFile(baseDir, baseName) {
-          const localBin = path3.resolve(baseDir, baseName);
+          const localBin = path4.resolve(baseDir, baseName);
           if (fs.existsSync(localBin)) return localBin;
-          if (sourceExt.includes(path3.extname(baseName))) return void 0;
+          if (sourceExt.includes(path4.extname(baseName))) return void 0;
           const foundExt = sourceExt.find(
             (ext) => fs.existsSync(`${localBin}${ext}`)
           );
@@ -2226,17 +2226,17 @@ Expecting one of '${allowedValues.join("', '")}'`);
           } catch {
             resolvedScriptPath = this._scriptPath;
           }
-          executableDir = path3.resolve(
-            path3.dirname(resolvedScriptPath),
+          executableDir = path4.resolve(
+            path4.dirname(resolvedScriptPath),
             executableDir
           );
         }
         if (executableDir) {
           let localFile = findFile(executableDir, executableFile);
           if (!localFile && !subcommand._executableFile && this._scriptPath) {
-            const legacyName = path3.basename(
+            const legacyName = path4.basename(
               this._scriptPath,
-              path3.extname(this._scriptPath)
+              path4.extname(this._scriptPath)
             );
             if (legacyName !== this._name) {
               localFile = findFile(
@@ -2247,7 +2247,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
           }
           executableFile = localFile || executableFile;
         }
-        launchWithNode = sourceExt.includes(path3.extname(executableFile));
+        launchWithNode = sourceExt.includes(path4.extname(executableFile));
         let proc;
         if (process2.platform !== "win32") {
           if (launchWithNode) {
@@ -3162,7 +3162,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @return {Command}
        */
       nameFromFilename(filename) {
-        this._name = path3.basename(filename, path3.extname(filename));
+        this._name = path4.basename(filename, path4.extname(filename));
         return this;
       }
       /**
@@ -3176,9 +3176,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [path]
        * @return {(string|null|Command)}
        */
-      executableDir(path4) {
-        if (path4 === void 0) return this._executableDir;
-        this._executableDir = path4;
+      executableDir(path5) {
+        if (path5 === void 0) return this._executableDir;
+        this._executableDir = path5;
         return this;
       }
       /**
@@ -7108,16 +7108,16 @@ var require_filesystem = __commonJS({
     var LDD_PATH = "/usr/bin/ldd";
     var SELF_PATH = "/proc/self/exe";
     var MAX_LENGTH = 2048;
-    var readFileSync = (path3) => {
-      const fd = fs.openSync(path3, "r");
+    var readFileSync = (path4) => {
+      const fd = fs.openSync(path4, "r");
       const buffer3 = Buffer.alloc(MAX_LENGTH);
       const bytesRead = fs.readSync(fd, buffer3, 0, MAX_LENGTH, 0);
       fs.close(fd, () => {
       });
       return buffer3.subarray(0, bytesRead);
     };
-    var readFile2 = (path3) => new Promise((resolve2, reject) => {
-      fs.open(path3, "r", (err, fd) => {
+    var readFile3 = (path4) => new Promise((resolve2, reject) => {
+      fs.open(path4, "r", (err, fd) => {
         if (err) {
           reject(err);
         } else {
@@ -7134,7 +7134,7 @@ var require_filesystem = __commonJS({
       LDD_PATH,
       SELF_PATH,
       readFileSync,
-      readFile: readFile2
+      readFile: readFile3
     };
   }
 });
@@ -7182,7 +7182,7 @@ var require_detect_libc = __commonJS({
     "use strict";
     var childProcess = require("child_process");
     var { isLinux, getReport } = require_process();
-    var { LDD_PATH, SELF_PATH, readFile: readFile2, readFileSync } = require_filesystem();
+    var { LDD_PATH, SELF_PATH, readFile: readFile3, readFileSync } = require_filesystem();
     var { interpreterPath } = require_elf();
     var cachedFamilyInterpreter;
     var cachedFamilyFilesystem;
@@ -7236,11 +7236,11 @@ var require_detect_libc = __commonJS({
       }
       return null;
     };
-    var familyFromInterpreterPath = (path3) => {
-      if (path3) {
-        if (path3.includes("/ld-musl-")) {
+    var familyFromInterpreterPath = (path4) => {
+      if (path4) {
+        if (path4.includes("/ld-musl-")) {
           return MUSL;
-        } else if (path3.includes("/ld-linux-")) {
+        } else if (path4.includes("/ld-linux-")) {
           return GLIBC;
         }
       }
@@ -7262,7 +7262,7 @@ var require_detect_libc = __commonJS({
       }
       cachedFamilyFilesystem = null;
       try {
-        const lddContent = await readFile2(LDD_PATH);
+        const lddContent = await readFile3(LDD_PATH);
         cachedFamilyFilesystem = getFamilyFromLddContent(lddContent);
       } catch (e) {
       }
@@ -7286,9 +7286,9 @@ var require_detect_libc = __commonJS({
       }
       cachedFamilyInterpreter = null;
       try {
-        const selfContent = await readFile2(SELF_PATH);
-        const path3 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
+        const selfContent = await readFile3(SELF_PATH);
+        const path4 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7300,8 +7300,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = readFileSync(SELF_PATH);
-        const path3 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path3);
+        const path4 = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7348,7 +7348,7 @@ var require_detect_libc = __commonJS({
       }
       cachedVersionFilesystem = null;
       try {
-        const lddContent = await readFile2(LDD_PATH);
+        const lddContent = await readFile3(LDD_PATH);
         const versionMatch = lddContent.match(RE_GLIBC_VERSION);
         if (versionMatch) {
           cachedVersionFilesystem = versionMatch[1];
@@ -7435,7 +7435,7 @@ var require_detect_libc = __commonJS({
 var require_node_gyp_build = __commonJS({
   "node_modules/node-gyp-build-optional-packages/node-gyp-build.js"(exports2, module2) {
     var fs = require("fs");
-    var path3 = require("path");
+    var path4 = require("path");
     var url = require("url");
     var os2 = require("os");
     var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
@@ -7457,30 +7457,30 @@ var require_node_gyp_build = __commonJS({
       return runtimeRequire(load.resolve(dir));
     }
     load.resolve = load.path = function(dir) {
-      dir = path3.resolve(dir || ".");
+      dir = path4.resolve(dir || ".");
       var packageName = "";
       var packageNameError;
       try {
-        packageName = runtimeRequire(path3.join(dir, "package.json")).name;
+        packageName = runtimeRequire(path4.join(dir, "package.json")).name;
         var varName = packageName.toUpperCase().replace(/-/g, "_");
         if (process.env[varName + "_PREBUILD"]) dir = process.env[varName + "_PREBUILD"];
       } catch (err) {
         packageNameError = err;
       }
       if (!prebuildsOnly) {
-        var release2 = getFirst(path3.join(dir, "build/Release"), matchBuild);
+        var release2 = getFirst(path4.join(dir, "build/Release"), matchBuild);
         if (release2) return release2;
-        var debug = getFirst(path3.join(dir, "build/Debug"), matchBuild);
+        var debug = getFirst(path4.join(dir, "build/Debug"), matchBuild);
         if (debug) return debug;
       }
       var prebuild = resolve2(dir);
       if (prebuild) return prebuild;
-      var nearby = resolve2(path3.dirname(process.execPath));
+      var nearby = resolve2(path4.dirname(process.execPath));
       if (nearby) return nearby;
       var platformPackage = (packageName[0] == "@" ? "" : "@" + packageName + "/") + packageName + "-" + platform + "-" + arch;
       var packageResolutionError;
       try {
-        var prebuildPackage = path3.dirname(require("module").createRequire(url.pathToFileURL(path3.join(dir, "package.json"))).resolve(platformPackage));
+        var prebuildPackage = path4.dirname(require("module").createRequire(url.pathToFileURL(path4.join(dir, "package.json"))).resolve(platformPackage));
         return resolveFile(prebuildPackage);
       } catch (error) {
         packageResolutionError = error;
@@ -7507,16 +7507,16 @@ var require_node_gyp_build = __commonJS({
       }
       throw new Error(errMessage);
       function resolve2(dir2) {
-        var tuples = readdirSync(path3.join(dir2, "prebuilds")).map(parseTuple);
+        var tuples = readdirSync(path4.join(dir2, "prebuilds")).map(parseTuple);
         var tuple3 = tuples.filter(matchTuple(platform, arch)).sort(compareTuples)[0];
         if (!tuple3) return;
-        return resolveFile(path3.join(dir2, "prebuilds", tuple3.name));
+        return resolveFile(path4.join(dir2, "prebuilds", tuple3.name));
       }
       function resolveFile(prebuilds) {
         var parsed = readdirSync(prebuilds).map(parseTags);
         var candidates = parsed.filter(matchTags(runtime2, abi));
         var winner = candidates.sort(compareTags(runtime2))[0];
-        if (winner) return path3.join(prebuilds, winner.file);
+        if (winner) return path4.join(prebuilds, winner.file);
       }
     };
     function readdirSync(dir) {
@@ -7528,7 +7528,7 @@ var require_node_gyp_build = __commonJS({
     }
     function getFirst(dir, filter12) {
       var files = readdirSync(dir).filter(filter12);
-      return files[0] && path3.join(dir, files[0]);
+      return files[0] && path4.join(dir, files[0]);
     }
     function matchBuild(name) {
       return /\.node$/.test(name);
@@ -7664,6 +7664,300 @@ var {
   Help
 } = import_index.default;
 
+// src/state.ts
+var import_promises = require("node:fs/promises");
+var import_node_os = __toESM(require("node:os"), 1);
+var import_node_path = __toESM(require("node:path"), 1);
+var import_node_crypto = require("node:crypto");
+var DEFAULT_STATE_DIR = import_node_path.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
+var DEFAULT_STATE_FILE = import_node_path.default.join(DEFAULT_STATE_DIR, "state.json");
+var STATE_LOCK_TIMEOUT_MS = 1e4;
+var STATE_LOCK_RETRY_MS = 50;
+var EMPTY_STATE = {
+  version: 1,
+  environments: [],
+  agents: [],
+  subscriptions: [],
+  notifications: []
+};
+function resolveStateFile() {
+  return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
+}
+async function ensureStateDir(stateFile) {
+  await (0, import_promises.mkdir)(import_node_path.default.dirname(stateFile), { recursive: true });
+}
+function normalizeState(parsed) {
+  return {
+    version: 1,
+    environments: Array.isArray(parsed.environments) ? parsed.environments : [],
+    agents: Array.isArray(parsed.agents) ? parsed.agents : [],
+    subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
+    notifications: Array.isArray(parsed.notifications) ? parsed.notifications : []
+  };
+}
+async function loadStateFromFile(stateFile) {
+  try {
+    const raw2 = await (0, import_promises.readFile)(stateFile, "utf8");
+    const parsed = JSON.parse(raw2);
+    return normalizeState(parsed);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ENOENT")) {
+      return structuredClone(EMPTY_STATE);
+    }
+    throw error;
+  }
+}
+async function loadState() {
+  return loadStateFromFile(resolveStateFile());
+}
+async function saveStateToFile(stateFile, state) {
+  await ensureStateDir(stateFile);
+  const tempFile = import_node_path.default.join(import_node_path.default.dirname(stateFile), `.${import_node_path.default.basename(stateFile)}.${(0, import_node_crypto.randomUUID)()}.tmp`);
+  await (0, import_promises.writeFile)(tempFile, `${JSON.stringify(state, null, 2)}
+`, "utf8");
+  await (0, import_promises.rename)(tempFile, stateFile);
+}
+async function sleep(ms) {
+  await new Promise((resolve2) => setTimeout(resolve2, ms));
+}
+async function withStateLock(stateFile, task) {
+  await ensureStateDir(stateFile);
+  const lockFile = `${stateFile}.lock`;
+  const startedAt = Date.now();
+  for (; ; ) {
+    try {
+      const handle = await (0, import_promises.open)(lockFile, "wx");
+      try {
+        await handle.writeFile(`${process.pid}
+`, "utf8");
+        return await task();
+      } finally {
+        await handle.close();
+        await (0, import_promises.unlink)(lockFile).catch(() => {
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("EEXIST")) {
+        throw error;
+      }
+      if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
+        throw new Error(`Timed out waiting for state lock '${lockFile}'.`);
+      }
+      await sleep(STATE_LOCK_RETRY_MS);
+    }
+  }
+}
+async function updateState(mutator) {
+  const stateFile = resolveStateFile();
+  return withStateLock(stateFile, async () => {
+    const current = await loadStateFromFile(stateFile);
+    const { state, result: result4 } = await mutator(current);
+    await saveStateToFile(stateFile, state);
+    return result4;
+  });
+}
+function upsertEnvironment(environments, next) {
+  const remaining = environments.filter((env) => env.name !== next.name);
+  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
+}
+function upsertAgent(agents, next) {
+  const remaining = agents.filter((agent2) => agent2.name !== next.name);
+  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
+}
+function removeAgent(agents, name) {
+  return agents.filter((agent2) => agent2.name !== name).sort((a, b) => a.name.localeCompare(b.name));
+}
+function upsertSubscription(subscriptions, next) {
+  const remaining = subscriptions.filter(
+    (subscription) => !(subscription.subscriberThreadId === next.subscriberThreadId && subscription.sourceThreadId === next.sourceThreadId)
+  );
+  return [...remaining, next].sort(
+    (a, b) => `${a.subscriberAgentName ?? a.subscriberThreadId}:${a.sourceAgentName ?? a.sourceThreadId}`.localeCompare(
+      `${b.subscriberAgentName ?? b.subscriberThreadId}:${b.sourceAgentName ?? b.sourceThreadId}`
+    )
+  );
+}
+function removeSubscription(subscriptions, input) {
+  return subscriptions.filter(
+    (subscription) => !(subscription.subscriberThreadId === input.subscriberThreadId && subscription.sourceThreadId === input.sourceThreadId)
+  );
+}
+function upsertNotification(notifications, next) {
+  const remaining = notifications.filter((notification) => notification.eventKey !== next.eventKey);
+  return [...remaining, next].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+function findAgentByThreadId(state, threadId) {
+  return state.agents.find((agent2) => agent2.threadId === threadId) ?? null;
+}
+function resolveCallerThreadId(env = process.env) {
+  const value3 = env.T3_THREAD_ID?.trim();
+  return value3 ? value3 : null;
+}
+function resolveCallerEnvironmentMetadata(env = process.env) {
+  const environmentName = env.T3_ENVIRONMENT_NAME?.trim();
+  const environmentId = env.T3_ENVIRONMENT_ID?.trim();
+  if (!environmentName || !environmentId) {
+    return null;
+  }
+  return {
+    environmentName,
+    environmentId
+  };
+}
+function resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment = null) {
+  const savedAgent = findAgentByThreadId(state, threadId);
+  if (savedAgent) {
+    return {
+      threadId: savedAgent.threadId,
+      name: savedAgent.name,
+      environment: savedAgent.environment
+    };
+  }
+  if (!callerEnvironment) {
+    return null;
+  }
+  const savedEnvironment = state.environments.find(
+    (environment) => environment.environmentId === callerEnvironment.environmentId || environment.name === callerEnvironment.environmentName || environment.label === callerEnvironment.environmentName
+  );
+  return {
+    threadId,
+    name: null,
+    environment: savedEnvironment?.name ?? callerEnvironment.environmentName
+  };
+}
+function resolveNotifyPreference(notify, env = process.env) {
+  if (notify === false) {
+    return { kind: "none" };
+  }
+  if (typeof notify === "string") {
+    const value3 = notify.trim();
+    if (!value3) {
+      throw new Error("`--notify` subscriber value cannot be empty.");
+    }
+    return {
+      kind: "explicit",
+      subscriber: value3
+    };
+  }
+  const callerThreadId = resolveCallerThreadId(env);
+  if (callerThreadId) {
+    return { kind: "caller" };
+  }
+  if (notify === true) {
+    throw new Error(
+      "T3_THREAD_ID is not set. Bare `agent create --notify` must run inside a T3 thread or specify `--notify <subscriber>`."
+    );
+  }
+  return { kind: "none" };
+}
+function requireEnvironment(state, name) {
+  const found = state.environments.find((env) => env.name === name);
+  if (!found) {
+    throw new Error(`Unknown environment '${name}'.`);
+  }
+  return found;
+}
+function requireAgent(state, name) {
+  const found = state.agents.find((agent2) => agent2.name === name);
+  if (!found) {
+    throw new Error(`Unknown agent '${name}'.`);
+  }
+  return found;
+}
+function buildSubscriptionRecord(caller, source, now2, existing) {
+  return {
+    subscriberThreadId: caller.threadId,
+    subscriberAgentName: caller.name,
+    subscriberEnvironment: caller.environment,
+    sourceThreadId: source.threadId,
+    sourceAgentName: source.name,
+    sourceEnvironment: source.environment,
+    createdAt: existing?.createdAt ?? now2,
+    updatedAt: now2
+  };
+}
+function assertNotSelfSubscription(caller, source) {
+  if (caller.threadId === source.threadId) {
+    throw new Error(`Subscriber '${caller.name ?? caller.threadId}' cannot subscribe to itself.`);
+  }
+}
+
+// src/agent-targets.ts
+var THREAD_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function orderedEnvironmentNames(state, preferredEnvironment) {
+  return [
+    ...preferredEnvironment ? [preferredEnvironment] : [],
+    ...state.environments.map((environment) => environment.name)
+  ].filter((value3, index2, list) => list.indexOf(value3) === index2);
+}
+function isRawThreadUuid(value3) {
+  return THREAD_UUID_PATTERN.test(value3.trim());
+}
+function resolveSavedAgentTarget(state, input) {
+  const savedByName = state.agents.find((agent2) => agent2.name === input);
+  if (savedByName) {
+    return {
+      input,
+      environment: savedByName.environment,
+      threadId: savedByName.threadId,
+      projectId: savedByName.projectId,
+      title: savedByName.title,
+      savedAgent: savedByName
+    };
+  }
+  const savedByThreadId = findAgentByThreadId(state, input);
+  if (!savedByThreadId) {
+    return null;
+  }
+  return {
+    input,
+    environment: savedByThreadId.environment,
+    threadId: savedByThreadId.threadId,
+    projectId: savedByThreadId.projectId,
+    title: savedByThreadId.title,
+    savedAgent: savedByThreadId
+  };
+}
+async function resolveAgentTarget(state, input, options) {
+  const local = resolveSavedAgentTarget(state, input);
+  if (local) {
+    return {
+      ...local,
+      checkedEnvironments: [local.environment]
+    };
+  }
+  if (!isRawThreadUuid(input)) {
+    throw new Error(`Unknown agent '${input}'.`);
+  }
+  const checkedEnvironments = [];
+  for (const environmentName of orderedEnvironmentNames(state, options.preferredEnvironment)) {
+    checkedEnvironments.push(environmentName);
+    requireEnvironment(state, environmentName);
+    const client = options.clientFactory(environmentName);
+    const thread = (await client.listThreads()).find((candidate) => candidate.id === input);
+    if (thread) {
+      return {
+        input,
+        environment: environmentName,
+        threadId: thread.id,
+        projectId: thread.projectId,
+        title: thread.title,
+        savedAgent: null,
+        checkedEnvironments
+      };
+    }
+  }
+  const checked = checkedEnvironments.length > 0 ? checkedEnvironments.join(", ") : "(none)";
+  throw new Error(`Unknown thread '${input}'. Checked paired environments: ${checked}.`);
+}
+function assertSavedAgentCapability(target2, capability) {
+  if (!target2.savedAgent) {
+    throw new Error(`${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`);
+  }
+}
+
 // src/agentPrompts.ts
 function buildFollowUpMessage(kind, message) {
   const trimmed = message?.trim() ?? "";
@@ -7677,10 +7971,10 @@ function buildFollowUpMessage(kind, message) {
 }
 
 // src/client.ts
-var import_node_crypto = require("node:crypto");
+var import_node_crypto2 = require("node:crypto");
 
 // src/projects.ts
-var import_node_path = __toESM(require("node:path"), 1);
+var import_node_path2 = __toESM(require("node:path"), 1);
 
 // node_modules/effect/dist/Pipeable.js
 var pipeArguments = (self, args2) => {
@@ -8425,8 +8719,8 @@ var CIRCULAR = "[Circular]";
 function formatPropertyKey(name) {
   return typeof name === "string" ? JSON.stringify(name) : String(name);
 }
-function formatPath(path3) {
-  return path3.map((key) => `[${formatPropertyKey(key)}]`).join("");
+function formatPath(path4) {
+  return path4.map((key) => `[${formatPropertyKey(key)}]`).join("");
 }
 function formatDate(date2) {
   try {
@@ -11630,13 +11924,13 @@ var isSuccess3 = /* @__PURE__ */ matchEager({
   onFailure: () => false,
   onSuccess: () => true
 });
-var delay = /* @__PURE__ */ dual(2, (self, duration) => andThen2(sleep(duration), self));
-var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => raceFirst(self, flatMap3(sleep(options.duration), options.orElse)));
+var delay = /* @__PURE__ */ dual(2, (self, duration) => andThen2(sleep2(duration), self));
+var timeoutOrElse = /* @__PURE__ */ dual(2, (self, options) => raceFirst(self, flatMap3(sleep2(options.duration), options.orElse)));
 var timeout = /* @__PURE__ */ dual(2, (self, duration) => timeoutOrElse(self, {
   duration,
   orElse: () => fail3(new TimeoutError())
 }));
-var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as2(sleep(duration), none2())));
+var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as2(sleep2(duration), none2())));
 var timed = (self) => clockWith((clock) => {
   const start = clock.currentTimeNanosUnsafe();
   return map5(self, (a) => [nanos(clock.currentTimeNanosUnsafe() - start), a]);
@@ -12501,7 +12795,7 @@ var processOrPerformanceNow = /* @__PURE__ */ (function() {
   return () => origin + processHrtime.bigint();
 })();
 var clockWith = (f) => withFiber((fiber3) => f(fiber3.getRef(ClockRef)));
-var sleep = (duration) => clockWith((clock) => clock.sleep(fromInputUnsafe(duration)));
+var sleep2 = (duration) => clockWith((clock) => clock.sleep(fromInputUnsafe(duration)));
 var currentTimeMillis = /* @__PURE__ */ clockWith((clock) => clock.currentTimeMillis);
 var TimeoutErrorTypeId = "~effect/Cause/TimeoutError";
 var TimeoutError = class extends (/* @__PURE__ */ TaggedError("TimeoutError")) {
@@ -12954,7 +13248,7 @@ __export(Effect_exports, {
   scopedWith: () => scopedWith2,
   service: () => service2,
   serviceOption: () => serviceOption2,
-  sleep: () => sleep2,
+  sleep: () => sleep3,
   spanAnnotations: () => spanAnnotations2,
   spanLinks: () => spanLinks2,
   succeed: () => succeed6,
@@ -13946,7 +14240,7 @@ var toStepWithMetadata = (schedule4) => clockWith((clock) => map5(toStep(schedul
       const meta = metaFn(now2, input);
       meta.output = output;
       meta.duration = duration;
-      return as2(sleep(duration), meta);
+      return as2(sleep2(duration), meta);
     });
   });
 }));
@@ -14443,7 +14737,7 @@ var timeout2 = timeout;
 var timeoutOption2 = timeoutOption;
 var timeoutOrElse2 = timeoutOrElse;
 var delay2 = delay;
-var sleep2 = sleep;
+var sleep3 = sleep2;
 var timed2 = timed;
 var raceAll2 = raceAll;
 var raceAllFirst2 = raceAllFirst;
@@ -15055,9 +15349,9 @@ var Pointer = class extends Base {
    * The issue that occurred.
    */
   issue;
-  constructor(path3, issue) {
+  constructor(path4, issue) {
     super();
-    this.path = path3;
+    this.path = path4;
     this.issue = issue;
   }
 };
@@ -15265,50 +15559,50 @@ function makeFormatterStandardSchemaV1(options) {
 function getExpectedMessage(expected, actual) {
   return `Expected ${expected}, got ${actual}`;
 }
-function toDefaultIssues(issue, path3, leafHook, checkHook) {
+function toDefaultIssues(issue, path4, leafHook, checkHook) {
   switch (issue._tag) {
     case "Filter": {
       const message = checkHook(issue);
       if (message !== void 0) {
         return [{
-          path: path3,
+          path: path4,
           message
         }];
       }
       switch (issue.issue._tag) {
         case "InvalidValue":
           return [{
-            path: path3,
+            path: path4,
             message: getExpectedMessage(formatCheck(issue.filter), format(issue.actual))
           }];
         default:
-          return toDefaultIssues(issue.issue, path3, leafHook, checkHook);
+          return toDefaultIssues(issue.issue, path4, leafHook, checkHook);
       }
     }
     case "Encoding":
-      return toDefaultIssues(issue.issue, path3, leafHook, checkHook);
+      return toDefaultIssues(issue.issue, path4, leafHook, checkHook);
     case "Pointer":
-      return toDefaultIssues(issue.issue, [...path3, ...issue.path], leafHook, checkHook);
+      return toDefaultIssues(issue.issue, [...path4, ...issue.path], leafHook, checkHook);
     case "Composite":
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path3, leafHook, checkHook));
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path4, leafHook, checkHook));
     case "AnyOf": {
       const message = findMessage(issue);
       if (issue.issues.length === 0) {
         if (message !== void 0) return [{
-          path: path3,
+          path: path4,
           message
         }];
         const expected = getExpectedMessage(getExpected(issue.ast), format(issue.actual));
         return [{
-          path: path3,
+          path: path4,
           message: expected
         }];
       }
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path3, leafHook, checkHook));
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path4, leafHook, checkHook));
     }
     default:
       return [{
-        path: path3,
+        path: path4,
         message: leafHook(issue)
       }];
   }
@@ -15330,9 +15624,9 @@ var defaultFormatter = /* @__PURE__ */ makeFormatterDefault();
 function formatDefaultIssue(issue) {
   let out = issue.message;
   if (issue.path && issue.path.length > 0) {
-    const path3 = formatPath(issue.path);
+    const path4 = formatPath(issue.path);
     out += `
-  at ${path3}`;
+  at ${path4}`;
   }
   return out;
 }
@@ -21327,10 +21621,10 @@ function makeReducer3(combiner2) {
 }
 
 // node_modules/effect/dist/internal/errors.js
-function errorWithPath(message, path3) {
-  if (path3.length > 0) {
+function errorWithPath(message, path4) {
+  if (path4.length > 0) {
     message += `
-  at ${formatPath(path3)}`;
+  at ${formatPath(path4)}`;
   }
   return new Error(message);
 }
@@ -21432,10 +21726,10 @@ function getFilters(checks) {
 var memoized = /* @__PURE__ */ memoize((ast) => {
   return recur(ast, []);
 });
-function recur(ast, path3) {
+function recur(ast, path4) {
   const annotation = resolve(ast)?.toArbitrary;
   if (annotation) {
-    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path3)) : [];
+    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path4)) : [];
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
     return (fc, ctx) => applyChecks(ast, filters, annotation(typeParameters.map((tp) => tp(fc, resetContext(ctx))))(fc, f(ctx)));
@@ -21443,16 +21737,16 @@ function recur(ast, path3) {
   if (ast.checks) {
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
-    const lawc = recur(replaceChecks(ast, void 0), path3);
+    const lawc = recur(replaceChecks(ast, void 0), path4);
     return (fc, ctx) => applyChecks(ast, filters, lawc(fc, f(ctx)));
   }
-  return base(ast, path3);
+  return base(ast, path4);
 }
-function base(ast, path3) {
+function base(ast, path4) {
   switch (ast._tag) {
     case "Never":
     case "Declaration":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path3);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path4);
     case "Null":
       return (fc) => fc.constant(null);
     case "Void":
@@ -21491,14 +21785,14 @@ function base(ast, path3) {
     case "ObjectKeyword":
       return (fc) => fc.oneof(fc.object(), fc.array(fc.anything()));
     case "Enum":
-      return recur(enumsToLiterals(ast), path3);
+      return recur(enumsToLiterals(ast), path4);
     case "TemplateLiteral":
       return (fc) => fc.stringMatching(getTemplateLiteralRegExp(ast));
     case "Arrays":
       return (fc, ctx) => {
         const reset = resetContext(ctx);
         const elements = ast.elements.map((e, i) => {
-          const out2 = recur(e, [...path3, i])(fc, reset);
+          const out2 = recur(e, [...path4, i])(fc, reset);
           if (!isOptional(e)) {
             return out2.map(some2);
           }
@@ -21507,7 +21801,7 @@ function base(ast, path3) {
         let out = fc.tuple(...elements).map(getSomes);
         if (isReadonlyArrayNonEmpty(ast.rest)) {
           const len = ast.elements.length;
-          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path3, len + i])(fc, reset));
+          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path4, len + i])(fc, reset));
           const rest = array2(fc, ast.elements.length === 0 ? ctx : reset, head2);
           out = out.chain((as4) => {
             if (as4.length < len) {
@@ -21537,13 +21831,13 @@ function base(ast, path3) {
           if (!isOptional(ps.type)) {
             requiredKeys.push(name);
           }
-          pss[name] = recur(ps.type, [...path3, name])(fc, reset);
+          pss[name] = recur(ps.type, [...path4, name])(fc, reset);
         }
         let out = fc.record(pss, {
           requiredKeys
         });
         for (const is3 of ast.indexSignatures) {
-          const entry = fc.tuple(recur(is3.parameter, path3)(fc, reset), recur(is3.type, path3)(fc, reset));
+          const entry = fc.tuple(recur(is3.parameter, path4)(fc, reset), recur(is3.type, path4)(fc, reset));
           const entries3 = array2(fc, ast.propertySignatures.length === 0 ? ctx : reset, entry);
           out = out.chain((o) => {
             return entries3.map((entries4) => {
@@ -21557,11 +21851,11 @@ function base(ast, path3) {
         return out;
       };
     case "Union":
-      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path3)(fc, ctx)));
+      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path4)(fc, ctx)));
     case "Suspend": {
       const memo2 = arbitraryMemoMap.get(ast);
       if (memo2) return memo2;
-      const get11 = memoizeThunk(() => recur(ast.thunk(), path3));
+      const get11 = memoizeThunk(() => recur(ast.thunk(), path4));
       const out = (fc, ctx) => fc.constant(null).chain(() => get11()(fc, {
         ...ctx,
         isSuspend: true
@@ -21803,14 +22097,14 @@ var recur2 = /* @__PURE__ */ memoize((ast) => {
 var toEquivalence = /* @__PURE__ */ memoize((ast) => {
   return recur3(ast, []);
 });
-function recur3(ast, path3) {
+function recur3(ast, path4) {
   const annotation = resolve(ast)?.["toEquivalence"];
   if (annotation) {
-    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path3)) : []);
+    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path4)) : []);
   }
   switch (ast._tag) {
     case "Never":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path3);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path4);
     case "Declaration":
     case "Null":
     case "Undefined":
@@ -21829,9 +22123,9 @@ function recur3(ast, path3) {
     case "TemplateLiteral":
       return equals;
     case "Arrays": {
-      const elements = ast.elements.map((e, i) => recur3(e, [...path3, i]));
+      const elements = ast.elements.map((e, i) => recur3(e, [...path4, i]));
       const len = ast.elements.length;
-      const rest = ast.rest.map((r, i) => recur3(r, [...path3, len + i]));
+      const rest = ast.rest.map((r, i) => recur3(r, [...path4, len + i]));
       return make2((a, b) => {
         if (!Array.isArray(a) || !Array.isArray(b)) {
           return false;
@@ -21867,8 +22161,8 @@ function recur3(ast, path3) {
       if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
         return equals;
       }
-      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path3, ps.name]));
-      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path3));
+      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path4, ps.name]));
+      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path4));
       return make2((a, b) => {
         if (!isObject(a) || !isObject(b)) {
           return false;
@@ -21909,13 +22203,13 @@ function recur3(ast, path3) {
         for (let i = 0; i < candidates.length; i++) {
           const is3 = types[i];
           if (is3(a) && is3(b)) {
-            return recur3(candidates[i], path3)(a, b);
+            return recur3(candidates[i], path4)(a, b);
           }
         }
         return false;
       });
     case "Suspend": {
-      const get11 = memoizeThunk(() => recur3(ast.thunk(), path3));
+      const get11 = memoizeThunk(() => recur3(ast.thunk(), path4));
       return make2((a, b) => get11()(a, b));
     }
   }
@@ -22914,10 +23208,10 @@ function get6(oldValue, newValue) {
     const len2 = newValue.length;
     const shared = Math.min(len1, len2);
     for (let i = 0; i < shared; i++) {
-      const path3 = `/${i}`;
+      const path4 = `/${i}`;
       const patch = get6(oldValue[i], newValue[i]);
       for (const op of patch) {
-        prefixPathInPlace(op, path3);
+        prefixPathInPlace(op, path4);
         patches.push(op);
       }
     }
@@ -22942,25 +23236,25 @@ function get6(oldValue, newValue) {
     const allKeys = Array.from(/* @__PURE__ */ new Set([...keys1, ...keys22])).sort();
     for (const key of allKeys) {
       const esc = escapeToken(key);
-      const path3 = `/${esc}`;
+      const path4 = `/${esc}`;
       const hasKey1 = Object.hasOwn(oldValue, key);
       const hasKey2 = Object.hasOwn(newValue, key);
       if (hasKey1 && hasKey2) {
         const patch = get6(oldValue[key], newValue[key]);
         for (const op of patch) {
-          prefixPathInPlace(op, path3);
+          prefixPathInPlace(op, path4);
           patches.push(op);
         }
       } else if (!hasKey1 && hasKey2) {
         patches.push({
           op: "add",
-          path: path3,
+          path: path4,
           value: newValue[key]
         });
       } else if (hasKey1 && !hasKey2) {
         patches.push({
           op: "remove",
-          path: path3
+          path: path4
         });
       }
     }
@@ -23306,8 +23600,8 @@ var OptionalNode = class {
 var PathNode = class {
   _tag = "PathNode";
   path;
-  constructor(path3) {
-    this.path = path3;
+  constructor(path4) {
+    this.path = path4;
   }
 };
 var CheckNode = class {
@@ -23553,24 +23847,24 @@ var recur4 = /* @__PURE__ */ memoize((node) => {
       return {
         _tag: "LensNode",
         get: (s) => {
-          const path3 = node.path;
+          const path4 = node.path;
           let out = s;
-          for (let i = 0, n = path3.length; i < n; i++) {
-            out = out[path3[i]];
+          for (let i = 0, n = path4.length; i < n; i++) {
+            out = out[path4[i]];
           }
           return out;
         },
         set: (a, s) => {
-          const path3 = node.path;
+          const path4 = node.path;
           const out = cloneShallow(s);
           let current = out;
           let i = 0;
-          for (; i < path3.length - 1; i++) {
-            const key = path3[i];
+          for (; i < path4.length - 1; i++) {
+            const key = path4[i];
             current[key] = cloneShallow(current[key]);
             current = current[key];
           }
-          const finalKey = path3[i];
+          const finalKey = path4[i];
           current[finalKey] = a;
           return out;
         }
@@ -25843,10 +26137,10 @@ var RunExecution = class RunExecution2 {
     }
     return failures;
   }
-  static mergePaths(offsetPath, path3) {
-    if (offsetPath.length === 0) return path3;
+  static mergePaths(offsetPath, path4) {
+    if (offsetPath.length === 0) return path4;
     const offsetItems = offsetPath.split(":");
-    const remainingItems = path3.split(":");
+    const remainingItems = path4.split(":");
     const middle = +offsetItems[offsetItems.length - 1] + +remainingItems[0];
     return [
       ...offsetItems.slice(0, offsetItems.length - 1),
@@ -26033,15 +26327,15 @@ function* lazyToss(generator, seed, random2, examples) {
 function produce(producer) {
   return producer();
 }
-function pathWalk(path3, initialProducers, shrink) {
+function pathWalk(path4, initialProducers, shrink) {
   const producers = initialProducers;
-  const segments = path3.split(":").map((text2) => +text2);
+  const segments = path4.split(":").map((text2) => +text2);
   if (segments.length === 0) return producers.map(produce);
-  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path3}`);
+  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path4}`);
   let values2 = producers.drop(segments[0]).map(produce);
   for (const s of segments.slice(1)) {
     const valueToShrink = values2.getNthOrLast(0);
-    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path3}`);
+    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path4}`);
     values2 = shrink(valueToShrink).drop(s);
   }
   return values2;
@@ -31222,8 +31516,8 @@ function webQueryParameters(constraints = {}) {
   return buildUriQueryOrFragmentArbitrary(constraints.size);
 }
 function partsToUrlMapper(data) {
-  const [scheme, authority, path3] = data;
-  return `${scheme}://${authority}${path3}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
+  const [scheme, authority, path4] = data;
+  return `${scheme}://${authority}${path4}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
 }
 var UrlSplitRegex = /^([[A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?(#[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?$/;
 function partsToUrlUnmapper(value3) {
@@ -31232,13 +31526,13 @@ function partsToUrlUnmapper(value3) {
   if (m === null) throw new Error("Incompatible value received");
   const scheme = m[1];
   const authority = m[2];
-  const path3 = m[3];
+  const path4 = m[3];
   const query = m[4];
   const fragments = m[5];
   return [
     scheme,
     authority,
-    path3,
+    path4,
     query !== void 0 ? query.substring(1) : null,
     fragments !== void 0 ? fragments.substring(1) : null
   ];
@@ -36766,7 +37060,7 @@ var get8 = /* @__PURE__ */ fnUntraced2(function* (self_) {
     } else if (!isFinite3) {
       return void_4;
     }
-    state.fiber = sleep2(self.idleTimeToLive).pipe(flatMap5(() => {
+    state.fiber = sleep3(self.idleTimeToLive).pipe(flatMap5(() => {
       if (self.state._tag === "Acquired" && self.state.refCount === 0) {
         self.state = stateEmpty;
         return close(state.scope, void_3);
@@ -37005,7 +37299,7 @@ var timeoutOrElse3 = /* @__PURE__ */ dual(2, (self, options) => {
       while (true) {
         yield* latch.await;
         if (deadline === void 0) continue;
-        yield* sleep2(deadline - clock.currentTimeMillisUnsafe());
+        yield* sleep3(deadline - clock.currentTimeMillisUnsafe());
         if (deadline === void 0) continue;
         const remaining = deadline - clock.currentTimeMillisUnsafe();
         if (remaining > 0) continue;
@@ -37668,7 +37962,7 @@ var debounce = /* @__PURE__ */ dual(2, (self, duration) => transformPull2(self, 
   const sleepLoop = suspend3(function loop() {
     const now2 = clock.currentTimeMillisUnsafe();
     const timeMs = emitAtMs < now2 ? durationMs : Math.min(durationMs, emitAtMs - now2);
-    return flatMap5(raceFirst2(sleep2(timeMs), endLatch.await), () => {
+    return flatMap5(raceFirst2(sleep3(timeMs), endLatch.await), () => {
       const now3 = clock.currentTimeMillisUnsafe();
       if (now3 < emitAtMs) {
         return loop();
@@ -37745,7 +38039,7 @@ var throttleShapeEffect = (self, cost, units, duration, burst) => transformPull2
     const waitCycles = -remaining / units;
     const delayMs = Math.max(0, waitCycles * durationMs);
     if (delayMs > 0) {
-      return flatMap5(sleep2(delayMs), () => {
+      return flatMap5(sleep3(delayMs), () => {
         tokens = remaining;
         timestampMs = currentMs;
         return succeed6(arr);
@@ -38759,12 +39053,12 @@ function normalizeProjectPath(workspaceRoot) {
     throw new Error("Project path must be absolute; shell-expand '~' before passing it to t3-thread.");
   }
   const isWindowsPath = /^[A-Za-z]:[\\/]/.test(trimmed) || /^\\\\/.test(trimmed);
-  if (!import_node_path.default.posix.isAbsolute(trimmed) && !isWindowsPath) {
+  if (!import_node_path2.default.posix.isAbsolute(trimmed) && !isWindowsPath) {
     throw new Error(`Project path must be absolute: ${workspaceRoot}`);
   }
-  const normalized = isWindowsPath ? import_node_path.default.win32.normalize(trimmed) : import_node_path.default.posix.normalize(trimmed);
+  const normalized = isWindowsPath ? import_node_path2.default.win32.normalize(trimmed) : import_node_path2.default.posix.normalize(trimmed);
   if (isWindowsPath) {
-    const parsed = import_node_path.default.win32.parse(normalized);
+    const parsed = import_node_path2.default.win32.parse(normalized);
     return normalized === parsed.root ? normalized : normalized.replace(/[\\/]+$/, "");
   }
   return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
@@ -38781,7 +39075,7 @@ function deriveProjectTitle(workspaceRoot, explicitTitle) {
     return normalizeProjectTitle(explicitTitle);
   }
   const normalized = normalizeProjectPath(workspaceRoot);
-  const baseName = (import_node_path.default.win32.isAbsolute(normalized) ? import_node_path.default.win32.basename(normalized) : import_node_path.default.posix.basename(normalized)).trim();
+  const baseName = (import_node_path2.default.win32.isAbsolute(normalized) ? import_node_path2.default.win32.basename(normalized) : import_node_path2.default.posix.basename(normalized)).trim();
   return baseName || "project";
 }
 function parseModelOptionEntries(entries3 = []) {
@@ -40130,9 +40424,9 @@ var setUrl = /* @__PURE__ */ dual(2, (self, url) => {
   clone2.hash = "";
   return makeWith(self.method, clone2.toString(), urlParams2, hash3, self.headers, self.body);
 });
-var prependUrl = /* @__PURE__ */ dual(2, (self, path3) => {
-  if (path3 === "") return self;
-  return makeWith(self.method, joinSegments(path3, self.url), self.urlParams, self.hash, self.headers, self.body);
+var prependUrl = /* @__PURE__ */ dual(2, (self, path4) => {
+  if (path4 === "") return self;
+  return makeWith(self.method, joinSegments(path4, self.url), self.urlParams, self.hash, self.headers, self.body);
 });
 var joinSegments = (first, second) => {
   const endsWithSlash = first.endsWith("/");
@@ -47557,7 +47851,7 @@ var RemoteEnvironmentClient = class {
         `An active project already exists for '${existingProject.workspaceRoot}' (${existingProject.id}).`
       );
     }
-    const projectId = (0, import_node_crypto.randomUUID)();
+    const projectId = (0, import_node_crypto2.randomUUID)();
     const title = deriveProjectTitle(input.workspaceRoot, input.title);
     const providerModels = input.noDefaultModel ? null : await this.getProviderModelsOrNull();
     const defaultModelSelection = buildModelSelection({
@@ -47568,7 +47862,7 @@ var RemoteEnvironmentClient = class {
       providerModels
     });
     const command = buildProjectCreateCommand({
-      commandId: (0, import_node_crypto.randomUUID)(),
+      commandId: (0, import_node_crypto2.randomUUID)(),
       projectId,
       title,
       workspaceRoot: input.workspaceRoot,
@@ -47593,7 +47887,7 @@ var RemoteEnvironmentClient = class {
     const snapshot = await this.getShellSnapshot();
     const project2 = resolveProjectTarget(snapshot.projects, input.identifier);
     const command = buildProjectMetaUpdateCommand({
-      commandId: (0, import_node_crypto.randomUUID)(),
+      commandId: (0, import_node_crypto2.randomUUID)(),
       projectId: project2.id,
       title: input.title
     });
@@ -47620,7 +47914,7 @@ var RemoteEnvironmentClient = class {
       providerModels
     });
     const command = buildProjectMetaUpdateCommand({
-      commandId: (0, import_node_crypto.randomUUID)(),
+      commandId: (0, import_node_crypto2.randomUUID)(),
       projectId: project2.id,
       defaultModelSelection
     });
@@ -47645,7 +47939,7 @@ var RemoteEnvironmentClient = class {
       );
     }
     const command = buildProjectDeleteCommand({
-      commandId: (0, import_node_crypto.randomUUID)(),
+      commandId: (0, import_node_crypto2.randomUUID)(),
       projectId: project2.id,
       force: input.force
     });
@@ -47689,7 +47983,7 @@ var RemoteEnvironmentClient = class {
       model: input.model,
       providerModels
     }) ?? DEFAULT_MODEL_SELECTION : project2.defaultModelSelection ?? buildModelSelection({ providerModels }) ?? DEFAULT_MODEL_SELECTION;
-    const threadId = (0, import_node_crypto.randomUUID)();
+    const threadId = (0, import_node_crypto2.randomUUID)();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
     const createdAt = nowIso();
@@ -47697,10 +47991,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: (0, import_node_crypto.randomUUID)(),
+        commandId: (0, import_node_crypto2.randomUUID)(),
         threadId,
         message: {
-          messageId: (0, import_node_crypto.randomUUID)(),
+          messageId: (0, import_node_crypto2.randomUUID)(),
           role: "user",
           text: initialMessage,
           attachments: []
@@ -47752,10 +48046,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: (0, import_node_crypto.randomUUID)(),
+        commandId: (0, import_node_crypto2.randomUUID)(),
         threadId: thread.id,
         message: {
-          messageId: (0, import_node_crypto.randomUUID)(),
+          messageId: (0, import_node_crypto2.randomUUID)(),
           role: "user",
           text: input.text,
           attachments: []
@@ -47774,7 +48068,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.interrupt",
-        commandId: (0, import_node_crypto.randomUUID)(),
+        commandId: (0, import_node_crypto2.randomUUID)(),
         threadId: thread.id,
         turnId: thread.latestTurn?.turnId,
         createdAt: nowIso()
@@ -47792,7 +48086,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.archive",
-        commandId: (0, import_node_crypto.randomUUID)(),
+        commandId: (0, import_node_crypto2.randomUUID)(),
         threadId: thread.id
       });
       return true;
@@ -47906,226 +48200,6 @@ function formatInboxLine(overview) {
   ].join(" ").trim();
 }
 
-// src/state.ts
-var import_promises = require("node:fs/promises");
-var import_node_os = __toESM(require("node:os"), 1);
-var import_node_path2 = __toESM(require("node:path"), 1);
-var import_node_crypto2 = require("node:crypto");
-var DEFAULT_STATE_DIR = import_node_path2.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
-var DEFAULT_STATE_FILE = import_node_path2.default.join(DEFAULT_STATE_DIR, "state.json");
-var STATE_LOCK_TIMEOUT_MS = 1e4;
-var STATE_LOCK_RETRY_MS = 50;
-var EMPTY_STATE = {
-  version: 1,
-  environments: [],
-  agents: [],
-  subscriptions: [],
-  notifications: []
-};
-function resolveStateFile() {
-  return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
-}
-async function ensureStateDir(stateFile) {
-  await (0, import_promises.mkdir)(import_node_path2.default.dirname(stateFile), { recursive: true });
-}
-function normalizeState(parsed) {
-  return {
-    version: 1,
-    environments: Array.isArray(parsed.environments) ? parsed.environments : [],
-    agents: Array.isArray(parsed.agents) ? parsed.agents : [],
-    subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
-    notifications: Array.isArray(parsed.notifications) ? parsed.notifications : []
-  };
-}
-async function loadStateFromFile(stateFile) {
-  try {
-    const raw2 = await (0, import_promises.readFile)(stateFile, "utf8");
-    const parsed = JSON.parse(raw2);
-    return normalizeState(parsed);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("ENOENT")) {
-      return structuredClone(EMPTY_STATE);
-    }
-    throw error;
-  }
-}
-async function loadState() {
-  return loadStateFromFile(resolveStateFile());
-}
-async function saveStateToFile(stateFile, state) {
-  await ensureStateDir(stateFile);
-  const tempFile = import_node_path2.default.join(import_node_path2.default.dirname(stateFile), `.${import_node_path2.default.basename(stateFile)}.${(0, import_node_crypto2.randomUUID)()}.tmp`);
-  await (0, import_promises.writeFile)(tempFile, `${JSON.stringify(state, null, 2)}
-`, "utf8");
-  await (0, import_promises.rename)(tempFile, stateFile);
-}
-async function sleep3(ms) {
-  await new Promise((resolve2) => setTimeout(resolve2, ms));
-}
-async function withStateLock(stateFile, task) {
-  await ensureStateDir(stateFile);
-  const lockFile = `${stateFile}.lock`;
-  const startedAt = Date.now();
-  for (; ; ) {
-    try {
-      const handle = await (0, import_promises.open)(lockFile, "wx");
-      try {
-        await handle.writeFile(`${process.pid}
-`, "utf8");
-        return await task();
-      } finally {
-        await handle.close();
-        await (0, import_promises.unlink)(lockFile).catch(() => {
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("EEXIST")) {
-        throw error;
-      }
-      if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
-        throw new Error(`Timed out waiting for state lock '${lockFile}'.`);
-      }
-      await sleep3(STATE_LOCK_RETRY_MS);
-    }
-  }
-}
-async function updateState(mutator) {
-  const stateFile = resolveStateFile();
-  return withStateLock(stateFile, async () => {
-    const current = await loadStateFromFile(stateFile);
-    const { state, result: result4 } = await mutator(current);
-    await saveStateToFile(stateFile, state);
-    return result4;
-  });
-}
-function upsertEnvironment(environments, next) {
-  const remaining = environments.filter((env) => env.name !== next.name);
-  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
-}
-function upsertAgent(agents, next) {
-  const remaining = agents.filter((agent2) => agent2.name !== next.name);
-  return [...remaining, next].sort((a, b) => a.name.localeCompare(b.name));
-}
-function removeAgent(agents, name) {
-  return agents.filter((agent2) => agent2.name !== name).sort((a, b) => a.name.localeCompare(b.name));
-}
-function upsertSubscription(subscriptions, next) {
-  const remaining = subscriptions.filter(
-    (subscription) => !(subscription.subscriberThreadId === next.subscriberThreadId && subscription.sourceThreadId === next.sourceThreadId)
-  );
-  return [...remaining, next].sort(
-    (a, b) => `${a.subscriberAgentName ?? a.subscriberThreadId}:${a.sourceAgentName ?? a.sourceThreadId}`.localeCompare(
-      `${b.subscriberAgentName ?? b.subscriberThreadId}:${b.sourceAgentName ?? b.sourceThreadId}`
-    )
-  );
-}
-function removeSubscription(subscriptions, input) {
-  return subscriptions.filter(
-    (subscription) => !(subscription.subscriberThreadId === input.subscriberThreadId && subscription.sourceThreadId === input.sourceThreadId)
-  );
-}
-function upsertNotification(notifications, next) {
-  const remaining = notifications.filter((notification) => notification.eventKey !== next.eventKey);
-  return [...remaining, next].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-}
-function findAgentByThreadId(state, threadId) {
-  return state.agents.find((agent2) => agent2.threadId === threadId) ?? null;
-}
-function resolveCallerThreadId(env = process.env) {
-  const value3 = env.T3_THREAD_ID?.trim();
-  return value3 ? value3 : null;
-}
-function resolveCallerEnvironmentMetadata(env = process.env) {
-  const environmentName = env.T3_ENVIRONMENT_NAME?.trim();
-  const environmentId = env.T3_ENVIRONMENT_ID?.trim();
-  if (!environmentName || !environmentId) {
-    return null;
-  }
-  return {
-    environmentName,
-    environmentId
-  };
-}
-function resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment = null) {
-  const savedAgent = findAgentByThreadId(state, threadId);
-  if (savedAgent) {
-    return {
-      threadId: savedAgent.threadId,
-      name: savedAgent.name,
-      environment: savedAgent.environment
-    };
-  }
-  if (!callerEnvironment) {
-    return null;
-  }
-  const savedEnvironment = state.environments.find(
-    (environment) => environment.environmentId === callerEnvironment.environmentId || environment.name === callerEnvironment.environmentName || environment.label === callerEnvironment.environmentName
-  );
-  return {
-    threadId,
-    name: null,
-    environment: savedEnvironment?.name ?? callerEnvironment.environmentName
-  };
-}
-function resolveNotifyPreference(notify, env = process.env) {
-  if (notify === false) {
-    return { kind: "none" };
-  }
-  if (typeof notify === "string") {
-    const value3 = notify.trim();
-    if (!value3) {
-      throw new Error("`--notify` subscriber value cannot be empty.");
-    }
-    return {
-      kind: "explicit",
-      subscriber: value3
-    };
-  }
-  const callerThreadId = resolveCallerThreadId(env);
-  if (callerThreadId) {
-    return { kind: "caller" };
-  }
-  if (notify === true) {
-    throw new Error(
-      "T3_THREAD_ID is not set. Bare `agent create --notify` must run inside a T3 thread or specify `--notify <subscriber>`."
-    );
-  }
-  return { kind: "none" };
-}
-function requireEnvironment(state, name) {
-  const found = state.environments.find((env) => env.name === name);
-  if (!found) {
-    throw new Error(`Unknown environment '${name}'.`);
-  }
-  return found;
-}
-function requireAgent(state, name) {
-  const found = state.agents.find((agent2) => agent2.name === name);
-  if (!found) {
-    throw new Error(`Unknown agent '${name}'.`);
-  }
-  return found;
-}
-function buildSubscriptionRecord(caller, source, now2, existing) {
-  return {
-    subscriberThreadId: caller.threadId,
-    subscriberAgentName: caller.name,
-    subscriberEnvironment: caller.environment,
-    sourceThreadId: source.threadId,
-    sourceAgentName: source.name,
-    sourceEnvironment: source.environment,
-    createdAt: existing?.createdAt ?? now2,
-    updatedAt: now2
-  };
-}
-function assertNotSelfSubscription(caller, source) {
-  if (caller.threadId === source.threadId) {
-    throw new Error(`Subscriber '${caller.name ?? caller.threadId}' cannot subscribe to itself.`);
-  }
-}
-
 // src/thread-preamble.ts
 var THREAD_PREAMBLE = [
   "You are a T3 worker thread. Before acting on the brief below, read and follow:",
@@ -48235,7 +48309,12 @@ async function scanAttentionNotifications(state, options = {}) {
   for (const sourceAgent of scopedAgents) {
     const sourceEnvironment = requireEnvironment(state, sourceAgent.environment);
     const sourceClient = clientFactory(sourceEnvironment);
-    const sourceThread = await sourceClient.findThread(sourceAgent.threadId);
+    let sourceThread;
+    try {
+      sourceThread = await sourceClient.findThread(sourceAgent.threadId);
+    } catch {
+      continue;
+    }
     const overview = buildAgentOverview(sourceAgent, sourceThread);
     if (!needsAttention(overview)) {
       continue;
@@ -48263,6 +48342,41 @@ async function scanAttentionNotifications(state, options = {}) {
     }
   }
   return scanned;
+}
+var UNDELIVERED_STATUSES = /* @__PURE__ */ new Set(["pending", "delivering", "delivery-failed"]);
+var IN_FLIGHT_SOURCE_STATES = /* @__PURE__ */ new Set(["running", "starting", "ready"]);
+async function hasActiveWork(options = {}) {
+  const clientFactory = options.clientFactory ?? createWatchClient;
+  const state = await loadState();
+  const undelivered = state.notifications.some(
+    (notification) => UNDELIVERED_STATUSES.has(notification.status) && matchesEnvFilter(notification, options.env)
+  );
+  if (undelivered) {
+    return true;
+  }
+  const subscribedSourceThreadIds = new Set(
+    state.subscriptions.map((subscription) => subscription.sourceThreadId)
+  );
+  if (subscribedSourceThreadIds.size === 0) {
+    return false;
+  }
+  for (const agent2 of state.agents) {
+    if (!subscribedSourceThreadIds.has(agent2.threadId)) {
+      continue;
+    }
+    if (options.env && agent2.environment !== options.env) {
+      continue;
+    }
+    try {
+      const environment = requireEnvironment(state, agent2.environment);
+      const thread = await clientFactory(environment).findThread(agent2.threadId);
+      if (IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)) {
+        return true;
+      }
+    } catch {
+    }
+  }
+  return false;
 }
 async function detectAttentionEvents(options = {}) {
   const state = await loadState();
@@ -48414,6 +48528,69 @@ async function deliverPendingNotifications(options = {}) {
   return delivered;
 }
 
+// src/watcher-process.ts
+var import_node_child_process = require("node:child_process");
+var import_promises2 = require("node:fs/promises");
+var import_node_path3 = __toESM(require("node:path"), 1);
+var DEFAULT_IDLE_EXIT_SECONDS = 900;
+function watcherPidFile() {
+  return import_node_path3.default.join(import_node_path3.default.dirname(resolveStateFile()), "watch.pid");
+}
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
+  }
+}
+async function readWatcherPid() {
+  try {
+    const raw2 = await (0, import_promises2.readFile)(watcherPidFile(), "utf8");
+    const pid = Number(raw2.trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+async function isWatcherRunning() {
+  const pid = await readWatcherPid();
+  return pid !== null && pid !== process.pid && isProcessAlive(pid);
+}
+async function writeWatcherPid() {
+  await (0, import_promises2.writeFile)(watcherPidFile(), `${process.pid}
+`, "utf8");
+}
+async function clearOwnWatcherPid() {
+  const pid = await readWatcherPid();
+  if (pid === process.pid) {
+    await (0, import_promises2.unlink)(watcherPidFile()).catch(() => {
+    });
+  }
+}
+async function ensureWatcherRunning(options = {}) {
+  try {
+    if (await isWatcherRunning()) {
+      return false;
+    }
+    const idle = options.idleExitSeconds ?? DEFAULT_IDLE_EXIT_SECONDS;
+    const entry = process.argv[1];
+    if (!entry) {
+      return false;
+    }
+    const args2 = [...process.execArgv, entry, "watch", "--idle-exit", String(idle)];
+    const child = (0, import_node_child_process.spawn)(process.execPath, args2, {
+      detached: true,
+      stdio: "ignore",
+      env: process.env
+    });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // src/cli.ts
 function printJson(value3) {
   process.stdout.write(`${JSON.stringify(value3, null, 2)}
@@ -48428,12 +48605,24 @@ function collectOption(value3, previous = []) {
 }
 async function withAgent(agentName) {
   const state = await loadState();
-  const agent2 = requireAgent(state, agentName);
-  const environment = requireEnvironment(state, agent2.environment);
+  const agentTarget = await resolveAgentTarget(state, agentName, {
+    clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName))
+  });
+  const environment = requireEnvironment(state, agentTarget.environment);
   return {
     state,
-    agent: agent2,
-    client: new RemoteEnvironmentClient(environment)
+    agent: agentTarget.savedAgent ?? {
+      name: agentTarget.threadId,
+      environment: agentTarget.environment,
+      threadId: agentTarget.threadId,
+      projectId: agentTarget.projectId,
+      title: agentTarget.title,
+      createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+      lastSeenAssistantMessageId: null
+    },
+    client: new RemoteEnvironmentClient(environment),
+    saved: agentTarget.savedAgent !== null,
+    target: agentTarget
   };
 }
 function toSubscriptionEndpoint(agent2) {
@@ -48448,11 +48637,11 @@ async function resolveThreadEndpoint(state, threadId, preferredEnvironment, call
   if (localEndpoint) {
     return localEndpoint;
   }
-  const orderedEnvironmentNames = [
+  const orderedEnvironmentNames2 = [
     ...preferredEnvironment ? [preferredEnvironment] : [],
     ...state.environments.map((environment) => environment.name)
   ].filter((value3, index2, list) => list.indexOf(value3) === index2);
-  for (const environmentName of orderedEnvironmentNames) {
+  for (const environmentName of orderedEnvironmentNames2) {
     const environment = requireEnvironment(state, environmentName);
     const client = new RemoteEnvironmentClient(environment);
     const threads = await client.listThreads();
@@ -48778,6 +48967,9 @@ agent.command("create").requiredOption("--name <name>", "local agent name").requ
     notifySubscriberAgentName: notifyCaller?.name ?? null,
     notifySubscriberThreadId: notifyCaller?.threadId ?? null
   });
+  if (notifyCaller) {
+    await ensureWatcherRunning();
+  }
 });
 agent.command("attach").requiredOption("--name <name>", "local agent name").requiredOption("--env <name>", "saved environment name").requiredOption("--thread <id>", "remote thread id").requiredOption("--project <id>", "remote project id").option("--title <title>", "local title override").action(async (options) => {
   await updateState(async (state) => ({
@@ -48865,9 +49057,16 @@ agent.command("subscriptions").description("List saved attention-routing subscri
   });
   printJson(subscriptions);
 });
-agent.command("subscribe").description("Subscribe the calling T3 thread to attention from a saved source agent").requiredOption("--watch <name>", "saved source agent name to watch").action(async (options) => {
+agent.command("subscribe").description("Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID").requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch").action(async (options) => {
   const { state, caller } = await withCallerFromEnv();
-  const source = requireAgent(state, options.watch);
+  const resolvedSource = await resolveAgentTarget(state, options.watch, {
+    clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName))
+  });
+  const source = {
+    threadId: resolvedSource.threadId,
+    name: resolvedSource.savedAgent?.name ?? null,
+    environment: resolvedSource.environment
+  };
   assertNotSelfSubscription(caller, source);
   const now2 = (/* @__PURE__ */ new Date()).toISOString();
   const existing = state.subscriptions.find(
@@ -48882,6 +49081,7 @@ agent.command("subscribe").description("Subscribe the calling T3 thread to atten
     result: null
   }));
   printJson(next);
+  await ensureWatcherRunning();
 });
 agent.command("unsubscribe").description("Remove an attention subscription for the calling T3 thread").requiredOption("--watch <name>", "saved source agent name to stop watching").action(async (options) => {
   const { state, caller } = await withCallerFromEnv();
@@ -48925,29 +49125,85 @@ agent.command("notifications").description("List saved routed notification event
   });
   printJson(notifications);
 });
-agent.command("watch").description("Poll saved agents for attention-worthy transitions and route notifications to subscribers").option("--env <name>", "optional saved environment filter").option("--interval <seconds>", "poll interval in seconds", "5").option("--once", "run a single scan and exit").option("--no-deliver", "record notification events but do not send messages to subscriber threads").action(async (options) => {
+agent.command("watch").description("Poll saved agents for attention-worthy transitions and route notifications to subscribers").option("--env <name>", "optional saved environment filter").option("--interval <seconds>", "poll interval in seconds", "5").option("--once", "run a single scan and exit").option("--no-deliver", "record notification events but do not send messages to subscriber threads").option(
+  "--idle-exit <seconds>",
+  "self-exit after this many seconds with nothing in flight (0 disables)",
+  String(DEFAULT_IDLE_EXIT_SECONDS)
+).option(
+  "--max-lifetime <seconds>",
+  "hard cap on total runtime as a backstop (0 disables)",
+  "21600"
+).option(
+  "--ensure",
+  "spawn a detached background watcher if none is running, then exit (no-op if one already runs)"
+).action(async (options) => {
   const intervalMs = Math.max(1, Number(options.interval)) * 1e3;
-  for (; ; ) {
-    const detectedNotifications = await detectAttentionEvents({
-      env: options.env
+  const idleExitMs = Math.max(0, Number(options.idleExit)) * 1e3;
+  const maxLifetimeMs = Math.max(0, Number(options.maxLifetime)) * 1e3;
+  if (options.ensure) {
+    const spawned = await ensureWatcherRunning({
+      idleExitSeconds: Math.max(0, Number(options.idleExit))
     });
-    const deliveryResults = options.deliver ? await deliverPendingNotifications({
-      env: options.env
-    }) : [];
-    printJson({
-      scannedAt: nowIso3(),
-      env: options.env ?? null,
-      deliver: options.deliver,
-      detectedNotifications,
-      deliveryResults
-    });
-    if (options.once) {
-      break;
+    printJson({ ensured: true, spawned });
+    return;
+  }
+  if (!options.once) {
+    if (await isWatcherRunning()) {
+      printJson({ skipped: "another watcher is already running" });
+      return;
     }
-    await sleep4(intervalMs);
+    await writeWatcherPid();
+    const cleanup = () => {
+      void clearOwnWatcherPid();
+    };
+    process.on("exit", cleanup);
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+      process.on(signal, () => {
+        void clearOwnWatcherPid().finally(() => process.exit(0));
+      });
+    }
+  }
+  const startedAt = Date.now();
+  let lastWorkAt = startedAt;
+  try {
+    for (; ; ) {
+      const detectedNotifications = await detectAttentionEvents({
+        env: options.env
+      });
+      const deliveryResults = options.deliver ? await deliverPendingNotifications({
+        env: options.env
+      }) : [];
+      printJson({
+        scannedAt: nowIso3(),
+        env: options.env ?? null,
+        deliver: options.deliver,
+        detectedNotifications,
+        deliveryResults
+      });
+      if (options.once) {
+        break;
+      }
+      const active = detectedNotifications.length > 0 || deliveryResults.length > 0 || await hasActiveWork({ env: options.env });
+      const now2 = Date.now();
+      if (active) {
+        lastWorkAt = now2;
+      } else if (idleExitMs > 0 && now2 - lastWorkAt >= idleExitMs) {
+        printJson({ exit: "idle", idleSeconds: Math.round((now2 - lastWorkAt) / 1e3) });
+        break;
+      }
+      if (maxLifetimeMs > 0 && now2 - startedAt >= maxLifetimeMs) {
+        printJson({ exit: "max-lifetime", uptimeSeconds: Math.round((now2 - startedAt) / 1e3) });
+        break;
+      }
+      await sleep4(intervalMs);
+    }
+  } finally {
+    if (!options.once) {
+      await clearOwnWatcherPid();
+    }
   }
 });
-agent.command("status").argument("[name]", "agent name").action(async (name) => {
+agent.command("status").argument("[name]", "agent name or raw thread UUID").action(async (name) => {
   if (!name) {
     const state = await loadState();
     const summaries = await Promise.all(
@@ -48961,33 +49217,36 @@ agent.command("status").argument("[name]", "agent name").action(async (name) => 
     printLines(summaries.map(formatOverviewLine));
     return;
   }
-  const { agent: savedAgent, client } = await withAgent(name);
+  const { agent: savedAgent, client, saved } = await withAgent(name);
   const thread = await client.findThread(savedAgent.threadId);
   const status = classifyThread(thread);
   const latestAssistant = getLatestAssistantMessage(thread);
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     environment: savedAgent.environment,
     threadId: savedAgent.threadId,
     title: savedAgent.title,
+    projectId: savedAgent.projectId,
+    saved,
     state: status.state,
     reason: status.reason,
     latestTurn: thread.latestTurn,
     session: thread.session,
     proposedPlans: thread.proposedPlans.length,
     messageCount: thread.messages.length,
-    hasNewOutput: hasNewAssistantOutput(savedAgent, thread),
+    hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, thread) : null,
     latestAssistantMessageId: latestAssistant?.id ?? null,
     latestAssistantPreview: latestAssistant ? summarizeMessageText(latestAssistant.text) : null
   });
 });
-agent.command("worklog").argument("<name>", "agent name").option("--tail <count>", "number of activity rows to show", "10").action(async (name, options) => {
-  const { agent: savedAgent, client } = await withAgent(name);
+agent.command("worklog").argument("<name>", "agent name or raw thread UUID").option("--tail <count>", "number of activity rows to show", "10").action(async (name, options) => {
+  const { agent: savedAgent, client, saved } = await withAgent(name);
   const thread = await client.getThreadDetail(savedAgent.threadId);
   const tailCount = Math.max(1, Number(options.tail));
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     threadId: savedAgent.threadId,
+    environment: savedAgent.environment,
     activities: thread.activities.slice(-tailCount)
   });
 });
@@ -49004,28 +49263,30 @@ agent.command("inbox").option("--env <name>", "optional saved environment filter
   );
   printLines(summaries.filter(needsAttention).map(formatInboxLine));
 });
-agent.command("send").argument("<name>", "agent name").argument("<message...>", "message text").action(async (name, messageParts) => {
-  const { agent: savedAgent, client } = await withAgent(name);
+agent.command("send").argument("<name>", "agent name or raw thread UUID").argument("<message...>", "message text").action(async (name, messageParts) => {
+  const { agent: savedAgent, client, saved } = await withAgent(name);
   await client.sendMessage({
     threadId: savedAgent.threadId,
     text: messageParts.join(" ").trim()
   });
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     threadId: savedAgent.threadId,
+    environment: savedAgent.environment,
     dispatched: true
   });
 });
 for (const kind of ["clarify", "revise", "complete"]) {
-  agent.command(kind).argument("<name>", "agent name").argument("[message...]", "optional follow-up text").action(async (name, messageParts) => {
-    const { agent: savedAgent, client } = await withAgent(name);
+  agent.command(kind).argument("<name>", "agent name or raw thread UUID").argument("[message...]", "optional follow-up text").action(async (name, messageParts) => {
+    const { agent: savedAgent, client, saved } = await withAgent(name);
     await client.sendMessage({
       threadId: savedAgent.threadId,
       text: buildFollowUpMessage(kind, messageParts.join(" "))
     });
     printJson({
-      agent: savedAgent.name,
+      agent: saved ? savedAgent.name : null,
       threadId: savedAgent.threadId,
+      environment: savedAgent.environment,
       dispatched: kind
     });
   });
@@ -49039,8 +49300,8 @@ agent.command("interrupt").argument("<name>", "agent name").action(async (name) 
     interrupted: true
   });
 });
-agent.command("wait").argument("<name>", "agent name").option("--for <goal>", "completion|attention|idle|running", "completion").option("--timeout <seconds>", "timeout in seconds", "300").option("--interval <seconds>", "poll interval in seconds", "5").action(async (name, options) => {
-  const { agent: savedAgent, client } = await withAgent(name);
+agent.command("wait").argument("<name>", "agent name or raw thread UUID").option("--for <goal>", "completion|attention|idle|running", "completion").option("--timeout <seconds>", "timeout in seconds", "300").option("--interval <seconds>", "poll interval in seconds", "5").action(async (name, options) => {
+  const { agent: savedAgent, client, saved } = await withAgent(name);
   const thread = await client.waitForThread({
     threadId: savedAgent.threadId,
     goal: options.for,
@@ -49049,15 +49310,16 @@ agent.command("wait").argument("<name>", "agent name").option("--for <goal>", "c
   });
   const status = classifyThread(thread);
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     threadId: savedAgent.threadId,
+    environment: savedAgent.environment,
     state: status.state,
     reason: status.reason,
     latestTurn: thread.latestTurn
   });
 });
-agent.command("result").argument("<name>", "agent name").option("--tail <count>", "number of messages to show", "1").option("--assistant-only", "only show assistant messages").option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading").option("--interval <seconds>", "poll interval in seconds while waiting", "2").option("--final-message", "return the terminal assistant message for the latest turn when available").option("--mark-seen", "record the latest assistant message as reviewed").action(async (name, options) => {
-  const { agent: savedAgent, client } = await withAgent(name);
+agent.command("result").argument("<name>", "agent name or raw thread UUID").option("--tail <count>", "number of messages to show", "1").option("--assistant-only", "only show assistant messages").option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading").option("--interval <seconds>", "poll interval in seconds while waiting", "2").option("--final-message", "return the terminal assistant message for the latest turn when available").option("--mark-seen", "record the latest assistant message as reviewed").action(async (name, options) => {
+  const { agent: savedAgent, client, saved, target: target2 } = await withAgent(name);
   const detail = options.wait ? await client.waitForThread({
     threadId: savedAgent.threadId,
     goal: "completion",
@@ -49067,6 +49329,9 @@ agent.command("result").argument("<name>", "agent name").option("--tail <count>"
   const tailCount = Math.max(1, Number(options.tail));
   const latestAssistant = options.finalMessage ? getLatestTurnAssistantMessage(detail) ?? getLatestAssistantMessage(detail) : getLatestAssistantMessage(detail);
   const messages = options.finalMessage ? latestAssistant ? [latestAssistant] : [] : options.assistantOnly ? detail.messages.filter((message) => message.role === "assistant") : detail.messages;
+  if (options.markSeen) {
+    assertSavedAgentCapability(target2, "`result --mark-seen`");
+  }
   let markedSeen = false;
   if (options.markSeen && latestAssistant) {
     await updateState(async (state) => {
@@ -49085,9 +49350,11 @@ agent.command("result").argument("<name>", "agent name").option("--tail <count>"
     markedSeen = true;
   }
   printJson({
-    agent: savedAgent.name,
+    agent: saved ? savedAgent.name : null,
     threadId: savedAgent.threadId,
-    hasNewOutput: hasNewAssistantOutput(savedAgent, detail),
+    environment: savedAgent.environment,
+    saved,
+    hasNewOutput: saved ? hasNewAssistantOutput(savedAgent, detail) : null,
     latestAssistantMessageId: latestAssistant?.id ?? null,
     latestTurnAssistantMessageId: detail.latestTurn?.assistantMessageId ?? null,
     markedSeen,
