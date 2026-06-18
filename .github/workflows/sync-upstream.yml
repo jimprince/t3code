@@ -229,6 +229,7 @@ jobs:
           FORK_RESOLVE_FILES: |
             .github/workflows/release.yml
             docs/operations/release.md
+            infra/relay/scripts/deploy.test.ts
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
