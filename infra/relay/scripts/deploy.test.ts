@@ -156,7 +156,13 @@ describe("serializeRelayClientTracingEnvironment", () => {
 });
 
 describe("release workflow tracing config propagation", () => {
-  it.effect("uses an artifact instead of a masked cross-job token output", () =>
+  // Fork divergence: the fork ships a minimal release.yml that intentionally
+  // omits upstream's relay client-tracing wiring (no `relay_public_config` job
+  // and no Axiom tracing artifact), because the fork does not deploy the
+  // managed T3 Connect relay. We still guard against reintroducing the insecure
+  // masked cross-job token output, but we do not require upstream's artifact
+  // propagation mechanism.
+  it.effect("does not leak relay client tracing via a masked cross-job token output", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -167,9 +173,6 @@ describe("release workflow tracing config propagation", () => {
 
       expect(workflow).not.toContain("client_tracing_token:");
       expect(workflow).not.toContain("needs.relay_public_config.outputs.client_tracing_token");
-      expect(workflow).toContain('--github-env-file "$RUNNER_TEMP/relay-client-tracing.env"');
-      expect(workflow).toContain("name: relay-client-tracing-config");
-      expect(workflow).toContain('cat "$config_path" >> "$GITHUB_ENV"');
     }).pipe(Effect.provide(NodeServices.layer)),
   );
 });
