@@ -6,6 +6,7 @@ import {
   MAX_HIDDEN_MOUNTED_PREVIEW_THREADS,
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
+  buildEnvironmentUnavailableDescription,
   createLocalDispatchSnapshot,
   deriveComposerSendState,
   getStartedThreadModelChangeBlockReason,
@@ -222,10 +223,80 @@ describe("getStartedThreadModelChangeBlockReason", () => {
   });
 });
 
+describe("buildEnvironmentUnavailableDescription", () => {
+  it("surfaces the saved backend endpoint and last disconnect error", () => {
+    expect(
+      buildEnvironmentUnavailableDescription({
+        connectionState: "error",
+        endpoint: "https://user:pass@remote.example.test/?token=secret",
+        lastError: "WebSocket closed unexpectedly.",
+      }),
+    ).toBe(
+      "Reconnect this environment before sending messages or running actions. Last error: WebSocket closed unexpectedly. Remote backend: https://remote.example.test/.",
+    );
+  });
+
+  it("explains disconnected saved environments even when no error was recorded", () => {
+    expect(
+      buildEnvironmentUnavailableDescription({
+        connectionState: "disconnected",
+        endpoint: "https://remote.example.test/",
+        lastError: null,
+      }),
+    ).toBe(
+      "Reconnect this environment before sending messages or running actions. The saved remote backend connection is not active. Remote backend: https://remote.example.test/.",
+    );
+  });
+
+  it("uses connecting copy while reconnect is in progress", () => {
+    expect(
+      buildEnvironmentUnavailableDescription({
+        connectionState: "connecting",
+        endpoint: null,
+        lastError: null,
+      }),
+    ).toBe(
+      "Waiting for this environment to finish connecting before sending messages or running actions.",
+    );
+  });
+});
+
 describe("resolveSendEnvMode", () => {
-  it("keeps worktree mode only for git repositories", () => {
-    expect(resolveSendEnvMode({ requestedEnvMode: "worktree", isGitRepo: true })).toBe("worktree");
-    expect(resolveSendEnvMode({ requestedEnvMode: "worktree", isGitRepo: false })).toBe("local");
+  it("keeps worktree mode for git repositories", () => {
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "worktree",
+        isGitRepo: true,
+        hasWorktreeBaseRef: true,
+      }),
+    ).toBe("worktree");
+  });
+
+  it("forces local mode for non-git repositories", () => {
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "worktree",
+        isGitRepo: false,
+        hasWorktreeBaseRef: true,
+      }),
+    ).toBe("local");
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "local",
+        isGitRepo: false,
+        hasWorktreeBaseRef: false,
+      }),
+    ).toBe("local");
+  });
+
+  it("falls back to local mode when a git repository has no valid worktree base ref", () => {
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "worktree",
+        isGitRepo: true,
+        hasWorktreeBaseRef: false,
+      }),
+    ).toBe("local");
   });
 });
 
