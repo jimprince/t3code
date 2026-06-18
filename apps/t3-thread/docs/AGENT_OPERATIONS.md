@@ -13,6 +13,7 @@ Examples below use `t3-thread <command>` (the wrapper in `~/.shared/bin/t3-threa
 2. Discover projects on the target environment:
    - `t3-thread projects --env <environment>`
    - `t3-thread project list --env <environment>`
+   - `t3-thread models --env <environment>`
 3. Create a branch-pinned delegated thread for the target project:
    - `t3-thread create --name <agent> --env <environment> --project <project-id> --title "<title>" --branch <branch> --message "<brief>"`
    - When running from inside a T3 caller thread, caller notification is the default.
@@ -62,17 +63,27 @@ Manage projects through the same paired environment model used for threads. This
 
 ```bash
 t3-thread project list --env <environment>
+t3-thread models --env <environment>
 t3-thread project add --env <environment> --path <absolute-workspace-root> --title "<title>"
 t3-thread project rename --env <environment> <project-id-or-absolute-workspace-root> "<new-title>"
 t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --provider codex --model gpt-5.4
+t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --provider opencode
+t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --provider cursor --model composer-2
 t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --provider opencode --model google/antigravity-gemini-3.5-flash-high
 t3-thread project set-model --env <environment> <project-id-or-absolute-workspace-root> --clear
 t3-thread project remove --env <environment> <project-id-or-absolute-workspace-root>
 ```
 
-OpenCode model slugs must include OpenCode's provider/model prefix, such as
-`google/antigravity-gemini-3.5-flash-high` or
-`google/antigravity-gemini-3.5-flash-low`.
+`--provider` is the T3 Code provider instance id shown by the app, not a
+closed CLI allowlist. Built-in ids such as `codex`, `claudeAgent`, `cursor`,
+`grok`, and `opencode` work, and custom instance ids such as `codex_personal`
+are passed through. `--model` accepts any app-visible slug for that provider
+instance. Run `t3-thread models --env <environment>` to inspect the live app
+roster. If `--provider` is passed without `--model`, `t3-thread` uses the
+current first non-custom model advertised by that provider, falling back to the
+static compatibility default only when live config is unavailable. OpenCode
+model slugs must include OpenCode's provider/model prefix, such as
+`google/antigravity-gemini-3.5-flash-high` or `openai/gpt-5`.
 
 Safety rules:
 

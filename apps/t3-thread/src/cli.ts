@@ -187,6 +187,7 @@ program.addHelpText(
   `
 Direct thread commands:
   project      Manage T3 Code projects on a paired environment
+  models       List live provider/model slugs from a paired environment
   create       Create and start a branch-pinned T3 worker thread
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
@@ -196,6 +197,7 @@ Direct thread commands:
 
 Examples:
   t3-thread project list --env dev-vm
+  t3-thread models --env dev-vm
   t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
   t3-thread create --name worker-a --env local-mbp --project PROJECT_ID --title "Worker A" --branch t3/worker-a --message "Fix the issue."
   t3-thread status worker-a
@@ -268,6 +270,17 @@ program
     const client = new RemoteEnvironmentClient(environment);
     const threads = await client.listThreads();
     printLines(threads.map(formatThreadLine));
+  });
+
+program
+  .command("models")
+  .requiredOption("--env <name>", "saved environment name")
+  .description("List live provider/model slugs from a paired T3 Code environment")
+  .action(async (options) => {
+    const state = await loadState();
+    const environment = requireEnvironment(state, options.env);
+    const client = new RemoteEnvironmentClient(environment);
+    printJson(await client.listModels());
   });
 
 program
@@ -367,13 +380,13 @@ project
   .requiredOption("--env <name>", "saved environment name")
   .argument("<project>", "project id or absolute workspace root")
   .option("--provider <provider>", "default model provider")
-  .option("--model <model>", "default model slug")
+  .option("--model <model>", "default model slug; defaults to the provider's live app model")
   .option("--model-option <key=value>", "default model option; may be repeated", collectOption, [])
   .option("--clear", "clear the project default model selection")
   .description("Set or clear a project's default model selection")
   .action(async (identifier, options) => {
-    if (!options.clear && (!options.provider || !options.model)) {
-      throw new Error("project set-model requires --provider and --model, or --clear.");
+    if (!options.clear && !options.provider) {
+      throw new Error("project set-model requires --provider, or --clear.");
     }
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);

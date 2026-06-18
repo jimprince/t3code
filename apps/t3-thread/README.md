@@ -12,6 +12,7 @@ Runtime state remains at `~/.config/t3-remote-agents/state.json` so existing pai
 ```bash
 t3-thread envs
 t3-thread projects --env local-mbp
+t3-thread models --env local-mbp
 t3-thread project list --env local-mbp
 t3-thread project add --env local-mbp --path /Users/brad/Programming/repo --title Repo
 
@@ -43,9 +44,12 @@ Do not pass a worktree path and do not manually create a git worktree first.
 
 ```bash
 t3-thread project list --env local-mbp
+t3-thread models --env local-mbp
 t3-thread project add --env local-mbp --path /Users/brad/Programming/repo --title Repo
 t3-thread project rename --env local-mbp PROJECT_ID "New Title"
 t3-thread project set-model --env local-mbp PROJECT_ID --provider codex --model gpt-5.4
+t3-thread project set-model --env local-mbp PROJECT_ID --provider opencode
+t3-thread project set-model --env local-mbp PROJECT_ID --provider cursor --model composer-2
 t3-thread project set-model --env local-mbp PROJECT_ID --provider opencode --model google/antigravity-gemini-3.5-flash-high
 t3-thread project remove --env local-mbp PROJECT_ID
 
@@ -80,17 +84,27 @@ Paths must be absolute paths on the target environment.
 
 ```bash
 t3-thread project list --env dev-vm
+t3-thread models --env dev-vm
 t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
 t3-thread project rename --env dev-vm PROJECT_ID "Repo"
 t3-thread project set-model --env dev-vm PROJECT_ID --provider codex --model gpt-5.4
+t3-thread project set-model --env dev-vm PROJECT_ID --provider opencode
+t3-thread project set-model --env dev-vm PROJECT_ID --provider cursor --model composer-2
 t3-thread project set-model --env dev-vm PROJECT_ID --provider opencode --model google/antigravity-gemini-3.5-flash-high
 t3-thread project set-model --env dev-vm PROJECT_ID --clear
 t3-thread project remove --env dev-vm PROJECT_ID
 ```
 
+`--provider` is the T3 Code provider instance id shown by the app, not a
+closed CLI allowlist. Built-in ids such as `codex`, `claudeAgent`, `cursor`,
+`grok`, and `opencode` work, and custom instance ids such as `codex_personal`
+are passed through. `--model` accepts any model slug available for that
+provider instance in the app; run `t3-thread models --env <environment>` to
+see the live roster. If `--provider` is passed without `--model`, `t3-thread`
+uses the current first non-custom model advertised by that provider, falling
+back to the static compatibility default only when live config is unavailable.
 OpenCode models must use OpenCode's provider/model slug format, for example
-`google/antigravity-gemini-3.5-flash-high` or
-`google/antigravity-gemini-3.5-flash-low`.
+`google/antigravity-gemini-3.5-flash-high` or `openai/gpt-5`.
 
 Safety defaults:
 
