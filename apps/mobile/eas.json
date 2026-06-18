@@ -6,31 +6,27 @@
   },
   "build": {
     "development": {
-      "corepack": true,
       "env": {
         "APP_VARIANT": "development",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
+        "MOBILE_VERSION_POLICY": "fingerprint"
       },
       "channel": "development",
+      "environment": "development",
       "developmentClient": true,
       "distribution": "internal"
     },
     "preview": {
-      "corepack": true,
       "env": {
-        "APP_VARIANT": "preview",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
+        "APP_VARIANT": "preview"
       },
       "channel": "preview",
       "environment": "preview",
       "distribution": "internal"
     },
     "preview:dev": {
-      "corepack": true,
       "env": {
         "APP_VARIANT": "preview",
-        "MOBILE_VERSION_POLICY": "fingerprint",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
+        "MOBILE_VERSION_POLICY": "fingerprint"
       },
       "channel": "preview",
       "environment": "preview",
@@ -41,10 +37,8 @@
       }
     },
     "production": {
-      "corepack": true,
       "env": {
-        "APP_VARIANT": "production",
-        "NODE_OPTIONS": "--max-old-space-size=4096"
+        "APP_VARIANT": "production"
       },
       "channel": "production",
       "environment": "production",
@@ -54,10 +48,7 @@
   "submit": {
     "production": {
       "ios": {
-        "ascAppId": "6787819824"
-      },
-      "android": {
-        "track": "internal"
+        "ascAppId": "6761315631"
       }
     }
   }
