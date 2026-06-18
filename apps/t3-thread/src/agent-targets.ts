@@ -29,15 +29,6 @@ export function isRawThreadUuid(value: string): boolean {
   return THREAD_UUID_PATTERN.test(value.trim());
 }
 
-export function assertSavedAgentCapability(
-  target: ResolvedAgentTarget,
-  capability: string,
-): asserts target is ResolvedAgentTarget & { savedAgent: SavedAgent } {
-  if (!target.savedAgent) {
-    throw new Error(`${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`);
-  }
-}
-
 export function resolveSavedAgentTarget(
   state: StateFile,
   input: string,
@@ -112,14 +103,11 @@ export async function resolveAgentTarget(
   throw new Error(`Unknown thread '${input}'. Checked paired environments: ${checked}.`);
 }
 
-export function toUnsavedAgent(thread: OrchestrationThreadShell, environment: string): SavedAgent {
-  return {
-    name: thread.id,
-    environment,
-    threadId: thread.id,
-    projectId: thread.projectId,
-    title: thread.title,
-    createdAt: thread.createdAt,
-    lastSeenAssistantMessageId: null,
-  };
+export function assertSavedAgentCapability(
+  target: ResolvedAgentTarget,
+  capability: string,
+): asserts target is ResolvedAgentTarget & { savedAgent: SavedAgent } {
+  if (!target.savedAgent) {
+    throw new Error(`${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`);
+  }
 }
