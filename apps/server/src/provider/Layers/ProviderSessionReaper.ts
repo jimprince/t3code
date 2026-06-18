@@ -53,15 +53,16 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
           continue;
         }
 
+        const thread = yield* projectionSnapshotQuery
+          .getThreadShellByIdIncludingArchived(binding.threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
         const idleDurationMs = now - lastSeenMs;
-        if (idleDurationMs < inactivityThresholdMs) {
+        const isArchivedThread = thread?.archivedAt !== null && thread?.archivedAt !== undefined;
+        if (!isArchivedThread && idleDurationMs < inactivityThresholdMs) {
           continue;
         }
 
-        const thread = yield* projectionSnapshotQuery
-          .getThreadShellById(binding.threadId)
-          .pipe(Effect.map(Option.getOrUndefined));
-        if (thread?.session?.activeTurnId != null) {
+        if (!isArchivedThread && thread?.session?.activeTurnId != null) {
           yield* Effect.logDebug("provider.session.reaper.skipped-active-turn", {
             threadId: binding.threadId,
             activeTurnId: thread.session.activeTurnId,
@@ -76,7 +77,7 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
               threadId: binding.threadId,
               provider: binding.provider,
               idleDurationMs,
-              reason: "inactivity_threshold",
+              reason: isArchivedThread ? "archived_thread" : "inactivity_threshold",
             }),
           ),
           Effect.as(true),
