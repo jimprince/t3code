@@ -1,90 +1,94 @@
 # Agent Requirements
 
-## Current Task Snapshot — Raw Thread UUID Direct Lifecycle Support
+## Current Task Snapshot - Direct Raw Thread UUID Lifecycle Commands
 
 ### Active Requirements
-- Add first-class support for using a raw T3 thread UUID directly, without a prior manual `attach`, for common lifecycle commands where feasible.
-- Support either a saved agent name or a raw thread UUID for: `status`, `result`, `worklog`, `send`, `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe`.
-- When a raw UUID is provided, resolve it by checking saved mappings first and then paired environments, infer environment/project metadata from the remote thread listing, and proceed without requiring a manual attach step.
-- Preserve existing saved-name behavior and keep `attach` available for explicit persistent aliases.
-- If a raw UUID cannot be found, report the paired environments checked and give a clear error.
-- Update docs and instructions to reflect the new direct-UUID workflow:
-  - `README.md`
-  - `docs/AGENT_OPERATIONS.md`
-  - `/Users/brad/.shared/skills/t3-threads/SKILL.md`
-- Add focused regression tests for raw UUID resolution and unsupported/not-found cases.
-- Run focused tests, `npm run build`, dist freshness validation if required, and `npm test` if feasible.
+- Implement first-class support for using a raw T3 `threadId` UUID directly with common `t3-thread` lifecycle commands.
+- Remove the need for agents/operators to manually run `attach --name continued-<shortid> ...` before `status`, `result`, `send`, and related commands when the thread already exists.
+- Preserve existing saved-agent-name behavior and keep explicit `attach` available for persistent aliases.
+- Resolve raw UUIDs by checking saved mappings first, then paired environments, with clear not-found errors that state which environments were checked.
 
 ### Constraints
-- This tracker update is the first project write for this task.
 - Keep `t3-thread` a thin wrapper over T3 Code native APIs.
-- Avoid broad rewrites; prefer a shared resolver used by the affected commands.
-- Preserve existing saved-name workflows and compatibility aliases.
-- Preserve unrelated dirty work already present in the repo.
+- Preserve unrelated dirty work already present in this repository.
+- Update repo docs and the shared `t3-threads` skill when command behavior changes.
+- Do not remove the deprecated `t3-agent` compatibility alias.
 
 ### Acceptance Criteria
-- Operators and agents can run commands like `t3-thread status <uuid>`, `t3-thread result <uuid>`, and `t3-thread send <uuid> "..."` without first running `attach`.
-- Raw UUID resolution prefers a saved mapping when one exists for that thread id.
-- When the UUID is unsaved, the CLI resolves the thread by scanning paired environments and uses remote metadata to continue.
-- Not-found errors name the paired environments checked.
-- Focused regression tests cover direct UUID resolution plus not-found or unsupported cases.
-- Updated docs and shared skill describe the direct-UUID workflow and clarify that manual attach is now optional for common lifecycle commands.
+- Common lifecycle commands accept either a saved agent name or a raw thread UUID where feasible.
+- Raw UUID lookup infers the environment/project metadata needed to operate without creating a temporary saved mapping.
+- Focused regression tests cover raw UUID resolution and not-found/unsupported cases.
+- Verification includes relevant focused tests, build, dist freshness validation if source changes require it, and full test run if feasible.
 
 ### Status
-- Completed locally.
+- Completed and folded into the local cleanup commit.
+- Original worker `t3-thread-uuid-direct` used remote thread id `ddbd58d0-6b5b-4036-a599-d4240a998600` in `local-mbp`, project `6ad68f3a-4431-4121-ab23-4d431fce6c9f`, branch `t3/raw-thread-id-direct`.
+- The stale saved mapping and related local subscription were removed during watcher-route cleanup.
 
-### Validation Update
-- Added a UUID-aware lifecycle target resolver in `src/agent-targets.ts`.
-- Lifecycle commands now accept either a saved agent name or a raw thread UUID for: `status`, `result`, `worklog`, `send`, `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe --watch`.
-- Raw UUID resolution now prefers an existing saved mapping, then scans paired environments and infers environment/project metadata from the remote thread shell.
-- Not-found raw UUID errors now report the paired environments checked.
-- `result --mark-seen` is explicitly rejected for unsaved raw UUID targets because read state is stored locally.
-- Updated `README.md`, `docs/AGENT_OPERATIONS.md`, and the shared `t3-threads` skill to document the direct-UUID workflow and the remaining `attach` use cases.
-- Added focused regression coverage in `tests/agent-targets.test.ts` for saved-name preference, unsaved raw UUID resolution, preferred-environment ordering, paired-environment not-found errors, and unsupported saved-state-only behavior.
-- Fresh-agent validation via `subagents codex` passed: a new agent discovered the updated UUID-direct lifecycle workflow, correctly identified the covered commands, and called out the remaining saved-alias-only cases.
-- Validation passed: `npm ci`, `npm test -- agent-targets state`, `npm run build`, `npm test -- dist-freshness`, and `npm test`.
-
-## Current Task Snapshot — Child Completion Notification Reliability
+## Current Task Snapshot - Existing Thread Continuation Workflow
 
 ### Active Requirements
-- Investigate why a parent/original T3 thread subscribed for child completion notifications does not reliably receive a notification when the child completes.
-- Orient against the intended behavior documented in `LLM_INSTRUCTIONS.md`, `docs/AGENT_OPERATIONS.md`, `docs/ACTIVE_COORDINATION.md`, and `~/.shared/skills/t3-threads/SKILL.md`.
-- Determine whether the root cause is in watcher lifecycle, subscription persistence, event detection, or delivery.
-- Reproduce the failure path if feasible.
-- Propose a fix and implement it if confidence is high and validation passes.
-- Preserve existing thread-to-thread notification routing semantics.
-- Rebuild committed `dist/cli.js` after any `src/` change.
-- Run `npm test` and report exact results.
-- Commit the completed work on branch `t3/fix-completion-notify` with a clear message.
+- Document the operator workflow for prompts like `continue this thread: <uuid>`.
+- Treat the UUID as an existing T3 Code `threadId`, not as a request to create a new worker.
+- Keep the workflow aligned with the shared `t3-threads` skill and user preferences.
 
 ### Constraints
-- This tracker update is the first project write for this task.
-- Do not hand-edit `~/.config/t3-remote-agents/state.json` as a fix.
-- Keep `t3-thread` a thin wrapper over native T3 APIs.
-- Do not break existing notification routing for thread-to-thread cases.
-- Avoid destructive git operations and preserve unrelated work.
+- Do not change CLI behavior in this docs-only pass.
+- Preserve unrelated dirty work already present in this repository.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
 
 ### Acceptance Criteria
-- Root cause is identified with concrete file/line evidence.
-- Reproduction steps clearly state observed vs expected behavior if repro is possible.
-- Any implemented fix is covered by regression tests.
-- `npm run build` is run after `src/` changes and committed `dist/cli.js` is refreshed.
-- `npm test` passes, or any failure is reported exactly.
-- A commit exists on `t3/fix-completion-notify` with the completed fix or investigation result.
+- `docs/AGENT_OPERATIONS.md` tells operators how to resolve, attach, inspect, and continue an existing thread by UUID.
+- `README.md` exposes the common commands needed for existing-thread continuation.
 
 ### Status
-- Completed locally.
+- Completed. Added the existing-thread continuation workflow to `docs/AGENT_OPERATIONS.md` and exposed the relevant commands in `README.md`.
 
-### Validation Update
-- Root cause confirmed in the create/subscribe and watch command paths: subscriptions were persisted, but no on-demand watcher bootstrap or singleton idle-exit lifecycle existed in the implementation.
-- Added watcher bootstrap helpers and wired `create`/`subscribe` to best-effort spawn a singleton detached watcher when a notification route is attached.
-- Added watcher idle-work detection so the watcher stays alive while subscribed source threads are still running or undelivered notifications remain.
-- Added regression coverage for watcher-work detection and watcher singleton lease handling.
-- Updated `README.md` and `docs/AGENT_OPERATIONS.md` to document the on-demand watcher lifecycle and `watch --ensure` usage.
-- `npm ci` completed successfully in this worktree.
-- `npm test -- watch watcher-process` passed: 8 tests across 2 files.
-- `npm run build` passed and refreshed `dist/cli.cjs`.
-- `npm test` passed: 83 tests across 11 files.
+## Current Task Snapshot - K1 CFS Open MMU Handoff Registration
+
+### Active Requirements
+- Register `/Users/brad/Programming/k1-cfs-open-mmu` as a project in the local `local-mbp` T3 Code environment.
+- Create a real T3 worker thread for the K1 CFS Open MMU handoff.
+- Verify creation with a returned remote `threadId` and status check.
+- Record the active project/thread handoff state for future agents.
+
+### Constraints
+- Use `t3-thread`, not the deprecated `t3-agent` command.
+- Do not fabricate a thread id; a worker exists only after `t3-thread create` returns `threadId`.
+- Do not initialize git or create a branch implicitly; the target project folder is not currently a git repository.
+- Preserve all printer safety constraints in the worker brief.
+
+### Acceptance Criteria
+- `local-mbp` contains a T3 project for `/Users/brad/Programming/k1-cfs-open-mmu`.
+- Saved worker `k1-cfs-open-mmu-handoff` exists with a real thread id.
+- `t3-thread status k1-cfs-open-mmu-handoff` reports a non-error state.
+- `docs/ACTIVE_COORDINATION.md` records the live handoff state.
+
+### Status
+- Completed handoff: project id `dbad92eb-0b76-4818-90c7-fdc576652235`; worker `k1-cfs-open-mmu-handoff`; thread id `c313ba2a-9b66-4b69-b7b8-02e334703d9f`; first turn completed. The worker performed read-only orientation, made no file/printer changes, confirmed the unsafe `CFS_WIPE_NOZZLE` purge-station X-motion blocker, and recommended the next supervised step be disabling that call and no-oping `BOX_NOZZLE_CLEAN` before any print/toolchange retry.
+
+## Current Task Snapshot - Ice Menu Bar Handoff Registration
+
+### Active Requirements
+- Register `/Users/brad/Programming/Ice` as a project in the local `local-mbp` T3 Code environment.
+- Create a real T3 worker thread for continuing the Ice menu-bar/notch debugging handoff.
+- Verify creation with a returned remote `threadId` and status check.
+- Record the active project/thread handoff state for future agents.
+
+### Constraints
+- Use `t3-thread`, not the deprecated `t3-agent` command.
+- Do not fabricate a thread id; a worker exists only after `t3-thread create` returns `threadId`.
+- Preserve the current dirty Ice checkout; do not silently commit, reset, or discard local patches.
+- The handoff must explicitly tell the worker that current Ice patches are uncommitted in `/Users/brad/Programming/Ice`.
+
+### Acceptance Criteria
+- `local-mbp` contains a T3 project for `/Users/brad/Programming/Ice`.
+- Saved worker `ice-menu-bar-handoff` exists with a real thread id.
+- `t3-thread status ice-menu-bar-handoff` reports a non-error state.
+- `docs/ACTIVE_COORDINATION.md` records the live handoff state.
+
+### Status
+- Completed initial handoff: project id `3f22d089-cf55-49ed-ab93-c6affc99a85b`; worker `ice-menu-bar-handoff`; thread id `5e3f4e94-01fe-4375-a3bc-7de57951fd0b`; initial status `running`.
 
 ## Current Task Snapshot - Protein Functional Topology Handoff Registration
 
@@ -189,7 +193,7 @@
 - This tracker update is the first project write for this task.
 - Keep `t3-thread` a thin wrapper over T3 Code native APIs.
 - Preserve existing thread lifecycle behavior and command compatibility.
-- Preserve existing user work and avoid destructive git operations.
+- Preserve the remote repo state and avoid destructive git operations.
 - Do not remove the deprecated `t3-agent` alias.
 
 ### Acceptance Criteria
@@ -224,6 +228,79 @@
 - Live `dev-vm` smoke passed using `/tmp/t3-thread-project-smoke-20260520143904`: add with `--create-dir`, rename, set model, clear model, remove, and final list confirmed the smoke project was no longer active.
 - `npx tsc --noEmit` is not a valid repo check in the current configuration because existing vendored contract files lack NodeNext `.js` import extensions and have pre-existing type errors; one new type issue surfaced by that run was fixed before normal validation.
 - Fresh-agent validation via `subagents codex` passed: a new agent found the repo/shared docs and reported the canonical `t3-thread project` commands plus the preserved `projects --env` shortcut without hidden parent-session context.
+
+## Current Task Snapshot — Audit Dependency Fix
+
+### Active Requirements
+- Resolve the current `npm audit` findings in `t3-thread` for transitive `uuid@13.0.0` and `ws@8.20.0`.
+- Prefer bumping the Effect package family together if that naturally updates the vulnerable transitive packages.
+- If package bumps do not resolve the findings, use targeted npm overrides for `uuid@13.0.1` and `ws@8.20.1`.
+- Keep the CLI behavior unchanged.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Avoid forced audit fixes that introduce unrelated dependency churn.
+- Preserve the remote repo state and avoid destructive git operations.
+
+### Acceptance Criteria
+- `npm audit` reports zero vulnerabilities.
+- `npm run build` succeeds.
+- `npm test` succeeds.
+- `t3-thread --help` still runs.
+
+### Status
+- Completed using targeted npm overrides for `uuid@13.0.1` and `ws@8.20.1` while keeping the existing Effect `4.0.0-beta.45` dependency line.
+- Validation passed: `npm run build`, `npm test` (56 tests), `npm audit` (0 vulnerabilities), and `t3-thread --help`.
+
+## Current Task Snapshot — Caller Environment Metadata
+
+### Active Requirements
+- Update `t3-thread caller` and notification caller resolution to consume
+  `T3_ENVIRONMENT_ID` / `T3_ENVIRONMENT_NAME` when present alongside
+  `T3_THREAD_ID`.
+- Prefer explicit environment context over scanning every saved environment.
+- Return an unsaved caller payload like
+  `{ "threadId": "...", "environment": "local-mbp", "saved": false }`, mapping
+  env id/name/label back to the saved environment key used for routing.
+- Preserve the existing saved-agent resolution behavior when the current thread
+  id is saved locally.
+- Preserve fallback paired-environment scanning when the new metadata is not
+  present.
+- Add focused regression tests for env-provided caller environment resolution.
+- Rebuild committed distribution output if source changes require it.
+- Verify the focused tests and live `t3-thread caller` behavior in this session.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+- Preserve existing state format compatibility.
+- Preserve existing user work and avoid destructive git operations.
+
+### Acceptance Criteria
+- `resolveCallerThreadId` still reads trimmed `T3_THREAD_ID`.
+- A new caller resolver reads `T3_ENVIRONMENT_NAME`/`T3_ENVIRONMENT_ID` and
+  returns an unsaved endpoint without remote environment scanning when possible.
+- Caller subscription during `t3-thread create` can use the env-provided caller environment.
+- Existing saved-agent lookup remains preferred over raw environment metadata.
+- Fallback scanning still works when environment metadata is absent.
+- Tests cover direct metadata, saved-agent preference, environment id matching,
+  environment name/label matching, and missing metadata.
+- Focused tests, build/dist freshness, and relevant docs are updated.
+
+### Status
+- Completed locally.
+
+### Validation Update
+- Added caller environment metadata parsing for `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME`.
+- Caller endpoint resolution now prefers saved agent mappings, then maps env id/name/label to the saved environment key before falling back to paired-environment scanning.
+- Updated `t3-thread caller`, default create notification resolution, `subscribe`, and `unsubscribe` caller paths to pass env metadata into resolution.
+- Added regression tests for complete/incomplete env metadata, saved-agent precedence, environment id matching, environment label matching, saved-name matching, and missing metadata fallback.
+- Updated README, operations runbook, and shared `t3-threads` skill routing notes.
+- `npm run test -- state` passed: 21 tests.
+- `npm run build` passed and updated `dist/cli.cjs`.
+- `npm run test -- state dist-freshness` passed: 22 tests.
+- `npm run test` passed: 57 tests across 9 files.
+- `npm run --silent cli -- caller` returned the current unsaved caller with `environment: "local-mbp"` and `saved: false`.
 
 ## Current Task Snapshot — Legacy Schema Decode Compatibility
 
@@ -552,3 +629,36 @@
 
 ### Status
 - Completed.
+
+## Current Task Snapshot — On-Demand Watcher Lifecycle
+
+### Active Requirements
+- The notification watcher must auto-launch when `t3-thread create` (and `subscribe`) runs if no watcher is already running.
+- The watcher must have an exit criteria so it does not run indefinitely.
+- Approved design (user, 2026-06-04): on-demand + idle-exit; drop launchd `KeepAlive`/`RunAtLoad` (keep the plist for manual `load`). Idle window = 15 min.
+
+### Constraints
+- Auto-launch must be a singleton (pidfile guard) — never spawn duplicate watchers.
+- Idle-exit must NOT fire while any subscribed source thread is still in flight (running) or any notification is undelivered, or completions would be missed.
+- Auto-launch hook must be best-effort: failure to spawn the watcher must never break `create`/`subscribe`.
+- Keep the CLI a thin wrapper; reuse existing state/lock + detect/deliver primitives.
+
+### Acceptance Criteria
+- `create`/`subscribe` spawn a detached watcher when none is running; a second invocation does not double-spawn (pidfile).
+- `watch` accepts `--idle-exit <seconds>` (default 900) and `--max-lifetime <seconds>` backstop; exits cleanly when idle with nothing in flight.
+- Watcher stays alive while a subscribed source thread is `running` or notifications are undelivered.
+- launchd plist no longer auto-restarts; `npm run build` refreshes `dist/cli.cjs`; `npm test` passes (incl. dist-freshness).
+- README, `~/.shared/skills/t3-threads/SKILL.md`, and LLM_INSTRUCTIONS maintenance note updated.
+- Watcher scans must tolerate stale saved source mappings whose remote thread has already vanished.
+
+### Status
+- Completed.
+
+### Validation
+- `npm run build` refreshes `dist/cli.cjs`; `npm test` → 11 files / 88 tests pass (incl. dist-freshness).
+- Added `hasActiveWork` idle-exit guard + tests; verified the "still running" regression test FAILS when the guard is broken, then restored.
+- Added stale-source hardening so `watch --once --no-deliver` skips vanished source threads instead of failing the whole scan.
+- Live (isolated temp state): idle-exit fires (`exit: idle`), pidfile is written then removed, and a second concurrent `watch` is skipped (singleton).
+- Live: `watch --ensure` spawns a detached watcher (`spawned: true`), a second `--ensure` no-ops (`spawned: false`), and the spawned watcher idle-exits + cleans its pidfile. create/subscribe call the same `ensureWatcherRunning()`.
+- launchd plist set to `RunAtLoad`/`KeepAlive` off and booted out; on-demand spawning is now the path.
+- All requirements/acceptance criteria met. The auto-spawn-from-`create` path was validated via the shared `ensureWatcherRunning()` (exercised live through `--ensure`) rather than a live `create` to avoid polluting real remote state.

@@ -35,8 +35,14 @@ import {
   upsertEnvironment,
 } from "./state.js";
 import { wrapWithPreamble } from "./thread-preamble.js";
-import { claimWatcherLease, ensureWatcherProcess } from "./watcher-process.js";
-import { deliverPendingNotifications, detectAttentionEvents, hasWatcherWork } from "./watch.js";
+import { deliverPendingNotifications, detectAttentionEvents, hasActiveWork } from "./watch.js";
+import {
+  DEFAULT_IDLE_EXIT_SECONDS,
+  clearOwnWatcherPid,
+  ensureWatcherRunning,
+  isWatcherRunning,
+  writeWatcherPid,
+} from "./watcher-process.js";
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
 import type { SavedAgent } from "./types.js";
 
@@ -171,16 +177,6 @@ function nowIso(): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function ensureNotificationWatcher(options: { env?: string; deliver?: boolean } = {}): Promise<void> {
-  await ensureWatcherProcess({
-    env: options.env,
-    intervalSeconds: 5,
-    idleExitSeconds: 900,
-    maxLifetimeSeconds: 86_400,
-    deliver: options.deliver ?? true,
-  });
 }
 
 const program = new Command();
@@ -541,9 +537,6 @@ agent
         result: null,
       };
     });
-    if (notifyCaller) {
-      void ensureNotificationWatcher({ env: options.env }).catch(() => {});
-    }
     printJson({
       name: options.name,
       environment: options.env,
@@ -554,6 +547,10 @@ agent
       notifySubscriberAgentName: notifyCaller?.name ?? null,
       notifySubscriberThreadId: notifyCaller?.threadId ?? null,
     });
+    // Best-effort: make sure a notification watcher is running to deliver completions.
+    if (notifyCaller) {
+      await ensureWatcherRunning();
+    }
   });
 
 agent
@@ -599,12 +596,11 @@ agent
   .argument("<name>", "agent name")
   .description("Archive the remote thread for a saved agent via T3 RPC")
   .action(async (name) => {
-    const { agent: savedAgent, client, saved } = await withAgent(name);
+    const { agent: savedAgent, client } = await withAgent(name);
     const archived = await client.archiveThread(savedAgent.threadId);
     printJson({
-      agent: saved ? savedAgent.name : null,
+      agent: savedAgent.name,
       threadId: savedAgent.threadId,
-      environment: savedAgent.environment,
       archived,
     });
   });
@@ -711,8 +707,9 @@ agent
       },
       result: null,
     }));
-    void ensureNotificationWatcher({ env: source.environment }).catch(() => {});
     printJson(next);
+    // Best-effort: ensure a watcher is running to deliver this subscription's events.
+    await ensureWatcherRunning();
   });
 
 agent
@@ -774,44 +771,57 @@ agent
   .description("Poll saved agents for attention-worthy transitions and route notifications to subscribers")
   .option("--env <name>", "optional saved environment filter")
   .option("--interval <seconds>", "poll interval in seconds", "5")
-  .option("--idle-exit <seconds>", "exit after this many idle seconds; 0 disables idle exit", "900")
-  .option("--max-lifetime <seconds>", "hard-stop the watcher after this many seconds; 0 disables the limit", "86400")
-  .option("--ensure", "spawn a detached singleton watcher if none is running, then exit")
   .option("--once", "run a single scan and exit")
   .option("--no-deliver", "record notification events but do not send messages to subscriber threads")
+  .option(
+    "--idle-exit <seconds>",
+    "self-exit after this many seconds with nothing in flight (0 disables)",
+    String(DEFAULT_IDLE_EXIT_SECONDS),
+  )
+  .option(
+    "--max-lifetime <seconds>",
+    "hard cap on total runtime as a backstop (0 disables)",
+    "21600",
+  )
+  .option(
+    "--ensure",
+    "spawn a detached background watcher if none is running, then exit (no-op if one already runs)",
+  )
   .action(async (options) => {
     const intervalMs = Math.max(1, Number(options.interval)) * 1000;
     const idleExitMs = Math.max(0, Number(options.idleExit)) * 1000;
     const maxLifetimeMs = Math.max(0, Number(options.maxLifetime)) * 1000;
 
+    // --ensure: idempotently make sure a background watcher exists, then return.
     if (options.ensure) {
-      const ensured = await ensureWatcherProcess({
-        env: options.env,
-        intervalSeconds: Math.max(1, Number(options.interval)),
+      const spawned = await ensureWatcherRunning({
         idleExitSeconds: Math.max(0, Number(options.idleExit)),
-        maxLifetimeSeconds: Math.max(0, Number(options.maxLifetime)),
-        deliver: options.deliver,
       });
-      printJson({
-        ensured: true,
-        ...ensured,
-        env: options.env ?? null,
-      });
+      printJson({ ensured: true, spawned });
       return;
     }
 
-    const releaseLease = options.once ? null : await claimWatcherLease();
-    if (!options.once && !releaseLease) {
-      printJson({
-        started: false,
-        reason: "watcher already running",
-        env: options.env ?? null,
-      });
-      return;
+    // Singleton: a long-running watcher claims a pidfile so create/subscribe never
+    // spawn duplicates. --once is a throwaway scan and skips all of this.
+    if (!options.once) {
+      if (await isWatcherRunning()) {
+        printJson({ skipped: "another watcher is already running" });
+        return;
+      }
+      await writeWatcherPid();
+      const cleanup = () => {
+        void clearOwnWatcherPid();
+      };
+      process.on("exit", cleanup);
+      for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+        process.on(signal, () => {
+          void clearOwnWatcherPid().finally(() => process.exit(0));
+        });
+      }
     }
 
     const startedAt = Date.now();
-    let idleSince = 0;
+    let lastWorkAt = startedAt;
 
     try {
       for (;;) {
@@ -823,40 +833,41 @@ agent
               env: options.env,
             })
           : [];
-        const workRemaining = await hasWatcherWork({
-          env: options.env,
-        });
         printJson({
           scannedAt: nowIso(),
           env: options.env ?? null,
           deliver: options.deliver,
           detectedNotifications,
           deliveryResults,
-          workRemaining,
         });
 
         if (options.once) {
           break;
         }
 
-        const nowMs = Date.now();
-        if (maxLifetimeMs > 0 && nowMs - startedAt >= maxLifetimeMs) {
+        // Stay alive while anything is in flight; otherwise start the idle countdown.
+        const active =
+          detectedNotifications.length > 0 ||
+          deliveryResults.length > 0 ||
+          (await hasActiveWork({ env: options.env }));
+        const now = Date.now();
+        if (active) {
+          lastWorkAt = now;
+        } else if (idleExitMs > 0 && now - lastWorkAt >= idleExitMs) {
+          printJson({ exit: "idle", idleSeconds: Math.round((now - lastWorkAt) / 1000) });
           break;
         }
-
-        if (workRemaining) {
-          idleSince = 0;
-        } else if (idleExitMs > 0) {
-          idleSince ||= nowMs;
-          if (nowMs - idleSince >= idleExitMs) {
-            break;
-          }
+        if (maxLifetimeMs > 0 && now - startedAt >= maxLifetimeMs) {
+          printJson({ exit: "max-lifetime", uptimeSeconds: Math.round((now - startedAt) / 1000) });
+          break;
         }
 
         await sleep(intervalMs);
       }
     } finally {
-      await releaseLease?.();
+      if (!options.once) {
+        await clearOwnWatcherPid();
+      }
     }
   });
 
