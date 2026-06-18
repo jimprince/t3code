@@ -123,13 +123,20 @@ export default defineConfig(() => {
     ],
     optimizeDeps: {
       include: [
+        "@dnd-kit/core",
+        "@dnd-kit/modifiers",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities",
         "@pierre/diffs",
         "@pierre/diffs/editor",
         "@pierre/diffs/react",
         "@pierre/diffs/worker/worker.js",
         "effect/Array",
         "effect/Order",
+        "react-dom",
         "react-dom/client",
+        "react-markdown",
+        "remark-gfm",
       ],
     },
     define: {

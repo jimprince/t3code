@@ -96,6 +96,7 @@ import { subscribeTerminalMetadata, terminalSessionManager } from "../../termina
 import { subscribePortDiscovery, usePortDiscoveryStore } from "../../portDiscoveryState";
 import { resetWsReconnectBackoff } from "~/rpc/wsConnectionState";
 import { resolveRemotePairingTarget } from "@t3tools/shared/remote";
+import { maybeRequestHeadlessUpdateCheck } from "~/serverUpdateCheck";
 
 type EnvironmentServiceState = {
   readonly queryClient: QueryClient;
@@ -150,6 +151,7 @@ let activeService: EnvironmentServiceState | null = null;
 let needsProviderInvalidation = false;
 let lastBrowserHiddenAt: number | null = null;
 let lastBrowserResumeReconnectAt = Number.NEGATIVE_INFINITY;
+const lastHeartbeatTimeoutReconnectAtByEnvironment = new Map<EnvironmentId, number>();
 
 // TODO(CLIENT-RUNTIME MIGRATION - DO NOT EXPAND THIS WEB-ONLY COPY):
 // This file still owns web's legacy thread-detail subscription cache. Mobile
@@ -168,6 +170,8 @@ let lastBrowserResumeReconnectAt = Number.NEGATIVE_INFINITY;
 const THREAD_DETAIL_SUBSCRIPTION_IDLE_EVICTION_MS = 15 * 60 * 1000;
 const MAX_CACHED_THREAD_DETAIL_SUBSCRIPTIONS = 32;
 const BROWSER_RESUME_RECONNECT_COOLDOWN_MS = 2_000;
+const BROWSER_RESUME_LIVENESS_PROBE_TIMEOUT_MS = 4_000;
+const HEARTBEAT_TIMEOUT_RECONNECT_COOLDOWN_MS = 2_000;
 const INITIAL_SERVER_CONFIG_SNAPSHOT_WAIT_MS = 150;
 const NOOP = () => undefined;
 const SSH_HTTP_STATUS_RE = /^\[ssh_http:(\d+)\]\s/u;
@@ -392,6 +396,41 @@ function shouldEvictThreadDetailSubscription(entry: ThreadDetailSubscriptionEntr
   return entry.refCount === 0 && !isNonIdleThreadDetailSubscription(entry);
 }
 
+function hasStartedThreadWithoutHydratedDetail(entry: ThreadDetailSubscriptionEntry): boolean {
+  const thread = selectThreadByRef(
+    useStore.getState(),
+    scopeThreadRef(entry.environmentId, entry.threadId),
+  );
+  if (!thread) {
+    return false;
+  }
+
+  const hasHydratedDetail =
+    thread.messages.length > 0 ||
+    thread.activities.length > 0 ||
+    thread.proposedPlans.length > 0 ||
+    thread.turnDiffSummaries.length > 0;
+  if (hasHydratedDetail) {
+    return false;
+  }
+
+  return (
+    thread.latestTurn !== null ||
+    thread.session !== null ||
+    thread.goal !== null ||
+    thread.pendingSourceProposedPlan !== undefined
+  );
+}
+
+function refreshThreadDetailSubscription(entry: ThreadDetailSubscriptionEntry): void {
+  if (entry.unsubscribe === NOOP) {
+    return;
+  }
+
+  entry.unsubscribe();
+  entry.unsubscribe = NOOP;
+}
+
 function attachThreadDetailSubscription(entry: ThreadDetailSubscriptionEntry): boolean {
   if (entry.unsubscribeConnectionListener !== null) {
     entry.unsubscribeConnectionListener();
@@ -571,6 +610,9 @@ export function retainThreadDetailSubscription(
   const existing = threadDetailSubscriptions.get(key);
   if (existing) {
     clearThreadDetailSubscriptionEviction(existing);
+    if (existing.refCount === 0 && hasStartedThreadWithoutHydratedDetail(existing)) {
+      refreshThreadDetailSubscription(existing);
+    }
     existing.refCount += 1;
     existing.lastAccessedAt = Date.now();
     if (!attachThreadDetailSubscription(existing)) {
@@ -1163,12 +1205,18 @@ function createPrimaryEnvironmentClient(
     );
   }
   const connectionLabel = knownEnvironment?.label ?? null;
+  const environmentId = knownEnvironment?.environmentId ?? null;
 
   return createWsRpcClient(
     new WsTransport(wsBaseUrl, {
       getConnectionLabel: () => connectionLabel,
       getVersionMismatchHint: () =>
         resolveServerConfigVersionMismatch(getServerConfig())?.hint ?? null,
+      onHeartbeatTimeout: () => {
+        if (environmentId) {
+          reconnectEnvironmentConnectionAfterHeartbeatTimeout(environmentId);
+        }
+      },
     }),
   );
 }
@@ -1265,6 +1313,9 @@ function createSavedEnvironmentClient(
             ),
           );
         },
+        onHeartbeatTimeout: () => {
+          reconnectEnvironmentConnectionAfterHeartbeatTimeout(environmentId);
+        },
       },
     ),
   );
@@ -1317,6 +1368,11 @@ async function refreshSavedEnvironmentMetadata(
     descriptor: serverConfig.environment,
     serverConfig,
     scopes: sessionState.authenticated ? (sessionState.scopes ?? scopeHint ?? null) : null,
+  });
+  maybeRequestHeadlessUpdateCheck({
+    environmentId: record.environmentId,
+    serverConfig,
+    client,
   });
   useSavedEnvironmentRegistryStore
     .getState()
@@ -1702,20 +1758,67 @@ function reconnectEnvironmentConnectionsAfterBrowserResume(reason: string): void
   if (now - lastBrowserResumeReconnectAt < BROWSER_RESUME_RECONNECT_COOLDOWN_MS) {
     return;
   }
+  lastBrowserResumeReconnectAt = now;
 
   for (const connection of environmentConnections.values()) {
-    if (connection.client.isHeartbeatFresh()) {
-      continue;
-    }
-    lastBrowserResumeReconnectAt = now;
-    void connection.reconnect().catch((error) => {
-      console.warn("Environment reconnect after browser resume failed", {
-        environmentId: connection.environmentId,
-        reason,
-        error: error instanceof Error ? error.message : String(error),
+    // A mobile OS can silently kill a backgrounded socket while the heartbeat
+    // timestamp still looks fresh, so actively probe the connection instead of
+    // trusting the last pong. A live connection answers immediately and is left
+    // alone; a dead one fails the probe and gets reconnected.
+    void connection
+      .verifyLiveness(BROWSER_RESUME_LIVENESS_PROBE_TIMEOUT_MS)
+      .then((alive) => {
+        if (alive) {
+          return;
+        }
+        return connection.reconnect();
+      })
+      .catch((error) => {
+        console.warn("Environment reconnect after browser resume failed", {
+          environmentId: connection.environmentId,
+          reason,
+          error: error instanceof Error ? error.message : String(error),
+        });
       });
-    });
   }
+}
+
+function isBrowserTabFocusedForHeartbeatReconnect(): boolean {
+  if (typeof document === "undefined") {
+    return true;
+  }
+
+  if (document.visibilityState !== "visible") {
+    return false;
+  }
+
+  return typeof document.hasFocus !== "function" || document.hasFocus();
+}
+
+function reconnectEnvironmentConnectionAfterHeartbeatTimeout(environmentId: EnvironmentId): void {
+  if (!isBrowserTabFocusedForHeartbeatReconnect()) {
+    return;
+  }
+
+  const now = Date.now();
+  const lastReconnectAt =
+    lastHeartbeatTimeoutReconnectAtByEnvironment.get(environmentId) ?? Number.NEGATIVE_INFINITY;
+  if (now - lastReconnectAt < HEARTBEAT_TIMEOUT_RECONNECT_COOLDOWN_MS) {
+    return;
+  }
+
+  const connection = environmentConnections.get(environmentId);
+  if (!connection) {
+    return;
+  }
+
+  lastHeartbeatTimeoutReconnectAtByEnvironment.set(environmentId, now);
+  void connection.reconnect().catch((error) => {
+    console.warn("Environment reconnect after heartbeat timeout failed", {
+      environmentId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 }
 
 function subscribeBrowserResumeReconnects(): () => void {
@@ -2081,6 +2184,7 @@ export async function resetEnvironmentServiceForTests(): Promise<void> {
   stopActiveService();
   lastBrowserHiddenAt = null;
   lastBrowserResumeReconnectAt = Number.NEGATIVE_INFINITY;
+  lastHeartbeatTimeoutReconnectAtByEnvironment.clear();
   lastAppliedProjectionVersionByEnvironment.clear();
   pendingSavedEnvironmentConnections.clear();
   savedEnvironmentConnectionAttempts.clear();

@@ -44,6 +44,7 @@ import { readLocalApi } from "../localApi";
 import { parseDiffRouteSearch, stripDiffSearchParams } from "../diffRouteSearch";
 import {
   collapseExpandedComposerCursor,
+  parseComposerGoalSlashCommand,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
 import {
@@ -179,6 +180,7 @@ import { ThreadErrorBanner } from "./chat/ThreadErrorBanner";
 import { ComposerBannerStack, type ComposerBannerStackItem } from "./chat/ComposerBannerStack";
 import {
   buildExpiredTerminalContextToastCopy,
+  buildEnvironmentUnavailableDescription,
   buildLocalDraftThread,
   collectUserMessageBlobPreviewUrls,
   createLocalDispatchSnapshot,
@@ -256,6 +258,8 @@ type EnvironmentUnavailableState = {
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly connectionState: "connecting" | "disconnected" | "error";
+  readonly endpoint: string | null;
+  readonly lastError: string | null;
 };
 
 type ThreadPlanCatalogEntry = Pick<Thread, "id" | "proposedPlans">;
@@ -403,6 +407,24 @@ function formatOutgoingPrompt(params: {
   const caps = getProviderModelCapabilities(params.models, params.model, params.provider);
   const promptEffort = resolvePromptInjectedEffort(caps, params.effort);
   return applyClaudePromptEffortPrefix(params.text, promptEffort);
+}
+
+function formatGoalInitialPrompt(goal: string): string {
+  return [
+    `Active T3 goal: ${goal}`,
+    "",
+    "Work toward this goal until it is satisfied. When you believe it is satisfied, state the concrete transcript-visible evidence and any verification performed.",
+  ].join("\n");
+}
+
+function formatGoalStatus(goal: Thread["goal"]): { title: string; description: string } {
+  if (!goal) {
+    return { title: "No active goal", description: "Use /goal <condition> to start one." };
+  }
+  return {
+    title: goal.status === "achieved" ? "Goal achieved" : "Active goal",
+    description: goal.lastReason ? `${goal.goal}\n${goal.lastReason}` : goal.goal,
+  };
 }
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
@@ -1472,12 +1494,20 @@ function ChatViewContent(props: ChatViewProps) {
         activeSavedEnvironmentConnectionState === "error"
           ? activeSavedEnvironmentConnectionState
           : "disconnected",
+      endpoint:
+        activeSavedEnvironmentRecord?.httpBaseUrl ??
+        activeSavedEnvironmentRecord?.wsBaseUrl ??
+        null,
+      lastError: activeSavedEnvironmentRuntime?.lastError ?? null,
     };
   }, [
     activeEnvironmentUnavailable,
     activeEnvironmentUnavailableLabel,
+    activeSavedEnvironmentRecord?.httpBaseUrl,
+    activeSavedEnvironmentRecord?.wsBaseUrl,
     activeSavedEnvironmentConnectionState,
     activeSavedEnvironmentId,
+    activeSavedEnvironmentRuntime?.lastError,
   ]);
   const [reconnectingEnvironmentId, setReconnectingEnvironmentId] = useState<EnvironmentId | null>(
     null,
@@ -1755,7 +1785,11 @@ function ChatViewContent(props: ChatViewProps) {
               : "disconnected"}
           </>
         ),
-        description: "Reconnect this environment before sending messages or running actions.",
+        description: buildEnvironmentUnavailableDescription({
+          connectionState: activeEnvironmentUnavailableState.connectionState,
+          endpoint: activeEnvironmentUnavailableState.endpoint,
+          lastError: activeEnvironmentUnavailableState.lastError,
+        }),
         actions: (
           <>
             <Button
@@ -2176,6 +2210,19 @@ function ChatViewContent(props: ChatViewProps) {
     () =>
       deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
+  );
+  const isThreadDetailLoading = Boolean(
+    isServerThread &&
+    activeThread &&
+    timelineEntries.length === 0 &&
+    activeThread.messages.length === 0 &&
+    activeThread.activities.length === 0 &&
+    activeThread.proposedPlans.length === 0 &&
+    activeThread.turnDiffSummaries.length === 0 &&
+    (activeThread.latestTurn !== null ||
+      activeThread.session !== null ||
+      activeThread.goal !== null ||
+      activeThread.pendingSourceProposedPlan !== undefined),
   );
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
@@ -3445,6 +3492,7 @@ function ChatViewContent(props: ChatViewProps) {
   const sendEnvMode = resolveSendEnvMode({
     requestedEnvMode: envMode,
     isGitRepo,
+    hasWorktreeBaseRef: activeThreadBranch !== null || activeThreadWorktreePath !== null,
   });
 
   useEffect(() => {
@@ -3793,6 +3841,10 @@ function ChatViewContent(props: ChatViewProps) {
       composerReviewComments.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
+    const goalSlashCommand =
+      composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
+        ? parseComposerGoalSlashCommand(trimmed)
+        : null;
     if (standaloneSlashCommand) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
@@ -3800,6 +3852,30 @@ function ChatViewContent(props: ChatViewProps) {
       composerRef.current?.resetCursorState();
       return;
     }
+    if (goalSlashCommand?.type === "status") {
+      const status = formatGoalStatus(activeThread.goal);
+      toastManager.add(stackedThreadToast({ type: "info", ...status }));
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
+    }
+    if (goalSlashCommand?.type === "clear") {
+      await api.orchestration.dispatchCommand({
+        type: "thread.goal.clear",
+        commandId: newCommandId(),
+        threadId: activeThread.id,
+        createdAt: new Date().toISOString(),
+      });
+      toastManager.add(
+        stackedThreadToast({ type: "success", title: "Goal cleared", description: "" }),
+      );
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
+    }
+    const goalToSet = goalSlashCommand?.type === "set" ? goalSlashCommand.goal : null;
     if (!hasSendableContent) {
       if (expiredTerminalContextCount > 0) {
         const toastCopy = buildExpiredTerminalContextToastCopy(
@@ -3842,7 +3918,10 @@ function ChatViewContent(props: ChatViewProps) {
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
     const composerReviewCommentsSnapshot: ReviewCommentContext[] = [...composerReviewComments];
     const messageTextWithContexts = appendElementContextsToPrompt(
-      appendTerminalContextsToPrompt(promptForSend, composerTerminalContextsSnapshot),
+      appendTerminalContextsToPrompt(
+        goalToSet ? formatGoalInitialPrompt(goalToSet) : promptForSend,
+        composerTerminalContextsSnapshot,
+      ),
       composerElementContextsSnapshot,
     );
     const messageTextWithPreviewAnnotations = composerPreviewAnnotationsSnapshot.reduce(
@@ -3926,7 +4005,7 @@ function ChatViewContent(props: ChatViewProps) {
           firstComposerImageName = firstComposerImage.name;
         }
       }
-      let titleSeed = trimmed;
+      let titleSeed = goalToSet ?? trimmed;
       if (!titleSeed) {
         if (firstComposerImageName) {
           titleSeed = `Image: ${firstComposerImageName}`;
@@ -3996,6 +4075,16 @@ function ChatViewContent(props: ChatViewProps) {
             }
           : undefined;
       beginLocalDispatch({ preparingWorktree: false });
+      const shouldSetGoalBeforeTurn = Boolean(goalToSet && isServerThread);
+      if (goalToSet && shouldSetGoalBeforeTurn) {
+        await api.orchestration.dispatchCommand({
+          type: "thread.goal.set",
+          commandId: newCommandId(),
+          threadId: threadIdForSend,
+          goal: goalToSet,
+          createdAt: messageCreatedAt,
+        });
+      }
       await api.orchestration.dispatchCommand({
         type: "thread.turn.start",
         commandId: newCommandId(),
@@ -4014,6 +4103,15 @@ function ChatViewContent(props: ChatViewProps) {
         createdAt: messageCreatedAt,
       });
       turnStartSucceeded = true;
+      if (goalToSet && !shouldSetGoalBeforeTurn) {
+        await api.orchestration.dispatchCommand({
+          type: "thread.goal.set",
+          commandId: newCommandId(),
+          threadId: threadIdForSend,
+          goal: goalToSet,
+          createdAt: messageCreatedAt,
+        });
+      }
     })().catch(async (err: unknown) => {
       if (
         !turnStartSucceeded &&
@@ -4842,6 +4940,7 @@ function ChatViewContent(props: ChatViewProps) {
               <MessagesTimeline
                 key={activeThread.id}
                 isWorking={isWorking}
+                isThreadDetailLoading={isThreadDetailLoading}
                 activeTurnInProgress={isWorking || !latestTurnSettled}
                 activeTurnStartedAt={activeWorkStartedAt}
                 listRef={legendListRef}
