@@ -28,7 +28,7 @@ jobs:
   publish-development-update:
     name: Verify and publish iOS development update
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 120
     env:
       APP_VARIANT: development
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
@@ -92,6 +92,101 @@ jobs:
           builds_json="$RUNNER_TEMP/mobile-ios-builds.json"
           build_json="$RUNNER_TEMP/mobile-ios-build.json"
           update_json="$RUNNER_TEMP/mobile-ios-update.json"
+          poll_json="$RUNNER_TEMP/mobile-ios-build-poll.json"
+          build_wait_timeout_seconds="${BUILD_WAIT_TIMEOUT_SECONDS:-5400}"
+          build_poll_interval_seconds="${BUILD_POLL_INTERVAL_SECONDS:-30}"
+
+          find_matching_build() {
+            local statuses_json="$1"
+            node -e '
+              const fs = require("fs");
+              const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const statuses = new Set(JSON.parse(process.argv[2]));
+              const build = builds.find((item) => statuses.has(item.status));
+              if (build) {
+                process.stdout.write(JSON.stringify({
+                  id: build.id,
+                  status: build.status,
+                  url: build.buildDetailsPageUrl ?? build.buildUrl ?? "",
+                }));
+              }
+            ' "$builds_json" "$statuses_json"
+          }
+
+          read_build_id() {
+            node -e '
+              const fs = require("fs");
+              const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              process.stdout.write(builds[0]?.id ?? "");
+            ' "$build_json"
+          }
+
+          poll_build_status() {
+            local build_id="$1"
+
+            eas build:list \
+              --platform ios \
+              --buildProfile development \
+              --runtimeVersion "$fingerprint_hash" \
+              --limit 10 \
+              --json \
+              --non-interactive > "$poll_json"
+
+            node -e '
+              const fs = require("fs");
+              const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const build = builds.find((item) => item.id === process.argv[2]);
+              if (!build) process.exit(2);
+              process.stdout.write(JSON.stringify({
+                status: build.status,
+                url: build.buildDetailsPageUrl ?? build.buildUrl ?? "",
+              }));
+            ' "$poll_json" "$build_id"
+          }
+
+          wait_for_finished_build() {
+            local build_id="$1"
+            local deadline=$((SECONDS + build_wait_timeout_seconds))
+
+            while true; do
+              local status_json
+              if ! status_json="$(poll_build_status "$build_id")"; then
+                echo "::error::Could not find iOS EAS build $build_id while polling for completion." >&2
+                exit 1
+              fi
+
+              local status
+              local url
+              status="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.status ?? "");' "$status_json")"
+              url="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.url ?? "");' "$status_json")"
+              echo "iOS EAS build $build_id status: $status"
+
+              case "$status" in
+                FINISHED)
+                  build_url="$url"
+                  return 0
+                  ;;
+                NEW|IN_QUEUE|IN_PROGRESS)
+                  if [ "$SECONDS" -ge "$deadline" ]; then
+                    echo "::error::Timed out waiting for iOS EAS build $build_id to finish after ${build_wait_timeout_seconds}s." >&2
+                    [ -n "$url" ] && echo "::error::Build logs: $url" >&2
+                    exit 1
+                  fi
+                  sleep "$build_poll_interval_seconds"
+                  ;;
+                ERRORED|CANCELED)
+                  echo "::error::iOS EAS build $build_id ended with status $status. No EAS update will be published for fingerprint $fingerprint_hash." >&2
+                  [ -n "$url" ] && echo "::error::Build logs: $url" >&2
+                  exit 1
+                  ;;
+                *)
+                  echo "::error::iOS EAS build $build_id returned unexpected status '$status'." >&2
+                  [ -n "$url" ] && echo "::error::Build logs: $url" >&2
+                  exit 1
+                  ;;
+              esac
+            done
+          }
 
           eas env:exec --non-interactive development \
             "npx expo-updates fingerprint:generate --platform ios" > "$fingerprint_json"
@@ -102,32 +197,50 @@ jobs:
             --platform ios \
             --buildProfile development \
             --runtimeVersion "$fingerprint_hash" \
-            --limit 1 \
+            --limit 10 \
             --json \
             --non-interactive > "$builds_json"
 
-          build_id="$(node -e 'const fs = require("fs"); const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const valid = new Set(["NEW", "IN_QUEUE", "IN_PROGRESS", "FINISHED"]); const build = builds.find((item) => valid.has(item.status)); process.stdout.write(build?.id ?? "");' "$builds_json")"
+          build_id=""
+          build_status=""
+          build_url=""
+          matching_build="$(find_matching_build '["FINISHED"]')"
 
-          if [ -n "$build_id" ]; then
-            echo "Existing iOS build found with matching fingerprint: $build_id"
+          if [ -n "$matching_build" ]; then
+            build_id="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.id);' "$matching_build")"
+            build_status="FINISHED"
+            build_url="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.url ?? "");' "$matching_build")"
+            echo "Existing FINISHED iOS build found with matching fingerprint: $build_id"
           else
-            echo "No existing iOS build found for fingerprint, starting a new build..."
-            if ! eas build \
-              --profile development \
-              --platform ios \
-              --non-interactive \
-              --json \
-              --no-wait > "$build_json"; then
-              echo "::error::Non-interactive iOS build failed. If credentials are missing or expired, run one interactive build locally to refresh them: cd apps/mobile && APP_VARIANT=development eas build --profile development --platform ios" >&2
-              exit 1
+            matching_build="$(find_matching_build '["NEW","IN_QUEUE","IN_PROGRESS"]')"
+            if [ -n "$matching_build" ]; then
+              build_id="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.id);' "$matching_build")"
+              build_status="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.status);' "$matching_build")"
+              build_url="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.url ?? "");' "$matching_build")"
+              echo "Existing iOS build found with matching fingerprint: $build_id ($build_status); waiting for FINISHED."
+            else
+              echo "No existing FINISHED or active iOS build found for fingerprint, starting a new build..."
+              if ! eas build \
+                --profile development \
+                --platform ios \
+                --non-interactive \
+                --json \
+                --no-wait > "$build_json"; then
+                echo "::error::Non-interactive iOS build failed. If credentials are missing or expired, run one interactive build locally to refresh them: cd apps/mobile && APP_VARIANT=development eas build --profile development --platform ios" >&2
+                exit 1
+              fi
+              build_id="$(read_build_id)"
+              echo "Started iOS EAS build: $build_id"
             fi
-            build_id="$(node -e 'const fs = require("fs"); const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); process.stdout.write(builds[0]?.id ?? "");' "$build_json")"
-            echo "Started iOS EAS build: $build_id"
           fi
 
           if [ -z "$build_id" ]; then
             echo "EAS did not return an iOS build id." >&2
             exit 1
+          fi
+
+          if [ "$build_status" != "FINISHED" ]; then
+            wait_for_finished_build "$build_id"
           fi
 
           eas update \
@@ -148,5 +261,6 @@ jobs:
             echo "### Mobile EAS development deploy"
             echo "- iOS fingerprint: \`$fingerprint_hash\`"
             echo "- iOS build: \`$build_id\`"
+            [ -n "$build_url" ] && echo "- iOS build logs: $build_url"
             echo "- iOS update: \`$update_id\`"
           } >> "$GITHUB_STEP_SUMMARY"
