@@ -303,7 +303,7 @@ export function isLatestTurnSettled(
   // previously stranded the UI in a permanent "working" state ("says running
   // when it's not").
   if (session) {
-    return session.orchestrationStatus !== "running";
+    return session.status !== "running";
   }
   // No session signal — fall back to the turn's own timing.
   if (!latestTurn?.startedAt) return false;

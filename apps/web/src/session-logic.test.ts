@@ -1638,8 +1638,8 @@ describe("isLatestTurnSettled", () => {
     // The session is authoritative: stopped => settled => no stuck spinner.
     expect(
       isLatestTurnSettled(runningTurnMissingCompletion, {
-        orchestrationStatus: "stopped",
-        activeTurnId: undefined,
+        status: "stopped",
+        activeTurnId: null,
       }),
     ).toBe(true);
   });
@@ -1647,8 +1647,8 @@ describe("isLatestTurnSettled", () => {
   it("REGRESSION: a ready session settles the turn even with no completion timestamp", () => {
     expect(
       isLatestTurnSettled(runningTurnMissingCompletion, {
-        orchestrationStatus: "ready",
-        activeTurnId: undefined,
+        status: "ready",
+        activeTurnId: null,
       }),
     ).toBe(true);
   });
@@ -1656,14 +1656,14 @@ describe("isLatestTurnSettled", () => {
   it("REGRESSION: an errored/idle session settles the turn even with no completion timestamp", () => {
     expect(
       isLatestTurnSettled(runningTurnMissingCompletion, {
-        orchestrationStatus: "error",
-        activeTurnId: undefined,
+        status: "error",
+        activeTurnId: null,
       }),
     ).toBe(true);
     expect(
       isLatestTurnSettled(runningTurnMissingCompletion, {
-        orchestrationStatus: "idle",
-        activeTurnId: undefined,
+        status: "idle",
+        activeTurnId: null,
       }),
     ).toBe(true);
   });
@@ -1671,7 +1671,7 @@ describe("isLatestTurnSettled", () => {
   it("still reports a running session as unsettled when completion is missing", () => {
     expect(
       isLatestTurnSettled(runningTurnMissingCompletion, {
-        orchestrationStatus: "running",
+        status: "running",
         activeTurnId: TurnId.make("turn-1"),
       }),
     ).toBe(false);

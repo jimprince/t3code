@@ -101,7 +101,6 @@ import {
 } from "../keybindings";
 import { isModelPickerOpen } from "../modelPickerVisibility";
 import { useShortcutModifierState } from "../shortcutModifierState";
-import { useVcsStatus } from "../lib/vcsStatusState";
 import {
   buildThreadMoveFailureReport,
   moveThreadToEnvironment,

@@ -232,10 +232,9 @@ function errorDetails(error: unknown): string {
 function HeadlessUpdateCheckBootstrap() {
   const primaryEnvironment = usePrimaryEnvironment();
   const serverConfig = useAtomValue(primaryServerConfigAtom);
-  const requestHeadlessUpdateCheck = useAtomCommand(
-    serverEnvironment.requestHeadlessUpdateCheck,
-    { reportFailure: false },
-  );
+  const requestHeadlessUpdateCheck = useAtomCommand(serverEnvironment.requestHeadlessUpdateCheck, {
+    reportFailure: false,
+  });
 
   useEffect(() => {
     if (!primaryEnvironment || !serverConfig) {

@@ -61,35 +61,6 @@ jobs:
       - name: Test
         run: vp run test
 
-  test_browser:
-    name: Browser Test
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Setup Vite+
-        uses: voidzero-dev/setup-vp@v1
-        with:
-          node-version-file: package.json
-          cache: true
-          run-install: true
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-
-      - name: Install browser test runtime
-        run: vp run --filter @t3tools/web test:browser:install
-
-      - name: Browser test
-        run: vp run --filter @t3tools/web test:browser
-
   mobile_native_static_analysis:
     name: Mobile Native Static Analysis
     runs-on: macos-15

@@ -1444,9 +1444,6 @@ function ChatViewContent(props: ChatViewProps) {
       endpoint: activeEnvironment.displayUrl,
     };
   }, [activeEnvironment, activeEnvironmentUnavailable, activeEnvironmentUnavailableLabel]);
-  const [reconnectingEnvironmentId, setReconnectingEnvironmentId] = useState<EnvironmentId | null>(
-    null,
-  );
   const handleReconnectActiveEnvironment = useCallback(
     async (environmentId: EnvironmentId) => {
       const result = await retryEnvironment(environmentId);
@@ -2066,6 +2063,7 @@ function ChatViewContent(props: ChatViewProps) {
       deriveTimelineEntries(timelineMessages, activeThread?.proposedPlans ?? [], workLogEntries),
     [activeThread?.proposedPlans, timelineMessages, workLogEntries],
   );
+  const activeThreadForkState = activeThread as Thread | null | undefined;
   const isThreadDetailLoading = Boolean(
     isServerThread &&
     activeThread &&
@@ -2073,11 +2071,11 @@ function ChatViewContent(props: ChatViewProps) {
     activeThread.messages.length === 0 &&
     activeThread.activities.length === 0 &&
     activeThread.proposedPlans.length === 0 &&
-    activeThread.turnDiffSummaries.length === 0 &&
+    (activeThreadForkState?.turnDiffSummaries?.length ?? 0) === 0 &&
     (activeThread.latestTurn !== null ||
       activeThread.session !== null ||
       activeThread.goal !== null ||
-      activeThread.pendingSourceProposedPlan !== undefined),
+      activeThreadForkState?.pendingSourceProposedPlan !== undefined),
   );
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
