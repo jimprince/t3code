@@ -74,12 +74,15 @@ CI uses Expo fingerprinting for development and preview dev-client builds to reu
 
 Pushes to `main` that touch mobile/runtime paths run
 `Mobile EAS Development Update`, which verifies the repo and deploys the iOS
-development lane with explicit EAS CLI build/update commands. The iOS app has a
-widget extension, so ad hoc credentials exist for both `com.brad.t3code.dev`
-and `com.brad.t3code.dev.widgets`. CI never contacts Apple: it consumes the
-signing credentials stored on EAS servers. When the native fingerprint changes
-and stored credentials are missing or expired, refresh them with one
-interactive local build (Apple ID auth):
+development lane with explicit EAS CLI build/update commands. The workflow only
+publishes an OTA update after EAS has a `FINISHED` iOS development build whose
+runtime version matches the current iOS fingerprint. If that build errors or is
+canceled, the workflow fails without publishing the update. The iOS app has a
+widget extension, so ad hoc credentials exist for both `com.brad.t3code.dev` and
+`com.brad.t3code.dev.widgets`. CI never contacts Apple: it consumes the signing
+credentials stored on EAS servers. When the native fingerprint changes and
+stored credentials are missing or expired, refresh them with one interactive
+local build (Apple ID auth):
 
 ```bash
 cd apps/mobile
