@@ -425,11 +425,11 @@ describe("buildCodexChildEnv", () => {
       homePath: "/tmp/codex-home",
     });
 
-    assert.equal(env.T3_THREAD_ID, "thread-env-test");
-    assert.equal(env.T3_ENVIRONMENT_ID, "environment-env-test");
-    assert.equal(env.T3_ENVIRONMENT_NAME, "local-mbp");
-    assert.equal(env.CODEX_HOME, "/tmp/codex-home");
-    assert.equal(env.EXISTING_ENV, "kept");
+    NodeAssert.equal(env.T3_THREAD_ID, "thread-env-test");
+    NodeAssert.equal(env.T3_ENVIRONMENT_ID, "environment-env-test");
+    NodeAssert.equal(env.T3_ENVIRONMENT_NAME, "local-mbp");
+    NodeAssert.equal(env.CODEX_HOME, "/tmp/codex-home");
+    NodeAssert.equal(env.EXISTING_ENV, "kept");
   });
 
   it("injects T3_THREAD_ID without optional environment metadata or CODEX_HOME", () => {
@@ -443,10 +443,10 @@ describe("buildCodexChildEnv", () => {
         environment: {},
       });
 
-      assert.equal(env.T3_THREAD_ID, "thread-env-test");
-      assert.equal(env.T3_ENVIRONMENT_ID, undefined);
-      assert.equal(env.T3_ENVIRONMENT_NAME, undefined);
-      assert.equal(env.CODEX_HOME, undefined);
+      NodeAssert.equal(env.T3_THREAD_ID, "thread-env-test");
+      NodeAssert.equal(env.T3_ENVIRONMENT_ID, undefined);
+      NodeAssert.equal(env.T3_ENVIRONMENT_NAME, undefined);
+      NodeAssert.equal(env.CODEX_HOME, undefined);
     } finally {
       if (previousEnvironmentId === undefined) {
         delete process.env.T3_ENVIRONMENT_ID;
@@ -472,8 +472,8 @@ describe("buildCodexChildEnv", () => {
         environment: {},
       });
 
-      assert.equal(env.T3_ENVIRONMENT_ID, "environment-process");
-      assert.equal(env.T3_ENVIRONMENT_NAME, "process-env");
+      NodeAssert.equal(env.T3_ENVIRONMENT_ID, "environment-process");
+      NodeAssert.equal(env.T3_ENVIRONMENT_NAME, "process-env");
     } finally {
       if (previousEnvironmentId === undefined) {
         delete process.env.T3_ENVIRONMENT_ID;
