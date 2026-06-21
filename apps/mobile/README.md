@@ -72,6 +72,15 @@ mobile app code on `main`.
 
 CI uses Expo fingerprinting for development and preview dev-client builds to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and persistent preview builds continue to use the `appVersion` runtime policy.
 
+`fingerprint.config.cjs` normalizes Expo/RN autolinking config paths before
+hashing. pnpm store directories include peer dependency hash suffixes that can
+differ between the Linux GitHub runner and EAS macOS builders even when the
+resolved packages are identical. The fingerprint keeps hashing the native
+package identities and config contents, but rewrites paths like
+`node_modules/.pnpm/<store>/node_modules/<pkg>` to stable `node_modules/<pkg>`
+form so the build runtime version and OTA update runtime version agree across
+machines.
+
 Pushes to `main` that touch mobile/runtime paths run
 `Mobile EAS Development Update`, which verifies the repo and deploys the iOS
 development lane with explicit EAS CLI build/update commands. The workflow only
