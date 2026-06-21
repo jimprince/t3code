@@ -1,0 +1,13 @@
+diff --git a/ios/ClerkNativeBridge.swift b/ios/ClerkNativeBridge.swift
+index aa26ed66c62e98c89216ee3758a1aaf8f220450d..dcde6de5bf1b6dac0adc757892de96472e11f951 100644
+--- a/ios/ClerkNativeBridge.swift
++++ b/ios/ClerkNativeBridge.swift
+@@ -7,7 +7,7 @@ import SwiftUI
+ import Observation
+ @_spi(FrameworkIntegration) import ClerkKit
+ import ClerkKitUI
+-import ClerkExpo  // Import the pod to access ClerkNativeBridgeProtocol
++internal import ClerkExpo  // Import the pod to access ClerkNativeBridgeProtocol
+ 
+ private struct ClerkExpoHeaderMiddleware: ClerkRequestMiddleware {
+   // Replaced by the config plugin when this bridge is copied into the app target.
