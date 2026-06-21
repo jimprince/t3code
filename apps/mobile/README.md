@@ -105,6 +105,10 @@ package identities and config contents, but rewrites paths like
 form so the build runtime version and OTA update runtime version agree across
 machines.
 
+The `@clerk/expo` patch normalizes Clerk's generated iOS app bridge to use
+`internal import ClerkExpo`, matching Expo's generated Swift imports on Xcode 26
+and avoiding mixed import access levels for the `ClerkExpo` module.
+
 Pushes to `main` that touch mobile/runtime paths run
 `Mobile EAS Development Update`, which verifies the repo and deploys the iOS
 development lane with explicit EAS CLI build/update commands. The workflow only
