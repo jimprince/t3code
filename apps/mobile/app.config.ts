@@ -181,6 +181,7 @@ const config: ExpoConfig = {
       },
     ],
     "./plugins/withAndroidCleartextTraffic.cjs",
+    "./plugins/withIosModularGooglePods.cjs",
   ],
   extra: {
     appVariant: APP_VARIANT,
