@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import { assert, describe, it } from "@effect/vitest";
 
@@ -30,7 +30,7 @@ describe("mobile-conflict-controller", () => {
   it("verifies GitHub webhook HMAC signatures", () => {
     const body = Buffer.from(JSON.stringify({ ok: true }));
     const secret = "test-secret";
-    const signature = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+    const signature = `sha256=${NodeCrypto.createHmac("sha256", secret).update(body).digest("hex")}`;
 
     assert.isTrue(verifyGitHubWebhookSignature(body, signature, secret));
     assert.isFalse(verifyGitHubWebhookSignature(body, signature, "wrong-secret"));
