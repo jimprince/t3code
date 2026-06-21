@@ -980,16 +980,19 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             adapter: {} as ProviderInstance["adapter"],
             textGeneration: {} as ProviderInstance["textGeneration"],
           } satisfies ProviderInstance;
-          const instanceRegistryLayer = Layer.succeed(ProviderInstanceRegistry, {
-            getInstance: (instanceId) =>
-              Effect.succeed(instanceId === codexInstanceId ? instance : undefined),
-            listInstances: Effect.succeed([instance]),
-            listUnavailable: Effect.succeed([]),
-            streamChanges: Stream.empty,
-            subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), (pubsub) =>
-              PubSub.subscribe(pubsub),
-            ),
-          });
+          const instanceRegistryLayer = Layer.succeed(
+            ProviderInstanceRegistry.ProviderInstanceRegistry,
+            {
+              getInstance: (instanceId) =>
+                Effect.succeed(instanceId === codexInstanceId ? instance : undefined),
+              listInstances: Effect.succeed([instance]),
+              listUnavailable: Effect.succeed([]),
+              streamChanges: Stream.empty,
+              subscribeChanges: Effect.flatMap(PubSub.unbounded<void>(), (pubsub) =>
+                PubSub.subscribe(pubsub),
+              ),
+            },
+          );
           const scope = yield* Scope.make();
           yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
           const maybeRuntimeServices = yield* Layer.build(
@@ -1009,7 +1012,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           }
 
           yield* Effect.gen(function* () {
-            const registry = yield* ProviderRegistry;
+            const registry = yield* ProviderRegistry.ProviderRegistry;
             assert.deepStrictEqual(yield* registry.getProviders, [fallbackProvider]);
 
             yield* Deferred.await(refreshStarted).pipe(Effect.timeoutOption("100 millis"));

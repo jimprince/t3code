@@ -27,8 +27,8 @@ import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Lay
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
 import { ProviderSessionRuntimeRepositoryLive } from "../../persistence/Layers/ProviderSessionRuntime.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
-import { ProviderSessionRuntimeRepository } from "../../persistence/Services/ProviderSessionRuntime.ts";
-import { RepositoryIdentityResolverLive } from "../../project/Layers/RepositoryIdentityResolver.ts";
+import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
+import { layer as RepositoryIdentityResolverLive } from "../../project/RepositoryIdentityResolver.ts";
 import * as VcsProcess from "../../vcs/VcsProcess.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";

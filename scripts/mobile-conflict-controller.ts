@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // @effect-diagnostics nodeBuiltinImport:off
 
-import { createHmac, timingSafeEqual } from "node:crypto";
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { mkdir } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { spawn } from "node:child_process";
+import * as NodeCrypto from "node:crypto";
+import * as NodeHttp from "node:http";
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
+import * as NodeChildProcess from "node:child_process";
 
 export interface MobileConflictPayload {
   readonly repository: string;
@@ -45,14 +45,14 @@ export const verifyGitHubWebhookSignature = (
 ): boolean => {
   if (!signatureHeader?.startsWith("sha256=")) return false;
 
-  const expected = `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+  const expected = `sha256=${NodeCrypto.createHmac("sha256", secret).update(body).digest("hex")}`;
   const received = signatureHeader.trim();
   const expectedBuffer = Buffer.from(expected);
   const receivedBuffer = Buffer.from(received);
 
   return (
     expectedBuffer.length === receivedBuffer.length &&
-    timingSafeEqual(expectedBuffer, receivedBuffer)
+    NodeCrypto.timingSafeEqual(expectedBuffer, receivedBuffer)
   );
 };
 
@@ -175,14 +175,14 @@ export const buildResolverDockerArgs = (
   input.image,
 ];
 
-const readBody = async (request: IncomingMessage): Promise<Buffer> => {
+const readBody = async (request: NodeHttp.IncomingMessage): Promise<Buffer> => {
   const chunks: Array<Buffer> = [];
   for await (const chunk of request)
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   return Buffer.concat(chunks);
 };
 
-const send = (response: ServerResponse, statusCode: number, body: string) => {
+const send = (response: NodeHttp.ServerResponse, statusCode: number, body: string) => {
   response.writeHead(statusCode, { "content-type": "text/plain; charset=utf-8" });
   response.end(body);
 };
@@ -191,8 +191,8 @@ const runResolver = async (
   payload: MobileConflictPayload,
   config: ControllerConfig,
 ): Promise<void> => {
-  const workspace = resolve(config.workspaceRoot, payload.sync_run_id);
-  await mkdir(workspace, { recursive: true });
+  const workspace = NodePath.resolve(config.workspaceRoot, payload.sync_run_id);
+  await NodeFSP.mkdir(workspace, { recursive: true });
 
   const args = buildResolverDockerArgs(payload, {
     image: config.resolverImage,
@@ -201,7 +201,7 @@ const runResolver = async (
   });
 
   await new Promise<void>((resolvePromise, reject) => {
-    const child = spawn("docker", args, { stdio: "inherit" });
+    const child = NodeChildProcess.spawn("docker", args, { stdio: "inherit" });
     child.once("error", reject);
     child.once("exit", (code) => {
       if (code === 0) resolvePromise();
@@ -231,7 +231,7 @@ export const createMobileConflictController = (config: ControllerConfig) => {
 
   let queue = Promise.resolve();
 
-  return createServer(async (request, response) => {
+  return NodeHttp.createServer(async (request, response) => {
     if (request.method !== "POST" || request.url !== "/github/webhook") {
       send(response, 404, "not found\n");
       return;
@@ -272,7 +272,11 @@ export const createMobileConflictController = (config: ControllerConfig) => {
         process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
       });
 
-    send(response, 202, `queued ${join(payload.repository, candidateBranchFor(payload))}\n`);
+    send(
+      response,
+      202,
+      `queued ${NodePath.join(payload.repository, candidateBranchFor(payload))}\n`,
+    );
   });
 };
 
