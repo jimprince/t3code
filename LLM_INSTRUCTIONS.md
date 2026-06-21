@@ -298,13 +298,14 @@ When merging upstream changes that touch any of these, keep our values.
 ## macOS signing and notarization
 
 macOS release artifacts are Developer ID-signed and notarized when the release
-job has all required Apple secrets:
+job has all required Apple signing/notarization inputs:
 
 - `CSC_LINK`
 - `CSC_KEY_PASSWORD`
 - `APPLE_API_KEY`
 - `APPLE_API_KEY_ID`
 - `APPLE_API_ISSUER`
+- `APPLE_TEAM_ID` repo variable
 
 `.github/workflows/release.yml` writes the App Store Connect key to a temporary
 `.p8` file, exports `APPLE_API_KEY` as that file path, and passes `--signed` to
@@ -312,12 +313,19 @@ job has all required Apple secrets:
 signing/notarization environment intact only for signed builds; unsigned builds
 strip the Apple signing variables and disable certificate auto-discovery.
 
+`MACOS_PROVISIONING_PROFILE` is optional and is only for the passkey/Associated
+Domains entitlement path. Personal-use fork releases without that profile still
+perform normal Developer ID hardened-runtime signing and notarization, but omit
+`com.apple.application-identifier` and
+`com.apple.developer.associated-domains` from the generated entitlements.
+
 Before assuming a macOS release is Gatekeeper-ready, verify the build log
-contains both `macOS signing enabled.` and `notarization successful`. You may
-check secret names with `gh secret list --repo jimprince/t3code`, but never
+contains a `macOS signing enabled` message and `notarization successful`. You
+may check secret names with `gh secret list --repo jimprince/t3code`, but never
 print or inspect secret values. The latest verified signed/notarized fork
 release at the time this note was updated was
-`v0.0.23-nightly.20260506.212-fork.1`.
+`v0.0.23-nightly.20260506.212-fork.1`; signed-without-profile should be
+reverified on the next macOS release run.
 
 The Linux headless tarball is not code-signed. Windows signing setup is
 intentionally omitted because Windows is not part of the fork release matrix.
