@@ -1177,6 +1177,6 @@ describe("CheckpointReactor", () => {
       threadId: ThreadId.make("thread-1"),
       numTurns: 1,
     });
-    expect(fs.readFileSync(path.join(harness.cwd, "README.md"), "utf8")).toBe("v2\n");
+    expect(NodeFS.readFileSync(NodePath.join(harness.cwd, "README.md"), "utf8")).toBe("v2\n");
   });
 });

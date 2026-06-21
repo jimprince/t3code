@@ -291,11 +291,11 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         modelSelection: createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5"),
       });
 
-      assert.deepEqual(runtimeMock.state.sessionGetCalls, ["opencode-session-existing"]);
-      assert.deepEqual(runtimeMock.state.sessionCreateUrls, []);
-      assert.deepEqual(session.resumeCursor, { sessionId: "opencode-session-existing" });
-      assert.deepEqual(turn.resumeCursor, { sessionId: "opencode-session-existing" });
-      assert.deepEqual(runtimeMock.state.promptCalls.at(-1), {
+      NodeAssert.deepEqual(runtimeMock.state.sessionGetCalls, ["opencode-session-existing"]);
+      NodeAssert.deepEqual(runtimeMock.state.sessionCreateUrls, []);
+      NodeAssert.deepEqual(session.resumeCursor, { sessionId: "opencode-session-existing" });
+      NodeAssert.deepEqual(turn.resumeCursor, { sessionId: "opencode-session-existing" });
+      NodeAssert.deepEqual(runtimeMock.state.promptCalls.at(-1), {
         sessionID: "opencode-session-existing",
         model: {
           providerID: "openai",
@@ -338,15 +338,15 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         runtimeMode: "full-access",
       });
 
-      assert.deepEqual(runtimeMock.state.sessionListCalls, [
+      NodeAssert.deepEqual(runtimeMock.state.sessionListCalls, [
         {
           directory: process.cwd(),
           search: threadId,
           limit: 50,
         },
       ]);
-      assert.deepEqual(runtimeMock.state.sessionCreateUrls, []);
-      assert.deepEqual(session.resumeCursor, { sessionId: "opencode-session-original" });
+      NodeAssert.deepEqual(runtimeMock.state.sessionCreateUrls, []);
+      NodeAssert.deepEqual(session.resumeCursor, { sessionId: "opencode-session-original" });
       yield* adapter.stopSession(threadId);
     }),
   );
@@ -894,7 +894,7 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         const sessions = yield* adapter.listSessions();
         yield* Fiber.interrupt(eventsFiber);
 
-        assert.deepEqual(
+        NodeAssert.deepEqual(
           events.map((event) => event.type),
           [
             "session.started",
@@ -905,9 +905,9 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
             "turn.completed",
           ],
         );
-        assert.equal(events.at(-1)?.turnId, turn.turnId);
-        assert.equal(sessions[0]?.status, "ready");
-        assert.equal(sessions[0]?.activeTurnId, undefined);
+        NodeAssert.equal(events.at(-1)?.turnId, turn.turnId);
+        NodeAssert.equal(sessions[0]?.status, "ready");
+        NodeAssert.equal(sessions[0]?.activeTurnId, undefined);
       }),
   );
 
