@@ -1,5 +1,9 @@
-import type { EnvironmentId, ServerConfig } from "@t3tools/contracts";
-import type { WsRpcClient } from "@t3tools/client-runtime";
+import type {
+  EnvironmentId,
+  ServerConfig,
+  ServerHeadlessUpdateCheckInput,
+  ServerHeadlessUpdateCheckResult,
+} from "@t3tools/contracts";
 
 import { APP_VERSION } from "./branding";
 import { isClientVersionNewerThanServer } from "./versionSkew";
@@ -46,7 +50,9 @@ export function claimHeadlessUpdateCheckRequest(input: {
 export function maybeRequestHeadlessUpdateCheck(input: {
   readonly environmentId: EnvironmentId;
   readonly serverConfig: ServerConfig;
-  readonly client: WsRpcClient;
+  readonly request: (
+    request: ServerHeadlessUpdateCheckInput,
+  ) => Promise<ServerHeadlessUpdateCheckResult>;
 }): void {
   if (
     !claimHeadlessUpdateCheckRequest({
@@ -57,8 +63,8 @@ export function maybeRequestHeadlessUpdateCheck(input: {
     return;
   }
 
-  void input.client.server
-    .requestHeadlessUpdateCheck({
+  void input
+    .request({
       clientVersion: APP_VERSION,
       serverVersion: input.serverConfig.environment.serverVersion,
     })
