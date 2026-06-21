@@ -23,7 +23,6 @@ import {
   OrchestrationImportThreadError,
   THREAD_MOVE_BUNDLE_VERSION,
   type OrchestrationCheckpointSummary,
-  type OrchestrationProjectShell,
   type OrchestrationThread,
   type PortableThread,
   type ThreadId,
@@ -965,7 +964,7 @@ const make = Effect.gen(function* () {
     readonly warnings: string[];
   }) =>
     Effect.gen(function* () {
-      const { providerSession, warnings } = input;
+      const { providerSession } = input;
 
       if (
         providerSession.sessionFile !== null &&

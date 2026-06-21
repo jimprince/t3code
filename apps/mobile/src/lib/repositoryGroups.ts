@@ -54,12 +54,12 @@ function deriveRepositorySubtitle(identity: RepositoryIdentity | null | undefine
 // never while an agent is merely streaming: `updatedAt` ticks on every
 // projection update while a thread runs, which made projects with running
 // threads continuously trade places.
-export function threadPromptActivityAt(thread: EnvironmentScopedThreadShell): string {
+export function threadPromptActivityAt(thread: EnvironmentThreadShell): string {
   return thread.latestUserMessageAt ?? thread.createdAt;
 }
 
 export function latestPromptActivityAt(
-  threads: ReadonlyArray<EnvironmentScopedThreadShell>,
+  threads: ReadonlyArray<EnvironmentThreadShell>,
 ): string | null {
   let latest: string | null = null;
   for (const thread of threads) {

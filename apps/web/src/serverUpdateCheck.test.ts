@@ -1,5 +1,4 @@
 import { DEFAULT_SERVER_SETTINGS, EnvironmentId, type ServerConfig } from "@t3tools/contracts";
-import type { WsRpcClient } from "@t3tools/client-runtime";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { APP_VERSION } from "./branding";
@@ -101,16 +100,10 @@ describe("serverUpdateCheck", () => {
       checkedAt: new Date(0).toISOString(),
       message: null,
     });
-    const client = {
-      server: {
-        requestHeadlessUpdateCheck,
-      },
-    } as unknown as WsRpcClient;
-
     maybeRequestHeadlessUpdateCheck({
       environmentId,
       serverConfig: makeServerConfig({ os: "linux", serverVersion: "0.0.0" }),
-      client,
+      request: requestHeadlessUpdateCheck,
     });
 
     expect(requestHeadlessUpdateCheck).toHaveBeenCalledWith({
