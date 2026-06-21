@@ -2,9 +2,9 @@
 // @effect-diagnostics globalDate:off
 // @effect-diagnostics globalErrorInEffectFailure:off
 
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -41,7 +41,7 @@ interface HeadlessUpdateCheckDeps {
 export function resolveHeadlessUpdateServicePath(env: NodeJS.ProcessEnv = process.env): string {
   return (
     env.T3CODE_HEADLESS_UPDATE_SERVICE_FILE ??
-    path.join(os.homedir(), ".config/systemd/user", resolveHeadlessUpdateServiceName(env))
+    NodePath.join(NodeOS.homedir(), ".config/systemd/user", resolveHeadlessUpdateServiceName(env))
   );
 }
 
@@ -129,7 +129,7 @@ export function createHeadlessUpdateCheckRequester(deps: HeadlessUpdateCheckDeps
   const platform = deps.platform ?? process.platform;
   const env = deps.env ?? process.env;
   const now = deps.now ?? (() => new Date());
-  const existsSync = deps.existsSync ?? fs.existsSync;
+  const existsSync = deps.existsSync ?? NodeFS.existsSync;
   const runCommand = deps.runCommand ?? runSystemCommand;
   const getUid = deps.getUid ?? (() => process.getuid?.());
   const cooldownMs = deps.cooldownMs ?? DEFAULT_COOLDOWN_MS;

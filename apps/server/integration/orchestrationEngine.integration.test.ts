@@ -908,7 +908,10 @@ it.live(
           thread.activities.some((activity) => activity.kind === "checkpoint.revert.failed"),
           false,
         );
-        assert.equal(fs.readFileSync(path.join(harness.workspaceDir, "README.md"), "utf8"), "v1\n");
+        assert.equal(
+          NodeFS.readFileSync(NodePath.join(harness.workspaceDir, "README.md"), "utf8"),
+          "v1\n",
+        );
       }),
     ),
 );
