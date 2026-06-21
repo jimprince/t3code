@@ -5,8 +5,8 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
-import * as FileSystem from "node:fs";
-import * as Path from "node:path";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
 import * as Electron from "electron";
 
@@ -96,8 +96,8 @@ const addScopedAppListener = <Args extends ReadonlyArray<unknown>>(
 
 function resolvePackagedDesktopFlavor(appPath: string): ElectronAppFlavor {
   try {
-    const packageJsonPath = Path.join(appPath, "package.json");
-    const raw = FileSystem.readFileSync(packageJsonPath, "utf8");
+    const packageJsonPath = NodePath.join(appPath, "package.json");
+    const raw = NodeFS.readFileSync(packageJsonPath, "utf8");
     const parsed = JSON.parse(raw) as { t3codeDesktopFlavor?: unknown };
     return parsed.t3codeDesktopFlavor === "dev" ? "dev" : "stable";
   } catch {
