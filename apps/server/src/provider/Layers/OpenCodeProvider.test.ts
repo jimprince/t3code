@@ -234,14 +234,14 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
           serverPool: pool,
         });
 
-        assert.equal(runtimeMock.state.startCalls, 1);
-        assert.equal(runtimeMock.state.closeCalls, 0);
+        NodeAssert.equal(runtimeMock.state.startCalls, 1);
+        NodeAssert.equal(runtimeMock.state.closeCalls, 0);
 
         yield* Effect.yieldNow;
         yield* TestClock.adjust(Duration.millis(600_001));
         yield* Effect.yieldNow;
 
-        assert.equal(runtimeMock.state.closeCalls, 1);
+        NodeAssert.equal(runtimeMock.state.closeCalls, 1);
       }),
     ).pipe(Effect.provide(TestClock.layer())),
   );
