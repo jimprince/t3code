@@ -4,12 +4,12 @@
 // @effect-diagnostics globalTimers:off
 // @effect-diagnostics globalConsole:off
 
-import { execFile, spawn, type ChildProcessByStdio } from "node:child_process";
-import http from "node:http";
-import { mkdtemp, mkdir, readdir, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import type { Readable } from "node:stream";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeHttp from "node:http";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeStream from "node:stream";
 
 interface CliArgs {
   readonly artifact: string;
@@ -22,7 +22,11 @@ interface CommandResult {
   readonly stderr: string;
 }
 
-type SmokeChildProcess = ChildProcessByStdio<null, Readable, Readable>;
+type SmokeChildProcess = NodeChildProcess.ChildProcessByStdio<
+  null,
+  NodeStream.Readable,
+  NodeStream.Readable
+>;
 
 const usage = `Usage: node scripts/smoke-headless-artifact.ts --artifact <tar.gz> --version <version> [--skip-serve]`;
 
@@ -63,7 +67,7 @@ function runCommand(
   cwd?: string,
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
-    execFile(
+    NodeChildProcess.execFile(
       command,
       [...args],
       {
@@ -91,7 +95,7 @@ function runCommand(
 }
 
 async function findExtractedRoot(extractDir: string): Promise<string> {
-  const entries = await readdir(extractDir, { withFileTypes: true });
+  const entries = await NodeFSP.readdir(extractDir, { withFileTypes: true });
   const directories = entries.filter((entry) => entry.isDirectory());
   if (directories.length !== 1) {
     throw new Error(
@@ -103,7 +107,7 @@ async function findExtractedRoot(extractDir: string): Promise<string> {
   if (!dirname) {
     throw new Error("Extracted artifact directory is missing a name.");
   }
-  return path.join(extractDir, dirname);
+  return NodePath.join(extractDir, dirname);
 }
 
 function requestHttp200(url: string): Promise<boolean> {
@@ -114,7 +118,7 @@ function requestHttp200(url: string): Promise<boolean> {
       settled = true;
       resolve(value);
     };
-    const request = http.get(url, (response) => {
+    const request = NodeHttp.get(url, (response) => {
       response.resume();
       settle(response.statusCode === 200);
     });
@@ -188,10 +192,12 @@ async function findAvailablePort(): Promise<number> {
 }
 
 async function smokeServe(artifactRoot: string, entrypoint: string): Promise<void> {
-  const baseDir = await mkdtemp(path.join(os.tmpdir(), "t3-headless-base-"));
-  const workspaceDir = await mkdtemp(path.join(os.tmpdir(), "t3-headless-workspace-"));
+  const baseDir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-headless-base-"));
+  const workspaceDir = await NodeFSP.mkdtemp(
+    NodePath.join(NodeOS.tmpdir(), "t3-headless-workspace-"),
+  );
   const port = await findAvailablePort();
-  const child = spawn(
+  const child = NodeChildProcess.spawn(
     entrypoint,
     [
       "serve",
@@ -230,19 +236,19 @@ async function smokeServe(artifactRoot: string, entrypoint: string): Promise<voi
     ]);
   } finally {
     await stopChild(child);
-    await rm(baseDir, { recursive: true, force: true });
-    await rm(workspaceDir, { recursive: true, force: true });
+    await NodeFSP.rm(baseDir, { recursive: true, force: true });
+    await NodeFSP.rm(workspaceDir, { recursive: true, force: true });
   }
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const extractDir = await mkdtemp(path.join(os.tmpdir(), "t3-headless-artifact-"));
+  const extractDir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-headless-artifact-"));
 
   try {
     await runCommand("tar", ["-xzf", args.artifact, "-C", extractDir]);
     const artifactRoot = await findExtractedRoot(extractDir);
-    const entrypoint = path.join(artifactRoot, "bin/t3");
+    const entrypoint = NodePath.join(artifactRoot, "bin/t3");
 
     const versionResult = await runCommand(entrypoint, ["--version"], artifactRoot);
     if (!versionResult.stdout.includes(args.version)) {
@@ -260,10 +266,10 @@ async function main() {
       await smokeServe(artifactRoot, entrypoint);
     }
 
-    console.log(`Headless artifact smoke passed for ${path.basename(args.artifact)}.`);
+    console.log(`Headless artifact smoke passed for ${NodePath.basename(args.artifact)}.`);
   } finally {
-    await mkdir(extractDir, { recursive: true });
-    await rm(extractDir, { recursive: true, force: true });
+    await NodeFSP.mkdir(extractDir, { recursive: true });
+    await NodeFSP.rm(extractDir, { recursive: true, force: true });
   }
 }
 
