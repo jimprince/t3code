@@ -1,6 +1,13 @@
-import type { EnvironmentId, ProjectId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
-
-import { readEnvironmentApi } from "../environmentApi";
+import type {
+  EnvironmentId,
+  OrchestrationExportThreadInput,
+  OrchestrationExportThreadResult,
+  OrchestrationImportThreadInput,
+  OrchestrationImportThreadResult,
+  ProjectId,
+  ScopedThreadRef,
+  ThreadId,
+} from "@t3tools/contracts";
 
 export type ThreadMovePhase = "exporting" | "importing";
 
@@ -14,6 +21,14 @@ export interface ThreadMoveResult {
   readonly worktreePath: string | null;
   readonly warnings: readonly string[];
 }
+
+export type ExportThreadForMove = (
+  input: OrchestrationExportThreadInput,
+) => Promise<OrchestrationExportThreadResult>;
+
+export type ImportThreadForMove = (
+  input: OrchestrationImportThreadInput,
+) => Promise<OrchestrationImportThreadResult>;
 
 /**
  * Flatten an error plus its nested causes into diagnostic lines for the
@@ -128,27 +143,20 @@ export function isThreadMoveBranchConflict(error: unknown): boolean {
 export async function moveThreadToEnvironment(input: {
   readonly source: ScopedThreadRef;
   readonly target: ThreadMoveTarget;
+  readonly exportThread: ExportThreadForMove;
+  readonly importThread: ImportThreadForMove;
   readonly onProgress?: (phase: ThreadMovePhase) => void;
   readonly confirmBranchFallback?: (branch: string) => Promise<boolean>;
 }): Promise<ThreadMoveResult> {
-  const sourceApi = readEnvironmentApi(input.source.environmentId);
-  if (!sourceApi) {
-    throw new Error("The source machine is not connected.");
-  }
-  const targetApi = readEnvironmentApi(input.target.environmentId);
-  if (!targetApi) {
-    throw new Error("The target machine is not connected.");
-  }
-
   input.onProgress?.("exporting");
-  const exported = await sourceApi.orchestration.exportThread({
+  const exported = await input.exportThread({
     threadId: input.source.threadId,
   });
 
   input.onProgress?.("importing");
   let imported;
   try {
-    imported = await targetApi.orchestration.importThread({
+    imported = await input.importThread({
       projectId: input.target.projectId,
       bundle: exported.bundle,
     });
@@ -162,7 +170,7 @@ export async function moveThreadToEnvironment(input: {
     ) {
       throw error;
     }
-    imported = await targetApi.orchestration.importThread({
+    imported = await input.importThread({
       projectId: input.target.projectId,
       bundle: exported.bundle,
       branchConflict: "new-worktree",
