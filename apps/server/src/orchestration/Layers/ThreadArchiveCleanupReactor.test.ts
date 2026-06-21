@@ -17,7 +17,7 @@ import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { TerminalManager, type TerminalManagerShape } from "../../terminal/Services/Manager.ts";
+import { TerminalManager } from "../../terminal/Manager.ts";
 import { OrchestrationListenerCallbackError } from "../Errors.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
@@ -25,6 +25,7 @@ import { ThreadArchiveCleanupReactor } from "../Services/ThreadArchiveCleanupRea
 import { ThreadArchiveCleanupReactorLive } from "./ThreadArchiveCleanupReactor.ts";
 
 const unsupported = () => Effect.die(new Error("Unsupported test call")) as never;
+type TerminalManagerShape = TerminalManager["Service"];
 
 function archivedEvent(
   threadId: ThreadId,
