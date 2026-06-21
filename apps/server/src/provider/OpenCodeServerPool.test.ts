@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import * as NodeAssert from "node:assert/strict";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
@@ -95,14 +95,14 @@ it.layer(testLayer)("OpenCodeServerPool", (it) => {
           Effect.succeed(server.url),
         );
 
-        assert.equal(firstUrl, "http://127.0.0.1:4301");
-        assert.equal(secondUrl, firstUrl);
-        assert.deepEqual(runtimeMock.state.startCalls, ["fake-opencode"]);
-        assert.deepEqual(runtimeMock.state.closeCalls, []);
+        NodeAssert.equal(firstUrl, "http://127.0.0.1:4301");
+        NodeAssert.equal(secondUrl, firstUrl);
+        NodeAssert.deepEqual(runtimeMock.state.startCalls, ["fake-opencode"]);
+        NodeAssert.deepEqual(runtimeMock.state.closeCalls, []);
 
         yield* advanceIdleClock;
 
-        assert.deepEqual(runtimeMock.state.closeCalls, ["http://127.0.0.1:4301"]);
+        NodeAssert.deepEqual(runtimeMock.state.closeCalls, ["http://127.0.0.1:4301"]);
       }),
     ).pipe(Effect.provide(TestClock.layer())),
   );
@@ -126,13 +126,13 @@ it.layer(testLayer)("OpenCodeServerPool", (it) => {
         yield* TestClock.adjust(Duration.millis(IDLE_TTL_MS / 2 + 1));
         yield* Effect.yieldNow;
 
-        assert.equal(secondUrl, firstUrl);
-        assert.deepEqual(runtimeMock.state.startCalls, ["fake-opencode"]);
-        assert.deepEqual(runtimeMock.state.closeCalls, []);
+        NodeAssert.equal(secondUrl, firstUrl);
+        NodeAssert.deepEqual(runtimeMock.state.startCalls, ["fake-opencode"]);
+        NodeAssert.deepEqual(runtimeMock.state.closeCalls, []);
 
         yield* advanceIdleClock;
 
-        assert.deepEqual(runtimeMock.state.closeCalls, ["http://127.0.0.1:4301"]);
+        NodeAssert.deepEqual(runtimeMock.state.closeCalls, ["http://127.0.0.1:4301"]);
       }),
     ).pipe(Effect.provide(TestClock.layer())),
   );
@@ -156,21 +156,21 @@ it.layer(testLayer)("OpenCodeServerPool", (it) => {
           Effect.succeed(server.url),
         );
 
-        assert.equal(secondUrl, firstUrl);
-        assert.deepEqual(runtimeMock.state.startCalls, ["fake-opencode"]);
-        assert.deepEqual(runtimeMock.state.closeCalls, []);
+        NodeAssert.equal(secondUrl, firstUrl);
+        NodeAssert.deepEqual(runtimeMock.state.startCalls, ["fake-opencode"]);
+        NodeAssert.deepEqual(runtimeMock.state.closeCalls, []);
 
         yield* Effect.yieldNow;
         yield* TestClock.adjust(Duration.millis(IDLE_TTL_MS + 1));
         yield* Effect.yieldNow;
 
-        assert.deepEqual(runtimeMock.state.closeCalls, []);
+        NodeAssert.deepEqual(runtimeMock.state.closeCalls, []);
 
         yield* Deferred.succeed(releaseFirstUse, undefined);
         yield* Fiber.join(firstFiber);
         yield* advanceIdleClock;
 
-        assert.deepEqual(runtimeMock.state.closeCalls, ["http://127.0.0.1:4301"]);
+        NodeAssert.deepEqual(runtimeMock.state.closeCalls, ["http://127.0.0.1:4301"]);
       }),
     ).pipe(Effect.provide(TestClock.layer())),
   );
@@ -186,14 +186,14 @@ it.layer(testLayer)("OpenCodeServerPool", (it) => {
           (connection) => Effect.succeed(connection),
         );
 
-        assert.equal(server.url, "http://127.0.0.1:9999");
-        assert.equal(server.external, true);
-        assert.deepEqual(runtimeMock.state.startCalls, []);
-        assert.deepEqual(runtimeMock.state.closeCalls, []);
+        NodeAssert.equal(server.url, "http://127.0.0.1:9999");
+        NodeAssert.equal(server.external, true);
+        NodeAssert.deepEqual(runtimeMock.state.startCalls, []);
+        NodeAssert.deepEqual(runtimeMock.state.closeCalls, []);
 
         yield* advanceIdleClock;
 
-        assert.deepEqual(runtimeMock.state.closeCalls, []);
+        NodeAssert.deepEqual(runtimeMock.state.closeCalls, []);
       }),
     ).pipe(Effect.provide(TestClock.layer())),
   );
@@ -205,11 +205,11 @@ it.layer(testLayer)("OpenCodeServerPool", (it) => {
           const pool = yield* makePool();
           yield* pool.withServer({ binaryPath: "fake-opencode" }, () => Effect.void);
 
-          assert.deepEqual(runtimeMock.state.closeCalls, []);
+          NodeAssert.deepEqual(runtimeMock.state.closeCalls, []);
         }),
       );
 
-      assert.deepEqual(runtimeMock.state.closeCalls, ["http://127.0.0.1:4301"]);
+      NodeAssert.deepEqual(runtimeMock.state.closeCalls, ["http://127.0.0.1:4301"]);
     }).pipe(Effect.provide(TestClock.layer())),
   );
 });

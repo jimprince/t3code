@@ -45,7 +45,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
 import { checkpointRefForThreadTurn, CHECKPOINT_REFS_PREFIX } from "../../checkpointing/Utils.ts";
-import { ProviderSessionRuntimeRepository } from "../../persistence/Services/ProviderSessionRuntime.ts";
+import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { VcsProcess } from "../../vcs/VcsProcess.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
