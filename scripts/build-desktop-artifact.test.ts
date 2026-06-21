@@ -21,6 +21,7 @@ import {
   LinuxIconResizeError,
   MacPasskeySigningConfigurationResolutionError,
   MissingMacPasskeyProvisioningProfileError,
+  renderMacCodeSigningEntitlements,
   renderMacPasskeyEntitlements,
   resolveClerkPasskeyNativeArtifacts,
   resolveMacPasskeySigningConfiguration,
@@ -292,14 +293,17 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("derives macOS passkey signing configuration from the Clerk publishable key", () => {
-    const configuration = resolveMacPasskeySigningConfiguration({
-      T3CODE_APPLE_TEAM_ID: "abc1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
-    });
+    const configuration = resolveMacPasskeySigningConfiguration(
+      {
+        T3CODE_APPLE_TEAM_ID: "abc1234567",
+        T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+        T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+      },
+      "com.t3tools.t3code.fork",
+    );
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "com.t3tools.t3code.fork",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -307,19 +311,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("normalizes explicit macOS passkey RP domains and renders required entitlements", () => {
-    const configuration = resolveMacPasskeySigningConfiguration({
-      T3CODE_APPLE_TEAM_ID: "ABC1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PASSKEY_RP_DOMAINS:
-        " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
-    });
+    const configuration = resolveMacPasskeySigningConfiguration(
+      {
+        T3CODE_APPLE_TEAM_ID: "ABC1234567",
+        T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+        T3CODE_CLERK_PASSKEY_RP_DOMAINS:
+          " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
+      },
+      "com.t3tools.t3code.fork.dev",
+    );
     const entitlements = renderMacPasskeyEntitlements(configuration);
 
     assert.deepStrictEqual(configuration.rpDomains, [
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code.fork.dev</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -328,7 +335,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it("rejects incomplete macOS passkey signing configuration", () => {
     const captureError = (env: Readonly<Record<string, string | undefined>>) => {
       try {
-        resolveMacPasskeySigningConfiguration(env);
+        resolveMacPasskeySigningConfiguration(env, "com.t3tools.t3code.fork");
       } catch (error) {
         return error;
       }
@@ -365,11 +372,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.notInclude(serializedInvalidDomainError, "query-secret");
     assert.throws(
       () =>
-        resolveMacPasskeySigningConfiguration({
-          T3CODE_APPLE_TEAM_ID: "ABC1234567",
-          T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-          T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
-        }),
+        resolveMacPasskeySigningConfiguration(
+          {
+            T3CODE_APPLE_TEAM_ID: "ABC1234567",
+            T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+            T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
+          },
+          "com.t3tools.t3code.fork",
+        ),
       /Invalid passkey RP domain/u,
     );
     const invalidPublishableKeyError = captureError({
@@ -450,6 +460,39 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(win.signAndEditExecutable, true);
       assert.notProperty(win, "azureSignOptions");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect(
+    "adds hardened-runtime entitlements without provisioning profile for signed macOS builds",
+    () =>
+      Effect.gen(function* () {
+        const entitlements = renderMacCodeSigningEntitlements();
+        const config = yield* createBuildConfig(
+          "stable",
+          "mac",
+          "dmg",
+          "1.2.3",
+          true,
+          false,
+          undefined,
+          {
+            entitlementsPath: "/tmp/entitlements.mac.plist",
+          },
+        );
+
+        const mac = config.mac as Record<string, unknown>;
+        assert.equal(config.appId, "com.t3tools.t3code.fork");
+        assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
+        assert.notProperty(mac, "provisioningProfile");
+        assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
+        assert.include(
+          entitlements,
+          "<key>com.apple.security.cs.allow-unsigned-executable-memory</key>",
+        );
+        assert.include(entitlements, "<key>com.apple.security.cs.disable-library-validation</key>");
+        assert.notInclude(entitlements, "com.apple.application-identifier");
+        assert.notInclude(entitlements, "com.apple.developer.associated-domains");
+      }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
   it("promotes target fff binaries to direct staged dependencies", () => {
