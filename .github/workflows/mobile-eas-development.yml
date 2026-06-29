@@ -67,6 +67,9 @@ jobs:
           token: ${{ secrets.EXPO_TOKEN }}
           packager: pnpm
 
+      - name: Build oxlint plugin
+        run: vp run --filter @t3tools/oxlint-plugin-t3code build
+
       - name: Check
         run: vp check
 
