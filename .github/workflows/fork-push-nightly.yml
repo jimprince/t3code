@@ -198,6 +198,11 @@ jobs:
 
           new_tag="${upstream_tag}-fork.${next_n}"
           version="${new_tag#v}"
+          # A freshly rebased upstream may change package manifests before the
+          # fork release-version stamp. Refresh the lockfile first so the
+          # install used to run the stamping script is not blocked by stale
+          # pre-rebase lock metadata.
+          vp install --lockfile-only --ignore-scripts
           vp install --frozen-lockfile --ignore-scripts
           node scripts/update-release-package-versions.ts "$version"
           vp fmt apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json
