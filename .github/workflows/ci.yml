@@ -25,6 +25,9 @@ jobs:
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron
 
+      - name: Build oxlint plugin
+        run: vp run --filter @t3tools/oxlint-plugin-t3code build
+
       - name: Check
         run: vp check
 
