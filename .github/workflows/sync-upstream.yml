@@ -233,6 +233,9 @@ jobs:
             apps/mobile/app.config.ts
             docs/operations/release.md
             infra/relay/scripts/deploy.test.ts
+            apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts
+            apps/server/src/orchestration/Services/ProjectionSnapshotQuery.ts
+            apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
