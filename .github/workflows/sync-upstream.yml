@@ -209,23 +209,17 @@ jobs:
           # creates perpetual conflicts with upstream's own version bumps.
           # Auto-resolving to upstream is safe because finalize will rewrite
           # them again after the next fork release builds.
-          # The checkpointing/project layer test paths were deleted by
-          # upstream module moves. Fork commits only carried old-path test
-          # edits; the live tests now reside at upstream paths, so preserving
-          # the upstream deletion avoids recurring modify/delete stops.
+          # Resolve tracker-only files from upstream to avoid blocked
+          # release syncs caused by stale local status metadata.
           UPSTREAM_RESOLVE_FILES: |
             apps/desktop/package.json
             apps/server/package.json
             apps/web/package.json
             packages/contracts/package.json
             pnpm-lock.yaml
-            docs/AGENT_REQUIREMENTS.md
-            apps/server/src/checkpointing/Layers/CheckpointDiffQuery.test.ts
-            apps/server/src/project/Layers/ProjectSetupScriptRunner.test.ts
-          # docs/AGENT_REQUIREMENTS.md is agent execution metadata, not a
-          # packaged runtime artifact. Resolve tracker-only conflicts to the
-          # current rebased tree so release syncs are not blocked by status-log
-          # edits from individual task commits.
+          # Resolve tracker-only conflicts to the current rebased tree so
+          # release syncs are not blocked by status-log edits from individual
+          # task commits.
           # release.yml is fork-owned: the fork intentionally keeps a minimal
           # macOS/headless matrix and local-runner fallback that upstream does
           # not have. During rebase, "theirs" is the fork commit being replayed.
