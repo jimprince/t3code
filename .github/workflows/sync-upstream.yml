@@ -217,6 +217,8 @@ jobs:
             apps/web/package.json
             packages/contracts/package.json
             pnpm-lock.yaml
+            apps/server/src/checkpointing/CheckpointDiffQuery.test.ts
+            apps/server/src/project/ProjectSetupScriptRunner.test.ts
           # Resolve tracker-only conflicts to the current rebased tree so
           # release syncs are not blocked by status-log edits from individual
           # task commits.
