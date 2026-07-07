@@ -73,7 +73,7 @@ jobs:
         if: steps.channel.outputs.selected == 'true'
         id: upstream
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
         run: |
           if [[ "${{ steps.channel.outputs.channel }}" == "nightly" ]]; then
             # First upstream release whose tag matches a nightly pattern.
@@ -337,7 +337,7 @@ jobs:
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
         env:
           CHANNEL: ${{ steps.channel.outputs.channel }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
