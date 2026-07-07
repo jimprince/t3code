@@ -228,11 +228,18 @@ jobs:
           # docs/operations/release.md is likewise fork-owned: it documents the
           # fork's reduced release lanes and mobile EAS model, fully replacing
           # upstream's release doc.
+          # These orchestration files intentionally remain fork-owned for this
+          # rebasing policy because fa2b-style thread lifecycle refactors are
+          # required to keep the fork's orchestration APIs in sync with
+          # downstream callers on each sync.
           FORK_RESOLVE_FILES: |
             .github/workflows/release.yml
             apps/mobile/app.config.ts
             docs/operations/release.md
             infra/relay/scripts/deploy.test.ts
+            apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts
+            apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts
+            apps/server/src/orchestration/Services/ProjectionSnapshotQuery.ts
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
