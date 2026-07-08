@@ -108,6 +108,7 @@ jobs:
           # These files are release metadata and are always kept at upstream
           # versions so tracker-only edits do not block rebased releases.
           UPSTREAM_RESOLVE_FILES=$'apps/desktop/package.json\napps/server/package.json\napps/web/package.json\npackages/contracts/package.json\npnpm-lock.yaml'
+          UPSTREAM_RESOLVE_FILES=$"${UPSTREAM_RESOLVE_FILES}\ndocs/AGENT_REQUIREMENTS.md\napps/server/src/checkpointing/Layers/CheckpointDiffQuery.test.ts\napps/server/src/project/Layers/ProjectSetupScriptRunner.test.ts"
           # app.config.ts is fork-owned because it binds the mobile app to this
           # fork's EAS project, bundle IDs, Apple team, and runtime policy.
           FORK_RESOLVE_FILES=$'.github/workflows/release.yml\napps/mobile/app.config.ts\ndocs/operations/release.md\ninfra/relay/scripts/deploy.test.ts'
