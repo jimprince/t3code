@@ -135,7 +135,10 @@ jobs:
           }
 
           ensure_upstream_remote
-          git fetch upstream "+refs/tags/${upstream_tag}:${upstream_ref}"
+          # Keep upstream tags out of the fork tag namespace. Without --no-tags,
+          # Git auto-follows reachable upstream tags into refs/tags/*, which can
+          # make a missing fork stable tag look already synced.
+          git fetch --no-tags upstream "+refs/tags/${upstream_tag}:${upstream_ref}"
 
           if [[ "$CHANNEL" == "nightly" ]]; then
             # Nightly: the fork publishes tags of the form
@@ -197,8 +200,8 @@ jobs:
           if ! git remote get-url upstream >/dev/null 2>&1; then
             git remote add upstream https://github.com/pingdotgg/t3code.git
           fi
-          git fetch upstream main
-          git fetch upstream "+refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}"
+          git fetch --no-tags upstream main
+          git fetch --no-tags upstream "+refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}"
 
       - name: Rebase fork commits onto upstream tag
         if: steps.check.outputs.needed == 'true'
@@ -419,8 +422,8 @@ jobs:
           echo "${{ steps.rebase.outputs.files }}" | sed 's/^/::error::  /'
           echo "::error::"
           echo "::error::Resolve locally:"
-          echo "::error::  git fetch upstream"
-          echo "::error::  git fetch upstream 'refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}'"
+          echo "::error::  git fetch --no-tags upstream"
+          echo "::error::  git fetch --no-tags upstream 'refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}'"
           echo "::error::  git rebase refs/tags/upstream/${upstream_tag}"
           echo "::error::  # fix conflicts, then:"
           echo "::error::  git push origin main --force-with-lease"
