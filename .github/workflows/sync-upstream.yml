@@ -228,9 +228,14 @@ jobs:
           # docs/operations/release.md is likewise fork-owned: it documents the
           # fork's reduced release lanes and mobile EAS model, fully replacing
           # upstream's release doc.
+          # The orchestration projection files carry fork-only commands,
+          # thread lifecycle behavior, and snapshot handoff guarantees.
           FORK_RESOLVE_FILES: |
             .github/workflows/release.yml
             apps/mobile/app.config.ts
+            apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts
+            apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts
+            apps/server/src/orchestration/Services/ProjectionSnapshotQuery.ts
             docs/operations/release.md
             infra/relay/scripts/deploy.test.ts
         run: |
