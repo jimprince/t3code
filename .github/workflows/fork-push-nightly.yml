@@ -110,9 +110,10 @@ jobs:
           UPSTREAM_RESOLVE_FILES=$'apps/desktop/package.json\napps/server/package.json\napps/web/package.json\npackages/contracts/package.json\npnpm-lock.yaml'
           # app.config.ts is fork-owned because it binds the mobile app to this
           # fork's EAS project, bundle IDs, Apple team, and runtime policy.
-          # The orchestration projection files and provider reaper test carry
-          # fork-only thread lifecycle behavior and snapshot handoff guarantees.
-          FORK_RESOLVE_FILES=$'.github/workflows/release.yml\napps/mobile/app.config.ts\napps/server/src/orchestration/Layers/OrchestrationEngine.test.ts\napps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts\napps/server/src/orchestration/Services/ProjectionSnapshotQuery.ts\napps/server/src/provider/Layers/ProviderSessionReaper.test.ts\ndocs/operations/release.md\ninfra/relay/scripts/deploy.test.ts'
+          # The orchestration projection files, provider reaper/startup tests,
+          # and WS layer carry fork-only thread lifecycle, environment metadata,
+          # snapshot handoff, thread transfer, and headless update behavior.
+          FORK_RESOLVE_FILES=$'.github/workflows/release.yml\napps/mobile/app.config.ts\napps/server/src/orchestration/Layers/OrchestrationEngine.test.ts\napps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts\napps/server/src/orchestration/Services/ProjectionSnapshotQuery.ts\napps/server/src/provider/Layers/ProviderSessionReaper.test.ts\napps/server/src/serverRuntimeStartup.test.ts\napps/server/src/ws.ts\ndocs/operations/release.md\ninfra/relay/scripts/deploy.test.ts'
           mapfile -t UPSTREAM_ALLOW < <(printf '%s\n' "$UPSTREAM_RESOLVE_FILES" | sed '/^$/d' | sort -u)
           mapfile -t FORK_ALLOW < <(printf '%s\n' "$FORK_RESOLVE_FILES" | sed '/^$/d' | sort -u)
 
