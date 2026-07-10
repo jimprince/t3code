@@ -1,5 +1,57 @@
 # Agent Requirements
 
+## Current Task Snapshot — Integrate `t3-thread` Into The T3 Code Fork
+
+### Active Requirements
+- Import the standalone CLI into `apps/t3-thread` with its git history.
+- Preserve a separately buildable/installable `t3-thread` CLI boundary.
+- Keep the unrelated `subagents` repository independent; no runtime dependency
+  is introduced in either direction.
+- Adopt the fork's pnpm, Vite+, Node 24, and Effect beta versions.
+- Preserve the vendored compatibility contracts because they normalize legacy
+  and current T3 wire shapes; do not silently narrow cross-version support.
+- Keep release/update mechanics in the fork, remote substrate administration in
+  `t3code-remote-ops`, and worker lifecycle in this package.
+
+### Constraints
+- Do not deploy, publish, push, or repoint the live wrapper from this branch.
+- Keep committed `dist/cli.cjs` fresh for package-style installs.
+- Preserve standalone history and historical tracker entries.
+
+### Acceptance Criteria
+- `apps/t3-thread` is a pnpm workspace app and has no nested npm lockfile.
+- The package builds and all 103 tests pass on the fork's Effect beta.
+- Typecheck, dist freshness, and read-only smoke checks pass under Node 24.
+- Root architecture docs explain why `t3-thread` and `subagents` stay separate.
+
+### Status
+- Completed locally on branch `overnight/t3-thread-integration`.
+
+### Validation Update
+- Rewrote the standalone repository history under `apps/t3-thread` with
+  `git-filter-repo` and merged it without squashing; 28 imported commits remain
+  individually visible.
+- Converted package management from the nested npm lockfile to the root pnpm
+  workspace and Vite+ test runner; Node `24.13.1` is installed through nvm for
+  the fork's required engine.
+- Kept the cross-version vendored contract compatibility layer. Migrated it to
+  Effect `4.0.0-beta.78` (`Schema.Defect()` plus NodeNext import extensions)
+  after Fable isolated the beta API change.
+- `pnpm --filter t3-thread test` passed: 13 files, 103 tests.
+- `pnpm --filter t3-thread typecheck`, `build`, and read-only `smoke` passed.
+- `pnpm --filter @t3tools/contracts test` passed: 14 files, 179 tests, proving
+  the imported compatibility layer did not regress the fork-owned contracts.
+- Rebuilt committed `dist/cli.cjs`; its freshness regression test passed.
+- Added `docs/architecture/t3-thread.md` documenting package, compatibility,
+  ownership, and `subagents` separation boundaries.
+- Fork-wide `pnpm typecheck` and `pnpm build` passed across the workspace.
+- Fork-wide tests passed 1,299 of 1,300 tests before one unrelated web timing
+  test exceeded its 15-second timeout under full parallel load. Its focused
+  rerun passed all 13 `MessagesTimeline` tests in 2.56 seconds, so no T3-thread
+  integration failure remains.
+
+---
+
 ## Current Task Snapshot — Remote T3 Operations Ownership Cleanup
 
 ### Active Requirements
