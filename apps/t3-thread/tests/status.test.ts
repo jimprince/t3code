@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "vite-plus/test";
 
 import { buildFollowUpMessage } from "../src/agentPrompts.js";
 import { classifyThread } from "../src/status.js";
