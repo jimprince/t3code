@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 
-import { ServerProvider } from "./server";
+import { ServerProvider } from "./server.js";
 
 const decodeServerProvider = Schema.decodeUnknownSync(ServerProvider);
 
