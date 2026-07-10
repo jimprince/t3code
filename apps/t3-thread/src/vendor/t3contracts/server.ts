@@ -1,18 +1,18 @@
 import { Effect, Schema } from "effect";
-import { ExecutionEnvironmentDescriptor } from "./environment";
-import { ServerAuthDescriptor } from "./auth";
+import { ExecutionEnvironmentDescriptor } from "./environment.js";
+import { ServerAuthDescriptor } from "./auth.js";
 import {
   IsoDateTime,
   NonNegativeInt,
   ProjectId,
   ThreadId,
   TrimmedNonEmptyString,
-} from "./baseSchemas";
-import { KeybindingRule, ResolvedKeybindingsConfig } from "./keybindings";
-import { EditorId } from "./editor";
-import { ModelCapabilities } from "./model";
-import { ProviderKind } from "./orchestration";
-import { ServerSettings } from "./settings";
+} from "./baseSchemas.js";
+import { KeybindingRule, ResolvedKeybindingsConfig } from "./keybindings.js";
+import { EditorId } from "./editor.js";
+import { ModelCapabilities } from "./model.js";
+import { ProviderKind } from "./orchestration.js";
+import { ServerSettings } from "./settings.js";
 
 const KeybindingsMalformedConfigIssue = Schema.Struct({
   kind: Schema.Literal("keybindings.malformed-config"),

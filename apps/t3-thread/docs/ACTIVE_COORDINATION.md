@@ -1,6 +1,7 @@
 # Active Coordination
 
-This standalone repo owns the `t3-thread` operator CLI.
+This workspace package owns the standalone `t3-thread` operator CLI within the
+T3 Code fork.
 
 ## Current Canonical Command
 

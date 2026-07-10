@@ -2,9 +2,9 @@ import { Schema } from "effect";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
-import { OpenError, OpenInEditorInput } from "./editor";
-import { AuthAccessStreamEvent } from "./auth";
-import { FilesystemBrowseInput, FilesystemBrowseResult, FilesystemBrowseError } from "./filesystem";
+import { OpenError, OpenInEditorInput } from "./editor.js";
+import { AuthAccessStreamEvent } from "./auth.js";
+import { FilesystemBrowseInput, FilesystemBrowseResult, FilesystemBrowseError } from "./filesystem.js";
 import {
   GitActionProgressEvent,
   GitCheckoutInput,
@@ -29,8 +29,8 @@ import {
   GitStatusInput,
   GitStatusResult,
   GitStatusStreamEvent,
-} from "./git";
-import { KeybindingsConfigError } from "./keybindings";
+} from "./git.js";
+import { KeybindingsConfigError } from "./keybindings.js";
 import {
   ClientOrchestrationCommand,
   ORCHESTRATION_WS_METHODS,
@@ -43,7 +43,7 @@ import {
   OrchestrationReplayEventsError,
   OrchestrationReplayEventsInput,
   OrchestrationRpcSchemas,
-} from "./orchestration";
+} from "./orchestration.js";
 import {
   ProjectSearchEntriesError,
   ProjectSearchEntriesInput,
@@ -51,7 +51,7 @@ import {
   ProjectWriteFileError,
   ProjectWriteFileInput,
   ProjectWriteFileResult,
-} from "./project";
+} from "./project.js";
 import {
   TerminalClearInput,
   TerminalCloseInput,
@@ -62,7 +62,7 @@ import {
   TerminalRestartInput,
   TerminalSessionSnapshot,
   TerminalWriteInput,
-} from "./terminal";
+} from "./terminal.js";
 import {
   ServerConfigStreamEvent,
   ServerConfig,
@@ -70,8 +70,8 @@ import {
   ServerProviderUpdatedPayload,
   ServerUpsertKeybindingInput,
   ServerUpsertKeybindingResult,
-} from "./server";
-import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings";
+} from "./server.js";
+import { ServerSettings, ServerSettingsError, ServerSettingsPatch } from "./settings.js";
 
 export const WS_METHODS = {
   // Project registry methods
