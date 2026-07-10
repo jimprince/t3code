@@ -1,14 +1,14 @@
 import { Effect } from "effect";
 import * as Schema from "effect/Schema";
 import * as SchemaTransformation from "effect/SchemaTransformation";
-import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas";
+import { TrimmedNonEmptyString, TrimmedString } from "./baseSchemas.js";
 import {
   ClaudeModelOptions,
   CodexModelOptions,
   DEFAULT_GIT_TEXT_GENERATION_MODEL_BY_PROVIDER,
   OpenCodeModelOptions,
-} from "./model";
-import { ModelSelection } from "./orchestration";
+} from "./model.js";
+import { ModelSelection } from "./orchestration.js";
 
 // ── Client Settings (local-only) ───────────────────────────────
 
@@ -119,7 +119,7 @@ export class ServerSettingsError extends Schema.TaggedErrorClass<ServerSettingsE
   {
     settingsPath: Schema.String,
     detail: Schema.String,
-    cause: Schema.optional(Schema.Defect),
+    cause: Schema.optional(Schema.Defect()),
   },
 ) {
   override get message(): string {
