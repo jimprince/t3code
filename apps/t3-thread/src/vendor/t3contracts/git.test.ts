@@ -7,7 +7,7 @@ import {
   GitRunStackedActionResult,
   GitRunStackedActionInput,
   GitResolvePullRequestResult,
-} from "./git";
+} from "./git.js";
 
 const decodeCreateWorktreeInput = Schema.decodeUnknownSync(GitCreateWorktreeInput);
 const decodePreparePullRequestThreadInput = Schema.decodeUnknownSync(
