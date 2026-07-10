@@ -1,5 +1,5 @@
 import { Schema } from "effect";
-import { TrimmedNonEmptyString } from "./baseSchemas";
+import { TrimmedNonEmptyString } from "./baseSchemas.js";
 
 export const EditorLaunchStyle = Schema.Literals(["direct-path", "goto", "line-column"]);
 export type EditorLaunchStyle = typeof EditorLaunchStyle.Type;
@@ -41,5 +41,5 @@ export type OpenInEditorInput = typeof OpenInEditorInput.Type;
 
 export class OpenError extends Schema.TaggedErrorClass<OpenError>()("OpenError", {
   message: Schema.String,
-  cause: Schema.optional(Schema.Defect),
+  cause: Schema.optional(Schema.Defect()),
 }) {}
