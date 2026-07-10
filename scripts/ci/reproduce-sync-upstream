@@ -1,0 +1,162 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Shared Sync Upstream rebase driver.
+#
+# GitHub Actions and ci-repair-bot both call this file so verification exercises
+# the same conflict policy as production. The repair bot provides the two ref
+# variables directly; workflows derive them from the selected upstream tag.
+
+: "${CI_REPAIR_BOT_UPSTREAM_TARGET:?CI_REPAIR_BOT_UPSTREAM_TARGET is required}"
+: "${CI_REPAIR_BOT_UPSTREAM_SOURCE_REF:?CI_REPAIR_BOT_UPSTREAM_SOURCE_REF is required}"
+
+UPSTREAM_REMOTE="${CI_REPAIR_BOT_UPSTREAM_REMOTE:-upstream}"
+CONFLICT_MODE="${CI_REPAIR_BOT_CONFLICT_MODE:-fail}"
+START_HEAD="$(git rev-parse HEAD)"
+REBASE_MERGE_DIR="$(git rev-parse --git-path rebase-merge)"
+REBASE_APPLY_DIR="$(git rev-parse --git-path rebase-apply)"
+
+# Generated release metadata is rewritten after a successful rebase, so the
+# upstream version is authoritative while replaying fork commits.
+UPSTREAM_RESOLVE_FILES=(
+  apps/desktop/package.json
+  apps/server/package.json
+  apps/web/package.json
+  packages/contracts/package.json
+  pnpm-lock.yaml
+)
+
+# These files are explicitly fork-owned. Runtime/source files do not belong in
+# either list: their conflicts require a semantic repair that preserves both
+# upstream behavior and the fork feature.
+FORK_RESOLVE_FILES=(
+  .github/workflows/release.yml
+  apps/mobile/app.config.ts
+  docs/operations/release.md
+)
+
+contains_file() {
+  local needle="$1"
+  shift
+  local candidate
+  for candidate in "$@"; do
+    [[ "$needle" == "$candidate" ]] && return 0
+  done
+  return 1
+}
+
+append_unknown() {
+  local needle="$1"
+  local index
+  for ((index = 0; index < unknown_chain_count; index++)); do
+    [[ "$needle" == "${unknown_chain[$index]}" ]] && return 0
+  done
+  unknown_chain[$unknown_chain_count]="$needle"
+  unknown_chain_count=$((unknown_chain_count + 1))
+}
+
+emit_status() {
+  local status="$1"
+  shift
+  local files=("$@")
+
+  echo "sync-upstream reproduction status: $status"
+  if [[ ${#files[@]} -gt 0 ]]; then
+    echo "full conflict chain:"
+    printf '  %s\n' "${files[@]}"
+  fi
+
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    echo "status=$status" >> "$GITHUB_OUTPUT"
+    {
+      echo "files<<EOF"
+      printf '%s\n' "${files[@]}"
+      echo "EOF"
+    } >> "$GITHUB_OUTPUT"
+  fi
+}
+
+restore_start_head() {
+  if [[ -d "$REBASE_MERGE_DIR" || -d "$REBASE_APPLY_DIR" ]]; then
+    git rebase --abort || true
+  fi
+  git reset --hard "$START_HEAD" >/dev/null
+}
+
+if ! git remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1; then
+  git remote add "$UPSTREAM_REMOTE" https://github.com/pingdotgg/t3code.git
+fi
+
+git fetch --no-tags "$UPSTREAM_REMOTE" main:refs/remotes/upstream/main
+git fetch --no-tags "$UPSTREAM_REMOTE" \
+  "+${CI_REPAIR_BOT_UPSTREAM_SOURCE_REF}:${CI_REPAIR_BOT_UPSTREAM_TARGET}"
+
+echo "Rebasing onto $CI_REPAIR_BOT_UPSTREAM_TARGET..."
+echo "Fork commits being replayed (relative to upstream/main):"
+git log --oneline upstream/main..HEAD
+
+if git rebase --onto "$CI_REPAIR_BOT_UPSTREAM_TARGET" upstream/main; then
+  emit_status clean
+  exit 0
+fi
+
+# Unknown conflicts are temporarily resolved to the upstream side so the
+# diagnostic pass can continue and report conflicts from later commits too.
+# If any unknown conflict is observed, the synthetic rebase is always discarded.
+unknown_chain=()
+unknown_chain_count=0
+
+while [[ -d "$REBASE_MERGE_DIR" || -d "$REBASE_APPLY_DIR" ]]; do
+  conflicted=()
+  while IFS= read -r file; do
+    [[ -n "$file" ]] && conflicted+=("$file")
+  done < <(git diff --name-only --diff-filter=U | sort -u)
+
+  if [[ ${#conflicted[@]} -eq 0 ]]; then
+    git rebase --skip || break
+    continue
+  fi
+
+  echo "Resolving conflict stop for diagnostic replay: ${conflicted[*]}"
+  for file in "${conflicted[@]}"; do
+    if contains_file "$file" "${UPSTREAM_RESOLVE_FILES[@]}"; then
+      git checkout --ours -- "$file"
+    elif contains_file "$file" "${FORK_RESOLVE_FILES[@]}"; then
+      git checkout --theirs -- "$file"
+    else
+      append_unknown "$file"
+      git checkout --ours -- "$file"
+    fi
+    git add -- "$file"
+  done
+
+  GIT_EDITOR=true git rebase --continue || true
+done
+
+unresolved=()
+unresolved_count=0
+while IFS= read -r file; do
+  if [[ -n "$file" ]]; then
+    unresolved[$unresolved_count]="$file"
+    unresolved_count=$((unresolved_count + 1))
+  fi
+done < <(git diff --name-only --diff-filter=U | sort -u)
+for ((index = 0; index < unresolved_count; index++)); do
+  append_unknown "${unresolved[$index]}"
+done
+
+if [[ -d "$REBASE_MERGE_DIR" || -d "$REBASE_APPLY_DIR" || $unknown_chain_count -gt 0 ]]; then
+  restore_start_head
+  if [[ $unknown_chain_count -gt 0 ]]; then
+    emit_status conflict "${unknown_chain[@]}"
+  else
+    emit_status conflict
+  fi
+  if [[ "$CONFLICT_MODE" == "output" ]]; then
+    exit 0
+  fi
+  exit 1
+fi
+
+emit_status clean
