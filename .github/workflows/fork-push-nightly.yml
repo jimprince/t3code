@@ -92,100 +92,10 @@ jobs:
           fi
           echo "Latest upstream nightly release: $upstream_tag"
 
-          git remote add upstream https://github.com/pingdotgg/t3code.git
-          git fetch upstream main
-          git fetch upstream "+refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}"
-
-          upstream_ref="refs/tags/upstream/${upstream_tag}"
-          echo "Rebasing fork commits onto $upstream_ref before tagging push nightly..."
-          echo "Fork commits being replayed (relative to upstream/main):"
-          git log --oneline upstream/main..HEAD
-
-          # Keep agent tracker-only conflicts from blocking updater-visible
-          # package builds. During rebase, "ours" is the current rebased tree,
-          # so this preserves prior tracker state instead of letting one
-          # replayed commit overwrite it.
-          # These files are release metadata and are always kept at upstream
-          # versions so tracker-only edits do not block rebased releases.
-          UPSTREAM_RESOLVE_FILES=$'apps/desktop/package.json\napps/server/package.json\napps/web/package.json\npackages/contracts/package.json\npnpm-lock.yaml'
-          # app.config.ts is fork-owned because it binds the mobile app to this
-          # fork's EAS project, bundle IDs, Apple team, and runtime policy.
-          # The orchestration projection files and provider reaper test carry
-          # fork-only thread lifecycle behavior and snapshot handoff guarantees.
-          FORK_RESOLVE_FILES=$'.github/workflows/release.yml\napps/mobile/app.config.ts\napps/server/src/orchestration/Layers/OrchestrationEngine.test.ts\napps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts\napps/server/src/orchestration/Services/ProjectionSnapshotQuery.ts\napps/server/src/provider/Layers/ProviderSessionReaper.test.ts\ndocs/operations/release.md\ninfra/relay/scripts/deploy.test.ts'
-          mapfile -t UPSTREAM_ALLOW < <(printf '%s\n' "$UPSTREAM_RESOLVE_FILES" | sed '/^$/d' | sort -u)
-          mapfile -t FORK_ALLOW < <(printf '%s\n' "$FORK_RESOLVE_FILES" | sed '/^$/d' | sort -u)
-
-          is_upstream_allowed() {
-            local f="$1"
-            for a in "${UPSTREAM_ALLOW[@]}"; do
-              [[ "$f" == "$a" ]] && return 0
-            done
-            return 1
-          }
-
-          is_fork_allowed() {
-            local f="$1"
-            for a in "${FORK_ALLOW[@]}"; do
-              [[ "$f" == "$a" ]] && return 0
-            done
-            return 1
-          }
-
-          if ! git rebase --onto "$upstream_ref" upstream/main; then
-            while [[ -d .git/rebase-merge || -d .git/rebase-apply ]]; do
-              mapfile -t conflicted < <(git diff --name-only --diff-filter=U | sort -u)
-
-              if [[ ${#conflicted[@]} -eq 0 ]]; then
-                git rebase --skip || break
-                continue
-              fi
-
-              unknown=()
-              for f in "${conflicted[@]}"; do
-                if ! is_upstream_allowed "$f" && ! is_fork_allowed "$f"; then
-                  unknown+=("$f")
-                fi
-              done
-
-              if [[ ${#unknown[@]} -gt 0 ]]; then
-                echo "::error::Rebase conflict syncing push nightly to $upstream_tag."
-                echo "::error::Conflicts outside auto-resolve allowlist:"
-                printf '::error::  %s\n' "${unknown[@]}"
-                git rebase --abort || true
-                exit 1
-              fi
-
-              echo "Auto-resolving allowed conflicts for: ${conflicted[*]}"
-              for f in "${conflicted[@]}"; do
-                if is_upstream_allowed "$f"; then
-                  # During rebase, "ours" = upstream (the new base).
-                  git checkout --ours -- "$f"
-                else
-                  # During rebase, "theirs" = the fork commit being replayed.
-                  git checkout --theirs -- "$f"
-                fi
-                git add -- "$f"
-              done
-
-              # If continuing hits a later conflict, keep the rebase state and
-              # let the next loop iteration inspect that conflict. Only the
-              # no-conflict branch above is allowed to skip an empty commit.
-              GIT_EDITOR=true git rebase --continue || true
-            done
-
-            mapfile -t unresolved < <(git diff --name-only --diff-filter=U | sort -u)
-            if [[ -d .git/rebase-merge || -d .git/rebase-apply || ${#unresolved[@]} -gt 0 ]]; then
-              echo "::error::Rebase stopped before completion while syncing push nightly to $upstream_tag."
-              if [[ ${#unresolved[@]} -gt 0 ]]; then
-                printf '::error::  %s\n' "${unresolved[@]}"
-              fi
-              git rebase --abort || true
-              exit 1
-            fi
-          fi
-
-          echo "Rebase completed."
+          export CI_REPAIR_BOT_UPSTREAM_TARGET="refs/tags/upstream/${upstream_tag}"
+          export CI_REPAIR_BOT_UPSTREAM_SOURCE_REF="refs/tags/${upstream_tag}"
+          export CI_REPAIR_BOT_CONFLICT_MODE=fail
+          scripts/ci/reproduce-sync-upstream
 
           mapfile -t existing_numbers < <(git tag --list "${upstream_tag}-fork.*" \
             | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
