@@ -163,4 +163,9 @@ The launchd agent `~/Library/LaunchAgents/network.homenetwork.t3-watcher.plist` 
 - Canonical skill: `/Users/brad/.shared/skills/t3-threads/SKILL.md`
 - Overseer layer: `/Users/brad/.shared/skills/overseer-thread-management/SKILL.md`
 - Runbook: `docs/AGENT_OPERATIONS.md`
-- Remote T3 Code update runbook: `docs/REMOTE_T3CODE_UPDATE.md`
+- Remote ownership boundary: `docs/REMOTE_T3CODE_UPDATE.md`
+
+This repo owns worker-thread lifecycle only. Updating the remote `t3code.service`
+is owned by the T3 Code fork's release docs, and VM/service/pairing/project
+administration is owned by the shared `t3code-remote-ops` skill. See
+`docs/REMOTE_T3CODE_UPDATE.md` for the routing.
