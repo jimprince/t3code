@@ -1,5 +1,50 @@
 # Agent Requirements
 
+## Current Task Snapshot — Remote T3 Operations Ownership Cleanup
+
+### Active Requirements
+- Replace the stale manual checkout/reset/build procedure in `docs/REMOTE_T3CODE_UPDATE.md` with a concise, pointer-based ownership boundary.
+- State the boundary explicitly:
+  - T3 Code fork `docs/operations/release.md` and `scripts/headless-auto-upgrade.sh` own release/update mechanics.
+  - Shared `t3code-remote-ops` skill owns VM/service/pairing/project administration.
+  - This repo owns worker-thread lifecycle only.
+- Update `README.md` and `LLM_INSTRUCTIONS.md` links to match the new boundary.
+- Remove dangerous or duplicative reset instructions.
+- Do not touch CLI behavior unless a test proves documentation needs a tiny correction.
+- Run docs/reference scans plus `npm test` / `npm run build` / `npm run smoke` as appropriate.
+- Commit the changes and report the SHA and test results.
+
+### Constraints
+- This tracker update is the first project write for this task.
+- Do not deploy, push, edit the live shared skill, or spawn subagents.
+- Verify pointer targets exist before linking them; a stale pointer is worse than a stale procedure.
+- Keep `t3-thread` a thin wrapper over T3 Code native APIs.
+- Preserve historical snapshots in this tracker; append the new one rather than rewriting old entries.
+
+### Acceptance Criteria
+- `docs/REMOTE_T3CODE_UPDATE.md` no longer contains `git reset --hard`, source-build, or `npm install -g` procedures.
+- The doc routes release/update mechanics to the fork, substrate administration to `t3code-remote-ops`, and keeps only thread lifecycle in this repo.
+- `README.md` and `LLM_INSTRUCTIONS.md` point at the rewritten doc with accurate descriptions.
+- Referenced fork paths are confirmed to exist on `jimprince/t3code` `main`.
+- `npm test`, `npm run build`, and `npm run smoke` pass, or any failure is reported exactly.
+
+### Status
+- Completed locally.
+
+### Validation Update
+- Verified both pointer targets exist on `jimprince/t3code` `main` via `gh api`: `docs/operations/release.md` (18223 bytes) and `scripts/headless-auto-upgrade.sh` (6686 bytes).
+- Confirmed the old procedure was stale, not merely verbose: it described a source-build install (`bun run build --filter=t3`, `npm install -g apps/server`, binary at `~/.local/node/bin/t3`), while the fork now ships release tarballs staged under `~/.local/share/t3code-server/releases/<version>` behind a `current` symlink.
+- Confirmed on the live dev VM (read-only) that `~/.local/share/t3code-server/current` and `~/.local/bin/t3code-headless-upgrade` exist and the `t3code-headless-upgrade.timer` is active.
+- Verified the service path end to end: `t3code.service` invokes
+  `~/.local/node/bin/t3`, and that small compatibility wrapper execs
+  `~/.local/share/t3code-server/current/bin/t3`. The updater therefore does
+  control the binary used by the live service; no unit drift exists.
+- Rewrote `docs/REMOTE_T3CODE_UPDATE.md` as a pointer-based ownership boundary; removed the `git reset --hard` step, the manual clone/build/install block, and the duplicated pairing/restart/project procedures already owned by `t3code-remote-ops`.
+- Updated `README.md` and `LLM_INSTRUCTIONS.md` link text to describe the doc as an ownership boundary rather than an update procedure.
+- No CLI behavior change was needed; no test surfaced a documentation correction.
+- Validation passed: `npm test` (13 files, 103 tests), `npm run build`, and
+  `npm run smoke`.
+
 ## Current Task Snapshot — Raw Thread UUID Direct Lifecycle Support
 
 ### Active Requirements
