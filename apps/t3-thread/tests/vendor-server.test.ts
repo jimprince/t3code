@@ -1,5 +1,5 @@
-import { Schema } from "effect";
-import { describe, expect, it } from "vitest";
+import * as Schema from "effect/Schema";
+import { describe, expect, it } from "vite-plus/test";
 
 import { ServerConfig, ServerProvider } from "../src/vendor/t3contracts/server.js";
 

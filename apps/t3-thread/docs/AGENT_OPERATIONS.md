@@ -483,7 +483,7 @@ Do not implement a custom renewal mechanism unless T3 exposes a first-class API 
 
 ## Coordination Hygiene
 
-Keep [docs/ACTIVE_COORDINATION.md](/Users/brad/Programming/t3-thread/docs/ACTIVE_COORDINATION.md) current when:
+Keep [docs/ACTIVE_COORDINATION.md](ACTIVE_COORDINATION.md) current when:
 
 - a new user request changes the active focus
 - a new delegated thread is created

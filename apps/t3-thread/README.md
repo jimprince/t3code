@@ -7,6 +7,10 @@ Deprecated compatibility alias: `t3-agent` remains in place for old scripts and 
 
 Runtime state remains at `~/.config/t3-remote-agents/state.json` so existing paired environments and saved workers continue to work.
 
+The source now lives at `apps/t3-thread` in Brad's T3 Code fork. It remains a
+separate workspace package and executable boundary; the move does not make it a
+server-internal API or combine it with the unrelated `subagents` tool.
+
 ## Quick Start
 
 ```bash
@@ -165,7 +169,21 @@ The launchd agent `~/Library/LaunchAgents/network.homenetwork.t3-watcher.plist` 
 - Runbook: `docs/AGENT_OPERATIONS.md`
 - Remote ownership boundary: `docs/REMOTE_T3CODE_UPDATE.md`
 
-This repo owns worker-thread lifecycle only. Updating the remote `t3code.service`
+This package owns worker-thread lifecycle only. Updating the remote `t3code.service`
 is owned by the T3 Code fork's release docs, and VM/service/pairing/project
 administration is owned by the shared `t3code-remote-ops` skill. See
 `docs/REMOTE_T3CODE_UPDATE.md` for the routing.
+
+## Monorepo Development
+
+From the fork root, use Node `24.13.1` and the workspace toolchain:
+
+```bash
+pnpm --filter t3-thread test
+pnpm --filter t3-thread typecheck
+pnpm --filter t3-thread build
+pnpm --filter t3-thread smoke
+```
+
+`dist/cli.cjs` remains committed and the dist-freshness test verifies it matches
+the source build.
