@@ -1,14 +1,16 @@
 # LLM Instructions
 
-This repo owns the standalone `t3-thread` operator CLI for creating, supervising, and retiring T3 Code worker threads.
+This workspace package owns the standalone `t3-thread` operator CLI for creating,
+supervising, and retiring T3 Code worker threads. It lives at
+`apps/t3-thread` inside Brad's T3 Code fork but keeps a separate CLI boundary.
 
 ## Read Order
 
-1. [docs/AGENT_REQUIREMENTS.md](/Users/brad/Programming/t3-thread/docs/AGENT_REQUIREMENTS.md)
-2. [README.md](/Users/brad/Programming/t3-thread/README.md)
+1. [docs/AGENT_REQUIREMENTS.md](docs/AGENT_REQUIREMENTS.md)
+2. [README.md](README.md)
 3. [~/.shared/skills/t3-threads/SKILL.md](/Users/brad/.shared/skills/t3-threads/SKILL.md)
 4. [~/.shared/skills/overseer-thread-management/SKILL.md](/Users/brad/.shared/skills/overseer-thread-management/SKILL.md) when coordinating multiple workers
-5. [docs/REMOTE_T3CODE_UPDATE.md](/Users/brad/Programming/t3-thread/docs/REMOTE_T3CODE_UPDATE.md) when a task looks like remote `t3code.service` maintenance; it routes that work to its real owners
+5. [docs/REMOTE_T3CODE_UPDATE.md](docs/REMOTE_T3CODE_UPDATE.md) when a task looks like remote `t3code.service` maintenance; it routes that work to its real owners
 
 ## Purpose
 
@@ -37,7 +39,7 @@ Do not pass `--worktree`. T3 Code creates and records the worktree path through 
 
 When command names, lifecycle behavior, or notification routing change, update:
 
-- [README.md](/Users/brad/Programming/t3-thread/README.md)
+- [README.md](README.md)
 - [~/.shared/skills/t3-threads/SKILL.md](/Users/brad/.shared/skills/t3-threads/SKILL.md)
 - [~/.shared/skills/overseer-thread-management/SKILL.md](/Users/brad/.shared/skills/overseer-thread-management/SKILL.md)
 - `/Users/brad/.shared/bin/t3-thread`
@@ -49,4 +51,4 @@ This repo owns worker-thread lifecycle only. Do not add remote release, build, o
 - Release/update mechanics for `t3code` are owned by the T3 Code fork: `docs/operations/release.md` and `scripts/headless-auto-upgrade.sh` in `jimprince/t3code`.
 - VM, service, pairing, and remote project administration are owned by `/Users/brad/.shared/skills/t3code-remote-ops/SKILL.md`.
 
-[docs/REMOTE_T3CODE_UPDATE.md](/Users/brad/Programming/t3-thread/docs/REMOTE_T3CODE_UPDATE.md) records that boundary and routes agents to the correct owner.
+[docs/REMOTE_T3CODE_UPDATE.md](docs/REMOTE_T3CODE_UPDATE.md) records that boundary and routes agents to the correct owner.

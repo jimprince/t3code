@@ -17,19 +17,19 @@ import type {
   GitStatusInput,
   GitStatusResult,
   GitCreateBranchResult,
-} from "./git";
-import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem";
+} from "./git.js";
+import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem.js";
 import type {
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileInput,
   ProjectWriteFileResult,
-} from "./project";
+} from "./project.js";
 import type {
   ServerConfig,
   ServerProviderUpdatedPayload,
   ServerUpsertKeybindingResult,
-} from "./server";
+} from "./server.js";
 import type {
   TerminalClearInput,
   TerminalCloseInput,
@@ -39,8 +39,8 @@ import type {
   TerminalRestartInput,
   TerminalSessionSnapshot,
   TerminalWriteInput,
-} from "./terminal";
-import type { ServerUpsertKeybindingInput } from "./server";
+} from "./terminal.js";
+import type { ServerUpsertKeybindingInput } from "./server.js";
 import type {
   ClientOrchestrationCommand,
   OrchestrationGetFullThreadDiffInput,
@@ -50,10 +50,10 @@ import type {
   OrchestrationShellStreamItem,
   OrchestrationSubscribeThreadInput,
   OrchestrationThreadStreamItem,
-} from "./orchestration";
-import type { EnvironmentId } from "./baseSchemas";
-import { EditorId } from "./editor";
-import { ClientSettings, ServerSettings, ServerSettingsPatch } from "./settings";
+} from "./orchestration.js";
+import type { EnvironmentId } from "./baseSchemas.js";
+import { EditorId } from "./editor.js";
+import { ClientSettings, ServerSettings, ServerSettingsPatch } from "./settings.js";
 
 export interface ContextMenuItem<T extends string = string> {
   id: T;

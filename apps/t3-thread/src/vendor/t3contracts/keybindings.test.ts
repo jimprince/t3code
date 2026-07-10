@@ -7,7 +7,7 @@ import {
   KeybindingRule,
   ResolvedKeybindingRule,
   ResolvedKeybindingsConfig,
-} from "./keybindings";
+} from "./keybindings.js";
 
 const decode = <S extends Schema.Top>(
   schema: S,
