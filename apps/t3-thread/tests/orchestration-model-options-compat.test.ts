@@ -261,9 +261,10 @@ describe("orchestration model option compatibility", () => {
         model: "composer-2",
       },
     });
-    expect("provider" in (encoded as { defaultModelSelection: Record<string, unknown> }).defaultModelSelection).toBe(
-      false,
-    );
+    expect(
+      "provider" in
+        (encoded as { defaultModelSelection: Record<string, unknown> }).defaultModelSelection,
+    ).toBe(false);
   });
 
   it("decodes exact legacy subscribeShell snapshot model selections", () => {
