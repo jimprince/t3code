@@ -265,14 +265,8 @@ jobs:
             echo "Pushed $new_tag — release.yml will build and publish."
           fi
 
-          # Pushes made with GITHUB_TOKEN do not trigger tag-push workflows.
-          # Dispatch the release workflow explicitly so scheduled syncs still
-          # publish artifacts without requiring a long-lived PAT secret.
-          gh workflow run release.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f version="$new_tag" \
-            -f target_ref="$new_tag"
+          # The persisted GH_PAT credential makes this tag push trigger
+          # release.yml. Do not dispatch it again or the same tag builds twice.
 
       - name: Fail with conflict resolution instructions
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'conflict'
