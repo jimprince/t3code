@@ -39846,6 +39846,14 @@ function resolveLiveDefaultModel(provider, providerModels) {
   if (!inventory) {
     return null;
   }
+  if (provider === "codex") {
+    const preferred = inventory.models.find(
+      (model) => model.slug === "gpt-5.6-terra" && !model.isCustom
+    );
+    if (preferred) {
+      return preferred.slug;
+    }
+  }
   return inventory.models.find((model) => !model.isCustom)?.slug ?? inventory.models[0]?.slug ?? null;
 }
 function resolveLiveModelSlug(provider, model, providerModels) {

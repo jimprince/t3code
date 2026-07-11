@@ -156,6 +156,27 @@ describe("project helpers", () => {
     });
   });
 
+  it("prefers GPT-5.6 Terra as the Codex default when it is live", () => {
+    expect(
+      buildModelSelection({
+        provider: "codex",
+        providerModels: [
+          {
+            provider: "codex",
+            models: [
+              { slug: "gpt-5.5", name: "GPT-5.5", isCustom: false },
+              { slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", isCustom: false },
+              { slug: "gpt-5.6-terra", name: "GPT-5.6 Terra", isCustom: false },
+            ],
+          },
+        ],
+      }),
+    ).toEqual({
+      provider: "codex",
+      model: "gpt-5.6-terra",
+    });
+  });
+
   it("resolves live server model display names to slugs", () => {
     expect(
       buildModelSelection({
