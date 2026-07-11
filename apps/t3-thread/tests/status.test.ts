@@ -30,7 +30,9 @@ function makeThread(overrides: Partial<OrchestrationThread> = {}): Orchestration
   };
 }
 
-function makeThreadShell(overrides: Partial<OrchestrationThreadShell> = {}): OrchestrationThreadShell {
+function makeThreadShell(
+  overrides: Partial<OrchestrationThreadShell> = {},
+): OrchestrationThreadShell {
   return {
     id: "thread-shell-1",
     projectId: "project-1",
@@ -122,9 +124,7 @@ describe("classifyThread", () => {
       }),
     );
 
-    expect(status.state).toBe(
-      "running",
-    );
+    expect(status.state).toBe("running");
   });
 
   it("reports running when session has an active turn even if session.status is not 'running'", () => {

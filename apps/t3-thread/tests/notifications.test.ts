@@ -5,11 +5,7 @@ import {
   buildNotificationMessage,
   buildNotificationRecord,
 } from "../src/notifications.js";
-import type {
-  OrchestrationThread,
-  SavedAgent,
-  SavedSubscription,
-} from "../src/types.js";
+import type { OrchestrationThread, SavedAgent, SavedSubscription } from "../src/types.js";
 
 function makeAgent(overrides: Partial<SavedAgent> = {}): SavedAgent {
   return {
