@@ -1,8 +1,44 @@
 # Agent Requirements
 
+## Current Task Snapshot — Land And Cut Over The Integrated CLI (2026-07-10)
+
+### Active Requirements
+
+- Preserve the standalone checkout's local coordination update in the imported
+  package.
+- Re-run package and fork validation, then fast-forward canonical fork `main`.
+- Repoint the shared `t3-thread` wrapper, compatibility alias documentation,
+  optional watcher plist, and shared lifecycle skill to
+  `/Users/brad/Programming/t3-plugin/apps/t3-thread`.
+- Verify live environment/project discovery and a one-shot watcher scan through
+  the repointed wrapper.
+- Leave the standalone repository in place until the post-cutover audit is
+  complete.
+
+### Status
+
+- Completed locally and ready to land/cut over.
+
+### Validation
+
+- Preserved the standalone checkout's 2026-07-09 CI Repair Bot retirement
+  record in `docs/ACTIVE_COORDINATION.md`; the unrelated `.ralph_status_*`
+  artifact remains intentionally unimported.
+- Normalized the imported package to the fork formatter and namespace-import
+  lint rules.
+- Root `pnpm exec vp check` passed formatting and lint with 0 errors; 21
+  existing warnings remain across the fork.
+- Root `pnpm exec vp run typecheck` passed across all 16 workspaces.
+- `pnpm --filter t3-thread test` passed: 13 files, 103 tests.
+- `pnpm --filter t3-thread typecheck`, `build`, and read-only `smoke` passed;
+  committed `dist/cli.cjs` is fresh.
+- `pnpm --filter @t3tools/contracts test` passed: 14 files, 179 tests.
+- `git diff --check` passed.
+
 ## Current Task Snapshot — Integrate `t3-thread` Into The T3 Code Fork
 
 ### Active Requirements
+
 - Import the standalone CLI into `apps/t3-thread` with its git history.
 - Preserve a separately buildable/installable `t3-thread` CLI boundary.
 - Keep the unrelated `subagents` repository independent; no runtime dependency
@@ -14,20 +50,24 @@
   `t3code-remote-ops`, and worker lifecycle in this package.
 
 ### Constraints
+
 - Do not deploy, publish, push, or repoint the live wrapper from this branch.
 - Keep committed `dist/cli.cjs` fresh for package-style installs.
 - Preserve standalone history and historical tracker entries.
 
 ### Acceptance Criteria
+
 - `apps/t3-thread` is a pnpm workspace app and has no nested npm lockfile.
 - The package builds and all 103 tests pass on the fork's Effect beta.
 - Typecheck, dist freshness, and read-only smoke checks pass under Node 24.
 - Root architecture docs explain why `t3-thread` and `subagents` stay separate.
 
 ### Status
+
 - Completed locally on branch `overnight/t3-thread-integration`.
 
 ### Validation Update
+
 - Rewrote the standalone repository history under `apps/t3-thread` with
   `git-filter-repo` and merged it without squashing; 28 imported commits remain
   individually visible.
@@ -55,6 +95,7 @@
 ## Current Task Snapshot — Remote T3 Operations Ownership Cleanup
 
 ### Active Requirements
+
 - Replace the stale manual checkout/reset/build procedure in `docs/REMOTE_T3CODE_UPDATE.md` with a concise, pointer-based ownership boundary.
 - State the boundary explicitly:
   - T3 Code fork `docs/operations/release.md` and `scripts/headless-auto-upgrade.sh` own release/update mechanics.
@@ -67,6 +108,7 @@
 - Commit the changes and report the SHA and test results.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Do not deploy, push, edit the live shared skill, or spawn subagents.
 - Verify pointer targets exist before linking them; a stale pointer is worse than a stale procedure.
@@ -74,6 +116,7 @@
 - Preserve historical snapshots in this tracker; append the new one rather than rewriting old entries.
 
 ### Acceptance Criteria
+
 - `docs/REMOTE_T3CODE_UPDATE.md` no longer contains `git reset --hard`, source-build, or `npm install -g` procedures.
 - The doc routes release/update mechanics to the fork, substrate administration to `t3code-remote-ops`, and keeps only thread lifecycle in this repo.
 - `README.md` and `LLM_INSTRUCTIONS.md` point at the rewritten doc with accurate descriptions.
@@ -81,9 +124,11 @@
 - `npm test`, `npm run build`, and `npm run smoke` pass, or any failure is reported exactly.
 
 ### Status
+
 - Completed locally.
 
 ### Validation Update
+
 - Verified both pointer targets exist on `jimprince/t3code` `main` via `gh api`: `docs/operations/release.md` (18223 bytes) and `scripts/headless-auto-upgrade.sh` (6686 bytes).
 - Confirmed the old procedure was stale, not merely verbose: it described a source-build install (`bun run build --filter=t3`, `npm install -g apps/server`, binary at `~/.local/node/bin/t3`), while the fork now ships release tarballs staged under `~/.local/share/t3code-server/releases/<version>` behind a `current` symlink.
 - Confirmed on the live dev VM (read-only) that `~/.local/share/t3code-server/current` and `~/.local/bin/t3code-headless-upgrade` exist and the `t3code-headless-upgrade.timer` is active.
@@ -100,6 +145,7 @@
 ## Current Task Snapshot — Raw Thread UUID Direct Lifecycle Support
 
 ### Active Requirements
+
 - Add first-class support for using a raw T3 thread UUID directly, without a prior manual `attach`, for common lifecycle commands where feasible.
 - Support either a saved agent name or a raw thread UUID for: `status`, `result`, `worklog`, `send`, `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe`.
 - When a raw UUID is provided, resolve it by checking saved mappings first and then paired environments, infer environment/project metadata from the remote thread listing, and proceed without requiring a manual attach step.
@@ -113,6 +159,7 @@
 - Run focused tests, `npm run build`, dist freshness validation if required, and `npm test` if feasible.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Keep `t3-thread` a thin wrapper over T3 Code native APIs.
 - Avoid broad rewrites; prefer a shared resolver used by the affected commands.
@@ -120,6 +167,7 @@
 - Preserve unrelated dirty work already present in the repo.
 
 ### Acceptance Criteria
+
 - Operators and agents can run commands like `t3-thread status <uuid>`, `t3-thread result <uuid>`, and `t3-thread send <uuid> "..."` without first running `attach`.
 - Raw UUID resolution prefers a saved mapping when one exists for that thread id.
 - When the UUID is unsaved, the CLI resolves the thread by scanning paired environments and uses remote metadata to continue.
@@ -128,9 +176,11 @@
 - Updated docs and shared skill describe the direct-UUID workflow and clarify that manual attach is now optional for common lifecycle commands.
 
 ### Status
+
 - Completed locally.
 
 ### Validation Update
+
 - Added a UUID-aware lifecycle target resolver in `src/agent-targets.ts`.
 - Lifecycle commands now accept either a saved agent name or a raw thread UUID for: `status`, `result`, `worklog`, `send`, `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe --watch`.
 - Raw UUID resolution now prefers an existing saved mapping, then scans paired environments and infers environment/project metadata from the remote thread shell.
@@ -144,6 +194,7 @@
 ## Current Task Snapshot — Child Completion Notification Reliability
 
 ### Active Requirements
+
 - Investigate why a parent/original T3 thread subscribed for child completion notifications does not reliably receive a notification when the child completes.
 - Orient against the intended behavior documented in `LLM_INSTRUCTIONS.md`, `docs/AGENT_OPERATIONS.md`, `docs/ACTIVE_COORDINATION.md`, and `~/.shared/skills/t3-threads/SKILL.md`.
 - Determine whether the root cause is in watcher lifecycle, subscription persistence, event detection, or delivery.
@@ -155,6 +206,7 @@
 - Commit the completed work on branch `t3/fix-completion-notify` with a clear message.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Do not hand-edit `~/.config/t3-remote-agents/state.json` as a fix.
 - Keep `t3-thread` a thin wrapper over native T3 APIs.
@@ -162,6 +214,7 @@
 - Avoid destructive git operations and preserve unrelated work.
 
 ### Acceptance Criteria
+
 - Root cause is identified with concrete file/line evidence.
 - Reproduction steps clearly state observed vs expected behavior if repro is possible.
 - Any implemented fix is covered by regression tests.
@@ -170,9 +223,11 @@
 - A commit exists on `t3/fix-completion-notify` with the completed fix or investigation result.
 
 ### Status
+
 - Completed locally.
 
 ### Validation Update
+
 - Root cause confirmed in the create/subscribe and watch command paths: subscriptions were persisted, but no on-demand watcher bootstrap or singleton idle-exit lifecycle existed in the implementation.
 - Added watcher bootstrap helpers and wired `create`/`subscribe` to best-effort spawn a singleton detached watcher when a notification route is attached.
 - Added watcher idle-work detection so the watcher stays alive while subscribed source threads are still running or undelivered notifications remain.
@@ -187,50 +242,59 @@
 ## Current Task Snapshot - Protein Functional Topology Handoff Registration
 
 ### Active Requirements
+
 - Register `/home/brad/Programming/protein-functional-topology` as a project in the remote `dev-vm` T3 Code environment.
 - Create a real T3 worker thread for the Protein Functional Topology Phase 0/1 handoff.
 - Verify creation with a returned remote `threadId` and status check.
 - Record the active project/thread handoff state for future agents.
 
 ### Constraints
+
 - Use `t3-thread`, not the deprecated `t3-agent` command.
 - Do not fabricate a thread id; a worker exists only after `t3-thread create` returns `threadId`.
 - Preserve the target repo's active T3 worktree metadata after thread creation.
 
 ### Acceptance Criteria
+
 - `dev-vm` contains a T3 project for `/home/brad/Programming/protein-functional-topology`.
 - Saved worker `pft-phase-0-1` exists with a real thread id.
 - `t3-thread status pft-phase-0-1` reports a non-error state.
 - `docs/ACTIVE_COORDINATION.md` records the live handoff state.
 
 ### Status
+
 - Completed: project id `9320c6c9-52a2-4082-900d-82cd0861ac9d`; worker `pft-phase-0-1`; thread id `e90614fc-e662-495c-9e39-e5dc45114340`; first turn completed and worker acknowledged the handoff.
 
 ## Current Task Snapshot - Willow Citrix Handoff Registration
 
 ### Active Requirements
+
 - Register `/Users/brad/Programming/willow-citrix-hotpatch-notes` as a project in the local T3 Code environment.
 - Create a real T3 worker thread for the Willow/Citrix hotpatch handoff.
 - Verify creation with a returned remote `threadId` and status check.
 - Record the active project/thread handoff state for future agents.
 
 ### Constraints
+
 - Use `t3-thread`, not the deprecated `t3-agent` command.
 - Do not fabricate a thread id; a worker exists only after `t3-thread create` returns `threadId`.
 - Keep the Willow handoff free of transcript contents or sensitive dictated text.
 
 ### Acceptance Criteria
+
 - `local-mbp` contains a T3 project for `/Users/brad/Programming/willow-citrix-hotpatch-notes`.
 - Saved worker `willow-citrix-resume` exists with a real thread id.
 - `t3-thread status willow-citrix-resume` reports a non-error state.
 - `docs/ACTIVE_COORDINATION.md` records the live handoff state.
 
 ### Status
+
 - Completed: project id `be9f8d66-92aa-407a-b606-00923610bf3b`; worker `willow-citrix-resume`; thread id `c2e1f65e-b42c-48f3-bb77-e859b6e9005e`; first turn completed.
 
 ## Current Task Snapshot — OpenCode Antigravity Thread Model Validation
 
 ### Active Requirements
+
 - Check whether `t3-thread` can launch real T3 worker threads using OpenCode through Antigravity with Gemini 3.5 Flash High.
 - Check whether `t3-thread` can launch real T3 worker threads using OpenCode through Antigravity with Gemini 3.5 Flash Low/Medium.
 - Use the OpenCode model aliases through OpenCode's required `provider/model` syntax: `google/antigravity-gemini-3.5-flash-high` and `google/antigravity-gemini-3.5-flash-low`.
@@ -238,6 +302,7 @@
 - Verify with real `t3-thread create` calls and report the created thread ids/status.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Keep `t3-thread` a thin wrapper over T3 Code native APIs.
 - Preserve existing Codex and Claude thread behavior.
@@ -245,17 +310,20 @@
 - Do not use Codex built-in subagents.
 
 ### Acceptance Criteria
+
 - `t3-thread projects --env local-mbp` can decode snapshots containing `opencode` model selections.
 - A high test thread can be created with `--provider opencode --model google/antigravity-gemini-3.5-flash-high`.
 - A low test thread can be created with `--provider opencode --model google/antigravity-gemini-3.5-flash-low`.
 - Each test thread reaches a non-error status or any provider/runtime failure is captured from `worklog`.
 
 ### Status
+
 - Completed locally; now syncing the validated OpenCode support by committing,
   rebasing onto `origin/main`, rerunning validation, pushing, and updating the
   dev VM checkout.
 
 ### Validation Update
+
 - Added `opencode` as an accepted T3 provider/model-selection kind in the vendored contract layer.
 - Added OpenCode model defaults and aliases that normalize to OpenCode's required `google/<model>` format for project defaults and thread creation.
 - During VM sync, found the local build had been produced from stale installed
@@ -271,6 +339,7 @@
 ## Current Task Snapshot — T3 Project Management CLI
 
 ### Active Requirements
+
 - Add first-class `t3-thread project` management commands for paired T3 Code environments.
 - Support managing both local and remote projects through the same saved `--env` model used for threads.
 - Keep `t3-thread projects --env <name>` as the existing list shortcut.
@@ -284,6 +353,7 @@
 - Run focused tests, full tests, dist freshness validation, and live/smoke CLI validation where feasible.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Keep `t3-thread` a thin wrapper over T3 Code native APIs.
 - Preserve existing thread lifecycle behavior and command compatibility.
@@ -291,6 +361,7 @@
 - Do not remove the deprecated `t3-agent` alias.
 
 ### Acceptance Criteria
+
 - `t3-thread project list --env dev-vm` lists remote projects.
 - `t3-thread projects --env dev-vm` continues to work.
 - `t3-thread project add --env <env> --path <absolute-path>` dispatches `project.create`.
@@ -303,9 +374,11 @@
 - Updated docs and shared skills describe the new workflow.
 
 ### Status
+
 - Completed locally.
 
 ### Validation Update
+
 - Added pure project-management helpers in `src/projects.ts`.
 - Added `t3-thread project list/add/rename/set-model/remove` in the CLI while preserving `t3-thread projects --env <name>`.
 - Added RPC client methods for project create, rename, default-model update/clear, and remove.
@@ -326,29 +399,34 @@
 ## Current Task Snapshot — Audit Dependency Fix
 
 ### Active Requirements
+
 - Resolve the current `npm audit` findings in `t3-thread` for transitive `uuid@13.0.0` and `ws@8.20.0`.
 - Prefer bumping the Effect package family together if that naturally updates the vulnerable transitive packages.
 - If package bumps do not resolve the findings, use targeted npm overrides for `uuid@13.0.1` and `ws@8.20.1`.
 - Keep the CLI behavior unchanged.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Avoid forced audit fixes that introduce unrelated dependency churn.
 - Preserve the remote repo state and avoid destructive git operations.
 
 ### Acceptance Criteria
+
 - `npm audit` reports zero vulnerabilities.
 - `npm run build` succeeds.
 - `npm test` succeeds.
 - `t3-thread --help` still runs.
 
 ### Status
+
 - Completed using targeted npm overrides for `uuid@13.0.1` and `ws@8.20.1` while keeping the existing Effect `4.0.0-beta.45` dependency line.
 - Validation passed: `npm run build`, `npm test` (56 tests), `npm audit` (0 vulnerabilities), and `t3-thread --help`.
 
 ## Current Task Snapshot — Caller Environment Metadata
 
 ### Active Requirements
+
 - Update `t3-thread caller` and notification caller resolution to consume
   `T3_ENVIRONMENT_ID` / `T3_ENVIRONMENT_NAME` when present alongside
   `T3_THREAD_ID`.
@@ -365,12 +443,14 @@
 - Verify the focused tests and live `t3-thread caller` behavior in this session.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Keep `t3-thread` a thin wrapper over T3 Code native APIs.
 - Preserve existing state format compatibility.
 - Preserve existing user work and avoid destructive git operations.
 
 ### Acceptance Criteria
+
 - `resolveCallerThreadId` still reads trimmed `T3_THREAD_ID`.
 - A new caller resolver reads `T3_ENVIRONMENT_NAME`/`T3_ENVIRONMENT_ID` and
   returns an unsaved endpoint without remote environment scanning when possible.
@@ -382,9 +462,11 @@
 - Focused tests, build/dist freshness, and relevant docs are updated.
 
 ### Status
+
 - Completed locally.
 
 ### Validation Update
+
 - Added caller environment metadata parsing for `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME`.
 - Caller endpoint resolution now prefers saved agent mappings, then maps env id/name/label to the saved environment key before falling back to paired-environment scanning.
 - Updated `t3-thread caller`, default create notification resolution, `subscribe`, and `unsubscribe` caller paths to pass env metadata into resolution.
@@ -399,6 +481,7 @@
 ## Current Task Snapshot — Legacy Schema Decode Compatibility
 
 ### Active Requirements
+
 - Fix the `t3-thread` CLI/contracts decode path so normal commands no longer require direct-RPC workarounds when T3 backends return legacy shell snapshot payloads.
 - Support legacy project `defaultModelSelection` values shaped like `{"instanceId":"codex","model":"gpt-5.4"}`.
 - Support legacy thread `modelSelection` values shaped like `{"instanceId":"codex","model":"gpt-5.5","options":[{"id":"reasoningEffort","value":"medium"}]}`.
@@ -410,12 +493,14 @@
 - Commit the completed changes and report the commit SHA, changed files, tests run, and any follow-up.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Do not change T3 server code.
 - Keep `t3-thread` a thin wrapper over T3 Code native APIs.
 - Preserve existing user work and avoid destructive git operations.
 
 ### Acceptance Criteria
+
 - `t3-thread projects --env local-mbp` can decode shell snapshots with legacy `defaultModelSelection`.
 - `t3-thread create ...` can proceed past project snapshot decoding for legacy model selections.
 - `t3-thread status <agent>` can decode thread snapshots with legacy `modelSelection` and `options`.
@@ -424,9 +509,11 @@
 - Focused tests, build/dist freshness, and smoke validation are run or any infeasible command is documented.
 
 ### Status
+
 - Completed locally.
 
 ### Validation Update
+
 - Existing vendored contract layer already contains backward-compatible `instanceId` model-selection normalization and legacy `options` array normalization in `src/vendor/t3contracts/orchestration.ts`.
 - Added regression coverage for the exact legacy `subscribeShell` project `defaultModelSelection` shape: `{"instanceId":"codex","model":"gpt-5.4"}`.
 - Added regression coverage for the exact legacy `subscribeThread` status snapshot shape: `{"instanceId":"codex","model":"gpt-5.5","options":[{"id":"reasoningEffort","value":"medium"}]}`.
@@ -440,26 +527,31 @@
 ## Current Task Snapshot — Deprecate T3-Agent Naming
 
 ### Active Requirements
+
 - Keep `t3-agent` executable alias in place for compatibility during one or two releases.
 - Rename current docs, prompts, tests, and shared agent guidance to use `t3-thread` as the canonical command.
 - Mark `t3-agent` as legacy/deprecated compatibility only.
 - Avoid breaking old active worker threads that may still have `t3-agent` in history.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Do not remove the `t3-agent` alias yet.
 - Keep runtime behavior equivalent except for canonical wording and orientation.
 
 ### Acceptance Criteria
+
 - New worker preamble instructs `t3-thread send`, not `t3-agent agent send`.
 - Help/shared docs prefer `t3-thread`.
 - Remaining `t3-agent` references are only compatibility/deprecation notes, bin alias entries, or non-user-facing test temp names.
 - Tests pass after wording updates.
 
 ### Status
+
 - Completed locally.
 
 ### Validation Update
+
 - Updated current docs, shared guidance, CLI help, and worker preamble to prefer `t3-thread`.
 - Kept `t3-agent` package/global alias in place as deprecated compatibility.
 - Rebuilt `dist/cli.cjs` with `npm run build`.
@@ -468,6 +560,7 @@
 - `npm run smoke` passed.
 
 ### Remote Verification Follow-Up
+
 - Dev VM pull succeeded.
 - Remote focused test exposed that `tests/dist-freshness.test.ts` expects committed `dist/cli.cjs`, while `.gitignore` excluded `dist/`.
 - Track only `dist/cli.cjs` so fresh clones and the dev VM can run the same test suite without relying on an untracked local build artifact.
@@ -476,6 +569,7 @@
 ## Current Task Snapshot — Initial Extraction
 
 ### Active Requirements
+
 - Standalone project for the T3 worker-thread operator CLI.
 - Primary command name: `t3-thread`.
 - Deprecated compatibility alias: `t3-agent`.
@@ -484,20 +578,24 @@
 - Preserve runtime state compatibility with the existing `~/.config/t3-remote-agents/state.json` unless explicitly migrated later.
 
 ### Constraints
+
 - This tracker is the first project file written in the extracted repo.
 - Preserve existing HomeNetwork source during extraction; do not delete it in this pass.
 - Avoid destructive filesystem operations.
 
 ### Acceptance Criteria
+
 - Source, tests, package metadata, and instructions exist in this standalone project.
 - `t3-thread` is documented as the primary command.
 - `t3-agent` remains available as a deprecated compatibility alias.
 - Shared skills and wrappers route future agents here.
 
 ### Status
+
 - Completed.
 
 ### Status Update
+
 - Added compatibility decoding for `instanceId`/`model` model selections in shell snapshots.
 - Added regression coverage for instanceId-shaped project and thread model selections.
 - Verified with `npm run test -- orchestration-model-options-compat` and `npm run build`.
@@ -506,6 +604,7 @@
 - Created real T3 worker `t3code-upstream-sync-repair` with remote thread id `1e537256-51f0-4be0-8fae-904a6b6b5b21`.
 
 ### Status Update
+
 - Created standalone project at `/Users/brad/Programming/t3-thread`.
 - Copied CLI source, tests, TypeScript/Vitest config, and README from HomeNetwork.
 - Added standalone `LLM_INSTRUCTIONS.md`, `docs/AGENT_OPERATIONS.md`, and `docs/ACTIVE_COORDINATION.md`.
@@ -520,6 +619,7 @@
 - Validation not run yet; per operator policy, ask before running build/tests or live CLI checks.
 
 ### Packaging Update
+
 - Added package-local development shims:
   - `bin/t3-thread`
   - `bin/t3-agent`
@@ -529,22 +629,27 @@
 ## Current Task Snapshot — Help and Smoke Polish
 
 ### Active Requirements
+
 - Improve `t3-thread --help` so future agents see the direct command forms, not only the legacy nested `agent` command.
 - Add a safe smoke script that verifies read-only lifecycle commands without creating threads.
 - Do not perform state-path migration or delete the old HomeNetwork source in this pass.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Keep changes low-risk and focused.
 
 ### Acceptance Criteria
+
 - Top-level help includes direct examples such as `t3-thread create`, `status`, and `result`.
 - `npm run smoke` exists and only performs safe read-only checks.
 
 ### Status
+
 - In progress.
 
 ### Status Update
+
 - Added explicit direct-command help text to `src/cli.ts` for `create`, `status`, `worklog`, `result`, `inbox`, and `watch`.
 - Added `npm run smoke`, which performs safe read-only checks:
   - `tsx src/cli.ts envs`
@@ -553,6 +658,7 @@
 - Deferred state-path migration and HomeNetwork source cleanup.
 
 ### Validation Update
+
 - `npm run smoke` succeeded.
 - `t3-thread --help` now shows direct-command guidance and examples.
 - Earlier Node one-shot edit attempt failed due shell quoting before code changes; direct patches were applied instead.
@@ -561,48 +667,58 @@
 ## Current Task Snapshot — Initialize Git and Push to Gitea
 
 ### Active Requirements
+
 - Initialize `/Users/brad/Programming/t3-thread` as a git repository.
 - Commit the extracted standalone `t3-thread` CLI project.
 - Create or use a Gitea repository named `t3-thread`.
 - Add the Gitea repository as `origin` and push `main`.
 
 ### Constraints
+
 - First project write for this task is this tracker update.
 - Do not delete or rewrite existing HomeNetwork source.
 - Use Gitea API/HTTP workflow rather than GitHub CLI.
 
 ### Acceptance Criteria
+
 - Local repo has an initial commit on `main`.
 - `origin` points at the Gitea `t3-thread` repo.
 - `main` is pushed to Gitea.
 
 ### Status
+
 - In progress.
 
 ### Git/Gitea Preparation
+
 - Added `.gitignore` so generated dependencies and build outputs are not committed.
 - Target Gitea remote: `ssh://git@git.home:2222/brad/t3-thread.git`.
 
 ## Current Task Snapshot — Remote T3 Code Update Runbook
 
 ### Active Requirements
+
 - Add a skill or runbook that explains how to update the remote dev VM's `t3code`/`t3` version.
 - Link the new operational documentation from `LLM_INSTRUCTIONS.md`.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Keep the guidance concise and operational.
 - Use canonical local-network values from `~/.shared/config/local_network.env`; do not hardcode secrets.
 - Preserve the distinction between remote `t3code.service` substrate maintenance and `t3-thread` worker lifecycle operations.
 
 ### Acceptance Criteria
+
 - Future agents can find the remote update procedure from `LLM_INSTRUCTIONS.md`.
 - The procedure covers updating from Brad's fork, building/installing the CLI on the dev VM, restarting the service, verification, and known failure modes.
 
 ### Status
+
 - Completed.
 
 ### Status Update
+
 - Added `docs/REMOTE_T3CODE_UPDATE.md` with the remote dev VM update workflow for Brad's `jimprince/t3code` fork.
 - Linked the runbook from `LLM_INSTRUCTIONS.md` read order and maintenance guidance.
 - Added the runbook to the README docs list.
@@ -611,22 +727,27 @@
 ## Current Task Snapshot — Current Thread Cleanup Documentation
 
 ### Active Requirements
+
 - Document the safe cleanup pattern used after troubleshooting a stuck T3 thread.
 - Preserve the key operational nuance: when replying from the thread being cleaned up, do not archive that T3 thread before the final response lands.
 
 ### Constraints
+
 - This tracker update is the first project write for this task.
 - Keep the documentation small and place it in the existing operational runbook.
 - Do not change CLI behavior.
 
 ### Acceptance Criteria
+
 - Future agents can find the procedure in `docs/AGENT_OPERATIONS.md`.
 - The documented flow distinguishes remote thread archival from local Git worktree/branch cleanup.
 
 ### Status
+
 - Completed.
 
 ### Status Update
+
 - Added the current-thread cleanup sequence to `docs/AGENT_OPERATIONS.md`.
 - Documented the rule to leave the current T3 thread unarchived until its final response lands.
 - No CLI behavior changes were needed.
@@ -634,24 +755,29 @@
 ## Current Task Snapshot — Model Selection Snapshot Compatibility
 
 ### Active Requirements
+
 - Unblock creating a real remote T3 Code worker thread for `/home/brad/Programming/t3code-fork` on `dev-vm`.
 - Fix `t3-thread` snapshot decoding so it accepts the current remote T3 Code `defaultModelSelection` / `modelSelection` shape using `instanceId` and `model`.
 - Launch the T3 worker only through the canonical `t3-thread create` flow and confirm the returned remote `threadId`.
 
 ### Constraints
+
 - This tracker update is the first project write for this compatibility-fix task.
 - Preserve existing unrelated dirty documentation changes in this repo.
 - Do not fabricate thread ids or bypass T3 thread lifecycle state.
 
 ### Acceptance Criteria
+
 - `t3-thread projects --env dev-vm` can list projects without the snapshot schema error.
 - A worker thread is created on the remote dev VM for the T3 Code fork maintenance task.
 - The saved agent name and remote `threadId` are recorded in the handoff response.
 
 ### Status
+
 - Completed.
 
 ### Status Update
+
 - Reviewed the dirty main-checkout changes in a branch-pinned worktree and reconstructed the compatibility, test, and docs changes without editing the dirty source checkout during implementation.
 - Installed worktree dependencies with `npm ci` so validation could run locally.
 - Validation passed with `npm run test`, `npm run build`, and `npm run smoke`.
@@ -659,6 +785,7 @@
 ## Current Task Snapshot — Review Dirty Main Checkout, Fix, Commit, Merge, Push
 
 ### Active Requirements
+
 - Review the current dirty changes in `/Users/brad/Programming/t3-thread`.
 - Reconstruct the needed changes in this branch-pinned worktree instead of editing the dirty main checkout during implementation.
 - Preserve user work; do not drop or revert dirty main-checkout changes without recording a clear reason here first.
@@ -668,21 +795,25 @@
 - Commit logically, merge the finished branch to `main`, and push `origin/main`.
 
 ### Constraints
+
 - This tracker update is the first repo file edit for this task in the worktree.
 - Do not edit `/Users/brad/Programming/t3-thread` directly during implementation unless needed at the final merge/push step.
 - Do not use destructive git commands or hand-edit `~/.config/t3-remote-agents/state.json`.
 - Keep `t3-thread` a thin wrapper over T3 Code native bootstrap semantics.
 
 ### Acceptance Criteria
+
 - The worktree contains the reviewed compatibility fix, regression tests, and any approved docs updates from the dirty main checkout.
 - Validation passes or any unavoidable failures are explicitly documented.
 - One or more commits capture the finalized changes cleanly.
 - `main` is updated from the committed worktree changes and pushed to `origin/main` without losing dirty user state.
 
 ### Status
+
 - Completed.
 
 ### Review Notes
+
 - Source material is the dirty main checkout on `main`, which currently modifies:
   - `LLM_INSTRUCTIONS.md`
   - `README.md`
@@ -696,30 +827,36 @@
   - operator docs/runbook additions
 
 ### Validation Update
+
 - `npm ci` completed successfully in the worktree; one moderate audit vulnerability remains in dependencies and was not changed in this task.
 - `npm run test` passed: 9 files, 49 tests.
 - `npm run build` passed and refreshed `dist/cli.cjs` deterministically with no tracked diff.
 - `npm run smoke` passed.
 
 ### Publish Plan
+
 - Keep the compatibility fix and operator docs as separate conventional commits for cleaner history.
 
 ## Current Task Snapshot — Markdown Vault Web Handoff Thread
 
 ### Active Requirements
+
 - Register `/Users/brad/Programming/markdown-vault-web` as a T3 Code project if it is missing.
 - Create a real T3 worker thread that can continue the current Markdown Vault Web conversation without losing context.
 - Include enough handoff detail for the worker to treat the live dirty checkout as the source of truth.
 
 ### Constraints
+
 - This tracker update is the first `t3-thread` repo write for this coordination-record task.
 - Do not hand-edit T3 runtime state; use `t3-thread` CLI commands.
 - Preserve the Markdown Vault Web repo's dirty state.
 
 ### Acceptance Criteria
+
 - Project registration returns a real project id.
 - Thread creation returns a real remote `threadId`.
 - Initial status/result confirms the worker read the live checkout and is ready for the next request.
 
 ### Status
+
 - Completed.
