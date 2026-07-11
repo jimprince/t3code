@@ -254,7 +254,10 @@ const buildHeadlessArtifact = Effect.fn("buildHeadlessArtifact")(function* (
   yield* runCommand(
     ChildProcess.make({
       cwd: artifactRoot,
-      ...commandOutputOptions(options.verbose),
+      // Dependency installation failures are otherwise hidden in release CI,
+      // which makes native-module packaging failures impossible to diagnose.
+      stdout: "inherit",
+      stderr: "inherit",
       shell: hostPlatform === "win32",
     })`vp install --prod`,
   );
