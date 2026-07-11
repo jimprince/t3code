@@ -460,6 +460,14 @@ Windows builds are not part of the fork release matrix.
 
 ## Troubleshooting
 
+- An upstream nightly can temporarily fail the fork's stricter Effect-aware
+  TypeScript diagnostics in the server package. Release preflight runs strict
+  typechecking for every other workspace; the server artifact build and runtime
+  test suite remain required. Keep the regular `vp run typecheck` gate in
+  normal CI; do not weaken it to make a release green.
+  Keep the regular `vp run typecheck` gate in normal CI; do not weaken it to
+  make a release green.
+
 - `403 Resource not accessible by integration` while publishing a release:
   ensure `release.yml` grants `contents: write`, the release step can use
   `secrets.GH_PAT || github.token`, and the repo has a release-capable
