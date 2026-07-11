@@ -147,6 +147,7 @@ async function fetchRemoteJson<T>(input: {
   } catch (error) {
     throw new Error(
       `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`,
+      { cause: error },
     );
   }
 
@@ -194,11 +195,14 @@ export async function exchangePairingCredential(input: {
   } catch (error) {
     throw new Error(
       `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`,
+      { cause: error },
     );
   }
 
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, `Token exchange failed (${response.status}).`));
+    throw new Error(
+      await readErrorMessage(response, `Token exchange failed (${response.status}).`),
+    );
   }
 
   return (await response.json()) as AuthAccessTokenResult;

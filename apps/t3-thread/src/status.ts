@@ -1,6 +1,8 @@
 import type { AgentStatus, OrchestrationThread, OrchestrationThreadShell } from "./types.js";
 
-export function classifyThread(thread: OrchestrationThread | OrchestrationThreadShell): AgentStatus {
+export function classifyThread(
+  thread: OrchestrationThread | OrchestrationThreadShell,
+): AgentStatus {
   if (thread.archivedAt) {
     return {
       state: "archived",
@@ -74,11 +76,5 @@ export function classifyThread(thread: OrchestrationThread | OrchestrationThread
 
 export function formatThreadLine(thread: OrchestrationThread | OrchestrationThreadShell): string {
   const status = classifyThread(thread);
-  return [
-    thread.id,
-    `[${status.state}]`,
-    thread.title,
-    thread.projectId,
-    status.reason,
-  ].join(" ");
+  return [thread.id, `[${status.state}]`, thread.title, thread.projectId, status.reason].join(" ");
 }

@@ -1,12 +1,21 @@
 {
   "name": "t3-thread",
-  "private": true,
   "version": "0.1.0",
-  "type": "module",
-  "bin": {
-    "t3-thread": "dist/cli.cjs",
-    "t3-agent": "dist/cli.cjs"
+  "private": true,
+  "description": "Operator CLI for T3 Code worker threads",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jimprince/t3code.git",
+    "directory": "apps/t3-thread"
   },
+  "bin": {
+    "t3-agent": "dist/cli.cjs",
+    "t3-thread": "dist/cli.cjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
   "scripts": {
     "build": "esbuild src/cli.ts --bundle --platform=node --format=cjs --outfile=dist/cli.cjs",
     "cli": "tsx src/cli.ts",
@@ -25,14 +34,5 @@
     "tsx": "^4.21.0",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
-  },
-  "description": "Operator CLI for T3 Code worker threads",
-  "files": [
-    "dist"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/jimprince/t3code.git",
-    "directory": "apps/t3-thread"
   }
 }

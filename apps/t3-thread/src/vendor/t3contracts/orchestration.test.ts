@@ -1,4 +1,4 @@
-import assert from "node:assert/strict";
+import * as NodeAssert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 
@@ -47,8 +47,8 @@ it.effect("parses turn diff input when fromTurnCount <= toTurnCount", () =>
       fromTurnCount: 1,
       toTurnCount: 2,
     });
-    assert.strictEqual(parsed.fromTurnCount, 1);
-    assert.strictEqual(parsed.toTurnCount, 2);
+    NodeAssert.strictEqual(parsed.fromTurnCount, 1);
+    NodeAssert.strictEqual(parsed.toTurnCount, 2);
   }),
 );
 
@@ -61,7 +61,7 @@ it.effect("rejects turn diff input when fromTurnCount > toTurnCount", () =>
         toTurnCount: 2,
       }),
     );
-    assert.strictEqual(result._tag, "Failure");
+    NodeAssert.strictEqual(result._tag, "Failure");
   }),
 );
 
@@ -75,7 +75,7 @@ it.effect("rejects thread turn diff when fromTurnCount > toTurnCount", () =>
         diff: "patch",
       }),
     );
-    assert.strictEqual(result._tag, "Failure");
+    NodeAssert.strictEqual(result._tag, "Failure");
   }),
 );
 
@@ -93,12 +93,12 @@ it.effect("trims branded ids and command string fields at decode boundaries", ()
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.commandId, "cmd-1");
-    assert.strictEqual(parsed.projectId, "project-1");
-    assert.strictEqual(parsed.title, "Project Title");
-    assert.strictEqual(parsed.workspaceRoot, "/tmp/workspace");
-    assert.strictEqual(parsed.createWorkspaceRootIfMissing, undefined);
-    assert.deepStrictEqual(parsed.defaultModelSelection, {
+    NodeAssert.strictEqual(parsed.commandId, "cmd-1");
+    NodeAssert.strictEqual(parsed.projectId, "project-1");
+    NodeAssert.strictEqual(parsed.title, "Project Title");
+    NodeAssert.strictEqual(parsed.workspaceRoot, "/tmp/workspace");
+    NodeAssert.strictEqual(parsed.createWorkspaceRootIfMissing, undefined);
+    NodeAssert.deepStrictEqual(parsed.defaultModelSelection, {
       provider: "codex",
       model: "gpt-5.2",
     });
@@ -117,7 +117,7 @@ it.effect("decodes project.create with createWorkspaceRootIfMissing enabled", ()
       createdAt: "2026-01-01T00:00:00.000Z",
     });
 
-    assert.strictEqual(parsed.createWorkspaceRootIfMissing, true);
+    NodeAssert.strictEqual(parsed.createWorkspaceRootIfMissing, true);
   }),
 );
 
@@ -130,11 +130,11 @@ it.effect("decodes project.delete with force enabled", () =>
       force: true,
     });
 
-    assert.strictEqual(parsed.type, "project.delete");
+    NodeAssert.strictEqual(parsed.type, "project.delete");
     if (parsed.type !== "project.delete") {
       throw new Error("Expected project.delete");
     }
-    assert.strictEqual(parsed.force, true);
+    NodeAssert.strictEqual(parsed.force, true);
   }),
 );
 
@@ -152,7 +152,7 @@ it.effect("decodes historical project.created payloads with a default provider",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.defaultModelSelection?.provider, "codex");
+    NodeAssert.strictEqual(parsed.defaultModelSelection?.provider, "codex");
   }),
 );
 
@@ -166,7 +166,7 @@ it.effect("decodes project.meta-updated payloads with explicit default provider"
       },
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.defaultModelSelection?.provider, "claudeAgent");
+    NodeAssert.strictEqual(parsed.defaultModelSelection?.provider, "claudeAgent");
   }),
 );
 
@@ -182,7 +182,7 @@ it.effect("rejects command fields that become empty after trim", () =>
         createdAt: "2026-01-01T00:00:00.000Z",
       }),
     );
-    assert.strictEqual(result._tag, "Failure");
+    NodeAssert.strictEqual(result._tag, "Failure");
   }),
 );
 
@@ -200,9 +200,9 @@ it.effect("decodes thread.turn.start defaults for provider and runtime mode", ()
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.modelSelection, undefined);
-    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
-    assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    NodeAssert.strictEqual(parsed.modelSelection, undefined);
+    NodeAssert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
+    NodeAssert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
   }),
 );
 
@@ -225,9 +225,9 @@ it.effect("preserves explicit provider and runtime mode in thread.turn.start", (
       runtimeMode: "full-access",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.modelSelection?.provider, "codex");
-    assert.strictEqual(parsed.runtimeMode, "full-access");
-    assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+    NodeAssert.strictEqual(parsed.modelSelection?.provider, "codex");
+    NodeAssert.strictEqual(parsed.runtimeMode, "full-access");
+    NodeAssert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
   }),
 );
 
@@ -266,9 +266,9 @@ it.effect("accepts bootstrap metadata in thread.turn.start", () =>
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.bootstrap?.createThread?.projectId, "project-1");
-    assert.strictEqual(parsed.bootstrap?.prepareWorktree?.baseBranch, "main");
-    assert.strictEqual(parsed.bootstrap?.runSetupScript, true);
+    NodeAssert.strictEqual(parsed.bootstrap?.createThread?.projectId, "project-1");
+    NodeAssert.strictEqual(parsed.bootstrap?.prepareWorktree?.baseBranch, "main");
+    NodeAssert.strictEqual(parsed.bootstrap?.runSetupScript, true);
   }),
 );
 
@@ -289,8 +289,8 @@ it.effect("decodes thread.created runtime mode for historical events", () =>
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
 
-    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
-    assert.strictEqual(parsed.modelSelection.provider, "codex");
+    NodeAssert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
+    NodeAssert.strictEqual(parsed.modelSelection.provider, "codex");
   }),
 );
 
@@ -304,7 +304,7 @@ it.effect("decodes thread.meta-updated payloads with explicit provider", () =>
       },
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.modelSelection?.provider, "claudeAgent");
+    NodeAssert.strictEqual(parsed.modelSelection?.provider, "claudeAgent");
   }),
 );
 
@@ -321,8 +321,8 @@ it.effect("decodes thread archive and unarchive commands", () =>
       threadId: "thread-1",
     });
 
-    assert.strictEqual(archive.type, "thread.archive");
-    assert.strictEqual(unarchive.type, "thread.unarchive");
+    NodeAssert.strictEqual(archive.type, "thread.archive");
+    NodeAssert.strictEqual(unarchive.type, "thread.unarchive");
   }),
 );
 
@@ -362,9 +362,9 @@ it.effect("decodes thread archived and unarchived events", () =>
       },
     });
 
-    assert.strictEqual(archived.type, "thread.archived");
-    assert.strictEqual(archived.payload.archivedAt, "2026-01-01T00:00:00.000Z");
-    assert.strictEqual(unarchived.type, "thread.unarchived");
+    NodeAssert.strictEqual(archived.type, "thread.archived");
+    NodeAssert.strictEqual(archived.payload.archivedAt, "2026-01-01T00:00:00.000Z");
+    NodeAssert.strictEqual(unarchived.type, "thread.unarchived");
   }),
 );
 
@@ -390,9 +390,9 @@ it.effect("accepts provider-scoped model options in thread.turn.start", () =>
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.modelSelection?.provider, "codex");
-    assert.strictEqual(parsed.modelSelection?.options?.reasoningEffort, "high");
-    assert.strictEqual(parsed.modelSelection?.options?.fastMode, true);
+    NodeAssert.strictEqual(parsed.modelSelection?.provider, "codex");
+    NodeAssert.strictEqual(parsed.modelSelection?.options?.reasoningEffort, "high");
+    NodeAssert.strictEqual(parsed.modelSelection?.options?.fastMode, true);
   }),
 );
 
@@ -432,8 +432,8 @@ it.effect("decodes legacy array-shaped model options in shell snapshots", () =>
       },
     });
 
-    assert.strictEqual(parsed.kind, "snapshot");
-    assert.strictEqual(
+    NodeAssert.strictEqual(parsed.kind, "snapshot");
+    NodeAssert.strictEqual(
       parsed.snapshot.threads[0]?.modelSelection.options?.reasoningEffort,
       "high",
     );
@@ -455,7 +455,7 @@ it.effect("accepts a title seed in thread.turn.start", () =>
       titleSeed: "Investigate reconnect failures",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.titleSeed, "Investigate reconnect failures");
+    NodeAssert.strictEqual(parsed.titleSeed, "Investigate reconnect failures");
   }),
 );
 
@@ -477,7 +477,7 @@ it.effect("accepts a source proposed plan reference in thread.turn.start", () =>
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.deepStrictEqual(parsed.sourceProposedPlan, {
+    NodeAssert.deepStrictEqual(parsed.sourceProposedPlan, {
       threadId: "thread-1",
       planId: "plan-1",
     });
@@ -493,10 +493,10 @@ it.effect(
         messageId: "msg-1",
         createdAt: "2026-01-01T00:00:00.000Z",
       });
-      assert.strictEqual(parsed.modelSelection, undefined);
-      assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
-      assert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
-      assert.strictEqual(parsed.sourceProposedPlan, undefined);
+      NodeAssert.strictEqual(parsed.modelSelection, undefined);
+      NodeAssert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
+      NodeAssert.strictEqual(parsed.interactionMode, DEFAULT_PROVIDER_INTERACTION_MODE);
+      NodeAssert.strictEqual(parsed.sourceProposedPlan, undefined);
     }),
 );
 
@@ -511,7 +511,7 @@ it.effect("decodes thread.turn-start-requested source proposed plan metadata whe
       },
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.deepStrictEqual(parsed.sourceProposedPlan, {
+    NodeAssert.deepStrictEqual(parsed.sourceProposedPlan, {
       threadId: "thread-1",
       planId: "plan-1",
     });
@@ -526,7 +526,7 @@ it.effect("decodes thread.turn-start-requested title seed when present", () =>
       titleSeed: "Investigate reconnect failures",
       createdAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.titleSeed, "Investigate reconnect failures");
+    NodeAssert.strictEqual(parsed.titleSeed, "Investigate reconnect failures");
   }),
 );
 
@@ -544,7 +544,7 @@ it.effect("decodes latest turn source proposed plan metadata when present", () =
         planId: "plan-1",
       },
     });
-    assert.deepStrictEqual(parsed.sourceProposedPlan, {
+    NodeAssert.deepStrictEqual(parsed.sourceProposedPlan, {
       threadId: "thread-1",
       planId: "plan-1",
     });
@@ -563,7 +563,7 @@ it.effect("decodes orchestration session runtime mode defaults", () =>
       lastError: null,
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
+    NodeAssert.strictEqual(parsed.runtimeMode, DEFAULT_RUNTIME_MODE);
   }),
 );
 
@@ -576,8 +576,8 @@ it.effect("defaults proposed plan implementation metadata for historical rows", 
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.implementedAt, null);
-    assert.strictEqual(parsed.implementationThreadId, null);
+    NodeAssert.strictEqual(parsed.implementedAt, null);
+    NodeAssert.strictEqual(parsed.implementationThreadId, null);
   }),
 );
 
@@ -592,7 +592,7 @@ it.effect("preserves proposed plan implementation metadata when present", () =>
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-02T00:00:00.000Z",
     });
-    assert.strictEqual(parsed.implementedAt, "2026-01-02T00:00:00.000Z");
-    assert.strictEqual(parsed.implementationThreadId, "thread-2");
+    NodeAssert.strictEqual(parsed.implementedAt, "2026-01-02T00:00:00.000Z");
+    NodeAssert.strictEqual(parsed.implementationThreadId, "thread-2");
   }),
 );

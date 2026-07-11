@@ -14,7 +14,9 @@ import {
 } from "../src/projects.js";
 import type { OrchestrationProjectShell, OrchestrationThreadShell } from "../src/types.js";
 
-function makeProject(overrides: Partial<OrchestrationProjectShell> = {}): OrchestrationProjectShell {
+function makeProject(
+  overrides: Partial<OrchestrationProjectShell> = {},
+): OrchestrationProjectShell {
   return {
     id: "project-1",
     title: "Project One",
