@@ -1,7 +1,7 @@
-import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
-import { randomUUID } from "node:crypto";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import * as NodeCrypto from "node:crypto";
 
 import type {
   SavedAgent,
@@ -27,8 +27,8 @@ export type NotifyPreference =
   | { kind: "caller" }
   | { kind: "explicit"; subscriber: string };
 
-const DEFAULT_STATE_DIR = path.join(os.homedir(), ".config", "t3-remote-agents");
-const DEFAULT_STATE_FILE = path.join(DEFAULT_STATE_DIR, "state.json");
+const DEFAULT_STATE_DIR = NodePath.join(NodeOS.homedir(), ".config", "t3-remote-agents");
+const DEFAULT_STATE_FILE = NodePath.join(DEFAULT_STATE_DIR, "state.json");
 const STATE_LOCK_TIMEOUT_MS = 10_000;
 const STATE_LOCK_RETRY_MS = 50;
 
@@ -45,7 +45,7 @@ export function resolveStateFile(): string {
 }
 
 async function ensureStateDir(stateFile: string): Promise<void> {
-  await mkdir(path.dirname(stateFile), { recursive: true });
+  await NodeFSP.mkdir(NodePath.dirname(stateFile), { recursive: true });
 }
 
 function normalizeState(parsed: Partial<StateFile>): StateFile {
@@ -60,7 +60,7 @@ function normalizeState(parsed: Partial<StateFile>): StateFile {
 
 async function loadStateFromFile(stateFile: string): Promise<StateFile> {
   try {
-    const raw = await readFile(stateFile, "utf8");
+    const raw = await NodeFSP.readFile(stateFile, "utf8");
     const parsed = JSON.parse(raw) as Partial<StateFile>;
     return normalizeState(parsed);
   } catch (error) {
@@ -78,9 +78,12 @@ export async function loadState(): Promise<StateFile> {
 
 async function saveStateToFile(stateFile: string, state: StateFile): Promise<void> {
   await ensureStateDir(stateFile);
-  const tempFile = path.join(path.dirname(stateFile), `.${path.basename(stateFile)}.${randomUUID()}.tmp`);
-  await writeFile(tempFile, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-  await rename(tempFile, stateFile);
+  const tempFile = NodePath.join(
+    NodePath.dirname(stateFile),
+    `.${NodePath.basename(stateFile)}.${NodeCrypto.randomUUID()}.tmp`,
+  );
+  await NodeFSP.writeFile(tempFile, `${JSON.stringify(state, null, 2)}\n`, "utf8");
+  await NodeFSP.rename(tempFile, stateFile);
 }
 
 export async function saveState(state: StateFile): Promise<void> {
@@ -98,13 +101,13 @@ async function withStateLock<T>(stateFile: string, task: () => Promise<T>): Prom
 
   for (;;) {
     try {
-      const handle = await open(lockFile, "wx");
+      const handle = await NodeFSP.open(lockFile, "wx");
       try {
         await handle.writeFile(`${process.pid}\n`, "utf8");
         return await task();
       } finally {
         await handle.close();
-        await unlink(lockFile).catch(() => {});
+        await NodeFSP.unlink(lockFile).catch(() => {});
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -112,7 +115,7 @@ async function withStateLock<T>(stateFile: string, task: () => Promise<T>): Prom
         throw error;
       }
       if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
-        throw new Error(`Timed out waiting for state lock '${lockFile}'.`);
+        throw new Error(`Timed out waiting for state lock '${lockFile}'.`, { cause: error });
       }
       await sleep(STATE_LOCK_RETRY_MS);
     }
@@ -120,7 +123,9 @@ async function withStateLock<T>(stateFile: string, task: () => Promise<T>): Prom
 }
 
 export async function updateState<T>(
-  mutator: (state: StateFile) => Promise<{ state: StateFile; result: T }> | { state: StateFile; result: T },
+  mutator: (
+    state: StateFile,
+  ) => Promise<{ state: StateFile; result: T }> | { state: StateFile; result: T },
 ): Promise<T> {
   const stateFile = resolveStateFile();
   return withStateLock(stateFile, async () => {
@@ -317,7 +322,10 @@ export function buildSubscriptionRecord(
   };
 }
 
-export function assertNotSelfSubscription(caller: SubscriptionEndpoint, source: SubscriptionEndpoint): void {
+export function assertNotSelfSubscription(
+  caller: SubscriptionEndpoint,
+  source: SubscriptionEndpoint,
+): void {
   if (caller.threadId === source.threadId) {
     throw new Error(`Subscriber '${caller.name ?? caller.threadId}' cannot subscribe to itself.`);
   }

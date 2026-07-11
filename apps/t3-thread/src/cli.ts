@@ -35,14 +35,8 @@ import {
   upsertEnvironment,
 } from "./state.js";
 import { wrapWithPreamble } from "./thread-preamble.js";
-import { deliverPendingNotifications, detectAttentionEvents, hasActiveWork } from "./watch.js";
-import {
-  DEFAULT_IDLE_EXIT_SECONDS,
-  clearOwnWatcherPid,
-  ensureWatcherRunning,
-  isWatcherRunning,
-  writeWatcherPid,
-} from "./watcher-process.js";
+import { claimWatcherLease, ensureWatcherProcess } from "./watcher-process.js";
+import { deliverPendingNotifications, detectAttentionEvents, hasWatcherWork } from "./watch.js";
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
 import type { SavedAgent } from "./types.js";
 
@@ -59,9 +53,7 @@ function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
 }
 
-async function withAgent(
-  agentName: string,
-): Promise<{
+async function withAgent(agentName: string): Promise<{
   state: Awaited<ReturnType<typeof loadState>>;
   agent: SavedAgent;
   client: RemoteEnvironmentClient;
@@ -70,22 +62,21 @@ async function withAgent(
 }> {
   const state = await loadState();
   const agentTarget = await resolveAgentTarget(state, agentName, {
-    clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
+    clientFactory: (environmentName) =>
+      new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
   });
   const environment = requireEnvironment(state, agentTarget.environment);
   return {
     state,
-    agent:
-      agentTarget.savedAgent ??
-      {
-        name: agentTarget.threadId,
-        environment: agentTarget.environment,
-        threadId: agentTarget.threadId,
-        projectId: agentTarget.projectId,
-        title: agentTarget.title,
-        createdAt: new Date().toISOString(),
-        lastSeenAssistantMessageId: null,
-      },
+    agent: agentTarget.savedAgent ?? {
+      name: agentTarget.threadId,
+      environment: agentTarget.environment,
+      threadId: agentTarget.threadId,
+      projectId: agentTarget.projectId,
+      title: agentTarget.title,
+      createdAt: new Date().toISOString(),
+      lastSeenAssistantMessageId: null,
+    },
     client: new RemoteEnvironmentClient(environment),
     saved: agentTarget.savedAgent !== null,
     target: agentTarget,
@@ -106,7 +97,11 @@ async function resolveThreadEndpoint(
   preferredEnvironment?: string,
   callerEnvironment?: CallerEnvironmentMetadata | null,
 ): Promise<SubscriptionEndpoint> {
-  const localEndpoint = resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment ?? null);
+  const localEndpoint = resolveCallerEndpointFromLocalContext(
+    state,
+    threadId,
+    callerEnvironment ?? null,
+  );
   if (localEndpoint) {
     return localEndpoint;
   }
@@ -129,7 +124,9 @@ async function resolveThreadEndpoint(
     }
   }
 
-  throw new Error(`Unknown thread '${threadId}'. It is not saved locally and was not found in any paired environment.`);
+  throw new Error(
+    `Unknown thread '${threadId}'. It is not saved locally and was not found in any paired environment.`,
+  );
 }
 
 async function resolveNotifyEndpoint(
@@ -159,15 +156,25 @@ async function resolveNotifyEndpoint(
   return resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment);
 }
 
-async function withCallerFromEnv(): Promise<{ state: Awaited<ReturnType<typeof loadState>>; caller: SubscriptionEndpoint }> {
+async function withCallerFromEnv(): Promise<{
+  state: Awaited<ReturnType<typeof loadState>>;
+  caller: SubscriptionEndpoint;
+}> {
   const state = await loadState();
   const threadId = resolveCallerThreadId();
   if (!threadId) {
-    throw new Error("T3_THREAD_ID is not set. Run this command inside a T3 thread or specify the caller explicitly later.");
+    throw new Error(
+      "T3_THREAD_ID is not set. Run this command inside a T3 thread or specify the caller explicitly later.",
+    );
   }
   return {
     state,
-    caller: await resolveThreadEndpoint(state, threadId, undefined, resolveCallerEnvironmentMetadata()),
+    caller: await resolveThreadEndpoint(
+      state,
+      threadId,
+      undefined,
+      resolveCallerEnvironmentMetadata(),
+    ),
   };
 }
 
@@ -177,6 +184,18 @@ function nowIso(): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function ensureNotificationWatcher(
+  options: { env?: string; deliver?: boolean } = {},
+): Promise<void> {
+  await ensureWatcherProcess({
+    env: options.env,
+    intervalSeconds: 5,
+    idleExitSeconds: 900,
+    maxLifetimeSeconds: 86_400,
+    deliver: options.deliver ?? true,
+  });
 }
 
 const program = new Command();
@@ -471,7 +490,10 @@ agent
   .option("--base-branch <name>", "base branch for T3's native worktree bootstrap", "main")
   .option("--runtime-mode <mode>", "thread runtime mode")
   .option("--interaction-mode <mode>", "thread interaction mode")
-  .requiredOption("--message <text>", "initial message (wrapped with the canonical T3 preamble unless --no-preamble)")
+  .requiredOption(
+    "--message <text>",
+    "initial message (wrapped with the canonical T3 preamble unless --no-preamble)",
+  )
   .option(
     "--no-preamble",
     "skip the canonical T3 worker preamble; send --message verbatim (rare; use for testing or non-standard worker types)",
@@ -480,7 +502,10 @@ agent
     "--notify [subscriber]",
     "override the default subscriber for completion/attention events; omit the value to force the current T3 caller from T3_THREAD_ID",
   )
-  .option("--no-notify", "disable automatic completion/attention notifications for the created worker")
+  .option(
+    "--no-notify",
+    "disable automatic completion/attention notifications for the created worker",
+  )
   .action(async (options) => {
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
@@ -492,7 +517,8 @@ agent
     }
     const client = new RemoteEnvironmentClient(environment);
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
-    const initialMessage = options.preamble === false ? options.message : wrapWithPreamble(options.message);
+    const initialMessage =
+      options.preamble === false ? options.message : wrapWithPreamble(options.message);
     const created = await client.createAgentThread({
       projectId: options.project,
       title: options.title,
@@ -537,6 +563,9 @@ agent
         result: null,
       };
     });
+    if (notifyCaller) {
+      void ensureNotificationWatcher({ env: options.env }).catch(() => {});
+    }
     printJson({
       name: options.name,
       environment: options.env,
@@ -547,10 +576,6 @@ agent
       notifySubscriberAgentName: notifyCaller?.name ?? null,
       notifySubscriberThreadId: notifyCaller?.threadId ?? null,
     });
-    // Best-effort: make sure a notification watcher is running to deliver completions.
-    if (notifyCaller) {
-      await ensureWatcherRunning();
-    }
   });
 
 agent
@@ -584,23 +609,22 @@ agent
     });
   });
 
-agent
-  .command("list")
-  .action(async () => {
-    const state = await loadState();
-    printJson(state.agents);
-  });
+agent.command("list").action(async () => {
+  const state = await loadState();
+  printJson(state.agents);
+});
 
 agent
   .command("archive")
   .argument("<name>", "agent name")
   .description("Archive the remote thread for a saved agent via T3 RPC")
   .action(async (name) => {
-    const { agent: savedAgent, client } = await withAgent(name);
+    const { agent: savedAgent, client, saved } = await withAgent(name);
     const archived = await client.archiveThread(savedAgent.threadId);
     printJson({
-      agent: savedAgent.name,
+      agent: saved ? savedAgent.name : null,
       threadId: savedAgent.threadId,
+      environment: savedAgent.environment,
       archived,
     });
   });
@@ -643,9 +667,12 @@ agent
     const state = await loadState();
     const threadId = resolveCallerThreadId();
     const caller = threadId
-      ? await resolveThreadEndpoint(state, threadId, undefined, resolveCallerEnvironmentMetadata()).catch(
-          () => null,
-        )
+      ? await resolveThreadEndpoint(
+          state,
+          threadId,
+          undefined,
+          resolveCallerEnvironmentMetadata(),
+        ).catch(() => null)
       : null;
     printJson({
       threadId,
@@ -680,12 +707,15 @@ agent
 
 agent
   .command("subscribe")
-  .description("Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID")
+  .description(
+    "Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID",
+  )
   .requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch")
   .action(async (options) => {
     const { state, caller } = await withCallerFromEnv();
     const resolvedSource = await resolveAgentTarget(state, options.watch, {
-      clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
+      clientFactory: (environmentName) =>
+        new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
     });
     const source = {
       threadId: resolvedSource.threadId,
@@ -707,9 +737,8 @@ agent
       },
       result: null,
     }));
+    void ensureNotificationWatcher({ env: source.environment }).catch(() => {});
     printJson(next);
-    // Best-effort: ensure a watcher is running to deliver this subscription's events.
-    await ensureWatcherRunning();
   });
 
 agent
@@ -768,60 +797,56 @@ agent
 
 agent
   .command("watch")
-  .description("Poll saved agents for attention-worthy transitions and route notifications to subscribers")
+  .description(
+    "Poll saved agents for attention-worthy transitions and route notifications to subscribers",
+  )
   .option("--env <name>", "optional saved environment filter")
   .option("--interval <seconds>", "poll interval in seconds", "5")
-  .option("--once", "run a single scan and exit")
-  .option("--no-deliver", "record notification events but do not send messages to subscriber threads")
-  .option(
-    "--idle-exit <seconds>",
-    "self-exit after this many seconds with nothing in flight (0 disables)",
-    String(DEFAULT_IDLE_EXIT_SECONDS),
-  )
+  .option("--idle-exit <seconds>", "exit after this many idle seconds; 0 disables idle exit", "900")
   .option(
     "--max-lifetime <seconds>",
-    "hard cap on total runtime as a backstop (0 disables)",
-    "21600",
+    "hard-stop the watcher after this many seconds; 0 disables the limit",
+    "86400",
   )
+  .option("--ensure", "spawn a detached singleton watcher if none is running, then exit")
+  .option("--once", "run a single scan and exit")
   .option(
-    "--ensure",
-    "spawn a detached background watcher if none is running, then exit (no-op if one already runs)",
+    "--no-deliver",
+    "record notification events but do not send messages to subscriber threads",
   )
   .action(async (options) => {
     const intervalMs = Math.max(1, Number(options.interval)) * 1000;
     const idleExitMs = Math.max(0, Number(options.idleExit)) * 1000;
     const maxLifetimeMs = Math.max(0, Number(options.maxLifetime)) * 1000;
 
-    // --ensure: idempotently make sure a background watcher exists, then return.
     if (options.ensure) {
-      const spawned = await ensureWatcherRunning({
+      const ensured = await ensureWatcherProcess({
+        env: options.env,
+        intervalSeconds: Math.max(1, Number(options.interval)),
         idleExitSeconds: Math.max(0, Number(options.idleExit)),
+        maxLifetimeSeconds: Math.max(0, Number(options.maxLifetime)),
+        deliver: options.deliver,
       });
-      printJson({ ensured: true, spawned });
+      printJson({
+        ensured: true,
+        ...ensured,
+        env: options.env ?? null,
+      });
       return;
     }
 
-    // Singleton: a long-running watcher claims a pidfile so create/subscribe never
-    // spawn duplicates. --once is a throwaway scan and skips all of this.
-    if (!options.once) {
-      if (await isWatcherRunning()) {
-        printJson({ skipped: "another watcher is already running" });
-        return;
-      }
-      await writeWatcherPid();
-      const cleanup = () => {
-        void clearOwnWatcherPid();
-      };
-      process.on("exit", cleanup);
-      for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
-        process.on(signal, () => {
-          void clearOwnWatcherPid().finally(() => process.exit(0));
-        });
-      }
+    const releaseLease = options.once ? null : await claimWatcherLease();
+    if (!options.once && !releaseLease) {
+      printJson({
+        started: false,
+        reason: "watcher already running",
+        env: options.env ?? null,
+      });
+      return;
     }
 
     const startedAt = Date.now();
-    let lastWorkAt = startedAt;
+    let idleSince = 0;
 
     try {
       for (;;) {
@@ -833,41 +858,40 @@ agent
               env: options.env,
             })
           : [];
+        const workRemaining = await hasWatcherWork({
+          env: options.env,
+        });
         printJson({
           scannedAt: nowIso(),
           env: options.env ?? null,
           deliver: options.deliver,
           detectedNotifications,
           deliveryResults,
+          workRemaining,
         });
 
         if (options.once) {
           break;
         }
 
-        // Stay alive while anything is in flight; otherwise start the idle countdown.
-        const active =
-          detectedNotifications.length > 0 ||
-          deliveryResults.length > 0 ||
-          (await hasActiveWork({ env: options.env }));
-        const now = Date.now();
-        if (active) {
-          lastWorkAt = now;
-        } else if (idleExitMs > 0 && now - lastWorkAt >= idleExitMs) {
-          printJson({ exit: "idle", idleSeconds: Math.round((now - lastWorkAt) / 1000) });
+        const nowMs = Date.now();
+        if (maxLifetimeMs > 0 && nowMs - startedAt >= maxLifetimeMs) {
           break;
         }
-        if (maxLifetimeMs > 0 && now - startedAt >= maxLifetimeMs) {
-          printJson({ exit: "max-lifetime", uptimeSeconds: Math.round((now - startedAt) / 1000) });
-          break;
+
+        if (workRemaining) {
+          idleSince = 0;
+        } else if (idleExitMs > 0) {
+          idleSince ||= nowMs;
+          if (nowMs - idleSince >= idleExitMs) {
+            break;
+          }
         }
 
         await sleep(intervalMs);
       }
     } finally {
-      if (!options.once) {
-        await clearOwnWatcherPid();
-      }
+      await releaseLease?.();
     }
   });
 
@@ -1028,9 +1052,15 @@ agent
   .argument("<name>", "agent name or raw thread UUID")
   .option("--tail <count>", "number of messages to show", "1")
   .option("--assistant-only", "only show assistant messages")
-  .option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading")
+  .option(
+    "--wait <seconds>",
+    "wait up to this many seconds for the latest turn to complete before reading",
+  )
   .option("--interval <seconds>", "poll interval in seconds while waiting", "2")
-  .option("--final-message", "return the terminal assistant message for the latest turn when available")
+  .option(
+    "--final-message",
+    "return the terminal assistant message for the latest turn when available",
+  )
   .option("--mark-seen", "record the latest assistant message as reviewed")
   .action(async (name, options) => {
     const { agent: savedAgent, client, saved, target } = await withAgent(name);
@@ -1044,7 +1074,7 @@ agent
       : await client.getThreadDetail(savedAgent.threadId);
     const tailCount = Math.max(1, Number(options.tail));
     const latestAssistant = options.finalMessage
-      ? getLatestTurnAssistantMessage(detail) ?? getLatestAssistantMessage(detail)
+      ? (getLatestTurnAssistantMessage(detail) ?? getLatestAssistantMessage(detail))
       : getLatestAssistantMessage(detail);
     const messages = options.finalMessage
       ? latestAssistant

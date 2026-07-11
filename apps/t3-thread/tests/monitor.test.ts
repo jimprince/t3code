@@ -164,13 +164,9 @@ describe("monitor helpers", () => {
     });
 
     const resolved = getLatestTurnAssistantMessage(thread);
-    expect(resolved?.id).toBe(
-      "assistant-2-final",
-    );
+    expect(resolved?.id).toBe("assistant-2-final");
     expect(resolved?.text).toBe("Final report for the caller");
-    expect(resolved?.id).not.toBe(
-      "assistant-2-setup",
-    );
+    expect(resolved?.id).not.toBe("assistant-2-setup");
     // REGRESSION: Socrates overseer probes on 2026-04-21 showed the CLI
     // returning an early setup/progress message because the old resolver
     // trusted latestTurn.assistantMessageId as the terminal pointer. The
@@ -201,9 +197,7 @@ describe("monitor helpers", () => {
       ],
     });
 
-    expect(getLatestTurnAssistantMessage(thread)?.id).toBe(
-      "assistant-cross-turn",
-    );
+    expect(getLatestTurnAssistantMessage(thread)?.id).toBe("assistant-cross-turn");
   });
 
   it("returns null when there is no latestTurn and no assistantMessageId", () => {

@@ -8,11 +8,11 @@ Do not add release, build, or install steps to this repo. They drift.
 
 ## Who Owns What
 
-| Concern | Owner | Entry point |
-| --- | --- | --- |
+| Concern                                                                                     | Owner                             | Entry point                                                      |
+| ------------------------------------------------------------------------------------------- | --------------------------------- | ---------------------------------------------------------------- |
 | Release and update mechanics for `t3code` (build, publish, install, auto-upgrade, rollback) | T3 Code fork (`jimprince/t3code`) | `docs/operations/release.md`, `scripts/headless-auto-upgrade.sh` |
-| VM, service, pairing, and project administration | Shared `t3code-remote-ops` skill | `/Users/brad/.shared/skills/t3code-remote-ops/SKILL.md` |
-| Worker-thread lifecycle | This repo | [docs/AGENT_OPERATIONS.md](AGENT_OPERATIONS.md) |
+| VM, service, pairing, and project administration                                            | Shared `t3code-remote-ops` skill  | `/Users/brad/.shared/skills/t3code-remote-ops/SKILL.md`          |
+| Worker-thread lifecycle                                                                     | This repo                         | [docs/AGENT_OPERATIONS.md](AGENT_OPERATIONS.md)                  |
 
 ## Updating The Remote Server
 
@@ -22,7 +22,7 @@ after a health check, then restarts `t3code.service` — with rollback if the ne
 release fails.
 
 - Procedure and systemd timer: fork `docs/operations/release.md`, sections
-  *Headless Server Install / Update* and *Headless Auto-Update*.
+  _Headless Server Install / Update_ and _Headless Auto-Update_.
 - Canonical updater script: fork `scripts/headless-auto-upgrade.sh`, installed on
   the VM as `~/.local/bin/t3code-headless-upgrade`.
 
