@@ -48726,12 +48726,7 @@ async function hasWatcherWork(options = {}) {
     seenSources.add(subscription.sourceThreadId);
     const sourceEnvironment = requireEnvironment(state, subscription.sourceEnvironment);
     const sourceClient = clientFactory(sourceEnvironment);
-    let sourceThread;
-    try {
-      sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
-    } catch {
-      continue;
-    }
+    const sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
     if (classifyThread(sourceThread).state === "running") {
       return true;
     }
