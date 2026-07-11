@@ -130,9 +130,10 @@ closed CLI allowlist. Built-in ids such as `codex`, `claudeAgent`, `cursor`,
 `grok`, and `opencode` work, and custom instance ids such as `codex_personal`
 are passed through. `--model` accepts any model slug available for that
 provider instance in the app; run `t3-thread models --env <environment>` to
-see the live roster. If `--provider` is passed without `--model`, `t3-thread`
-uses the current first non-custom model advertised by that provider, falling
-back to the static compatibility default only when live config is unavailable.
+see the live roster. If `--provider` is passed without `--model`, native Codex
+prefers `gpt-5.6-terra` when it is live; other providers use their current first
+non-custom advertised model. Selection falls back to the static compatibility
+default only when live config is unavailable.
 OpenCode models must use OpenCode's provider/model slug format, for example
 `google/antigravity-gemini-3.5-flash-high` or `openai/gpt-5`.
 
