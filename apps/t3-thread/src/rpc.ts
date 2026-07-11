@@ -23,10 +23,7 @@ function wsRpcProtocolLayer(wsUrl: string) {
   const webSocketConstructorLayer = Layer.succeed(
     Socket.WebSocketConstructor,
     (socketUrl, protocols) =>
-      new NodeSocket.NodeWS.WebSocket(
-        socketUrl,
-        protocols,
-      ) as unknown as globalThis.WebSocket,
+      new NodeSocket.NodeWS.WebSocket(socketUrl, protocols) as unknown as globalThis.WebSocket,
   );
 
   return RpcClient.layerProtocolSocket().pipe(

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import {
   buildModelSelection,
@@ -192,7 +192,7 @@ export class RemoteEnvironmentClient {
       );
     }
 
-    const projectId = randomUUID();
+    const projectId = NodeCrypto.randomUUID();
     const title = deriveProjectTitle(input.workspaceRoot, input.title);
     const providerModels = input.noDefaultModel ? null : await this.getProviderModelsOrNull();
     const defaultModelSelection = buildModelSelection({
@@ -203,7 +203,7 @@ export class RemoteEnvironmentClient {
       providerModels,
     });
     const command = buildProjectCreateCommand({
-      commandId: randomUUID(),
+      commandId: NodeCrypto.randomUUID(),
       projectId,
       title,
       workspaceRoot: input.workspaceRoot,
@@ -227,11 +227,14 @@ export class RemoteEnvironmentClient {
     };
   }
 
-  async renameProject(input: { identifier: string; title: string }): Promise<OrchestrationProjectShell> {
+  async renameProject(input: {
+    identifier: string;
+    title: string;
+  }): Promise<OrchestrationProjectShell> {
     const snapshot = await this.getShellSnapshot();
     const project = resolveProjectTarget(snapshot.projects, input.identifier);
     const command = buildProjectMetaUpdateCommand({
-      commandId: randomUUID(),
+      commandId: NodeCrypto.randomUUID(),
       projectId: project.id,
       title: input.title,
     });
@@ -267,7 +270,7 @@ export class RemoteEnvironmentClient {
       providerModels,
     });
     const command = buildProjectMetaUpdateCommand({
-      commandId: randomUUID(),
+      commandId: NodeCrypto.randomUUID(),
       projectId: project.id,
       defaultModelSelection,
     });
@@ -299,7 +302,7 @@ export class RemoteEnvironmentClient {
       );
     }
     const command = buildProjectDeleteCommand({
-      commandId: randomUUID(),
+      commandId: NodeCrypto.randomUUID(),
       projectId: project.id,
       force: input.force,
     });
@@ -370,7 +373,7 @@ export class RemoteEnvironmentClient {
           buildModelSelection({ providerModels }) ??
           DEFAULT_MODEL_SELECTION);
 
-    const threadId = randomUUID();
+    const threadId = NodeCrypto.randomUUID();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
     const createdAt = nowIso();
@@ -378,10 +381,10 @@ export class RemoteEnvironmentClient {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: randomUUID(),
+        commandId: NodeCrypto.randomUUID(),
         threadId,
         message: {
-          messageId: randomUUID(),
+          messageId: NodeCrypto.randomUUID(),
           role: "user",
           text: initialMessage,
           attachments: [],
@@ -442,10 +445,10 @@ export class RemoteEnvironmentClient {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: randomUUID(),
+        commandId: NodeCrypto.randomUUID(),
         threadId: thread.id,
         message: {
-          messageId: randomUUID(),
+          messageId: NodeCrypto.randomUUID(),
           role: "user",
           text: input.text,
           attachments: [],
@@ -465,7 +468,7 @@ export class RemoteEnvironmentClient {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.interrupt",
-        commandId: randomUUID(),
+        commandId: NodeCrypto.randomUUID(),
         threadId: thread.id,
         turnId: thread.latestTurn?.turnId,
         createdAt: nowIso(),
@@ -485,7 +488,7 @@ export class RemoteEnvironmentClient {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.archive",
-        commandId: randomUUID(),
+        commandId: NodeCrypto.randomUUID(),
         threadId: thread.id,
       });
       return true;
