@@ -1,6 +1,6 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
@@ -251,9 +251,7 @@ describe("state helpers", () => {
       environment: "dev-vm",
     };
 
-    expect(
-      buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z"),
-    ).toEqual({
+    expect(buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z")).toEqual({
       subscriberThreadId: "thread-coordinator-a",
       subscriberAgentName: "coordinator-a",
       subscriberEnvironment: "local-mbp",
@@ -277,9 +275,7 @@ describe("state helpers", () => {
       environment: "dev-vm",
     };
 
-    expect(
-      buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z"),
-    ).toEqual({
+    expect(buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z")).toEqual({
       subscriberThreadId: "thread-unsaved-caller",
       subscriberAgentName: null,
       subscriberEnvironment: "local-mbp",
@@ -301,13 +297,13 @@ describe("state helpers", () => {
   });
 
   it("serializes concurrent state updates so both writes are preserved", async () => {
-    const tempDir = await mkdtemp(path.join(os.tmpdir(), "t3-thread-state-test-"));
-    const stateFile = path.join(tempDir, "state.json");
+    const tempDir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-thread-state-test-"));
+    const stateFile = NodePath.join(tempDir, "state.json");
     const previousStateFile = process.env.T3_AGENT_STATE_FILE;
     process.env.T3_AGENT_STATE_FILE = stateFile;
 
     try {
-      await writeFile(
+      await NodeFSP.writeFile(
         stateFile,
         `${JSON.stringify(makeState({ agents: [], subscriptions: [], notifications: [] }), null, 2)}\n`,
         "utf8",
@@ -319,7 +315,10 @@ describe("state helpers", () => {
           return {
             state: {
               ...state,
-              agents: [...state.agents, makeAgent({ name: "worker-a", threadId: "thread-worker-a" })],
+              agents: [
+                ...state.agents,
+                makeAgent({ name: "worker-a", threadId: "thread-worker-a" }),
+              ],
             },
             result: null,
           };
@@ -333,7 +332,7 @@ describe("state helpers", () => {
         })),
       ]);
 
-      const finalState = JSON.parse(await readFile(stateFile, "utf8")) as {
+      const finalState = JSON.parse(await NodeFSP.readFile(stateFile, "utf8")) as {
         agents: Array<{ name: string }>;
       };
       expect(finalState.agents.map((agent) => agent.name).sort()).toEqual(["worker-a", "worker-b"]);
@@ -343,7 +342,7 @@ describe("state helpers", () => {
       } else {
         process.env.T3_AGENT_STATE_FILE = previousStateFile;
       }
-      await rm(tempDir, { recursive: true, force: true });
+      await NodeFSP.rm(tempDir, { recursive: true, force: true });
     }
   });
 });

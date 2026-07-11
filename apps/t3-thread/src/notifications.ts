@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import { summarizeMessageText, type AgentOverview } from "./monitor.js";
 import type {
@@ -40,7 +40,7 @@ export function buildNotificationRecord(input: {
   });
 
   return {
-    id: input.existing?.id ?? randomUUID(),
+    id: input.existing?.id ?? NodeCrypto.randomUUID(),
     eventKey,
     subscriberThreadId: input.subscription.subscriberThreadId,
     subscriberAgentName: input.subscription.subscriberAgentName,

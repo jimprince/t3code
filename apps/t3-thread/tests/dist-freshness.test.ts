@@ -1,7 +1,7 @@
-import { execSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import { describe, expect, it } from "vite-plus/test";
 
@@ -17,46 +17,42 @@ import { describe, expect, it } from "vite-plus/test";
  * they differ, the committed dist is stale and must be rebuilt.
  */
 describe("dist/cli.cjs freshness", () => {
-  it(
-    "REGRESSION: dist/cli.cjs matches the output of `npm run build` (if this fails: run `npm run build` and commit the updated dist/cli.cjs)",
-    () => {
-      const pkg = JSON.parse(readFileSync("package.json", "utf-8")) as {
-        scripts: { build: string };
-      };
-      const buildCmd = pkg.scripts.build;
+  it("REGRESSION: dist/cli.cjs matches the output of `npm run build` (if this fails: run `npm run build` and commit the updated dist/cli.cjs)", () => {
+    const pkg = JSON.parse(NodeFS.readFileSync("package.json", "utf-8")) as {
+      scripts: { build: string };
+    };
+    const buildCmd = pkg.scripts.build;
 
-      // The build command must write to dist/cli.cjs; we swap that for a
-      // temp path to produce a fresh comparison bundle without touching
-      // the committed artifact.
-      const outfileMarker = "dist/cli.cjs";
-      if (!buildCmd.includes(outfileMarker)) {
-        throw new Error(
-          `dist-freshness test expects scripts.build in package.json to write to "${outfileMarker}" so it can be redirected to a temp file. ` +
-            `Current build command: ${buildCmd}. ` +
-            `Update this test to match the new outfile convention.`,
-        );
-      }
+    // The build command must write to dist/cli.cjs; we swap that for a
+    // temp path to produce a fresh comparison bundle without touching
+    // the committed artifact.
+    const outfileMarker = "dist/cli.cjs";
+    if (!buildCmd.includes(outfileMarker)) {
+      throw new Error(
+        `dist-freshness test expects scripts.build in package.json to write to "${outfileMarker}" so it can be redirected to a temp file. ` +
+          `Current build command: ${buildCmd}. ` +
+          `Update this test to match the new outfile convention.`,
+      );
+    }
 
-      const tmp = mkdtempSync(join(tmpdir(), "t3-dist-freshness-"));
-      const freshOutfile = join(tmp, "cli.cjs");
-      try {
-        const redirected = buildCmd.replace(outfileMarker, freshOutfile);
-        // `npx --no-install` ensures we use the locally-installed esbuild
-        // (as `npm run build` would) and does not silently install a new
-        // version if it's missing.
-        execSync(`npx --no-install ${redirected}`, { stdio: "pipe" });
+    const tmp = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-dist-freshness-"));
+    const freshOutfile = NodePath.join(tmp, "cli.cjs");
+    try {
+      const redirected = buildCmd.replace(outfileMarker, freshOutfile);
+      // `npx --no-install` ensures we use the locally-installed esbuild
+      // (as `npm run build` would) and does not silently install a new
+      // version if it's missing.
+      NodeChildProcess.execSync(`npx --no-install ${redirected}`, { stdio: "pipe" });
 
-        const fresh = readFileSync(freshOutfile);
-        const committed = readFileSync("dist/cli.cjs");
+      const fresh = NodeFS.readFileSync(freshOutfile);
+      const committed = NodeFS.readFileSync("dist/cli.cjs");
 
-        expect(
-          committed.equals(fresh),
-          "dist/cli.cjs is stale relative to src/. Run `npm run build` and commit the updated dist/cli.cjs.",
-        ).toBe(true);
-      } finally {
-        rmSync(tmp, { recursive: true, force: true });
-      }
-    },
-    30_000,
-  );
+      expect(
+        committed.equals(fresh),
+        "dist/cli.cjs is stale relative to src/. Run `npm run build` and commit the updated dist/cli.cjs.",
+      ).toBe(true);
+    } finally {
+      NodeFS.rmSync(tmp, { recursive: true, force: true });
+    }
+  }, 30_000);
 });
