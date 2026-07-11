@@ -13,7 +13,9 @@ export interface AgentOverview {
   latestAssistantPreview: string | null;
 }
 
-export function getLatestAssistantMessage(thread: OrchestrationThread): OrchestrationMessage | null {
+export function getLatestAssistantMessage(
+  thread: OrchestrationThread,
+): OrchestrationMessage | null {
   for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
     const candidate = thread.messages[index];
     if (candidate.role === "assistant") {
@@ -23,7 +25,9 @@ export function getLatestAssistantMessage(thread: OrchestrationThread): Orchestr
   return null;
 }
 
-export function getLatestTurnAssistantMessage(thread: OrchestrationThread): OrchestrationMessage | null {
+export function getLatestTurnAssistantMessage(
+  thread: OrchestrationThread,
+): OrchestrationMessage | null {
   const turnId = thread.latestTurn?.turnId ?? null;
   if (turnId) {
     for (let index = thread.messages.length - 1; index >= 0; index -= 1) {

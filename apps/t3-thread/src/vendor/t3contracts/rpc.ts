@@ -4,7 +4,11 @@ import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 
 import { OpenError, OpenInEditorInput } from "./editor.js";
 import { AuthAccessStreamEvent } from "./auth.js";
-import { FilesystemBrowseInput, FilesystemBrowseResult, FilesystemBrowseError } from "./filesystem.js";
+import {
+  FilesystemBrowseInput,
+  FilesystemBrowseResult,
+  FilesystemBrowseError,
+} from "./filesystem.js";
 import {
   GitActionProgressEvent,
   GitCheckoutInput,

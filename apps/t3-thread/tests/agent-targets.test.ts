@@ -6,7 +6,12 @@ import {
   resolveAgentTarget,
   resolveSavedAgentTarget,
 } from "../src/agent-targets.js";
-import type { OrchestrationThreadShell, SavedAgent, SavedEnvironment, StateFile } from "../src/types.js";
+import type {
+  OrchestrationThreadShell,
+  SavedAgent,
+  SavedEnvironment,
+  StateFile,
+} from "../src/types.js";
 
 function makeAgent(overrides: Partial<SavedAgent> = {}): SavedAgent {
   return {
@@ -155,7 +160,9 @@ describe("agent target resolution", () => {
 
     await expect(
       resolveAgentTarget(makeState(), "33333333-3333-4333-8333-333333333333", { clientFactory }),
-    ).rejects.toThrow("Unknown thread '33333333-3333-4333-8333-333333333333'. Checked paired environments: local-mbp, dev-vm.");
+    ).rejects.toThrow(
+      "Unknown thread '33333333-3333-4333-8333-333333333333'. Checked paired environments: local-mbp, dev-vm.",
+    );
   });
 
   it("keeps non-UUID unknown inputs on the saved-agent path", async () => {
@@ -163,9 +170,9 @@ describe("agent target resolution", () => {
       listThreads: vi.fn(async () => []),
     }));
 
-    await expect(resolveAgentTarget(makeState(), "missing-worker", { clientFactory })).rejects.toThrow(
-      "Unknown agent 'missing-worker'.",
-    );
+    await expect(
+      resolveAgentTarget(makeState(), "missing-worker", { clientFactory }),
+    ).rejects.toThrow("Unknown agent 'missing-worker'.");
     expect(clientFactory).not.toHaveBeenCalled();
   });
 

@@ -1,6 +1,6 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
 import { loadState, saveState } from "../src/state.js";
@@ -163,8 +163,8 @@ function createClientFactory(input: {
 }
 
 async function withTempState(test: () => Promise<void>): Promise<void> {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "t3-thread-watch-test-"));
-  const stateFile = path.join(tempDir, "state.json");
+  const tempDir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-thread-watch-test-"));
+  const stateFile = NodePath.join(tempDir, "state.json");
   const previousStateFile = process.env.T3_AGENT_STATE_FILE;
   process.env.T3_AGENT_STATE_FILE = stateFile;
 
@@ -177,7 +177,7 @@ async function withTempState(test: () => Promise<void>): Promise<void> {
     } else {
       process.env.T3_AGENT_STATE_FILE = previousStateFile;
     }
-    await rm(tempDir, { recursive: true, force: true });
+    await NodeFSP.rm(tempDir, { recursive: true, force: true });
   }
 }
 
