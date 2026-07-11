@@ -1,81 +1,121 @@
-import { spawn } from "node:child_process";
-import { readFile, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
 
 import { resolveStateFile } from "./state.js";
 
-export const DEFAULT_IDLE_EXIT_SECONDS = 900; // 15 minutes
+export type WatcherEnsureResult =
+  | { status: "already-running"; pid: number }
+  | { status: "spawned"; pid: number };
 
-/** Pidfile lives next to the state file so it follows T3_AGENT_STATE_FILE overrides. */
-export function watcherPidFile(): string {
-  return path.join(path.dirname(resolveStateFile()), "watch.pid");
+function watcherPidFile(): string {
+  return NodePath.join(NodePath.dirname(resolveStateFile()), "watch.pid");
 }
 
-function isProcessAlive(pid: number): boolean {
+function repoRootFromArgv(): string {
+  const entry = process.argv[1];
+  if (!entry) {
+    throw new Error("Cannot resolve watcher repo root from process.argv[1].");
+  }
+  return NodePath.resolve(NodePath.dirname(entry), "..");
+}
+
+async function readWatcherPid(pidFile: string): Promise<number | null> {
+  try {
+    const raw = (await NodeFSP.readFile(pidFile, "utf8")).trim();
+    const pid = Number(raw);
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("ENOENT")) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function isProcessRunning(pid: number): boolean {
   try {
     process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    // ESRCH = no such process (dead). EPERM = exists but not signalable by us (alive).
-    return (error as NodeJS.ErrnoException)?.code === "EPERM";
-  }
-}
-
-export async function readWatcherPid(): Promise<number | null> {
-  try {
-    const raw = await readFile(watcherPidFile(), "utf8");
-    const pid = Number(raw.trim());
-    return Number.isInteger(pid) && pid > 0 ? pid : null;
-  } catch {
-    return null;
-  }
-}
-
-/** True when a *different*, live watcher process owns the pidfile. */
-export async function isWatcherRunning(): Promise<boolean> {
-  const pid = await readWatcherPid();
-  return pid !== null && pid !== process.pid && isProcessAlive(pid);
-}
-
-export async function writeWatcherPid(): Promise<void> {
-  await writeFile(watcherPidFile(), `${process.pid}\n`, "utf8");
-}
-
-/** Remove the pidfile only if it still points at this process. */
-export async function clearOwnWatcherPid(): Promise<void> {
-  const pid = await readWatcherPid();
-  if (pid === process.pid) {
-    await unlink(watcherPidFile()).catch(() => {});
-  }
-}
-
-/**
- * Spawn a detached background watcher if none is running. Best-effort: any failure
- * resolves false rather than throwing, so it never breaks the caller (create/subscribe).
- * Re-invokes the current launcher (node + execArgv + entry script) so it works under
- * both `tsx src/cli.ts` (dev) and the bundled `dist/cli.cjs` (installed) paths.
- */
-export async function ensureWatcherRunning(
-  options: { idleExitSeconds?: number } = {},
-): Promise<boolean> {
-  try {
-    if (await isWatcherRunning()) {
-      return false;
-    }
-    const idle = options.idleExitSeconds ?? DEFAULT_IDLE_EXIT_SECONDS;
-    const entry = process.argv[1];
-    if (!entry) {
-      return false;
-    }
-    const args = [...process.execArgv, entry, "watch", "--idle-exit", String(idle)];
-    const child = spawn(process.execPath, args, {
-      detached: true,
-      stdio: "ignore",
-      env: process.env,
-    });
-    child.unref();
     return true;
   } catch {
     return false;
   }
+}
+
+export async function claimWatcherLease(): Promise<(() => Promise<void>) | null> {
+  const pidFile = watcherPidFile();
+  await NodeFSP.mkdir(NodePath.dirname(pidFile), { recursive: true });
+  const existingPid = await readWatcherPid(pidFile);
+  if (existingPid && existingPid !== process.pid && isProcessRunning(existingPid)) {
+    return null;
+  }
+
+  if (existingPid && !isProcessRunning(existingPid)) {
+    await NodeFSP.unlink(pidFile).catch(() => {});
+  }
+
+  await NodeFSP.writeFile(pidFile, `${process.pid}\n`, "utf8");
+
+  return async () => {
+    const currentPid = await readWatcherPid(pidFile);
+    if (currentPid === process.pid) {
+      await NodeFSP.unlink(pidFile).catch(() => {});
+    }
+  };
+}
+
+export async function ensureWatcherProcess(input: {
+  env?: string;
+  intervalSeconds: number;
+  idleExitSeconds: number;
+  maxLifetimeSeconds: number;
+  deliver: boolean;
+}): Promise<WatcherEnsureResult> {
+  const pidFile = watcherPidFile();
+  await NodeFSP.mkdir(NodePath.dirname(pidFile), { recursive: true });
+  const existingPid = await readWatcherPid(pidFile);
+  if (existingPid && isProcessRunning(existingPid)) {
+    return {
+      status: "already-running",
+      pid: existingPid,
+    };
+  }
+
+  if (existingPid && !isProcessRunning(existingPid)) {
+    await NodeFSP.unlink(pidFile).catch(() => {});
+  }
+
+  const repoRoot = repoRootFromArgv();
+  const tsxPath = NodePath.join(repoRoot, "node_modules", ".bin", "tsx");
+  const cliEntry = NodePath.join(repoRoot, "src", "cli.ts");
+  const args = [
+    cliEntry,
+    "watch",
+    "--interval",
+    String(input.intervalSeconds),
+    "--idle-exit",
+    String(input.idleExitSeconds),
+    "--max-lifetime",
+    String(input.maxLifetimeSeconds),
+  ];
+
+  if (input.env) {
+    args.push("--env", input.env);
+  }
+  if (!input.deliver) {
+    args.push("--no-deliver");
+  }
+
+  const child = NodeChildProcess.spawn(tsxPath, args, {
+    cwd: repoRoot,
+    detached: true,
+    stdio: "ignore",
+  });
+  child.unref();
+
+  return {
+    status: "spawned",
+    pid: child.pid ?? -1,
+  };
 }

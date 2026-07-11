@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 
 import { RemoteEnvironmentClient } from "./client.js";
 import { buildAgentOverview, needsAttention } from "./monitor.js";
@@ -7,12 +7,7 @@ import {
   buildNotificationRecord,
   mergeDetectedNotification,
 } from "./notifications.js";
-import {
-  loadState,
-  requireEnvironment,
-  updateState,
-  upsertNotification,
-} from "./state.js";
+import { loadState, requireEnvironment, updateState, upsertNotification } from "./state.js";
 import { classifyThread } from "./status.js";
 import type {
   OrchestrationThread,
@@ -191,7 +186,8 @@ export async function detectAttentionEvents(
     let notifications = currentState.notifications;
 
     for (const notification of scanned) {
-      const existing = notifications.find((candidate) => candidate.eventKey === notification.eventKey) ?? null;
+      const existing =
+        notifications.find((candidate) => candidate.eventKey === notification.eventKey) ?? null;
       const merged = mergeDetectedNotification(existing, notification);
       notifications = upsertNotification(notifications, merged);
       persisted.push(merged);
@@ -240,7 +236,7 @@ export async function claimPendingNotifications(
         updatedAt: claimedAt,
         lastAttemptedAt: claimedAt,
         lastError: null,
-        deliveryClaimId: randomUUID(),
+        deliveryClaimId: NodeCrypto.randomUUID(),
       };
       claimed.push(next);
       return next;
@@ -261,7 +257,9 @@ async function finalizeNotificationAttempt(input: {
   claimId: string | null;
 }): Promise<SavedNotification | null> {
   return updateState(async (state) => {
-    const current = state.notifications.find((candidate) => candidate.eventKey === input.notification.eventKey) ?? null;
+    const current =
+      state.notifications.find((candidate) => candidate.eventKey === input.notification.eventKey) ??
+      null;
     if (!current || current.deliveryClaimId !== input.claimId) {
       return {
         state,
