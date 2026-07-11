@@ -41,7 +41,7 @@ describe("build-headless-artifact", () => {
 
     expect(packageJson.version).toBe("0.0.23-test.1");
     expect(packageJson.engines.node).toContain("^22.16");
-    expect(packageJson.packageManager).toBe("pnpm@10.24.0");
+    expect(packageJson.packageManager).toBe("pnpm@11.10.0");
     expect(packageJson.dependencies["node-pty"]).toBeDefined();
     expect(packageJson.pnpm.onlyBuiltDependencies).toContain("node-pty");
   });
