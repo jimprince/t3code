@@ -131,10 +131,4 @@ jobs:
           git tag "$new_tag" HEAD
           git push origin HEAD:main --force-with-lease
           git push origin "$new_tag"
-          gh workflow run release.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f channel=stable \
-            -f version="$new_tag" \
-            -f target_ref="$new_tag"
           echo "Pushed $new_tag for fork push nightly update. release.yml will publish it to the nightly feed."
