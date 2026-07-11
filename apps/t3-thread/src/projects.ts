@@ -1,11 +1,15 @@
-import path from "node:path";
+import * as NodePath from "node:path";
 
 import {
   DEFAULT_MODEL,
   DEFAULT_MODEL_BY_PROVIDER,
   MODEL_SLUG_ALIASES_BY_PROVIDER,
 } from "./vendor/t3contracts/model.js";
-import type { ModelSelection, OrchestrationProjectShell, OrchestrationThreadShell } from "./types.js";
+import type {
+  ModelSelection,
+  OrchestrationProjectShell,
+  OrchestrationThreadShell,
+} from "./types.js";
 
 export type ProviderModelInfo = {
   slug: string;
@@ -54,15 +58,19 @@ export function normalizeProjectPath(workspaceRoot: string): string {
     throw new Error("Project path cannot be empty.");
   }
   if (trimmed.startsWith("~")) {
-    throw new Error("Project path must be absolute; shell-expand '~' before passing it to t3-thread.");
+    throw new Error(
+      "Project path must be absolute; shell-expand '~' before passing it to t3-thread.",
+    );
   }
-  const isWindowsPath = /^[A-Za-z]:[\\/]/.test(trimmed) || /^\\\\/.test(trimmed);
-  if (!path.posix.isAbsolute(trimmed) && !isWindowsPath) {
+  const isWindowsPath = /^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith("\\\\");
+  if (!NodePath.posix.isAbsolute(trimmed) && !isWindowsPath) {
     throw new Error(`Project path must be absolute: ${workspaceRoot}`);
   }
-  const normalized = isWindowsPath ? path.win32.normalize(trimmed) : path.posix.normalize(trimmed);
+  const normalized = isWindowsPath
+    ? NodePath.win32.normalize(trimmed)
+    : NodePath.posix.normalize(trimmed);
   if (isWindowsPath) {
-    const parsed = path.win32.parse(normalized);
+    const parsed = NodePath.win32.parse(normalized);
     return normalized === parsed.root ? normalized : normalized.replace(/[\\/]+$/, "");
   }
   return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
@@ -82,11 +90,17 @@ export function deriveProjectTitle(workspaceRoot: string, explicitTitle?: string
   }
 
   const normalized = normalizeProjectPath(workspaceRoot);
-  const baseName = (path.win32.isAbsolute(normalized) ? path.win32.basename(normalized) : path.posix.basename(normalized)).trim();
+  const baseName = (
+    NodePath.win32.isAbsolute(normalized)
+      ? NodePath.win32.basename(normalized)
+      : NodePath.posix.basename(normalized)
+  ).trim();
   return baseName || "project";
 }
 
-export function parseModelOptionEntries(entries: string[] = []): Record<string, unknown> | undefined {
+export function parseModelOptionEntries(
+  entries: string[] = [],
+): Record<string, unknown> | undefined {
   if (entries.length === 0) {
     return undefined;
   }
@@ -130,9 +144,7 @@ function resolveLiveDefaultModel(
     return null;
   }
   return (
-    inventory.models.find((model) => !model.isCustom)?.slug ??
-    inventory.models[0]?.slug ??
-    null
+    inventory.models.find((model) => !model.isCustom)?.slug ?? inventory.models[0]?.slug ?? null
   );
 }
 
@@ -154,8 +166,7 @@ function resolveLiveModelSlug(
   const lowered = model.toLowerCase();
   const named = inventory.models.find(
     (candidate) =>
-      candidate.name?.toLowerCase() === lowered ||
-      candidate.shortName?.toLowerCase() === lowered,
+      candidate.name?.toLowerCase() === lowered || candidate.shortName?.toLowerCase() === lowered,
   );
   return named?.slug ?? null;
 }
@@ -169,7 +180,9 @@ function resolveModelSlug(
   const providerAliases = MODEL_SLUG_ALIASES_BY_PROVIDER as Record<string, Record<string, string>>;
   const trimmedModel = model?.trim();
   const fallbackModel =
-    resolveLiveDefaultModel(provider, providerModels) ?? providerDefaults[provider] ?? DEFAULT_MODEL;
+    resolveLiveDefaultModel(provider, providerModels) ??
+    providerDefaults[provider] ??
+    DEFAULT_MODEL;
   if (!trimmedModel) {
     return fallbackModel;
   }
@@ -186,15 +199,24 @@ export function buildModelSelection(input: {
   providerModels?: ReadonlyArray<ProviderModelInventory> | null;
 }): ModelSelection | null {
   if (input.clear) {
-    if (input.provider || input.model || (input.optionEntries?.length ?? 0) > 0 || input.noDefault) {
-      throw new Error("`--clear` cannot be combined with model provider, model, options, or --no-default-model.");
+    if (
+      input.provider ||
+      input.model ||
+      (input.optionEntries?.length ?? 0) > 0 ||
+      input.noDefault
+    ) {
+      throw new Error(
+        "`--clear` cannot be combined with model provider, model, options, or --no-default-model.",
+      );
     }
     return null;
   }
 
   if (input.noDefault) {
     if (input.provider || input.model || (input.optionEntries?.length ?? 0) > 0) {
-      throw new Error("`--no-default-model` cannot be combined with model provider, model, or options.");
+      throw new Error(
+        "`--no-default-model` cannot be combined with model provider, model, or options.",
+      );
     }
     return null;
   }
@@ -224,12 +246,16 @@ export function resolveProjectTarget(
   }
 
   const normalizedPath = normalizeProjectPath(trimmed);
-  const pathMatches = projects.filter((project) => normalizeProjectPath(project.workspaceRoot) === normalizedPath);
+  const pathMatches = projects.filter(
+    (project) => normalizeProjectPath(project.workspaceRoot) === normalizedPath,
+  );
   if (pathMatches.length === 1) {
     return pathMatches[0]!;
   }
   if (pathMatches.length > 1) {
-    throw new Error(`Multiple active projects use '${normalizedPath}'. Re-run with the project id.`);
+    throw new Error(
+      `Multiple active projects use '${normalizedPath}'. Re-run with the project id.`,
+    );
   }
 
   throw new Error(`No active project found for '${trimmed}'.`);
@@ -240,7 +266,10 @@ export function findExistingProjectByPath(
   workspaceRoot: string,
 ): OrchestrationProjectShell | null {
   const normalizedPath = normalizeProjectPath(workspaceRoot);
-  return projects.find((project) => normalizeProjectPath(project.workspaceRoot) === normalizedPath) ?? null;
+  return (
+    projects.find((project) => normalizeProjectPath(project.workspaceRoot) === normalizedPath) ??
+    null
+  );
 }
 
 export function listThreadsForProject(
@@ -271,7 +300,9 @@ export function buildProjectMetaUpdateCommand(input: ProjectMetaUpdateCommandInp
     commandId: input.commandId,
     projectId: input.projectId,
     ...(input.title !== undefined ? { title: normalizeProjectTitle(input.title) } : {}),
-    ...(input.workspaceRoot !== undefined ? { workspaceRoot: normalizeProjectPath(input.workspaceRoot) } : {}),
+    ...(input.workspaceRoot !== undefined
+      ? { workspaceRoot: normalizeProjectPath(input.workspaceRoot) }
+      : {}),
     ...(input.defaultModelSelection !== undefined
       ? { defaultModelSelection: input.defaultModelSelection }
       : {}),

@@ -87,9 +87,9 @@ function normalizeModelOptions(value: unknown): ModelOptionRecordType | undefine
   return undefined;
 }
 
-function encodeModelOptions(options: ModelOptionRecordType | undefined):
-  | ReadonlyArray<{ id: string; value: string | boolean }>
-  | undefined {
+function encodeModelOptions(
+  options: ModelOptionRecordType | undefined,
+): ReadonlyArray<{ id: string; value: string | boolean }> | undefined {
   if (options === undefined) {
     return undefined;
   }
