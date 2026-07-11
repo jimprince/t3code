@@ -13,9 +13,21 @@ set -euo pipefail
 
 UPSTREAM_REMOTE="${CI_REPAIR_BOT_UPSTREAM_REMOTE:-upstream}"
 CONFLICT_MODE="${CI_REPAIR_BOT_CONFLICT_MODE:-fail}"
-START_HEAD="$(git rev-parse HEAD)"
-REBASE_MERGE_DIR="$(git rev-parse --git-path rebase-merge)"
-REBASE_APPLY_DIR="$(git rev-parse --git-path rebase-apply)"
+GIT_BIN="${CI_REPAIR_BOT_GIT_BIN:-$(command -v git)}"
+if [[ ! -x "$GIT_BIN" ]]; then
+  echo "git executable is unavailable: $GIT_BIN" >&2
+  exit 2
+fi
+
+# ci-repair-bot provides the system Git path so disposable conflict operations
+# do not hit interactive safety wrappers intended for a user's live worktree.
+git_cmd() {
+  "$GIT_BIN" "$@"
+}
+
+START_HEAD="$(git_cmd rev-parse HEAD)"
+REBASE_MERGE_DIR="$(git_cmd rev-parse --git-path rebase-merge)"
+REBASE_APPLY_DIR="$(git_cmd rev-parse --git-path rebase-apply)"
 
 # Generated release metadata is rewritten after a successful rebase, so the
 # upstream version is authoritative while replaying fork commits.
@@ -79,24 +91,24 @@ emit_status() {
 
 restore_start_head() {
   if [[ -d "$REBASE_MERGE_DIR" || -d "$REBASE_APPLY_DIR" ]]; then
-    git rebase --abort || true
+    git_cmd rebase --abort || true
   fi
-  git reset --hard "$START_HEAD" >/dev/null
+  git_cmd reset --hard "$START_HEAD" >/dev/null
 }
 
-if ! git remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1; then
-  git remote add "$UPSTREAM_REMOTE" https://github.com/pingdotgg/t3code.git
+if ! git_cmd remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1; then
+  git_cmd remote add "$UPSTREAM_REMOTE" https://github.com/pingdotgg/t3code.git
 fi
 
-git fetch --no-tags "$UPSTREAM_REMOTE" main:refs/remotes/upstream/main
-git fetch --no-tags "$UPSTREAM_REMOTE" \
+git_cmd fetch --no-tags "$UPSTREAM_REMOTE" main:refs/remotes/upstream/main
+git_cmd fetch --no-tags "$UPSTREAM_REMOTE" \
   "+${CI_REPAIR_BOT_UPSTREAM_SOURCE_REF}:${CI_REPAIR_BOT_UPSTREAM_TARGET}"
 
 echo "Rebasing onto $CI_REPAIR_BOT_UPSTREAM_TARGET..."
 echo "Fork commits being replayed (relative to upstream/main):"
-git log --oneline upstream/main..HEAD
+git_cmd log --oneline upstream/main..HEAD
 
-if git rebase --onto "$CI_REPAIR_BOT_UPSTREAM_TARGET" upstream/main; then
+if git_cmd rebase --onto "$CI_REPAIR_BOT_UPSTREAM_TARGET" upstream/main; then
   emit_status clean
   exit 0
 fi
@@ -111,27 +123,27 @@ while [[ -d "$REBASE_MERGE_DIR" || -d "$REBASE_APPLY_DIR" ]]; do
   conflicted=()
   while IFS= read -r file; do
     [[ -n "$file" ]] && conflicted+=("$file")
-  done < <(git diff --name-only --diff-filter=U | sort -u)
+  done < <(git_cmd diff --name-only --diff-filter=U | sort -u)
 
   if [[ ${#conflicted[@]} -eq 0 ]]; then
-    git rebase --skip || break
+    git_cmd rebase --skip || break
     continue
   fi
 
   echo "Resolving conflict stop for diagnostic replay: ${conflicted[*]}"
   for file in "${conflicted[@]}"; do
     if contains_file "$file" "${UPSTREAM_RESOLVE_FILES[@]}"; then
-      git checkout --ours -- "$file"
+      git_cmd checkout --ours -- "$file"
     elif contains_file "$file" "${FORK_RESOLVE_FILES[@]}"; then
-      git checkout --theirs -- "$file"
+      git_cmd checkout --theirs -- "$file"
     else
       append_unknown "$file"
-      git checkout --ours -- "$file"
+      git_cmd checkout --ours -- "$file"
     fi
-    git add -- "$file"
+    git_cmd add -- "$file"
   done
 
-  GIT_EDITOR=true git rebase --continue || true
+  GIT_EDITOR=true git_cmd rebase --continue || true
 done
 
 unresolved=()
@@ -141,7 +153,7 @@ while IFS= read -r file; do
     unresolved[$unresolved_count]="$file"
     unresolved_count=$((unresolved_count + 1))
   fi
-done < <(git diff --name-only --diff-filter=U | sort -u)
+done < <(git_cmd diff --name-only --diff-filter=U | sort -u)
 for ((index = 0; index < unresolved_count; index++)); do
   append_unknown "${unresolved[$index]}"
 done
