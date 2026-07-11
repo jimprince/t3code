@@ -97,7 +97,9 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ github.token }}
+          # Upstream may change workflow files; a PAT with workflow scope is
+          # required to push those changes back to the fork.
+          token: ${{ secrets.GH_PAT || github.token }}
 
       - name: Setup Vite+
         if: steps.channel.outputs.selected == 'true'
@@ -206,7 +208,7 @@ jobs:
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
         env:
           CHANNEL: ${{ steps.channel.outputs.channel }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
