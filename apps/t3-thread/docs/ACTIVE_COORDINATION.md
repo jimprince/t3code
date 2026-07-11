@@ -32,6 +32,13 @@ Project/task coordination for target repos may still live in the target repo tra
 
 ## Recent Retired Work
 
+- 2026-07-09: Retired completed `CI Repair Bot` reliability worker after its output was merged, deployed, and acknowledged.
+  - Project id: `67605d8c-282a-41fb-8dbf-d92e1cdcffdf`
+  - Worker saved name: `ci-repair-hardening`
+  - Thread id: `0e795483-4008-4e05-aa25-1a0bf31b0ef9`
+  - Branch: `ci-repair-bot/reliability-hardening`
+  - Cleanup: marked final output seen, archived the remote thread, forgot the saved mapping, and removed its notification subscription.
+
 - 2026-06-18: Retired stale saved worker mappings/subscriptions after direct raw thread UUID lifecycle-command support was folded into the local dirty cleanup.
   - Project id: `6ad68f3a-4431-4121-ab23-4d431fce6c9f`
   - Worker saved name: `t3-thread-uuid-direct`

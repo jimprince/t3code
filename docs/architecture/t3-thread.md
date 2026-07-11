@@ -36,10 +36,10 @@ CLI's compatibility tests. They are not a second server-domain owner.
 
 Brad's `subagents` repository remains independent:
 
-| Tool | Responsibility | Runtime substrate |
-| --- | --- | --- |
+| Tool        | Responsibility                                                                                 | Runtime substrate          |
+| ----------- | ---------------------------------------------------------------------------------------------- | -------------------------- |
 | `t3-thread` | Persistent T3 worker lifecycle, paired environments, projects, notifications, archived history | T3 Code HTTP/WebSocket/RPC |
-| `subagents` | Short-lived local model subprocess fan-out and result capture | Local CLI processes |
+| `subagents` | Short-lived local model subprocess fan-out and result capture                                  | Local CLI processes        |
 
 Neither tool depends on the other at runtime. `t3-thread` may use `subagents`
 only as a development-time fresh-agent validation harness; that does not make
@@ -47,11 +47,16 @@ only as a development-time fresh-agent validation harness; that does not make
 
 ## Operations Ownership
 
-| Concern | Owner |
-| --- | --- |
-| Worker lifecycle and notification routing | `apps/t3-thread` plus the shared `t3-threads` skill |
-| VM access, service, pairing, and remote project administration | shared `t3code-remote-ops` skill |
-| Build, release, install, auto-upgrade, rollback | this fork's `docs/operations/release.md` and `scripts/headless-auto-upgrade.sh` |
+| Concern                                                        | Owner                                                                           |
+| -------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Worker lifecycle and notification routing                      | `apps/t3-thread` plus the shared `t3-threads` skill                             |
+| VM access, service, pairing, and remote project administration | shared `t3code-remote-ops` skill                                                |
+| Build, release, install, auto-upgrade, rollback                | this fork's `docs/operations/release.md` and `scripts/headless-auto-upgrade.sh` |
 
 Detailed CLI operations remain in
 [`apps/t3-thread/docs/AGENT_OPERATIONS.md`](../../apps/t3-thread/docs/AGENT_OPERATIONS.md).
+
+The canonical local operator checkout is
+`/Users/brad/Programming/t3-plugin/apps/t3-thread`; shared wrappers should enter
+that workspace and run its pnpm `cli` script. The former standalone checkout is
+retained only as a migration/audit source after cutover.

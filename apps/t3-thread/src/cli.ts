@@ -53,9 +53,7 @@ function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
 }
 
-async function withAgent(
-  agentName: string,
-): Promise<{
+async function withAgent(agentName: string): Promise<{
   state: Awaited<ReturnType<typeof loadState>>;
   agent: SavedAgent;
   client: RemoteEnvironmentClient;
@@ -64,22 +62,21 @@ async function withAgent(
 }> {
   const state = await loadState();
   const agentTarget = await resolveAgentTarget(state, agentName, {
-    clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
+    clientFactory: (environmentName) =>
+      new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
   });
   const environment = requireEnvironment(state, agentTarget.environment);
   return {
     state,
-    agent:
-      agentTarget.savedAgent ??
-      {
-        name: agentTarget.threadId,
-        environment: agentTarget.environment,
-        threadId: agentTarget.threadId,
-        projectId: agentTarget.projectId,
-        title: agentTarget.title,
-        createdAt: new Date().toISOString(),
-        lastSeenAssistantMessageId: null,
-      },
+    agent: agentTarget.savedAgent ?? {
+      name: agentTarget.threadId,
+      environment: agentTarget.environment,
+      threadId: agentTarget.threadId,
+      projectId: agentTarget.projectId,
+      title: agentTarget.title,
+      createdAt: new Date().toISOString(),
+      lastSeenAssistantMessageId: null,
+    },
     client: new RemoteEnvironmentClient(environment),
     saved: agentTarget.savedAgent !== null,
     target: agentTarget,
@@ -100,7 +97,11 @@ async function resolveThreadEndpoint(
   preferredEnvironment?: string,
   callerEnvironment?: CallerEnvironmentMetadata | null,
 ): Promise<SubscriptionEndpoint> {
-  const localEndpoint = resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment ?? null);
+  const localEndpoint = resolveCallerEndpointFromLocalContext(
+    state,
+    threadId,
+    callerEnvironment ?? null,
+  );
   if (localEndpoint) {
     return localEndpoint;
   }
@@ -123,7 +124,9 @@ async function resolveThreadEndpoint(
     }
   }
 
-  throw new Error(`Unknown thread '${threadId}'. It is not saved locally and was not found in any paired environment.`);
+  throw new Error(
+    `Unknown thread '${threadId}'. It is not saved locally and was not found in any paired environment.`,
+  );
 }
 
 async function resolveNotifyEndpoint(
@@ -153,15 +156,25 @@ async function resolveNotifyEndpoint(
   return resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment);
 }
 
-async function withCallerFromEnv(): Promise<{ state: Awaited<ReturnType<typeof loadState>>; caller: SubscriptionEndpoint }> {
+async function withCallerFromEnv(): Promise<{
+  state: Awaited<ReturnType<typeof loadState>>;
+  caller: SubscriptionEndpoint;
+}> {
   const state = await loadState();
   const threadId = resolveCallerThreadId();
   if (!threadId) {
-    throw new Error("T3_THREAD_ID is not set. Run this command inside a T3 thread or specify the caller explicitly later.");
+    throw new Error(
+      "T3_THREAD_ID is not set. Run this command inside a T3 thread or specify the caller explicitly later.",
+    );
   }
   return {
     state,
-    caller: await resolveThreadEndpoint(state, threadId, undefined, resolveCallerEnvironmentMetadata()),
+    caller: await resolveThreadEndpoint(
+      state,
+      threadId,
+      undefined,
+      resolveCallerEnvironmentMetadata(),
+    ),
   };
 }
 
@@ -173,7 +186,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function ensureNotificationWatcher(options: { env?: string; deliver?: boolean } = {}): Promise<void> {
+async function ensureNotificationWatcher(
+  options: { env?: string; deliver?: boolean } = {},
+): Promise<void> {
   await ensureWatcherProcess({
     env: options.env,
     intervalSeconds: 5,
@@ -475,7 +490,10 @@ agent
   .option("--base-branch <name>", "base branch for T3's native worktree bootstrap", "main")
   .option("--runtime-mode <mode>", "thread runtime mode")
   .option("--interaction-mode <mode>", "thread interaction mode")
-  .requiredOption("--message <text>", "initial message (wrapped with the canonical T3 preamble unless --no-preamble)")
+  .requiredOption(
+    "--message <text>",
+    "initial message (wrapped with the canonical T3 preamble unless --no-preamble)",
+  )
   .option(
     "--no-preamble",
     "skip the canonical T3 worker preamble; send --message verbatim (rare; use for testing or non-standard worker types)",
@@ -484,7 +502,10 @@ agent
     "--notify [subscriber]",
     "override the default subscriber for completion/attention events; omit the value to force the current T3 caller from T3_THREAD_ID",
   )
-  .option("--no-notify", "disable automatic completion/attention notifications for the created worker")
+  .option(
+    "--no-notify",
+    "disable automatic completion/attention notifications for the created worker",
+  )
   .action(async (options) => {
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
@@ -496,7 +517,8 @@ agent
     }
     const client = new RemoteEnvironmentClient(environment);
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
-    const initialMessage = options.preamble === false ? options.message : wrapWithPreamble(options.message);
+    const initialMessage =
+      options.preamble === false ? options.message : wrapWithPreamble(options.message);
     const created = await client.createAgentThread({
       projectId: options.project,
       title: options.title,
@@ -587,12 +609,10 @@ agent
     });
   });
 
-agent
-  .command("list")
-  .action(async () => {
-    const state = await loadState();
-    printJson(state.agents);
-  });
+agent.command("list").action(async () => {
+  const state = await loadState();
+  printJson(state.agents);
+});
 
 agent
   .command("archive")
@@ -647,9 +667,12 @@ agent
     const state = await loadState();
     const threadId = resolveCallerThreadId();
     const caller = threadId
-      ? await resolveThreadEndpoint(state, threadId, undefined, resolveCallerEnvironmentMetadata()).catch(
-          () => null,
-        )
+      ? await resolveThreadEndpoint(
+          state,
+          threadId,
+          undefined,
+          resolveCallerEnvironmentMetadata(),
+        ).catch(() => null)
       : null;
     printJson({
       threadId,
@@ -684,12 +707,15 @@ agent
 
 agent
   .command("subscribe")
-  .description("Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID")
+  .description(
+    "Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID",
+  )
   .requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch")
   .action(async (options) => {
     const { state, caller } = await withCallerFromEnv();
     const resolvedSource = await resolveAgentTarget(state, options.watch, {
-      clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
+      clientFactory: (environmentName) =>
+        new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
     });
     const source = {
       threadId: resolvedSource.threadId,
@@ -771,14 +797,23 @@ agent
 
 agent
   .command("watch")
-  .description("Poll saved agents for attention-worthy transitions and route notifications to subscribers")
+  .description(
+    "Poll saved agents for attention-worthy transitions and route notifications to subscribers",
+  )
   .option("--env <name>", "optional saved environment filter")
   .option("--interval <seconds>", "poll interval in seconds", "5")
   .option("--idle-exit <seconds>", "exit after this many idle seconds; 0 disables idle exit", "900")
-  .option("--max-lifetime <seconds>", "hard-stop the watcher after this many seconds; 0 disables the limit", "86400")
+  .option(
+    "--max-lifetime <seconds>",
+    "hard-stop the watcher after this many seconds; 0 disables the limit",
+    "86400",
+  )
   .option("--ensure", "spawn a detached singleton watcher if none is running, then exit")
   .option("--once", "run a single scan and exit")
-  .option("--no-deliver", "record notification events but do not send messages to subscriber threads")
+  .option(
+    "--no-deliver",
+    "record notification events but do not send messages to subscriber threads",
+  )
   .action(async (options) => {
     const intervalMs = Math.max(1, Number(options.interval)) * 1000;
     const idleExitMs = Math.max(0, Number(options.idleExit)) * 1000;
@@ -1017,9 +1052,15 @@ agent
   .argument("<name>", "agent name or raw thread UUID")
   .option("--tail <count>", "number of messages to show", "1")
   .option("--assistant-only", "only show assistant messages")
-  .option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading")
+  .option(
+    "--wait <seconds>",
+    "wait up to this many seconds for the latest turn to complete before reading",
+  )
   .option("--interval <seconds>", "poll interval in seconds while waiting", "2")
-  .option("--final-message", "return the terminal assistant message for the latest turn when available")
+  .option(
+    "--final-message",
+    "return the terminal assistant message for the latest turn when available",
+  )
   .option("--mark-seen", "record the latest assistant message as reviewed")
   .action(async (name, options) => {
     const { agent: savedAgent, client, saved, target } = await withAgent(name);
@@ -1033,7 +1074,7 @@ agent
       : await client.getThreadDetail(savedAgent.threadId);
     const tailCount = Math.max(1, Number(options.tail));
     const latestAssistant = options.finalMessage
-      ? getLatestTurnAssistantMessage(detail) ?? getLatestAssistantMessage(detail)
+      ? (getLatestTurnAssistantMessage(detail) ?? getLatestAssistantMessage(detail))
       : getLatestAssistantMessage(detail);
     const messages = options.finalMessage
       ? latestAssistant

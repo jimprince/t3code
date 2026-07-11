@@ -1,6 +1,6 @@
-import { spawn } from "node:child_process";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
-import path from "node:path";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
+import * as NodePath from "node:path";
 
 import { resolveStateFile } from "./state.js";
 
@@ -9,7 +9,7 @@ export type WatcherEnsureResult =
   | { status: "spawned"; pid: number };
 
 function watcherPidFile(): string {
-  return path.join(path.dirname(resolveStateFile()), "watch.pid");
+  return NodePath.join(NodePath.dirname(resolveStateFile()), "watch.pid");
 }
 
 function repoRootFromArgv(): string {
@@ -17,12 +17,12 @@ function repoRootFromArgv(): string {
   if (!entry) {
     throw new Error("Cannot resolve watcher repo root from process.argv[1].");
   }
-  return path.resolve(path.dirname(entry), "..");
+  return NodePath.resolve(NodePath.dirname(entry), "..");
 }
 
 async function readWatcherPid(pidFile: string): Promise<number | null> {
   try {
-    const raw = (await readFile(pidFile, "utf8")).trim();
+    const raw = (await NodeFSP.readFile(pidFile, "utf8")).trim();
     const pid = Number(raw);
     return Number.isInteger(pid) && pid > 0 ? pid : null;
   } catch (error) {
@@ -45,22 +45,22 @@ function isProcessRunning(pid: number): boolean {
 
 export async function claimWatcherLease(): Promise<(() => Promise<void>) | null> {
   const pidFile = watcherPidFile();
-  await mkdir(path.dirname(pidFile), { recursive: true });
+  await NodeFSP.mkdir(NodePath.dirname(pidFile), { recursive: true });
   const existingPid = await readWatcherPid(pidFile);
   if (existingPid && existingPid !== process.pid && isProcessRunning(existingPid)) {
     return null;
   }
 
   if (existingPid && !isProcessRunning(existingPid)) {
-    await unlink(pidFile).catch(() => {});
+    await NodeFSP.unlink(pidFile).catch(() => {});
   }
 
-  await writeFile(pidFile, `${process.pid}\n`, "utf8");
+  await NodeFSP.writeFile(pidFile, `${process.pid}\n`, "utf8");
 
   return async () => {
     const currentPid = await readWatcherPid(pidFile);
     if (currentPid === process.pid) {
-      await unlink(pidFile).catch(() => {});
+      await NodeFSP.unlink(pidFile).catch(() => {});
     }
   };
 }
@@ -73,7 +73,7 @@ export async function ensureWatcherProcess(input: {
   deliver: boolean;
 }): Promise<WatcherEnsureResult> {
   const pidFile = watcherPidFile();
-  await mkdir(path.dirname(pidFile), { recursive: true });
+  await NodeFSP.mkdir(NodePath.dirname(pidFile), { recursive: true });
   const existingPid = await readWatcherPid(pidFile);
   if (existingPid && isProcessRunning(existingPid)) {
     return {
@@ -83,12 +83,12 @@ export async function ensureWatcherProcess(input: {
   }
 
   if (existingPid && !isProcessRunning(existingPid)) {
-    await unlink(pidFile).catch(() => {});
+    await NodeFSP.unlink(pidFile).catch(() => {});
   }
 
   const repoRoot = repoRootFromArgv();
-  const tsxPath = path.join(repoRoot, "node_modules", ".bin", "tsx");
-  const cliEntry = path.join(repoRoot, "src", "cli.ts");
+  const tsxPath = NodePath.join(repoRoot, "node_modules", ".bin", "tsx");
+  const cliEntry = NodePath.join(repoRoot, "src", "cli.ts");
   const args = [
     cliEntry,
     "watch",
@@ -107,7 +107,7 @@ export async function ensureWatcherProcess(input: {
     args.push("--no-deliver");
   }
 
-  const child = spawn(tsxPath, args, {
+  const child = NodeChildProcess.spawn(tsxPath, args, {
     cwd: repoRoot,
     detached: true,
     stdio: "ignore",

@@ -1197,7 +1197,7 @@ var require_command = __commonJS({
   "../../node_modules/.pnpm/commander@14.0.3/node_modules/commander/lib/command.js"(exports2) {
     var EventEmitter = require("node:events").EventEmitter;
     var childProcess = require("node:child_process");
-    var path4 = require("node:path");
+    var path = require("node:path");
     var fs = require("node:fs");
     var process2 = require("node:process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
@@ -2210,9 +2210,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
         let launchWithNode = false;
         const sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
         function findFile(baseDir, baseName) {
-          const localBin = path4.resolve(baseDir, baseName);
+          const localBin = path.resolve(baseDir, baseName);
           if (fs.existsSync(localBin)) return localBin;
-          if (sourceExt.includes(path4.extname(baseName))) return void 0;
+          if (sourceExt.includes(path.extname(baseName))) return void 0;
           const foundExt = sourceExt.find(
             (ext) => fs.existsSync(`${localBin}${ext}`)
           );
@@ -2230,17 +2230,17 @@ Expecting one of '${allowedValues.join("', '")}'`);
           } catch {
             resolvedScriptPath = this._scriptPath;
           }
-          executableDir = path4.resolve(
-            path4.dirname(resolvedScriptPath),
+          executableDir = path.resolve(
+            path.dirname(resolvedScriptPath),
             executableDir
           );
         }
         if (executableDir) {
           let localFile = findFile(executableDir, executableFile);
           if (!localFile && !subcommand._executableFile && this._scriptPath) {
-            const legacyName = path4.basename(
+            const legacyName = path.basename(
               this._scriptPath,
-              path4.extname(this._scriptPath)
+              path.extname(this._scriptPath)
             );
             if (legacyName !== this._name) {
               localFile = findFile(
@@ -2251,7 +2251,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
           }
           executableFile = localFile || executableFile;
         }
-        launchWithNode = sourceExt.includes(path4.extname(executableFile));
+        launchWithNode = sourceExt.includes(path.extname(executableFile));
         let proc;
         if (process2.platform !== "win32") {
           if (launchWithNode) {
@@ -3166,7 +3166,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @return {Command}
        */
       nameFromFilename(filename) {
-        this._name = path4.basename(filename, path4.extname(filename));
+        this._name = path.basename(filename, path.extname(filename));
         return this;
       }
       /**
@@ -3180,9 +3180,9 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} [path]
        * @return {(string|null|Command)}
        */
-      executableDir(path5) {
-        if (path5 === void 0) return this._executableDir;
-        this._executableDir = path5;
+      executableDir(path2) {
+        if (path2 === void 0) return this._executableDir;
+        this._executableDir = path2;
         return this;
       }
       /**
@@ -3487,15 +3487,15 @@ var require_constants = __commonJS({
 var require_node_gyp_build = __commonJS({
   "../../node_modules/.pnpm/node-gyp-build@4.8.4/node_modules/node-gyp-build/node-gyp-build.js"(exports2, module2) {
     var fs = require("fs");
-    var path4 = require("path");
-    var os2 = require("os");
+    var path = require("path");
+    var os = require("os");
     var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
     var vars = process.config && process.config.variables || {};
     var prebuildsOnly = !!process.env.PREBUILDS_ONLY;
     var abi = process.versions.modules;
     var runtime2 = isElectron() ? "electron" : isNwjs() ? "node-webkit" : "node";
-    var arch = process.env.npm_config_arch || os2.arch();
-    var platform = process.env.npm_config_platform || os2.platform();
+    var arch = process.env.npm_config_arch || os.arch();
+    var platform = process.env.npm_config_platform || os.platform();
     var libc = process.env.LIBC || (isAlpine(platform) ? "musl" : "glibc");
     var armv = process.env.ARM_VERSION || (arch === "arm64" ? "8" : vars.arm_version) || "";
     var uv = (process.versions.uv || "").split(".")[0];
@@ -3504,21 +3504,21 @@ var require_node_gyp_build = __commonJS({
       return runtimeRequire(load.resolve(dir));
     }
     load.resolve = load.path = function(dir) {
-      dir = path4.resolve(dir || ".");
+      dir = path.resolve(dir || ".");
       try {
-        var name = runtimeRequire(path4.join(dir, "package.json")).name.toUpperCase().replace(/-/g, "_");
+        var name = runtimeRequire(path.join(dir, "package.json")).name.toUpperCase().replace(/-/g, "_");
         if (process.env[name + "_PREBUILD"]) dir = process.env[name + "_PREBUILD"];
       } catch (err) {
       }
       if (!prebuildsOnly) {
-        var release2 = getFirst(path4.join(dir, "build/Release"), matchBuild);
+        var release2 = getFirst(path.join(dir, "build/Release"), matchBuild);
         if (release2) return release2;
-        var debug = getFirst(path4.join(dir, "build/Debug"), matchBuild);
+        var debug = getFirst(path.join(dir, "build/Debug"), matchBuild);
         if (debug) return debug;
       }
-      var prebuild = resolve2(dir);
+      var prebuild = resolve3(dir);
       if (prebuild) return prebuild;
-      var nearby = resolve2(path4.dirname(process.execPath));
+      var nearby = resolve3(path.dirname(process.execPath));
       if (nearby) return nearby;
       var target2 = [
         "platform=" + platform,
@@ -3534,15 +3534,15 @@ var require_node_gyp_build = __commonJS({
         // eslint-disable-line
       ].filter(Boolean).join(" ");
       throw new Error("No native build was found for " + target2 + "\n    loaded from: " + dir + "\n");
-      function resolve2(dir2) {
-        var tuples = readdirSync(path4.join(dir2, "prebuilds")).map(parseTuple);
+      function resolve3(dir2) {
+        var tuples = readdirSync(path.join(dir2, "prebuilds")).map(parseTuple);
         var tuple3 = tuples.filter(matchTuple(platform, arch)).sort(compareTuples)[0];
         if (!tuple3) return;
-        var prebuilds = path4.join(dir2, "prebuilds", tuple3.name);
+        var prebuilds = path.join(dir2, "prebuilds", tuple3.name);
         var parsed = readdirSync(prebuilds).map(parseTags);
         var candidates = parsed.filter(matchTags(runtime2, abi));
         var winner = candidates.sort(compareTags(runtime2))[0];
-        if (winner) return path4.join(prebuilds, winner.file);
+        if (winner) return path.join(prebuilds, winner.file);
       }
     };
     function readdirSync(dir) {
@@ -3554,7 +3554,7 @@ var require_node_gyp_build = __commonJS({
     }
     function getFirst(dir, filter12) {
       var files = readdirSync(dir).filter(filter12);
-      return files[0] && path4.join(dir, files[0]);
+      return files[0] && path.join(dir, files[0]);
     }
     function matchBuild(name) {
       return /\.node$/.test(name);
@@ -7431,22 +7431,22 @@ var require_filesystem = __commonJS({
     var LDD_PATH = "/usr/bin/ldd";
     var SELF_PATH = "/proc/self/exe";
     var MAX_LENGTH = 2048;
-    var readFileSync = (path4) => {
-      const fd = fs.openSync(path4, "r");
+    var readFileSync = (path) => {
+      const fd = fs.openSync(path, "r");
       const buffer3 = Buffer.alloc(MAX_LENGTH);
       const bytesRead = fs.readSync(fd, buffer3, 0, MAX_LENGTH, 0);
       fs.close(fd, () => {
       });
       return buffer3.subarray(0, bytesRead);
     };
-    var readFile3 = (path4) => new Promise((resolve2, reject) => {
-      fs.open(path4, "r", (err, fd) => {
+    var readFile3 = (path) => new Promise((resolve3, reject) => {
+      fs.open(path, "r", (err, fd) => {
         if (err) {
           reject(err);
         } else {
           const buffer3 = Buffer.alloc(MAX_LENGTH);
           fs.read(fd, buffer3, 0, MAX_LENGTH, 0, (_, bytesRead) => {
-            resolve2(buffer3.subarray(0, bytesRead));
+            resolve3(buffer3.subarray(0, bytesRead));
             fs.close(fd, () => {
             });
           });
@@ -7514,10 +7514,10 @@ var require_detect_libc = __commonJS({
     var commandOut = "";
     var safeCommand = () => {
       if (!commandOut) {
-        return new Promise((resolve2) => {
+        return new Promise((resolve3) => {
           childProcess.exec(command, (err, out) => {
             commandOut = err ? " " : out;
-            resolve2(commandOut);
+            resolve3(commandOut);
           });
         });
       }
@@ -7559,11 +7559,11 @@ var require_detect_libc = __commonJS({
       }
       return null;
     };
-    var familyFromInterpreterPath = (path4) => {
-      if (path4) {
-        if (path4.includes("/ld-musl-")) {
+    var familyFromInterpreterPath = (path) => {
+      if (path) {
+        if (path.includes("/ld-musl-")) {
           return MUSL;
-        } else if (path4.includes("/ld-linux-")) {
+        } else if (path.includes("/ld-linux-")) {
           return GLIBC;
         }
       }
@@ -7610,8 +7610,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = await readFile3(SELF_PATH);
-        const path4 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
+        const path = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7623,8 +7623,8 @@ var require_detect_libc = __commonJS({
       cachedFamilyInterpreter = null;
       try {
         const selfContent = readFileSync(SELF_PATH);
-        const path4 = interpreterPath(selfContent);
-        cachedFamilyInterpreter = familyFromInterpreterPath(path4);
+        const path = interpreterPath(selfContent);
+        cachedFamilyInterpreter = familyFromInterpreterPath(path);
       } catch (e) {
       }
       return cachedFamilyInterpreter;
@@ -7758,9 +7758,9 @@ var require_detect_libc = __commonJS({
 var require_node_gyp_build3 = __commonJS({
   "../../node_modules/.pnpm/node-gyp-build-optional-packages@5.2.2/node_modules/node-gyp-build-optional-packages/node-gyp-build.js"(exports2, module2) {
     var fs = require("fs");
-    var path4 = require("path");
+    var path = require("path");
     var url = require("url");
-    var os2 = require("os");
+    var os = require("os");
     var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : require;
     var vars = process.config && process.config.variables || {};
     var prebuildsOnly = !!process.env.PREBUILDS_ONLY;
@@ -7770,8 +7770,8 @@ var require_node_gyp_build3 = __commonJS({
       abi = "unsupported";
     }
     var runtime2 = isElectron() ? "electron" : isNwjs() ? "node-webkit" : "node";
-    var arch = process.env.npm_config_arch || os2.arch();
-    var platform = process.env.npm_config_platform || os2.platform();
+    var arch = process.env.npm_config_arch || os.arch();
+    var platform = process.env.npm_config_platform || os.platform();
     var libc = process.env.LIBC || (isMusl(platform) ? "musl" : "glibc");
     var armv = process.env.ARM_VERSION || (arch === "arm64" ? "8" : vars.arm_version) || "";
     var uv = (versions.uv || "").split(".")[0];
@@ -7780,30 +7780,30 @@ var require_node_gyp_build3 = __commonJS({
       return runtimeRequire(load.resolve(dir));
     }
     load.resolve = load.path = function(dir) {
-      dir = path4.resolve(dir || ".");
+      dir = path.resolve(dir || ".");
       var packageName = "";
       var packageNameError;
       try {
-        packageName = runtimeRequire(path4.join(dir, "package.json")).name;
+        packageName = runtimeRequire(path.join(dir, "package.json")).name;
         var varName = packageName.toUpperCase().replace(/-/g, "_");
         if (process.env[varName + "_PREBUILD"]) dir = process.env[varName + "_PREBUILD"];
       } catch (err) {
         packageNameError = err;
       }
       if (!prebuildsOnly) {
-        var release2 = getFirst(path4.join(dir, "build/Release"), matchBuild);
+        var release2 = getFirst(path.join(dir, "build/Release"), matchBuild);
         if (release2) return release2;
-        var debug = getFirst(path4.join(dir, "build/Debug"), matchBuild);
+        var debug = getFirst(path.join(dir, "build/Debug"), matchBuild);
         if (debug) return debug;
       }
-      var prebuild = resolve2(dir);
+      var prebuild = resolve3(dir);
       if (prebuild) return prebuild;
-      var nearby = resolve2(path4.dirname(process.execPath));
+      var nearby = resolve3(path.dirname(process.execPath));
       if (nearby) return nearby;
       var platformPackage = (packageName[0] == "@" ? "" : "@" + packageName + "/") + packageName + "-" + platform + "-" + arch;
       var packageResolutionError;
       try {
-        var prebuildPackage = path4.dirname(require("module").createRequire(url.pathToFileURL(path4.join(dir, "package.json"))).resolve(platformPackage));
+        var prebuildPackage = path.dirname(require("module").createRequire(url.pathToFileURL(path.join(dir, "package.json"))).resolve(platformPackage));
         return resolveFile(prebuildPackage);
       } catch (error) {
         packageResolutionError = error;
@@ -7829,17 +7829,17 @@ var require_node_gyp_build3 = __commonJS({
         errMessage += "Error resolving package: " + packageResolutionError.message + "\n";
       }
       throw new Error(errMessage);
-      function resolve2(dir2) {
-        var tuples = readdirSync(path4.join(dir2, "prebuilds")).map(parseTuple);
+      function resolve3(dir2) {
+        var tuples = readdirSync(path.join(dir2, "prebuilds")).map(parseTuple);
         var tuple3 = tuples.filter(matchTuple(platform, arch)).sort(compareTuples)[0];
         if (!tuple3) return;
-        return resolveFile(path4.join(dir2, "prebuilds", tuple3.name));
+        return resolveFile(path.join(dir2, "prebuilds", tuple3.name));
       }
       function resolveFile(prebuilds) {
         var parsed = readdirSync(prebuilds).map(parseTags);
         var candidates = parsed.filter(matchTags(runtime2, abi));
         var winner = candidates.sort(compareTags(runtime2))[0];
-        if (winner) return path4.join(prebuilds, winner.file);
+        if (winner) return path.join(prebuilds, winner.file);
       }
     };
     function readdirSync(dir) {
@@ -7851,7 +7851,7 @@ var require_node_gyp_build3 = __commonJS({
     }
     function getFirst(dir, filter12) {
       var files = readdirSync(dir).filter(filter12);
-      return files[0] && path4.join(dir, files[0]);
+      return files[0] && path.join(dir, files[0]);
     }
     function matchBuild(name) {
       return /\.node$/.test(name);
@@ -7988,12 +7988,12 @@ var {
 } = import_index.default;
 
 // src/state.ts
-var import_promises = require("node:fs/promises");
-var import_node_os = __toESM(require("node:os"), 1);
-var import_node_path = __toESM(require("node:path"), 1);
-var import_node_crypto = require("node:crypto");
-var DEFAULT_STATE_DIR = import_node_path.default.join(import_node_os.default.homedir(), ".config", "t3-remote-agents");
-var DEFAULT_STATE_FILE = import_node_path.default.join(DEFAULT_STATE_DIR, "state.json");
+var NodeFSP = __toESM(require("node:fs/promises"), 1);
+var NodeOS = __toESM(require("node:os"), 1);
+var NodePath = __toESM(require("node:path"), 1);
+var NodeCrypto = __toESM(require("node:crypto"), 1);
+var DEFAULT_STATE_DIR = NodePath.join(NodeOS.homedir(), ".config", "t3-remote-agents");
+var DEFAULT_STATE_FILE = NodePath.join(DEFAULT_STATE_DIR, "state.json");
 var STATE_LOCK_TIMEOUT_MS = 1e4;
 var STATE_LOCK_RETRY_MS = 50;
 var EMPTY_STATE = {
@@ -8007,7 +8007,7 @@ function resolveStateFile() {
   return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
 }
 async function ensureStateDir(stateFile) {
-  await (0, import_promises.mkdir)(import_node_path.default.dirname(stateFile), { recursive: true });
+  await NodeFSP.mkdir(NodePath.dirname(stateFile), { recursive: true });
 }
 function normalizeState(parsed) {
   return {
@@ -8020,7 +8020,7 @@ function normalizeState(parsed) {
 }
 async function loadStateFromFile(stateFile) {
   try {
-    const raw2 = await (0, import_promises.readFile)(stateFile, "utf8");
+    const raw2 = await NodeFSP.readFile(stateFile, "utf8");
     const parsed = JSON.parse(raw2);
     return normalizeState(parsed);
   } catch (error) {
@@ -8036,13 +8036,16 @@ async function loadState() {
 }
 async function saveStateToFile(stateFile, state) {
   await ensureStateDir(stateFile);
-  const tempFile = import_node_path.default.join(import_node_path.default.dirname(stateFile), `.${import_node_path.default.basename(stateFile)}.${(0, import_node_crypto.randomUUID)()}.tmp`);
-  await (0, import_promises.writeFile)(tempFile, `${JSON.stringify(state, null, 2)}
+  const tempFile = NodePath.join(
+    NodePath.dirname(stateFile),
+    `.${NodePath.basename(stateFile)}.${NodeCrypto.randomUUID()}.tmp`
+  );
+  await NodeFSP.writeFile(tempFile, `${JSON.stringify(state, null, 2)}
 `, "utf8");
-  await (0, import_promises.rename)(tempFile, stateFile);
+  await NodeFSP.rename(tempFile, stateFile);
 }
 async function sleep(ms) {
-  await new Promise((resolve2) => setTimeout(resolve2, ms));
+  await new Promise((resolve3) => setTimeout(resolve3, ms));
 }
 async function withStateLock(stateFile, task) {
   await ensureStateDir(stateFile);
@@ -8050,14 +8053,14 @@ async function withStateLock(stateFile, task) {
   const startedAt = Date.now();
   for (; ; ) {
     try {
-      const handle = await (0, import_promises.open)(lockFile, "wx");
+      const handle = await NodeFSP.open(lockFile, "wx");
       try {
         await handle.writeFile(`${process.pid}
 `, "utf8");
         return await task();
       } finally {
         await handle.close();
-        await (0, import_promises.unlink)(lockFile).catch(() => {
+        await NodeFSP.unlink(lockFile).catch(() => {
         });
       }
     } catch (error) {
@@ -8066,7 +8069,7 @@ async function withStateLock(stateFile, task) {
         throw error;
       }
       if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
-        throw new Error(`Timed out waiting for state lock '${lockFile}'.`);
+        throw new Error(`Timed out waiting for state lock '${lockFile}'.`, { cause: error });
       }
       await sleep(STATE_LOCK_RETRY_MS);
     }
@@ -8220,7 +8223,9 @@ function isRawThreadUuid(value3) {
 }
 function assertSavedAgentCapability(target2, capability) {
   if (!target2.savedAgent) {
-    throw new Error(`${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`);
+    throw new Error(
+      `${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`
+    );
   }
 }
 function resolveSavedAgentTarget(state, input) {
@@ -8294,10 +8299,10 @@ function buildFollowUpMessage(kind, message) {
 }
 
 // src/client.ts
-var import_node_crypto2 = require("node:crypto");
+var NodeCrypto2 = __toESM(require("node:crypto"), 1);
 
 // src/projects.ts
-var import_node_path2 = __toESM(require("node:path"), 1);
+var NodePath2 = __toESM(require("node:path"), 1);
 
 // ../../node_modules/.pnpm/effect@4.0.0-beta.78_patch_hash=c502bc684210b707dfceb87d8fe6ad6843395af6e19cfc02cd65854898bde2c5/node_modules/effect/dist/Pipeable.js
 var pipeArguments = (self, args2) => {
@@ -9045,8 +9050,8 @@ var CIRCULAR = "[Circular]";
 function formatPropertyKey(name) {
   return typeof name === "string" ? JSON.stringify(name) : String(name);
 }
-function formatPath(path4) {
-  return path4.map((key) => `[${formatPropertyKey(key)}]`).join("");
+function formatPath(path) {
+  return path.map((key) => `[${formatPropertyKey(key)}]`).join("");
 }
 function formatDate(date2) {
   try {
@@ -12920,8 +12925,8 @@ var runPromiseExitWith = (context4) => {
   const runFork3 = runForkWith(context4);
   return (effect2, options) => {
     const fiber3 = runFork3(effect2, options);
-    return new Promise((resolve2) => {
-      fiber3.addObserver((exit3) => resolve2(exit3));
+    return new Promise((resolve3) => {
+      fiber3.addObserver((exit3) => resolve3(exit3));
     });
   };
 };
@@ -15823,9 +15828,9 @@ var Pointer = class extends Base {
    * The issue that occurred.
    */
   issue;
-  constructor(path4, issue) {
+  constructor(path, issue) {
     super();
-    this.path = path4;
+    this.path = path;
     this.issue = issue;
   }
 };
@@ -16049,50 +16054,50 @@ function makeFormatterStandardSchemaV1(options) {
 function getExpectedMessage(expected, actual) {
   return `Expected ${expected}, got ${actual}`;
 }
-function toDefaultIssues(issue, path4, leafHook, checkHook) {
+function toDefaultIssues(issue, path, leafHook, checkHook) {
   switch (issue._tag) {
     case "Filter": {
       const message = checkHook(issue);
       if (message !== void 0) {
         return [{
-          path: path4,
+          path,
           message
         }];
       }
       switch (issue.issue._tag) {
         case "InvalidValue":
           return [{
-            path: path4,
+            path,
             message: getExpectedMessage(formatCheck(issue.filter), format(issue.actual))
           }];
         default:
-          return toDefaultIssues(issue.issue, path4, leafHook, checkHook);
+          return toDefaultIssues(issue.issue, path, leafHook, checkHook);
       }
     }
     case "Encoding":
-      return toDefaultIssues(issue.issue, path4, leafHook, checkHook);
+      return toDefaultIssues(issue.issue, path, leafHook, checkHook);
     case "Pointer":
-      return toDefaultIssues(issue.issue, [...path4, ...issue.path], leafHook, checkHook);
+      return toDefaultIssues(issue.issue, [...path, ...issue.path], leafHook, checkHook);
     case "Composite":
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path4, leafHook, checkHook));
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path, leafHook, checkHook));
     case "AnyOf": {
       const message = findMessage(issue);
       if (issue.issues.length === 0) {
         if (message !== void 0) return [{
-          path: path4,
+          path,
           message
         }];
         const expected = getExpectedMessage(getExpected(issue.ast), format(issue.actual));
         return [{
-          path: path4,
+          path,
           message: expected
         }];
       }
-      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path4, leafHook, checkHook));
+      return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path, leafHook, checkHook));
     }
     default:
       return [{
-        path: path4,
+        path,
         message: leafHook(issue)
       }];
   }
@@ -16114,9 +16119,9 @@ var defaultFormatter = /* @__PURE__ */ makeFormatterDefault();
 function formatDefaultIssue(issue) {
   let out = issue.message;
   if (issue.path && issue.path.length > 0) {
-    const path4 = formatPath(issue.path);
+    const path = formatPath(issue.path);
     out += `
-  at ${path4}`;
+  at ${path}`;
   }
   return out;
 }
@@ -18613,7 +18618,7 @@ var size2 = (self) => self.length;
 // ../../node_modules/.pnpm/effect@4.0.0-beta.78_patch_hash=c502bc684210b707dfceb87d8fe6ad6843395af6e19cfc02cd65854898bde2c5/node_modules/effect/dist/Fiber.js
 var TypeId20 = `~effect/Fiber/${version}`;
 var await_ = fiberAwait;
-var join2 = fiberJoin;
+var join3 = fiberJoin;
 var joinAll = fiberJoinAll;
 var interrupt4 = fiberInterrupt;
 var interruptAll = fiberInterruptAll;
@@ -20421,7 +20426,7 @@ var mapEffectConcurrent = (self, f, options) => fromTransformBracket(fnUntraced2
       const fiber3 = runFork3(f(value3, i++));
       trackFiber(fiber3);
       fiber3.addObserver(onExit5);
-      return offer(effects, join2(fiber3));
+      return offer(effects, join3(fiber3));
     }), forever4({
       disableYield: true
     }), catchCause3((cause) => offer(effects, failCause2(cause)).pipe(andThen3(failCause5(effects, cause)))), forkIn2(forkedScope));
@@ -22143,10 +22148,10 @@ function makeReducer3(combiner2) {
 }
 
 // ../../node_modules/.pnpm/effect@4.0.0-beta.78_patch_hash=c502bc684210b707dfceb87d8fe6ad6843395af6e19cfc02cd65854898bde2c5/node_modules/effect/dist/internal/errors.js
-function errorWithPath(message, path4) {
-  if (path4.length > 0) {
+function errorWithPath(message, path) {
+  if (path.length > 0) {
     message += `
-  at ${formatPath(path4)}`;
+  at ${formatPath(path)}`;
   }
   return new Error(message);
 }
@@ -22258,10 +22263,10 @@ function getFilters(checks) {
 var memoized = /* @__PURE__ */ memoize((ast) => {
   return recur(ast, []);
 });
-function recur(ast, path4) {
+function recur(ast, path) {
   const annotation = resolve(ast)?.toArbitrary;
   if (annotation) {
-    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path4)) : [];
+    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path)) : [];
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
     return (fc, ctx) => applyChecks(ast, filters, annotation(typeParameters.map((tp) => tp(fc, resetContext(ctx))))(fc, f(ctx)));
@@ -22269,16 +22274,16 @@ function recur(ast, path4) {
   if (ast.checks) {
     const filters = getFilters(ast.checks);
     const f = constraintContext(filters);
-    const lawc = recur(replaceChecks(ast, void 0), path4);
+    const lawc = recur(replaceChecks(ast, void 0), path);
     return (fc, ctx) => applyChecks(ast, filters, lawc(fc, f(ctx)));
   }
-  return base(ast, path4);
+  return base(ast, path);
 }
-function base(ast, path4) {
+function base(ast, path) {
   switch (ast._tag) {
     case "Never":
     case "Declaration":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path4);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path);
     case "Null":
       return (fc) => fc.constant(null);
     case "Void":
@@ -22317,14 +22322,14 @@ function base(ast, path4) {
     case "ObjectKeyword":
       return (fc) => fc.oneof(fc.object(), fc.array(fc.anything()));
     case "Enum":
-      return recur(enumsToLiterals(ast), path4);
+      return recur(enumsToLiterals(ast), path);
     case "TemplateLiteral":
       return (fc) => fc.stringMatching(getTemplateLiteralRegExp(ast));
     case "Arrays":
       return (fc, ctx) => {
         const reset = resetContext(ctx);
         const elements = ast.elements.map((e, i) => {
-          const out2 = recur(e, [...path4, i])(fc, reset);
+          const out2 = recur(e, [...path, i])(fc, reset);
           if (!isOptional(e)) {
             return out2.map(some2);
           }
@@ -22333,7 +22338,7 @@ function base(ast, path4) {
         let out = fc.tuple(...elements).map(getSomes);
         if (isReadonlyArrayNonEmpty(ast.rest)) {
           const len = ast.elements.length;
-          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path4, len + i])(fc, reset));
+          const [head2, ...tail] = ast.rest.map((r, i) => recur(r, [...path, len + i])(fc, reset));
           const rest = array2(fc, ast.elements.length === 0 ? ctx : reset, head2);
           out = out.chain((as4) => {
             if (as4.length < len) {
@@ -22363,13 +22368,13 @@ function base(ast, path4) {
           if (!isOptional(ps.type)) {
             requiredKeys.push(name);
           }
-          pss[name] = recur(ps.type, [...path4, name])(fc, reset);
+          pss[name] = recur(ps.type, [...path, name])(fc, reset);
         }
         let out = fc.record(pss, {
           requiredKeys
         });
         for (const is3 of ast.indexSignatures) {
-          const entry = fc.tuple(recur(is3.parameter, path4)(fc, reset), recur(is3.type, path4)(fc, reset));
+          const entry = fc.tuple(recur(is3.parameter, path)(fc, reset), recur(is3.type, path)(fc, reset));
           const entries3 = array2(fc, ast.propertySignatures.length === 0 ? ctx : reset, entry);
           out = out.chain((o) => {
             return entries3.map((entries4) => {
@@ -22383,11 +22388,11 @@ function base(ast, path4) {
         return out;
       };
     case "Union":
-      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path4)(fc, ctx)));
+      return (fc, ctx) => fc.oneof(...ast.types.map((ast2) => recur(ast2, path)(fc, ctx)));
     case "Suspend": {
       const memo2 = arbitraryMemoMap.get(ast);
       if (memo2) return memo2;
-      const get11 = memoizeThunk(() => recur(ast.thunk(), path4));
+      const get11 = memoizeThunk(() => recur(ast.thunk(), path));
       const out = (fc, ctx) => fc.constant(null).chain(() => get11()(fc, {
         ...ctx,
         isSuspend: true
@@ -22630,14 +22635,14 @@ var recur2 = /* @__PURE__ */ memoize((ast) => {
 var toEquivalence = /* @__PURE__ */ memoize((ast) => {
   return recur3(ast, []);
 });
-function recur3(ast, path4) {
+function recur3(ast, path) {
   const annotation = resolve(ast)?.["toEquivalence"];
   if (annotation) {
-    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path4)) : []);
+    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path)) : []);
   }
   switch (ast._tag) {
     case "Never":
-      throw errorWithPath(`Unsupported AST ${ast._tag}`, path4);
+      throw errorWithPath(`Unsupported AST ${ast._tag}`, path);
     case "Declaration":
     case "Null":
     case "Undefined":
@@ -22656,9 +22661,9 @@ function recur3(ast, path4) {
     case "TemplateLiteral":
       return equals;
     case "Arrays": {
-      const elements = ast.elements.map((e, i) => recur3(e, [...path4, i]));
+      const elements = ast.elements.map((e, i) => recur3(e, [...path, i]));
       const len = ast.elements.length;
-      const rest = ast.rest.map((r, i) => recur3(r, [...path4, len + i]));
+      const rest = ast.rest.map((r, i) => recur3(r, [...path, len + i]));
       return make2((a, b) => {
         if (!Array.isArray(a) || !Array.isArray(b)) {
           return false;
@@ -22694,8 +22699,8 @@ function recur3(ast, path4) {
       if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
         return equals;
       }
-      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path4, ps.name]));
-      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path4));
+      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path, ps.name]));
+      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path));
       return make2((a, b) => {
         if (!isObject(a) || !isObject(b)) {
           return false;
@@ -22736,13 +22741,13 @@ function recur3(ast, path4) {
         for (let i = 0; i < candidates.length; i++) {
           const is3 = types[i];
           if (is3(a) && is3(b)) {
-            return recur3(candidates[i], path4)(a, b);
+            return recur3(candidates[i], path)(a, b);
           }
         }
         return false;
       });
     case "Suspend": {
-      const get11 = memoizeThunk(() => recur3(ast.thunk(), path4));
+      const get11 = memoizeThunk(() => recur3(ast.thunk(), path));
       return make2((a, b) => get11()(a, b));
     }
   }
@@ -23671,10 +23676,10 @@ function get6(oldValue, newValue) {
     const len2 = newValue.length;
     const shared = Math.min(len1, len2);
     for (let i = 0; i < shared; i++) {
-      const path4 = `/${i}`;
+      const path = `/${i}`;
       const patch = get6(oldValue[i], newValue[i]);
       for (const op of patch) {
-        prefixPathInPlace(op, path4);
+        prefixPathInPlace(op, path);
         patches.push(op);
       }
     }
@@ -23699,25 +23704,25 @@ function get6(oldValue, newValue) {
     const allKeys = Array.from(/* @__PURE__ */ new Set([...keys1, ...keys22])).sort();
     for (const key of allKeys) {
       const esc = escapeToken(key);
-      const path4 = `/${esc}`;
+      const path = `/${esc}`;
       const hasKey1 = Object.hasOwn(oldValue, key);
       const hasKey2 = Object.hasOwn(newValue, key);
       if (hasKey1 && hasKey2) {
         const patch = get6(oldValue[key], newValue[key]);
         for (const op of patch) {
-          prefixPathInPlace(op, path4);
+          prefixPathInPlace(op, path);
           patches.push(op);
         }
       } else if (!hasKey1 && hasKey2) {
         patches.push({
           op: "add",
-          path: path4,
+          path,
           value: newValue[key]
         });
       } else if (hasKey1 && !hasKey2) {
         patches.push({
           op: "remove",
-          path: path4
+          path
         });
       }
     }
@@ -24063,8 +24068,8 @@ var OptionalNode = class {
 var PathNode = class {
   _tag = "PathNode";
   path;
-  constructor(path4) {
-    this.path = path4;
+  constructor(path) {
+    this.path = path;
   }
 };
 var CheckNode = class {
@@ -24310,24 +24315,24 @@ var recur4 = /* @__PURE__ */ memoize((node) => {
       return {
         _tag: "LensNode",
         get: (s) => {
-          const path4 = node.path;
+          const path = node.path;
           let out = s;
-          for (let i = 0, n = path4.length; i < n; i++) {
-            out = out[path4[i]];
+          for (let i = 0, n = path.length; i < n; i++) {
+            out = out[path[i]];
           }
           return out;
         },
         set: (a, s) => {
-          const path4 = node.path;
+          const path = node.path;
           const out = cloneShallow(s);
           let current = out;
           let i = 0;
-          for (; i < path4.length - 1; i++) {
-            const key = path4[i];
+          for (; i < path.length - 1; i++) {
+            const key = path[i];
             current[key] = cloneShallow(current[key]);
             current = current[key];
           }
-          const finalKey = path4[i];
+          const finalKey = path[i];
           current[finalKey] = a;
           return out;
         }
@@ -26150,9 +26155,9 @@ function interruptAfter(timeMs, setTimeoutSafe, clearTimeoutSafe) {
   let timeoutHandle = null;
   return {
     clear: () => clearTimeoutSafe(timeoutHandle),
-    promise: new Promise((resolve2) => {
+    promise: new Promise((resolve3) => {
       timeoutHandle = setTimeoutSafe(() => {
-        resolve2(new PreconditionFailure(true));
+        resolve3(new PreconditionFailure(true));
       }, timeMs);
     })
   };
@@ -26201,9 +26206,9 @@ var timeoutAfter = (timeMs, setTimeoutSafe, clearTimeoutSafe) => {
   let timeoutHandle = null;
   return {
     clear: () => clearTimeoutSafe(timeoutHandle),
-    promise: new Promise((resolve2) => {
+    promise: new Promise((resolve3) => {
       timeoutHandle = setTimeoutSafe(() => {
-        resolve2({ error: new SError(`Property timeout: exceeded limit of ${timeMs} milliseconds`) });
+        resolve3({ error: new SError(`Property timeout: exceeded limit of ${timeMs} milliseconds`) });
       }, timeMs);
     })
   };
@@ -26435,10 +26440,10 @@ function possiblyAsyncStringify(value3) {
       if (handleId !== null) clearTimeout(handleId);
     };
     return {
-      delay: new Promise((resolve2) => {
+      delay: new Promise((resolve3) => {
         handleId = setTimeout(() => {
           handleId = null;
-          resolve2(stillPendingMarker);
+          resolve3(stillPendingMarker);
         }, 0);
       }),
       cancel
@@ -26608,10 +26613,10 @@ var RunExecution = class RunExecution2 {
     }
     return failures;
   }
-  static mergePaths(offsetPath, path4) {
-    if (offsetPath.length === 0) return path4;
+  static mergePaths(offsetPath, path) {
+    if (offsetPath.length === 0) return path;
     const offsetItems = offsetPath.split(":");
-    const remainingItems = path4.split(":");
+    const remainingItems = path.split(":");
     const middle = +offsetItems[offsetItems.length - 1] + +remainingItems[0];
     return [
       ...offsetItems.slice(0, offsetItems.length - 1),
@@ -26798,15 +26803,15 @@ function* lazyToss(generator, seed, random2, examples) {
 function produce(producer) {
   return producer();
 }
-function pathWalk(path4, initialProducers, shrink) {
+function pathWalk(path, initialProducers, shrink) {
   const producers = initialProducers;
-  const segments = path4.split(":").map((text2) => +text2);
+  const segments = path.split(":").map((text2) => +text2);
   if (segments.length === 0) return producers.map(produce);
-  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path4}`);
+  if (!segments.every((v) => !Number.isNaN(v))) throw new Error(`Unable to replay, got invalid path=${path}`);
   let values2 = producers.drop(segments[0]).map(produce);
   for (const s of segments.slice(1)) {
     const valueToShrink = values2.getNthOrLast(0);
-    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path4}`);
+    if (valueToShrink === null) throw new Error(`Unable to replay, got wrong path=${path}`);
     values2 = shrink(valueToShrink).drop(s);
   }
   return values2;
@@ -32074,8 +32079,8 @@ function webQueryParameters(constraints = {}) {
   return buildUriQueryOrFragmentArbitrary(constraints.size);
 }
 function partsToUrlMapper(data) {
-  const [scheme, authority, path4] = data;
-  return `${scheme}://${authority}${path4}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
+  const [scheme, authority, path] = data;
+  return `${scheme}://${authority}${path}${data[3] === null ? "" : `?${data[3]}`}${data[4] === null ? "" : `#${data[4]}`}`;
 }
 var UrlSplitRegex = /^([[A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)([^?#]*)(\?[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?(#[A-Za-z0-9\-._~!$&'()*+,;=:@/?%]*)?$/;
 function partsToUrlUnmapper(value3) {
@@ -32084,13 +32089,13 @@ function partsToUrlUnmapper(value3) {
   if (m === null) throw new Error("Incompatible value received");
   const scheme = m[1];
   const authority = m[2];
-  const path4 = m[3];
+  const path = m[3];
   const query = m[4];
   const fragments = m[5];
   return [
     scheme,
     authority,
-    path4,
+    path,
     query !== void 0 ? query.substring(1) : null,
     fragments !== void 0 ? fragments.substring(1) : null
   ];
@@ -32445,12 +32450,12 @@ var SchedulerImplem = class SchedulerImplem2 {
   scheduleInternal(schedulingType, label, task, metadata, customAct, thenTaskToBeAwaited) {
     const taskId = ++this.lastTaskId;
     let trigger = void 0;
-    const scheduledPromise = new Promise((resolve2, reject) => {
+    const scheduledPromise = new Promise((resolve3, reject) => {
       trigger = () => {
         const promise3 = Promise.resolve(thenTaskToBeAwaited !== void 0 ? task.then(() => thenTaskToBeAwaited()) : task);
         promise3.then((data) => {
           this.log(schedulingType, taskId, label, metadata, "resolved", data);
-          resolve2(data);
+          resolve3(data);
         }, (err) => {
           this.log(schedulingType, taskId, label, metadata, "rejected", err);
           reject(err);
@@ -32484,8 +32489,8 @@ var SchedulerImplem = class SchedulerImplem2 {
     const dummyResolvedPromise = { then: (f) => f() };
     let resolveSequenceTask = () => {
     };
-    const sequenceTask = new Promise((resolve2) => {
-      resolveSequenceTask = () => resolve2({
+    const sequenceTask = new Promise((resolve3) => {
+      resolveSequenceTask = () => resolve3({
         done: status.done,
         faulty: status.faulty
       });
@@ -32583,10 +32588,10 @@ var SchedulerImplem = class SchedulerImplem2 {
       if (handleNotifiedIndex !== -1) this.scheduledWatchers.splice(handleNotifiedIndex, 1);
       if (handleNotifiedIndex === 0 && this.scheduledWatchers.length !== 0) this.scheduledWatchers[0]();
     };
-    const finalTask = new Promise((resolve2, reject) => {
+    const finalTask = new Promise((resolve3, reject) => {
       resolveFinal = (value3) => {
         clearAndReplaceWatcher();
-        resolve2(value3);
+        resolve3(value3);
       };
       rejectFinal = (error) => {
         clearAndReplaceWatcher();
@@ -34112,9 +34117,9 @@ function toStandardSchemaV1(self, options) {
     if (exit3) {
       return makeStandardResult(exit3);
     }
-    return new Promise((resolve2) => {
+    return new Promise((resolve3) => {
       fiber3.addObserver((exit4) => {
-        resolve2(makeStandardResult(exit4));
+        resolve3(makeStandardResult(exit4));
       });
     });
   };
@@ -38233,7 +38238,7 @@ var partitionQueue = /* @__PURE__ */ dual((args2) => isStream(args2[0]), /* @__P
           yield* offerAll(fails, leftover);
         }
       }
-      if (passFiber) yield* join2(passFiber);
+      if (passFiber) yield* join3(passFiber);
     }
   }).pipe(onError2((cause) => {
     failCauseUnsafe(passes, cause);
@@ -39185,8 +39190,8 @@ var toReadableStreamWith = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (
       });
     },
     pull() {
-      return new Promise((resolve2) => {
-        currentResolve = resolve2;
+      return new Promise((resolve3) => {
+        currentResolve = resolve3;
         latch.openUnsafe();
       });
     },
@@ -39319,7 +39324,7 @@ var runtime = (self) => () => map7(context2(), (services) => {
     return fiber3;
   };
 });
-var join3 = (self) => _await(self.deferred);
+var join4 = (self) => _await(self.deferred);
 
 // ../../node_modules/.pnpm/effect@4.0.0-beta.78_patch_hash=c502bc684210b707dfceb87d8fe6ad6843395af6e19cfc02cd65854898bde2c5/node_modules/effect/dist/PrimaryKey.js
 var symbol4 = "~effect/interfaces/PrimaryKey";
@@ -39667,7 +39672,14 @@ var CheckpointRef = makeEntityId("CheckpointRef");
 
 // src/vendor/t3contracts/model.ts
 var CODEX_REASONING_EFFORT_OPTIONS = ["xhigh", "high", "medium", "low"];
-var CLAUDE_CODE_EFFORT_OPTIONS = ["low", "medium", "high", "max", "ultrathink", "xhigh"];
+var CLAUDE_CODE_EFFORT_OPTIONS = [
+  "low",
+  "medium",
+  "high",
+  "max",
+  "ultrathink",
+  "xhigh"
+];
 var CodexModelOptions = Schema_exports.Struct({
   reasoningEffort: Schema_exports.optional(Schema_exports.Literals(CODEX_REASONING_EFFORT_OPTIONS)),
   fastMode: Schema_exports.optional(Schema_exports.Boolean)
@@ -39771,15 +39783,17 @@ function normalizeProjectPath(workspaceRoot) {
     throw new Error("Project path cannot be empty.");
   }
   if (trimmed.startsWith("~")) {
-    throw new Error("Project path must be absolute; shell-expand '~' before passing it to t3-thread.");
+    throw new Error(
+      "Project path must be absolute; shell-expand '~' before passing it to t3-thread."
+    );
   }
-  const isWindowsPath = /^[A-Za-z]:[\\/]/.test(trimmed) || /^\\\\/.test(trimmed);
-  if (!import_node_path2.default.posix.isAbsolute(trimmed) && !isWindowsPath) {
+  const isWindowsPath = /^[A-Za-z]:[\\/]/.test(trimmed) || trimmed.startsWith("\\\\");
+  if (!NodePath2.posix.isAbsolute(trimmed) && !isWindowsPath) {
     throw new Error(`Project path must be absolute: ${workspaceRoot}`);
   }
-  const normalized = isWindowsPath ? import_node_path2.default.win32.normalize(trimmed) : import_node_path2.default.posix.normalize(trimmed);
+  const normalized = isWindowsPath ? NodePath2.win32.normalize(trimmed) : NodePath2.posix.normalize(trimmed);
   if (isWindowsPath) {
-    const parsed = import_node_path2.default.win32.parse(normalized);
+    const parsed = NodePath2.win32.parse(normalized);
     return normalized === parsed.root ? normalized : normalized.replace(/[\\/]+$/, "");
   }
   return normalized === "/" ? normalized : normalized.replace(/\/+$/, "");
@@ -39796,7 +39810,7 @@ function deriveProjectTitle(workspaceRoot, explicitTitle) {
     return normalizeProjectTitle(explicitTitle);
   }
   const normalized = normalizeProjectPath(workspaceRoot);
-  const baseName = (import_node_path2.default.win32.isAbsolute(normalized) ? import_node_path2.default.win32.basename(normalized) : import_node_path2.default.posix.basename(normalized)).trim();
+  const baseName = (NodePath2.win32.isAbsolute(normalized) ? NodePath2.win32.basename(normalized) : NodePath2.posix.basename(normalized)).trim();
   return baseName || "project";
 }
 function parseModelOptionEntries(entries3 = []) {
@@ -39863,13 +39877,17 @@ function resolveModelSlug(provider, model, providerModels) {
 function buildModelSelection(input) {
   if (input.clear) {
     if (input.provider || input.model || (input.optionEntries?.length ?? 0) > 0 || input.noDefault) {
-      throw new Error("`--clear` cannot be combined with model provider, model, options, or --no-default-model.");
+      throw new Error(
+        "`--clear` cannot be combined with model provider, model, options, or --no-default-model."
+      );
     }
     return null;
   }
   if (input.noDefault) {
     if (input.provider || input.model || (input.optionEntries?.length ?? 0) > 0) {
-      throw new Error("`--no-default-model` cannot be combined with model provider, model, or options.");
+      throw new Error(
+        "`--no-default-model` cannot be combined with model provider, model, or options."
+      );
     }
     return null;
   }
@@ -39892,12 +39910,16 @@ function resolveProjectTarget(projects, identifier2) {
     return idMatch;
   }
   const normalizedPath = normalizeProjectPath(trimmed);
-  const pathMatches = projects.filter((project2) => normalizeProjectPath(project2.workspaceRoot) === normalizedPath);
+  const pathMatches = projects.filter(
+    (project2) => normalizeProjectPath(project2.workspaceRoot) === normalizedPath
+  );
   if (pathMatches.length === 1) {
     return pathMatches[0];
   }
   if (pathMatches.length > 1) {
-    throw new Error(`Multiple active projects use '${normalizedPath}'. Re-run with the project id.`);
+    throw new Error(
+      `Multiple active projects use '${normalizedPath}'. Re-run with the project id.`
+    );
   }
   throw new Error(`No active project found for '${trimmed}'.`);
 }
@@ -40048,7 +40070,8 @@ async function fetchRemoteJson(input) {
     });
   } catch (error) {
     throw new Error(
-      `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`
+      `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`,
+      { cause: error }
     );
   }
   if (!response.ok) {
@@ -40084,11 +40107,14 @@ async function exchangePairingCredential(input) {
     });
   } catch (error) {
     throw new Error(
-      `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`
+      `Failed to reach ${requestUrl} (${error instanceof Error ? error.message : String(error)}).`,
+      { cause: error }
     );
   }
   if (!response.ok) {
-    throw new Error(await readErrorMessage(response, `Token exchange failed (${response.status}).`));
+    throw new Error(
+      await readErrorMessage(response, `Token exchange failed (${response.status}).`)
+    );
   }
   return await response.json();
 }
@@ -40324,13 +40350,13 @@ var fromWebSocket = (acquire, options) => withFiber2((fiber3) => {
             cause: new Error('timeout waiting for "open"')
           })
         }))
-      }), raceFirst2(join3(fiberSet)));
+      }), raceFirst2(join4(fiberSet)));
     }
     open2 = true;
     currentWS = ws;
     latch.openUnsafe();
     if (opts?.onOpen) yield* opts.onOpen;
-    return yield* catchFilter2(join3(fiberSet), SocketCloseError.filterClean((_) => !closeCodeIsError(_)), () => void_4);
+    return yield* catchFilter2(join4(fiberSet), SocketCloseError.filterClean((_) => !closeCodeIsError(_)), () => void_4);
   })).pipe(updateContext2((input) => merge(acquireContext, input)), ensuring2(sync3(() => {
     latch.closeUnsafe();
     currentWS = void 0;
@@ -41191,9 +41217,9 @@ var setUrl = /* @__PURE__ */ dual(2, (self, url) => {
   clone2.hash = "";
   return makeWith(self.method, clone2.toString(), urlParams2, hash3, self.headers, self.body);
 });
-var prependUrl = /* @__PURE__ */ dual(2, (self, path4) => {
-  if (path4 === "") return self;
-  return makeWith(self.method, joinSegments(path4, self.url), self.urlParams, self.hash, self.headers, self.body);
+var prependUrl = /* @__PURE__ */ dual(2, (self, path) => {
+  if (path === "") return self;
+  return makeWith(self.method, joinSegments(path, self.url), self.urlParams, self.hash, self.headers, self.body);
 });
 var joinSegments = (first, second) => {
   const endsWithSlash = first.endsWith("/");
@@ -47700,10 +47726,7 @@ var makeT3RpcClient = RpcClient_exports.make(WsRpcGroup);
 function wsRpcProtocolLayer(wsUrl) {
   const webSocketConstructorLayer = Layer_exports.succeed(
     WebSocketConstructor,
-    (socketUrl, protocols) => new wrapper_exports.WebSocket(
-      socketUrl,
-      protocols
-    )
+    (socketUrl, protocols) => new wrapper_exports.WebSocket(socketUrl, protocols)
   );
   return RpcClient_exports.layerProtocolSocket().pipe(
     Layer_exports.provide(layerWebSocket(wsUrl).pipe(Layer_exports.provide(webSocketConstructorLayer))),
@@ -47804,13 +47827,7 @@ function classifyThread(thread) {
 }
 function formatThreadLine(thread) {
   const status = classifyThread(thread);
-  return [
-    thread.id,
-    `[${status.state}]`,
-    thread.title,
-    thread.projectId,
-    status.reason
-  ].join(" ");
+  return [thread.id, `[${status.state}]`, thread.title, thread.projectId, status.reason].join(" ");
 }
 
 // src/client.ts
@@ -47937,7 +47954,7 @@ var RemoteEnvironmentClient = class {
         `An active project already exists for '${existingProject.workspaceRoot}' (${existingProject.id}).`
       );
     }
-    const projectId = (0, import_node_crypto2.randomUUID)();
+    const projectId = NodeCrypto2.randomUUID();
     const title = deriveProjectTitle(input.workspaceRoot, input.title);
     const providerModels = input.noDefaultModel ? null : await this.getProviderModelsOrNull();
     const defaultModelSelection = buildModelSelection({
@@ -47948,7 +47965,7 @@ var RemoteEnvironmentClient = class {
       providerModels
     });
     const command = buildProjectCreateCommand({
-      commandId: (0, import_node_crypto2.randomUUID)(),
+      commandId: NodeCrypto2.randomUUID(),
       projectId,
       title,
       workspaceRoot: input.workspaceRoot,
@@ -47973,7 +47990,7 @@ var RemoteEnvironmentClient = class {
     const snapshot = await this.getShellSnapshot();
     const project2 = resolveProjectTarget(snapshot.projects, input.identifier);
     const command = buildProjectMetaUpdateCommand({
-      commandId: (0, import_node_crypto2.randomUUID)(),
+      commandId: NodeCrypto2.randomUUID(),
       projectId: project2.id,
       title: input.title
     });
@@ -48000,7 +48017,7 @@ var RemoteEnvironmentClient = class {
       providerModels
     });
     const command = buildProjectMetaUpdateCommand({
-      commandId: (0, import_node_crypto2.randomUUID)(),
+      commandId: NodeCrypto2.randomUUID(),
       projectId: project2.id,
       defaultModelSelection
     });
@@ -48025,7 +48042,7 @@ var RemoteEnvironmentClient = class {
       );
     }
     const command = buildProjectDeleteCommand({
-      commandId: (0, import_node_crypto2.randomUUID)(),
+      commandId: NodeCrypto2.randomUUID(),
       projectId: project2.id,
       force: input.force
     });
@@ -48069,7 +48086,7 @@ var RemoteEnvironmentClient = class {
       model: input.model,
       providerModels
     }) ?? DEFAULT_MODEL_SELECTION : project2.defaultModelSelection ?? buildModelSelection({ providerModels }) ?? DEFAULT_MODEL_SELECTION;
-    const threadId = (0, import_node_crypto2.randomUUID)();
+    const threadId = NodeCrypto2.randomUUID();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
     const createdAt = nowIso();
@@ -48077,10 +48094,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: (0, import_node_crypto2.randomUUID)(),
+        commandId: NodeCrypto2.randomUUID(),
         threadId,
         message: {
-          messageId: (0, import_node_crypto2.randomUUID)(),
+          messageId: NodeCrypto2.randomUUID(),
           role: "user",
           text: initialMessage,
           attachments: []
@@ -48132,10 +48149,10 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
-        commandId: (0, import_node_crypto2.randomUUID)(),
+        commandId: NodeCrypto2.randomUUID(),
         threadId: thread.id,
         message: {
-          messageId: (0, import_node_crypto2.randomUUID)(),
+          messageId: NodeCrypto2.randomUUID(),
           role: "user",
           text: input.text,
           attachments: []
@@ -48154,7 +48171,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.turn.interrupt",
-        commandId: (0, import_node_crypto2.randomUUID)(),
+        commandId: NodeCrypto2.randomUUID(),
         threadId: thread.id,
         turnId: thread.latestTurn?.turnId,
         createdAt: nowIso()
@@ -48172,7 +48189,7 @@ var RemoteEnvironmentClient = class {
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.archive",
-        commandId: (0, import_node_crypto2.randomUUID)(),
+        commandId: NodeCrypto2.randomUUID(),
         threadId: thread.id
       });
       return true;
@@ -48192,7 +48209,7 @@ var RemoteEnvironmentClient = class {
       if (Date.now() - started > input.timeoutMs) {
         throw new Error(`Timed out waiting for thread '${input.threadId}' to reach ${input.goal}.`);
       }
-      await new Promise((resolve2) => setTimeout(resolve2, input.intervalMs));
+      await new Promise((resolve3) => setTimeout(resolve3, input.intervalMs));
     }
   }
   async openRpc() {
@@ -48300,22 +48317,22 @@ ${message}`;
 }
 
 // src/watcher-process.ts
-var import_node_child_process = require("node:child_process");
-var import_promises2 = require("node:fs/promises");
-var import_node_path3 = __toESM(require("node:path"), 1);
+var NodeChildProcess = __toESM(require("node:child_process"), 1);
+var NodeFSP2 = __toESM(require("node:fs/promises"), 1);
+var NodePath3 = __toESM(require("node:path"), 1);
 function watcherPidFile() {
-  return import_node_path3.default.join(import_node_path3.default.dirname(resolveStateFile()), "watch.pid");
+  return NodePath3.join(NodePath3.dirname(resolveStateFile()), "watch.pid");
 }
 function repoRootFromArgv() {
   const entry = process.argv[1];
   if (!entry) {
     throw new Error("Cannot resolve watcher repo root from process.argv[1].");
   }
-  return import_node_path3.default.resolve(import_node_path3.default.dirname(entry), "..");
+  return NodePath3.resolve(NodePath3.dirname(entry), "..");
 }
 async function readWatcherPid(pidFile) {
   try {
-    const raw2 = (await (0, import_promises2.readFile)(pidFile, "utf8")).trim();
+    const raw2 = (await NodeFSP2.readFile(pidFile, "utf8")).trim();
     const pid = Number(raw2);
     return Number.isInteger(pid) && pid > 0 ? pid : null;
   } catch (error) {
@@ -48336,28 +48353,28 @@ function isProcessRunning(pid) {
 }
 async function claimWatcherLease() {
   const pidFile = watcherPidFile();
-  await (0, import_promises2.mkdir)(import_node_path3.default.dirname(pidFile), { recursive: true });
+  await NodeFSP2.mkdir(NodePath3.dirname(pidFile), { recursive: true });
   const existingPid = await readWatcherPid(pidFile);
   if (existingPid && existingPid !== process.pid && isProcessRunning(existingPid)) {
     return null;
   }
   if (existingPid && !isProcessRunning(existingPid)) {
-    await (0, import_promises2.unlink)(pidFile).catch(() => {
+    await NodeFSP2.unlink(pidFile).catch(() => {
     });
   }
-  await (0, import_promises2.writeFile)(pidFile, `${process.pid}
+  await NodeFSP2.writeFile(pidFile, `${process.pid}
 `, "utf8");
   return async () => {
     const currentPid = await readWatcherPid(pidFile);
     if (currentPid === process.pid) {
-      await (0, import_promises2.unlink)(pidFile).catch(() => {
+      await NodeFSP2.unlink(pidFile).catch(() => {
       });
     }
   };
 }
 async function ensureWatcherProcess(input) {
   const pidFile = watcherPidFile();
-  await (0, import_promises2.mkdir)(import_node_path3.default.dirname(pidFile), { recursive: true });
+  await NodeFSP2.mkdir(NodePath3.dirname(pidFile), { recursive: true });
   const existingPid = await readWatcherPid(pidFile);
   if (existingPid && isProcessRunning(existingPid)) {
     return {
@@ -48366,12 +48383,12 @@ async function ensureWatcherProcess(input) {
     };
   }
   if (existingPid && !isProcessRunning(existingPid)) {
-    await (0, import_promises2.unlink)(pidFile).catch(() => {
+    await NodeFSP2.unlink(pidFile).catch(() => {
     });
   }
   const repoRoot = repoRootFromArgv();
-  const tsxPath = import_node_path3.default.join(repoRoot, "node_modules", ".bin", "tsx");
-  const cliEntry = import_node_path3.default.join(repoRoot, "src", "cli.ts");
+  const tsxPath = NodePath3.join(repoRoot, "node_modules", ".bin", "tsx");
+  const cliEntry = NodePath3.join(repoRoot, "src", "cli.ts");
   const args2 = [
     cliEntry,
     "watch",
@@ -48388,7 +48405,7 @@ async function ensureWatcherProcess(input) {
   if (!input.deliver) {
     args2.push("--no-deliver");
   }
-  const child = (0, import_node_child_process.spawn)(tsxPath, args2, {
+  const child = NodeChildProcess.spawn(tsxPath, args2, {
     cwd: repoRoot,
     detached: true,
     stdio: "ignore"
@@ -48401,10 +48418,10 @@ async function ensureWatcherProcess(input) {
 }
 
 // src/watch.ts
-var import_node_crypto4 = require("node:crypto");
+var NodeCrypto4 = __toESM(require("node:crypto"), 1);
 
 // src/notifications.ts
-var import_node_crypto3 = require("node:crypto");
+var NodeCrypto3 = __toESM(require("node:crypto"), 1);
 function buildNotificationEventKey(input) {
   const marker = input.latestAssistantMessageId ? `assistant:${input.latestAssistantMessageId}` : input.latestTurnId ? `turn:${input.latestTurnId}:${input.sourceState}` : `state:${input.sourceState}`;
   return `${input.subscriberThreadId}:${input.sourceThreadId}:${marker}`;
@@ -48418,7 +48435,7 @@ function buildNotificationRecord(input) {
     sourceState: input.overview.state
   });
   return {
-    id: input.existing?.id ?? (0, import_node_crypto3.randomUUID)(),
+    id: input.existing?.id ?? NodeCrypto3.randomUUID(),
     eventKey,
     subscriberThreadId: input.subscription.subscriberThreadId,
     subscriberAgentName: input.subscription.subscriberAgentName,
@@ -48575,7 +48592,7 @@ async function claimPendingNotifications(options = {}) {
         updatedAt: claimedAt,
         lastAttemptedAt: claimedAt,
         lastError: null,
-        deliveryClaimId: (0, import_node_crypto4.randomUUID)()
+        deliveryClaimId: NodeCrypto4.randomUUID()
       };
       claimed.push(next);
       return next;
@@ -48756,7 +48773,11 @@ function toSubscriptionEndpoint(agent2) {
   };
 }
 async function resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment) {
-  const localEndpoint = resolveCallerEndpointFromLocalContext(state, threadId, callerEnvironment ?? null);
+  const localEndpoint = resolveCallerEndpointFromLocalContext(
+    state,
+    threadId,
+    callerEnvironment ?? null
+  );
   if (localEndpoint) {
     return localEndpoint;
   }
@@ -48776,7 +48797,9 @@ async function resolveThreadEndpoint(state, threadId, preferredEnvironment, call
       };
     }
   }
-  throw new Error(`Unknown thread '${threadId}'. It is not saved locally and was not found in any paired environment.`);
+  throw new Error(
+    `Unknown thread '${threadId}'. It is not saved locally and was not found in any paired environment.`
+  );
 }
 async function resolveNotifyEndpoint(state, notify, preferredEnvironment) {
   const callerEnvironment = resolveCallerEnvironmentMetadata();
@@ -48801,18 +48824,25 @@ async function withCallerFromEnv() {
   const state = await loadState();
   const threadId = resolveCallerThreadId();
   if (!threadId) {
-    throw new Error("T3_THREAD_ID is not set. Run this command inside a T3 thread or specify the caller explicitly later.");
+    throw new Error(
+      "T3_THREAD_ID is not set. Run this command inside a T3 thread or specify the caller explicitly later."
+    );
   }
   return {
     state,
-    caller: await resolveThreadEndpoint(state, threadId, void 0, resolveCallerEnvironmentMetadata())
+    caller: await resolveThreadEndpoint(
+      state,
+      threadId,
+      void 0,
+      resolveCallerEnvironmentMetadata()
+    )
   };
 }
 function nowIso3() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
 function sleep4(ms) {
-  return new Promise((resolve2) => setTimeout(resolve2, ms));
+  return new Promise((resolve3) => setTimeout(resolve3, ms));
 }
 async function ensureNotificationWatcher(options = {}) {
   await ensureWatcherProcess({
@@ -49030,13 +49060,19 @@ project.command("remove").requiredOption("--env <name>", "saved environment name
   });
 });
 var agent = program2.command("agent").description("Manage named remote agents");
-agent.command("create").requiredOption("--name <name>", "local agent name").requiredOption("--env <name>", "saved environment name").requiredOption("--project <id>", "remote project id").requiredOption("--title <title>", "thread title").option("--provider <provider>", "model provider").option("--model <model>", "model slug").option("--branch <name>", "git branch for T3's native worktree bootstrap").option("--worktree <path>", "deprecated; T3 chooses/manages worktree paths").option("--base-branch <name>", "base branch for T3's native worktree bootstrap", "main").option("--runtime-mode <mode>", "thread runtime mode").option("--interaction-mode <mode>", "thread interaction mode").requiredOption("--message <text>", "initial message (wrapped with the canonical T3 preamble unless --no-preamble)").option(
+agent.command("create").requiredOption("--name <name>", "local agent name").requiredOption("--env <name>", "saved environment name").requiredOption("--project <id>", "remote project id").requiredOption("--title <title>", "thread title").option("--provider <provider>", "model provider").option("--model <model>", "model slug").option("--branch <name>", "git branch for T3's native worktree bootstrap").option("--worktree <path>", "deprecated; T3 chooses/manages worktree paths").option("--base-branch <name>", "base branch for T3's native worktree bootstrap", "main").option("--runtime-mode <mode>", "thread runtime mode").option("--interaction-mode <mode>", "thread interaction mode").requiredOption(
+  "--message <text>",
+  "initial message (wrapped with the canonical T3 preamble unless --no-preamble)"
+).option(
   "--no-preamble",
   "skip the canonical T3 worker preamble; send --message verbatim (rare; use for testing or non-standard worker types)"
 ).option(
   "--notify [subscriber]",
   "override the default subscriber for completion/attention events; omit the value to force the current T3 caller from T3_THREAD_ID"
-).option("--no-notify", "disable automatic completion/attention notifications for the created worker").action(async (options) => {
+).option(
+  "--no-notify",
+  "disable automatic completion/attention notifications for the created worker"
+).action(async (options) => {
   const state = await loadState();
   const environment = requireEnvironment(state, options.env);
   const notifyCaller = await resolveNotifyEndpoint(state, options.notify, options.env);
@@ -49166,9 +49202,12 @@ agent.command("forget").argument("<name>", "agent name").description("Remove a s
 agent.command("caller").description("Resolve the calling thread from T3_THREAD_ID and T3 environment metadata").action(async () => {
   const state = await loadState();
   const threadId = resolveCallerThreadId();
-  const caller = threadId ? await resolveThreadEndpoint(state, threadId, void 0, resolveCallerEnvironmentMetadata()).catch(
-    () => null
-  ) : null;
+  const caller = threadId ? await resolveThreadEndpoint(
+    state,
+    threadId,
+    void 0,
+    resolveCallerEnvironmentMetadata()
+  ).catch(() => null) : null;
   printJson({
     threadId,
     caller: caller ? {
@@ -49191,7 +49230,9 @@ agent.command("subscriptions").description("List saved attention-routing subscri
   });
   printJson(subscriptions);
 });
-agent.command("subscribe").description("Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID").requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch").action(async (options) => {
+agent.command("subscribe").description(
+  "Subscribe the calling T3 thread to attention from a saved source agent or raw thread UUID"
+).requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch").action(async (options) => {
   const { state, caller } = await withCallerFromEnv();
   const resolvedSource = await resolveAgentTarget(state, options.watch, {
     clientFactory: (environmentName) => new RemoteEnvironmentClient(requireEnvironment(state, environmentName))
@@ -49260,7 +49301,16 @@ agent.command("notifications").description("List saved routed notification event
   });
   printJson(notifications);
 });
-agent.command("watch").description("Poll saved agents for attention-worthy transitions and route notifications to subscribers").option("--env <name>", "optional saved environment filter").option("--interval <seconds>", "poll interval in seconds", "5").option("--idle-exit <seconds>", "exit after this many idle seconds; 0 disables idle exit", "900").option("--max-lifetime <seconds>", "hard-stop the watcher after this many seconds; 0 disables the limit", "86400").option("--ensure", "spawn a detached singleton watcher if none is running, then exit").option("--once", "run a single scan and exit").option("--no-deliver", "record notification events but do not send messages to subscriber threads").action(async (options) => {
+agent.command("watch").description(
+  "Poll saved agents for attention-worthy transitions and route notifications to subscribers"
+).option("--env <name>", "optional saved environment filter").option("--interval <seconds>", "poll interval in seconds", "5").option("--idle-exit <seconds>", "exit after this many idle seconds; 0 disables idle exit", "900").option(
+  "--max-lifetime <seconds>",
+  "hard-stop the watcher after this many seconds; 0 disables the limit",
+  "86400"
+).option("--ensure", "spawn a detached singleton watcher if none is running, then exit").option("--once", "run a single scan and exit").option(
+  "--no-deliver",
+  "record notification events but do not send messages to subscriber threads"
+).action(async (options) => {
   const intervalMs = Math.max(1, Number(options.interval)) * 1e3;
   const idleExitMs = Math.max(0, Number(options.idleExit)) * 1e3;
   const maxLifetimeMs = Math.max(0, Number(options.maxLifetime)) * 1e3;
@@ -49445,7 +49495,13 @@ agent.command("wait").argument("<name>", "agent name or raw thread UUID").option
     latestTurn: thread.latestTurn
   });
 });
-agent.command("result").argument("<name>", "agent name or raw thread UUID").option("--tail <count>", "number of messages to show", "1").option("--assistant-only", "only show assistant messages").option("--wait <seconds>", "wait up to this many seconds for the latest turn to complete before reading").option("--interval <seconds>", "poll interval in seconds while waiting", "2").option("--final-message", "return the terminal assistant message for the latest turn when available").option("--mark-seen", "record the latest assistant message as reviewed").action(async (name, options) => {
+agent.command("result").argument("<name>", "agent name or raw thread UUID").option("--tail <count>", "number of messages to show", "1").option("--assistant-only", "only show assistant messages").option(
+  "--wait <seconds>",
+  "wait up to this many seconds for the latest turn to complete before reading"
+).option("--interval <seconds>", "poll interval in seconds while waiting", "2").option(
+  "--final-message",
+  "return the terminal assistant message for the latest turn when available"
+).option("--mark-seen", "record the latest assistant message as reviewed").action(async (name, options) => {
   const { agent: savedAgent, client, saved, target: target2 } = await withAgent(name);
   const detail = options.wait ? await client.waitForThread({
     threadId: savedAgent.threadId,

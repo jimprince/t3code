@@ -34,7 +34,9 @@ export function assertSavedAgentCapability(
   capability: string,
 ): asserts target is ResolvedAgentTarget & { savedAgent: SavedAgent } {
   if (!target.savedAgent) {
-    throw new Error(`${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`);
+    throw new Error(
+      `${capability} requires a saved agent name. Raw thread UUIDs do not persist local state.`,
+    );
   }
 }
 
