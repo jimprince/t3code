@@ -47843,6 +47843,39 @@ var DEFAULT_MODEL_SELECTION = {
   provider: "codex",
   model: "gpt-5.4"
 };
+function buildPlanImplementationPrompt(planMarkdown) {
+  return `PLEASE IMPLEMENT THIS PLAN:
+${planMarkdown.trim()}`;
+}
+function newestPlan(plans) {
+  return [...plans].sort(
+    (left, right) => left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id)
+  ).at(-1) ?? null;
+}
+function selectPlanForImplementation(thread, planId) {
+  if (planId) {
+    const plan2 = thread.proposedPlans.find((candidate) => candidate.id === planId);
+    if (!plan2) {
+      throw new Error(`Thread '${thread.id}' has no proposed plan '${planId}'.`);
+    }
+    if (plan2.implementedAt) {
+      throw new Error(`Proposed plan '${plan2.id}' is already implemented.`);
+    }
+    return plan2;
+  }
+  const latestTurnId = thread.latestTurn?.turnId;
+  const plan = (latestTurnId ? newestPlan(thread.proposedPlans.filter((candidate) => candidate.turnId === latestTurnId)) : null) ?? newestPlan(thread.proposedPlans);
+  if (!plan) {
+    throw new Error(`Thread '${thread.id}' has no proposed plan to implement.`);
+  }
+  if (plan.implementedAt) {
+    throw new Error(`Proposed plan '${plan.id}' is already implemented.`);
+  }
+  return plan;
+}
+function threadHasActiveTurn(thread) {
+  return thread.latestTurn?.state === "running" || thread.session?.status === "starting" || thread.session?.status === "running" || (thread.session?.activeTurnId ?? null) !== null;
+}
 function nowIso() {
   return (/* @__PURE__ */ new Date()).toISOString();
 }
@@ -47875,8 +47908,10 @@ function providerInventoryFromConfig(config) {
 }
 var RemoteEnvironmentClient = class {
   environment;
-  constructor(environment) {
+  rpcFactory;
+  constructor(environment, options = {}) {
     this.environment = environment;
+    this.rpcFactory = options.rpcFactory ?? null;
   }
   static async pair(input) {
     const [descriptor, exchange] = await Promise.all([
@@ -48173,6 +48208,71 @@ var RemoteEnvironmentClient = class {
       await rpc.dispose();
     }
   }
+  async implementPlan(input) {
+    const rpc = await this.openRpc();
+    try {
+      const item = await rpc.subscribeThreadSnapshot(input.threadId);
+      if (item.kind !== "snapshot") {
+        throw new Error(
+          `Expected a thread snapshot for '${input.threadId}', received '${item.kind}'.`
+        );
+      }
+      const thread = item.snapshot.thread;
+      if (thread.archivedAt || thread.deletedAt) {
+        throw new Error(`Thread '${thread.id}' is archived and cannot implement a plan.`);
+      }
+      if (threadHasActiveTurn(thread)) {
+        throw new Error(`Thread '${thread.id}' is still running and cannot implement a plan.`);
+      }
+      const plan = selectPlanForImplementation(thread, input.planId);
+      const createdAt = nowIso();
+      let modeChanged = false;
+      if (thread.interactionMode !== "default") {
+        await rpc.request("dispatchCommand", {
+          type: "thread.interaction-mode.set",
+          commandId: NodeCrypto2.randomUUID(),
+          threadId: thread.id,
+          interactionMode: "default",
+          createdAt
+        });
+        modeChanged = true;
+      }
+      try {
+        await rpc.request("dispatchCommand", {
+          type: "thread.turn.start",
+          commandId: NodeCrypto2.randomUUID(),
+          threadId: thread.id,
+          message: {
+            messageId: NodeCrypto2.randomUUID(),
+            role: "user",
+            text: buildPlanImplementationPrompt(plan.planMarkdown),
+            attachments: []
+          },
+          modelSelection: thread.modelSelection,
+          titleSeed: thread.title,
+          runtimeMode: thread.runtimeMode,
+          interactionMode: "default",
+          sourceProposedPlan: {
+            threadId: thread.id,
+            planId: plan.id
+          },
+          createdAt
+        });
+      } catch (error) {
+        if (modeChanged) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `Thread '${thread.id}' was switched to default mode, but the implementation turn failed to start: ${detail}`,
+            { cause: error }
+          );
+        }
+        throw error;
+      }
+      return { threadId: thread.id, planId: plan.id, modeChanged };
+    } finally {
+      await rpc.dispose();
+    }
+  }
   async interrupt(threadId) {
     const thread = await this.findThread(threadId);
     const rpc = await this.openRpc();
@@ -48221,6 +48321,9 @@ var RemoteEnvironmentClient = class {
     }
   }
   async openRpc() {
+    if (this.rpcFactory) {
+      return this.rpcFactory(this.environment.wsBaseUrl);
+    }
     const wsUrl = await resolveWebSocketUrl({
       httpBaseUrl: this.environment.httpBaseUrl,
       wsBaseUrl: this.environment.wsBaseUrl,
@@ -48872,6 +48975,7 @@ var AGENT_COMMAND_ALIASES = /* @__PURE__ */ new Set([
   "status",
   "worklog",
   "inbox",
+  "implement",
   "send",
   "clarify",
   "revise",
@@ -48895,6 +48999,7 @@ Direct thread commands:
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
   result       Fetch latest/final worker output
+  implement    Start the latest Plan Ready proposal in build mode
   inbox        List workers with new output or attention states
   watch        Detect and deliver completion/attention notifications
 
@@ -48904,6 +49009,7 @@ Examples:
   t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
   t3-thread create --name worker-a --env local-mbp --project PROJECT_ID --title "Worker A" --branch t3/worker-a --message "Fix the issue."
   t3-thread status worker-a
+  t3-thread implement worker-a
   t3-thread result worker-a --wait 120 --final-message
 
 Compatibility:
@@ -49442,6 +49548,21 @@ agent.command("inbox").option("--env <name>", "optional saved environment filter
     })
   );
   printLines(summaries.filter(needsAttention).map(formatInboxLine));
+});
+agent.command("implement").description("Implement a Plan Ready proposal in the same thread using build mode").argument("<name>", "agent name or raw thread UUID").option("--plan-id <id>", "implement a specific unimplemented proposed plan").action(async (name, options) => {
+  const { agent: savedAgent, client, saved } = await withAgent(name);
+  const result4 = await client.implementPlan({
+    threadId: savedAgent.threadId,
+    ...options.planId ? { planId: options.planId } : {}
+  });
+  printJson({
+    agent: saved ? savedAgent.name : null,
+    threadId: result4.threadId,
+    environment: savedAgent.environment,
+    planId: result4.planId,
+    modeChanged: result4.modeChanged,
+    dispatched: "implement"
+  });
 });
 agent.command("send").argument("<name>", "agent name or raw thread UUID").argument("<message...>", "message text").action(async (name, messageParts) => {
   const { agent: savedAgent, client, saved } = await withAgent(name);
