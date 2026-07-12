@@ -61,9 +61,6 @@ interface HeadlessPackageJson {
   readonly packageManager: string;
   readonly dependencies: Record<string, string>;
   readonly overrides: Record<string, string>;
-  readonly pnpm: {
-    readonly onlyBuiltDependencies: ReadonlyArray<string>;
-  };
 }
 
 class HeadlessBuildError extends Data.TaggedError("HeadlessBuildError")<{
@@ -148,9 +145,6 @@ export function createHeadlessPackageJson(
       workspaceConfig.catalog ?? {},
       "apps/server",
     ),
-    pnpm: {
-      onlyBuiltDependencies: ["node-pty"],
-    },
   };
 }
 
@@ -248,6 +242,12 @@ const buildHeadlessArtifact = Effect.fn("buildHeadlessArtifact")(function* (
   yield* fs.writeFileString(
     path.join(artifactRoot, "package.json"),
     `${yield* encodeJsonString(packageJson)}\n`,
+  );
+  // pnpm 11 reads build approvals from pnpm-workspace.yaml, not package.json.
+  // The staged runtime needs both native dependencies to build during install.
+  yield* fs.writeFileString(
+    path.join(artifactRoot, "pnpm-workspace.yaml"),
+    ["allowBuilds:", "  msgpackr-extract: true", "  node-pty: true", ""].join("\n"),
   );
 
   yield* Effect.log("[headless-artifact] Installing staged production dependencies...");
