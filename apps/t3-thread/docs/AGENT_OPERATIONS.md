@@ -4,7 +4,11 @@ Canonical runbook for supervising T3-based agents with this repo.
 
 ## CLI Form
 
-Examples below use `t3-thread <command>` (the wrapper in `~/.shared/bin/t3-thread`), which works from any cwd. Inside this repo `t3-thread <command>` is equivalent; pick whichever matches the shell you are in. Both forms invoke `tsx src/cli.ts`, so edits to `src/` are picked up on the next invocation with no rebuild step.
+Examples below use `t3-thread <command>` (the wrapper in `~/.shared/bin/t3-thread`),
+which works from any cwd and targets the canonical checkout. When developing in
+a separate worktree, run `pnpm run cli -- <command>` from `apps/t3-thread` so
+you exercise that worktree's source. Both forms invoke `tsx src/cli.ts`, so
+edits to the selected checkout's `src/` are picked up without rebuilding.
 
 ## Quick Start
 
@@ -181,6 +185,22 @@ t3-thread status <thread-id>
 t3-thread result <thread-id> --final-message
 t3-thread send <thread-id> "Continue from the last checkpoint."
 ```
+
+Implement a Plan Ready proposal in the same thread:
+
+```bash
+t3-thread implement <agent>
+t3-thread implement <thread-id>
+t3-thread implement <thread-id> --plan-id <plan-id>
+```
+
+`implement` is the CLI equivalent of the primary **Implement** button in T3
+Code. It selects the current unimplemented proposal, persists `default`
+interaction mode, and starts a same-thread implementation turn with the source
+plan reference. It rejects running, archived, missing-plan, and already-
+implemented states. Do not substitute `send "Implement the plan"`: `send`
+preserves the thread's current interaction mode, so a plan-mode worker remains
+unable to mutate the repository.
 
 Attach is still the right move when you want a persistent local alias or local
 read-state features such as `result --mark-seen`.
