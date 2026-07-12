@@ -48,6 +48,14 @@ Project/task coordination for target repos may still live in the target repo tra
 
 ## Active Handoffs
 
+- 2026-07-11: Handed off `Rare Case Atlas v2` pristine-demo production validation to the dev VM.
+  - Project id: `733c282f-3260-48ff-9815-d93176a4c7fb`
+  - Worker saved name: `rca-v2-pristine-handoff`
+  - Thread id: `55adcfd3-280c-4473-878a-7cc8837f4274`
+  - Branch: `t3/rca-v2-pristine-handoff` (base: `feature/atlas-v2-autonomous`)
+  - Initial focus: complete the live PMID 32551328 SLC13A5 replay, visually verify one complete
+    string-anchored outline per populated rotated-table cell, and preserve that page as a hard QA gate.
+
 - 2026-06-01: Registered local project `K1 CFS Open MMU` at `/Users/brad/Programming/k1-cfs-open-mmu` in `local-mbp`.
   - Project id: `dbad92eb-0b76-4818-90c7-fdc576652235`
   - Worker saved name: `k1-cfs-open-mmu-handoff`
