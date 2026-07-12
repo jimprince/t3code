@@ -33,6 +33,10 @@ t3-thread create \
 t3-thread status <saved-agent-name>
 ```
 
+When a worker reports Plan Ready, continue it with
+`t3-thread implement <saved-agent-name-or-thread-id>`. Do not use plain `send`
+for this transition because `send` preserves plan mode.
+
 Do not pass `--worktree`. T3 Code creates and records the worktree path through native bootstrap.
 
 ## Maintenance
