@@ -94,6 +94,13 @@ This fork resolves its EAS owner/project and app identifiers from
 updates at Brad's `jimprince/t3-code` EAS project while preserving upstream's
 mobile app code on `main`.
 
+Native configuration follows the same rule. `app.config.ts` remains upstream's
+configuration and applies the identity/EAS overrides from `fork-config.ts` only
+at export. Keep upstream plugins, entitlements, assets, and platform settings in
+that config; fork changes belong in the small overlay. This structure lets Git
+carry upstream edits through scheduled rebases instead of replaying a stale
+fork-owned copy of the whole Expo config.
+
 CI uses Expo fingerprinting for development and preview dev-client builds to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and persistent preview builds continue to use the `appVersion` runtime policy.
 
 `fingerprint.config.cjs` normalizes Expo/RN autolinking config paths before
