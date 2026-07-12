@@ -28,4 +28,18 @@ it.layer(NodeServices.layer)("mobile EAS workflows", (it) => {
       }
     }),
   );
+
+  it.effect("uses the repo package manager for development fingerprinting", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const workflow = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/mobile-eas-development.yml"),
+      );
+
+      assert.include(workflow, '"pnpm exec expo-updates fingerprint:generate --platform ios"');
+      assert.notInclude(workflow, '"npx expo-updates fingerprint:generate --platform ios"');
+    }),
+  );
 });
