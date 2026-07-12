@@ -57,4 +57,33 @@ it.layer(NodeServices.layer)("mobile EAS workflows", (it) => {
       assert.notInclude(appConfig, '"expo-router"');
     }),
   );
+
+  it.effect("references splash assets that exist in the EAS checkout", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const appConfig = yield* fs.readFileString(path.join(repoRoot, "apps/mobile/app.config.ts"));
+
+      for (const asset of ["splash-icon-dev.png", "splash-icon-prod.png"]) {
+        assert.include(appConfig, `./assets/${asset}`);
+        assert.isTrue(yield* fs.exists(path.join(repoRoot, "apps/mobile/assets", asset)));
+      }
+      assert.notInclude(appConfig, '"./assets/splash-icon.png"');
+    }),
+  );
+
+  it.effect("derives the generated iOS app target instead of hard-coding a variant", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const plugin = yield* fs.readFileString(
+        path.join(repoRoot, "apps/mobile/plugins/withIosModularGooglePods.cjs"),
+      );
+
+      assert.include(plugin, "nextConfig.modRequest.projectName");
+      assert.notInclude(plugin, "T3CodeDev");
+    }),
+  );
 });
