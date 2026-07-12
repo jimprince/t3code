@@ -39,8 +39,17 @@ not want to create a saved alias first:
 ```bash
 t3-thread status 22222222-2222-4222-8222-222222222222
 t3-thread result 22222222-2222-4222-8222-222222222222 --final-message
+t3-thread implement 22222222-2222-4222-8222-222222222222
 t3-thread send 22222222-2222-4222-8222-222222222222 "Continue from the last checkpoint."
 ```
+
+When a worker reaches **Plan Ready**, use `t3-thread implement <agent-or-thread-id>`
+to perform the same-thread equivalent of the UI's **Implement** button. The CLI
+selects the current unimplemented proposal, switches the thread from plan mode
+to build mode, and starts the implementation turn with source-plan tracking.
+Use `--plan-id <id>` only when intentionally selecting a specific proposal.
+Plain `send` preserves the current interaction mode and therefore does not
+replace `implement` for Plan Ready workers.
 
 Resolution order for a raw UUID:
 
@@ -77,6 +86,8 @@ t3-thread status worker-a
 t3-thread status 22222222-2222-4222-8222-222222222222
 t3-thread worklog worker-a --tail 10
 t3-thread worklog 22222222-2222-4222-8222-222222222222 --tail 10
+t3-thread implement worker-a
+t3-thread implement 22222222-2222-4222-8222-222222222222
 t3-thread result worker-a --wait 120 --final-message
 t3-thread result 22222222-2222-4222-8222-222222222222 --final-message
 t3-thread inbox
@@ -87,7 +98,7 @@ t3-thread archive 22222222-2222-4222-8222-222222222222
 t3-thread forget worker-a
 ```
 
-Supported direct-UUID lifecycle commands: `status`, `result`, `worklog`, `send`,
+Supported direct-UUID lifecycle commands: `status`, `result`, `worklog`, `implement`, `send`,
 `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe --watch`.
 
 `attach` is still available when you want a persistent local alias. `result --mark-seen`
