@@ -106,6 +106,16 @@ Validated updater path: an installed
 `v0.0.22-nightly.20260423.108-fork.1` app detected
 `v0.0.22-nightly.20260423.108-fork.2` through the nightly mac updater feed.
 
+### Mobile Expo config ownership
+
+Do not turn `apps/mobile/app.config.ts` into a fork-owned replacement for
+upstream's Expo configuration. Keep that file aligned with upstream and apply
+`fork-config.ts` only at export; the overlay owns fork identity, EAS routing,
+widget identifiers, and runtime policy. Upstream plugins, entitlements, assets,
+and platform behavior remain in `app.config.ts`. The behavioral regression test
+is `apps/mobile/fork-config.test.ts`; the real integration gate is an iOS
+`expo prebuild` for the development variant.
+
 ## The fork-mirroring model
 
 Our version numbers **mirror upstream**. Our release tags are derived from
