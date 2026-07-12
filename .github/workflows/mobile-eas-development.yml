@@ -195,7 +195,7 @@ jobs:
           }
 
           eas env:exec --non-interactive development \
-            "npx expo-updates fingerprint:generate --platform ios" > "$fingerprint_json"
+            "pnpm exec expo-updates fingerprint:generate --platform ios" > "$fingerprint_json"
           fingerprint_hash="$(node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (!data.hash) process.exit(1); console.log(data.hash);' "$fingerprint_json")"
           echo "iOS fingerprint: $fingerprint_hash"
 
