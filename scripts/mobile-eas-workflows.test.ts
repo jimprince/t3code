@@ -73,17 +73,31 @@ it.layer(NodeServices.layer)("mobile EAS workflows", (it) => {
     }),
   );
 
-  it.effect("derives the generated iOS app target instead of hard-coding a variant", () =>
+  it.effect("uses upstream modular pod configuration instead of a fork Podfile patch", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
-      const plugin = yield* fs.readFileString(
-        path.join(repoRoot, "apps/mobile/plugins/withIosModularGooglePods.cjs"),
-      );
+      const appConfig = yield* fs.readFileString(path.join(repoRoot, "apps/mobile/app.config.ts"));
 
-      assert.include(plugin, "nextConfig.modRequest.projectName");
-      assert.notInclude(plugin, "T3CodeDev");
+      assert.include(appConfig, '{ name: "GoogleUtilities", modular_headers: true }');
+      assert.include(appConfig, '{ name: "RecaptchaInterop", modular_headers: true }');
+      assert.isFalse(
+        yield* fs.exists(path.join(repoRoot, "apps/mobile/plugins/withIosModularGooglePods.cjs")),
+      );
+    }),
+  );
+
+  it.effect("applies fork-owned Expo configuration only at export", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const appConfig = yield* fs.readFileString(path.join(repoRoot, "apps/mobile/app.config.ts"));
+
+      assert.include(appConfig, 'from "./fork-config.ts"');
+      assert.include(appConfig, "applyMobileForkConfig(config, forkConfig)");
+      assert.notInclude(appConfig, "com.brad.t3code");
     }),
   );
 });
