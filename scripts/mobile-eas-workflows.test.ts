@@ -42,4 +42,19 @@ it.layer(NodeServices.layer)("mobile EAS workflows", (it) => {
       assert.notInclude(workflow, '"npx expo-updates fingerprint:generate --platform ios"');
     }),
   );
+
+  it.effect("does not configure the removed Expo Router package", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const mobilePackage = yield* fs.readFileString(
+        path.join(repoRoot, "apps/mobile/package.json"),
+      );
+      const appConfig = yield* fs.readFileString(path.join(repoRoot, "apps/mobile/app.config.ts"));
+
+      assert.notInclude(mobilePackage, '"expo-router"');
+      assert.notInclude(appConfig, '"expo-router"');
+    }),
+  );
 });
