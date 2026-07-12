@@ -126,7 +126,6 @@ const config: ExpoConfig = {
     favicon: "./assets/favicon.png",
   },
   plugins: [
-    "expo-router",
     "expo-font",
     "expo-secure-store",
     ["@clerk/expo", { theme: "./clerk-theme.json" }],
