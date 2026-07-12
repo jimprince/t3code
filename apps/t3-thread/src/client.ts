@@ -22,6 +22,7 @@ import { classifyThread } from "./status.js";
 import type {
   ExecutionEnvironmentDescriptor,
   ModelSelection,
+  OrchestrationProposedPlan,
   OrchestrationProjectShell,
   OrchestrationShellSnapshot,
   OrchestrationThread,
@@ -34,6 +35,66 @@ const DEFAULT_MODEL_SELECTION: ModelSelection = {
   provider: "codex",
   model: "gpt-5.4",
 };
+
+type RemoteRpcClient = Pick<
+  T3RpcClient,
+  "request" | "subscribeShellSnapshot" | "subscribeThreadSnapshot" | "dispose"
+>;
+
+type RpcFactory = (wsUrl: string) => RemoteRpcClient;
+
+function buildPlanImplementationPrompt(planMarkdown: string): string {
+  return `PLEASE IMPLEMENT THIS PLAN:\n${planMarkdown.trim()}`;
+}
+
+function newestPlan(plans: readonly OrchestrationProposedPlan[]): OrchestrationProposedPlan | null {
+  return (
+    [...plans]
+      .sort(
+        (left, right) =>
+          left.updatedAt.localeCompare(right.updatedAt) || left.id.localeCompare(right.id),
+      )
+      .at(-1) ?? null
+  );
+}
+
+function selectPlanForImplementation(
+  thread: OrchestrationThread,
+  planId?: string,
+): OrchestrationProposedPlan {
+  if (planId) {
+    const plan = thread.proposedPlans.find((candidate) => candidate.id === planId);
+    if (!plan) {
+      throw new Error(`Thread '${thread.id}' has no proposed plan '${planId}'.`);
+    }
+    if (plan.implementedAt) {
+      throw new Error(`Proposed plan '${plan.id}' is already implemented.`);
+    }
+    return plan;
+  }
+
+  const latestTurnId = thread.latestTurn?.turnId;
+  const plan =
+    (latestTurnId
+      ? newestPlan(thread.proposedPlans.filter((candidate) => candidate.turnId === latestTurnId))
+      : null) ?? newestPlan(thread.proposedPlans);
+  if (!plan) {
+    throw new Error(`Thread '${thread.id}' has no proposed plan to implement.`);
+  }
+  if (plan.implementedAt) {
+    throw new Error(`Proposed plan '${plan.id}' is already implemented.`);
+  }
+  return plan;
+}
+
+function threadHasActiveTurn(thread: OrchestrationThread): boolean {
+  return (
+    thread.latestTurn?.state === "running" ||
+    thread.session?.status === "starting" ||
+    thread.session?.status === "running" ||
+    (thread.session?.activeTurnId ?? null) !== null
+  );
+}
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -70,9 +131,11 @@ function providerInventoryFromConfig(config: ServerConfig): ProviderModelInvento
 
 export class RemoteEnvironmentClient {
   readonly environment: SavedEnvironment;
+  private readonly rpcFactory: RpcFactory | null;
 
-  constructor(environment: SavedEnvironment) {
+  constructor(environment: SavedEnvironment, options: { rpcFactory?: RpcFactory } = {}) {
     this.environment = environment;
+    this.rpcFactory = options.rpcFactory ?? null;
   }
 
   static async pair(input: {
@@ -462,6 +525,84 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  async implementPlan(input: {
+    threadId: string;
+    planId?: string;
+  }): Promise<{ threadId: string; planId: string; modeChanged: boolean }> {
+    const rpc = await this.openRpc();
+    try {
+      const item = await rpc.subscribeThreadSnapshot<{
+        kind: "snapshot";
+        snapshot: {
+          snapshotSequence: number;
+          thread: OrchestrationThread;
+        };
+      }>(input.threadId);
+      if (item.kind !== "snapshot") {
+        throw new Error(
+          `Expected a thread snapshot for '${input.threadId}', received '${item.kind}'.`,
+        );
+      }
+      const thread = item.snapshot.thread;
+      if (thread.archivedAt || thread.deletedAt) {
+        throw new Error(`Thread '${thread.id}' is archived and cannot implement a plan.`);
+      }
+      if (threadHasActiveTurn(thread)) {
+        throw new Error(`Thread '${thread.id}' is still running and cannot implement a plan.`);
+      }
+
+      const plan = selectPlanForImplementation(thread, input.planId);
+      const createdAt = nowIso();
+      let modeChanged = false;
+      if (thread.interactionMode !== "default") {
+        await rpc.request("dispatchCommand", {
+          type: "thread.interaction-mode.set",
+          commandId: NodeCrypto.randomUUID(),
+          threadId: thread.id,
+          interactionMode: "default",
+          createdAt,
+        });
+        modeChanged = true;
+      }
+
+      try {
+        await rpc.request("dispatchCommand", {
+          type: "thread.turn.start",
+          commandId: NodeCrypto.randomUUID(),
+          threadId: thread.id,
+          message: {
+            messageId: NodeCrypto.randomUUID(),
+            role: "user",
+            text: buildPlanImplementationPrompt(plan.planMarkdown),
+            attachments: [],
+          },
+          modelSelection: thread.modelSelection,
+          titleSeed: thread.title,
+          runtimeMode: thread.runtimeMode,
+          interactionMode: "default",
+          sourceProposedPlan: {
+            threadId: thread.id,
+            planId: plan.id,
+          },
+          createdAt,
+        });
+      } catch (error) {
+        if (modeChanged) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `Thread '${thread.id}' was switched to default mode, but the implementation turn failed to start: ${detail}`,
+            { cause: error },
+          );
+        }
+        throw error;
+      }
+
+      return { threadId: thread.id, planId: plan.id, modeChanged };
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   async interrupt(threadId: string): Promise<void> {
     const thread = await this.findThread(threadId);
     const rpc = await this.openRpc();
@@ -526,7 +667,10 @@ export class RemoteEnvironmentClient {
     }
   }
 
-  private async openRpc(): Promise<T3RpcClient> {
+  private async openRpc(): Promise<RemoteRpcClient> {
+    if (this.rpcFactory) {
+      return this.rpcFactory(this.environment.wsBaseUrl);
+    }
     const wsUrl = await resolveWebSocketUrl({
       httpBaseUrl: this.environment.httpBaseUrl,
       wsBaseUrl: this.environment.wsBaseUrl,
