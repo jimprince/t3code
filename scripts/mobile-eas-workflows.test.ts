@@ -1,6 +1,8 @@
-import * as NodeFS from "node:fs";
-
-import { assert, describe, it } from "@effect/vitest";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { assert, it } from "@effect/vitest";
+import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
+import * as Path from "effect/Path";
 
 const workflowPaths = [
   "mobile-eas-development.yml",
@@ -8,17 +10,22 @@ const workflowPaths = [
   "mobile-eas-production.yml",
 ] as const;
 
-describe("mobile EAS workflows", () => {
-  it("installs the action-managed EAS CLI with npm", () => {
-    for (const workflowPath of workflowPaths) {
-      const workflow = NodeFS.readFileSync(
-        new URL(`../.github/workflows/${workflowPath}`, import.meta.url),
-        "utf8",
-      );
+it.layer(NodeServices.layer)("mobile EAS workflows", (it) => {
+  it.effect("installs the action-managed EAS CLI with npm", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
 
-      assert.include(workflow, "uses: expo/expo-github-action@v8");
-      assert.include(workflow, "packager: npm");
-      assert.notInclude(workflow, "packager: pnpm");
-    }
-  });
+      for (const workflowPath of workflowPaths) {
+        const workflow = yield* fs.readFileString(
+          path.join(repoRoot, ".github/workflows", workflowPath),
+        );
+
+        assert.include(workflow, "uses: expo/expo-github-action@v8");
+        assert.include(workflow, "packager: npm");
+        assert.notInclude(workflow, "packager: pnpm");
+      }
+    }),
+  );
 });
