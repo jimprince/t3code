@@ -64,7 +64,7 @@ function makeUpstreamConfig(appVariant: "development" | "preview" | "production"
 }
 
 describe("applyMobileForkConfig", () => {
-  it("exports fork identity with upstream production plugins and entitlements intact", () => {
+  it("exports fork identity with upstream plugins and entitlements intact", () => {
     const plugins = mobileConfig.plugins ?? [];
     const pluginNames = plugins.map((plugin) => (Array.isArray(plugin) ? plugin[0] : plugin));
     const widgetOptions = plugins.find(
@@ -73,19 +73,25 @@ describe("applyMobileForkConfig", () => {
     const buildProperties = plugins.find(
       (plugin) => Array.isArray(plugin) && plugin[0] === "expo-build-properties",
     )?.[1];
+    const appVariant = mobileConfig.extra?.appVariant as "development" | "preview" | "production";
+    const identifierSuffix =
+      appVariant === "production" ? "" : appVariant === "development" ? ".dev" : ".preview";
+    const schemeSuffix =
+      appVariant === "production" ? "" : appVariant === "development" ? "-dev" : "-preview";
+    const runtimePolicy = appVariant === "development" ? "fingerprint" : "appVersion";
 
     expect(mobileConfig).toMatchObject({
       owner: "jimprince",
-      scheme: "t3code-brad",
-      runtimeVersion: { policy: "appVersion" },
+      scheme: `t3code-brad${schemeSuffix}`,
+      runtimeVersion: { policy: runtimePolicy },
       updates: { url: "https://u.expo.dev/c148e0df-ed1f-4673-9c07-403ea56b6d1b" },
       ios: {
         appleTeamId: "CBCQ6MJF4B",
-        bundleIdentifier: "com.brad.t3code",
+        bundleIdentifier: `com.brad.t3code${identifierSuffix}`,
         associatedDomains: ["applinks:clerk.t3.codes", "webcredentials:clerk.t3.codes"],
       },
       android: {
-        package: "com.brad.t3code",
+        package: `com.brad.t3code${identifierSuffix}`,
         predictiveBackGestureEnabled: true,
       },
       extra: {
@@ -104,8 +110,8 @@ describe("applyMobileForkConfig", () => {
       ]),
     );
     expect(widgetOptions).toMatchObject({
-      bundleIdentifier: "com.brad.t3code.widgets",
-      groupIdentifier: "group.com.brad.t3code",
+      bundleIdentifier: `com.brad.t3code${identifierSuffix}.widgets`,
+      groupIdentifier: `group.com.brad.t3code${identifierSuffix}`,
       frequentUpdates: true,
     });
     expect(buildProperties).toMatchObject({
