@@ -214,6 +214,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "status",
   "worklog",
   "inbox",
+  "implement",
   "send",
   "clarify",
   "revise",
@@ -239,6 +240,7 @@ Direct thread commands:
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
   result       Fetch latest/final worker output
+  implement    Start the latest Plan Ready proposal in build mode
   inbox        List workers with new output or attention states
   watch        Detect and deliver completion/attention notifications
 
@@ -248,6 +250,7 @@ Examples:
   t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
   t3-thread create --name worker-a --env local-mbp --project PROJECT_ID --title "Worker A" --branch t3/worker-a --message "Fix the issue."
   t3-thread status worker-a
+  t3-thread implement worker-a
   t3-thread result worker-a --wait 120 --final-message
 
 Compatibility:
@@ -969,6 +972,27 @@ agent
       }),
     );
     printLines(summaries.filter(needsAttention).map(formatInboxLine));
+  });
+
+agent
+  .command("implement")
+  .description("Implement a Plan Ready proposal in the same thread using build mode")
+  .argument("<name>", "agent name or raw thread UUID")
+  .option("--plan-id <id>", "implement a specific unimplemented proposed plan")
+  .action(async (name, options) => {
+    const { agent: savedAgent, client, saved } = await withAgent(name);
+    const result = await client.implementPlan({
+      threadId: savedAgent.threadId,
+      ...(options.planId ? { planId: options.planId } : {}),
+    });
+    printJson({
+      agent: saved ? savedAgent.name : null,
+      threadId: result.threadId,
+      environment: savedAgent.environment,
+      planId: result.planId,
+      modeChanged: result.modeChanged,
+      dispatched: "implement",
+    });
   });
 
 agent
