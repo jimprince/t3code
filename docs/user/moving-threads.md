@@ -10,6 +10,8 @@ exports a portable bundle from the source server and imports it into the
 target server. If a turn is running, it is interrupted and the provider
 session is stopped before export. The source thread is archived only after
 the target confirms the import, so a failed move never loses the thread.
+If the provider does not confirm shutdown within the export timeout, the move
+stops without creating a bundle; wait for the turn to stop and retry.
 
 ## What moves
 
@@ -31,8 +33,27 @@ the target confirms the import, so a failed move never loses the thread.
 - **Agent memory (Claude)** — the Claude Code session transcript is copied
   under the target machine's `~/.claude/projects/<new-worktree>` directory and
   the resume cursor is preserved, so the next turn resumes with full native
-  session context. Other providers currently move history only; the agent
-  starts its next turn fresh (the move reports this as a warning).
+  session context. The cursor is preserved only when its matching transcript
+  is transferred successfully. Other providers currently move history only;
+  the agent starts its next turn fresh (the move reports this as a warning).
+
+The target must have an enabled provider instance compatible with the source
+thread. A matching instance id is preferred; otherwise the importer maps to
+the target's only enabled instance of the same provider. The move fails before
+restoring Git state if there is no compatible instance or if multiple target
+instances make the mapping ambiguous.
+
+## Safety limits
+
+The importer validates repository identity, bundle version, Git refs, nested
+thread ids, provider transcript names, and all restored paths before recording
+the thread. It refuses symlinked or non-regular untracked files rather than
+following them outside the worktree.
+
+To keep transfer RPCs and temporary disk use bounded, Git bundles, tracked
+diffs, the total untracked-file payload, and Claude transcripts are limited to
+64 MiB each; each untracked file is limited to 16 MiB. Export fails instead of
+silently omitting required worktree state when these limits are exceeded.
 
 ## What does not move
 

@@ -21,6 +21,7 @@ import {
   EventId,
   OrchestrationExportThreadError,
   OrchestrationImportThreadError,
+  type RepositoryIdentity,
   THREAD_MOVE_BUNDLE_VERSION,
   type OrchestrationCheckpointSummary,
   type OrchestrationThread,
@@ -47,7 +48,9 @@ import * as Schema from "effect/Schema";
 import { checkpointRefForThreadTurn, CHECKPOINT_REFS_PREFIX } from "../../checkpointing/Utils.ts";
 import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { ProviderAdapterRegistry } from "../../provider/Services/ProviderAdapterRegistry.ts";
 import { VcsProcess } from "../../vcs/VcsProcess.ts";
+import { findImportedNestedIdCollision } from "../decider.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ThreadTransfer, type ThreadTransferShape } from "../Services/ThreadTransfer.ts";
@@ -60,10 +63,11 @@ const MAX_DIRTY_DIFF_BYTES = 64 * 1024 * 1024;
 const MAX_UNTRACKED_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_UNTRACKED_TOTAL_BYTES = 64 * 1024 * 1024;
 const MAX_PROVIDER_SESSION_FILE_BYTES = 64 * 1024 * 1024;
+const MAX_GIT_BUNDLE_BYTES = 64 * 1024 * 1024;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const CLAUDE_PROVIDER_NAME = "claude";
+const CLAUDE_PROVIDER_NAME = "claudeAgent";
 
 /**
  * Claude Code stores session transcripts under
@@ -138,6 +142,90 @@ export function isSafeRelativeFilePath(filePath: string): boolean {
   return segments.every((segment) => segment !== "..");
 }
 
+function isSafeProviderSessionFileName(fileName: string): boolean {
+  return (
+    fileName.length > 0 &&
+    fileName !== "." &&
+    fileName !== ".." &&
+    !fileName.includes("/") &&
+    !fileName.includes("\\")
+  );
+}
+
+function maxBase64Length(byteLimit: number): number {
+  return Math.ceil(byteLimit / 3) * 4;
+}
+
+function utf8ByteLength(value: string): number {
+  return new TextEncoder().encode(value).byteLength;
+}
+
+function validateBundleForImport(
+  bundle: ThreadMoveBundle,
+  targetRepositoryIdentity: RepositoryIdentity | null | undefined,
+): string | undefined {
+  if (
+    bundle.repositoryIdentity !== null &&
+    targetRepositoryIdentity != null &&
+    bundle.repositoryIdentity.canonicalKey !== targetRepositoryIdentity.canonicalKey
+  ) {
+    return `The source repository '${bundle.repositoryIdentity.canonicalKey}' does not match the target repository '${targetRepositoryIdentity.canonicalKey}'.`;
+  }
+
+  const gitState = bundle.git;
+  if (gitState !== null) {
+    if (
+      gitState.bundleBase64 !== null &&
+      gitState.bundleBase64.length > maxBase64Length(MAX_GIT_BUNDLE_BYTES)
+    ) {
+      return "The Git bundle exceeds the thread move size limit.";
+    }
+    if (gitState.dirtyDiff !== null && utf8ByteLength(gitState.dirtyDiff) > MAX_DIRTY_DIFF_BYTES) {
+      return "The uncommitted tracked changes exceed the thread move size limit.";
+    }
+
+    const checkpointPrefix = `${CHECKPOINT_REFS_PREFIX}/${Encoding.encodeBase64Url(bundle.thread.id)}/`;
+    if (gitState.checkpointRefs.some((ref) => !String(ref).startsWith(checkpointPrefix))) {
+      return "The Git bundle contains a checkpoint ref that does not belong to this thread.";
+    }
+
+    let totalUntrackedBase64Length = 0;
+    for (const untracked of gitState.untrackedFiles) {
+      if (!isSafeRelativeFilePath(untracked.path)) {
+        return `The Git bundle contains an unsafe untracked file path '${untracked.path}'.`;
+      }
+      if (untracked.contentBase64.length > maxBase64Length(MAX_UNTRACKED_FILE_BYTES)) {
+        return `Untracked file '${untracked.path}' exceeds the thread move size limit.`;
+      }
+      totalUntrackedBase64Length += untracked.contentBase64.length;
+      if (totalUntrackedBase64Length > maxBase64Length(MAX_UNTRACKED_TOTAL_BYTES)) {
+        return "The untracked files exceed the total thread move size limit.";
+      }
+    }
+  }
+
+  const providerSession = bundle.providerSession;
+  if (providerSession?.sessionFile !== null && providerSession?.sessionFile !== undefined) {
+    if (!isSafeProviderSessionFileName(providerSession.sessionFile.fileName)) {
+      return `The provider session filename '${providerSession.sessionFile.fileName}' is unsafe.`;
+    }
+    if (utf8ByteLength(providerSession.sessionFile.content) > MAX_PROVIDER_SESSION_FILE_BYTES) {
+      return "The provider session transcript exceeds the thread move size limit.";
+    }
+    if (providerSession.providerName === CLAUDE_PROVIDER_NAME) {
+      const sessionId = readClaudeSessionIdFromCursor(providerSession.resumeCursor);
+      if (
+        sessionId === undefined ||
+        providerSession.sessionFile.fileName !== `${sessionId}.jsonl`
+      ) {
+        return "The Claude session transcript does not match its resume cursor.";
+      }
+    }
+  }
+
+  return undefined;
+}
+
 /**
  * Flatten an error and its cause chain into one diagnostic string. Generic
  * top-level messages ("Failed to execute statement") are useless without the
@@ -206,11 +294,44 @@ const make = Effect.gen(function* () {
   const engine = yield* OrchestrationEngineService;
   const snapshotQuery = yield* ProjectionSnapshotQuery;
   const providerSessionRuntime = yield* ProviderSessionRuntimeRepository;
+  const providerAdapterRegistry = yield* ProviderAdapterRegistry;
   const gitWorkflow = yield* GitWorkflowService;
   const vcsProcess = yield* VcsProcess;
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const crypto = yield* Crypto.Crypto;
+
+  const isPathWithinRoot = (rootPath: string, candidatePath: string): boolean => {
+    const relative = path.relative(rootPath, candidatePath);
+    return relative === "" || (!path.isAbsolute(relative) && relative.split(/[\\/]/)[0] !== "..");
+  };
+
+  const prepareContainedFileWrite = (rootPath: string, filePath: string) =>
+    Effect.gen(function* () {
+      const rootRealPath = yield* fs.realPath(rootPath);
+      const parentPath = path.dirname(filePath);
+      yield* fs.makeDirectory(parentPath, { recursive: true });
+      const parentRealPath = yield* fs.realPath(parentPath);
+      if (!isPathWithinRoot(rootRealPath, parentRealPath)) {
+        return yield* new OrchestrationImportThreadError({
+          message: `Refusing to restore a file outside the target worktree: '${filePath}'.`,
+        });
+      }
+      const symlinkTarget = yield* fs.readLink(filePath).pipe(Effect.option);
+      if (Option.isSome(symlinkTarget)) {
+        return yield* new OrchestrationImportThreadError({
+          message: `Refusing to overwrite symlink '${filePath}' while restoring the thread.`,
+        });
+      }
+      if (yield* fs.exists(filePath)) {
+        const existingRealPath = yield* fs.realPath(filePath);
+        if (!isPathWithinRoot(rootRealPath, existingRealPath)) {
+          return yield* new OrchestrationImportThreadError({
+            message: `Refusing to overwrite a file outside the target worktree: '${filePath}'.`,
+          });
+        }
+      }
+    });
 
   const claudeProjectsDirForCwd = (cwd: string): string => {
     const configuredDir = process.env.CLAUDE_CONFIG_DIR;
@@ -309,7 +430,7 @@ const make = Effect.gen(function* () {
 
   /** Interrupt any active turn and stop the provider session so the provider
    * transcript on disk is final before we copy it. */
-  const quiesceThread = (thread: OrchestrationThread, warnings: string[]) =>
+  const quiesceThread = (thread: OrchestrationThread) =>
     Effect.gen(function* () {
       const status = thread.session?.status;
       const sessionActive =
@@ -343,13 +464,14 @@ const make = Effect.gen(function* () {
 
       const quiesced = yield* awaitSessionQuiesced(thread.id);
       if (!quiesced) {
-        warnings.push(
-          "The provider session did not confirm shutdown before export; the moved agent context may be missing the very latest turn.",
-        );
+        return yield* new OrchestrationExportThreadError({
+          message:
+            "The provider session did not confirm shutdown, so the thread was not exported. Retry after the active turn stops.",
+        });
       }
     });
 
-  const collectUntrackedFiles = (cwd: string, warnings: string[]) =>
+  const collectUntrackedFiles = (cwd: string) =>
     Effect.gen(function* () {
       const listed = yield* git({
         operation: "ThreadTransfer.export.listUntracked",
@@ -362,28 +484,44 @@ const make = Effect.gen(function* () {
       let totalBytes = 0;
       for (const relativePath of paths) {
         const absolutePath = path.join(cwd, relativePath);
+        const symlinkTarget = yield* fs.readLink(absolutePath).pipe(Effect.option);
+        if (Option.isSome(symlinkTarget)) {
+          return yield* new OrchestrationExportThreadError({
+            message: `Untracked symlink '${relativePath}' cannot be transferred safely.`,
+          });
+        }
         const stat = yield* fs.stat(absolutePath).pipe(
           Effect.map(Option.some),
           Effect.orElseSucceed(() => Option.none()),
         );
         if (Option.isNone(stat) || stat.value.type !== "File") {
-          continue;
+          return yield* new OrchestrationExportThreadError({
+            message: `Untracked entry '${relativePath}' is not a regular file and cannot be transferred safely.`,
+          });
         }
         const size = Number(stat.value.size);
         if (size > MAX_UNTRACKED_FILE_BYTES) {
-          warnings.push(
-            `Untracked file '${relativePath}' exceeds the move size limit and was not transferred.`,
-          );
-          continue;
+          return yield* new OrchestrationExportThreadError({
+            message: `Untracked file '${relativePath}' exceeds the thread move size limit.`,
+          });
         }
         if (totalBytes + size > MAX_UNTRACKED_TOTAL_BYTES) {
-          warnings.push(
-            `Untracked files beyond '${relativePath}' exceed the total move size limit and were not transferred.`,
-          );
-          break;
+          return yield* new OrchestrationExportThreadError({
+            message: "Untracked files exceed the total thread move size limit.",
+          });
         }
         const bytes = yield* fs.readFile(absolutePath);
-        totalBytes += size;
+        if (bytes.byteLength > MAX_UNTRACKED_FILE_BYTES) {
+          return yield* new OrchestrationExportThreadError({
+            message: `Untracked file '${relativePath}' changed while exporting and now exceeds the thread move size limit.`,
+          });
+        }
+        totalBytes += bytes.byteLength;
+        if (totalBytes > MAX_UNTRACKED_TOTAL_BYTES) {
+          return yield* new OrchestrationExportThreadError({
+            message: "Untracked files exceed the total thread move size limit.",
+          });
+        }
         untrackedFiles.push({
           path: relativePath,
           contentBase64: Encoding.encodeBase64(bytes),
@@ -496,10 +634,8 @@ const make = Effect.gen(function* () {
       // Bundle the branch plus checkpoint refs, excluding history the target
       // clone is expected to have. Falls back to a full bundle when no remote
       // basis exists.
-      const bundlePath = path.join(
-        yield* fs.makeTempDirectory({ prefix: "t3-thread-move-" }),
-        "thread.bundle",
-      );
+      const bundleDir = yield* fs.makeTempDirectory({ prefix: "t3-thread-move-" });
+      const bundlePath = path.join(bundleDir, "thread.bundle");
       const bundleRefs = [`refs/heads/${branch}`, ...checkpointRefs];
       const bundleArgs = [
         "bundle",
@@ -508,27 +644,38 @@ const make = Effect.gen(function* () {
         ...(mergeBase !== null && mergeBase !== branchTipSha ? [`^${mergeBase}`] : []),
         ...bundleRefs,
       ];
-      const bundleResult = yield* git({
-        operation: "ThreadTransfer.export.bundleCreate",
-        cwd,
-        args: bundleArgs,
-        allowNonZeroExit: true,
-        timeoutMs: GIT_BUNDLE_TIMEOUT_MS,
-      });
-      let bundleBase64: string | null = null;
-      if (bundleResult.exitCode === 0) {
-        const bundleBytes = yield* fs.readFile(bundlePath);
-        bundleBase64 = Encoding.encodeBase64(bundleBytes);
-      } else if (/empty bundle/i.test(bundleResult.stderr)) {
-        // Branch tip equals the basis and there are no checkpoint refs — the
-        // target can recreate the branch from `branchTipSha` directly.
-        bundleBase64 = null;
-      } else {
+      const bundleBase64 = yield* Effect.gen(function* () {
+        const bundleResult = yield* git({
+          operation: "ThreadTransfer.export.bundleCreate",
+          cwd,
+          args: bundleArgs,
+          allowNonZeroExit: true,
+          timeoutMs: GIT_BUNDLE_TIMEOUT_MS,
+        });
+        if (bundleResult.exitCode === 0) {
+          const bundleBytes = yield* fs.readFile(bundlePath);
+          if (bundleBytes.byteLength > MAX_GIT_BUNDLE_BYTES) {
+            return yield* new OrchestrationExportThreadError({
+              message: "The Git bundle exceeds the thread move size limit.",
+            });
+          }
+          return Encoding.encodeBase64(bundleBytes);
+        }
+        if (/empty bundle/i.test(bundleResult.stderr)) {
+          // Branch tip equals the basis and there are no checkpoint refs — the
+          // target can recreate the branch from `branchTipSha` directly.
+          return null;
+        }
         return yield* new OrchestrationExportThreadError({
           message: `Failed to create the git bundle for branch '${branch}': ${bundleResult.stderr.trim()}`,
         });
-      }
-      yield* fs.remove(bundlePath, { force: true }).pipe(Effect.orElseSucceed(() => undefined));
+      }).pipe(
+        Effect.ensuring(
+          fs
+            .remove(bundleDir, { recursive: true, force: true })
+            .pipe(Effect.orElseSucceed(() => undefined)),
+        ),
+      );
 
       // Uncommitted tracked changes (staged + unstaged vs HEAD), applied on
       // the target with `git apply --binary`.
@@ -540,11 +687,12 @@ const make = Effect.gen(function* () {
       });
       let dirtyDiff: string | null = diffResult.stdout.length > 0 ? diffResult.stdout : null;
       if (diffResult.stdoutTruncated) {
-        warnings.push("Uncommitted changes exceeded the move size limit and were not transferred.");
-        dirtyDiff = null;
+        return yield* new OrchestrationExportThreadError({
+          message: "Uncommitted tracked changes exceed the thread move size limit.",
+        });
       }
 
-      const untrackedFiles = yield* collectUntrackedFiles(cwd, warnings);
+      const untrackedFiles = yield* collectUntrackedFiles(cwd);
 
       const gitState: ThreadMoveGitState = {
         branch,
@@ -587,7 +735,7 @@ const make = Effect.gen(function* () {
         input.warnings.push(
           `Agent conversation memory for provider '${runtime.providerName}' is not transferred yet; the moved thread keeps its visible history but the agent starts the next turn without native session context.`,
         );
-        return base;
+        return { ...base, resumeCursor: null };
       }
 
       const sessionId = readClaudeSessionIdFromCursor(runtime.resumeCursor);
@@ -595,7 +743,7 @@ const make = Effect.gen(function* () {
         input.warnings.push(
           "No resumable Claude session id was found; the agent starts the next turn without native session context.",
         );
-        return base;
+        return { ...base, resumeCursor: null };
       }
 
       const sessionFilePath = path.join(claudeProjectsDirForCwd(input.cwd), `${sessionId}.jsonl`);
@@ -607,13 +755,13 @@ const make = Effect.gen(function* () {
         input.warnings.push(
           `Claude session transcript '${sessionId}.jsonl' was not found on the source machine; the agent starts the next turn without native session context.`,
         );
-        return base;
+        return { ...base, resumeCursor: null };
       }
       if (Number(stat.value.size) > MAX_PROVIDER_SESSION_FILE_BYTES) {
         input.warnings.push(
           "The Claude session transcript exceeds the move size limit and was not transferred.",
         );
-        return base;
+        return { ...base, resumeCursor: null };
       }
 
       const content = yield* fs.readFileString(sessionFilePath);
@@ -648,7 +796,7 @@ const make = Effect.gen(function* () {
         });
       }
 
-      yield* quiesceThread(initialThread, warnings);
+      yield* quiesceThread(initialThread);
 
       // Re-read after quiescing so the exported history includes the
       // interrupt/stop outcome.
@@ -802,71 +950,101 @@ const make = Effect.gen(function* () {
         const bundleBytes = Result.getOrThrow(Encoding.decodeBase64(gitState.bundleBase64));
         const bundleDir = yield* fs.makeTempDirectory({ prefix: "t3-thread-move-" });
         const bundlePath = path.join(bundleDir, "thread.bundle");
-        yield* fs.writeFile(bundlePath, bundleBytes);
+        yield* Effect.gen(function* () {
+          yield* fs.writeFile(bundlePath, bundleBytes);
 
-        const verifyBundle = git({
-          operation: "ThreadTransfer.import.bundleVerify",
-          cwd: workspaceRoot,
-          args: ["bundle", "verify", bundlePath],
-          allowNonZeroExit: true,
-          timeoutMs: GIT_BUNDLE_TIMEOUT_MS,
-        });
-        let verifyResult = yield* verifyBundle;
-        if (verifyResult.exitCode !== 0) {
-          // Thin bundles assume the target already has the source's shared
-          // base commits. A stale clone is the common cause, and both
-          // projects share the same repository, so fetch the target's
-          // primary remote once and retry before failing.
-          const fetchedRemote = yield* fetchPrimaryRemote(workspaceRoot);
-          if (fetchedRemote !== null) {
-            verifyResult = yield* verifyBundle;
-          }
-          if (verifyResult.exitCode !== 0) {
-            return yield* new OrchestrationImportThreadError({
-              message: `The target repository is missing commits this thread is based on${
-                fetchedRemote !== null
-                  ? ` (even after fetching '${fetchedRemote}'; push the thread's base commits to the shared remote, or pull on the target project, then retry)`
-                  : " (the target project has no reachable git remote to fetch them from; run a git fetch/pull there first)"
-              }: ${verifyResult.stderr.trim()}`,
-            });
-          }
-        }
-
-        // Fetch exactly the refs the bundle advertises.
-        const heads = yield* git({
-          operation: "ThreadTransfer.import.bundleListHeads",
-          cwd: workspaceRoot,
-          args: ["bundle", "list-heads", bundlePath],
-          timeoutMs: GIT_BUNDLE_TIMEOUT_MS,
-        });
-        const bundledRefs = heads.stdout
-          .split("\n")
-          .map((line) => line.trim())
-          .filter((line) => line.length > 0)
-          .map((line) => line.split(/\s+/)[1])
-          .filter((ref): ref is string => ref !== undefined && ref !== "HEAD");
-        if (bundledRefs.length > 0) {
-          const refspecs = bundledRefs.map((ref) => {
-            if (ref !== `refs/heads/${gitState.branch}`) {
-              return `+${ref}:${ref}`;
-            }
-            if (targetBranch !== gitState.branch) {
-              // Land the bundle's branch on the fresh fallback name.
-              return `+${ref}:refs/heads/${targetBranch}`;
-            }
-            // Same tip already present: non-forced no-op fetch.
-            return existingBranchSha !== null ? `${ref}:${ref}` : `+${ref}:${ref}`;
-          });
-          yield* git({
-            operation: "ThreadTransfer.import.bundleFetch",
+          const verifyBundle = git({
+            operation: "ThreadTransfer.import.bundleVerify",
             cwd: workspaceRoot,
-            args: ["fetch", "--quiet", "--no-tags", bundlePath, ...refspecs],
+            args: ["bundle", "verify", bundlePath],
+            allowNonZeroExit: true,
             timeoutMs: GIT_BUNDLE_TIMEOUT_MS,
           });
-        }
-        yield* fs
-          .remove(bundleDir, { recursive: true, force: true })
-          .pipe(Effect.orElseSucceed(() => undefined));
+          let verifyResult = yield* verifyBundle;
+          if (verifyResult.exitCode !== 0) {
+            // Thin bundles assume the target already has the source's shared
+            // base commits. A stale clone is the common cause, and both
+            // projects share the same repository, so fetch the target's
+            // primary remote once and retry before failing.
+            const fetchedRemote = yield* fetchPrimaryRemote(workspaceRoot);
+            if (fetchedRemote !== null) {
+              verifyResult = yield* verifyBundle;
+            }
+            if (verifyResult.exitCode !== 0) {
+              return yield* new OrchestrationImportThreadError({
+                message: `The target repository is missing commits this thread is based on${
+                  fetchedRemote !== null
+                    ? ` (even after fetching '${fetchedRemote}'; push the thread's base commits to the shared remote, or pull on the target project, then retry)`
+                    : " (the target project has no reachable git remote to fetch them from; run a git fetch/pull there first)"
+                }: ${verifyResult.stderr.trim()}`,
+              });
+            }
+          }
+
+          // Fetch exactly the refs the bundle advertises.
+          const heads = yield* git({
+            operation: "ThreadTransfer.import.bundleListHeads",
+            cwd: workspaceRoot,
+            args: ["bundle", "list-heads", bundlePath],
+            timeoutMs: GIT_BUNDLE_TIMEOUT_MS,
+          });
+          const bundledHeads = heads.stdout
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+            .flatMap((line) => {
+              const [sha, ref] = line.split(/\s+/);
+              return sha !== undefined && ref !== undefined && ref !== "HEAD" ? [{ sha, ref }] : [];
+            });
+          const expectedBranchRef = `refs/heads/${gitState.branch}`;
+          const expectedRefs = new Set([expectedBranchRef, ...gitState.checkpointRefs]);
+          const unexpectedRef = bundledHeads.find(({ ref }) => !expectedRefs.has(ref));
+          if (unexpectedRef !== undefined) {
+            return yield* new OrchestrationImportThreadError({
+              message: `The Git bundle advertises unexpected ref '${unexpectedRef.ref}'.`,
+            });
+          }
+          const bundledBranch = bundledHeads.find(({ ref }) => ref === expectedBranchRef);
+          if (bundledBranch === undefined || bundledBranch.sha !== gitState.branchTipSha) {
+            return yield* new OrchestrationImportThreadError({
+              message: `The Git bundle branch does not match the declared tip for '${gitState.branch}'.`,
+            });
+          }
+          const missingCheckpointRef = gitState.checkpointRefs.find(
+            (ref) => !bundledHeads.some((head) => head.ref === ref),
+          );
+          if (missingCheckpointRef !== undefined) {
+            return yield* new OrchestrationImportThreadError({
+              message: `The Git bundle is missing declared checkpoint ref '${missingCheckpointRef}'.`,
+            });
+          }
+          const bundledRefs = bundledHeads.map(({ ref }) => ref);
+          if (bundledRefs.length > 0) {
+            const refspecs = bundledRefs.map((ref) => {
+              if (ref !== `refs/heads/${gitState.branch}`) {
+                return `+${ref}:${ref}`;
+              }
+              if (targetBranch !== gitState.branch) {
+                // Land the bundle's branch on the fresh fallback name.
+                return `+${ref}:refs/heads/${targetBranch}`;
+              }
+              // Same tip already present: non-forced no-op fetch.
+              return existingBranchSha !== null ? `${ref}:${ref}` : `+${ref}:${ref}`;
+            });
+            yield* git({
+              operation: "ThreadTransfer.import.bundleFetch",
+              cwd: workspaceRoot,
+              args: ["fetch", "--quiet", "--no-tags", bundlePath, ...refspecs],
+              timeoutMs: GIT_BUNDLE_TIMEOUT_MS,
+            });
+          }
+        }).pipe(
+          Effect.ensuring(
+            fs
+              .remove(bundleDir, { recursive: true, force: true })
+              .pipe(Effect.orElseSucceed(() => undefined)),
+          ),
+        );
       }
 
       // Ensure the branch exists even when the bundle carried no branch ref
@@ -924,11 +1102,12 @@ const make = Effect.gen(function* () {
         }
         for (const untracked of gitState.untrackedFiles) {
           if (!isSafeRelativeFilePath(untracked.path)) {
-            warnings.push(`Skipped untracked file with unsafe path '${untracked.path}'.`);
-            continue;
+            return yield* new OrchestrationImportThreadError({
+              message: `The Git bundle contains an unsafe untracked file path '${untracked.path}'.`,
+            });
           }
           const absolutePath = path.join(worktreePath, untracked.path);
-          yield* fs.makeDirectory(path.dirname(absolutePath), { recursive: true });
+          yield* prepareContainedFileWrite(worktreePath, absolutePath);
           yield* fs.writeFile(
             absolutePath,
             Result.getOrThrow(Encoding.decodeBase64(untracked.contentBase64)),
@@ -961,6 +1140,7 @@ const make = Effect.gen(function* () {
     readonly providerSession: ThreadMoveProviderSession;
     readonly threadId: ThreadId;
     readonly cwd: string;
+    readonly modelSelection: PortableThread["modelSelection"];
     readonly warnings: string[];
   }) =>
     Effect.gen(function* () {
@@ -991,7 +1171,10 @@ const make = Effect.gen(function* () {
         status: "stopped",
         lastSeenAt,
         resumeCursor: providerSession.resumeCursor,
-        runtimePayload: null,
+        runtimePayload: {
+          cwd: input.cwd,
+          modelSelection: input.modelSelection,
+        },
       });
     }).pipe(
       Effect.catch((cause) =>
@@ -1003,10 +1186,88 @@ const make = Effect.gen(function* () {
       ),
     );
 
+  const resolveTargetProviderRoute = (input: {
+    readonly portable: PortableThread;
+    readonly providerSession: ThreadMoveProviderSession | null;
+    readonly warnings: string[];
+  }) =>
+    Effect.gen(function* () {
+      const sourceInstanceId =
+        input.providerSession?.providerInstanceId ?? input.portable.modelSelection.instanceId;
+      const exactMatch = yield* providerAdapterRegistry
+        .getInstanceInfo(sourceInstanceId)
+        .pipe(Effect.option, Effect.map(Option.getOrUndefined));
+      const sourceDriver = input.providerSession?.providerName;
+
+      let target =
+        exactMatch !== undefined &&
+        exactMatch.enabled &&
+        (sourceDriver === undefined || String(exactMatch.driverKind) === sourceDriver)
+          ? exactMatch
+          : undefined;
+
+      if (target === undefined && sourceDriver !== undefined) {
+        const instanceIds = yield* providerAdapterRegistry.listInstances();
+        const instanceInfos = yield* Effect.forEach(
+          instanceIds,
+          (instanceId) => providerAdapterRegistry.getInstanceInfo(instanceId).pipe(Effect.option),
+          { concurrency: "unbounded" },
+        );
+        const compatible = instanceInfos
+          .filter(Option.isSome)
+          .map((entry) => entry.value)
+          .filter((entry) => entry.enabled && String(entry.driverKind) === sourceDriver);
+        if (compatible.length === 1) {
+          target = compatible[0];
+        } else if (compatible.length === 0) {
+          return yield* new OrchestrationImportThreadError({
+            message: `The target environment has no enabled '${sourceDriver}' provider instance for this thread. Configure one and retry the move.`,
+          });
+        } else {
+          return yield* new OrchestrationImportThreadError({
+            message: `The source provider instance '${sourceInstanceId}' does not exist on the target, and multiple '${sourceDriver}' instances are available. Configure a matching instance id and retry the move.`,
+          });
+        }
+      }
+
+      if (target === undefined) {
+        return yield* new OrchestrationImportThreadError({
+          message: `The target environment has no enabled provider instance '${sourceInstanceId}' for this thread. Configure it and retry the move.`,
+        });
+      }
+
+      if (target.instanceId !== sourceInstanceId) {
+        input.warnings.push(
+          `Provider instance '${sourceInstanceId}' was mapped to '${target.instanceId}' on the target environment.`,
+        );
+      }
+
+      return {
+        portable: {
+          ...input.portable,
+          modelSelection: {
+            ...input.portable.modelSelection,
+            instanceId: target.instanceId,
+          },
+        },
+        providerSession:
+          input.providerSession === null
+            ? null
+            : {
+                ...input.providerSession,
+                providerName: String(target.driverKind),
+                providerInstanceId: target.instanceId,
+                adapterKey: String(target.driverKind),
+              },
+      } satisfies {
+        portable: PortableThread;
+        providerSession: ThreadMoveProviderSession | null;
+      };
+    });
+
   const importThread: ThreadTransferShape["importThread"] = (input) =>
     Effect.gen(function* () {
       const warnings: string[] = [...input.bundle.warnings];
-      const portable = input.bundle.thread;
 
       const project = yield* snapshotQuery
         .getProjectShellById(input.projectId)
@@ -1017,13 +1278,38 @@ const make = Effect.gen(function* () {
         });
       }
 
-      const existing = yield* snapshotQuery.getThreadShellByIdIncludingArchived(portable.id).pipe(
-        Effect.map(Option.getOrUndefined),
-        Effect.orElseSucceed(() => undefined),
-      );
+      const validationError = validateBundleForImport(input.bundle, project.repositoryIdentity);
+      if (validationError !== undefined) {
+        return yield* new OrchestrationImportThreadError({ message: validationError });
+      }
+
+      const existing = yield* snapshotQuery
+        .getThreadShellByIdIncludingArchived(input.bundle.thread.id)
+        .pipe(
+          Effect.map(Option.getOrUndefined),
+          Effect.orElseSucceed(() => undefined),
+        );
       if (existing !== undefined) {
         return yield* new OrchestrationImportThreadError({
-          message: `Thread '${portable.id}' already exists on this environment.`,
+          message: `Thread '${input.bundle.thread.id}' already exists on this environment.`,
+        });
+      }
+
+      const resolvedProvider = yield* resolveTargetProviderRoute({
+        portable: input.bundle.thread,
+        providerSession: input.bundle.providerSession,
+        warnings,
+      });
+      const portable = resolvedProvider.portable;
+      const providerSession = resolvedProvider.providerSession;
+
+      const nestedIdCollision = findImportedNestedIdCollision(
+        yield* snapshotQuery.getSnapshot(),
+        portable,
+      );
+      if (nestedIdCollision !== undefined) {
+        return yield* new OrchestrationImportThreadError({
+          message: `Cannot import thread '${portable.id}': ${nestedIdCollision}.`,
         });
       }
 
@@ -1085,11 +1371,12 @@ const make = Effect.gen(function* () {
         ),
       );
 
-      if (input.bundle.providerSession !== null) {
+      if (providerSession !== null) {
         yield* transplantProviderSession({
-          providerSession: input.bundle.providerSession,
+          providerSession,
           threadId: portable.id,
           cwd: worktreePath ?? project.workspaceRoot,
+          modelSelection: portable.modelSelection,
           warnings,
         });
       }

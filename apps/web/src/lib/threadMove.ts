@@ -22,6 +22,10 @@ export interface ThreadMoveResult {
   readonly warnings: readonly string[];
 }
 
+export interface ThreadMoveArchiveResult {
+  readonly _tag: "Success" | "Failure";
+}
+
 export type ExportThreadForMove = (
   input: OrchestrationExportThreadInput,
 ) => Promise<OrchestrationExportThreadResult>;
@@ -137,14 +141,17 @@ export function isThreadMoveBranchConflict(error: unknown): boolean {
  * import is retried with the new-worktree option, landing the work on a
  * fallback branch at the exported tip without touching the target's branch.
  *
- * Archiving the source thread is intentionally left to the caller — it must
- * only happen after this resolves, so a failed move never loses the thread.
+ * Source archival is part of this coordinator so its ordering is testable: it
+ * runs only after target import succeeds. An archival failure leaves both
+ * copies intact and is returned as a warning instead of hiding the partial
+ * move.
  */
 export async function moveThreadToEnvironment(input: {
   readonly source: ScopedThreadRef;
   readonly target: ThreadMoveTarget;
   readonly exportThread: ExportThreadForMove;
   readonly importThread: ImportThreadForMove;
+  readonly archiveSource?: () => Promise<ThreadMoveArchiveResult>;
   readonly onProgress?: (phase: ThreadMovePhase) => void;
   readonly confirmBranchFallback?: (branch: string) => Promise<boolean>;
 }): Promise<ThreadMoveResult> {
@@ -177,9 +184,21 @@ export async function moveThreadToEnvironment(input: {
     });
   }
 
+  const warnings = [...imported.warnings];
+  if (input.archiveSource) {
+    try {
+      const archiveResult = await input.archiveSource();
+      if (archiveResult._tag === "Failure") {
+        warnings.push("The source copy could not be archived; archive it manually.");
+      }
+    } catch {
+      warnings.push("The source copy could not be archived; archive it manually.");
+    }
+  }
+
   return {
     threadId: imported.threadId,
     worktreePath: imported.worktreePath,
-    warnings: imported.warnings,
+    warnings,
   };
 }

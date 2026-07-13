@@ -3,6 +3,7 @@ import {
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationReadModel,
+  type PortableThread,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Crypto from "effect/Crypto";
@@ -57,6 +58,76 @@ type PlannedOrchestrationEvent = Omit<OrchestrationEvent, "sequence">;
 type DecideOrchestrationCommandResult =
   | PlannedOrchestrationEvent
   | ReadonlyArray<PlannedOrchestrationEvent>;
+
+export function findImportedNestedIdCollision(
+  readModel: OrchestrationReadModel,
+  portable: PortableThread,
+): string | undefined {
+  const existingMessageIds = new Set(
+    readModel.threads.flatMap((thread) => thread.messages.map((message) => String(message.id))),
+  );
+  const existingPlanIds = new Set(
+    readModel.threads.flatMap((thread) => thread.proposedPlans.map((plan) => String(plan.id))),
+  );
+  const existingActivityIds = new Set(
+    readModel.threads.flatMap((thread) => thread.activities.map((activity) => String(activity.id))),
+  );
+  const existingTurnIds = new Set(
+    readModel.threads.flatMap((thread) => [
+      ...(thread.latestTurn === null ? [] : [String(thread.latestTurn.turnId)]),
+      ...thread.messages.flatMap((message) =>
+        message.turnId === null ? [] : [String(message.turnId)],
+      ),
+      ...thread.proposedPlans.flatMap((plan) =>
+        plan.turnId === null ? [] : [String(plan.turnId)],
+      ),
+      ...thread.activities.flatMap((activity) =>
+        activity.turnId === null ? [] : [String(activity.turnId)],
+      ),
+      ...thread.checkpoints.map((checkpoint) => String(checkpoint.turnId)),
+      ...(thread.goal?.lastTurnId == null ? [] : [String(thread.goal.lastTurnId)]),
+    ]),
+  );
+
+  const checks: ReadonlyArray<
+    readonly [label: string, values: ReadonlyArray<string>, existing: ReadonlySet<string>]
+  > = [
+    ["message", portable.messages.map((message) => String(message.id)), existingMessageIds],
+    ["proposed plan", portable.proposedPlans.map((plan) => String(plan.id)), existingPlanIds],
+    ["activity", portable.activities.map((activity) => String(activity.id)), existingActivityIds],
+    [
+      "turn",
+      [
+        ...portable.messages.flatMap((message) =>
+          message.turnId === null ? [] : [String(message.turnId)],
+        ),
+        ...portable.proposedPlans.flatMap((plan) =>
+          plan.turnId === null ? [] : [String(plan.turnId)],
+        ),
+        ...portable.activities.flatMap((activity) =>
+          activity.turnId === null ? [] : [String(activity.turnId)],
+        ),
+        ...portable.checkpoints.map((checkpoint) => String(checkpoint.turnId)),
+        ...(portable.goal?.lastTurnId == null ? [] : [String(portable.goal.lastTurnId)]),
+      ],
+      existingTurnIds,
+    ],
+  ];
+
+  for (const [label, values, existing] of checks) {
+    const seen = new Set<string>();
+    for (const value of values) {
+      if (existing.has(value)) {
+        return `${label} id '${value}' already belongs to another thread`;
+      }
+      if (label !== "turn" && seen.has(value)) {
+        return `${label} id '${value}' appears more than once in the imported thread`;
+      }
+      seen.add(value);
+    }
+  }
+  return undefined;
+}
 
 const decideCommandSequence = Effect.fn("decideCommandSequence")(function* ({
   commands,
@@ -554,7 +625,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         threadId: command.threadId,
       });
 
-      const lastUserMessage = [...targetThread.messages].reverse().find((m) => m.role === "user");
+      const lastUserMessage = targetThread.messages.toReversed().find((m) => m.role === "user");
 
       if (!lastUserMessage) {
         return yield* new OrchestrationCommandInvariantError({
@@ -565,12 +636,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
       return [
         {
-          ...withEventBase({
+          ...(yield* withEventBase({
             aggregateKind: "thread",
             aggregateId: command.threadId,
             occurredAt: command.createdAt,
             commandId: command.commandId,
-          }),
+          })),
           type: "thread.turn-start-requested",
           payload: {
             threadId: command.threadId,
@@ -872,6 +943,13 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       });
 
       const portable = command.thread;
+      const nestedIdCollision = findImportedNestedIdCollision(readModel, portable);
+      if (nestedIdCollision !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Cannot import thread '${command.threadId}': ${nestedIdCollision}.`,
+        });
+      }
       const plannedEvents: PlannedOrchestrationEvent[] = [];
       const eventBase = () =>
         withEventBase({
