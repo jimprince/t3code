@@ -4,7 +4,10 @@ import { useEffect } from "react";
 import ChatView from "../components/ChatView";
 import { threadHasStarted } from "../components/ChatView.logic";
 import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "../composerDraftStore";
-import { shouldDelayMissingThreadRedirect, shouldRenderServerThreadRoute } from "./-threadRouteRecovery";
+import {
+  shouldDelayMissingThreadRedirect,
+  shouldRenderServerThreadRoute,
+} from "./-threadRouteRecovery";
 import { resolveThreadRouteRef } from "../threadRoutes";
 import { SidebarInset } from "~/components/ui/sidebar";
 import { useEnvironmentThreadRefs, useThreadDetail, useThreadShell } from "../state/entities";
