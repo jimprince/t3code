@@ -211,8 +211,12 @@ distribution certificate stored on EAS.
 When uploading an already completed iOS build, use `mode=submit` with its EAS
 build ID. That lane downloads the signed IPA and uploads it directly with
 Xcode's bundled App Store uploader on a hosted macOS runner, so it does not
-depend on the EAS Submit service. It also creates the single production App
-Store Connect record for `com.brad.t3code` if the record does not exist yet:
+depend on the EAS Submit service. Apple requires the initial app record to be
+created on the App Store Connect website; the API intentionally does not permit
+creating apps. Create one iOS record named `T3 Code` for bundle ID
+`com.brad.t3code`, primary language `English (U.S.)`, SKU
+`t3code-ios-production`, and full user access. The workflow confirms that record
+exists before uploading:
 
 ```bash
 gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
