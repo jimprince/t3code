@@ -8,9 +8,9 @@
  *
  * Import: restore the git state into the target project's repository, create
  * the thread worktree, transplant the provider session transcript under the
- * new working directory, persist the provider resume cursor, and replay the
- * portable thread into the orchestration event log via the `thread.import`
- * command.
+ * new working directory, persist a resume cursor only when its provider-owned
+ * session data was transferred, and replay the portable thread into the
+ * orchestration event log via the `thread.import` command.
  *
  * @module ThreadTransferLive
  */
@@ -64,6 +64,18 @@ const MAX_PROVIDER_SESSION_FILE_BYTES = 64 * 1024 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CLAUDE_PROVIDER_NAME = "claude";
+
+/** A provider cursor is machine-portable only when the session data it names
+ * is moved with it. Keeping a Codex rollout id (or a Claude cursor without its
+ * JSONL) makes the target try to resume state that exists only on the source. */
+export function importedProviderResumeCursor(
+  providerSession: ThreadMoveProviderSession,
+): unknown | null {
+  return providerSession.providerName === CLAUDE_PROVIDER_NAME &&
+    providerSession.sessionFile !== null
+    ? providerSession.resumeCursor
+    : null;
+}
 
 /**
  * Claude Code stores session transcripts under
@@ -578,7 +590,7 @@ const make = Effect.gen(function* () {
         providerInstanceId: runtime.providerInstanceId,
         adapterKey: runtime.adapterKey,
         runtimeMode: runtime.runtimeMode,
-        resumeCursor: runtime.resumeCursor,
+        resumeCursor: null,
         sourceCwd: input.cwd,
         sessionFile: null,
       };
@@ -619,6 +631,7 @@ const make = Effect.gen(function* () {
       const content = yield* fs.readFileString(sessionFilePath);
       return {
         ...base,
+        resumeCursor: runtime.resumeCursor,
         sessionFile: {
           fileName: `${sessionId}.jsonl`,
           content,
@@ -990,7 +1003,7 @@ const make = Effect.gen(function* () {
         runtimeMode: providerSession.runtimeMode,
         status: "stopped",
         lastSeenAt,
-        resumeCursor: providerSession.resumeCursor,
+        resumeCursor: importedProviderResumeCursor(providerSession),
         runtimePayload: null,
       });
     }).pipe(

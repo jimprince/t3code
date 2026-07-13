@@ -39,6 +39,7 @@ import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQu
 import {
   describeErrorChain,
   encodeClaudeProjectDirName,
+  importedProviderResumeCursor,
   isSafeRelativeFilePath,
   readClaudeSessionIdFromCursor,
   rewriteClaudeSessionCwd,
@@ -260,6 +261,42 @@ describe("Claude session helpers", () => {
     expect(isSafeRelativeFilePath("../escape.txt")).toBe(false);
     expect(isSafeRelativeFilePath("nested/../../escape.txt")).toBe(false);
     expect(isSafeRelativeFilePath("C:\\windows\\system32")).toBe(false);
+  });
+});
+
+describe("provider session transfer", () => {
+  const resumeCursor = { threadId: "source-only-provider-session" };
+
+  plainIt("drops a Codex resume cursor that has no portable session data", () => {
+    expect(
+      importedProviderResumeCursor({
+        providerName: "codex",
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        resumeCursor,
+        sourceCwd: "/source",
+        sessionFile: null,
+      }),
+    ).toBeNull();
+  });
+
+  plainIt("keeps a Claude cursor only when its transcript moves with it", () => {
+    const providerSession = {
+      providerName: "claude",
+      providerInstanceId: ProviderInstanceId.make("claude"),
+      adapterKey: "claude",
+      runtimeMode: "full-access" as const,
+      resumeCursor,
+      sourceCwd: "/source",
+    };
+    expect(importedProviderResumeCursor({ ...providerSession, sessionFile: null })).toBeNull();
+    expect(
+      importedProviderResumeCursor({
+        ...providerSession,
+        sessionFile: { fileName: "session.jsonl", content: "{}" },
+      }),
+    ).toBe(resumeCursor);
   });
 });
 
