@@ -184,7 +184,8 @@ jobs:
             --profile production \
             --id "$EAS_BUILD_ID" \
             --non-interactive \
-            --no-wait
+            --wait \
+            --verbose
 
       - name: Publish OTA update
         if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'update'
