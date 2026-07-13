@@ -254,7 +254,7 @@ jobs:
 
           asc_app_id="$(jq -r '.data[0].id // empty' "$app_response")"
           if [ -z "$asc_app_id" ]; then
-            echo "::error::Create the T3 Code app record for com.brad.t3code at https://appstoreconnect.apple.com/apps before submitting." >&2
+            echo "::error::Create the T3 Code - Fork app record for com.brad.t3code at https://appstoreconnect.apple.com/apps before submitting." >&2
             exit 1
           fi
           echo "Found App Store Connect app $asc_app_id for com.brad.t3code."
