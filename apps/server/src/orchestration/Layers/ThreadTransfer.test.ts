@@ -3,16 +3,21 @@ import {
   GitCommandError,
   MessageId,
   ProjectId,
+  ProviderDriverKind,
   ProviderInstanceId,
+  THREAD_MOVE_BUNDLE_VERSION,
   ThreadId,
   TurnId,
   type PortableThread,
+  type ThreadMoveBundle,
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
+import * as Encoding from "effect/Encoding";
 import * as Exit from "effect/Exit";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
@@ -26,9 +31,14 @@ import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
 import { ProviderSessionRuntimeRepositoryLive } from "../../persistence/Layers/ProviderSessionRuntime.ts";
-import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
+import {
+  makeSqlitePersistenceLive,
+  SqlitePersistenceMemory,
+} from "../../persistence/Layers/Sqlite.ts";
 import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
 import { layer as RepositoryIdentityResolverLive } from "../../project/RepositoryIdentityResolver.ts";
+import { ProviderUnsupportedError } from "../../provider/Errors.ts";
+import { ProviderAdapterRegistry } from "../../provider/Services/ProviderAdapterRegistry.ts";
 import * as VcsProcess from "../../vcs/VcsProcess.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
@@ -46,6 +56,13 @@ import {
 } from "./ThreadTransfer.ts";
 
 const now = () => "2026-01-01T00:00:00.000Z";
+const noDelayClock: Clock.Clock = {
+  currentTimeMillisUnsafe: () => Date.parse(now()),
+  currentTimeMillis: Effect.succeed(Date.parse(now())),
+  currentTimeNanosUnsafe: () => BigInt(Date.parse(now())) * 1_000_000n,
+  currentTimeNanos: Effect.succeed(BigInt(Date.parse(now())) * 1_000_000n),
+  sleep: () => Effect.void,
+};
 
 // Test repos always live on POSIX temp paths here, so plain "/" joins are fine.
 const joinPath = (...parts: ReadonlyArray<string>) => parts.join("/");
@@ -88,6 +105,38 @@ const makeScopedTempDirectory = (prefix: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     return yield* fs.makeTempDirectoryScoped({ prefix });
+  });
+
+interface TestProviderRoute {
+  readonly instanceId: string;
+  readonly driverKind: string;
+}
+
+const providerAdapterRegistryTestLayer = (routes: ReadonlyArray<TestProviderRoute>) =>
+  Layer.mock(ProviderAdapterRegistry)({
+    listInstances: () =>
+      Effect.succeed(routes.map((route) => ProviderInstanceId.make(route.instanceId))),
+    getInstanceInfo: (instanceId) => {
+      const route = routes.find((candidate) => candidate.instanceId === instanceId);
+      if (route === undefined) {
+        return Effect.fail(
+          new ProviderUnsupportedError({
+            provider: String(instanceId),
+          }),
+        );
+      }
+      const driverKind = ProviderDriverKind.make(route.driverKind);
+      return Effect.succeed({
+        instanceId,
+        driverKind,
+        displayName: undefined,
+        enabled: true,
+        continuationIdentity: {
+          driverKind,
+          continuationKey: `${driverKind}:instance:${instanceId}`,
+        },
+      });
+    },
   });
 
 const initRepo = (cwd: string) =>
@@ -144,7 +193,12 @@ const gitWorkflowTestLayer = (worktreesRoot: string) =>
     }),
   );
 
-const makeTransferSystemLayer = (input: { prefix: string; worktreesRoot: string }) => {
+const makeTransferSystemLayer = (input: {
+  prefix: string;
+  worktreesRoot: string;
+  dbPath?: string;
+  providerRoutes?: ReadonlyArray<TestProviderRoute>;
+}) => {
   const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), { prefix: input.prefix });
   const orchestrationLayer = Layer.mergeAll(
     OrchestrationEngineLive.pipe(
@@ -154,7 +208,19 @@ const makeTransferSystemLayer = (input: { prefix: string; worktreesRoot: string 
     OrchestrationProjectionSnapshotQueryLive,
     ProviderSessionRuntimeRepositoryLive,
   );
+  const persistenceLayer =
+    input.dbPath === undefined
+      ? SqlitePersistenceMemory
+      : makeSqlitePersistenceLive(input.dbPath).pipe(Layer.provide(NodeServices.layer));
   return ThreadTransferLive.pipe(
+    Layer.provide(
+      providerAdapterRegistryTestLayer(
+        input.providerRoutes ?? [
+          { instanceId: "claudeAgent", driverKind: "claudeAgent" },
+          { instanceId: "codex", driverKind: "codex" },
+        ],
+      ),
+    ),
     Layer.provide(VcsProcessTestLayer),
     Layer.provide(
       gitWorkflowTestLayer(input.worktreesRoot).pipe(Layer.provide(VcsProcessTestLayer)),
@@ -164,7 +230,7 @@ const makeTransferSystemLayer = (input: { prefix: string; worktreesRoot: string 
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolverLive),
-    Layer.provide(SqlitePersistenceMemory),
+    Layer.provide(persistenceLayer),
     Layer.provideMerge(ServerConfigLayer),
     Layer.provideMerge(NodeServices.layer),
   );
@@ -172,7 +238,12 @@ const makeTransferSystemLayer = (input: { prefix: string; worktreesRoot: string 
 
 // Each system gets its own MemoMap: the suite-level memo map would otherwise
 // hand both "environments" the same memoized engine + in-memory database.
-const buildTransferSystem = (input: { prefix: string; worktreesRoot: string }) =>
+const buildTransferSystem = (input: {
+  prefix: string;
+  worktreesRoot: string;
+  dbPath?: string;
+  providerRoutes?: ReadonlyArray<TestProviderRoute>;
+}) =>
   Effect.gen(function* () {
     const memoMap = yield* Layer.makeMemoMap;
     const scope = yield* Scope.make();
@@ -183,6 +254,7 @@ const buildTransferSystem = (input: { prefix: string; worktreesRoot: string }) =
       snapshotQuery: Context.get(context, ProjectionSnapshotQuery),
       transfer: Context.get(context, ThreadTransfer),
       providerRuntime: Context.get(context, ProviderSessionRuntimeRepository),
+      dispose: Scope.close(scope, Exit.void),
     };
   });
 
@@ -288,7 +360,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
           id: threadId,
           title: "Imported thread",
           modelSelection: {
-            instanceId: ProviderInstanceId.make("claude"),
+            instanceId: ProviderInstanceId.make("claudeAgent"),
             model: "claude-fable-5",
           },
           runtimeMode: "full-access",
@@ -398,6 +470,32 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         // thread immediately after the move lands.
         expect(thread!.goal?.lastTurnId).toBe(lastTurnId);
 
+        const collidingThreadId = ThreadId.make("99991111-2222-4333-8444-555566667777");
+        const nestedIdCollision = yield* Effect.exit(
+          system.engine.dispatch({
+            type: "thread.import",
+            commandId: CommandId.make("cmd-thread-import-nested-id-collision"),
+            threadId: collidingThreadId,
+            projectId,
+            thread: {
+              ...portable,
+              id: collidingThreadId,
+              title: "Must not steal nested ids",
+            },
+            branch: null,
+            worktreePath: null,
+            createdAt: now(),
+          }),
+        );
+        expect(Exit.isFailure(nestedIdCollision)).toBe(true);
+        const originalAfterCollision = yield* system.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(originalAfterCollision?.messages.map((message) => message.text)).toEqual([
+          "hello",
+          "world",
+        ]);
+
         const duplicate = yield* Effect.exit(
           system.engine.dispatch({
             type: "thread.import",
@@ -415,6 +513,469 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
     );
   });
 
+  describe("malformed bundle rejection", () => {
+    it.effect("rejects provider session path traversal before importing the thread", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-move-malformed-");
+        const workspaceRoot = joinPath(root, "workspace");
+        const worktreesRoot = joinPath(root, "worktrees");
+        const claudeConfigDir = joinPath(root, "claude");
+        for (const directory of [workspaceRoot, worktreesRoot, claudeConfigDir]) {
+          yield* makeDirectory(directory);
+        }
+
+        const target = yield* buildTransferSystem({
+          prefix: "t3-thread-move-malformed-target-",
+          worktreesRoot,
+        });
+        const projectId = ProjectId.make("project-malformed-target");
+        const threadId = ThreadId.make("eeee1111-2222-4333-8444-555566667777");
+        yield* target.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-malformed-target-project"),
+          projectId,
+          title: "Malformed Bundle Target",
+          workspaceRoot,
+          createdAt: now(),
+        });
+
+        const portable: PortableThread = {
+          id: threadId,
+          title: "Malicious transcript path",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("claudeAgent"),
+            model: "claude-fable-5",
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          goal: null,
+          createdAt: now(),
+          updatedAt: now(),
+          messages: [],
+          proposedPlans: [],
+          activities: [],
+          checkpoints: [],
+        };
+        const bundle: ThreadMoveBundle = {
+          version: THREAD_MOVE_BUNDLE_VERSION,
+          exportedAt: now(),
+          sourceProjectId: ProjectId.make("project-malformed-source"),
+          sourceWorkspaceRoot: "/source/workspace",
+          repositoryIdentity: null,
+          thread: portable,
+          git: null,
+          providerSession: {
+            providerName: "claudeAgent",
+            providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+            adapterKey: "claudeAgent",
+            runtimeMode: "full-access",
+            resumeCursor: { resume: "eeee1111-2222-4333-8444-555566667777" },
+            sourceCwd: "/source/workspace",
+            sessionFile: {
+              fileName: "../../escaped.jsonl",
+              content: '{"type":"user","text":"unsafe"}\n',
+            },
+          },
+          warnings: [],
+        };
+
+        const imported = yield* Effect.exit(
+          withClaudeConfigDir(claudeConfigDir, target.transfer.importThread({ projectId, bundle })),
+        );
+        expect(Exit.isFailure(imported)).toBe(true);
+
+        const thread = yield* target.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(thread).toBeUndefined();
+        const fs = yield* FileSystem.FileSystem;
+        expect(yield* fs.exists(joinPath(claudeConfigDir, "escaped.jsonl"))).toBe(false);
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("rejects unexpected bundled refs without changing target refs", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-move-refs-");
+        const sourceRepo = joinPath(root, "source");
+        const targetRepo = joinPath(root, "target");
+        const worktreesRoot = joinPath(root, "worktrees");
+        for (const directory of [sourceRepo, targetRepo, worktreesRoot]) {
+          yield* makeDirectory(directory);
+        }
+        yield* initRepo(sourceRepo);
+        yield* execGit(sourceRepo, ["branch", "move-safe"]);
+        yield* execGit(sourceRepo, ["checkout", "-b", "protected"]);
+        yield* writeTextFile(joinPath(sourceRepo, "PROTECTED.md"), "malicious replacement\n");
+        yield* execGit(sourceRepo, ["add", "."]);
+        yield* execGit(sourceRepo, ["commit", "-m", "unexpected protected ref"]);
+
+        const bundlePath = joinPath(root, "malicious.bundle");
+        yield* execGit(sourceRepo, [
+          "bundle",
+          "create",
+          bundlePath,
+          "refs/heads/move-safe",
+          "refs/heads/protected",
+        ]);
+        const fs = yield* FileSystem.FileSystem;
+        const bundleBase64 = Encoding.encodeBase64(yield* fs.readFile(bundlePath));
+        const branchTipSha = yield* execGit(sourceRepo, ["rev-parse", "refs/heads/move-safe"]);
+
+        yield* initRepo(targetRepo);
+        yield* execGit(targetRepo, ["branch", "protected"]);
+        const protectedBefore = yield* execGit(targetRepo, ["rev-parse", "refs/heads/protected"]);
+        const target = yield* buildTransferSystem({
+          prefix: "t3-thread-move-refs-target-",
+          worktreesRoot,
+        });
+        const projectId = ProjectId.make("project-refs-target");
+        const threadId = ThreadId.make("ffff1111-2222-4333-8444-555566667777");
+        yield* target.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-refs-target-project"),
+          projectId,
+          title: "Unexpected Refs Target",
+          workspaceRoot: targetRepo,
+          createdAt: now(),
+        });
+
+        const bundle: ThreadMoveBundle = {
+          version: THREAD_MOVE_BUNDLE_VERSION,
+          exportedAt: now(),
+          sourceProjectId: ProjectId.make("project-refs-source"),
+          sourceWorkspaceRoot: sourceRepo,
+          repositoryIdentity: null,
+          thread: {
+            id: threadId,
+            title: "Unexpected bundled ref",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("claudeAgent"),
+              model: "claude-fable-5",
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: "move-safe",
+            goal: null,
+            createdAt: now(),
+            updatedAt: now(),
+            messages: [],
+            proposedPlans: [],
+            activities: [],
+            checkpoints: [],
+          },
+          git: {
+            branch: "move-safe",
+            branchTipSha,
+            bundleBase64,
+            checkpointRefs: [],
+            dirtyDiff: null,
+            untrackedFiles: [],
+          },
+          providerSession: null,
+          warnings: [],
+        };
+
+        const imported = yield* Effect.exit(target.transfer.importThread({ projectId, bundle }));
+        expect(Exit.isFailure(imported)).toBe(true);
+        expect(yield* execGit(targetRepo, ["rev-parse", "refs/heads/protected"])).toBe(
+          protectedBefore,
+        );
+        const thread = yield* target.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(thread).toBeUndefined();
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("remaps a source provider instance to the target's only compatible instance", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-move-provider-remap-");
+        const workspaceRoot = joinPath(root, "workspace");
+        const worktreesRoot = joinPath(root, "worktrees");
+        for (const directory of [workspaceRoot, worktreesRoot]) {
+          yield* makeDirectory(directory);
+        }
+        const target = yield* buildTransferSystem({
+          prefix: "t3-thread-move-provider-remap-target-",
+          worktreesRoot,
+          providerRoutes: [{ instanceId: "claude-target", driverKind: "claudeAgent" }],
+        });
+        const projectId = ProjectId.make("project-provider-remap-target");
+        const threadId = ThreadId.make("88881111-2222-4333-8444-555566667777");
+        yield* target.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-provider-remap-project"),
+          projectId,
+          title: "Provider Remap Target",
+          workspaceRoot,
+          createdAt: now(),
+        });
+        const bundle: ThreadMoveBundle = {
+          version: THREAD_MOVE_BUNDLE_VERSION,
+          exportedAt: now(),
+          sourceProjectId: ProjectId.make("project-provider-remap-source"),
+          sourceWorkspaceRoot: "/source/workspace",
+          repositoryIdentity: null,
+          thread: {
+            id: threadId,
+            title: "Provider remap",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("claude-source"),
+              model: "claude-sonnet-4-6",
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            goal: null,
+            createdAt: now(),
+            updatedAt: now(),
+            messages: [],
+            proposedPlans: [],
+            activities: [],
+            checkpoints: [],
+          },
+          git: null,
+          providerSession: {
+            providerName: "claudeAgent",
+            providerInstanceId: ProviderInstanceId.make("claude-source"),
+            adapterKey: "claudeAgent",
+            runtimeMode: "full-access",
+            resumeCursor: null,
+            sourceCwd: "/source/workspace",
+            sessionFile: null,
+          },
+          warnings: [],
+        };
+
+        const imported = yield* target.transfer.importThread({ projectId, bundle });
+        const movedThread = yield* target.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(movedThread?.modelSelection.instanceId).toBe("claude-target");
+        const runtime = yield* target.providerRuntime
+          .getByThreadId({ threadId })
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(runtime?.providerInstanceId).toBe("claude-target");
+        expect(runtime?.runtimePayload).toMatchObject({
+          cwd: imported.worktreePath ?? workspaceRoot,
+          modelSelection: { instanceId: "claude-target" },
+        });
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("refuses to export an untracked symlink", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-move-symlink-");
+        const sourceRepo = joinPath(root, "source");
+        const worktreesRoot = joinPath(root, "worktrees");
+        const outsideFile = joinPath(root, "outside-secret.txt");
+        for (const directory of [sourceRepo, worktreesRoot]) {
+          yield* makeDirectory(directory);
+        }
+        yield* initRepo(sourceRepo);
+        yield* writeTextFile(outsideFile, "must not be copied\n");
+        const fs = yield* FileSystem.FileSystem;
+        yield* fs.symlink(outsideFile, joinPath(sourceRepo, "linked-secret.txt"));
+
+        const sourceSystem = yield* buildTransferSystem({
+          prefix: "t3-thread-move-symlink-source-",
+          worktreesRoot,
+        });
+        const projectId = ProjectId.make("project-symlink-source");
+        const threadId = ThreadId.make("abcd1111-2222-4333-8444-555566667777");
+        yield* sourceSystem.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-symlink-source-project"),
+          projectId,
+          title: "Symlink Source",
+          workspaceRoot: sourceRepo,
+          createdAt: now(),
+        });
+        yield* sourceSystem.engine.dispatch({
+          type: "thread.import",
+          commandId: CommandId.make("cmd-symlink-source-thread"),
+          threadId,
+          projectId,
+          thread: {
+            id: threadId,
+            title: "Untracked symlink",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("claudeAgent"),
+              model: "claude-fable-5",
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: "main",
+            goal: null,
+            createdAt: now(),
+            updatedAt: now(),
+            messages: [],
+            proposedPlans: [],
+            activities: [],
+            checkpoints: [],
+          },
+          branch: "main",
+          worktreePath: sourceRepo,
+          createdAt: now(),
+        });
+
+        const exported = yield* Effect.exit(sourceSystem.transfer.exportThread({ threadId }));
+        expect(Exit.isFailure(exported)).toBe(true);
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("fails export when an active session never confirms shutdown", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-move-quiesce-");
+        const sourceRepo = joinPath(root, "source");
+        const worktreesRoot = joinPath(root, "worktrees");
+        for (const directory of [sourceRepo, worktreesRoot]) {
+          yield* makeDirectory(directory);
+        }
+        yield* initRepo(sourceRepo);
+        const sourceSystem = yield* buildTransferSystem({
+          prefix: "t3-thread-move-quiesce-source-",
+          worktreesRoot,
+        });
+        const projectId = ProjectId.make("project-quiesce-source");
+        const threadId = ThreadId.make("12341111-2222-4333-8444-555566667777");
+        const activeTurnId = TurnId.make("turn-quiesce-active");
+        yield* sourceSystem.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-quiesce-source-project"),
+          projectId,
+          title: "Quiesce Source",
+          workspaceRoot: sourceRepo,
+          createdAt: now(),
+        });
+        yield* sourceSystem.engine.dispatch({
+          type: "thread.import",
+          commandId: CommandId.make("cmd-quiesce-source-thread"),
+          threadId,
+          projectId,
+          thread: {
+            id: threadId,
+            title: "Active thread",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5.6-terra",
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: "main",
+            goal: null,
+            createdAt: now(),
+            updatedAt: now(),
+            messages: [],
+            proposedPlans: [],
+            activities: [],
+            checkpoints: [],
+          },
+          branch: "main",
+          worktreePath: sourceRepo,
+          createdAt: now(),
+        });
+        yield* sourceSystem.engine.dispatch({
+          type: "thread.session.set",
+          commandId: CommandId.make("cmd-quiesce-session-running"),
+          threadId,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "codex",
+            providerInstanceId: ProviderInstanceId.make("codex"),
+            runtimeMode: "full-access",
+            activeTurnId,
+            lastError: null,
+            updatedAt: now(),
+          },
+          createdAt: now(),
+        });
+
+        const exported = yield* sourceSystem.transfer
+          .exportThread({ threadId })
+          .pipe(Effect.provideService(Clock.Clock, noDelayClock), Effect.exit);
+        expect(Exit.isFailure(exported)).toBe(true);
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("clears a Claude resume cursor when its transcript is unavailable", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-move-missing-transcript-");
+        const workspaceRoot = joinPath(root, "workspace");
+        const worktreesRoot = joinPath(root, "worktrees");
+        const claudeConfigDir = joinPath(root, "claude-config");
+        for (const directory of [workspaceRoot, worktreesRoot, claudeConfigDir]) {
+          yield* makeDirectory(directory);
+        }
+        const source = yield* buildTransferSystem({
+          prefix: "t3-thread-move-missing-transcript-source-",
+          worktreesRoot,
+        });
+        const projectId = ProjectId.make("project-missing-transcript-source");
+        const threadId = ThreadId.make("77771111-2222-4333-8444-555566667777");
+        const sessionId = "77771111-2222-4333-8444-555566667777";
+        yield* source.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-missing-transcript-project"),
+          projectId,
+          title: "Missing Transcript Source",
+          workspaceRoot,
+          createdAt: now(),
+        });
+        yield* source.engine.dispatch({
+          type: "thread.import",
+          commandId: CommandId.make("cmd-missing-transcript-thread"),
+          threadId,
+          projectId,
+          thread: {
+            id: threadId,
+            title: "Missing native context",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("claudeAgent"),
+              model: "claude-sonnet-4-6",
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            goal: null,
+            createdAt: now(),
+            updatedAt: now(),
+            messages: [],
+            proposedPlans: [],
+            activities: [],
+            checkpoints: [],
+          },
+          branch: null,
+          worktreePath: null,
+          createdAt: now(),
+        });
+        yield* source.providerRuntime.upsert({
+          threadId,
+          providerName: "claudeAgent",
+          providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+          adapterKey: "claudeAgent",
+          runtimeMode: "full-access",
+          status: "stopped",
+          lastSeenAt: now(),
+          resumeCursor: { resume: sessionId },
+          runtimePayload: null,
+        });
+
+        const exported = yield* withClaudeConfigDir(
+          claudeConfigDir,
+          source.transfer.exportThread({ threadId }),
+        );
+        expect(exported.bundle.providerSession?.sessionFile).toBeNull();
+        expect(exported.bundle.providerSession?.resumeCursor).toBeNull();
+        expect(exported.bundle.warnings.some((warning) => warning.includes("was not found"))).toBe(
+          true,
+        );
+      }).pipe(Effect.scoped),
+    );
+  });
+
   describe("round trip", () => {
     it.effect("moves history, git state, and the Claude session between two environments", () =>
       Effect.gen(function* () {
@@ -424,6 +985,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         const targetRepo = joinPath(root, "target-repo");
         const sourceWorktreesRoot = joinPath(root, "source-worktrees");
         const targetWorktreesRoot = joinPath(root, "target-worktrees");
+        const targetDbPath = joinPath(root, "target.sqlite");
         for (const dir of [
           claudeConfigDir,
           sourceRepo,
@@ -441,6 +1003,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         const target = yield* buildTransferSystem({
           prefix: "t3-thread-move-target-",
           worktreesRoot: targetWorktreesRoot,
+          dbPath: targetDbPath,
         });
 
         const threadId = ThreadId.make("aaaa1111-2222-4333-8444-555566667777");
@@ -499,7 +1062,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
           id: threadId,
           title: "Thread on the move",
           modelSelection: {
-            instanceId: ProviderInstanceId.make("claude"),
+            instanceId: ProviderInstanceId.make("claudeAgent"),
             model: "claude-fable-5",
           },
           runtimeMode: "full-access",
@@ -545,9 +1108,9 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         });
         yield* source.providerRuntime.upsert({
           threadId,
-          providerName: "claude",
-          providerInstanceId: ProviderInstanceId.make("claude"),
-          adapterKey: "claude",
+          providerName: "claudeAgent",
+          providerInstanceId: ProviderInstanceId.make("claudeAgent"),
+          adapterKey: "claudeAgent",
           runtimeMode: "full-access",
           status: "stopped",
           lastSeenAt: now(),
@@ -631,13 +1194,37 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
           .getByThreadId({ threadId })
           .pipe(Effect.map(Option.getOrUndefined));
         expect(targetRuntime).toBeDefined();
-        expect(targetRuntime!.providerName).toBe("claude");
+        expect(targetRuntime!.providerName).toBe("claudeAgent");
         expect(targetRuntime!.status).toBe("stopped");
         expect(readClaudeSessionIdFromCursor(targetRuntime!.resumeCursor)).toBe(sessionId);
+        expect(targetRuntime!.runtimePayload).toEqual({
+          cwd: targetWorktree,
+          modelSelection: portable.modelSelection,
+        });
+
+        yield* target.dispose;
+        const restartedTarget = yield* buildTransferSystem({
+          prefix: "t3-thread-move-target-restarted-",
+          worktreesRoot: targetWorktreesRoot,
+          dbPath: targetDbPath,
+        });
+        const restartedThread = yield* restartedTarget.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(restartedThread?.messages.map((message) => message.text)).toEqual(["do the thing"]);
+        expect(restartedThread?.worktreePath).toBe(targetWorktree);
+        expect(
+          restartedThread?.activities.some((activity) => activity.kind === "thread.imported"),
+        ).toBe(true);
+        const restartedRuntime = yield* restartedTarget.providerRuntime
+          .getByThreadId({ threadId })
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(restartedRuntime).toEqual(targetRuntime);
+        expect(yield* readTextFile(targetSessionPath)).toBe(movedSession);
 
         // Importing the same bundle again must fail cleanly.
         const duplicate = yield* Effect.exit(
-          target.transfer.importThread({ projectId: targetProjectId, bundle }),
+          restartedTarget.transfer.importThread({ projectId: targetProjectId, bundle }),
         );
         expect(Exit.isFailure(duplicate)).toBe(true);
         if (Exit.isFailure(duplicate)) {
@@ -692,7 +1279,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
           id: threadId,
           title: "Thread on main",
           modelSelection: {
-            instanceId: ProviderInstanceId.make("claude"),
+            instanceId: ProviderInstanceId.make("claudeAgent"),
             model: "claude-fable-5",
           },
           runtimeMode: "full-access",
@@ -859,7 +1446,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
             id: threadId,
             title: "Thread ahead of a stale clone",
             modelSelection: {
-              instanceId: ProviderInstanceId.make("claude"),
+              instanceId: ProviderInstanceId.make("claudeAgent"),
               model: "claude-fable-5",
             },
             runtimeMode: "full-access",

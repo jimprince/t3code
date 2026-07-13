@@ -298,6 +298,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(
     Layer.mergeAll(
       ThreadTransferLive.pipe(
+        Layer.provide(ProviderAdapterRegistryLive),
         Layer.provide(VcsProcess.layer),
         Layer.provide(ProviderSessionRuntimeRepositoryLive),
       ),

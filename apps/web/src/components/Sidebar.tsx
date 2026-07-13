@@ -2233,6 +2233,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
               }
               return result.value;
             },
+            archiveSource: () => archiveThread(threadRef),
             confirmBranchFallback: (branch) =>
               api.dialogs.confirm(
                 [
@@ -2254,21 +2255,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             },
           });
 
-          // Archive the source copy only after the target confirmed the
-          // import, so a failed move never loses the thread.
-          let archiveFailed = false;
-          try {
-            await archiveThread(threadRef);
-          } catch {
-            archiveFailed = true;
-          }
-
-          const followUpNotes = [
-            ...moved.warnings,
-            ...(archiveFailed
-              ? ["The source copy could not be archived; archive it manually."]
-              : []),
-          ];
+          const followUpNotes = moved.warnings;
           toastManager.update(
             progressToastId,
             stackedThreadToast({
