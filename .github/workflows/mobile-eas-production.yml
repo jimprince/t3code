@@ -1,6 +1,8 @@
 name: Mobile EAS Production
 
 # Production builds and OTA updates run from CI (Linux) — never from a laptop.
+# Completed iOS builds are uploaded from a hosted macOS runner with Apple's
+# Transporter, avoiding the extra EAS Submit service hop.
 # Under the fingerprint runtime-version policy the fingerprint must be computed
 # in the same OS/pnpm as the EAS build; a macOS `eas build` computes a different
 # fingerprint (platform-specific deps + pnpm version) and errors. On this Linux
@@ -37,6 +39,7 @@ on:
 
 jobs:
   production:
+    if: inputs.mode != 'submit'
     name: EAS Production ${{ inputs.mode }}
     runs-on: ubuntu-24.04
     permissions:
@@ -100,7 +103,7 @@ jobs:
       - name: Prepare App Store Connect API key
         if: >-
           steps.expo-token.outputs.present == 'true' &&
-          (inputs.mode == 'build' || inputs.mode == 'submit')
+          inputs.mode == 'build'
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -136,42 +139,6 @@ jobs:
           --non-interactive
           --no-wait
 
-      - name: Submit existing build
-        if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'submit'
-        working-directory: apps/mobile
-        env:
-          EAS_BUILD_ID: ${{ inputs.build_id }}
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: |
-          if [ -z "$EAS_BUILD_ID" ]; then
-            echo "::error::build_id is required when mode=submit." >&2
-            exit 1
-          fi
-
-          # EAS Submit accepts a new API key non-interactively only when the
-          # submit profile references it. Inject the runner-local key path;
-          # the secret value is never written to the repository or logs.
-          node --input-type=module <<'NODE'
-          import fs from "node:fs";
-
-          const path = "eas.json";
-          const config = JSON.parse(fs.readFileSync(path, "utf8"));
-          Object.assign(config.submit.production.ios, {
-            ascApiKeyPath: process.env.EXPO_ASC_API_KEY_PATH,
-            ascApiKeyId: process.env.EXPO_ASC_KEY_ID,
-            ascApiKeyIssuerId: process.env.EXPO_ASC_ISSUER_ID,
-          });
-          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
-          NODE
-
-          eas submit \
-            --platform ios \
-            --profile production \
-            --id "$EAS_BUILD_ID" \
-            --non-interactive \
-            --wait \
-            --verbose
-
       - name: Publish OTA update
         if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'update'
         working-directory: apps/mobile
@@ -184,3 +151,74 @@ jobs:
             --platform ${{ inputs.platform }} \
             --message "${{ inputs.message || format('Production OTA ({0})', github.sha) }}" \
             --non-interactive
+
+  submit-ios:
+    if: inputs.mode == 'submit'
+    name: Upload production iOS build
+    runs-on: macos-15
+    permissions:
+      contents: read
+    env:
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      EAS_BUILD_ID: ${{ inputs.build_id }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Download and upload production IPA
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$EAS_BUILD_ID" ]; then
+            echo "::error::build_id is required when mode=submit." >&2
+            exit 1
+          fi
+          if [ -z "$EXPO_TOKEN" ] || [ -z "$APPLE_API_KEY" ] || [ -z "$APPLE_API_KEY_ID" ] || [ -z "$APPLE_API_ISSUER" ]; then
+            echo "::error::EXPO_TOKEN and App Store Connect API key secrets are required." >&2
+            exit 1
+          fi
+
+          request="$(jq -nc --arg id "$EAS_BUILD_ID" '{
+            query: "query Build($buildId: ID!) { builds { byId(buildId: $buildId) { id status platform artifacts { buildUrl } } } }",
+            variables: {buildId: $id}
+          }')"
+          response_file="$RUNNER_TEMP/eas-build.json"
+          curl --fail --silent --show-error \
+            https://api.expo.dev/graphql \
+            --header "Authorization: Bearer $EXPO_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data-binary "$request" \
+            --output "$response_file"
+
+          if jq -e '.errors | length > 0' "$response_file" >/dev/null 2>&1; then
+            jq -r '.errors[].message' "$response_file" >&2
+            exit 1
+          fi
+
+          status="$(jq -r '.data.builds.byId.status // empty' "$response_file")"
+          platform="$(jq -r '.data.builds.byId.platform // empty' "$response_file")"
+          artifact_url="$(jq -r '.data.builds.byId.artifacts.buildUrl // empty' "$response_file")"
+          if [ "$status" != "FINISHED" ] || [ "$platform" != "IOS" ] || [ -z "$artifact_url" ]; then
+            echo "::error::Build must be a finished iOS build with a downloadable IPA (status=$status, platform=$platform)." >&2
+            exit 1
+          fi
+
+          ipa_path="$RUNNER_TEMP/t3code-production.ipa"
+          key_dir="$HOME/.appstoreconnect/private_keys"
+          key_path="$key_dir/AuthKey_${APPLE_API_KEY_ID}.p8"
+          trap 'rm -f "$ipa_path" "$key_path" "$response_file"' EXIT
+
+          curl --fail --location --retry 3 --silent --show-error \
+            "$artifact_url" \
+            --output "$ipa_path"
+          mkdir -p "$key_dir"
+          printf '%s' "$APPLE_API_KEY" > "$key_path"
+          chmod 600 "$key_path"
+
+          xcrun iTMSTransporter \
+            -m upload \
+            -assetFile "$ipa_path" \
+            -apiKey "$APPLE_API_KEY_ID" \
+            -apiIssuer "$APPLE_API_ISSUER" \
+            -v informational
