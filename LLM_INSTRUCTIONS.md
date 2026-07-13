@@ -440,5 +440,5 @@ cd -
 git worktree remove /tmp/t3code-<task>
 ```
 
-This keeps the user's dirty files in `/Users/brad/Programming/t3-plugin`
+This keeps the user's dirty files in `/Users/brad/Programming/t3code-fork`
 untouched.
