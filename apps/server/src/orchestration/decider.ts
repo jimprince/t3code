@@ -554,7 +554,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         threadId: command.threadId,
       });
 
-      const lastUserMessage = [...targetThread.messages].reverse().find((m) => m.role === "user");
+      const lastUserMessage = targetThread.messages.findLast((message) => message.role === "user");
 
       if (!lastUserMessage) {
         return yield* new OrchestrationCommandInvariantError({
@@ -565,12 +565,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
 
       return [
         {
-          ...withEventBase({
+          ...(yield* withEventBase({
             aggregateKind: "thread",
             aggregateId: command.threadId,
             occurredAt: command.createdAt,
             commandId: command.commandId,
-          }),
+          })),
           type: "thread.turn-start-requested",
           payload: {
             threadId: command.threadId,

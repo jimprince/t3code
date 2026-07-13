@@ -66,7 +66,7 @@ function ChatThreadRouteView() {
     finalizePromotedDraftThreadByRef(threadRef);
   }, [draftThread, serverThreadStarted, threadRef]);
 
-  if (!shouldRenderServerThreadRoute({ threadRef, bootstrapComplete })) {
+  if (!threadRef || !shouldRenderServerThreadRoute({ threadRef, bootstrapComplete })) {
     return null;
   }
 

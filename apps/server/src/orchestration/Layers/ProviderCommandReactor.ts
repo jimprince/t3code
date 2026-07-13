@@ -288,7 +288,7 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  const setThreadSessionErrorOnTurnStartFailure = Effect.fnUntraced(function* (input: {
+  const setThreadSessionError = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
     readonly detail: string;
     readonly createdAt: string;
@@ -308,6 +308,39 @@ const make = Effect.gen(function* () {
         updatedAt: input.createdAt,
       },
       createdAt: input.createdAt,
+    });
+  });
+
+  const recoverPendingResponseFailure = Effect.fnUntraced(function* (input: {
+    readonly cause: Cause.Cause<ProviderServiceError>;
+    readonly threadId: ThreadId;
+    readonly requestId: string;
+    readonly requestKind: "approval" | "user-input";
+    readonly isStale: boolean;
+    readonly kind: "provider.approval.respond.failed" | "provider.user-input.respond.failed";
+    readonly summary: string;
+    readonly createdAt: string;
+  }) {
+    const detail = input.isStale
+      ? stalePendingRequestDetail(input.requestKind, input.requestId)
+      : Cause.pretty(input.cause);
+
+    if (input.isStale) {
+      yield* setThreadSessionError({
+        threadId: input.threadId,
+        detail,
+        createdAt: input.createdAt,
+      });
+    }
+
+    yield* appendProviderFailureActivity({
+      threadId: input.threadId,
+      kind: input.kind,
+      summary: input.summary,
+      detail,
+      turnId: null,
+      createdAt: input.createdAt,
+      requestId: input.requestId,
     });
   });
 
@@ -812,7 +845,7 @@ const make = Effect.gen(function* () {
         return Effect.void;
       }
       const detail = formatFailureDetail(cause);
-      return setThreadSessionErrorOnTurnStartFailure({
+      return setThreadSessionError({
         threadId: event.payload.threadId,
         detail,
         createdAt: event.payload.createdAt,
@@ -916,19 +949,19 @@ const make = Effect.gen(function* () {
         decision: event.payload.decision,
       })
       .pipe(
-        Effect.catchCause((cause) =>
-          appendProviderFailureActivity({
+        Effect.catchCause((cause) => {
+          const isStale = isUnknownPendingApprovalRequestError(cause);
+          return recoverPendingResponseFailure({
+            cause,
             threadId: event.payload.threadId,
+            requestId: event.payload.requestId,
+            requestKind: "approval",
+            isStale,
             kind: "provider.approval.respond.failed",
             summary: "Provider approval response failed",
-            detail: isUnknownPendingApprovalRequestError(cause)
-              ? stalePendingRequestDetail("approval", event.payload.requestId)
-              : Cause.pretty(cause),
-            turnId: null,
             createdAt: event.payload.createdAt,
-            requestId: event.payload.requestId,
-          }),
-        ),
+          });
+        }),
       );
   });
 
@@ -960,19 +993,19 @@ const make = Effect.gen(function* () {
           answers: event.payload.answers,
         })
         .pipe(
-          Effect.catchCause((cause) =>
-            appendProviderFailureActivity({
+          Effect.catchCause((cause) => {
+            const isStale = isUnknownPendingUserInputRequestError(cause);
+            return recoverPendingResponseFailure({
+              cause,
               threadId: event.payload.threadId,
+              requestId: event.payload.requestId,
+              requestKind: "user-input",
+              isStale,
               kind: "provider.user-input.respond.failed",
               summary: "Provider user input response failed",
-              detail: isUnknownPendingUserInputRequestError(cause)
-                ? stalePendingRequestDetail("user-input", event.payload.requestId)
-                : Cause.pretty(cause),
-              turnId: null,
               createdAt: event.payload.createdAt,
-              requestId: event.payload.requestId,
-            }),
-          ),
+            });
+          }),
         );
     },
   );
