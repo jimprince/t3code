@@ -133,6 +133,24 @@ three lanes separately:
 3. Mobile app: the manually dispatched `Mobile EAS Production` workflow and
    its App Store Connect/TestFlight result. Mobile is not part of `release.yml`.
 
+## iOS Deployment Choices
+
+GitHub or Gitea can store the source and trigger a build, but iOS still requires
+an Apple-signed binary and a provisioning/distribution method. The supported
+choices, commands, expiration rules, and tradeoffs are documented in
+[`docs/mobile/ios-deployment.md`](../mobile/ios-deployment.md).
+
+For the single-app setup, use the production variant (`com.brad.t3code`):
+
+- `vp run ios:release` builds and installs locally through Xcode when the iPhone
+  is paired with the Mac; it does not upload to Apple.
+- `mobile-eas-production.yml` builds remotely and uploads to TestFlight for a
+  remote install.
+- The same production build can proceed through App Review for a durable public
+  or unlisted App Store installation.
+- `mode=update` publishes compatible JavaScript/assets through EAS OTA; it does
+  not install an app or replace a native build.
+
 ## Legacy Mobile EAS Development Lane (Manual Only)
 
 The mobile app now lives on `main`; the old `feature/mobile-track` drift branch

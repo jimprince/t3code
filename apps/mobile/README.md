@@ -1,7 +1,8 @@
 # T3 Code Mobile
 
 > [!WARNING]
-> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> T3 Code Mobile is still in development. The fork has a production build path,
+> but it is not a public App Store release.
 
 ## Quickstart
 
@@ -15,6 +16,12 @@ This app has three variants:
 - `production`: store/release build as `T3 Code`
 
 Run commands from `apps/mobile`.
+
+For the differences between local Xcode installs, EAS internal/ad-hoc builds,
+TestFlight, App Store distribution, and EAS OTA updates, see
+[`docs/mobile/ios-deployment.md`](../../docs/mobile/ios-deployment.md). That guide
+also explains why GitHub or Gitea can trigger a deployment but cannot replace
+iOS code signing and provisioning.
 
 T3 Connect is optional and disabled in a fresh clone. Public configuration belongs in the
 repository-root `.env` or `.env.local`, not an `apps/mobile/.env` file. See
@@ -116,17 +123,16 @@ The `@clerk/expo` patch normalizes Clerk's generated iOS app bridge to use
 `internal import ClerkExpo`, matching Expo's generated Swift imports on Xcode 26
 and avoiding mixed import access levels for the `ClerkExpo` module.
 
-Pushes to `main` that touch mobile/runtime paths run
-`Mobile EAS Development Update`, which verifies the repo and deploys the iOS
-development lane with explicit EAS CLI build/update commands. The workflow only
-publishes an OTA update after EAS has a `FINISHED` iOS development build whose
-runtime version matches the current iOS fingerprint. If that build errors or is
-canceled, the workflow fails without publishing the update. The iOS app has a
-widget extension, so ad hoc credentials exist for both `com.brad.t3code.dev` and
-`com.brad.t3code.dev.widgets`. CI never contacts Apple: it consumes the signing
-credentials stored on EAS servers. When the native fingerprint changes and
-stored credentials are missing or expired, refresh them with one interactive
-local build (Apple ID auth):
+`Mobile EAS Development Update` is retained as a manual-only legacy recovery
+lane. Normal mobile deployment uses the single production workflow documented
+in [`docs/operations/release.md`](../../docs/operations/release.md#production-build-lane).
+If the development workflow is explicitly dispatched, it only publishes an OTA
+update after EAS has a `FINISHED` iOS development build whose runtime version
+matches the current iOS fingerprint. The iOS app has a widget extension, so ad
+hoc credentials exist for both `com.brad.t3code.dev` and
+`com.brad.t3code.dev.widgets`. CI consumes signing credentials stored on EAS
+servers. When the native fingerprint changes and stored credentials are missing
+or expired, refresh them with one interactive local build (Apple ID auth):
 
 ```bash
 cd apps/mobile
