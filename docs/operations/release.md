@@ -203,8 +203,10 @@ gh workflow run mobile-eas-development-rollback.yml --repo jimprince/t3code \
 ### Production build lane
 
 `.github/workflows/mobile-eas-production.yml` dispatches non-interactive EAS
-production builds and submits them to TestFlight. The main app and widget
-extension require separate App Store provisioning profiles for
+production builds. Uploading a completed iOS build is a separate, explicit
+step so one build cannot create duplicate EAS and App Store Connect
+submissions. The main app and widget extension require separate App Store
+provisioning profiles for
 `com.brad.t3code` and `com.brad.t3code.widgets`; both profiles reuse the same
 distribution certificate stored on EAS.
 
