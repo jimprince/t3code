@@ -1,8 +1,8 @@
 name: Mobile EAS Production
 
 # Production builds and OTA updates run from CI (Linux) — never from a laptop.
-# Completed iOS builds are uploaded from a hosted macOS runner with Apple's
-# Transporter, avoiding the extra EAS Submit service hop.
+# Completed iOS builds are uploaded from a hosted macOS runner with Xcode's
+# bundled App Store uploader, avoiding the extra EAS Submit service hop.
 # Under the fingerprint runtime-version policy the fingerprint must be computed
 # in the same OS/pnpm as the EAS build; a macOS `eas build` computes a different
 # fingerprint (platform-specific deps + pnpm version) and errors. On this Linux
@@ -216,9 +216,9 @@ jobs:
           printf '%s' "$APPLE_API_KEY" > "$key_path"
           chmod 600 "$key_path"
 
-          xcrun iTMSTransporter \
-            -m upload \
-            -assetFile "$ipa_path" \
-            -apiKey "$APPLE_API_KEY_ID" \
-            -apiIssuer "$APPLE_API_ISSUER" \
-            -v informational
+          xcrun altool \
+            --upload-package "$ipa_path" \
+            --api-key "$APPLE_API_KEY_ID" \
+            --api-issuer "$APPLE_API_ISSUER" \
+            --wait \
+            --output-format json
