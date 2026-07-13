@@ -9,7 +9,7 @@
 - Re-run package and fork validation, then fast-forward canonical fork `main`.
 - Repoint the shared `t3-thread` wrapper, compatibility alias documentation,
   optional watcher plist, and shared lifecycle skill to
-  `/Users/brad/Programming/t3-plugin/apps/t3-thread`.
+  `/Users/brad/Programming/t3code-fork/apps/t3-thread`.
 - Verify live environment/project discovery and a one-shot watcher scan through
   the repointed wrapper.
 - Leave the standalone repository in place until the post-cutover audit is
