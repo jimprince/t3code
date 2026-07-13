@@ -216,6 +216,73 @@ jobs:
           printf '%s' "$APPLE_API_KEY" > "$key_path"
           chmod 600 "$key_path"
 
+          asc_token="$(
+            ASC_ISSUER="$APPLE_API_ISSUER" \
+              ASC_KEY_ID="$APPLE_API_KEY_ID" \
+              ASC_KEY_PATH="$key_path" \
+              node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+
+          const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+          const now = Math.floor(Date.now() / 1000);
+          const unsigned = `${encode({ alg: "ES256", kid: process.env.ASC_KEY_ID, typ: "JWT" })}.${encode({
+            iss: process.env.ASC_ISSUER,
+            iat: now,
+            exp: now + 600,
+            aud: "appstoreconnect-v1",
+          })}`;
+          const signature = crypto.sign("sha256", Buffer.from(unsigned), {
+            key: fs.readFileSync(process.env.ASC_KEY_PATH),
+            dsaEncoding: "ieee-p1363",
+          });
+          process.stdout.write(`${unsigned}.${signature.toString("base64url")}`);
+          NODE
+          )"
+
+          app_response="$RUNNER_TEMP/asc-app.json"
+          http_status="$(curl --silent --show-error \
+            --header "Authorization: Bearer $asc_token" \
+            --header "Content-Type: application/json" \
+            --output "$app_response" \
+            --write-out '%{http_code}' \
+            'https://api.appstoreconnect.apple.com/v1/apps?filter%5BbundleId%5D=com.brad.t3code')"
+          if [[ ! "$http_status" =~ ^2 ]]; then
+            jq -r '.errors[]? | [.code, .title, .detail] | map(select(. != null)) | join(": ")' "$app_response" >&2
+            exit 1
+          fi
+
+          asc_app_id="$(jq -r '.data[0].id // empty' "$app_response")"
+          if [ -z "$asc_app_id" ]; then
+            create_payload="$(jq -nc '{
+              data: {
+                type: "apps",
+                attributes: {
+                  name: "T3 Code",
+                  primaryLocale: "en-US",
+                  bundleId: "com.brad.t3code",
+                  sku: "t3code-ios-production"
+                }
+              }
+            }')"
+            http_status="$(curl --silent --show-error \
+              --request POST \
+              --header "Authorization: Bearer $asc_token" \
+              --header "Content-Type: application/json" \
+              --data-binary "$create_payload" \
+              --output "$app_response" \
+              --write-out '%{http_code}' \
+              https://api.appstoreconnect.apple.com/v1/apps)"
+            if [[ ! "$http_status" =~ ^2 ]]; then
+              jq -r '.errors[]? | [.code, .title, .detail] | map(select(. != null)) | join(": ")' "$app_response" >&2
+              exit 1
+            fi
+            asc_app_id="$(jq -r '.data.id // empty' "$app_response")"
+            echo "Created App Store Connect app $asc_app_id for com.brad.t3code."
+          else
+            echo "Found App Store Connect app $asc_app_id for com.brad.t3code."
+          fi
+
           xcrun altool \
             --upload-app \
             -f "$ipa_path" \
