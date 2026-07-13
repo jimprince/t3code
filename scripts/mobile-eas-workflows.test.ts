@@ -66,6 +66,24 @@ it.layer(NodeServices.layer)("mobile EAS workflows", (it) => {
     }),
   );
 
+  it.effect("keeps production build and App Store upload as separate stages", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const workflow = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/mobile-eas-production.yml"),
+      );
+
+      assert.include(workflow, "inputs.mode == 'submit'");
+      assert.include(workflow, "xcrun altool");
+      assert.notInclude(workflow, "--auto-submit");
+      assert.notInclude(workflow, "EXPO_ASC_API_KEY_PATH");
+      assert.include(workflow, "api.appstoreconnect.apple.com/v1/apps");
+      assert.notInclude(workflow, "--request POST");
+    }),
+  );
+
   it.effect("does not configure the removed Expo Router package", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
