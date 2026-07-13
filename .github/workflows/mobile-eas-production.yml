@@ -254,34 +254,10 @@ jobs:
 
           asc_app_id="$(jq -r '.data[0].id // empty' "$app_response")"
           if [ -z "$asc_app_id" ]; then
-            create_payload="$(jq -nc '{
-              data: {
-                type: "apps",
-                attributes: {
-                  name: "T3 Code",
-                  primaryLocale: "en-US",
-                  bundleId: "com.brad.t3code",
-                  sku: "t3code-ios-production"
-                }
-              }
-            }')"
-            http_status="$(curl --silent --show-error \
-              --request POST \
-              --header "Authorization: Bearer $asc_token" \
-              --header "Content-Type: application/json" \
-              --data-binary "$create_payload" \
-              --output "$app_response" \
-              --write-out '%{http_code}' \
-              https://api.appstoreconnect.apple.com/v1/apps)"
-            if [[ ! "$http_status" =~ ^2 ]]; then
-              jq -r '.errors[]? | [.code, .title, .detail] | map(select(. != null)) | join(": ")' "$app_response" >&2
-              exit 1
-            fi
-            asc_app_id="$(jq -r '.data.id // empty' "$app_response")"
-            echo "Created App Store Connect app $asc_app_id for com.brad.t3code."
-          else
-            echo "Found App Store Connect app $asc_app_id for com.brad.t3code."
+            echo "::error::Create the T3 Code app record for com.brad.t3code at https://appstoreconnect.apple.com/apps before submitting." >&2
+            exit 1
           fi
+          echo "Found App Store Connect app $asc_app_id for com.brad.t3code."
 
           xcrun altool \
             --upload-app \
