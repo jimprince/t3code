@@ -211,7 +211,8 @@ distribution certificate stored on EAS.
 When uploading an already completed iOS build, use `mode=submit` with its EAS
 build ID. That lane downloads the signed IPA and uploads it directly with
 Xcode's bundled App Store uploader on a hosted macOS runner, so it does not
-depend on the EAS Submit service:
+depend on the EAS Submit service. It also creates the single production App
+Store Connect record for `com.brad.t3code` if the record does not exist yet:
 
 ```bash
 gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
