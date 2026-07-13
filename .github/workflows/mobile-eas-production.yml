@@ -9,12 +9,13 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "build (+ auto-submit to TestFlight) or update (OTA)"
+        description: "build (+ auto-submit), submit an existing build, or update (OTA)"
         required: true
         type: choice
         default: build
         options:
           - build
+          - submit
           - update
       platform:
         description: "Target platform"
@@ -30,6 +31,10 @@ on:
         required: false
         type: boolean
         default: false
+      build_id:
+        description: "EAS build ID (mode=submit only)"
+        required: false
+        type: string
       message:
         description: "OTA update message (mode=update only)"
         required: false
@@ -98,7 +103,9 @@ jobs:
         run: eas env:pull production --non-interactive
 
       - name: Prepare App Store Connect API key
-        if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'build'
+        if: >-
+          steps.expo-token.outputs.present == 'true' &&
+          (inputs.mode == 'build' || inputs.mode == 'submit')
         env:
           APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
@@ -133,7 +140,7 @@ jobs:
             # choices; Apple authentication still uses the ASC API key above.
             for _ in {1..20}; do printf '\n'; done | \
               env -u CI script -q -e -c \
-                "eas build --platform ${{ inputs.platform }} --profile production --auto-submit --no-wait" \
+                "eas build --platform ${{ inputs.platform }} --profile production --no-wait" \
                 /dev/null
           else
             eas build \
@@ -143,6 +150,25 @@ jobs:
               --non-interactive \
               --no-wait
           fi
+
+      - name: Submit existing build
+        if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'submit'
+        working-directory: apps/mobile
+        env:
+          EAS_BUILD_ID: ${{ inputs.build_id }}
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EAS_BUILD_ID" ]; then
+            echo "::error::build_id is required when mode=submit." >&2
+            exit 1
+          fi
+
+          eas submit \
+            --platform ios \
+            --profile production \
+            --id "$EAS_BUILD_ID" \
+            --non-interactive \
+            --no-wait
 
       - name: Publish OTA update
         if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'update'
