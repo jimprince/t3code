@@ -57,6 +57,6 @@ Detailed CLI operations remain in
 [`apps/t3-thread/docs/AGENT_OPERATIONS.md`](../../apps/t3-thread/docs/AGENT_OPERATIONS.md).
 
 The canonical local operator checkout is
-`/Users/brad/Programming/t3-plugin/apps/t3-thread`; shared wrappers should enter
+`/Users/brad/Programming/t3code-fork/apps/t3-thread`; shared wrappers should enter
 that workspace and run its pnpm `cli` script. The former standalone checkout is
 retained only as a migration/audit source after cutover.
