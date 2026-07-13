@@ -25,6 +25,11 @@ on:
           - ios
           - android
           - all
+      bootstrap_credentials:
+        description: "One-time interactive iOS signing credential setup"
+        required: false
+        type: boolean
+        default: false
       message:
         description: "OTA update message (mode=update only)"
         required: false
@@ -111,6 +116,8 @@ jobs:
             echo "EXPO_ASC_API_KEY_PATH=$key_path"
             echo "EXPO_ASC_KEY_ID=$APPLE_API_KEY_ID"
             echo "EXPO_ASC_ISSUER_ID=$APPLE_API_ISSUER"
+            echo "EXPO_APPLE_TEAM_ID=CBCQ6MJF4B"
+            echo "EXPO_APPLE_TEAM_TYPE=COMPANY_OR_ORGANIZATION"
           } >> "$GITHUB_ENV"
 
       - name: Build and submit
@@ -118,7 +125,24 @@ jobs:
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform ${{ inputs.platform }} --profile production --auto-submit --non-interactive --no-wait
+        run: |
+          if [ "${{ inputs.bootstrap_credentials }}" = "true" ]; then
+            # EAS refuses to associate an existing distribution certificate
+            # with a new bundle ID in non-interactive mode. Give the one-time
+            # setup a pseudo-terminal and accept EAS's recommended reuse
+            # choices; Apple authentication still uses the ASC API key above.
+            for _ in {1..20}; do printf '\n'; done | \
+              env -u CI script -q -e -c \
+                "eas build --platform ${{ inputs.platform }} --profile production --auto-submit --no-wait" \
+                /dev/null
+          else
+            eas build \
+              --platform ${{ inputs.platform }} \
+              --profile production \
+              --auto-submit \
+              --non-interactive \
+              --no-wait
+          fi
 
       - name: Publish OTA update
         if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'update'
