@@ -217,8 +217,8 @@ jobs:
           chmod 600 "$key_path"
 
           xcrun altool \
-            --upload-package "$ipa_path" \
-            --api-key "$APPLE_API_KEY_ID" \
-            --api-issuer "$APPLE_API_ISSUER" \
-            --wait \
-            --output-format json
+            --upload-app \
+            -f "$ipa_path" \
+            -t ios \
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER"
