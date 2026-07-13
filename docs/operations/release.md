@@ -208,6 +208,18 @@ extension require separate App Store provisioning profiles for
 `com.brad.t3code` and `com.brad.t3code.widgets`; both profiles reuse the same
 distribution certificate stored on EAS.
 
+When uploading an already completed iOS build, use `mode=submit` with its EAS
+build ID. That lane downloads the signed IPA and uploads it directly with
+Apple's Transporter on a hosted macOS runner, so it does not depend on the EAS
+Submit service:
+
+```bash
+gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
+  -f mode=submit \
+  -f platform=ios \
+  -f build_id=<eas-build-id>
+```
+
 Do not try to bootstrap Apple signing by piping answers into an interactive
 EAS command in CI. On this individual Apple Developer account, a trusted Mac
 with the Account Holder's restored Apple ID session must create or refresh the
