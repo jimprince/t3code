@@ -200,6 +200,34 @@ gh workflow run mobile-eas-development-rollback.yml --repo jimprince/t3code \
   -f message="rollback bad Hermes bytecode update"
 ```
 
+### Production build lane
+
+`.github/workflows/mobile-eas-production.yml` dispatches non-interactive EAS
+production builds and submits them to TestFlight. The main app and widget
+extension require separate App Store provisioning profiles for
+`com.brad.t3code` and `com.brad.t3code.widgets`; both profiles reuse the same
+distribution certificate stored on EAS.
+
+Do not try to bootstrap Apple signing by piping answers into an interactive
+EAS command in CI. On this individual Apple Developer account, a trusted Mac
+with the Account Holder's restored Apple ID session must create or refresh the
+profiles. From an up-to-date `main` checkout, run:
+
+```bash
+cd apps/mobile
+APP_VARIANT=production eas credentials:configure-build --platform ios --profile production
+```
+
+Accept the existing valid distribution certificate and generate a profile for
+each target. After EAS reports that all credentials are ready, dispatch the
+normal non-interactive production workflow:
+
+```bash
+gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
+  -f mode=build \
+  -f platform=ios
+```
+
 PRs still use `mobile-eas-preview.yml`, which deploys preview builds/updates
 with Expo fingerprinting and the `preview:dev` EAS profile.
 
