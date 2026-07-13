@@ -288,7 +288,7 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  const setThreadSessionErrorOnTurnStartFailure = Effect.fnUntraced(function* (input: {
+  const setThreadSessionReadyWithError = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
     readonly detail: string;
     readonly createdAt: string;
@@ -812,7 +812,7 @@ const make = Effect.gen(function* () {
         return Effect.void;
       }
       const detail = formatFailureDetail(cause);
-      return setThreadSessionErrorOnTurnStartFailure({
+      return setThreadSessionReadyWithError({
         threadId: event.payload.threadId,
         detail,
         createdAt: event.payload.createdAt,
@@ -916,19 +916,32 @@ const make = Effect.gen(function* () {
         decision: event.payload.decision,
       })
       .pipe(
-        Effect.catchCause((cause) =>
-          appendProviderFailureActivity({
-            threadId: event.payload.threadId,
-            kind: "provider.approval.respond.failed",
-            summary: "Provider approval response failed",
-            detail: isUnknownPendingApprovalRequestError(cause)
-              ? stalePendingRequestDetail("approval", event.payload.requestId)
-              : Cause.pretty(cause),
-            turnId: null,
-            createdAt: event.payload.createdAt,
-            requestId: event.payload.requestId,
-          }),
-        ),
+        Effect.catchCause((cause) => {
+          const stale = isUnknownPendingApprovalRequestError(cause);
+          const detail = stale
+            ? stalePendingRequestDetail("approval", event.payload.requestId)
+            : Cause.pretty(cause);
+          const recoverSession = stale
+            ? setThreadSessionReadyWithError({
+                threadId: event.payload.threadId,
+                detail,
+                createdAt: event.payload.createdAt,
+              })
+            : Effect.void;
+          return recoverSession.pipe(
+            Effect.andThen(
+              appendProviderFailureActivity({
+                threadId: event.payload.threadId,
+                kind: "provider.approval.respond.failed",
+                summary: "Provider approval response failed",
+                detail,
+                turnId: null,
+                createdAt: event.payload.createdAt,
+                requestId: event.payload.requestId,
+              }),
+            ),
+          );
+        }),
       );
   });
 
@@ -960,19 +973,32 @@ const make = Effect.gen(function* () {
           answers: event.payload.answers,
         })
         .pipe(
-          Effect.catchCause((cause) =>
-            appendProviderFailureActivity({
-              threadId: event.payload.threadId,
-              kind: "provider.user-input.respond.failed",
-              summary: "Provider user input response failed",
-              detail: isUnknownPendingUserInputRequestError(cause)
-                ? stalePendingRequestDetail("user-input", event.payload.requestId)
-                : Cause.pretty(cause),
-              turnId: null,
-              createdAt: event.payload.createdAt,
-              requestId: event.payload.requestId,
-            }),
-          ),
+          Effect.catchCause((cause) => {
+            const stale = isUnknownPendingUserInputRequestError(cause);
+            const detail = stale
+              ? stalePendingRequestDetail("user-input", event.payload.requestId)
+              : Cause.pretty(cause);
+            const recoverSession = stale
+              ? setThreadSessionReadyWithError({
+                  threadId: event.payload.threadId,
+                  detail,
+                  createdAt: event.payload.createdAt,
+                })
+              : Effect.void;
+            return recoverSession.pipe(
+              Effect.andThen(
+                appendProviderFailureActivity({
+                  threadId: event.payload.threadId,
+                  kind: "provider.user-input.respond.failed",
+                  summary: "Provider user input response failed",
+                  detail,
+                  turnId: null,
+                  createdAt: event.payload.createdAt,
+                  requestId: event.payload.requestId,
+                }),
+              ),
+            );
+          }),
         );
     },
   );
