@@ -43,6 +43,29 @@ it.layer(NodeServices.layer)("mobile EAS workflows", (it) => {
     }),
   );
 
+  it.effect("keeps production signing bootstrap local and production CI non-interactive", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const workflow = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/mobile-eas-production.yml"),
+      );
+      const releaseGuide = yield* fs.readFileString(
+        path.join(repoRoot, "docs/operations/release.md"),
+      );
+
+      assert.include(workflow, "--non-interactive");
+      assert.notInclude(workflow, "bootstrap_credentials");
+      assert.notInclude(workflow, "env -u CI script");
+      assert.notInclude(workflow, "EXPO_APPLE_TEAM_TYPE");
+      assert.include(
+        releaseGuide,
+        "APP_VARIANT=production eas credentials:configure-build --platform ios --profile production",
+      );
+    }),
+  );
+
   it.effect("does not configure the removed Expo Router package", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
