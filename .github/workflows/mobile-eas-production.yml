@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "build (+ auto-submit), submit an existing build, or update (OTA)"
+        description: "build, submit an existing build, or update (OTA)"
         required: true
         type: choice
         default: build
@@ -100,30 +100,7 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas env:pull production --non-interactive
 
-      - name: Prepare App Store Connect API key
-        if: >-
-          steps.expo-token.outputs.present == 'true' &&
-          inputs.mode == 'build'
-        env:
-          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
-          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
-          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
-        run: |
-          if [ -z "$APPLE_API_KEY" ] || [ -z "$APPLE_API_KEY_ID" ] || [ -z "$APPLE_API_ISSUER" ]; then
-            echo "::error::Production iOS builds require APPLE_API_KEY, APPLE_API_KEY_ID, and APPLE_API_ISSUER." >&2
-            exit 1
-          fi
-
-          key_path="$RUNNER_TEMP/AuthKey_${APPLE_API_KEY_ID}.p8"
-          printf '%s' "$APPLE_API_KEY" > "$key_path"
-          chmod 600 "$key_path"
-          {
-            echo "EXPO_ASC_API_KEY_PATH=$key_path"
-            echo "EXPO_ASC_KEY_ID=$APPLE_API_KEY_ID"
-            echo "EXPO_ASC_ISSUER_ID=$APPLE_API_ISSUER"
-          } >> "$GITHUB_ENV"
-
-      - name: Build and submit
+      - name: Build production binary
         if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'build'
         working-directory: apps/mobile
         env:
@@ -135,7 +112,6 @@ jobs:
           eas build
           --platform ${{ inputs.platform }}
           --profile production
-          --auto-submit
           --non-interactive
           --no-wait
 
