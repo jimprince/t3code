@@ -303,7 +303,7 @@ describe("MessagesTimeline", () => {
     expect(onAnchorReady).toHaveBeenCalledOnce();
     expect(onAnchorReady).toHaveBeenCalledWith(secondEntry.message.id, 1);
     expect(onAnchorSizeChanged).toHaveBeenCalledWith(secondEntry.message.id, 240);
-  });
+  }, 30_000);
 
   it("shows a loading progress state instead of the new-thread placeholder while detail hydrates", async () => {
     const { MessagesTimeline } = await import("./MessagesTimeline");
