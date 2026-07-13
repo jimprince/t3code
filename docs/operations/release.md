@@ -130,10 +130,10 @@ three lanes separately:
    mac assets.
 2. Linux/headless app: the `Release` workflow's Linux x64 build and published
    `t3-headless-<version>-linux-x64.tar.gz` asset.
-3. Mobile app: the `Mobile EAS Development Update` workflow on `main` and its
-   EAS publish result. Mobile is not part of `release.yml`.
+3. Mobile app: the manually dispatched `Mobile EAS Production` workflow and
+   its App Store Connect/TestFlight result. Mobile is not part of `release.yml`.
 
-## Mobile EAS Development Lane
+## Legacy Mobile EAS Development Lane (Manual Only)
 
 The mobile app now lives on `main`; the old `feature/mobile-track` drift branch
 and conflict-promotion workflow are retired. Fork-specific mobile identity is
@@ -144,15 +144,11 @@ tracked as non-secret config in `apps/mobile/fork.config.json`:
 - iOS bundle base: `com.brad.t3code`
 - scheme base: `t3code-brad`
 
-`.github/workflows/mobile-eas-development.yml` runs on pushes to `main` that
-touch mobile/runtime paths and can also be dispatched manually. It uses the
-current Vite+/pnpm setup, runs `vp check`, `vp run typecheck`, and the mobile
-test suite, then deploys the iOS development lane with Expo fingerprinting. If
-an existing EAS development build matches the current native fingerprint, the
-workflow publishes an EAS update to the `development` branch/channel; if the
-native fingerprint changed, the workflow starts a new compatible iOS
-development build before publishing the update. This prevents incompatible OTA
-bytecode from being served to an older app binary.
+`.github/workflows/mobile-eas-development.yml` is retained as a manual-only
+legacy recovery tool. It does not run on pushes to `main`; normal mobile work
+uses the single production App Store/TestFlight lane below. If explicitly
+dispatched, it runs the current Vite+/pnpm checks and deploys the old iOS
+development lane with Expo fingerprinting.
 
 The iOS app includes a widget extension target, so native development builds
 need ad hoc credentials for both `com.brad.t3code.dev` and
