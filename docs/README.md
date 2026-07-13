@@ -5,7 +5,7 @@
 - [`t3-thread` operator CLI](./architecture/t3-thread.md)
 - [T3 Connect](./cloud/t3-connect-clerk.md)
 - [Integrations](./integrations/source-control-providers.md)
-- [Mobile](./mobile/app.md)
+- [Mobile iOS deployment options](./mobile/ios-deployment.md)
 - [Operations](./operations/ci.md)
 - [Providers](./providers/codex.md)
 - [Reference](./reference/encyclopedia.md)
