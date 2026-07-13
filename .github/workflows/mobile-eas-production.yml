@@ -163,6 +163,22 @@ jobs:
             exit 1
           fi
 
+          # EAS Submit accepts a new API key non-interactively only when the
+          # submit profile references it. Inject the runner-local key path;
+          # the secret value is never written to the repository or logs.
+          node --input-type=module <<'NODE'
+          import fs from "node:fs";
+
+          const path = "eas.json";
+          const config = JSON.parse(fs.readFileSync(path, "utf8"));
+          Object.assign(config.submit.production.ios, {
+            ascApiKeyPath: process.env.EXPO_ASC_API_KEY_PATH,
+            ascApiKeyId: process.env.EXPO_ASC_KEY_ID,
+            ascApiKeyIssuerId: process.env.EXPO_ASC_ISSUER_ID,
+          });
+          fs.writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+          NODE
+
           eas submit \
             --platform ios \
             --profile production \
