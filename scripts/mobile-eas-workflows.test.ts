@@ -43,6 +43,20 @@ it.layer(NodeServices.layer)("mobile EAS workflows", (it) => {
     }),
   );
 
+  it.effect("keeps the legacy development publisher manual-only", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const workflow = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/mobile-eas-development.yml"),
+      );
+
+      assert.include(workflow, "workflow_dispatch:");
+      assert.notInclude(workflow, "  push:");
+    }),
+  );
+
   it.effect("keeps production signing bootstrap local and production CI non-interactive", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
