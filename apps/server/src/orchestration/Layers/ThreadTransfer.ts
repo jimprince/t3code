@@ -226,6 +226,23 @@ function validateBundleForImport(
   return undefined;
 }
 
+function normalizeProviderSessionForImport(
+  providerSession: ThreadMoveProviderSession | null,
+  warnings: string[],
+): ThreadMoveProviderSession | null {
+  if (
+    providerSession?.providerName === CLAUDE_PROVIDER_NAME &&
+    providerSession.sessionFile === null &&
+    providerSession.resumeCursor !== null
+  ) {
+    warnings.push(
+      "The Claude resume cursor was discarded because the bundle has no matching session transcript.",
+    );
+    return { ...providerSession, resumeCursor: null };
+  }
+  return providerSession;
+}
+
 /**
  * Flatten an error and its cause chain into one diagnostic string. Generic
  * top-level messages ("Failed to execute statement") are useless without the
@@ -721,13 +738,16 @@ const make = Effect.gen(function* () {
         return null;
       }
 
+      // Claude canonicalizes cwd before deriving its transcript directory.
+      // This matters on macOS where /tmp resolves to /private/tmp.
+      const providerCwd = yield* fs.realPath(input.cwd).pipe(Effect.orElseSucceed(() => input.cwd));
       const base: ThreadMoveProviderSession = {
         providerName: runtime.providerName,
         providerInstanceId: runtime.providerInstanceId,
         adapterKey: runtime.adapterKey,
         runtimeMode: runtime.runtimeMode,
         resumeCursor: runtime.resumeCursor,
-        sourceCwd: input.cwd,
+        sourceCwd: providerCwd,
         sessionFile: null,
       };
 
@@ -746,7 +766,7 @@ const make = Effect.gen(function* () {
         return { ...base, resumeCursor: null };
       }
 
-      const sessionFilePath = path.join(claudeProjectsDirForCwd(input.cwd), `${sessionId}.jsonl`);
+      const sessionFilePath = path.join(claudeProjectsDirForCwd(providerCwd), `${sessionId}.jsonl`);
       const stat = yield* fs.stat(sessionFilePath).pipe(
         Effect.map(Option.some),
         Effect.orElseSucceed(() => Option.none()),
@@ -871,6 +891,20 @@ const make = Effect.gen(function* () {
           "Target project is not a git repository; branch, checkpoints, and uncommitted changes were not restored.",
         );
         return { branch: null, worktreePath: null, checkpointsRestored: false };
+      }
+
+      const branchNameCheck = gitState.branch.startsWith("-")
+        ? null
+        : yield* git({
+            operation: "ThreadTransfer.import.branchNameCheck",
+            cwd: workspaceRoot,
+            args: ["check-ref-format", `refs/heads/${gitState.branch}`],
+            allowNonZeroExit: true,
+          });
+      if (branchNameCheck === null || branchNameCheck.exitCode !== 0) {
+        return yield* new OrchestrationImportThreadError({
+          message: `The Git bundle contains invalid branch name '${gitState.branch}'.`,
+        });
       }
 
       const existingBranch = yield* git({
@@ -1158,7 +1192,23 @@ const make = Effect.gen(function* () {
           input.cwd,
         );
         yield* fs.makeDirectory(sessionsDir, { recursive: true });
-        yield* fs.writeFileString(targetPath, rewritten);
+        const created = yield* fs.writeFileString(targetPath, rewritten, { flag: "wx" }).pipe(
+          Effect.as(true),
+          Effect.catchIf(
+            (error) => error.reason._tag === "AlreadyExists",
+            () => Effect.succeed(false),
+          ),
+        );
+        if (!created) {
+          const symlinkTarget = yield* fs.readLink(targetPath).pipe(Effect.option);
+          const stat = yield* fs.stat(targetPath);
+          const existing = yield* fs.readFileString(targetPath);
+          if (Option.isSome(symlinkTarget) || stat.type !== "File" || existing !== rewritten) {
+            return yield* new OrchestrationImportThreadError({
+              message: `Claude session transcript '${providerSession.sessionFile.fileName}' already exists and does not match the imported contents.`,
+            });
+          }
+        }
       }
 
       const lastSeenAt = yield* nowIso;
@@ -1297,7 +1347,7 @@ const make = Effect.gen(function* () {
 
       const resolvedProvider = yield* resolveTargetProviderRoute({
         portable: input.bundle.thread,
-        providerSession: input.bundle.providerSession,
+        providerSession: normalizeProviderSessionForImport(input.bundle.providerSession, warnings),
         warnings,
       });
       const portable = resolvedProvider.portable;
