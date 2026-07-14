@@ -312,6 +312,10 @@ describe("ProviderRuntimeIngestion", () => {
     return {
       engine,
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
+      readEvents: () =>
+        Effect.runPromise(
+          Stream.runCollect(engine.readEvents(0)).pipe(Effect.map((chunk) => Array.from(chunk))),
+        ),
       emit: provider.emit,
       setProviderSession: provider.setSession,
       drain,
@@ -1965,6 +1969,130 @@ describe("ProviderRuntimeIngestion", () => {
     expect(message?.streaming).toBe(false);
   });
 
+  it("associates a turn-less approval request with the active turn", async () => {
+    const harness = await createHarness();
+    const startedAt = "2026-01-01T00:00:00.000Z";
+    const requestedAt = "2026-01-01T00:00:01.000Z";
+    const turnId = asTurnId("turn-request-without-provider-turn-id");
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started-before-turn-less-request"),
+      provider: ProviderDriverKind.make("claudeAgent"),
+      createdAt: startedAt,
+      threadId: asThreadId("thread-1"),
+      turnId,
+    });
+    await waitForThread(harness.readModel, (thread) => thread.session?.activeTurnId === turnId);
+    harness.setProviderSession({
+      provider: ProviderDriverKind.make("claudeAgent"),
+      status: "running",
+      runtimeMode: "approval-required",
+      threadId: ThreadId.make("thread-1"),
+      activeTurnId: turnId,
+      createdAt: startedAt,
+      updatedAt: startedAt,
+    });
+
+    harness.emit({
+      type: "request.opened",
+      eventId: asEventId("evt-turn-less-request-opened"),
+      provider: ProviderDriverKind.make("claudeAgent"),
+      createdAt: requestedAt,
+      threadId: asThreadId("thread-1"),
+      requestId: ApprovalRequestId.make("req-without-provider-turn-id"),
+      payload: {
+        requestType: "command_execution_approval",
+        detail: "pwd",
+      },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.activities.some(
+        (activity: ProviderRuntimeTestActivity) =>
+          activity.kind === "approval.requested" &&
+          activity.payload !== null &&
+          typeof activity.payload === "object" &&
+          (activity.payload as Record<string, unknown>).requestId ===
+            "req-without-provider-turn-id",
+      ),
+    );
+    const request = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) =>
+        activity.kind === "approval.requested" &&
+        activity.payload !== null &&
+        typeof activity.payload === "object" &&
+        (activity.payload as Record<string, unknown>).requestId === "req-without-provider-turn-id",
+    );
+    expect(request?.turnId).toBe(turnId);
+  });
+
+  it("leaves a turn-less request unscoped while provider and projection turns disagree", async () => {
+    const harness = await createHarness();
+    const createdAt = "2026-01-01T00:00:00.000Z";
+    const staleTurnId = asTurnId("turn-stale-projected-request");
+    const providerTurnId = asTurnId("turn-current-provider-request");
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-stale-projected-request-session"),
+        threadId: ThreadId.make("thread-1"),
+        session: {
+          threadId: ThreadId.make("thread-1"),
+          status: "running",
+          providerName: "claudeAgent",
+          runtimeMode: "approval-required",
+          activeTurnId: staleTurnId,
+          updatedAt: createdAt,
+          lastError: null,
+        },
+        createdAt,
+      }),
+    );
+    harness.setProviderSession({
+      provider: ProviderDriverKind.make("claudeAgent"),
+      status: "running",
+      runtimeMode: "approval-required",
+      threadId: ThreadId.make("thread-1"),
+      activeTurnId: providerTurnId,
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    harness.emit({
+      type: "request.opened",
+      eventId: asEventId("evt-request-during-turn-disagreement"),
+      provider: ProviderDriverKind.make("claudeAgent"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      threadId: asThreadId("thread-1"),
+      requestId: ApprovalRequestId.make("req-during-turn-disagreement"),
+      payload: {
+        requestType: "command_execution_approval",
+        detail: "pwd",
+      },
+    });
+
+    const thread = await waitForThread(harness.readModel, (entry) =>
+      entry.activities.some(
+        (activity: ProviderRuntimeTestActivity) =>
+          activity.kind === "approval.requested" &&
+          activity.payload !== null &&
+          typeof activity.payload === "object" &&
+          (activity.payload as Record<string, unknown>).requestId ===
+            "req-during-turn-disagreement",
+      ),
+    );
+    const request = thread.activities.find(
+      (activity: ProviderRuntimeTestActivity) =>
+        activity.kind === "approval.requested" &&
+        activity.payload !== null &&
+        typeof activity.payload === "object" &&
+        (activity.payload as Record<string, unknown>).requestId === "req-during-turn-disagreement",
+    );
+    expect(request?.turnId).toBeNull();
+  });
+
   it("flushes and completes buffered assistant text when user input is requested", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
@@ -2197,11 +2325,7 @@ describe("ProviderRuntimeIngestion", () => {
     expect(resumedMessage?.text).toBe(" second half");
     expect(resumedMessage?.streaming).toBe(false);
 
-    const events = await Effect.runPromise(
-      Stream.runCollect(harness.engine.readEvents(0)).pipe(
-        Effect.map((chunk) => Array.from(chunk)),
-      ),
-    );
+    const events = await harness.readEvents();
     const assistantEvents = events.filter(
       (event): event is Extract<(typeof events)[number], { type: "thread.message-sent" }> =>
         event.type === "thread.message-sent" &&
@@ -2553,11 +2677,7 @@ describe("ProviderRuntimeIngestion", () => {
         ),
     );
 
-    const events = await Effect.runPromise(
-      Stream.runCollect(harness.engine.readEvents(0)).pipe(
-        Effect.map((chunk) => Array.from(chunk)),
-      ),
-    );
+    const events = await harness.readEvents();
     const completionEvents = events.filter((event) => {
       if (event.type !== "thread.message-sent") {
         return false;

@@ -1852,6 +1852,7 @@ describe("ProviderCommandReactor", () => {
   it("surfaces stale provider approval request failures without faking approval resolution", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
+    const staleTurnId = TurnId.make("turn-stale-approval-request");
     harness.respondToRequest.mockImplementation(() =>
       Effect.fail(
         new ProviderAdapterRequestError({
@@ -1872,7 +1873,7 @@ describe("ProviderCommandReactor", () => {
           status: "running",
           providerName: "codex",
           runtimeMode: "approval-required",
-          activeTurnId: null,
+          activeTurnId: staleTurnId,
           lastError: null,
           updatedAt: now,
         },
@@ -1894,7 +1895,7 @@ describe("ProviderCommandReactor", () => {
             requestId: "approval-request-1",
             requestKind: "command",
           },
-          turnId: null,
+          turnId: staleTurnId,
           createdAt: now,
         },
         createdAt: now,
@@ -1948,6 +1949,82 @@ describe("ProviderCommandReactor", () => {
     );
     expect(resolvedActivity).toBeUndefined();
   });
+
+  effectIt.effect(
+    "does not reset a newer active turn when an older approval callback is stale",
+    () =>
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() => createHarness());
+        const now = "2026-01-01T00:00:00.000Z";
+        const activeTurnId = TurnId.make("turn-newer-than-stale-approval");
+        harness.respondToRequest.mockImplementation(() =>
+          Effect.fail(
+            new ProviderAdapterRequestError({
+              provider: ProviderDriverKind.make("codex"),
+              method: "session/request_permission",
+              detail: "Unknown pending permission request: approval-request-old",
+            }),
+          ),
+        );
+
+        yield* harness.engine.dispatch({
+          type: "thread.session.set",
+          commandId: CommandId.make("cmd-session-set-newer-turn"),
+          threadId: ThreadId.make("thread-1"),
+          session: {
+            threadId: ThreadId.make("thread-1"),
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "approval-required",
+            activeTurnId,
+            lastError: null,
+            updatedAt: now,
+          },
+          createdAt: now,
+        });
+        yield* harness.engine.dispatch({
+          type: "thread.activity.append",
+          commandId: CommandId.make("cmd-old-approval-requested"),
+          threadId: ThreadId.make("thread-1"),
+          activity: {
+            id: EventId.make("activity-old-approval-requested"),
+            tone: "approval",
+            kind: "approval.requested",
+            summary: "Old command approval requested",
+            payload: { requestId: "approval-request-old", requestKind: "command" },
+            turnId: TurnId.make("turn-old-approval"),
+            createdAt: now,
+          },
+          createdAt: now,
+        });
+        yield* harness.engine.dispatch({
+          type: "thread.approval.respond",
+          commandId: CommandId.make("cmd-old-approval-response"),
+          threadId: ThreadId.make("thread-1"),
+          requestId: asApprovalRequestId("approval-request-old"),
+          decision: "accept",
+          createdAt: now,
+        });
+
+        yield* Effect.promise(() =>
+          waitFor(async () => {
+            const thread = (await harness.readModel()).threads.find(
+              (entry) => entry.id === ThreadId.make("thread-1"),
+            );
+            return (
+              thread?.activities.some(
+                (activity) => activity.kind === "provider.approval.respond.failed",
+              ) ?? false
+            );
+          }),
+        );
+        const readModel = yield* Effect.promise(() => harness.readModel());
+        const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+        expect(thread?.session?.status).toBe("running");
+        expect(thread?.session?.activeTurnId).toBe(activeTurnId);
+        expect(thread?.session?.lastError).toBeNull();
+      }),
+  );
 
   it("surfaces non-resumable provider user-input callbacks as stale failures", async () => {
     const harness = await createHarness();
@@ -2152,4 +2229,99 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
     expect(thread?.session?.activeTurnId).toBeNull();
   });
+
+  effectIt.effect(
+    "uses activity sequence when equal-timestamp user-input requests supersede each other",
+    () =>
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() => createHarness());
+        const createdAt = "2026-01-01T00:00:00.000Z";
+        harness.respondToUserInput.mockImplementation(() =>
+          Effect.fail(
+            new ProviderAdapterRequestError({
+              provider: ProviderDriverKind.make("claudeAgent"),
+              method: "item/tool/respondToUserInput",
+              detail: "Unknown pending user-input request: user-input-request-old",
+            }),
+          ),
+        );
+
+        yield* harness.engine.dispatch({
+          type: "thread.session.set",
+          commandId: CommandId.make("cmd-session-set-newer-user-input"),
+          threadId: ThreadId.make("thread-1"),
+          session: {
+            threadId: ThreadId.make("thread-1"),
+            status: "running",
+            providerName: "claudeAgent",
+            runtimeMode: "approval-required",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: createdAt,
+          },
+          createdAt,
+        });
+        yield* Effect.forEach(
+          ["user-input-request-old", "user-input-request-new"] as const,
+          (requestId) =>
+            harness.engine.dispatch({
+              type: "thread.activity.append",
+              commandId: CommandId.make(`cmd-${requestId}`),
+              threadId: ThreadId.make("thread-1"),
+              activity: {
+                id: EventId.make(`activity-${requestId}`),
+                tone: "info",
+                kind: "user-input.requested",
+                summary: "User input requested",
+                payload: { requestId, questions: [] },
+                turnId: null,
+                createdAt,
+              },
+              createdAt,
+            }),
+          { concurrency: 1 },
+        );
+        const beforeResponse = yield* Effect.promise(() => harness.readModel());
+        const requestActivities = beforeResponse.threads
+          .find((entry) => entry.id === ThreadId.make("thread-1"))
+          ?.activities.filter((activity) => activity.kind === "user-input.requested")
+          .map((activity) => ({
+            requestId:
+              typeof activity.payload === "object" && activity.payload !== null
+                ? (activity.payload as Record<string, unknown>).requestId
+                : undefined,
+            sequence: activity.sequence,
+          }));
+        expect(requestActivities).toEqual([
+          { requestId: "user-input-request-old", sequence: expect.any(Number) },
+          { requestId: "user-input-request-new", sequence: expect.any(Number) },
+        ]);
+        yield* harness.engine.dispatch({
+          type: "thread.user-input.respond",
+          commandId: CommandId.make("cmd-old-user-input-response"),
+          threadId: ThreadId.make("thread-1"),
+          requestId: asApprovalRequestId("user-input-request-old"),
+          answers: { answer: "stale" },
+          createdAt,
+        });
+
+        yield* Effect.promise(() =>
+          waitFor(async () => {
+            const thread = (await harness.readModel()).threads.find(
+              (entry) => entry.id === ThreadId.make("thread-1"),
+            );
+            return (
+              thread?.activities.some(
+                (activity) => activity.kind === "provider.user-input.respond.failed",
+              ) ?? false
+            );
+          }),
+        );
+        const readModel = yield* Effect.promise(() => harness.readModel());
+        const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+        expect(thread?.session?.status).toBe("running");
+        expect(thread?.session?.activeTurnId).toBeNull();
+        expect(thread?.session?.lastError).toBeNull();
+      }),
+  );
 });
