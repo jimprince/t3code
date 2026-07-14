@@ -4,6 +4,8 @@ import {
   EventId,
   type ModelSelection,
   type OrchestrationEvent,
+  type OrchestrationThread,
+  type OrchestrationThreadActivity,
   ProviderDriverKind,
   type ProjectId,
   type OrchestrationSession,
@@ -169,6 +171,85 @@ function stalePendingRequestDetail(
   return `Stale pending ${requestKind} request: ${requestId}. Provider callback state does not survive app restarts or recovered sessions. Restart the turn to continue.`;
 }
 
+type PendingProviderRequestKind = "approval" | "user-input";
+
+function activityRequestId(activity: OrchestrationThreadActivity | undefined): string | undefined {
+  if (activity === undefined || typeof activity.payload !== "object" || activity.payload === null) {
+    return undefined;
+  }
+  const requestId = (activity.payload as Record<string, unknown>).requestId;
+  return typeof requestId === "string" ? requestId : undefined;
+}
+
+function isStaleRequestFailureActivity(
+  activity: OrchestrationThreadActivity,
+  requestKind: PendingProviderRequestKind,
+): boolean {
+  const failureKind =
+    requestKind === "approval"
+      ? "provider.approval.respond.failed"
+      : "provider.user-input.respond.failed";
+  if (activity.kind !== failureKind || typeof activity.payload !== "object") {
+    return false;
+  }
+  const detail = (activity.payload as Record<string, unknown> | null)?.detail;
+  return typeof detail === "string" && detail.toLowerCase().includes("stale pending");
+}
+
+function findLatestPendingProviderRequest(
+  activities: ReadonlyArray<OrchestrationThreadActivity>,
+  requestKind: PendingProviderRequestKind,
+): OrchestrationThreadActivity | undefined {
+  const requestedKind = requestKind === "approval" ? "approval.requested" : "user-input.requested";
+  const resolvedKind = requestKind === "approval" ? "approval.resolved" : "user-input.resolved";
+  const openRequests = new Map<string, OrchestrationThreadActivity>();
+  const ordered = [...activities].toSorted((left, right) => {
+    if (left.sequence !== undefined || right.sequence !== undefined) {
+      if (left.sequence === undefined) return -1;
+      if (right.sequence === undefined) return 1;
+      const sequenceOrder = left.sequence - right.sequence;
+      if (sequenceOrder !== 0) return sequenceOrder;
+    }
+    return (
+      left.createdAt.localeCompare(right.createdAt) ||
+      String(left.id).localeCompare(String(right.id))
+    );
+  });
+
+  for (const activity of ordered) {
+    const requestId = activityRequestId(activity);
+    if (requestId === undefined) {
+      continue;
+    }
+    if (activity.kind === requestedKind) {
+      openRequests.delete(requestId);
+      openRequests.set(requestId, activity);
+      continue;
+    }
+    if (activity.kind === resolvedKind || isStaleRequestFailureActivity(activity, requestKind)) {
+      openRequests.delete(requestId);
+    }
+  }
+
+  return [...openRequests.values()].at(-1);
+}
+
+function pendingRequestMatchesActiveTurn(
+  thread: OrchestrationThread,
+  pending: OrchestrationThreadActivity,
+): boolean {
+  const activeTurnId = thread.session?.activeTurnId ?? null;
+  if (activeTurnId === null) return true;
+  if (pending.turnId !== null) return pending.turnId === activeTurnId;
+
+  // Older adapters could omit request turn ids. Only recover those legacy
+  // rows when their timestamp places them strictly inside the active turn.
+  const latestTurn = thread.latestTurn;
+  if (latestTurn?.turnId !== activeTurnId) return false;
+  const activeTurnBoundary = latestTurn.startedAt ?? latestTurn.requestedAt;
+  return pending.createdAt > activeTurnBoundary;
+}
+
 function buildGeneratedWorktreeBranchName(raw: string): string {
   const normalized = raw
     .trim()
@@ -292,11 +373,28 @@ const make = Effect.gen(function* () {
     readonly threadId: ThreadId;
     readonly detail: string;
     readonly createdAt: string;
+    readonly pendingRequest?: {
+      readonly kind: PendingProviderRequestKind;
+      readonly requestId: string;
+    };
   }) {
     const thread = yield* resolveThread(input.threadId);
     const session = thread?.session;
     if (!session) {
       return;
+    }
+    if (input.pendingRequest !== undefined) {
+      const pending = findLatestPendingProviderRequest(
+        thread.activities,
+        input.pendingRequest.kind,
+      );
+      if (
+        activityRequestId(pending) !== input.pendingRequest.requestId ||
+        pending === undefined ||
+        !pendingRequestMatchesActiveTurn(thread, pending)
+      ) {
+        return;
+      }
     }
     yield* setThreadSession({
       threadId: input.threadId,
@@ -926,6 +1024,10 @@ const make = Effect.gen(function* () {
                 threadId: event.payload.threadId,
                 detail,
                 createdAt: event.payload.createdAt,
+                pendingRequest: {
+                  kind: "approval",
+                  requestId: event.payload.requestId,
+                },
               })
             : Effect.void;
           return recoverSession.pipe(
@@ -983,6 +1085,10 @@ const make = Effect.gen(function* () {
                   threadId: event.payload.threadId,
                   detail,
                   createdAt: event.payload.createdAt,
+                  pendingRequest: {
+                    kind: "user-input",
+                    requestId: event.payload.requestId,
+                  },
                 })
               : Effect.void;
             return recoverSession.pipe(

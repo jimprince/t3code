@@ -264,6 +264,7 @@ function requestKindFromCanonicalRequestType(
 
 function runtimeEventToActivities(
   event: ProviderRuntimeEvent,
+  requestFallbackTurnId: TurnId | null,
 ): ReadonlyArray<OrchestrationThreadActivity> {
   const maybeSequence = (() => {
     const eventWithSequence = event as ProviderRuntimeEvent & { sessionSequence?: number };
@@ -271,6 +272,7 @@ function runtimeEventToActivities(
       ? { sequence: eventWithSequence.sessionSequence }
       : {};
   })();
+  const requestTurnId = toTurnId(event.turnId) ?? requestFallbackTurnId;
   switch (event.type) {
     case "request.opened": {
       if (event.payload.requestType === "tool_user_input") {
@@ -297,7 +299,7 @@ function runtimeEventToActivities(
             requestType: event.payload.requestType,
             ...(event.payload.detail ? { detail: truncateDetail(event.payload.detail) } : {}),
           },
-          turnId: toTurnId(event.turnId) ?? null,
+          turnId: requestTurnId,
           ...maybeSequence,
         },
       ];
@@ -321,7 +323,7 @@ function runtimeEventToActivities(
             requestType: event.payload.requestType,
             ...(event.payload.decision ? { decision: event.payload.decision } : {}),
           },
-          turnId: toTurnId(event.turnId) ?? null,
+          turnId: requestTurnId,
           ...maybeSequence,
         },
       ];
@@ -416,7 +418,7 @@ function runtimeEventToActivities(
             ...(event.requestId ? { requestId: event.requestId } : {}),
             questions: event.payload.questions,
           },
-          turnId: toTurnId(event.turnId) ?? null,
+          turnId: requestTurnId,
           ...maybeSequence,
         },
       ];
@@ -434,7 +436,7 @@ function runtimeEventToActivities(
             ...(event.requestId ? { requestId: event.requestId } : {}),
             answers: event.payload.answers,
           },
-          turnId: toTurnId(event.turnId) ?? null,
+          turnId: requestTurnId,
           ...maybeSequence,
         },
       ];
@@ -1261,6 +1263,21 @@ const make = Effect.gen(function* () {
       const now = event.createdAt;
       const eventTurnId = toTurnId(event.turnId);
       const activeTurnId = thread.session?.activeTurnId ?? null;
+      const isTurnlessRequestActivity =
+        eventTurnId === undefined &&
+        (event.type === "request.opened" ||
+          event.type === "request.resolved" ||
+          event.type === "user-input.requested" ||
+          event.type === "user-input.resolved");
+      const providerTurnIdForRequest = isTurnlessRequestActivity
+        ? toTurnId(yield* getExpectedProviderTurnIdForThread(thread.id))
+        : undefined;
+      // During turn transitions the projected and provider active turns can
+      // temporarily disagree. Keep the request unscoped in that case so the
+      // reactor's guarded legacy timestamp fallback can resolve it later.
+      const requestFallbackTurnId = sameId(providerTurnIdForRequest, activeTurnId)
+        ? (providerTurnIdForRequest ?? null)
+        : null;
 
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
@@ -1729,7 +1746,7 @@ const make = Effect.gen(function* () {
         }
       }
 
-      const activities = runtimeEventToActivities(event);
+      const activities = runtimeEventToActivities(event, requestFallbackTurnId);
       yield* Effect.forEach(activities, (activity) =>
         providerCommandId(event, "thread-activity-append").pipe(
           Effect.flatMap((commandId) =>
