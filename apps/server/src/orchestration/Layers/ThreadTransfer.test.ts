@@ -416,6 +416,133 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
   });
 
   describe("round trip", () => {
+    it.effect("clears a non-Claude resume cursor so transferred history remains pending", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-move-context-fallback-");
+        const sourceWorkspace = joinPath(root, "source-workspace");
+        const targetWorkspace = joinPath(root, "target-workspace");
+        const sourceWorktreesRoot = joinPath(root, "source-worktrees");
+        const targetWorktreesRoot = joinPath(root, "target-worktrees");
+        for (const directory of [
+          sourceWorkspace,
+          targetWorkspace,
+          sourceWorktreesRoot,
+          targetWorktreesRoot,
+        ]) {
+          yield* makeDirectory(directory);
+        }
+
+        const source = yield* buildTransferSystem({
+          prefix: "t3-thread-move-context-fallback-source-",
+          worktreesRoot: sourceWorktreesRoot,
+        });
+        const target = yield* buildTransferSystem({
+          prefix: "t3-thread-move-context-fallback-target-",
+          worktreesRoot: targetWorktreesRoot,
+        });
+        const sourceProjectId = ProjectId.make("project-context-fallback-source");
+        const targetProjectId = ProjectId.make("project-context-fallback-target");
+        const threadId = ThreadId.make("99991111-2222-4333-8444-555566667777");
+        const portable: PortableThread = {
+          id: threadId,
+          title: "Codex thread on the move",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5.6-terra",
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          goal: null,
+          createdAt: now(),
+          updatedAt: now(),
+          messages: [
+            {
+              id: MessageId.make("context-fallback-message"),
+              role: "user",
+              text: "Preserve this history.",
+              turnId: null,
+              streaming: false,
+              createdAt: now(),
+              updatedAt: now(),
+            },
+          ],
+          proposedPlans: [],
+          activities: [],
+          checkpoints: [],
+        };
+
+        yield* source.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-context-fallback-source-project"),
+          projectId: sourceProjectId,
+          title: "Context Fallback Source",
+          workspaceRoot: sourceWorkspace,
+          createdAt: now(),
+        });
+        yield* source.engine.dispatch({
+          type: "thread.import",
+          commandId: CommandId.make("cmd-context-fallback-source-thread"),
+          threadId,
+          projectId: sourceProjectId,
+          thread: portable,
+          branch: null,
+          worktreePath: null,
+          createdAt: now(),
+        });
+        yield* source.providerRuntime.upsert({
+          threadId,
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          adapterKey: "codex",
+          runtimeMode: "full-access",
+          status: "stopped",
+          lastSeenAt: now(),
+          resumeCursor: { threadId: "machine-local-cursor" },
+          runtimePayload: null,
+        });
+
+        const exported = yield* source.transfer.exportThread({ threadId });
+        expect(exported.bundle.providerSession?.resumeCursor).toBeNull();
+        expect(
+          exported.bundle.warnings.some((warning) => warning.includes("bounded provider-only")),
+        ).toBe(true);
+
+        yield* target.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-context-fallback-target-project"),
+          projectId: targetProjectId,
+          title: "Context Fallback Target",
+          workspaceRoot: targetWorkspace,
+          createdAt: now(),
+        });
+        yield* target.transfer.importThread({
+          projectId: targetProjectId,
+          bundle: exported.bundle,
+        });
+
+        const movedThread = yield* target.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(
+          movedThread?.activities.find((activity) => activity.kind === "thread.imported")?.payload,
+        ).toMatchObject({
+          providerContextHandoff: {
+            required: true,
+            historyMessageCount: 1,
+          },
+        });
+        const targetRuntime = yield* target.providerRuntime
+          .getByThreadId({ threadId })
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(targetRuntime?.resumeCursor).toBeNull();
+        expect(targetRuntime?.runtimePayload).toEqual({
+          cwd: targetWorkspace,
+          modelSelection: portable.modelSelection,
+        });
+      }).pipe(Effect.scoped),
+    );
+
     it.effect("moves history, git state, and the Claude session between two environments", () =>
       Effect.gen(function* () {
         const root = yield* makeScopedTempDirectory("t3-thread-move-");
@@ -601,9 +728,16 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         expect(movedThread!.messages.map((message) => message.text)).toEqual(["do the thing"]);
         expect(movedThread!.checkpoints).toHaveLength(1);
         expect(movedThread!.worktreePath).toBe(targetWorktree);
-        expect(
-          movedThread!.activities.some((activity) => activity.kind === "thread.imported"),
-        ).toBe(true);
+        const importMarker = movedThread!.activities.find(
+          (activity) => activity.kind === "thread.imported",
+        );
+        expect(importMarker?.payload).toMatchObject({
+          providerContextHandoff: {
+            version: 1,
+            required: true,
+            historyMessageCount: 1,
+          },
+        });
 
         // Git state landed: branch, checkpoint ref, dirty diff, untracked file.
         const targetBranchSha = yield* execGit(targetRepo, ["rev-parse", `refs/heads/${branch}`]);
@@ -634,6 +768,14 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         expect(targetRuntime!.providerName).toBe("claude");
         expect(targetRuntime!.status).toBe("stopped");
         expect(readClaudeSessionIdFromCursor(targetRuntime!.resumeCursor)).toBe(sessionId);
+        expect(targetRuntime!.runtimePayload).toEqual({
+          cwd: targetWorktree,
+          modelSelection: portable.modelSelection,
+          threadTransferContextHandoff: {
+            version: 1,
+            consumedExportedAt: bundle.exportedAt,
+          },
+        });
 
         // Importing the same bundle again must fail cleanly.
         const duplicate = yield* Effect.exit(
@@ -778,6 +920,15 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
           .pipe(Effect.map(Option.getOrUndefined));
         expect(movedThread).toBeDefined();
         expect(movedThread!.branch).toMatch(/^main-moved-cccc1111/);
+        expect(
+          movedThread!.activities.find((activity) => activity.kind === "thread.imported")?.payload,
+        ).toMatchObject({
+          providerContextHandoff: {
+            version: 1,
+            required: true,
+            historyMessageCount: 1,
+          },
+        });
 
         // The target's own main is untouched; the work landed on the
         // fallback branch's worktree.
