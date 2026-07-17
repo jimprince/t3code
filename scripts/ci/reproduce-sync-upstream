@@ -44,6 +44,7 @@ FORK_RESOLVE_FILES=(
   .github/workflows/release.yml
   apps/mobile/app.config.ts
   apps/mobile/eas.json
+  docs/operations/ci.md
   docs/operations/release.md
   infra/relay/scripts/deploy.test.ts
 )
