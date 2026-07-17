@@ -113,18 +113,21 @@ it.layer(NodeServices.layer)("mobile EAS workflows", (it) => {
     }),
   );
 
-  it.effect("references splash assets that exist in the EAS checkout", () =>
+  it.effect("uses the centralized brand assets available in the EAS checkout", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
       const appConfig = yield* fs.readFileString(path.join(repoRoot, "apps/mobile/app.config.ts"));
 
-      for (const asset of ["splash-icon-dev.png", "splash-icon-prod.png"]) {
-        assert.include(appConfig, `./assets/${asset}`);
-        assert.isTrue(yield* fs.exists(path.join(repoRoot, "apps/mobile/assets", asset)));
+      for (const asset of ["developmentIosIconPng", "nightlyIosIconPng", "productionIosIconPng"]) {
+        assert.include(appConfig, `BRAND_ASSET_PATHS.${asset}`);
       }
-      assert.notInclude(appConfig, '"./assets/splash-icon.png"');
+      assert.include(
+        appConfig,
+        "const fromRepoRoot = (relativePath: string) => `../../${relativePath}`",
+      );
+      assert.notInclude(appConfig, 'splashIcon: "./assets/');
     }),
   );
 
