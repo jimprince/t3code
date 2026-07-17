@@ -5645,7 +5645,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           orchestrationEngine: {
-            subscribeDomainEvents: Effect.map(PubSub.subscribe(liveEvents), Stream.fromSubscription),
+            subscribeDomainEvents: Effect.map(
+              PubSub.subscribe(liveEvents),
+              Stream.fromSubscription,
+            ),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshotById: () =>
