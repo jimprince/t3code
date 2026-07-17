@@ -142,7 +142,10 @@ versioning axis for the fork.
   Rebase conflict auto-resolution is intentionally asymmetric: package version
   files resolve to upstream and are re-stamped later, while
   `.github/workflows/release.yml` resolves to the fork side because this fork's
-  release matrix and runner fallback are deliberately custom.
+  release matrix and runner fallback are deliberately custom. Fork-owned CI and
+  release documentation (`docs/operations/ci.md` and
+  `docs/operations/release.md`) also resolves to the fork side so upstream
+  documentation edits cannot stall scheduled syncs.
 - Tag scheme by channel:
   - **stable**: `${upstream_tag}` verbatim (e.g. `v0.0.21`). The fork and
     upstream share the tag name; the commit on the fork is upstream's commit
