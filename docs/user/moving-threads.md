@@ -28,11 +28,16 @@ the target confirms the import, so a failed move never loses the thread.
   move asks whether to create a new worktree on a fallback branch named
   `<branch>-moved-<thread-id-prefix>` at the exported tip; the target's own
   branch is never modified.
-- **Agent memory (Claude)** — the Claude Code session transcript is copied
+- **Agent memory** — the Claude Code session transcript is copied
   under the target machine's `~/.claude/projects/<new-worktree>` directory and
   the resume cursor is preserved, so the next turn resumes with full native
-  session context. Other providers currently move history only; the agent
-  starts its next turn fresh (the move reports this as a warning).
+  session context. The cursor is preserved only when its matching transcript
+  is transferred successfully. When native provider context cannot be moved
+  (including Codex sessions), T3 sends up to 64 KiB of the most recent visible
+  message history as provider-only context with the first turn on the target.
+  This handoff is not added as another visible message, is consumed only after
+  the provider accepts the turn, and is not repeated on later turns. The move
+  reports this fallback as a warning.
 
 ## What does not move
 
