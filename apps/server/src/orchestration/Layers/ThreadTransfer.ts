@@ -24,6 +24,7 @@ import {
   THREAD_MOVE_BUNDLE_VERSION,
   type OrchestrationCheckpointSummary,
   type OrchestrationThread,
+  type OrchestrationThreadActivity,
   type PortableThread,
   type ThreadId,
   type ThreadMoveBundle,
@@ -51,6 +52,10 @@ import { VcsProcess } from "../../vcs/VcsProcess.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ThreadTransfer, type ThreadTransferShape } from "../Services/ThreadTransfer.ts";
+import {
+  makeThreadTransferImportedActivityPayload,
+  markThreadTransferContextHandoffConsumed,
+} from "../threadTransferContextHandoff.ts";
 
 const QUIESCE_POLL_INTERVAL_MS = 250;
 const QUIESCE_POLL_ATTEMPTS = 60;
@@ -64,6 +69,8 @@ const MAX_PROVIDER_SESSION_FILE_BYTES = 64 * 1024 * 1024;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CLAUDE_PROVIDER_NAME = "claude";
+const PROVIDER_CONTEXT_FALLBACK =
+  "the first target turn receives a bounded provider-only handoff of the visible message history instead";
 
 /**
  * Claude Code stores session transcripts under
@@ -585,17 +592,17 @@ const make = Effect.gen(function* () {
 
       if (runtime.providerName !== CLAUDE_PROVIDER_NAME) {
         input.warnings.push(
-          `Agent conversation memory for provider '${runtime.providerName}' is not transferred yet; the moved thread keeps its visible history but the agent starts the next turn without native session context.`,
+          `Native agent session context for provider '${runtime.providerName}' is not transferred; ${PROVIDER_CONTEXT_FALLBACK}.`,
         );
-        return base;
+        return { ...base, resumeCursor: null };
       }
 
       const sessionId = readClaudeSessionIdFromCursor(runtime.resumeCursor);
       if (sessionId === undefined) {
         input.warnings.push(
-          "No resumable Claude session id was found; the agent starts the next turn without native session context.",
+          `No resumable Claude session id was found; ${PROVIDER_CONTEXT_FALLBACK}.`,
         );
-        return base;
+        return { ...base, resumeCursor: null };
       }
 
       const sessionFilePath = path.join(claudeProjectsDirForCwd(input.cwd), `${sessionId}.jsonl`);
@@ -605,15 +612,15 @@ const make = Effect.gen(function* () {
       );
       if (Option.isNone(stat)) {
         input.warnings.push(
-          `Claude session transcript '${sessionId}.jsonl' was not found on the source machine; the agent starts the next turn without native session context.`,
+          `Claude session transcript '${sessionId}.jsonl' was not found on the source machine; ${PROVIDER_CONTEXT_FALLBACK}.`,
         );
-        return base;
+        return { ...base, resumeCursor: null };
       }
       if (Number(stat.value.size) > MAX_PROVIDER_SESSION_FILE_BYTES) {
         input.warnings.push(
           "The Claude session transcript exceeds the move size limit and was not transferred.",
         );
-        return base;
+        return { ...base, resumeCursor: null };
       }
 
       const content = yield* fs.readFileString(sessionFilePath);
@@ -961,10 +968,16 @@ const make = Effect.gen(function* () {
     readonly providerSession: ThreadMoveProviderSession;
     readonly threadId: ThreadId;
     readonly cwd: string;
+    readonly modelSelection: PortableThread["modelSelection"];
+    readonly exportedAt: string;
     readonly warnings: string[];
   }) =>
     Effect.gen(function* () {
       const { providerSession } = input;
+      const nativeSessionContextTransferred =
+        providerSession.providerName === CLAUDE_PROVIDER_NAME &&
+        providerSession.sessionFile !== null &&
+        providerSession.resumeCursor !== null;
 
       if (
         providerSession.sessionFile !== null &&
@@ -990,14 +1003,25 @@ const make = Effect.gen(function* () {
         runtimeMode: providerSession.runtimeMode,
         status: "stopped",
         lastSeenAt,
-        resumeCursor: providerSession.resumeCursor,
-        runtimePayload: null,
+        resumeCursor: nativeSessionContextTransferred ? providerSession.resumeCursor : null,
+        runtimePayload: nativeSessionContextTransferred
+          ? markThreadTransferContextHandoffConsumed(
+              {
+                cwd: input.cwd,
+                modelSelection: input.modelSelection,
+              },
+              input.exportedAt,
+            )
+          : {
+              cwd: input.cwd,
+              modelSelection: input.modelSelection,
+            },
       });
     }).pipe(
       Effect.catch((cause) =>
         Effect.sync(() => {
           input.warnings.push(
-            `Agent session context could not be transplanted (${toMessage(cause, "unknown error")}); the thread history is intact but the agent starts fresh.`,
+            `Agent session context could not be transplanted (${toMessage(cause, "unknown error")}); ${PROVIDER_CONTEXT_FALLBACK}.`,
           );
         }),
       ),
@@ -1051,13 +1075,30 @@ const make = Effect.gen(function* () {
       }
 
       const createdAt = yield* nowIso;
+      const importMarker: OrchestrationThreadActivity = {
+        id: EventId.make(yield* crypto.randomUUIDv4),
+        tone: "info",
+        kind: "thread.imported",
+        summary: "Thread moved from another machine",
+        payload: makeThreadTransferImportedActivityPayload({
+          sourceWorkspaceRoot: input.bundle.sourceWorkspaceRoot,
+          exportedAt: input.bundle.exportedAt,
+          historyMessageCount: portable.messages.length,
+        }),
+        turnId: null,
+        createdAt,
+      };
       const dispatchImport = engine
         .dispatch({
           type: "thread.import",
           commandId: yield* serverCommandId("thread-move-import"),
           threadId: portable.id,
           projectId: input.projectId,
-          thread: { ...portable, checkpoints },
+          thread: {
+            ...portable,
+            activities: [...portable.activities, importMarker],
+            checkpoints,
+          },
           branch,
           worktreePath,
           createdAt,
@@ -1090,32 +1131,11 @@ const make = Effect.gen(function* () {
           providerSession: input.bundle.providerSession,
           threadId: portable.id,
           cwd: worktreePath ?? project.workspaceRoot,
+          modelSelection: portable.modelSelection,
+          exportedAt: input.bundle.exportedAt,
           warnings,
         });
       }
-
-      // Provenance marker in the activity feed; best effort.
-      yield* Effect.gen(function* () {
-        const markerAt = yield* nowIso;
-        yield* engine.dispatch({
-          type: "thread.activity.append",
-          commandId: yield* serverCommandId("thread-move-marker"),
-          threadId: portable.id,
-          activity: {
-            id: EventId.make(yield* crypto.randomUUIDv4),
-            tone: "info",
-            kind: "thread.imported",
-            summary: "Thread moved from another machine",
-            payload: {
-              sourceWorkspaceRoot: input.bundle.sourceWorkspaceRoot,
-              exportedAt: input.bundle.exportedAt,
-            },
-            turnId: null,
-            createdAt: markerAt,
-          },
-          createdAt: markerAt,
-        });
-      }).pipe(Effect.ignoreCause({ log: true }));
 
       return {
         threadId: portable.id,
