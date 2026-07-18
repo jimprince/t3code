@@ -167,14 +167,34 @@ restart_service() {
     return 0
   fi
 
-  local pid
+  local pid new_pid
   pid="$(systemctl show "$service_name" -p MainPID --value 2>/dev/null || true)"
   if [ -n "$pid" ] && [ "$pid" != "0" ]; then
     kill -TERM "$pid"
-    return 0
+
+    # A successful kill(2) only means the signal was delivered. The server can
+    # keep the main process alive while child providers are still running, so
+    # wait for systemd to replace it before checking the new release.
+    for _ in $(seq 1 10); do
+      new_pid="$(systemctl show "$service_name" -p MainPID --value 2>/dev/null || true)"
+      if [ -n "$new_pid" ] && [ "$new_pid" != "0" ] && [ "$new_pid" != "$pid" ]; then
+        return 0
+      fi
+      sleep 1
+    done
+
+    log "$service_name main PID $pid ignored SIGTERM; forcing restart"
+    kill -KILL "$pid" 2>/dev/null || true
+    for _ in $(seq 1 30); do
+      new_pid="$(systemctl show "$service_name" -p MainPID --value 2>/dev/null || true)"
+      if [ -n "$new_pid" ] && [ "$new_pid" != "0" ] && [ "$new_pid" != "$pid" ]; then
+        return 0
+      fi
+      sleep 1
+    done
   fi
 
-  die "could not restart $service_name through systemctl or MainPID fallback"
+  die "could not restart $service_name through systemctl or verified MainPID fallback"
 }
 
 check_health() {

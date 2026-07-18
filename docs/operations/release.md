@@ -419,7 +419,12 @@ upgrade service report `unsupported` and do nothing.
 If the timer runs while `t3code.service` is active, it downloads and validates
 the new release first. Downtime is limited to the final restart. The updater
 keeps the previous release for rollback and prunes older releases after a
-successful update.
+successful update. When an unprivileged `systemctl restart` is unavailable, the
+fallback verifies that systemd actually replaces the old `MainPID`; it allows a
+10-second graceful `SIGTERM` window and then forces down only that stuck main
+process so `Restart=always` can start the selected release. This prevents the
+upgrade and rollback checks from querying an old process after merely delivering
+a signal.
 
 ## Nightly Release Concurrency
 
