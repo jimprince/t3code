@@ -260,6 +260,10 @@ import {
   isVersionMismatchDismissed,
   resolveServerConfigVersionMismatch,
 } from "../versionSkew";
+import {
+  buildHeadlessUpdateCheckRequest,
+  resolveHeadlessUpdateCheckOutcome,
+} from "../serverUpdateCheck";
 import { useAssetUrls } from "../assets/assetUrls";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
@@ -1106,6 +1110,11 @@ type LocalThreadErrorEntry = {
   readonly at: number;
 };
 
+type HeadlessUpgradeRequestState = {
+  readonly mismatchKey: string;
+  readonly state: "requesting" | "requested" | "unavailable" | "failed";
+};
+
 function ChatViewContent(props: ChatViewProps) {
   const {
     environmentId,
@@ -1123,6 +1132,9 @@ function ChatViewContent(props: ChatViewProps) {
   const routeThreadKey = useMemo(() => scopedThreadKey(routeThreadRef), [routeThreadRef]);
   const updateProject = useAtomCommand(projectEnvironment.update, { reportFailure: false });
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
+    reportFailure: false,
+  });
+  const requestHeadlessUpdateCheck = useAtomCommand(serverEnvironment.requestHeadlessUpdateCheck, {
     reportFailure: false,
   });
   const openTerminal = useAtomCommand(terminalEnvironment.open, "terminal open");
@@ -1819,6 +1831,89 @@ function ChatViewContent(props: ChatViewProps) {
     hasMultipleRegisteredEnvironments && activeThread
       ? `${environmentById.get(activeThread.environmentId)?.label ?? serverConfig?.environment.label ?? activeThread.environmentId} server`
       : "server";
+  const headlessUpdateRequest = serverConfig ? buildHeadlessUpdateCheckRequest(serverConfig) : null;
+  const [headlessUpgradeRequestState, setHeadlessUpgradeRequestState] =
+    useState<HeadlessUpgradeRequestState | null>(null);
+  const currentHeadlessUpgradeState =
+    headlessUpgradeRequestState?.mismatchKey === versionMismatchDismissKey
+      ? headlessUpgradeRequestState.state
+      : "idle";
+  const requestHeadlessUpgrade = useCallback(async () => {
+    if (!activeThread || !headlessUpdateRequest || !versionMismatchDismissKey) {
+      return;
+    }
+
+    const confirmed = await readLocalApi()?.dialogs.confirm(
+      [
+        `Upgrade ${versionMismatchServerLabel} from ${headlessUpdateRequest.serverVersion} to ${headlessUpdateRequest.clientVersion}?`,
+        "The updater stages and validates the matching release, restarts T3 Code, health-checks it, and rolls back automatically on failure.",
+        "This connection may briefly disconnect while the service restarts.",
+      ].join("\n\n"),
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setHeadlessUpgradeRequestState({
+      mismatchKey: versionMismatchDismissKey,
+      state: "requesting",
+    });
+    const result = await requestHeadlessUpdateCheck({
+      environmentId: activeThread.environmentId,
+      input: headlessUpdateRequest,
+    });
+    if (result._tag === "Failure") {
+      setHeadlessUpgradeRequestState({
+        mismatchKey: versionMismatchDismissKey,
+        state: "failed",
+      });
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not start remote upgrade",
+            description:
+              error instanceof Error ? error.message : "The remote upgrade request failed.",
+          }),
+        );
+      }
+      return;
+    }
+
+    const outcome = resolveHeadlessUpdateCheckOutcome(result.value);
+    setHeadlessUpgradeRequestState({
+      mismatchKey: versionMismatchDismissKey,
+      state: outcome.state,
+    });
+    toastManager.add(
+      stackedThreadToast({
+        type: outcome.toastType,
+        title: outcome.title,
+        description: outcome.description,
+      }),
+    );
+  }, [
+    activeThread,
+    headlessUpdateRequest,
+    requestHeadlessUpdateCheck,
+    versionMismatchDismissKey,
+    versionMismatchServerLabel,
+  ]);
+  const headlessUpgradeButtonLabel =
+    currentHeadlessUpgradeState === "requesting"
+      ? "Starting Upgrade..."
+      : currentHeadlessUpgradeState === "requested"
+        ? "Upgrade Requested"
+        : currentHeadlessUpgradeState === "unavailable"
+          ? "Upgrade Unavailable"
+          : currentHeadlessUpgradeState === "failed"
+            ? "Retry Upgrade"
+            : "Upgrade Remote";
+  const headlessUpgradeButtonDisabled =
+    currentHeadlessUpgradeState === "requesting" ||
+    currentHeadlessUpgradeState === "requested" ||
+    currentHeadlessUpgradeState === "unavailable";
   const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
     if (activeEnvironmentUnavailableState) {
@@ -1871,6 +1966,15 @@ function ChatViewContent(props: ChatViewProps) {
             {versionMismatch.serverVersion}. Sync them if RPC calls or reconnects fail.
           </>
         ),
+        actions: headlessUpdateRequest ? (
+          <Button
+            size="xs"
+            disabled={headlessUpgradeButtonDisabled}
+            onClick={() => void requestHeadlessUpgrade()}
+          >
+            {headlessUpgradeButtonLabel}
+          </Button>
+        ) : undefined,
         dismissLabel: "Dismiss version mismatch warning",
         onDismiss: () => {
           dismissVersionMismatch(versionMismatchDismissKey);
@@ -1882,7 +1986,11 @@ function ChatViewContent(props: ChatViewProps) {
   }, [
     activeEnvironmentUnavailableState,
     handleReconnectActiveEnvironment,
+    headlessUpdateRequest,
+    headlessUpgradeButtonDisabled,
+    headlessUpgradeButtonLabel,
     navigate,
+    requestHeadlessUpgrade,
     showVersionMismatchBanner,
     versionMismatch,
     versionMismatchDismissKey,
