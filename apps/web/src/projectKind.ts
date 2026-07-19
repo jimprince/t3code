@@ -49,3 +49,15 @@ export function groupChatProjectsByEnvironment<
   }
   return [...groups.values()];
 }
+
+export function selectCanonicalChatProjectsByEnvironment<
+  TProject extends { readonly environmentId: unknown; readonly createdAt?: string },
+>(projects: readonly TProject[]): readonly TProject[] {
+  return groupChatProjectsByEnvironment(projects).flatMap((environmentProjects) => {
+    const representative = selectChatProjectForEnvironment(
+      environmentProjects,
+      environmentProjects[0]?.environmentId,
+    );
+    return representative ? [representative] : [];
+  });
+}

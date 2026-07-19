@@ -2,6 +2,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   partitionProjectsByKind,
   groupChatProjectsByEnvironment,
+  selectCanonicalChatProjectsByEnvironment,
   selectChatProjectForEnvironment,
   selectDefaultThreadProject,
 } from "./projectKind";
@@ -66,6 +67,10 @@ describe("partitionProjectsByKind", () => {
     expect(groupChatProjectsByEnvironment([legacy, canonical, remote])).toEqual([
       [legacy, canonical],
       [remote],
+    ]);
+    expect(selectCanonicalChatProjectsByEnvironment([legacy, canonical, remote])).toEqual([
+      canonical,
+      remote,
     ]);
   });
 });
