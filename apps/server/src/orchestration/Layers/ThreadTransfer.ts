@@ -654,6 +654,11 @@ const make = Effect.gen(function* () {
           message: `Project '${initialThread.projectId}' for thread '${input.threadId}' was not found.`,
         });
       }
+      if (project.kind === "chat") {
+        return yield* new OrchestrationExportThreadError({
+          message: "General chats are local to this environment and cannot be moved.",
+        });
+      }
 
       yield* quiesceThread(initialThread, warnings);
 
@@ -1038,6 +1043,11 @@ const make = Effect.gen(function* () {
       if (project === undefined) {
         return yield* new OrchestrationImportThreadError({
           message: `Target project '${input.projectId}' was not found.`,
+        });
+      }
+      if (project.kind === "chat") {
+        return yield* new OrchestrationImportThreadError({
+          message: "Threads cannot be imported into the environment's General chat.",
         });
       }
 

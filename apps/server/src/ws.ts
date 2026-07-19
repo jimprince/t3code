@@ -575,28 +575,34 @@ const makeWsRpcLayer = (
       const enrichProjectEvent = (
         event: OrchestrationEvent,
       ): Effect.Effect<OrchestrationEvent, never, never> => {
+        const isChatProjectEvent = (payload: { readonly kind?: string }) => payload.kind === "chat";
         switch (event.type) {
           case "project.created":
-            return repositoryIdentityResolver.resolve(event.payload.workspaceRoot).pipe(
-              Effect.map((repositoryIdentity) => ({
-                ...event,
-                payload: {
-                  ...event.payload,
-                  repositoryIdentity,
-                },
-              })),
-            );
+            return isChatProjectEvent(event.payload)
+              ? Effect.succeed(event)
+              : repositoryIdentityResolver.resolve(event.payload.workspaceRoot).pipe(
+                  Effect.map((repositoryIdentity) => ({
+                    ...event,
+                    payload: {
+                      ...event.payload,
+                      repositoryIdentity,
+                    },
+                  })),
+                );
           case "project.meta-updated":
             return Effect.gen(function* () {
+              const project = yield* projectionSnapshotQuery.getProjectShellById(
+                event.payload.projectId,
+              );
+              if (Option.isSome(project) && project.value.kind === "chat") {
+                return event;
+              }
               const workspaceRoot =
                 event.payload.workspaceRoot ??
-                Option.match(
-                  yield* projectionSnapshotQuery.getProjectShellById(event.payload.projectId),
-                  {
-                    onNone: () => null,
-                    onSome: (project) => project.workspaceRoot,
-                  },
-                ) ??
+                Option.match(project, {
+                  onNone: () => null,
+                  onSome: (project) => project.workspaceRoot,
+                }) ??
                 null;
               if (workspaceRoot === null) {
                 return event;
