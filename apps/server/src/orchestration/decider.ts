@@ -21,6 +21,8 @@ import {
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
 
+const isChatProject = (project: { readonly kind?: unknown }): boolean => project.kind === "chat";
+
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
 function withEventBase(
@@ -129,6 +131,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           projectId: command.projectId,
           title: command.title,
+          kind: command.kind ?? "workspace",
           workspaceRoot: command.workspaceRoot,
           defaultModelSelection: command.defaultModelSelection ?? null,
           scripts: [],
@@ -139,11 +142,23 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "project.meta.update": {
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      if (
+        isChatProject(project) &&
+        (command.title !== undefined ||
+          command.workspaceRoot !== undefined ||
+          command.scripts !== undefined ||
+          command.defaultModelSelection !== undefined)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat project '${command.projectId}' has server-owned metadata that cannot be changed.`,
+        });
+      }
       if (command.workspaceRoot !== undefined) {
         yield* requireActiveProjectWorkspaceRootAbsent({
           readModel,
@@ -175,11 +190,17 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "project.delete": {
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      if (isChatProject(project)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat project '${command.projectId}' is server-owned and cannot be deleted.`,
+        });
+      }
       const activeThreads = listThreadsByProjectId(readModel, command.projectId).filter(
         (thread) => thread.deletedAt === null,
       );
@@ -226,11 +247,17 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.create": {
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      if (isChatProject(project) && command.worktreePath !== null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat thread '${command.threadId}' cannot override its server workspace.`,
+        });
+      }
       yield* requireThreadAbsent({
         readModel,
         command,
@@ -335,6 +362,21 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const project = yield* requireProject({
+        readModel,
+        command,
+        projectId: thread.projectId,
+      });
+      if (
+        isChatProject(project) &&
+        command.worktreePath !== undefined &&
+        command.worktreePath !== null
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat thread '${command.threadId}' cannot override its server workspace.`,
+        });
+      }
       const branch =
         command.branch !== undefined &&
         command.expectedBranch !== undefined &&
@@ -839,11 +881,17 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // Thread-move import: expand a PortableThread into the existing event
       // vocabulary so projections, reactors, and clients need no
       // import-specific handling. All events commit in one transaction.
-      yield* requireProject({
+      const project = yield* requireProject({
         readModel,
         command,
         projectId: command.projectId,
       });
+      if (isChatProject(project)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Threads cannot be imported into chat project '${command.projectId}'.`,
+        });
+      }
       yield* requireThreadAbsent({
         readModel,
         command,
