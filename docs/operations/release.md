@@ -416,6 +416,11 @@ rate-limits it and starts `t3code-headless-upgrade.service` through
 safely restart `t3code.service`. Non-Linux hosts or Linux hosts without the
 upgrade service report `unsupported` and do nothing.
 
+The client exposes this as an explicit **Upgrade Remote** action on the
+client/server version-mismatch banner. It asks for confirmation before making
+the RPC request and reports queued, already-requested, unsupported, and failed
+outcomes. Loading a newer client by itself does not start an upgrade check.
+
 If the timer runs while `t3code.service` is active, it downloads and validates
 the new release first. Downtime is limited to the final restart. The updater
 keeps the previous release for rollback and prunes older releases after a
