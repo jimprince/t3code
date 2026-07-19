@@ -543,6 +543,84 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
       }).pipe(Effect.scoped),
     );
 
+    it.effect("rejects export from and import into General chat", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-chat-transfer-policy-");
+        const worktreesRoot = joinPath(root, "worktrees");
+        const workspaceRoot = joinPath(root, "workspace");
+        const chatRoot = joinPath(root, "chat");
+        yield* makeDirectory(worktreesRoot);
+        yield* makeDirectory(workspaceRoot);
+        yield* makeDirectory(chatRoot);
+        const system = yield* buildTransferSystem({
+          prefix: "t3-chat-transfer-policy-",
+          worktreesRoot,
+        });
+        const workspaceProjectId = ProjectId.make("workspace-transfer-policy");
+        const chatProjectId = ProjectId.make("chat-transfer-policy");
+        for (const project of [
+          { id: workspaceProjectId, kind: "workspace" as const, root: workspaceRoot },
+          { id: chatProjectId, kind: "chat" as const, root: chatRoot },
+        ]) {
+          yield* system.engine.dispatch({
+            type: "project.create",
+            commandId: CommandId.make(`cmd-create-${project.id}`),
+            projectId: project.id,
+            title: project.kind === "chat" ? "Chat" : "Workspace",
+            kind: project.kind,
+            workspaceRoot: project.root,
+            createdAt: now(),
+          });
+        }
+
+        const createThread = (threadId: ThreadId, projectId: ProjectId) =>
+          system.engine.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make(`cmd-create-${threadId}`),
+            threadId,
+            projectId,
+            title: "Transfer policy",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5.6-terra",
+            },
+            interactionMode: "default",
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: null,
+            createdAt: now(),
+          });
+        const workspaceThreadId = ThreadId.make("workspace-thread-transfer-policy");
+        const chatThreadId = ThreadId.make("chat-thread-transfer-policy");
+        yield* createThread(workspaceThreadId, workspaceProjectId);
+        yield* createThread(chatThreadId, chatProjectId);
+
+        const chatExport = yield* Effect.exit(
+          system.transfer.exportThread({ threadId: chatThreadId }),
+        );
+        expect(Exit.isFailure(chatExport)).toBe(true);
+        if (Exit.isFailure(chatExport)) {
+          expect(String(Cause.squash(chatExport.cause))).toContain("local to this environment");
+        }
+
+        const workspaceExport = yield* system.transfer.exportThread({
+          threadId: workspaceThreadId,
+        });
+        const chatImport = yield* Effect.exit(
+          system.transfer.importThread({
+            projectId: chatProjectId,
+            bundle: workspaceExport.bundle,
+          }),
+        );
+        expect(Exit.isFailure(chatImport)).toBe(true);
+        if (Exit.isFailure(chatImport)) {
+          expect(String(Cause.squash(chatImport.cause))).toContain(
+            "cannot be imported into the environment's General chat",
+          );
+        }
+      }).pipe(Effect.scoped),
+    );
+
     it.effect("moves history, git state, and the Claude session between two environments", () =>
       Effect.gen(function* () {
         const root = yield* makeScopedTempDirectory("t3-thread-move-");

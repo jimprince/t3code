@@ -18,6 +18,8 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as NodeOS from "node:os";
+import * as NodeCrypto from "node:crypto";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -35,6 +37,7 @@ import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
+import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import {
   formatHeadlessServeOutput,
   formatHostForUrl,
@@ -173,6 +176,103 @@ export const launchStartupHeartbeat = recordStartupHeartbeat.pipe(
 export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
   instanceId: ProviderInstanceId.make("codex"),
   model: DEFAULT_MODEL,
+});
+
+/**
+ * A chat project is server-owned rather than repository-owned. Its stable ID
+ * lets every process restart recover the same backing project for an
+ * environment instead of creating a cwd-derived project.
+ */
+export const getChatProjectId = (environmentId: string): ProjectId =>
+  ProjectId.make(`chat-${getChatProjectStorageKey(environmentId)}`);
+
+const CHAT_PROJECT_TITLE = "Chat";
+const CHAT_WORKSPACE_DIRECTORY_NAME = "t3code-chat-workspaces";
+
+// Prefixing the encoded value makes even hostile persisted values such as
+// `..` a single harmless path segment. Environment IDs are normally UUIDs,
+// but startup must remain safe if the state file is manually corrupted.
+export const getChatProjectStorageKey = (environmentId: string): string =>
+  `env-${NodeCrypto.createHash("sha256").update(environmentId).digest("hex").slice(0, 32)}`;
+
+/** Ensure the single server-owned chat project and its private workspace exist. */
+export const ensureChatProject = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  const serverConfig = yield* ServerConfig.ServerConfig;
+  const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+  const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
+  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+
+  const environmentId = yield* serverEnvironment.getEnvironmentId;
+  const chatProjectId = getChatProjectId(String(environmentId));
+  // Keep agent-controlled files outside server state (database, settings,
+  // attachments, and secrets). The chat workspace is intentionally disposable.
+  const workspaceRoot = yield* workspacePaths.normalizeWorkspaceRoot(
+    path.join(
+      NodeOS.tmpdir(),
+      CHAT_WORKSPACE_DIRECTORY_NAME,
+      getChatProjectStorageKey(String(environmentId)),
+    ),
+    { createIfMissing: true },
+  );
+
+  const existing = yield* projectionSnapshotQuery.getProjectShellById(chatProjectId);
+  if (Option.isSome(existing)) {
+    if (existing.value.kind !== "chat" || existing.value.workspaceRoot !== workspaceRoot) {
+      return yield* new ServerRuntimeStartupError({
+        mode: serverConfig.mode,
+        host: serverConfig.host ?? null,
+        port: serverConfig.port,
+        cause: new Error(`Chat project '${chatProjectId}' does not own its server workspace.`),
+      });
+    }
+    return existing.value.id;
+  }
+
+  const existingAtWorkspaceRoot =
+    yield* projectionSnapshotQuery.getActiveProjectByWorkspaceRoot(workspaceRoot);
+  if (Option.isSome(existingAtWorkspaceRoot)) {
+    return yield* new ServerRuntimeStartupError({
+      mode: serverConfig.mode,
+      host: serverConfig.host ?? null,
+      port: serverConfig.port,
+      cause: new Error(`Chat workspace '${workspaceRoot}' is already owned by another project.`),
+    });
+  }
+
+  const createdAt = DateTime.formatIso(yield* DateTime.now);
+  yield* orchestrationEngine.dispatch({
+    type: "project.create",
+    // A deterministic receipt makes concurrent startup attempts converge on
+    // one logical command. The event-store transaction remains authoritative.
+    commandId: CommandId.make(
+      `chat-project.ensure-${getChatProjectStorageKey(String(environmentId))}`,
+    ),
+    projectId: chatProjectId,
+    title: CHAT_PROJECT_TITLE,
+    workspaceRoot,
+    createWorkspaceRootIfMissing: true,
+    kind: "chat",
+    defaultModelSelection: getAutoBootstrapDefaultModelSelection(),
+    createdAt,
+  });
+
+  const committed = yield* projectionSnapshotQuery.getProjectShellById(chatProjectId);
+  if (
+    Option.isNone(committed) ||
+    committed.value.kind !== "chat" ||
+    committed.value.workspaceRoot !== workspaceRoot
+  ) {
+    return yield* new ServerRuntimeStartupError({
+      mode: serverConfig.mode,
+      host: serverConfig.host ?? null,
+      port: serverConfig.port,
+      cause: new Error(`Chat project '${chatProjectId}' was not committed as requested.`),
+    });
+  }
+
+  return chatProjectId;
 });
 
 export const resolveWelcomeBase = Effect.gen(function* () {
@@ -354,6 +454,9 @@ export const make = Effect.gen(function* () {
         yield* providerSessionReaper.start().pipe(Scope.provide(reactorScope));
       }),
     );
+
+    yield* Effect.logDebug("startup phase: ensuring chat project");
+    yield* runStartupPhase("chat-project.ensure", ensureChatProject);
 
     const environment = yield* serverEnvironment.getDescriptor;
     applyT3EnvironmentMetadataToProcessEnv(environment);
