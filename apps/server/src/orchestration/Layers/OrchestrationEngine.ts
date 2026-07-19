@@ -171,6 +171,27 @@ const makeOrchestrationEngine = Effect.gen(function* () {
         const committedCommand = yield* sql
           .withTransaction(
             Effect.gen(function* () {
+              // Re-check after acquiring the database transaction. Another
+              // process may have committed this command after the optimistic
+              // preflight read above. This is the cross-process idempotency
+              // boundary; callers that use stable command IDs converge here.
+              const committedReceipt = yield* commandReceiptRepository.getByCommandId({
+                commandId: envelope.command.commandId,
+              });
+              if (Option.isSome(committedReceipt)) {
+                if (committedReceipt.value.status === "accepted") {
+                  return {
+                    committedEvents: [],
+                    lastSequence: committedReceipt.value.resultSequence,
+                    nextCommandReadModel: commandReadModel,
+                  } as const;
+                }
+                return yield* new OrchestrationCommandPreviouslyRejectedError({
+                  commandId: envelope.command.commandId,
+                  detail: committedReceipt.value.error ?? "Previously rejected.",
+                });
+              }
+
               const committedEvents: OrchestrationEvent[] = [];
               let nextCommandReadModel = commandReadModel;
 

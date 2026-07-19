@@ -5,6 +5,10 @@ import { useEffect } from "react";
 import { isCommandPaletteOpen } from "../commandPaletteContext";
 import { dispatchPreviewAction } from "../components/preview/previewActionBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useProjects } from "../state/entities";
+import { usePrimaryEnvironmentId } from "../state/environments";
+import { selectChatProjectForEnvironment } from "../projectKind";
+import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   startNewLocalThreadFromContext,
   startNewThreadFromContext,
@@ -24,6 +28,9 @@ function ChatRouteGlobalShortcuts() {
   const selectedThreadKeysSize = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
     useHandleNewThread();
+  const projects = useProjects();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const primaryChatProject = selectChatProjectForEnvironment(projects, primaryEnvironmentId);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const terminalOpen = useTerminalUiStateStore((state) =>
     routeThreadRef
@@ -75,12 +82,18 @@ function ChatRouteGlobalShortcuts() {
       if (command === "chat.new") {
         event.preventDefault();
         event.stopPropagation();
-        void startNewThreadFromContext({
-          activeDraftThread,
-          activeThread: activeThread ?? undefined,
-          defaultProjectRef,
-          handleNewThread,
-        });
+        if (primaryChatProject) {
+          void handleNewThread(
+            scopeProjectRef(primaryChatProject.environmentId, primaryChatProject.id),
+          );
+        } else {
+          void startNewThreadFromContext({
+            activeDraftThread,
+            activeThread: activeThread ?? undefined,
+            defaultProjectRef,
+            handleNewThread,
+          });
+        }
         return;
       }
 
@@ -137,6 +150,7 @@ function ChatRouteGlobalShortcuts() {
     activeThread,
     clearSelection,
     handleNewThread,
+    primaryChatProject,
     keybindings,
     defaultProjectRef,
     previewOpen,
