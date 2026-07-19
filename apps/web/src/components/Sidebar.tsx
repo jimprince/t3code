@@ -222,17 +222,15 @@ import {
 } from "../logicalProject";
 import type { SidebarThreadSummary } from "../types";
 import {
+  GENERAL_CHAT_PROJECT_KEY,
+  buildGeneralChatSidebarSnapshot,
   buildPhysicalToLogicalProjectKeyMap,
   buildSidebarProjectSnapshots,
   type SidebarProjectGroupMember,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
 import { SidebarProviderUpdatePill } from "./sidebar/SidebarProviderUpdatePill";
-import {
-  groupChatProjectsByEnvironment,
-  partitionProjectsByKind,
-  selectChatProjectForEnvironment,
-} from "../projectKind";
+import { partitionProjectsByKind, selectCanonicalChatProjectsByEnvironment } from "../projectKind";
 const SIDEBAR_SORT_LABELS: Record<SidebarProjectSortOrder, string> = {
   updated_at: "Last user message",
   created_at: "Created at",
@@ -1078,6 +1076,8 @@ const SidebarProjectThreadList = memo(function SidebarProjectThreadList(
 interface SidebarProjectItemProps {
   project: SidebarProjectSnapshot;
   isChatProject?: boolean;
+  hideProjectHeader?: boolean;
+  forceExpanded?: boolean;
   isThreadListExpanded: boolean;
   activeRouteThreadKey: string | null;
   newThreadShortcutLabel: string | null;
@@ -1099,6 +1099,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const {
     project,
     isChatProject = false,
+    hideProjectHeader = false,
+    forceExpanded = false,
     isThreadListExpanded,
     activeRouteThreadKey,
     newThreadShortcutLabel,
@@ -1213,9 +1215,10 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   sidebarThreadByKeyRef.current = sidebarThreadByKey;
   const projectThreads = sidebarThreads;
   const projectPreferenceKeys = useMemo(() => projectExpansionPreferenceKeys(project), [project]);
-  const projectExpanded = useUiStateStore((state) =>
+  const storedProjectExpanded = useUiStateStore((state) =>
     resolveProjectExpanded(state.projectExpandedById, projectPreferenceKeys),
   );
+  const projectExpanded = forceExpanded || storedProjectExpanded;
   const threadLastVisitedAts = useUiStateStore(
     useShallow((state) =>
       projectThreads.map(
@@ -2366,125 +2369,127 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
   return (
     <>
-      <div className="group/project-header relative">
-        <SidebarMenuButton
-          ref={isManualProjectSorting ? dragHandleProps?.setActivatorNodeRef : undefined}
-          size="sm"
-          className={`gap-2 px-2 py-1.5 pr-8 text-left hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground max-sm:pr-14 ${
-            isManualProjectSorting ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
-          }`}
-          {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.attributes : {})}
-          {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.listeners : {})}
-          onPointerDownCapture={handleProjectButtonPointerDownCapture}
-          onClick={handleProjectButtonClick}
-          onKeyDown={handleProjectButtonKeyDown}
-          onContextMenu={isChatProject ? undefined : handleProjectButtonContextMenu}
-        >
-          {!projectExpanded && projectStatus ? (
+      {!hideProjectHeader ? (
+        <div className="group/project-header relative">
+          <SidebarMenuButton
+            ref={isManualProjectSorting ? dragHandleProps?.setActivatorNodeRef : undefined}
+            size="sm"
+            className={`gap-2 px-2 py-1.5 pr-8 text-left hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground max-sm:pr-14 ${
+              isManualProjectSorting ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+            }`}
+            {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.attributes : {})}
+            {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.listeners : {})}
+            onPointerDownCapture={handleProjectButtonPointerDownCapture}
+            onClick={handleProjectButtonClick}
+            onKeyDown={handleProjectButtonKeyDown}
+            onContextMenu={isChatProject ? undefined : handleProjectButtonContextMenu}
+          >
+            {!projectExpanded && projectStatus ? (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      aria-label={projectStatus.label}
+                      className={`-ml-0.5 relative inline-flex size-3.5 shrink-0 items-center justify-center ${projectStatus.colorClass}`}
+                    />
+                  }
+                >
+                  <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
+                    <span
+                      className={`size-[9px] rounded-full ${projectStatus.dotClass} ${
+                        projectStatus.pulse ? "animate-status-pulse" : ""
+                      }`}
+                    />
+                  </span>
+                  <ChevronRightIcon className="absolute inset-0 m-auto size-3.5 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-hover/project-header:opacity-100" />
+                </TooltipTrigger>
+                <TooltipPopup side="top">{projectStatus.label}</TooltipPopup>
+              </Tooltip>
+            ) : (
+              <ChevronRightIcon
+                className={`-ml-0.5 size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 ${
+                  projectExpanded ? "rotate-90" : ""
+                }`}
+              />
+            )}
+            {isChatProject ? (
+              <SquarePenIcon className="size-3.5 shrink-0 text-muted-foreground/70" />
+            ) : (
+              <ProjectFavicon environmentId={project.environmentId} cwd={project.workspaceRoot} />
+            )}
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="truncate text-xs font-medium text-foreground/90">
+                {project.displayName}
+              </span>
+              {!isChatProject && project.groupedProjectCount > 1 ? (
+                <span className="shrink-0 text-[10px] text-muted-foreground/60">
+                  {project.groupedProjectCount} projects
+                </span>
+              ) : null}
+            </span>
+          </SidebarMenuButton>
+          {/* Environment badge – visible by default, crossfades with the
+            "new thread" button on hover using the same pointer-events +
+            opacity pattern as the thread row archive/timestamp swap. */}
+          {project.environmentPresence === "remote-only" && (
             <Tooltip>
               <TooltipTrigger
                 render={
                   <span
-                    aria-label={projectStatus.label}
-                    className={`-ml-0.5 relative inline-flex size-3.5 shrink-0 items-center justify-center ${projectStatus.colorClass}`}
+                    aria-label={
+                      project.allRemoteMembersAreDesktopLocal
+                        ? "Local sandbox project"
+                        : "Remote project"
+                    }
+                    className="pointer-events-none absolute top-1 right-1.5 inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/60 transition-opacity duration-150 max-sm:right-7 group-hover/project-header:opacity-0 group-focus-within/project-header:opacity-0 max-sm:group-hover/project-header:opacity-100 max-sm:group-focus-within/project-header:opacity-100"
                   />
                 }
               >
-                <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
-                  <span
-                    className={`size-[9px] rounded-full ${projectStatus.dotClass} ${
-                      projectStatus.pulse ? "animate-status-pulse" : ""
-                    }`}
-                  />
-                </span>
-                <ChevronRightIcon className="absolute inset-0 m-auto size-3.5 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-hover/project-header:opacity-100" />
+                {project.allRemoteMembersAreDesktopLocal ? (
+                  <ContainerIcon className="size-3" />
+                ) : (
+                  <CloudIcon className="size-3" />
+                )}
               </TooltipTrigger>
-              <TooltipPopup side="top">{projectStatus.label}</TooltipPopup>
+              <TooltipPopup side="top">
+                {project.allRemoteMembersAreDesktopLocal
+                  ? `Local sandbox: ${project.remoteEnvironmentLabels.join(", ")}`
+                  : `Remote environment: ${project.remoteEnvironmentLabels.join(", ")}`}
+              </TooltipPopup>
             </Tooltip>
-          ) : (
-            <ChevronRightIcon
-              className={`-ml-0.5 size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 ${
-                projectExpanded ? "rotate-90" : ""
-              }`}
-            />
           )}
-          {isChatProject ? (
-            <SquarePenIcon className="size-3.5 shrink-0 text-muted-foreground/70" />
-          ) : (
-            <ProjectFavicon environmentId={project.environmentId} cwd={project.workspaceRoot} />
-          )}
-          <span className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="truncate text-xs font-medium text-foreground/90">
-              {project.displayName}
-            </span>
-            {!isChatProject && project.groupedProjectCount > 1 ? (
-              <span className="shrink-0 text-[10px] text-muted-foreground/60">
-                {project.groupedProjectCount} projects
-              </span>
-            ) : null}
-          </span>
-        </SidebarMenuButton>
-        {/* Environment badge – visible by default, crossfades with the
-            "new thread" button on hover using the same pointer-events +
-            opacity pattern as the thread row archive/timestamp swap. */}
-        {project.environmentPresence === "remote-only" && (
           <Tooltip>
             <TooltipTrigger
               render={
-                <span
-                  aria-label={
-                    project.allRemoteMembersAreDesktopLocal
-                      ? "Local sandbox project"
-                      : "Remote project"
-                  }
-                  className="pointer-events-none absolute top-1 right-1.5 inline-flex size-5 items-center justify-center rounded-md text-muted-foreground/60 transition-opacity duration-150 max-sm:right-7 group-hover/project-header:opacity-0 group-focus-within/project-header:opacity-0 max-sm:group-hover/project-header:opacity-100 max-sm:group-focus-within/project-header:opacity-100"
-                />
+                <div className="pointer-events-none absolute top-[calc(50%+1px)] right-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100 group-focus-within/project-header:pointer-events-auto group-focus-within/project-header:opacity-100">
+                  <button
+                    type="button"
+                    aria-label={
+                      isChatProject
+                        ? "Create new chat"
+                        : `Create new thread in ${project.displayName}`
+                    }
+                    data-testid="new-thread-button"
+                    className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
+                    onClick={handleCreateThreadClick}
+                  >
+                    <SquarePenIcon className="size-3.5" />
+                  </button>
+                </div>
               }
-            >
-              {project.allRemoteMembersAreDesktopLocal ? (
-                <ContainerIcon className="size-3" />
-              ) : (
-                <CloudIcon className="size-3" />
-              )}
-            </TooltipTrigger>
+            />
             <TooltipPopup side="top">
-              {project.allRemoteMembersAreDesktopLocal
-                ? `Local sandbox: ${project.remoteEnvironmentLabels.join(", ")}`
-                : `Remote environment: ${project.remoteEnvironmentLabels.join(", ")}`}
+              {isChatProject
+                ? newThreadShortcutLabel
+                  ? `New chat (${newThreadShortcutLabel})`
+                  : "New chat"
+                : newThreadShortcutLabel
+                  ? `New thread (${newThreadShortcutLabel})`
+                  : "New thread"}
             </TooltipPopup>
           </Tooltip>
-        )}
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <div className="pointer-events-none absolute top-[calc(50%+1px)] right-0.5 -translate-y-1/2 opacity-0 transition-opacity duration-150 max-sm:pointer-events-auto max-sm:opacity-100 group-hover/project-header:pointer-events-auto group-hover/project-header:opacity-100 group-focus-within/project-header:pointer-events-auto group-focus-within/project-header:opacity-100">
-                <button
-                  type="button"
-                  aria-label={
-                    isChatProject
-                      ? "Create new chat"
-                      : `Create new thread in ${project.displayName}`
-                  }
-                  data-testid="new-thread-button"
-                  className={SIDEBAR_ICON_ACTION_BUTTON_CLASS}
-                  onClick={handleCreateThreadClick}
-                >
-                  <SquarePenIcon className="size-3.5" />
-                </button>
-              </div>
-            }
-          />
-          <TooltipPopup side="top">
-            {isChatProject
-              ? newThreadShortcutLabel
-                ? `New chat (${newThreadShortcutLabel})`
-                : "New chat"
-              : newThreadShortcutLabel
-                ? `New thread (${newThreadShortcutLabel})`
-                : "New thread"}
-          </TooltipPopup>
-        </Tooltip>
-      </div>
+        </div>
+      ) : null}
 
       <SidebarProjectThreadList
         projectKey={project.projectKey}
@@ -3056,7 +3061,7 @@ interface SidebarProjectsContentProps {
   archiveThread: ReturnType<typeof useThreadActions>["archiveThread"];
   deleteThread: ReturnType<typeof useThreadActions>["deleteThread"];
   sortedChatProjects: readonly SidebarProjectSnapshot[];
-  createNewChat: () => void;
+  createNewChat: (event: React.MouseEvent<HTMLButtonElement>) => void;
   canCreateNewChat: boolean;
   sortedProjects: readonly SidebarProjectSnapshot[];
   expandedThreadListsByProject: ReadonlySet<string>;
@@ -3226,6 +3231,8 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
                 key={project.projectKey}
                 project={project}
                 isChatProject
+                hideProjectHeader
+                forceExpanded
                 isThreadListExpanded={expandedThreadListsByProject.has(project.projectKey)}
                 activeRouteThreadKey={
                   activeRouteProjectKey === project.projectKey ? routeThreadKey : null
@@ -3480,72 +3487,21 @@ export default function Sidebar() {
     projectGroupingSettings,
     primaryEnvironmentId,
   ]);
-  const sidebarChatProjects = useMemo<SidebarProjectSnapshot[]>(
-    () =>
-      groupChatProjectsByEnvironment(chatProjects)
-        .flatMap((environmentProjects) => {
-          const representative = selectChatProjectForEnvironment(
-            environmentProjects,
-            environmentProjects[0]?.environmentId,
-          );
-          if (!representative) return [];
-          const memberSnapshots = environmentProjects.flatMap((project) =>
-            buildSidebarProjectSnapshots({
-              projects: [project],
-              settings: projectGroupingSettings,
-              primaryEnvironmentId,
-              resolveEnvironmentLabel: (environmentId) =>
-                environmentLabelById.get(environmentId) ?? null,
-              isDesktopLocalEnvironment: (environmentId) =>
-                desktopLocalEnvironmentIds.has(environmentId),
-            }),
-          );
-          return buildSidebarProjectSnapshots({
-            projects: [representative],
-            settings: projectGroupingSettings,
-            primaryEnvironmentId,
-            resolveEnvironmentLabel: (environmentId) =>
-              environmentLabelById.get(environmentId) ?? null,
-            isDesktopLocalEnvironment: (environmentId) =>
-              desktopLocalEnvironmentIds.has(environmentId),
-          }).map((snapshot) => ({
-            ...snapshot,
-            projectKey: `chat-environment:${String(representative.environmentId)}`,
-            displayName:
-              representative.environmentId === primaryEnvironmentId
-                ? "This device"
-                : (environmentLabelById.get(representative.environmentId) ?? "Remote environment"),
-            groupedProjectCount: environmentProjects.length,
-            memberProjects: memberSnapshots.flatMap((member) => member.memberProjects),
-            memberProjectRefs: memberSnapshots.flatMap((member) => member.memberProjectRefs),
-          }));
-        })
-        .sort((left, right) => {
-          const leftPrimary = left.memberProjects.some(
-            (member) => member.environmentId === primaryEnvironmentId,
-          );
-          const rightPrimary = right.memberProjects.some(
-            (member) => member.environmentId === primaryEnvironmentId,
-          );
-          if (leftPrimary !== rightPrimary) return leftPrimary ? -1 : 1;
-          const labelOrder = left.displayName.localeCompare(right.displayName);
-          if (labelOrder !== 0) return labelOrder;
-          return left.projectKey.localeCompare(right.projectKey);
-        }),
-    [
-      chatProjects,
-      desktopLocalEnvironmentIds,
-      environmentLabelById,
+  const sidebarChatProjects = useMemo<SidebarProjectSnapshot[]>(() => {
+    const snapshot = buildGeneralChatSidebarSnapshot({
+      projects: chatProjects,
       primaryEnvironmentId,
-      projectGroupingSettings,
-    ],
-  );
+      resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
+      isDesktopLocalEnvironment: (environmentId) => desktopLocalEnvironmentIds.has(environmentId),
+    });
+    return snapshot ? [snapshot] : [];
+  }, [chatProjects, desktopLocalEnvironmentIds, environmentLabelById, primaryEnvironmentId]);
   const chatProjectKeyByScopedProjectKey = useMemo(
     () =>
       new Map(
         chatProjects.map((project) => [
           scopedProjectKey(scopeProjectRef(project.environmentId, project.id)),
-          `chat-environment:${String(project.environmentId)}`,
+          GENERAL_CHAT_PROJECT_KEY,
         ]),
       ),
     [chatProjects],
@@ -3766,14 +3722,93 @@ export default function Sidebar() {
     visibleThreads,
   ]);
   const isManualProjectSorting = sidebarProjectSortOrder === "manual";
-  const primaryChatProject = useMemo(
-    () => selectChatProjectForEnvironment(chatProjects, primaryEnvironmentId),
-    [chatProjects, primaryEnvironmentId],
+  const chatEnvironmentProjects = useMemo(
+    () =>
+      [...selectCanonicalChatProjectsByEnvironment(chatProjects)].sort((left, right) => {
+        const leftIsPrimary = left.environmentId === primaryEnvironmentId;
+        const rightIsPrimary = right.environmentId === primaryEnvironmentId;
+        if (leftIsPrimary !== rightIsPrimary) return leftIsPrimary ? -1 : 1;
+        const leftLabel = environmentLabelById.get(left.environmentId) ?? "Remote environment";
+        const rightLabel = environmentLabelById.get(right.environmentId) ?? "Remote environment";
+        return leftLabel.localeCompare(rightLabel);
+      }),
+    [chatProjects, environmentLabelById, primaryEnvironmentId],
   );
-  const createNewChat = useCallback(() => {
-    if (!primaryChatProject) return;
-    void handleNewThread(scopeProjectRef(primaryChatProject.environmentId, primaryChatProject.id));
-  }, [handleNewThread, primaryChatProject]);
+  const createChatForProject = useCallback(
+    (project: (typeof chatEnvironmentProjects)[number]) => {
+      if (isMobile) {
+        setOpenMobile(false);
+      }
+      void (async () => {
+        const result = await settlePromise(() =>
+          handleNewThread(scopeProjectRef(project.environmentId, project.id)),
+        );
+        if (result._tag === "Failure") {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not create chat",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      })();
+    },
+    [handleNewThread, isMobile, setOpenMobile],
+  );
+  const createNewChat = useCallback(
+    (event: React.MouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const defaultProject = chatEnvironmentProjects[0];
+      if (!defaultProject) return;
+      if (chatEnvironmentProjects.length === 1) {
+        createChatForProject(defaultProject);
+        return;
+      }
+
+      void (async () => {
+        const api = readLocalApi();
+        if (!api) {
+          createChatForProject(defaultProject);
+          return;
+        }
+        const clickedResult = await settlePromise(() =>
+          api.contextMenu.show(
+            chatEnvironmentProjects.map((project) => ({
+              id: scopedProjectKey(scopeProjectRef(project.environmentId, project.id)),
+              label:
+                project.environmentId === primaryEnvironmentId
+                  ? "This device"
+                  : (environmentLabelById.get(project.environmentId) ?? "Remote environment"),
+            })),
+            { x: event.clientX, y: event.clientY },
+          ),
+        );
+        if (clickedResult._tag === "Failure") {
+          const error = squashAtomCommandFailure(clickedResult);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not choose environment",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+          return;
+        }
+        const selectedProject = chatEnvironmentProjects.find(
+          (project) =>
+            scopedProjectKey(scopeProjectRef(project.environmentId, project.id)) ===
+            clickedResult.value,
+        );
+        if (selectedProject) {
+          createChatForProject(selectedProject);
+        }
+      })();
+    },
+    [chatEnvironmentProjects, createChatForProject, environmentLabelById, primaryEnvironmentId],
+  );
   const visibleSidebarThreadKeys = useMemo(
     () =>
       [...sidebarChatProjects, ...sortedProjects].flatMap((project) => {
@@ -3783,10 +3818,9 @@ export default function Sidebar() {
           ),
           sidebarThreadSortOrder,
         );
-        const projectExpanded = resolveProjectExpanded(
-          projectExpandedById,
-          projectExpansionPreferenceKeys(project),
-        );
+        const projectExpanded =
+          project.projectKey === GENERAL_CHAT_PROJECT_KEY ||
+          resolveProjectExpanded(projectExpandedById, projectExpansionPreferenceKeys(project));
         const activeThreadKey = routeThreadKey ?? undefined;
         const pinnedCollapsedThread =
           !projectExpanded && activeThreadKey
@@ -4101,7 +4135,7 @@ export default function Sidebar() {
             deleteThread={deleteThread}
             sortedChatProjects={sidebarChatProjects}
             createNewChat={createNewChat}
-            canCreateNewChat={primaryChatProject !== null}
+            canCreateNewChat={chatEnvironmentProjects.length > 0}
             sortedProjects={sortedProjects}
             expandedThreadListsByProject={expandedThreadListsByProject}
             activeRouteProjectKey={activeRouteProjectKey}
