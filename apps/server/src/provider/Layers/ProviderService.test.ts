@@ -841,6 +841,44 @@ it.effect(
 );
 
 routing.layer("ProviderServiceLive routing", (it) => {
+  it.effect("creates a fallback fork binding without resuming an unsupported provider", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("thread-fork-fallback-source");
+      const targetThreadId = asThreadId("thread-fork-fallback-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/source-project",
+        runtimeMode: "full-access",
+      });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+      routing.codex.startSession.mockClear();
+
+      const result = yield* provider.forkConversation({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/fork-project",
+        retainedTurnCount: 1,
+        runtimeMode: "full-access",
+        modelSelection: createModelSelection(codexInstanceId, "gpt-5.6-terra"),
+      });
+      const targetBinding = yield* directory
+        .getBinding(targetThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+
+      assert.equal(result.native, false);
+      assert.equal(routing.codex.startSession.mock.calls.length, 0);
+      assert.equal(targetBinding?.resumeCursor, null);
+      assert.deepEqual(targetBinding?.runtimePayload, {
+        cwd: "/tmp/fork-project",
+        modelSelection: createModelSelection(codexInstanceId, "gpt-5.6-terra"),
+      });
+    }),
+  );
+
   it.effect("routes provider operations and rollback conversation", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;

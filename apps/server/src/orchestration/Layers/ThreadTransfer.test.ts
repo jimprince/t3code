@@ -28,6 +28,7 @@ import { OrchestrationEventStoreLive } from "../../persistence/Layers/Orchestrat
 import { ProviderSessionRuntimeRepositoryLive } from "../../persistence/Layers/ProviderSessionRuntime.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
 import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
+import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { layer as RepositoryIdentityResolverLive } from "../../project/RepositoryIdentityResolver.ts";
 import * as VcsProcess from "../../vcs/VcsProcess.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
@@ -160,6 +161,11 @@ const makeTransferSystemLayer = (input: { prefix: string; worktreesRoot: string 
       gitWorkflowTestLayer(input.worktreesRoot).pipe(Layer.provide(VcsProcessTestLayer)),
     ),
     Layer.provideMerge(orchestrationLayer),
+    Layer.provide(
+      Layer.mock(ProviderService)({
+        forkConversation: () => Effect.succeed({ native: false }),
+      }),
+    ),
   ).pipe(
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
@@ -264,6 +270,201 @@ describe("Claude session helpers", () => {
 });
 
 it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
+  describe("thread fork", () => {
+    it.effect("forks before a selected user message without mutating the source", () =>
+      Effect.gen(function* () {
+        const root = yield* makeScopedTempDirectory("t3-thread-fork-");
+        const workspaceRoot = joinPath(root, "workspace");
+        const worktreesRoot = joinPath(root, "worktrees");
+        yield* makeDirectory(workspaceRoot);
+        yield* makeDirectory(worktreesRoot);
+        yield* initRepo(workspaceRoot);
+        const system = yield* buildTransferSystem({
+          prefix: "t3-thread-fork-test-",
+          worktreesRoot,
+        });
+        const projectId = ProjectId.make("project-fork");
+        const sourceThreadId = ThreadId.make("source-thread-fork");
+        const firstTurnId = TurnId.make("source-turn-1");
+        const secondTurnId = TurnId.make("source-turn-2");
+        const firstUserId = MessageId.make("source-user-1");
+        const firstAssistantId = MessageId.make("source-assistant-1");
+        const secondUserId = MessageId.make("source-user-2");
+        const secondAssistantId = MessageId.make("source-assistant-2");
+        const messageTime = (seconds: number) =>
+          `2026-01-01T00:00:${String(seconds).padStart(2, "0")}.000Z`;
+
+        yield* system.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-project-fork-create"),
+          projectId,
+          title: "Fork Project",
+          workspaceRoot,
+          createdAt: now(),
+        });
+        const portable: PortableThread = {
+          id: sourceThreadId,
+          title: "Source conversation",
+          modelSelection: {
+            instanceId: ProviderInstanceId.make("codex"),
+            model: "gpt-5.6-terra",
+          },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          goal: null,
+          createdAt: now(),
+          updatedAt: now(),
+          messages: [
+            {
+              id: firstUserId,
+              role: "user",
+              text: "First request",
+              turnId: firstTurnId,
+              streaming: false,
+              createdAt: messageTime(1),
+              updatedAt: messageTime(1),
+            },
+            {
+              id: firstAssistantId,
+              role: "assistant",
+              text: "First response",
+              turnId: firstTurnId,
+              streaming: false,
+              createdAt: messageTime(2),
+              updatedAt: messageTime(2),
+            },
+            {
+              id: secondUserId,
+              role: "user",
+              text: "Try a different direction",
+              turnId: secondTurnId,
+              streaming: false,
+              createdAt: messageTime(3),
+              updatedAt: messageTime(3),
+            },
+            {
+              id: secondAssistantId,
+              role: "assistant",
+              text: "Second response",
+              turnId: secondTurnId,
+              streaming: false,
+              createdAt: messageTime(4),
+              updatedAt: messageTime(4),
+            },
+          ],
+          proposedPlans: [],
+          activities: [],
+          checkpoints: [
+            {
+              turnId: firstTurnId,
+              checkpointTurnCount: 1,
+              checkpointRef: checkpointRefForThreadTurn(sourceThreadId, 1),
+              status: "ready",
+              files: [],
+              assistantMessageId: firstAssistantId,
+              completedAt: now(),
+            },
+            {
+              turnId: secondTurnId,
+              checkpointTurnCount: 2,
+              checkpointRef: checkpointRefForThreadTurn(sourceThreadId, 2),
+              status: "ready",
+              files: [],
+              assistantMessageId: secondAssistantId,
+              completedAt: now(),
+            },
+          ],
+        };
+        yield* system.engine.dispatch({
+          type: "thread.import",
+          commandId: CommandId.make("cmd-source-thread-import"),
+          threadId: sourceThreadId,
+          projectId,
+          thread: portable,
+          branch: null,
+          worktreePath: null,
+          createdAt: now(),
+        });
+        const checkpointCommit = yield* execGit(workspaceRoot, ["rev-parse", "HEAD"]);
+        yield* execGit(workspaceRoot, [
+          "update-ref",
+          checkpointRefForThreadTurn(sourceThreadId, 0),
+          checkpointCommit,
+        ]);
+        yield* execGit(workspaceRoot, [
+          "update-ref",
+          checkpointRefForThreadTurn(sourceThreadId, 1),
+          checkpointCommit,
+        ]);
+
+        const result = yield* system.transfer.forkThread({
+          sourceThreadId,
+          messageId: secondUserId,
+          workspaceMode: "current",
+        });
+        const fork = yield* system.snapshotQuery
+          .getThreadDetailById(result.threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        const source = yield* system.snapshotQuery
+          .getThreadDetailById(sourceThreadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+
+        expect(result.prefilledPrompt).toBe("Try a different direction");
+        expect(result.worktreePath).toBeNull();
+        expect(fork?.messages.map((message) => message.text)).toEqual([
+          "First request",
+          "First response",
+        ]);
+        expect(fork?.messages.map((message) => message.id)).not.toEqual([
+          firstUserId,
+          firstAssistantId,
+        ]);
+        expect(fork?.checkpoints).toHaveLength(1);
+        expect(fork?.checkpoints[0]?.checkpointRef).toBe(
+          checkpointRefForThreadTurn(result.threadId, 1),
+        );
+        expect(fork?.activities.some((activity) => activity.kind === "thread.forked")).toBe(true);
+        expect(fork?.activities.some((activity) => activity.kind === "thread.imported")).toBe(true);
+        expect(source?.messages).toHaveLength(4);
+
+        const worktreeResult = yield* system.transfer.forkThread({
+          sourceThreadId,
+          messageId: firstAssistantId,
+          workspaceMode: "new-worktree",
+        });
+        expect(worktreeResult.worktreePath).not.toBeNull();
+        expect(worktreeResult.worktreePath).not.toBe(workspaceRoot);
+        expect(yield* execGit(worktreeResult.worktreePath!, ["rev-parse", "HEAD"])).toBe(
+          checkpointCommit,
+        );
+        const worktreeFork = yield* system.snapshotQuery
+          .getThreadDetailById(worktreeResult.threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(worktreeFork?.messages.map((message) => message.text)).toEqual([
+          "First request",
+          "First response",
+        ]);
+        expect(worktreeFork?.worktreePath).toBe(worktreeResult.worktreePath);
+        expect(worktreeFork?.checkpoints[0]?.checkpointRef).toBe(
+          checkpointRefForThreadTurn(worktreeResult.threadId, 1),
+        );
+        expect(
+          yield* execGit(workspaceRoot, [
+            "rev-parse",
+            checkpointRefForThreadTurn(worktreeResult.threadId, 0),
+          ]),
+        ).toBe(checkpointCommit);
+        expect(
+          yield* execGit(workspaceRoot, [
+            "rev-parse",
+            checkpointRefForThreadTurn(worktreeResult.threadId, 1),
+          ]),
+        ).toBe(checkpointCommit);
+      }).pipe(Effect.scoped),
+    );
+  });
+
   describe("thread.import command", () => {
     it.effect("replays a portable thread into existing events and guards the goal reactor", () =>
       Effect.gen(function* () {

@@ -13,6 +13,9 @@ import type {
   OrchestrationExportThreadError,
   OrchestrationExportThreadInput,
   OrchestrationExportThreadResult,
+  OrchestrationForkThreadError,
+  OrchestrationForkThreadInput,
+  OrchestrationForkThreadResult,
   OrchestrationImportThreadError,
   OrchestrationImportThreadInput,
   OrchestrationImportThreadResult,
@@ -39,6 +42,14 @@ export interface ThreadTransferShape {
   readonly importThread: (
     input: OrchestrationImportThreadInput,
   ) => Effect.Effect<OrchestrationImportThreadResult, OrchestrationImportThreadError>;
+
+  /**
+   * Clone a thread's visible history and provider context at a selected
+   * message boundary. The source thread is never mutated.
+   */
+  readonly forkThread: (
+    input: OrchestrationForkThreadInput,
+  ) => Effect.Effect<OrchestrationForkThreadResult, OrchestrationForkThreadError>;
 }
 
 export class ThreadTransfer extends Context.Service<ThreadTransfer, ThreadTransferShape>()(
