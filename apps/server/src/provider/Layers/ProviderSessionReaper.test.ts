@@ -234,9 +234,7 @@ describe("ProviderSessionReaper", () => {
               input.readModel.threads.find((thread) => thread.id === threadId)
                 ? Option.some(input.readModel.threads.find((thread) => thread.id === threadId)!)
                 : Option.none(),
-            ).pipe(
-              Effect.tap(() => input.onThreadInspected?.(threadId) ?? Effect.void),
-            ),
+            ).pipe(Effect.tap(() => input.onThreadInspected?.(threadId) ?? Effect.void)),
           getThreadDetailById: () => Effect.die("unused"),
           getThreadDetailSnapshotById: () => Effect.die("unused"),
         }),
@@ -732,10 +730,14 @@ describe("ProviderSessionReaper", () => {
     const reaper = await runtime!.runPromise(Effect.service(ProviderSessionReaper));
     scope = await Effect.runPromise(Scope.make("sequential"));
     await Effect.runPromise(reaper.start().pipe(Scope.provide(scope)));
-    await waitFor(async () => {
-      const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
-      return Option.isSome(binding) && binding.value.status === "stopped";
-    }, 2_000, "REGRESSION: dead-generation orphaned binding survived the reaper sweep");
+    await waitFor(
+      async () => {
+        const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+        return Option.isSome(binding) && binding.value.status === "stopped";
+      },
+      2_000,
+      "REGRESSION: dead-generation orphaned binding survived the reaper sweep",
+    );
 
     expect(
       harness.stopSession,
@@ -836,10 +838,14 @@ describe("ProviderSessionReaper", () => {
     const reaper = await runtime!.runPromise(Effect.service(ProviderSessionReaper));
     scope = await Effect.runPromise(Scope.make("sequential"));
     await Effect.runPromise(reaper.start().pipe(Scope.provide(scope)));
-    await waitFor(async () => {
-      const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
-      return Option.isSome(binding) && binding.value.status === "stopped";
-    }, 2_000, "REGRESSION: legacy null-generation binding was not treated as a dead generation");
+    await waitFor(
+      async () => {
+        const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+        return Option.isSome(binding) && binding.value.status === "stopped";
+      },
+      2_000,
+      "REGRESSION: legacy null-generation binding was not treated as a dead generation",
+    );
 
     expect(
       harness.stopSession,
