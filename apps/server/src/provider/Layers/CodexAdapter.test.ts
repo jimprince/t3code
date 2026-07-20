@@ -142,7 +142,11 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
     return Effect.promise(() => this.rollbackThreadImpl(numTurns));
   }
 
-  forkThread(_input: { readonly cwd: string; readonly retainedTurnCount: number }) {
+  forkThread(_input: {
+    readonly cwd: string;
+    readonly retainedTurnCount: number;
+    readonly retainedTurnId: TurnId | null;
+  }) {
     return Effect.succeed({ threadId: "provider-forked-thread", turnCount: 0 });
   }
 

@@ -18,12 +18,54 @@ import {
   createLocalDispatchSnapshot,
   deriveComposerSendState,
   getStartedThreadModelChangeBlockReason,
+  hydrateForkedMessageAttachments,
   hasServerAcknowledgedLocalDispatch,
   reconcileMountedTerminalThreadIds,
   reconcileRetainedMountedThreadIds,
   resolveSendEnvMode,
   shouldWriteThreadErrorToCurrentServerThread,
 } from "./ChatView.logic";
+
+it("hydrates selected-message image attachments for the fork composer", async () => {
+  const fetchedUrls: string[] = [];
+  const result = await hydrateForkedMessageAttachments({
+    attachments: [
+      {
+        type: "image",
+        id: "attachment-1",
+        name: "diagram.png",
+        mimeType: "image/png",
+        sizeBytes: 3,
+      },
+      {
+        type: "image",
+        id: "attachment-missing",
+        name: "missing.png",
+        mimeType: "image/png",
+        sizeBytes: 1,
+      },
+    ],
+    assetUrlById: new Map([["attachment-1", "http://localhost:13773/api/assets/token/1"]]),
+    resolveAssetUrl: (url) => new URL(url).pathname,
+    fetchAsset: async (url) => {
+      fetchedUrls.push(url);
+      return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+    },
+    createObjectUrl: () => "blob:fork-image",
+  });
+
+  expect(result.unavailableCount).toBe(1);
+  expect(result.images).toHaveLength(1);
+  expect(result.images[0]).toMatchObject({
+    id: "attachment-1",
+    name: "diagram.png",
+    mimeType: "image/png",
+    sizeBytes: 3,
+    previewUrl: "blob:fork-image",
+  });
+  expect(result.images[0]!.file).toBeInstanceOf(File);
+  expect(fetchedUrls).toEqual(["/api/assets/token/1"]);
+});
 
 const environmentId = EnvironmentId.make("environment-local");
 const projectId = ProjectId.make("project-1");

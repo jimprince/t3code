@@ -67,6 +67,7 @@ import {
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
+import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
@@ -236,6 +237,7 @@ import {
   deriveComposerSendState,
   hasServerAcknowledgedLocalDispatch,
   getStartedThreadModelChangeBlockReason,
+  hydrateForkedMessageAttachments,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
   type LocalDispatchSnapshot,
@@ -4233,12 +4235,35 @@ function ChatViewContent(props: ChatViewProps) {
         if (result.value.prefilledPrompt !== null) {
           setComposerDraftPrompt(targetThreadRef, result.value.prefilledPrompt);
         }
-        if (result.value.warnings.length > 0) {
+        const warnings = [...result.value.warnings];
+        if (result.value.prefilledAttachments.length > 0) {
+          const hydratedAttachments = await hydrateForkedMessageAttachments({
+            attachments: result.value.prefilledAttachments,
+            assetUrlById: serverAttachmentUrlById,
+            ...(activeThread.environmentId === primaryEnvironmentId
+              ? {
+                  resolveAssetUrl: (assetUrl: string) => {
+                    const sourceUrl = new URL(assetUrl);
+                    const proxyUrl = new URL(resolvePrimaryEnvironmentHttpUrl(sourceUrl.pathname));
+                    proxyUrl.search = sourceUrl.search;
+                    return proxyUrl.toString();
+                  },
+                }
+              : {}),
+          });
+          addComposerDraftImages(targetThreadRef, hydratedAttachments.images);
+          if (hydratedAttachments.unavailableCount > 0) {
+            warnings.push(
+              `${hydratedAttachments.unavailableCount} selected-message attachment${hydratedAttachments.unavailableCount === 1 ? " was" : "s were"} unavailable and could not be copied into the fork draft.`,
+            );
+          }
+        }
+        if (warnings.length > 0) {
           toastManager.add(
             stackedThreadToast({
               type: "info",
               title: "Thread forked",
-              description: result.value.warnings.join(" "),
+              description: warnings.join(" "),
             }),
           );
         }
@@ -4261,7 +4286,17 @@ function ChatViewContent(props: ChatViewProps) {
         setIsForkingThread(false);
       }
     },
-    [activeThread, forkThread, isServerThread, isWorking, navigate, setComposerDraftPrompt],
+    [
+      activeThread,
+      addComposerDraftImages,
+      forkThread,
+      isServerThread,
+      isWorking,
+      navigate,
+      primaryEnvironmentId,
+      serverAttachmentUrlById,
+      setComposerDraftPrompt,
+    ],
   );
 
   const onSend = async (e?: { preventDefault: () => void }) => {

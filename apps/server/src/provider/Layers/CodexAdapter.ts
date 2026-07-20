@@ -1627,10 +1627,14 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
           ? cause
           : mapCodexRuntimeError(threadId, "thread/fork", cause),
       ),
-      Effect.map((forked) => ({
-        resumeCursor: { threadId: forked.threadId },
-        turnCount: forked.turnCount,
-      })),
+      Effect.map((forked) =>
+        forked === null
+          ? null
+          : {
+              resumeCursor: { threadId: forked.threadId },
+              turnCount: forked.turnCount,
+            },
+      ),
     );
 
   const respondToRequest: CodexAdapterShape["respondToRequest"] = (threadId, requestId, decision) =>

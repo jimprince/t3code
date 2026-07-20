@@ -3,13 +3,17 @@ import type {
   MessageId,
   OrchestrationCheckpointSummary,
   OrchestrationMessage,
+  TurnId,
 } from "@t3tools/contracts";
 
 export interface ThreadForkBoundary {
   readonly retainedMessages: ReadonlyArray<OrchestrationMessage>;
   readonly retainedTurnCount: number;
+  readonly retainedTurnId: TurnId | null;
   readonly checkpointRef: CheckpointRef | null;
+  readonly checkpointTurnCount: number;
   readonly prefilledPrompt: string | null;
+  readonly prefilledAttachments: NonNullable<OrchestrationMessage["attachments"]>;
 }
 
 export function resolveThreadForkBoundary(input: {
@@ -44,6 +48,11 @@ export function resolveThreadForkBoundary(input: {
       .filter((message) => message.role === "assistant" && message.turnId !== null)
       .map((message) => message.turnId),
   );
+  const retainedTurnId = retainedMessages.reduce<TurnId | null>(
+    (latest, message) =>
+      message.role === "assistant" && message.turnId !== null ? message.turnId : latest,
+    null,
+  );
   const retainedCheckpoint = input.checkpoints
     .filter(
       (checkpoint) =>
@@ -56,7 +65,10 @@ export function resolveThreadForkBoundary(input: {
   return {
     retainedMessages,
     retainedTurnCount: retainedTurnIds.size,
+    retainedTurnId,
     checkpointRef: retainedCheckpoint?.checkpointRef ?? null,
+    checkpointTurnCount: retainedCheckpoint?.checkpointTurnCount ?? 0,
     prefilledPrompt: selected.role === "user" ? selected.text : null,
+    prefilledAttachments: selected.role === "user" ? [...(selected.attachments ?? [])] : [],
   };
 }

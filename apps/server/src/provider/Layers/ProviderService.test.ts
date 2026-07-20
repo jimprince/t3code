@@ -862,6 +862,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         targetThreadId,
         cwd: "/tmp/fork-project",
         retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("turn-1"),
         runtimeMode: "full-access",
         modelSelection: createModelSelection(codexInstanceId, "gpt-5.6-terra"),
       });
@@ -878,6 +879,141 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
     }),
   );
+
+  it.effect("falls back when a provider-native fork fails", () => {
+    const forkThread = vi.fn<NonNullable<ProviderAdapterShape<ProviderAdapterError>["forkThread"]>>(
+      () =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: String(CLAUDE_AGENT_DRIVER),
+            method: "thread/fork",
+            detail: "simulated native fork failure",
+          }),
+        ),
+    );
+    Object.assign(routing.claude.adapter, { forkThread });
+
+    return Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("thread-fork-error-source");
+      const targetThreadId = asThreadId("thread-fork-error-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: CLAUDE_AGENT_DRIVER,
+        providerInstanceId: claudeAgentInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/source-project",
+        runtimeMode: "full-access",
+      });
+
+      const result = yield* provider.forkConversation({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/fork-project",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("turn-1"),
+        runtimeMode: "full-access",
+        modelSelection: createModelSelection(claudeAgentInstanceId, "claude-fable-5"),
+      });
+      const targetBinding = yield* directory
+        .getBinding(targetThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+
+      assert.equal(result.native, false);
+      assert.equal(forkThread.mock.calls.length, 1);
+      assert.equal(targetBinding?.resumeCursor, null);
+      yield* provider.stopSession({ threadId: sourceThreadId });
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          delete (routing.claude.adapter as { forkThread?: unknown }).forkThread;
+          routing.claude.startSession.mockClear();
+          routing.claude.stopSession.mockClear();
+        }),
+      ),
+    );
+  });
+
+  it.effect("stops a source session recovered only for a native fork", () => {
+    const forkThread = vi.fn<NonNullable<ProviderAdapterShape<ProviderAdapterError>["forkThread"]>>(
+      () =>
+        Effect.succeed({
+          resumeCursor: { resume: "forked-provider-session" },
+          turnCount: 1,
+        }),
+    );
+    Object.assign(routing.claude.adapter, { forkThread });
+
+    return Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("thread-fork-recovered-source");
+      const targetThreadId = asThreadId("thread-fork-recovered-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: CLAUDE_AGENT_DRIVER,
+        providerInstanceId: claudeAgentInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/source-project",
+        runtimeMode: "full-access",
+      });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+      const stoppedSourceBinding = yield* directory
+        .getBinding(sourceThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+      assert.notEqual(stoppedSourceBinding, undefined);
+      if (stoppedSourceBinding === undefined) return;
+      yield* directory.upsert({
+        ...stoppedSourceBinding,
+        runtimePayload: {
+          ...(stoppedSourceBinding.runtimePayload as Record<string, unknown>),
+          threadTransferContextHandoff: {
+            version: 1,
+            consumedExportedAt: "2026-07-19T00:00:00.000Z",
+          },
+        },
+      });
+      routing.claude.startSession.mockClear();
+      routing.claude.stopSession.mockClear();
+
+      const result = yield* provider.forkConversation({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/fork-project",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("turn-1"),
+        runtimeMode: "full-access",
+        modelSelection: createModelSelection(claudeAgentInstanceId, "claude-fable-5"),
+      });
+      const sourceBinding = yield* directory
+        .getBinding(sourceThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+      const targetBinding = yield* directory
+        .getBinding(targetThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+
+      assert.equal(result.native, true);
+      assert.equal(routing.claude.startSession.mock.calls.length, 1);
+      assert.deepEqual(routing.claude.stopSession.mock.calls, [[sourceThreadId]]);
+      assert.equal(yield* routing.claude.hasSession(sourceThreadId), false);
+      assert.equal(sourceBinding?.status, "stopped");
+      assert.deepEqual(
+        (targetBinding?.runtimePayload as Record<string, unknown> | undefined)
+          ?.threadTransferContextHandoff,
+        {
+          version: 1,
+          consumedExportedAt: "2026-07-19T00:00:00.000Z",
+        },
+      );
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          delete (routing.claude.adapter as { forkThread?: unknown }).forkThread;
+          routing.claude.startSession.mockClear();
+          routing.claude.stopSession.mockClear();
+        }),
+      ),
+    );
+  });
 
   it.effect("routes provider operations and rollback conversation", () =>
     Effect.gen(function* () {

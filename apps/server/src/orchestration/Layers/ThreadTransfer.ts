@@ -40,6 +40,7 @@ import {
   type ThreadMoveUntrackedFile,
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
+import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Crypto from "effect/Crypto";
@@ -57,6 +58,7 @@ import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSess
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { VcsProcess } from "../../vcs/VcsProcess.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
+import { ServerConfig } from "../../config.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ThreadTransfer, type ThreadTransferShape } from "../Services/ThreadTransfer.ts";
@@ -224,6 +226,7 @@ const make = Effect.gen(function* () {
   const snapshotQuery = yield* ProjectionSnapshotQuery;
   const providerSessionRuntime = yield* ProviderSessionRuntimeRepository;
   const providerService = yield* ProviderService;
+  const serverConfig = yield* ServerConfig;
   const gitWorkflow = yield* GitWorkflowService;
   const vcsProcess = yield* VcsProcess;
   const fs = yield* FileSystem.FileSystem;
@@ -1338,26 +1341,9 @@ const make = Effect.gen(function* () {
       let worktreePath: string | null = source.worktreePath;
       let branch = source.branch;
       let createdWorktreePath: string | null = null;
+      let createdWorktreeBranch: string | null = null;
       const createdCheckpointRefs: CheckpointRef[] = [];
       const warnings: string[] = [];
-
-      if (input.workspaceMode === "new-worktree") {
-        const checkpointRef = boundary.checkpointRef ?? checkpointRefForThreadTurn(source.id, 0);
-        const branchToken = (yield* crypto.randomUUIDv4).replaceAll("-", "").slice(0, 8);
-        const newBranch = buildTemporaryWorktreeBranchName(() => branchToken);
-        const worktree = yield* gitWorkflow.createWorktree({
-          cwd: project.workspaceRoot,
-          refName: checkpointRef,
-          newRefName: newBranch,
-          ...(source.branch !== null ? { baseRefName: source.branch } : {}),
-          path: null,
-        });
-        createdWorktreePath = worktree.worktree.path;
-        worktreePath = worktree.worktree.path;
-        branch = worktree.worktree.refName;
-      } else {
-        warnings.push("This fork shares the source thread's current working tree.");
-      }
 
       const materializeCheckpointRef = (input: {
         readonly sourceRef: CheckpointRef;
@@ -1445,9 +1431,63 @@ const make = Effect.gen(function* () {
             })
             .pipe(Effect.ignoreCause({ log: true }));
         }
+        if (createdWorktreeBranch !== null) {
+          yield* git({
+            operation: "ThreadTransfer.fork.deleteWorktreeBranch",
+            cwd: project.workspaceRoot,
+            args: ["update-ref", "-d", `refs/heads/${createdWorktreeBranch}`],
+            allowNonZeroExit: true,
+          }).pipe(Effect.ignoreCause({ log: true }));
+        }
+      });
+
+      const prepareWorkspace = Effect.gen(function* () {
+        if (input.workspaceMode !== "new-worktree") {
+          warnings.push("This fork shares the source thread's current working tree.");
+          return;
+        }
+
+        const checkpointRef = boundary.checkpointRef ?? checkpointRefForThreadTurn(source.id, 0);
+        const resolvedCheckpoint = yield* git({
+          operation: "ThreadTransfer.fork.preflightCheckpointRef",
+          cwd: project.workspaceRoot,
+          args: ["rev-parse", "--verify", "--quiet", `${checkpointRef}^{commit}`],
+          allowNonZeroExit: true,
+        });
+        if (resolvedCheckpoint.exitCode !== 0 || resolvedCheckpoint.stdout.trim().length === 0) {
+          return yield* new OrchestrationForkThreadError({
+            message: `Cannot create a new worktree because the retained checkpoint Git ref '${checkpointRef}' is unavailable.`,
+          });
+        }
+        if (boundary.checkpointTurnCount < boundary.retainedTurnCount) {
+          warnings.push(
+            `The new worktree starts at checkpoint turn ${boundary.checkpointTurnCount}, while the conversation retains ${boundary.retainedTurnCount} turns; later file changes are not included.`,
+          );
+        }
+
+        const branchToken = (yield* crypto.randomUUIDv4).replaceAll("-", "").slice(0, 8);
+        const newBranch = buildTemporaryWorktreeBranchName(() => branchToken);
+        const intendedWorktreePath = path.join(
+          serverConfig.worktreesDir,
+          path.basename(project.workspaceRoot),
+          newBranch.replaceAll("/", "-"),
+        );
+        createdWorktreeBranch = newBranch;
+        createdWorktreePath = intendedWorktreePath;
+        const worktree = yield* gitWorkflow.createWorktree({
+          cwd: project.workspaceRoot,
+          refName: checkpointRef,
+          newRefName: newBranch,
+          ...(source.branch !== null ? { baseRefName: source.branch } : {}),
+          path: intendedWorktreePath,
+        });
+        createdWorktreePath = worktree.worktree.path;
+        worktreePath = worktree.worktree.path;
+        branch = worktree.worktree.refName;
       });
 
       const createFork = Effect.gen(function* () {
+        yield* prepareWorkspace;
         const portable = yield* cloneForkHistory({
           source,
           retainedMessages: boundary.retainedMessages,
@@ -1460,6 +1500,7 @@ const make = Effect.gen(function* () {
           targetThreadId,
           cwd: worktreePath ?? project.workspaceRoot,
           retainedTurnCount: boundary.retainedTurnCount,
+          retainedTurnId: boundary.retainedTurnId,
           runtimeMode: source.runtimeMode,
           modelSelection: source.modelSelection,
         });
@@ -1518,26 +1559,31 @@ const make = Effect.gen(function* () {
       });
 
       yield* createFork.pipe(
-        Effect.catch((cause) =>
-          cleanup.pipe(
+        Effect.catchCause((cause) => {
+          if (Cause.hasInterruptsOnly(cause)) {
+            return cleanup.pipe(Effect.flatMap(() => Effect.failCause(cause)));
+          }
+          const failure = Cause.squash(cause);
+          return cleanup.pipe(
             Effect.flatMap(() =>
               Effect.fail(
-                isForkThreadError(cause)
-                  ? cause
+                isForkThreadError(failure)
+                  ? failure
                   : new OrchestrationForkThreadError({
-                      message: toMessage(cause, "Failed to fork the thread."),
-                      cause,
+                      message: toMessage(failure, "Failed to fork the thread."),
+                      cause: failure,
                     }),
               ),
             ),
-          ),
-        ),
+          );
+        }),
       );
 
       return {
         threadId: targetThreadId,
         worktreePath,
         prefilledPrompt: boundary.prefilledPrompt,
+        prefilledAttachments: boundary.prefilledAttachments,
         warnings,
       };
     }).pipe(

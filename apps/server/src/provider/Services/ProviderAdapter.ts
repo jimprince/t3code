@@ -125,7 +125,11 @@ export interface ProviderAdapterShape<TError> {
    */
   readonly forkThread?: (
     threadId: ThreadId,
-    input: { readonly cwd: string; readonly retainedTurnCount: number },
+    input: {
+      readonly cwd: string;
+      readonly retainedTurnCount: number;
+      readonly retainedTurnId: TurnId | null;
+    },
   ) => Effect.Effect<ProviderThreadForkResult | null, TError>;
 
   /**

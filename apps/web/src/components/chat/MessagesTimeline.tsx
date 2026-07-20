@@ -873,15 +873,20 @@ export function buildMessageForkContextMenuItems(input: {
   ];
 }
 
+export function shouldClaimMessageForkContextMenu(api: unknown | undefined): boolean {
+  return api !== undefined;
+}
+
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
   const ctx = use(TimelineRowCtx);
   const activity = use(TimelineRowActivityCtx);
   const handleContextMenu = useCallback(
     async (event: MouseEvent<HTMLDivElement>) => {
       if (row.kind !== "message") return;
+      const api = readLocalApi();
+      if (!shouldClaimMessageForkContextMenu(api)) return;
       event.preventDefault();
       event.stopPropagation();
-      const api = readLocalApi();
       if (!api) return;
       const disabled = !ctx.canForkThread || activity.isWorking || row.message.streaming;
       const clicked = await api.contextMenu.show(

@@ -223,7 +223,8 @@ function buildUserTimelineEntry(text: string) {
 
 describe("MessagesTimeline", () => {
   it("builds message fork actions for the current or checkpoint worktree", async () => {
-    const { buildMessageForkContextMenuItems } = await import("./MessagesTimeline");
+    const { buildMessageForkContextMenuItems, shouldClaimMessageForkContextMenu } =
+      await import("./MessagesTimeline");
 
     expect(
       buildMessageForkContextMenuItems({ disabled: false, canForkToNewWorktree: true }),
@@ -246,6 +247,8 @@ describe("MessagesTimeline", () => {
       buildMessageForkContextMenuItems({ disabled: false, canForkToNewWorktree: false })[0]
         ?.children?.[1]?.disabled,
     ).toBe(true);
+    expect(shouldClaimMessageForkContextMenu(undefined)).toBe(false);
+    expect(shouldClaimMessageForkContextMenu({})).toBe(true);
   });
 
   it("uses LegendList isNearEnd when deciding whether the live edge is visible", async () => {

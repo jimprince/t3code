@@ -14,6 +14,7 @@ import {
   NonNegativeInt,
   RuntimeMode,
   ThreadId,
+  TurnId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
@@ -26,6 +27,7 @@ import {
   type ProviderSession,
 } from "@t3tools/contracts";
 import { causeErrorTag } from "@t3tools/shared/observability";
+import * as Cause from "effect/Cause";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -80,6 +82,7 @@ const ProviderForkConversationInput = Schema.Struct({
   targetThreadId: ThreadId,
   cwd: Schema.String,
   retainedTurnCount: NonNegativeInt,
+  retainedTurnId: Schema.NullOr(TurnId),
   runtimeMode: RuntimeMode,
   modelSelection: ModelSelection,
 });
@@ -170,6 +173,28 @@ function readPersistedCwd(
   if (typeof rawCwd !== "string") return undefined;
   const trimmed = rawCwd.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readTransferredContextHandoff(
+  runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
+): { readonly version: 1; readonly consumedExportedAt: string } | undefined {
+  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
+    return undefined;
+  }
+  const handoff =
+    "threadTransferContextHandoff" in runtimePayload
+      ? runtimePayload.threadTransferContextHandoff
+      : undefined;
+  if (!handoff || typeof handoff !== "object" || Array.isArray(handoff)) return undefined;
+  if (
+    !("version" in handoff) ||
+    handoff.version !== 1 ||
+    !("consumedExportedAt" in handoff) ||
+    typeof handoff.consumedExportedAt !== "string"
+  ) {
+    return undefined;
+  }
+  return { version: 1, consumedExportedAt: handoff.consumedExportedAt };
 }
 
 const dieOnMissingBindingInstanceId = (
@@ -470,6 +495,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         instanceId,
         threadId: input.threadId,
         isActive: true,
+        wasRecovered: false,
       } as const;
     }
 
@@ -479,6 +505,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         instanceId,
         threadId: input.threadId,
         isActive: false,
+        wasRecovered: false,
       } as const;
     }
 
@@ -491,6 +518,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       instanceId,
       threadId: input.threadId,
       isActive: true,
+      wasRecovered: true,
     } as const;
   });
 
@@ -1098,19 +1126,47 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const adapter = yield* registry.getByInstance(instanceId);
       const forkProviderThread = adapter.forkThread;
       const forked = forkProviderThread
-        ? yield* resolveRoutableSession({
-            threadId: input.sourceThreadId,
-            operation: "ProviderService.forkConversation",
-            allowRecovery: true,
+        ? yield* Effect.gen(function* () {
+            const routed = yield* resolveRoutableSession({
+              threadId: input.sourceThreadId,
+              operation: "ProviderService.forkConversation",
+              allowRecovery: true,
+            });
+            return yield* forkProviderThread(input.sourceThreadId, {
+              cwd: input.cwd,
+              retainedTurnCount: input.retainedTurnCount,
+              retainedTurnId: input.retainedTurnId,
+            }).pipe(
+              Effect.ensuring(
+                routed.wasRecovered
+                  ? stopSession({ threadId: input.sourceThreadId }).pipe(
+                      Effect.catchCause((cause) =>
+                        Effect.logWarning("provider fork source cleanup failed", {
+                          threadId: input.sourceThreadId,
+                          provider: sourceBinding.provider,
+                          cause,
+                        }),
+                      ),
+                    )
+                  : Effect.void,
+              ),
+            );
           }).pipe(
-            Effect.flatMap(() =>
-              forkProviderThread(input.sourceThreadId, {
-                cwd: input.cwd,
-                retainedTurnCount: input.retainedTurnCount,
-              }),
-            ),
+            Effect.catchCause((cause) => {
+              if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause);
+              return Effect.logWarning(
+                "provider native conversation fork fell back to transcript",
+                {
+                  threadId: input.sourceThreadId,
+                  provider: sourceBinding.provider,
+                  cause,
+                },
+              ).pipe(Effect.as(null));
+            }),
           )
         : null;
+      const transferredContextHandoff =
+        forked === null ? undefined : readTransferredContextHandoff(sourceBinding.runtimePayload);
       yield* directory.upsert({
         threadId: input.targetThreadId,
         provider: sourceBinding.provider,
@@ -1122,6 +1178,9 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         runtimePayload: {
           cwd: input.cwd,
           modelSelection: input.modelSelection,
+          ...(transferredContextHandoff !== undefined
+            ? { threadTransferContextHandoff: transferredContextHandoff }
+            : {}),
         },
       });
       return { native: forked !== null };

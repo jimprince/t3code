@@ -66,7 +66,9 @@ describe("resolveThreadForkBoundary", () => {
 
     expect(boundary.retainedMessages.map((entry) => entry.id)).toEqual(["user-1", "assistant-1"]);
     expect(boundary.retainedTurnCount).toBe(1);
+    expect(boundary.retainedTurnId).toBe(TurnId.make("turn-1"));
     expect(boundary.checkpointRef).toBe(checkpoints[0]!.checkpointRef);
+    expect(boundary.checkpointTurnCount).toBe(1);
     expect(boundary.prefilledPrompt).toBeNull();
   });
 
@@ -89,20 +91,41 @@ describe("resolveThreadForkBoundary", () => {
       "assistant-1",
     ]);
     expect(boundary.retainedTurnCount).toBe(1);
+    expect(boundary.retainedTurnId).toBe(TurnId.make("turn-1"));
     expect(boundary.checkpointRef).toBe(checkpoints[0]!.checkpointRef);
+    expect(boundary.checkpointTurnCount).toBe(1);
   });
 
   it("forks before a user turn and returns that prompt for editing", () => {
+    const attachedMessages = messages.map((entry) =>
+      entry.id === MessageId.make("user-2")
+        ? {
+            ...entry,
+            attachments: [
+              {
+                type: "image" as const,
+                id: "fork-image",
+                name: "fork.png",
+                mimeType: "image/png",
+                sizeBytes: 123,
+              },
+            ],
+          }
+        : entry,
+    );
     const boundary = resolveThreadForkBoundary({
-      messages,
+      messages: attachedMessages,
       checkpoints,
       messageId: MessageId.make("user-2"),
     });
 
     expect(boundary.retainedMessages.map((entry) => entry.id)).toEqual(["user-1", "assistant-1"]);
     expect(boundary.retainedTurnCount).toBe(1);
+    expect(boundary.retainedTurnId).toBe(TurnId.make("turn-1"));
+    expect(boundary.checkpointTurnCount).toBe(1);
     expect(boundary.checkpointRef).toBe(checkpoints[0]!.checkpointRef);
     expect(boundary.prefilledPrompt).toBe("Second request");
+    expect(boundary.prefilledAttachments).toEqual(attachedMessages[2]!.attachments);
   });
 
   it("uses the baseline when forking from the first user message", () => {
@@ -114,8 +137,11 @@ describe("resolveThreadForkBoundary", () => {
 
     expect(boundary.retainedMessages).toEqual([]);
     expect(boundary.retainedTurnCount).toBe(0);
+    expect(boundary.retainedTurnId).toBeNull();
+    expect(boundary.checkpointTurnCount).toBe(0);
     expect(boundary.checkpointRef).toBeNull();
     expect(boundary.prefilledPrompt).toBe("First request");
+    expect(boundary.prefilledAttachments).toEqual([]);
   });
 
   it("rejects streaming and unknown messages", () => {
