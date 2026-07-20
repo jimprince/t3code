@@ -5646,7 +5646,6 @@ function ChatViewContent(props: ChatViewProps) {
                         onImplementPlanInNewThread={onImplementPlanInNewThread}
                         onRespondToApproval={onRespondToApproval}
                         onSelectActivePendingUserInputOption={onSelectActivePendingUserInputOption}
-                        onAdvanceActivePendingUserInput={onAdvanceActivePendingUserInput}
                         onPreviousActivePendingUserInputQuestion={
                           onPreviousActivePendingUserInputQuestion
                         }
