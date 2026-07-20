@@ -2809,12 +2809,184 @@ describe("ClaudeAdapterLive", () => {
         resume: "550e8400-e29b-41d4-a716-446655440000",
         resumeSessionAt: "assistant-99",
         turnCount: 3,
+        turnBoundaries: [{ turnCount: 3, assistantUuid: "assistant-99" }],
       });
 
       const createInput = harness.getLastCreateQueryInput();
       assert.equal(createInput?.options.resume, "550e8400-e29b-41d4-a716-446655440000");
       assert.equal(createInput?.options.sessionId, undefined);
       assert.equal(createInput?.options.resumeSessionAt, undefined);
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("starts a Claude native fork at the retained assistant boundary", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const sourceSessionId = "550e8400-e29b-41d4-a716-446655440000";
+      const targetSessionId = "8d8fca5a-6e2c-4e23-8a1f-822c8b114700";
+      const retainedAssistantUuid = "9e7e476a-c6aa-4d16-b040-50f786259101";
+      const targetThreadId = ThreadId.make("thread-claude-fork-target");
+
+      const session = yield* adapter.startSession({
+        threadId: targetThreadId,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        cwd: "/tmp/claude-fork-worktree",
+        resumeCursor: {
+          resume: sourceSessionId,
+          sessionId: targetSessionId,
+          forkSession: true,
+          resumeSessionAt: retainedAssistantUuid,
+          turnCount: 2,
+          turnBoundaries: [{ turnCount: 2, assistantUuid: retainedAssistantUuid }],
+        },
+        runtimeMode: "full-access",
+      });
+
+      const createInput = harness.getLastCreateQueryInput();
+      assert.equal(createInput?.options.cwd, "/tmp/claude-fork-worktree");
+      assert.equal(createInput?.options.resume, sourceSessionId);
+      assert.equal(createInput?.options.sessionId, targetSessionId);
+      assert.equal(createInput?.options.forkSession, true);
+      assert.equal(createInput?.options.resumeSessionAt, retainedAssistantUuid);
+      assert.deepEqual(session.resumeCursor, {
+        threadId: targetThreadId,
+        resume: targetSessionId,
+        resumeSessionAt: retainedAssistantUuid,
+        turnCount: 2,
+        turnBoundaries: [{ turnCount: 2, assistantUuid: retainedAssistantUuid }],
+      });
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("prepares a Claude native fork cursor without mutating the source session", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+      const sourceSessionId = (session.resumeCursor as { resume?: string }).resume;
+      assert.equal(typeof sourceSessionId, "string");
+
+      yield* adapter.sendTurn({
+        threadId: session.threadId,
+        input: "first",
+        attachments: [],
+      });
+      const completedFiber = yield* Stream.filter(
+        adapter.streamEvents,
+        (event) => event.type === "turn.completed",
+      ).pipe(Stream.runHead, Effect.forkChild);
+      const retainedAssistantUuid = "19efbfc6-9150-4d14-8a66-187df7390b5d";
+      harness.query.emit({
+        type: "assistant",
+        session_id: sourceSessionId,
+        uuid: retainedAssistantUuid,
+        parent_tool_use_id: null,
+        message: {
+          content: [{ type: "text", text: "first answer" }],
+        },
+      } as unknown as SDKMessage);
+      harness.query.emit({
+        type: "result",
+        subtype: "success",
+        is_error: false,
+        errors: [],
+        session_id: sourceSessionId,
+        uuid: "result-first",
+      } as unknown as SDKMessage);
+      yield* Fiber.join(completedFiber);
+
+      const forked = yield* adapter.forkThread!(session.threadId, {
+        cwd: "/tmp/claude-fork-worktree",
+        retainedTurnCount: 1,
+      });
+      assert.notEqual(forked, null);
+      if (forked === null) return;
+      assert.equal(forked.turnCount, 1);
+      assert.deepInclude(forked.resumeCursor as object, {
+        resume: sourceSessionId,
+        forkSession: true,
+        resumeSessionAt: retainedAssistantUuid,
+        turnCount: 1,
+      });
+      assert.match(
+        (forked.resumeCursor as { sessionId?: string }).sessionId ?? "",
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+
+      const activeSessions = yield* adapter.listSessions();
+      assert.equal(activeSessions.length, 1);
+      assert.equal(
+        (activeSessions[0]?.resumeCursor as { resume?: string } | undefined)?.resume,
+        sourceSessionId,
+      );
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("uses a fresh Claude session for a native zero-turn fork", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        runtimeMode: "full-access",
+      });
+
+      const forked = yield* adapter.forkThread!(session.threadId, {
+        cwd: "/tmp/claude-empty-fork",
+        retainedTurnCount: 0,
+      });
+      assert.notEqual(forked, null);
+      if (forked === null) return;
+      assert.deepInclude(forked.resumeCursor as object, {
+        createSession: true,
+        turnCount: 0,
+      });
+      assert.equal((forked.resumeCursor as { resume?: string }).resume, undefined);
+      assert.match(
+        (forked.resumeCursor as { sessionId?: string }).sessionId ?? "",
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      );
+    }).pipe(
+      Effect.provideService(Random.Random, makeDeterministicRandomService()),
+      Effect.provide(harness.layer),
+    );
+  });
+
+  it.effect("falls back when a legacy Claude cursor lacks the retained boundary", () => {
+    const harness = makeHarness();
+    return Effect.gen(function* () {
+      const adapter = yield* ClaudeAdapter;
+      const session = yield* adapter.startSession({
+        threadId: RESUME_THREAD_ID,
+        provider: ProviderDriverKind.make("claudeAgent"),
+        resumeCursor: {
+          resume: "550e8400-e29b-41d4-a716-446655440000",
+          resumeSessionAt: "19efbfc6-9150-4d14-8a66-187df7390b5d",
+          turnCount: 3,
+        },
+        runtimeMode: "full-access",
+      });
+
+      const forked = yield* adapter.forkThread!(session.threadId, {
+        cwd: "/tmp/claude-legacy-fork",
+        retainedTurnCount: 2,
+      });
+      assert.equal(forked, null);
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
       Effect.provide(harness.layer),

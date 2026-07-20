@@ -119,11 +119,14 @@ export interface ProviderAdapterShape<TError> {
     numTurns: number,
   ) => Effect.Effect<ProviderThreadSnapshot, TError>;
 
-  /** Fork provider-native context when the underlying runtime supports it. */
+  /**
+   * Fork provider-native context when the underlying runtime supports it.
+   * Returning null asks orchestration to use its transcript-handoff fallback.
+   */
   readonly forkThread?: (
     threadId: ThreadId,
     input: { readonly cwd: string; readonly retainedTurnCount: number },
-  ) => Effect.Effect<ProviderThreadForkResult, TError>;
+  ) => Effect.Effect<ProviderThreadForkResult | null, TError>;
 
   /**
    * Stop all sessions owned by this adapter.
