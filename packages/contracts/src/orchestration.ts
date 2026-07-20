@@ -648,6 +648,7 @@ export const OrchestrationForkThreadResult = Schema.Struct({
   threadId: ThreadId,
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   prefilledPrompt: Schema.NullOr(Schema.String),
+  prefilledAttachments: Schema.Array(ChatAttachment),
   warnings: Schema.Array(Schema.String),
 });
 export type OrchestrationForkThreadResult = typeof OrchestrationForkThreadResult.Type;

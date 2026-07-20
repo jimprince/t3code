@@ -92,6 +92,7 @@ const encodeUnknownJsonStringExit = Schema.encodeUnknownExit(Schema.UnknownFromJ
 const decodeUnknownJsonStringExit = Schema.decodeUnknownExit(Schema.UnknownFromJsonString);
 
 const PROVIDER = ProviderDriverKind.make("claudeAgent");
+const CLAUDE_TURN_BOUNDARY_HISTORY_LIMIT = 256;
 type ClaudeTextStreamKind = Extract<RuntimeContentStreamKind, "assistant_text" | "reasoning_text">;
 type ClaudeToolResultStreamKind = Extract<
   RuntimeContentStreamKind,
@@ -126,7 +127,17 @@ interface ClaudeResumeState {
 
 interface ClaudeTurnBoundary {
   readonly turnCount: number;
+  readonly turnId?: TurnId;
   readonly assistantUuid: string;
+}
+
+function pruneClaudeTurnBoundaries(boundaries: Map<number, ClaudeTurnBoundary>): void {
+  const excess = boundaries.size - CLAUDE_TURN_BOUNDARY_HISTORY_LIMIT;
+  if (excess <= 0) return;
+  for (const turnCount of Array.from(boundaries.keys()).toSorted((left, right) => left - right)) {
+    boundaries.delete(turnCount);
+    if (boundaries.size <= CLAUDE_TURN_BOUNDARY_HISTORY_LIMIT) return;
+  }
 }
 
 interface ClaudeTurnState {
@@ -202,7 +213,7 @@ interface ClaudeSessionContext {
     items: Array<unknown>;
   }>;
   readonly baseTurnCount: number;
-  readonly turnBoundaries: Map<number, string>;
+  readonly turnBoundaries: Map<number, ClaudeTurnBoundary>;
   readonly inFlightTools: Map<number, ToolInFlight>;
   readonly claudeTasks: Map<string, ClaudeTaskState>;
   turnState: ClaudeTurnState | undefined;
@@ -605,19 +616,35 @@ function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undef
   const resumeSessionAt =
     typeof cursor.resumeSessionAt === "string" ? cursor.resumeSessionAt : undefined;
   const turnCountValue = typeof cursor.turnCount === "number" ? cursor.turnCount : undefined;
-  const turnBoundaries = Array.isArray(cursor.turnBoundaries)
-    ? cursor.turnBoundaries.flatMap((boundary): Array<ClaudeTurnBoundary> => {
-        if (!boundary || typeof boundary !== "object") return [];
-        const candidate = boundary as { turnCount?: unknown; assistantUuid?: unknown };
-        return typeof candidate.turnCount === "number" &&
-          Number.isInteger(candidate.turnCount) &&
-          candidate.turnCount > 0 &&
-          typeof candidate.assistantUuid === "string" &&
-          candidate.assistantUuid.length > 0
-          ? [{ turnCount: candidate.turnCount, assistantUuid: candidate.assistantUuid }]
-          : [];
-      })
-    : [];
+  const turnBoundaries = (
+    Array.isArray(cursor.turnBoundaries)
+      ? cursor.turnBoundaries.flatMap((boundary): Array<ClaudeTurnBoundary> => {
+          if (!boundary || typeof boundary !== "object") return [];
+          const candidate = boundary as {
+            turnCount?: unknown;
+            turnId?: unknown;
+            assistantUuid?: unknown;
+          };
+          return typeof candidate.turnCount === "number" &&
+            Number.isInteger(candidate.turnCount) &&
+            candidate.turnCount > 0 &&
+            typeof candidate.assistantUuid === "string" &&
+            candidate.assistantUuid.length > 0
+            ? [
+                {
+                  turnCount: candidate.turnCount,
+                  ...(typeof candidate.turnId === "string"
+                    ? { turnId: TurnId.make(candidate.turnId) }
+                    : {}),
+                  assistantUuid: candidate.assistantUuid,
+                },
+              ]
+            : [];
+        })
+      : []
+  )
+    .toSorted((left, right) => left.turnCount - right.turnCount)
+    .slice(-CLAUDE_TURN_BOUNDARY_HISTORY_LIMIT);
 
   return {
     ...(threadId ? { threadId } : {}),
@@ -1487,10 +1514,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     context: ClaudeSessionContext,
     throughTurnCount = currentTurnCount(context),
   ): ReadonlyArray<ClaudeTurnBoundary> =>
-    Array.from(context.turnBoundaries.entries())
-      .filter(([turnCount]) => turnCount <= throughTurnCount)
-      .sort(([left], [right]) => left - right)
-      .map(([turnCount, assistantUuid]) => ({ turnCount, assistantUuid }));
+    Array.from(context.turnBoundaries.values())
+      .filter((boundary) => boundary.turnCount <= throughTurnCount)
+      .sort((left, right) => left.turnCount - right.turnCount)
+      .slice(-CLAUDE_TURN_BOUNDARY_HISTORY_LIMIT);
 
   const updateResumeCursor = Effect.fn("updateResumeCursor")(function* (
     context: ClaudeSessionContext,
@@ -2080,7 +2107,13 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       items: [...turnState.items],
     });
     if (turnState.lastAssistantUuid) {
-      context.turnBoundaries.set(currentTurnCount(context), turnState.lastAssistantUuid);
+      const turnCount = currentTurnCount(context);
+      context.turnBoundaries.set(turnCount, {
+        turnCount,
+        turnId: turnState.turnId,
+        assistantUuid: turnState.lastAssistantUuid,
+      });
+      pruneClaudeTurnBoundaries(context.turnBoundaries);
     }
 
     yield* emitThreadTokenUsage(context, usageSnapshot, {
@@ -3163,22 +3196,23 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ? newSessionId
         : (existingResumeSessionId ?? newSessionId);
       const initialTurnCount = resumeState?.turnCount ?? 0;
-      const initialTurnBoundaries = new Map<number, string>(
-        resumeState?.turnBoundaries?.map((boundary) => [
-          boundary.turnCount,
-          boundary.assistantUuid,
-        ]),
+      const initialTurnBoundaries = new Map<number, ClaudeTurnBoundary>(
+        resumeState?.turnBoundaries?.map((boundary) => [boundary.turnCount, boundary]),
       );
       if (
         initialTurnCount > 0 &&
         resumeState?.resumeSessionAt &&
         !initialTurnBoundaries.has(initialTurnCount)
       ) {
-        initialTurnBoundaries.set(initialTurnCount, resumeState.resumeSessionAt);
+        initialTurnBoundaries.set(initialTurnCount, {
+          turnCount: initialTurnCount,
+          assistantUuid: resumeState.resumeSessionAt,
+        });
       }
-      const serializedInitialTurnBoundaries = Array.from(initialTurnBoundaries.entries())
-        .sort(([left], [right]) => left - right)
-        .map(([turnCount, assistantUuid]) => ({ turnCount, assistantUuid }));
+      pruneClaudeTurnBoundaries(initialTurnBoundaries);
+      const serializedInitialTurnBoundaries = Array.from(initialTurnBoundaries.values()).sort(
+        (left, right) => left.turnCount - right.turnCount,
+      );
 
       const runtimeContext = yield* Effect.context<never>();
       const runFork = Effect.runForkWith(runtimeContext);
@@ -3867,7 +3901,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           context.turnBoundaries.delete(turnCount);
         }
       }
-      context.lastAssistantUuid = context.turnBoundaries.get(nextTurnCount);
+      context.lastAssistantUuid = context.turnBoundaries.get(nextTurnCount)?.assistantUuid;
       yield* updateResumeCursor(context);
       return yield* snapshotThread(context);
     },
@@ -3878,11 +3912,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       const context = yield* requireSession(threadId);
       const sourceTurnCount = currentTurnCount(context);
       if (input.retainedTurnCount > sourceTurnCount) {
-        return yield* new ProviderAdapterValidationError({
-          provider: PROVIDER,
-          operation: "forkThread",
-          issue: `Cannot retain ${input.retainedTurnCount} turns from a ${sourceTurnCount}-turn Claude session.`,
-        });
+        return null;
       }
 
       const targetSessionId = yield* randomUUIDv4;
@@ -3898,8 +3928,10 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       }
 
       const sourceSessionId = context.resumeSessionId;
-      const retainedAssistantUuid = context.turnBoundaries.get(input.retainedTurnCount);
-      if (!sourceSessionId || !retainedAssistantUuid) {
+      const retainedBoundary = Array.from(context.turnBoundaries.values()).find(
+        (boundary) => boundary.turnId === input.retainedTurnId,
+      );
+      if (!sourceSessionId || !retainedBoundary) {
         return null;
       }
 
@@ -3908,7 +3940,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           resume: sourceSessionId,
           sessionId: targetSessionId,
           forkSession: true,
-          resumeSessionAt: retainedAssistantUuid,
+          resumeSessionAt: retainedBoundary.assistantUuid,
           turnCount: input.retainedTurnCount,
           turnBoundaries: retainedTurnBoundaries(context, input.retainedTurnCount),
         },

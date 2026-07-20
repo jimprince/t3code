@@ -28,7 +28,10 @@ import { OrchestrationEventStoreLive } from "../../persistence/Layers/Orchestrat
 import { ProviderSessionRuntimeRepositoryLive } from "../../persistence/Layers/ProviderSessionRuntime.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
 import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
-import { ProviderService } from "../../provider/Services/ProviderService.ts";
+import {
+  ProviderService,
+  type ProviderServiceShape,
+} from "../../provider/Services/ProviderService.ts";
 import { layer as RepositoryIdentityResolverLive } from "../../project/RepositoryIdentityResolver.ts";
 import * as VcsProcess from "../../vcs/VcsProcess.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
@@ -145,7 +148,13 @@ const gitWorkflowTestLayer = (worktreesRoot: string) =>
     }),
   );
 
-const makeTransferSystemLayer = (input: { prefix: string; worktreesRoot: string }) => {
+interface TransferSystemInput {
+  readonly prefix: string;
+  readonly worktreesRoot: string;
+  readonly forkConversation?: ProviderServiceShape["forkConversation"];
+}
+
+const makeTransferSystemLayer = (input: TransferSystemInput) => {
   const ServerConfigLayer = ServerConfig.layerTest(process.cwd(), { prefix: input.prefix });
   const orchestrationLayer = Layer.mergeAll(
     OrchestrationEngineLive.pipe(
@@ -163,7 +172,7 @@ const makeTransferSystemLayer = (input: { prefix: string; worktreesRoot: string 
     Layer.provideMerge(orchestrationLayer),
     Layer.provide(
       Layer.mock(ProviderService)({
-        forkConversation: () => Effect.succeed({ native: false }),
+        forkConversation: input.forkConversation ?? (() => Effect.succeed({ native: false })),
       }),
     ),
   ).pipe(
@@ -178,7 +187,7 @@ const makeTransferSystemLayer = (input: { prefix: string; worktreesRoot: string 
 
 // Each system gets its own MemoMap: the suite-level memo map would otherwise
 // hand both "environments" the same memoized engine + in-memory database.
-const buildTransferSystem = (input: { prefix: string; worktreesRoot: string }) =>
+const buildTransferSystem = (input: TransferSystemInput) =>
   Effect.gen(function* () {
     const memoMap = yield* Layer.makeMemoMap;
     const scope = yield* Scope.make();
@@ -279,9 +288,14 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         yield* makeDirectory(workspaceRoot);
         yield* makeDirectory(worktreesRoot);
         yield* initRepo(workspaceRoot);
+        let failProviderFork = false;
         const system = yield* buildTransferSystem({
           prefix: "t3-thread-fork-test-",
           worktreesRoot,
+          forkConversation: () =>
+            failProviderFork
+              ? Effect.die(new Error("simulated provider fork failure"))
+              : Effect.succeed({ native: false }),
         });
         const projectId = ProjectId.make("project-fork");
         const sourceThreadId = ThreadId.make("source-thread-fork");
@@ -338,6 +352,15 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
               id: secondUserId,
               role: "user",
               text: "Try a different direction",
+              attachments: [
+                {
+                  type: "image",
+                  id: "fork-image",
+                  name: "fork.png",
+                  mimeType: "image/png",
+                  sizeBytes: 123,
+                },
+              ],
               turnId: secondTurnId,
               streaming: false,
               createdAt: messageTime(3),
@@ -363,15 +386,6 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
               status: "ready",
               files: [],
               assistantMessageId: firstAssistantId,
-              completedAt: now(),
-            },
-            {
-              turnId: secondTurnId,
-              checkpointTurnCount: 2,
-              checkpointRef: checkpointRefForThreadTurn(sourceThreadId, 2),
-              status: "ready",
-              files: [],
-              assistantMessageId: secondAssistantId,
               completedAt: now(),
             },
           ],
@@ -411,6 +425,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
           .pipe(Effect.map(Option.getOrUndefined));
 
         expect(result.prefilledPrompt).toBe("Try a different direction");
+        expect(result.prefilledAttachments).toEqual(portable.messages[2]!.attachments);
         expect(result.worktreePath).toBeNull();
         expect(fork?.messages.map((message) => message.text)).toEqual([
           "First request",
@@ -461,6 +476,62 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
             checkpointRefForThreadTurn(worktreeResult.threadId, 1),
           ]),
         ).toBe(checkpointCommit);
+
+        const laggedWorktree = yield* system.transfer.forkThread({
+          sourceThreadId,
+          messageId: secondAssistantId,
+          workspaceMode: "new-worktree",
+        });
+        expect(
+          laggedWorktree.warnings.some(
+            (warning) => warning.includes("checkpoint turn 1") && warning.includes("2 turns"),
+          ),
+        ).toBe(true);
+
+        const branchesBeforeFailure = yield* execGit(workspaceRoot, [
+          "for-each-ref",
+          "--format=%(refname)",
+          "refs/heads/t3code/",
+        ]);
+        const worktreesBeforeFailure = yield* execGit(workspaceRoot, [
+          "worktree",
+          "list",
+          "--porcelain",
+        ]);
+        failProviderFork = true;
+        const failedFork = yield* system.transfer
+          .forkThread({
+            sourceThreadId,
+            messageId: firstAssistantId,
+            workspaceMode: "new-worktree",
+          })
+          .pipe(Effect.exit);
+        failProviderFork = false;
+        expect(Exit.isFailure(failedFork)).toBe(true);
+        expect(
+          yield* execGit(workspaceRoot, [
+            "for-each-ref",
+            "--format=%(refname)",
+            "refs/heads/t3code/",
+          ]),
+        ).toBe(branchesBeforeFailure);
+        expect(yield* execGit(workspaceRoot, ["worktree", "list", "--porcelain"])).toBe(
+          worktreesBeforeFailure,
+        );
+
+        yield* execGit(workspaceRoot, [
+          "update-ref",
+          "-d",
+          checkpointRefForThreadTurn(sourceThreadId, 1),
+        ]);
+        const missingRefError = yield* Effect.flip(
+          system.transfer.forkThread({
+            sourceThreadId,
+            messageId: firstAssistantId,
+            workspaceMode: "new-worktree",
+          }),
+        );
+        expect(missingRefError.message).toContain("retained checkpoint Git ref");
       }).pipe(Effect.scoped),
     );
   });

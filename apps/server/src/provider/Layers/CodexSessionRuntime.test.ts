@@ -4,7 +4,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { describe } from "vite-plus/test";
-import { DEFAULT_MODEL, EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_MODEL, EnvironmentId, ThreadId, TurnId } from "@t3tools/contracts";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexRpc from "effect-codex-app-server/rpc";
 
@@ -66,6 +66,7 @@ describe("forkCodexThread", () => {
         sourceThreadId: "provider-source",
         cwd: "/tmp/fork-worktree",
         retainedTurnCount: 2,
+        retainedTurnId: TurnId.make("turn-2"),
       });
 
       NodeAssert.deepStrictEqual(requests, [
@@ -78,8 +79,121 @@ describe("forkCodexThread", () => {
           payload: { threadId: "provider-fork", numTurns: 1 },
         },
       ]);
+      NodeAssert.notEqual(result, null);
+      if (result === null) return;
       NodeAssert.equal(result.threadId, "provider-fork");
       NodeAssert.equal(result.turnCount, 2);
+    }),
+  );
+
+  it.effect("anchors rollback to the retained turn id when provider counts diverge", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          return Effect.succeed({
+            thread: {
+              id: "provider-fork",
+              turns: [
+                { id: "turn-1" },
+                { id: "turn-interrupted" },
+                { id: "turn-3" },
+                { id: "turn-4" },
+              ],
+            },
+          });
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 3,
+        retainedTurnId: TurnId.make("turn-4"),
+      });
+
+      NodeAssert.deepStrictEqual(
+        requests.map((request) => request.method),
+        ["thread/fork"],
+        "REGRESSION: ordinal rollback dropped the retained turn after an interrupted provider turn",
+      );
+      NodeAssert.equal(result?.threadId, "provider-fork");
+      NodeAssert.equal(result?.turnCount, 4);
+    }),
+  );
+
+  it.effect("archives a detached provider fork when the retained turn is missing", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          return method === "thread/fork"
+            ? Effect.succeed({
+                thread: { id: "provider-orphan", turns: [{ id: "different-turn" }] },
+              })
+            : Effect.succeed({});
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("missing-turn"),
+      });
+
+      NodeAssert.equal(result, null);
+      NodeAssert.deepStrictEqual(requests, [
+        {
+          method: "thread/fork",
+          payload: { threadId: "provider-source", cwd: "/tmp/fork-worktree" },
+        },
+        {
+          method: "thread/archive",
+          payload: { threadId: "provider-orphan" },
+        },
+      ]);
+    }),
+  );
+
+  it.effect("archives a detached provider fork when rollback fails", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          if (method === "thread/fork") {
+            return Effect.succeed({
+              thread: {
+                id: "provider-orphan",
+                turns: [{ id: "turn-1" }, { id: "turn-2" }],
+              },
+            });
+          }
+          if (method === "thread/rollback") {
+            return Effect.die(new Error("simulated rollback failure"));
+          }
+          return Effect.succeed({});
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("turn-1"),
+      }).pipe(Effect.exit);
+
+      NodeAssert.equal(result._tag, "Failure");
+      NodeAssert.deepStrictEqual(
+        requests.map(({ method }) => method),
+        ["thread/fork", "thread/rollback", "thread/archive"],
+      );
     }),
   );
 });

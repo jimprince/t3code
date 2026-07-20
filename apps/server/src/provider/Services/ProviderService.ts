@@ -25,6 +25,7 @@ import type {
   ProviderTurnStartResult,
   ModelSelection,
   RuntimeMode,
+  TurnId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
@@ -112,6 +113,7 @@ export interface ProviderServiceShape {
     readonly targetThreadId: ThreadId;
     readonly cwd: string;
     readonly retainedTurnCount: number;
+    readonly retainedTurnId: TurnId | null;
     readonly runtimeMode: RuntimeMode;
     readonly modelSelection: ModelSelection;
   }) => Effect.Effect<{ readonly native: boolean }, ProviderServiceError>;
