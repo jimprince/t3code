@@ -772,6 +772,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
           lastSeenAt: now(),
           resumeCursor: { threadId: "machine-local-cursor" },
           runtimePayload: null,
+          bootGenerationId: null,
         });
 
         const exported = yield* source.transfer.exportThread({ threadId });
@@ -1030,6 +1031,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
           lastSeenAt: now(),
           resumeCursor: { threadId, resume: sessionId, turnCount: 1 },
           runtimePayload: null,
+          bootGenerationId: null,
         });
 
         // --- Export from the source environment.

@@ -28,10 +28,12 @@ export interface ProviderRuntimeBinding {
   readonly resumeCursor?: unknown | null;
   readonly runtimePayload?: unknown | null;
   readonly runtimeMode?: RuntimeMode;
+  readonly bootGenerationId?: string | null;
 }
 
 export interface ProviderRuntimeBindingWithMetadata extends ProviderRuntimeBinding {
   readonly lastSeenAt: string;
+  readonly bootGenerationId: string | null;
 }
 
 export type ProviderSessionDirectoryReadError = ProviderSessionDirectoryPersistenceError;
@@ -62,6 +64,11 @@ export interface ProviderSessionDirectoryShape {
     ReadonlyArray<ProviderRuntimeBindingWithMetadata>,
     ProviderSessionDirectoryPersistenceError
   >;
+
+  readonly settleDeadGenerationBinding: (input: {
+    readonly threadId: ThreadId;
+    readonly expectedBootGenerationId: string | null;
+  }) => Effect.Effect<boolean, ProviderSessionDirectoryPersistenceError>;
 }
 
 export class ProviderSessionDirectory extends Context.Service<

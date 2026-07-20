@@ -13,6 +13,7 @@ import {
   type ProviderRuntimeBindingWithMetadata,
   type ProviderSessionDirectoryShape,
 } from "../Services/ProviderSessionDirectory.ts";
+import { ServerBootGeneration } from "../Services/ServerBootGeneration.ts";
 const decodeProviderDriverKindValue = Schema.decodeUnknownEffect(ProviderDriverKind);
 
 function toPersistenceError(operation: string) {
@@ -78,6 +79,7 @@ function toRuntimeBinding(
           resumeCursor: runtime.resumeCursor,
           runtimePayload: runtime.runtimePayload,
           lastSeenAt: runtime.lastSeenAt,
+          bootGenerationId: runtime.bootGenerationId,
         }) satisfies ProviderRuntimeBindingWithMetadata,
     ),
   );
@@ -85,6 +87,7 @@ function toRuntimeBinding(
 
 const makeProviderSessionDirectory = Effect.gen(function* () {
   const repository = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+  const { bootGenerationId } = yield* ServerBootGeneration;
 
   const getBinding = (threadId: ThreadId) =>
     repository.getByThreadId({ threadId }).pipe(
@@ -130,6 +133,7 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
         threadId: resolvedThreadId,
         providerName: binding.provider,
         providerInstanceId,
+        bootGenerationId,
         adapterKey:
           binding.adapterKey ??
           (providerChanged ? binding.provider : (existingRuntime?.adapterKey ?? binding.provider)),
@@ -182,12 +186,29 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
       ),
     );
 
+  const settleDeadGenerationBinding: ProviderSessionDirectoryShape["settleDeadGenerationBinding"] =
+    Effect.fn("ProviderSessionDirectory.settleDeadGenerationBinding")(function* (input) {
+      const lastSeenAt = DateTime.formatIso(yield* DateTime.now);
+      return yield* repository
+        .settleDeadGeneration({
+          ...input,
+          currentBootGenerationId: bootGenerationId,
+          lastSeenAt,
+        })
+        .pipe(
+          Effect.mapError(
+            toPersistenceError("ProviderSessionDirectory.settleDeadGenerationBinding:update"),
+          ),
+        );
+    });
+
   return {
     upsert,
     getProvider,
     getBinding,
     listThreadIds,
     listBindings,
+    settleDeadGenerationBinding,
   } satisfies ProviderSessionDirectoryShape;
 });
 

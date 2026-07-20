@@ -49,6 +49,7 @@ import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.
 import { makeProviderServiceLive } from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
+import { makeServerBootGenerationLayer } from "./ServerBootGeneration.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import {
@@ -284,7 +285,10 @@ function makeProviderServiceLayer() {
   const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
     Layer.provide(SqlitePersistenceMemory),
   );
-  const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+  const directoryLayer = ProviderSessionDirectoryLive.pipe(
+    Layer.provide(runtimeRepositoryLayer),
+    Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+  );
 
   const layer = it.layer(
     Layer.mergeAll(
@@ -337,7 +341,10 @@ it.effect("ProviderServiceLive catches stopAll failures during shutdown", () =>
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+    Layer.provide(runtimeRepositoryLayer),
+    Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+  );
     const providerLayer = Layer.mergeAll(
       makeProviderServiceLive().pipe(
         Layer.provide(providerAdapterLayer),
@@ -397,7 +404,10 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+    Layer.provide(runtimeRepositoryLayer),
+    Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+  );
     const providerLayer = makeProviderServiceLive().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
@@ -481,6 +491,7 @@ it.effect(
       );
       const directoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const providerLayer = makeProviderServiceLive().pipe(
         Layer.provide(providerAdapterLayer),
@@ -551,7 +562,10 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+    Layer.provide(runtimeRepositoryLayer),
+    Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+  );
     const providerLayer = makeProviderServiceLive().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
@@ -596,7 +610,10 @@ it.effect("ProviderServiceLive writes canonical events to the emitting thread se
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+    Layer.provide(runtimeRepositoryLayer),
+    Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+  );
     const providerLayer = makeProviderServiceLive({
       canonicalEventLogger: {
         filePath: "memory://provider-canonical-events",
@@ -656,7 +673,10 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(persistenceLayer),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+    Layer.provide(runtimeRepositoryLayer),
+    Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+  );
 
     yield* Effect.gen(function* () {
       const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
@@ -730,6 +750,7 @@ it.effect(
 
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const firstProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -789,6 +810,7 @@ it.effect(
       });
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const secondProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -1474,6 +1496,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const firstProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -1512,6 +1535,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const secondProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -1580,6 +1604,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         });
         const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
+          Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
         );
         const firstProviderLayer = makeProviderServiceLive().pipe(
           Layer.provide(
@@ -1613,6 +1638,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         });
         const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
+          Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
         );
         const secondProviderLayer = makeProviderServiceLive().pipe(
           Layer.provide(

@@ -12,6 +12,8 @@ import * as Migrator from "effect/unstable/sql/Migrator";
 import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
 
+import { runForkMigrations } from "./ForkMigrations.ts";
+
 // Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
 import Migration0002 from "./Migrations/002_OrchestrationCommandReceipts.ts";
@@ -158,4 +160,9 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
  * )
  * ```
  */
-export const MigrationsLive = Layer.effectDiscard(runMigrations());
+export const MigrationsLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    yield* runMigrations();
+    yield* runForkMigrations();
+  }),
+);

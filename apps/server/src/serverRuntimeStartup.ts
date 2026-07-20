@@ -13,6 +13,7 @@ import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -23,6 +24,7 @@ import * as NodeCrypto from "node:crypto";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Schedule from "effect/Schedule";
 import * as Scope from "effect/Scope";
 
 import * as ServerConfig from "./config.ts";
@@ -172,6 +174,83 @@ export const launchStartupHeartbeat = recordStartupHeartbeat.pipe(
   Effect.forkScoped,
   Effect.asVoid,
 );
+
+const UNEXPECTED_SHUTDOWN_MESSAGE = "Interrupted by unexpected server shutdown";
+
+export const reconcileOrphanedThreadSessions = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
+  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const commandReadModel = yield* projectionSnapshotQuery.getCommandReadModel();
+  const orphanedSessions = commandReadModel.threads.flatMap((thread) => {
+    const session = thread.session;
+    if (thread.deletedAt !== null || session === null) {
+      return [];
+    }
+    if (
+      session.status === "starting" ||
+      session.status === "running" ||
+      thread.latestTurn?.state === "running"
+    ) {
+      return [session];
+    }
+    return [];
+  });
+
+  if (orphanedSessions.length === 0) {
+    return;
+  }
+
+  const reconciledThreadIds = yield* Effect.forEach(
+    orphanedSessions,
+    (session) =>
+      Effect.gen(function* () {
+        const now = DateTime.formatIso(yield* DateTime.now);
+        const uuid = yield* crypto.randomUUIDv4;
+        const exit = yield* Effect.exit(
+          orchestrationEngine
+            .dispatch({
+              type: "thread.session.set",
+              commandId: CommandId.make(`server:sessions-reconcile:${session.threadId}:${uuid}`),
+              threadId: session.threadId,
+              session: {
+                ...session,
+                status: "interrupted",
+                activeTurnId: null,
+                lastError: UNEXPECTED_SHUTDOWN_MESSAGE,
+                updatedAt: now,
+              },
+              createdAt: now,
+            })
+            .pipe(
+              Effect.retry({
+                times: 2,
+                schedule: Schedule.spaced(Duration.millis(25)),
+              }),
+            ),
+        );
+
+        if (Exit.isFailure(exit)) {
+          yield* Effect.logWarning("server.sessions.reconcile.failed", {
+            threadId: session.threadId,
+            cause: exit.cause,
+          });
+          return null;
+        }
+
+        return session.threadId;
+      }),
+    { concurrency: 1 },
+  );
+  const successfulThreadIds = reconciledThreadIds.filter((threadId) => threadId !== null);
+  const failedCount = orphanedSessions.length - successfulThreadIds.length;
+
+  yield* Effect.logInfo("server.sessions.reconcile.complete", {
+    reconciledCount: successfulThreadIds.length,
+    failedCount,
+    threadIds: successfulThreadIds.slice(0, 20),
+  });
+});
 
 export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
   instanceId: ProviderInstanceId.make("codex"),
@@ -445,6 +524,9 @@ export const make = Effect.gen(function* () {
         Effect.forkScoped,
       ),
     );
+
+    yield* Effect.logDebug("startup phase: reconciling orphaned thread sessions");
+    yield* runStartupPhase("sessions.reconcile", reconcileOrphanedThreadSessions);
 
     yield* Effect.logDebug("startup phase: starting orchestration reactors");
     yield* runStartupPhase(

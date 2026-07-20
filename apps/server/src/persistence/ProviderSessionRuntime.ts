@@ -43,6 +43,7 @@ export const ProviderSessionRuntime = Schema.Struct({
    * instance id before routing.
    */
   providerInstanceId: Schema.NullOr(ProviderInstanceId),
+  bootGenerationId: Schema.NullOr(Schema.String),
   adapterKey: Schema.String,
   runtimeMode: RuntimeMode,
   status: ProviderSessionRuntimeStatus,
@@ -57,6 +58,13 @@ export type GetProviderSessionRuntimeInput = typeof GetProviderSessionRuntimeInp
 
 export const DeleteProviderSessionRuntimeInput = Schema.Struct({ threadId: ThreadId });
 export type DeleteProviderSessionRuntimeInput = typeof DeleteProviderSessionRuntimeInput.Type;
+
+export interface SettleDeadGenerationRuntimeInput {
+  readonly threadId: ThreadId;
+  readonly expectedBootGenerationId: string | null;
+  readonly currentBootGenerationId: string;
+  readonly lastSeenAt: typeof IsoDateTime.Type;
+}
 
 /**
  * ProviderSessionRuntimeRepository - Service tag for provider runtime persistence.
@@ -94,6 +102,15 @@ export class ProviderSessionRuntimeRepository extends Context.Service<
     >;
 
     /**
+     * Atomically settles a binding only if it still belongs to the boot
+     * generation observed by the caller. Cursor and runtime payload columns
+     * are intentionally left untouched for lazy recovery.
+     */
+    readonly settleDeadGeneration: (
+      input: SettleDeadGenerationRuntimeInput,
+    ) => Effect.Effect<boolean, ProviderSessionRuntimeRepositoryError>;
+
+    /**
      * Delete provider runtime state by canonical thread id.
      */
     readonly deleteByThreadId: (
@@ -113,6 +130,7 @@ const ProviderSessionRuntimeRawDbRowSchema = Schema.Struct({
   threadId: Schema.String,
   providerName: Schema.Unknown,
   providerInstanceId: Schema.Unknown,
+  bootGenerationId: Schema.Unknown,
   adapterKey: Schema.Unknown,
   runtimeMode: Schema.Unknown,
   status: Schema.Unknown,
@@ -155,6 +173,7 @@ export const make = Effect.gen(function* () {
           thread_id,
           provider_name,
           provider_instance_id,
+          boot_generation_id,
           adapter_key,
           runtime_mode,
           status,
@@ -166,6 +185,7 @@ export const make = Effect.gen(function* () {
           ${runtime.threadId},
           ${runtime.providerName},
           ${runtime.providerInstanceId},
+          ${runtime.bootGenerationId},
           ${runtime.adapterKey},
           ${runtime.runtimeMode},
           ${runtime.status},
@@ -177,6 +197,7 @@ export const make = Effect.gen(function* () {
         DO UPDATE SET
           provider_name = excluded.provider_name,
           provider_instance_id = excluded.provider_instance_id,
+          boot_generation_id = excluded.boot_generation_id,
           adapter_key = excluded.adapter_key,
           runtime_mode = excluded.runtime_mode,
           status = excluded.status,
@@ -195,6 +216,7 @@ export const make = Effect.gen(function* () {
           thread_id AS "threadId",
           provider_name AS "providerName",
           provider_instance_id AS "providerInstanceId",
+          boot_generation_id AS "bootGenerationId",
           adapter_key AS "adapterKey",
           runtime_mode AS "runtimeMode",
           status,
@@ -215,6 +237,7 @@ export const make = Effect.gen(function* () {
           thread_id AS "threadId",
           provider_name AS "providerName",
           provider_instance_id AS "providerInstanceId",
+          boot_generation_id AS "bootGenerationId",
           adapter_key AS "adapterKey",
           runtime_mode AS "runtimeMode",
           status,
@@ -234,6 +257,30 @@ export const make = Effect.gen(function* () {
         WHERE thread_id = ${threadId}
       `,
   });
+
+  const settleDeadGeneration: ProviderSessionRuntimeRepository["Service"]["settleDeadGeneration"] =
+    (input) =>
+      sql<{ readonly threadId: string }>`
+        UPDATE provider_session_runtime
+        SET
+          status = 'stopped',
+          boot_generation_id = ${input.currentBootGenerationId},
+          last_seen_at = ${input.lastSeenAt}
+        WHERE thread_id = ${input.threadId}
+          AND status != 'stopped'
+          AND boot_generation_id IS ${input.expectedBootGenerationId}
+        RETURNING thread_id AS "threadId"
+      `.pipe(
+        Effect.map((rows) => rows.length > 0),
+        Effect.mapError(
+          (cause) =>
+            new PersistenceSqlError({
+              operation: "ProviderSessionRuntimeRepository.settleDeadGeneration:query",
+              correlation: { threadId: input.threadId },
+              cause,
+            }),
+        ),
+      );
 
   const upsert: ProviderSessionRuntimeRepository["Service"]["upsert"] = (runtime) =>
     upsertRuntimeRow(runtime).pipe(
@@ -326,6 +373,7 @@ export const make = Effect.gen(function* () {
     upsert,
     getByThreadId,
     list,
+    settleDeadGeneration,
     deleteByThreadId,
   } satisfies ProviderSessionRuntimeRepository["Service"];
 });

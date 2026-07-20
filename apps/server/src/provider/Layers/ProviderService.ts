@@ -455,6 +455,20 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       yield* upsertSessionBinding(
         { ...resumed, providerInstanceId: bindingInstanceId },
         input.binding.threadId,
+      ).pipe(
+        // startSession necessarily precedes the current-generation stamp. If
+        // that stamp fails (including after a dead-generation CAS won the
+        // race), tear down the newly started adapter session so persistence
+        // cannot say stopped/stale while a live session remains untracked.
+        Effect.onError(() =>
+          Effect.all(
+            [
+              adapter.stopSession(input.binding.threadId).pipe(Effect.ignore),
+              clearMcpSession(input.binding.threadId).pipe(Effect.ignore),
+            ],
+            { discard: true },
+          ),
+        ),
       );
       yield* analytics.record("provider.session.recovered", {
         provider: resumed.provider,

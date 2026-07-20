@@ -36,6 +36,7 @@ import { makeAdapterRegistryMock } from "../src/provider/testUtils/providerAdapt
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
 import { makeProviderRegistryLayer } from "../src/provider/testUtils/providerRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
+import { makeServerBootGenerationLayer } from "../src/provider/Layers/ServerBootGeneration.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
 import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
 import { makeCodexAdapter } from "../src/provider/Layers/CodexAdapter.ts";
@@ -266,6 +267,7 @@ export const makeOrchestrationIntegrationHarness = (
     );
     const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
       Layer.provide(ProviderSessionRuntimeRepositoryLive),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
     );
     const realCodexRegistry = Layer.effect(
       ProviderAdapterRegistry,

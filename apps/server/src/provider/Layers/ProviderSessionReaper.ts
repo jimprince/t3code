@@ -12,6 +12,7 @@ import {
   type ProviderSessionReaperShape,
 } from "../Services/ProviderSessionReaper.ts";
 import { ProviderService } from "../Services/ProviderService.ts";
+import { ServerBootGeneration } from "../Services/ServerBootGeneration.ts";
 
 const DEFAULT_INACTIVITY_THRESHOLD_MS = 30 * 60 * 1000;
 const DEFAULT_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
@@ -26,6 +27,7 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
     const providerService = yield* ProviderService;
     const directory = yield* ProviderSessionDirectory;
     const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
+    const { bootGenerationId } = yield* ServerBootGeneration;
 
     const inactivityThresholdMs = Math.max(
       1,
@@ -37,9 +39,52 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
       const bindings = yield* directory.listBindings();
       const now = yield* Clock.currentTimeMillis;
       let reapedCount = 0;
+      let deadGenerationSettledCount = 0;
 
       for (const binding of bindings) {
         if (binding.status === "stopped") {
+          continue;
+        }
+
+        const isDeadGeneration = binding.bootGenerationId !== bootGenerationId;
+        if (isDeadGeneration) {
+          // Recovery starts the adapter before it upserts the binding. This CAS
+          // is safe on both sides of that upsert: before it, recovery's later
+          // running/current-generation upsert wins; after it, the expected old
+          // generation no longer matches and this sweep skips the live session.
+          const settled = yield* directory
+            .settleDeadGenerationBinding({
+              threadId: binding.threadId,
+              expectedBootGenerationId: binding.bootGenerationId,
+            })
+            .pipe(
+              Effect.tap((didSettle) =>
+                didSettle
+                  ? Effect.logDebug("provider.session.reaper.dead-generation-settled", {
+                      threadId: binding.threadId,
+                      provider: binding.provider,
+                      currentBootGenerationId: bootGenerationId,
+                      persistedBootGenerationId: binding.bootGenerationId,
+                    })
+                  : Effect.logDebug("provider.session.reaper.generation-changed", {
+                      threadId: binding.threadId,
+                      currentBootGenerationId: bootGenerationId,
+                      persistedBootGenerationId: binding.bootGenerationId,
+                    }),
+              ),
+              Effect.catchCause((cause) =>
+                Effect.logWarning("provider.session.reaper.dead-generation-settle-failed", {
+                  threadId: binding.threadId,
+                  provider: binding.provider,
+                  currentBootGenerationId: bootGenerationId,
+                  persistedBootGenerationId: binding.bootGenerationId,
+                  cause,
+                }).pipe(Effect.as(false)),
+              ),
+            );
+          if (settled) {
+            deadGenerationSettledCount += 1;
+          }
           continue;
         }
 
@@ -94,6 +139,13 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
         if (reaped) {
           reapedCount += 1;
         }
+      }
+
+      if (deadGenerationSettledCount > 0) {
+        yield* Effect.logInfo("provider.session.reaper.dead-generation-sweep-complete", {
+          count: deadGenerationSettledCount,
+          currentBootGenerationId: bootGenerationId,
+        });
       }
 
       if (reapedCount > 0) {

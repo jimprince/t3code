@@ -386,8 +386,10 @@ describe("ProviderCommandReactor", () => {
           [...providerBindings.values()].map((entry) => ({
             ...entry,
             lastSeenAt: now,
+            bootGenerationId: null,
           })),
         ),
+      settleDeadGenerationBinding: () => Effect.succeed(false),
     });
 
     const orchestrationLayer = OrchestrationEngineLive.pipe(

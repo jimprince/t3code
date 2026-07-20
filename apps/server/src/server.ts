@@ -25,6 +25,7 @@ import { ProviderAdapterRegistryLive } from "./provider/Layers/ProviderAdapterRe
 import * as ProviderEventLoggers from "./provider/Layers/ProviderEventLoggers.ts";
 import { ProviderServiceLive } from "./provider/Layers/ProviderService.ts";
 import { ProviderSessionReaperLive } from "./provider/Layers/ProviderSessionReaper.ts";
+import { ServerBootGenerationLive } from "./provider/Layers/ServerBootGeneration.ts";
 import * as OpenCodeRuntime from "./provider/opencodeRuntime.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
 import * as CheckpointStore from "./checkpointing/CheckpointStore.ts";
@@ -288,6 +289,9 @@ const CloudManagedEndpointRuntimeLive = Layer.mergeAll(
 const ProviderRuntimeLayerLive = ProviderSessionReaperLive.pipe(
   Layer.provideMerge(ProviderLayerLive),
   Layer.provideMerge(OrchestrationLayerLive),
+  // The same memoized layer instance supplies one generation identity to the
+  // directory nested in ProviderLayerLive and to the reaper.
+  Layer.provide(ServerBootGenerationLive),
 );
 
 const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(

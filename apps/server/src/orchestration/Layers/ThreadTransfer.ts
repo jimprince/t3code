@@ -1018,6 +1018,10 @@ const make = Effect.gen(function* () {
         threadId: input.threadId,
         providerName: providerSession.providerName,
         providerInstanceId: providerSession.providerInstanceId,
+        // A transplanted session is persisted stopped and has no runtime in
+        // this server process. Leave its generation null until lazy recovery
+        // creates a live binding through ProviderSessionDirectory.
+        bootGenerationId: null,
         adapterKey: providerSession.adapterKey,
         runtimeMode: providerSession.runtimeMode,
         status: "stopped",

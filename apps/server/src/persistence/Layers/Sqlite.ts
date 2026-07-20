@@ -6,6 +6,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
 
 import { runMigrations } from "../Migrations.ts";
+import { runForkMigrations } from "../ForkMigrations.ts";
 import { ServerConfig } from "../../config.ts";
 
 type RuntimeSqliteLayerConfig = {
@@ -37,6 +38,7 @@ const setup = Layer.effectDiscard(
     yield* sql`PRAGMA busy_timeout = 5000;`;
     yield* sql`PRAGMA foreign_keys = ON;`;
     yield* runMigrations();
+    yield* runForkMigrations();
   }),
 );
 

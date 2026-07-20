@@ -8,6 +8,7 @@ import {
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
+import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -25,6 +26,9 @@ import { ProviderSessionReaper } from "../Services/ProviderSessionReaper.ts";
 import { ProviderService, type ProviderServiceShape } from "../Services/ProviderService.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
 import { makeProviderSessionReaperLive } from "./ProviderSessionReaper.ts";
+import { makeServerBootGenerationLayer } from "./ServerBootGeneration.ts";
+
+const CURRENT_BOOT_GENERATION = "current-boot";
 
 const defaultModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
@@ -34,6 +38,7 @@ const defaultModelSelection = {
 async function waitFor(
   predicate: () => boolean | Promise<boolean>,
   timeoutMs = 2_000,
+  timeoutMessage = "Timed out waiting for expectation.",
 ): Promise<void> {
   const deadline = (await Effect.runPromise(Clock.currentTimeMillis)) + timeoutMs;
   const poll = async (): Promise<void> => {
@@ -41,7 +46,7 @@ async function waitFor(
       return;
     }
     if ((await Effect.runPromise(Clock.currentTimeMillis)) >= deadline) {
-      throw new Error("Timed out waiting for expectation.");
+      throw new Error(timeoutMessage);
     }
     await Effect.runPromise(Effect.yieldNow);
     return poll();
@@ -136,17 +141,23 @@ describe("ProviderSessionReaper", () => {
 
   async function createHarness(input: {
     readonly readModel: ReturnType<typeof makeReadModel>;
+    readonly bootGenerationId?: string;
     readonly stopSessionImplementation?: (input: {
       readonly threadId: ThreadId;
     }) => ReturnType<ProviderServiceShape["stopSession"]>;
+    readonly onThreadInspected?: (threadId: ThreadId) => Effect.Effect<void>;
   }) {
     const stoppedThreadIds = new Set<ThreadId>();
+    let settleSession: ((threadId: ThreadId) => Effect.Effect<void>) | undefined;
     const stopSession = vi.fn<ProviderServiceShape["stopSession"]>(
       (request) =>
         (input.stopSessionImplementation
           ? input.stopSessionImplementation(request)
-          : Effect.sync(() => {
+          : Effect.gen(function* () {
               stoppedThreadIds.add(request.threadId);
+              if (settleSession) {
+                yield* settleSession(request.threadId);
+              }
             })) as ReturnType<ProviderServiceShape["stopSession"]>,
     );
 
@@ -181,7 +192,12 @@ describe("ProviderSessionReaper", () => {
       Layer.provide(SqlitePersistenceMemory),
     );
     const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
-      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(
+        Layer.merge(
+          runtimeRepositoryLayer,
+          makeServerBootGenerationLayer(input.bootGenerationId ?? CURRENT_BOOT_GENERATION),
+        ),
+      ),
     );
     const layer = makeProviderSessionReaperLive({
       inactivityThresholdMs: 1_000,
@@ -189,6 +205,9 @@ describe("ProviderSessionReaper", () => {
     }).pipe(
       Layer.provideMerge(providerSessionDirectoryLayer),
       Layer.provideMerge(runtimeRepositoryLayer),
+      Layer.provideMerge(
+        makeServerBootGenerationLayer(input.bootGenerationId ?? CURRENT_BOOT_GENERATION),
+      ),
       Layer.provideMerge(Layer.succeed(ProviderService, providerService)),
       Layer.provideMerge(
         Layer.succeed(ProjectionSnapshotQuery, {
@@ -215,6 +234,8 @@ describe("ProviderSessionReaper", () => {
               input.readModel.threads.find((thread) => thread.id === threadId)
                 ? Option.some(input.readModel.threads.find((thread) => thread.id === threadId)!)
                 : Option.none(),
+            ).pipe(
+              Effect.tap(() => input.onThreadInspected?.(threadId) ?? Effect.void),
             ),
           getThreadDetailById: () => Effect.die("unused"),
           getThreadDetailSnapshotById: () => Effect.die("unused"),
@@ -224,6 +245,24 @@ describe("ProviderSessionReaper", () => {
     );
 
     runtime = ManagedRuntime.make(layer);
+    const settlementRepository = await runtime.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    settleSession = (threadId) =>
+      settlementRepository.getByThreadId({ threadId }).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () => Effect.void,
+            onSome: (binding) =>
+              settlementRepository.upsert({
+                ...binding,
+                bootGenerationId: input.bootGenerationId ?? CURRENT_BOOT_GENERATION,
+                status: "stopped",
+              }),
+          }),
+        ),
+        Effect.orDie,
+      );
     return { stopSession, stoppedThreadIds };
   }
 
@@ -255,6 +294,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -305,6 +345,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -354,6 +395,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -404,6 +446,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -452,6 +495,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "stopped",
@@ -523,6 +567,7 @@ describe("ProviderSessionReaper", () => {
         threadId: failedThreadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -538,6 +583,7 @@ describe("ProviderSessionReaper", () => {
         threadId: reapedThreadId,
         providerName: "codex",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "codex",
         runtimeMode: "full-access",
         status: "running",
@@ -606,6 +652,7 @@ describe("ProviderSessionReaper", () => {
         threadId: defectThreadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -621,6 +668,7 @@ describe("ProviderSessionReaper", () => {
         threadId: reapedThreadId,
         providerName: "codex",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "codex",
         runtimeMode: "full-access",
         status: "running",
@@ -642,5 +690,220 @@ describe("ProviderSessionReaper", () => {
       defectThreadId,
       reapedThreadId,
     ]);
+  });
+
+  it("settles a dead-generation binding without resolving a removed provider instance", async () => {
+    const threadId = ThreadId.make("thread-reaper-dead-generation-active-turn");
+    const now = DateTime.formatIso(await Effect.runPromise(DateTime.now));
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: TurnId.make("turn-dead-generation-active"),
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: ProviderInstanceId.make("removed-custom-provider"),
+        bootGenerationId: "previous-boot",
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: now,
+        resumeCursor: { opaque: "resume-dead-active" },
+        runtimePayload: null,
+      }),
+    );
+
+    const reaper = await runtime!.runPromise(Effect.service(ProviderSessionReaper));
+    scope = await Effect.runPromise(Scope.make("sequential"));
+    await Effect.runPromise(reaper.start().pipe(Scope.provide(scope)));
+    await waitFor(async () => {
+      const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+      return Option.isSome(binding) && binding.value.status === "stopped";
+    }, 2_000, "REGRESSION: dead-generation orphaned binding survived the reaper sweep");
+
+    expect(
+      harness.stopSession,
+      "REGRESSION: restart settlement performed a provider/adapter lookup",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("protects a fresh current-generation binding with an active turn", async () => {
+    const threadId = ThreadId.make("thread-reaper-current-generation-active-turn");
+    const now = DateTime.formatIso(await Effect.runPromise(DateTime.now));
+    const inspected = await Effect.runPromise(Deferred.make<void>());
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: TurnId.make("turn-current-generation-active"),
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+      onThreadInspected: (inspectedThreadId) =>
+        inspectedThreadId === threadId
+          ? Deferred.succeed(inspected, undefined).pipe(Effect.asVoid)
+          : Effect.void,
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: now,
+        resumeCursor: { opaque: "resume-current-active" },
+        runtimePayload: null,
+      }),
+    );
+
+    const reaper = await runtime!.runPromise(Effect.service(ProviderSessionReaper));
+    scope = await Effect.runPromise(Scope.make("sequential"));
+    await Effect.runPromise(reaper.start().pipe(Scope.provide(scope)));
+    await Effect.runPromise(Deferred.await(inspected));
+
+    expect(
+      harness.stopSession,
+      "REGRESSION: current-generation live work was reaped before the inactivity threshold",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("treats a null boot generation as dead and reaps it promptly", async () => {
+    const threadId = ThreadId.make("thread-reaper-null-generation");
+    const now = DateTime.formatIso(await Effect.runPromise(DateTime.now));
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: TurnId.make("turn-null-generation-active"),
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: null,
+        bootGenerationId: null,
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: now,
+        resumeCursor: { opaque: "resume-null-generation" },
+        runtimePayload: null,
+      }),
+    );
+
+    const reaper = await runtime!.runPromise(Effect.service(ProviderSessionReaper));
+    scope = await Effect.runPromise(Scope.make("sequential"));
+    await Effect.runPromise(reaper.start().pipe(Scope.provide(scope)));
+    await waitFor(async () => {
+      const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+      return Option.isSome(binding) && binding.value.status === "stopped";
+    }, 2_000, "REGRESSION: legacy null-generation binding was not treated as a dead generation");
+
+    expect(
+      harness.stopSession,
+      "REGRESSION: null-generation restart settlement called provider stopSession",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("preserves the resume cursor when settling a dead-generation binding", async () => {
+    const threadId = ThreadId.make("thread-reaper-dead-generation-resume-cursor");
+    const now = DateTime.formatIso(await Effect.runPromise(DateTime.now));
+    const resumeCursor = { threadId: "provider-thread-for-lazy-recovery" };
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: null,
+        bootGenerationId: "previous-boot",
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: now,
+        resumeCursor,
+        runtimePayload: null,
+      }),
+    );
+
+    const reaper = await runtime!.runPromise(Effect.service(ProviderSessionReaper));
+    scope = await Effect.runPromise(Scope.make("sequential"));
+    await Effect.runPromise(reaper.start().pipe(Scope.provide(scope)));
+    await waitFor(async () => {
+      const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+      return Option.isSome(binding) && binding.value.status === "stopped";
+    });
+
+    const settled = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+    expect(
+      Option.isSome(settled),
+      "REGRESSION: dead-generation reap destroyed the resume cursor needed for lazy session recovery",
+    ).toBe(true);
+    if (Option.isSome(settled)) {
+      expect(
+        settled.value.resumeCursor,
+        "REGRESSION: dead-generation reap destroyed the resume cursor needed for lazy session recovery",
+      ).toEqual(resumeCursor);
+      expect(settled.value.status).toBe("stopped");
+    }
   });
 });
