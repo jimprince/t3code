@@ -67,6 +67,11 @@ re-stamped later. `.github/workflows/release.yml` is auto-resolved to the fork
 side because the fork intentionally owns its reduced macOS/headless release
 matrix and local-runner fallback.
 
+Shared runtime integration files are not safe for whole-file conflict
+resolution. In particular, `apps/server/src/ws.ts` must stop for semantic
+repair rather than taking the fork side, because doing so can discard unrelated
+upstream RPC handlers while leaving their shared contracts in place.
+
 Check both channels:
 
 ```bash

@@ -3728,6 +3728,27 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("routes the lightweight server probe over an authenticated websocket", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+
+      const { response: bootstrapResponse, cookie } = yield* bootstrapBrowserSession();
+
+      assert.equal(bootstrapResponse.status, 200);
+      assert.isDefined(cookie);
+
+      const wsUrl = appendSessionCookieToWsUrl(
+        yield* getWsServerUrl("/ws", { authenticated: false }),
+        cookie?.split(";")[0] ?? "",
+      );
+      const response = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverProbe]({})),
+      );
+
+      assert.deepEqual(response, {});
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect(
     "rejects websocket rpc handshake when a session token is only provided via query string",
     () =>

@@ -287,6 +287,7 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   // Export interrupts/stops the provider session, so it is an operate action.
   [ORCHESTRATION_WS_METHODS.exportThread, AuthOrchestrationOperateScope],
   [ORCHESTRATION_WS_METHODS.importThread, AuthOrchestrationOperateScope],
+  [WS_METHODS.serverProbe, AuthOrchestrationReadScope],
   [WS_METHODS.serverGetConfig, AuthOrchestrationReadScope],
   [WS_METHODS.serverRefreshProviders, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpdateProvider, AuthOrchestrationOperateScope],
@@ -1153,6 +1154,10 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "orchestration" },
           ),
+        [WS_METHODS.serverProbe]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverProbe, Effect.succeed({}), {
+            "rpc.aggregate": "server",
+          }),
         [WS_METHODS.serverGetConfig]: (_input) =>
           observeRpcEffect(WS_METHODS.serverGetConfig, loadServerConfig, {
             "rpc.aggregate": "server",

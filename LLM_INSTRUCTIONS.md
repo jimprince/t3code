@@ -146,6 +146,9 @@ versioning axis for the fork.
   release documentation (`docs/operations/ci.md` and
   `docs/operations/release.md`) also resolves to the fork side so upstream
   documentation edits cannot stall scheduled syncs.
+  Do not add shared runtime integration files such as `apps/server/src/ws.ts`
+  to whole-file fork-side resolution. Those conflicts must stop for semantic
+  repair so unrelated upstream RPC additions are not silently discarded.
 - Tag scheme by channel:
   - **stable**: `${upstream_tag}` verbatim (e.g. `v0.0.21`). The fork and
     upstream share the tag name; the commit on the fork is upstream's commit

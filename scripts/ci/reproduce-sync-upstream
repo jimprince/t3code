@@ -52,7 +52,10 @@ FORK_RESOLVE_FILES=(
 # The fork owns its atomic `getThreadDetailSnapshotById` contract. It is used
 # by the fork WebSocket handoff to prevent lost or double-applied stream events;
 # upstream's similarly named API is not a drop-in replacement. Keep the fork
-# implementation and all of its contract mocks/tests together during rebase.
+# implementation and its narrow contract mocks/tests together during rebase.
+# `apps/server/src/ws.ts` is deliberately excluded: it is a shared integration
+# point where whole-file fork resolution can silently discard unrelated upstream
+# RPC handlers. Conflicts there require semantic repair.
 FORK_SNAPSHOT_HANDOFF_FILES=(
   apps/server/src/checkpointing/CheckpointDiffQuery.test.ts
   apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts
@@ -62,7 +65,6 @@ FORK_SNAPSHOT_HANDOFF_FILES=(
   apps/server/src/provider/Layers/ProviderSessionReaper.test.ts
   apps/server/src/server.test.ts
   apps/server/src/serverRuntimeStartup.test.ts
-  apps/server/src/ws.ts
 )
 
 # apps/t3-thread is a fork-specific operator CLI with its own lifecycle and
