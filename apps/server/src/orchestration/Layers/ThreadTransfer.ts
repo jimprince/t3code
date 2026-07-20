@@ -17,22 +17,29 @@
 import * as NodeOS from "node:os";
 
 import {
+  CheckpointRef,
   CommandId,
   EventId,
   OrchestrationExportThreadError,
+  OrchestrationForkThreadError,
   OrchestrationImportThreadError,
+  MessageId,
   THREAD_MOVE_BUNDLE_VERSION,
+  ThreadId,
+  TurnId,
   type OrchestrationCheckpointSummary,
+  type OrchestrationMessage,
+  type OrchestrationProposedPlan,
   type OrchestrationThread,
   type OrchestrationThreadActivity,
   type PortableThread,
-  type ThreadId,
   type ThreadMoveBundle,
   type ThreadMoveBranchConflictResolution,
   type ThreadMoveGitState,
   type ThreadMoveProviderSession,
   type ThreadMoveUntrackedFile,
 } from "@t3tools/contracts";
+import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Crypto from "effect/Crypto";
@@ -49,6 +56,7 @@ import { checkpointRefForThreadTurn, CHECKPOINT_REFS_PREFIX } from "../../checkp
 import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { VcsProcess } from "../../vcs/VcsProcess.ts";
+import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ThreadTransfer, type ThreadTransferShape } from "../Services/ThreadTransfer.ts";
@@ -56,6 +64,7 @@ import {
   makeThreadTransferImportedActivityPayload,
   markThreadTransferContextHandoffConsumed,
 } from "../threadTransferContextHandoff.ts";
+import { resolveThreadForkBoundary } from "../threadFork.ts";
 
 const QUIESCE_POLL_INTERVAL_MS = 250;
 const QUIESCE_POLL_ATTEMPTS = 60;
@@ -208,11 +217,13 @@ function toMessage(cause: unknown, fallback: string): string {
 
 const isExportThreadError = Schema.is(OrchestrationExportThreadError);
 const isImportThreadError = Schema.is(OrchestrationImportThreadError);
+const isForkThreadError = Schema.is(OrchestrationForkThreadError);
 
 const make = Effect.gen(function* () {
   const engine = yield* OrchestrationEngineService;
   const snapshotQuery = yield* ProjectionSnapshotQuery;
   const providerSessionRuntime = yield* ProviderSessionRuntimeRepository;
+  const providerService = yield* ProviderService;
   const gitWorkflow = yield* GitWorkflowService;
   const vcsProcess = yield* VcsProcess;
   const fs = yield* FileSystem.FileSystem;
@@ -1164,9 +1175,387 @@ const make = Effect.gen(function* () {
       Effect.withSpan("ThreadTransfer.importThread"),
     );
 
+  const cloneForkHistory = (input: {
+    readonly source: OrchestrationThread;
+    readonly retainedMessages: ReadonlyArray<OrchestrationMessage>;
+    readonly targetThreadId: ThreadId;
+    readonly createdAt: string;
+    readonly cutoffAt: string;
+  }) =>
+    Effect.gen(function* () {
+      const messageIds = new Map<string, MessageId>();
+      const turnIds = new Map<string, TurnId>();
+
+      const remapTurnId = (turnId: TurnId | null) =>
+        Effect.gen(function* () {
+          if (turnId === null) return null;
+          const existing = turnIds.get(turnId);
+          if (existing !== undefined) return existing;
+          const next = TurnId.make(yield* crypto.randomUUIDv4);
+          turnIds.set(turnId, next);
+          return next;
+        });
+
+      const messages = yield* Effect.forEach(input.retainedMessages, (message) =>
+        Effect.gen(function* () {
+          const nextMessageId = MessageId.make(yield* crypto.randomUUIDv4);
+          messageIds.set(message.id, nextMessageId);
+          return {
+            ...message,
+            id: nextMessageId,
+            turnId: yield* remapTurnId(message.turnId),
+            streaming: false,
+          };
+        }),
+      );
+
+      const checkpoints = yield* Effect.forEach(
+        input.source.checkpoints.filter(
+          (checkpoint) =>
+            checkpoint.assistantMessageId !== null && messageIds.has(checkpoint.assistantMessageId),
+        ),
+        (checkpoint) =>
+          Effect.gen(function* () {
+            const assistantMessageId =
+              checkpoint.assistantMessageId === null
+                ? null
+                : (messageIds.get(checkpoint.assistantMessageId) ?? null);
+            const turnId = yield* remapTurnId(checkpoint.turnId);
+            if (turnId === null) {
+              return yield* Effect.die(
+                new Error(`Checkpoint '${checkpoint.checkpointRef}' has no turn id.`),
+              );
+            }
+            return {
+              ...checkpoint,
+              turnId,
+              assistantMessageId,
+            };
+          }),
+      );
+
+      const proposedPlans: OrchestrationProposedPlan[] = yield* Effect.forEach(
+        input.source.proposedPlans.filter(
+          (plan) => plan.turnId === null || turnIds.has(plan.turnId),
+        ),
+        (plan) =>
+          Effect.gen(function* () {
+            const nextTurnId = yield* remapTurnId(plan.turnId);
+            return {
+              ...plan,
+              id: yield* crypto.randomUUIDv4,
+              turnId: nextTurnId,
+              implementationThreadId: null,
+            };
+          }),
+      );
+
+      const retainedActivities = input.source.activities.filter(
+        (activity) =>
+          activity.createdAt <= input.cutoffAt &&
+          (activity.turnId === null || turnIds.has(activity.turnId)),
+      );
+      const activities = yield* Effect.forEach(retainedActivities, (activity) =>
+        Effect.gen(function* () {
+          const { sequence: _sourceSequence, ...rest } = activity;
+          return {
+            ...rest,
+            id: EventId.make(yield* crypto.randomUUIDv4),
+            turnId: yield* remapTurnId(activity.turnId),
+          };
+        }),
+      );
+
+      return {
+        id: input.targetThreadId,
+        title: `${input.source.title} (fork)`,
+        modelSelection: input.source.modelSelection,
+        runtimeMode: input.source.runtimeMode,
+        interactionMode: input.source.interactionMode,
+        branch: input.source.branch,
+        goal: null,
+        createdAt: input.createdAt,
+        updatedAt: input.createdAt,
+        messages,
+        proposedPlans,
+        activities,
+        checkpoints,
+      } satisfies PortableThread;
+    });
+
+  const forkThread: ThreadTransferShape["forkThread"] = (input) =>
+    Effect.gen(function* () {
+      const source = yield* snapshotQuery
+        .getThreadDetailById(input.sourceThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+      if (source === undefined) {
+        return yield* new OrchestrationForkThreadError({
+          message: `Source thread '${input.sourceThreadId}' was not found.`,
+        });
+      }
+      if (source.session?.activeTurnId !== null && source.session?.activeTurnId !== undefined) {
+        return yield* new OrchestrationForkThreadError({
+          message: "Wait for the active turn to finish before forking this thread.",
+        });
+      }
+
+      const selectedMessage = source.messages.find((message) => message.id === input.messageId);
+      if (selectedMessage === undefined) {
+        return yield* new OrchestrationForkThreadError({
+          message: `Message '${input.messageId}' was not found in the source thread.`,
+        });
+      }
+      const boundary = yield* Effect.try({
+        try: () =>
+          resolveThreadForkBoundary({
+            messages: source.messages,
+            checkpoints: source.checkpoints,
+            messageId: input.messageId,
+          }),
+        catch: (cause) =>
+          new OrchestrationForkThreadError({
+            message: toMessage(cause, "The selected message cannot be used as a fork point."),
+            cause,
+          }),
+      });
+
+      const project = yield* snapshotQuery
+        .getProjectShellById(source.projectId)
+        .pipe(Effect.map(Option.getOrUndefined));
+      if (project === undefined) {
+        return yield* new OrchestrationForkThreadError({
+          message: `Project '${source.projectId}' was not found.`,
+        });
+      }
+      if (project.kind === "chat") {
+        return yield* new OrchestrationForkThreadError({
+          message: "General chat threads cannot be forked yet.",
+        });
+      }
+
+      const createdAt = yield* nowIso;
+      const targetThreadId = ThreadId.make(yield* crypto.randomUUIDv4);
+      let worktreePath: string | null = source.worktreePath;
+      let branch = source.branch;
+      let createdWorktreePath: string | null = null;
+      const createdCheckpointRefs: CheckpointRef[] = [];
+      const warnings: string[] = [];
+
+      if (input.workspaceMode === "new-worktree") {
+        const checkpointRef = boundary.checkpointRef ?? checkpointRefForThreadTurn(source.id, 0);
+        const branchToken = (yield* crypto.randomUUIDv4).replaceAll("-", "").slice(0, 8);
+        const newBranch = buildTemporaryWorktreeBranchName(() => branchToken);
+        const worktree = yield* gitWorkflow.createWorktree({
+          cwd: project.workspaceRoot,
+          refName: checkpointRef,
+          newRefName: newBranch,
+          ...(source.branch !== null ? { baseRefName: source.branch } : {}),
+          path: null,
+        });
+        createdWorktreePath = worktree.worktree.path;
+        worktreePath = worktree.worktree.path;
+        branch = worktree.worktree.refName;
+      } else {
+        warnings.push("This fork shares the source thread's current working tree.");
+      }
+
+      const materializeCheckpointRef = (input: {
+        readonly sourceRef: CheckpointRef;
+        readonly targetRef: CheckpointRef;
+      }) =>
+        Effect.gen(function* () {
+          const resolved = yield* git({
+            operation: "ThreadTransfer.fork.resolveCheckpointRef",
+            cwd: project.workspaceRoot,
+            args: ["rev-parse", "--verify", "--quiet", `${input.sourceRef}^{commit}`],
+            allowNonZeroExit: true,
+          });
+          if (resolved.exitCode !== 0 || resolved.stdout.trim().length === 0) {
+            return false;
+          }
+          yield* git({
+            operation: "ThreadTransfer.fork.createCheckpointRef",
+            cwd: project.workspaceRoot,
+            args: ["update-ref", input.targetRef, resolved.stdout.trim()],
+          });
+          createdCheckpointRefs.push(input.targetRef);
+          return true;
+        });
+
+      const ownForkCheckpoints = (portable: PortableThread) =>
+        Effect.gen(function* () {
+          if (!(yield* isGitRepository(project.workspaceRoot))) {
+            if (portable.checkpoints.length > 0) {
+              warnings.push(
+                "Retained checkpoint metadata was omitted because this project is not a Git repository.",
+              );
+            }
+            return { ...portable, checkpoints: [] } satisfies PortableThread;
+          }
+
+          const sourceBaselineRef = checkpointRefForThreadTurn(source.id, 0);
+          const targetBaselineRef = checkpointRefForThreadTurn(targetThreadId, 0);
+          const baselineCreated = yield* materializeCheckpointRef({
+            sourceRef: sourceBaselineRef,
+            targetRef: targetBaselineRef,
+          });
+          if (!baselineCreated && portable.checkpoints.length > 0) {
+            warnings.push("The fork's original baseline checkpoint was unavailable.");
+          }
+
+          const checkpoints: OrchestrationCheckpointSummary[] = [];
+          for (const checkpoint of portable.checkpoints) {
+            const targetRef = checkpointRefForThreadTurn(
+              targetThreadId,
+              checkpoint.checkpointTurnCount,
+            );
+            const created = yield* materializeCheckpointRef({
+              sourceRef: checkpoint.checkpointRef,
+              targetRef,
+            });
+            if (!created) {
+              warnings.push(
+                `Checkpoint ${checkpoint.checkpointTurnCount} was omitted because its Git ref is unavailable.`,
+              );
+              continue;
+            }
+            checkpoints.push({ ...checkpoint, checkpointRef: targetRef });
+          }
+          return { ...portable, checkpoints } satisfies PortableThread;
+        });
+
+      const cleanup = Effect.gen(function* () {
+        yield* providerSessionRuntime
+          .deleteByThreadId({ threadId: targetThreadId })
+          .pipe(Effect.ignoreCause({ log: true }));
+        for (const checkpointRef of createdCheckpointRefs) {
+          yield* git({
+            operation: "ThreadTransfer.fork.deleteCheckpointRef",
+            cwd: project.workspaceRoot,
+            args: ["update-ref", "-d", checkpointRef],
+            allowNonZeroExit: true,
+          }).pipe(Effect.ignoreCause({ log: true }));
+        }
+        if (createdWorktreePath !== null) {
+          yield* gitWorkflow
+            .removeWorktree({
+              cwd: project.workspaceRoot,
+              path: createdWorktreePath,
+              force: true,
+            })
+            .pipe(Effect.ignoreCause({ log: true }));
+        }
+      });
+
+      const createFork = Effect.gen(function* () {
+        const portable = yield* cloneForkHistory({
+          source,
+          retainedMessages: boundary.retainedMessages,
+          targetThreadId,
+          createdAt,
+          cutoffAt: boundary.retainedMessages.at(-1)?.updatedAt ?? selectedMessage.updatedAt,
+        }).pipe(Effect.flatMap(ownForkCheckpoints));
+        const providerFork = yield* providerService.forkConversation({
+          sourceThreadId: source.id,
+          targetThreadId,
+          cwd: worktreePath ?? project.workspaceRoot,
+          retainedTurnCount: boundary.retainedTurnCount,
+          runtimeMode: source.runtimeMode,
+          modelSelection: source.modelSelection,
+        });
+        if (!providerFork.native) {
+          warnings.push(
+            "This provider does not support native conversation forks; the retained history will be handed off on the first new turn.",
+          );
+        }
+        const forkMarker: OrchestrationThreadActivity = {
+          id: EventId.make(yield* crypto.randomUUIDv4),
+          tone: "info",
+          kind: "thread.forked",
+          summary: `Forked from “${source.title}”`,
+          payload: {
+            sourceThreadId: source.id,
+            sourceMessageId: input.messageId,
+            workspaceMode: input.workspaceMode,
+          },
+          turnId: null,
+          createdAt,
+        };
+        const handoffMarker: OrchestrationThreadActivity | null = providerFork.native
+          ? null
+          : {
+              id: EventId.make(yield* crypto.randomUUIDv4),
+              tone: "info",
+              kind: "thread.imported",
+              summary: "Conversation history prepared for provider handoff",
+              payload: makeThreadTransferImportedActivityPayload({
+                sourceWorkspaceRoot: project.workspaceRoot,
+                exportedAt: createdAt,
+                historyMessageCount: portable.messages.length,
+              }),
+              turnId: null,
+              createdAt,
+            };
+
+        yield* engine.dispatch({
+          type: "thread.import",
+          commandId: yield* serverCommandId("thread-fork"),
+          threadId: targetThreadId,
+          projectId: source.projectId,
+          thread: {
+            ...portable,
+            branch,
+            activities: [
+              ...portable.activities,
+              forkMarker,
+              ...(handoffMarker === null ? [] : [handoffMarker]),
+            ],
+          },
+          branch,
+          worktreePath,
+          createdAt,
+        });
+      });
+
+      yield* createFork.pipe(
+        Effect.catch((cause) =>
+          cleanup.pipe(
+            Effect.flatMap(() =>
+              Effect.fail(
+                isForkThreadError(cause)
+                  ? cause
+                  : new OrchestrationForkThreadError({
+                      message: toMessage(cause, "Failed to fork the thread."),
+                      cause,
+                    }),
+              ),
+            ),
+          ),
+        ),
+      );
+
+      return {
+        threadId: targetThreadId,
+        worktreePath,
+        prefilledPrompt: boundary.prefilledPrompt,
+        warnings,
+      };
+    }).pipe(
+      Effect.mapError((cause) =>
+        isForkThreadError(cause)
+          ? cause
+          : new OrchestrationForkThreadError({
+              message: toMessage(cause, "Failed to fork the thread."),
+              cause,
+            }),
+      ),
+      Effect.withSpan("ThreadTransfer.forkThread"),
+    );
+
   return {
     exportThread,
     importThread,
+    forkThread,
   } satisfies ThreadTransferShape;
 });
 

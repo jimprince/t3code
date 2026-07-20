@@ -179,6 +179,9 @@ function buildProps() {
     onOpenTurnDiff: () => {},
     revertTurnCountByUserMessageId: new Map(),
     onRevertUserMessage: () => {},
+    onForkMessage: () => {},
+    canForkThread: true,
+    canForkToNewWorktree: true,
     isRevertingCheckpoint: false,
     onImageExpand: () => {},
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
@@ -219,6 +222,32 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("builds message fork actions for the current or checkpoint worktree", async () => {
+    const { buildMessageForkContextMenuItems } = await import("./MessagesTimeline");
+
+    expect(
+      buildMessageForkContextMenuItems({ disabled: false, canForkToNewWorktree: true }),
+    ).toEqual([
+      {
+        id: "fork",
+        label: "Fork thread from here",
+        disabled: false,
+        children: [
+          { id: "fork-current", label: "Use current worktree", disabled: false },
+          {
+            id: "fork-new-worktree",
+            label: "Create new worktree from here",
+            disabled: false,
+          },
+        ],
+      },
+    ]);
+    expect(
+      buildMessageForkContextMenuItems({ disabled: false, canForkToNewWorktree: false })[0]
+        ?.children?.[1]?.disabled,
+    ).toBe(true);
+  });
+
   it("uses LegendList isNearEnd when deciding whether the live edge is visible", async () => {
     const {
       resolveTimelineIsAtEnd,

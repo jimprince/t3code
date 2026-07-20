@@ -144,6 +144,13 @@ export interface CodexSessionRuntimeShape {
   readonly rollbackThread: (
     numTurns: number,
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
+  readonly forkThread: (input: {
+    readonly cwd: string;
+    readonly retainedTurnCount: number;
+  }) => Effect.Effect<
+    { readonly threadId: string; readonly turnCount: number },
+    CodexSessionRuntimeError
+  >;
   readonly respondToRequest: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -459,6 +466,42 @@ interface CodexThreadOpenClient {
     payload: CodexRpc.ClientRequestParamsByMethod[M],
   ) => Effect.Effect<CodexRpc.ClientRequestResponsesByMethod[M], CodexErrors.CodexAppServerError>;
 }
+
+type CodexThreadForkMethod = "thread/fork" | "thread/rollback";
+
+interface CodexThreadForkClient {
+  readonly request: <M extends CodexThreadForkMethod>(
+    method: M,
+    payload: CodexRpc.ClientRequestParamsByMethod[M],
+  ) => Effect.Effect<CodexRpc.ClientRequestResponsesByMethod[M], CodexErrors.CodexAppServerError>;
+}
+
+export const forkCodexThread = Effect.fn("forkCodexThread")(function* (input: {
+  readonly client: CodexThreadForkClient;
+  readonly sourceThreadId: string;
+  readonly cwd: string;
+  readonly retainedTurnCount: number;
+}) {
+  const forked = yield* input.client.request("thread/fork", {
+    threadId: input.sourceThreadId,
+    cwd: input.cwd,
+  });
+  const providerThreadId = forked.thread.id;
+  const forkedTurnCount = forked.thread.turns.length;
+  const turnsToDrop = Math.max(0, forkedTurnCount - input.retainedTurnCount);
+  const finalThread =
+    turnsToDrop === 0
+      ? forked.thread
+      : (yield* input.client.request("thread/rollback", {
+          threadId: providerThreadId,
+          numTurns: turnsToDrop,
+        })).thread;
+
+  return {
+    threadId: providerThreadId,
+    turnCount: finalThread.turns.length,
+  };
+});
 
 export const openCodexThread = (input: {
   readonly client: CodexThreadOpenClient;
@@ -1373,6 +1416,16 @@ export const makeCodexSessionRuntime = (
             activeTurnId: undefined,
           });
           return parseThreadSnapshot(response);
+        }),
+      forkThread: (input) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          return yield* forkCodexThread({
+            client,
+            sourceThreadId: providerThreadId,
+            cwd: input.cwd,
+            retainedTurnCount: input.retainedTurnCount,
+          });
         }),
       respondToRequest: (requestId, decision) =>
         Effect.gen(function* () {

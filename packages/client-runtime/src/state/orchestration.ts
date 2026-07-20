@@ -28,5 +28,9 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       label: "environment-data:orchestration:import-thread",
       tag: ORCHESTRATION_WS_METHODS.importThread,
     }),
+    forkThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:fork-thread",
+      tag: ORCHESTRATION_WS_METHODS.forkThread,
+    }),
   };
 }

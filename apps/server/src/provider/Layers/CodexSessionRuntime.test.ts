@@ -18,6 +18,7 @@ import {
   buildTurnStartParams,
   hasConfiguredMcpServer,
   isRecoverableThreadResumeError,
+  forkCodexThread,
   openCodexThread,
 } from "./CodexSessionRuntime.ts";
 const isCodexAppServerRequestError = Schema.is(CodexErrors.CodexAppServerRequestError);
@@ -37,6 +38,50 @@ describe("CodexSessionRuntimeIdentifierGenerationError", () => {
       "Failed to generate Codex App Server identifier for provider-event.",
     );
   });
+});
+
+describe("forkCodexThread", () => {
+  it.effect("forks into the destination cwd and trims trailing turns", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          if (method === "thread/fork") {
+            return Effect.succeed({
+              thread: {
+                id: "provider-fork",
+                turns: [{ id: "turn-1" }, { id: "turn-2" }, { id: "turn-3" }],
+              },
+            });
+          }
+          return Effect.succeed({
+            thread: { id: "provider-fork", turns: [{ id: "turn-1" }, { id: "turn-2" }] },
+          });
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 2,
+      });
+
+      NodeAssert.deepStrictEqual(requests, [
+        {
+          method: "thread/fork",
+          payload: { threadId: "provider-source", cwd: "/tmp/fork-worktree" },
+        },
+        {
+          method: "thread/rollback",
+          payload: { threadId: "provider-fork", numTurns: 1 },
+        },
+      ]);
+      NodeAssert.equal(result.threadId, "provider-fork");
+      NodeAssert.equal(result.turnCount, 2);
+    }),
+  );
 });
 
 function makeThreadOpenResponse(

@@ -288,6 +288,7 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [ORCHESTRATION_WS_METHODS.exportThread, AuthOrchestrationOperateScope],
   [ORCHESTRATION_WS_METHODS.importThread, AuthOrchestrationOperateScope],
   [WS_METHODS.serverProbe, AuthOrchestrationReadScope],
+  [ORCHESTRATION_WS_METHODS.forkThread, AuthOrchestrationOperateScope],
   [WS_METHODS.serverGetConfig, AuthOrchestrationReadScope],
   [WS_METHODS.serverRefreshProviders, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpdateProvider, AuthOrchestrationOperateScope],
@@ -1019,6 +1020,10 @@ const makeWsRpcLayer = (
               "rpc.aggregate": "orchestration",
             },
           ),
+        [ORCHESTRATION_WS_METHODS.forkThread]: (input) =>
+          observeRpcEffect(ORCHESTRATION_WS_METHODS.forkThread, threadTransfer.forkThread(input), {
+            "rpc.aggregate": "orchestration",
+          }),
         [ORCHESTRATION_WS_METHODS.replayEvents]: (input) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.replayEvents,

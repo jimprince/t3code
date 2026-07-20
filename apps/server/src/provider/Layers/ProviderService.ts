@@ -12,6 +12,7 @@
 import {
   ModelSelection,
   NonNegativeInt,
+  RuntimeMode,
   ThreadId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
@@ -72,6 +73,15 @@ type ProviderServiceMethod<Name extends keyof ProviderService.ProviderService["S
 const ProviderRollbackConversationInput = Schema.Struct({
   threadId: ThreadId,
   numTurns: NonNegativeInt,
+});
+
+const ProviderForkConversationInput = Schema.Struct({
+  sourceThreadId: ThreadId,
+  targetThreadId: ThreadId,
+  cwd: Schema.String,
+  retainedTurnCount: NonNegativeInt,
+  runtimeMode: RuntimeMode,
+  modelSelection: ModelSelection,
 });
 
 function toValidationError(
@@ -1068,6 +1078,56 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     ),
   );
 
+  const forkConversation: ProviderServiceMethod<"forkConversation"> = Effect.fn("forkConversation")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.forkConversation",
+        schema: ProviderForkConversationInput,
+        payload: rawInput,
+      });
+      const sourceBinding = Option.getOrUndefined(
+        yield* directory.getBinding(input.sourceThreadId),
+      );
+      if (!sourceBinding) {
+        return { native: false };
+      }
+      const instanceId = yield* requireBindingInstanceId(
+        "ProviderService.forkConversation",
+        sourceBinding,
+      );
+      const adapter = yield* registry.getByInstance(instanceId);
+      const forkProviderThread = adapter.forkThread;
+      const forked = forkProviderThread
+        ? yield* resolveRoutableSession({
+            threadId: input.sourceThreadId,
+            operation: "ProviderService.forkConversation",
+            allowRecovery: true,
+          }).pipe(
+            Effect.flatMap(() =>
+              forkProviderThread(input.sourceThreadId, {
+                cwd: input.cwd,
+                retainedTurnCount: input.retainedTurnCount,
+              }),
+            ),
+          )
+        : null;
+      yield* directory.upsert({
+        threadId: input.targetThreadId,
+        provider: sourceBinding.provider,
+        providerInstanceId: instanceId,
+        ...(sourceBinding.adapterKey !== undefined ? { adapterKey: sourceBinding.adapterKey } : {}),
+        runtimeMode: input.runtimeMode,
+        status: "stopped",
+        resumeCursor: forked?.resumeCursor ?? null,
+        runtimePayload: {
+          cwd: input.cwd,
+          modelSelection: input.modelSelection,
+        },
+      });
+      return { native: forked !== null };
+    },
+  );
+
   return {
     startSession,
     sendTurn,
@@ -1079,6 +1139,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     getCapabilities,
     getInstanceInfo,
     rollbackConversation,
+    forkConversation,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
     // independently receive all runtime events.
