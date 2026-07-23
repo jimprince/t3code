@@ -2,6 +2,7 @@ import {
   CommandId,
   DEFAULT_MODEL,
   DEFAULT_PROVIDER_INTERACTION_MODE,
+  type ExecutionEnvironmentDescriptor,
   type ModelSelection,
   ProjectId,
   ProviderInstanceId,
@@ -12,14 +13,18 @@ import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as NodeOS from "node:os";
+import * as NodeCrypto from "node:crypto";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as Schedule from "effect/Schedule";
 import * as Scope from "effect/Scope";
 
 import * as ServerConfig from "./config.ts";
@@ -34,6 +39,7 @@ import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
+import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import {
   formatHeadlessServeOutput,
   formatHostForUrl,
@@ -65,6 +71,14 @@ export class ServerRuntimeStartup extends Context.Service<
     ) => Effect.Effect<A, E | ServerRuntimeStartupError>;
   }
 >()("t3/serverRuntimeStartup") {}
+
+export function applyT3EnvironmentMetadataToProcessEnv(
+  environment: ExecutionEnvironmentDescriptor,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  env.T3_ENVIRONMENT_ID = String(environment.environmentId);
+  env.T3_ENVIRONMENT_NAME = environment.label;
+}
 
 interface QueuedCommand {
   readonly run: Effect.Effect<void, never>;
@@ -161,9 +175,183 @@ export const launchStartupHeartbeat = recordStartupHeartbeat.pipe(
   Effect.asVoid,
 );
 
+const UNEXPECTED_SHUTDOWN_MESSAGE = "Interrupted by unexpected server shutdown";
+
+export const reconcileOrphanedThreadSessions = Effect.gen(function* () {
+  const crypto = yield* Crypto.Crypto;
+  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const commandReadModel = yield* projectionSnapshotQuery.getCommandReadModel();
+  const orphanedSessions = commandReadModel.threads.flatMap((thread) => {
+    const session = thread.session;
+    if (thread.deletedAt !== null || session === null) {
+      return [];
+    }
+    if (
+      session.status === "starting" ||
+      session.status === "running" ||
+      thread.latestTurn?.state === "running"
+    ) {
+      return [session];
+    }
+    return [];
+  });
+
+  if (orphanedSessions.length === 0) {
+    return;
+  }
+
+  const reconciledThreadIds = yield* Effect.forEach(
+    orphanedSessions,
+    (session) =>
+      Effect.gen(function* () {
+        const now = DateTime.formatIso(yield* DateTime.now);
+        const uuid = yield* crypto.randomUUIDv4;
+        const exit = yield* Effect.exit(
+          orchestrationEngine
+            .dispatch({
+              type: "thread.session.set",
+              commandId: CommandId.make(`server:sessions-reconcile:${session.threadId}:${uuid}`),
+              threadId: session.threadId,
+              session: {
+                ...session,
+                status: "interrupted",
+                activeTurnId: null,
+                lastError: UNEXPECTED_SHUTDOWN_MESSAGE,
+                updatedAt: now,
+              },
+              createdAt: now,
+            })
+            .pipe(
+              Effect.retry({
+                times: 2,
+                schedule: Schedule.spaced(Duration.millis(25)),
+              }),
+            ),
+        );
+
+        if (Exit.isFailure(exit)) {
+          yield* Effect.logWarning("server.sessions.reconcile.failed", {
+            threadId: session.threadId,
+            cause: exit.cause,
+          });
+          return null;
+        }
+
+        return session.threadId;
+      }),
+    { concurrency: 1 },
+  );
+  const successfulThreadIds = reconciledThreadIds.filter((threadId) => threadId !== null);
+  const failedCount = orphanedSessions.length - successfulThreadIds.length;
+
+  yield* Effect.logInfo("server.sessions.reconcile.complete", {
+    reconciledCount: successfulThreadIds.length,
+    failedCount,
+    threadIds: successfulThreadIds.slice(0, 20),
+  });
+});
+
 export const getAutoBootstrapDefaultModelSelection = (): ModelSelection => ({
   instanceId: ProviderInstanceId.make("codex"),
   model: DEFAULT_MODEL,
+});
+
+/**
+ * A chat project is server-owned rather than repository-owned. Its stable ID
+ * lets every process restart recover the same backing project for an
+ * environment instead of creating a cwd-derived project.
+ */
+export const getChatProjectId = (environmentId: string): ProjectId =>
+  ProjectId.make(`chat-${getChatProjectStorageKey(environmentId)}`);
+
+const CHAT_PROJECT_TITLE = "Chat";
+const CHAT_WORKSPACE_DIRECTORY_NAME = "t3code-chat-workspaces";
+
+// Prefixing the encoded value makes even hostile persisted values such as
+// `..` a single harmless path segment. Environment IDs are normally UUIDs,
+// but startup must remain safe if the state file is manually corrupted.
+export const getChatProjectStorageKey = (environmentId: string): string =>
+  `env-${NodeCrypto.createHash("sha256").update(environmentId).digest("hex").slice(0, 32)}`;
+
+/** Ensure the single server-owned chat project and its private workspace exist. */
+export const ensureChatProject = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  const serverConfig = yield* ServerConfig.ServerConfig;
+  const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
+  const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
+  const projectionSnapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+  const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+
+  const environmentId = yield* serverEnvironment.getEnvironmentId;
+  const chatProjectId = getChatProjectId(String(environmentId));
+  // Keep agent-controlled files outside server state (database, settings,
+  // attachments, and secrets). The chat workspace is intentionally disposable.
+  const workspaceRoot = yield* workspacePaths.normalizeWorkspaceRoot(
+    path.join(
+      NodeOS.tmpdir(),
+      CHAT_WORKSPACE_DIRECTORY_NAME,
+      getChatProjectStorageKey(String(environmentId)),
+    ),
+    { createIfMissing: true },
+  );
+
+  const existing = yield* projectionSnapshotQuery.getProjectShellById(chatProjectId);
+  if (Option.isSome(existing)) {
+    if (existing.value.kind !== "chat" || existing.value.workspaceRoot !== workspaceRoot) {
+      return yield* new ServerRuntimeStartupError({
+        mode: serverConfig.mode,
+        host: serverConfig.host ?? null,
+        port: serverConfig.port,
+        cause: new Error(`Chat project '${chatProjectId}' does not own its server workspace.`),
+      });
+    }
+    return existing.value.id;
+  }
+
+  const existingAtWorkspaceRoot =
+    yield* projectionSnapshotQuery.getActiveProjectByWorkspaceRoot(workspaceRoot);
+  if (Option.isSome(existingAtWorkspaceRoot)) {
+    return yield* new ServerRuntimeStartupError({
+      mode: serverConfig.mode,
+      host: serverConfig.host ?? null,
+      port: serverConfig.port,
+      cause: new Error(`Chat workspace '${workspaceRoot}' is already owned by another project.`),
+    });
+  }
+
+  const createdAt = DateTime.formatIso(yield* DateTime.now);
+  yield* orchestrationEngine.dispatch({
+    type: "project.create",
+    // A deterministic receipt makes concurrent startup attempts converge on
+    // one logical command. The event-store transaction remains authoritative.
+    commandId: CommandId.make(
+      `chat-project.ensure-${getChatProjectStorageKey(String(environmentId))}`,
+    ),
+    projectId: chatProjectId,
+    title: CHAT_PROJECT_TITLE,
+    workspaceRoot,
+    createWorkspaceRootIfMissing: true,
+    kind: "chat",
+    defaultModelSelection: getAutoBootstrapDefaultModelSelection(),
+    createdAt,
+  });
+
+  const committed = yield* projectionSnapshotQuery.getProjectShellById(chatProjectId);
+  if (
+    Option.isNone(committed) ||
+    committed.value.kind !== "chat" ||
+    committed.value.workspaceRoot !== workspaceRoot
+  ) {
+    return yield* new ServerRuntimeStartupError({
+      mode: serverConfig.mode,
+      host: serverConfig.host ?? null,
+      port: serverConfig.port,
+      cause: new Error(`Chat project '${chatProjectId}' was not committed as requested.`),
+    });
+  }
+
+  return chatProjectId;
 });
 
 export const resolveWelcomeBase = Effect.gen(function* () {
@@ -337,6 +525,9 @@ export const make = Effect.gen(function* () {
       ),
     );
 
+    yield* Effect.logDebug("startup phase: reconciling orphaned thread sessions");
+    yield* runStartupPhase("sessions.reconcile", reconcileOrphanedThreadSessions);
+
     yield* Effect.logDebug("startup phase: starting orchestration reactors");
     yield* runStartupPhase(
       "reactors.start",
@@ -346,8 +537,13 @@ export const make = Effect.gen(function* () {
       }),
     );
 
-    const welcomeBase = yield* resolveWelcomeBase;
+    yield* Effect.logDebug("startup phase: ensuring chat project");
+    yield* runStartupPhase("chat-project.ensure", ensureChatProject);
+
     const environment = yield* serverEnvironment.getDescriptor;
+    applyT3EnvironmentMetadataToProcessEnv(environment);
+
+    const welcomeBase = yield* resolveWelcomeBase;
     yield* Effect.logDebug("startup phase: preparing welcome payload");
     yield* Effect.logDebug("startup phase: publishing welcome event", {
       environmentId: environment.environmentId,

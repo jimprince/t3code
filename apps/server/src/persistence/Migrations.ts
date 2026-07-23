@@ -12,6 +12,8 @@ import * as Migrator from "effect/unstable/sql/Migrator";
 import * as Layer from "effect/Layer";
 import * as Effect from "effect/Effect";
 
+import { runForkMigrations } from "./ForkMigrations.ts";
+
 // Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
 import Migration0002 from "./Migrations/002_OrchestrationCommandReceipts.ts";
@@ -45,7 +47,13 @@ import Migration0029 from "./Migrations/029_ProjectionThreadDetailOrderingIndexe
 import Migration0030 from "./Migrations/030_ProjectionThreadShellArchiveIndexes.ts";
 import Migration0031 from "./Migrations/031_AuthAuthorizationScopes.ts";
 import Migration0032 from "./Migrations/032_AuthPairingProofKeyThumbprint.ts";
-import Migration0033 from "./Migrations/033_ProjectionThreadsSettled.ts";
+import Migration0033 from "./Migrations/033_ProjectionThreadGoals.ts";
+import Migration0034 from "./Migrations/034_RepairAuthAuthorizationScopes.ts";
+import Migration0035 from "./Migrations/035_RepairAuthPairingProofKeyThumbprint.ts";
+import Migration0036 from "./Migrations/036_ProjectionProjectsKind.ts";
+import Migration0037 from "./Migrations/037_UniqueProjectCreation.ts";
+// Upstream migration 33 landed after the fork had already published IDs 33-37.
+import Migration0038 from "./Migrations/033_ProjectionThreadsSettled.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -90,7 +98,12 @@ export const migrationEntries = [
   [30, "ProjectionThreadShellArchiveIndexes", Migration0030],
   [31, "AuthAuthorizationScopes", Migration0031],
   [32, "AuthPairingProofKeyThumbprint", Migration0032],
-  [33, "ProjectionThreadsSettled", Migration0033],
+  [33, "ProjectionThreadGoals", Migration0033],
+  [34, "RepairAuthAuthorizationScopes", Migration0034],
+  [35, "RepairAuthPairingProofKeyThumbprint", Migration0035],
+  [36, "ProjectionProjectsKind", Migration0036],
+  [37, "UniqueProjectCreation", Migration0037],
+  [38, "ProjectionThreadsSettled", Migration0038],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>
@@ -150,4 +163,9 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
  * )
  * ```
  */
-export const MigrationsLive = Layer.effectDiscard(runMigrations());
+export const MigrationsLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    yield* runMigrations();
+    yield* runForkMigrations();
+  }),
+);

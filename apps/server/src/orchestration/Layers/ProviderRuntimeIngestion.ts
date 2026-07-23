@@ -1290,6 +1290,46 @@ const make = Effect.gen(function* () {
     },
   );
 
+  const completeMissingTurnDiff = (input: {
+    event: ProviderRuntimeEvent;
+    threadId: ThreadId;
+    turnId: TurnId;
+    assistantMessageId: MessageId;
+    completedAt: string;
+    commandTag: string;
+  }) =>
+    Effect.gen(function* () {
+      const checkpointContext = yield* projectionSnapshotQuery
+        .getThreadCheckpointContext(input.threadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+      const workspaceCwd = checkpointContext?.worktreePath ?? checkpointContext?.workspaceRoot;
+      if (!checkpointContext || !workspaceCwd || !isGitRepository(workspaceCwd)) {
+        return;
+      }
+
+      // Skip if a checkpoint already exists for this turn. A real
+      // (non-placeholder) capture from CheckpointReactor should not
+      // be clobbered, and dispatching a duplicate placeholder for the
+      // same turnId would produce an unstable checkpointTurnCount.
+      if (hasCheckpointForTurn(checkpointContext.checkpoints, input.turnId)) {
+        return;
+      }
+
+      yield* orchestrationEngine.dispatch({
+        type: "thread.turn.diff.complete",
+        commandId: yield* providerCommandId(input.event, input.commandTag),
+        threadId: input.threadId,
+        turnId: input.turnId,
+        completedAt: input.completedAt,
+        checkpointRef: CheckpointRef.make(`provider-diff:${input.event.eventId}`),
+        status: "missing",
+        files: [],
+        assistantMessageId: input.assistantMessageId,
+        checkpointTurnCount: maxCheckpointTurnCount(checkpointContext.checkpoints) + 1,
+        createdAt: input.completedAt,
+      });
+    });
+
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
       const thread = yield* resolveThreadShell(event.threadId);
@@ -1317,6 +1357,20 @@ const make = Effect.gen(function* () {
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
       const missingTurnForActiveTurn = activeTurnId !== null && eventTurnId === undefined;
+      // Provider runtime state is authoritative when a persisted projection is
+      // stuck on an older active turn from a missed completion event.
+      const expectedProviderTurnId =
+        conflictsWithActiveTurn &&
+        (event.type === "turn.started" || event.type === "turn.completed")
+          ? yield* getExpectedProviderTurnIdForThread(thread.id)
+          : undefined;
+      const matchesCurrentProviderTurn = sameId(expectedProviderTurnId, eventTurnId);
+      const providerHasNoCurrentTurn = expectedProviderTurnId === undefined;
+      // A queued turn.started can be processed after the provider has already
+      // completed and gone idle; in that case the event itself is the ordered
+      // evidence needed to advance a stale projected active turn.
+      const eventIsNotOlderThanProjectedSession =
+        thread.session?.updatedAt === undefined || event.createdAt >= thread.session.updatedAt;
 
       // A turn.started that conflicts with the active turn is legitimate when
       // the server itself has a turn start pending for this thread AND the
@@ -1341,14 +1395,22 @@ const make = Effect.gen(function* () {
           case "thread.started":
             return true;
           case "turn.started":
-            return !conflictsWithActiveTurn || conflictingTurnStartIsPendingTurnStart;
+            return (
+              !conflictsWithActiveTurn ||
+              conflictingTurnStartIsPendingTurnStart ||
+              matchesCurrentProviderTurn ||
+              (providerHasNoCurrentTurn && eventIsNotOlderThanProjectedSession)
+            );
           case "turn.completed":
-            if (conflictsWithActiveTurn || missingTurnForActiveTurn) {
+            if (
+              (conflictsWithActiveTurn && !matchesCurrentProviderTurn) ||
+              missingTurnForActiveTurn
+            ) {
               return false;
             }
             // Only the active turn may close the lifecycle state.
             if (activeTurnId !== null && eventTurnId !== undefined) {
-              return sameId(activeTurnId, eventTurnId);
+              return sameId(activeTurnId, eventTurnId) || matchesCurrentProviderTurn;
             }
             // If no active turn is tracked, accept completion scoped to this thread.
             return true;
@@ -1616,6 +1678,40 @@ const make = Effect.gen(function* () {
           }
         }
 
+        if (event.provider === "opencode" && turnId) {
+          yield* completeMissingTurnDiff({
+            event,
+            threadId: thread.id,
+            turnId,
+            assistantMessageId,
+            completedAt: now,
+            commandTag: "opencode-assistant-turn-diff-complete",
+          });
+
+          const refreshedThread = yield* resolveThreadShell(thread.id);
+          const refreshedSession = refreshedThread?.session ?? null;
+          if (
+            refreshedThread !== undefined &&
+            refreshedSession?.status === "running" &&
+            !refreshedThread.hasPendingApprovals &&
+            !refreshedThread.hasPendingUserInput
+          ) {
+            yield* orchestrationEngine.dispatch({
+              type: "thread.session.set",
+              commandId: yield* providerCommandId(event, "opencode-assistant-session-set"),
+              threadId: thread.id,
+              session: {
+                ...refreshedSession,
+                status: "ready",
+                activeTurnId: null,
+                lastError: null,
+                updatedAt: now,
+              },
+              createdAt: now,
+            });
+          }
+        }
+
         if (turnId) {
           yield* clearAssistantSegmentStateForTurn(thread.id, turnId);
         }
@@ -1714,38 +1810,17 @@ const make = Effect.gen(function* () {
 
       if (event.type === "turn.diff.updated") {
         const turnId = toTurnId(event.turnId);
-        const checkpointContext = turnId
-          ? yield* projectionSnapshotQuery
-              .getThreadCheckpointContext(thread.id)
-              .pipe(Effect.map(Option.getOrUndefined))
-          : undefined;
-        const workspaceCwd =
-          checkpointContext?.worktreePath ?? checkpointContext?.workspaceRoot ?? undefined;
-        if (turnId && checkpointContext && workspaceCwd && isGitRepository(workspaceCwd)) {
-          // Skip if a checkpoint already exists for this turn. A real
-          // (non-placeholder) capture from CheckpointReactor should not
-          // be clobbered, and dispatching a duplicate placeholder for the
-          // same turnId would produce an unstable checkpointTurnCount.
-          if (hasCheckpointForTurn(checkpointContext.checkpoints, turnId)) {
-            // Already tracked; no-op.
-          } else {
-            const assistantMessageId = MessageId.make(
+        if (turnId) {
+          yield* completeMissingTurnDiff({
+            event,
+            threadId: thread.id,
+            turnId,
+            assistantMessageId: MessageId.make(
               `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
-            );
-            yield* orchestrationEngine.dispatch({
-              type: "thread.turn.diff.complete",
-              commandId: yield* providerCommandId(event, "thread-turn-diff-complete"),
-              threadId: thread.id,
-              turnId,
-              completedAt: now,
-              checkpointRef: CheckpointRef.make(`provider-diff:${event.eventId}`),
-              status: "missing",
-              files: [],
-              assistantMessageId,
-              checkpointTurnCount: maxCheckpointTurnCount(checkpointContext.checkpoints) + 1,
-              createdAt: now,
-            });
-          }
+            ),
+            completedAt: now,
+            commandTag: "thread-turn-diff-complete",
+          });
         }
       }
 

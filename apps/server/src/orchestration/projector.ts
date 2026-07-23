@@ -18,6 +18,9 @@ import {
   ThreadArchivedPayload,
   ThreadCreatedPayload,
   ThreadDeletedPayload,
+  ThreadGoalClearedPayload,
+  ThreadGoalEvaluatedPayload,
+  ThreadGoalSetPayload,
   ThreadInteractionModeSetPayload,
   ThreadMetaUpdatedPayload,
   ThreadProposedPlanUpsertedPayload,
@@ -207,6 +210,7 @@ export function projectEvent(
           const nextProject = {
             id: payload.projectId,
             title: payload.title,
+            kind: payload.kind ?? "workspace",
             workspaceRoot: payload.workspaceRoot,
             defaultModelSelection: payload.defaultModelSelection,
             scripts: payload.scripts,
@@ -285,6 +289,7 @@ export function projectEvent(
             branch: payload.branch,
             worktreePath: payload.worktreePath,
             latestTurn: null,
+            goal: null,
             createdAt: payload.createdAt,
             updatedAt: payload.updatedAt,
             archivedAt: null,
@@ -406,6 +411,56 @@ export function projectEvent(
             updatedAt: payload.updatedAt,
           }),
         })),
+      );
+
+    case "thread.goal-set":
+      return decodeForEvent(ThreadGoalSetPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            goal: payload.goal,
+            updatedAt: payload.goal.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.goal-cleared":
+      return decodeForEvent(ThreadGoalClearedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            goal: null,
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.goal-evaluated":
+      return decodeForEvent(ThreadGoalEvaluatedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          if (!thread?.goal) {
+            return nextBase;
+          }
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              goal: {
+                ...thread.goal,
+                status: payload.achieved ? "achieved" : "active",
+                updatedAt: payload.updatedAt,
+                achievedAt: payload.achieved ? payload.evaluatedAt : thread.goal.achievedAt,
+                lastEvaluatedAt: payload.evaluatedAt,
+                lastReason: payload.reason,
+                lastTurnId: payload.turnId,
+                continuationCount: payload.continuationRequested
+                  ? thread.goal.continuationCount + 1
+                  : thread.goal.continuationCount,
+              },
+              updatedAt: payload.updatedAt,
+            }),
+          };
+        }),
       );
 
     case "thread.message-sent":
