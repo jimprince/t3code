@@ -520,6 +520,15 @@ Current high-value span and metric boundaries include:
 - terminal session lifecycle
 - sqlite query execution
 
+Restart recovery emits these structured log events:
+
+- `server.sessions.reconcile.complete`: boot reconciliation totals and a bounded sample of reconciled thread IDs
+- `server.sessions.reconcile.failed`: a thread still failed after bounded retries
+- `provider.session.reaper.dead-generation-settled`: debug record for one atomically settled stale binding
+- `provider.session.reaper.generation-changed`: debug record when recovery restamped a binding during the sweep
+- `provider.session.reaper.dead-generation-settle-failed`: stale-binding settlement failed, with current and persisted generation IDs
+- `provider.session.reaper.dead-generation-sweep-complete`: aggregate count for a sweep that settled stale bindings
+
 ### Current Constraints
 
 - logs outside spans are not persisted

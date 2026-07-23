@@ -13,6 +13,7 @@ import {
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
   type ThreadId,
+  type ThreadForkWorkspaceMode,
   type TurnId,
   type KeybindingCommand,
   OrchestrationThreadActivity,
@@ -66,10 +67,12 @@ import {
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
+import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
   collapseExpandedComposerCursor,
+  parseComposerGoalSlashCommand,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
 import {
@@ -194,6 +197,7 @@ import {
 } from "../state/server";
 import { terminalEnvironment } from "../state/terminal";
 import { threadEnvironment } from "../state/threads";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { vcsEnvironment } from "../state/vcs";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import {
@@ -232,6 +236,7 @@ import {
 import {
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
+  buildEnvironmentUnavailableDescription,
   buildLocalDraftThread,
   buildThreadTurnInterruptInput,
   collectUserMessageBlobPreviewUrls,
@@ -239,6 +244,7 @@ import {
   deriveComposerSendState,
   hasServerAcknowledgedLocalDispatch,
   getStartedThreadModelChangeBlockReason,
+  hydrateForkedMessageAttachments,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
   type LocalDispatchSnapshot,
@@ -269,6 +275,10 @@ import {
   resolveServerSelfUpdateCapability,
   serverUpdateGuidance,
 } from "../versionSkew";
+import {
+  buildHeadlessUpdateCheckRequest,
+  resolveHeadlessUpdateCheckOutcome,
+} from "../serverUpdateCheck";
 import { useAssetUrls } from "../assets/assetUrls";
 
 const IMAGE_ONLY_BOOTSTRAP_PROMPT =
@@ -388,9 +398,20 @@ type EnvironmentUnavailableState = {
   readonly environmentId: EnvironmentId;
   readonly label: string;
   readonly connection: EnvironmentConnectionPresentation;
+  readonly endpoint: string | null;
 };
 
 type ThreadPlanCatalogEntry = Pick<Thread, "id" | "proposedPlans">;
+
+function environmentUnavailableConnectionState(
+  connection: EnvironmentConnectionPresentation,
+): "connecting" | "disconnected" | "error" {
+  if (connection.phase === "error") return "error";
+  if (connection.phase === "connecting" || connection.phase === "reconnecting") {
+    return "connecting";
+  }
+  return "disconnected";
+}
 
 function eventPathContainsSelector(event: Event, selector: string): boolean {
   const path = event.composedPath();
@@ -422,6 +443,24 @@ function formatOutgoingPrompt(params: {
   const caps = getProviderModelCapabilities(params.models, params.model, params.provider);
   const promptEffort = resolvePromptInjectedEffort(caps, params.effort);
   return applyClaudePromptEffortPrefix(params.text, promptEffort);
+}
+
+function formatGoalInitialPrompt(goal: string): string {
+  return [
+    `Active T3 goal: ${goal}`,
+    "",
+    "Work toward this goal until it is satisfied. When you believe it is satisfied, state the concrete transcript-visible evidence and any verification performed.",
+  ].join("\n");
+}
+
+function formatGoalStatus(goal: Thread["goal"]): { title: string; description: string } {
+  if (!goal) {
+    return { title: "No active goal", description: "Use /goal <condition> to start one." };
+  }
+  return {
+    title: goal.status === "achieved" ? "Goal achieved" : "Active goal",
+    description: goal.lastReason ? `${goal.goal}\n${goal.lastReason}` : goal.goal,
+  };
 }
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
@@ -1086,9 +1125,10 @@ type LocalThreadErrorEntry = {
   readonly at: number;
 };
 
-function chatActionErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "An error occurred.";
-}
+type HeadlessUpgradeRequestState = {
+  readonly mismatchKey: string;
+  readonly state: "requesting" | "requested" | "unavailable" | "failed";
+};
 
 function ChatViewContent(props: ChatViewProps) {
   const {
@@ -1109,6 +1149,9 @@ function ChatViewContent(props: ChatViewProps) {
   const upsertKeybinding = useAtomCommand(serverEnvironment.upsertKeybinding, {
     reportFailure: false,
   });
+  const requestHeadlessUpdateCheck = useAtomCommand(serverEnvironment.requestHeadlessUpdateCheck, {
+    reportFailure: false,
+  });
   const openTerminal = useAtomCommand(terminalEnvironment.open, "terminal open");
   const writeTerminal = useAtomCommand(terminalEnvironment.write, "terminal write");
   const closeTerminalMutation = useAtomCommand(terminalEnvironment.close, "terminal close");
@@ -1124,6 +1167,8 @@ function ChatViewContent(props: ChatViewProps) {
   const setThreadInteractionMode = useAtomCommand(threadEnvironment.setInteractionMode, {
     reportFailure: false,
   });
+  const setThreadGoal = useAtomCommand(threadEnvironment.setGoal, { reportFailure: false });
+  const clearThreadGoal = useAtomCommand(threadEnvironment.clearGoal, { reportFailure: false });
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const interruptThreadTurn = useAtomCommand(threadEnvironment.interruptTurn, {
     reportFailure: false,
@@ -1135,6 +1180,9 @@ function ChatViewContent(props: ChatViewProps) {
     reportFailure: false,
   });
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
+    reportFailure: false,
+  });
+  const forkThread = useAtomCommand(orchestrationEnvironment.forkThread, {
     reportFailure: false,
   });
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
@@ -1227,6 +1275,7 @@ function ChatViewContent(props: ChatViewProps) {
   >({});
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
+  const [isForkingThread, setIsForkingThread] = useState(false);
   const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
     null,
   );
@@ -1592,6 +1641,7 @@ function ChatViewContent(props: ChatViewProps) {
       environmentId: activeEnvironment.environmentId,
       label: activeEnvironmentUnavailableLabel,
       connection: activeEnvironment.connection,
+      endpoint: activeEnvironment.displayUrl,
     };
   }, [activeEnvironment, activeEnvironmentUnavailable, activeEnvironmentUnavailableLabel]);
   const handleReconnectActiveEnvironment = useCallback(
@@ -1802,10 +1852,90 @@ function ChatViewContent(props: ChatViewProps) {
     hasMultipleRegisteredEnvironments && activeThread
       ? `${environmentById.get(activeThread.environmentId)?.label ?? serverConfig?.environment.label ?? activeThread.environmentId} server`
       : "server";
-  const versionMismatchEnvironmentId =
-    versionMismatch && activeThread ? activeThread.environmentId : null;
-  const versionMismatchSelfUpdate = resolveServerSelfUpdateCapability(serverConfig);
-  const systemComposerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
+  const headlessUpdateRequest = serverConfig ? buildHeadlessUpdateCheckRequest(serverConfig) : null;
+  const [headlessUpgradeRequestState, setHeadlessUpgradeRequestState] =
+    useState<HeadlessUpgradeRequestState | null>(null);
+  const currentHeadlessUpgradeState =
+    headlessUpgradeRequestState?.mismatchKey === versionMismatchDismissKey
+      ? headlessUpgradeRequestState.state
+      : "idle";
+  const requestHeadlessUpgrade = useCallback(async () => {
+    if (!activeThread || !headlessUpdateRequest || !versionMismatchDismissKey) {
+      return;
+    }
+
+    const confirmed = await readLocalApi()?.dialogs.confirm(
+      [
+        `Upgrade ${versionMismatchServerLabel} from ${headlessUpdateRequest.serverVersion} to ${headlessUpdateRequest.clientVersion}?`,
+        "The updater stages and validates the matching release, restarts T3 Code, health-checks it, and rolls back automatically on failure.",
+        "This connection may briefly disconnect while the service restarts.",
+      ].join("\n\n"),
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setHeadlessUpgradeRequestState({
+      mismatchKey: versionMismatchDismissKey,
+      state: "requesting",
+    });
+    const result = await requestHeadlessUpdateCheck({
+      environmentId: activeThread.environmentId,
+      input: headlessUpdateRequest,
+    });
+    if (result._tag === "Failure") {
+      setHeadlessUpgradeRequestState({
+        mismatchKey: versionMismatchDismissKey,
+        state: "failed",
+      });
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not start remote upgrade",
+            description:
+              error instanceof Error ? error.message : "The remote upgrade request failed.",
+          }),
+        );
+      }
+      return;
+    }
+
+    const outcome = resolveHeadlessUpdateCheckOutcome(result.value);
+    setHeadlessUpgradeRequestState({
+      mismatchKey: versionMismatchDismissKey,
+      state: outcome.state,
+    });
+    toastManager.add(
+      stackedThreadToast({
+        type: outcome.toastType,
+        title: outcome.title,
+        description: outcome.description,
+      }),
+    );
+  }, [
+    activeThread,
+    headlessUpdateRequest,
+    requestHeadlessUpdateCheck,
+    versionMismatchDismissKey,
+    versionMismatchServerLabel,
+  ]);
+  const headlessUpgradeButtonLabel =
+    currentHeadlessUpgradeState === "requesting"
+      ? "Starting Upgrade..."
+      : currentHeadlessUpgradeState === "requested"
+        ? "Upgrade Requested"
+        : currentHeadlessUpgradeState === "unavailable"
+          ? "Upgrade Unavailable"
+          : currentHeadlessUpgradeState === "failed"
+            ? "Retry Upgrade"
+            : "Upgrade Remote";
+  const headlessUpgradeButtonDisabled =
+    currentHeadlessUpgradeState === "requesting" ||
+    currentHeadlessUpgradeState === "requested" ||
+    currentHeadlessUpgradeState === "unavailable";
+  const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const items: ComposerBannerStackItem[] = [];
     if (activeEnvironmentUnavailableState) {
       const connection = activeEnvironmentUnavailableState.connection;
@@ -1816,9 +1946,11 @@ function ChatViewContent(props: ChatViewProps) {
         variant: connection.phase === "error" ? "error" : "warning",
         icon: <WifiOffIcon />,
         title: `${activeEnvironmentUnavailableState.label}: ${connectionStatusText(connection)}`,
-        description:
-          connection.error ??
-          "Reconnect this environment before sending messages or running actions.",
+        description: buildEnvironmentUnavailableDescription({
+          connectionState: environmentUnavailableConnectionState(connection),
+          endpoint: activeEnvironmentUnavailableState.endpoint,
+          lastError: connection.error ?? null,
+        }),
         actions: (
           <>
             <Button
@@ -1861,17 +1993,15 @@ function ChatViewContent(props: ChatViewProps) {
             {serverUpdateGuidance(versionMismatchSelfUpdate, versionMismatchServerLabel)}
           </>
         ),
-        // The desktop-managed guidance is already the description; the action
-        // slot would only repeat it.
-        actions:
-          versionMismatchSelfUpdate === "desktop-managed" ? undefined : (
-            <ServerUpdateAction
-              environmentId={versionMismatchEnvironmentId}
-              serverLabel={versionMismatchServerLabel}
-              selfUpdate={versionMismatchSelfUpdate}
-              targetVersion={versionMismatch.clientVersion}
-            />
-          ),
+        actions: headlessUpdateRequest ? (
+          <Button
+            size="xs"
+            disabled={headlessUpgradeButtonDisabled}
+            onClick={() => void requestHeadlessUpgrade()}
+          >
+            {headlessUpgradeButtonLabel}
+          </Button>
+        ) : undefined,
         dismissLabel: "Dismiss version mismatch warning",
         onDismiss: () => {
           dismissVersionMismatch(versionMismatchDismissKey);
@@ -1883,8 +2013,11 @@ function ChatViewContent(props: ChatViewProps) {
   }, [
     activeEnvironmentUnavailableState,
     handleReconnectActiveEnvironment,
+    headlessUpdateRequest,
+    headlessUpgradeButtonDisabled,
+    headlessUpgradeButtonLabel,
     navigate,
-    setDismissedVersionMismatchKey,
+    requestHeadlessUpgrade,
     showVersionMismatchBanner,
     versionMismatch,
     versionMismatchDismissKey,
@@ -1986,7 +2119,8 @@ function ChatViewContent(props: ChatViewProps) {
     activePendingUserInput: activePendingUserInput?.requestId ?? null,
     threadError,
   });
-  const isWorking = phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint;
+  const isWorking =
+    phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint || isForkingThread;
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -2247,6 +2381,20 @@ function ChatViewContent(props: ChatViewProps) {
     attachDraftHeroComposerAnchorRef,
     captureDraftHeroComposerRect,
   ] = useDraftHeroLayoutTransition(isDraftHeroState);
+  const activeThreadForkState = activeThread as Thread | null | undefined;
+  const isThreadDetailLoading = Boolean(
+    isServerThread &&
+    activeThread &&
+    timelineEntries.length === 0 &&
+    activeThread.messages.length === 0 &&
+    activeThread.activities.length === 0 &&
+    activeThread.proposedPlans.length === 0 &&
+    (activeThreadForkState?.turnDiffSummaries?.length ?? 0) === 0 &&
+    (activeThread.latestTurn !== null ||
+      activeThread.session !== null ||
+      activeThread.goal !== null ||
+      activeThreadForkState?.pendingSourceProposedPlan !== undefined),
+  );
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
   const turnDiffSummaryByAssistantMessageId = useMemo(() => {
@@ -3795,6 +3943,7 @@ function ChatViewContent(props: ChatViewProps) {
   const sendEnvMode = resolveSendEnvMode({
     requestedEnvMode: envMode,
     isGitRepo,
+    hasWorktreeBaseRef: activeThreadBranch !== null || activeThreadWorktreePath !== null,
   });
   const localCheckoutBranchMismatch = useMemo(
     () =>
@@ -4252,6 +4401,103 @@ function ChatViewContent(props: ChatViewProps) {
     ],
   );
 
+  const onForkMessage = useCallback(
+    async (messageId: MessageId, workspaceMode: ThreadForkWorkspaceMode) => {
+      if (!activeThread || !isServerThread || isWorking) return;
+
+      setIsForkingThread(true);
+      try {
+        const result = await forkThread({
+          environmentId: activeThread.environmentId,
+          input: {
+            sourceThreadId: activeThread.id,
+            messageId,
+            workspaceMode,
+          },
+        });
+        if (result._tag === "Failure") {
+          if (!isAtomCommandInterrupted(result)) {
+            const error = squashAtomCommandFailure(result);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Could not fork thread",
+                description:
+                  error instanceof Error ? error.message : "An unexpected error occurred.",
+              }),
+            );
+          }
+          return;
+        }
+
+        const targetThreadRef = scopeThreadRef(activeThread.environmentId, result.value.threadId);
+        if (result.value.prefilledPrompt !== null) {
+          setComposerDraftPrompt(targetThreadRef, result.value.prefilledPrompt);
+        }
+        const warnings = [...result.value.warnings];
+        if (result.value.prefilledAttachments.length > 0) {
+          const hydratedAttachments = await hydrateForkedMessageAttachments({
+            attachments: result.value.prefilledAttachments,
+            assetUrlById: serverAttachmentUrlById,
+            ...(activeThread.environmentId === primaryEnvironmentId
+              ? {
+                  resolveAssetUrl: (assetUrl: string) => {
+                    const sourceUrl = new URL(assetUrl);
+                    const proxyUrl = new URL(resolvePrimaryEnvironmentHttpUrl(sourceUrl.pathname));
+                    proxyUrl.search = sourceUrl.search;
+                    return proxyUrl.toString();
+                  },
+                }
+              : {}),
+          });
+          addComposerDraftImages(targetThreadRef, hydratedAttachments.images);
+          if (hydratedAttachments.unavailableCount > 0) {
+            warnings.push(
+              `${hydratedAttachments.unavailableCount} selected-message attachment${hydratedAttachments.unavailableCount === 1 ? " was" : "s were"} unavailable and could not be copied into the fork draft.`,
+            );
+          }
+        }
+        if (warnings.length > 0) {
+          toastManager.add(
+            stackedThreadToast({
+              type: "info",
+              title: "Thread forked",
+              description: warnings.join(" "),
+            }),
+          );
+        }
+        await navigate({
+          to: "/$environmentId/$threadId",
+          params: {
+            environmentId: activeThread.environmentId,
+            threadId: result.value.threadId,
+          },
+        });
+      } catch (error) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not open forked thread",
+            description: error instanceof Error ? error.message : "An unexpected error occurred.",
+          }),
+        );
+      } finally {
+        setIsForkingThread(false);
+      }
+    },
+    [
+      activeThread,
+      addComposerDraftImages,
+      forkThread,
+      isServerThread,
+      isWorking,
+      navigate,
+      primaryEnvironmentId,
+      serverAttachmentUrlById,
+      setComposerDraftPrompt,
+    ],
+  );
+
   const onSend = async (e?: { preventDefault: () => void }) => {
     e?.preventDefault();
     if (
@@ -4317,6 +4563,10 @@ function ChatViewContent(props: ChatViewProps) {
       composerReviewComments.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
+    const goalSlashCommand =
+      composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
+        ? parseComposerGoalSlashCommand(trimmed)
+        : null;
     if (standaloneSlashCommand) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
@@ -4324,6 +4574,39 @@ function ChatViewContent(props: ChatViewProps) {
       composerRef.current?.resetCursorState();
       return;
     }
+    if (goalSlashCommand?.type === "status") {
+      const status = formatGoalStatus(activeThread.goal);
+      toastManager.add(stackedThreadToast({ type: "info", ...status }));
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
+    }
+    if (goalSlashCommand?.type === "clear") {
+      const result = await clearThreadGoal({
+        environmentId,
+        input: {
+          threadId: activeThread.id,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        setThreadError(
+          activeThread.id,
+          error instanceof Error ? error.message : "Failed to clear goal.",
+        );
+        return;
+      }
+      toastManager.add(
+        stackedThreadToast({ type: "success", title: "Goal cleared", description: "" }),
+      );
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
+    }
+    const goalToSet = goalSlashCommand?.type === "set" ? goalSlashCommand.goal : null;
     if (!hasSendableContent) {
       if (expiredTerminalContextCount > 0) {
         const toastCopy = buildExpiredTerminalContextToastCopy(
@@ -4390,7 +4673,10 @@ function ChatViewContent(props: ChatViewProps) {
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
     const composerReviewCommentsSnapshot: ReviewCommentContext[] = [...composerReviewComments];
     const messageTextWithContexts = appendElementContextsToPrompt(
-      appendTerminalContextsToPrompt(promptForSend, composerTerminalContextsSnapshot),
+      appendTerminalContextsToPrompt(
+        goalToSet ? formatGoalInitialPrompt(goalToSet) : promptForSend,
+        composerTerminalContextsSnapshot,
+      ),
       composerElementContextsSnapshot,
     );
     const messageTextWithPreviewAnnotations = composerPreviewAnnotationsSnapshot.reduce(
@@ -4479,7 +4765,7 @@ function ChatViewContent(props: ChatViewProps) {
         firstComposerImageName = firstComposerImage.name;
       }
     }
-    let titleSeed = trimmed;
+    let titleSeed = goalToSet ?? trimmed;
     if (!titleSeed) {
       if (firstComposerImageName) {
         titleSeed = `Image: ${firstComposerImageName}`;
@@ -4567,28 +4853,44 @@ function ChatViewContent(props: ChatViewProps) {
             }
           : undefined;
       beginLocalDispatch({ preparingWorktree: false });
-      const startResult = await startThreadTurn({
-        environmentId,
-        input: {
-          threadId: threadIdForSend,
-          message: {
-            messageId: messageIdForSend,
-            role: "user",
-            text: outgoingMessageText,
-            attachments: turnAttachmentsResult.value,
+      if (goalToSet && isServerThread) {
+        const goalResult = await setThreadGoal({
+          environmentId,
+          input: {
+            threadId: threadIdForSend,
+            goal: goalToSet,
+            createdAt: messageCreatedAt,
           },
-          modelSelection: ctxSelectedModelSelection,
-          titleSeed: title,
-          runtimeMode,
-          interactionMode,
-          ...(bootstrap ? { bootstrap } : {}),
-          createdAt: messageCreatedAt,
-        },
-      });
-      if (startResult._tag === "Failure") {
-        failure = startResult;
-      } else {
-        turnStartSucceeded = true;
+        });
+        if (goalResult._tag === "Failure") {
+          failure = goalResult;
+        }
+      }
+
+      if (failure === null) {
+        const startResult = await startThreadTurn({
+          environmentId,
+          input: {
+            threadId: threadIdForSend,
+            message: {
+              messageId: messageIdForSend,
+              role: "user",
+              text: outgoingMessageText,
+              attachments: turnAttachmentsResult.value,
+            },
+            modelSelection: ctxSelectedModelSelection,
+            titleSeed: title,
+            runtimeMode,
+            interactionMode,
+            ...(bootstrap ? { bootstrap } : {}),
+            createdAt: messageCreatedAt,
+          },
+        });
+        if (startResult._tag === "Failure") {
+          failure = startResult;
+        } else {
+          turnStartSucceeded = true;
+        }
       }
     }
 
@@ -5494,6 +5796,7 @@ function ChatViewContent(props: ChatViewProps) {
               <MessagesTimeline
                 key={activeThread.id}
                 isWorking={isWorking}
+                isThreadDetailLoading={isThreadDetailLoading}
                 activeTurnInProgress={isWorking || !latestTurnSettled}
                 activeTurnStartedAt={activeWorkStartedAt}
                 listRef={legendListRef}
@@ -5510,6 +5813,13 @@ function ChatViewContent(props: ChatViewProps) {
                 onOpenTurnDiff={onOpenTurnDiff}
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
+                onForkMessage={onForkMessage}
+                canForkThread={Boolean(
+                  isServerThread && activeProject && activeProject.kind !== "chat",
+                )}
+                canForkToNewWorktree={Boolean(
+                  isServerThread && activeProject && activeProject.kind !== "chat" && isGitRepo,
+                )}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 markdownCwd={gitCwd ?? undefined}
@@ -5592,119 +5902,126 @@ function ChatViewContent(props: ChatViewProps) {
                         : undefined
                     }
                   >
-                    <div className="chat-composer-glass-host mx-auto w-full max-w-3xl rounded-[22px]">
-                      <div ref={attachDraftHeroComposerAnchorRef} className="relative z-10">
-                        <ChatComposer
-                          composerRef={composerRef}
-                          composerDraftTarget={composerDraftTarget}
-                          environmentId={environmentId}
-                          routeKind={routeKind}
-                          routeThreadRef={routeThreadRef}
-                          draftId={draftId}
-                          activeThreadId={activeThreadId}
-                          activeThreadEnvironmentId={activeThread?.environmentId}
-                          activeThread={activeThread}
-                          isServerThread={isServerThread}
-                          isLocalDraftThread={isLocalDraftThread}
-                          forceExpandedOnMobile={forceExpandedMobileComposer && isDraftHeroState}
-                          projectSelectionRequired={isLocalDraftThread && activeProject === null}
-                          phase={phase}
-                          isConnecting={isConnecting}
-                          isSendBusy={isSendBusy}
-                          isPreparingWorktree={isPreparingWorktree}
-                          environmentUnavailable={activeEnvironmentUnavailableState}
-                          activePendingApproval={activePendingApproval}
-                          pendingApprovals={pendingApprovals}
-                          pendingUserInputs={pendingUserInputs}
-                          activePendingProgress={activePendingProgress}
-                          activePendingResolvedAnswers={activePendingResolvedAnswers}
-                          activePendingIsResponding={activePendingIsResponding}
-                          activePendingDraftAnswers={activePendingDraftAnswers}
-                          activePendingQuestionIndex={activePendingQuestionIndex}
-                          respondingRequestIds={respondingRequestIds}
-                          showPlanFollowUpPrompt={showPlanFollowUpPrompt}
-                          activeProposedPlan={activeProposedPlan}
-                          activePlan={activePlan as { turnId?: TurnId } | null}
-                          sidebarProposedPlan={sidebarProposedPlan as { turnId?: TurnId } | null}
-                          planSidebarLabel={planSidebarLabel}
-                          planSidebarOpen={planSidebarOpen}
-                          runtimeMode={runtimeMode}
-                          interactionMode={interactionMode}
-                          lockedProvider={lockedProvider}
-                          providerStatuses={providerStatuses as ServerProvider[]}
-                          activeProjectDefaultModelSelection={activeProject?.defaultModelSelection}
-                          activeThreadModelSelection={activeThread?.modelSelection}
-                          activeThreadActivities={activeThread?.activities}
-                          resolvedTheme={resolvedTheme}
-                          settings={settings}
-                          keybindings={keybindings}
-                          terminalOpen={Boolean(terminalUiState.terminalOpen)}
-                          gitCwd={gitCwd}
-                          promptRef={promptRef}
-                          composerImagesRef={composerImagesRef}
-                          composerTerminalContextsRef={composerTerminalContextsRef}
-                          composerElementContextsRef={composerElementContextsRef}
-                          onSend={onSend}
-                          onInterrupt={onInterrupt}
-                          onImplementPlanInNewThread={onImplementPlanInNewThread}
-                          onRespondToApproval={onRespondToApproval}
-                          onSelectActivePendingUserInputOption={
-                            onSelectActivePendingUserInputOption
-                          }
-                          onAdvanceActivePendingUserInput={onAdvanceActivePendingUserInput}
-                          onPreviousActivePendingUserInputQuestion={
-                            onPreviousActivePendingUserInputQuestion
-                          }
-                          onChangeActivePendingUserInputCustomAnswer={
-                            onChangeActivePendingUserInputCustomAnswer
-                          }
-                          onProviderModelSelect={onProviderModelSelect}
-                          getModelDisabledReason={getModelDisabledReason}
-                          toggleInteractionMode={toggleInteractionMode}
-                          handleRuntimeModeChange={handleRuntimeModeChange}
-                          handleInteractionModeChange={handleInteractionModeChange}
-                          togglePlanSidebar={togglePlanSidebar}
-                          focusComposer={focusComposer}
-                          scheduleComposerFocus={scheduleComposerFocus}
-                          setThreadError={setThreadError}
-                          onExpandImage={onExpandTimelineImage}
-                        />
-                      </div>
-                      <div className="min-h-0">
-                        <div
-                          data-terminal-open={terminalUiState.terminalOpen ? "true" : undefined}
-                          className="relative z-0"
-                        >
-                          {isGitRepo && (
-                            <div className="pointer-events-auto">
-                              <BranchToolbar
-                                environmentId={activeThread.environmentId}
-                                threadId={activeThread.id}
-                                {...(routeKind === "draft" && draftId ? { draftId } : {})}
-                                onEnvModeChange={onEnvModeChange}
-                                startFromOrigin={startFromOrigin}
-                                onStartFromOriginChange={onStartFromOriginChange}
-                                {...(canOverrideServerThreadEnvMode
-                                  ? { effectiveEnvModeOverride: envMode }
-                                  : {})}
-                                {...(canOverrideServerThreadEnvMode
-                                  ? {
-                                      activeThreadBranchOverride: activeThreadBranch,
-                                      onActiveThreadBranchOverrideChange:
-                                        setPendingServerThreadBranch,
-                                    }
-                                  : {})}
-                                envLocked={envLocked}
-                                onComposerFocusRequest={scheduleComposerFocus}
-                                {...(canCheckoutPullRequestIntoThread
-                                  ? { onCheckoutPullRequestRequest: openPullRequestDialog }
-                                  : {})}
-                                {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
-                                availableEnvironments={logicalProjectEnvironments}
-                              />
-                            </div>
-                          )}
-                        </div>
+                    <div
+                      ref={attachDraftHeroComposerAnchorRef}
+                      className="relative z-10 mx-auto w-full max-w-3xl"
+                    >
+                      <ChatComposer
+                        composerRef={composerRef}
+                        composerDraftTarget={composerDraftTarget}
+                        environmentId={environmentId}
+                        routeKind={routeKind}
+                        routeThreadRef={routeThreadRef}
+                        draftId={draftId}
+                        activeThreadId={activeThreadId}
+                        activeThreadEnvironmentId={activeThread?.environmentId}
+                        activeThread={activeThread}
+                        isServerThread={isServerThread}
+                        isLocalDraftThread={isLocalDraftThread}
+                        forceExpandedOnMobile={forceExpandedMobileComposer && isDraftHeroState}
+                        projectSelectionRequired={isLocalDraftThread && activeProject === null}
+                        phase={phase}
+                        isConnecting={isConnecting}
+                        isSendBusy={isSendBusy}
+                        isPreparingWorktree={isPreparingWorktree}
+                        environmentUnavailable={activeEnvironmentUnavailableState}
+                        activePendingApproval={activePendingApproval}
+                        pendingApprovals={pendingApprovals}
+                        pendingUserInputs={pendingUserInputs}
+                        activePendingProgress={activePendingProgress}
+                        activePendingResolvedAnswers={activePendingResolvedAnswers}
+                        activePendingIsResponding={activePendingIsResponding}
+                        activePendingDraftAnswers={activePendingDraftAnswers}
+                        activePendingQuestionIndex={activePendingQuestionIndex}
+                        respondingRequestIds={respondingRequestIds}
+                        showPlanFollowUpPrompt={showPlanFollowUpPrompt}
+                        activeProposedPlan={activeProposedPlan}
+                        activePlan={activePlan as { turnId?: TurnId } | null}
+                        sidebarProposedPlan={sidebarProposedPlan as { turnId?: TurnId } | null}
+                        planSidebarLabel={planSidebarLabel}
+                        planSidebarOpen={planSidebarOpen}
+                        runtimeMode={runtimeMode}
+                        interactionMode={interactionMode}
+                        lockedProvider={lockedProvider}
+                        providerStatuses={providerStatuses as ServerProvider[]}
+                        activeProjectDefaultModelSelection={activeProject?.defaultModelSelection}
+                        activeThreadModelSelection={activeThread?.modelSelection}
+                        activeThreadActivities={activeThread?.activities}
+                        resolvedTheme={resolvedTheme}
+                        settings={settings}
+                        keybindings={keybindings}
+                        terminalOpen={Boolean(terminalUiState.terminalOpen)}
+                        gitCwd={gitCwd}
+                        promptRef={promptRef}
+                        composerImagesRef={composerImagesRef}
+                        composerTerminalContextsRef={composerTerminalContextsRef}
+                        composerElementContextsRef={composerElementContextsRef}
+                        onSend={onSend}
+                        onInterrupt={onInterrupt}
+                        onImplementPlanInNewThread={onImplementPlanInNewThread}
+                        onRespondToApproval={onRespondToApproval}
+                        onSelectActivePendingUserInputOption={onSelectActivePendingUserInputOption}
+                        onPreviousActivePendingUserInputQuestion={
+                          onPreviousActivePendingUserInputQuestion
+                        }
+                        onChangeActivePendingUserInputCustomAnswer={
+                          onChangeActivePendingUserInputCustomAnswer
+                        }
+                        onProviderModelSelect={onProviderModelSelect}
+                        getModelDisabledReason={getModelDisabledReason}
+                        toggleInteractionMode={toggleInteractionMode}
+                        handleRuntimeModeChange={handleRuntimeModeChange}
+                        handleInteractionModeChange={handleInteractionModeChange}
+                        togglePlanSidebar={togglePlanSidebar}
+                        focusComposer={focusComposer}
+                        scheduleComposerFocus={scheduleComposerFocus}
+                        setThreadError={setThreadError}
+                        onExpandImage={onExpandTimelineImage}
+                      />
+                    </div>
+                    <div
+                      className={cn(
+                        "min-h-0",
+                        isDraftHeroState ? "absolute inset-x-0 top-full" : null,
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          "chat-composer-lower-chrome relative z-10",
+                          isGitRepo
+                            ? "pb-[calc(env(safe-area-inset-bottom)+0.25rem)]"
+                            : "pb-[calc(env(safe-area-inset-bottom)+0.75rem)] sm:pb-[calc(env(safe-area-inset-bottom)+1rem)]",
+                        )}
+                      >
+                        {isGitRepo && (
+                          <div className="pointer-events-auto">
+                            <BranchToolbar
+                              environmentId={activeThread.environmentId}
+                              threadId={activeThread.id}
+                              {...(routeKind === "draft" && draftId ? { draftId } : {})}
+                              onEnvModeChange={onEnvModeChange}
+                              startFromOrigin={startFromOrigin}
+                              onStartFromOriginChange={onStartFromOriginChange}
+                              {...(canOverrideServerThreadEnvMode
+                                ? { effectiveEnvModeOverride: envMode }
+                                : {})}
+                              {...(canOverrideServerThreadEnvMode
+                                ? {
+                                    activeThreadBranchOverride: activeThreadBranch,
+                                    onActiveThreadBranchOverrideChange:
+                                      setPendingServerThreadBranch,
+                                  }
+                                : {})}
+                              envLocked={envLocked}
+                              onComposerFocusRequest={scheduleComposerFocus}
+                              {...(canCheckoutPullRequestIntoThread
+                                ? { onCheckoutPullRequestRequest: openPullRequestDialog }
+                                : {})}
+                              {...(hasMultipleEnvironments ? { onEnvironmentChange } : {})}
+                              availableEnvironments={logicalProjectEnvironments}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div

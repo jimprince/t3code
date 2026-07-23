@@ -59,6 +59,11 @@ import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import { useProjects, useThreadShells } from "../state/entities";
 import {
+  isChatProject,
+  partitionProjectsByKind,
+  selectChatProjectForEnvironment,
+} from "../projectKind";
+import {
   startNewThreadInProjectFromContext,
   startNewThreadFromContext,
 } from "../lib/chatThreadActions";
@@ -491,6 +496,10 @@ function OpenCommandPaletteDialog(props: {
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
   const projects = useProjects();
+  const { chatProjects, workspaceProjects } = useMemo(
+    () => partitionProjectsByKind(projects),
+    [projects],
+  );
   const threads = useThreadShells();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const providers = useAtomValue(primaryServerProvidersAtom);
@@ -671,7 +680,7 @@ function OpenCommandPaletteDialog(props: {
   const projectSearchItems = useMemo(
     () =>
       buildProjectActionItems({
-        projects,
+        projects: workspaceProjects,
         valuePrefix: "project",
         icon: (project) => (
           <ProjectFavicon
@@ -682,36 +691,35 @@ function OpenCommandPaletteDialog(props: {
         ),
         runProject: openProjectFromSearch,
       }),
-    [openProjectFromSearch, projects],
+    [openProjectFromSearch, workspaceProjects],
   );
 
   const projectThreadItems = useMemo(
     () =>
-      enumerateCommandPaletteItems(
-        buildProjectActionItems({
-          projects,
-          valuePrefix: "new-thread-in",
-          icon: (project) => (
-            <ProjectFavicon
-              environmentId={project.environmentId}
-              cwd={project.workspaceRoot}
-              className={ITEM_ICON_CLASS}
-            />
-          ),
-          runProject: async (project) => {
-            await startNewThreadInProjectFromContext(
-              {
-                activeDraftThread,
-                activeThread: activeThread ?? undefined,
-                defaultProjectRef,
-                handleNewThread,
-              },
-              scopeProjectRef(project.environmentId, project.id),
-            );
-          },
-        }),
-      ),
-    [activeDraftThread, activeThread, defaultProjectRef, handleNewThread, projects],
+      buildProjectActionItems({
+        projects: workspaceProjects,
+        valuePrefix: "new-thread-in",
+        shortcutCommand: "chat.newLocal",
+        icon: (project) => (
+          <ProjectFavicon
+            environmentId={project.environmentId}
+            cwd={project.workspaceRoot}
+            className={ITEM_ICON_CLASS}
+          />
+        ),
+        runProject: async (project) => {
+          await startNewThreadInProjectFromContext(
+            {
+              activeDraftThread,
+              activeThread: activeThread ?? undefined,
+              defaultProjectRef,
+              handleNewThread,
+            },
+            scopeProjectRef(project.environmentId, project.id),
+          );
+        },
+      }),
+    [activeDraftThread, activeThread, defaultProjectRef, handleNewThread, workspaceProjects],
   );
 
   const allThreadItems = useMemo(
@@ -1017,12 +1025,31 @@ function OpenCommandPaletteDialog(props: {
 
   const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
-  if (projects.length > 0) {
+  const primaryChatProject = selectChatProjectForEnvironment(chatProjects, primaryEnvironmentId);
+  if (primaryChatProject) {
+    actionItems.push({
+      kind: "action",
+      value: "action:new-chat",
+      searchTerms: ["new chat", "chat", "create", "draft"],
+      title: "New chat",
+      description: "Start a project-independent conversation",
+      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
+      shortcutCommand: "chat.new",
+      run: async () => {
+        await handleNewThread(
+          scopeProjectRef(primaryChatProject.environmentId, primaryChatProject.id),
+        );
+      },
+    });
+  }
+
+  if (workspaceProjects.length > 0) {
     const activeProjectTitle = currentProjectId
       ? (projectTitleById.get(currentProjectId) ?? null)
       : null;
 
-    if (activeProjectTitle) {
+    const activeProject = projects.find((project) => project.id === currentProjectId) ?? {};
+    if (activeProjectTitle && !isChatProject(activeProject)) {
       actionItems.push({
         kind: "action",
         value: "action:new-thread",
@@ -1033,7 +1060,7 @@ function OpenCommandPaletteDialog(props: {
           </>
         ),
         icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-        shortcutCommand: "chat.new",
+        shortcutCommand: "chat.newLocal",
         run: async () => {
           await startNewThreadFromContext({
             activeDraftThread,

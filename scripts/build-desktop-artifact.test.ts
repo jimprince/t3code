@@ -21,6 +21,7 @@ import {
   LinuxIconResizeError,
   MacPasskeySigningConfigurationResolutionError,
   MissingMacPasskeyProvisioningProfileError,
+  renderMacCodeSigningEntitlements,
   renderMacPasskeyEntitlements,
   resolveClerkPasskeyNativeArtifacts,
   resolveMacPasskeySigningConfiguration,
@@ -84,8 +85,21 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.equal(resolveDesktopUpdateChannel("0.0.17"), "latest");
   });
 
+  it("routes fork-published nightly versions to the nightly updater channel", () => {
+    // sync-upstream.yml tags fork nightlies as vX.Y.Z-nightly.YYYYMMDD.R-fork.N
+    // so electron-updater picks up upgrades. The packager must agree.
+    assert.equal(resolveDesktopUpdateChannel("0.0.21-nightly.20260421.88-fork.1"), "nightly");
+    assert.equal(resolveDesktopUpdateChannel("0.0.22-nightly.20260423.108-fork.3"), "nightly");
+  });
+
+  it("keeps stable -fork.N interim versions on the latest channel", () => {
+    // Stable fork-only patch builds (vX.Y.Z-fork.N per LLM_INSTRUCTIONS.md)
+    // must still go to the `latest` channel, not the nightly one.
+    assert.equal(resolveDesktopUpdateChannel("0.0.22-fork.1"), "latest");
+  });
+
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Alpha)");
+    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Fork)");
     assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
   });
 
@@ -348,14 +362,17 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("derives macOS passkey signing configuration from the Clerk publishable key", () => {
-    const configuration = resolveMacPasskeySigningConfiguration({
-      T3CODE_APPLE_TEAM_ID: "abc1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
-    });
+    const configuration = resolveMacPasskeySigningConfiguration(
+      {
+        T3CODE_APPLE_TEAM_ID: "abc1234567",
+        T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+        T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+      },
+      "com.t3tools.t3code.fork",
+    );
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "com.t3tools.t3code.fork",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -363,19 +380,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("normalizes explicit macOS passkey RP domains and renders required entitlements", () => {
-    const configuration = resolveMacPasskeySigningConfiguration({
-      T3CODE_APPLE_TEAM_ID: "ABC1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PASSKEY_RP_DOMAINS:
-        " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
-    });
+    const configuration = resolveMacPasskeySigningConfiguration(
+      {
+        T3CODE_APPLE_TEAM_ID: "ABC1234567",
+        T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+        T3CODE_CLERK_PASSKEY_RP_DOMAINS:
+          " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
+      },
+      "com.t3tools.t3code.fork.dev",
+    );
     const entitlements = renderMacPasskeyEntitlements(configuration);
 
     assert.deepStrictEqual(configuration.rpDomains, [
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code.fork.dev</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -384,7 +404,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it("rejects incomplete macOS passkey signing configuration", () => {
     const captureError = (env: Readonly<Record<string, string | undefined>>) => {
       try {
-        resolveMacPasskeySigningConfiguration(env);
+        resolveMacPasskeySigningConfiguration(env, "com.t3tools.t3code.fork");
       } catch (error) {
         return error;
       }
@@ -421,11 +441,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.notInclude(serializedInvalidDomainError, "query-secret");
     assert.throws(
       () =>
-        resolveMacPasskeySigningConfiguration({
-          T3CODE_APPLE_TEAM_ID: "ABC1234567",
-          T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-          T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
-        }),
+        resolveMacPasskeySigningConfiguration(
+          {
+            T3CODE_APPLE_TEAM_ID: "ABC1234567",
+            T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+            T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
+          },
+          "com.t3tools.t3code.fork",
+        ),
       /Invalid passkey RP domain/u,
     );
     const invalidPublishableKeyError = captureError({
@@ -464,13 +487,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("adds passkey entitlements and both renderer protocols to signed macOS builds", () =>
     Effect.gen(function* () {
-      const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
-        entitlementsPath: "/tmp/entitlements.mac.plist",
-        provisioningProfilePath: "/tmp/t3code.provisionprofile",
-      });
+      const config = yield* createBuildConfig(
+        "stable",
+        "mac",
+        "dmg",
+        "1.2.3",
+        true,
+        false,
+        undefined,
+        {
+          entitlementsPath: "/tmp/entitlements.mac.plist",
+          provisioningProfilePath: "/tmp/t3code.provisionprofile",
+        },
+      );
 
       const mac = config.mac as Record<string, unknown>;
-      assert.equal(config.appId, "com.t3tools.t3code");
+      assert.equal(config.appId, "com.t3tools.t3code.fork");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.deepStrictEqual(mac.protocols, [
@@ -482,6 +514,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("keeps executable resource editing enabled for unsigned Windows builds", () =>
     Effect.gen(function* () {
       const config = yield* createBuildConfig(
+        "stable",
         "win",
         "nsis",
         "1.2.3",
@@ -496,6 +529,39 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       assert.equal(win.signAndEditExecutable, true);
       assert.notProperty(win, "azureSignOptions");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
+  );
+
+  it.effect(
+    "adds hardened-runtime entitlements without provisioning profile for signed macOS builds",
+    () =>
+      Effect.gen(function* () {
+        const entitlements = renderMacCodeSigningEntitlements();
+        const config = yield* createBuildConfig(
+          "stable",
+          "mac",
+          "dmg",
+          "1.2.3",
+          true,
+          false,
+          undefined,
+          {
+            entitlementsPath: "/tmp/entitlements.mac.plist",
+          },
+        );
+
+        const mac = config.mac as Record<string, unknown>;
+        assert.equal(config.appId, "com.t3tools.t3code.fork");
+        assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
+        assert.notProperty(mac, "provisioningProfile");
+        assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
+        assert.include(
+          entitlements,
+          "<key>com.apple.security.cs.allow-unsigned-executable-memory</key>",
+        );
+        assert.include(entitlements, "<key>com.apple.security.cs.disable-library-validation</key>");
+        assert.notInclude(entitlements, "com.apple.application-identifier");
+        assert.notInclude(entitlements, "com.apple.developer.associated-domains");
+      }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
 
   it("promotes target fff binaries to direct staged dependencies", () => {
@@ -593,6 +659,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("resolves default platform and architecture from host references", () =>
     Effect.gen(function* () {
       const resolved = yield* resolveBuildOptions({
+        flavor: Option.none(),
         platform: Option.none(),
         target: Option.none(),
         arch: Option.none(),
@@ -631,6 +698,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("preserves explicit false boolean flags over true env defaults", () =>
     Effect.gen(function* () {
       const resolved = yield* resolveBuildOptions({
+        flavor: Option.none(),
         platform: Option.some("mac"),
         target: Option.none(),
         arch: Option.some("arm64"),
