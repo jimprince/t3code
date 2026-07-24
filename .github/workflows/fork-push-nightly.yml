@@ -1,0 +1,134 @@
+name: Fork Push Nightly
+
+# Creates updater-visible nightly fork releases for Brad-authored changes.
+# Normal pushes to main should ship through the nightly feed only. The next
+# upstream stable sync still replays this fork patch onto the upstream stable
+# tag and publishes the integrated stable release.
+
+on:
+  push:
+    branches:
+      - main
+    # Keep this allowlist narrow. Helper-script/docs/workflow maintenance should
+    # not publish an updater-visible desktop release.
+    paths:
+      - "apps/desktop/**"
+      - "apps/server/**"
+      - "apps/web/**"
+      - "assets/**"
+      - "packages/**"
+      - "scripts/build-desktop-artifact.ts"
+      - "scripts/build-headless-artifact.ts"
+      - "scripts/lib/brand-assets.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: fork-push-nightly
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag fork push nightly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # Fork nightly replays can include upstream workflow changes.
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Resolve and push next fork tag
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "push" && "$HEAD_MESSAGE" == chore\(release\):\ prepare* ]]; then
+            echo "Release finalize version-bump commit; no fork push nightly tag needed."
+            exit 0
+          fi
+
+          # sync-upstream pushes main and then a release tag. Give the tag push
+          # a moment to appear so sync-created commits do not get double-tagged
+          # as push nightlies.
+          sleep 30
+          git fetch --tags origin
+
+          existing_head_tags=$(git tag --points-at HEAD --list 'v*')
+          if [[ -n "$existing_head_tags" ]]; then
+            echo "HEAD already has release tag(s); no fork push nightly tag needed:"
+            echo "$existing_head_tags" | sed 's/^/  /'
+            exit 0
+          fi
+
+          upstream_tag=$(gh release list --repo pingdotgg/t3code --limit 50 \
+            --json tagName,isPrerelease,publishedAt \
+            --jq '[.[] | select(.isPrerelease and (.tagName | test("(^|-)v[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\.")))] | sort_by(.publishedAt) | reverse | .[0].tagName')
+          if [[ -z "$upstream_tag" || "$upstream_tag" == "null" ]]; then
+            echo "::error::No nightly release found on upstream."
+            exit 1
+          fi
+          echo "Latest upstream nightly release: $upstream_tag"
+
+          export CI_REPAIR_BOT_UPSTREAM_TARGET="refs/tags/upstream/${upstream_tag}"
+          export CI_REPAIR_BOT_UPSTREAM_SOURCE_REF="refs/tags/${upstream_tag}"
+          export CI_REPAIR_BOT_CONFLICT_MODE=fail
+          scripts/ci/reproduce-sync-upstream
+
+          mapfile -t existing_numbers < <(git tag --list "${upstream_tag}-fork.*" \
+            | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
+            | sort -n)
+
+          if [[ ${#existing_numbers[@]} -eq 0 ]]; then
+            next_n=1
+          else
+            last="${existing_numbers[-1]}"
+            next_n=$((last + 1))
+          fi
+
+          new_tag="${upstream_tag}-fork.${next_n}"
+          version="${new_tag#v}"
+          # A freshly synced upstream may change package manifests before the
+          # fork release-version stamp. Refresh the lockfile first so the
+          # install used to run the stamping script is not blocked by stale
+          # pre-sync lock metadata.
+          vp install --lockfile-only --ignore-scripts
+          vp install --frozen-lockfile --ignore-scripts
+          node scripts/update-release-package-versions.ts "$version"
+          vp fmt apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json
+          vp install --lockfile-only --ignore-scripts
+
+          if ! git diff --quiet -- apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json pnpm-lock.yaml; then
+            git add apps/server/package.json apps/desktop/package.json apps/web/package.json packages/contracts/package.json pnpm-lock.yaml
+            git commit -m "chore(release): prepare $new_tag"
+          else
+            echo "Package versions already match $version."
+          fi
+
+          git tag "$new_tag" HEAD
+          git push origin HEAD:main --force-with-lease
+          git push origin "$new_tag"
+          echo "Pushed $new_tag for fork push nightly update. release.yml will publish it to the nightly feed."

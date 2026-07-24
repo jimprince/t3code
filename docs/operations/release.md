@@ -1,330 +1,566 @@
-# Release Checklist
+# Release Workflow
 
-This document covers the unified release workflow for stable and nightly desktop releases.
+This is the operational release guide for the fork at `jimprince/t3code`.
+`LLM_INSTRUCTIONS.md` is still the source of truth for the fork model; this
+file is the concise runbook.
 
-## What the workflow does
+## Release Model
 
-- Workflow: `.github/workflows/release.yml`
-- Triggers:
-  - push tag matching `v*.*.*` for stable releases
-  - scheduled nightly check every three hours
-  - manual `workflow_dispatch` for either channel
-- Runs quality gates first: lint, typecheck, test.
-- Reads the shared production T3 Connect relay URL and Clerk client configuration before packaging clients.
-- Builds four artifacts in parallel for both channels:
-  - macOS `arm64` DMG
-  - macOS `x64` DMG
-  - Linux `x64` AppImage
-  - Windows `x64` NSIS installer
-- Publishes one GitHub Release with all produced files.
-  - Stable tags with a suffix after `X.Y.Z` (for example `1.2.3-alpha.1`) are published as GitHub prereleases.
-  - Only plain stable `X.Y.Z` releases are marked as the repository's latest release.
-  - Nightly runs are always GitHub prereleases and never marked latest.
-  - Automatically generated release notes are pinned to the previous tag in the same channel, so stable compares to the previous stable tag and nightly compares to the previous nightly tag.
-- Includes Electron auto-update metadata (for example `latest*.yml`, `nightly*.yml`, and `*.blockmap`) in release assets.
-- Publishes the CLI package (`apps/server`, npm package `t3`) with OIDC trusted publishing from the same workflow file:
-  - stable releases publish npm dist-tag `latest`
-  - nightly releases publish npm dist-tag `nightly`
-- Deploys the hosted web app to Vercel only after a release is published:
-  - stable releases are aliased to the `latest` hosted app channel
-  - nightly releases are aliased to the `nightly` hosted app channel
-- Signing is optional and auto-detected per platform from secrets.
+- `sync-upstream.yml` checks upstream every 3 hours and can also be dispatched
+  manually.
+- `release.yml` builds only after a release tag is pushed, or when manually
+  dispatched with an explicit version.
+- Versions mirror upstream. Do not invent independent fork version numbers.
+- Stable upstream tags are reused verbatim, for example `v0.0.21`.
+- Nightly fork builds use `vX.Y.Z-nightly.YYYYMMDD.RUN-fork.N`.
+- Normal pushes to `main` publish fork changes through the nightly feed. They
+  do not create stable/latest `vNEXT-fork.N` releases.
+- Release tags point at commits where releasable package versions already
+  match the release tag. This keeps tag-checkout/headless installs reporting
+  the same version as the desktop release.
 
-## T3 Connect relay deployment
+## Push Nightly Trigger
 
-The relay is a shared control plane versioned separately from client releases. Stable and nightly
-client builds must point at the same relay so users see the same linked environments when switching
-release channels.
+`fork-push-nightly.yml` publishes updater-visible nightly fork builds for
+normal pushes to `main`, but only for changes that can affect packaged
+app/runtime output: `apps/**`, `packages/**`, `assets/**`, root package/build
+files, and desktop artifact build inputs.
 
-`.github/workflows/deploy-relay.yml` deploys Alchemy stage `prod` on every push to `main`. The
-release workflow reads the relay URL and Clerk client configuration from the existing `production`
-GitHub Actions environment before building desktop, CLI, or hosted web artifacts.
+Docs, workflow maintenance, release helper scripts, and other repo plumbing
+should not create push nightlies. Use manual `release.yml` dispatch if a
+maintenance-only commit genuinely needs to ship as a desktop update.
 
-Required repository variables shared by relay deployments:
+Before pushing `${upstream_nightly_tag}-fork.N`, the workflow fetches the latest
+upstream nightly tag, replays the net fork patch onto that tag, stamps the releasable
+package versions and lockfile, then tags the stamped commit. That package stamp
+is required because the headless `t3` server reports its version from
+`apps/server/package.json`. The next upstream stable sync replays the fork patch
+onto the stable tag and publishes the integrated stable release.
 
-- `CLOUDFLARE_ACCOUNT_ID`
-- `PLANETSCALE_ORGANIZATION`
-- `AXIOM_ORG_ID`
+## Normal Commands
 
-Required repository secrets shared by relay deployments:
+Optionally start the local Apple Silicon runner before a desktop release:
 
-- `CLOUDFLARE_API_TOKEN`
-- `PLANETSCALE_API_TOKEN_ID`
-- `PLANETSCALE_API_TOKEN`
-- `AXIOM_TOKEN`
-
-Required `production` environment variables:
-
-- `RELAY_API_ZONE_NAME`
-- `RELAY_TUNNEL_ZONE_NAME`
-- `CLERK_PUBLISHABLE_KEY`
-- `CLERK_JWT_AUDIENCE`
-- `CLERK_JWT_TEMPLATE`
-- `CLERK_CLI_OAUTH_CLIENT_ID`
-- `APNS_ENVIRONMENT`
-- `APNS_TEAM_ID`
-- `APNS_KEY_ID`
-- `APNS_BUNDLE_ID`
-
-Optional `production` environment variables:
-
-- `RELAY_DOMAIN` when overriding the derived `relay.<RELAY_API_ZONE_NAME>` domain
-
-Required `production` environment secrets:
-
-- `CLERK_SECRET_KEY`
-- `APNS_PRIVATE_KEY`
-
-The account-scoped repository credentials are consumed by Alchemy while provisioning relay stages; they
-are not bound into the relay Worker. The production deployment uses an Axiom personal access token,
-so `AXIOM_ORG_ID` must accompany `AXIOM_TOKEN`. The `prod` stage owns the retained PlanetScale
-database. Local personal stages provision isolated branches from it and are never deployed by CI.
-Production adopts the configured relay API and tunnel DNS zones as retained Cloudflare resources.
-Personal stages reference the production-owned zones.
-
-Developers deploy personal stages locally rather than through pull-request automation:
-
-```sh
-vp run --filter t3code-relay deploy -- --stage "$USER" --env-file .env.local
+```bash
+t3code-mac-runner start 7200
 ```
 
-## Hosted web app release deployment
+Release preflight prefers this runner when it is online and idle. If it is
+offline or busy, the macOS build uses GitHub-hosted `macos-15` instead.
+The runner-state probe uses `secrets.T3CODE_RUNNER_STATE_TOKEN` when present,
+falling back to `secrets.GH_PAT`. If neither secret can list repository
+self-hosted runners, preflight intentionally chooses GitHub-hosted macOS.
 
-The hosted app is intentionally not deployed by Vercel's Git integration. The
-web project disables automatic Git deployments in `apps/web/vercel.ts` via
-`git.deploymentEnabled: false`, and `.github/workflows/release.yml` deploys the
-web app with Vercel CLI after the GitHub Release succeeds.
+Sync stable or nightly from upstream:
 
-Required GitHub Actions secrets:
+```bash
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
+```
 
-- `VERCEL_TOKEN`
-- `VERCEL_ORG_ID`
-- `VERCEL_PROJECT_ID`
+For both channels, `sync-upstream.yml` collapses the net fork delta into one
+commit on the selected upstream tag, stamps package versions to the derived
+fork release version, and pushes the release tag at that stamped commit.
+Keeping one replay commit prevents old conflict-repair commits from conflicting
+again on every nightly.
 
-Optional GitHub Actions variables:
+During that replay, package version files are auto-resolved to upstream and
+re-stamped later. `.github/workflows/release.yml` is auto-resolved to the fork
+side because the fork intentionally owns its reduced macOS/headless release
+matrix and local-runner fallback.
 
-- `VERCEL_TEAM_SLUG`: overrides the Vercel CLI scope when the team slug is preferred over the `VERCEL_ORG_ID` secret.
-- `T3CODE_WEB_ROUTER_URL`: defaults to `https://app.t3.codes`.
-- `T3CODE_WEB_LATEST_DOMAIN`: defaults to `latest.app.t3.codes`.
-- `T3CODE_WEB_NIGHTLY_DOMAIN`: defaults to `nightly.app.t3.codes`.
+Shared runtime integration files are not safe for whole-file conflict
+resolution. In particular, `apps/server/src/ws.ts` and
+`apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts` must stop for
+semantic repair rather than taking the fork side, because doing so can discard
+unrelated upstream RPC handlers or newly projected thread fields while leaving
+their shared contracts in place.
 
-Required Vercel domains:
+Check both channels:
 
-- `app.t3.codes`: the router domain users open, updated by stable releases.
-- `latest.app.t3.codes`: channel alias updated by stable releases.
-- `nightly.app.t3.codes`: channel alias updated by nightly releases.
+```bash
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=both
+```
 
-The router domain uses `apps/web/vercel.ts` routes. Users opt into a channel by
-visiting `/__t3code/channel?channel=latest` or
-`/__t3code/channel?channel=nightly`; the router stores the
-`t3code_web_channel` cookie and rewrites future requests on `app.t3.codes` to
-the matching channel alias.
+Stop the runner when the release is done:
 
-The release deploy job rewrites release package versions before upload so the
-hosted app's About panel renders the release version. Stable deploys alias the
-same deployment to both the `latest` channel and the router domain so the router
-rules stay current. Nightly deploys only alias the `nightly` channel. The job
-also passes `VITE_HOSTED_APP_CHANNEL=latest|nightly`, which renders the hosted
-update track selector in the About panel. Changing the selector navigates
-through `/__t3code/channel` on the router domain so the user's channel cookie is
-updated before redirecting to the hosted app root.
+```bash
+t3code-mac-runner stop
+```
 
-One-time Vercel dashboard setup:
+## Rerolling A Nightly For Updater Testing
 
-1. Confirm the web project root directory remains `apps/web`.
-2. Add the three domains above to the web project.
-3. Disable automatic Git deployments in the dashboard if desired; the committed
-   `vercel.ts` setting is the source-of-truth, but disconnecting Git in the
-   dashboard is also safe.
-4. Run one stable release deployment, or manually alias the current stable
-   deployment, so `app.t3.codes` points at a deployment containing the router
-   rules in `apps/web/vercel.ts`. Future stable releases keep this alias current.
+`sync-upstream.yml` skips an upstream nightly only once an existing
+`${upstream_tag}-fork.*` tag contains the upstream nightly tag commit. Malformed
+historical fork tags do not block a corrected sync. To intentionally publish
+another build from the same upstream nightly after a good tag exists, dispatch
+`release.yml` directly with the next `-fork.N` version.
+Manual dispatch also accepts `target_ref` when the fixed workflow on `main`
+should build and publish a specific existing tag or commit.
 
-## Nightly builds
+Important quirk: `release.yml` currently exposes only `channel=stable` in the
+manual dispatch form. That is fine; the workflow derives the real release
+channel from the version string. Any version containing `-nightly.` is built as
+nightly.
 
-- Workflow: `.github/workflows/release.yml`
-- Triggers:
-  - scheduled check every three hours
-  - manual `workflow_dispatch` with `channel=nightly`
-- Runs the same desktop quality gates and artifact matrix as the tagged release flow.
-- Publishes a GitHub prerelease only:
-  - tag format: `nightly-vX.Y.Z-nightly.YYYYMMDD.<run_number>`
-  - release name includes the short commit SHA
-  - `make_latest` is always `false`
-- Uses the next stable patch version as the nightly base. For example, `0.0.17` produces nightlies on `0.0.18-nightly.*`.
-- Publishes Electron auto-update metadata to the dedicated `nightly` updater channel, so desktop users can opt into that track independently from stable.
-- Publishes the CLI package (`apps/server`, npm package `t3`) to the `nightly` npm dist-tag using the same nightly version.
-- Does not commit version bumps back to `main`.
+```bash
+gh workflow run release.yml --repo jimprince/t3code \
+  -f channel=stable \
+  -f version=v0.0.22-nightly.20260423.108-fork.2
+```
 
-## Server self-update release invariant
+Use `target_ref` when recovering an existing tag from a fixed workflow on
+`main`:
 
-Connected servers update to the client's exact version, not to an npm dist-tag. Every released
-desktop or hosted client version must therefore have a matching `t3@<version>` package available on
-npm before users can receive that client.
+```bash
+gh workflow run release.yml --repo jimprince/t3code \
+  --ref main \
+  -f channel=stable \
+  -f version=v0.0.22-nightly.20260427.135-fork.1 \
+  -f target_ref=v0.0.22-nightly.20260427.135-fork.1
+```
 
-The workflow enforces this ordering:
+Validated path: an installed `v0.0.22-nightly.20260423.108-fork.1` app found
+`v0.0.22-nightly.20260423.108-fork.2` as available through
+`nightly-mac.yml`.
 
-1. `publish_cli` publishes the exact stable or nightly version to npm.
-2. `release` depends on `publish_cli` before exposing desktop artifacts in GitHub Releases.
-3. `deploy_web` depends on `release` before moving the hosted channel to the new client.
+## Build Matrix
 
-Preserve these dependencies when changing the release graph. Publishing a client first would leave
-the **Update server** action targeting a package version that does not exist yet.
+The fork intentionally builds only:
 
-For a release smoke test, confirm `npm view t3@<version> version` returns the expected version, then
-connect the new client to a server on the previous version and verify that the update action
-reconnects to the matching server. Test one automatic path and the manual or desktop-managed
-guidance when those environments are available.
+- macOS arm64: DMG, zip, blockmaps, and `latest-mac.yml` or `nightly-mac.yml`.
+- Linux x64 headless server:
+  `t3-headless-<version>-linux-x64.tar.gz`.
 
-## Desktop auto-update notes
+When Brad asks for remote build or build status in this fork, check and report
+three lanes separately:
+
+1. mac Electron app: the `Release` workflow's macOS arm64 build and published
+   mac assets.
+2. Linux/headless app: the `Release` workflow's Linux x64 build and published
+   `t3-headless-<version>-linux-x64.tar.gz` asset.
+3. Mobile app: the manually dispatched `Mobile EAS Production` workflow and
+   its App Store Connect/TestFlight result. Mobile is not part of `release.yml`.
+
+## iOS Deployment Choices
+
+GitHub or Gitea can store the source and trigger a build, but iOS still requires
+an Apple-signed binary and a provisioning/distribution method. The supported
+choices, commands, expiration rules, and tradeoffs are documented in
+[`docs/mobile/ios-deployment.md`](../mobile/ios-deployment.md).
+
+For the single-app setup, use the production variant (`com.brad.t3code`):
+
+- `vp run ios:release` builds and installs locally through Xcode when the iPhone
+  is paired with the Mac; it does not upload to Apple.
+- `mobile-eas-production.yml` builds remotely and uploads to TestFlight for a
+  remote install.
+- The same production build can proceed through App Review for a durable public
+  or unlisted App Store installation.
+- `mode=update` publishes compatible JavaScript/assets through EAS OTA; it does
+  not install an app or replace a native build.
+
+## Legacy Mobile EAS Development Lane (Manual Only)
+
+The mobile app now lives on `main`; the old `feature/mobile-track` drift branch
+and conflict-promotion workflow are retired. Fork-specific mobile identity is
+tracked as non-secret config in `apps/mobile/fork.config.json`:
+
+- EAS owner: `jimprince`
+- EAS project: `c148e0df-ed1f-4673-9c07-403ea56b6d1b`
+- iOS bundle base: `com.brad.t3code`
+- scheme base: `t3code-brad`
+
+`.github/workflows/mobile-eas-development.yml` is retained as a manual-only
+legacy recovery tool. It does not run on pushes to `main`; normal mobile work
+uses the single production App Store/TestFlight lane below. If explicitly
+dispatched, it runs the current Vite+/pnpm checks and deploys the old iOS
+development lane with Expo fingerprinting.
+
+The iOS app includes a widget extension target, so native development builds
+need ad hoc credentials for both `com.brad.t3code.dev` and
+`com.brad.t3code.dev.widgets`. iOS signing credentials are managed manually:
+the repo's App Store Connect API key cannot create ad hoc provisioning
+profiles (Apple returns 403 — on this individual Apple account only the
+Account Holder's interactive Apple ID auth may mint them), so CI never
+contacts Apple. Both targets' ad hoc profiles, the distribution certificate,
+and the push key are stored on EAS servers (created 2026-06-09 via an
+interactive local build). CI's non-interactive `eas build` consumes those
+stored credentials as-is.
+
+When the native fingerprint changes and CI reports a failed non-interactive
+build (or credentials expire / a new test device is added), refresh
+credentials with one interactive build from a `main` checkout:
+
+```bash
+cd apps/mobile
+APP_VARIANT=development eas build --profile development --platform ios
+```
+
+`EXPO_TOKEN` must exist as a repository secret. Do not print or inspect
+secret values.
+
+Manual dispatch:
+
+```bash
+gh workflow run mobile-eas-development.yml --repo jimprince/t3code
+```
+
+Check recent mobile updates:
+
+```bash
+gh run list --repo jimprince/t3code \
+  --workflow mobile-eas-development.yml \
+  --limit 10
+```
+
+If a bad development OTA update was published for an older runtime, roll that
+runtime back to the embedded bundle:
+
+```bash
+gh workflow run mobile-eas-development-rollback.yml --repo jimprince/t3code \
+  -f runtime_version=0.1.0 \
+  -f message="rollback bad Hermes bytecode update"
+```
+
+### Production build lane
+
+`.github/workflows/mobile-eas-production.yml` dispatches non-interactive EAS
+production builds. Uploading a completed iOS build is a separate, explicit
+step so one build cannot create duplicate EAS and App Store Connect
+submissions. The main app and widget extension require separate App Store
+provisioning profiles for
+`com.brad.t3code` and `com.brad.t3code.widgets`; both profiles reuse the same
+distribution certificate stored on EAS.
+
+When uploading an already completed iOS build, use `mode=submit` with its EAS
+build ID. That lane downloads the signed IPA and uploads it directly with
+Xcode's bundled App Store uploader on a hosted macOS runner, so it does not
+depend on the EAS Submit service. Apple requires the initial app record to be
+created on the App Store Connect website; the API intentionally does not permit
+creating apps. Create one iOS record named `T3 Code - Fork` for bundle ID
+`com.brad.t3code`, primary language `English (U.S.)`, SKU
+`t3code-ios-production`, and full user access. The workflow confirms that record
+exists before uploading:
+
+```bash
+gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
+  -f mode=submit \
+  -f platform=ios \
+  -f build_id=<eas-build-id>
+```
+
+Do not try to bootstrap Apple signing by piping answers into an interactive
+EAS command in CI. On this individual Apple Developer account, a trusted Mac
+with the Account Holder's restored Apple ID session must create or refresh the
+profiles. From an up-to-date `main` checkout, run:
+
+```bash
+cd apps/mobile
+APP_VARIANT=production eas credentials:configure-build --platform ios --profile production
+```
+
+Accept the existing valid distribution certificate and generate a profile for
+each target. After EAS reports that all credentials are ready, dispatch the
+normal non-interactive production workflow:
+
+```bash
+gh workflow run mobile-eas-production.yml --repo jimprince/t3code \
+  -f mode=build \
+  -f platform=ios
+```
+
+PRs still use `mobile-eas-preview.yml`, which deploys preview builds/updates
+with Expo fingerprinting and the `preview:dev` EAS profile.
+
+Do not re-add Linux Electron/AppImage, Windows, or macOS x64 unless the user
+explicitly changes the support target.
+
+macOS arm64 builds prefer the local self-hosted `t3code-mac-arm64` runner when
+release preflight can confirm it is online and idle. Start it before dispatching
+a release:
+
+```bash
+t3code-mac-runner start 7200
+```
+
+If the runner is offline, busy, or runner-state API access is unavailable, the
+macOS build falls back to GitHub-hosted `macos-15`. Linux/headless builds stay
+on GitHub-hosted Ubuntu.
+
+To make local-runner detection work in GitHub Actions, configure
+`T3CODE_RUNNER_STATE_TOKEN` as a repository secret with read access to the
+repository self-hosted runner list. GitHub documents the required fine-grained
+token permission for that API as repository `Administration` read access. The
+workflow also tries the existing `GH_PAT` secret as a compatibility fallback.
+
+Nightly preflight and headless Linux installs skip dependency lifecycle scripts
+so native dependency hangs do not block macOS updater releases.
+
+The headless Linux x64 tarball is required for both stable and nightly
+releases. It is built in a separate Ubuntu job, includes `bin/t3`,
+`apps/server/dist/bin.mjs`, `apps/server/dist/client/**`, and production
+`node_modules`, and is smoke-tested after a clean unpack before publication.
+The target VM must have Node.js 22.16 or newer; the current release workflow
+uses the repo `package.json` Node version.
+
+## Headless Server Install / Update
+
+The headless server does not use Electron's in-app updater. Treat it like a
+Linux daemon: an external updater stages release tarballs into versioned
+directories, flips a `current` symlink only after validation, then restarts
+`t3code.service`.
+
+This is safe while the app is running. The running Node process keeps using the
+files it already opened; the updater never overwrites that active release
+directory. Existing browser clients may disconnect during the final service
+restart, then reconnect to the new version. If the new release fails its health
+check, the updater flips `current` back to the previous release and restarts
+again.
+
+Discover the latest fork release before installing or testing. Do not hardcode
+an old nightly tag:
+
+```bash
+gh release list --repo jimprince/t3code --limit 10
+```
+
+Install or update the remote VM from a release asset:
+
+```bash
+set -euo pipefail
+
+repo="jimprince/t3code"
+tag="<release-tag>"
+version="${tag#v}"
+root="/home/brad/.local/share/t3code-server"
+release_dir="$root/releases/$version"
+asset="t3-headless-${version}-linux-x64.tar.gz"
+
+mkdir -p "$root/releases"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+gh release download "$tag" --repo "$repo" --pattern "$asset" --dir "$tmp"
+mkdir -p "$release_dir"
+tar -xzf "$tmp/$asset" -C "$release_dir" --strip-components 1
+ln -sfn "$release_dir" "$root/current"
+
+"$root/current/bin/t3" --version
+sudo systemctl restart t3code.service
+sudo systemctl status t3code.service --no-pager
+curl -I http://100.64.0.4:3773/
+```
+
+The service command should run the current symlink:
+
+```bash
+/home/brad/.local/share/t3code-server/current/bin/t3 serve \
+  --mode web \
+  --host 100.64.0.4 \
+  --port 3773 \
+  --no-browser \
+  --base-dir /home/brad/.local/share/t3code-dev
+```
+
+### Headless Auto-Update
+
+The canonical updater script is `scripts/headless-auto-upgrade.sh`. Install it
+on the VM as `~/.local/bin/t3code-headless-upgrade` and run it from a systemd
+timer. By default it tracks the latest stable GitHub release from
+`jimprince/t3code`; set `T3CODE_HEADLESS_CHANNEL=nightly` only for an explicit
+nightly host.
+
+Recommended user timer:
+
+```ini
+# ~/.config/systemd/user/t3code-headless-upgrade.service
+[Unit]
+Description=Update T3 Code headless server from GitHub Releases
+
+[Service]
+Type=oneshot
+Environment=T3CODE_HEADLESS_CHANNEL=stable
+Environment=T3CODE_HEADLESS_ROOT=%h/.local/share/t3code-server
+ExecStart=%h/.local/bin/t3code-headless-upgrade
+```
+
+```ini
+# ~/.config/systemd/user/t3code-headless-upgrade.timer
+[Unit]
+Description=Check for T3 Code headless server updates
+
+[Timer]
+OnCalendar=*-*-* 05:20:00
+RandomizedDelaySec=45m
+Persistent=true
+Unit=t3code-headless-upgrade.service
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable and inspect it:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now t3code-headless-upgrade.timer
+systemctl --user list-timers t3code-headless-upgrade.timer
+journalctl --user -u t3code-headless-upgrade.service -n 100 --no-pager
+```
+
+The timer checks once per day at 05:20 UTC with up to 45 minutes of randomized
+delay. `Persistent=true` makes systemd run a missed check after the machine
+comes back.
+
+For a user timer to run after reboot before the user logs in, enable lingering
+once with `sudo loginctl enable-linger brad`. If lingering is unavailable, use
+a system timer that runs the same script as the install user.
+
+Newer clients can also request an immediate server-side check when the connected
+Linux server reports an older `serverVersion`. That request goes through the
+authenticated websocket RPC `server.requestHeadlessUpdateCheck`; the server
+rate-limits it and starts `t3code-headless-upgrade.service` through
+`systemctl --user`, so the updater runs outside the T3 server process and can
+safely restart `t3code.service`. Non-Linux hosts or Linux hosts without the
+upgrade service report `unsupported` and do nothing.
+
+The client exposes this as an explicit **Upgrade Remote** action on the
+client/server version-mismatch banner. It asks for confirmation before making
+the RPC request and reports queued, already-requested, unsupported, and failed
+outcomes. Loading a newer client by itself does not start an upgrade check.
+
+If the timer runs while `t3code.service` is active, it downloads and validates
+the new release first. Downtime is limited to the final restart. The updater
+keeps the previous release for rollback and prunes older releases after a
+successful update. When an unprivileged `systemctl restart` is unavailable, the
+fallback verifies that systemd actually replaces the old `MainPID`; it allows a
+10-second graceful `SIGTERM` window and then forces down only that stuck main
+process so `Restart=always` can start the selected release. This prevents the
+upgrade and rollback checks from querying an old process after merely delivering
+a signal.
+
+## Nightly Release Concurrency
+
+`release.yml` puts all nightly tag pushes in the shared `release-nightly`
+concurrency group with `cancel-in-progress: true`. If multiple upstream
+nightlies queue up (for example because the self-hosted macOS runner was
+offline overnight), only the newest one builds; older queued/in-progress
+nightly runs are cancelled. Stable releases (`v0.0.21`, `v0.0.22-fork.N`) and
+manual `workflow_dispatch` runs use per-run groups and always complete, so
+this does not affect stable update delivery.
+
+To force an older nightly to ship anyway, dispatch `release.yml` manually with
+the desired version — manual dispatch always gets a unique concurrency group:
+
+```bash
+gh workflow run release.yml --repo jimprince/t3code \
+  --ref main \
+  -f channel=stable \
+  -f version=v0.0.22-nightly.20260430.158-fork.1 \
+  -f target_ref=v0.0.22-nightly.20260430.158-fork.1
+```
+
+## Updater Requirements
 
 - Runtime updater: `electron-updater` in `apps/desktop/src/main.ts`.
-- Update UX:
-  - Background checks run on startup delay + interval.
-  - No automatic download or install.
-  - The desktop UI shows a rocket update button when an update is available; click once to download, click again after download to restart/install.
-- Provider: GitHub Releases (`provider: github`) configured at build time.
-- Repository slug source:
-  - `T3CODE_DESKTOP_UPDATE_REPOSITORY` (format `owner/repo`), if set.
-  - otherwise `GITHUB_REPOSITORY` from GitHub Actions.
-- Temporary private-repo auth workaround:
-  - set `T3CODE_DESKTOP_UPDATE_GITHUB_TOKEN` (or `GH_TOKEN`) in the desktop app runtime environment.
-  - the app forwards it as an `Authorization: Bearer <token>` request header for updater HTTP calls.
-- Required release assets for updater:
-  - platform installers (`.exe`, `.dmg`, `.AppImage`, plus macOS `.zip` for Squirrel.Mac update payloads)
-  - channel metadata: `latest*.yml` for stable releases, `nightly*.yml` for nightly releases
-  - `*.blockmap` files (used for differential downloads)
-- macOS metadata note:
-  - `electron-updater` reads `latest-mac.yml` on stable and `nightly-mac.yml` on nightly, for both Intel and Apple Silicon.
-  - The workflow merges the per-arch mac manifests into one channel-specific mac manifest before publishing the GitHub Release.
+- Packaged update provider: GitHub Releases.
+- Repository source: `T3CODE_DESKTOP_UPDATE_REPOSITORY`, otherwise
+  `GITHUB_REPOSITORY`.
+- Stable channel metadata: `latest*.yml`.
+- Nightly channel metadata: `nightly*.yml`.
+- macOS requires both the DMG and zip because Squirrel.Mac uses the zip payload.
+- `scripts/build-desktop-artifact.ts` must write `channel: nightly` into
+  `app-update.yml` for nightly versions.
+- `apps/desktop/src/updateChannels.ts` must continue accepting
+  `*-nightly.YYYYMMDD.RUN-fork.N` as the nightly channel.
 
-## 0) npm OIDC trusted publishing setup (CLI)
+If testing a private repo build locally, the app can use
+`T3CODE_DESKTOP_UPDATE_GITHUB_TOKEN` or `GH_TOKEN` at runtime for updater HTTP
+requests. Do not commit tokens or print them in logs.
 
-The workflow publishes the CLI with `npm publish` from `apps/server` after bumping
-the package version to the release tag version.
+## Verification
 
-Checklist:
+Watch a workflow:
 
-1. Confirm npm org/user owns package `t3` (or rename package first if needed).
-2. In npm package settings, configure Trusted Publisher:
-   - Provider: GitHub Actions
-   - Repository: this repo
-   - Workflow file: `.github/workflows/release.yml`
-   - Environment (if used): match your npm trusted publishing config
-3. Ensure npm account and org policies allow trusted publishing for the package.
-4. Create release tag `vX.Y.Z` and push; workflow will:
-   - set `apps/server/package.json` version to `X.Y.Z`
-   - build web + server
-   - run `npm publish --access public --tag latest`
-5. Nightly runs from the same workflow file publish with `npm publish --access public --tag nightly`.
+```bash
+gh run watch <run-id> --repo jimprince/t3code --exit-status
+```
 
-## 1) Dry-run release without signing
+Inspect a release and its assets:
 
-Use this first to validate the release pipeline.
+```bash
+gh release view <tag> --repo jimprince/t3code \
+  --json tagName,isPrerelease,publishedAt,url,assets
+```
 
-1. Confirm no signing secrets are required for this test.
-2. Create a test tag:
-   - `git tag v0.0.0-test.1`
-   - `git push origin v0.0.0-test.1`
-3. Wait for `.github/workflows/release.yml` to finish.
-4. Verify the GitHub Release contains all platform artifacts.
-5. Download each artifact and sanity-check installation on each OS.
+Smoke-test a downloaded headless asset locally:
 
-## 2) Apple signing + notarization setup (macOS)
+```bash
+bun run smoke:headless:artifact -- \
+  --artifact release/t3-headless-<version>-linux-x64.tar.gz \
+  --version <version>
+```
 
-Required secrets used by the workflow:
+Inspect the nightly mac feed:
 
-- `CSC_LINK`
-- `CSC_KEY_PASSWORD`
-- `APPLE_API_KEY`
-- `APPLE_API_KEY_ID`
-- `APPLE_API_ISSUER`
-- `MACOS_PROVISIONING_PROFILE` (base64-encoded provisioning profile with Associated Domains)
+```bash
+curl -fsSL \
+  https://github.com/jimprince/t3code/releases/download/<tag>/nightly-mac.yml \
+  | sed -n '1,80p'
+```
 
-Required repository variables:
+Check the installed desktop app updater log:
 
-- `APPLE_TEAM_ID`
+```bash
+tail -n 160 ~/.t3/userdata/logs/desktop-main.log \
+  | rg -i 'desktop-updater|Update available|Ignoring|No updates'
+```
 
-Optional repository variables:
+Expected updater proof line:
 
-- `CLERK_PASSKEY_RP_DOMAINS`: comma-separated RP-domain override. By default, the build derives the
-  domain from the production Clerk publishable key.
+```text
+[desktop-updater] Update available: 0.0.22-nightly.20260423.108-fork.2
+```
 
-Checklist:
+## Signing
 
-1. Apple Developer account access:
-   - Team has rights to create Developer ID certificates.
-2. Create an explicit App ID for `com.t3tools.t3code` and enable Associated Domains.
-3. Create a `Developer ID Application` certificate and a compatible provisioning profile for that
-   App ID with Associated Domains enabled.
-4. Export the certificate + private key as `.p12` from Keychain.
-5. Base64-encode the `.p12` and store as `CSC_LINK`.
-6. Base64-encode the provisioning profile and store it as `MACOS_PROVISIONING_PROFILE`.
-7. Store the `.p12` export password as `CSC_KEY_PASSWORD`, and set `APPLE_TEAM_ID` to the
-   10-character Apple Developer Team ID.
-8. In App Store Connect, create an API key (Team key).
-9. Add API key values:
-   - `APPLE_API_KEY`: contents of the downloaded `.p8`
-   - `APPLE_API_KEY_ID`: Key ID
-   - `APPLE_API_ISSUER`: Issuer ID
-10. Complete the Clerk Native API and AASA setup in [T3 Connect Clerk Setup](../cloud/t3-connect-clerk.md#desktop-passkeys).
-11. Re-run a tag release and confirm macOS artifacts are signed/notarized and contain the expected
-    `com.apple.developer.associated-domains` entitlement.
+macOS release artifacts are Developer ID-signed and notarized when all required
+Apple secrets are present: `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_API_KEY`,
+`APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`. The release workflow logs
+`macOS signing enabled.` before the desktop build and Electron Builder should
+later log `notarization successful`.
 
-Notes:
+If any required Apple secret is missing, the macOS build intentionally proceeds
+unsigned and logs `macOS signing disabled (missing one or more Apple signing
+secrets).` Do not print or inspect secret values; use `gh secret list --repo
+jimprince/t3code` only to confirm secret names exist. The Linux headless tarball
+is not code-signed. Windows signing setup is intentionally omitted because
+Windows builds are not part of the fork release matrix.
 
-- `APPLE_API_KEY` is stored as raw key text in secrets.
-- The workflow writes it to a temporary `AuthKey_<id>.p8` file at runtime.
-- The workflow decodes `MACOS_PROVISIONING_PROFILE`, validates it with `security cms`, and passes it
-  to the desktop packager.
+## Troubleshooting
 
-## 3) Azure Trusted Signing setup (Windows)
+- An upstream nightly can temporarily fail the fork's stricter Effect-aware
+  TypeScript diagnostics in the server package. Release preflight runs strict
+  typechecking for every other workspace; the server artifact build and runtime
+  test suite remain required. Keep the regular `vp run typecheck` gate in
+  normal CI; do not weaken it to make a release green.
+  Keep the regular `vp run typecheck` gate in normal CI; do not weaken it to
+  make a release green.
 
-Required secrets used by the workflow:
-
-- `AZURE_TENANT_ID`
-- `AZURE_CLIENT_ID`
-- `AZURE_CLIENT_SECRET`
-- `AZURE_TRUSTED_SIGNING_ENDPOINT`
-- `AZURE_TRUSTED_SIGNING_ACCOUNT_NAME`
-- `AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE_NAME`
-- `AZURE_TRUSTED_SIGNING_PUBLISHER_NAME`
-
-Checklist:
-
-1. Create Azure Trusted Signing account and certificate profile.
-2. Record ATS values:
-   - Endpoint
-   - Account name
-   - Certificate profile name
-   - Publisher name
-3. Create/choose an Entra app registration (service principal).
-4. Grant service principal permissions required by Trusted Signing.
-5. Create a client secret for the service principal.
-6. Add Azure secrets listed above in GitHub Actions secrets.
-7. Re-run a tag release and confirm Windows installer is signed.
-
-## 4) Ongoing release checklist
-
-1. Ensure `main` is green in CI.
-2. Bump app version as needed.
-3. Create release tag: `vX.Y.Z`.
-4. Push tag.
-5. Verify workflow steps:
-   - preflight passes
-   - all matrix builds pass
-   - `publish_cli` publishes the exact release version before the release job
-   - release job uploads expected files
-6. Smoke test downloaded artifacts.
-
-## 5) Troubleshooting
-
-- macOS build unsigned when expected signed:
-  - Check all Apple secrets plus `APPLE_TEAM_ID` are populated and non-empty.
-  - Confirm the provisioning profile belongs to `APPLE_TEAM_ID.com.t3tools.t3code` and includes
-    Associated Domains.
-- Windows build unsigned when expected signed:
-  - Check all Azure ATS and auth secrets are populated and non-empty.
-- Build fails with signing error:
-  - Retry with secrets removed to confirm unsigned path still works.
-  - Re-check certificate/profile names and tenant/client credentials.
+- `403 Resource not accessible by integration` while publishing a release:
+  ensure `release.yml` grants `contents: write`, the release step can use
+  `secrets.GH_PAT || github.token`, and the repo has a release-capable
+  `GH_PAT` secret. Do not print or inspect the secret value.
+- Nightly release publishes but updater does not see it: confirm the release
+  has `nightly-mac.yml`, the app is on the `nightly` update channel, and the
+  version matches `*-nightly.YYYYMMDD.RUN-fork.N`.
+- Nightly feed points at an assetless release: delete the orphan release/tag or
+  republish it with the required updater assets. Assetless nightly feed entries
+  poison updater discovery.
+- macOS job never starts: check the preflight "Resolve macOS runner" step. It
+  should choose GitHub-hosted `macos-15` if the local runner is offline, busy,
+  or not queryable. To use the local machine, start it with
+  `t3code-mac-runner start 7200`, verify the `t3code-mac-arm64` label, and make
+  sure `T3CODE_RUNNER_STATE_TOKEN` or `GH_PAT` can list repository
+  self-hosted runners.

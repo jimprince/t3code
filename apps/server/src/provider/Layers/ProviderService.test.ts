@@ -23,6 +23,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { it, assert, vi } from "@effect/vitest";
 
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -49,6 +50,7 @@ import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.
 import { makeProviderServiceLive } from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
+import { makeServerBootGenerationLayer } from "./ServerBootGeneration.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import {
@@ -284,7 +286,10 @@ function makeProviderServiceLayer() {
   const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
     Layer.provide(SqlitePersistenceMemory),
   );
-  const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+  const directoryLayer = ProviderSessionDirectoryLive.pipe(
+    Layer.provide(runtimeRepositoryLayer),
+    Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+  );
 
   const layer = it.layer(
     Layer.mergeAll(
@@ -337,7 +342,10 @@ it.effect("ProviderServiceLive catches stopAll failures during shutdown", () =>
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
     const providerLayer = Layer.mergeAll(
       makeProviderServiceLive().pipe(
         Layer.provide(providerAdapterLayer),
@@ -397,7 +405,10 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
     const providerLayer = makeProviderServiceLive().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
@@ -481,6 +492,7 @@ it.effect(
       );
       const directoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const providerLayer = makeProviderServiceLive().pipe(
         Layer.provide(providerAdapterLayer),
@@ -551,7 +563,10 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
     const providerLayer = makeProviderServiceLive().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
@@ -596,7 +611,10 @@ it.effect("ProviderServiceLive writes canonical events to the emitting thread se
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
     const providerLayer = makeProviderServiceLive({
       canonicalEventLogger: {
         filePath: "memory://provider-canonical-events",
@@ -656,7 +674,10 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(persistenceLayer),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
 
     yield* Effect.gen(function* () {
       const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
@@ -730,6 +751,7 @@ it.effect(
 
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const firstProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -789,6 +811,7 @@ it.effect(
       });
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const secondProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -841,6 +864,281 @@ it.effect(
 );
 
 routing.layer("ProviderServiceLive routing", (it) => {
+  it.effect("reserves an active-turn marker before the provider send can complete", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const threadId = asThreadId("thread-send-reservation");
+      const turnId = asTurnId("turn-send-reservation");
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const previewValue = (yield* directory.listBindings()).find(
+        (binding) => binding.threadId === threadId,
+      );
+      const previewBinding = previewValue === undefined ? Option.none() : Option.some(previewValue);
+      assert.equal(Option.isSome(previewBinding), true);
+      if (Option.isNone(previewBinding)) return;
+
+      const sendGate = yield* Deferred.make<ProviderTurnStartResult>();
+      routing.codex.sendTurn.mockImplementationOnce(() => Deferred.await(sendGate));
+      const sendFiber = yield* provider
+        .sendTurn({
+          threadId,
+          input: "hold the provider response",
+          attachments: [],
+        })
+        .pipe(Effect.forkChild);
+      while (routing.codex.sendTurn.mock.calls.length === 0) {
+        yield* Effect.yieldNow;
+      }
+
+      const reservedBinding = yield* directory.getBinding(threadId);
+      assert.equal(Option.isSome(reservedBinding), true);
+      if (Option.isSome(reservedBinding)) {
+        assert.match(
+          String(reservedBinding.value.activeTurnId),
+          /^pending:/,
+          "REGRESSION: recovery could observe the session as idle while sendTurn was in flight",
+        );
+      }
+      assert.equal(
+        yield* directory.claimIdleForRecovery({
+          threadId,
+          expectedLastSeenAt: previewBinding.value.lastSeenAt,
+        }),
+        false,
+        "REGRESSION: recovery claimed a provider while sendTurn was in flight",
+      );
+
+      yield* Deferred.succeed(sendGate, { threadId, turnId });
+      const turn = yield* Fiber.join(sendFiber);
+      assert.equal(turn.turnId, turnId);
+      const activeBinding = yield* directory.getBinding(threadId);
+      assert.equal(
+        Option.getOrUndefined(activeBinding)?.activeTurnId,
+        turnId,
+        "REGRESSION: the pending marker was not replaced by the provider turn id",
+      );
+      yield* provider.stopSession({ threadId });
+      routing.codex.sendTurn.mockClear();
+    }),
+  );
+
+  it.effect("does not resurrect a turn that completed before sendTurn returned", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const threadId = asThreadId("thread-send-fast-completion");
+      const turnId = asTurnId("turn-send-fast-completion");
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "full-access",
+      });
+      routing.codex.sendTurn.mockImplementationOnce(() =>
+        Effect.gen(function* () {
+          yield* directory.markTurnStarted({ threadId, turnId });
+          yield* directory.markTurnTerminal({ threadId, expectedTurnId: turnId });
+          return { threadId, turnId };
+        }).pipe(Effect.orDie),
+      );
+
+      yield* provider.sendTurn({
+        threadId,
+        input: "complete before send returns",
+        attachments: [],
+      });
+
+      const binding = yield* directory.getBinding(threadId);
+      assert.equal(
+        Option.getOrUndefined(binding)?.activeTurnId,
+        null,
+        "REGRESSION: sendTurn overwrote an already-terminal lifecycle update",
+      );
+      yield* provider.stopSession({ threadId });
+      routing.codex.sendTurn.mockClear();
+    }),
+  );
+
+  it.effect("creates a fallback fork binding without resuming an unsupported provider", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("thread-fork-fallback-source");
+      const targetThreadId = asThreadId("thread-fork-fallback-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: ProviderDriverKind.make("codex"),
+        providerInstanceId: codexInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/source-project",
+        runtimeMode: "full-access",
+      });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+      routing.codex.startSession.mockClear();
+
+      const result = yield* provider.forkConversation({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/fork-project",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("turn-1"),
+        runtimeMode: "full-access",
+        modelSelection: createModelSelection(codexInstanceId, "gpt-5.6-terra"),
+      });
+      const targetBinding = yield* directory
+        .getBinding(targetThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+
+      assert.equal(result.native, false);
+      assert.equal(routing.codex.startSession.mock.calls.length, 0);
+      assert.equal(targetBinding?.resumeCursor, null);
+      assert.deepEqual(targetBinding?.runtimePayload, {
+        cwd: "/tmp/fork-project",
+        modelSelection: createModelSelection(codexInstanceId, "gpt-5.6-terra"),
+      });
+    }),
+  );
+
+  it.effect("falls back when a provider-native fork fails", () => {
+    const forkThread = vi.fn<NonNullable<ProviderAdapterShape<ProviderAdapterError>["forkThread"]>>(
+      () =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: String(CLAUDE_AGENT_DRIVER),
+            method: "thread/fork",
+            detail: "simulated native fork failure",
+          }),
+        ),
+    );
+    Object.assign(routing.claude.adapter, { forkThread });
+
+    return Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("thread-fork-error-source");
+      const targetThreadId = asThreadId("thread-fork-error-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: CLAUDE_AGENT_DRIVER,
+        providerInstanceId: claudeAgentInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/source-project",
+        runtimeMode: "full-access",
+      });
+
+      const result = yield* provider.forkConversation({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/fork-project",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("turn-1"),
+        runtimeMode: "full-access",
+        modelSelection: createModelSelection(claudeAgentInstanceId, "claude-fable-5"),
+      });
+      const targetBinding = yield* directory
+        .getBinding(targetThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+
+      assert.equal(result.native, false);
+      assert.equal(forkThread.mock.calls.length, 1);
+      assert.equal(targetBinding?.resumeCursor, null);
+      yield* provider.stopSession({ threadId: sourceThreadId });
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          delete (routing.claude.adapter as { forkThread?: unknown }).forkThread;
+          routing.claude.startSession.mockClear();
+          routing.claude.stopSession.mockClear();
+        }),
+      ),
+    );
+  });
+
+  it.effect("stops a source session recovered only for a native fork", () => {
+    const forkThread = vi.fn<NonNullable<ProviderAdapterShape<ProviderAdapterError>["forkThread"]>>(
+      () =>
+        Effect.succeed({
+          resumeCursor: { resume: "forked-provider-session" },
+          turnCount: 1,
+        }),
+    );
+    Object.assign(routing.claude.adapter, { forkThread });
+
+    return Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const sourceThreadId = asThreadId("thread-fork-recovered-source");
+      const targetThreadId = asThreadId("thread-fork-recovered-target");
+      yield* provider.startSession(sourceThreadId, {
+        provider: CLAUDE_AGENT_DRIVER,
+        providerInstanceId: claudeAgentInstanceId,
+        threadId: sourceThreadId,
+        cwd: "/tmp/source-project",
+        runtimeMode: "full-access",
+      });
+      yield* provider.stopSession({ threadId: sourceThreadId });
+      const stoppedSourceBinding = yield* directory
+        .getBinding(sourceThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+      assert.notEqual(stoppedSourceBinding, undefined);
+      if (stoppedSourceBinding === undefined) return;
+      yield* directory.upsert({
+        ...stoppedSourceBinding,
+        runtimePayload: {
+          ...(stoppedSourceBinding.runtimePayload as Record<string, unknown>),
+          threadTransferContextHandoff: {
+            version: 1,
+            consumedExportedAt: "2026-07-19T00:00:00.000Z",
+          },
+        },
+      });
+      routing.claude.startSession.mockClear();
+      routing.claude.stopSession.mockClear();
+
+      const result = yield* provider.forkConversation({
+        sourceThreadId,
+        targetThreadId,
+        cwd: "/tmp/fork-project",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("turn-1"),
+        runtimeMode: "full-access",
+        modelSelection: createModelSelection(claudeAgentInstanceId, "claude-fable-5"),
+      });
+      const sourceBinding = yield* directory
+        .getBinding(sourceThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+      const targetBinding = yield* directory
+        .getBinding(targetThreadId)
+        .pipe(Effect.map(Option.getOrUndefined));
+
+      assert.equal(result.native, true);
+      assert.equal(routing.claude.startSession.mock.calls.length, 1);
+      assert.deepEqual(routing.claude.stopSession.mock.calls, [[sourceThreadId]]);
+      assert.equal(yield* routing.claude.hasSession(sourceThreadId), false);
+      assert.equal(sourceBinding?.status, "stopped");
+      assert.deepEqual(
+        (targetBinding?.runtimePayload as Record<string, unknown> | undefined)
+          ?.threadTransferContextHandoff,
+        {
+          version: 1,
+          consumedExportedAt: "2026-07-19T00:00:00.000Z",
+        },
+      );
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => {
+          delete (routing.claude.adapter as { forkThread?: unknown }).forkThread;
+          routing.claude.startSession.mockClear();
+          routing.claude.stopSession.mockClear();
+        }),
+      ),
+    );
+  });
+
   it.effect("routes provider operations and rollback conversation", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
@@ -1300,6 +1598,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const firstProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -1338,6 +1637,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const secondProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -1406,6 +1706,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         });
         const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
+          Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
         );
         const firstProviderLayer = makeProviderServiceLive().pipe(
           Layer.provide(
@@ -1439,6 +1740,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         });
         const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
+          Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
         );
         const secondProviderLayer = makeProviderServiceLive().pipe(
           Layer.provide(
@@ -1493,11 +1795,17 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
   it.effect("fans out adapter turn completion events", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
       const session = yield* provider.startSession(asThreadId("thread-1"), {
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
+      });
+      const turn = yield* provider.sendTurn({
+        threadId: session.threadId,
+        input: "hello",
+        attachments: [],
       });
 
       const eventsRef = yield* Ref.make<Array<ProviderRuntimeEvent>>([]);
@@ -1512,7 +1820,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         provider: ProviderDriverKind.make("codex"),
         createdAt: "2026-01-01T00:00:00.000Z",
         threadId: session.threadId,
-        turnId: asTurnId("turn-1"),
+        turnId: turn.turnId,
         status: "completed",
       };
 
@@ -1533,6 +1841,17 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         ),
         true,
       );
+
+      const binding = yield* directory.getBinding(session.threadId);
+      assert.equal(Option.isSome(binding), true);
+      if (Option.isSome(binding)) {
+        assert.equal(
+          binding.value.activeTurnId,
+          null,
+          "REGRESSION: terminal provider events must release the completed turn",
+        );
+        assert.deepInclude(binding.value.runtimePayload, { activeTurnId: null });
+      }
     }),
   );
 
