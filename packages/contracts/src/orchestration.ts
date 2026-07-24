@@ -30,6 +30,9 @@ export const ORCHESTRATION_WS_METHODS = {
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
+  exportThread: "orchestration.exportThread",
+  importThread: "orchestration.importThread",
+  forkThread: "orchestration.forkThread",
 } as const;
 
 export const ProviderApprovalPolicy = Schema.Literals([
@@ -209,9 +212,13 @@ export const ProjectScript = Schema.Struct({
 });
 export type ProjectScript = typeof ProjectScript.Type;
 
+export const ProjectKind = Schema.Literals(["workspace", "chat"]);
+export type ProjectKind = typeof ProjectKind.Type;
+
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(ProjectKind),
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
@@ -342,6 +349,22 @@ export const OrchestrationLatestTurn = Schema.Struct({
 });
 export type OrchestrationLatestTurn = typeof OrchestrationLatestTurn.Type;
 
+export const OrchestrationThreadGoalStatus = Schema.Literals(["active", "achieved"]);
+export type OrchestrationThreadGoalStatus = typeof OrchestrationThreadGoalStatus.Type;
+
+export const OrchestrationThreadGoal = Schema.Struct({
+  goal: TrimmedNonEmptyString.check(Schema.isMaxLength(8_000)),
+  status: OrchestrationThreadGoalStatus,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  achievedAt: Schema.NullOr(IsoDateTime),
+  lastEvaluatedAt: Schema.NullOr(IsoDateTime),
+  lastReason: Schema.NullOr(Schema.String),
+  lastTurnId: Schema.NullOr(TurnId),
+  continuationCount: NonNegativeInt,
+});
+export type OrchestrationThreadGoal = typeof OrchestrationThreadGoal.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -354,6 +377,7 @@ export const OrchestrationThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
+  goal: Schema.optionalKey(Schema.NullOr(OrchestrationThreadGoal)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -383,6 +407,7 @@ export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
 export const OrchestrationProjectShell = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(ProjectKind),
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
@@ -404,6 +429,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
+  goal: Schema.optionalKey(Schema.NullOr(OrchestrationThreadGoal)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -505,11 +531,171 @@ export const OrchestrationThreadDetailSnapshot = Schema.Struct({
 });
 export type OrchestrationThreadDetailSnapshot = typeof OrchestrationThreadDetailSnapshot.Type;
 
+/**
+ * Thread move bundle — the portable representation of one thread used to move
+ * it between execution environments (machines). Produced by
+ * `orchestration.exportThread` on the source server and consumed verbatim by
+ * `orchestration.importThread` on the target server; the client never
+ * inspects or rewrites its contents.
+ *
+ * The bundle is versioned: importers only accept the version they understand,
+ * so a newer source server cannot silently corrupt an older target.
+ */
+export const THREAD_MOVE_BUNDLE_VERSION = 1;
+
+/**
+ * Portable thread state — everything the orchestration read model needs to
+ * reconstruct the visible thread history on another environment. Machine-bound
+ * fields (`projectId`, `worktreePath`, session/runtime state) are intentionally
+ * absent; the importer supplies target-environment values.
+ */
+export const PortableThread = Schema.Struct({
+  id: ThreadId,
+  title: TrimmedNonEmptyString,
+  modelSelection: ModelSelection,
+  runtimeMode: RuntimeMode,
+  interactionMode: ProviderInteractionMode,
+  branch: Schema.NullOr(TrimmedNonEmptyString),
+  goal: Schema.NullOr(OrchestrationThreadGoal),
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  messages: Schema.Array(OrchestrationMessage),
+  proposedPlans: Schema.Array(OrchestrationProposedPlan),
+  activities: Schema.Array(OrchestrationThreadActivity),
+  checkpoints: Schema.Array(OrchestrationCheckpointSummary),
+});
+export type PortableThread = typeof PortableThread.Type;
+
+export const ThreadMoveUntrackedFile = Schema.Struct({
+  path: TrimmedNonEmptyString,
+  contentBase64: Schema.String,
+});
+export type ThreadMoveUntrackedFile = typeof ThreadMoveUntrackedFile.Type;
+
+export const ThreadMoveGitState = Schema.Struct({
+  branch: TrimmedNonEmptyString,
+  /** Commit the thread branch pointed at when exported. */
+  branchTipSha: TrimmedNonEmptyString,
+  /**
+   * Thin `git bundle` of the thread branch plus its checkpoint refs (base64).
+   * Null when the branch had no commits the target clone would be missing —
+   * the importer then recreates the branch directly from `branchTipSha`.
+   */
+  bundleBase64: Schema.NullOr(Schema.String),
+  checkpointRefs: Schema.Array(CheckpointRef),
+  /** `git diff HEAD --binary` of tracked uncommitted changes, if any. */
+  dirtyDiff: Schema.NullOr(Schema.String),
+  untrackedFiles: Schema.Array(ThreadMoveUntrackedFile),
+});
+export type ThreadMoveGitState = typeof ThreadMoveGitState.Type;
+
+export const ThreadMoveProviderSessionFile = Schema.Struct({
+  fileName: TrimmedNonEmptyString,
+  content: Schema.String,
+});
+export type ThreadMoveProviderSessionFile = typeof ThreadMoveProviderSessionFile.Type;
+
+export const ThreadMoveProviderSession = Schema.Struct({
+  providerName: TrimmedNonEmptyString,
+  providerInstanceId: Schema.NullOr(ProviderInstanceId),
+  adapterKey: TrimmedNonEmptyString,
+  runtimeMode: RuntimeMode,
+  resumeCursor: Schema.NullOr(Schema.Unknown),
+  /** Working directory the provider session ran in on the source machine. */
+  sourceCwd: Schema.NullOr(TrimmedNonEmptyString),
+  /** Provider-owned session transcript (e.g. Claude Code session JSONL). */
+  sessionFile: Schema.NullOr(ThreadMoveProviderSessionFile),
+});
+export type ThreadMoveProviderSession = typeof ThreadMoveProviderSession.Type;
+
+export const ThreadMoveBundle = Schema.Struct({
+  version: Schema.Literal(THREAD_MOVE_BUNDLE_VERSION),
+  exportedAt: IsoDateTime,
+  sourceProjectId: ProjectId,
+  sourceWorkspaceRoot: TrimmedNonEmptyString,
+  repositoryIdentity: Schema.NullOr(RepositoryIdentity),
+  thread: PortableThread,
+  git: Schema.NullOr(ThreadMoveGitState),
+  providerSession: Schema.NullOr(ThreadMoveProviderSession),
+  warnings: Schema.Array(Schema.String),
+});
+export type ThreadMoveBundle = typeof ThreadMoveBundle.Type;
+
+export const OrchestrationExportThreadInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type OrchestrationExportThreadInput = typeof OrchestrationExportThreadInput.Type;
+
+export const OrchestrationExportThreadResult = Schema.Struct({
+  bundle: ThreadMoveBundle,
+});
+export type OrchestrationExportThreadResult = typeof OrchestrationExportThreadResult.Type;
+
+/**
+ * How the importer should react when the thread's branch already exists on
+ * the target with different history or is checked out there. Default is
+ * "fail" with a machine-readable `reason: "branch-conflict"` so clients can
+ * offer the fallback as an explicit user choice and retry with
+ * "new-worktree" (a fallback branch at the exported tip + fresh worktree;
+ * the target's own branch is never modified).
+ */
+export const ThreadMoveBranchConflictResolution = Schema.Literals(["fail", "new-worktree"]);
+export type ThreadMoveBranchConflictResolution = typeof ThreadMoveBranchConflictResolution.Type;
+
+export const OrchestrationImportThreadInput = Schema.Struct({
+  projectId: ProjectId,
+  bundle: ThreadMoveBundle,
+  branchConflict: Schema.optional(ThreadMoveBranchConflictResolution),
+});
+export type OrchestrationImportThreadInput = typeof OrchestrationImportThreadInput.Type;
+
+export const OrchestrationImportThreadResult = Schema.Struct({
+  threadId: ThreadId,
+  worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  warnings: Schema.Array(Schema.String),
+});
+export type OrchestrationImportThreadResult = typeof OrchestrationImportThreadResult.Type;
+
+export const ThreadForkWorkspaceMode = Schema.Literals(["current", "new-worktree"]);
+export type ThreadForkWorkspaceMode = typeof ThreadForkWorkspaceMode.Type;
+
+export const OrchestrationForkThreadInput = Schema.Struct({
+  sourceThreadId: ThreadId,
+  messageId: MessageId,
+  workspaceMode: ThreadForkWorkspaceMode,
+});
+export type OrchestrationForkThreadInput = typeof OrchestrationForkThreadInput.Type;
+
+export const OrchestrationForkThreadResult = Schema.Struct({
+  threadId: ThreadId,
+  worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  prefilledPrompt: Schema.NullOr(Schema.String),
+  prefilledAttachments: Schema.Array(ChatAttachment),
+  warnings: Schema.Array(Schema.String),
+});
+export type OrchestrationForkThreadResult = typeof OrchestrationForkThreadResult.Type;
+
 export const ProjectCreateCommand = Schema.Struct({
   type: Schema.Literal("project.create"),
   commandId: CommandId,
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(ProjectKind),
+  workspaceRoot: TrimmedNonEmptyString,
+  createWorkspaceRootIfMissing: Schema.optional(Schema.Boolean),
+  defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
+  createdAt: IsoDateTime,
+});
+
+// Chat projects are server-owned infrastructure. Network clients may omit
+// `kind` for backwards compatibility or explicitly create a workspace project,
+// but cannot mint protected chat projects.
+const ClientProjectCreateCommand = Schema.Struct({
+  type: Schema.Literal("project.create"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(Schema.Literal("workspace")),
   workspaceRoot: TrimmedNonEmptyString,
   createWorkspaceRootIfMissing: Schema.optional(Schema.Boolean),
   defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
@@ -607,6 +793,21 @@ const ThreadInteractionModeSetCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   interactionMode: ProviderInteractionMode,
+  createdAt: IsoDateTime,
+});
+
+const ThreadGoalSetCommand = Schema.Struct({
+  type: Schema.Literal("thread.goal.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  goal: OrchestrationThreadGoal.fields.goal,
+  createdAt: IsoDateTime,
+});
+
+const ThreadGoalClearCommand = Schema.Struct({
+  type: Schema.Literal("thread.goal.clear"),
+  commandId: CommandId,
+  threadId: ThreadId,
   createdAt: IsoDateTime,
 });
 
@@ -730,6 +931,8 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
+  ThreadGoalSetCommand,
+  ThreadGoalClearCommand,
   ThreadTurnStartCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
@@ -741,7 +944,7 @@ export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
 
 export const ClientOrchestrationCommand = Schema.Union([
-  ProjectCreateCommand,
+  ClientProjectCreateCommand,
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
@@ -753,6 +956,8 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
+  ThreadGoalSetCommand,
+  ThreadGoalClearCommand,
   ClientThreadTurnStartCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
@@ -827,6 +1032,34 @@ const ThreadRevertCompleteCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
+const ThreadGoalEvaluationRecordCommand = Schema.Struct({
+  type: Schema.Literal("thread.goal.evaluation.record"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  turnId: TurnId,
+  achieved: Schema.Boolean,
+  reason: Schema.String,
+  continuationRequested: Schema.Boolean,
+  createdAt: IsoDateTime,
+});
+
+/**
+ * Server-internal command dispatched by the thread-move import path. Carries a
+ * `PortableThread` and target-environment values; the decider expands it into
+ * the existing event vocabulary (`thread.created`, `thread.message-sent`, …)
+ * so projections and reactors need no import-specific handling.
+ */
+const ThreadImportCommand = Schema.Struct({
+  type: Schema.Literal("thread.import"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  projectId: ProjectId,
+  thread: PortableThread,
+  branch: Schema.NullOr(TrimmedNonEmptyString),
+  worktreePath: Schema.NullOr(TrimmedNonEmptyString),
+  createdAt: IsoDateTime,
+});
+
 const InternalOrchestrationCommand = Schema.Union([
   ThreadSessionSetCommand,
   ThreadMessageAssistantDeltaCommand,
@@ -835,6 +1068,8 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadTurnDiffCompleteCommand,
   ThreadActivityAppendCommand,
   ThreadRevertCompleteCommand,
+  ThreadGoalEvaluationRecordCommand,
+  ThreadImportCommand,
 ]);
 export type InternalOrchestrationCommand = typeof InternalOrchestrationCommand.Type;
 
@@ -857,6 +1092,9 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.meta-updated",
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
+  "thread.goal-set",
+  "thread.goal-cleared",
+  "thread.goal-evaluated",
   "thread.message-sent",
   "thread.turn-start-requested",
   "thread.turn-interrupt-requested",
@@ -879,6 +1117,7 @@ export const OrchestrationActorKind = Schema.Literals(["client", "server", "prov
 export const ProjectCreatedPayload = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(ProjectKind),
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
@@ -965,6 +1204,27 @@ export const ThreadInteractionModeSetPayload = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadGoalSetPayload = Schema.Struct({
+  threadId: ThreadId,
+  goal: OrchestrationThreadGoal,
+});
+
+export const ThreadGoalClearedPayload = Schema.Struct({
+  threadId: ThreadId,
+  clearedAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadGoalEvaluatedPayload = Schema.Struct({
+  threadId: ThreadId,
+  turnId: TurnId,
+  achieved: Schema.Boolean,
+  reason: Schema.String,
+  continuationRequested: Schema.Boolean,
+  evaluatedAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
 
@@ -1136,6 +1396,21 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.interaction-mode-set"),
     payload: ThreadInteractionModeSetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.goal-set"),
+    payload: ThreadGoalSetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.goal-cleared"),
+    payload: ThreadGoalClearedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.goal-evaluated"),
+    payload: ThreadGoalEvaluatedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
@@ -1338,6 +1613,18 @@ export const OrchestrationRpcSchemas = {
     input: OrchestrationSubscribeShellInput,
     output: OrchestrationShellStreamItem,
   },
+  exportThread: {
+    input: OrchestrationExportThreadInput,
+    output: OrchestrationExportThreadResult,
+  },
+  importThread: {
+    input: OrchestrationImportThreadInput,
+    output: OrchestrationImportThreadResult,
+  },
+  forkThread: {
+    input: OrchestrationForkThreadInput,
+    output: OrchestrationForkThreadResult,
+  },
 } as const;
 
 export class OrchestrationGetSnapshotError extends Schema.TaggedErrorClass<OrchestrationGetSnapshotError>()(
@@ -1374,6 +1661,32 @@ export class OrchestrationGetFullThreadDiffError extends Schema.TaggedErrorClass
 
 export class OrchestrationReplayEventsError extends Schema.TaggedErrorClass<OrchestrationReplayEventsError>()(
   "OrchestrationReplayEventsError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+export class OrchestrationExportThreadError extends Schema.TaggedErrorClass<OrchestrationExportThreadError>()(
+  "OrchestrationExportThreadError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+export class OrchestrationImportThreadError extends Schema.TaggedErrorClass<OrchestrationImportThreadError>()(
+  "OrchestrationImportThreadError",
+  {
+    message: TrimmedNonEmptyString,
+    /** Machine-readable failure class for client-side recovery flows. */
+    reason: Schema.optional(Schema.Literal("branch-conflict")),
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+export class OrchestrationForkThreadError extends Schema.TaggedErrorClass<OrchestrationForkThreadError>()(
+  "OrchestrationForkThreadError",
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),

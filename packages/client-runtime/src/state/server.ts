@@ -298,6 +298,10 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:process-resource-history",
       tag: WS_METHODS.serverGetProcessResourceHistory,
     }),
+    recoveryPreview: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:recovery-preview",
+      tag: WS_METHODS.serverPreviewRecovery,
+    }),
     configProjection,
     welcome: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
       label: "environment-data:server:welcome",
@@ -348,6 +352,18 @@ export function createServerEnvironmentAtoms<R, E>(
     signalProcess: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:signal-process",
       tag: WS_METHODS.serverSignalProcess,
+    }),
+    executeRecovery: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:execute-recovery",
+      tag: WS_METHODS.serverExecuteRecovery,
+    }),
+    requestHeadlessUpdateCheck: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:request-headless-update-check",
+      tag: WS_METHODS.serverRequestHeadlessUpdateCheck,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
     }),
   };
 }

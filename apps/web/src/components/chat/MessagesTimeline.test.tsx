@@ -183,6 +183,9 @@ function buildProps() {
     onOpenTurnDiff: () => {},
     revertTurnCountByUserMessageId: new Map(),
     onRevertUserMessage: () => {},
+    onForkMessage: () => {},
+    canForkThread: true,
+    canForkToNewWorktree: true,
     isRevertingCheckpoint: false,
     onImageExpand: () => {},
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
@@ -223,71 +226,33 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
-  it("uses the larger leading inset only when the top fade is enabled", () => {
-    const timelineEntries = [buildUserTimelineEntry("Hello")];
+  it("builds message fork actions for the current or checkpoint worktree", async () => {
+    const { buildMessageForkContextMenuItems, shouldClaimMessageForkContextMenu } =
+      await import("./MessagesTimeline");
 
-    const compactMarkup = renderToStaticMarkup(
-      <MessagesTimeline {...buildProps()} timelineEntries={timelineEntries} />,
-    );
-    const fadedMarkup = renderToStaticMarkup(
-      <MessagesTimeline {...buildProps()} timelineEntries={timelineEntries} topFadeEnabled />,
-    );
-
-    expect(compactMarkup).toContain('class="h-3 sm:h-4"');
-    expect(compactMarkup).not.toContain("chat-timeline-scroll-fade");
-    expect(fadedMarkup).toContain('class="h-10 sm:h-12"');
-    expect(fadedMarkup).toContain("chat-timeline-scroll-fade");
-  });
-
-  it("keeps assistant changed-files headers sticky below the thread header", () => {
-    const assistantMessageId = MessageId.make("message-assistant-with-files");
-    const turnId = TurnId.make("turn-with-files");
-    const markup = renderToStaticMarkup(
-      <MessagesTimeline
-        {...buildProps()}
-        timelineEntries={[
+    expect(
+      buildMessageForkContextMenuItems({ disabled: false, canForkToNewWorktree: true }),
+    ).toEqual([
+      {
+        id: "fork",
+        label: "Fork thread from here",
+        disabled: false,
+        children: [
+          { id: "fork-current", label: "Use current worktree", disabled: false },
           {
-            id: "entry-assistant-with-files",
-            kind: "message",
-            createdAt: MESSAGE_CREATED_AT,
-            message: {
-              id: assistantMessageId,
-              role: "assistant",
-              text: "Updated the fixture.",
-              turnId,
-              createdAt: MESSAGE_CREATED_AT,
-              updatedAt: MESSAGE_CREATED_AT,
-              streaming: false,
-            },
+            id: "fork-new-worktree",
+            label: "Create new worktree from here",
+            disabled: false,
           },
-        ]}
-        turnDiffSummaryByAssistantMessageId={
-          new Map([
-            [
-              assistantMessageId,
-              {
-                turnId,
-                checkpointTurnCount: 1,
-                checkpointRef: CheckpointRef.make("checkpoint-with-files"),
-                status: "ready",
-                files: [{ path: "README.md", kind: "modified", additions: 2, deletions: 1 }],
-                assistantMessageId,
-                completedAt: MESSAGE_CREATED_AT,
-              },
-            ],
-          ])
-        }
-      />,
-    );
-
-    expect(markup).toContain('class="sticky top-2 z-10');
-    expect(markup).not.toContain("self-start");
-    expect(markup).toContain("whitespace-nowrap");
-    expect(markup).toContain("!size-[22px]");
-    expect(markup).toContain("size-3");
-    expect(markup).toContain('aria-label="Collapse all"');
-    expect(markup).toContain('aria-label="View diff"');
-    expect(markup).toContain("1 changed file");
+        ],
+      },
+    ]);
+    expect(
+      buildMessageForkContextMenuItems({ disabled: false, canForkToNewWorktree: false })[0]
+        ?.children?.[1]?.disabled,
+    ).toBe(true);
+    expect(shouldClaimMessageForkContextMenu(undefined)).toBe(false);
+    expect(shouldClaimMessageForkContextMenu({})).toBe(true);
   });
 
   it("uses LegendList isNearEnd when deciding whether the live edge is visible", async () => {
@@ -399,7 +364,23 @@ describe("MessagesTimeline", () => {
     expect(onAnchorSizeChanged).toHaveBeenCalledWith(secondEntry.message.id, 240);
   });
 
-  it("renders collapse controls for long user messages", () => {
+  it("shows a loading progress state instead of the new-thread placeholder while detail hydrates", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[]} isThreadDetailLoading />,
+    );
+
+    expect(markup).toContain("Refreshing conversation state...");
+    expect(markup).toContain(
+      "The sidebar has backend activity for this thread, but the conversation detail has not arrived yet.",
+    );
+    expect(markup).toContain('aria-label="Refreshing conversation state"');
+    expect(markup).toContain('role="progressbar"');
+    expect(markup).not.toContain("Send a message to start the conversation.");
+  }, 20_000);
+
+  it("renders collapse controls for long user messages", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
     const markup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}

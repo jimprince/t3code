@@ -1,5 +1,6 @@
 import {
   type EnvironmentId,
+  type ChatAttachment,
   isProviderDriverKind,
   ProjectId,
   type ModelSelection,
@@ -215,11 +216,65 @@ export function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+export async function hydrateForkedMessageAttachments(input: {
+  readonly attachments: ReadonlyArray<ChatAttachment>;
+  readonly assetUrlById: ReadonlyMap<string, string>;
+  readonly resolveAssetUrl?: (url: string) => string;
+  readonly fetchAsset?: (url: string) => Promise<{ readonly ok: boolean; blob(): Promise<Blob> }>;
+  readonly createObjectUrl?: (blob: Blob) => string;
+}): Promise<{
+  readonly images: ComposerImageAttachment[];
+  readonly unavailableCount: number;
+}> {
+  const fetchAsset = input.fetchAsset ?? fetch;
+  const resolveAssetUrl = input.resolveAssetUrl ?? ((url: string) => url);
+  const createObjectUrl = input.createObjectUrl ?? URL.createObjectURL;
+  const images: ComposerImageAttachment[] = [];
+  let unavailableCount = 0;
+
+  for (const attachment of input.attachments) {
+    const assetUrl = input.assetUrlById.get(attachment.id);
+    if (!assetUrl) {
+      unavailableCount += 1;
+      continue;
+    }
+    try {
+      const response = await fetchAsset(resolveAssetUrl(assetUrl));
+      if (!response.ok) {
+        unavailableCount += 1;
+        continue;
+      }
+      const blob = await response.blob();
+      const file = new File([blob], attachment.name, { type: attachment.mimeType });
+      images.push({
+        type: "image",
+        id: attachment.id,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        previewUrl: createObjectUrl(blob),
+        file,
+      });
+    } catch {
+      unavailableCount += 1;
+    }
+  }
+
+  return { images, unavailableCount };
+}
+
 export function resolveSendEnvMode(input: {
   requestedEnvMode: DraftThreadEnvMode;
   isGitRepo: boolean;
+  hasWorktreeBaseRef: boolean;
 }): DraftThreadEnvMode {
-  return input.isGitRepo ? input.requestedEnvMode : "local";
+  if (!input.isGitRepo) {
+    return "local";
+  }
+  if (input.requestedEnvMode === "worktree" && !input.hasWorktreeBaseRef) {
+    return "local";
+  }
+  return input.requestedEnvMode;
 }
 
 export function cloneComposerImageForRetry(
@@ -287,6 +342,60 @@ export function buildExpiredTerminalContextToastCopy(
     title: `${noun} omitted from message`,
     description: "Re-add it if you want that terminal output included.",
   };
+}
+
+export type EnvironmentUnavailableConnectionState = "connecting" | "disconnected" | "error";
+
+function sentence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return /[.!?]$/u.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function formatRemoteBackendEndpoint(endpoint: string | null | undefined): string | null {
+  const trimmed = endpoint?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function buildEnvironmentUnavailableDescription(input: {
+  readonly connectionState: EnvironmentUnavailableConnectionState;
+  readonly endpoint?: string | null;
+  readonly lastError?: string | null;
+}): string {
+  const lead =
+    input.connectionState === "connecting"
+      ? "Waiting for this environment to finish connecting before sending messages or running actions."
+      : "Reconnect this environment before sending messages or running actions.";
+  const details: string[] = [lead];
+  const lastError = input.lastError?.trim();
+  const endpoint = formatRemoteBackendEndpoint(input.endpoint);
+
+  if (lastError) {
+    details.push(sentence(`Last error: ${lastError}`));
+  } else if (input.connectionState === "disconnected") {
+    details.push("The saved remote backend connection is not active.");
+  }
+
+  if (endpoint) {
+    details.push(sentence(`Remote backend: ${endpoint}`));
+  }
+
+  return details.join(" ");
 }
 
 export function threadHasStarted(thread: Thread | null | undefined): boolean {
@@ -411,6 +520,29 @@ export async function waitForStartedServerThread(
       finish(false);
     }, timeoutMs);
   });
+}
+
+export type ComposerSubmitIntent = "blocked" | "respond-to-user-input" | "send-message";
+
+export function resolveComposerSubmitIntent(input: {
+  hasActiveThread: boolean;
+  environmentUnavailable: boolean;
+  hasPendingUserInput: boolean;
+  pendingUserInputResponding: boolean;
+  isSendBusy: boolean;
+  isConnecting: boolean;
+  sendInFlight: boolean;
+}): ComposerSubmitIntent {
+  if (!input.hasActiveThread || input.environmentUnavailable) {
+    return "blocked";
+  }
+  if (input.hasPendingUserInput) {
+    return input.pendingUserInputResponding ? "blocked" : "respond-to-user-input";
+  }
+  if (input.isSendBusy || input.isConnecting || input.sendInFlight) {
+    return "blocked";
+  }
+  return "send-message";
 }
 
 export interface LocalDispatchSnapshot {
