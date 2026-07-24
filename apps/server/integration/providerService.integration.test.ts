@@ -13,6 +13,7 @@ import * as Stream from "effect/Stream";
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
 import { makeAdapterRegistryMock } from "../src/provider/testUtils/providerAdapterRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
+import { makeServerBootGenerationLayer } from "../src/provider/Layers/ServerBootGeneration.ts";
 import {
   NoOpProviderEventLoggers,
   ProviderEventLoggers,
@@ -64,6 +65,7 @@ const makeIntegrationFixture = Effect.gen(function* () {
 
   const directoryLayer = ProviderSessionDirectoryLive.pipe(
     Layer.provide(ProviderSessionRuntime.layer),
+    Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
   );
 
   const shared = Layer.mergeAll(

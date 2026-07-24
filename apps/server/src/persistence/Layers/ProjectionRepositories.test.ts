@@ -28,6 +28,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       yield* projects.upsert({
         projectId: ProjectId.make("project-null-options"),
         title: "Null options project",
+        kind: "chat",
         workspaceRoot: "/tmp/project-null-options",
         defaultModelSelection: {
           instanceId: ProviderInstanceId.make("codex"),
@@ -67,6 +68,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5.4",
       });
+      assert.strictEqual(Option.getOrNull(persisted)?.kind, "chat");
     }),
   );
 
@@ -88,6 +90,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         branch: null,
         worktreePath: null,
         latestTurnId: null,
+        goal: null,
         createdAt: "2026-03-24T00:00:00.000Z",
         updatedAt: "2026-03-24T00:00:00.000Z",
         archivedAt: null,
@@ -148,6 +151,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         branch: null,
         worktreePath: null,
         latestTurnId: null,
+        goal: null,
         createdAt: "2026-03-24T00:00:00.000Z",
         updatedAt: "2026-03-25T00:00:00.000Z",
         archivedAt: null,

@@ -13,10 +13,12 @@ import {
   MAX_HIDDEN_MOUNTED_PREVIEW_THREADS,
   MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
   buildExpiredTerminalContextToastCopy,
+  buildEnvironmentUnavailableDescription,
   buildThreadTurnInterruptInput,
   createLocalDispatchSnapshot,
   deriveComposerSendState,
   getStartedThreadModelChangeBlockReason,
+  hydrateForkedMessageAttachments,
   hasServerAcknowledgedLocalDispatch,
   reconcileMountedTerminalThreadIds,
   reconcileRetainedMountedThreadIds,
@@ -24,6 +26,47 @@ import {
   resolveSendEnvMode,
   shouldWriteThreadErrorToCurrentServerThread,
 } from "./ChatView.logic";
+
+it("hydrates selected-message image attachments for the fork composer", async () => {
+  const fetchedUrls: string[] = [];
+  const result = await hydrateForkedMessageAttachments({
+    attachments: [
+      {
+        type: "image",
+        id: "attachment-1",
+        name: "diagram.png",
+        mimeType: "image/png",
+        sizeBytes: 3,
+      },
+      {
+        type: "image",
+        id: "attachment-missing",
+        name: "missing.png",
+        mimeType: "image/png",
+        sizeBytes: 1,
+      },
+    ],
+    assetUrlById: new Map([["attachment-1", "http://localhost:13773/api/assets/token/1"]]),
+    resolveAssetUrl: (url) => new URL(url).pathname,
+    fetchAsset: async (url) => {
+      fetchedUrls.push(url);
+      return new Response(new Uint8Array([1, 2, 3]), { status: 200 });
+    },
+    createObjectUrl: () => "blob:fork-image",
+  });
+
+  expect(result.unavailableCount).toBe(1);
+  expect(result.images).toHaveLength(1);
+  expect(result.images[0]).toMatchObject({
+    id: "attachment-1",
+    name: "diagram.png",
+    mimeType: "image/png",
+    sizeBytes: 3,
+    previewUrl: "blob:fork-image",
+  });
+  expect(result.images[0]!.file).toBeInstanceOf(File);
+  expect(fetchedUrls).toEqual(["/api/assets/token/1"]);
+});
 
 const environmentId = EnvironmentId.make("environment-local");
 const projectId = ProjectId.make("project-1");
@@ -285,10 +328,80 @@ describe("getStartedThreadModelChangeBlockReason", () => {
   });
 });
 
+describe("buildEnvironmentUnavailableDescription", () => {
+  it("surfaces the saved backend endpoint and last disconnect error", () => {
+    expect(
+      buildEnvironmentUnavailableDescription({
+        connectionState: "error",
+        endpoint: "https://user:pass@remote.example.test/?token=secret",
+        lastError: "WebSocket closed unexpectedly.",
+      }),
+    ).toBe(
+      "Reconnect this environment before sending messages or running actions. Last error: WebSocket closed unexpectedly. Remote backend: https://remote.example.test/.",
+    );
+  });
+
+  it("explains disconnected saved environments even when no error was recorded", () => {
+    expect(
+      buildEnvironmentUnavailableDescription({
+        connectionState: "disconnected",
+        endpoint: "https://remote.example.test/",
+        lastError: null,
+      }),
+    ).toBe(
+      "Reconnect this environment before sending messages or running actions. The saved remote backend connection is not active. Remote backend: https://remote.example.test/.",
+    );
+  });
+
+  it("uses connecting copy while reconnect is in progress", () => {
+    expect(
+      buildEnvironmentUnavailableDescription({
+        connectionState: "connecting",
+        endpoint: null,
+        lastError: null,
+      }),
+    ).toBe(
+      "Waiting for this environment to finish connecting before sending messages or running actions.",
+    );
+  });
+});
+
 describe("resolveSendEnvMode", () => {
-  it("keeps worktree mode only for git repositories", () => {
-    expect(resolveSendEnvMode({ requestedEnvMode: "worktree", isGitRepo: true })).toBe("worktree");
-    expect(resolveSendEnvMode({ requestedEnvMode: "worktree", isGitRepo: false })).toBe("local");
+  it("keeps worktree mode for git repositories", () => {
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "worktree",
+        isGitRepo: true,
+        hasWorktreeBaseRef: true,
+      }),
+    ).toBe("worktree");
+  });
+
+  it("forces local mode for non-git repositories", () => {
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "worktree",
+        isGitRepo: false,
+        hasWorktreeBaseRef: true,
+      }),
+    ).toBe("local");
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "local",
+        isGitRepo: false,
+        hasWorktreeBaseRef: false,
+      }),
+    ).toBe("local");
+  });
+
+  it("falls back to local mode when a git repository has no valid worktree base ref", () => {
+    expect(
+      resolveSendEnvMode({
+        requestedEnvMode: "worktree",
+        isGitRepo: true,
+        hasWorktreeBaseRef: false,
+      }),
+    ).toBe("local");
   });
 });
 
