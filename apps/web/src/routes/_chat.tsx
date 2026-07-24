@@ -1,15 +1,17 @@
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { useAtomValue } from "@effect/atom-react";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 
 import { isCommandPaletteOpen } from "../commandPaletteBus";
 import { useClientSettings } from "../hooks/useSettings";
 import { openCommandPalette } from "../commandPaletteBus";
 import { useProjects } from "../state/entities";
+import { usePrimaryEnvironmentId } from "../state/environments";
+import { selectProjectGroupingSettings } from "../logicalProject";
+import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { dispatchPreviewAction } from "../components/preview/previewActionBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import { usePrimaryEnvironmentId } from "../state/environments";
-import { selectChatProjectForEnvironment } from "../projectKind";
+import { partitionProjectsByKind, selectChatProjectForEnvironment } from "../projectKind";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
   startNewLocalThreadFromContext,
@@ -32,10 +34,24 @@ function ChatRouteGlobalShortcuts() {
     useHandleNewThread();
   const projects = useProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
-  const primaryChatProject = selectChatProjectForEnvironment(projects, primaryEnvironmentId);
+  const { chatProjects, workspaceProjects } = useMemo(
+    () => partitionProjectsByKind(projects),
+    [projects],
+  );
+  const primaryChatProject = selectChatProjectForEnvironment(chatProjects, primaryEnvironmentId);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const sidebarV2Enabled = useClientSettings((settings) => settings.sidebarV2Enabled);
-  const projectCount = useProjects().length;
+  const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
+  const projectGroupCount = useMemo(
+    () =>
+      buildSidebarProjectSnapshots({
+        projects: workspaceProjects,
+        settings: projectGroupingSettings,
+        primaryEnvironmentId,
+        resolveEnvironmentLabel: () => null,
+      }).length,
+    [primaryEnvironmentId, projectGroupingSettings, workspaceProjects],
+  );
   const terminalOpen = useTerminalUiStateStore((state) =>
     routeThreadRef
       ? selectThreadTerminalUiState(state.terminalUiStateByThreadKey, routeThreadRef).terminalOpen
@@ -90,14 +106,21 @@ function ChatRouteGlobalShortcuts() {
           void handleNewThread(
             scopeProjectRef(primaryChatProject.environmentId, primaryChatProject.id),
           );
-        } else {
-          void startNewThreadFromContext({
-            activeDraftThread,
-            activeThread: activeThread ?? undefined,
-            defaultProjectRef,
-            handleNewThread,
-          });
+          return;
         }
+        // Sidebar v2 routes creation through the command palette whenever
+        // there is a real choice to make; v1 (and single-project setups)
+        // keep the immediate contextual create.
+        if (sidebarV2Enabled && projectGroupCount > 1) {
+          openCommandPalette({ open: "new-thread-in" });
+          return;
+        }
+        void startNewThreadFromContext({
+          activeDraftThread,
+          activeThread: activeThread ?? undefined,
+          defaultProjectRef,
+          handleNewThread,
+        });
         return;
       }
 
@@ -158,7 +181,7 @@ function ChatRouteGlobalShortcuts() {
     keybindings,
     defaultProjectRef,
     previewOpen,
-    projectCount,
+    projectGroupCount,
     routeThreadRef,
     selectedThreadKeysSize,
     sidebarV2Enabled,
