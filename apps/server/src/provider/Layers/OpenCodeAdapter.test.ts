@@ -212,6 +212,9 @@ const providerSessionDirectoryTestLayer = Layer.succeed(ProviderSessionDirectory
   listThreadIds: () => Effect.succeed([]),
   listBindings: () => Effect.succeed([]),
   settleDeadGenerationBinding: () => Effect.succeed(false),
+  markTurnStarted: () => Effect.succeed(false),
+  markTurnTerminal: () => Effect.succeed(false),
+  claimIdleForRecovery: () => Effect.succeed(false),
 });
 
 // The adapter now receives its settings as a plain argument (the old design

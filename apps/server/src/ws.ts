@@ -97,6 +97,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
+import * as SystemRecovery from "./diagnostics/SystemRecovery.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
@@ -301,6 +302,8 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.serverGetProcessDiagnostics, AuthOrchestrationReadScope],
   [WS_METHODS.serverGetProcessResourceHistory, AuthOrchestrationReadScope],
   [WS_METHODS.serverSignalProcess, AuthOrchestrationOperateScope],
+  [WS_METHODS.serverPreviewRecovery, AuthOrchestrationReadScope],
+  [WS_METHODS.serverExecuteRecovery, AuthOrchestrationOperateScope],
   [WS_METHODS.serverRequestHeadlessUpdateCheck, AuthOrchestrationOperateScope],
   [WS_METHODS.cloudGetRelayClientStatus, AuthRelayWriteScope],
   [WS_METHODS.cloudInstallRelayClient, AuthRelayWriteScope],
@@ -442,6 +445,7 @@ const makeWsRpcLayer = (
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
+      const systemRecovery = yield* SystemRecovery.SystemRecovery;
       const relayClient = yield* RelayClient.RelayClient;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
@@ -1255,6 +1259,14 @@ const makeWsRpcLayer = (
           ),
         [WS_METHODS.serverSignalProcess]: (input) =>
           observeRpcEffect(WS_METHODS.serverSignalProcess, processDiagnostics.signal(input), {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverPreviewRecovery]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverPreviewRecovery, systemRecovery.preview, {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverExecuteRecovery]: (input) =>
+          observeRpcEffect(WS_METHODS.serverExecuteRecovery, systemRecovery.execute(input), {
             "rpc.aggregate": "server",
           }),
         [WS_METHODS.serverRequestHeadlessUpdateCheck]: (input) =>

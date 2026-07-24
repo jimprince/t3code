@@ -23,6 +23,7 @@ import { createModelSelection } from "@t3tools/shared/model";
 import { it, assert, vi } from "@effect/vitest";
 
 import * as Effect from "effect/Effect";
+import * as Deferred from "effect/Deferred";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -863,6 +864,107 @@ it.effect(
 );
 
 routing.layer("ProviderServiceLive routing", (it) => {
+  it.effect("reserves an active-turn marker before the provider send can complete", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const threadId = asThreadId("thread-send-reservation");
+      const turnId = asTurnId("turn-send-reservation");
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const previewValue = (yield* directory.listBindings()).find(
+        (binding) => binding.threadId === threadId,
+      );
+      const previewBinding = previewValue === undefined ? Option.none() : Option.some(previewValue);
+      assert.equal(Option.isSome(previewBinding), true);
+      if (Option.isNone(previewBinding)) return;
+
+      const sendGate = yield* Deferred.make<ProviderTurnStartResult>();
+      routing.codex.sendTurn.mockImplementationOnce(() => Deferred.await(sendGate));
+      const sendFiber = yield* provider
+        .sendTurn({
+          threadId,
+          input: "hold the provider response",
+          attachments: [],
+        })
+        .pipe(Effect.forkChild);
+      while (routing.codex.sendTurn.mock.calls.length === 0) {
+        yield* Effect.yieldNow;
+      }
+
+      const reservedBinding = yield* directory.getBinding(threadId);
+      assert.equal(Option.isSome(reservedBinding), true);
+      if (Option.isSome(reservedBinding)) {
+        assert.match(
+          String(reservedBinding.value.activeTurnId),
+          /^pending:/,
+          "REGRESSION: recovery could observe the session as idle while sendTurn was in flight",
+        );
+      }
+      assert.equal(
+        yield* directory.claimIdleForRecovery({
+          threadId,
+          expectedLastSeenAt: previewBinding.value.lastSeenAt,
+        }),
+        false,
+        "REGRESSION: recovery claimed a provider while sendTurn was in flight",
+      );
+
+      yield* Deferred.succeed(sendGate, { threadId, turnId });
+      const turn = yield* Fiber.join(sendFiber);
+      assert.equal(turn.turnId, turnId);
+      const activeBinding = yield* directory.getBinding(threadId);
+      assert.equal(
+        Option.getOrUndefined(activeBinding)?.activeTurnId,
+        turnId,
+        "REGRESSION: the pending marker was not replaced by the provider turn id",
+      );
+      yield* provider.stopSession({ threadId });
+      routing.codex.sendTurn.mockClear();
+    }),
+  );
+
+  it.effect("does not resurrect a turn that completed before sendTurn returned", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const threadId = asThreadId("thread-send-fast-completion");
+      const turnId = asTurnId("turn-send-fast-completion");
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "full-access",
+      });
+      routing.codex.sendTurn.mockImplementationOnce(() =>
+        Effect.gen(function* () {
+          yield* directory.markTurnStarted({ threadId, turnId });
+          yield* directory.markTurnTerminal({ threadId, expectedTurnId: turnId });
+          return { threadId, turnId };
+        }).pipe(Effect.orDie),
+      );
+
+      yield* provider.sendTurn({
+        threadId,
+        input: "complete before send returns",
+        attachments: [],
+      });
+
+      const binding = yield* directory.getBinding(threadId);
+      assert.equal(
+        Option.getOrUndefined(binding)?.activeTurnId,
+        null,
+        "REGRESSION: sendTurn overwrote an already-terminal lifecycle update",
+      );
+      yield* provider.stopSession({ threadId });
+      routing.codex.sendTurn.mockClear();
+    }),
+  );
+
   it.effect("creates a fallback fork binding without resuming an unsupported provider", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
@@ -1693,11 +1795,17 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
   it.effect("fans out adapter turn completion events", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
       const session = yield* provider.startSession(asThreadId("thread-1"), {
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
+      });
+      const turn = yield* provider.sendTurn({
+        threadId: session.threadId,
+        input: "hello",
+        attachments: [],
       });
 
       const eventsRef = yield* Ref.make<Array<ProviderRuntimeEvent>>([]);
@@ -1712,7 +1820,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         provider: ProviderDriverKind.make("codex"),
         createdAt: "2026-01-01T00:00:00.000Z",
         threadId: session.threadId,
-        turnId: asTurnId("turn-1"),
+        turnId: turn.turnId,
         status: "completed",
       };
 
@@ -1733,6 +1841,17 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         ),
         true,
       );
+
+      const binding = yield* directory.getBinding(session.threadId);
+      assert.equal(Option.isSome(binding), true);
+      if (Option.isSome(binding)) {
+        assert.equal(
+          binding.value.activeTurnId,
+          null,
+          "REGRESSION: terminal provider events must release the completed turn",
+        );
+        assert.deepInclude(binding.value.runtimePayload, { activeTurnId: null });
+      }
     }),
   );
 

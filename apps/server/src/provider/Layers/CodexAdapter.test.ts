@@ -228,6 +228,9 @@ const providerSessionDirectoryTestLayer = Layer.succeed(ProviderSessionDirectory
   listThreadIds: () => Effect.succeed([]),
   listBindings: () => Effect.succeed([]),
   settleDeadGenerationBinding: () => Effect.succeed(false),
+  markTurnStarted: () => Effect.succeed(false),
+  markTurnTerminal: () => Effect.succeed(false),
+  claimIdleForRecovery: () => Effect.succeed(false),
 });
 
 const validationRuntimeFactory = makeRuntimeFactory();
@@ -1245,7 +1248,7 @@ it.effect("flushes managed native logs when the adapter layer shuts down", () =>
       yield* Scope.close(scope, Exit.void);
       scopeClosed = true;
 
-      const threadLogPath = NodePath.join(tempDir, "thread-logger.log");
+      const threadLogPath = NodePath.join(tempDir, "thread-logger.native.log");
       NodeAssert.equal(NodeFS.existsSync(threadLogPath), true);
       const contents = NodeFS.readFileSync(threadLogPath, "utf8");
       NodeAssert.match(contents, /NTIVE: .*"message":"native flush test"/);

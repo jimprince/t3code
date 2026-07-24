@@ -42,6 +42,9 @@ import type {
   ServerRemoveKeybindingResult,
   ServerSignalProcessInput,
   ServerSignalProcessResult,
+  ServerRecoveryExecuteInput,
+  ServerRecoveryExecuteResult,
+  ServerRecoveryPreviewResult,
   ServerTraceDiagnosticsResult,
   ServerUpsertKeybindingResult,
 } from "./server.ts";
@@ -1138,6 +1141,8 @@ export interface LocalApi {
       input: ServerProcessResourceHistoryInput,
     ) => Promise<ServerProcessResourceHistoryResult>;
     signalProcess: (input: ServerSignalProcessInput) => Promise<ServerSignalProcessResult>;
+    previewRecovery: () => Promise<ServerRecoveryPreviewResult>;
+    executeRecovery: (input: ServerRecoveryExecuteInput) => Promise<ServerRecoveryExecuteResult>;
   };
 }
 

@@ -1440,6 +1440,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   }
 
   if (platform === "mac") {
+    buildConfig.extraResources = [
+      {
+        from: "apps/desktop/resources/T3PressureMonitor",
+        to: "T3PressureMonitor",
+      },
+    ];
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
@@ -1707,6 +1713,23 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   yield* fs.copy(distDirs.desktopDist, path.join(stageAppDir, "apps/desktop/dist-electron"));
   yield* fs.copy(distDirs.desktopResources, stageResourcesDir);
   yield* fs.copy(distDirs.serverDist, path.join(stageAppDir, "apps/server/dist"));
+
+  if (options.platform === "mac") {
+    yield* runCommand(
+      ChildProcess.make(
+        process.execPath,
+        [
+          path.join(repoRoot, "apps/desktop/scripts/build-pressure-monitor.mjs"),
+          "--output",
+          path.join(stageResourcesDir, "T3PressureMonitor"),
+          "--arch",
+          options.arch,
+        ],
+        { cwd: repoRoot },
+      ),
+      { label: "build native pressure monitor", verbose: options.verbose },
+    );
+  }
 
   yield* assertPlatformBuildResources(
     options.platform,

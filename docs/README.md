@@ -10,4 +10,5 @@
 - [Providers](./providers/codex.md)
 - [Reference](./reference/encyclopedia.md)
 - [User guides](./user/keybindings.md)
+- [Performance protection and recovery](./user/performance-recovery.md)
 - [Moving threads between machines](./user/moving-threads.md)

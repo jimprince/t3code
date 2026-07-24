@@ -188,6 +188,20 @@ export const make = DesktopLifecycle.of({
     yield* electronApp.on("activate", () => {
       void runEffect(desktopWindow.activate.pipe(Effect.withSpan("desktop.lifecycle.activate")));
     });
+    yield* electronApp.on("open-url", (event: Electron.Event, url: string) => {
+      event.preventDefault();
+      void runEffect(
+        desktopWindow.navigateMain(url).pipe(
+          Effect.tap((accepted) =>
+            accepted
+              ? logLifecycleInfo("desktop recovery route opened", { url })
+              : logLifecycleError("desktop URL was rejected", { url }),
+          ),
+          Effect.asVoid,
+          Effect.withSpan("desktop.lifecycle.openUrl"),
+        ),
+      );
+    });
     yield* electronApp.on("window-all-closed", () => {
       void runEffect(
         Effect.gen(function* () {

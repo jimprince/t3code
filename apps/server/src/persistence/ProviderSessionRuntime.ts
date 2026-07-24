@@ -15,6 +15,7 @@ import {
   ProviderSessionRuntimeStatus,
   RuntimeMode,
   ThreadId,
+  TurnId,
 } from "@t3tools/contracts";
 
 import {
@@ -47,6 +48,9 @@ export const ProviderSessionRuntime = Schema.Struct({
   adapterKey: Schema.String,
   runtimeMode: RuntimeMode,
   status: ProviderSessionRuntimeStatus,
+  // Optional on writes so older call sites and imported snapshots remain
+  // source-compatible. Rows read from SQLite always materialize this column.
+  activeTurnId: Schema.optional(Schema.NullOr(TurnId)),
   lastSeenAt: IsoDateTime,
   resumeCursor: Schema.NullOr(Schema.Unknown),
   runtimePayload: Schema.NullOr(Schema.Unknown),
@@ -62,6 +66,28 @@ export type DeleteProviderSessionRuntimeInput = typeof DeleteProviderSessionRunt
 export interface SettleDeadGenerationRuntimeInput {
   readonly threadId: ThreadId;
   readonly expectedBootGenerationId: string | null;
+  readonly currentBootGenerationId: string;
+  readonly lastSeenAt: typeof IsoDateTime.Type;
+}
+
+export interface MarkProviderTurnStartedInput {
+  readonly threadId: ThreadId;
+  readonly turnId: TurnId;
+  readonly expectedActiveTurnId?: TurnId | null;
+  readonly currentBootGenerationId: string;
+  readonly lastSeenAt: typeof IsoDateTime.Type;
+}
+
+export interface MarkProviderTurnTerminalInput {
+  readonly threadId: ThreadId;
+  readonly expectedTurnId: TurnId;
+  readonly currentBootGenerationId: string;
+  readonly lastSeenAt: typeof IsoDateTime.Type;
+}
+
+export interface ClaimIdleProviderSessionInput {
+  readonly threadId: ThreadId;
+  readonly expectedLastSeenAt: typeof IsoDateTime.Type;
   readonly currentBootGenerationId: string;
   readonly lastSeenAt: typeof IsoDateTime.Type;
 }
@@ -103,11 +129,28 @@ export class ProviderSessionRuntimeRepository extends Context.Service<
 
     /**
      * Atomically settles a binding only if it still belongs to the boot
-     * generation observed by the caller. Cursor and runtime payload columns
-     * are intentionally left untouched for lazy recovery.
+     * generation observed by the caller. Resume state is preserved for lazy
+     * recovery, while the dead process's active-turn marker is cleared.
      */
     readonly settleDeadGeneration: (
       input: SettleDeadGenerationRuntimeInput,
+    ) => Effect.Effect<boolean, ProviderSessionRuntimeRepositoryError>;
+
+    readonly markTurnStarted: (
+      input: MarkProviderTurnStartedInput,
+    ) => Effect.Effect<boolean, ProviderSessionRuntimeRepositoryError>;
+
+    readonly markTurnTerminal: (
+      input: MarkProviderTurnTerminalInput,
+    ) => Effect.Effect<boolean, ProviderSessionRuntimeRepositoryError>;
+
+    /**
+     * Atomically marks a session stopped only when it is still the idle
+     * snapshot observed by a recovery preview. A concurrent turn reservation
+     * or any newer lifecycle update makes the claim fail without mutation.
+     */
+    readonly claimIdleForRecovery: (
+      input: ClaimIdleProviderSessionInput,
     ) => Effect.Effect<boolean, ProviderSessionRuntimeRepositoryError>;
 
     /**
@@ -134,6 +177,7 @@ const ProviderSessionRuntimeRawDbRowSchema = Schema.Struct({
   adapterKey: Schema.Unknown,
   runtimeMode: Schema.Unknown,
   status: Schema.Unknown,
+  activeTurnId: Schema.Unknown,
   lastSeenAt: Schema.Unknown,
   resumeCursor: Schema.Unknown,
   runtimePayload: Schema.Unknown,
@@ -177,6 +221,7 @@ export const make = Effect.gen(function* () {
           adapter_key,
           runtime_mode,
           status,
+          active_turn_id,
           last_seen_at,
           resume_cursor_json,
           runtime_payload_json
@@ -189,6 +234,7 @@ export const make = Effect.gen(function* () {
           ${runtime.adapterKey},
           ${runtime.runtimeMode},
           ${runtime.status},
+          ${runtime.activeTurnId ?? null},
           ${runtime.lastSeenAt},
           ${runtime.resumeCursor},
           ${runtime.runtimePayload}
@@ -201,6 +247,7 @@ export const make = Effect.gen(function* () {
           adapter_key = excluded.adapter_key,
           runtime_mode = excluded.runtime_mode,
           status = excluded.status,
+          active_turn_id = excluded.active_turn_id,
           last_seen_at = excluded.last_seen_at,
           resume_cursor_json = excluded.resume_cursor_json,
           runtime_payload_json = excluded.runtime_payload_json
@@ -220,6 +267,7 @@ export const make = Effect.gen(function* () {
           adapter_key AS "adapterKey",
           runtime_mode AS "runtimeMode",
           status,
+          active_turn_id AS "activeTurnId",
           last_seen_at AS "lastSeenAt",
           resume_cursor_json AS "resumeCursor",
           runtime_payload_json AS "runtimePayload"
@@ -241,6 +289,7 @@ export const make = Effect.gen(function* () {
           adapter_key AS "adapterKey",
           runtime_mode AS "runtimeMode",
           status,
+          active_turn_id AS "activeTurnId",
           last_seen_at AS "lastSeenAt",
           resume_cursor_json AS "resumeCursor",
           runtime_payload_json AS "runtimePayload"
@@ -264,8 +313,14 @@ export const make = Effect.gen(function* () {
         UPDATE provider_session_runtime
         SET
           status = 'stopped',
+          active_turn_id = NULL,
           boot_generation_id = ${input.currentBootGenerationId},
-          last_seen_at = ${input.lastSeenAt}
+          last_seen_at = ${input.lastSeenAt},
+          runtime_payload_json = json_set(
+            COALESCE(runtime_payload_json, '{}'),
+            '$.activeTurnId',
+            NULL
+          )
         WHERE thread_id = ${input.threadId}
           AND status != 'stopped'
           AND boot_generation_id IS ${input.expectedBootGenerationId}
@@ -276,6 +331,98 @@ export const make = Effect.gen(function* () {
           (cause) =>
             new PersistenceSqlError({
               operation: "ProviderSessionRuntimeRepository.settleDeadGeneration:query",
+              correlation: { threadId: input.threadId },
+              cause,
+            }),
+        ),
+      );
+
+  const markTurnStarted: ProviderSessionRuntimeRepository["Service"]["markTurnStarted"] = (input) =>
+    sql<{ readonly threadId: string }>`
+      UPDATE provider_session_runtime
+      SET
+        status = 'running',
+        active_turn_id = ${input.turnId},
+        boot_generation_id = ${input.currentBootGenerationId},
+        last_seen_at = ${input.lastSeenAt},
+        runtime_payload_json = json_set(
+          COALESCE(runtime_payload_json, '{}'),
+          '$.activeTurnId',
+          ${input.turnId}
+        )
+      WHERE thread_id = ${input.threadId}
+        AND status != 'stopped'
+        AND (
+          ${input.expectedActiveTurnId === undefined ? 1 : 0} = 1
+          OR active_turn_id IS ${input.expectedActiveTurnId ?? null}
+        )
+      RETURNING thread_id AS "threadId"
+    `.pipe(
+      Effect.map((rows) => rows.length > 0),
+      Effect.mapError(
+        (cause) =>
+          new PersistenceSqlError({
+            operation: "ProviderSessionRuntimeRepository.markTurnStarted:query",
+            correlation: { threadId: input.threadId },
+            cause,
+          }),
+      ),
+    );
+
+  const markTurnTerminal: ProviderSessionRuntimeRepository["Service"]["markTurnTerminal"] = (
+    input,
+  ) =>
+    sql<{ readonly threadId: string }>`
+      UPDATE provider_session_runtime
+      SET
+        active_turn_id = NULL,
+        boot_generation_id = ${input.currentBootGenerationId},
+        last_seen_at = ${input.lastSeenAt},
+        runtime_payload_json = json_set(
+          COALESCE(runtime_payload_json, '{}'),
+          '$.activeTurnId',
+          NULL
+        )
+      WHERE thread_id = ${input.threadId}
+        AND active_turn_id = ${input.expectedTurnId}
+      RETURNING thread_id AS "threadId"
+    `.pipe(
+      Effect.map((rows) => rows.length > 0),
+      Effect.mapError(
+        (cause) =>
+          new PersistenceSqlError({
+            operation: "ProviderSessionRuntimeRepository.markTurnTerminal:query",
+            correlation: { threadId: input.threadId },
+            cause,
+          }),
+      ),
+    );
+
+  const claimIdleForRecovery: ProviderSessionRuntimeRepository["Service"]["claimIdleForRecovery"] =
+    (input) =>
+      sql<{ readonly threadId: string }>`
+        UPDATE provider_session_runtime
+        SET
+          status = 'stopped',
+          active_turn_id = NULL,
+          boot_generation_id = ${input.currentBootGenerationId},
+          last_seen_at = ${input.lastSeenAt},
+          runtime_payload_json = json_set(
+            COALESCE(runtime_payload_json, '{}'),
+            '$.activeTurnId',
+            NULL
+          )
+        WHERE thread_id = ${input.threadId}
+          AND status != 'stopped'
+          AND active_turn_id IS NULL
+          AND last_seen_at = ${input.expectedLastSeenAt}
+        RETURNING thread_id AS "threadId"
+      `.pipe(
+        Effect.map((rows) => rows.length > 0),
+        Effect.mapError(
+          (cause) =>
+            new PersistenceSqlError({
+              operation: "ProviderSessionRuntimeRepository.claimIdleForRecovery:query",
               correlation: { threadId: input.threadId },
               cause,
             }),
@@ -374,6 +521,9 @@ export const make = Effect.gen(function* () {
     getByThreadId,
     list,
     settleDeadGeneration,
+    markTurnStarted,
+    markTurnTerminal,
+    claimIdleForRecovery,
     deleteByThreadId,
   } satisfies ProviderSessionRuntimeRepository["Service"];
 });

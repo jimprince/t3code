@@ -57,6 +57,7 @@ export class DesktopWindow extends Context.Service<
     readonly createMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
     readonly ensureMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
     readonly revealOrCreateMain: Effect.Effect<Electron.BrowserWindow, DesktopWindowError>;
+    readonly navigateMain: (url: string) => Effect.Effect<boolean, DesktopWindowError>;
     readonly activate: Effect.Effect<void, DesktopWindowError>;
     readonly createMainIfBackendReady: Effect.Effect<void, DesktopWindowError>;
     // Show a lightweight "Connecting to WSL" splash window immediately (wsl-only
@@ -116,7 +117,12 @@ export function isSameOriginRendererNavigation(input: {
   readonly navigationUrl: string;
 }): boolean {
   try {
-    return new URL(input.applicationUrl).origin === new URL(input.navigationUrl).origin;
+    const applicationUrl = new URL(input.applicationUrl);
+    const navigationUrl = new URL(input.navigationUrl);
+    return (
+      applicationUrl.protocol === navigationUrl.protocol &&
+      applicationUrl.host === navigationUrl.host
+    );
   } catch {
     return false;
   }
@@ -211,6 +217,7 @@ export const make = Effect.gen(function* () {
   // The transient "Connecting to WSL" splash window, tracked separately so it
   // is never mistaken for the real main window.
   const splashWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
+  const pendingNavigationRef = yield* Ref.make<Option.Option<string>>(Option.none());
   const context = yield* Effect.context<DesktopWindowRuntimeServices>();
   const runFork = Effect.runForkWith(context);
   const runPromise = Effect.runPromiseWith(context);
@@ -509,6 +516,31 @@ export const make = Effect.gen(function* () {
     return window;
   }).pipe(Effect.withSpan("desktop.window.revealOrCreateMain"));
 
+  const navigateMain = Effect.fn("desktop.window.navigateMain")(function* (rawUrl: string) {
+    const applicationUrl = getDesktopUrl(environment.isDevelopment);
+    if (
+      !isSameOriginRendererNavigation({
+        applicationUrl,
+        navigationUrl: rawUrl,
+      })
+    ) {
+      return false;
+    }
+
+    const parsed = new URL(rawUrl);
+    const navigationUrl = new URL(`${parsed.pathname}${parsed.search}`, applicationUrl).href;
+    yield* Ref.set(pendingNavigationRef, Option.some(navigationUrl));
+    if (!(yield* Ref.get(backendReadyRef))) {
+      return true;
+    }
+
+    const window = yield* ensureMain;
+    yield* Effect.promise(() => window.loadURL(navigationUrl)).pipe(Effect.ignore);
+    yield* Ref.set(pendingNavigationRef, Option.none());
+    yield* electronWindow.reveal(window);
+    return true;
+  });
+
   const createMainIfBackendReady = Effect.gen(function* () {
     const backendReady = yield* Ref.get(backendReadyRef);
     if (!backendReady) return;
@@ -567,6 +599,7 @@ export const make = Effect.gen(function* () {
     createMain,
     ensureMain,
     revealOrCreateMain,
+    navigateMain,
     activate: Effect.gen(function* () {
       const existingWindow = yield* currentMainWindow;
       if (Option.isSome(existingWindow)) {
@@ -594,6 +627,10 @@ export const make = Effect.gen(function* () {
       yield* Ref.set(backendReadyRef, true);
       yield* logWindowInfo("backend ready", { source: "http", url: httpBaseUrl.href });
       yield* createMainIfBackendReady;
+      const pendingNavigation = yield* Ref.get(pendingNavigationRef);
+      if (Option.isSome(pendingNavigation)) {
+        yield* navigateMain(pendingNavigation.value);
+      }
     }),
     handleBackendNotReady: Ref.set(backendReadyRef, false).pipe(
       Effect.withSpan("desktop.window.handleBackendNotReady"),

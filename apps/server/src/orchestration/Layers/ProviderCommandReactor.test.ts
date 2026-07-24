@@ -390,6 +390,9 @@ describe("ProviderCommandReactor", () => {
           })),
         ),
       settleDeadGenerationBinding: () => Effect.succeed(false),
+      markTurnStarted: () => Effect.succeed(false),
+      markTurnTerminal: () => Effect.succeed(false),
+      claimIdleForRecovery: () => Effect.succeed(false),
     });
 
     const orchestrationLayer = OrchestrationEngineLive.pipe(

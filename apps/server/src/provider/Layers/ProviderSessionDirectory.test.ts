@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ProviderDriverKind, ThreadId } from "@t3tools/contracts";
+import { ProviderDriverKind, ThreadId, TurnId } from "@t3tools/contracts";
 import { it, assert } from "@effect/vitest";
 import { assertSome } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
@@ -110,6 +110,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         provider: ProviderDriverKind.make("codex"),
         threadId,
         status: "running",
+        activeTurnId: TurnId.make("turn-1"),
         runtimePayload: {
           activeTurnId: "turn-1",
         },
@@ -128,7 +129,131 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
           model: "gpt-5-codex",
           activeTurnId: "turn-1",
         });
+        assert.equal(runtime.value.activeTurnId, "turn-1");
       }
+    }));
+
+  it("clears only the matching active turn and preserves a newer turn", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const threadId = ThreadId.make("thread-terminal-cas");
+      const firstTurnId = TurnId.make("turn-1");
+      const secondTurnId = TurnId.make("turn-2");
+
+      yield* directory.upsert({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        activeTurnId: firstTurnId,
+      });
+      yield* directory.markTurnStarted({ threadId, turnId: secondTurnId });
+
+      const staleCompletionApplied = yield* directory.markTurnTerminal({
+        threadId,
+        expectedTurnId: firstTurnId,
+      });
+      assert.equal(
+        staleCompletionApplied,
+        false,
+        "REGRESSION: a late completion must not clear a newer active turn",
+      );
+
+      const currentCompletionApplied = yield* directory.markTurnTerminal({
+        threadId,
+        expectedTurnId: secondTurnId,
+      });
+      assert.equal(currentCompletionApplied, true);
+
+      const binding = yield* directory.getBinding(threadId);
+      assert.equal(Option.isSome(binding), true);
+      if (Option.isSome(binding)) {
+        assert.equal(binding.value.activeTurnId, null);
+        assert.deepEqual(binding.value.runtimePayload, { activeTurnId: null });
+      }
+    }));
+
+  it("reserves a turn only while the session is idle", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const threadId = ThreadId.make("thread-turn-reservation-cas");
+      const firstTurnId = TurnId.make("pending:first");
+      const secondTurnId = TurnId.make("pending:second");
+
+      yield* directory.upsert({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        activeTurnId: null,
+      });
+      assert.equal(
+        yield* directory.markTurnStarted({
+          threadId,
+          turnId: firstTurnId,
+          expectedActiveTurnId: null,
+        }),
+        true,
+      );
+      assert.equal(
+        yield* directory.markTurnStarted({
+          threadId,
+          turnId: secondTurnId,
+          expectedActiveTurnId: null,
+        }),
+        false,
+        "REGRESSION: a concurrent send replaced an existing turn reservation",
+      );
+
+      const binding = yield* directory.getBinding(threadId);
+      assert.equal(Option.getOrUndefined(binding)?.activeTurnId, firstTurnId);
+    }));
+
+  it("claims only an unchanged idle session and blocks a concurrent turn start", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const threadId = ThreadId.make("thread-idle-recovery-claim");
+      const turnId = TurnId.make("turn-after-preview");
+
+      yield* directory.upsert({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        activeTurnId: null,
+      });
+      const previewValue = (yield* directory.listBindings()).find(
+        (binding) => binding.threadId === threadId,
+      );
+      const previewBinding = previewValue === undefined ? Option.none() : Option.some(previewValue);
+      assert.equal(Option.isSome(previewBinding), true);
+      if (Option.isNone(previewBinding)) return;
+
+      assert.equal(yield* directory.markTurnStarted({ threadId, turnId }), true);
+      assert.equal(
+        yield* directory.claimIdleForRecovery({
+          threadId,
+          expectedLastSeenAt: previewBinding.value.lastSeenAt,
+        }),
+        false,
+        "REGRESSION: recovery claimed a session after a turn started",
+      );
+
+      assert.equal(yield* directory.markTurnTerminal({ threadId, expectedTurnId: turnId }), true);
+      const refreshedValue = (yield* directory.listBindings()).find(
+        (binding) => binding.threadId === threadId,
+      );
+      const refreshedBinding =
+        refreshedValue === undefined ? Option.none() : Option.some(refreshedValue);
+      assert.equal(Option.isSome(refreshedBinding), true);
+      if (Option.isNone(refreshedBinding)) return;
+
+      assert.equal(
+        yield* directory.claimIdleForRecovery({
+          threadId,
+          expectedLastSeenAt: refreshedBinding.value.lastSeenAt,
+        }),
+        true,
+      );
+      assert.equal(
+        yield* directory.markTurnStarted({ threadId, turnId }),
+        false,
+        "REGRESSION: a turn started after recovery atomically claimed the session",
+      );
     }));
 
   it("lists persisted bindings with metadata in oldest-first order", () =>
@@ -147,6 +272,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         adapterKey: "codex",
         runtimeMode: "full-access",
         status: "running",
+        activeTurnId: null,
         lastSeenAt: "2026-04-14T12:05:00.000Z",
         resumeCursor: {
           opaque: "resume-newer",
@@ -164,6 +290,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         adapterKey: "claudeAgent",
         runtimeMode: "approval-required",
         status: "starting",
+        activeTurnId: null,
         lastSeenAt: "2026-04-14T12:00:00.000Z",
         resumeCursor: {
           opaque: "resume-older",
@@ -183,6 +310,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
           adapterKey: "claudeAgent",
           runtimeMode: "approval-required",
           status: "starting",
+          activeTurnId: null,
           lastSeenAt: "2026-04-14T12:00:00.000Z",
           resumeCursor: {
             opaque: "resume-older",
@@ -198,6 +326,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
           adapterKey: "codex",
           runtimeMode: "full-access",
           status: "running",
+          activeTurnId: null,
           lastSeenAt: "2026-04-14T12:05:00.000Z",
           resumeCursor: {
             opaque: "resume-newer",
@@ -223,6 +352,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
+        activeTurnId: null,
         lastSeenAt: "2026-01-01T00:00:00.000Z",
         resumeCursor: null,
         runtimePayload: null,
@@ -291,6 +421,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         adapterKey: "codex",
         runtimeMode: "full-access",
         status: "running",
+        activeTurnId: null,
         lastSeenAt: "2026-07-19T00:00:00.000Z",
         resumeCursor,
         runtimePayload,

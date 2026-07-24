@@ -14,8 +14,8 @@ import {
 import { ProviderService } from "../Services/ProviderService.ts";
 import { ServerBootGeneration } from "../Services/ServerBootGeneration.ts";
 
-const DEFAULT_INACTIVITY_THRESHOLD_MS = 30 * 60 * 1000;
-const DEFAULT_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
+export const DEFAULT_INACTIVITY_THRESHOLD_MS = 15 * 60 * 1000;
+export const DEFAULT_SWEEP_INTERVAL_MS = 60 * 1000;
 
 export interface ProviderSessionReaperLiveOptions {
   readonly inactivityThresholdMs?: number;
@@ -107,10 +107,42 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
           continue;
         }
 
-        if (!isArchivedThread && thread?.session?.activeTurnId != null) {
+        const projectedActiveTurnId = thread?.session?.activeTurnId ?? null;
+        if (
+          binding.activeTurnId != null &&
+          thread?.session !== null &&
+          thread?.session !== undefined &&
+          projectedActiveTurnId === null
+        ) {
+          const reconciled = yield* directory
+            .markTurnTerminal({
+              threadId: binding.threadId,
+              expectedTurnId: binding.activeTurnId,
+            })
+            .pipe(
+              Effect.catchCause((cause) =>
+                Effect.logWarning("provider.session.reaper.stale-turn-reconcile-failed", {
+                  threadId: binding.threadId,
+                  activeTurnId: binding.activeTurnId,
+                  cause,
+                }).pipe(Effect.as(false)),
+              ),
+            );
+          if (reconciled) {
+            yield* Effect.logInfo("provider.session.reaper.stale-turn-reconciled", {
+              threadId: binding.threadId,
+              activeTurnId: binding.activeTurnId,
+            });
+            // Reconciliation refreshes lastSeenAt, beginning a full warm-idle
+            // window rather than immediately killing the recovered session.
+            continue;
+          }
+        }
+
+        if (binding.activeTurnId != null || projectedActiveTurnId != null) {
           yield* Effect.logDebug("provider.session.reaper.skipped-active-turn", {
             threadId: binding.threadId,
-            activeTurnId: thread.session.activeTurnId,
+            activeTurnId: projectedActiveTurnId ?? binding.activeTurnId,
             idleDurationMs,
           });
           continue;

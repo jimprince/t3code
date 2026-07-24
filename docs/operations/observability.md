@@ -49,6 +49,20 @@ If OTLP is not configured, metrics still exist in-process, but you will not have
 
 Provider event NDJSON files still exist for provider runtime streams. Those are separate from the main server trace file.
 
+Native provider events and canonical T3 events use distinct files per thread:
+`<thread>.native.log` and `<thread>.canonical.log`. Their writers are closed
+when the provider session stops or exits.
+
+The logs directory has a global retention policy across trace and provider
+files: files older than 30 days are removed first, followed by the oldest files
+until total retained size is at most 2 GiB. Cleanup runs at startup and hourly,
+and the directory contains `.metadata_never_index` so Spotlight does not index
+high-churn logs.
+
+Successful high-frequency spans are limited to 200 per minute. Errors and spans
+lasting at least 250 ms are always retained; the next retained record reports
+how many successful spans were suppressed.
+
 ## Run The Server In Instrumented Mode
 
 There are two useful modes:
@@ -528,6 +542,11 @@ Restart recovery emits these structured log events:
 - `provider.session.reaper.generation-changed`: debug record when recovery restamped a binding during the sweep
 - `provider.session.reaper.dead-generation-settle-failed`: stale-binding settlement failed, with current and persisted generation IDs
 - `provider.session.reaper.dead-generation-sweep-complete`: aggregate count for a sweep that settled stale bindings
+- `provider.session.reaper.stale-turn-reconciled`: a persisted active-turn
+  marker had no active projection and was cleared before its warm-idle window
+  began
+- `provider.session.reaped`: an idle current-generation provider session passed
+  the 15-minute warm timeout
 
 ### Current Constraints
 

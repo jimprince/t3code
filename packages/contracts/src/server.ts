@@ -406,6 +406,57 @@ export const ServerSignalProcessResult = Schema.Struct({
 });
 export type ServerSignalProcessResult = typeof ServerSignalProcessResult.Type;
 
+export const ServerRecoveryGroupId = Schema.Literals([
+  "idle-provider-sessions",
+  "diagnostic-captures",
+  "orphaned-provider-workers",
+]);
+export type ServerRecoveryGroupId = typeof ServerRecoveryGroupId.Type;
+
+export const ServerRecoveryCandidate = Schema.Struct({
+  candidateId: TrimmedNonEmptyString,
+  groupId: ServerRecoveryGroupId,
+  kind: Schema.Literals(["provider-session", "process"]),
+  label: TrimmedNonEmptyString,
+  detail: TrimmedNonEmptyString,
+  recommended: Schema.Boolean,
+  pid: Schema.Option(PositiveInt),
+  threadId: Schema.Option(ThreadId),
+  cpuPercent: Schema.Option(Schema.Number),
+  rssBytes: Schema.Option(NonNegativeInt),
+});
+export type ServerRecoveryCandidate = typeof ServerRecoveryCandidate.Type;
+
+export const ServerRecoveryPreviewResult = Schema.Struct({
+  previewId: TrimmedNonEmptyString,
+  createdAt: Schema.DateTimeUtc,
+  expiresAt: Schema.DateTimeUtc,
+  candidates: Schema.Array(ServerRecoveryCandidate),
+  warnings: Schema.Array(TrimmedNonEmptyString),
+  automaticRecovery: Schema.Literal(false),
+});
+export type ServerRecoveryPreviewResult = typeof ServerRecoveryPreviewResult.Type;
+
+export const ServerRecoveryExecuteInput = Schema.Struct({
+  previewId: TrimmedNonEmptyString,
+  candidateIds: Schema.Array(TrimmedNonEmptyString),
+});
+export type ServerRecoveryExecuteInput = typeof ServerRecoveryExecuteInput.Type;
+
+export const ServerRecoveryActionResult = Schema.Struct({
+  candidateId: TrimmedNonEmptyString,
+  outcome: Schema.Literals(["stopped", "signaled", "skipped", "failed"]),
+  message: Schema.Option(TrimmedNonEmptyString),
+});
+export type ServerRecoveryActionResult = typeof ServerRecoveryActionResult.Type;
+
+export const ServerRecoveryExecuteResult = Schema.Struct({
+  previewId: TrimmedNonEmptyString,
+  completedAt: Schema.DateTimeUtc,
+  actions: Schema.Array(ServerRecoveryActionResult),
+});
+export type ServerRecoveryExecuteResult = typeof ServerRecoveryExecuteResult.Type;
+
 export const ServerHeadlessUpdateCheckStatus = Schema.Literals([
   "queued",
   "cooldown",
