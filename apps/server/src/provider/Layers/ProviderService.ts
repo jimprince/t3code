@@ -28,6 +28,7 @@ import {
 } from "@t3tools/contracts";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -60,6 +61,7 @@ import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 const isModelSelection = Schema.is(ModelSelection);
+const STALE_TURN_RECONCILIATION_GRACE_MS = 5_000;
 
 /**
  * Hook for tests that want to override the canonical event logger pulled
@@ -605,6 +607,143 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     } as const;
   });
 
+  const reservePendingTurn = Effect.fn("reservePendingTurn")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly pendingTurnId: TurnId;
+    readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
+  }) {
+    const reserved = yield* directory.markTurnStarted({
+      threadId: input.threadId,
+      turnId: input.pendingTurnId,
+      expectedActiveTurnId: null,
+    });
+    if (reserved) {
+      return true;
+    }
+
+    const binding = (yield* directory.listBindings()).find(
+      (candidate) => candidate.threadId === input.threadId,
+    );
+    if (!binding || binding.status === "stopped") {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        reason: binding ? "session-stopped" : "binding-missing",
+      });
+      return false;
+    }
+
+    const activeTurnId = binding.activeTurnId;
+    if (activeTurnId === null || activeTurnId === undefined) {
+      const retryReserved = yield* directory.markTurnStarted({
+        threadId: input.threadId,
+        turnId: input.pendingTurnId,
+        expectedActiveTurnId: null,
+      });
+      if (!retryReserved) {
+        yield* Effect.logDebug("provider.turn.reservation-conflict", {
+          threadId: input.threadId,
+          provider: input.adapter.provider,
+          reason: "reservation-retry-lost",
+        });
+      }
+      return retryReserved;
+    }
+
+    if (String(activeTurnId).startsWith("pending:")) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        reason: "pending-turn",
+      });
+      return false;
+    }
+
+    const markerTimestamp = Date.parse(binding.lastSeenAt);
+    const markerAgeMs = (yield* Clock.currentTimeMillis) - markerTimestamp;
+    if (Number.isNaN(markerTimestamp) || markerAgeMs < STALE_TURN_RECONCILIATION_GRACE_MS) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: Number.isNaN(markerTimestamp) ? "invalid-marker-timestamp" : "recent-turn",
+      });
+      return false;
+    }
+
+    const liveSessions = yield* input.adapter.listSessions().pipe(
+      Effect.map(Option.some),
+      Effect.catchCause((cause) =>
+        Effect.logWarning("provider.turn.live-session-inspection-failed", {
+          threadId: input.threadId,
+          provider: input.adapter.provider,
+          activeTurnId,
+          cause,
+        }).pipe(Effect.as(Option.none<ReadonlyArray<ProviderSession>>())),
+      ),
+    );
+    if (Option.isNone(liveSessions)) {
+      return false;
+    }
+
+    const liveSession = liveSessions.value.find((session) => session.threadId === input.threadId);
+    if (
+      liveSession === undefined ||
+      liveSession.activeTurnId !== undefined ||
+      liveSession.status === "running"
+    ) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        liveActiveTurnId: liveSession?.activeTurnId,
+        liveSessionStatus: liveSession?.status,
+        markerAgeMs,
+        reason: liveSession === undefined ? "live-session-missing" : "live-turn-active",
+      });
+      return false;
+    }
+
+    const reconciled = yield* directory.markTurnTerminal({
+      threadId: input.threadId,
+      expectedTurnId: activeTurnId,
+    });
+    if (!reconciled) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: "stale-marker-cas-lost",
+      });
+      return false;
+    }
+
+    yield* Effect.logInfo("provider.turn.stale-marker-reconciled", {
+      threadId: input.threadId,
+      provider: input.adapter.provider,
+      activeTurnId,
+      markerAgeMs,
+    });
+    const retryReserved = yield* directory.markTurnStarted({
+      threadId: input.threadId,
+      turnId: input.pendingTurnId,
+      expectedActiveTurnId: null,
+    });
+    if (!retryReserved) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: "reconciled-reservation-lost",
+      });
+    }
+    return retryReserved;
+  });
+
   const stopStaleSessionsForThread = Effect.fn("stopStaleSessionsForThread")(function* (input: {
     readonly threadId: ThreadId;
     readonly currentInstanceId: ProviderInstanceId;
@@ -807,15 +946,15 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       const pendingTurnId = TurnId.make(
         `pending:${process.pid}:${pendingSequence}:${String(input.threadId)}`,
       );
-      const reserved = yield* directory.markTurnStarted({
+      const reserved = yield* reservePendingTurn({
         threadId: input.threadId,
-        turnId: pendingTurnId,
-        expectedActiveTurnId: null,
+        pendingTurnId,
+        adapter: routed.adapter,
       });
       if (!reserved) {
         return yield* toValidationError(
           "ProviderService.sendTurn",
-          `Cannot start a turn for thread '${input.threadId}' because the session is stopping.`,
+          `Cannot start a turn for thread '${input.threadId}' because another turn or session transition is in progress. Wait for it to settle, then retry.`,
         );
       }
 

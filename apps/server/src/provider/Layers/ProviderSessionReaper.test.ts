@@ -5,6 +5,7 @@ import {
   TurnId,
   ProviderDriverKind,
   ProviderInstanceId,
+  type ProviderSession,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
@@ -156,6 +157,7 @@ describe("ProviderSessionReaper", () => {
       readonly threadId: ThreadId;
     }) => ReturnType<ProviderServiceShape["stopSession"]>;
     readonly onThreadInspected?: (threadId: ThreadId) => Effect.Effect<void>;
+    readonly liveSessions?: ReadonlyArray<ProviderSession>;
   }) {
     const stoppedThreadIds = new Set<ThreadId>();
     let settleSession: ((threadId: ThreadId) => Effect.Effect<void>) | undefined;
@@ -178,7 +180,7 @@ describe("ProviderSessionReaper", () => {
       respondToRequest: () => unsupported(),
       respondToUserInput: () => unsupported(),
       stopSession,
-      listSessions: () => Effect.succeed([]),
+      listSessions: () => Effect.succeed(input.liveSessions ?? []),
       getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
       getInstanceInfo: (instanceId) => {
         const driverKind = ProviderDriverKind.make(String(instanceId));
@@ -430,6 +432,71 @@ describe("ProviderSessionReaper", () => {
       expect(reconciled.value.status).toBe("running");
       expect(reconciled.value.runtimePayload).toEqual({ activeTurnId: null });
       expect(Date.parse(reconciled.value.lastSeenAt)).toBeGreaterThan(Date.parse(now));
+    }
+  });
+
+  it("does not reconcile a persisted marker while the provider still reports a live turn", async () => {
+    const threadId = ThreadId.make("thread-reaper-live-provider-turn");
+    const activeTurnId = TurnId.make("turn-reaper-live-provider-turn");
+    const now = "2026-01-01T00:00:00.000Z";
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+      liveSessions: [
+        {
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          status: "running",
+          runtimeMode: "full-access",
+          threadId,
+          activeTurnId,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        bootGenerationId: CURRENT_BOOT_GENERATION,
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        activeTurnId,
+        lastSeenAt: "2026-01-01T00:00:00.000Z",
+        resumeCursor: { opaque: "resume-live-provider-turn" },
+        runtimePayload: { activeTurnId },
+      }),
+    );
+
+    const reaper = await runtime!.runPromise(Effect.service(ProviderSessionReaper));
+    scope = await runtime!.runPromise(Scope.make("sequential"));
+    await runtime!.runPromise(reaper.start().pipe(Scope.provide(scope)));
+    await runtime!.runPromise(drainFibers);
+
+    expect(harness.stopSession).not.toHaveBeenCalled();
+    const remaining = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+    expect(Option.isSome(remaining)).toBe(true);
+    if (Option.isSome(remaining)) {
+      expect(remaining.value.activeTurnId).toBe(activeTurnId);
+      expect(remaining.value.status).toBe("running");
     }
   });
 

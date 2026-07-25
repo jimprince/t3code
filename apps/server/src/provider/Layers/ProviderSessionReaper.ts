@@ -37,6 +37,10 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
 
     const sweep = Effect.gen(function* () {
       const bindings = yield* directory.listBindings();
+      const liveSessions = yield* providerService.listSessions();
+      const liveSessionsByThreadId = new Map(
+        liveSessions.map((session) => [session.threadId, session] as const),
+      );
       const now = yield* Clock.currentTimeMillis;
       let reapedCount = 0;
       let deadGenerationSettledCount = 0;
@@ -108,11 +112,15 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
         }
 
         const projectedActiveTurnId = thread?.session?.activeTurnId ?? null;
+        const liveSession = liveSessionsByThreadId.get(binding.threadId);
+        const liveActiveTurnId = liveSession?.activeTurnId ?? null;
         if (
           binding.activeTurnId != null &&
           thread?.session !== null &&
           thread?.session !== undefined &&
-          projectedActiveTurnId === null
+          projectedActiveTurnId === null &&
+          liveActiveTurnId === null &&
+          liveSession?.status !== "running"
         ) {
           const reconciled = yield* directory
             .markTurnTerminal({
@@ -139,10 +147,16 @@ const makeProviderSessionReaper = (options?: ProviderSessionReaperLiveOptions) =
           }
         }
 
-        if (binding.activeTurnId != null || projectedActiveTurnId != null) {
+        if (
+          binding.activeTurnId != null ||
+          projectedActiveTurnId != null ||
+          liveActiveTurnId != null ||
+          liveSession?.status === "running"
+        ) {
           yield* Effect.logDebug("provider.session.reaper.skipped-active-turn", {
             threadId: binding.threadId,
-            activeTurnId: projectedActiveTurnId ?? binding.activeTurnId,
+            activeTurnId: liveActiveTurnId ?? projectedActiveTurnId ?? binding.activeTurnId,
+            liveSessionStatus: liveSession?.status,
             idleDurationMs,
           });
           continue;
