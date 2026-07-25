@@ -33,6 +33,7 @@ export type EventNdjsonStream = "native" | "canonical" | "orchestration";
 export interface EventNdjsonLogger {
   readonly filePath: string;
   write: (event: unknown, threadId: ThreadId | null) => Effect.Effect<void, never, never>;
+  releaseThread?: (threadId: ThreadId) => Effect.Effect<void, never, never>;
   close: () => Effect.Effect<void, never, never>;
 }
 
@@ -212,7 +213,10 @@ export const makeEventNdjsonLogger = Effect.fn("makeEventNdjsonLogger")(function
       }
 
       return makeThreadWriter({
-        filePath: NodePath.join(NodePath.dirname(filePath), `${threadSegment}.log`),
+        filePath: NodePath.join(
+          NodePath.dirname(filePath),
+          `${threadSegment}.${options.stream}.log`,
+        ),
         maxBytes,
         maxFiles,
         batchWindowMs,
@@ -278,9 +282,31 @@ export const makeEventNdjsonLogger = Effect.fn("makeEventNdjsonLogger")(function
     );
   });
 
+  const releaseThread = Effect.fn("releaseThread")(function* (threadId: ThreadId) {
+    const threadSegment = resolveThreadSegment(threadId);
+    yield* SynchronizedRef.modifyEffect(stateRef, (state) => {
+      const writer = state.threadWriters.get(threadSegment);
+      const nextThreadWriters = new Map(state.threadWriters);
+      const nextFailedSegments = new Set(state.failedSegments);
+      nextThreadWriters.delete(threadSegment);
+      nextFailedSegments.delete(threadSegment);
+
+      return (writer ? writer.close() : Effect.void).pipe(
+        Effect.as([
+          undefined,
+          {
+            threadWriters: nextThreadWriters,
+            failedSegments: nextFailedSegments,
+          },
+        ] as const),
+      );
+    });
+  });
+
   return {
     filePath,
     write,
+    releaseThread,
     close,
   } satisfies EventNdjsonLogger;
 });

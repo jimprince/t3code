@@ -1,0 +1,15 @@
+node_modules
+.bun
+.turbo
+.git
+.env
+.env.*
+release
+release-mock
+build
+dist
+dist-electron
+apps/*/dist
+packages/*/dist
+*.log
+*.tsbuildinfo
