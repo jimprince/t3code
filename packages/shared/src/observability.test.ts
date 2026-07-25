@@ -18,6 +18,7 @@ import {
   errorTag,
   makeLocalFileTracer,
   makeTraceSink,
+  type EffectTraceRecord,
   type TraceRecord,
 } from "./observability.ts";
 
@@ -63,7 +64,7 @@ const TraceRecordLine = Schema.Struct({
 
 const decodeTraceRecordLine = Schema.decodeUnknownSync(Schema.fromJsonString(TraceRecordLine));
 
-const makeRecord = (name: string, suffix = ""): TraceRecord => ({
+const makeRecord = (name: string, suffix = ""): EffectTraceRecord => ({
   type: "effect-span",
   name,
   traceId: `trace-${name}-${suffix}`,
@@ -251,6 +252,48 @@ describe("observability", () => {
             lines.map((line) => line.name),
             ["alpha", "beta"],
           );
+        }),
+      ),
+    );
+
+    it.effect("rate-limits repetitive successful spans but retains failures with a summary", () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const fileSystem = yield* FileSystem.FileSystem;
+          const path = yield* Path.Path;
+          const tempDir = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-trace-limit-" });
+          const tracePath = path.join(tempDir, "shared.trace.ndjson");
+
+          const sink = yield* makeTraceSink({
+            filePath: tracePath,
+            maxBytes: 1024 * 1024,
+            maxFiles: 2,
+            batchWindowMs: 10_000,
+            successfulSpanMaxPerWindow: 2,
+            successfulSpanWindowMs: 60_000,
+            slowSpanThresholdMs: 250,
+          });
+
+          sink.push({
+            ...makeRecord("sql.execute", "failure-before"),
+            exit: { _tag: "Failure", cause: "test failure" },
+          });
+          sink.push(makeRecord("sql.execute", "1"));
+          sink.push(makeRecord("sql.execute", "2"));
+          sink.push(makeRecord("sql.execute", "3"));
+          sink.push(makeRecord("sql.execute", "4"));
+          sink.push({
+            ...makeRecord("sql.execute", "failure-after"),
+            exit: { _tag: "Failure", cause: "test failure" },
+          });
+          yield* sink.close();
+
+          const records = yield* readTraceRecords(tracePath);
+          assert.deepStrictEqual(
+            records.map((record) => record.attributes.payload),
+            ["failure-before", "1", "2", "failure-after"],
+          );
+          assert.equal(records[3]?.attributes["trace.suppressed_count"], 2);
         }),
       ),
     );

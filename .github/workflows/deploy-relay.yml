@@ -17,7 +17,7 @@ concurrency:
 jobs:
   deploy_relay:
     name: Deploy production relay
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     environment:
       name: production
@@ -36,10 +36,65 @@ jobs:
       APNS_BUNDLE_ID: ${{ vars.APNS_BUNDLE_ID }}
       ALCHEMY_TELEMETRY_DISABLED: "1"
     steps:
+      - name: Check relay deployment config
+        id: relay-config
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          PLANETSCALE_API_TOKEN_ID: ${{ secrets.PLANETSCALE_API_TOKEN_ID }}
+          PLANETSCALE_API_TOKEN: ${{ secrets.PLANETSCALE_API_TOKEN }}
+          AXIOM_TOKEN: ${{ secrets.AXIOM_TOKEN }}
+          CLERK_SECRET_KEY: ${{ secrets.CLERK_SECRET_KEY }}
+          APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
+        run: |
+          required=(
+            CLOUDFLARE_ACCOUNT_ID
+            PLANETSCALE_ORGANIZATION
+            AXIOM_ORG_ID
+            RELAY_API_ZONE_NAME
+            RELAY_TUNNEL_ZONE_NAME
+            CLERK_PUBLISHABLE_KEY
+            CLERK_JWT_AUDIENCE
+            APNS_ENVIRONMENT
+            APNS_TEAM_ID
+            APNS_KEY_ID
+            APNS_BUNDLE_ID
+            CLOUDFLARE_API_TOKEN
+            PLANETSCALE_API_TOKEN_ID
+            PLANETSCALE_API_TOKEN
+            AXIOM_TOKEN
+            CLERK_SECRET_KEY
+            APNS_PRIVATE_KEY
+          )
+
+          present=0
+          missing=()
+          for name in "${required[@]}"; do
+            if [ -n "${!name}" ]; then
+              present=$((present + 1))
+            else
+              missing+=("$name")
+            fi
+          done
+
+          if [ "$present" -eq 0 ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Relay production deploy is skipped because production relay Actions variables and secrets are not configured."
+            exit 0
+          fi
+
+          if [ "${#missing[@]}" -gt 0 ]; then
+            echo "::error::Relay production deploy config is incomplete. Missing: ${missing[*]}"
+            exit 1
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
       - name: Checkout
+        if: steps.relay-config.outputs.configured == 'true'
         uses: actions/checkout@v6
 
       - name: Setup Vite+
+        if: steps.relay-config.outputs.configured == 'true'
         uses: voidzero-dev/setup-vp@v1
         with:
           node-version-file: package.json
@@ -47,6 +102,7 @@ jobs:
           run-install: true
 
       - name: Deploy production relay stage
+        if: steps.relay-config.outputs.configured == 'true'
         id: deploy
         run: vp run --filter t3code-relay deploy --stage prod --yes --github-output
         env:
@@ -58,6 +114,7 @@ jobs:
           APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
 
       - name: Publish relay deploy commit status
+        if: steps.relay-config.outputs.configured == 'true'
         uses: actions/github-script@v8
         with:
           script: |
@@ -76,5 +133,20 @@ jobs:
               state: "success",
               context: "Relay deploy / production",
               description,
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+            });
+
+      - name: Publish skipped relay deploy commit status
+        if: steps.relay-config.outputs.configured == 'false'
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: "success",
+              context: "Relay deploy / production",
+              description: "Relay production deploy skipped; config is not present.",
               target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
             });

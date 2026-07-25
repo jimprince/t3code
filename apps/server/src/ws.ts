@@ -71,6 +71,7 @@ import * as ExternalLauncher from "./process/externalLauncher.ts";
 import { normalizeDispatchCommand } from "./orchestration/Normalizer.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import { ThreadTransfer } from "./orchestration/Services/ThreadTransfer.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -100,6 +101,7 @@ import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
+import * as SystemRecovery from "./diagnostics/SystemRecovery.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
@@ -116,6 +118,7 @@ import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
+import { requestHeadlessUpdateCheck } from "./headlessUpdateCheck.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -293,7 +296,11 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [ORCHESTRATION_WS_METHODS.subscribeShell, AuthOrchestrationReadScope],
   [ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot, AuthOrchestrationReadScope],
   [ORCHESTRATION_WS_METHODS.subscribeThread, AuthOrchestrationReadScope],
+  // Export interrupts/stops the provider session, so it is an operate action.
+  [ORCHESTRATION_WS_METHODS.exportThread, AuthOrchestrationOperateScope],
+  [ORCHESTRATION_WS_METHODS.importThread, AuthOrchestrationOperateScope],
   [WS_METHODS.serverProbe, AuthOrchestrationReadScope],
+  [ORCHESTRATION_WS_METHODS.forkThread, AuthOrchestrationOperateScope],
   [WS_METHODS.serverGetConfig, AuthOrchestrationReadScope],
   [WS_METHODS.serverRefreshProviders, AuthOrchestrationOperateScope],
   [WS_METHODS.serverUpdateProvider, AuthOrchestrationOperateScope],
@@ -307,6 +314,9 @@ const RPC_REQUIRED_SCOPE = new Map<string, AuthEnvironmentScope>([
   [WS_METHODS.serverGetProcessDiagnostics, AuthOrchestrationReadScope],
   [WS_METHODS.serverGetProcessResourceHistory, AuthOrchestrationReadScope],
   [WS_METHODS.serverSignalProcess, AuthOrchestrationOperateScope],
+  [WS_METHODS.serverPreviewRecovery, AuthOrchestrationReadScope],
+  [WS_METHODS.serverExecuteRecovery, AuthOrchestrationOperateScope],
+  [WS_METHODS.serverRequestHeadlessUpdateCheck, AuthOrchestrationOperateScope],
   [WS_METHODS.cloudGetRelayClientStatus, AuthRelayWriteScope],
   [WS_METHODS.cloudInstallRelayClient, AuthRelayWriteScope],
   [WS_METHODS.sourceControlLookupRepository, AuthOrchestrationReadScope],
@@ -412,6 +422,7 @@ const makeWsRpcLayer = (
       const keybindings = yield* Keybindings.Keybindings;
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
       const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
+      const threadTransfer = yield* ThreadTransfer;
       const review = yield* ReviewService.ReviewService;
       const vcsProvisioning = yield* VcsProvisioningService.VcsProvisioningService;
       const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
@@ -447,6 +458,7 @@ const makeWsRpcLayer = (
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
+      const systemRecovery = yield* SystemRecovery.SystemRecovery;
       const relayClient = yield* RelayClient.RelayClient;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
@@ -582,28 +594,34 @@ const makeWsRpcLayer = (
       const enrichProjectEvent = (
         event: OrchestrationEvent,
       ): Effect.Effect<OrchestrationEvent, never, never> => {
+        const isChatProjectEvent = (payload: { readonly kind?: string }) => payload.kind === "chat";
         switch (event.type) {
           case "project.created":
-            return repositoryIdentityResolver.resolve(event.payload.workspaceRoot).pipe(
-              Effect.map((repositoryIdentity) => ({
-                ...event,
-                payload: {
-                  ...event.payload,
-                  repositoryIdentity,
-                },
-              })),
-            );
+            return isChatProjectEvent(event.payload)
+              ? Effect.succeed(event)
+              : repositoryIdentityResolver.resolve(event.payload.workspaceRoot).pipe(
+                  Effect.map((repositoryIdentity) => ({
+                    ...event,
+                    payload: {
+                      ...event.payload,
+                      repositoryIdentity,
+                    },
+                  })),
+                );
           case "project.meta-updated":
             return Effect.gen(function* () {
+              const project = yield* projectionSnapshotQuery.getProjectShellById(
+                event.payload.projectId,
+              );
+              if (Option.isSome(project) && project.value.kind === "chat") {
+                return event;
+              }
               const workspaceRoot =
                 event.payload.workspaceRoot ??
-                Option.match(
-                  yield* projectionSnapshotQuery.getProjectShellById(event.payload.projectId),
-                  {
-                    onNone: () => null,
-                    onSome: (project) => project.workspaceRoot,
-                  },
-                ) ??
+                Option.match(project, {
+                  onNone: () => null,
+                  onSome: (project) => project.workspaceRoot,
+                }) ??
                 null;
               if (workspaceRoot === null) {
                 return event;
@@ -1111,54 +1129,7 @@ const makeWsRpcLayer = (
             ORCHESTRATION_WS_METHODS.dispatchCommand,
             Effect.gen(function* () {
               const normalizedCommand = yield* normalizeDispatchCommand(command);
-              const shouldStopSessionAfterArchive =
-                normalizedCommand.type === "thread.archive"
-                  ? yield* projectionSnapshotQuery
-                      .getThreadShellById(normalizedCommand.threadId)
-                      .pipe(
-                        Effect.map(
-                          Option.match({
-                            onNone: () => false,
-                            onSome: (thread) =>
-                              thread.session !== null && thread.session.status !== "stopped",
-                          }),
-                        ),
-                        Effect.orElseSucceed(() => false),
-                      )
-                  : false;
               const result = yield* dispatchNormalizedCommand(normalizedCommand);
-              if (normalizedCommand.type === "thread.archive") {
-                if (shouldStopSessionAfterArchive) {
-                  yield* Effect.gen(function* () {
-                    const stopCommand = yield* normalizeDispatchCommand({
-                      type: "thread.session.stop",
-                      commandId: CommandId.make(
-                        `session-stop-for-archive:${normalizedCommand.commandId}`,
-                      ),
-                      threadId: normalizedCommand.threadId,
-                      createdAt: yield* nowIso,
-                    });
-
-                    yield* dispatchNormalizedCommand(stopCommand);
-                  }).pipe(
-                    Effect.catchCause((cause) =>
-                      Effect.logWarning("failed to stop provider session during archive", {
-                        threadId: normalizedCommand.threadId,
-                        cause,
-                      }),
-                    ),
-                  );
-                }
-
-                yield* terminalManager.close({ threadId: normalizedCommand.threadId }).pipe(
-                  Effect.catch((error) =>
-                    Effect.logWarning("failed to close thread terminals after archive", {
-                      threadId: normalizedCommand.threadId,
-                      error: error.message,
-                    }),
-                  ),
-                );
-              }
               return result;
             }).pipe(
               Effect.mapError((cause) =>
@@ -1200,6 +1171,26 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "orchestration" },
           ),
+        [ORCHESTRATION_WS_METHODS.exportThread]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.exportThread,
+            threadTransfer.exportThread(input),
+            {
+              "rpc.aggregate": "orchestration",
+            },
+          ),
+        [ORCHESTRATION_WS_METHODS.importThread]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.importThread,
+            threadTransfer.importThread(input),
+            {
+              "rpc.aggregate": "orchestration",
+            },
+          ),
+        [ORCHESTRATION_WS_METHODS.forkThread]: (input) =>
+          observeRpcEffect(ORCHESTRATION_WS_METHODS.forkThread, threadTransfer.forkThread(input), {
+            "rpc.aggregate": "orchestration",
+          }),
         [ORCHESTRATION_WS_METHODS.replayEvents]: (input) =>
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.replayEvents,
@@ -1356,19 +1347,23 @@ const makeWsRpcLayer = (
                 event.aggregateId === input.threadId &&
                 isThreadDetailEvent(event);
 
-              const liveStream = orchestrationEngine.streamDomainEvents.pipe(
+              // Establish the PubSub subscription before either the replay or
+              // snapshot read. This is deliberately eager: streamDomainEvents
+              // subscribes only when the stream starts running, which leaves a
+              // race where a committed event can fall between the read and the
+              // live subscription.
+              const liveEvents = yield* orchestrationEngine.subscribeDomainEvents;
+              const liveStream = liveEvents.pipe(
                 Stream.filter(isThisThreadDetailEvent),
                 Stream.map((event) => ({
                   kind: "event" as const,
                   event,
                 })),
               );
-
-              // Attach live delivery before reading either replay or snapshot state.
-              // Otherwise an event published while the snapshot is loading is lost.
               const liveBuffer = yield* Queue.unbounded<OrchestrationThreadStreamItem>();
               yield* Effect.forkScoped(
                 liveStream.pipe(Stream.runForEach((item) => Queue.offer(liveBuffer, item))),
+                { startImmediately: true },
               );
               const bufferedLiveStream = Stream.fromQueue(liveBuffer);
 
@@ -1416,8 +1411,8 @@ const makeWsRpcLayer = (
                 return Stream.concat(catchUpStream, afterCatchUp);
               }
 
-              const snapshot = yield* projectionSnapshotQuery
-                .getThreadDetailSnapshot(input.threadId)
+              const threadDetailSnapshot = yield* projectionSnapshotQuery
+                .getThreadDetailSnapshotById(input.threadId)
                 .pipe(
                   Effect.mapError(
                     (cause) =>
@@ -1428,12 +1423,22 @@ const makeWsRpcLayer = (
                   ),
                 );
 
-              if (Option.isNone(snapshot)) {
+              if (Option.isNone(threadDetailSnapshot)) {
                 return yield* new OrchestrationGetSnapshotError({
                   message: `Thread ${input.threadId} was not found`,
                   cause: input.threadId,
                 });
               }
+
+              const { snapshotSequence, thread } = threadDetailSnapshot.value;
+              // Events at or below the atomic snapshot's sequence are already
+              // reflected in the snapshot. Dropping them is required because
+              // streaming text deltas are not idempotent.
+              const bufferedAfterSnapshot = bufferedLiveStream.pipe(
+                Stream.filter(
+                  (item) => item.kind !== "event" || item.event.sequence > snapshotSequence,
+                ),
+              );
 
               const afterSnapshot =
                 input.requestCompletionMarker === true
@@ -1441,13 +1446,16 @@ const makeWsRpcLayer = (
                       Stream.fromEffect(
                         Queue.offer(liveBuffer, { kind: "synchronized" as const }),
                       ).pipe(Stream.drain),
-                      bufferedLiveStream,
+                      bufferedAfterSnapshot,
                     )
-                  : bufferedLiveStream;
+                  : bufferedAfterSnapshot;
               return Stream.concat(
                 Stream.make({
                   kind: "snapshot" as const,
-                  snapshot: snapshot.value,
+                  snapshot: {
+                    snapshotSequence,
+                    thread,
+                  },
                 }),
                 afterSnapshot,
               );
@@ -1556,6 +1564,22 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverSignalProcess, processDiagnostics.signal(input), {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.serverPreviewRecovery]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverPreviewRecovery, systemRecovery.preview, {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverExecuteRecovery]: (input) =>
+          observeRpcEffect(WS_METHODS.serverExecuteRecovery, systemRecovery.execute(input), {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverRequestHeadlessUpdateCheck]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverRequestHeadlessUpdateCheck,
+            requestHeadlessUpdateCheck(input),
+            {
+              "rpc.aggregate": "server",
+            },
+          ),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
             "rpc.aggregate": "cloud",
