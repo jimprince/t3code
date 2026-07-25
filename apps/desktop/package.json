@@ -1,12 +1,13 @@
 {
   "name": "@t3tools/desktop",
-  "version": "0.0.28",
+  "version": "0.0.29-nightly.20260725.899-fork.1",
   "private": true,
   "type": "module",
   "main": "dist-electron/main.cjs",
   "scripts": {
     "ensure:electron": "node scripts/ensure-electron-runtime.mjs",
-    "start": "node scripts/start-electron.mjs",
+    "start": "node scripts/build-pressure-monitor.mjs && node scripts/start-electron.mjs",
+    "build:native:pressure": "node scripts/build-pressure-monitor.mjs",
     "typecheck": "tsgo --noEmit",
     "test": "vp test run --passWithNoTests",
     "smoke-test": "node scripts/smoke-test.mjs"
