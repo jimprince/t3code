@@ -9,6 +9,9 @@ import { OtlpResource, OtlpTracer } from "effect/unstable/observability";
 import { RotatingFileSink } from "./logging.ts";
 
 const FLUSH_BUFFER_THRESHOLD = 32;
+const DEFAULT_SUCCESSFUL_SPAN_MAX_PER_WINDOW = 200;
+const DEFAULT_SUCCESSFUL_SPAN_WINDOW_MS = 60_000;
+const DEFAULT_SLOW_SPAN_THRESHOLD_MS = 250;
 
 export type TraceAttributes = Readonly<Record<string, unknown>>;
 
@@ -109,6 +112,9 @@ export interface TraceSinkOptions {
   readonly maxBytes: number;
   readonly maxFiles: number;
   readonly batchWindowMs: number;
+  readonly successfulSpanMaxPerWindow?: number;
+  readonly successfulSpanWindowMs?: number;
+  readonly slowSpanThresholdMs?: number;
 }
 
 export interface TraceSink {
@@ -270,6 +276,39 @@ export function spanToTraceRecord(span: SerializableSpan): EffectTraceRecord {
   };
 }
 
+interface SpanAdmissionState {
+  windowStartedAtMs: number;
+  admittedCount: number;
+  suppressedCount: number;
+}
+
+function isSuccessfulTraceRecord(record: TraceRecord): boolean {
+  if (record.type === "effect-span") {
+    return record.exit._tag === "Success";
+  }
+  const statusCode = record.status?.code?.toUpperCase();
+  return (
+    statusCode === undefined ||
+    statusCode === "0" ||
+    statusCode === "1" ||
+    statusCode === "UNSET" ||
+    statusCode === "OK" ||
+    statusCode === "STATUS_CODE_UNSET" ||
+    statusCode === "STATUS_CODE_OK"
+  );
+}
+
+function withSuppressionSummary(record: TraceRecord, suppressedCount: number): TraceRecord {
+  if (suppressedCount === 0) return record;
+  return {
+    ...record,
+    attributes: {
+      ...record.attributes,
+      "trace.suppressed_count": suppressedCount,
+    },
+  };
+}
+
 export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: TraceSinkOptions) {
   const sink = new RotatingFileSink({
     filePath: options.filePath,
@@ -278,6 +317,19 @@ export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: Trac
   });
 
   let buffer: Array<string> = [];
+  const admissionByName = new Map<string, SpanAdmissionState>();
+  const maxSuccessfulPerWindow = Math.max(
+    1,
+    options.successfulSpanMaxPerWindow ?? DEFAULT_SUCCESSFUL_SPAN_MAX_PER_WINDOW,
+  );
+  const successfulSpanWindowMs = Math.max(
+    1,
+    options.successfulSpanWindowMs ?? DEFAULT_SUCCESSFUL_SPAN_WINDOW_MS,
+  );
+  const slowSpanThresholdMs = Math.max(
+    0,
+    options.slowSpanThresholdMs ?? DEFAULT_SLOW_SPAN_THRESHOLD_MS,
+  );
 
   const flushUnsafe = () => {
     if (buffer.length === 0) {
@@ -305,7 +357,34 @@ export const makeTraceSink = Effect.fn("makeTraceSink")(function* (options: Trac
     filePath: options.filePath,
     push(record) {
       try {
-        buffer.push(`${JSON.stringify(record)}\n`);
+        // This synchronous sink callback cannot yield Effect's Clock service.
+        // @effect-diagnostics-next-line globalDate:off
+        const nowMs = Date.now();
+        const admissionKey = `${record.type}:${record.name}`;
+        const previous = admissionByName.get(admissionKey);
+        const state =
+          previous === undefined || nowMs - previous.windowStartedAtMs >= successfulSpanWindowMs
+            ? {
+                windowStartedAtMs: nowMs,
+                admittedCount: 0,
+                suppressedCount: previous?.suppressedCount ?? 0,
+              }
+            : previous;
+        const rateLimitedSuccess =
+          isSuccessfulTraceRecord(record) && record.durationMs < slowSpanThresholdMs;
+        if (rateLimitedSuccess && state.admittedCount >= maxSuccessfulPerWindow) {
+          state.suppressedCount += 1;
+          admissionByName.set(admissionKey, state);
+          return;
+        }
+
+        if (rateLimitedSuccess) {
+          state.admittedCount += 1;
+        }
+        const recordWithSummary = withSuppressionSummary(record, state.suppressedCount);
+        state.suppressedCount = 0;
+        admissionByName.set(admissionKey, state);
+        buffer.push(`${JSON.stringify(recordWithSummary)}\n`);
         if (buffer.length >= FLUSH_BUFFER_THRESHOLD) {
           flushUnsafe();
         }

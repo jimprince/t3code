@@ -87,8 +87,8 @@ describe("EventNdjsonLogger", () => {
         );
         yield* logger.close();
 
-        const threadOnePath = NodePath.join(tempDir, "thread-1.log");
-        const threadTwoPath = NodePath.join(tempDir, "thread-2.log");
+        const threadOnePath = NodePath.join(tempDir, "thread-1.native.log");
+        const threadTwoPath = NodePath.join(tempDir, "thread-2.native.log");
         assert.equal(NodeFS.existsSync(threadOnePath), true);
         assert.equal(NodeFS.existsSync(threadTwoPath), true);
 
@@ -129,7 +129,7 @@ describe("EventNdjsonLogger", () => {
           yield* logger.write({ id: "evt-invalid-thread" }, "!!!" as unknown as ThreadId);
           yield* logger.close();
 
-          const globalPath = NodePath.join(tempDir, "_global.log");
+          const globalPath = NodePath.join(tempDir, "_global.orchestration.log");
           assert.equal(NodeFS.existsSync(globalPath), true);
           const lines = NodeFS.readFileSync(globalPath, "utf8")
             .trim()
@@ -172,7 +172,7 @@ describe("EventNdjsonLogger", () => {
         );
         yield* logger.close();
 
-        const globalPath = NodePath.join(tempDir, "_global.log");
+        const globalPath = NodePath.join(tempDir, "_global.canonical.log");
         assert.equal(NodeFS.existsSync(globalPath), true);
         const lines = NodeFS.readFileSync(globalPath, "utf8")
           .trim()
@@ -184,6 +184,88 @@ describe("EventNdjsonLogger", () => {
           '{"id":"evt-concurrent-1"}',
           '{"id":"evt-concurrent-2"}',
         ]);
+      } finally {
+        NodeFS.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("keeps native and canonical stream writers on distinct files", () =>
+    Effect.gen(function* () {
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const basePath = NodePath.join(tempDir, "provider-events.ndjson");
+      const threadId = ThreadId.make("thread-split-streams");
+
+      try {
+        const native = yield* makeEventNdjsonLogger(basePath, {
+          stream: "native",
+          batchWindowMs: 0,
+        });
+        const canonical = yield* makeEventNdjsonLogger(basePath, {
+          stream: "canonical",
+          batchWindowMs: 0,
+        });
+        assert.exists(native);
+        assert.exists(canonical);
+        if (!native || !canonical) return;
+
+        yield* Effect.all(
+          [
+            native.write({ id: "native-event" }, threadId),
+            canonical.write({ id: "canonical-event" }, threadId),
+          ],
+          { concurrency: "unbounded" },
+        );
+        yield* native.close();
+        yield* canonical.close();
+
+        assert.equal(
+          NodeFS.existsSync(NodePath.join(tempDir, "thread-split-streams.native.log")),
+          true,
+        );
+        assert.equal(
+          NodeFS.existsSync(NodePath.join(tempDir, "thread-split-streams.canonical.log")),
+          true,
+        );
+      } finally {
+        NodeFS.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }),
+  );
+
+  it.effect("releases a thread writer and allows a later writer to reopen it", () =>
+    Effect.gen(function* () {
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const basePath = NodePath.join(tempDir, "provider-events.ndjson");
+      const threadId = ThreadId.make("thread-release-writer");
+
+      try {
+        const logger = yield* makeEventNdjsonLogger(basePath, {
+          stream: "canonical",
+          batchWindowMs: 0,
+        });
+        assert.exists(logger);
+        if (!logger) return;
+        const releaseThread = logger.releaseThread;
+        assert.exists(releaseThread);
+        if (!releaseThread) return;
+
+        yield* logger.write({ id: "before-release" }, threadId);
+        yield* releaseThread(threadId);
+        yield* logger.write({ id: "after-release" }, threadId);
+        yield* logger.close();
+
+        const records = NodeFS.readFileSync(
+          NodePath.join(tempDir, "thread-release-writer.canonical.log"),
+          "utf8",
+        )
+          .trim()
+          .split("\n")
+          .map(parseLogLine);
+        assert.deepEqual(
+          records.map((record) => record.payload),
+          ['{"id":"before-release"}', '{"id":"after-release"}'],
+        );
       } finally {
         NodeFS.rmSync(tempDir, { recursive: true, force: true });
       }
@@ -218,7 +300,7 @@ describe("EventNdjsonLogger", () => {
         }
         yield* logger.close();
 
-        const fileStem = "thread-rotate.log";
+        const fileStem = "thread-rotate.native.log";
         const matchingFiles = NodeFS.readdirSync(tempDir)
           .filter((entry) => entry === fileStem || entry.startsWith(`${fileStem}.`))
           .toSorted();

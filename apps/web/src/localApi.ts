@@ -76,6 +76,8 @@ function createBrowserLocalApi(): LocalApi {
       getProcessDiagnostics: () => Promise.reject(unavailableLocalBackendError()),
       getProcessResourceHistory: () => Promise.reject(unavailableLocalBackendError()),
       signalProcess: () => Promise.reject(unavailableLocalBackendError()),
+      previewRecovery: () => Promise.reject(unavailableLocalBackendError()),
+      executeRecovery: () => Promise.reject(unavailableLocalBackendError()),
     },
   };
 }
