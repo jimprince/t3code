@@ -12,7 +12,9 @@
 import {
   ModelSelection,
   NonNegativeInt,
+  RuntimeMode,
   ThreadId,
+  TurnId,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
@@ -25,8 +27,11 @@ import {
   type ProviderSession,
 } from "@t3tools/contracts";
 import { causeErrorTag } from "@t3tools/shared/observability";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
@@ -56,6 +61,7 @@ import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 const isModelSelection = Schema.is(ModelSelection);
+const STALE_TURN_RECONCILIATION_GRACE_MS = 5_000;
 
 /**
  * Hook for tests that want to override the canonical event logger pulled
@@ -72,6 +78,16 @@ type ProviderServiceMethod<Name extends keyof ProviderService.ProviderService["S
 const ProviderRollbackConversationInput = Schema.Struct({
   threadId: ThreadId,
   numTurns: NonNegativeInt,
+});
+
+const ProviderForkConversationInput = Schema.Struct({
+  sourceThreadId: ThreadId,
+  targetThreadId: ThreadId,
+  cwd: Schema.String,
+  retainedTurnCount: NonNegativeInt,
+  retainedTurnId: Schema.NullOr(TurnId),
+  runtimeMode: RuntimeMode,
+  modelSelection: ModelSelection,
 });
 
 function toValidationError(
@@ -162,6 +178,28 @@ function readPersistedCwd(
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function readTransferredContextHandoff(
+  runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
+): { readonly version: 1; readonly consumedExportedAt: string } | undefined {
+  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
+    return undefined;
+  }
+  const handoff =
+    "threadTransferContextHandoff" in runtimePayload
+      ? runtimePayload.threadTransferContextHandoff
+      : undefined;
+  if (!handoff || typeof handoff !== "object" || Array.isArray(handoff)) return undefined;
+  if (
+    !("version" in handoff) ||
+    handoff.version !== 1 ||
+    !("consumedExportedAt" in handoff) ||
+    typeof handoff.consumedExportedAt !== "string"
+  ) {
+    return undefined;
+  }
+  return { version: 1, consumedExportedAt: handoff.consumedExportedAt };
+}
+
 const dieOnMissingBindingInstanceId = (
   operation: string,
   payload: {
@@ -209,10 +247,19 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   // log writer is attached", which downstream code already handles as a
   // no-op.
   const canonicalEventLogger = options?.canonicalEventLogger ?? eventLoggers.canonical;
+  const releaseThreadEventWriters = (threadId: ThreadId) =>
+    Effect.all(
+      [
+        eventLoggers.native?.releaseThread?.(threadId) ?? Effect.void,
+        canonicalEventLogger?.releaseThread?.(threadId) ?? Effect.void,
+      ],
+      { concurrency: "unbounded", discard: true },
+    );
 
   const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistry;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const runtimeEventPubSub = yield* PubSub.unbounded<ProviderRuntimeEvent>();
+  const pendingTurnSequence = yield* Ref.make(0);
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
   const prepareMcpSession = (threadId: ThreadId, providerInstanceId: ProviderInstanceId) =>
     McpSessionRegistry.issueActiveMcpCredential({ threadId, providerInstanceId }).pipe(
@@ -276,10 +323,56 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         providerInstanceId,
         runtimeMode: session.runtimeMode,
         status: toRuntimeStatus(session),
+        activeTurnId: session.activeTurnId ?? null,
         ...(session.resumeCursor !== undefined ? { resumeCursor: session.resumeCursor } : {}),
         runtimePayload: toRuntimePayloadFromSession(session, extra),
       });
     });
+
+  const syncRuntimeBindingForEvent = (
+    source: {
+      readonly instanceId: ProviderInstanceId;
+      readonly provider: ProviderDriverKind;
+    },
+    event: ProviderRuntimeEvent,
+  ) => {
+    if (event.type === "turn.started" && event.turnId !== undefined) {
+      return directory
+        .markTurnStarted({
+          threadId: event.threadId,
+          turnId: event.turnId,
+        })
+        .pipe(Effect.asVoid);
+    }
+    if (
+      (event.type === "turn.completed" || event.type === "turn.aborted") &&
+      event.turnId !== undefined
+    ) {
+      return directory
+        .markTurnTerminal({
+          threadId: event.threadId,
+          expectedTurnId: event.turnId,
+        })
+        .pipe(Effect.asVoid);
+    }
+    if (event.type === "session.exited") {
+      return directory
+        .upsert({
+          threadId: event.threadId,
+          provider: source.provider,
+          providerInstanceId: source.instanceId,
+          status: "stopped",
+          activeTurnId: null,
+          runtimePayload: {
+            activeTurnId: null,
+            lastRuntimeEvent: event.type,
+            lastRuntimeEventAt: event.createdAt,
+          },
+        })
+        .pipe(Effect.ensuring(releaseThreadEventWriters(event.threadId)));
+    }
+    return Effect.void;
+  };
 
   const processRuntimeEvent = (
     source: {
@@ -290,10 +383,23 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   ): Effect.Effect<void> =>
     Effect.sync(() => correlateRuntimeEventWithInstance(source, event)).pipe(
       Effect.flatMap((canonicalEvent) =>
-        increment(providerRuntimeEventsTotal, {
-          provider: canonicalEvent.provider,
-          eventType: canonicalEvent.type,
-        }).pipe(Effect.andThen(publishRuntimeEvent(canonicalEvent))),
+        syncRuntimeBindingForEvent(source, canonicalEvent).pipe(
+          Effect.catchCause((cause) =>
+            Effect.logWarning("provider.runtime.lifecycle-persistence-failed", {
+              threadId: canonicalEvent.threadId,
+              turnId: canonicalEvent.turnId,
+              eventType: canonicalEvent.type,
+              cause,
+            }),
+          ),
+          Effect.andThen(
+            increment(providerRuntimeEventsTotal, {
+              provider: canonicalEvent.provider,
+              eventType: canonicalEvent.type,
+            }),
+          ),
+          Effect.andThen(publishRuntimeEvent(canonicalEvent)),
+        ),
       ),
     );
 
@@ -420,6 +526,20 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       yield* upsertSessionBinding(
         { ...resumed, providerInstanceId: bindingInstanceId },
         input.binding.threadId,
+      ).pipe(
+        // startSession necessarily precedes the current-generation stamp. If
+        // that stamp fails (including after a dead-generation CAS won the
+        // race), tear down the newly started adapter session so persistence
+        // cannot say stopped/stale while a live session remains untracked.
+        Effect.onError(() =>
+          Effect.all(
+            [
+              adapter.stopSession(input.binding.threadId).pipe(Effect.ignore),
+              clearMcpSession(input.binding.threadId).pipe(Effect.ignore),
+            ],
+            { discard: true },
+          ),
+        ),
       );
       yield* analytics.record("provider.session.recovered", {
         provider: resumed.provider,
@@ -460,6 +580,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         instanceId,
         threadId: input.threadId,
         isActive: true,
+        wasRecovered: false,
       } as const;
     }
 
@@ -469,6 +590,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         instanceId,
         threadId: input.threadId,
         isActive: false,
+        wasRecovered: false,
       } as const;
     }
 
@@ -481,7 +603,145 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       instanceId,
       threadId: input.threadId,
       isActive: true,
+      wasRecovered: true,
     } as const;
+  });
+
+  const reservePendingTurn = Effect.fn("reservePendingTurn")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly pendingTurnId: TurnId;
+    readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
+  }) {
+    const reserved = yield* directory.markTurnStarted({
+      threadId: input.threadId,
+      turnId: input.pendingTurnId,
+      expectedActiveTurnId: null,
+    });
+    if (reserved) {
+      return true;
+    }
+
+    const binding = (yield* directory.listBindings()).find(
+      (candidate) => candidate.threadId === input.threadId,
+    );
+    if (!binding || binding.status === "stopped") {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        reason: binding ? "session-stopped" : "binding-missing",
+      });
+      return false;
+    }
+
+    const activeTurnId = binding.activeTurnId;
+    if (activeTurnId === null || activeTurnId === undefined) {
+      const retryReserved = yield* directory.markTurnStarted({
+        threadId: input.threadId,
+        turnId: input.pendingTurnId,
+        expectedActiveTurnId: null,
+      });
+      if (!retryReserved) {
+        yield* Effect.logDebug("provider.turn.reservation-conflict", {
+          threadId: input.threadId,
+          provider: input.adapter.provider,
+          reason: "reservation-retry-lost",
+        });
+      }
+      return retryReserved;
+    }
+
+    if (String(activeTurnId).startsWith("pending:")) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        reason: "pending-turn",
+      });
+      return false;
+    }
+
+    const markerTimestamp = Date.parse(binding.lastSeenAt);
+    const markerAgeMs = (yield* Clock.currentTimeMillis) - markerTimestamp;
+    if (Number.isNaN(markerTimestamp) || markerAgeMs < STALE_TURN_RECONCILIATION_GRACE_MS) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: Number.isNaN(markerTimestamp) ? "invalid-marker-timestamp" : "recent-turn",
+      });
+      return false;
+    }
+
+    const liveSessions = yield* input.adapter.listSessions().pipe(
+      Effect.map(Option.some),
+      Effect.catchCause((cause) =>
+        Effect.logWarning("provider.turn.live-session-inspection-failed", {
+          threadId: input.threadId,
+          provider: input.adapter.provider,
+          activeTurnId,
+          cause,
+        }).pipe(Effect.as(Option.none<ReadonlyArray<ProviderSession>>())),
+      ),
+    );
+    if (Option.isNone(liveSessions)) {
+      return false;
+    }
+
+    const liveSession = liveSessions.value.find((session) => session.threadId === input.threadId);
+    if (
+      liveSession === undefined ||
+      liveSession.activeTurnId !== undefined ||
+      liveSession.status === "running"
+    ) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        liveActiveTurnId: liveSession?.activeTurnId,
+        liveSessionStatus: liveSession?.status,
+        markerAgeMs,
+        reason: liveSession === undefined ? "live-session-missing" : "live-turn-active",
+      });
+      return false;
+    }
+
+    const reconciled = yield* directory.markTurnTerminal({
+      threadId: input.threadId,
+      expectedTurnId: activeTurnId,
+    });
+    if (!reconciled) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: "stale-marker-cas-lost",
+      });
+      return false;
+    }
+
+    yield* Effect.logInfo("provider.turn.stale-marker-reconciled", {
+      threadId: input.threadId,
+      provider: input.adapter.provider,
+      activeTurnId,
+      markerAgeMs,
+    });
+    const retryReserved = yield* directory.markTurnStarted({
+      threadId: input.threadId,
+      turnId: input.pendingTurnId,
+      expectedActiveTurnId: null,
+    });
+    if (!retryReserved) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: "reconciled-reservation-lost",
+      });
+    }
+    return retryReserved;
   });
 
   const stopStaleSessionsForThread = Effect.fn("stopStaleSessionsForThread")(function* (input: {
@@ -679,28 +939,73 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         "provider.kind": routed.adapter.provider,
         ...(input.modelSelection?.model ? { "provider.model": input.modelSelection.model } : {}),
       });
-      const turn = yield* routed.adapter.sendTurn(input);
-      yield* directory.upsert({
+      const pendingSequence = yield* Ref.updateAndGet(
+        pendingTurnSequence,
+        (sequence) => sequence + 1,
+      );
+      const pendingTurnId = TurnId.make(
+        `pending:${process.pid}:${pendingSequence}:${String(input.threadId)}`,
+      );
+      const reserved = yield* reservePendingTurn({
         threadId: input.threadId,
-        provider: routed.adapter.provider,
-        providerInstanceId: routed.instanceId,
-        status: "running",
-        ...(turn.resumeCursor !== undefined ? { resumeCursor: turn.resumeCursor } : {}),
-        runtimePayload: {
-          ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
-          activeTurnId: turn.turnId,
-          lastRuntimeEvent: "provider.sendTurn",
-          lastRuntimeEventAt: yield* nowIso,
-        },
+        pendingTurnId,
+        adapter: routed.adapter,
       });
-      yield* analytics.record("provider.turn.sent", {
-        provider: routed.adapter.provider,
-        model: input.modelSelection?.model,
-        interactionMode: input.interactionMode,
-        attachmentCount: input.attachments.length,
-        hasInput: typeof input.input === "string" && input.input.trim().length > 0,
-      });
-      return turn;
+      if (!reserved) {
+        return yield* toValidationError(
+          "ProviderService.sendTurn",
+          `Cannot start a turn for thread '${input.threadId}' because another turn or session transition is in progress. Wait for it to settle, then retry.`,
+        );
+      }
+
+      return yield* Effect.gen(function* () {
+        const turn = yield* routed.adapter.sendTurn(input);
+        yield* directory.markTurnStarted({
+          threadId: input.threadId,
+          turnId: turn.turnId,
+          expectedActiveTurnId: pendingTurnId,
+        });
+        yield* directory.upsert({
+          threadId: input.threadId,
+          provider: routed.adapter.provider,
+          providerInstanceId: routed.instanceId,
+          status: "running",
+          ...(turn.resumeCursor !== undefined ? { resumeCursor: turn.resumeCursor } : {}),
+          runtimePayload: {
+            ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
+            lastRuntimeEvent: "provider.sendTurn",
+            lastRuntimeEventAt: yield* nowIso,
+          },
+        });
+        yield* analytics.record("provider.turn.sent", {
+          provider: routed.adapter.provider,
+          model: input.modelSelection?.model,
+          interactionMode: input.interactionMode,
+          attachmentCount: input.attachments.length,
+          hasInput: typeof input.input === "string" && input.input.trim().length > 0,
+        });
+        return turn;
+      }).pipe(
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit)
+            ? directory
+                .markTurnTerminal({
+                  threadId: input.threadId,
+                  expectedTurnId: pendingTurnId,
+                })
+                .pipe(
+                  Effect.catchCause((cause) =>
+                    Effect.logWarning("provider.turn.pending-marker-clear-failed", {
+                      threadId: input.threadId,
+                      pendingTurnId,
+                      cause,
+                    }),
+                  ),
+                  Effect.asVoid,
+                )
+            : Effect.void,
+        ),
+      );
     }).pipe(
       withMetrics({
         counter: providerTurnsTotal,
@@ -855,10 +1160,12 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           provider: routed.adapter.provider,
           providerInstanceId: routed.instanceId,
           status: "stopped",
+          activeTurnId: null,
           runtimePayload: {
             activeTurnId: null,
           },
         });
+        yield* releaseThreadEventWriters(input.threadId);
         yield* analytics.record("provider.session.stopped", {
           provider: routed.adapter.provider,
         });
@@ -1039,17 +1346,20 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "ProviderService.stopAll",
           binding,
         );
-        return yield* directory.upsert({
-          threadId: binding.threadId,
-          provider: binding.provider,
-          providerInstanceId,
-          status: "stopped",
-          runtimePayload: {
+        return yield* directory
+          .upsert({
+            threadId: binding.threadId,
+            provider: binding.provider,
+            providerInstanceId,
+            status: "stopped",
             activeTurnId: null,
-            lastRuntimeEvent: "provider.stopAll",
-            lastRuntimeEventAt: yield* nowIso,
-          },
-        });
+            runtimePayload: {
+              activeTurnId: null,
+              lastRuntimeEvent: "provider.stopAll",
+              lastRuntimeEventAt: yield* nowIso,
+            },
+          })
+          .pipe(Effect.ensuring(releaseThreadEventWriters(binding.threadId)));
       }),
     ).pipe(Effect.asVoid);
     yield* analytics.record("provider.sessions.stopped_all", {
@@ -1068,6 +1378,88 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     ),
   );
 
+  const forkConversation: ProviderServiceMethod<"forkConversation"> = Effect.fn("forkConversation")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.forkConversation",
+        schema: ProviderForkConversationInput,
+        payload: rawInput,
+      });
+      const sourceBinding = Option.getOrUndefined(
+        yield* directory.getBinding(input.sourceThreadId),
+      );
+      if (!sourceBinding) {
+        return { native: false };
+      }
+      const instanceId = yield* requireBindingInstanceId(
+        "ProviderService.forkConversation",
+        sourceBinding,
+      );
+      const adapter = yield* registry.getByInstance(instanceId);
+      const forkProviderThread = adapter.forkThread;
+      const forked = forkProviderThread
+        ? yield* Effect.gen(function* () {
+            const routed = yield* resolveRoutableSession({
+              threadId: input.sourceThreadId,
+              operation: "ProviderService.forkConversation",
+              allowRecovery: true,
+            });
+            return yield* forkProviderThread(input.sourceThreadId, {
+              cwd: input.cwd,
+              retainedTurnCount: input.retainedTurnCount,
+              retainedTurnId: input.retainedTurnId,
+            }).pipe(
+              Effect.ensuring(
+                routed.wasRecovered
+                  ? stopSession({ threadId: input.sourceThreadId }).pipe(
+                      Effect.catchCause((cause) =>
+                        Effect.logWarning("provider fork source cleanup failed", {
+                          threadId: input.sourceThreadId,
+                          provider: sourceBinding.provider,
+                          cause,
+                        }),
+                      ),
+                    )
+                  : Effect.void,
+              ),
+            );
+          }).pipe(
+            Effect.catchCause((cause) => {
+              if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause);
+              return Effect.logWarning(
+                "provider native conversation fork fell back to transcript",
+                {
+                  threadId: input.sourceThreadId,
+                  provider: sourceBinding.provider,
+                  cause,
+                },
+              ).pipe(Effect.as(null));
+            }),
+          )
+        : null;
+      const transferredContextHandoff =
+        forked === null ? undefined : readTransferredContextHandoff(sourceBinding.runtimePayload);
+      yield* directory.upsert({
+        threadId: input.targetThreadId,
+        provider: sourceBinding.provider,
+        providerInstanceId: instanceId,
+        ...(sourceBinding.adapterKey !== undefined ? { adapterKey: sourceBinding.adapterKey } : {}),
+        runtimeMode: input.runtimeMode,
+        status: "stopped",
+        activeTurnId: null,
+        resumeCursor: forked?.resumeCursor ?? null,
+        runtimePayload: {
+          cwd: input.cwd,
+          modelSelection: input.modelSelection,
+          ...(transferredContextHandoff !== undefined
+            ? { threadTransferContextHandoff: transferredContextHandoff }
+            : {}),
+        },
+      });
+      return { native: forked !== null };
+    },
+  );
+
   return {
     startSession,
     sendTurn,
@@ -1079,6 +1471,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     getCapabilities,
     getInstanceInfo,
     rollbackConversation,
+    forkConversation,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
     // independently receive all runtime events.

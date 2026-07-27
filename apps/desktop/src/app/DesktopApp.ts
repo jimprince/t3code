@@ -25,6 +25,7 @@ import * as DesktopShellEnvironment from "../shell/DesktopShellEnvironment.ts";
 import * as DesktopState from "./DesktopState.ts";
 import * as DesktopUpdates from "../updates/DesktopUpdates.ts";
 import * as DesktopWslBackend from "../wsl/DesktopWslBackend.ts";
+import * as SystemPressureMonitor from "./SystemPressureMonitor.ts";
 
 const DEFAULT_DESKTOP_BACKEND_PORT = 3773;
 const MAX_TCP_PORT = 65_535;
@@ -231,6 +232,7 @@ const startup = Effect.gen(function* () {
   yield* electronApp.setPath("userData", userDataPath);
   yield* logStartupInfo("runtime logging configured", { logDir: environment.logDir });
   yield* desktopSettings.load;
+  yield* SystemPressureMonitor.install;
 
   if (environment.platform === "linux") {
     yield* electronApp.appendCommandLineSwitch("class", environment.linuxWmClass);
