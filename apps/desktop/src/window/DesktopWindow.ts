@@ -15,7 +15,11 @@ import { getDesktopUrl } from "../electron/ElectronProtocol.ts";
 import * as ElectronShell from "../electron/ElectronShell.ts";
 import * as ElectronTheme from "../electron/ElectronTheme.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
-import { MENU_ACTION_CHANNEL, WINDOW_FULLSCREEN_STATE_CHANNEL } from "../ipc/channels.ts";
+import {
+  MENU_ACTION_CHANNEL,
+  OPEN_THREAD_CHANNEL,
+  WINDOW_FULLSCREEN_STATE_CHANNEL,
+} from "../ipc/channels.ts";
 import * as PreviewManager from "../preview/Manager.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 
@@ -81,6 +85,10 @@ export class DesktopWindow extends Context.Service<
     readonly handleBackendNotReady: Effect.Effect<void>;
     readonly flushMainWindowBounds: Effect.Effect<void>;
     readonly dispatchMenuAction: (action: string) => Effect.Effect<void, DesktopWindowError>;
+    readonly openThread: (target: {
+      environmentId: string;
+      threadId: string;
+    }) => Effect.Effect<void, DesktopWindowError>;
     readonly syncAppearance: Effect.Effect<void>;
   }
 >()("@t3tools/desktop/window/DesktopWindow") {}
@@ -258,6 +266,9 @@ export const make = Effect.gen(function* () {
   // createMainIfBackendReady, which gates the post-readiness window
   // open in development and the macOS "activate without windows" path.
   const backendReadyRef = yield* Ref.make(false);
+  const pendingThreadNavigationRef = yield* Ref.make<
+    Option.Option<{ environmentId: string; threadId: string }>
+  >(Option.none());
   // The transient "Connecting to WSL" splash window, tracked separately so it
   // is never mistaken for the real main window.
   const splashWindowRef = yield* Ref.make<Option.Option<Electron.BrowserWindow>>(Option.none());
@@ -713,6 +724,26 @@ export const make = Effect.gen(function* () {
     yield* createMain;
   }).pipe(Effect.withSpan("desktop.window.createMainIfBackendReady"));
 
+  const openThread = Effect.fn("desktop.window.openThread")(function* (target: {
+    environmentId: string;
+    threadId: string;
+  }) {
+    yield* Ref.set(pendingThreadNavigationRef, Option.some(target));
+    if (!(yield* Ref.get(backendReadyRef))) return;
+    const window = yield* ensureMain;
+    const send = () => {
+      if (window.isDestroyed()) return;
+      window.webContents.send(OPEN_THREAD_CHANNEL, target);
+      void runPromise(electronWindow.reveal(window));
+    };
+    if (window.webContents.isLoadingMainFrame()) {
+      window.webContents.once("did-finish-load", send);
+      return;
+    }
+    send();
+    yield* Ref.set(pendingThreadNavigationRef, Option.none());
+  });
+
   const showConnectingSplash = Effect.gen(function* () {
     // Only when nothing is shown yet: no real window, no existing splash.
     const existingSplash = yield* Ref.get(splashWindowRef);
@@ -795,6 +826,10 @@ export const make = Effect.gen(function* () {
       if (Option.isSome(pendingNavigation)) {
         yield* navigateMain(pendingNavigation.value);
       }
+      const pendingThreadNavigation = yield* Ref.get(pendingThreadNavigationRef);
+      if (Option.isSome(pendingThreadNavigation)) {
+        yield* openThread(pendingThreadNavigation.value);
+      }
     }),
     handleBackendNotReady: Ref.set(backendReadyRef, false).pipe(
       Effect.withSpan("desktop.window.handleBackendNotReady"),
@@ -823,6 +858,7 @@ export const make = Effect.gen(function* () {
 
       send();
     }),
+    openThread,
     syncAppearance: Effect.gen(function* () {
       const shouldUseDarkColors = yield* electronTheme.shouldUseDarkColors;
       yield* electronWindow.syncAllAppearance((window) =>
