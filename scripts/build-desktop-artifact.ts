@@ -17,6 +17,7 @@ import {
   type WebAssetBrand,
 } from "./lib/brand-assets.ts";
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
+import { validateBundledClientAssets } from "./lib/client-assets.ts";
 import { loadRepoEnv } from "./lib/public-config.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
@@ -35,11 +36,11 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.t3tools.t3code";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
 const BuildArch = Schema.Literals(["arm64", "x64", "universal"]);
+const DesktopFlavor = Schema.Literals(["stable", "dev"]);
 
 const WorkspaceConfig = Schema.Struct({
   catalog: Schema.optional(Schema.Record(Schema.String, Schema.String)),
@@ -133,6 +134,7 @@ const PLATFORM_CONFIG: Record<typeof BuildPlatform.Type, PlatformConfig> = {
 };
 
 interface BuildCliInput {
+  readonly flavor: Option.Option<typeof DesktopFlavor.Type>;
   readonly platform: Option.Option<typeof BuildPlatform.Type>;
   readonly target: Option.Option<string>;
   readonly arch: Option.Option<typeof BuildArch.Type>;
@@ -594,6 +596,7 @@ const resolvePythonForNodeGyp = Effect.fn("resolvePythonForNodeGyp")(function* (
 });
 
 interface ResolvedBuildOptions {
+  readonly flavor: typeof DesktopFlavor.Type;
   readonly platform: typeof BuildPlatform.Type;
   readonly target: string;
   readonly arch: typeof BuildArch.Type;
@@ -613,6 +616,7 @@ interface StagePackageJson {
   readonly version: string;
   readonly buildVersion: string;
   readonly t3codeCommitHash: string;
+  readonly t3codeDesktopFlavor: typeof DesktopFlavor.Type;
   readonly private: true;
   readonly packageManager: string;
   readonly description: string;
@@ -783,6 +787,7 @@ function normalizePasskeyRpDomain(value: string): string {
 
 export function resolveMacPasskeySigningConfiguration(
   env: Readonly<Record<string, string | undefined>>,
+  appId: string,
 ): MacPasskeySigningConfiguration {
   const teamId = env.T3CODE_APPLE_TEAM_ID?.trim().toUpperCase() ?? "";
   if (!APPLE_TEAM_ID_PATTERN.test(teamId)) {
@@ -818,7 +823,7 @@ export function resolveMacPasskeySigningConfiguration(
   }
 
   return {
-    appId: DESKTOP_APP_ID,
+    appId,
     teamId,
     rpDomains: uniqueRpDomains,
     provisioningProfilePath,
@@ -853,6 +858,22 @@ export function renderMacPasskeyEntitlements(
     <array>
 ${associatedDomains}
     </array>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>
+`;
+}
+
+export function renderMacCodeSigningEntitlements(): string {
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
     <key>com.apple.security.cs.allow-jit</key>
     <true/>
     <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
@@ -1024,6 +1045,9 @@ const AzureTrustedSigningOptionsConfig = Config.all({
 });
 
 const BuildEnvConfig = Config.all({
+  flavor: Config.schema(DesktopFlavor, "T3CODE_DESKTOP_FLAVOR").pipe(
+    Config.withDefault("stable" as typeof DesktopFlavor.Type),
+  ),
   platform: Config.schema(BuildPlatform, "T3CODE_DESKTOP_PLATFORM").pipe(Config.option),
   target: Config.string("T3CODE_DESKTOP_TARGET").pipe(Config.option),
   arch: Config.schema(BuildArch, "T3CODE_DESKTOP_ARCH").pipe(Config.option),
@@ -1083,6 +1107,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
   const repoRoot = yield* RepoRoot;
   const env = yield* BuildEnvConfig;
   const hostPlatform = yield* HostProcessPlatform;
+  const flavor = Option.getOrElse(input.flavor, () => env.flavor);
 
   const platform = mergeOptions(
     input.platform,
@@ -1135,6 +1160,7 @@ export const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (
     Option.getOrUndefined(input.wslPrebuild) ?? Option.getOrUndefined(env.wslPrebuild);
 
   return {
+    flavor,
     platform,
     target,
     arch,
@@ -1394,42 +1420,6 @@ function stageWindowsIcons(stageResourcesDir: string, sourceIco: string) {
   });
 }
 
-function validateBundledClientAssets(clientDir: string) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const indexPath = path.join(clientDir, "index.html");
-    const indexHtml = yield* fs.readFileString(indexPath);
-    const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)]
-      .map((match) => match[1])
-      .filter((value): value is string => value !== undefined);
-    const missing: string[] = [];
-
-    for (const ref of refs) {
-      const normalizedRef = ref.split("#")[0]?.split("?")[0] ?? "";
-      if (!normalizedRef) continue;
-      if (normalizedRef.startsWith("http://") || normalizedRef.startsWith("https://")) continue;
-      if (normalizedRef.startsWith("data:") || normalizedRef.startsWith("mailto:")) continue;
-
-      const ext = path.extname(normalizedRef);
-      if (!ext) continue;
-
-      const relativePath = normalizedRef.replace(/^\/+/, "");
-      const assetPath = path.join(clientDir, relativePath);
-      if (!(yield* fs.exists(assetPath))) {
-        missing.push(normalizedRef);
-      }
-    }
-
-    if (missing.length > 0) {
-      return yield* new BundledClientAssetsMissingError({
-        indexPath,
-        missingFiles: missing,
-      });
-    }
-  });
-}
-
 export function resolveDesktopRuntimeDependencies(
   dependencies: Record<string, string> | undefined,
   catalog: Record<string, string>,
@@ -1446,6 +1436,35 @@ export function resolveDesktopRuntimeDependencies(
   );
 
   return resolveCatalogDependencies(runtimeDependencies, catalog, "apps/desktop");
+}
+
+function resolveDesktopFlavorMetadata(flavor: typeof DesktopFlavor.Type): {
+  readonly productName: string;
+  readonly appId: string;
+  readonly artifactName: string;
+  readonly executableName: string;
+  readonly linuxDesktopEntryName: string;
+  readonly packageName: string;
+} {
+  if (flavor === "dev") {
+    return {
+      productName: "T3 Code (Fork Dev)",
+      appId: "com.t3tools.t3code.fork.dev",
+      artifactName: "T3-Code-Fork-Dev-${version}-${arch}.${ext}",
+      executableName: "t3code-fork-dev",
+      linuxDesktopEntryName: "t3code-fork-dev",
+      packageName: "t3code-fork-dev",
+    };
+  }
+
+  return {
+    productName: "T3 Code (Fork)",
+    appId: "com.t3tools.t3code.fork",
+    artifactName: "T3-Code-Fork-${version}-${arch}.${ext}",
+    executableName: "t3code-fork",
+    linuxDesktopEntryName: "t3code-fork",
+    packageName: "t3code-fork",
+  };
 }
 
 export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig")(function* (
@@ -1474,8 +1493,14 @@ export const resolveGitHubPublishConfig = Effect.fn("resolveGitHubPublishConfig"
   };
 });
 
+// Accepts:
+//   - workflow_dispatch-generated nightlies: `0.0.17-nightly.20260413.42`
+//   - fork nightlies published by sync-upstream.yml after rebasing onto an
+//     upstream nightly: `0.0.21-nightly.20260421.88-fork.1`
+// The optional `-fork.N` suffix ensures fork nightly builds route to the
+// `nightly` updater channel and pick up nightly icons/branding at package time.
 export function resolveDesktopUpdateChannel(version: string): "latest" | "nightly" {
-  return /-nightly\.\d{8}\.\d+$/.test(version) ? "nightly" : "latest";
+  return /-nightly\.\d{8}\.\d+(?:-fork\.\d+)?$/.test(version) ? "nightly" : "latest";
 }
 
 export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
@@ -1518,10 +1543,11 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
     ? "T3 Code (Nightly)"
-    : (desktopPackageJson.productName ?? "T3 Code");
+    : resolveDesktopFlavorMetadata("stable").productName;
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
+  flavor: typeof DesktopFlavor.Type,
   platform: typeof BuildPlatform.Type,
   target: string,
   version: string,
@@ -1531,14 +1557,15 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   macPasskeySigning:
     | {
         readonly entitlementsPath: string;
-        readonly provisioningProfilePath: string;
+        readonly provisioningProfilePath?: string;
       }
     | undefined,
 ) {
+  const flavorMetadata = resolveDesktopFlavorMetadata(flavor);
   const buildConfig: Record<string, unknown> = {
-    appId: DESKTOP_APP_ID,
-    productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-${version}-${arch}.${ext}",
+    appId: flavorMetadata.appId,
+    productName: flavorMetadata.productName,
+    artifactName: flavorMetadata.artifactName,
     electronLanguages: [...DESKTOP_ELECTRON_LANGUAGES],
     files: [...DESKTOP_FILE_EXCLUSIONS],
     directories: {
@@ -1551,7 +1578,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     extraResources: DESKTOP_EXTRA_RESOURCES,
   };
   const updateChannel = resolveDesktopUpdateChannel(version);
-  const publishConfig = yield* resolveGitHubPublishConfig(updateChannel);
+  const publishConfig =
+    flavor === "stable" ? yield* resolveGitHubPublishConfig(updateChannel) : undefined;
   if (publishConfig) {
     buildConfig.publish = [publishConfig];
   } else if (mockUpdates) {
@@ -1564,6 +1592,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   }
 
   if (platform === "mac") {
+    buildConfig.extraResources = [
+      {
+        from: "apps/desktop/resources/T3PressureMonitor",
+        to: "T3PressureMonitor",
+      },
+    ];
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
@@ -1577,7 +1611,9 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ...(macPasskeySigning
         ? {
             entitlements: macPasskeySigning.entitlementsPath,
-            provisioningProfile: macPasskeySigning.provisioningProfilePath,
+            ...(macPasskeySigning.provisioningProfilePath
+              ? { provisioningProfile: macPasskeySigning.provisioningProfilePath }
+              : {}),
           }
         : {}),
     };
@@ -1586,12 +1622,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "linux") {
     buildConfig.linux = {
       target: [target],
-      executableName: "t3code",
+      executableName: flavorMetadata.executableName,
       icon: "icons",
       category: "Development",
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: flavorMetadata.linuxDesktopEntryName,
         },
       },
     };
@@ -1766,6 +1802,7 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   });
 
   const appVersion = options.version ?? serverPackageJson.version;
+  const flavorMetadata = resolveDesktopFlavorMetadata(options.flavor);
   const iconAssets = resolveDesktopBuildIconAssets(appVersion);
   const commitHash = yield* resolveGitCommitHash(repoRoot);
   const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
@@ -1836,6 +1873,23 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     verbose: options.verbose,
   });
 
+  if (options.platform === "mac") {
+    yield* runCommand(
+      ChildProcess.make(
+        process.execPath,
+        [
+          path.join(repoRoot, "apps/desktop/scripts/build-pressure-monitor.mjs"),
+          "--output",
+          path.join(stageResourcesDir, "T3PressureMonitor"),
+          "--arch",
+          options.arch,
+        ],
+        { cwd: repoRoot },
+      ),
+      { label: "build native pressure monitor", verbose: options.verbose },
+    );
+  }
+
   yield* assertPlatformBuildResources(
     options.platform,
     stageResourcesDir,
@@ -1850,33 +1904,50 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
   // electron-builder is filtering out stageResourcesDir directory in the AppImage for production
   yield* fs.copy(stageResourcesDir, path.join(stageAppDir, "apps/desktop/prod-resources"));
 
-  const configuredMacPasskeySigning =
+  const macEntitlementsPath =
     options.platform === "mac" && options.signed
-      ? yield* Effect.try({
-          try: () => resolveMacPasskeySigningConfiguration(loadRepoEnv({ repoRoot })),
-          catch: MacPasskeySigningConfigurationResolutionError.fromCause,
-        })
+      ? path.join(stageAppDir, "entitlements.mac.plist")
       : undefined;
-  const macPasskeySigning = configuredMacPasskeySigning
-    ? {
-        ...configuredMacPasskeySigning,
-        provisioningProfilePath: path.resolve(
-          repoRoot,
-          configuredMacPasskeySigning.provisioningProfilePath,
-        ),
-      }
-    : undefined;
-  const macEntitlementsPath = macPasskeySigning
-    ? path.join(stageAppDir, "entitlements.mac.plist")
-    : undefined;
-  if (macPasskeySigning && macEntitlementsPath) {
-    if (!(yield* fs.exists(macPasskeySigning.provisioningProfilePath))) {
-      return yield* new MacProvisioningProfileNotFoundError({
-        provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
-      });
-    }
-    yield* fs.writeFileString(macEntitlementsPath, renderMacPasskeyEntitlements(macPasskeySigning));
-  }
+  const macCodeSigning =
+    macEntitlementsPath === undefined
+      ? undefined
+      : yield* Effect.gen(function* () {
+          const repoEnv = loadRepoEnv({ repoRoot });
+          const configuredProvisioningProfilePath =
+            repoEnv.T3CODE_MACOS_PROVISIONING_PROFILE?.trim();
+
+          if (!configuredProvisioningProfilePath) {
+            yield* fs.writeFileString(macEntitlementsPath, renderMacCodeSigningEntitlements());
+            return { entitlementsPath: macEntitlementsPath };
+          }
+
+          const configuredMacPasskeySigning = yield* Effect.try({
+            try: () => resolveMacPasskeySigningConfiguration(repoEnv, flavorMetadata.appId),
+            catch: MacPasskeySigningConfigurationResolutionError.fromCause,
+          });
+          const macPasskeySigning = {
+            ...configuredMacPasskeySigning,
+            provisioningProfilePath: path.resolve(
+              repoRoot,
+              configuredMacPasskeySigning.provisioningProfilePath,
+            ),
+          };
+
+          if (!(yield* fs.exists(macPasskeySigning.provisioningProfilePath))) {
+            return yield* new MacProvisioningProfileNotFoundError({
+              provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
+            });
+          }
+
+          yield* fs.writeFileString(
+            macEntitlementsPath,
+            renderMacPasskeyEntitlements(macPasskeySigning),
+          );
+          return {
+            entitlementsPath: macEntitlementsPath,
+            provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
+          };
+        });
 
   const stageDependencies = {
     ...resolvedServerDependencies,
@@ -1903,28 +1974,25 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
     stageDependencies,
   );
   const stagePackageJson: StagePackageJson = {
-    name: "t3code",
+    name: flavorMetadata.packageName,
     version: appVersion,
     buildVersion: appVersion,
     t3codeCommitHash: commitHash,
+    t3codeDesktopFlavor: options.flavor,
     private: true,
     packageManager: rootPackageJson.packageManager,
     description: "T3 Code desktop build",
     author: "T3 Tools",
     main: "apps/desktop/dist-electron/main.cjs",
     build: yield* createBuildConfig(
+      options.flavor,
       options.platform,
       options.target,
       appVersion,
       options.signed,
       options.mockUpdates,
       options.mockUpdateServerPort,
-      macPasskeySigning && macEntitlementsPath
-        ? {
-            entitlementsPath: macEntitlementsPath,
-            provisioningProfilePath: macPasskeySigning.provisioningProfilePath,
-          }
-        : undefined,
+      macCodeSigning,
     ),
     dependencies: stageDependencies,
     devDependencies: {
@@ -2075,6 +2143,10 @@ const buildDesktopArtifact = Effect.fn("buildDesktopArtifact")(function* (
 });
 
 const buildDesktopArtifactCli = Command.make("build-desktop-artifact", {
+  flavor: Flag.choice("flavor", DesktopFlavor.literals).pipe(
+    Flag.withDescription("Desktop flavor: stable or dev (env: T3CODE_DESKTOP_FLAVOR)."),
+    Flag.optional,
+  ),
   platform: Flag.choice("platform", BuildPlatform.literals).pipe(
     Flag.withDescription("Build platform (env: T3CODE_DESKTOP_PLATFORM)."),
     Flag.optional,
