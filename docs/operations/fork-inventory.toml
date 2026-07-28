@@ -1,0 +1,183 @@
+# Fork Patch Inventory
+#
+# Every patch owes an answer to "why does this exist, and what would retire it?"
+# A patch without a stated reason and an exit criterion is a defect, not merely
+# undocumented.
+#
+# This file is the DURABLE RECORD. Decision issues (git.home/brad/fork-decisions)
+# are the channel by which questions reach a human; the answers land HERE, keyed
+# to the patch. A decision recorded only on an issue gets re-asked on the next
+# sync — decision amnesia, the same disease as conflict amnesia.
+#
+# class:
+#   product        Fork feature. Upstream will never want it. Never retires.
+#   divergence     Compatibility/behaviour gap. Retires when upstream closes it.
+#   upstream-bound A fix upstream should take. Retires when they adopt it.
+#
+# Read by agents during sync. Before resolving any conflict, check the owning
+# patch here: a recorded decision is standing policy and must be followed, not
+# re-litigated.
+
+schema = 1
+fork = "jimprince/t3code"
+upstream = "pingdotgg/t3code"
+
+# ---------------------------------------------------------------------------
+# Patches, in stack order.
+# ---------------------------------------------------------------------------
+
+[[patch]]
+name = "fork-t3-thread-operator-cli"
+class = "product"
+purpose = "The t3-thread operator CLI. Does not exist upstream at all."
+retire_when = "never"
+surface = "67 additive files, 0 modified"
+note = "The model patch: zero conflict cost, forever. Replayed clean through every sync measured."
+
+[[patch]]
+name = "fork-build-and-release-tooling"
+class = "product"
+purpose = "Fork build, packaging and release scripts; sync/patch-set tooling."
+retire_when = "never"
+note = "pnpm-lock.yaml is NEVER textually merged — take upstream's and regenerate (invariant I3)."
+status = "lockfile-regenerated-2026-07-28"
+lockfile_done = "Resolved 2026-07-28: pnpm install added the apps/t3-thread importer (+522/-77; deletions are peer-suffix re-keying only, no version changes) and the delta was folded into this patch with stg refresh -p. Original finding: pnpm-lock.yaml is currently byte-identical to upstream, but pnpm-workspace.yaml's apps/* glob makes apps/t3-thread a workspace member with ZERO lockfile entries. Any --frozen-lockfile install (CI) fails at install, before typecheck. Required: run pnpm install, verify the only lockfile delta is fork workspace entries, fold it into THIS patch with stg refresh."
+
+[[patch]]
+name = "fork-docs"
+class = "product"
+purpose = "Fork-specific operator documentation, including this inventory."
+retire_when = "never"
+
+[[patch]]
+name = "fork-server-orchestration-and"
+class = "product"
+purpose = "Orchestration and projection changes backing fork thread/project features."
+retire_when = "never"
+surface = "largest server-side surface; a standing extraction candidate"
+
+[[patch]]
+name = "fork-server-provider-runtime"
+class = "divergence"
+purpose = "Provider turn reservation and crash recovery (landed as PR #62). Prevents a reaper clearing a live turn's marker and reporting a false 'session is stopping'."
+retire_when = "Upstream adds its own pending-turn reservation with crash recovery."
+[[patch.decision]]
+id = "logger-supersession-951"
+date = "2026-07-29"
+decided = "retire+narrow+adapt (per capability)"
+analysis = "docs/analysis/logger-supersession.md"
+rationale = "Upstream v0.0.31 rework (49c0d96ed) superseded per-thread writer splitting, shutdown flush, and native/canonical file separation - RETIRED. KEPT: releaseThread eviction adapted onto upstream's store, trace-span rate limiting, Spotlight marker. NARROWED retention: upstream 512MiB/14d provider policy + fork 2GiB/30d logsDir sweep, layered. Verdict produced by worker gpt-5.6-sol, evidence spot-verified before use."
+[[patch.decision]]
+id = "providerservice-mcp-touch"
+date = "2026-07-28"
+decided = "adapt"
+rationale = "Upstream added McpSessionRegistry.touchActiveMcpThread before sendTurn; the fork wraps sendTurn in a reservation gate. Independent concerns. The touch belongs INSIDE the gate, immediately before the real sendTurn — placing it earlier would touch even when the reservation fails and no turn is sent, changing upstream's semantics."
+
+[[patch]]
+name = "fork-server-transport-auth-and"
+class = "divergence"
+purpose = "Transport, auth and headless update paths the fork needs for remote/relay operation."
+retire_when = "Upstream ships equivalent headless update + relay auth."
+[[patch.decision]]
+id = "ws-snapshot-projection"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream's projectThreadDetailSnapshot spreads ...snapshot, so it preserves snapshotSequence AND prunes activity payloads — a strict superset of the fork's hand-rolled projection. Fork code removed from ws.ts (4th-hottest file). NOTE: the fork had renamed the binding to threadDetailSnapshot, so neither side applied verbatim; upstream's call must be bound to the fork's name."
+[[patch.decision]]
+id = "gitmanager-faketextgeneration"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream replaced a 30-line hand-written interface with `type X = TextGeneration['Service']`. The fork's interface declared an identical method set. Fully redundant."
+[[patch.decision]]
+id = "release-version-stamps"
+date = "2026-07-28"
+decided = "narrow"
+rationale = "Committed `version` fields in apps/*/package.json are redundant — release.yml re-derives the version from the tag at build time (design spec 2.2) — yet they conflicted on every single sync. Dropped from the patch. Take upstream's version always."
+[[patch.decision]]
+id = "rpc-scope-map-relocation-951"
+date = "2026-07-29"
+decided = "relocate"
+rationale = "Upstream extracted the inline RPC_REQUIRED_SCOPE map to auth/RpcAuthorization.ts and type-coupled it to WsRpcGroup, so the fork's 6 scope entries (thread transfer, recovery, headless update) moved there. The compiler now enforces their presence - a missing fork scope is a type error, not a runtime auth hole."
+[[patch.decision]]
+id = "forkprocessrows-extraction-951"
+date = "2026-07-29"
+decided = "extract-to-additive"
+rationale = "Upstream's diagnostics rework deleted ps-row parsing from ProcessDiagnostics.ts. SystemRecovery's needs (ProcessRow, readProcessRows) now live in fork-owned additive apps/server/src/diagnostics/forkProcessRows.ts (pre-rework module verbatim + 2 marked survival edits). Removes ALL fork code from upstream's ProcessDiagnostics. Surface reduction."
+[[patch.decision]]
+id = "chat-enrichment-guard-951"
+date = "2026-07-29"
+decided = "retire"
+rationale = "Upstream adopted isChatProjectRow filtering in ProjectionSnapshotQuery's enrichment - the fork's chat-project guard in ws.ts is covered. Also retired with upstream pattern deletions: ipc.ts server stubs, localApi.ts recovery stubs, ws.ts enrichProjectEvent block."
+
+
+[[patch]]
+name = "fork-web-client-resilience-and"
+class = "product"
+purpose = "Client resilience, thread-move UI, flat General Chat, and project-scope selection."
+retire_when = "Partially retirable; see decisions."
+surface = "largest fork surface — Sidebar.tsx alone carries ~605 fork lines against 71 upstream commits/6mo"
+[[patch.decision]]
+id = "stashimagecompression-timeout"
+date = "2026-07-29"
+decided = "adapt (new in-place edit, upstream-bound)"
+rationale = "Upstream test 'reports too-large when even the smallest encoding overflows the budget' deterministically exceeds vitest's 15s default under parallel CI load (4/4 hosted-runner failures; passes in isolation). One-line 60s timeout bump. Grows the conflict surface by one upstream test file - accepted because CI on main can never be green otherwise."
+retire_when = "Upstream fixes the test timeout or speeds up the encoding walk. Candidate for an upstream issue/PR."
+[[patch.decision]]
+id = "sidebar-project-header-styling"
+date = "2026-07-28"
+decided = "adapt"
+rationale = "Fork owns structure (hideProjectHeader wrapper, isChatProject/SquarePenIcon); upstream owns the design system. Take upstream's className and drop size='sm'; keep the fork's structural additions."
+[[patch.decision]]
+id = "sidebarv2-project-scope"
+date = "2026-07-28"
+decided = "keep-multiselect"
+decided_by = "brad"
+issue = "http://git.home/brad/fork-decisions/issues/1"
+rationale = "projectScope is upstream's concept: upstream ships single-select (MenuRadioGroup/MenuRadioItem), the fork rebuilt it as multi-select with checkbox partial states (allCheckboxState, CheckIcon/MinusIcon). Brad chose to KEEP multi-select and port it onto upstream's restructured menu."
+standing_policy = "Multi-select project scope is a fork product feature. On future conflicts here, port it forward onto upstream's current structure. Do NOT re-ask, and do NOT silently retire it to single-select. Re-escalate only if upstream removes projectScope entirely."
+cost_accepted = "~90 lines of JSX re-ported each time upstream restructures this menu."
+resolution_kind = "relocate"
+status = "ported-and-uat-verified-2026-07-29"
+relocation = "Upstream MOVED the project-scope menu within SidebarV2.tsx. Both conflict regions were resolved to UPSTREAM's side so upstream's restructure stands and the menu is not duplicated (the shared continuation after the conflict already contained upstream's relocated <Menu open={projectScopeMenuOpen}>). The fork's multi-select must now be RE-IMPLEMENTED at that new site, inside this same patch."
+port_todo = "At upstream's relocated menu: replace MenuRadioGroup/MenuRadioItem with the fork's All-projects MenuItem (tri-state via allCheckboxState) + MenuSeparator + per-project MenuCheckboxItem driven by hiddenProjectKeys/toggleHiddenProjectKey; re-add the isolate button (TargetIcon/CircleDotIcon, setIsolatedProjectKey, closes the menu) and the trigger's isolation indicator. KEEP upstream's ProjectFavicon and handleProjectActions ellipsis button, which the fork already carried."
+port_done = "2026-07-29: ported by T3 worker sidebarv2-port (gpt-5.6-sol) as f5a6eeded on t3/sidebarv2-multiselect-port, folded into this patch via cherry-pick --no-commit + stg refresh -p. Independently verified: all four packages typecheck at 0 errors, exit codes captured without pipes. 128/128 sidebar tests pass per worker (no direct SidebarV2 component test exists). Trigger isolation control is a keyboard-accessible role=button span, not a nested button. REMAINING: browser UAT of tri-state/checkbox/isolate behaviour before landing."
+
+[[patch]]
+name = "fork-desktop-branding"
+class = "product"
+purpose = "Fork branding, packaging flavour and update channels for the desktop app."
+retire_when = "never"
+resolved = "2026-07-29: navigateMain/openThread stubs added by worker commit 563d00e17, folded into this patch. DesktopLifecycle tests 3/3, desktop typecheck 0 errors."
+
+[[patch]]
+name = "fork-mobile-eas-configuration"
+class = "product"
+purpose = "Fork identity, EAS routing, widget identifiers and runtime policy, layered over upstream's Expo config."
+retire_when = "never"
+note = "Deliberately an OVERLAY (fork-config.ts), never a replacement — replacing the whole config silently dropped upstream native plugins during rebases. Measured 2026-07-28: this patch overlaps ZERO files upstream touched. The decision is paying off."
+
+[[patch]]
+name = "fork-contracts-shared-schema"
+class = "divergence"
+purpose = "Shared schema extensions the fork's server and clients both require."
+retire_when = "Upstream adopts equivalent contract fields."
+
+[[patch]]
+name = "fork-ci-release-and-sync"
+class = "product"
+purpose = "Fork release pipeline, sync automation and updater feed."
+retire_when = "never"
+note = "release.yml carries ~1022 fork lines. Known hazards live here — see the process map: release finalize must not push to main (H3), leases must be pinned explicitly (H4). NEW 2026-07-29: build-desktop-artifact cargo-builds the upstream resource monitor, so the fork mac release runner now requires a Rust toolchain."
+[[patch.decision]]
+id = "stamp-free-release-tags"
+date = "2026-07-30"
+decided = "tag-stamped-child-main-unstamped-parent"
+rationale = "The first live auto-land exposed Fork Push Nightly putting chore(release): prepare on main. Sync Upstream and Fork Push Nightly must both call scripts/ci/prepare-release-tag, tag its prepared child, and push main at the exact pre-stamp stack tip. Release consumes the bound tag/source and never finalizes versions onto main. Both main writers share t3code-writes-main, retain bounded daily backups, and use leases pinned before preparation so a stale writer fails before tag publication."
+standing_policy = "Generated version stamps and release lockfile changes are tag-only. Never push the prepared child or a release finalizer to main."
+[[patch.decision]]
+id = "queued-main-writer-start-binding"
+date = "2026-07-30"
+decided = "fail-stale-queued-checkouts"
+issue = "brad/t3code-fork#2 comment 2757"
+rationale = "A queued workflow can check out an older event SHA after another main writer has advanced the remote. Recording the newer remote SHA as the lease would authorize replaying the older checkout over newer main. Both automatic writers now bind the lease to their exact checked-out starting HEAD and fail before replay unless live origin/main still equals it."
+standing_policy = "Never renew an automatic main writer's starting lease from the remote. A stale queued checkout must fail and be retried from a fresh workflow run."
