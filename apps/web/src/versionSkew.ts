@@ -23,6 +23,87 @@ function normalizeVersion(version: string | null | undefined): string | null {
   return trimmed && trimmed.length > 0 ? trimmed : null;
 }
 
+function parseVersion(version: string): {
+  readonly core: ReadonlyArray<number>;
+  readonly prerelease: ReadonlyArray<string>;
+} {
+  const normalized = version.trim().replace(/^v/u, "");
+  const [coreRaw = "", ...suffixParts] = normalized.split("-");
+  return {
+    core: coreRaw.split(".").map((part) => {
+      const parsed = Number.parseInt(part, 10);
+      return Number.isFinite(parsed) ? parsed : 0;
+    }),
+    prerelease: suffixParts.join("-").split(/[.-]/u).filter(Boolean),
+  };
+}
+
+function compareVersionIdentifiers(left: string, right: string): number {
+  const leftNumber = /^\d+$/u.test(left) ? Number.parseInt(left, 10) : null;
+  const rightNumber = /^\d+$/u.test(right) ? Number.parseInt(right, 10) : null;
+
+  if (leftNumber !== null && rightNumber !== null) {
+    return leftNumber - rightNumber;
+  }
+  if (leftNumber !== null) {
+    return -1;
+  }
+  if (rightNumber !== null) {
+    return 1;
+  }
+  return left.localeCompare(right);
+}
+
+export function compareT3Versions(left: string, right: string): number {
+  const parsedLeft = parseVersion(left);
+  const parsedRight = parseVersion(right);
+  const coreLength = Math.max(parsedLeft.core.length, parsedRight.core.length);
+
+  for (let index = 0; index < coreLength; index += 1) {
+    const delta = (parsedLeft.core[index] ?? 0) - (parsedRight.core[index] ?? 0);
+    if (delta !== 0) {
+      return delta;
+    }
+  }
+
+  if (parsedLeft.prerelease.length === 0 && parsedRight.prerelease.length === 0) {
+    return 0;
+  }
+  if (parsedLeft.prerelease.length === 0) {
+    return 1;
+  }
+  if (parsedRight.prerelease.length === 0) {
+    return -1;
+  }
+
+  const prereleaseLength = Math.max(parsedLeft.prerelease.length, parsedRight.prerelease.length);
+  for (let index = 0; index < prereleaseLength; index += 1) {
+    const leftPart = parsedLeft.prerelease[index];
+    const rightPart = parsedRight.prerelease[index];
+    if (leftPart === undefined) {
+      return -1;
+    }
+    if (rightPart === undefined) {
+      return 1;
+    }
+    const delta = compareVersionIdentifiers(leftPart, rightPart);
+    if (delta !== 0) {
+      return delta;
+    }
+  }
+
+  return 0;
+}
+
+export function isClientVersionNewerThanServer(serverVersion: string | null | undefined): boolean {
+  const normalizedClientVersion = normalizeVersion(APP_VERSION);
+  const normalizedServerVersion = normalizeVersion(serverVersion);
+  if (!normalizedClientVersion || !normalizedServerVersion) {
+    return false;
+  }
+  return compareT3Versions(normalizedClientVersion, normalizedServerVersion) > 0;
+}
+
 export function resolveVersionMismatch(
   serverVersion: string | null | undefined,
 ): VersionMismatch | null {
