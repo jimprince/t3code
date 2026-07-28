@@ -183,6 +183,9 @@ function buildProps() {
     onOpenTurnDiff: () => {},
     revertTurnCountByUserMessageId: new Map(),
     onRevertUserMessage: () => {},
+    onForkMessage: () => {},
+    canForkThread: true,
+    canForkToNewWorktree: true,
     isRevertingCheckpoint: false,
     onImageExpand: () => {},
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
@@ -223,6 +226,35 @@ function buildUserTimelineEntry(text: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it("builds message fork actions for the current or checkpoint worktree", async () => {
+    const { buildMessageForkContextMenuItems, shouldClaimMessageForkContextMenu } =
+      await import("./MessagesTimeline");
+
+    expect(
+      buildMessageForkContextMenuItems({ disabled: false, canForkToNewWorktree: true }),
+    ).toEqual([
+      {
+        id: "fork",
+        label: "Fork thread from here",
+        disabled: false,
+        children: [
+          { id: "fork-current", label: "Use current worktree", disabled: false },
+          {
+            id: "fork-new-worktree",
+            label: "Create new worktree from here",
+            disabled: false,
+          },
+        ],
+      },
+    ]);
+    expect(
+      buildMessageForkContextMenuItems({ disabled: false, canForkToNewWorktree: false })[0]
+        ?.children?.[1]?.disabled,
+    ).toBe(true);
+    expect(shouldClaimMessageForkContextMenu(undefined)).toBe(false);
+    expect(shouldClaimMessageForkContextMenu({})).toBe(true);
+  });
+
   it("uses the larger leading inset only when the top fade is enabled", () => {
     const timelineEntries = [buildUserTimelineEntry("Hello")];
 
@@ -405,7 +437,23 @@ describe("MessagesTimeline", () => {
     expect(onAnchorSizeChanged).toHaveBeenCalledWith(secondEntry.message.id, 240);
   });
 
-  it("renders collapse controls for long user messages", () => {
+  it("shows a loading progress state instead of the new-thread placeholder while detail hydrates", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[]} isThreadDetailLoading />,
+    );
+
+    expect(markup).toContain("Refreshing conversation state...");
+    expect(markup).toContain(
+      "The sidebar has backend activity for this thread, but the conversation detail has not arrived yet.",
+    );
+    expect(markup).toContain('aria-label="Refreshing conversation state"');
+    expect(markup).toContain('role="progressbar"');
+    expect(markup).not.toContain("Send a message to start the conversation.");
+  }, 20_000);
+
+  it("renders collapse controls for long user messages", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
     const markup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
