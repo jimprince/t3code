@@ -1,0 +1,79 @@
+[
+  {
+    "message": "fork: t3-thread operator CLI",
+    "paths": ["apps/t3-thread/"]
+  },
+  {
+    "message": "fork: build and release tooling",
+    "paths": [
+      "scripts/",
+      "ops/",
+      "oxlint-plugin-t3code/",
+      "infra/",
+      "vite.config.ts",
+      "package.json",
+      "pnpm-workspace.yaml",
+      "pnpm-lock.yaml",
+      ".dockerignore",
+      ".gitignore",
+      ".gitmodules",
+      "LLM_INSTRUCTIONS.md"
+    ]
+  },
+  {
+    "message": "fork: docs",
+    "paths": ["docs/", ".agents/"]
+  },
+  {
+    "message": "fork(server): orchestration and projection",
+    "paths": [
+      "apps/server/src/orchestration/",
+      "apps/server/src/persistence/",
+      "apps/server/integration/"
+    ]
+  },
+  {
+    "message": "fork(server): provider runtime",
+    "paths": ["apps/server/src/provider/"]
+  },
+  {
+    "message": "fork(server): transport, auth and headless updates",
+    "paths": [
+      "apps/server/package.json",
+      "apps/server/src/checkpointing/",
+      "apps/server/src/diagnostics/",
+      "apps/server/src/git/",
+      "apps/server/src/observability/",
+      "apps/server/src/headlessUpdateCheck.ts",
+      "apps/server/src/headlessUpdateCheck.test.ts",
+      "apps/server/src/project/",
+      "apps/server/src/relay/",
+      "apps/server/src/server.ts",
+      "apps/server/src/server.test.ts",
+      "apps/server/src/serverRuntimeStartup.ts",
+      "apps/server/src/serverRuntimeStartup.test.ts",
+      "apps/server/src/textGeneration/",
+      "apps/server/src/ws.ts"
+    ]
+  },
+  {
+    "message": "fork(web): client resilience and thread-move UI",
+    "paths": ["apps/web/"]
+  },
+  {
+    "message": "fork(desktop): branding, packaging flavor and update channels",
+    "paths": ["apps/desktop/"]
+  },
+  {
+    "message": "fork(mobile): EAS configuration",
+    "paths": ["apps/mobile/", "app.json", "assets/", "favicon.svg"]
+  },
+  {
+    "message": "fork(contracts): shared schema extensions",
+    "paths": ["packages/"]
+  },
+  {
+    "message": "fork(ci): release and sync pipeline",
+    "paths": [".github/"]
+  }
+]
