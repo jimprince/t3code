@@ -206,6 +206,16 @@ describe("ServerSettings.sourceControlWritingStyle", () => {
   });
 });
 
+describe("ServerSettings system pressure notifications", () => {
+  it("defaults notifications on and accepts an explicit opt-out", () => {
+    expect(decodeServerSettings({}).systemPressureNotificationsEnabled).toBe(true);
+    expect(
+      decodeServerSettingsPatch({ systemPressureNotificationsEnabled: false })
+        .systemPressureNotificationsEnabled,
+    ).toBe(false);
+  });
+});
+
 describe("ServerSettingsPatch.providerInstances", () => {
   it("treats providerInstances as an optional whole-map replacement", () => {
     const patch = decodeServerSettingsPatch({});
