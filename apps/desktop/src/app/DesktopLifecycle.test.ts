@@ -70,6 +70,7 @@ describe("DesktopLifecycle", () => {
         createMain: Effect.die("unexpected window creation"),
         ensureMain: Effect.die("unexpected window creation"),
         revealOrCreateMain: Effect.die("unexpected window creation"),
+        navigateMain: () => Effect.succeed(true),
         activate: Effect.void,
         createMainIfBackendReady: Effect.void,
         showConnectingSplash: Effect.void,
@@ -77,6 +78,7 @@ describe("DesktopLifecycle", () => {
         handleBackendNotReady: Effect.void,
         flushMainWindowBounds: Effect.void,
         dispatchMenuAction: () => Effect.void,
+        openThread: () => Effect.void,
         syncAppearance: Effect.void,
       });
 
