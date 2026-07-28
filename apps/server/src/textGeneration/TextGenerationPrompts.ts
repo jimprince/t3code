@@ -231,3 +231,38 @@ export function buildThreadTitlePrompt(input: ThreadTitlePromptInput) {
 
   return { prompt, outputSchema };
 }
+
+// ---------------------------------------------------------------------------
+// Goal evaluation
+// ---------------------------------------------------------------------------
+
+export interface GoalEvaluationPromptInput {
+  goal: string;
+  transcript: string;
+}
+
+export function buildGoalEvaluationPrompt(input: GoalEvaluationPromptInput) {
+  const prompt = [
+    "You evaluate whether an active coding-agent goal has been achieved.",
+    "Return a JSON object with keys: achieved, reason.",
+    "Rules:",
+    "- Use only the transcript-visible evidence below.",
+    "- Do not infer success from hidden filesystem state, unstated tests, or intent.",
+    "- achieved must be true only when the transcript proves the goal is satisfied.",
+    "- If the transcript shows pending work, blockers, missing verification, or uncertainty, achieved must be false.",
+    "- reason must be one concise sentence citing the transcript evidence or missing evidence.",
+    "",
+    "Goal:",
+    limitSection(input.goal, 8_000),
+    "",
+    "Transcript-visible evidence:",
+    limitSection(input.transcript, 60_000),
+  ].join("\n");
+
+  const outputSchema = Schema.Struct({
+    achieved: Schema.Boolean,
+    reason: Schema.String,
+  });
+
+  return { prompt, outputSchema };
+}
