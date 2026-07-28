@@ -61,7 +61,7 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationReadScope);
           const snapshot = yield* projectionSnapshotQuery
-            .getThreadDetailSnapshot(args.params.threadId)
+            .getThreadDetailSnapshotById(args.params.threadId)
             .pipe(
               Effect.catch((cause) =>
                 failEnvironmentInternal("orchestration_thread_snapshot_failed", cause),
