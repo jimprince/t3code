@@ -1,8 +1,8 @@
 import type { EnvironmentConnectionPhase } from "../connection/presentation.ts";
 import type {
   CommandId,
+  ClientOrchestrationCommand,
   EnvironmentId,
-  OrchestrationCommand,
   ProjectId,
   SourceControlDiscoveryResult,
   SourceControlProviderKind,
@@ -213,12 +213,13 @@ export function buildProjectCreateCommand(input: {
   readonly projectId: ProjectId;
   readonly workspaceRoot: string;
   readonly createdAt: string;
-}): Extract<OrchestrationCommand, { type: "project.create" }> {
+}): Extract<ClientOrchestrationCommand, { type: "project.create" }> {
   return {
     type: "project.create",
     commandId: input.commandId,
     projectId: input.projectId,
     title: inferProjectTitleFromPath(input.workspaceRoot),
+    kind: "workspace",
     workspaceRoot: input.workspaceRoot,
     createWorkspaceRootIfMissing: true,
     defaultModelSelection: null,
