@@ -30,7 +30,9 @@ const parseGithubOutput = (
   const statusMatch = /^status=(.*)$/m.exec(contents);
   const filesMatch = /^files<<EOF\n([\s\S]*?)\nEOF$/m.exec(contents);
   const files =
-    filesMatch === null ? [] : filesMatch[1].split("\n").filter((line) => line.length > 0);
+    filesMatch?.[1] === undefined
+      ? []
+      : filesMatch[1].split("\n").filter((line) => line.length > 0);
   return { status: statusMatch?.[1], files };
 };
 
