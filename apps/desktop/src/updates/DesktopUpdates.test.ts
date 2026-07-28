@@ -31,6 +31,7 @@ interface UpdatesHarnessOptions {
   readonly setDisableDifferentialDownload?: Effect.Effect<void>;
   readonly stopBackend?: Effect.Effect<void>;
   readonly env?: Record<string, string | undefined>;
+  readonly environment?: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput>;
 }
 
 const flushCallbacks = Effect.yieldNow;
@@ -139,6 +140,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     isPackaged: true,
     resourcesPath: "/missing/resources",
     runningUnderArm64Translation: false,
+    ...options.environment,
   }).pipe(
     Layer.provide(
       Layer.mergeAll(
@@ -543,6 +545,26 @@ describe("DesktopUpdates", () => {
         assert.equal(state.channel, "latest");
         assert.equal(persistedSettings.updateChannel, "latest");
         assert.equal(persistedSettings.updateChannelConfiguredByUser, false);
+      }),
+    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
+  });
+
+  it.effect("disables updates with a visible reason for packaged Fork Dev builds", () => {
+    const harness = makeHarness({
+      environment: {
+        desktopFlavor: "dev",
+      },
+    });
+
+    return Effect.scoped(
+      Effect.gen(function* () {
+        const updates = yield* DesktopUpdates.DesktopUpdates;
+        yield* updates.configure;
+
+        const state = yield* updates.getState;
+        assert.equal(state.enabled, false);
+        assert.equal(state.status, "disabled");
+        assert.equal(state.message, "Automatic updates are disabled for Fork Dev builds.");
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
