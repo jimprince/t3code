@@ -1,26 +1,252 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import * as NodeOS from "node:os";
+import {
+  DEFAULT_MODEL,
+  EnvironmentId,
+  CommandId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+  TurnId,
+  MessageId,
+  DEFAULT_PROVIDER_INTERACTION_MODE,
+} from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
+import * as TestClock from "effect/testing/TestClock";
+import * as HttpServer from "effect/unstable/http/HttpServer";
 
+import * as EnvironmentAuth from "./auth/EnvironmentAuth.ts";
 import * as ServerConfig from "./config.ts";
+import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
+import * as Keybindings from "./keybindings.ts";
+import { OrchestrationCommandReceiptRepositoryLive } from "./persistence/Layers/OrchestrationCommandReceipts.ts";
+import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
+import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
+import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolver.ts";
+import { OrchestrationEngineLive } from "./orchestration/Layers/OrchestrationEngine.ts";
+import { OrchestrationProjectionPipelineLive } from "./orchestration/Layers/ProjectionPipeline.ts";
+import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers/ProjectionSnapshotQuery.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
+import * as OrchestrationReactor from "./orchestration/Services/OrchestrationReactor.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ExternalLauncher from "./process/externalLauncher.ts";
+import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
+import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
+import * as ServerSettings from "./serverSettings.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
+import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
+
+const startupReconciliationTestLayer = Layer.mergeAll(
+  OrchestrationEngineLive.pipe(
+    Layer.provide(OrchestrationProjectionSnapshotQueryLive),
+    Layer.provide(OrchestrationProjectionPipelineLive),
+  ),
+  OrchestrationProjectionSnapshotQueryLive,
+).pipe(
+  Layer.provide(OrchestrationEventStoreLive),
+  Layer.provide(OrchestrationCommandReceiptRepositoryLive),
+  Layer.provide(RepositoryIdentityResolver.layer),
+  Layer.provide(SqlitePersistenceMemory),
+  Layer.provideMerge(
+    ServerConfig.layerTest(process.cwd(), { prefix: "t3-startup-reconciliation-test-" }),
+  ),
+  Layer.provideMerge(NodeServices.layer),
+);
+
+const startupTestEnvironment = {
+  environmentId: EnvironmentId.make("environment-startup-reconciliation-test"),
+  label: "Startup reconciliation test",
+  platform: {
+    os: "darwin" as const,
+    arch: "arm64" as const,
+  },
+  serverVersion: "0.0.0-test",
+  capabilities: {
+    repositoryIdentity: true,
+  },
+};
+
+const startupInfrastructureTestLayer = Layer.mergeAll(
+  WorkspacePaths.layer,
+  AnalyticsService.AnalyticsService.layerTest,
+  Layer.mock(EnvironmentAuth.EnvironmentAuth)({}),
+  Layer.mock(ExternalLauncher.ExternalLauncher)({}),
+  Layer.succeed(
+    HttpServer.HttpServer,
+    HttpServer.HttpServer.of({
+      address: { _tag: "TcpAddress", hostname: "127.0.0.1", port: 0 },
+      serve: (() => Effect.void) as HttpServer.HttpServer["Service"]["serve"],
+    }),
+  ),
+);
+
+const runProductionStartup = ServerRuntimeStartup.make.pipe(
+  Effect.provideService(Keybindings.Keybindings, {
+    start: Effect.void,
+  } as never),
+  Effect.provideService(OrchestrationReactor.OrchestrationReactor, {
+    start: () => Effect.void,
+  }),
+  Effect.provideService(ProviderSessionReaper.ProviderSessionReaper, {
+    start: () => Effect.void,
+  }),
+  Effect.provideService(ServerLifecycleEvents.ServerLifecycleEvents, {
+    publish: (
+      event: Parameters<ServerLifecycleEvents.ServerLifecycleEvents["Service"]["publish"]>[0],
+    ) => Effect.succeed({ ...event, sequence: 1 } as never),
+  } as never),
+  Effect.provideService(ServerSettings.ServerSettingsService, {
+    start: Effect.void,
+  } as never),
+  Effect.provideService(ServerEnvironment.ServerEnvironment, {
+    getEnvironmentId: Effect.succeed(startupTestEnvironment.environmentId),
+    getDescriptor: Effect.succeed(startupTestEnvironment),
+  }),
+  Effect.provide(startupInfrastructureTestLayer),
+);
+
+const seedThread = (input: {
+  readonly engine: OrchestrationEngine.OrchestrationEngineService["Service"];
+  readonly projectId: ProjectId;
+  readonly threadId: ThreadId;
+  readonly turnId: TurnId;
+  readonly suffix: string;
+  readonly settled?: boolean;
+}) =>
+  Effect.gen(function* () {
+    const createdAt = "2026-07-19T12:00:00.000Z";
+    const modelSelection = {
+      instanceId: ProviderInstanceId.make("codex"),
+      model: DEFAULT_MODEL,
+    };
+
+    yield* input.engine.dispatch({
+      type: "project.create",
+      commandId: CommandId.make(`cmd-project-${input.suffix}`),
+      projectId: input.projectId,
+      title: `Startup project ${input.suffix}`,
+      workspaceRoot: process.cwd(),
+      defaultModelSelection: modelSelection,
+      createdAt,
+    });
+    yield* input.engine.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make(`cmd-thread-${input.suffix}`),
+      threadId: input.threadId,
+      projectId: input.projectId,
+      title: `Startup thread ${input.suffix}`,
+      modelSelection,
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      runtimeMode: "approval-required",
+      branch: null,
+      worktreePath: null,
+      createdAt,
+    });
+    yield* input.engine.dispatch({
+      type: "thread.turn.start",
+      commandId: CommandId.make(`cmd-turn-${input.suffix}`),
+      threadId: input.threadId,
+      message: {
+        messageId: MessageId.make(`message-${input.suffix}`),
+        role: "user",
+        text: "Simulate a turn active when the server crashed.",
+        attachments: [],
+      },
+      interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+      runtimeMode: "approval-required",
+      createdAt,
+    });
+    yield* input.engine.dispatch({
+      type: "thread.session.set",
+      commandId: CommandId.make(`cmd-session-running-${input.suffix}`),
+      threadId: input.threadId,
+      session: {
+        threadId: input.threadId,
+        status: "running",
+        providerName: "codex",
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        runtimeMode: "approval-required",
+        activeTurnId: input.turnId,
+        lastError: null,
+        updatedAt: "2026-07-19T12:00:01.000Z",
+      },
+      createdAt: "2026-07-19T12:00:01.000Z",
+    });
+
+    if (input.settled) {
+      yield* input.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make(`cmd-session-ready-${input.suffix}`),
+        threadId: input.threadId,
+        session: {
+          threadId: input.threadId,
+          status: "ready",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: "2026-07-19T12:00:02.000Z",
+        },
+        createdAt: "2026-07-19T12:00:02.000Z",
+      });
+    }
+  });
+
+const getThreadShell = (
+  query: ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"],
+  threadId: ThreadId,
+) =>
+  query
+    .getThreadShellById(threadId)
+    .pipe(
+      Effect.map(
+        Option.getOrThrowWith(
+          () => new Error(`Expected startup reconciliation test thread '${threadId}'.`),
+        ),
+      ),
+    );
 
 it("uses the canonical Codex default for auto-bootstrapped model selection", () => {
   assert.deepStrictEqual(ServerRuntimeStartup.getAutoBootstrapDefaultModelSelection(), {
     instanceId: ProviderInstanceId.make("codex"),
     model: DEFAULT_MODEL,
   });
+});
+
+it("applies T3 environment metadata to process env for launched agent children", () => {
+  const env: NodeJS.ProcessEnv = {};
+
+  ServerRuntimeStartup.applyT3EnvironmentMetadataToProcessEnv(
+    {
+      environmentId: EnvironmentId.make("environment-local"),
+      label: "local-mbp",
+      platform: {
+        os: "darwin",
+        arch: "arm64",
+      },
+      serverVersion: "0.1.0",
+      capabilities: {
+        repositoryIdentity: true,
+      },
+    },
+    env,
+  );
+
+  assert.equal(env.T3_ENVIRONMENT_ID, "environment-local");
+  assert.equal(env.T3_ENVIRONMENT_NAME, "local-mbp");
 });
 
 it.effect("enqueueCommand waits for readiness and then drains queued work", () =>
@@ -70,6 +296,159 @@ it.effect("enqueueCommand fails queued work when readiness fails", () =>
   ),
 );
 
+it.effect("interrupts a persisted running turn during server startup", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngine.OrchestrationEngineService;
+      const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+      const threadId = ThreadId.make("thread-crashed-mid-run");
+      const turnId = TurnId.make("turn-crashed-mid-run");
+
+      yield* seedThread({
+        engine,
+        projectId: ProjectId.make("project-crashed-mid-run"),
+        threadId,
+        turnId,
+        suffix: "crashed-mid-run",
+      });
+
+      const beforeRestart = yield* getThreadShell(query, threadId);
+      assert.equal(beforeRestart.session?.status, "running", "test precondition: running session");
+      assert.equal(
+        beforeRestart.session?.activeTurnId,
+        turnId,
+        "test precondition: running session has an active turn",
+      );
+      assert.equal(beforeRestart.latestTurn?.state, "running", "test precondition: running turn");
+
+      const startup = yield* runProductionStartup;
+      yield* startup.awaitCommandReady;
+
+      const afterRestart = yield* getThreadShell(query, threadId);
+      assert.equal(
+        afterRestart.session?.status,
+        "interrupted",
+        "REGRESSION: thread left in stale 'running' state after server restart — boot reconciliation missing or broken",
+      );
+      assert.equal(
+        afterRestart.session?.activeTurnId,
+        null,
+        "REGRESSION: interrupted startup recovery left an active turn attached to the session",
+      );
+      assert.equal(
+        afterRestart.latestTurn?.state,
+        "interrupted",
+        "REGRESSION: startup recovery did not settle the latest turn as interrupted",
+      );
+      assert.notEqual(
+        afterRestart.latestTurn?.completedAt,
+        null,
+        "REGRESSION: startup recovery did not record when the interrupted turn settled",
+      );
+    }).pipe(Effect.provide(startupReconciliationTestLayer)),
+  ),
+);
+
+it.effect("does not modify an already settled session during server startup", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngine.OrchestrationEngineService;
+      const query = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
+      const threadId = ThreadId.make("thread-settled-before-restart");
+
+      yield* seedThread({
+        engine,
+        projectId: ProjectId.make("project-settled-before-restart"),
+        threadId,
+        turnId: TurnId.make("turn-settled-before-restart"),
+        suffix: "settled-before-restart",
+        settled: true,
+      });
+
+      const beforeRestart = yield* getThreadShell(query, threadId);
+      assert.equal(beforeRestart.session?.status, "ready", "test precondition: settled session");
+      assert.equal(beforeRestart.session?.activeTurnId, null);
+      assert.equal(beforeRestart.latestTurn?.state, "completed");
+
+      const startup = yield* runProductionStartup;
+      yield* startup.awaitCommandReady;
+
+      const afterRestart = yield* getThreadShell(query, threadId);
+      assert.deepStrictEqual(
+        afterRestart.session,
+        beforeRestart.session,
+        "REGRESSION: boot reconciliation modified an already settled session",
+      );
+      assert.deepStrictEqual(
+        afterRestart.latestTurn,
+        beforeRestart.latestTurn,
+        "REGRESSION: boot reconciliation modified an already settled latest turn",
+      );
+    }).pipe(Effect.provide(startupReconciliationTestLayer)),
+  ),
+);
+
+it.effect("retries orphan reconciliation per thread and continues after a permanent failure", () =>
+  Effect.gen(function* () {
+    const transientThreadId = ThreadId.make("thread-reconcile-transient-failure");
+    const permanentThreadId = ThreadId.make("thread-reconcile-permanent-failure");
+    const transientAttempts = yield* Ref.make(0);
+    const permanentAttempts = yield* Ref.make(0);
+    const makeSession = (threadId: ThreadId) => ({
+      threadId,
+      status: "running" as const,
+      providerName: "codex" as const,
+      providerInstanceId: ProviderInstanceId.make("codex"),
+      runtimeMode: "full-access" as const,
+      activeTurnId: TurnId.make(`turn-${threadId}`),
+      lastError: null,
+      updatedAt: "2026-07-19T12:00:01.000Z",
+    });
+
+    yield* ServerRuntimeStartup.reconcileOrphanedThreadSessions.pipe(
+      Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+        getCommandReadModel: () =>
+          Effect.succeed({
+            threads: [
+              {
+                deletedAt: null,
+                latestTurn: { state: "running" },
+                session: makeSession(transientThreadId),
+              },
+              {
+                deletedAt: null,
+                latestTurn: { state: "running" },
+                session: makeSession(permanentThreadId),
+              },
+            ],
+          } as never),
+      } as never),
+      Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
+        dispatch: (command: { readonly threadId: ThreadId }) => {
+          const attempts =
+            command.threadId === transientThreadId ? transientAttempts : permanentAttempts;
+          return Ref.updateAndGet(attempts, (count) => count + 1).pipe(
+            Effect.flatMap((attempt) =>
+              command.threadId === transientThreadId && attempt >= 3
+                ? Effect.succeed({ sequence: attempt })
+                : Effect.fail("simulated reconciliation dispatch failure"),
+            ),
+          );
+        },
+      } as never),
+      Effect.provide(NodeServices.layer),
+      TestClock.withLive,
+    );
+
+    assert.equal(yield* Ref.get(transientAttempts), 3, "transient dispatch was not retried");
+    assert.equal(
+      yield* Ref.get(permanentAttempts),
+      3,
+      "permanent dispatch exceeded the bounded retry budget",
+    );
+  }),
+);
+
 it.effect("launchStartupHeartbeat does not block the caller while counts are loading", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -95,8 +474,9 @@ it.effect("launchStartupHeartbeat does not block the caller while counts are loa
           getThreadCheckpointContext: () => Effect.succeed(Option.none()),
           getFullThreadDiffContext: () => Effect.succeed(Option.none()),
           getThreadShellById: () => Effect.succeed(Option.none()),
+          getThreadShellByIdIncludingArchived: () => Effect.succeed(Option.none()),
           getThreadDetailById: () => Effect.succeed(Option.none()),
-          getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
+          getThreadDetailSnapshotById: () => Effect.succeed(Option.none()),
         }),
         Effect.provideService(AnalyticsService.AnalyticsService, {
           record: () => Effect.void,
@@ -120,6 +500,88 @@ it.effect("resolveWelcomeBase derives cwd and project name from server config", 
       projectName: "startup-project",
     });
   }),
+);
+
+it.effect("creates one deterministic chat project outside server state and the process cwd", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-chat-project-state-" });
+    const environmentId = EnvironmentId.make("environment-chat-test");
+    const dispatched = yield* Ref.make<ReadonlyArray<Record<string, unknown>>>([]);
+
+    const projectId = yield* ServerRuntimeStartup.ensureChatProject.pipe(
+      Effect.provideService(ServerConfig.ServerConfig, {
+        stateDir,
+        cwd: "/unrelated/user/repository",
+        mode: "web",
+        host: undefined,
+        port: 3773,
+      } as never),
+      Effect.provideService(ServerEnvironment.ServerEnvironment, {
+        getEnvironmentId: Effect.succeed(environmentId),
+        getDescriptor: Effect.die("unused"),
+      }),
+      Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+        getProjectShellById: () =>
+          Ref.get(dispatched).pipe(
+            Effect.map((commands) =>
+              commands.length === 0
+                ? Option.none()
+                : Option.some({
+                    id: ServerRuntimeStartup.getChatProjectId(String(environmentId)),
+                    title: "Chat",
+                    kind: "chat",
+                    workspaceRoot: path.join(
+                      NodeOS.tmpdir(),
+                      "t3code-chat-workspaces",
+                      ServerRuntimeStartup.getChatProjectStorageKey(String(environmentId)),
+                    ),
+                  } as never),
+            ),
+          ),
+        getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+      } as never),
+      Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
+        dispatch: (command: unknown) =>
+          Ref.update(dispatched, (commands) => [
+            ...commands,
+            command as unknown as Record<string, unknown>,
+          ]).pipe(Effect.as({ sequence: 1 })),
+      } as never),
+      Effect.provide(WorkspacePaths.layer),
+    );
+
+    assert.equal(projectId, ServerRuntimeStartup.getChatProjectId(String(environmentId)));
+    const command = (yield* Ref.get(dispatched))[0];
+    const expectedWorkspaceRoot = path.join(
+      NodeOS.tmpdir(),
+      "t3code-chat-workspaces",
+      ServerRuntimeStartup.getChatProjectStorageKey(String(environmentId)),
+    );
+    assert.deepStrictEqual(
+      command && {
+        projectId: command.projectId,
+        title: command.title,
+        kind: command.kind,
+        workspaceRoot: command.workspaceRoot,
+        createWorkspaceRootIfMissing: command.createWorkspaceRootIfMissing,
+      },
+      {
+        projectId: ServerRuntimeStartup.getChatProjectId(String(environmentId)),
+        title: "Chat",
+        kind: "chat",
+        workspaceRoot: expectedWorkspaceRoot,
+        createWorkspaceRootIfMissing: true,
+      },
+    );
+    assert.equal((yield* fs.stat(expectedWorkspaceRoot)).type, "Directory");
+    assert.equal(expectedWorkspaceRoot.startsWith(stateDir), false);
+    assert.match(
+      ServerRuntimeStartup.getChatProjectStorageKey("../server-state"),
+      /^env-[a-f0-9]{32}$/,
+    );
+  }).pipe(Effect.provide(NodeServices.layer)),
 );
 
 it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and thread ids", () => {
@@ -158,8 +620,9 @@ it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and threa
         getThreadCheckpointContext: () => Effect.succeed(Option.none()),
         getFullThreadDiffContext: () => Effect.succeed(Option.none()),
         getThreadShellById: () => Effect.die("unused"),
+        getThreadShellByIdIncludingArchived: () => Effect.die("unused"),
         getThreadDetailById: () => Effect.die("unused"),
-        getThreadDetailSnapshot: () => Effect.die("unused"),
+        getThreadDetailSnapshotById: () => Effect.die("unused"),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -168,6 +631,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and threa
             Effect.as({ sequence: 1 }),
           ),
         streamDomainEvents: Stream.empty,
+        subscribeDomainEvents: Effect.succeed(Stream.empty),
         latestSequence: Effect.succeed(0),
       } satisfies OrchestrationEngine.OrchestrationEngineService["Service"]),
       Effect.provide(NodeServices.layer),
@@ -202,8 +666,9 @@ it.effect("resolveAutoBootstrapWelcomeTargets creates a project and thread when 
         getThreadCheckpointContext: () => Effect.succeed(Option.none()),
         getFullThreadDiffContext: () => Effect.succeed(Option.none()),
         getThreadShellById: () => Effect.die("unused"),
+        getThreadShellByIdIncludingArchived: () => Effect.die("unused"),
         getThreadDetailById: () => Effect.die("unused"),
-        getThreadDetailSnapshot: () => Effect.die("unused"),
+        getThreadDetailSnapshotById: () => Effect.die("unused"),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -212,6 +677,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets creates a project and thread when 
             Effect.as({ sequence: 1 }),
           ),
         streamDomainEvents: Stream.empty,
+        subscribeDomainEvents: Effect.succeed(Stream.empty),
         latestSequence: Effect.succeed(0),
       } satisfies OrchestrationEngine.OrchestrationEngineService["Service"]),
       Effect.provide(NodeServices.layer),
@@ -252,8 +718,9 @@ it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation fa
         getThreadCheckpointContext: () => Effect.succeed(Option.none()),
         getFullThreadDiffContext: () => Effect.succeed(Option.none()),
         getThreadShellById: () => Effect.die("unused"),
+        getThreadShellByIdIncludingArchived: () => Effect.die("unused"),
         getThreadDetailById: () => Effect.die("unused"),
-        getThreadDetailSnapshot: () => Effect.die("unused"),
+        getThreadDetailSnapshotById: () => Effect.die("unused"),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -262,6 +729,7 @@ it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation fa
             Effect.as({ sequence: 1 }),
           ),
         streamDomainEvents: Stream.empty,
+        subscribeDomainEvents: Effect.succeed(Stream.empty),
         latestSequence: Effect.succeed(0),
       } satisfies OrchestrationEngine.OrchestrationEngineService["Service"]),
       Effect.provideService(Crypto.Crypto, {
