@@ -245,8 +245,8 @@ export function BranchToolbarBranchSelector({
     branchRefState.data?.nextCursor !== null && branchRefState.data?.nextCursor !== undefined;
   const isFetchingNextPage = branchRefState.isPending && branchRefState.data !== null;
   const isInitialBranchesLoadPending = branchRefState.isPending && branchRefState.data === null;
-  const currentGitBranch =
-    branchStatusQuery.data?.refName ?? refs.find((refName) => refName.current)?.name ?? null;
+  const currentRefBranch = refs.find((refName) => refName.current)?.name ?? null;
+  const currentGitBranch = currentRefBranch ?? branchStatusQuery.data?.refName ?? null;
   const sourceControlPresentation = useMemo(
     () => getSourceControlPresentation(branchStatusQuery.data?.sourceControlProvider),
     [branchStatusQuery.data?.sourceControlProvider],
@@ -479,18 +479,12 @@ export function BranchToolbarBranchSelector({
       effectiveEnvMode !== "worktree" ||
       activeWorktreePath ||
       activeThreadBranch ||
-      !worktreeBaseBranchCandidate
+      !currentRefBranch
     ) {
       return;
     }
-    setThreadBranch(worktreeBaseBranchCandidate, null);
-  }, [
-    activeThreadBranch,
-    activeWorktreePath,
-    effectiveEnvMode,
-    setThreadBranch,
-    worktreeBaseBranchCandidate,
-  ]);
+    setThreadBranch(currentRefBranch, null);
+  }, [activeThreadBranch, activeWorktreePath, currentRefBranch, effectiveEnvMode, setThreadBranch]);
 
   // ---------------------------------------------------------------------------
   // Combobox / list plumbing

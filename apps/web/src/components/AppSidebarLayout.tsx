@@ -160,6 +160,14 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
     };
   }, [navigate, pathname]);
 
+  useEffect(() => {
+    const onOpenThread = window.desktopBridge?.onOpenThread;
+    if (typeof onOpenThread !== "function") return;
+    return onOpenThread(({ environmentId, threadId }) => {
+      void navigate({ to: "/$environmentId/$threadId", params: { environmentId, threadId } });
+    });
+  }, [navigate]);
+
   return (
     <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={sidebarProviderStyle}>
       <Sidebar
