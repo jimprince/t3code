@@ -1,0 +1,6 @@
+Bottom: 5d3f1a773c4b46b4ffd07955b0b63e425e8951f3
+Top:    ac56e49e320ac1f6c1664234ceea9ceec8a0b015
+Author: Codex <codex@users.noreply.github.com>
+Date:   2026-07-27 18:53:50 -0600
+
+fix(ci): guard optional regex capture in sync driver test

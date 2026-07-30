@@ -1,9 +1,59 @@
 {
   "version": 5,
-  "prev": null,
+  "prev": "fdb53d0b01d0c36f884638ceb538932b3093c398",
   "head": "aeec3d6865c46d42d30dd0670dd6a0b05a2a3eb8",
-  "applied": [],
+  "applied": [
+    "fork-t3-thread-operator-cli",
+    "fork-build-and-release-tooling",
+    "fork-docs",
+    "fork-server-orchestration-and",
+    "fork-server-provider-runtime",
+    "fork-server-transport-auth-and",
+    "fork-web-client-resilience-and",
+    "fork-desktop-branding",
+    "fork-mobile-eas-configuration",
+    "fork-contracts-shared-schema",
+    "fork-ci-release-and-sync",
+    "fix-ci-guard-optional-regex"
+  ],
   "unapplied": [],
   "hidden": [],
-  "patches": {}
+  "patches": {
+    "fix-ci-guard-optional-regex": {
+      "oid": "aeec3d6865c46d42d30dd0670dd6a0b05a2a3eb8"
+    },
+    "fork-build-and-release-tooling": {
+      "oid": "acab7faab586693e1d7b1444194d22c254be30d6"
+    },
+    "fork-ci-release-and-sync": {
+      "oid": "9a392a239d77c49e109b5066970601afb0829901"
+    },
+    "fork-contracts-shared-schema": {
+      "oid": "f40768c00dacd522901c4bbb74a4ed579bf297d6"
+    },
+    "fork-desktop-branding": {
+      "oid": "cfb625717303b3910753d96292acbfc08fa4c72a"
+    },
+    "fork-docs": {
+      "oid": "ee9af5d8f65622ee7e82feec46583659f704d299"
+    },
+    "fork-mobile-eas-configuration": {
+      "oid": "8e321e24039e2ebeef23d1e4a7fbe104c51cbf2f"
+    },
+    "fork-server-orchestration-and": {
+      "oid": "f3c1085c28b9e13a9b84d9e0e4d0de9347995d67"
+    },
+    "fork-server-provider-runtime": {
+      "oid": "84890f00bbf22ddcc35e6d8466e0a21504fd30ea"
+    },
+    "fork-server-transport-auth-and": {
+      "oid": "7536c2f87581ab7d005889456fd225f91bef4981"
+    },
+    "fork-t3-thread-operator-cli": {
+      "oid": "93539dd22db7d79c3dff4ba50e87a734c2ee4977"
+    },
+    "fork-web-client-resilience-and": {
+      "oid": "aa1023ead5f63617a9027914a2aed6e12dab531b"
+    }
+  }
 }
