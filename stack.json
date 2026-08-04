@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "dfca5d81c160d0a9413690b35f8e935fae13fa6d",
-  "head": "a61f1547d5b636798065cc48589b7a60cf1609fe",
+  "prev": "fd4639eddfac55d74bacd827f7893858f8cbf7f6",
+  "head": "a86857d25ef5c918a8ad47249cddeabe7929c631",
   "applied": [
     "fork-t3-thread-operator-cli",
     "fork-build-and-release-tooling",
@@ -14,7 +14,8 @@
     "fork-mobile-eas-configuration",
     "fork-contracts-shared-schema",
     "fork-ci-release-and-sync",
-    "fork-ci-stgit-metadata"
+    "fork-ci-stgit-metadata",
+    "fork-stgit-stack-policy"
   ],
   "unapplied": [],
   "hidden": [],
@@ -48,6 +49,9 @@
     },
     "fork-server-transport-auth-and": {
       "oid": "aa01f8b6a00ba65e489c4edad26302084d8d0181"
+    },
+    "fork-stgit-stack-policy": {
+      "oid": "a86857d25ef5c918a8ad47249cddeabe7929c631"
     },
     "fork-t3-thread-operator-cli": {
       "oid": "992bc9c24864f25d35ec65764f0d89b77c6183bf"
