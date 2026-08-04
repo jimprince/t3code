@@ -8,6 +8,39 @@ This repo (`jimprince/t3code`) is a fork of [`pingdotgg/t3code`](https://github.
 The general agent guide is in `CLAUDE.md` / `AGENTS.md`; this file covers only
 things specific to the fork relationship.
 
+## Changing code: verify before calling anything done
+
+Use focused tests, formatting and typechecks for the files being changed.
+Invoke Vite+ through `corepack pnpm exec vp` when `vp` is absent from PATH.
+Do not run repository-wide checks locally unless requested; CI owns the full
+suite. Automatic replay runs `scripts/ci/verify-stgit-replay` on the complete
+unstamped candidate before publication, including all workspace typechecks.
+
+Tests import from `"vite-plus/test"`, not `"vitest"`. Prefer precise,
+single-site edits over regex bulk rewrites (`perl -pi`, broad `sed`) — bulk
+substitutions have produced doubled or mangled identifiers that only surface at
+typecheck — and run `vp fmt` on every file you touched before finishing. New
+fork functionality is not just a commit — it must land as an StGit patch with
+an inventory entry; see Route B below before you start.
+
+## Sandboxed candidate agents
+
+If you are an agent working in a sandboxed clone (typical signs: no network
+access, `git commit` fails on `.git` permissions, `refs/stacks/*` and
+`refs/patches/*` are absent), this is your contract:
+
+- Dependencies are preinstalled for you. Do not run installs; do not retry
+  failed network access. If a command genuinely needs the network, note it in
+  your report and continue.
+- Your deliverable is a FINISHED WORKING TREE plus a report: what changed and
+  why, verification commands with their real exit codes (say "unverified" for
+  anything you could not run — never claim green you did not see), and the
+  landing route (owning patch or new-patch decision per Route B).
+- Never `stg init` or fabricate stack metadata to work around missing refs;
+  the operator lands your tree through the real stack.
+- A new patch's inventory stanza goes at the END of
+  `docs/operations/fork-inventory.toml` — stanza order must match stack order.
+
 ## Changing or rebasing this fork
 
 Start with the repo-local [fork patch stack skill](./.agents/skills/fork-patch-stack/SKILL.md),
