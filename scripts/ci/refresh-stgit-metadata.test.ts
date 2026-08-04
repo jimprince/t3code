@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import { assert, describe, it } from "@effect/vitest";
@@ -120,6 +121,78 @@ describe("refresh-stgit-metadata", () => {
       });
       assert.notStrictEqual(result.status, 0);
       assert.include(`${result.stdout}\n${result.stderr}`, "does not match expected main lease");
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it("REGRESSION: treats stack.json.applied as canonical across renamed, split, added, and removed patches", () => {
+    const repo = createFixtureRepo();
+    try {
+      const base = repo.git("rev-parse", "HEAD");
+      const canonicalSubjects = [
+        ["fork-renamed-concern", "fork: renamed concern"],
+        ["fork-split-alpha", "fork: split alpha"],
+        ["fork-split-beta", "fork: split beta"],
+        ["fork-added-concern", "fork: added concern"],
+      ] as const;
+      const previousPatches: Record<string, string> = {};
+      for (const [name, subject] of canonicalSubjects) {
+        repo.writeFile(`${name}.txt`, "old\n");
+        previousPatches[name] = repo.commitAll(subject);
+        if (name !== "fork-added-concern") {
+          repo.git("update-ref", `refs/patches/stgit/adopt/${name}`, previousPatches[name]);
+        }
+      }
+      const oldMain = repo.git("rev-parse", "HEAD");
+      writeStack(repo.dir, "refs/stacks/stgit/adopt", oldMain, previousPatches);
+
+      const obsoleteRefs = [
+        "refs/patches/stgit/adopt/fork-old-concern",
+        "refs/patches/stgit/adopt/fork-monolith",
+        "refs/patches/stgit/adopt/fork-removed-concern",
+      ] as const;
+      for (const ref of obsoleteRefs) repo.git("update-ref", ref, oldMain);
+
+      repo.git("reset", "--hard", base);
+      const replayedPatches: Record<string, string> = {};
+      for (const [name, subject] of canonicalSubjects) {
+        repo.writeFile(`${name}.txt`, "replayed\n");
+        replayedPatches[name] = repo.commitAll(subject);
+      }
+      const mainSha = repo.git("rev-parse", "HEAD");
+      const outputFile = NodePath.join(repo.dir, "github-output.txt");
+
+      const result = run(repo.dir, {
+        GITHUB_OUTPUT: outputFile,
+        STGIT_BRANCH: "adopt",
+        STGIT_EXPECTED_HEAD: oldMain,
+        STGIT_MAIN_SHA: mainSha,
+      });
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+      const output = NodeFS.readFileSync(outputFile, "utf8");
+      for (const ref of obsoleteRefs) {
+        assert.match(
+          output,
+          new RegExp(`${ref}\\t[0-9a-f]{40}\\t(?:\\n|$)`),
+          `obsolete ${ref} must be emitted as a leased deletion`,
+        );
+        assert.throws(() => repo.git("rev-parse", "--verify", ref));
+      }
+
+      const patchRefs = repo
+        .git("for-each-ref", "--format=%(refname)", "refs/patches/stgit/adopt")
+        .split("\n")
+        .filter(Boolean);
+      assert.deepEqual(
+        patchRefs,
+        canonicalSubjects.map(([name]) => `refs/patches/stgit/adopt/${name}`).sort(),
+        "only stack.json.applied patch refs may remain",
+      );
+      for (const [name, sha] of Object.entries(replayedPatches)) {
+        assert.strictEqual(repo.git("rev-parse", `refs/patches/stgit/adopt/${name}`), sha);
+      }
     } finally {
       repo.cleanup();
     }

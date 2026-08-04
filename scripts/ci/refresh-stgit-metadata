@@ -34,63 +34,53 @@ if [[ "$recorded_head" != "$STGIT_EXPECTED_HEAD" ]]; then
 fi
 
 merge_base="$(git_cmd merge-base "$STGIT_EXPECTED_HEAD" "$STGIT_MAIN_SHA")"
-subjects="$(git_cmd log --format='%H%x09%s' "${merge_base}..${STGIT_MAIN_SHA}")"
+subjects="$(git_cmd log --reverse --format='%H%x09%s' "${merge_base}..${STGIT_MAIN_SHA}")"
 
 desired_file="$(mktemp)"
 plan_file="$(mktemp)"
 index_file="$(mktemp)"
-trap 'rm -f "$desired_file" "$plan_file" "$index_file"' EXIT
+updated_file="$(mktemp)"
+trap 'rm -f "$desired_file" "$plan_file" "$index_file" "$updated_file"' EXIT
 
-# StGit patch names are the normalized subjects of the curated topic commits.
-# Keep that derivation here rather than duplicating a second topic-name list.
-node - "$stack_json" "$subjects" "$STGIT_MAIN_SHA" "$patch_prefix" "$desired_file" <<'NODE'
-const [stackRaw, subjectsRaw, mainSha, patchPrefix, desiredFile] = process.argv.slice(2);
+# The existing StGit patch commits define the expected subjects. Match those
+# subjects exactly in the replayed series; patch names are stable identifiers,
+# not lossy normalizations of commit messages.
+node - "$stack_json" "$subjects" "$STGIT_MAIN_SHA" "$patch_prefix" "$desired_file" "$updated_file" "$GIT_BIN" <<'NODE'
+const { execFileSync } = require("node:child_process");
+const { writeFileSync } = require("node:fs");
+const [stackRaw, subjectsRaw, mainSha, patchPrefix, desiredFile, updatedFile, gitBin] = process.argv.slice(2);
 const stack = JSON.parse(stackRaw);
-const normalize = (subject) =>
-  subject
-    .toLowerCase()
-    .replace(/[():,]/g, " ")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-const commits = new Map(
+const commits =
   subjectsRaw
     .split("\n")
     .filter(Boolean)
-    .map((line) => line.split("\t"))
-    .map(([sha, subject]) => [normalize(subject), sha]),
-);
-const commitFor = (name) => {
-  const matches = [...commits].filter(([normalized]) => normalized === name || normalized.startsWith(`${name}-`));
-  if (matches.length !== 1) return undefined;
-  return matches[0][1];
+    .map((line) => {
+      const separator = line.indexOf("\t");
+      return { oid: line.slice(0, separator), subject: line.slice(separator + 1) };
+    });
+const expectedSubject = (name) => {
+  const oid = stack.patches[name]?.oid;
+  if (!oid) throw new Error(`StGit metadata is missing an oid for applied patch ${name}`);
+  return execFileSync(gitBin, ["show", "-s", "--format=%s", oid], { encoding: "utf8" }).trimEnd();
 };
-const missing = stack.applied.filter((name) => !commitFor(name));
-if (missing.length > 0) {
-  throw new Error(`Replayed main is missing StGit topic commit(s): ${missing.join(", ")}`);
+const desired = [];
+for (const name of stack.applied) {
+  const subject = expectedSubject(name);
+  const matches = commits.filter((commit) => commit.subject === subject);
+  if (matches.length !== 1) {
+    throw new Error(
+      `Expected exactly one replayed commit for ${name} with subject ${JSON.stringify(subject)}; found ${matches.length}`,
+    );
+  }
+  stack.patches[name].oid = matches[0].oid;
+  desired.push(`${patchPrefix}${name}\t${matches[0].oid}`);
 }
-for (const name of stack.applied) stack.patches[name].oid = commitFor(name);
 stack.head = mainSha;
-process.stdout.write(JSON.stringify(stack));
-require("node:fs").writeFileSync(
-  desiredFile,
-  stack.applied.map((name) => `${patchPrefix}${name}\t${stack.patches[name].oid}`).join("\n") + "\n",
-);
+writeFileSync(desiredFile, desired.join("\n") + "\n");
+writeFileSync(updatedFile, JSON.stringify(stack));
 NODE
 
-updated_json="$(node - "$stack_json" "$subjects" "$STGIT_MAIN_SHA" <<'NODE'
-const [stackRaw, subjectsRaw, mainSha] = process.argv.slice(2);
-const stack = JSON.parse(stackRaw);
-const normalize = (subject) => subject.toLowerCase().replace(/[():,]/g, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-const commits = new Map(subjectsRaw.split("\n").filter(Boolean).map((line) => line.split("\t")).map(([sha, subject]) => [normalize(subject), sha]));
-const commitFor = (name) => {
-  const matches = [...commits].filter(([normalized]) => normalized === name || normalized.startsWith(`${name}-`));
-  return matches.length === 1 ? matches[0][1] : undefined;
-};
-for (const name of stack.applied) stack.patches[name].oid = commitFor(name);
-stack.head = mainSha;
-process.stdout.write(JSON.stringify(stack));
-NODE
-)"
+updated_json="$(cat "$updated_file")"
 
 GIT_INDEX_FILE="$index_file" git_cmd read-tree "${stack_ref}^{tree}"
 
@@ -117,6 +107,28 @@ NODE
   git_cmd update-ref "$ref" "$sha" "$old"
   printf '%s\t%s\t%s\n' "$ref" "$old" "$sha" >> "$plan_file"
 done < "$desired_file"
+
+# stack.json.applied is the canonical series. Raw patch refs may include debris
+# from retired, renamed, or split patches; delete every non-canonical ref and
+# emit its exact old oid so the caller can lease the deletion atomically.
+while IFS=' ' read -r ref old; do
+  [[ -z "$ref" ]] && continue
+  desired=false
+  while IFS=$'\t' read -r desired_ref _; do
+    if [[ "$ref" == "$desired_ref" ]]; then
+      desired=true
+      break
+    fi
+  done < "$desired_file"
+  if [[ "$desired" == true ]]; then
+    continue
+  fi
+
+  name="${ref#"$patch_prefix"}"
+  GIT_INDEX_FILE="$index_file" git_cmd update-index --force-remove "patches/$name" 2>/dev/null || true
+  git_cmd update-ref -d "$ref" "$old"
+  printf '%s\t%s\t\n' "$ref" "$old" >> "$plan_file"
+done < <(git_cmd for-each-ref --format='%(refname) %(objectname)' "$patch_prefix")
 
 blob="$(printf '%s' "$updated_json" | git_cmd hash-object -w --stdin)"
 GIT_INDEX_FILE="$index_file" git_cmd update-index --add --cacheinfo "100644,$blob,stack.json"
