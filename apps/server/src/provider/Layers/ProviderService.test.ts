@@ -644,6 +644,7 @@ it.effect(
       );
       const directoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const providerLayer = makeProviderServiceLive().pipe(
         Layer.provide(Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, registry)),
