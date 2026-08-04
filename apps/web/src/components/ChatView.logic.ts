@@ -711,6 +711,8 @@ export function cloneComposerImageForRetry(
 export function deriveComposerSendState(options: {
   prompt: string;
   imageCount: number;
+  /** Non-image file attachments; a files-only message is a valid send. */
+  fileCount?: number;
   terminalContexts: ReadonlyArray<TerminalContextDraft>;
   /**
    * Optional element-pick attachment count. Element contexts contribute to
@@ -736,6 +738,7 @@ export function deriveComposerSendState(options: {
     hasSendableContent:
       trimmedPrompt.length > 0 ||
       options.imageCount > 0 ||
+      (options.fileCount ?? 0) > 0 ||
       sendableTerminalContexts.length > 0 ||
       elementContextCount > 0,
   };
