@@ -1,7 +1,8 @@
 # T3 Code Mobile
 
 > [!WARNING]
-> T3 Code Mobile is currently in development and is not distributed yet. If you want to try it out, you can build it from source.
+> T3 Code Mobile is still in development. The fork has a production build path,
+> but it is not a public App Store release.
 
 ## Quickstart
 
@@ -15,6 +16,12 @@ This app has three variants:
 - `production`: store/release build as `T3 Code`
 
 Run commands from `apps/mobile`.
+
+For the differences between local Xcode installs, EAS internal/ad-hoc builds,
+TestFlight, App Store distribution, and EAS OTA updates, see
+[`docs/mobile/ios-deployment.md`](../../docs/mobile/ios-deployment.md). That guide
+also explains why GitHub or Gitea can trigger a deployment but cannot replace
+iOS code signing and provisioning.
 
 T3 Connect is optional and disabled in a fresh clone. Public configuration belongs in the
 repository-root `.env` or `.env.local`, not an `apps/mobile/.env` file. See
@@ -89,7 +96,55 @@ The native lint task runs SwiftLint for Swift plus ktlint and detekt for Kotlin.
 
 ## EAS Builds
 
-CI uses Expo fingerprinting with the `preview:dev` profile to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and default local builds continue to use the `appVersion` runtime policy.
+This fork resolves its EAS owner/project and app identifiers from
+`fork.config.json`. The tracked values are non-secret and point development
+updates at Brad's `jimprince/t3-code` EAS project while preserving upstream's
+mobile app code on `main`.
+
+Native configuration follows the same rule. `app.config.ts` remains upstream's
+configuration and applies the identity/EAS overrides from `fork-config.ts` only
+at export. Keep upstream plugins, entitlements, assets, and platform settings in
+that config; fork changes belong in the small overlay. This structure lets Git
+carry upstream edits through scheduled rebases instead of replaying a stale
+fork-owned copy of the whole Expo config.
+
+CI uses Expo fingerprinting for development and preview dev-client builds to reuse an existing compatible build when possible, or start a new internal EAS build when native runtime inputs change. Production and persistent preview builds continue to use the `appVersion` runtime policy.
+
+`fingerprint.config.cjs` normalizes Expo/RN autolinking config paths before
+hashing. pnpm store directories include peer dependency hash suffixes that can
+differ between the Linux GitHub runner and EAS macOS builders even when the
+resolved packages are identical. The fingerprint keeps hashing the native
+package identities and config contents, but rewrites paths like
+`node_modules/.pnpm/<store>/node_modules/<pkg>` to stable `node_modules/<pkg>`
+form so the build runtime version and OTA update runtime version agree across
+machines.
+
+The `@clerk/expo` patch normalizes Clerk's generated iOS app bridge to use
+`internal import ClerkExpo`, matching Expo's generated Swift imports on Xcode 26
+and avoiding mixed import access levels for the `ClerkExpo` module.
+
+`Mobile EAS Development Update` is retained as a manual-only legacy recovery
+lane. Normal mobile deployment uses the single production workflow documented
+in [`docs/operations/release.md`](../../docs/operations/release.md#production-build-lane).
+If the development workflow is explicitly dispatched, it only publishes an OTA
+update after EAS has a `FINISHED` iOS development build whose runtime version
+matches the current iOS fingerprint. The iOS app has a widget extension, so ad
+hoc credentials exist for both `com.brad.t3code.dev` and
+`com.brad.t3code.dev.widgets`. CI consumes signing credentials stored on EAS
+servers. When the native fingerprint changes and stored credentials are missing
+or expired, refresh them with one interactive local build (Apple ID auth):
+
+```bash
+cd apps/mobile
+APP_VARIANT=development eas build --profile development --platform ios
+```
+
+Manual dispatch is also supported from
+`.github/workflows/mobile-eas-development.yml`.
+
+If an incompatible development OTA update is published, use
+`.github/workflows/mobile-eas-development-rollback.yml` to roll the affected
+runtime version back to the embedded bundle.
 
 For preview or production EAS environments, set `T3CODE_CLERK_PUBLISHABLE_KEY`,
 `T3CODE_CLERK_JWT_TEMPLATE`, and `T3CODE_RELAY_URL`
