@@ -244,6 +244,32 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
       );
     }),
   );
+
+  it.effect("reuses a pooled local OpenCode server across provider refreshes", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const pool = yield* makeOpenCodeServerPool({
+          idleTtl: Duration.minutes(10),
+        });
+
+        yield* checkOpenCodeProviderStatus(makeOpenCodeSettings(), process.cwd(), process.env, {
+          serverPool: pool,
+        });
+        yield* checkOpenCodeProviderStatus(makeOpenCodeSettings(), process.cwd(), process.env, {
+          serverPool: pool,
+        });
+
+        NodeAssert.equal(runtimeMock.state.startCalls, 1);
+        NodeAssert.equal(runtimeMock.state.closeCalls, 0);
+
+        yield* Effect.yieldNow;
+        yield* TestClock.adjust(Duration.millis(600_001));
+        yield* Effect.yieldNow;
+
+        NodeAssert.equal(runtimeMock.state.closeCalls, 1);
+      }),
+    ).pipe(Effect.provide(TestClock.layer())),
+  );
 });
 
 it.layer(testLayer)("checkOpenCodeProviderStatus with configured server URL", (it) => {
