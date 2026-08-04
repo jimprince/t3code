@@ -24,3 +24,13 @@ purpose = "Route maintainers and agents through the executable StGit maintenance
 retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
 depends_on = []
 roles = ["agent-docs-owner"]
+
+[[patch]]
+name = "fork-build-workspace-tooling"
+subject = "build(fork): configure workspace tooling"
+class = "product"
+purpose = "Configure the fork workspace, dependency graph, and reusable build tooling required by its additive applications."
+retire_when = "never"
+depends_on = ["fork-stgit-stack-policy"]
+roles = ["lockfile-owner"]
+note = "pnpm-lock.yaml is generated: take upstream's lockfile during a conflict, then regenerate it AT THE STACK TIP and copy it back into this patch. Regenerating while only the early patches are applied omits workspaces that later patches add (apps/t3-thread), which then fails --frozen-lockfile in CI."

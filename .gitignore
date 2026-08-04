@@ -26,6 +26,7 @@ squashfs-root/
 .vercel
 .gstack/
 .plans/
+.worktrees/
 dist-electron/
 .electron-runtime/
 .showcase/
@@ -38,3 +39,7 @@ node_modules/
 *.log
 .env*
 !.env.example
+oxlint-plugin-t3code/dist/
+
+# superpowers brainstorming mockups
+.superpowers/
