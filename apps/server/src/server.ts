@@ -84,6 +84,7 @@ import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolve
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
 import * as WorkspaceUploads from "./workspace/WorkspaceUploads.ts";
+import { sweepStaleFileAttachments } from "./orchestration/fileAttachmentStore.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "./vcs/VcsDriverRegistry.ts";
@@ -609,6 +610,9 @@ export const makeServerLayer = Layer.unwrap(
         yield* startup.markHttpListening;
       }),
     );
+    const fileAttachmentSweepLayer = Layer.effectDiscard(
+      sweepStaleFileAttachments().pipe(Effect.forkScoped),
+    );
     const runtimeStateLayer = Layer.effectDiscard(
       Effect.acquireRelease(
         Effect.gen(function* () {
@@ -785,6 +789,7 @@ export const makeServerLayer = Layer.unwrap(
     const serverApplicationLayer = Layer.mergeAll(
       routesLayer,
       httpListeningLayer,
+      fileAttachmentSweepLayer,
       runtimeStateLayer,
       tailscaleServeLayer,
       cloudDesiredLinkReconcileLayer,
