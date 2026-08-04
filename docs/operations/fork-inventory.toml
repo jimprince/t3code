@@ -187,3 +187,12 @@ id = "gitmanager-faketextgeneration"
 date = "2026-07-28"
 decided = "retire"
 rationale = "Upstream replaced the duplicate hand-written interface with TextGeneration['Service']; keep the upstream type alias and do not restore the redundant interface."
+
+[[patch]]
+name = "fork-web-client-resilience"
+subject = "fix(web): preserve client state across disruptions"
+class = "divergence"
+purpose = "Keep web session, stream, and navigation state predictable across disconnects and partial recovery."
+retire_when = "Upstream provides equivalent client recovery semantics."
+depends_on = ["fork-thread-lifecycle-recovery"]
+roles = []
