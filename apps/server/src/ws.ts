@@ -88,6 +88,7 @@ import {
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
+import { ThreadTransfer } from "./orchestration/Services/ThreadTransfer.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -129,6 +130,9 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as UsageService from "./usage/UsageService.ts";
+
+import * as SystemRecovery from "./diagnostics/SystemRecovery.ts";
+
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
@@ -145,6 +149,7 @@ import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
+import { requestHeadlessUpdateCheck } from "./headlessUpdateCheck.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
@@ -506,6 +511,7 @@ const makeWsRpcLayer = (
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
       const remoteOpenTargets = yield* RemoteOpenTargets.RemoteOpenTargets;
       const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
+      const threadTransfer = yield* ThreadTransfer;
       const review = yield* ReviewService.ReviewService;
       const vcsProvisioning = yield* VcsProvisioningService.VcsProvisioningService;
       const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
@@ -600,6 +606,9 @@ const makeWsRpcLayer = (
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
+
+      const systemRecovery = yield* SystemRecovery.SystemRecovery;
+
       const relayClient = yield* RelayClient.RelayClient;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
@@ -1341,6 +1350,26 @@ const makeWsRpcLayer = (
             ),
             { "rpc.aggregate": "orchestration" },
           ),
+        [ORCHESTRATION_WS_METHODS.exportThread]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.exportThread,
+            threadTransfer.exportThread(input),
+            {
+              "rpc.aggregate": "orchestration",
+            },
+          ),
+        [ORCHESTRATION_WS_METHODS.importThread]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.importThread,
+            threadTransfer.importThread(input),
+            {
+              "rpc.aggregate": "orchestration",
+            },
+          ),
+        [ORCHESTRATION_WS_METHODS.forkThread]: (input) =>
+          observeRpcEffect(ORCHESTRATION_WS_METHODS.forkThread, threadTransfer.forkThread(input), {
+            "rpc.aggregate": "orchestration",
+          }),
         [ORCHESTRATION_WS_METHODS.subscribeShell]: (input) =>
           observeRpcStreamEffect(
             ORCHESTRATION_WS_METHODS.subscribeShell,
@@ -1480,14 +1509,19 @@ const makeWsRpcLayer = (
                 event.aggregateId === input.threadId &&
                 isThreadDetailEvent(event);
 
-              const liveStream = orchestrationEngine.streamDomainEvents.pipe(
+              // Establish the PubSub subscription before either the replay or
+              // snapshot read. This is deliberately eager: streamDomainEvents
+              // subscribes only when the stream starts running, which leaves a
+              // race where a committed event can fall between the read and the
+              // live subscription.
+              const liveEvents = yield* orchestrationEngine.subscribeDomainEvents;
+              const liveStream = liveEvents.pipe(
                 Stream.filter(isThisThreadDetailEvent),
                 Stream.map((event) => ({
                   kind: "event" as const,
                   event,
                 })),
               );
-
               // Attach live delivery before reading either replay or snapshot state.
               // Otherwise an event published while the snapshot is loading is lost.
               const liveBuffer = yield* makeThreadLiveEventCoalescer();
@@ -1559,7 +1593,7 @@ const makeWsRpcLayer = (
                 // fresh thread detail instead of an unbounded replay.
               }
 
-              const snapshot = yield* projectionSnapshotQuery
+              const threadDetailSnapshot = yield* projectionSnapshotQuery
                 .getThreadDetailSnapshot(
                   input.threadId,
                   // Windowing the fallback snapshot is opt-in per subscription:
@@ -1578,12 +1612,22 @@ const makeWsRpcLayer = (
                   ),
                 );
 
-              if (Option.isNone(snapshot)) {
+              if (Option.isNone(threadDetailSnapshot)) {
                 return yield* new OrchestrationGetSnapshotError({
                   message: `Thread ${input.threadId} was not found`,
                   cause: input.threadId,
                 });
               }
+
+              const { snapshotSequence } = threadDetailSnapshot.value;
+              // Events at or below the atomic snapshot's sequence are already
+              // reflected in the snapshot. Dropping them is required because
+              // streaming text deltas are not idempotent.
+              const bufferedAfterSnapshot = bufferedLiveStream.pipe(
+                Stream.filter(
+                  (item) => item.kind !== "event" || item.event.sequence > snapshotSequence,
+                ),
+              );
 
               const afterSnapshot =
                 input.requestCompletionMarker === true
@@ -1592,14 +1636,19 @@ const makeWsRpcLayer = (
                         liveBuffer
                           .offerAndWait({ kind: "synchronized" as const })
                           .pipe(Effect.andThen(liveBuffer.takeAll)),
-                      ).pipe(Stream.flatMap((items) => Stream.fromIterable(items))),
-                      bufferedLiveStream,
+                      ).pipe(
+                        Stream.flatMap((items) => Stream.fromIterable(items)),
+                        Stream.filter(
+                          (item) => item.kind !== "event" || item.event.sequence > snapshotSequence,
+                        ),
+                      ),
+                      bufferedAfterSnapshot,
                     )
-                  : bufferedLiveStream;
+                  : bufferedAfterSnapshot;
               return Stream.concat(
                 Stream.make({
                   kind: "snapshot" as const,
-                  snapshot: projectThreadDetailSnapshot(snapshot.value),
+                  snapshot: projectThreadDetailSnapshot(threadDetailSnapshot.value),
                 }),
                 afterSnapshot,
               );
@@ -1925,6 +1974,24 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
           }),
+
+        [WS_METHODS.serverPreviewRecovery]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverPreviewRecovery, systemRecovery.preview, {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverExecuteRecovery]: (input) =>
+          observeRpcEffect(WS_METHODS.serverExecuteRecovery, systemRecovery.execute(input), {
+            "rpc.aggregate": "server",
+          }),
+        [WS_METHODS.serverRequestHeadlessUpdateCheck]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.serverRequestHeadlessUpdateCheck,
+            requestHeadlessUpdateCheck(input),
+            {
+              "rpc.aggregate": "server",
+            },
+          ),
+
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
             "rpc.aggregate": "cloud",
