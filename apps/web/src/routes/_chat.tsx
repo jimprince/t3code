@@ -11,6 +11,8 @@ import { selectProjectGroupingSettings } from "../logicalProject";
 import { buildSidebarProjectSnapshots } from "../sidebarProjectGrouping";
 import { dispatchPreviewAction } from "../components/preview/previewActionBus";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { partitionProjectsByKind, selectChatProjectForEnvironment } from "../projectKind";
+import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
 import { isPreviewFocused } from "../lib/previewFocus";
 import { isTerminalFocused } from "../lib/terminalFocus";
@@ -27,20 +29,25 @@ function ChatRouteGlobalShortcuts() {
   const selectedThreadKeysSize = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
     useHandleNewThread();
+  const projects = useProjects();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
+  const { chatProjects, workspaceProjects } = useMemo(
+    () => partitionProjectsByKind(projects),
+    [projects],
+  );
+  const primaryChatProject = selectChatProjectForEnvironment(chatProjects, primaryEnvironmentId);
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const sidebarV2Enabled = useSidebarV2Enabled();
   const projectGroupingSettings = useClientSettings(selectProjectGroupingSettings);
-  const projects = useProjects();
-  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const projectGroupCount = useMemo(
     () =>
       buildSidebarProjectSnapshots({
-        projects,
+        projects: workspaceProjects,
         settings: projectGroupingSettings,
         primaryEnvironmentId,
         resolveEnvironmentLabel: () => null,
       }).length,
-    [primaryEnvironmentId, projectGroupingSettings, projects],
+    [primaryEnvironmentId, projectGroupingSettings, workspaceProjects],
   );
   const terminalOpen = useTerminalUiStateStore((state) =>
     routeThreadRef
@@ -92,6 +99,12 @@ function ChatRouteGlobalShortcuts() {
       if (command === "chat.new") {
         event.preventDefault();
         event.stopPropagation();
+        if (primaryChatProject) {
+          void handleNewThread(
+            scopeProjectRef(primaryChatProject.environmentId, primaryChatProject.id),
+          );
+          return;
+        }
         // Sidebar v2 routes creation through the command palette whenever
         // there is a real choice to make; v1 (and single-project setups)
         // keep the immediate contextual create.
@@ -161,6 +174,7 @@ function ChatRouteGlobalShortcuts() {
     activeThread,
     clearSelection,
     handleNewThread,
+    primaryChatProject,
     keybindings,
     defaultProjectRef,
     previewOpen,
