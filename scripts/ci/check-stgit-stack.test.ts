@@ -83,8 +83,16 @@ const seedStack = (
   return commits;
 };
 
-const run = (repo: FixtureRepo): { readonly status: number; readonly output: string } => {
-  const result = NodeChildProcess.spawnSync(script, [], {
+const run = (
+  repo: FixtureRepo,
+  args: readonly string[] = [],
+): {
+  readonly status: number;
+  readonly stdout: string;
+  readonly stderr: string;
+  readonly output: string;
+} => {
+  const result = NodeChildProcess.spawnSync(script, [...args], {
     cwd: repo.dir,
     encoding: "utf8",
     env: {
@@ -94,7 +102,12 @@ const run = (repo: FixtureRepo): { readonly status: number; readonly output: str
       SYNC_GIT_BIN: "/usr/bin/git",
     },
   });
-  return { status: result.status ?? 1, output: `${result.stdout}${result.stderr}` };
+  return {
+    status: result.status ?? 1,
+    stdout: result.stdout,
+    stderr: result.stderr,
+    output: `${result.stdout}${result.stderr}`,
+  };
 };
 
 const validPatches = [
@@ -123,6 +136,82 @@ describe("check-stgit-stack", () => {
       const result = run(repo);
       assert.strictEqual(result.status, 0, result.output);
       assert.include(result.output, "3 applied patches");
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it("emits deterministic schema-2 stack context through contract v1", () => {
+    const repo = createFixtureRepo();
+    try {
+      const commits = seedStack(repo, validPatches);
+      const first = run(repo, ["--format=json"]);
+      const second = run(repo, ["--format=json"]);
+      assert.strictEqual(first.status, 0, first.output);
+      assert.strictEqual(first.stdout, second.stdout);
+      const context = JSON.parse(first.stdout) as {
+        readonly contract: string;
+        readonly version: number;
+        readonly inventorySchema: number;
+        readonly head: string;
+        readonly base: string;
+        readonly inventoryPath: string;
+        readonly instructionPaths: readonly string[];
+        readonly patches: readonly {
+          readonly name: string;
+          readonly subject: string;
+          readonly oid: string;
+          readonly note: string | null;
+          readonly questions: readonly unknown[];
+        }[];
+        readonly roleOwners: Readonly<Record<string, string>>;
+      };
+      assert.strictEqual(context.contract, "t3code.stgit-stack-context");
+      assert.strictEqual(context.version, 1);
+      assert.strictEqual(context.inventorySchema, 2);
+      assert.strictEqual(context.head, commits.at(-1)?.[1]);
+      assert.strictEqual(context.base, repo.git("rev-parse", `${commits[0]?.[1]}^`));
+      assert.strictEqual(context.inventoryPath, "docs/operations/fork-inventory.toml");
+      assert.deepEqual(context.instructionPaths, [
+        "AGENTS.md",
+        "LLM_INSTRUCTIONS.md",
+        ".agents/skills/fork-patch-stack/SKILL.md",
+        "docs/operations/fork-maintenance.md",
+        "docs/operations/fork-inventory.toml",
+      ]);
+      assert.deepEqual(
+        context.patches.map(({ name, subject, oid, note, questions }) => ({
+          name,
+          subject,
+          oid,
+          note,
+          questions,
+        })),
+        commits.map(([name, oid], index) => ({
+          name,
+          subject: validPatches[index]?.subject,
+          oid,
+          note: null,
+          questions: [],
+        })),
+      );
+      assert.deepEqual(context.roleOwners, {
+        "agent-docs-owner": "fork-stgit-stack-policy",
+        "lockfile-owner": "fork-build-workspace-tooling",
+        "release-workflow-owner": "fork-ci-release-pipeline",
+      });
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it("keeps the default human-readable output compatible", () => {
+    const repo = createFixtureRepo();
+    try {
+      seedStack(repo, validPatches);
+      const result = run(repo);
+      assert.strictEqual(result.status, 0, result.output);
+      assert.strictEqual(result.stdout, "StGit stack check PASS: 3 applied patches.\n");
     } finally {
       repo.cleanup();
     }
@@ -168,6 +257,27 @@ describe("check-stgit-stack", () => {
       const result = run(repo);
       assert.notStrictEqual(result.status, 0);
       assert.include(result.output, "stack.json.head");
+      const jsonResult = run(repo, ["--format=json"]);
+      assert.notStrictEqual(jsonResult.status, 0);
+      assert.strictEqual(jsonResult.stdout, "");
+      assert.include(jsonResult.stderr, "stack.json.head");
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it("emits no partial JSON when inventory validation fails", () => {
+    const repo = createFixtureRepo();
+    try {
+      seedStack(repo, [
+        validPatches[0],
+        { ...validPatches[1], roles: ["lockfile-owner", "agent-docs-owner"] },
+        validPatches[2],
+      ]);
+      const result = run(repo, ["--format=json"]);
+      assert.notStrictEqual(result.status, 0);
+      assert.strictEqual(result.stdout, "");
+      assert.include(result.stderr, "agent-docs-owner");
     } finally {
       repo.cleanup();
     }

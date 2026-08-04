@@ -178,6 +178,22 @@ Use this patch-retirement ladder:
 Do not retire a patch solely because upstream changed the same file. Prove the
 purpose is covered.
 
+## Validated stack context
+
+Repository automation must obtain stack policy from the checked-out tree, not
+parse the inventory through a separately versioned implementation:
+
+```bash
+scripts/ci/check-stgit-stack --format=json
+```
+
+The command emits `t3code.stgit-stack-context` contract version 1 only after
+the ordinary stack and inventory checks pass. It includes the exact head and
+base, ordered patch names, subjects and object IDs, singleton role owners, and
+the repository-local instruction paths. Invalid state produces no partial
+JSON. The contract version is independent of the TOML schema version; the
+checker is the compatibility adapter when the inventory schema evolves.
+
 ## Publication
 
 The only supported manual landing route for a changed stack is:
@@ -198,7 +214,13 @@ atomically publishes:
 - leased deletions for remote patch refs absent from the applied list.
 
 Any changed lease fails the whole transaction. Release automation adds the
-tagged child to the same leased atomic transaction.
+tagged child to the same leased atomic transaction. Automated repair supplies
+the claim-time main lease in `STGIT_EXPECTED_REMOTE_MAIN`, the prepared tag in
+`STGIT_RELEASE_TAG` and `STGIT_RELEASE_TAG_SHA`, and
+`STGIT_BACKUP_NAMESPACE=bot`. Manual publication uses the `manual` backup
+namespace. The helper never refreshes a rejected lease or retries against
+newly observed state, and it verifies every resulting remote object ID when a
+push reports an ambiguous transport failure.
 
 ## Recovery
 
