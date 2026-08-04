@@ -1,4 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests */
+
 import {
   ProjectId,
   ThreadId,
@@ -130,6 +132,11 @@ function makeReadModel(
 }
 
 describe("ProviderSessionReaper", () => {
+  it("uses a 15-minute warm window with one-minute sweeps", () => {
+    expect(DEFAULT_INACTIVITY_THRESHOLD_MS).toBe(15 * 60 * 1_000);
+    expect(DEFAULT_SWEEP_INTERVAL_MS).toBe(60 * 1_000);
+  });
+
   let runtime: ManagedRuntime.ManagedRuntime<
     ProviderSessionReaper | ProviderSessionRuntime.ProviderSessionRuntimeRepository,
     unknown
@@ -181,7 +188,6 @@ describe("ProviderSessionReaper", () => {
     const providerService: ProviderServiceShape = {
       startSession: () => unsupported(),
       sendTurn: () => unsupported(),
-      compactThread: () => unsupported(),
       interruptTurn: () => unsupported(),
       respondToRequest: () => unsupported(),
       respondToUserInput: () => unsupported(),
@@ -231,7 +237,6 @@ describe("ProviderSessionReaper", () => {
       Layer.provideMerge(Layer.succeed(ProviderService, providerService)),
       Layer.provideMerge(
         Layer.succeed(ProjectionSnapshotQuery, {
-          getUserInputActivity: () => Effect.die("unused"),
           getCommandReadModel: () => Effect.die("unused"),
           getSnapshot: () => Effect.die("unused"),
           getShellSnapshot: () => Effect.die("unused"),
@@ -259,7 +264,7 @@ describe("ProviderSessionReaper", () => {
             ).pipe(Effect.tap(() => input.onThreadInspected?.(threadId) ?? Effect.void)),
           getThreadDetailById: () => Effect.die("unused"),
           searchThreads: () => Effect.succeed({ matches: [] }),
-          getThreadDetailSnapshotById: () => Effect.die("unused"),
+          getThreadDetailSnapshot: () => Effect.die("unused"),
         }),
       ),
       Layer.provideMerge(NodeServices.layer),
@@ -426,16 +431,135 @@ describe("ProviderSessionReaper", () => {
     );
 
     await startReaper();
-    await Effect.runPromise(drainFibers);
+    await runtime!.runPromise(drainFibers);
 
     expect(harness.stopSession).not.toHaveBeenCalled();
     const remaining = await runtime!.runPromise(repository.getByThreadId({ threadId }));
     expect(Option.isSome(remaining)).toBe(true);
   });
 
+  it("reconciles a stale persisted active turn before beginning the warm window", async () => {
+    const threadId = ThreadId.make("thread-reaper-stale-persisted-turn");
+    const staleTurnId = TurnId.make("turn-stale-persisted");
+    const now = "2026-01-01T00:00:00.000Z";
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        activeTurnId: staleTurnId,
+        lastSeenAt: "2026-01-01T00:00:00.000Z",
+        resumeCursor: { opaque: "resume-stale-persisted-turn" },
+        runtimePayload: { activeTurnId: staleTurnId },
+      }),
+    );
+
+    await startReaper();
+
+    await waitFor(async () => {
+      const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+      return Option.isSome(binding) && binding.value.activeTurnId === null;
+    });
+
+    expect(harness.stopSession).not.toHaveBeenCalled();
+    const reconciled = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+    expect(Option.isSome(reconciled)).toBe(true);
+    if (Option.isSome(reconciled)) {
+      expect(reconciled.value.status).toBe("running");
+      expect(reconciled.value.runtimePayload).toEqual({ activeTurnId: null });
+      expect(Date.parse(reconciled.value.lastSeenAt)).toBeGreaterThan(Date.parse(now));
+    }
+  });
+
+  it("does not reconcile a persisted marker while the provider still reports a live turn", async () => {
+    const threadId = ThreadId.make("thread-reaper-live-provider-turn");
+    const activeTurnId = TurnId.make("turn-reaper-live-provider-turn");
+    const now = "2026-01-01T00:00:00.000Z";
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+      liveSessions: [
+        {
+          provider: ProviderDriverKind.make("codex"),
+          providerInstanceId: ProviderInstanceId.make("codex"),
+          status: "running",
+          runtimeMode: "full-access",
+          threadId,
+          activeTurnId,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ],
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        bootGenerationId: CURRENT_BOOT_GENERATION,
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        activeTurnId,
+        lastSeenAt: "2026-01-01T00:00:00.000Z",
+        resumeCursor: { opaque: "resume-live-provider-turn" },
+        runtimePayload: { activeTurnId },
+      }),
+    );
+
+    await startReaper();
+    await runtime!.runPromise(drainFibers);
+
+    expect(harness.stopSession).not.toHaveBeenCalled();
+    const remaining = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+    expect(Option.isSome(remaining)).toBe(true);
+    if (Option.isSome(remaining)) {
+      expect(remaining.value.activeTurnId).toBe(activeTurnId);
+      expect(remaining.value.status).toBe("running");
+    }
+  });
+
   it("does not reap sessions that are still within the inactivity threshold", async () => {
     const threadId = ThreadId.make("thread-reaper-fresh");
-    const now = DateTime.formatIso(await Effect.runPromise(DateTime.now));
+    const now = DateTime.formatIso(DateTime.nowUnsafe());
     const harness = await createHarness({
       readModel: makeReadModel([
         {
@@ -474,11 +598,61 @@ describe("ProviderSessionReaper", () => {
     );
 
     await startReaper();
-    await Effect.runPromise(drainFibers);
+    await runtime!.runPromise(drainFibers);
 
     expect(harness.stopSession).not.toHaveBeenCalled();
     const remaining = await runtime!.runPromise(repository.getByThreadId({ threadId }));
     expect(Option.isSome(remaining)).toBe(true);
+  });
+
+  it("does not reap an archived session while its turn is still active", async () => {
+    const threadId = ThreadId.make("thread-reaper-archived-fresh");
+    const now = DateTime.formatIso(DateTime.nowUnsafe());
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          archivedAt: now,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "claudeAgent",
+            runtimeMode: "full-access",
+            activeTurnId: TurnId.make("turn-archived-active"),
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "claudeAgent",
+        providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
+        adapterKey: "claudeAgent",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: now,
+        resumeCursor: {
+          opaque: "resume-archived-fresh",
+        },
+        runtimePayload: null,
+      }),
+    );
+
+    await startReaper();
+    await runtime!.runPromise(drainFibers);
+
+    expect(
+      harness.stopSession,
+      "REGRESSION: archiving a thread killed its still-active provider turn",
+    ).not.toHaveBeenCalled();
   });
 
   it("skips persisted sessions that are already marked stopped", async () => {
@@ -698,5 +872,229 @@ describe("ProviderSessionReaper", () => {
       defectThreadId,
       reapedThreadId,
     ]);
+  });
+
+  it("settles a dead-generation binding without resolving a removed provider instance", async () => {
+    const threadId = ThreadId.make("thread-reaper-dead-generation-active-turn");
+    const activeTurnId = TurnId.make("turn-dead-generation-active");
+    const now = DateTime.formatIso(DateTime.nowUnsafe());
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId,
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: ProviderInstanceId.make("removed-custom-provider"),
+        bootGenerationId: "previous-boot",
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        activeTurnId,
+        lastSeenAt: now,
+        resumeCursor: { opaque: "resume-dead-active" },
+        runtimePayload: { activeTurnId },
+      }),
+    );
+
+    await startReaper();
+    await waitFor(
+      async () => {
+        const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+        return Option.isSome(binding) && binding.value.status === "stopped";
+      },
+      2_000,
+      "REGRESSION: dead-generation orphaned binding survived the reaper sweep",
+    );
+
+    expect(
+      harness.stopSession,
+      "REGRESSION: restart settlement performed a provider/adapter lookup",
+    ).not.toHaveBeenCalled();
+    const settled = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+    expect(Option.isSome(settled)).toBe(true);
+    if (Option.isSome(settled)) {
+      expect(settled.value.activeTurnId).toBeNull();
+      expect(settled.value.runtimePayload).toEqual({ activeTurnId: null });
+    }
+  });
+
+  it("protects a fresh current-generation binding with an active turn", async () => {
+    const threadId = ThreadId.make("thread-reaper-current-generation-active-turn");
+    const now = DateTime.formatIso(DateTime.nowUnsafe());
+    let signalInspected = () => {};
+    const inspected = new Promise<void>((resolve) => {
+      signalInspected = resolve;
+    });
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: TurnId.make("turn-current-generation-active"),
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+      onThreadInspected: (inspectedThreadId) =>
+        inspectedThreadId === threadId ? Effect.sync(() => signalInspected()) : Effect.void,
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: now,
+        resumeCursor: { opaque: "resume-current-active" },
+        runtimePayload: null,
+      }),
+    );
+
+    await startReaper();
+    await inspected;
+
+    expect(
+      harness.stopSession,
+      "REGRESSION: current-generation live work was reaped before the inactivity threshold",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("treats a null boot generation as dead and reaps it promptly", async () => {
+    const threadId = ThreadId.make("thread-reaper-null-generation");
+    const now = DateTime.formatIso(DateTime.nowUnsafe());
+    const harness = await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: TurnId.make("turn-null-generation-active"),
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: null,
+        bootGenerationId: null,
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: now,
+        resumeCursor: { opaque: "resume-null-generation" },
+        runtimePayload: null,
+      }),
+    );
+
+    await startReaper();
+    await waitFor(
+      async () => {
+        const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+        return Option.isSome(binding) && binding.value.status === "stopped";
+      },
+      2_000,
+      "REGRESSION: legacy null-generation binding was not treated as a dead generation",
+    );
+
+    expect(
+      harness.stopSession,
+      "REGRESSION: null-generation restart settlement called provider stopSession",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("preserves the resume cursor when settling a dead-generation binding", async () => {
+    const threadId = ThreadId.make("thread-reaper-dead-generation-resume-cursor");
+    const now = DateTime.formatIso(DateTime.nowUnsafe());
+    const resumeCursor = { threadId: "provider-thread-for-lazy-recovery" };
+    await createHarness({
+      readModel: makeReadModel([
+        {
+          id: threadId,
+          session: {
+            threadId,
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: now,
+          },
+        },
+      ]),
+    });
+    const repository = await runtime!.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    await runtime!.runPromise(
+      repository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: null,
+        bootGenerationId: "previous-boot",
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        lastSeenAt: now,
+        resumeCursor,
+        runtimePayload: null,
+      }),
+    );
+
+    await startReaper();
+    await waitFor(async () => {
+      const binding = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+      return Option.isSome(binding) && binding.value.status === "stopped";
+    });
+
+    const settled = await runtime!.runPromise(repository.getByThreadId({ threadId }));
+    expect(
+      Option.isSome(settled),
+      "REGRESSION: dead-generation reap destroyed the resume cursor needed for lazy session recovery",
+    ).toBe(true);
+    if (Option.isSome(settled)) {
+      expect(
+        settled.value.resumeCursor,
+        "REGRESSION: dead-generation reap destroyed the resume cursor needed for lazy session recovery",
+      ).toEqual(resumeCursor);
+      expect(settled.value.status).toBe("stopped");
+    }
   });
 });
