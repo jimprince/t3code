@@ -16,6 +16,7 @@ import {
   isProviderSendTurnSupportedImageMimeType,
   ProviderDriverKind,
   ProviderInstanceId,
+  CHAT_FILE_ATTACHMENT_MAX_BYTES,
   PROVIDER_SEND_TURN_MAX_ATTACHMENTS,
   PROVIDER_SEND_TURN_MAX_IMAGE_BYTES,
 } from "@t3tools/contracts";
@@ -51,6 +52,7 @@ import {
   makeComposerMentionDragHandlers,
 } from "./composerMentionDrag";
 import {
+  type ComposerFileAttachment,
   type ComposerImageAttachment,
   type DraftId,
   type PersistedComposerImageAttachment,
@@ -241,6 +243,7 @@ import { toastManager } from "../ui/toast";
 import {
   BotIcon,
   CircleAlertIcon,
+  FileIcon,
   PencilRulerIcon,
   type LucideIcon,
   LockIcon,
@@ -275,6 +278,14 @@ import {
 import { searchProviderSkills } from "../../providerSkillSearch";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import type { ReviewCommentContext } from "../../reviewCommentContext";
+
+const FILE_SIZE_LIMIT_LABEL = "32 MB";
+
+function formatComposerFileSize(sizeBytes: number): string {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`;
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 const runtimeModeConfig: Record<
   RuntimeMode,
@@ -532,6 +543,7 @@ export interface ChatComposerHandle {
   getSendContext: () => {
     prompt: string;
     images: ComposerImageAttachment[];
+    files: ComposerFileAttachment[];
     terminalContexts: TerminalContextDraft[];
     elementContexts: ElementContextDraft[];
     previewAnnotations: PreviewAnnotationPayload[];
@@ -630,6 +642,7 @@ export interface ChatComposerProps {
   // Refs the parent needs kept in sync
   promptRef: React.RefObject<string>;
   composerImagesRef: React.RefObject<ComposerImageAttachment[]>;
+  composerFilesRef: React.RefObject<ComposerFileAttachment[]>;
   composerTerminalContextsRef: React.RefObject<TerminalContextDraft[]>;
   composerElementContextsRef: React.RefObject<ElementContextDraft[]>;
   composerRef: React.RefObject<ChatComposerHandle | null>;
@@ -720,6 +733,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     promptRef,
     composerRef,
     composerImagesRef,
+    composerFilesRef,
     composerTerminalContextsRef,
     composerElementContextsRef,
     onSend,
@@ -745,6 +759,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const composerDraft = useComposerThreadDraft(composerDraftTarget);
   const prompt = composerDraft.prompt;
   const composerImages = composerDraft.images;
+  const composerFiles = composerDraft.files;
   const composerTerminalContexts = composerDraft.terminalContexts;
   const composerElementContexts = composerDraft.elementContexts;
   const composerPreviewAnnotations = composerDraft.previewAnnotations;
@@ -766,6 +781,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const addComposerDraftImage = useComposerDraftStore((store) => store.addImage);
   const addComposerDraftImages = useComposerDraftStore((store) => store.addImages);
   const removeComposerDraftImage = useComposerDraftStore((store) => store.removeImage);
+  const addComposerDraftFiles = useComposerDraftStore((store) => store.addFiles);
+  const removeComposerDraftFile = useComposerDraftStore((store) => store.removeFile);
   const insertComposerDraftTerminalContext = useComposerDraftStore(
     (store) => store.insertTerminalContext,
   );
@@ -1069,6 +1086,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const mobileComposerExpandFrameRef = useRef<number | null>(null);
   const mobileComposerExpandReleaseFrameRef = useRef<number | null>(null);
   const mobileComposerExpandInFlightRef = useRef(false);
+  const dragDepthRef = useRef(0);
   const stashPulseKeyRef = useRef(0);
   const stashPulseTimeoutRef = useRef<number | null>(null);
   /**
@@ -1093,6 +1111,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       deriveComposerSendState({
         prompt,
         imageCount: composerImages.length,
+        fileCount: composerFiles.length,
         terminalContexts: composerTerminalContexts,
         elementContextCount:
           composerElementContexts.length +
@@ -1101,6 +1120,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       }),
     [
       composerElementContexts.length,
+      composerFiles.length,
       composerImages.length,
       composerPreviewAnnotations.length,
       composerReviewComments.length,
@@ -1401,6 +1421,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     [composerDraftTarget, removeComposerDraftImage],
   );
 
+  const addComposerFilesToDraft = useCallback(
+    (files: ComposerFileAttachment[]) => {
+      addComposerDraftFiles(composerDraftTarget, files);
+    },
+    [composerDraftTarget, addComposerDraftFiles],
+  );
+
+  const removeComposerFileFromDraft = useCallback(
+    (fileId: string) => {
+      removeComposerDraftFile(composerDraftTarget, fileId);
+    },
+    [composerDraftTarget, removeComposerDraftFile],
+  );
+
   const removeComposerTerminalContextFromDraft = useCallback(
     (contextId: string) => {
       const contextIndex = composerTerminalContexts.findIndex(
@@ -1456,6 +1490,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   useEffect(() => {
     composerImagesRef.current = composerImages;
   }, [composerImages, composerImagesRef]);
+
+  useEffect(() => {
+    composerFilesRef.current = composerFiles;
+  }, [composerFiles, composerFilesRef]);
 
   useEffect(() => {
     composerTerminalContextsRef.current = composerTerminalContexts;
@@ -1548,6 +1586,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     setProviderInputSubmissionError(null);
     setComposerCursor(collapseExpandedComposerCursor(promptRef.current, promptRef.current.length));
     setComposerTrigger(detectComposerTrigger(promptRef.current, promptRef.current.length));
+    dragDepthRef.current = 0;
     setIsDragOverComposer(false);
   }, [draftId, activeThreadId, promptRef]);
 
@@ -2685,6 +2724,54 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   };
 
   // ------------------------------------------------------------------
+  // Callbacks: non-image file attachments (handed to the thread by path)
+  // ------------------------------------------------------------------
+  const addComposerFiles = (files: File[]) => {
+    if (!activeThreadId || files.length === 0) return;
+    if (pendingUserInputs.length > 0) {
+      toastManager.add({
+        type: "error",
+        title: "Attach files after answering plan questions.",
+      });
+      return;
+    }
+    const threadId = activeThreadId;
+    const reservedCount =
+      composerImagesRef.current.length +
+      (pendingImageCompressionsRef.current.get(threadId) ?? 0) +
+      composerFilesRef.current.length;
+    let remaining = PROVIDER_SEND_TURN_MAX_ATTACHMENTS - reservedCount;
+    const accepted: ComposerFileAttachment[] = [];
+    let error: string | null = null;
+    for (const file of files) {
+      if (file.size === 0) {
+        error = `'${file.name}' is empty.`;
+        continue;
+      }
+      if (file.size > CHAT_FILE_ATTACHMENT_MAX_BYTES) {
+        error = `'${file.name}' exceeds the ${FILE_SIZE_LIMIT_LABEL} attachment limit. Use scp for larger files.`;
+        continue;
+      }
+      if (remaining <= 0) {
+        error = `You can attach up to ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} attachments per message.`;
+        break;
+      }
+      accepted.push({
+        id: randomUUID(),
+        name: file.name || "file",
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        file,
+      });
+      remaining -= 1;
+    }
+    setThreadError(threadId, error);
+    if (accepted.length > 0) {
+      addComposerFilesToDraft(accepted);
+    }
+  };
+
+  // ------------------------------------------------------------------
   // Callbacks: paste / drag
   // ------------------------------------------------------------------
   const onComposerPaste = (event: React.ClipboardEvent<HTMLElement>) => {
@@ -2693,9 +2780,77 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     const imageFiles = files.filter(
       (file) => file.type.startsWith("image/") || isHeicImageFile(file),
     );
-    if (imageFiles.length === 0) return;
+    const otherFiles = files.filter(
+      (file) => !file.type.startsWith("image/") && !isHeicImageFile(file),
+    );
+    if (imageFiles.length === 0 && otherFiles.length === 0) return;
     event.preventDefault();
-    void addComposerImages(imageFiles);
+    if (imageFiles.length > 0) void addComposerImages(imageFiles);
+    if (otherFiles.length > 0) addComposerFiles(otherFiles);
+  };
+
+  const onComposerDragEnter = (event: React.DragEvent<HTMLFormElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current += 1;
+    setIsDragOverComposer(true);
+  };
+
+  const onComposerDragOver = (event: React.DragEvent<HTMLFormElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragOverComposer(true);
+  };
+
+  const onComposerDragLeave = (event: React.DragEvent<HTMLFormElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) {
+      setIsDragOverComposer(false);
+    }
+  };
+
+  const onComposerDrop = (event: React.DragEvent<HTMLFormElement>) => {
+    if (!event.dataTransfer.types.includes("Files")) return;
+    event.preventDefault();
+    dragDepthRef.current = 0;
+    setIsDragOverComposer(false);
+    const items = Array.from(event.dataTransfer.items);
+    const files: File[] = [];
+    let droppedFolder = false;
+    if (items.length > 0) {
+      for (const item of items) {
+        if (item.kind !== "file") continue;
+        if (item.webkitGetAsEntry()?.isDirectory) {
+          droppedFolder = true;
+          continue;
+        }
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    } else {
+      files.push(...Array.from(event.dataTransfer.files));
+    }
+    if (droppedFolder) {
+      toastManager.add({
+        type: "error",
+        title: "Folders can't be attached",
+        description: "Drop individual files instead.",
+      });
+    }
+    const imageFiles = files.filter(
+      (file) => file.type.startsWith("image/") || isHeicImageFile(file),
+    );
+    const otherFiles = files.filter(
+      (file) => !file.type.startsWith("image/") && !isHeicImageFile(file),
+    );
+    if (imageFiles.length > 0) void addComposerImages(imageFiles);
+    if (otherFiles.length > 0) addComposerFiles(otherFiles);
+    focusComposer();
   };
 
   const insertComposerTextAtEnd = (
@@ -2892,6 +3047,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       getSendContext: () => ({
         prompt: promptRef.current,
         images: composerImagesRef.current,
+        files: composerFilesRef.current,
         terminalContexts: composerTerminalContextsRef.current,
         elementContexts: composerElementContextsRef.current,
         previewAnnotations: composerPreviewAnnotations,
@@ -2971,6 +3127,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       onBlurCapture={() => {
         scheduleComposerCollapseCheck();
       }}
+      onDragEnter={onComposerDragEnter}
+      onDragOver={onComposerDragOver}
+      onDragLeave={onComposerDragLeave}
+      onDrop={onComposerDrop}
       onDragEnterCapture={composerMentionDragHandlers.onDragEnter}
       onDragOverCapture={composerMentionDragHandlers.onDragOver}
       onDragLeaveCapture={onComposerMentionDragLeaveCapture}
@@ -3384,6 +3544,56 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                           </div>
                         );
                       })}
+                  </div>
+                )}
+
+              {!isComposerCollapsedMobile &&
+                !isComposerApprovalState &&
+                pendingUserInputs.length === 0 &&
+                composerFiles.length > 0 && (
+                  <div className="mb-3 flex flex-wrap gap-2">
+                    {composerFiles.map((file) => (
+                      <div
+                        key={file.id}
+                        className="relative flex h-11 max-w-64 items-center gap-2 rounded-lg border border-border/80 bg-background pl-2 pr-8"
+                      >
+                        <FileIcon className="size-4 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <div className="truncate text-xs font-medium">{file.name}</div>
+                          <div className="text-[10px] leading-tight text-muted-foreground">
+                            {formatComposerFileSize(file.sizeBytes)}
+                          </div>
+                        </div>
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <span
+                                role="img"
+                                aria-label="File attachment is not saved with drafts"
+                                className="inline-flex shrink-0 items-center justify-center text-amber-600"
+                              >
+                                <CircleAlertIcon className="size-3" />
+                              </span>
+                            }
+                          />
+                          <TooltipPopup
+                            side="top"
+                            className="max-w-64 whitespace-normal leading-tight"
+                          >
+                            File attachments aren't saved with drafts and are lost on reload.
+                          </TooltipPopup>
+                        </Tooltip>
+                        <Button
+                          variant="ghost"
+                          size="icon-xs"
+                          className="absolute right-1 top-1/2 -translate-y-1/2 bg-background/80 hover:bg-background/90"
+                          onClick={() => removeComposerFileFromDraft(file.id)}
+                          aria-label={`Remove ${file.name}`}
+                        >
+                          <XIcon />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
                 )}
 
