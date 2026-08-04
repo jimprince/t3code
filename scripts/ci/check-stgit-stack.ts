@@ -181,7 +181,8 @@ export const checkStgitStack = (): string[] => {
         if (role.length === 0) errors.push(`${expectedName}: roles may not be empty`);
         const owner = roleOwners.get(role);
         if (owner) errors.push(`${role} is owned by both ${owner} and ${expectedName}`);
-        else roleOwners.set(role, expectedName);
+        else
+          roleOwners.set(role, typeof entry.name === "string" ? entry.name : `patch-${index + 1}`);
       }
     }
     if (typeof entry.name === "string") seenNames.add(entry.name);
