@@ -44,3 +44,23 @@ retire_when = "Upstream or maintained shared tooling provides equivalent capabil
 depends_on = ["fork-build-workspace-tooling"]
 roles = []
 note = "CLI sends still require an explicit allowWhileRunning path; this is distinct from server adapter steering. Focused send-while-running tests document the rejection and the separate durable queue gap (Gitea PR25/issue27)."
+
+[[patch]]
+name = "fork-provider-turn-reservation"
+subject = "fix(server): reserve active provider turns"
+class = "divergence"
+purpose = "Reserve pending sends against reaper recovery while preserving live turn markers and provider steering."
+retire_when = "Upstream adds equivalent pending-turn reservation semantics."
+depends_on = ["fork-stgit-stack-policy"]
+roles = []
+[[patch.decision]]
+id = "providerservice-mcp-touch"
+date = "2026-07-28"
+decided = "adapt"
+rationale = "Upstream added McpSessionRegistry.touchActiveMcpThread before sendTurn; the fork wraps sendTurn in a reservation gate. Independent concerns. The touch belongs inside the gate immediately before the real sendTurn, because touching earlier would change upstream semantics when reservation fails and no turn is sent."
+[[patch.decision]]
+id = "allow-live-turn-steering"
+date = "2026-09-05"
+decided = "narrow"
+rationale = "Upstream adapters accept follow-ups during a running turn. Permit sends when the adapter reports the same real turn id, without replacing its marker; inspect live state before the stale-marker age gate. Keep pending-send exclusion and conservative reconciliation for unmatched markers so recovery cannot claim an in-flight send."
+
