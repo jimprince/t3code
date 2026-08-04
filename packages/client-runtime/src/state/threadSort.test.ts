@@ -16,14 +16,14 @@ function makeThread(overrides: Partial<TestThread> = {}): TestThread {
 }
 
 describe("sortThreads", () => {
-  it("falls back to updatedAt and createdAt when latestUserMessageAt is invalid and there are no messages", () => {
+  it("falls back to createdAt before streaming-sensitive updatedAt when there are no user messages", () => {
     const sorted = sortThreads(
       [
         makeThread({
           id: "thread-1",
           latestUserMessageAt: "not-a-date",
           createdAt: "2026-03-09T10:00:00.000Z",
-          updatedAt: "2026-03-09T10:05:00.000Z",
+          updatedAt: "2026-03-09T10:30:00.000Z",
         }),
         makeThread({
           id: "thread-2",
