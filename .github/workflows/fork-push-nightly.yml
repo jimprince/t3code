@@ -39,7 +39,7 @@ jobs:
   tag:
     name: Tag fork push nightly
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 60
     steps:
       - name: Checkout fork
         uses: actions/checkout@v6
@@ -70,7 +70,12 @@ jobs:
 
       - name: Record main lease
         id: pre
-        run: scripts/ci/record-main-lease
+        run: |
+          scripts/ci/record-main-lease
+          git fetch origin \
+            '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
+            '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+          scripts/ci/prepare-stgit-publication
 
       - name: Resolve next fork tag
         id: resolve
@@ -112,11 +117,6 @@ jobs:
           fi
           echo "Latest upstream nightly release: $upstream_tag"
 
-          export CI_REPAIR_BOT_UPSTREAM_TARGET="refs/tags/upstream/${upstream_tag}"
-          export CI_REPAIR_BOT_UPSTREAM_SOURCE_REF="refs/tags/${upstream_tag}"
-          export CI_REPAIR_BOT_CONFLICT_MODE=fail
-          scripts/ci/reproduce-sync-upstream
-
           mapfile -t existing_numbers < <(git tag --list "${upstream_tag}-fork.*" \
             | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
             | sort -n)
@@ -131,6 +131,39 @@ jobs:
           new_tag="${upstream_tag}-fork.${next_n}"
           echo "needed=true" >> "$GITHUB_OUTPUT"
           echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
+          echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Replay fork onto latest upstream nightly
+        if: steps.resolve.outputs.needed == 'true'
+        id: replay
+        env:
+          CI_REPAIR_BOT_UPSTREAM_TARGET: refs/tags/upstream/${{ steps.resolve.outputs.upstream_tag }}
+          CI_REPAIR_BOT_UPSTREAM_SOURCE_REF: refs/tags/${{ steps.resolve.outputs.upstream_tag }}
+          CI_REPAIR_BOT_CONFLICT_MODE: output
+        run: scripts/ci/reproduce-sync-upstream
+
+      - name: Route replay conflict to autonomous repair
+        if: steps.resolve.outputs.needed == 'true' && steps.replay.outputs.status == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          FAILING_PATCH: ${{ steps.replay.outputs.patch }}
+          CONFLICT_FILES: ${{ steps.replay.outputs.files }}
+        run: |
+          set -euo pipefail
+          gh workflow run sync-upstream.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f channel=nightly
+          echo "::error::Fork push replay conflicted in $FAILING_PATCH; dispatched eligible Sync Upstream repair."
+          echo "$CONFLICT_FILES" | sed 's/^/::error::  /'
+          exit 1
+
+      - name: Verify replay before publication
+        if: steps.resolve.outputs.needed == 'true' && steps.replay.outputs.status == 'clean'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-dev pkg-config
+          scripts/ci/verify-stgit-replay
 
       - name: Prepare release tag
         if: steps.resolve.outputs.needed == 'true'
@@ -139,61 +172,26 @@ jobs:
           RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
         run: scripts/ci/prepare-release-tag
 
-      - name: Refresh StGit stack metadata
-        if: steps.resolve.outputs.needed == 'true'
-        id: stgit
+      - name: Publish verified stack and release tag
+        if: steps.resolve.outputs.needed == 'true' && steps.replay.outputs.status == 'clean'
         env:
-          STGIT_BRANCH: adopt
-          STGIT_EXPECTED_HEAD: ${{ steps.pre.outputs.main_sha }}
-          STGIT_MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
-        run: |
-          set -euo pipefail
-          git fetch origin \
-            '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
-            '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
-          scripts/ci/refresh-stgit-metadata
-
-      - name: Atomically push main, StGit metadata, and release tag
-        if: steps.resolve.outputs.needed == 'true'
-        env:
-          LEASE_SHA: ${{ steps.pre.outputs.main_sha }}
+          STGIT_EXPECTED_REMOTE_MAIN: ${{ steps.pre.outputs.main_sha }}
           MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
           PREP_SHA: ${{ steps.prepare.outputs.prep_sha }}
           NEW_TAG: ${{ steps.prepare.outputs.tag }}
-          STGIT_STACK_REF: ${{ steps.stgit.outputs.stack_ref }}
-          STGIT_STACK_LEASE: ${{ steps.stgit.outputs.stack_lease }}
-          STGIT_STACK_SHA: ${{ steps.stgit.outputs.stack_sha }}
-          STGIT_PUSH_PLAN: ${{ steps.stgit.outputs.push_plan }}
+          STGIT_BACKUP_NAMESPACE: bot
         run: |
           set -euo pipefail
-
           tag_sha="$(git rev-parse "${NEW_TAG}^{commit}")"
           if [[ "$tag_sha" != "$PREP_SHA" ]]; then
-            echo "::error::Tag/source mismatch: $NEW_TAG resolves to $tag_sha, expected $PREP_SHA."
+            echo "::error::Prepared tag changed before publication."
             exit 1
           fi
           if [[ "$PREP_SHA" != "$MAIN_SHA" ]] && [[ "$(git rev-parse "${PREP_SHA}^")" != "$MAIN_SHA" ]]; then
-            echo "::error::Release-prep commit $PREP_SHA is not a direct child of main $MAIN_SHA."
+            echo "::error::Release preparation must be a direct child of the verified stack."
             exit 1
           fi
-
-          # Keep the exact StGit stack rendering on main. The generated version
-          # stamp and lockfile live only in the prepared child named by the tag.
-          # Backup current main before the force-push (bounded: one ref/day).
-          git push origin "+${LEASE_SHA}:refs/heads/backup/auto/nightly-$(date -u +%Y%m%d)" || true
-          leases=(
-            "--force-with-lease=refs/heads/main:${LEASE_SHA}"
-            "--force-with-lease=${STGIT_STACK_REF}:${STGIT_STACK_LEASE}"
-          )
-          refspecs=(
-            "${MAIN_SHA}:refs/heads/main"
-            "${STGIT_STACK_SHA}:${STGIT_STACK_REF}"
-            "refs/tags/${NEW_TAG}:refs/tags/${NEW_TAG}"
-          )
-          while IFS=$'\t' read -r ref old new; do
-            [[ -z "$ref" ]] && continue
-            leases+=("--force-with-lease=${ref}:${old}")
-            refspecs+=("${new}:${ref}")
-          done <<< "$STGIT_PUSH_PLAN"
-          git push --atomic origin "${leases[@]}" "${refspecs[@]}"
-          echo "Pushed $NEW_TAG (main at $MAIN_SHA) for fork push nightly update. release.yml will publish it to the nightly feed."
+          # Restore the verified unstamped tip; the prepared child remains tagged.
+          git reset --hard "$MAIN_SHA"
+          STGIT_RELEASE_TAG="$NEW_TAG" STGIT_RELEASE_TAG_SHA="$PREP_SHA" \
+            scripts/ci/publish-stgit-stack --push
