@@ -61,10 +61,11 @@ describe("refresh-stgit-metadata", () => {
     try {
       const previousMain = repo.git("rev-parse", "HEAD");
       const previousPatches: Record<string, string> = {};
-      for (const [name, subject] of [
+      const patches: ReadonlyArray<readonly [string, string]> = [
         ["fork-build-and-release-tooling", "fork: build and release tooling"],
         ["fork-ci-release-and-sync", "fork(ci): release and sync pipeline"],
-      ]) {
+      ];
+      for (const [name, subject] of patches) {
         repo.writeFile(`${name}.txt`, "old\n");
         previousPatches[name] = repo.commitAll(subject);
         repo.git("update-ref", `refs/patches/stgit/adopt/${name}`, previousPatches[name]);
@@ -74,10 +75,7 @@ describe("refresh-stgit-metadata", () => {
 
       repo.git("reset", "--hard", previousMain);
       const replayedPatches: Record<string, string> = {};
-      for (const [name, subject] of [
-        ["fork-build-and-release-tooling", "fork: build and release tooling"],
-        ["fork-ci-release-and-sync", "fork(ci): release and sync pipeline"],
-      ]) {
+      for (const [name, subject] of patches) {
         repo.writeFile(`${name}.txt`, "replayed\n");
         replayedPatches[name] = repo.commitAll(subject);
       }
