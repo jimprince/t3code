@@ -32,6 +32,7 @@ import { makeSqlitePersistenceLive } from "../src/persistence/Layers/Sqlite.ts";
 import * as ProviderSessionRuntime from "../src/persistence/ProviderSessionRuntime.ts";
 import * as ExternalLauncher from "../src/process/externalLauncher.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
+import { makeServerBootGenerationLayer } from "../src/provider/Layers/ServerBootGeneration.ts";
 import * as ProviderService from "../src/provider/Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "../src/provider/Services/ProviderSessionDirectory.ts";
 import * as ProviderSessionReaper from "../src/provider/Services/ProviderSessionReaper.ts";
@@ -59,6 +60,7 @@ const makePersistedRuntimeLayer = (dbPath: string) => {
   );
   const directory = ProviderSessionDirectoryLive.pipe(
     Layer.provide(ProviderSessionRuntime.layer),
+    Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
     Layer.provide(persistence),
   );
   return Layer.mergeAll(orchestration, directory);
