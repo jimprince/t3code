@@ -579,6 +579,7 @@ export const ProviderRegistryLive = Layer.effect(
           knownInstanceIds.add(snapshotInstanceKey(provider));
         }
         const previousSubs = yield* Ref.get(liveSubsRef);
+        const isBootSync = previousSubs.size === 0;
 
         // Carry over subscriptions for instances whose identity is
         // unchanged (reconcile treated them as no-op). Instances that
@@ -636,20 +637,35 @@ export const ProviderRegistryLive = Layer.effect(
         }
         yield* Effect.yieldNow;
 
-        // Snapshot current state without starting a probe. Managed providers
-        // launch their startup refresh independently, so this closes the
-        // subscription race without putting external work on the registry
-        // or HTTP server construction path.
+        // Publish each new or rebuilt instance's current snapshot before
+        // forcing another probe. A rebuilt provider can publish its pending
+        // state before this registry has attached its stream subscriber; the
+        // direct read closes that gap and lets consumers observe the rebuild.
         yield* Effect.forEach(
           newlyAdded,
-          ([, instance]) =>
-            Effect.gen(function* () {
-              const source = buildSnapshotSource(instance);
-              const provider = yield* source.getSnapshot;
-              yield* correlateSnapshotWithSource(source, provider).pipe(
-                Effect.flatMap(syncProvider),
-              );
-            }).pipe(Effect.ignoreCause({ log: true })),
+          ([, instance]) => {
+            const source = buildSnapshotSource(instance);
+            return source.getSnapshot.pipe(
+              Effect.flatMap((provider) => correlateSnapshotWithSource(source, provider)),
+              Effect.flatMap(syncProvider),
+              Effect.ignoreCause({ log: true }),
+            );
+          },
+          { concurrency: "unbounded", discard: true },
+        );
+
+        // Force-refresh every new/rebuilt instance. The refresh's result is
+        // piped directly into `syncProvider`, so it still compensates for
+        // any PubSub timing race. At boot, refreshes are forked so they
+        // do not block server HTTP/WS readiness.
+        yield* Effect.forEach(
+          newlyAdded,
+          ([, instance]) => {
+            const refreshEffect = refreshOneSource(buildSnapshotSource(instance)).pipe(
+              Effect.ignoreCause({ log: true }),
+            );
+            return isBootSync ? Effect.forkScoped(refreshEffect) : refreshEffect;
+          },
           { concurrency: "unbounded", discard: true },
         );
         yield* upsertProviders(unavailableProviders, {
