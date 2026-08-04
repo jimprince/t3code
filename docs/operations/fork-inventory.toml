@@ -322,3 +322,12 @@ purpose = "Publish the rendered stack and canonical StGit metadata together, inc
 retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-ci-upstream-sync"]
 roles = []
+
+[[patch]]
+name = "fork-web-files-upload"
+subject = "feat(web): upload files into workspace via drag-and-drop"
+class = "product"
+purpose = "Let operators drop files onto the files pane to upload them (binary-safe, collision auto-rename) into the workspace root of the paired server."
+retire_when = "Upstream ships a binary-capable workspace upload RPC with drag-and-drop in the files pane."
+depends_on = ["fork-build-workspace-tooling"]
+roles = []
