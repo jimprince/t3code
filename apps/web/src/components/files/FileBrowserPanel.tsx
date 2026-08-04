@@ -2,12 +2,14 @@ import type {
   ContextMenuItem as TreeContextMenuItem,
   ContextMenuOpenContext as TreeContextMenuOpenContext,
 } from "@pierre/trees";
+import { PROJECT_UPLOAD_FILE_MAX_BYTES } from "@t3tools/contracts";
 import type { EnvironmentId, ProjectEntry } from "@t3tools/contracts";
 import { FileTree, useFileTree, useFileTreeSearch } from "@pierre/trees/react";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
-import { RotateCw } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { RotateCw, Upload } from "lucide-react";
+import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import { readFileAsDataUrl } from "~/components/ChatView.logic";
 import { Button } from "~/components/ui/button";
 import { InputGroup, InputGroupInput } from "~/components/ui/input-group";
 import { toastManager } from "~/components/ui/toast";
@@ -19,9 +21,13 @@ import { useWorkspaceMutationRefresh } from "~/hooks/useWorkspaceMutationRefresh
 import { cn } from "~/lib/utils";
 import { readLocalApi } from "~/localApi";
 import { T3_PIERRE_ICONS } from "~/pierre-icons";
+import { projectEnvironment } from "~/state/projects";
+import { useAtomCommand } from "~/state/use-atom-command";
 
 import { createFileTreeDragMentionController } from "./fileTreeDragMention";
 import { useProjectEntriesQuery } from "./projectFilesQueryState";
+
+const UPLOAD_SIZE_LIMIT_LABEL = "32 MB";
 
 interface FileBrowserPanelProps {
   environmentId: EnvironmentId;
@@ -343,6 +349,110 @@ export default function FileBrowserPanel({
   useEffect(() => {
     treeModelRef.current = model;
   }, [model]);
+
+  // ------------------------------------------------------------------
+  // OS file drops upload into the workspace root (auto-renaming on
+  // collision). Row drags out of the tree carry a text mention payload, not
+  // "Files", so the type gate keeps the two drag flows from interfering.
+  // ------------------------------------------------------------------
+  const uploadFile = useAtomCommand(projectEnvironment.uploadFile);
+  const [isDragOverPanel, setIsDragOverPanel] = useState(false);
+  const uploadDragDepthRef = useRef(0);
+
+  const handleDroppedFiles = async (files: File[], containsDirectory: boolean) => {
+    if (containsDirectory) {
+      toastManager.add({
+        type: "error",
+        title: "Folders can't be uploaded",
+        description: "Drop individual files instead.",
+      });
+    }
+    const uploaded: string[] = [];
+    for (const file of files) {
+      if (file.size === 0) {
+        toastManager.add({
+          type: "error",
+          title: "Upload failed",
+          description: `'${file.name}' is empty.`,
+        });
+        continue;
+      }
+      if (file.size > PROJECT_UPLOAD_FILE_MAX_BYTES) {
+        toastManager.add({
+          type: "error",
+          title: "Upload failed",
+          description: `'${file.name}' exceeds the ${UPLOAD_SIZE_LIMIT_LABEL} upload limit. Use scp for larger files.`,
+        });
+        continue;
+      }
+      const dataUrl = await readFileAsDataUrl(file);
+      const result = await uploadFile({
+        environmentId,
+        input: { cwd, fileName: file.name || "upload.bin", dataUrl },
+      });
+      if (result._tag === "Success") {
+        uploaded.push(result.value.relativePath);
+      }
+      // Failures surface through the shared atom-command reporter.
+    }
+    if (uploaded.length > 0) {
+      entriesQuery.refresh();
+      toastManager.add({
+        type: "success",
+        title: `Uploaded to ${projectName}`,
+        description: uploaded.join(", "),
+      });
+    }
+  };
+
+  const isFileDrag = (event: ReactDragEvent<HTMLDivElement>) =>
+    event.dataTransfer.types.includes("Files");
+
+  const onUploadDragEnter = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    uploadDragDepthRef.current += 1;
+    setIsDragOverPanel(true);
+  };
+  const onUploadDragOver = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragOverPanel(true);
+  };
+  const onUploadDragLeave = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+    uploadDragDepthRef.current = Math.max(0, uploadDragDepthRef.current - 1);
+    if (uploadDragDepthRef.current === 0) {
+      setIsDragOverPanel(false);
+    }
+  };
+  const onUploadDrop = (event: ReactDragEvent<HTMLDivElement>) => {
+    if (!isFileDrag(event)) return;
+    event.preventDefault();
+    uploadDragDepthRef.current = 0;
+    setIsDragOverPanel(false);
+    const items = Array.from(event.dataTransfer.items);
+    let containsDirectory = false;
+    const files: File[] = [];
+    if (items.length > 0) {
+      for (const item of items) {
+        if (item.kind !== "file") continue;
+        if (item.webkitGetAsEntry()?.isDirectory) {
+          containsDirectory = true;
+          continue;
+        }
+        const file = item.getAsFile();
+        if (file) files.push(file);
+      }
+    } else {
+      files.push(...Array.from(event.dataTransfer.files));
+    }
+    void handleDroppedFiles(files, containsDirectory);
+  };
   useEffect(() => {
     const panel = panelRef.current;
     if (panel === null) {
@@ -361,8 +471,12 @@ export default function FileBrowserPanel({
   return (
     <div
       ref={panelRef}
-      className="flex min-h-0 flex-1 flex-col bg-background"
+      className="relative flex min-h-0 flex-1 flex-col bg-background"
       data-file-browser-panel={`${environmentId}:${cwd}`}
+      onDragEnter={onUploadDragEnter}
+      onDragOver={onUploadDragOver}
+      onDragLeave={onUploadDragLeave}
+      onDrop={onUploadDrop}
     >
       <div
         className="flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-2 in-data-[preview-panel-mode=inline]:mb-3 in-data-[preview-panel-mode=inline]:h-7 in-data-[preview-panel-mode=inline]:min-h-7 in-data-[preview-panel-mode=inline]:border-b-transparent"
@@ -390,6 +504,14 @@ export default function FileBrowserPanel({
           }}
         />
       )}
+      {isDragOverPanel ? (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center border-2 border-dashed border-primary/60 bg-background/80">
+          <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+            <Upload className="size-4" />
+            Drop files to upload to {projectName}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
