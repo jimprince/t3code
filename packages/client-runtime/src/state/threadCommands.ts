@@ -4,6 +4,7 @@ import { Atom } from "effect/unstable/reactivity";
 import { createAtomCommandScheduler, createEnvironmentCommand } from "./runtime.ts";
 import {
   type ArchiveThreadInput,
+  type ClearThreadGoalInput,
   type CreateThreadInput,
   type DeleteThreadInput,
   type InterruptThreadTurnInput,
@@ -11,6 +12,7 @@ import {
   type RespondToThreadUserInputInput,
   type RevertThreadCheckpointInput,
   type SetThreadInteractionModeInput,
+  type SetThreadGoalInput,
   type SetThreadRuntimeModeInput,
   type PinThreadInput,
   type SettleThreadInput,
@@ -23,6 +25,7 @@ import {
   type UnsnoozeThreadInput,
   type UpdateThreadMetadataInput,
   archiveThread,
+  clearThreadGoal,
   createThread,
   deleteThread,
   interruptThreadTurn,
@@ -30,6 +33,7 @@ import {
   respondToThreadUserInput,
   revertThreadCheckpoint,
   setThreadInteractionMode,
+  setThreadGoal,
   setThreadRuntimeMode,
   pinThread,
   settleThread,
@@ -46,6 +50,7 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 
 export type {
   ArchiveThreadInput,
+  ClearThreadGoalInput,
   CreateThreadInput,
   DeleteThreadInput,
   InterruptThreadTurnInput,
@@ -53,6 +58,7 @@ export type {
   RespondToThreadUserInputInput,
   RevertThreadCheckpointInput,
   SetThreadInteractionModeInput,
+  SetThreadGoalInput,
   SetThreadRuntimeModeInput,
   PinThreadInput,
   SettleThreadInput,
@@ -151,6 +157,18 @@ export function createThreadEnvironmentAtoms<R, E>(
     setInteractionMode: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:set-interaction-mode",
       execute: (input: SetThreadInteractionModeInput) => setThreadInteractionMode(input),
+      scheduler,
+      concurrency,
+    }),
+    setGoal: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:set-goal",
+      execute: (input: SetThreadGoalInput) => setThreadGoal(input),
+      scheduler,
+      concurrency,
+    }),
+    clearGoal: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:clear-goal",
+      execute: (input: ClearThreadGoalInput) => clearThreadGoal(input),
       scheduler,
       concurrency,
     }),
