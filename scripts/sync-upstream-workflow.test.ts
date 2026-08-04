@@ -57,11 +57,18 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       const path = yield* Path.Path;
       const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
       const ciWorkflow = yield* fs.readFileString(path.join(repoRoot, ".github/workflows/ci.yml"));
+      const releaseWorkflow = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/release.yml"),
+      );
       const testJob = ciWorkflow.slice(
         ciWorkflow.indexOf("  test:\n"),
         ciWorkflow.indexOf("  mobile_native_static_analysis:\n"),
       );
       const policyJob = ciWorkflow.slice(ciWorkflow.indexOf("  fork-policy:\n"));
+      const releasePreflight = releaseWorkflow.slice(
+        releaseWorkflow.indexOf("  preflight:\n"),
+        releaseWorkflow.indexOf("  build:\n"),
+      );
       const stackWriters = [
         yield* fs.readFileString(path.join(repoRoot, ".github/workflows/sync-upstream.yml")),
         yield* fs.readFileString(path.join(repoRoot, ".github/workflows/fork-push-nightly.yml")),
@@ -70,6 +77,7 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       for (const [name, workflow, operation] of [
         ["CI Test", testJob, "vp run test"],
         ["CI Fork patch policy", policyJob, "scripts/ci/check-stgit-stack"],
+        ["Release Preflight", releasePreflight, "vp run test"],
         ["Sync Upstream", stackWriters[0]!, "scripts/ci/reproduce-sync-upstream"],
         ["Fork Push Nightly", stackWriters[1]!, "scripts/ci/reproduce-sync-upstream"],
       ] as const) {
