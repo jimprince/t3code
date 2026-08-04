@@ -173,3 +173,17 @@ purpose = "Provide guarded headless server update discovery, installation, and r
 retire_when = "never"
 depends_on = ["fork-remote-relay-access"]
 roles = []
+
+[[patch]]
+name = "fork-text-generation"
+subject = "feat(server): add fork text generation"
+class = "product"
+purpose = "Provide fork-owned text-generation services and integrations used by runtime features."
+retire_when = "never"
+depends_on = ["fork-provider-runtime-recovery"]
+roles = []
+[[patch.decision]]
+id = "gitmanager-faketextgeneration"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream replaced the duplicate hand-written interface with TextGeneration['Service']; keep the upstream type alias and do not restore the redundant interface."
