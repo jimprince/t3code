@@ -28,6 +28,13 @@ there, never in the client.
 └────────────────────────────────────────────────┘
 ```
 
+## Operator CLI
+
+[`apps/t3-thread`](../architecture/t3-thread.md) is a separately built workspace application for
+persistent worker lifecycle and notification operations against an already-running T3 Code
+environment. It is not part of the server runtime and is distinct from local subprocess fan-out
+tools.
+
 ## The RPC boundary
 
 The client/server contract is an Effect RPC group, not a hand-rolled push protocol. [`rpc.ts`][rpc]
