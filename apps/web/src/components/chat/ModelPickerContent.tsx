@@ -4,7 +4,11 @@ import {
   type ResolvedKeybindingsConfig,
 } from "@t3tools/contracts";
 import { resolveSelectableModel } from "@t3tools/shared/model";
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import {
+  LegendList,
+  type LegendListRef,
+  type LegendListRenderItemProps,
+} from "@legendapp/list/react";
 import { memo, useMemo, useState, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { ChevronRightIcon, SearchIcon } from "lucide-react";
 import { ModelListRow } from "./ModelListRow";
@@ -753,28 +757,30 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                   ref={modelListRef}
                   data={filteredItemKeys}
                   extraData={modelListExtraData}
-                  keyExtractor={(modelKey) => modelKey}
-                  renderItem={({ item: modelKey, index }) => {
-                    if (legacySection?.key === modelKey) {
+                  keyExtractor={(modelKey: string) => modelKey}
+                  renderItem={({ item: modelKey, index }: LegendListRenderItemProps<string>) => {
+                    const matchedLegacySection =
+                      legacySection?.key === modelKey ? legacySection : null;
+                    if (matchedLegacySection) {
                       return (
                         <ComboboxItem
                           hideIndicator
                           index={index}
                           value={modelKey}
-                          aria-expanded={legacySection.isExpanded}
+                          aria-expanded={matchedLegacySection.isExpanded}
                           className="group w-full cursor-pointer rounded-md px-2 py-2"
                           contentClassName="flex w-full items-center gap-3"
                         >
                           <div className="min-w-0 flex-1 text-left">
                             <div className="text-xs font-medium leading-snug">Legacy models</div>
                             <div className="mt-1 text-xs font-normal leading-snug text-muted-foreground/70">
-                              {legacySection.legacyModels.length} models
+                              {matchedLegacySection.legacyModels.length} models
                             </div>
                           </div>
                           <ChevronRightIcon
                             className={cn(
                               "size-4 transition-transform",
-                              legacySection.isExpanded && "rotate-90",
+                              matchedLegacySection.isExpanded && "rotate-90",
                             )}
                           />
                         </ComboboxItem>
