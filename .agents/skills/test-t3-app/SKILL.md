@@ -94,6 +94,11 @@ If completion is uncertain, keep the environment alive and mention that it is re
 
 ## Troubleshoot predictably
 
+- If `node apps/server/scripts/t3-sqlite-state.ts ...` fails with
+  `ERR_MODULE_NOT_FOUND` for a workspace dependency in a fresh worktree, run
+  `vp install --ignore-scripts --frozen-lockfile` from the repository root,
+  then retry the helper. The script imports workspace packages and cannot run
+  before dependencies are linked.
 - If the browser shows an unauthenticated pairing screen, issue a new token instead of retrying the consumed URL.
 - If the pairing URL is no longer visible, create a replacement token with both `--dev-url` and `--base-url`.
 - If the replacement token is rejected, verify that the CLI and server use the identical absolute base directory and web URL.
