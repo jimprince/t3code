@@ -84,15 +84,17 @@ const OPENCODE_SKILL_DISCOVERY_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 export interface OpenCodeServerProcess {
   readonly url: string;
   readonly serverPassword?: string;
-  readonly version: string;
-  readonly isRunning: Effect.Effect<boolean>;
+  readonly version?: string;
+  readonly isRunning?: Effect.Effect<boolean>;
+  readonly processId?: number | null;
   readonly exitCode: Effect.Effect<number, never>;
 }
 
 export interface OpenCodeServerConnection {
   readonly url: string;
   readonly serverPassword?: string;
-  readonly version: string;
+  readonly version?: string;
+  readonly processId?: number | null;
   readonly exitCode: Effect.Effect<number, never> | null;
   readonly external: boolean;
 }
@@ -700,7 +702,11 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
                 // any serve process left in that group.
               }
             });
-      const terminateChild = killOpenCodeProcessGroup("SIGTERM").pipe(
+      const terminateChild = Effect.logInfo("opencode server process stopping", {
+        processId: child.pid,
+        port,
+      }).pipe(
+        Effect.andThen(killOpenCodeProcessGroup("SIGTERM")),
         Effect.andThen(Effect.sleep("1 second")),
         Effect.andThen(killOpenCodeProcessGroup("SIGKILL")),
         Effect.ignore,
@@ -798,8 +804,9 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
         }),
       );
 
-      return {
+      const server = {
         url,
+        processId: typeof child.pid === "number" ? child.pid : null,
         ...(serverPassword !== undefined ? { serverPassword } : {}),
         version,
         isRunning: child.isRunning.pipe(Effect.orElseSucceed(() => false)),
@@ -808,6 +815,12 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
           Effect.orElseSucceed(() => 0),
         ),
       } satisfies OpenCodeServerProcess;
+      yield* Effect.logInfo("opencode server process started", {
+        processId: server.processId,
+        port,
+        url: server.url,
+      });
+      return server;
     });
 
   const connectToOpenCodeServer: OpenCodeRuntimeShape["connectToOpenCodeServer"] = (input) => {
@@ -826,6 +839,7 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
       ).pipe(
         Effect.map((version) => ({
           url: serverUrl,
+          processId: null,
           ...(serverPassword !== undefined ? { serverPassword } : {}),
           version,
           exitCode: null,
@@ -845,8 +859,9 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
     }).pipe(
       Effect.map((server) => ({
         url: server.url,
+        ...(server.processId !== undefined ? { processId: server.processId } : {}),
         ...(server.serverPassword !== undefined ? { serverPassword: server.serverPassword } : {}),
-        version: server.version,
+        ...(server.version !== undefined ? { version: server.version } : {}),
         exitCode: server.exitCode,
         external: false,
       })),
