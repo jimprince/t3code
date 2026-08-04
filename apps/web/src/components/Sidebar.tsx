@@ -41,17 +41,20 @@ import {
   CircleAlertIcon,
   CircleCheckIcon,
   CircleDashedIcon,
+  CircleDotIcon,
   ClockIcon,
   FolderIcon,
   FolderPlusIcon,
   GitBranchIcon,
   MessageSquareIcon,
+  MinusIcon,
   PinIcon,
   PlusIcon,
   SearchIcon,
   ServerIcon,
   SettingsIcon,
   SquarePenIcon,
+  TargetIcon,
   TerminalIcon,
   Undo2Icon,
   XIcon,
@@ -104,7 +107,7 @@ import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { openCommandPalette } from "../commandPaletteBus";
 import { startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useClientSettings } from "../hooks/useSettings";
+import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -179,7 +182,7 @@ import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "./ui/menu";
+import { Menu, MenuCheckboxItem, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "./ui/menu";
 import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
@@ -191,6 +194,12 @@ import {
   type ComposerThreadDraftState,
   type DraftSessionState,
 } from "../composerDraftStore";
+import {
+  pruneHiddenProjectKeys,
+  resolveAllProjectsCheckboxState,
+  toggleAllHiddenProjectKeys,
+  toggleHiddenProjectKey,
+} from "./sidebarProjectScope.ts";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -1728,6 +1737,10 @@ export default function Sidebar() {
     () => partitionProjectsByKind(projects),
     [projects],
   );
+  const chatProjectRefKeys = useMemo(
+    () => new Set(chatProjects.map((project) => `${project.environmentId}:${project.id}`)),
+    [chatProjects],
+  );
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
   const router = useRouter();
@@ -1947,8 +1960,12 @@ export default function Sidebar() {
 
   const changeRequestSnapshotByKey = useAtomValue(threadChangeRequestSnapshotsAtom);
 
-  // Project scope: one menu above the list. Scoping filters the list without
-  // making the header width depend on the number or length of project names.
+  // Project scope: upstream owns the single-project scope selector
+  // (projectScopeKey / scopedProjectGroup). The fork layers a persisted
+  // hide/show multi-select on top of it: an explicit scope wins, otherwise the
+  // list shows every project the user has not hidden. Upstream dropped its own
+  // useUpdateClientSettings binding from this component, so the fork now owns
+  // the one it needs rather than depending on upstream keeping it.
   const [projectScopeKey, setProjectScopeKey] = useState<string | null>(null);
   const scopedProjectGroup = useMemo(
     () =>
@@ -1957,17 +1974,49 @@ export default function Sidebar() {
         : (projectGroups.find((project) => project.projectKey === projectScopeKey) ?? null),
     [projectGroups, projectScopeKey],
   );
-  const scopedProjectKeys = useMemo(
-    () =>
-      scopedProjectGroup === null
-        ? null
-        : new Set(
-            scopedProjectGroup.memberProjectRefs.map(
-              (projectRef) => `${projectRef.environmentId}:${projectRef.projectId}`,
-            ),
-          ),
-    [scopedProjectGroup],
+  const updateSettings = useUpdateClientSettings();
+  const hiddenProjectKeys = useClientSettings((settings) => settings.sidebarHiddenProjectKeys);
+  const allProjectsCheckboxState = useMemo(
+    () => resolveAllProjectsCheckboxState(hiddenProjectKeys, projectGroups),
+    [hiddenProjectKeys, projectGroups],
   );
+  const visibleProjectGroups = useMemo(
+    () => projectGroups.filter((project) => !hiddenProjectKeys.includes(project.projectKey)),
+    [hiddenProjectKeys, projectGroups],
+  );
+  const scopedProjectKeys = useMemo(() => {
+    // null means "no filter at all"; only an unscoped list with nothing hidden
+    // qualifies, so the unfiltered fast path keeps upstream's semantics.
+    if (scopedProjectGroup === null && hiddenProjectKeys.length === 0) return null;
+    const scoped = scopedProjectGroup === null ? visibleProjectGroups : [scopedProjectGroup];
+    return new Set(
+      scoped.flatMap((project) =>
+        project.memberProjectRefs.map(
+          (projectRef) => `${projectRef.environmentId}:${projectRef.projectId}`,
+        ),
+      ),
+    );
+  }, [hiddenProjectKeys.length, scopedProjectGroup, visibleProjectGroups]);
+  const projectScopeTriggerLabel =
+    scopedProjectGroup?.displayName ??
+    (allProjectsCheckboxState === "all"
+      ? "All projects"
+      : allProjectsCheckboxState === "none"
+        ? "No projects"
+        : `${visibleProjectGroups.length} projects`);
+  // Any scope change drops the selection: rows selected under the old scope may
+  // be hidden now, and bulk actions must never count or touch invisible rows.
+  const settledResetKey = `${projectScopeKey ?? "all"}:${[...hiddenProjectKeys].sort().join(",")}`;
+  const setHiddenProjectKeys = useCallback(
+    (nextHiddenProjectKeys: readonly string[]) => {
+      updateSettings({ sidebarHiddenProjectKeys: [...nextHiddenProjectKeys] });
+    },
+    [updateSettings],
+  );
+  useEffect(() => {
+    const pruned = pruneHiddenProjectKeys(hiddenProjectKeys, projectGroups);
+    if (pruned !== hiddenProjectKeys) setHiddenProjectKeys(pruned);
+  }, [hiddenProjectKeys, projectGroups, setHiddenProjectKeys]);
   useEffect(() => {
     if (projectScopeKey !== null && scopedProjectGroup === null) {
       setProjectScopeKey(null);
@@ -2003,7 +2052,7 @@ export default function Sidebar() {
   // hidden now, and bulk actions must never count or touch invisible rows.
   useEffect(() => {
     clearSelection();
-  }, [clearSelection, projectScopeKey]);
+  }, [clearSelection, settledResetKey]);
 
   const handleProjectSettings = useCallback(
     (event: ReactMouseEvent<HTMLButtonElement>, projectGroup: SidebarProjectSnapshot) => {
@@ -2040,12 +2089,15 @@ export default function Sidebar() {
     // memo exactly at the next wake boundary.
     void snoozeWakeTick;
     const preciseNow = new Date().toISOString();
-    const visible = threads.filter(
-      (thread) =>
+    const visible = threads.filter((thread) => {
+      const projectRefKey = `${thread.environmentId}:${thread.projectId}`;
+      return (
         thread.archivedAt === null &&
         (scopedProjectKeys === null ||
-          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
-    );
+          chatProjectRefKeys.has(projectRefKey) ||
+          scopedProjectKeys.has(projectRefKey))
+      );
+    });
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const snoozed: EnvironmentThreadShell[] = [];
@@ -2118,6 +2170,7 @@ export default function Sidebar() {
   }, [
     autoSettleAfterDays,
     autoSettleOnMerge,
+    chatProjectRefKeys,
     changeRequestSnapshotByKey,
     nowMinute,
     scopedProjectKeys,
@@ -2176,7 +2229,6 @@ export default function Sidebar() {
   // filter context changes so a scope/search flip never inherits a deep
   // page state.
   const [settledVisibleCount, setSettledVisibleCount] = useState(SETTLED_TAIL_INITIAL_COUNT);
-  const settledResetKey = projectScopeKey ?? "all";
   const lastSettledResetKeyRef = useRef(settledResetKey);
   if (lastSettledResetKeyRef.current !== settledResetKey) {
     lastSettledResetKeyRef.current = settledResetKey;
@@ -3608,59 +3660,149 @@ export default function Sidebar() {
                     ) : (
                       <FolderIcon className="size-4 shrink-0" />
                     )}
-                    <span className="min-w-0 flex-1 truncate">
-                      {scopedProjectGroup?.displayName ?? "All projects"}
-                    </span>
+                    <span className="min-w-0 flex-1 truncate">{projectScopeTriggerLabel}</span>
+                    {scopedProjectGroup ? (
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              aria-label="Stop isolating project"
+                              className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-primary"
+                              onPointerDown={(event) => {
+                                event.stopPropagation();
+                                event.preventDefault();
+                              }}
+                              onMouseDown={(event) => {
+                                event.stopPropagation();
+                                event.preventDefault();
+                              }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                event.preventDefault();
+                                setProjectScopeKey(null);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key !== "Enter" && event.key !== " ") return;
+                                event.stopPropagation();
+                                event.preventDefault();
+                                setProjectScopeKey(null);
+                              }}
+                            />
+                          }
+                        >
+                          <CircleDotIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipPopup>Stop isolating</TooltipPopup>
+                      </Tooltip>
+                    ) : null}
                     <ChevronDownIcon className="-mr-px size-4 shrink-0" />
                   </MenuTrigger>
                   <MenuPopup align="start" className="w-(--anchor-width)">
-                    <MenuRadioGroup
-                      value={projectScopeKey ?? "all"}
-                      onValueChange={(value) =>
-                        setProjectScopeKey(value === "all" ? null : (value as string))
+                    <MenuItem
+                      closeOnClick={false}
+                      role="menuitemcheckbox"
+                      aria-checked={
+                        allProjectsCheckboxState === "all"
+                          ? true
+                          : allProjectsCheckboxState === "none"
+                            ? false
+                            : "mixed"
                       }
+                      className="grid h-8 min-h-8 grid-cols-[1rem_1fr] items-center gap-2 px-1 py-0 text-sm font-medium"
+                      onClick={() => {
+                        setHiddenProjectKeys(
+                          toggleAllHiddenProjectKeys(hiddenProjectKeys, projectGroups),
+                        );
+                      }}
                     >
-                      <MenuRadioItem
-                        value="all"
-                        closeOnClick
-                        className="h-8 min-h-8 py-0 text-sm font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
-                      >
+                      <span className="col-start-1 flex size-4 items-center justify-center">
+                        {allProjectsCheckboxState === "all" ? (
+                          <CheckIcon className="size-3.5" />
+                        ) : allProjectsCheckboxState === "partial" ? (
+                          <MinusIcon className="size-3.5" />
+                        ) : null}
+                      </span>
+                      <span className="col-start-2 flex min-w-0 items-center gap-2">
                         <FolderIcon className="size-4 shrink-0" />
                         <span className="min-w-0 truncate text-sm">All projects</span>
-                      </MenuRadioItem>
-                      {projectGroups.map((project) => {
-                        const scopeKey = project.projectKey;
-                        return (
-                          <MenuRadioItem
-                            key={scopeKey}
-                            value={scopeKey}
-                            closeOnClick
-                            className="h-8 min-h-8 py-0 text-sm font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
-                          >
-                            <ProjectFavicon
-                              environmentId={project.environmentId}
-                              cwd={project.workspaceRoot}
-                              faviconPath={project.faviconPath}
-                              className="size-4 shrink-0"
-                            />
-                            <span className="min-w-0 truncate text-sm">{project.displayName}</span>
-                            <Button
-                              size="icon-xs"
-                              variant="ghost-muted"
-                              aria-label={`Project settings for ${project.displayName}`}
-                              title={`Project settings for ${project.displayName}`}
-                              className="ml-auto size-6 [--control-icon-color:currentColor] text-icon-muted focus-visible:bg-accent focus-visible:text-foreground"
-                              onPointerDown={(event) => event.stopPropagation()}
-                              onClick={(event) => {
-                                void handleProjectSettings(event, project);
-                              }}
+                      </span>
+                    </MenuItem>
+                    <MenuSeparator />
+                    {projectGroups.map((project) => {
+                      const isIsolated = scopedProjectGroup?.projectKey === project.projectKey;
+                      return (
+                        <MenuCheckboxItem
+                          key={project.projectKey}
+                          checked={!hiddenProjectKeys.includes(project.projectKey)}
+                          closeOnClick={false}
+                          onCheckedChange={() => {
+                            setHiddenProjectKeys(
+                              toggleHiddenProjectKey(hiddenProjectKeys, project.projectKey),
+                            );
+                          }}
+                          className="h-8 min-h-8 px-1 py-0 text-sm font-medium [&>span:last-child]:flex [&>span:last-child]:min-w-0 [&>span:last-child]:items-center [&>span:last-child]:gap-2"
+                        >
+                          <ProjectFavicon
+                            environmentId={project.environmentId}
+                            cwd={project.workspaceRoot}
+                            faviconPath={project.faviconPath}
+                            className="size-4 shrink-0"
+                          />
+                          <span className="min-w-0 flex-1 truncate text-sm">
+                            {project.displayName}
+                          </span>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <button
+                                  type="button"
+                                  aria-label={
+                                    isIsolated
+                                      ? `Show all projects instead of ${project.displayName}`
+                                      : `Scope to ${project.displayName}`
+                                  }
+                                  className={`ml-auto inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md outline-none transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring ${
+                                    isIsolated
+                                      ? "text-primary"
+                                      : "text-muted-foreground/55 hover:text-foreground"
+                                  }`}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setProjectScopeKey(isIsolated ? null : project.projectKey);
+                                    setProjectScopeMenuOpen(false);
+                                  }}
+                                />
+                              }
                             >
-                              <SettingsIcon className="size-3.5" />
-                            </Button>
-                          </MenuRadioItem>
-                        );
-                      })}
-                    </MenuRadioGroup>
+                              {isIsolated ? (
+                                <CircleDotIcon className="size-3.5" />
+                              ) : (
+                                <TargetIcon className="size-3.5" />
+                              )}
+                            </TooltipTrigger>
+                            <TooltipPopup>
+                              {isIsolated ? "Show all projects" : "Scope to this project"}
+                            </TooltipPopup>
+                          </Tooltip>
+                          <Button
+                            size="icon-xs"
+                            variant="ghost-muted"
+                            aria-label={`Project settings for ${project.displayName}`}
+                            title={`Project settings for ${project.displayName}`}
+                            className="size-6 [--control-icon-color:currentColor] text-icon-muted focus-visible:bg-accent focus-visible:text-foreground"
+                            onPointerDown={(event) => event.stopPropagation()}
+                            onClick={(event) => {
+                              void handleProjectSettings(event, project);
+                            }}
+                          >
+                            <SettingsIcon className="size-3.5" />
+                          </Button>
+                        </MenuCheckboxItem>
+                      );
+                    })}
                   </MenuPopup>
                 </Menu>
                 <Tooltip>
@@ -4046,6 +4188,19 @@ export default function Sidebar() {
                 </>
               ) : scopedProjectGroup ? (
                 `No threads in ${scopedProjectGroup.displayName} yet`
+              ) : allProjectsCheckboxState === "none" ? (
+                <>
+                  <span>No projects selected</span>
+                  <button
+                    type="button"
+                    onClick={() => setHiddenProjectKeys([])}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1 text-[11px] font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                  >
+                    Select all
+                  </button>
+                </>
+              ) : allProjectsCheckboxState === "partial" ? (
+                `No threads in the ${visibleProjectGroups.length} selected projects yet`
               ) : (
                 "No threads yet"
               )}
