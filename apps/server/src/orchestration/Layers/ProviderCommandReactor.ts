@@ -46,6 +46,7 @@ import {
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { appendFileAttachmentPromptLines } from "../fileAttachmentPrompt.ts";
 import {
   buildTransferredThreadProviderInput,
   findPendingTransferredThreadHandoff,
@@ -1188,13 +1189,15 @@ const make = Effect.gen(function* () {
         providerBinding?.runtimePayload,
       ),
     });
-    const providerMessageText =
+    const providerMessageText = appendFileAttachmentPromptLines(
       transferredContextHandoff === undefined
         ? message.text
         : buildTransferredThreadProviderInput({
             historyMessages: transferredContextHandoff.historyMessages,
             currentRequest: message.text,
-          });
+          }),
+      message.fileAttachments,
+    );
 
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
