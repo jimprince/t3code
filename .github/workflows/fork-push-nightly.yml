@@ -131,13 +131,31 @@ jobs:
           RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
         run: scripts/ci/prepare-release-tag
 
-      - name: Push main and release tag
+      - name: Refresh StGit stack metadata
+        if: steps.resolve.outputs.needed == 'true'
+        id: stgit
+        env:
+          STGIT_BRANCH: adopt
+          STGIT_EXPECTED_HEAD: ${{ steps.pre.outputs.main_sha }}
+          STGIT_MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin \
+            '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
+            '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+          scripts/ci/refresh-stgit-metadata
+
+      - name: Atomically push main, StGit metadata, and release tag
         if: steps.resolve.outputs.needed == 'true'
         env:
           LEASE_SHA: ${{ steps.pre.outputs.main_sha }}
           MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
           PREP_SHA: ${{ steps.prepare.outputs.prep_sha }}
           NEW_TAG: ${{ steps.prepare.outputs.tag }}
+          STGIT_STACK_REF: ${{ steps.stgit.outputs.stack_ref }}
+          STGIT_STACK_LEASE: ${{ steps.stgit.outputs.stack_lease }}
+          STGIT_STACK_SHA: ${{ steps.stgit.outputs.stack_sha }}
+          STGIT_PUSH_PLAN: ${{ steps.stgit.outputs.push_plan }}
         run: |
           set -euo pipefail
 
@@ -155,7 +173,19 @@ jobs:
           # stamp and lockfile live only in the prepared child named by the tag.
           # Backup current main before the force-push (bounded: one ref/day).
           git push origin "+${LEASE_SHA}:refs/heads/backup/auto/nightly-$(date -u +%Y%m%d)" || true
-          git push origin "${MAIN_SHA}:refs/heads/main" \
+          leases=(
             "--force-with-lease=refs/heads/main:${LEASE_SHA}"
-          git push origin "$NEW_TAG"
+            "--force-with-lease=${STGIT_STACK_REF}:${STGIT_STACK_LEASE}"
+          )
+          refspecs=(
+            "${MAIN_SHA}:refs/heads/main"
+            "${STGIT_STACK_SHA}:${STGIT_STACK_REF}"
+            "refs/tags/${NEW_TAG}:refs/tags/${NEW_TAG}"
+          )
+          while IFS=$'\t' read -r ref old new; do
+            [[ -z "$ref" ]] && continue
+            leases+=("--force-with-lease=${ref}:${old}")
+            refspecs+=("${new}:${ref}")
+          done <<< "$STGIT_PUSH_PLAN"
+          git push --atomic origin "${leases[@]}" "${refspecs[@]}"
           echo "Pushed $NEW_TAG (main at $MAIN_SHA) for fork push nightly update. release.yml will publish it to the nightly feed."

@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Rebuild the StGit metadata for the curated fork stack after a plain-git
+# replay. Git rebase moves main but deliberately knows nothing about StGit's
+# private refs, so publishing only main leaves `stack.json.head` stale.
+#
+# The workflow fetches refs/stacks/stgit/$STGIT_BRANCH and its patch refs before
+# calling this script. The resulting refs are local until the caller publishes
+# them together with main using the emitted leased atomic push plan.
+
+: "${STGIT_BRANCH:?STGIT_BRANCH is required}"
+: "${STGIT_EXPECTED_HEAD:?STGIT_EXPECTED_HEAD is required}"
+: "${STGIT_MAIN_SHA:?STGIT_MAIN_SHA is required}"
+
+GIT_BIN="${SYNC_GIT_BIN:-$(command -v git)}"
+git_cmd() { "$GIT_BIN" "$@"; }
+
+stack_ref="refs/stacks/stgit/$STGIT_BRANCH"
+patch_prefix="refs/patches/stgit/$STGIT_BRANCH/"
+
+if ! git_cmd rev-parse --verify "${stack_ref}^{commit}" >/dev/null 2>&1; then
+  echo "Missing StGit stack ref $stack_ref; refusing to invent production metadata." >&2
+  exit 1
+fi
+
+stack_lease="$(git_cmd rev-parse "$stack_ref")"
+stack_json="$(git_cmd show "$stack_ref:stack.json")"
+recorded_head="$(node -e 'const stack = JSON.parse(process.argv[1]); process.stdout.write(stack.head ?? "")' "$stack_json")"
+if [[ "$recorded_head" != "$STGIT_EXPECTED_HEAD" ]]; then
+  echo "StGit stack head $recorded_head does not match expected main lease $STGIT_EXPECTED_HEAD." >&2
+  exit 1
+fi
+
+merge_base="$(git_cmd merge-base "$STGIT_EXPECTED_HEAD" "$STGIT_MAIN_SHA")"
+subjects="$(git_cmd log --format='%H%x09%s' "${merge_base}..${STGIT_MAIN_SHA}")"
+
+desired_file="$(mktemp)"
+plan_file="$(mktemp)"
+index_file="$(mktemp)"
+trap 'rm -f "$desired_file" "$plan_file" "$index_file"' EXIT
+
+# StGit patch names are the normalized subjects of the curated topic commits.
+# Keep that derivation here rather than duplicating a second topic-name list.
+node - "$stack_json" "$subjects" "$STGIT_MAIN_SHA" "$patch_prefix" "$desired_file" <<'NODE'
+const [stackRaw, subjectsRaw, mainSha, patchPrefix, desiredFile] = process.argv.slice(2);
+const stack = JSON.parse(stackRaw);
+const normalize = (subject) =>
+  subject
+    .toLowerCase()
+    .replace(/[():,]/g, " ")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+const commits = new Map(
+  subjectsRaw
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => line.split("\t"))
+    .map(([sha, subject]) => [normalize(subject), sha]),
+);
+const commitFor = (name) => {
+  const matches = [...commits].filter(([normalized]) => normalized === name || normalized.startsWith(`${name}-`));
+  if (matches.length !== 1) return undefined;
+  return matches[0][1];
+};
+const missing = stack.applied.filter((name) => !commitFor(name));
+if (missing.length > 0) {
+  throw new Error(`Replayed main is missing StGit topic commit(s): ${missing.join(", ")}`);
+}
+for (const name of stack.applied) stack.patches[name].oid = commitFor(name);
+stack.head = mainSha;
+process.stdout.write(JSON.stringify(stack));
+require("node:fs").writeFileSync(
+  desiredFile,
+  stack.applied.map((name) => `${patchPrefix}${name}\t${stack.patches[name].oid}`).join("\n") + "\n",
+);
+NODE
+
+updated_json="$(node - "$stack_json" "$subjects" "$STGIT_MAIN_SHA" <<'NODE'
+const [stackRaw, subjectsRaw, mainSha] = process.argv.slice(2);
+const stack = JSON.parse(stackRaw);
+const normalize = (subject) => subject.toLowerCase().replace(/[():,]/g, " ").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+const commits = new Map(subjectsRaw.split("\n").filter(Boolean).map((line) => line.split("\t")).map(([sha, subject]) => [normalize(subject), sha]));
+const commitFor = (name) => {
+  const matches = [...commits].filter(([normalized]) => normalized === name || normalized.startsWith(`${name}-`));
+  return matches.length === 1 ? matches[0][1] : undefined;
+};
+for (const name of stack.applied) stack.patches[name].oid = commitFor(name);
+stack.head = mainSha;
+process.stdout.write(JSON.stringify(stack));
+NODE
+)"
+
+GIT_INDEX_FILE="$index_file" git_cmd read-tree "${stack_ref}^{tree}"
+
+while IFS=$'\t' read -r ref sha; do
+  old="$(git_cmd rev-parse --verify "$ref" 2>/dev/null || printf '%040d' 0)"
+  name="${ref#"$patch_prefix"}"
+  bottom="$(git_cmd rev-parse "${sha}^")"
+  patch_metadata="$(git_cmd show "${stack_ref}:patches/${name}" 2>/dev/null || true)"
+  updated_patch_metadata="$(node - "$patch_metadata" "$bottom" "$sha" <<'NODE'
+const [original, bottom, top] = process.argv.slice(2);
+if (original.length === 0) {
+  process.stdout.write(`Bottom: ${bottom}\nTop:    ${top}\n\n`);
+} else {
+  process.stdout.write(
+    original
+      .replace(/^Bottom: .+$/m, `Bottom: ${bottom}`)
+      .replace(/^Top:    .+$/m, `Top:    ${top}`),
+  );
+}
+NODE
+)"
+  patch_blob="$(printf '%s' "$updated_patch_metadata" | git_cmd hash-object -w --stdin)"
+  GIT_INDEX_FILE="$index_file" git_cmd update-index --add --cacheinfo "100644,$patch_blob,patches/$name"
+  git_cmd update-ref "$ref" "$sha" "$old"
+  printf '%s\t%s\t%s\n' "$ref" "$old" "$sha" >> "$plan_file"
+done < "$desired_file"
+
+blob="$(printf '%s' "$updated_json" | git_cmd hash-object -w --stdin)"
+GIT_INDEX_FILE="$index_file" git_cmd update-index --add --cacheinfo "100644,$blob,stack.json"
+tree="$(GIT_INDEX_FILE="$index_file" git_cmd write-tree)"
+new_stack="$(printf 'refresh StGit stack metadata\n' | git_cmd commit-tree "$tree" -p "$stack_lease" -p "$STGIT_MAIN_SHA")"
+git_cmd update-ref "$stack_ref" "$new_stack" "$stack_lease"
+
+final_json="$(git_cmd show "$stack_ref:stack.json")"
+final_head="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).head)' "$final_json")"
+if [[ "$final_head" != "$STGIT_MAIN_SHA" ]]; then
+  echo "StGit metadata guard failed: stack.json.head $final_head does not equal main $STGIT_MAIN_SHA." >&2
+  exit 1
+fi
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "stack_ref=$stack_ref"
+    echo "stack_lease=$stack_lease"
+    echo "stack_sha=$new_stack"
+    echo "push_plan<<EOF"
+    cat "$plan_file"
+    echo "EOF"
+  } >> "$GITHUB_OUTPUT"
+fi
+
+echo "StGit metadata refreshed: $stack_ref now records main $STGIT_MAIN_SHA."

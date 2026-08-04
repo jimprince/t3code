@@ -42,6 +42,16 @@ because the headless `t3` server reports its version from
 checked-out starting HEAD and requires live `origin/main` to still equal it
 before replay. A stale queued checkout therefore fails before preparation or
 tag publication. The bounded daily backup ref is retained.
+
+The replay also refreshes the canonical StGit `adopt` metadata. Before writing,
+the workflow fetches `refs/stacks/stgit/adopt` and all of its patch refs, and
+requires the recorded `stack.json.head` to equal the same pre-replay `main`
+lease. `scripts/ci/refresh-stgit-metadata` then rewrites the 11 declared patch
+refs and the stack head to the replayed `main` commits. The resulting `main`,
+StGit stack ref, patch refs, and release tag are pushed in one `git push
+--atomic` transaction with an explicit lease for every mutable ref. A metadata
+mismatch therefore rejects the release instead of publishing a branch that
+StGit cannot safely adopt.
 The next upstream stable sync replays the fork patch onto the stable tag and
 publishes the integrated stable release.
 
