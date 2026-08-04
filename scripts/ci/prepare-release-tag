@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Creates the release-preparation commit (version stamps + refreshed lockfile),
+# tags it, and reports the SHA that `main` must be pushed at.
+#
+# The prep commit is deliberately NOT on main. `release.yml` derives the version
+# from the tag name (line 153) and re-stamps at build time (lines 266, 440), so
+# main carries no generated release metadata. Keeping it off main removes one
+# replayed commit per sync from the rebase stack — historically 16 of them, each
+# conflicting on the four manifests plus pnpm-lock.yaml.
+#
+# The commit still exists and is still tagged, because release.yml installs with
+# --frozen-lockfile and needs a consistent lockfile at the tagged commit.
+#
+# Required env:
+#   RELEASE_TAG          e.g. v0.0.29-nightly.20260725.860-fork.1
+# Optional env:
+#   SYNC_SKIP_INSTALL=1  skip vp install/fmt (tests)
+#   SYNC_GIT_BIN         git binary path (bypass interactive wrappers)
+#
+# Outputs (appended to $GITHUB_OUTPUT when set):
+#   main_sha  SHA to push to main
+#   prep_sha  tagged commit
+#   tag       the created tag
+
+: "${RELEASE_TAG:?RELEASE_TAG is required}"
+
+# Resolve the sibling stamping script relative to this file's own location
+# (not $PWD): the target repo (or, in tests, a disposable fixture repo) is the
+# working directory the version manifests live in, but this script itself
+# lives in the real checkout, wherever that was invoked from.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+GIT_BIN="${SYNC_GIT_BIN:-$(command -v git)}"
+if [[ ! -x "$GIT_BIN" ]]; then
+  echo "git executable is unavailable: $GIT_BIN" >&2
+  exit 2
+fi
+
+git_cmd() {
+  "$GIT_BIN" "$@"
+}
+
+MANIFESTS=(
+  apps/server/package.json
+  apps/desktop/package.json
+  apps/web/package.json
+  packages/contracts/package.json
+)
+
+main_sha="$(git_cmd rev-parse HEAD)"
+version="${RELEASE_TAG#v}"
+
+if [[ "${SYNC_SKIP_INSTALL:-0}" != "1" ]]; then
+  # A freshly rebased upstream may change manifests before the fork stamp, so
+  # refresh the lockfile before the install that runs the stamping script.
+  vp install --lockfile-only --ignore-scripts
+  vp install --frozen-lockfile --ignore-scripts
+fi
+
+node "$REPO_ROOT/scripts/update-release-package-versions.ts" "$version"
+
+if [[ "${SYNC_SKIP_INSTALL:-0}" != "1" ]]; then
+  vp fmt "${MANIFESTS[@]}"
+  vp install --lockfile-only --ignore-scripts
+fi
+
+if git_cmd diff --quiet -- "${MANIFESTS[@]}" pnpm-lock.yaml; then
+  echo "Package versions already match $version; tagging main head."
+  prep_sha="$main_sha"
+else
+  git_cmd add -- "${MANIFESTS[@]}" pnpm-lock.yaml
+  git_cmd commit -m "chore(release): prepare $RELEASE_TAG"
+  prep_sha="$(git_cmd rev-parse HEAD)"
+fi
+
+git_cmd tag -f "$RELEASE_TAG" "$prep_sha"
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "main_sha=$main_sha"
+    echo "prep_sha=$prep_sha"
+    echo "tag=$RELEASE_TAG"
+  } >> "$GITHUB_OUTPUT"
+fi
+
+echo "main stays at $main_sha"
+echo "tag $RELEASE_TAG -> $prep_sha"
