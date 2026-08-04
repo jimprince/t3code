@@ -1,20 +1,31 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { DEFAULT_MODEL, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import * as NodeOS from "node:os";
+import {
+  DEFAULT_MODEL,
+  EnvironmentId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Option from "effect/Option";
+import * as Path from "effect/Path";
 import * as PlatformError from "effect/PlatformError";
 import * as Ref from "effect/Ref";
 import * as Stream from "effect/Stream";
 
 import * as ServerConfig from "./config.ts";
+import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
+import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 
 it.effect("automatic pull only updates enabled, behind, clean default-branch checkouts", () =>
   Effect.gen(function* () {
@@ -54,6 +65,29 @@ it.effect("automatic pull only updates enabled, behind, clean default-branch che
     assert.deepStrictEqual(pulled, ["/clean"]);
   }),
 );
+
+it("applies T3 environment metadata to process env for launched agent children", () => {
+  const env: NodeJS.ProcessEnv = {};
+
+  ServerRuntimeStartup.applyT3EnvironmentMetadataToProcessEnv(
+    {
+      environmentId: EnvironmentId.make("environment-local"),
+      label: "local-mbp",
+      platform: {
+        os: "darwin",
+        arch: "arm64",
+      },
+      serverVersion: "0.1.0",
+      capabilities: {
+        repositoryIdentity: true,
+      },
+    },
+    env,
+  );
+
+  assert.equal(env.T3_ENVIRONMENT_ID, "environment-local");
+  assert.equal(env.T3_ENVIRONMENT_NAME, "local-mbp");
+});
 
 it.effect("enqueueCommand waits for readiness and then drains queued work", () =>
   Effect.scoped(
@@ -117,6 +151,88 @@ it.effect("resolveWelcomeBase derives cwd and project name from server config", 
   }),
 );
 
+it.effect("creates one deterministic chat project outside server state and the process cwd", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-chat-project-state-" });
+    const environmentId = EnvironmentId.make("environment-chat-test");
+    const dispatched = yield* Ref.make<ReadonlyArray<Record<string, unknown>>>([]);
+
+    const projectId = yield* ServerRuntimeStartup.ensureChatProject.pipe(
+      Effect.provideService(ServerConfig.ServerConfig, {
+        stateDir,
+        cwd: "/unrelated/user/repository",
+        mode: "web",
+        host: undefined,
+        port: 3773,
+      } as never),
+      Effect.provideService(ServerEnvironment.ServerEnvironment, {
+        getEnvironmentId: Effect.succeed(environmentId),
+        getDescriptor: Effect.die("unused"),
+      }),
+      Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+        getProjectShellById: () =>
+          Ref.get(dispatched).pipe(
+            Effect.map((commands) =>
+              commands.length === 0
+                ? Option.none()
+                : Option.some({
+                    id: ServerRuntimeStartup.getChatProjectId(String(environmentId)),
+                    title: "Chat",
+                    kind: "chat",
+                    workspaceRoot: path.join(
+                      NodeOS.tmpdir(),
+                      "t3code-chat-workspaces",
+                      ServerRuntimeStartup.getChatProjectStorageKey(String(environmentId)),
+                    ),
+                  } as never),
+            ),
+          ),
+        getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+      } as never),
+      Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
+        dispatch: (command: unknown) =>
+          Ref.update(dispatched, (commands) => [
+            ...commands,
+            command as unknown as Record<string, unknown>,
+          ]).pipe(Effect.as({ sequence: 1 })),
+      } as never),
+      Effect.provide(WorkspacePaths.layer),
+    );
+
+    assert.equal(projectId, ServerRuntimeStartup.getChatProjectId(String(environmentId)));
+    const command = (yield* Ref.get(dispatched))[0];
+    const expectedWorkspaceRoot = path.join(
+      NodeOS.tmpdir(),
+      "t3code-chat-workspaces",
+      ServerRuntimeStartup.getChatProjectStorageKey(String(environmentId)),
+    );
+    assert.deepStrictEqual(
+      command && {
+        projectId: command.projectId,
+        title: command.title,
+        kind: command.kind,
+        workspaceRoot: command.workspaceRoot,
+        createWorkspaceRootIfMissing: command.createWorkspaceRootIfMissing,
+      },
+      {
+        projectId: ServerRuntimeStartup.getChatProjectId(String(environmentId)),
+        title: "Chat",
+        kind: "chat",
+        workspaceRoot: expectedWorkspaceRoot,
+        createWorkspaceRootIfMissing: true,
+      },
+    );
+    assert.equal((yield* fs.stat(expectedWorkspaceRoot)).type, "Directory");
+    assert.equal(expectedWorkspaceRoot.startsWith(stateDir), false);
+    assert.match(
+      ServerRuntimeStartup.getChatProjectStorageKey("../server-state"),
+      /^env-[a-f0-9]{32}$/,
+    );
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
+
 it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and thread ids", () => {
   const bootstrapProjectId = ProjectId.make("project-startup-bootstrap");
   const bootstrapThreadId = ThreadId.make("thread-startup-bootstrap");
@@ -160,9 +276,10 @@ it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and threa
         getFullThreadDiffContext: () => Effect.succeed(Option.none()),
         getThreadRuntimeContext: () => Effect.die("unused"),
         getThreadShellById: () => Effect.die("unused"),
+        getThreadShellByIdIncludingArchived: () => Effect.die("unused"),
         getThreadDetailById: () => Effect.die("unused"),
-        getThreadDetailSnapshot: () => Effect.die("unused"),
         searchThreads: () => Effect.succeed({ matches: [] }),
+        getThreadDetailSnapshot: () => Effect.die("unused"),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -220,9 +337,10 @@ it.effect("resolveAutoBootstrapWelcomeTargets creates a project and thread when 
         getFullThreadDiffContext: () => Effect.succeed(Option.none()),
         getThreadRuntimeContext: () => Effect.die("unused"),
         getThreadShellById: () => Effect.die("unused"),
+        getThreadShellByIdIncludingArchived: () => Effect.die("unused"),
         getThreadDetailById: () => Effect.die("unused"),
-        getThreadDetailSnapshot: () => Effect.die("unused"),
         searchThreads: () => Effect.succeed({ matches: [] }),
+        getThreadDetailSnapshot: () => Effect.die("unused"),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
@@ -343,9 +461,10 @@ it.effect("resolveAutoBootstrapWelcomeTargets preserves typed UUID generation fa
         getFullThreadDiffContext: () => Effect.succeed(Option.none()),
         getThreadRuntimeContext: () => Effect.die("unused"),
         getThreadShellById: () => Effect.die("unused"),
+        getThreadShellByIdIncludingArchived: () => Effect.die("unused"),
         getThreadDetailById: () => Effect.die("unused"),
-        getThreadDetailSnapshot: () => Effect.die("unused"),
         searchThreads: () => Effect.succeed({ matches: [] }),
+        getThreadDetailSnapshot: () => Effect.die("unused"),
       }),
       Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
         readEvents: () => Stream.empty,
