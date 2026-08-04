@@ -266,3 +266,23 @@ purpose = "Adapt repository CI to the fork's available runners, mobile checks, a
 retire_when = "Upstream CI supports the same runner and validation constraints."
 depends_on = ["fork-build-workspace-tooling"]
 roles = []
+
+[[patch]]
+name = "fork-ci-release-pipeline"
+subject = "ci: publish fork release pipeline"
+class = "product"
+purpose = "Build and publish the fork's desktop, headless, updater, and mobile release lanes."
+retire_when = "never"
+depends_on = ["fork-desktop-distribution", "fork-mobile-delivery", "fork-ci-runner-compat"]
+roles = ["release-workflow-owner"]
+[[patch.decision]]
+id = "release-version-stamps"
+date = "2026-07-28"
+decided = "narrow"
+rationale = "Committed package versions are redundant because release automation derives them from the tag. Always take upstream versions during replay and keep generated stamps out of main."
+[[patch.decision]]
+id = "stamp-free-release-tags"
+date = "2026-07-30"
+decided = "tag-stamped-child-main-unstamped-parent"
+rationale = "Both automatic release writers call prepare-release-tag, tag its prepared child, and keep main at the exact unstamped stack tip. Release consumes that bound tag and never finalizes versions onto main."
+standing_policy = "Generated version stamps and release lockfile changes are tag-only."
