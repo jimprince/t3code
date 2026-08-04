@@ -257,3 +257,12 @@ retire_when = "never"
 depends_on = ["fork-build-workspace-tooling"]
 roles = []
 note = "Keep mobile configuration as an overlay; replacing upstream's config can silently drop new native plugins."
+
+[[patch]]
+name = "fork-ci-runner-compat"
+subject = "ci: support fork runner constraints"
+class = "divergence"
+purpose = "Adapt repository CI to the fork's available runners, mobile checks, and release smoke requirements."
+retire_when = "Upstream CI supports the same runner and validation constraints."
+depends_on = ["fork-build-workspace-tooling"]
+roles = []
