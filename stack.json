@@ -1,13 +1,17 @@
 {
   "version": 5,
-  "prev": "dadafadd1a3be5bbec309d61b4be8303062a9987",
-  "head": "6a0bae5d8cba06f0894b76365d1ee9ebd631390b",
+  "prev": "355baa92eede773f747c98fd5476a82c8a5fd5f6",
+  "head": "605c4821b8b3e52dd8da96b2e6bf19faca7e7656",
   "applied": [
-    "fork-stgit-stack-policy"
+    "fork-stgit-stack-policy",
+    "fork-build-workspace-tooling"
   ],
   "unapplied": [],
   "hidden": [],
   "patches": {
+    "fork-build-workspace-tooling": {
+      "oid": "605c4821b8b3e52dd8da96b2e6bf19faca7e7656"
+    },
     "fork-stgit-stack-policy": {
       "oid": "6a0bae5d8cba06f0894b76365d1ee9ebd631390b"
     }
