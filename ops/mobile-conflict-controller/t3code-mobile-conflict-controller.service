@@ -1,0 +1,26 @@
+[Unit]
+Description=T3 Code mobile-track conflict controller
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/t3code
+Environment=MOBILE_CONFLICT_CONTROLLER_PORT=8787
+Environment=MOBILE_CONFLICT_ALLOWED_REPOS=jimprince/t3code
+Environment=MOBILE_CONFLICT_EVENT_TYPE=mobile-track-conflict
+Environment=MOBILE_CONFLICT_WORKSPACE_ROOT=/var/lib/t3code-mobile-conflicts/jobs
+Environment=MOBILE_CONFLICT_RESOLVER_IMAGE=t3code-mobile-conflict-resolver:latest
+EnvironmentFile=/etc/t3code/mobile-conflict-controller.env
+ExecStart=/usr/bin/node scripts/mobile-conflict-controller.ts
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/t3code-mobile-conflicts
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
