@@ -9,9 +9,11 @@
 - [Keeping app and server in sync](./user/updating.md)
 - [Source control integrations](./user/source-control.md)
 - [Background service (Linux)](./user/background-service.md)
+- [Performance protection and recovery](./user/performance-recovery.md)
+- [Moving threads between machines](./user/moving-threads.md)
 - Providers: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md)
 
-Mobile app: [apps/mobile/README.md](../apps/mobile/README.md)
+Mobile app: [apps/mobile/README.md](../apps/mobile/README.md) · [iOS deployment options](./mobile/ios-deployment.md)
 
 ---
 
@@ -21,6 +23,7 @@ Everything below is for maintainers. Setup lives in the [root README](../README.
 policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../AGENTS.md).
 
 - [Architecture overview](./internals/overview.md)
+- [`t3-thread` operator CLI](./architecture/t3-thread.md)
 - [Workspace layout](./internals/workspace-layout.md)
 - [Glossary](./internals/glossary.md)
 - [Scripts](./internals/scripts.md)
@@ -35,7 +38,13 @@ policy in [CONTRIBUTING.md](../CONTRIBUTING.md); agent rules in [AGENTS.md](../A
 
 ### Runbooks
 
+- [Rebase the fork or resolve a patch conflict](./operations/fork-maintenance.md#rebase-and-conflict-repair)
+- [Add or change a fork feature](./operations/fork-maintenance.md#adding-or-changing-fork-functionality)
+- [Publish the StGit stack safely](./operations/fork-maintenance.md#publication)
+- [Fork CI](./operations/ci.md)
 - [Release](./operations/release.md)
+- [Fork maintenance](./operations/fork-maintenance.md)
+- [Fork patch inventory](./operations/fork-inventory.toml)
 - [Observability](./operations/observability.md)
 - [Relay observability](./operations/relay-observability.md)
 - [Mobile app store screenshots](./operations/mobile-app-store-screenshots.md)
