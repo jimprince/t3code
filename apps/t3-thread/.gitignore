@@ -1,0 +1,9 @@
+node_modules/
+dist/*
+!dist/
+!dist/cli.cjs
+coverage/
+.env
+.env.*
+*.log
+.DS_Store
