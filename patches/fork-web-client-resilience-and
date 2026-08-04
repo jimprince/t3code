@@ -1,0 +1,6 @@
+Bottom: 2d2faccbc33aa6a3e2b638791c5df7ee6c60ba54
+Top:    de351f757f3da646d4815c16a1c580353bb1138d
+Author: Codex <codex@users.noreply.github.com>
+Date:   2026-08-04 01:17:14 +0000
+
+fork(web): client resilience and thread-move UI
