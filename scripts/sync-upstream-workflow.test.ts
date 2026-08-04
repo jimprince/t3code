@@ -51,6 +51,42 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
     }),
   );
 
+  it.effect("provisions Bun before every Bun-backed stack operation", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const ciWorkflow = yield* fs.readFileString(path.join(repoRoot, ".github/workflows/ci.yml"));
+      const testJob = ciWorkflow.slice(
+        ciWorkflow.indexOf("  test:\n"),
+        ciWorkflow.indexOf("  mobile_native_static_analysis:\n"),
+      );
+      const policyJob = ciWorkflow.slice(ciWorkflow.indexOf("  fork-policy:\n"));
+      const stackWriters = [
+        yield* fs.readFileString(path.join(repoRoot, ".github/workflows/sync-upstream.yml")),
+        yield* fs.readFileString(path.join(repoRoot, ".github/workflows/fork-push-nightly.yml")),
+      ];
+
+      for (const [name, workflow, operation] of [
+        ["CI Test", testJob, "vp run test"],
+        ["CI Fork patch policy", policyJob, "scripts/ci/check-stgit-stack"],
+        ["Sync Upstream", stackWriters[0]!, "scripts/ci/reproduce-sync-upstream"],
+        ["Fork Push Nightly", stackWriters[1]!, "scripts/ci/reproduce-sync-upstream"],
+      ] as const) {
+        assert.include(
+          workflow,
+          "oven-sh/setup-bun@v2",
+          `REGRESSION: ${name} must install Bun before invoking Bun-backed stack tooling`,
+        );
+        assert.isBelow(
+          workflow.indexOf("oven-sh/setup-bun@v2"),
+          workflow.indexOf(operation),
+          `${name} must install Bun before ${operation}`,
+        );
+      }
+    }),
+  );
+
   it.effect("pushes main at the pre-prep sha so release metadata stays off main", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
