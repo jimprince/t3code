@@ -19,6 +19,7 @@ import {
   ProviderRuntimeEvent,
   type RuntimeMode,
   ThreadId,
+  TurnId,
   ProviderInstanceId,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
@@ -4931,6 +4932,7 @@ describe("ClaudeAdapterLive", () => {
         resume: "550e8400-e29b-41d4-a716-446655440000",
         resumeSessionAt: "assistant-99",
         turnCount: 3,
+        turnBoundaries: [{ turnCount: 3, assistantUuid: "assistant-99" }],
       });
 
       const createInput = harness.getLastCreateQueryInput();
