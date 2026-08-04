@@ -34,6 +34,13 @@ normal pushes to `main`, but only for changes that can affect packaged
 app/runtime output: `apps/**`, `packages/**`, `assets/**`, root package/build
 files, and desktop artifact build inputs.
 
+A lightweight job compares the exact push-before and push-after trees before
+installing replay tools. GitHub's coarse path filter can include replayed
+commits after a StGit force push; the tree comparison skips maintenance-only
+rewrites. Missing history conservatively follows the normal release path,
+and manual dispatch bypasses this filter. Main and prepared tags publish
+atomically, so tag discovery needs no fixed visibility delay.
+
 Docs, workflow maintenance, release helper scripts, and other repo plumbing
 should not create push nightlies. Use manual `release.yml` dispatch if a
 maintenance-only commit genuinely needs to ship as a desktop update.
@@ -53,6 +60,12 @@ version stamp only in the tagged child.
 The next upstream stable sync replays the fork patch onto the stable tag and
 publishes the integrated stable release.
 
+If the push-nightly replay conflicts, it restores the starting checkout,
+dispatches the nightly `Sync Upstream` workflow, and fails visibly. Both
+workflows share the main-writer lock, so the dispatched run starts only after
+the detector exits; that eligible run emits the normal repair handoff for the
+CI Repair Bot instead of leaving the conflict idle until the daily schedule.
+
 ## Normal Commands
 
 Optionally start the local Apple Silicon runner before a desktop release:
@@ -71,12 +84,17 @@ Self-hosted Mac builds reuse the machine's persistent pnpm store directly.
 The setup action's remote dependency cache stays enabled only on hosted runners;
 archiving the shared local store adds an unnecessary upload to every release.
 
-Sync stable or nightly from upstream:
+Sync from upstream. Scheduled runs sync nightly only, because the fork ships
+the nightly feed; stable runs solely on an explicit `channel=stable` dispatch:
 
 ```bash
-gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
 gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
 ```
+
+A stable replay conflicts by construction whenever the stack sits on a nightly
+base that references upstream files absent from the stable tag, so expect to
+resolve those conflicts by hand when you deliberately ask for a stable sync.
 
 For both channels, `sync-upstream.yml` replays the ordered StGit series onto the
 selected upstream tag and stamps package versions to the derived release
