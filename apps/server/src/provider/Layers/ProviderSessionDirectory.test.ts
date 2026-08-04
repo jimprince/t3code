@@ -4,7 +4,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { ProviderDriverKind, ThreadId } from "@t3tools/contracts";
+import { ProviderDriverKind, ThreadId, TurnId } from "@t3tools/contracts";
 import { it, assert } from "@effect/vitest";
 import { assertSome } from "@effect/vitest/utils";
 import * as Effect from "effect/Effect";
@@ -19,12 +19,20 @@ import {
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import { ProviderSessionDirectory } from "../Services/ProviderSessionDirectory.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
+import { makeServerBootGenerationLayer } from "./ServerBootGeneration.ts";
 
-function makeDirectoryLayer<E, R>(persistenceLayer: Layer.Layer<SqlClient.SqlClient, E, R>) {
+function makeDirectoryLayer<E, R>(
+  persistenceLayer: Layer.Layer<SqlClient.SqlClient, E, R>,
+  bootGenerationId = "boot-a",
+) {
   const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(Layer.provide(persistenceLayer));
+  const bootGenerationLayer = makeServerBootGenerationLayer(bootGenerationId);
   return Layer.mergeAll(
     runtimeRepositoryLayer,
-    ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer)),
+    ProviderSessionDirectoryLive.pipe(
+      Layer.provide(Layer.merge(runtimeRepositoryLayer, bootGenerationLayer)),
+    ),
+    bootGenerationLayer,
     NodeServices.layer,
   );
 }
@@ -71,6 +79,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         assert.equal(runtime.value.threadId, nextThreadId);
         assert.equal(runtime.value.status, "running");
         assert.equal(runtime.value.providerName, "codex");
+        assert.equal(runtime.value.bootGenerationId, "boot-a");
       }
 
       const threadIds = yield* directory.listThreadIds();
@@ -101,6 +110,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         provider: ProviderDriverKind.make("codex"),
         threadId,
         status: "running",
+        activeTurnId: TurnId.make("turn-1"),
         runtimePayload: {
           activeTurnId: "turn-1",
         },
@@ -134,9 +144,11 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         threadId: newerThreadId,
         providerName: "codex",
         providerInstanceId: null,
+        bootGenerationId: "boot-newer",
         adapterKey: "codex",
         runtimeMode: "full-access",
         status: "running",
+        activeTurnId: null,
         lastSeenAt: "2026-04-14T12:05:00.000Z",
         resumeCursor: {
           opaque: "resume-newer",
@@ -150,9 +162,11 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         threadId: olderThreadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: "boot-older",
         adapterKey: "claudeAgent",
         runtimeMode: "approval-required",
         status: "starting",
+        activeTurnId: null,
         lastSeenAt: "2026-04-14T12:00:00.000Z",
         resumeCursor: {
           opaque: "resume-older",
@@ -168,9 +182,11 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         {
           threadId: olderThreadId,
           provider: ProviderDriverKind.make("claudeAgent"),
+          bootGenerationId: "boot-older",
           adapterKey: "claudeAgent",
           runtimeMode: "approval-required",
           status: "starting",
+          activeTurnId: null,
           lastSeenAt: "2026-04-14T12:00:00.000Z",
           resumeCursor: {
             opaque: "resume-older",
@@ -182,9 +198,11 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         {
           threadId: newerThreadId,
           provider: ProviderDriverKind.make("codex"),
+          bootGenerationId: "boot-newer",
           adapterKey: "codex",
           runtimeMode: "full-access",
           status: "running",
+          activeTurnId: null,
           lastSeenAt: "2026-04-14T12:05:00.000Z",
           resumeCursor: {
             opaque: "resume-newer",
@@ -206,9 +224,11 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: "legacy-boot",
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
+        activeTurnId: null,
         lastSeenAt: "2026-01-01T00:00:00.000Z",
         resumeCursor: null,
         runtimePayload: null,

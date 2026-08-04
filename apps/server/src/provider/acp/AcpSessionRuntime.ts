@@ -20,8 +20,10 @@ import * as EffectAcpClient from "effect-acp/client";
 import * as EffectAcpErrors from "effect-acp/errors";
 import type * as EffectAcpSchema from "effect-acp/schema";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
+import type { ThreadId } from "@t3tools/contracts";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 
+import { withT3ThreadIdentityEnv } from "../t3ThreadIdentityEnv.ts";
 import {
   collectSessionConfigOptionValues,
   decideToolCallUpdateEmission,
@@ -80,6 +82,13 @@ export interface AcpSpawnInput {
 export interface AcpSessionRuntimeOptions {
   readonly spawn: AcpSpawnInput;
   readonly cwd: string;
+  /**
+   * Stamps `T3_THREAD_ID` (and the T3 environment metadata) onto the agent
+   * process so `t3-thread` inside the session resolves its own thread. Chat
+   * sessions set it; probe, setup and text-generation runtimes leave it unset
+   * because they are not a thread.
+   */
+  readonly t3ThreadId?: ThreadId;
   readonly resumeSessionId?: string;
   readonly resumeMethod?: "load" | "resume";
   readonly sessionLoadTimeout?: Duration.Input;
@@ -425,15 +434,23 @@ export const make = (
         ),
       );
 
+    // Overlay only — `extendEnv` still decides whether the process env is
+    // inherited, so a provider that deliberately spawns with a curated env
+    // (Antigravity) keeps that env plus the identity, and one that relies on
+    // inheritance (Cursor, Grok) does not lose it by gaining an `env`.
+    const spawnEnv =
+      options.t3ThreadId === undefined
+        ? options.spawn.env
+        : withT3ThreadIdentityEnv(options.spawn.env, { threadId: options.t3ThreadId });
     const spawnCommand = yield* resolveSpawnCommand(options.spawn.command, options.spawn.args, {
-      ...(options.spawn.env ? { env: options.spawn.env } : {}),
+      ...(spawnEnv ? { env: spawnEnv } : {}),
       extendEnv: options.spawn.extendEnv ?? true,
     });
     const child = yield* spawner
       .spawn(
         ChildProcess.make(spawnCommand.command, spawnCommand.args, {
           ...(options.spawn.cwd ? { cwd: options.spawn.cwd } : {}),
-          ...(options.spawn.env ? { env: options.spawn.env } : {}),
+          ...(spawnEnv ? { env: spawnEnv } : {}),
           extendEnv: options.spawn.extendEnv ?? true,
           shell: spawnCommand.shell,
         }),
