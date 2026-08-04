@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+# Deprecated compatibility alias. Use t3-thread in new workflows.
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+exec "$SCRIPT_DIR/t3-thread" "$@"
