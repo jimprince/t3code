@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Rebuild published StGit metadata after the ordered series is replayed onto a
+# new upstream base. The workflow begins from the remote metadata snapshot and
+# maps its stable patch names onto the rewritten commits.
+#
+# The workflow fetches refs/stacks/stgit/$STGIT_BRANCH and its patch refs before
+# calling this script. The resulting refs are local until the caller publishes
+# them together with main using the emitted leased atomic push plan.
+
+: "${STGIT_BRANCH:?STGIT_BRANCH is required}"
+: "${STGIT_EXPECTED_HEAD:?STGIT_EXPECTED_HEAD is required}"
+: "${STGIT_MAIN_SHA:?STGIT_MAIN_SHA is required}"
+
+GIT_BIN="${SYNC_GIT_BIN:-$(command -v git)}"
+git_cmd() { "$GIT_BIN" "$@"; }
+
+stack_ref="refs/stacks/stgit/$STGIT_BRANCH"
+patch_prefix="refs/patches/stgit/$STGIT_BRANCH/"
+
+if ! git_cmd rev-parse --verify "${stack_ref}^{commit}" >/dev/null 2>&1; then
+  echo "Missing StGit stack ref $stack_ref; refusing to invent production metadata." >&2
+  exit 1
+fi
+
+stack_lease="$(git_cmd rev-parse "$stack_ref")"
+stack_json="$(git_cmd show "$stack_ref:stack.json")"
+recorded_head="$(node -e 'const stack = JSON.parse(process.argv[1]); process.stdout.write(stack.head ?? "")' "$stack_json")"
+if [[ "$recorded_head" != "$STGIT_EXPECTED_HEAD" ]]; then
+  echo "StGit stack head $recorded_head does not match expected main lease $STGIT_EXPECTED_HEAD." >&2
+  exit 1
+fi
+
+merge_base="$(git_cmd merge-base "$STGIT_EXPECTED_HEAD" "$STGIT_MAIN_SHA")"
+subjects="$(git_cmd log --reverse --format='%H%x09%s' "${merge_base}..${STGIT_MAIN_SHA}")"
+
+desired_file="$(mktemp)"
+plan_file="$(mktemp)"
+index_file="$(mktemp)"
+updated_file="$(mktemp)"
+trap 'rm -f "$desired_file" "$plan_file" "$index_file" "$updated_file"' EXIT
+
+# The existing StGit patch commits define the expected subjects. Match those
+# subjects exactly in the replayed series; patch names are stable identifiers,
+# not lossy normalizations of commit messages.
+node - "$stack_json" "$subjects" "$STGIT_MAIN_SHA" "$patch_prefix" "$desired_file" "$updated_file" "$GIT_BIN" <<'NODE'
+const { execFileSync } = require("node:child_process");
+const { writeFileSync } = require("node:fs");
+const [stackRaw, subjectsRaw, mainSha, patchPrefix, desiredFile, updatedFile, gitBin] = process.argv.slice(2);
+const stack = JSON.parse(stackRaw);
+const commits =
+  subjectsRaw
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => {
+      const separator = line.indexOf("\t");
+      return { oid: line.slice(0, separator), subject: line.slice(separator + 1) };
+    });
+const expectedSubject = (name) => {
+  const oid = stack.patches[name]?.oid;
+  if (!oid) throw new Error(`StGit metadata is missing an oid for applied patch ${name}`);
+  return execFileSync(gitBin, ["show", "-s", "--format=%s", oid], { encoding: "utf8" }).trimEnd();
+};
+const desired = [];
+for (const name of stack.applied) {
+  const subject = expectedSubject(name);
+  const matches = commits.filter((commit) => commit.subject === subject);
+  if (matches.length !== 1) {
+    throw new Error(
+      `Expected exactly one replayed commit for ${name} with subject ${JSON.stringify(subject)}; found ${matches.length}`,
+    );
+  }
+  stack.patches[name].oid = matches[0].oid;
+  desired.push(`${patchPrefix}${name}\t${matches[0].oid}`);
+}
+stack.head = mainSha;
+writeFileSync(desiredFile, desired.join("\n") + "\n");
+writeFileSync(updatedFile, JSON.stringify(stack));
+NODE
+
+updated_json="$(cat "$updated_file")"
+
+GIT_INDEX_FILE="$index_file" git_cmd read-tree "${stack_ref}^{tree}"
+
+while IFS=$'\t' read -r ref sha; do
+  old="$(git_cmd rev-parse --verify "$ref" 2>/dev/null || printf '%040d' 0)"
+  name="${ref#"$patch_prefix"}"
+  bottom="$(git_cmd rev-parse "${sha}^")"
+  patch_metadata="$(git_cmd show "${stack_ref}:patches/${name}" 2>/dev/null || true)"
+  updated_patch_metadata="$(node - "$patch_metadata" "$bottom" "$sha" <<'NODE'
+const [original, bottom, top] = process.argv.slice(2);
+if (original.length === 0) {
+  process.stdout.write(`Bottom: ${bottom}\nTop:    ${top}\n\n`);
+} else {
+  process.stdout.write(
+    original
+      .replace(/^Bottom: .+$/m, `Bottom: ${bottom}`)
+      .replace(/^Top:    .+$/m, `Top:    ${top}`),
+  );
+}
+NODE
+)"
+  patch_blob="$(printf '%s' "$updated_patch_metadata" | git_cmd hash-object -w --stdin)"
+  GIT_INDEX_FILE="$index_file" git_cmd update-index --add --cacheinfo "100644,$patch_blob,patches/$name"
+  git_cmd update-ref "$ref" "$sha" "$old"
+  printf '%s\t%s\t%s\n' "$ref" "$old" "$sha" >> "$plan_file"
+done < "$desired_file"
+
+# stack.json.applied is the canonical series. Raw patch refs may include debris
+# from retired, renamed, or split patches; delete every non-canonical ref and
+# emit its exact old oid so the caller can lease the deletion atomically.
+while IFS=' ' read -r ref old; do
+  [[ -z "$ref" ]] && continue
+  desired=false
+  while IFS=$'\t' read -r desired_ref _; do
+    if [[ "$ref" == "$desired_ref" ]]; then
+      desired=true
+      break
+    fi
+  done < "$desired_file"
+  if [[ "$desired" == true ]]; then
+    continue
+  fi
+
+  name="${ref#"$patch_prefix"}"
+  GIT_INDEX_FILE="$index_file" git_cmd update-index --force-remove "patches/$name" 2>/dev/null || true
+  git_cmd update-ref -d "$ref" "$old"
+  printf '%s\t%s\t\n' "$ref" "$old" >> "$plan_file"
+done < <(git_cmd for-each-ref --format='%(refname) %(objectname)' "$patch_prefix")
+
+blob="$(printf '%s' "$updated_json" | git_cmd hash-object -w --stdin)"
+GIT_INDEX_FILE="$index_file" git_cmd update-index --add --cacheinfo "100644,$blob,stack.json"
+tree="$(GIT_INDEX_FILE="$index_file" git_cmd write-tree)"
+new_stack="$(printf 'refresh StGit stack metadata\n' | git_cmd commit-tree "$tree" -p "$stack_lease" -p "$STGIT_MAIN_SHA")"
+git_cmd update-ref "$stack_ref" "$new_stack" "$stack_lease"
+
+final_json="$(git_cmd show "$stack_ref:stack.json")"
+final_head="$(node -e 'process.stdout.write(JSON.parse(process.argv[1]).head)' "$final_json")"
+if [[ "$final_head" != "$STGIT_MAIN_SHA" ]]; then
+  echo "StGit metadata guard failed: stack.json.head $final_head does not equal main $STGIT_MAIN_SHA." >&2
+  exit 1
+fi
+
+if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+  {
+    echo "stack_ref=$stack_ref"
+    echo "stack_lease=$stack_lease"
+    echo "stack_sha=$new_stack"
+    echo "push_plan<<EOF"
+    cat "$plan_file"
+    echo "EOF"
+  } >> "$GITHUB_OUTPUT"
+fi
+
+echo "StGit metadata refreshed: $stack_ref now records main $STGIT_MAIN_SHA."
