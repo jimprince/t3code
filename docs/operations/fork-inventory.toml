@@ -247,3 +247,13 @@ purpose = "Ship fork branding, packaging, update channels, and desktop lifecycle
 retire_when = "never"
 depends_on = ["fork-build-workspace-tooling", "fork-thread-transfer"]
 roles = []
+
+[[patch]]
+name = "fork-mobile-delivery"
+subject = "feat(mobile): add EAS delivery lanes"
+class = "product"
+purpose = "Maintain fork mobile identity, EAS routing, widget identifiers, runtime policy, and delivery documentation."
+retire_when = "never"
+depends_on = ["fork-build-workspace-tooling"]
+roles = []
+note = "Keep mobile configuration as an overlay; replacing upstream's config can silently drop new native plugins."
