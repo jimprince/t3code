@@ -119,3 +119,12 @@ id = "provider-session-reconciliation"
 date = "2026-08-21"
 decided = "retire+narrow"
 rationale = "Upstream #7719 now reconciles orphaned provider sessions and running turns while also preserving live sessions, repairing provider-directory bindings, covering archived and stale-active-turn cases, and bounding per-thread failures. Retire the fork's earlier startup reconciler and its duplicate tests so it cannot settle sessions before upstream's stronger reconciliation runs; keep the remaining lifecycle and bounded snapshot behavior in this patch."
+
+[[patch]]
+name = "fork-thread-goals"
+subject = "feat(goals): persist thread goals"
+class = "product"
+purpose = "Persist, expose, and render durable goals for long-running agent threads."
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
+depends_on = ["fork-thread-lifecycle-recovery"]
+roles = []
