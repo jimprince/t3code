@@ -286,3 +286,19 @@ date = "2026-07-30"
 decided = "tag-stamped-child-main-unstamped-parent"
 rationale = "Both automatic release writers call prepare-release-tag, tag its prepared child, and keep main at the exact unstamped stack tip. Release consumes that bound tag and never finalizes versions onto main."
 standing_policy = "Generated version stamps and release lockfile changes are tag-only."
+
+[[patch]]
+name = "fork-ci-upstream-sync"
+subject = "ci: replay StGit stack onto upstream"
+class = "product"
+purpose = "Replay the ordered StGit series onto upstream releases and hand conflicts to the owning patch."
+retire_when = "never"
+depends_on = ["fork-ci-release-pipeline"]
+roles = []
+[[patch.decision]]
+id = "queued-main-writer-start-binding"
+date = "2026-07-30"
+decided = "fail-stale-queued-checkouts"
+issue = "brad/t3code-fork#2 comment 2757"
+rationale = "A queued workflow may check out an older event SHA after another writer advances remote main. Bind every automatic writer's lease to its checked-out starting HEAD and fail before replay rather than adopting a newer remote lease."
+standing_policy = "Never renew an automatic main writer's starting lease from the remote."
