@@ -2,6 +2,8 @@
 import * as NodeAssert from "node:assert/strict";
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests */
+
 import * as NodePath from "node:path";
 import {
   ApprovalRequestId,
@@ -51,7 +53,7 @@ const decodeCodexSettings = Schema.decodeSync(CodexSettings);
 
 // Test-local service tag so the rest of the file can keep using `yield* CodexAdapter`.
 class CodexAdapter extends Context.Service<CodexAdapter, CodexAdapterShape>()(
-  "t3/provider/Layers/CodexAdapter.test/CodexAdapter",
+  "t3/provider/Layers/CodexAdapter.fork.test/CodexAdapter",
 ) {}
 
 const asThreadId = (value: string): ThreadId => ThreadId.make(value);
