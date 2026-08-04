@@ -1,5 +1,11 @@
 # Fork Maintenance Phases 0–2 Implementation Plan
 
+> **Historical design record.** It describes the pre-StGit
+> `fork-topics.json`/autosquash implementation. For current operations, use
+> [LLM_INSTRUCTIONS.md](../../../LLM_INSTRUCTIONS.md), the repository-local
+> [`fork-patch-stack` skill](../../../.agents/skills/fork-patch-stack/SKILL.md),
+> and the [fork maintenance runbook](../../operations/fork-maintenance.md).
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Cut the fork's replayed commit stack from 120 to ~11, give conflict resolution persistent memory, and make the stack structurally unable to regrow.

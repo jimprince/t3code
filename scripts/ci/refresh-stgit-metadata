@@ -2,9 +2,9 @@
 
 set -euo pipefail
 
-# Rebuild the StGit metadata for the curated fork stack after a plain-git
-# replay. Git rebase moves main but deliberately knows nothing about StGit's
-# private refs, so publishing only main leaves `stack.json.head` stale.
+# Rebuild published StGit metadata after the ordered series is replayed onto a
+# new upstream base. The workflow begins from the remote metadata snapshot and
+# maps its stable patch names onto the rewritten commits.
 #
 # The workflow fetches refs/stacks/stgit/$STGIT_BRANCH and its patch refs before
 # calling this script. The resulting refs are local until the caller publishes

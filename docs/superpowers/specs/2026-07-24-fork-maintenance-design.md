@@ -1,5 +1,11 @@
 # Fork Maintenance Strategy — Design
 
+> **Historical design record.** It describes the pre-StGit
+> `fork-topics.json`/autosquash implementation. For current operations, use
+> [LLM_INSTRUCTIONS.md](../../../LLM_INSTRUCTIONS.md), the repository-local
+> [`fork-patch-stack` skill](../../../.agents/skills/fork-patch-stack/SKILL.md),
+> and the [fork maintenance runbook](../../operations/fork-maintenance.md).
+
 **Date:** 2026-07-24
 **Scope:** `jimprince/t3code` only. Ice and OrcaSlicer are greenfield forks suited to a
 merge-based model and get their own spec.

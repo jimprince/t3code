@@ -79,16 +79,17 @@ gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
 gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
 ```
 
-For both channels, `sync-upstream.yml` rebases the fork's curated topic series
-onto the selected upstream tag, stamps package versions to the derived release
-version via `scripts/ci/prepare-release-tag`, and pushes the release tag at
-that stamped child while `main` stays at the exact pre-stamp stack tip. Fork
-Push Nightly uses the same helper and ref split. Both workflows share the
+For both channels, `sync-upstream.yml` replays the ordered StGit series onto the
+selected upstream tag and stamps package versions to the derived release
+version via `scripts/ci/prepare-release-tag`. The release tag points at that
+stamped child while `main` stays at the exact pre-stamp stack tip. Fork Push
+Nightly uses the same helper and ref split. Both workflows share the
 `t3code-writes-main` lock, preserve daily backup refs, and use exact pinned
 leases bound to their checked-out starting HEAD; live `origin/main` must match
-before replay. The tag push follows the main push so a stale run cannot publish
-an orphan release. `release.yml` is tag-triggered and performs no `main` write
-or post-release finalization.
+before replay. The unstamped `main`, stack metadata, current patch refs,
+obsolete-ref deletions, and the stamped tag are published in one atomic
+transaction. `release.yml` is tag-triggered and performs no `main` write or
+post-release finalization.
 
 During that rebase, package version files are auto-resolved to upstream and
 re-stamped later. `.github/workflows/release.yml` is auto-resolved to the fork

@@ -18,10 +18,16 @@
   iOS development runtime back to the embedded bundle.
 - `.github/workflows/mobile-eas-preview.yml` handles PR preview mobile
   builds/updates with Expo fingerprinting.
-- `.github/workflows/sync-upstream.yml` applies the net fork delta as one replay
-  commit on each selected upstream tag. The repository-owned
-  `scripts/ci/reproduce-sync-upstream` driver is shared with the CI repair bot,
-  reports the complete one-pass conflict set, and restores the starting head
-  on interruption or unresolved conflicts.
+- `.github/workflows/sync-upstream.yml` replays the ordered StGit series on each
+  selected upstream tag. The repository-owned
+  `scripts/ci/reproduce-sync-upstream` driver is shared with the CI repair bot;
+  a repair operates inside the failing patch and refreshes that patch instead
+  of appending a commit. The inventory and metadata checks derive the live
+  series dynamically. Patch count may grow when an authorized independent
+  concern is added.
+- The fork policy CI job checks both the StGit stack and the documentation
+  discovery graph. Publishing keeps the rendered `main`, stack metadata, and
+  canonical patch refs together; obsolete patch refs are deleted with exact
+  leases in the same atomic transaction.
 - See [Release Workflow](./release.md) for the full fork release and mobile
   EAS model.

@@ -1,8 +1,7 @@
 name: Sync Upstream
 
-# Detects new releases on pingdotgg/t3code, rebases the fork's curated topic
-# stack (scripts/ci/fork-topics.json) onto the upstream tag, and pushes a
-# release tag — which triggers release.yml to build.
+# Detects new releases on pingdotgg/t3code, rebases the ordered StGit series
+# onto the upstream tag, and pushes a release tag that triggers release.yml.
 #
 # Scheduled runs check both channels independently. Manual runs can target one
 # channel or explicitly select both.
@@ -154,6 +153,10 @@ jobs:
           node-version-file: package.json
           cache: true
           run-install: false
+
+      - name: Install StGit
+        if: steps.channel.outputs.selected == 'true'
+        run: scripts/ci/install-stgit
 
       - name: Configure git
         if: steps.channel.outputs.selected == 'true'
@@ -382,34 +385,29 @@ jobs:
         run: |
           upstream_tag="${{ steps.upstream.outputs.tag }}"
           echo "::error::Rebase conflict syncing to $upstream_tag (channel: $CHANNEL)."
+          echo "::error::Failing patch: ${{ steps.rebase.outputs.patch }}"
           echo "::error::Conflicting files:"
           echo "${{ steps.rebase.outputs.files }}" | sed 's/^/::error::  /'
           echo "::error::"
           echo "::error::Resolve locally:"
-          echo "::error::  git fetch --no-tags upstream"
-          echo "::error::  git fetch --no-tags upstream 'refs/tags/${upstream_tag}:refs/tags/upstream/${upstream_tag}'"
-          echo "::error::  CI_REPAIR_BOT_UPSTREAM_TARGET='refs/tags/upstream/${upstream_tag}' \\"
-          echo "::error::    CI_REPAIR_BOT_UPSTREAM_SOURCE_REF='refs/tags/${upstream_tag}' \\"
-          echo "::error::    scripts/ci/reproduce-sync-upstream"
+          echo "::error::  git fetch upstream --tags"
+          echo "::error::  saved_top=\$(stg top)"
+          echo "::error::  stg rebase --merged 'refs/tags/upstream/${upstream_tag}'"
           echo "::error::"
           echo "::error::On EVERY conflict, ask in this order:"
           echo "::error::  1. Is the fork's side still needed at all?  -> retire"
           echo "::error::  2. Does upstream now cover part of it?      -> narrow"
-          echo "::error::  3. Only then: how do I reconcile them?      -> adapt"
-          echo "::error::Answering 3 first silently preserves patches that no longer need to"
+          echo "::error::  3. Did upstream move the integration point? -> relocate"
+          echo "::error::  4. Only then: how do I reconcile them?       -> adapt"
+          echo "::error::Answering 4 first silently preserves patches that no longer need to"
           echo "::error::exist, and they conflict again on every future sync. Conflicts"
           echo "::error::cluster exactly where upstream is changing the code your patch"
           echo "::error::touches -- which is where supersession happens."
           echo "::error::Fix the PATCH, never add a repair commit beside it."
           echo "::error::"
-          echo "::error::  # after conflicts are resolved and focused tests pass:"
-          echo "::error::  git push origin main --force-with-lease"
-          if [[ "$CHANNEL" == "nightly" ]]; then
-            echo "::error::  # pick the next fork.N for this upstream tag:"
-            echo "::error::  n=\$(( \$(git tag --list '${upstream_tag}-fork.*' | awk -F '-fork\\\\.' 'NF==2{print \$2}' | sort -n | tail -1) + 1 ))"
-            echo "::error::  git tag \"${upstream_tag}-fork.\$n\" HEAD"
-            echo "::error::  git push origin \"${upstream_tag}-fork.\$n\""
-          else
-            echo "::error::  git push origin ${upstream_tag}"
-          fi
+          echo "::error::  # resolve explicit files, then refresh the failing patch:"
+          echo "::error::  git add <explicit-paths>"
+          echo "::error::  stg refresh"
+          echo "::error::  stg goto \"\$saved_top\""
+          echo "::error::  scripts/ci/publish-stgit-stack --check"
           exit 1

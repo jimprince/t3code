@@ -5,7 +5,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 
 it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
-  it.effect("preserves fork-owned CI documentation during upstream rebases", () =>
+  it.effect("replays the published StGit series", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -14,14 +14,14 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
         path.join(repoRoot, "scripts/ci/reproduce-sync-upstream"),
       );
 
-      assert.include(rebaseDriver, "docs/operations/ci.md");
-      assert.include(rebaseDriver, "docs/operations/release.md");
-      assert.include(rebaseDriver, "--max-count=20");
-      assert.include(rebaseDriver, "older fork commits");
+      assert.include(rebaseDriver, "refs/stacks/stgit/adopt");
+      assert.include(rebaseDriver, "refs/patches/stgit/adopt/*");
+      assert.include(rebaseDriver, 'stg_cmd rebase --merged "$CI_REPAIR_BOT_UPSTREAM_TARGET"');
+      assert.include(rebaseDriver, "failing patch:");
     }),
   );
 
-  it.effect("does not silently take the fork side for shared runtime integration files", () =>
+  it.effect("requires current metadata before mutating the checkout", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -29,58 +29,25 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       const rebaseDriver = yield* fs.readFileString(
         path.join(repoRoot, "scripts/ci/reproduce-sync-upstream"),
       );
-      const forkOwnershipPolicy = rebaseDriver.slice(
-        rebaseDriver.indexOf("FORK_RESOLVE_FILES=("),
-        rebaseDriver.indexOf("is_fork_owned_file()"),
-      );
-      const forkOwnedEntries = forkOwnershipPolicy
-        .split("\n")
-        .map((line) => line.trim())
-        .filter((line) => line.length > 0 && !line.startsWith("#"));
 
-      assert.isAbove(forkOwnershipPolicy.length, 0);
-      assert.notInclude(
-        forkOwnedEntries,
-        "apps/server/src/ws.ts",
-        "REGRESSION: whole-file fork ownership discarded upstream server.probe changes",
-      );
-      assert.notInclude(
-        forkOwnedEntries,
-        "apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts",
-        "REGRESSION: whole-file fork ownership discarded upstream thread snapshot fields",
-      );
+      assert.include(rebaseDriver, "recorded_head");
+      assert.include(rebaseDriver, '"$recorded_head" != "$START_HEAD"');
+      assert.include(rebaseDriver, "do not initialize a replacement stack");
+      assert.include(rebaseDriver, "stg_cmd undo --hard");
     }),
   );
 
-  // The squash-model "collapses the fork delta to one replay commit on every
-  // target" fixture used to live here. The driver now rebases the curated
-  // topic stack instead of squashing (scripts/ci/reproduce-sync-upstream.test.ts
-  // exercises that directly: topic commits survive as separate commits, a
-  // fixup! is folded by --autosquash, and a genuine conflict reports the full
-  // file list and restores the starting HEAD). This file keeps the
-  // workflow-wiring-level assertions below instead of duplicating that
-  // fixture coverage.
-
-  it.effect("auto-resolves the near-fully fork-owned release workflow to the fork side", () =>
+  it.effect("installs the pinned StGit release before sync", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
-      const driver = yield* fs.readFileString(
-        path.join(repoRoot, "scripts/ci/reproduce-sync-upstream"),
+      const workflow = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/sync-upstream.yml"),
       );
 
-      const forkResolveBlock = driver.slice(
-        driver.indexOf("FORK_RESOLVE_FILES=("),
-        driver.indexOf(")", driver.indexOf("FORK_RESOLVE_FILES=(")),
-      );
-      assert.include(
-        forkResolveBlock,
-        ".github/workflows/release.yml",
-        "REGRESSION: release.yml conflicts on nearly every sync because it is almost " +
-          "entirely fork-owned (tag policy, concurrency groups, channel dispatch); it " +
-          "must auto-resolve to the fork side rather than reconflict every cycle",
-      );
+      assert.include(workflow, "scripts/ci/install-stgit");
+      assert.include(workflow, "scripts/ci/reproduce-sync-upstream");
     }),
   );
 
@@ -227,9 +194,10 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       assert.include(syncWorkflow, 'new_tag="${UPSTREAM_TAG}-fork.${next_n}"');
       assert.include(syncWorkflow, 'new_tag="$UPSTREAM_TAG"');
       assert.include(nightlyWorkflow, 'new_tag="${upstream_tag}-fork.${next_n}"');
-      assert.include(syncWorkflow, 'git push origin "$NEW_TAG"');
-      assert.include(syncWorkflow, 'git push origin "$NEW_TAG" --force');
-      assert.include(nightlyWorkflow, 'git push origin "$NEW_TAG"');
+      assert.include(syncWorkflow, "git push --atomic origin");
+      assert.include(syncWorkflow, '"refs/tags/${NEW_TAG}:refs/tags/${NEW_TAG}"');
+      assert.include(nightlyWorkflow, "git push --atomic origin");
+      assert.include(nightlyWorkflow, '"refs/tags/${NEW_TAG}:refs/tags/${NEW_TAG}"');
       assert.include(releaseWorkflow, "push:\n    tags:");
     }),
   );
