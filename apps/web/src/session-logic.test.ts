@@ -2134,6 +2134,12 @@ describe("isLatestTurnSettled", () => {
       ),
     ).toBe(false);
   });
+
+  const runningTurnMissingCompletion = {
+    turnId: TurnId.make("turn-1"),
+    startedAt: "2026-02-27T21:10:00.000Z",
+    completedAt: null,
+  } as const;
 });
 
 describe("deriveActiveWorkStartedAt", () => {
