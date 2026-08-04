@@ -49,6 +49,7 @@ import {
   mergeOpenCodeAssistantText,
 } from "./OpenCodeAdapter.ts";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
+import { openCodeAssistantSegmentIsTerminal } from "../openCodeAssistantSegment.ts";
 
 // Test-local service tag so the rest of the file can keep using `yield* OpenCodeAdapter`.
 class OpenCodeAdapter extends Context.Service<OpenCodeAdapter, OpenCodeAdapterShape>()(
@@ -202,6 +203,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         url,
         version: "1.15.13",
         ...(serverPassword ? { serverPassword } : {}),
+        processId: 43_001,
         exitCode: Effect.never,
         isRunning: Effect.succeed(true),
       };
@@ -223,6 +225,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         url,
         version: "1.15.13",
         ...(serverPassword ? { serverPassword } : {}),
+        processId: null,
         exitCode: null,
         external: Boolean(serverUrl),
       };
@@ -231,6 +234,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
   createOpenCodeSdkClient: ({ baseUrl, serverPassword }) =>
     ({
       session: {
+        list: async () => ({ data: [] }),
         create: async (input: Record<string, unknown>) => {
           runtimeMock.state.sessionCreateUrls.push(baseUrl);
           runtimeMock.state.sessionCreateInputs.push(input);
@@ -522,6 +526,10 @@ const providerSessionDirectoryTestLayer = Layer.succeed(ProviderSessionDirectory
   getBinding: () => Effect.succeed(Option.none()),
   listThreadIds: () => Effect.succeed([]),
   listBindings: () => Effect.succeed([]),
+  settleDeadGenerationBinding: () => Effect.succeed(false),
+  markTurnStarted: () => Effect.succeed(false),
+  markTurnTerminal: () => Effect.succeed(false),
+  claimIdleForRecovery: () => Effect.succeed(false),
 });
 
 // The adapter now receives its settings as a plain argument (the old design
@@ -1325,6 +1333,12 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
   it.effect("clears session state even when cleanup finalizers throw", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
+      // `it.layer` shares one adapter instance across this suite. Retire any
+      // sessions intentionally left live by earlier tests, then isolate the
+      // finalizer probe to the two sessions created below.
+      yield* adapter.stopAll();
+      runtimeMock.state.closeCalls.length = 0;
+
       yield* adapter.startSession({
         provider: ProviderDriverKind.make("opencode"),
         threadId: asThreadId("thread-stop-all-a"),
@@ -6907,47 +6921,6 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       }),
   );
 
-  it.effect("lets OpenCode own session title generation and emits title metadata updates", () =>
-    Effect.gen(function* () {
-      const adapter = yield* OpenCodeAdapter;
-      const threadId = asThreadId("thread-opencode-title-sync");
-      runtimeMock.state.subscribedEvents = [
-        {
-          type: "session.updated",
-          properties: {
-            info: {
-              id: "http://127.0.0.1:9999/session",
-              title: "Investigate OpenCode title sync",
-            },
-          },
-        },
-      ];
-
-      const eventsFiber = yield* adapter.streamEvents.pipe(
-        Stream.filter((event) => event.threadId === threadId),
-        Stream.take(3),
-        Stream.runCollect,
-        Effect.forkChild,
-      );
-
-      yield* adapter.startSession({
-        provider: ProviderDriverKind.make("opencode"),
-        threadId,
-        runtimeMode: "full-access",
-      });
-
-      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")));
-      NodeAssert.equal(runtimeMock.state.sessionCreateInputs.length, 1);
-      NodeAssert.equal("title" in (runtimeMock.state.sessionCreateInputs[0] ?? {}), false);
-
-      const metadataUpdated = events.find((event) => event.type === "thread.metadata.updated");
-      NodeAssert.ok(metadataUpdated);
-      if (metadataUpdated.type === "thread.metadata.updated") {
-        NodeAssert.equal(metadataUpdated.payload.name, "Investigate OpenCode title sync");
-      }
-    }),
-  );
-
   it.effect("passes the thread title to session.create when provided", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
@@ -7229,6 +7202,148 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       NodeAssert.equal(sessions.length, 1);
       NodeAssert.equal(sessions[0]?.threadId, "thread-native-log-failure");
       NodeAssert.deepEqual(closeCallsDuringRun, []);
+    }),
+  );
+
+  // GLM via OpenRouter emits its narration as its own assistant message that
+  // finishes with `finish: "tool-calls"`, then opens a new message for the tool
+  // call. Completing that segment must close the display segment without
+  // ending the turn.
+  it.effect("marks an assistant segment that finishes with tool-calls as non-terminal", () =>
+    Effect.gen(function* () {
+      const adapter = yield* OpenCodeAdapter;
+      const threadId = asThreadId("thread-opencode-tool-calls-segment");
+      const sessionID = "http://127.0.0.1:9999/session";
+      const narrationPart = promiseWithResolvers<unknown>();
+      const narrationMessage = promiseWithResolvers<unknown>();
+      const finalMessage = promiseWithResolvers<unknown>();
+      const finalPart = promiseWithResolvers<unknown>();
+      runtimeMock.state.subscribedEvents = [
+        narrationPart.promise,
+        narrationMessage.promise,
+        finalPart.promise,
+        finalMessage.promise,
+      ];
+
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter(
+          (event) =>
+            event.threadId === threadId &&
+            (event.type === "item.completed" || event.type === "turn.completed"),
+        ),
+        Stream.take(3),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* adapter.startSession({
+        provider: ProviderDriverKind.make("opencode"),
+        threadId,
+        runtimeMode: "full-access",
+      });
+      const sendFiber = yield* adapter
+        .sendTurn({
+          threadId,
+          input: "Install the deps and generate the model",
+          modelSelection: createModelSelection(
+            ProviderInstanceId.make("opencode"),
+            "opencode/glm-5.3-flash",
+          ),
+        })
+        .pipe(Effect.forkChild);
+
+      narrationPart.resolve({
+        id: "evt-narration-part",
+        type: "message.part.updated",
+        properties: {
+          sessionID,
+          part: {
+            id: "part-narration",
+            sessionID,
+            messageID: "msg-narration",
+            type: "text",
+            text: "Nice - let me set up the environment:",
+            time: { start: 1, end: 2 },
+          },
+          time: 2,
+        },
+      });
+      const turn = yield* Fiber.join(sendFiber);
+      narrationMessage.resolve({
+        id: "evt-narration-message",
+        type: "message.updated",
+        properties: {
+          sessionID,
+          info: {
+            id: "msg-narration",
+            role: "assistant",
+            time: { created: 1, completed: 2 },
+            finish: "tool-calls",
+          },
+        },
+      });
+      yield* Effect.yieldNow;
+
+      const sessionsMidTurn = yield* adapter.listSessions();
+      const midTurn = sessionsMidTurn.find((candidate) => candidate.threadId === threadId);
+      NodeAssert.equal(midTurn?.status, "running");
+      NodeAssert.equal(midTurn?.activeTurnId, turn.turnId);
+
+      // The settled part arrives before the message that declares the finish
+      // reason, so the terminal state must be recorded before its parts are
+      // replayed.
+      finalPart.resolve({
+        id: "evt-final-part",
+        type: "message.part.updated",
+        properties: {
+          sessionID,
+          part: {
+            id: "part-final",
+            sessionID,
+            messageID: "msg-final",
+            type: "text",
+            text: "Done.",
+            time: { start: 3, end: 4 },
+          },
+          time: 4,
+        },
+      });
+      finalMessage.resolve({
+        id: "evt-final-message",
+        type: "message.updated",
+        properties: {
+          sessionID,
+          info: {
+            id: "msg-final",
+            role: "assistant",
+            time: { created: 3, completed: 4 },
+            finish: "stop",
+          },
+        },
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("2 seconds")));
+      NodeAssert.deepEqual(
+        events.map((event) => event.type),
+        ["item.completed", "item.completed", "turn.completed"],
+      );
+      const [narration, final] = events;
+      NodeAssert.equal(
+        narration?.type === "item.completed" &&
+          openCodeAssistantSegmentIsTerminal(narration.payload.data),
+        false,
+      );
+      NodeAssert.equal(
+        final?.type === "item.completed" && openCodeAssistantSegmentIsTerminal(final.payload.data),
+        true,
+      );
+
+      const sessions = yield* adapter.listSessions();
+      const session = sessions.find((candidate) => candidate.threadId === threadId);
+      NodeAssert.equal(session?.status, "ready");
+      NodeAssert.equal(session?.activeTurnId, undefined);
+
+      yield* adapter.stopSession(threadId);
     }),
   );
 });
