@@ -172,9 +172,17 @@ function ComposerBannerStackAlert({
   const dismissOnly = item.onDismiss && !item.actions;
 
   return (
+    // The alert centers its action container vertically. For dismiss-only
+    // banners on mobile the X must stay aligned with the title row even when
+    // a long description wraps (e.g. nightly version strings in the version
+    // mismatch banner), so pin the action container to the top there.
     <Alert
       variant={item.variant}
-      className={cn("alert-glass rounded-[22px]", item.className)}
+      className={cn(
+        "alert-glass rounded-[22px]",
+        item.className,
+        dismissOnly ? "max-sm:[&>div>div:last-child]:self-start" : undefined,
+      )}
       data-variant={item.variant}
     >
       {item.icon}
