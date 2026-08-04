@@ -6,6 +6,7 @@ import * as NodePath from "node:path";
 import {
   ApprovalRequestId,
   CodexSettings,
+  EnvironmentId,
   EventId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -146,6 +147,14 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
     return Effect.promise(() => this.rollbackThreadImpl(numTurns));
   }
 
+  forkThread(_input: {
+    readonly cwd: string;
+    readonly retainedTurnCount: number;
+    readonly retainedTurnId: TurnId | null;
+  }) {
+    return Effect.succeed({ threadId: "provider-forked-thread", turnCount: 0 });
+  }
+
   uploadFeedback(reason?: string) {
     return Effect.promise(() => this.uploadFeedbackImpl(reason));
   }
@@ -228,6 +237,10 @@ const providerSessionDirectoryTestLayer = Layer.succeed(ProviderSessionDirectory
   getBinding: () => Effect.succeed(Option.none()),
   listThreadIds: () => Effect.succeed([]),
   listBindings: () => Effect.succeed([]),
+  settleDeadGenerationBinding: () => Effect.succeed(false),
+  markTurnStarted: () => Effect.succeed(false),
+  markTurnTerminal: () => Effect.succeed(false),
+  claimIdleForRecovery: () => Effect.succeed(false),
 });
 
 const validationRuntimeFactory = makeRuntimeFactory();
@@ -238,6 +251,10 @@ const validationLayer = it.layer(
       const codexConfig = decodeCodexSettings({});
       return yield* makeCodexAdapter(codexConfig, {
         makeRuntime: validationRuntimeFactory.factory,
+        t3Environment: {
+          id: EnvironmentId.make("environment-local"),
+          name: "local-mbp",
+        },
       });
     }),
   ).pipe(
@@ -293,6 +310,10 @@ validationLayer("CodexAdapterLive validation", (it) => {
         model: "gpt-5.3-codex",
         providerInstanceId: ProviderInstanceId.make("codex"),
         serviceTier: "priority",
+        t3Environment: {
+          id: EnvironmentId.make("environment-local"),
+          name: "local-mbp",
+        },
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
       });

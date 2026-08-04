@@ -70,3 +70,19 @@ date = "2026-09-05"
 decided = "adapt"
 rationale = "Preserve upstream shell-only metadata commands, transcript import writes and restart-continuation marker consumption inside the reservation-protected send. Keep archived-session stop lookup and live-turn steering."
 
+[[patch]]
+name = "fork-provider-runtime-recovery"
+subject = "fix(server): recover provider runtimes"
+class = "divergence"
+purpose = "Recover provider sessions and lifecycle state predictably after crashes, restarts, and partial startup."
+retire_when = "Upstream provides equivalent provider runtime recovery and lifecycle guarantees."
+depends_on = ["fork-provider-turn-reservation"]
+note = "Upstream1286 import insertion preserves fork boot generation and turn markers; missing-diff recovery uses the upstream asynchronous checkpoint repository check. Provider registry tests await matching persisted snapshot events and settings-driven probe completion instead of advancing virtual time through capped polling loops."
+roles = []
+[[patch.decision]]
+id = "upstream-opencode-probe-pool"
+date = "2026-08-29"
+decided = "adapt"
+rationale = "Retain upstream's explicit probe pool and CLI inventory path while keeping the fork's per-instance server owner for runtime recovery and text generation. Configured external servers continue through the fork's password-aware, version-validating connection path."
+
+# Cache-removal tests await refresh completion and persisted update events, avoiding fixed clock-poll loops.
