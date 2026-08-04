@@ -12,6 +12,8 @@ import * as Migrator from "effect/unstable/sql/Migrator";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
+import { runForkMigrations } from "./ForkMigrations.ts";
+
 // Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
 import Migration0002 from "./Migrations/002_OrchestrationCommandReceipts.ts";
@@ -45,17 +47,23 @@ import Migration0029 from "./Migrations/029_ProjectionThreadDetailOrderingIndexe
 import Migration0030 from "./Migrations/030_ProjectionThreadShellArchiveIndexes.ts";
 import Migration0031 from "./Migrations/031_AuthAuthorizationScopes.ts";
 import Migration0032 from "./Migrations/032_AuthPairingProofKeyThumbprint.ts";
-import Migration0033 from "./Migrations/033_ProjectionThreadsSettled.ts";
-import Migration0034 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
-import Migration0035 from "./Migrations/035_ProjectionThreadTitleRegeneration.ts";
-import Migration0036 from "./Migrations/036_ProjectionThreadsPinned.ts";
-import Migration0037 from "./Migrations/037_ProjectionTurnsKeysetIndex.ts";
-import Migration0038 from "./Migrations/038_ProjectionThreadsPinOrderKey.ts";
-import Migration0039 from "./Migrations/039_ProjectionProjectsDefaultThreadEnvMode.ts";
-import Migration0040 from "./Migrations/040_ProjectionProjectFaviconPath.ts";
-import Migration0041 from "./Migrations/041_AuthSessionClientConnection.ts";
-import Migration0042 from "./Migrations/042_ProjectionThreadLinkedPullRequest.ts";
-import Migration0043 from "./Migrations/043_ProjectionThreadsUnsettledAt.ts";
+import Migration0033 from "./Migrations/033_ProjectionThreadGoals.ts";
+import Migration0034 from "./Migrations/034_RepairAuthAuthorizationScopes.ts";
+import Migration0035 from "./Migrations/035_RepairAuthPairingProofKeyThumbprint.ts";
+import Migration0036 from "./Migrations/036_ProjectionProjectsKind.ts";
+import Migration0037 from "./Migrations/037_UniqueProjectCreation.ts";
+// Upstream migrations 33-43 landed after the fork had already published IDs 33-37.
+import Migration0038 from "./Migrations/033_ProjectionThreadsSettled.ts";
+import Migration0039 from "./Migrations/034_ProjectionThreadsSnoozed.ts";
+import Migration0040 from "./Migrations/035_ProjectionThreadTitleRegeneration.ts";
+import Migration0041 from "./Migrations/036_ProjectionThreadsPinned.ts";
+import Migration0042 from "./Migrations/037_ProjectionTurnsKeysetIndex.ts";
+import Migration0043 from "./Migrations/038_ProjectionThreadsPinOrderKey.ts";
+import Migration0044 from "./Migrations/039_ProjectionProjectsDefaultThreadEnvMode.ts";
+import Migration0045 from "./Migrations/040_ProjectionProjectFaviconPath.ts";
+import Migration0046 from "./Migrations/041_AuthSessionClientConnection.ts";
+import Migration0047 from "./Migrations/042_ProjectionThreadLinkedPullRequest.ts";
+import Migration0048 from "./Migrations/043_ProjectionThreadsUnsettledAt.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -100,17 +108,22 @@ export const migrationEntries = [
   [30, "ProjectionThreadShellArchiveIndexes", Migration0030],
   [31, "AuthAuthorizationScopes", Migration0031],
   [32, "AuthPairingProofKeyThumbprint", Migration0032],
-  [33, "ProjectionThreadsSettled", Migration0033],
-  [34, "ProjectionThreadsSnoozed", Migration0034],
-  [35, "ProjectionThreadTitleRegeneration", Migration0035],
-  [36, "ProjectionThreadsPinned", Migration0036],
-  [37, "ProjectionTurnsKeysetIndex", Migration0037],
-  [38, "ProjectionThreadsPinOrderKey", Migration0038],
-  [39, "ProjectionProjectsDefaultThreadEnvMode", Migration0039],
-  [40, "ProjectionProjectFaviconPath", Migration0040],
-  [41, "AuthSessionClientConnection", Migration0041],
-  [42, "ProjectionThreadLinkedPullRequest", Migration0042],
-  [43, "ProjectionThreadsUnsettledAt", Migration0043],
+  [33, "ProjectionThreadGoals", Migration0033],
+  [34, "RepairAuthAuthorizationScopes", Migration0034],
+  [35, "RepairAuthPairingProofKeyThumbprint", Migration0035],
+  [36, "ProjectionProjectsKind", Migration0036],
+  [37, "UniqueProjectCreation", Migration0037],
+  [38, "ProjectionThreadsSettled", Migration0038],
+  [39, "ProjectionThreadsSnoozed", Migration0039],
+  [40, "ProjectionThreadTitleRegeneration", Migration0040],
+  [41, "ProjectionThreadsPinned", Migration0041],
+  [42, "ProjectionTurnsKeysetIndex", Migration0042],
+  [43, "ProjectionThreadsPinOrderKey", Migration0043],
+  [44, "ProjectionProjectsDefaultThreadEnvMode", Migration0044],
+  [45, "ProjectionProjectFaviconPath", Migration0045],
+  [46, "AuthSessionClientConnection", Migration0046],
+  [47, "ProjectionThreadLinkedPullRequest", Migration0047],
+  [48, "ProjectionThreadsUnsettledAt", Migration0048],
 ] as const;
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
@@ -172,4 +185,9 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
  * )
  * ```
  */
-export const MigrationsLive = Layer.effectDiscard(runMigrations());
+export const MigrationsLive = Layer.effectDiscard(
+  Effect.gen(function* () {
+    yield* runMigrations();
+    yield* runForkMigrations();
+  }),
+);
