@@ -15,6 +15,7 @@ import {
   type ResolvedKeybindingsConfig,
   type ScopedThreadRef,
   type ThreadId,
+  type ThreadForkWorkspaceMode,
   type TurnId,
   type KeybindingCommand,
   OrchestrationThreadActivity,
@@ -85,11 +86,13 @@ import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
+import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
   collapseExpandedComposerCursor,
   type ComposerSubmissionIntent,
+  parseComposerGoalSlashCommand,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
 import {
@@ -284,6 +287,7 @@ import {
   threadHasOlderTurns,
 } from "@t3tools/client-runtime/state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { vcsEnvironment } from "../state/vcs";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import {
@@ -374,6 +378,7 @@ import {
   shouldOpenProactiveTurnDiff,
   shouldRenderPreviewMiniPlayer,
   getStartedThreadModelChangeBlockReason,
+  hydrateForkedMessageAttachments,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
   type LocalDispatchSnapshot,
@@ -388,6 +393,7 @@ import {
   resolveComposerProviderSelection,
   resolveDraftHeroState,
   resolveProactiveTurnDiffAction,
+  resolveComposerSubmitIntent,
   resolveThreadMetadataUpdateForNextTurn,
   resolveSendEnvMode,
   revokeBlobPreviewUrl,
@@ -628,6 +634,24 @@ function formatOutgoingPrompt(params: {
   const caps = getProviderModelCapabilities(params.models, params.model, params.provider);
   const promptEffort = resolvePromptInjectedEffort(caps, params.effort);
   return applyClaudePromptEffortPrefix(params.text, promptEffort);
+}
+
+function formatGoalInitialPrompt(goal: string): string {
+  return [
+    `Active T3 goal: ${goal}`,
+    "",
+    "Work toward this goal until it is satisfied. When you believe it is satisfied, state the concrete transcript-visible evidence and any verification performed.",
+  ].join("\n");
+}
+
+function formatGoalStatus(goal: Thread["goal"]): { title: string; description: string } {
+  if (!goal) {
+    return { title: "No active goal", description: "Use /goal <condition> to start one." };
+  }
+  return {
+    title: goal.status === "achieved" ? "Goal achieved" : "Active goal",
+    description: goal.lastReason ? `${goal.goal}\n${goal.lastReason}` : goal.goal,
+  };
 }
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
@@ -1396,6 +1420,8 @@ export default function ChatView(props: ChatViewProps) {
   const setThreadInteractionMode = useAtomCommand(threadEnvironment.setInteractionMode, {
     reportFailure: false,
   });
+  const setThreadGoal = useAtomCommand(threadEnvironment.setGoal, { reportFailure: false });
+  const clearThreadGoal = useAtomCommand(threadEnvironment.clearGoal, { reportFailure: false });
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const createAttachmentAssetUrl = useAtomQueryRunner(assetEnvironment.createUrl, {
     reportFailure: false,
@@ -1414,6 +1440,9 @@ export default function ChatView(props: ChatViewProps) {
     reportFailure: false,
   });
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
+    reportFailure: false,
+  });
+  const forkThread = useAtomCommand(orchestrationEnvironment.forkThread, {
     reportFailure: false,
   });
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
@@ -1586,6 +1615,7 @@ export default function ChatView(props: ChatViewProps) {
   >({});
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
+  const [isForkingThread, setIsForkingThread] = useState(false);
   const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
     null,
   );
@@ -2657,7 +2687,12 @@ export default function ChatView(props: ChatViewProps) {
     compactRequestIsActive &&
     !compactionSettled;
   const isWorking =
-    phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint || isCompacting;
+    phase === "running" ||
+    isSendBusy ||
+    isConnecting ||
+    isRevertingCheckpoint ||
+    isCompacting ||
+    isForkingThread;
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -2962,6 +2997,20 @@ export default function ChatView(props: ChatViewProps) {
     attachDraftHeroComposerAnchorRef,
     captureDraftHeroComposerRect,
   ] = useDraftHeroLayoutTransition(isDraftHeroState);
+  const activeThreadForkState = activeThread as Thread | null | undefined;
+  const isThreadDetailLoading = Boolean(
+    isServerThread &&
+    activeThread &&
+    timelineEntries.length === 0 &&
+    activeThread.messages.length === 0 &&
+    activeThread.activities.length === 0 &&
+    activeThread.proposedPlans.length === 0 &&
+    (activeThreadForkState?.turnDiffSummaries?.length ?? 0) === 0 &&
+    (activeThread.latestTurn !== null ||
+      activeThread.session !== null ||
+      activeThread.goal !== null ||
+      activeThreadForkState?.pendingSourceProposedPlan !== undefined),
+  );
   const { turnDiffSummaries, inferredCheckpointTurnCountByTurnId } =
     useTurnDiffSummaries(activeThread);
   const turnDiffSummaryByAssistantMessageId = useMemo(() => {
@@ -4964,6 +5013,7 @@ export default function ChatView(props: ChatViewProps) {
   const sendEnvMode = resolveSendEnvMode({
     requestedEnvMode: envMode,
     isGitRepo,
+    hasWorktreeBaseRef: activeThreadBranch !== null || activeThreadWorktreePath !== null,
   });
   const localCheckoutBranchMismatch = useMemo(
     () =>
@@ -6083,6 +6133,103 @@ export default function ChatView(props: ChatViewProps) {
     ],
   );
 
+  const onForkMessage = useCallback(
+    async (messageId: MessageId, workspaceMode: ThreadForkWorkspaceMode) => {
+      if (!activeThread || !isServerThread || isWorking) return;
+
+      setIsForkingThread(true);
+      try {
+        const result = await forkThread({
+          environmentId: activeThread.environmentId,
+          input: {
+            sourceThreadId: activeThread.id,
+            messageId,
+            workspaceMode,
+          },
+        });
+        if (result._tag === "Failure") {
+          if (!isAtomCommandInterrupted(result)) {
+            const error = squashAtomCommandFailure(result);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Could not fork thread",
+                description:
+                  error instanceof Error ? error.message : "An unexpected error occurred.",
+              }),
+            );
+          }
+          return;
+        }
+
+        const targetThreadRef = scopeThreadRef(activeThread.environmentId, result.value.threadId);
+        if (result.value.prefilledPrompt !== null) {
+          setComposerDraftPrompt(targetThreadRef, result.value.prefilledPrompt);
+        }
+        const warnings = [...result.value.warnings];
+        if (result.value.prefilledAttachments.length > 0) {
+          const hydratedAttachments = await hydrateForkedMessageAttachments({
+            attachments: result.value.prefilledAttachments,
+            assetUrlById: serverAttachmentUrlById,
+            ...(activeThread.environmentId === primaryEnvironmentId
+              ? {
+                  resolveAssetUrl: (assetUrl: string) => {
+                    const sourceUrl = new URL(assetUrl);
+                    const proxyUrl = new URL(resolvePrimaryEnvironmentHttpUrl(sourceUrl.pathname));
+                    proxyUrl.search = sourceUrl.search;
+                    return proxyUrl.toString();
+                  },
+                }
+              : {}),
+          });
+          addComposerDraftImages(targetThreadRef, hydratedAttachments.images);
+          if (hydratedAttachments.unavailableCount > 0) {
+            warnings.push(
+              `${hydratedAttachments.unavailableCount} selected-message attachment${hydratedAttachments.unavailableCount === 1 ? " was" : "s were"} unavailable and could not be copied into the fork draft.`,
+            );
+          }
+        }
+        if (warnings.length > 0) {
+          toastManager.add(
+            stackedThreadToast({
+              type: "info",
+              title: "Thread forked",
+              description: warnings.join(" "),
+            }),
+          );
+        }
+        await navigate({
+          to: "/$environmentId/$threadId",
+          params: {
+            environmentId: activeThread.environmentId,
+            threadId: result.value.threadId,
+          },
+        });
+      } catch (error) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not open forked thread",
+            description: error instanceof Error ? error.message : "An unexpected error occurred.",
+          }),
+        );
+      } finally {
+        setIsForkingThread(false);
+      }
+    },
+    [
+      activeThread,
+      addComposerDraftImages,
+      forkThread,
+      isServerThread,
+      isWorking,
+      navigate,
+      primaryEnvironmentId,
+      serverAttachmentUrlById,
+      setComposerDraftPrompt,
+    ],
+  );
+
   const onSend = async (
     e?: { preventDefault: () => void },
     submissionIntent: ComposerSubmissionIntent = "foreground",
@@ -6102,6 +6249,15 @@ export default function ChatView(props: ChatViewProps) {
         }),
       );
     };
+    const submitIntent = resolveComposerSubmitIntent({
+      hasActiveThread: Boolean(activeThread),
+      environmentUnavailable: activeEnvironmentUnavailable,
+      hasPendingUserInput: activePendingProgress !== null,
+      pendingUserInputResponding: activePendingIsResponding,
+      isSendBusy,
+      isConnecting,
+      sendInFlight: sendInFlightRef.current,
+    });
     if (
       !activeThread ||
       isSendBusy ||
@@ -6127,7 +6283,13 @@ export default function ChatView(props: ChatViewProps) {
       });
       return;
     }
-    if (activePendingProgress) {
+    // The remaining "blocked" case is the fork's: a pending user-input prompt
+    // already being responded to must not also accept a new message.
+    if (submitIntent === "blocked") {
+      notifyDirectAnnotationAttached();
+      return;
+    }
+    if (submitIntent === "respond-to-user-input") {
       if (directAnnotation) {
         notifyDirectAnnotationAttached();
         return;
@@ -6340,6 +6502,10 @@ export default function ChatView(props: ChatViewProps) {
       composerReviewComments.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
+    const goalSlashCommand =
+      composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
+        ? parseComposerGoalSlashCommand(trimmed)
+        : null;
     if (standaloneSlashCommand) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
@@ -6347,6 +6513,39 @@ export default function ChatView(props: ChatViewProps) {
       composerRef.current?.resetCursorState();
       return;
     }
+    if (goalSlashCommand?.type === "status") {
+      const status = formatGoalStatus(activeThread.goal);
+      toastManager.add(stackedThreadToast({ type: "info", ...status }));
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
+    }
+    if (goalSlashCommand?.type === "clear") {
+      const result = await clearThreadGoal({
+        environmentId,
+        input: {
+          threadId: activeThread.id,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        setThreadError(
+          activeThread.id,
+          error instanceof Error ? error.message : "Failed to clear goal.",
+        );
+        return;
+      }
+      toastManager.add(
+        stackedThreadToast({ type: "success", title: "Goal cleared", description: "" }),
+      );
+      promptRef.current = "";
+      clearComposerDraftContent(composerDraftTarget);
+      composerRef.current?.resetCursorState();
+      return;
+    }
+    const goalToSet = goalSlashCommand?.type === "set" ? goalSlashCommand.goal : null;
     if (!hasSendableContent) {
       if (expiredTerminalContextCount > 0) {
         const toastCopy = buildExpiredTerminalContextToastCopy(
@@ -6397,7 +6596,10 @@ export default function ChatView(props: ChatViewProps) {
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
     const composerReviewCommentsSnapshot: ReviewCommentContext[] = [...composerReviewComments];
     const messageTextWithContexts = appendElementContextsToPrompt(
-      appendTerminalContextsToPrompt(promptForSend, composerTerminalContextsSnapshot),
+      appendTerminalContextsToPrompt(
+        goalToSet ? formatGoalInitialPrompt(goalToSet) : promptForSend,
+        composerTerminalContextsSnapshot,
+      ),
       composerElementContextsSnapshot,
     );
     const messageTextWithPreviewAnnotations = composerPreviewAnnotationsSnapshot.reduce(
@@ -6606,7 +6808,7 @@ export default function ChatView(props: ChatViewProps) {
         firstComposerImageName = firstComposerImage.name;
       }
     }
-    let titleSeed = assistantCitationsToPlainText(trimmed);
+    let titleSeed = goalToSet ?? assistantCitationsToPlainText(trimmed);
     if (!titleSeed) {
       if (firstComposerImageName) {
         titleSeed = `Image: ${firstComposerImageName}`;
@@ -6702,87 +6904,103 @@ export default function ChatView(props: ChatViewProps) {
                 : {}),
             }
           : undefined;
-      const backgroundThreadRef =
-        resolvedSubmissionIntent === "background"
-          ? scopeThreadRef(activeThread.environmentId, threadIdForSend)
-          : null;
-      if (backgroundThreadRef) {
-        beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
-      }
-      const startResult = await startThreadTurn({
-        environmentId,
-        input: {
-          threadId: threadIdForSend,
-          message: {
-            messageId: messageIdForSend,
-            role: "user",
-            text: outgoingMessageText,
-            attachments: turnAttachmentsResult.value,
+      if (goalToSet && isServerThread) {
+        const goalResult = await setThreadGoal({
+          environmentId,
+          input: {
+            threadId: threadIdForSend,
+            goal: goalToSet,
+            createdAt: messageCreatedAt,
           },
-          modelSelection: ctxSelectedModelSelection,
-          titleSeed: title,
-          runtimeMode,
-          interactionMode: sendInteractionMode,
-          ...(bootstrap ? { bootstrap } : {}),
-          createdAt: messageCreatedAt,
-        },
-      });
-      if (startResult._tag === "Failure") {
-        if (backgroundThreadRef) {
-          clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
+        });
+        if (goalResult._tag === "Failure") {
+          failure = goalResult;
         }
-        failure = startResult;
-      } else {
-        turnStartSucceeded = true;
-        if (turnUsesAttachmentUploads) {
-          releaseDraftAttachments(composerAttachmentsSnapshot);
-        }
-        acknowledgeActiveThreadWoke();
+      }
+
+      if (failure === null) {
+        const backgroundThreadRef =
+          resolvedSubmissionIntent === "background"
+            ? scopeThreadRef(activeThread.environmentId, threadIdForSend)
+            : null;
         if (backgroundThreadRef) {
-          markPromotedDraftThreadByRef(backgroundThreadRef);
-          try {
-            const nextDraft = await handleNewThread(
-              scopeProjectRef(activeProject.environmentId, activeProject.id),
-              resolveBackgroundDraftWorkspaceOptions({
-                envMode: sendEnvMode,
-                branch: activeThreadBranch,
-                startFromOrigin,
-              }),
-            );
-            if (nextDraft) {
-              finalizePromotedDraftThreadByRef(backgroundThreadRef);
-              toastManager.add(
-                stackedThreadToast({
-                  type: "success",
-                  title: "Started in background",
-                  timeout: 5_000,
-                  actionProps: {
-                    children: "Open",
-                    onClick: () => {
-                      void navigate({
-                        to: "/$environmentId/$threadId",
-                        params: buildThreadRouteParams(backgroundThreadRef),
-                      });
-                    },
-                  },
+          beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
+        }
+        const startResult = await startThreadTurn({
+          environmentId,
+          input: {
+            threadId: threadIdForSend,
+            message: {
+              messageId: messageIdForSend,
+              role: "user",
+              text: outgoingMessageText,
+              attachments: turnAttachmentsResult.value,
+            },
+            modelSelection: ctxSelectedModelSelection,
+            titleSeed: title,
+            runtimeMode,
+            interactionMode: sendInteractionMode,
+            ...(bootstrap ? { bootstrap } : {}),
+            createdAt: messageCreatedAt,
+          },
+        });
+        if (startResult._tag === "Failure") {
+          if (backgroundThreadRef) {
+            clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
+          }
+          failure = startResult;
+        } else {
+          turnStartSucceeded = true;
+          if (turnUsesAttachmentUploads) {
+            releaseDraftAttachments(composerAttachmentsSnapshot);
+          }
+          acknowledgeActiveThreadWoke();
+          if (backgroundThreadRef) {
+            markPromotedDraftThreadByRef(backgroundThreadRef);
+            try {
+              const nextDraft = await handleNewThread(
+                scopeProjectRef(activeProject.environmentId, activeProject.id),
+                resolveBackgroundDraftWorkspaceOptions({
+                  envMode: sendEnvMode,
+                  branch: activeThreadBranch,
+                  startFromOrigin,
                 }),
               );
-            } else {
+              if (nextDraft) {
+                finalizePromotedDraftThreadByRef(backgroundThreadRef);
+                toastManager.add(
+                  stackedThreadToast({
+                    type: "success",
+                    title: "Started in background",
+                    timeout: 5_000,
+                    actionProps: {
+                      children: "Open",
+                      onClick: () => {
+                        void navigate({
+                          to: "/$environmentId/$threadId",
+                          params: buildThreadRouteParams(backgroundThreadRef),
+                        });
+                      },
+                    },
+                  }),
+                );
+              } else {
+                clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
+              }
+            } catch (error) {
               clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
+              resetLocalDispatch();
+              toastManager.add(
+                stackedThreadToast({
+                  type: "warning",
+                  title: "Task started in the background",
+                  description:
+                    error instanceof Error
+                      ? `Could not open a fresh composer: ${error.message}`
+                      : "Could not open a fresh composer.",
+                }),
+              );
             }
-          } catch (error) {
-            clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
-            resetLocalDispatch();
-            toastManager.add(
-              stackedThreadToast({
-                type: "warning",
-                title: "Task started in the background",
-                description:
-                  error instanceof Error
-                    ? `Could not open a fresh composer: ${error.message}`
-                    : "Could not open a fresh composer.",
-              }),
-            );
           }
         }
       }
@@ -7839,6 +8057,13 @@ export default function ChatView(props: ChatViewProps) {
                 revertTurnCountByUserMessageId={revertTurnCountByUserMessageId}
                 onRevertUserMessage={onRevertUserMessage}
                 onUseArtifactTemplate={useArtifactTemplate}
+                onForkMessage={onForkMessage}
+                canForkThread={Boolean(
+                  isServerThread && activeProject && activeProject.kind !== "chat",
+                )}
+                canForkToNewWorktree={Boolean(
+                  isServerThread && activeProject && activeProject.kind !== "chat" && isGitRepo,
+                )}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 onFileOpen={openFileAttachment}
@@ -7859,7 +8084,9 @@ export default function ChatView(props: ChatViewProps) {
                 onIsAtEndChange={onIsAtEndChange}
                 onToolOutputCollapsedAtEnd={onToolOutputCollapsedAtEnd}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
-                hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
+                hideEmptyPlaceholder={
+                  isDraftHeroState || threadDetailLoading || isThreadDetailLoading
+                }
                 topFadeEnabled={!hasTimelineTopBanner}
                 loadEarlier={loadEarlierTurns}
               />
@@ -8020,7 +8247,6 @@ export default function ChatView(props: ChatViewProps) {
                             onSelectActivePendingUserInputOption={
                               onSelectActivePendingUserInputOption
                             }
-                            onAdvanceActivePendingUserInput={onAdvanceActivePendingUserInput}
                             onPreviousActivePendingUserInputQuestion={
                               onPreviousActivePendingUserInputQuestion
                             }
