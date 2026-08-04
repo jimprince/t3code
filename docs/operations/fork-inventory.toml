@@ -326,3 +326,13 @@ purpose = "Let operators drop files onto the files pane to upload them (binary-s
 retire_when = "Upstream ships a binary-capable workspace upload RPC with drag-and-drop in the files pane."
 depends_on = ["fork-build-workspace-tooling"]
 roles = []
+
+[[patch]]
+name = "fork-chat-file-attachments"
+subject = "feat(chat): attach non-image files to threads via /tmp handoff"
+class = "product"
+purpose = "Let operators drop non-image files on the chat composer; the server stores them under the OS tmp dir and injects the absolute path into provider input so any agent can read them."
+retire_when = "Upstream ships non-image chat attachments with a path or file handoff to providers."
+depends_on = ["fork-build-workspace-tooling"]
+roles = []
+note = "fileAttachments is a parallel optional message field, never a ChatAttachment union member: union decode hard-fails on unknown type literals in old mobile/t3-thread decoders."
