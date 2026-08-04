@@ -1,6 +1,8 @@
 name: Mobile EAS Production
 
 # Production builds and OTA updates run from CI (Linux) — never from a laptop.
+# Completed iOS builds are uploaded from a hosted macOS runner with Xcode's
+# bundled App Store uploader, avoiding the extra EAS Submit service hop.
 # Under the fingerprint runtime-version policy the fingerprint must be computed
 # in the same OS/pnpm as the EAS build; a macOS `eas build` computes a different
 # fingerprint (platform-specific deps + pnpm version) and errors. On this Linux
@@ -28,12 +30,13 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: "build (+ auto-submit to TestFlight) or update (OTA)"
+        description: "build, submit an existing build, or update (OTA)"
         required: true
         type: choice
         default: build
         options:
           - build
+          - submit
           - update
       platform:
         description: "Target platform"
@@ -44,8 +47,8 @@ on:
           - ios
           - android
           - all
-      version:
-        description: "Optional build version override (blank uses app.config.ts; an override is committed before building)"
+      build_id:
+        description: "EAS build ID (mode=submit only)"
         required: false
         type: string
       message:
@@ -75,8 +78,9 @@ concurrency:
 
 jobs:
   production:
-    name: EAS Production ${{ github.event_name == 'push' && 'auto' || inputs.mode }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    if: inputs.mode != 'submit'
+    name: EAS Production ${{ inputs.mode }}
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     env:
@@ -95,21 +99,12 @@ jobs:
             echo "EXPO_TOKEN is not available; skipping EAS production job."
           fi
 
-      - id: version_app_token
-        name: Mint release app token for version override
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build' && inputs.version != ''
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RELEASE_APP_ID }}
-          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-
       - name: Checkout
         if: steps.expo-token.outputs.present == 'true'
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          token: ${{ steps.version_app_token.outputs.token || github.token }}
+          token: ${{ github.token }}
           # No sparse-checkout here: it makes actions/checkout fetch with
           # --filter=blob:none, and eas-cli archives the project via
           # `git clone --depth 1 file://<workspace>`, which fails (exit 128)
@@ -151,71 +146,20 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: eas env:pull production --non-interactive
 
-      - name: Apply manual version override
-        if: steps.version_app_token.outcome == 'success'
-        env:
-          GH_TOKEN: ${{ steps.version_app_token.outputs.token }}
-          APP_SLUG: ${{ steps.version_app_token.outputs.app-slug }}
-          RELEASE_VERSION: ${{ inputs.version }}
-        run: |
-          if [ "$GITHUB_REF_TYPE" != "branch" ]; then
-            echo "Version overrides require dispatching this workflow from a branch; received $GITHUB_REF_TYPE '$GITHUB_REF_NAME'." >&2
-            exit 1
-          fi
-          if ! [[ "$RELEASE_VERSION" =~ ^[0-9]+(\.[0-9]+){1,2}$ ]]; then
-            echo "Version override must contain two or three dot-separated integers; received '$RELEASE_VERSION'." >&2
-            exit 1
-          fi
-
-          node --input-type=module -e '
-            import fs from "node:fs";
-            const path = "apps/mobile/app.config.ts";
-            const source = fs.readFileSync(path, "utf8");
-            const next = source.replace(
-              /^(  version: ")[^"]+(".*)$/m,
-              `$1${process.env.RELEASE_VERSION}$2`,
-            );
-            if (next === source && !source.includes(`  version: "${process.env.RELEASE_VERSION}"`)) {
-              throw new Error("Could not update app version");
-            }
-            fs.writeFileSync(path, next);
-          '
-          vp fmt apps/mobile/app.config.ts
-
-          if git diff --quiet -- apps/mobile/app.config.ts; then
-            echo "app.config.ts is already at $RELEASE_VERSION; no version commit needed."
-            exit 0
-          fi
-
-          user_id="$(gh api "/users/${APP_SLUG}[bot]" --jq .id)"
-          git config user.name "${APP_SLUG}[bot]"
-          git config user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
-          git add apps/mobile/app.config.ts
-          git commit \
-            -m "chore(mobile): bump app version to $RELEASE_VERSION" \
-            -m "Co-authored-by: codex <codex@users.noreply.github.com>"
-          git push origin "HEAD:refs/heads/${GITHUB_REF_NAME}"
-
-      - name: Summarize manual build version
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
-        working-directory: apps/mobile
-        run: |
-          version="$(npx expo config --json --type public | jq -r '.version')"
-          {
-            echo "## Manual production build"
-            echo
-            echo "- App version: \`$version\`"
-            echo "- Platform: \`${{ inputs.platform }}\`"
-            echo
-            echo "> Apple closes an iOS release train after App Store approval. Before building iOS, confirm \`$version\` is newer than the approved App Store version."
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Build and submit (manual)
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'build'
+      - name: Build production binary
+        if: steps.expo-token.outputs.present == 'true' && inputs.mode == 'build'
         working-directory: apps/mobile
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: eas build --platform ${{ inputs.platform }} --profile production --auto-submit --non-interactive --no-wait
+        # Distribution certificates and profiles are bootstrapped from a
+        # trusted Mac; CI only consumes the credentials already stored on EAS.
+        # See docs/operations/release.md, "Production build lane".
+        run: >-
+          eas build
+          --platform ${{ inputs.platform }}
+          --profile production
+          --non-interactive
+          --no-wait
 
       - name: Publish OTA update (manual)
         if: steps.expo-token.outputs.present == 'true' && github.event_name == 'workflow_dispatch' && inputs.mode == 'update'
@@ -230,61 +174,116 @@ jobs:
             --message "${{ inputs.message || format('Production OTA ({0})', github.sha) }}" \
             --non-interactive
 
-      # No --status filter on build:list: an in-queue/in-progress build must
-      # count as existing, or every merge during the build window would cut a
-      # duplicate. After an errored build, retry via workflow_dispatch
-      # mode=build — pushes won't re-trigger it until the app version changes.
-      - id: store_builds
-        name: Ensure store builds exist for the current app version
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'push'
-        continue-on-error: true
-        working-directory: apps/mobile
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  submit-ios:
+    if: inputs.mode == 'submit'
+    name: Upload production iOS build
+    runs-on: macos-15
+    permissions:
+      contents: read
+    env:
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      EAS_BUILD_ID: ${{ inputs.build_id }}
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: Download and upload production IPA
+        shell: bash
         run: |
-          failed=0
-          version="$(npx expo config --json --type public | jq -r '.version')"
-          for platform in ios android; do
-            latest="$(eas build:list --platform "$platform" --build-profile production --limit 1 --json --non-interactive | jq -r '.[0].appVersion // "none"')"
-            if [ "$latest" = "$version" ]; then
-              echo "$platform: production build for $version already exists (or is in progress)"
-              continue
-            fi
-            echo "$platform: latest production build is $latest, app.config.ts says $version — building"
-            if eas build --platform "$platform" --profile production --auto-submit --non-interactive --no-wait; then
-              echo ":building_construction: $platform: scheduled production build and submission for $version" >> "$GITHUB_STEP_SUMMARY"
-            else
-              failed=1
-              echo ":x: $platform: production build or submission failed for $version" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-          exit "$failed"
+          set -euo pipefail
 
-      - name: Publish fingerprint-gated OTA
-        if: steps.expo-token.outputs.present == 'true' && github.event_name == 'push'
-        working-directory: apps/mobile
-        env:
-          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: |
-          message="$(git log -1 --pretty=%s | head -c 120) ($(git rev-parse --short=9 HEAD))"
-          for platform in ios android; do
-            # eas-cli prints an environment-loaded notice to stdout before the
-            # JSON even with --json, so discard everything before the document.
-            hash="$(eas fingerprint:generate --platform "$platform" --environment production --json --non-interactive | sed -n '/^{/,$p' | jq -er '.hash | select(type == "string" and length > 0)')"
-            matching="$(eas build:list --platform "$platform" --build-profile production --status finished --fingerprint-hash "$hash" --limit 1 --json --non-interactive | jq 'length')"
-            if [ "$matching" -gt 0 ]; then
-              eas update \
-                --channel production \
-                --environment production \
-                --platform "$platform" \
-                --message "$message" \
-                --non-interactive
-              echo ":white_check_mark: $platform: OTA published to production (fingerprint \`$hash\`)" >> "$GITHUB_STEP_SUMMARY"
-            else
-              echo ":warning: $platform: no finished production build matches fingerprint \`$hash\` — OTA skipped; JS changes reach $platform only once a matching build ships" >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
+          if [ -z "$EAS_BUILD_ID" ]; then
+            echo "::error::build_id is required when mode=submit." >&2
+            exit 1
+          fi
+          if [ -z "$EXPO_TOKEN" ] || [ -z "$APPLE_API_KEY" ] || [ -z "$APPLE_API_KEY_ID" ] || [ -z "$APPLE_API_ISSUER" ]; then
+            echo "::error::EXPO_TOKEN and App Store Connect API key secrets are required." >&2
+            exit 1
+          fi
 
-      - name: Propagate store build failure
-        if: steps.store_builds.outcome == 'failure'
-        run: exit 1
+          request="$(jq -nc --arg id "$EAS_BUILD_ID" '{
+            query: "query Build($buildId: ID!) { builds { byId(buildId: $buildId) { id status platform artifacts { buildUrl } } } }",
+            variables: {buildId: $id}
+          }')"
+          response_file="$RUNNER_TEMP/eas-build.json"
+          curl --fail --silent --show-error \
+            https://api.expo.dev/graphql \
+            --header "Authorization: Bearer $EXPO_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data-binary "$request" \
+            --output "$response_file"
+
+          if jq -e '.errors | length > 0' "$response_file" >/dev/null 2>&1; then
+            jq -r '.errors[].message' "$response_file" >&2
+            exit 1
+          fi
+
+          status="$(jq -r '.data.builds.byId.status // empty' "$response_file")"
+          platform="$(jq -r '.data.builds.byId.platform // empty' "$response_file")"
+          artifact_url="$(jq -r '.data.builds.byId.artifacts.buildUrl // empty' "$response_file")"
+          if [ "$status" != "FINISHED" ] || [ "$platform" != "IOS" ] || [ -z "$artifact_url" ]; then
+            echo "::error::Build must be a finished iOS build with a downloadable IPA (status=$status, platform=$platform)." >&2
+            exit 1
+          fi
+
+          ipa_path="$RUNNER_TEMP/t3code-production.ipa"
+          key_dir="$HOME/.appstoreconnect/private_keys"
+          key_path="$key_dir/AuthKey_${APPLE_API_KEY_ID}.p8"
+          trap 'rm -f "$ipa_path" "$key_path" "$response_file"' EXIT
+
+          curl --fail --location --retry 3 --silent --show-error \
+            "$artifact_url" \
+            --output "$ipa_path"
+          mkdir -p "$key_dir"
+          printf '%s' "$APPLE_API_KEY" > "$key_path"
+          chmod 600 "$key_path"
+
+          asc_token="$(
+            ASC_ISSUER="$APPLE_API_ISSUER" \
+              ASC_KEY_ID="$APPLE_API_KEY_ID" \
+              ASC_KEY_PATH="$key_path" \
+              node <<'NODE'
+          const crypto = require("node:crypto");
+          const fs = require("node:fs");
+
+          const encode = (value) => Buffer.from(JSON.stringify(value)).toString("base64url");
+          const now = Math.floor(Date.now() / 1000);
+          const unsigned = `${encode({ alg: "ES256", kid: process.env.ASC_KEY_ID, typ: "JWT" })}.${encode({
+            iss: process.env.ASC_ISSUER,
+            iat: now,
+            exp: now + 600,
+            aud: "appstoreconnect-v1",
+          })}`;
+          const signature = crypto.sign("sha256", Buffer.from(unsigned), {
+            key: fs.readFileSync(process.env.ASC_KEY_PATH),
+            dsaEncoding: "ieee-p1363",
+          });
+          process.stdout.write(`${unsigned}.${signature.toString("base64url")}`);
+          NODE
+          )"
+
+          app_response="$RUNNER_TEMP/asc-app.json"
+          http_status="$(curl --silent --show-error \
+            --header "Authorization: Bearer $asc_token" \
+            --header "Content-Type: application/json" \
+            --output "$app_response" \
+            --write-out '%{http_code}' \
+            'https://api.appstoreconnect.apple.com/v1/apps?filter%5BbundleId%5D=com.brad.t3code')"
+          if [[ ! "$http_status" =~ ^2 ]]; then
+            jq -r '.errors[]? | [.code, .title, .detail] | map(select(. != null)) | join(": ")' "$app_response" >&2
+            exit 1
+          fi
+
+          asc_app_id="$(jq -r '.data[0].id // empty' "$app_response")"
+          if [ -z "$asc_app_id" ]; then
+            echo "::error::Create the T3 Code - Fork app record for com.brad.t3code at https://appstoreconnect.apple.com/apps before submitting." >&2
+            exit 1
+          fi
+          echo "Found App Store Connect app $asc_app_id for com.brad.t3code."
+
+          xcrun altool \
+            --upload-app \
+            -f "$ipa_path" \
+            -t ios \
+            --apiKey "$APPLE_API_KEY_ID" \
+            --apiIssuer "$APPLE_API_ISSUER"
