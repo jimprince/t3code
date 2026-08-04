@@ -1036,6 +1036,12 @@ export function createServerEnvironmentAtoms<R, E>(
       staleTimeMs: 60_000,
       refreshTrigger: ({ environmentId }) => usagePricesAtom(environmentId),
     }),
+
+    recoveryPreview: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:recovery-preview",
+      tag: WS_METHODS.serverPreviewRecovery,
+    }),
+
     configProjection,
     welcome,
     consumeResetCredit: createEnvironmentRpcCommand(runtime, {
@@ -1101,6 +1107,19 @@ export function createServerEnvironmentAtoms<R, E>(
     retryResourceTelemetry: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:server:retry-resource-telemetry",
       tag: WS_METHODS.serverRetryResourceTelemetry,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId }) => environmentId,
+      },
+    }),
+
+    executeRecovery: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:execute-recovery",
+      tag: WS_METHODS.serverExecuteRecovery,
+    }),
+    requestHeadlessUpdateCheck: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:request-headless-update-check",
+      tag: WS_METHODS.serverRequestHeadlessUpdateCheck,
       concurrency: {
         mode: "singleFlight",
         key: ({ environmentId }) => environmentId,
