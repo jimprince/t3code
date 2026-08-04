@@ -7989,6 +7989,7 @@ function ChatViewContent(props: ChatViewProps) {
                 isWorking={isWorking}
                 isPreparingWorktree={isPreparingWorktree}
                 isCompacting={isCompacting}
+                isThreadDetailLoading={isThreadDetailLoading}
                 activeTurnStartedAt={activeWorkStartedAt}
                 listRef={legendListRef}
                 timelineEntries={timelineEntries}
@@ -8027,9 +8028,7 @@ function ChatViewContent(props: ChatViewProps) {
                 liveFollowEnabled={timelineLiveFollowEnabled}
                 onIsAtEndChange={onIsAtEndChange}
                 onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
-                hideEmptyPlaceholder={
-                  isDraftHeroState || threadDetailLoading || isThreadDetailLoading
-                }
+                hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
                 topFadeEnabled={!hasTimelineTopBanner}
                 loadEarlier={loadEarlierTurns}
               />
