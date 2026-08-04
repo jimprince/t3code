@@ -1271,7 +1271,6 @@ export interface ChatComposerProps {
     decision: ProviderApprovalDecision,
   ) => Promise<unknown>;
   onSelectActivePendingUserInputOption: (questionId: string, optionValue: string) => void;
-  onAdvanceActivePendingUserInput: () => void;
   onPreviousActivePendingUserInputQuestion: () => void;
   onChangeActivePendingUserInputCustomAnswer: (
     questionId: string,
@@ -1369,7 +1368,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onImplementPlanInNewThread,
     onRespondToApproval,
     onSelectActivePendingUserInputOption,
-    onAdvanceActivePendingUserInput,
     onPreviousActivePendingUserInputQuestion,
     onChangeActivePendingUserInputCustomAnswer,
     onProviderModelSelect,
@@ -1932,6 +1930,14 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
               },
             ] as const)
           : []),
+        // The goal loop is independent of plan mode, so it stays ungated.
+        {
+          id: "slash:goal",
+          type: "slash-command",
+          command: "goal",
+          label: "/goal",
+          description: "Set, show, or clear this thread's goal loop",
+        },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const slashMenuSkills = getProviderSkillsForSlashMenu(
         selectedProviderSkills,
@@ -4780,7 +4786,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     answers={activePendingDraftAnswers}
                     questionIndex={activePendingQuestionIndex}
                     onToggleOption={onSelectActivePendingUserInputOption}
-                    onAdvance={onAdvanceActivePendingUserInput}
                   />
                 ) : !isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan ? (
                   <ComposerPlanFollowUpBanner
@@ -4795,7 +4800,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       answers={activePendingDraftAnswers}
                       questionIndex={activePendingQuestionIndex}
                       onToggleOption={onSelectActivePendingUserInputOption}
-                      onAdvance={onAdvanceActivePendingUserInput}
                     />
                     {!isChoiceOnlyPendingQuestion ||
                     activePendingProgress?.activeQuestion?.multiSelect ? (
