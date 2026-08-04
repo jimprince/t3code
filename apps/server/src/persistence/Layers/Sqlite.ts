@@ -6,6 +6,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import type { SqlError } from "effect/unstable/sql/SqlError";
 
 import { runMigrations } from "../Migrations.ts";
+import { runForkMigrations } from "../ForkMigrations.ts";
 import { ServerConfig } from "../../config.ts";
 import * as ServiceLauncherClient from "../../cloud/serviceLauncherClient.ts";
 
@@ -36,9 +37,11 @@ const setup = (trial: boolean) =>
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
       yield* sql`PRAGMA foreign_keys = ON;`;
+      yield* sql`PRAGMA busy_timeout = 5000;`;
       if (!trial) {
         yield* sql`PRAGMA journal_mode = WAL;`;
         yield* runMigrations();
+        yield* runForkMigrations();
       }
     }),
   );
