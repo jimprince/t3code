@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildGoalEvaluationPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
@@ -216,6 +217,19 @@ describe("buildThreadTitlePrompt", () => {
       `Thread contents:\n[Earlier content truncated]\n\n${retainedContext}`,
     );
     expect(result.prompt.match(/\[Earlier content truncated\]/g)).toHaveLength(1);
+  });
+});
+
+describe("buildGoalEvaluationPrompt", () => {
+  it("requires transcript-visible evidence only", () => {
+    const result = buildGoalEvaluationPrompt({
+      goal: "Fix the failing lint check",
+      transcript: "USER: fix lint\nASSISTANT: I will fix it",
+    });
+
+    expect(result.prompt).toContain("Use only the transcript-visible evidence");
+    expect(result.prompt).toContain("Fix the failing lint check");
+    expect(result.prompt).toContain("USER: fix lint");
   });
 });
 
