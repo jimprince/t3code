@@ -5129,6 +5129,77 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("normalizes chat file attachments into tmp paths during turn dispatch", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const dispatchedCommands: Array<OrchestrationCommand> = [];
+      // NUL + invalid UTF-8: a text-mode write would corrupt this payload.
+      const payload = Uint8Array.from([0x00, 0x25, 0x50, 0x44, 0x46, 0xc3, 0x28, 0xff]);
+
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            dispatch: (command) =>
+              Effect.sync(() => {
+                dispatchedCommands.push(command);
+                return { sequence: dispatchedCommands.length };
+              }),
+            readEvents: () => Stream.empty,
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.turn.start",
+            commandId: CommandId.make("cmd-file-attachment-turn"),
+            threadId: ThreadId.make("thread-file-attach"),
+            message: {
+              messageId: MessageId.make("msg-file-attach"),
+              role: "user",
+              text: "use the attached file",
+              attachments: [],
+              fileAttachments: [
+                {
+                  type: "file",
+                  name: "spec notes.pdf",
+                  mimeType: "application/pdf",
+                  sizeBytes: payload.byteLength,
+                  dataUrl: `data:application/pdf;base64,${Buffer.from(payload).toString("base64")}`,
+                },
+              ],
+            },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }),
+        ),
+      );
+
+      const command = dispatchedCommands[0];
+      assertTrue(command?.type === "thread.turn.start");
+      if (command?.type !== "thread.turn.start") return;
+      const fileAttachments = command.message.fileAttachments ?? [];
+      assert.equal(fileAttachments.length, 1);
+      const attachment = fileAttachments[0]!;
+      // The upload shape must be gone: the dispatched command carries a
+      // server-local absolute path instead of the base64 payload.
+      assert.notProperty(attachment, "dataUrl");
+      assert.equal(attachment.name, "spec notes.pdf");
+      assert.equal(attachment.mimeType, "application/pdf");
+      assert.equal(attachment.sizeBytes, payload.byteLength);
+      assertTrue(attachment.path.startsWith("/"));
+      const persisted = yield* fs.readFile(attachment.path);
+      assert.isTrue(Buffer.from(persisted).equals(Buffer.from(payload)));
+      // Best-effort cleanup of the tmp attachment dir this test created.
+      yield* fs
+        .remove(attachment.path.slice(0, attachment.path.lastIndexOf("/")), { recursive: true })
+        .pipe(Effect.ignore);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("routes websocket rpc shell.openInEditor", () =>
     Effect.gen(function* () {
       let openedInput: { cwd: string; editor: EditorId } | null = null;
