@@ -80,6 +80,11 @@ jobs:
           cache: true
           run-install: true
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -162,6 +167,11 @@ jobs:
           run-install: |
             args:
               - --filter=@t3tools/scripts...
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
 
       - name: Fetch StGit metadata
         run: |
