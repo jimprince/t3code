@@ -25,6 +25,9 @@ import type {
   ProviderUploadFeedbackResult,
   ThreadId,
   ProviderTurnStartResult,
+  ModelSelection,
+  RuntimeMode,
+  TurnId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
@@ -113,6 +116,16 @@ export interface ProviderServiceShape {
     readonly threadId: ThreadId;
     readonly numTurns: number;
   }) => Effect.Effect<void, ProviderServiceError>;
+
+  readonly forkConversation: (input: {
+    readonly sourceThreadId: ThreadId;
+    readonly targetThreadId: ThreadId;
+    readonly cwd: string;
+    readonly retainedTurnCount: number;
+    readonly retainedTurnId: TurnId | null;
+    readonly runtimeMode: RuntimeMode;
+    readonly modelSelection: ModelSelection;
+  }) => Effect.Effect<{ readonly native: boolean }, ProviderServiceError>;
 
   /**
    * Upload a thread and return the provider's shareable feedback identifier.
