@@ -13,8 +13,8 @@ concurrency:
 jobs:
   check:
     name: Check
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -39,11 +39,14 @@ jobs:
       - name: Ensure Electron runtime is installed
         run: vp run --filter @t3tools/desktop ensure:electron
 
+      - name: Build oxlint plugin
+        run: vp run --filter @t3tools/oxlint-plugin-t3code build
+
       - name: Check
         run: vp check
 
       - name: Typecheck
-        run: vpr typecheck
+        run: vp run typecheck
 
       - name: Check resource monitor formatting
         run: cargo fmt --manifest-path native/resource-monitor/Cargo.toml -- --check
@@ -59,8 +62,8 @@ jobs:
 
   test:
     name: Test
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    timeout-minutes: 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -91,7 +94,7 @@ jobs:
 
   mobile_native_static_analysis:
     name: Mobile Native Static Analysis
-    runs-on: blacksmith-6vcpu-macos-26
+    runs-on: macos-15
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -119,7 +122,7 @@ jobs:
 
   release_smoke:
     name: Release Smoke
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -141,3 +144,33 @@ jobs:
 
       - name: Exercise release-only workflow steps
         run: node scripts/release-smoke.ts
+
+  fork-policy:
+    name: Fork patch policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: |
+            args:
+              - --filter=@t3tools/scripts...
+
+      - name: Fetch StGit metadata
+        run: |
+          git fetch origin \
+            '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
+            '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+
+      - name: Check fork patch stack
+        run: scripts/ci/check-stgit-stack
+
+      - name: Check fork documentation
+        run: bun scripts/ci/check-fork-docs.ts
