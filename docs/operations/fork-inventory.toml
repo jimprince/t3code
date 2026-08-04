@@ -99,3 +99,12 @@ purpose = "Persist, expose, and render durable goals for long-running agent thre
 retire_when = "never"
 depends_on = ["fork-thread-lifecycle-recovery"]
 roles = []
+
+[[patch]]
+name = "fork-thread-transfer"
+subject = "feat(threads): transfer threads between environments"
+class = "product"
+purpose = "Move threads safely between local and remote environments with coordinated server, desktop, and web behavior."
+retire_when = "never"
+depends_on = ["fork-thread-lifecycle-recovery"]
+roles = []
