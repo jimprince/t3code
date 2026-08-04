@@ -124,6 +124,44 @@ describe("refresh-stgit-metadata", () => {
     }
   });
 
+  it("REGRESSION: preserves current metadata and prunes obsolete refs after a no-op replay", () => {
+    const repo = createFixtureRepo();
+    try {
+      const patchName = "fork-stgit-stack-policy";
+      const patchRef = `refs/patches/stgit/adopt/${patchName}`;
+      repo.writeFile("policy.txt", "current\n");
+      const mainSha = repo.commitAll("docs(fork): define StGit stack policy");
+      repo.git("update-ref", patchRef, mainSha);
+      writeStack(repo.dir, "refs/stacks/stgit/adopt", mainSha, { [patchName]: mainSha });
+      const stackRef = "refs/stacks/stgit/adopt";
+      const stackSha = repo.git("rev-parse", stackRef);
+      const obsoleteRef = "refs/patches/stgit/adopt/fork-retired-concern";
+      repo.git("update-ref", obsoleteRef, mainSha);
+      const outputFile = NodePath.join(repo.dir, "github-output.txt");
+
+      const result = run(repo.dir, {
+        GITHUB_OUTPUT: outputFile,
+        STGIT_BRANCH: "adopt",
+        STGIT_EXPECTED_HEAD: mainSha,
+        STGIT_MAIN_SHA: mainSha,
+      });
+      assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+
+      assert.strictEqual(repo.git("rev-parse", stackRef), stackSha);
+      assert.strictEqual(repo.git("rev-parse", patchRef), mainSha);
+      assert.throws(() => repo.git("rev-parse", "--verify", obsoleteRef));
+      const output = NodeFS.readFileSync(outputFile, "utf8");
+      assert.include(output, `stack_sha=${stackSha}`);
+      assert.match(
+        output,
+        new RegExp(`${obsoleteRef}\\t${mainSha}\\t(?:\\n|$)`),
+        "a no-op replay must still schedule leased deletion of obsolete patch refs",
+      );
+    } finally {
+      repo.cleanup();
+    }
+  });
+
   it("REGRESSION: treats stack.json.applied as canonical across renamed, split, added, and removed patches", () => {
     const repo = createFixtureRepo();
     try {

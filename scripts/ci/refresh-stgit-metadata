@@ -42,13 +42,27 @@ index_file="$(mktemp)"
 updated_file="$(mktemp)"
 trap 'rm -f "$desired_file" "$plan_file" "$index_file" "$updated_file"' EXIT
 
+emit_outputs() {
+  local stack_sha="$1"
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    {
+      echo "stack_ref=$stack_ref"
+      echo "stack_lease=$stack_lease"
+      echo "stack_sha=$stack_sha"
+      echo "push_plan<<EOF"
+      cat "$plan_file"
+      echo "EOF"
+    } >> "$GITHUB_OUTPUT"
+  fi
+}
+
 # The existing StGit patch commits define the expected subjects. Match those
 # subjects exactly in the replayed series; patch names are stable identifiers,
 # not lossy normalizations of commit messages.
-node - "$stack_json" "$subjects" "$STGIT_MAIN_SHA" "$patch_prefix" "$desired_file" "$updated_file" "$GIT_BIN" <<'NODE'
+node - "$stack_json" "$subjects" "$STGIT_MAIN_SHA" "$patch_prefix" "$desired_file" "$updated_file" "$GIT_BIN" "$STGIT_EXPECTED_HEAD" <<'NODE'
 const { execFileSync } = require("node:child_process");
 const { writeFileSync } = require("node:fs");
-const [stackRaw, subjectsRaw, mainSha, patchPrefix, desiredFile, updatedFile, gitBin] = process.argv.slice(2);
+const [stackRaw, subjectsRaw, mainSha, patchPrefix, desiredFile, updatedFile, gitBin, expectedHead] = process.argv.slice(2);
 const stack = JSON.parse(stackRaw);
 const commits =
   subjectsRaw
@@ -58,14 +72,18 @@ const commits =
       const separator = line.indexOf("\t");
       return { oid: line.slice(0, separator), subject: line.slice(separator + 1) };
     });
-const expectedSubject = (name) => {
-  const oid = stack.patches[name]?.oid;
-  if (!oid) throw new Error(`StGit metadata is missing an oid for applied patch ${name}`);
-  return execFileSync(gitBin, ["show", "-s", "--format=%s", oid], { encoding: "utf8" }).trimEnd();
-};
+const noReplay = mainSha === expectedHead;
 const desired = [];
 for (const name of stack.applied) {
-  const subject = expectedSubject(name);
+  const previousOid = stack.patches[name]?.oid;
+  if (!previousOid) throw new Error(`StGit metadata is missing an oid for applied patch ${name}`);
+  if (noReplay) {
+    desired.push(`${patchPrefix}${name}\t${previousOid}`);
+    continue;
+  }
+  const subject = execFileSync(gitBin, ["show", "-s", "--format=%s", previousOid], {
+    encoding: "utf8",
+  }).trimEnd();
   const matches = commits.filter((commit) => commit.subject === subject);
   if (matches.length !== 1) {
     throw new Error(
@@ -130,6 +148,12 @@ while IFS=' ' read -r ref old; do
   printf '%s\t%s\t\n' "$ref" "$old" >> "$plan_file"
 done < <(git_cmd for-each-ref --format='%(refname) %(objectname)' "$patch_prefix")
 
+if [[ "$STGIT_MAIN_SHA" == "$STGIT_EXPECTED_HEAD" ]]; then
+  emit_outputs "$stack_lease"
+  echo "StGit metadata already records main $STGIT_MAIN_SHA; canonical patch refs reconciled."
+  exit 0
+fi
+
 blob="$(printf '%s' "$updated_json" | git_cmd hash-object -w --stdin)"
 GIT_INDEX_FILE="$index_file" git_cmd update-index --add --cacheinfo "100644,$blob,stack.json"
 tree="$(GIT_INDEX_FILE="$index_file" git_cmd write-tree)"
@@ -143,15 +167,6 @@ if [[ "$final_head" != "$STGIT_MAIN_SHA" ]]; then
   exit 1
 fi
 
-if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
-  {
-    echo "stack_ref=$stack_ref"
-    echo "stack_lease=$stack_lease"
-    echo "stack_sha=$new_stack"
-    echo "push_plan<<EOF"
-    cat "$plan_file"
-    echo "EOF"
-  } >> "$GITHUB_OUTPUT"
-fi
+emit_outputs "$new_stack"
 
 echo "StGit metadata refreshed: $stack_ref now records main $STGIT_MAIN_SHA."
