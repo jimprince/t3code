@@ -76,3 +76,17 @@ date = "2026-07-29"
 decided = "retire+narrow+adapt (per capability)"
 analysis = "docs/analysis/logger-supersession.md"
 rationale = "Upstream v0.0.31 rework (49c0d96ed) superseded per-thread writer splitting, shutdown flush, and native/canonical file separation, so those pieces retired. Keep releaseThread eviction adapted to upstream's store, trace-span rate limiting, and the Spotlight marker. Layer the fork's 2GiB/30d logsDir sweep over upstream's 512MiB/14d provider policy."
+
+[[patch]]
+name = "fork-thread-lifecycle-recovery"
+subject = "fix(server): recover thread lifecycle"
+class = "divergence"
+purpose = "Preserve thread state and snapshot handoff correctness across server reconnects and lifecycle recovery."
+retire_when = "Upstream supplies equivalent lifecycle recovery and atomic snapshot handoff."
+depends_on = ["fork-provider-runtime-recovery"]
+roles = []
+[[patch.decision]]
+id = "ws-snapshot-projection"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream's projectThreadDetailSnapshot spreads the complete snapshot and prunes activity payloads, a strict superset of the old hand-rolled projection. Retain upstream's call while binding it to the fork's threadDetailSnapshot name; do not restore the retired projection."
