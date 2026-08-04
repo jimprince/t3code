@@ -206,9 +206,7 @@ export const UploadChatFileAttachment = Schema.Struct({
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
   mimeType: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
   sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(CHAT_FILE_ATTACHMENT_MAX_BYTES)),
-  dataUrl: TrimmedNonEmptyString.check(
-    Schema.isMaxLength(CHAT_FILE_ATTACHMENT_MAX_DATA_URL_CHARS),
-  ),
+  dataUrl: TrimmedNonEmptyString.check(Schema.isMaxLength(CHAT_FILE_ATTACHMENT_MAX_DATA_URL_CHARS)),
 });
 export type UploadChatFileAttachment = typeof UploadChatFileAttachment.Type;
 

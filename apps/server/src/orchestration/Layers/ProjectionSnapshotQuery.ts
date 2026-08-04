@@ -1266,9 +1266,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   role: row.role,
                   text: row.text,
                   ...(row.attachments !== null ? { attachments: row.attachments } : {}),
-                  ...(row.fileAttachments !== null
-                    ? { fileAttachments: row.fileAttachments }
-                    : {}),
+                  ...(row.fileAttachments !== null ? { fileAttachments: row.fileAttachments } : {}),
                   turnId: row.turnId,
                   streaming: row.isStreaming === 1,
                   createdAt: row.createdAt,

@@ -3177,7 +3177,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             </span>
                           }
                         />
-                        <TooltipPopup side="top" className="max-w-64 whitespace-normal leading-tight">
+                        <TooltipPopup
+                          side="top"
+                          className="max-w-64 whitespace-normal leading-tight"
+                        >
                           File attachments aren't saved with drafts and are lost on reload.
                         </TooltipPopup>
                       </Tooltip>
