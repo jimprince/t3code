@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3fab68c01ae21b58c93f90d07f829e51e93df091",
-  "head": "b7f1b068aaa1592eb3e3903cda571ae3bffdc495",
+  "prev": "995255392eecacd8f51f9fe7e264156f8a46fdcb",
+  "head": "43ef6849b5e4ddce257f60ae32d4eb69a227dd26",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -17,8 +17,7 @@
     "fork-remote-relay-access",
     "fork-performance-recovery",
     "fork-headless-updates",
-    "fork-text-generation",
-    "refresh-temp"
+    "fork-text-generation"
   ],
   "unapplied": [],
   "hidden": [],
@@ -54,7 +53,7 @@
       "oid": "6d3c378b6c60e18b1c951a267a4ce10bbbc7500d"
     },
     "fork-text-generation": {
-      "oid": "7ac5949c44dad98da3cb5ab606fb20f808bae811"
+      "oid": "43ef6849b5e4ddce257f60ae32d4eb69a227dd26"
     },
     "fork-thread-fork": {
       "oid": "ffbf7c373ea4c7c27df878dd4e548e391254c8e7"
@@ -67,9 +66,6 @@
     },
     "fork-thread-transfer": {
       "oid": "9969f007b78c3f23d3203aedb5049a0ce8f066f5"
-    },
-    "refresh-temp": {
-      "oid": "b7f1b068aaa1592eb3e3903cda571ae3bffdc495"
     }
   }
 }
