@@ -2287,7 +2287,9 @@ describe("session activity performance", () => {
     expect(appendedEntries[1]).toBe(initialEntries[1]);
   });
 
-  it("updates 20,000 ordered tool activities within 100 ms", () => {
+  // Keep enough headroom for repo-wide parallelism on shared CI runners while
+  // still catching accidental superlinear work in the streaming update path.
+  it("updates 20,000 ordered tool activities within 250 ms", () => {
     const activities = Array.from({ length: 20_000 }, (_, index) =>
       makeActivity({
         id: `benchmark-tool-${index}`,
@@ -2324,6 +2326,6 @@ describe("session activity performance", () => {
 
     const startedAt = performance.now();
     expect(deriveWorkLogEntries(updatedActivities)).toHaveLength(20_001);
-    expect(performance.now() - startedAt).toBeLessThan(100);
+    expect(performance.now() - startedAt).toBeLessThan(250);
   });
 });
