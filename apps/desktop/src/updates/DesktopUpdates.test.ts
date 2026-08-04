@@ -31,6 +31,7 @@ interface UpdatesHarnessOptions {
   readonly setDisableDifferentialDownload?: Effect.Effect<void>;
   readonly stopBackend?: Effect.Effect<void>;
   readonly env?: Record<string, string | undefined>;
+  readonly environment?: Partial<DesktopEnvironment.MakeDesktopEnvironmentInput>;
 }
 
 const flushCallbacks = Effect.yieldNow;
@@ -139,6 +140,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     isPackaged: true,
     resourcesPath: "/missing/resources",
     runningUnderArm64Translation: false,
+    ...options.environment,
   }).pipe(
     Layer.provide(
       Layer.mergeAll(
