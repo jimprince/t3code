@@ -1,8 +1,13 @@
 #!/usr/bin/env bun
 
 // @effect-diagnostics nodeBuiltinImport:off
+// @effect-diagnostics globalConsole:off
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
+
+declare const Bun: {
+  readonly TOML: { readonly parse: (contents: string) => unknown };
+};
 
 type InventoryPatch = {
   readonly name?: unknown;
@@ -131,7 +136,12 @@ export const checkStgitStack = (): string[] => {
   for (let index = 0; index < inventory.length; index += 1) {
     const entry = inventory[index];
     const expectedName = applied[index];
-    const expectedSubject = oids[index] ? git("show", "-s", "--format=%s", oids[index]) : undefined;
+    if (entry === undefined) {
+      errors.push(`inventory patch ${index + 1}: entry is missing`);
+      continue;
+    }
+    const expectedOid = oids[index];
+    const expectedSubject = expectedOid ? git("show", "-s", "--format=%s", expectedOid) : undefined;
     if (typeof entry.name !== "string" || entry.name.length === 0)
       errors.push(`inventory patch ${index + 1}: name is required`);
     if (entry.name !== expectedName)
@@ -182,10 +192,15 @@ export const checkStgitStack = (): string[] => {
 
   for (let index = 0; index < applied.length; index += 1) {
     const name = applied[index];
+    const oid = oids[index];
+    if (name === undefined || oid === undefined) {
+      errors.push(`stack entry ${index + 1} is incomplete`);
+      continue;
+    }
     let atPatch: InventoryPatch[] = [];
     try {
       atPatch = parseInventory(
-        git("show", `${oids[index]}:${inventoryPath}`),
+        git("show", `${oid}:${inventoryPath}`),
         `${name}:${inventoryPath}`,
         errors,
       );
@@ -209,12 +224,14 @@ export const checkStgitStack = (): string[] => {
     );
   }
   for (let index = 0; index < desiredRefs.length; index += 1) {
+    const desiredRef = desiredRefs[index];
+    if (desiredRef === undefined) continue;
     try {
-      const oid = git("rev-parse", desiredRefs[index]);
+      const oid = git("rev-parse", desiredRef);
       if (oid !== oids[index])
-        errors.push(`${desiredRefs[index]} points to ${oid}, expected ${oids[index]}`);
+        errors.push(`${desiredRef} points to ${oid}, expected ${oids[index]}`);
     } catch (error) {
-      errors.push(`${desiredRefs[index]} is missing: ${String(error)}`);
+      errors.push(`${desiredRef} is missing: ${String(error)}`);
     }
   }
 

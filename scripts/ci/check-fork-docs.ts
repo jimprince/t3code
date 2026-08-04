@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 
 // @effect-diagnostics nodeBuiltinImport:off
+// @effect-diagnostics globalConsole:off
 import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 
@@ -47,11 +48,14 @@ const walkFiles = (root: string, relative: string): string[] => {
 const localLinkTargets = (contents: string): string[] => {
   const targets: string[] = [];
   for (const match of contents.matchAll(/\[[^\]]*\]\(([^)]+)\)/g)) {
-    let target = match[1].trim();
+    const captured = match[1];
+    if (captured === undefined) continue;
+    let target = captured.trim();
     if (target.startsWith("<") && target.endsWith(">")) target = target.slice(1, -1);
-    else target = target.split(/\s+/)[0];
+    else target = target.split(/\s+/, 1)[0] ?? "";
     if (!target || target.startsWith("#") || /^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
-    targets.push(target.split("#", 1)[0]);
+    const localTarget = target.split("#", 1)[0];
+    if (localTarget) targets.push(localTarget);
   }
   return targets;
 };
