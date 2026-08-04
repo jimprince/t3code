@@ -189,7 +189,7 @@ describe("check-stgit-stack", () => {
         })),
         commits.map(([name, oid], index) => ({
           name,
-          subject: validPatches[index]?.subject,
+          subject: validPatches[index]!.subject,
           oid,
           note: null,
           questions: [],
