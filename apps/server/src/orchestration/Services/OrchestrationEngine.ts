@@ -87,24 +87,6 @@ export interface OrchestrationEngineShape {
    */
   readonly latestSequence: Effect.Effect<number, never, never>;
 
-  /**
-   * Eagerly subscribe to the live domain event feed.
-   *
-   * The subscription is registered as soon as this effect completes (before the
-   * returned stream is consumed), so a caller can subscribe *first*, then read a
-   * snapshot, and replay the buffered live events filtered to those past the
-   * snapshot sequence — losing none and double-applying none. Domain events are
-   * published only after their projection transaction commits, so the snapshot
-   * sequence is an exact cut point.
-   *
-   * The subscription is scoped: it is released when the surrounding scope (e.g.
-   * the RPC stream's scope) closes.
-   */
-  readonly subscribeDomainEvents: Effect.Effect<
-    Stream.Stream<OrchestrationEvent>,
-    never,
-    Scope.Scope
-  >;
 }
 
 /**
