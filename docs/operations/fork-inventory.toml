@@ -230,3 +230,22 @@ rationale = "Upstream ships single-select projectScope while the fork provides c
 standing_policy = "Do not retire multi-select to upstream's single-select model. Re-escalate only if upstream removes projectScope entirely."
 resolution_kind = "relocate"
 status = "ported-and-uat-verified-2026-07-29"
+
+[[patch]]
+name = "fork-web-image-timeout"
+subject = "test(web): allow image compression boundary runtime"
+class = "upstream-bound"
+purpose = "Keep deterministic web runtime boundary tests meaningful under parallel CI load."
+retire_when = "Upstream makes the covered operations reliably faster under parallel CI or adopts sufficient runtime budgets."
+depends_on = ["fork-build-workspace-tooling"]
+roles = []
+[[patch.decision]]
+id = "stashimagecompression-timeout"
+date = "2026-07-29"
+decided = "adapt"
+rationale = "The too-large boundary test repeatedly exceeded the default timeout under parallel hosted CI while passing in isolation. Accept the one-line upstream-file edit until the test becomes reliably faster."
+[[patch.decision]]
+id = "session-logic-performance-budget"
+date = "2026-08-25"
+decided = "adapt"
+rationale = "Upstream's 100 ms absolute work-log update budget passed in isolation but took 152 ms in the repo-wide parallel verifier. Preserve the regression guard with a 250 ms shared-runner budget that still catches superlinear regressions."
