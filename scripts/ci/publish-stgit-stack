@@ -1,0 +1,317 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+mode="${1:---check}"
+if [[ "$mode" != "--check" && "$mode" != "--push" ]] || [[ $# -gt 1 ]]; then
+  echo "usage: scripts/ci/publish-stgit-stack [--check|--push]" >&2
+  exit 2
+fi
+
+GIT_BIN="${SYNC_GIT_BIN:-$(command -v git)}"
+git_cmd() { "$GIT_BIN" "$@"; }
+
+remote="${STGIT_REMOTE:-origin}"
+expected_remote_main="${STGIT_EXPECTED_REMOTE_MAIN:-}"
+expected_remote_stack="${STGIT_EXPECTED_REMOTE_STACK:-}"
+expected_patch_refs_json="${STGIT_EXPECTED_PATCH_REFS_JSON:-}"
+release_tag="${STGIT_RELEASE_TAG:-}"
+release_tag_sha="${STGIT_RELEASE_TAG_SHA:-}"
+backup_namespace="${STGIT_BACKUP_NAMESPACE:-manual}"
+
+# A preparation record is local to this checkout and is never renewed here.
+lease_file="$(git_cmd rev-parse --git-path stgit-publication-lease.json)"
+if [[ -f "$lease_file" ]]; then
+  recorded_leases="$(bun -e '
+    const lease = await Bun.file(process.argv[1]).json();
+    if (lease.remote !== process.argv[2]) throw new Error("publication remote changed");
+    console.log(lease.main); console.log(lease.stack); console.log(JSON.stringify(lease.patches));
+  ' "$lease_file" "$remote")"
+  recorded_main="$(printf '%s\n' "$recorded_leases" | sed -n '1p')"
+  recorded_stack="$(printf '%s\n' "$recorded_leases" | sed -n '2p')"
+  recorded_patches="$(printf '%s\n' "$recorded_leases" | sed -n '3p')"
+  if [[ -n "$expected_remote_main" && "$expected_remote_main" != "$recorded_main" ]] ||
+    [[ -n "$expected_remote_stack" && "$expected_remote_stack" != "$recorded_stack" ]]; then
+    echo "Explicit leases disagree with this checkout's preparation record." >&2
+    exit 1
+  fi
+  expected_remote_main="${expected_remote_main:-$recorded_main}"
+  expected_remote_stack="${expected_remote_stack:-$recorded_stack}"
+  expected_patch_refs_json="${expected_patch_refs_json:-$recorded_patches}"
+fi
+if [[ -z "$expected_remote_main" || -z "$expected_remote_stack" || -z "$expected_patch_refs_json" ]]; then
+  echo "Preparation-time main, stack and patch-ref leases are required. Run scripts/ci/prepare-stgit-publication before editing or replaying." >&2
+  exit 2
+fi
+
+if [[ "$backup_namespace" != "bot" && "$backup_namespace" != "manual" ]]; then
+  echo "STGIT_BACKUP_NAMESPACE must be bot or manual." >&2
+  exit 2
+fi
+if [[ -n "$expected_remote_main" ]] &&
+  [[ ! "$expected_remote_main" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "STGIT_EXPECTED_REMOTE_MAIN must be a full lowercase Git oid." >&2
+  exit 2
+fi
+if [[ -n "$expected_remote_stack" ]] &&
+  [[ ! "$expected_remote_stack" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "STGIT_EXPECTED_REMOTE_STACK must be a full lowercase Git oid." >&2
+  exit 2
+fi
+if [[ -n "$expected_patch_refs_json" ]] && ! bun -e '
+  const value = JSON.parse(process.argv[1]);
+  if (!value || Array.isArray(value) || typeof value !== "object") process.exit(1);
+  for (const [ref, oid] of Object.entries(value)) {
+    if (!/^refs\/patches\/stgit\/adopt\/[A-Za-z0-9._-]+$/.test(ref)) process.exit(1);
+    if (!/^[0-9a-f]{40}$/.test(String(oid))) process.exit(1);
+  }
+' "$expected_patch_refs_json"; then
+  echo "STGIT_EXPECTED_PATCH_REFS_JSON must map canonical patch refs to full oids." >&2
+  exit 2
+fi
+if [[ -n "$release_tag" || -n "$release_tag_sha" ]]; then
+  if [[ -z "$release_tag" || -z "$release_tag_sha" ]]; then
+    echo "STGIT_RELEASE_TAG and STGIT_RELEASE_TAG_SHA must be supplied together." >&2
+    exit 2
+  fi
+  if [[ "$release_tag" == refs/tags/* ]]; then
+    release_ref="$release_tag"
+  else
+    release_ref="refs/tags/$release_tag"
+  fi
+  if ! git_cmd check-ref-format "$release_ref" ||
+    [[ ! "$release_tag_sha" =~ ^[0-9a-f]{40}$ ]] ||
+    ! git_cmd cat-file -e "${release_tag_sha}^{commit}"; then
+    echo "prepared release tag name or sha is invalid." >&2
+    exit 2
+  fi
+else
+  release_ref=""
+fi
+
+branch="$(git_cmd branch --show-current)"
+if [[ "$branch" != "stgit/adopt" ]]; then
+  echo "publish-stgit-stack requires branch stgit/adopt; current branch is ${branch:-detached}." >&2
+  exit 1
+fi
+if [[ -n "$(git_cmd status --porcelain)" ]]; then
+  echo "publish-stgit-stack requires a clean worktree." >&2
+  exit 1
+fi
+
+stack_ref="refs/stacks/stgit/adopt"
+stack_json="$(git_cmd show "$stack_ref:stack.json")"
+head="$(git_cmd rev-parse HEAD)"
+recorded_head="$(bun -e 'process.stdout.write(JSON.parse(process.argv[1]).head ?? "")' "$stack_json")"
+if [[ "$recorded_head" != "$head" ]]; then
+  echo "stack.json.head $recorded_head does not equal HEAD $head." >&2
+  exit 1
+fi
+if ! bun -e '
+  const stack = JSON.parse(process.argv[1]);
+  if (stack.unapplied.length || stack.hidden.length) process.exit(1);
+' "$stack_json"; then
+  echo "all StGit patches must be applied and visible before publication." >&2
+  exit 1
+fi
+
+scripts/ci/check-stgit-stack
+bun scripts/ci/check-fork-docs.ts
+
+remote_refs="$(mktemp)"
+desired_refs="$(mktemp)"
+obsolete_refs="$(mktemp)"
+expected_refs="$(mktemp)"
+verified_refs="$(mktemp)"
+trap 'rm -f "$remote_refs" "$desired_refs" "$obsolete_refs" "$expected_refs" "$verified_refs"' EXIT
+
+query_refs=(refs/heads/main "$stack_ref" 'refs/patches/stgit/adopt/*')
+if [[ -n "$release_ref" ]]; then
+  query_refs+=("$release_ref")
+fi
+git_cmd ls-remote --refs "$remote" "${query_refs[@]}" > "$remote_refs"
+
+remote_oid() {
+  local ref="$1"
+  awk -v wanted="$ref" '$2 == wanted { print $1 }' "$remote_refs"
+}
+
+remote_main="$(remote_oid refs/heads/main)"
+if [[ -z "$remote_main" ]]; then
+  echo "remote $remote has no refs/heads/main; refusing publication." >&2
+  exit 1
+fi
+if [[ -n "$expected_remote_main" && "$remote_main" != "$expected_remote_main" ]]; then
+  echo "remote main lease changed: expected $expected_remote_main, found $remote_main." >&2
+  exit 1
+fi
+stack_oid="$(git_cmd rev-parse "$stack_ref")"
+
+bun -e '
+  const stack = JSON.parse(process.argv[1]);
+  for (const name of stack.applied) console.log(`refs/patches/stgit/adopt/${name}\t${stack.patches[name].oid}`);
+' "$stack_json" > "$desired_refs"
+
+leases=("--force-with-lease=refs/heads/main:${remote_main}")
+refspecs=("${head}:refs/heads/main")
+printf 'refs/heads/main\t%s\n' "$head" >> "$expected_refs"
+
+remote_stack="$(remote_oid "$stack_ref")"
+if [[ -n "$expected_remote_stack" && "$remote_stack" != "$expected_remote_stack" ]]; then
+  echo "remote stack lease changed: expected $expected_remote_stack, found ${remote_stack:-<absent>}." >&2
+  exit 1
+fi
+if [[ -n "$expected_patch_refs_json" ]]; then
+  actual_patch_refs_json="$(bun -e '
+    const text = await Bun.file(process.argv[1]).text();
+    const result = {};
+    for (const line of text.split("\n")) {
+      const [oid, ref] = line.split("\t");
+      if (ref?.startsWith("refs/patches/stgit/adopt/")) result[ref] = oid;
+    }
+    process.stdout.write(JSON.stringify(result, Object.keys(result).sort()));
+  ' "$remote_refs")"
+  normalized_expected_patch_refs_json="$(bun -e '
+    const value = JSON.parse(process.argv[1]);
+    process.stdout.write(JSON.stringify(value, Object.keys(value).sort()));
+  ' "$expected_patch_refs_json")"
+  if [[ "$actual_patch_refs_json" != "$normalized_expected_patch_refs_json" ]]; then
+    echo "remote patch-ref leases changed since the candidate was claimed." >&2
+    exit 1
+  fi
+fi
+leases+=("--force-with-lease=${stack_ref}:${remote_stack}")
+refspecs+=("${stack_oid}:${stack_ref}")
+printf '%s\t%s\n' "$stack_ref" "$stack_oid" >> "$expected_refs"
+
+echo "StGit publication plan for $remote:"
+echo "  update refs/heads/main ${remote_main} -> ${head}"
+echo "  update ${stack_ref} ${remote_stack:-<absent>} -> ${stack_oid}"
+
+while IFS=$'\t' read -r ref oid; do
+  [[ -z "$ref" ]] && continue
+  local_oid="$(git_cmd rev-parse "$ref")"
+  if [[ "$local_oid" != "$oid" ]]; then
+    echo "$ref points to $local_oid, but stack.json records $oid." >&2
+    exit 1
+  fi
+  old="$(remote_oid "$ref")"
+  leases+=("--force-with-lease=${ref}:${old}")
+  refspecs+=("${oid}:${ref}")
+  printf '%s\t%s\n' "$ref" "$oid" >> "$expected_refs"
+  echo "  update ${ref} ${old:-<absent>} -> ${oid}"
+done < "$desired_refs"
+
+while read -r oid ref; do
+  [[ "$ref" != refs/patches/stgit/adopt/* ]] && continue
+  desired=false
+  while IFS=$'\t' read -r desired_ref _; do
+    if [[ "$ref" == "$desired_ref" ]]; then
+      desired=true
+      break
+    fi
+  done < "$desired_refs"
+  if [[ "$desired" == true ]]; then
+    continue
+  fi
+  leases+=("--force-with-lease=${ref}:${oid}")
+  refspecs+=(":${ref}")
+  printf '%s\n' "$ref" >> "$obsolete_refs"
+  echo "  delete ${ref} ${oid}"
+done < "$remote_refs"
+
+if [[ -n "$release_ref" ]]; then
+  remote_release="$(remote_oid "$release_ref")"
+  leases+=("--force-with-lease=${release_ref}:${remote_release}")
+  refspecs+=("${release_tag_sha}:${release_ref}")
+  printf '%s\t%s\n' "$release_ref" "$release_tag_sha" >> "$expected_refs"
+  echo "  update ${release_ref} ${remote_release:-<absent>} -> ${release_tag_sha}"
+fi
+
+if [[ "$mode" == "--check" ]]; then
+  echo "Check mode only; remote state was not changed. Re-run with --push to publish this stack."
+  exit 0
+fi
+
+backup_ref="refs/heads/backup/${backup_namespace}/stgit-$(date -u +%Y%m%dT%H%M%SZ)"
+if [[ -n "$(git_cmd ls-remote --refs "$remote" "$backup_ref")" ]]; then
+  echo "backup ref already exists: $backup_ref" >&2
+  exit 1
+fi
+leases+=("--force-with-lease=${backup_ref}:")
+refspecs+=("${remote_main}:${backup_ref}")
+printf '%s\t%s\n' "$backup_ref" "$remote_main" >> "$expected_refs"
+echo "  create ${backup_ref} -> ${remote_main}"
+# Immutable snapshot of the StGit metadata being published. refs/stacks is
+# force-updated on every publish and its log does not survive re-inits in
+# disposable clones, so without this the previous stack state (patch commit
+# oids, applied order) is only recoverable by reconstruction from the backup
+# branch. One snapshot per publish, never rewritten; prune deliberately.
+history_ref="refs/stack-history/stgit/adopt/${backup_ref##*/stgit-}"
+if [[ -n "$(git_cmd ls-remote --refs "$remote" "$history_ref")" ]]; then
+  echo "stack history ref already exists: $history_ref" >&2
+  exit 1
+fi
+leases+=("--force-with-lease=${history_ref}:")
+refspecs+=("${stack_oid}:${history_ref}")
+printf '%s\t%s\n' "$history_ref" "$stack_oid" >> "$expected_refs"
+echo "  create ${history_ref} -> ${stack_oid}"
+
+# Preserve the metadata that belongs to the backed-up previous main as well
+# as the new metadata. Recovery never depends on a previous writer's history.
+previous_history_ref="${history_ref}-previous"
+if [[ -n "$(git_cmd ls-remote --refs "$remote" "$previous_history_ref")" ]]; then
+  echo "previous stack history ref already exists: $previous_history_ref" >&2
+  exit 1
+fi
+if ! git_cmd cat-file -e "${remote_stack}^{commit}"; then
+  echo "Previous stack object is unavailable locally; fetch the pinned object before publishing." >&2
+  exit 1
+fi
+leases+=("--force-with-lease=${previous_history_ref}:")
+refspecs+=("${remote_stack}:${previous_history_ref}")
+printf '%s\t%s\n' "$previous_history_ref" "$remote_stack" >> "$expected_refs"
+
+verify_remote_state() {
+  local failed=false
+  local verify_query=(
+    refs/heads/main
+    "$backup_ref"
+    "$history_ref"
+    "$previous_history_ref"
+    "$stack_ref"
+    'refs/patches/stgit/adopt/*'
+  )
+  if [[ -n "$release_ref" ]]; then
+    verify_query+=("$release_ref")
+  fi
+  git_cmd ls-remote --refs "$remote" "${verify_query[@]}" > "$verified_refs"
+  while IFS=$'\t' read -r ref oid; do
+    [[ -z "$ref" ]] && continue
+    actual="$(awk -v wanted="$ref" '$2 == wanted { print $1 }' "$verified_refs")"
+    if [[ "$actual" != "$oid" ]]; then
+      echo "remote verification failed for $ref: expected $oid, found ${actual:-<absent>}." >&2
+      failed=true
+    fi
+  done < "$expected_refs"
+  while read -r ref; do
+    [[ -z "$ref" ]] && continue
+    if awk -v wanted="$ref" '$2 == wanted { found = 1 } END { exit !found }' "$verified_refs"; then
+      echo "remote verification failed: obsolete ref still exists: $ref." >&2
+      failed=true
+    fi
+  done < "$obsolete_refs"
+  [[ "$failed" == false ]]
+}
+
+if ! git_cmd push --atomic "$remote" "${leases[@]}" "${refspecs[@]}"; then
+  echo "atomic push reported failure; verifying remote state before deciding outcome." >&2
+  if ! verify_remote_state; then
+    echo "atomic StGit publication failed; no lease was refreshed or retried." >&2
+    exit 1
+  fi
+  echo "Atomic push transport was ambiguous, but every resulting remote ref is correct."
+else
+  verify_remote_state
+fi
+echo "Published HEAD and canonical StGit metadata atomically; backup: $backup_ref; stack snapshot: $history_ref"

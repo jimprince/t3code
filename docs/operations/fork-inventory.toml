@@ -1,0 +1,26 @@
+# Fork Patch Inventory — schema version 2
+#
+# This ordered registry is part of the stack interface. Every applied StGit
+# patch has exactly one entry, in stack.json.applied order. A patch owns its
+# implementation, tests, applicable documentation, and this stanza. Paths may
+# overlap; coherent purpose, not exclusive files, determines ownership.
+#
+# STANZA POSITION MATTERS: [[patch]] blocks must appear in exactly the same
+# order as stack.json.applied, so a NEW patch created at the top of the stack
+# adds its stanza at the END of this file — not next to thematically related
+# entries. scripts/ci/check-stgit-stack fails the stack otherwise.
+#
+# class: product | divergence | upstream-bound
+
+schema = 2
+fork = "jimprince/t3code"
+upstream = "pingdotgg/t3code"
+
+[[patch]]
+name = "fork-stgit-stack-policy"
+subject = "docs(fork): define StGit stack policy"
+class = "product"
+purpose = "Route maintainers and agents through the executable StGit maintenance, validation, and publication policy."
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
+depends_on = []
+roles = ["agent-docs-owner"]
