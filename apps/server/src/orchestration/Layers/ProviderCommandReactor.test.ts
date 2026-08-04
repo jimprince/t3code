@@ -10,6 +10,7 @@ import {
   ProviderDriverKind,
   ProviderInstanceId,
   ProviderSetupError,
+  type ProviderSendTurnInput,
 } from "@t3tools/contracts";
 import { createModelSelection } from "@t3tools/shared/model";
 import {
@@ -29,6 +30,7 @@ import * as Deferred from "effect/Deferred";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -47,6 +49,10 @@ import {
   type ProviderServiceShape,
 } from "../../provider/Services/ProviderService.ts";
 import { ProviderAuthService } from "../../provider/Services/ProviderAuthService.ts";
+import {
+  ProviderSessionDirectory,
+  type ProviderRuntimeBinding,
+} from "../../provider/Services/ProviderSessionDirectory.ts";
 import { makeProviderRegistryLayer } from "../../provider/testUtils/providerRegistryMock.ts";
 import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
@@ -177,6 +183,7 @@ describe("ProviderCommandReactor", () => {
     readonly compactThreadEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly stopSessionEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
+    readonly importedHistory?: boolean;
     readonly startSessionEffect?: (
       session: ProviderSession,
     ) => Effect.Effect<ProviderSession, ProviderAdapterRequestError>;
@@ -194,6 +201,7 @@ describe("ProviderCommandReactor", () => {
     );
     let nextSessionIndex = 1;
     const runtimeSessions: Array<ProviderSession> = [];
+    const providerBindings = new Map<string, ProviderRuntimeBinding>();
     const modelSelection = input?.threadModelSelection ?? {
       instanceId: ProviderInstanceId.make("codex"),
       model: "gpt-5-codex",
@@ -256,11 +264,20 @@ describe("ProviderCommandReactor", () => {
         Effect.tap((startedSession) =>
           Effect.sync(() => {
             runtimeSessions.push(startedSession);
+            providerBindings.set(String(threadId), {
+              threadId,
+              provider,
+              ...(providerInstanceId ? { providerInstanceId } : {}),
+              runtimeMode: startedSession.runtimeMode,
+              status: "running",
+              resumeCursor: startedSession.resumeCursor ?? null,
+              runtimePayload: null,
+            });
           }),
         ),
       );
     });
-    const sendTurn = vi.fn((_: unknown) =>
+    const sendTurn = vi.fn((_: ProviderSendTurnInput) =>
       Effect.succeed({
         threadId: ThreadId.make("thread-1"),
         turnId: asTurnId("turn-1"),
@@ -389,11 +406,58 @@ describe("ProviderCommandReactor", () => {
         });
       },
       rollbackConversation: () => unsupported(),
+      forkConversation: () => unsupported(),
       uploadFeedback: () => unsupported(),
       get streamEvents() {
         return Stream.fromPubSub(runtimeEventPubSub);
       },
     };
+    const providerSessionDirectory = ProviderSessionDirectory.of({
+      upsert: (binding) =>
+        Effect.sync(() => {
+          const existing = providerBindings.get(String(binding.threadId));
+          const existingPayload = existing?.runtimePayload;
+          const nextPayload = binding.runtimePayload;
+          providerBindings.set(String(binding.threadId), {
+            ...existing,
+            ...binding,
+            runtimePayload:
+              existingPayload !== null &&
+              typeof existingPayload === "object" &&
+              !Array.isArray(existingPayload) &&
+              nextPayload !== null &&
+              nextPayload !== undefined &&
+              typeof nextPayload === "object" &&
+              !Array.isArray(nextPayload)
+                ? { ...existingPayload, ...nextPayload }
+                : (nextPayload ?? existingPayload ?? null),
+          });
+        }),
+      getProvider: (threadId) =>
+        Effect.sync(
+          () =>
+            providerBindings.get(String(threadId))?.provider ?? ProviderDriverKind.make("codex"),
+        ),
+      getBinding: (threadId) =>
+        Effect.sync(() => {
+          const binding = providerBindings.get(String(threadId));
+          return binding === undefined ? Option.none() : Option.some(binding);
+        }),
+      listThreadIds: () =>
+        Effect.sync(() => [...providerBindings.values()].map((entry) => entry.threadId)),
+      listBindings: () =>
+        Effect.sync(() =>
+          [...providerBindings.values()].map((entry) => ({
+            ...entry,
+            lastSeenAt: now,
+            bootGenerationId: null,
+          })),
+        ),
+      settleDeadGenerationBinding: () => Effect.succeed(false),
+      markTurnStarted: () => Effect.succeed(false),
+      markTurnTerminal: () => Effect.succeed(false),
+      claimIdleForRecovery: () => Effect.succeed(false),
+    });
 
     const orchestrationLayer = OrchestrationEngineLive.pipe(
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
@@ -449,6 +513,7 @@ describe("ProviderCommandReactor", () => {
       Layer.provideMerge(projectionSnapshotLayer),
       Layer.provideMerge(Layer.succeed(ProviderService, service)),
       Layer.provide(Layer.mock(ProviderAuthService, { tryHandlePromptCommand })),
+      Layer.provideMerge(Layer.succeed(ProviderSessionDirectory, providerSessionDirectory)),
       Layer.provideMerge(makeProviderRegistryLayer(providerSnapshots as never)),
       Layer.provideMerge(
         Layer.mock(GitWorkflowService.GitWorkflowService)({
@@ -497,21 +562,83 @@ describe("ProviderCommandReactor", () => {
         createdAt: now,
       }),
     );
-    await Effect.runPromise(
-      engine.dispatch({
-        type: "thread.create",
-        commandId: CommandId.make("cmd-thread-create"),
-        threadId: ThreadId.make("thread-1"),
-        projectId: asProjectId("project-1"),
-        title: "Thread",
-        modelSelection: modelSelection,
-        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
-        runtimeMode: "approval-required",
-        branch: null,
-        worktreePath: null,
-        createdAt: now,
-      }),
-    );
+    const seedThread =
+      input?.importedHistory === true
+        ? engine.dispatch({
+            type: "thread.import",
+            commandId: CommandId.make("cmd-thread-import"),
+            threadId: ThreadId.make("thread-1"),
+            projectId: asProjectId("project-1"),
+            thread: {
+              id: ThreadId.make("thread-1"),
+              title: "Imported thread",
+              modelSelection,
+              interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+              runtimeMode: "approval-required",
+              branch: null,
+              goal: null,
+              createdAt: now,
+              updatedAt: now,
+              messages: [
+                {
+                  id: asMessageId("imported-user"),
+                  role: "user",
+                  text: "Investigate the original failure.",
+                  turnId: null,
+                  streaming: false,
+                  createdAt: "2025-12-31T23:59:59.000Z",
+                  updatedAt: "2025-12-31T23:59:59.000Z",
+                },
+                {
+                  id: asMessageId("imported-assistant"),
+                  role: "assistant",
+                  text: "The failure is in the reconnect path.",
+                  turnId: null,
+                  streaming: false,
+                  createdAt: now,
+                  updatedAt: now,
+                },
+              ],
+              proposedPlans: [],
+              activities: [
+                {
+                  id: EventId.make("import-marker"),
+                  tone: "info",
+                  kind: "thread.imported",
+                  summary: "Thread moved from another machine",
+                  payload: {
+                    sourceWorkspaceRoot: "/source/provider-project",
+                    exportedAt: now,
+                    providerContextHandoff: {
+                      version: 1,
+                      required: true,
+                      historyMessageCount: 2,
+                    },
+                  },
+                  turnId: null,
+                  createdAt: now,
+                },
+              ],
+              checkpoints: [],
+            },
+            branch: null,
+            worktreePath: null,
+            createdAt: now,
+          })
+        : engine.dispatch({
+            type: "thread.create",
+            commandId: CommandId.make("cmd-thread-create"),
+            threadId: ThreadId.make("thread-1"),
+            projectId: asProjectId("project-1"),
+            title: "Thread",
+            modelSelection: modelSelection,
+            interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+            runtimeMode: "approval-required",
+            branch: null,
+            worktreePath: null,
+            createdAt: now,
+          });
+    await Effect.runPromise(seedThread);
     if (input?.titleRegenerationBeforeStart === "two") {
       await Effect.runPromise(
         engine.dispatch({
@@ -588,6 +715,7 @@ describe("ProviderCommandReactor", () => {
       generateBranchName,
       generateThreadTitle,
       runtimeSessions,
+      readProviderBinding: () => providerBindings.get("thread-1"),
       stateDir,
       drain,
       runEffect,
@@ -1267,6 +1395,74 @@ describe("ProviderCommandReactor", () => {
       expect(thread?.session?.status).toBe("starting");
       expect(thread?.session?.lastError).toBeNull();
     }),
+  );
+
+  effectIt.effect(
+    "sends imported visible history to a fresh provider once without duplicating UI messages",
+    () =>
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() => createHarness({ importedHistory: true }));
+        const now = "2026-01-01T00:00:01.000Z";
+
+        yield* harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-imported-turn-start-1"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId("post-import-user-1"),
+            role: "user",
+            text: "Continue on this machine.",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        });
+
+        yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 1));
+        yield* Effect.promise(() =>
+          waitFor(() => {
+            const payload = harness.readProviderBinding()?.runtimePayload;
+            return (
+              typeof payload === "object" &&
+              payload !== null &&
+              "threadTransferContextHandoff" in payload
+            );
+          }),
+        );
+        const firstProviderInput = harness.sendTurn.mock.calls[0]?.[0].input ?? "";
+        expect(firstProviderInput).toContain("Investigate the original failure.");
+        expect(firstProviderInput).toContain("The failure is in the reconnect path.");
+        expect(firstProviderInput.match(/Continue on this machine\./g)).toHaveLength(1);
+
+        const firstSnapshot = yield* Effect.promise(() => harness.readModel());
+        const firstThread = firstSnapshot.threads.find(
+          (entry) => entry.id === ThreadId.make("thread-1"),
+        );
+        expect(firstThread?.messages.map((entry) => entry.text)).toEqual([
+          "Investigate the original failure.",
+          "The failure is in the reconnect path.",
+          "Continue on this machine.",
+        ]);
+
+        yield* harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-imported-turn-start-2"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId("post-import-user-2"),
+            role: "user",
+            text: "Second request.",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: "2026-01-01T00:00:02.000Z",
+        });
+
+        yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 2));
+        expect(harness.sendTurn.mock.calls[1]?.[0].input).toBe("Second request.");
+      }),
   );
 
   it("retries thread title generation after a transient failure", async () => {
@@ -3910,4 +4106,52 @@ describe("ProviderCommandReactor", () => {
       expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
     }),
   );
+
+  it("reacts to thread.session.stop after archive by stopping the provider session", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const threadId = ThreadId.make("thread-1");
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-session-set-for-archived-stop"),
+        threadId,
+        session: {
+          threadId,
+          status: "ready",
+          providerName: "codex",
+          providerInstanceId: ProviderInstanceId.make("codex_work"),
+          runtimeMode: "approval-required",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: now,
+        },
+        createdAt: now,
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.archive",
+        commandId: CommandId.make("cmd-archive-before-session-stop"),
+        threadId,
+      }),
+    );
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.session.stop",
+        commandId: CommandId.make("cmd-session-stop-archived"),
+        threadId,
+        createdAt: now,
+      }),
+    );
+
+    await waitFor(() => harness.stopSession.mock.calls.length === 1);
+    const readModel = await harness.readModel();
+    const thread = readModel.threads.find((entry) => entry.id === threadId);
+    expect(thread?.archivedAt).not.toBeNull();
+    expect(thread?.session?.status).toBe("stopped");
+    expect(thread?.session?.providerInstanceId).toBe(ProviderInstanceId.make("codex_work"));
+    expect(thread?.session?.activeTurnId).toBeNull();
+  });
 });
