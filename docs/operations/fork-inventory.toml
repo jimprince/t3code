@@ -136,3 +136,17 @@ id = "sidebar-project-header-styling"
 date = "2026-07-28"
 decided = "adapt"
 rationale = "The fork owns the General Chat structure (hideProjectHeader wrapper and chat affordance); upstream owns the design system. Preserve the structural additions while taking upstream styling."
+
+[[patch]]
+name = "fork-remote-relay-access"
+subject = "feat(remote): support authenticated relay access"
+class = "divergence"
+purpose = "Support authenticated remote and relay operation with fork-specific scope and transport behavior."
+retire_when = "Upstream ships equivalent authenticated relay access."
+depends_on = ["fork-thread-lifecycle-recovery"]
+roles = []
+[[patch.decision]]
+id = "rpc-scope-map-relocation-951"
+date = "2026-07-29"
+decided = "relocate"
+rationale = "Upstream moved the RPC scope map into auth/RpcAuthorization.ts and type-coupled it to WsRpcGroup. Keep the fork's transfer, recovery, and headless scopes at that new location so missing scope coverage remains a compile-time error."
