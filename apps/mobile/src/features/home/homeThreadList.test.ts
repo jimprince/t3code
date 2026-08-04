@@ -256,6 +256,7 @@ describe("buildHomeThreadGroups", () => {
             projectId: olderProject.id,
             title: "Most recently active",
             updatedAt: "2026-06-03T00:00:00.000Z",
+            latestUserMessageAt: "2026-06-03T00:00:00.000Z",
           }),
           makeThread({
             environmentId,
@@ -263,12 +264,72 @@ describe("buildHomeThreadGroups", () => {
             projectId: newerProject.id,
             title: "Less recently active",
             updatedAt: "2026-06-02T00:00:00.000Z",
+            latestUserMessageAt: "2026-06-02T00:00:00.000Z",
           }),
         ],
         pendingTasks: [],
         projectSortOrder: "updated_at",
       }).map((scope) => scope.representative.id),
     ).toEqual([olderProject.id, newerProject.id]);
+  });
+
+  it("does not reorder project scopes for agent-only streaming activity", () => {
+    const environmentId = EnvironmentId.make("environment-1");
+    const busyProject = makeProject({
+      environmentId,
+      id: ProjectId.make("project-busy"),
+      title: "Busy project",
+    });
+    const promptedProject = makeProject({
+      environmentId,
+      id: ProjectId.make("project-prompted"),
+      title: "Prompted project",
+    });
+    const automationProject = makeProject({
+      environmentId,
+      id: ProjectId.make("project-automation"),
+      title: "Automation project",
+    });
+    const scopes = buildHomeProjectScopes({
+      projects: [busyProject, promptedProject, automationProject],
+      environmentId: null,
+      projectGroupingMode: "separate",
+    });
+
+    expect(
+      sortHomeProjectScopes({
+        scopes,
+        threads: [
+          makeThread({
+            environmentId,
+            id: ThreadId.make("thread-busy"),
+            projectId: busyProject.id,
+            title: "Streaming agent",
+            updatedAt: "2026-06-09T00:00:00.000Z",
+            latestUserMessageAt: "2026-06-02T00:00:00.000Z",
+          }),
+          makeThread({
+            environmentId,
+            id: ThreadId.make("thread-prompted"),
+            projectId: promptedProject.id,
+            title: "New user prompt",
+            updatedAt: "2026-06-03T00:00:00.000Z",
+            latestUserMessageAt: "2026-06-03T00:00:00.000Z",
+          }),
+          makeThread({
+            environmentId,
+            id: ThreadId.make("thread-automation"),
+            projectId: automationProject.id,
+            title: "Promptless automation",
+            createdAt: "2026-06-01T00:00:00.000Z",
+            updatedAt: "2026-06-10T00:00:00.000Z",
+            latestUserMessageAt: null,
+          }),
+        ],
+        pendingTasks: [],
+        projectSortOrder: "updated_at",
+      }).map((scope) => scope.representative.id),
+    ).toEqual([promptedProject.id, busyProject.id, automationProject.id]);
   });
 
   it("sorts invalid project creation timestamps after valid ones", () => {
@@ -426,6 +487,7 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Older thread",
         updatedAt: "2026-06-02T00:00:00.000Z",
+        latestUserMessageAt: "2026-06-02T00:00:00.000Z",
       }),
       makeThread({
         environmentId,
@@ -433,6 +495,7 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Newer thread",
         updatedAt: "2026-06-03T00:00:00.000Z",
+        latestUserMessageAt: "2026-06-03T00:00:00.000Z",
       }),
     ];
 
@@ -591,6 +654,7 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Today",
         updatedAt: "2026-06-28T00:00:00.000Z",
+        latestUserMessageAt: "2026-06-28T00:00:00.000Z",
       }),
       makeThread({
         environmentId,
@@ -598,6 +662,7 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Within window",
         updatedAt: "2026-06-25T00:00:00.000Z",
+        latestUserMessageAt: "2026-06-25T00:00:00.000Z",
       }),
       makeThread({
         environmentId,
@@ -605,6 +670,7 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Two weeks ago",
         updatedAt: "2026-06-14T00:00:00.000Z",
+        latestUserMessageAt: "2026-06-14T00:00:00.000Z",
       }),
     ];
 
@@ -630,6 +696,7 @@ describe("buildHomeThreadGroups", () => {
           projectId: project.id,
           title: `Thread ${index}`,
           updatedAt: `${day}T00:00:00.000Z`,
+          latestUserMessageAt: `${day}T00:00:00.000Z`,
         }),
     );
 
@@ -657,6 +724,7 @@ describe("buildHomeThreadGroups", () => {
           projectId: project.id,
           title: `Thread ${index}`,
           updatedAt: `${day}T00:00:00.000Z`,
+          latestUserMessageAt: `${day}T00:00:00.000Z`,
         }),
     );
 
@@ -725,6 +793,7 @@ describe("buildHomeThreadGroups", () => {
         projectId: laptopProject.id,
         title: "Older laptop thread",
         updatedAt: "2026-06-27T00:00:00.000Z",
+        latestUserMessageAt: "2026-06-27T00:00:00.000Z",
       }),
       makeThread({
         environmentId: desktopEnv,
@@ -732,6 +801,7 @@ describe("buildHomeThreadGroups", () => {
         projectId: desktopProject.id,
         title: "Newest desktop thread",
         updatedAt: "2026-06-28T00:00:00.000Z",
+        latestUserMessageAt: "2026-06-28T00:00:00.000Z",
       }),
     ];
 
