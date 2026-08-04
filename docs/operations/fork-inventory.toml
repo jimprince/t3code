@@ -150,3 +150,17 @@ id = "rpc-scope-map-relocation-951"
 date = "2026-07-29"
 decided = "relocate"
 rationale = "Upstream moved the RPC scope map into auth/RpcAuthorization.ts and type-coupled it to WsRpcGroup. Keep the fork's transfer, recovery, and headless scopes at that new location so missing scope coverage remains a compile-time error."
+
+[[patch]]
+name = "fork-performance-recovery"
+subject = "feat(recovery): add performance recovery controls"
+class = "product"
+purpose = "Expose resource pressure diagnosis and bounded system recovery controls."
+retire_when = "never"
+depends_on = ["fork-provider-observability"]
+roles = []
+[[patch.decision]]
+id = "forkprocessrows-extraction-951"
+date = "2026-07-29"
+decided = "extract-to-additive"
+rationale = "When upstream deleted process-row parsing from ProcessDiagnostics, move ProcessRow and readProcessRows into the additive forkProcessRows module. This keeps all fork behavior out of the upstream diagnostics file."
