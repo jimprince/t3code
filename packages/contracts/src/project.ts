@@ -306,12 +306,8 @@ const PROJECT_UPLOAD_FILE_NAME_MAX_LENGTH = 255;
 export const ProjectUploadFileInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   // A single path segment; the server sanitizes and auto-renames on collision.
-  fileName: TrimmedNonEmptyString.check(
-    Schema.isMaxLength(PROJECT_UPLOAD_FILE_NAME_MAX_LENGTH),
-  ),
-  dataUrl: TrimmedNonEmptyString.check(
-    Schema.isMaxLength(PROJECT_UPLOAD_FILE_MAX_DATA_URL_CHARS),
-  ),
+  fileName: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_UPLOAD_FILE_NAME_MAX_LENGTH)),
+  dataUrl: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_UPLOAD_FILE_MAX_DATA_URL_CHARS)),
 });
 export type ProjectUploadFileInput = typeof ProjectUploadFileInput.Type;
 

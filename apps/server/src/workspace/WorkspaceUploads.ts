@@ -46,10 +46,7 @@ export function isInvalidUploadFileName(fileName: string): boolean {
     const code = char.charCodeAt(0);
     if (code < 0x20 || code === 0x7f) return true;
   }
-  return (
-    fileName.includes("/") ||
-    fileName.includes("\\")
-  );
+  return fileName.includes("/") || fileName.includes("\\");
 }
 
 /** Service tag for workspace upload operations. */
@@ -107,9 +104,7 @@ export const make = Effect.gen(function* () {
       return yield* payloadError("Upload payload is empty.");
     }
     if (bytes.byteLength > PROJECT_UPLOAD_FILE_MAX_BYTES) {
-      return yield* payloadError(
-        `Upload payload exceeds ${PROJECT_UPLOAD_FILE_MAX_BYTES} bytes.`,
-      );
+      return yield* payloadError(`Upload payload exceeds ${PROJECT_UPLOAD_FILE_MAX_BYTES} bytes.`);
     }
 
     const { stem, ext } = splitUploadFileName(fileName);

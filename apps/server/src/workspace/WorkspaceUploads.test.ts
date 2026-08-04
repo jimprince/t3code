@@ -188,7 +188,11 @@ it.layer(TestLayer, { excludeTestServices: true })("WorkspaceUploadsLive", (it) 
         const cwd = yield* makeTempDir;
 
         const error = yield* workspaceUploads
-          .uploadFile({ cwd, fileName: "empty.bin", dataUrl: "data:application/octet-stream;base64," })
+          .uploadFile({
+            cwd,
+            fileName: "empty.bin",
+            dataUrl: "data:application/octet-stream;base64,",
+          })
           .pipe(Effect.flip);
 
         expect(error).toBeInstanceOf(WorkspaceFileSystem.WorkspaceFileSystemOperationError);

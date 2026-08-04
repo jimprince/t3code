@@ -7,13 +7,7 @@ import type { EnvironmentId, ProjectEntry } from "@t3tools/contracts";
 import { FileTree, useFileTree, useFileTreeSearch } from "@pierre/trees/react";
 import { serializeComposerFileLink } from "@t3tools/shared/composerTrigger";
 import { RotateCw, Upload } from "lucide-react";
-import {
-  type DragEvent as ReactDragEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type DragEvent as ReactDragEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { readFileAsDataUrl } from "~/components/ChatView.logic";
 import { Button } from "~/components/ui/button";
