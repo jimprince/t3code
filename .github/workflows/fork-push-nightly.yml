@@ -1,0 +1,199 @@
+name: Fork Push Nightly
+
+# Creates updater-visible nightly fork releases for Brad-authored changes.
+# Normal pushes to main should ship through the nightly feed only. The next
+# upstream stable sync still replays this fork patch onto the upstream stable
+# tag and publishes the integrated stable release.
+
+on:
+  push:
+    branches:
+      - main
+    # Keep this allowlist narrow. Helper-script/docs/workflow maintenance should
+    # not publish an updater-visible desktop release.
+    paths:
+      - "apps/desktop/**"
+      - "apps/server/**"
+      - "apps/web/**"
+      - "assets/**"
+      - "packages/**"
+      - "scripts/build-desktop-artifact.ts"
+      - "scripts/build-headless-artifact.ts"
+      - "scripts/lib/brand-assets.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  # One lock for every Actions writer of main (C2 race fix, 2026-07-29:
+  # sync and nightly raced; the loser was saved only by its lease).
+  group: t3code-writes-main
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Tag fork push nightly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # Fork nightly replays can include upstream workflow changes.
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install StGit
+        run: scripts/ci/install-stgit
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Record main lease
+        id: pre
+        run: scripts/ci/record-main-lease
+
+      - name: Resolve next fork tag
+        id: resolve
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+        run: |
+          set -euo pipefail
+
+          # sync-upstream pushes main and then a release tag. Give the tag push
+          # a moment to appear so sync-created commits do not get double-tagged
+          # as push nightlies. The tag now points at main's stamped child, so
+          # checking only tags directly at HEAD is insufficient.
+          sleep 30
+          git fetch --tags origin
+
+          head_sha="$(git rev-parse HEAD)"
+          existing_release_tags="$(
+            while IFS= read -r tag; do
+              tag_sha="$(git rev-parse "${tag}^{commit}")"
+              tag_parent="$(git rev-parse "${tag}^{commit}^" 2>/dev/null || true)"
+              if [[ "$tag_sha" == "$head_sha" || "$tag_parent" == "$head_sha" ]]; then
+                echo "$tag"
+              fi
+            done < <(git tag --list 'v*')
+          )"
+          if [[ -n "$existing_release_tags" ]]; then
+            echo "Main already has release tag(s) at HEAD or its prepared child:"
+            echo "$existing_release_tags" | sed 's/^/  /'
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          upstream_tag=$(gh release list --repo pingdotgg/t3code --limit 50 \
+            --json tagName,isPrerelease,publishedAt \
+            --jq '[.[] | select(.isPrerelease and (.tagName | test("(^|-)v[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\.")))] | sort_by(.publishedAt) | reverse | .[0].tagName')
+          if [[ -z "$upstream_tag" || "$upstream_tag" == "null" ]]; then
+            echo "::error::No nightly release found on upstream."
+            exit 1
+          fi
+          echo "Latest upstream nightly release: $upstream_tag"
+
+          export CI_REPAIR_BOT_UPSTREAM_TARGET="refs/tags/upstream/${upstream_tag}"
+          export CI_REPAIR_BOT_UPSTREAM_SOURCE_REF="refs/tags/${upstream_tag}"
+          export CI_REPAIR_BOT_CONFLICT_MODE=fail
+          scripts/ci/reproduce-sync-upstream
+
+          mapfile -t existing_numbers < <(git tag --list "${upstream_tag}-fork.*" \
+            | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
+            | sort -n)
+
+          if [[ ${#existing_numbers[@]} -eq 0 ]]; then
+            next_n=1
+          else
+            last="${existing_numbers[-1]}"
+            next_n=$((last + 1))
+          fi
+
+          new_tag="${upstream_tag}-fork.${next_n}"
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+          echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release tag
+        if: steps.resolve.outputs.needed == 'true'
+        id: prepare
+        env:
+          RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
+        run: scripts/ci/prepare-release-tag
+
+      - name: Refresh StGit stack metadata
+        if: steps.resolve.outputs.needed == 'true'
+        id: stgit
+        env:
+          STGIT_BRANCH: adopt
+          STGIT_EXPECTED_HEAD: ${{ steps.pre.outputs.main_sha }}
+          STGIT_MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
+        run: |
+          set -euo pipefail
+          git fetch origin \
+            '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
+            '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+          scripts/ci/refresh-stgit-metadata
+
+      - name: Atomically push main, StGit metadata, and release tag
+        if: steps.resolve.outputs.needed == 'true'
+        env:
+          LEASE_SHA: ${{ steps.pre.outputs.main_sha }}
+          MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
+          PREP_SHA: ${{ steps.prepare.outputs.prep_sha }}
+          NEW_TAG: ${{ steps.prepare.outputs.tag }}
+          STGIT_STACK_REF: ${{ steps.stgit.outputs.stack_ref }}
+          STGIT_STACK_LEASE: ${{ steps.stgit.outputs.stack_lease }}
+          STGIT_STACK_SHA: ${{ steps.stgit.outputs.stack_sha }}
+          STGIT_PUSH_PLAN: ${{ steps.stgit.outputs.push_plan }}
+        run: |
+          set -euo pipefail
+
+          tag_sha="$(git rev-parse "${NEW_TAG}^{commit}")"
+          if [[ "$tag_sha" != "$PREP_SHA" ]]; then
+            echo "::error::Tag/source mismatch: $NEW_TAG resolves to $tag_sha, expected $PREP_SHA."
+            exit 1
+          fi
+          if [[ "$PREP_SHA" != "$MAIN_SHA" ]] && [[ "$(git rev-parse "${PREP_SHA}^")" != "$MAIN_SHA" ]]; then
+            echo "::error::Release-prep commit $PREP_SHA is not a direct child of main $MAIN_SHA."
+            exit 1
+          fi
+
+          # Keep the exact StGit stack rendering on main. The generated version
+          # stamp and lockfile live only in the prepared child named by the tag.
+          # Backup current main before the force-push (bounded: one ref/day).
+          git push origin "+${LEASE_SHA}:refs/heads/backup/auto/nightly-$(date -u +%Y%m%d)" || true
+          leases=(
+            "--force-with-lease=refs/heads/main:${LEASE_SHA}"
+            "--force-with-lease=${STGIT_STACK_REF}:${STGIT_STACK_LEASE}"
+          )
+          refspecs=(
+            "${MAIN_SHA}:refs/heads/main"
+            "${STGIT_STACK_SHA}:${STGIT_STACK_REF}"
+            "refs/tags/${NEW_TAG}:refs/tags/${NEW_TAG}"
+          )
+          while IFS=$'\t' read -r ref old new; do
+            [[ -z "$ref" ]] && continue
+            leases+=("--force-with-lease=${ref}:${old}")
+            refspecs+=("${new}:${ref}")
+          done <<< "$STGIT_PUSH_PLAN"
+          git push --atomic origin "${leases[@]}" "${refspecs[@]}"
+          echo "Pushed $NEW_TAG (main at $MAIN_SHA) for fork push nightly update. release.yml will publish it to the nightly feed."
