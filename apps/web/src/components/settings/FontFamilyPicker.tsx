@@ -1,4 +1,8 @@
-import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import {
+  LegendList,
+  type LegendListRef,
+  type LegendListRenderItemProps,
+} from "@legendapp/list/react";
 import { CheckIcon, ChevronDownIcon, SearchIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { isMonospaceFamily, queryInstalledFontFamilies } from "../../appearanceFonts";
@@ -238,8 +242,10 @@ export function FontFamilyPicker({
               <LegendList<string>
                 ref={listRef}
                 data={items}
-                keyExtractor={(item) => item}
-                renderItem={({ item, index }) => renderItem(item, index)}
+                keyExtractor={(item: string) => item}
+                renderItem={({ item, index }: LegendListRenderItemProps<string>) =>
+                  renderItem(item, index)
+                }
                 estimatedItemSize={30}
                 drawDistance={360}
                 style={{ height: Math.min(items.length * 30, 288) }}
