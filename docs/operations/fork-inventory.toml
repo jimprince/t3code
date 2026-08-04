@@ -38,3 +38,17 @@ purpose = "Provide the additive t3-thread operator CLI, which has no upstream eq
 retire_when = "never"
 depends_on = ["fork-build-workspace-tooling"]
 roles = []
+
+[[patch]]
+name = "fork-provider-turn-reservation"
+subject = "fix(server): reserve active provider turns"
+class = "divergence"
+purpose = "Prevent the provider reaper from clearing a live turn marker and reporting a false stopping session."
+retire_when = "Upstream adds equivalent pending-turn reservation semantics."
+depends_on = ["fork-stgit-stack-policy"]
+roles = []
+[[patch.decision]]
+id = "providerservice-mcp-touch"
+date = "2026-07-28"
+decided = "adapt"
+rationale = "Upstream added McpSessionRegistry.touchActiveMcpThread before sendTurn; the fork wraps sendTurn in a reservation gate. Independent concerns. The touch belongs inside the gate immediately before the real sendTurn, because touching earlier would change upstream semantics when reservation fails and no turn is sent."
