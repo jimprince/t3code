@@ -2,6 +2,7 @@ import {
   ApprovalRequestId,
   DEFAULT_MODEL,
   EventId,
+  type EnvironmentId,
   ProviderDriverKind,
   ProviderItemId,
   type ProviderInstanceId,
@@ -95,6 +96,10 @@ type CodexThreadItem =
 
 export interface CodexSessionRuntimeOptions {
   readonly threadId: ThreadId;
+  readonly t3Environment?: {
+    readonly id: EnvironmentId;
+    readonly name: string;
+  };
   readonly providerInstanceId?: ProviderInstanceId;
   readonly binaryPath: string;
   readonly homePath?: string;
@@ -141,6 +146,14 @@ export interface CodexSessionRuntimeShape {
   readonly rollbackThread: (
     numTurns: number,
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
+  readonly forkThread: (input: {
+    readonly cwd: string;
+    readonly retainedTurnCount: number;
+    readonly retainedTurnId: TurnId | null;
+  }) => Effect.Effect<
+    { readonly threadId: string; readonly turnCount: number } | null,
+    CodexSessionRuntimeError
+  >;
   readonly respondToRequest: (
     requestId: ApprovalRequestId,
     decision: ProviderApprovalDecision,
@@ -441,6 +454,24 @@ export function isRecoverableThreadResumeError(error: unknown): boolean {
   return RECOVERABLE_THREAD_RESUME_ERROR_SNIPPETS.some((snippet) => message.includes(snippet));
 }
 
+export function buildCodexChildEnv(input: {
+  readonly threadId: ThreadId;
+  readonly environmentId?: EnvironmentId;
+  readonly environmentName?: string;
+  readonly environment?: NodeJS.ProcessEnv;
+  readonly homePath?: string;
+}): NodeJS.ProcessEnv {
+  const environmentId = input.environmentId ?? process.env.T3_ENVIRONMENT_ID;
+  const environmentName = input.environmentName ?? process.env.T3_ENVIRONMENT_NAME;
+  return {
+    ...(input.environment ?? process.env),
+    T3_THREAD_ID: String(input.threadId),
+    ...(environmentId ? { T3_ENVIRONMENT_ID: String(environmentId) } : {}),
+    ...(environmentName ? { T3_ENVIRONMENT_NAME: environmentName } : {}),
+    ...(input.homePath ? { CODEX_HOME: input.homePath } : {}),
+  };
+}
+
 type CodexThreadOpenResponse =
   | CodexRpc.ClientRequestResponsesByMethod["thread/start"]
   | CodexRpc.ClientRequestResponsesByMethod["thread/resume"];
@@ -453,6 +484,68 @@ interface CodexThreadOpenClient {
     payload: CodexRpc.ClientRequestParamsByMethod[M],
   ) => Effect.Effect<CodexRpc.ClientRequestResponsesByMethod[M], CodexErrors.CodexAppServerError>;
 }
+
+type CodexThreadForkMethod = "thread/fork" | "thread/rollback" | "thread/archive";
+
+interface CodexThreadForkClient {
+  readonly request: <M extends CodexThreadForkMethod>(
+    method: M,
+    payload: CodexRpc.ClientRequestParamsByMethod[M],
+  ) => Effect.Effect<CodexRpc.ClientRequestResponsesByMethod[M], CodexErrors.CodexAppServerError>;
+}
+
+export const forkCodexThread = Effect.fn("forkCodexThread")(function* (input: {
+  readonly client: CodexThreadForkClient;
+  readonly sourceThreadId: string;
+  readonly cwd: string;
+  readonly retainedTurnCount: number;
+  readonly retainedTurnId: TurnId | null;
+}) {
+  const forked = yield* input.client.request("thread/fork", {
+    threadId: input.sourceThreadId,
+    cwd: input.cwd,
+  });
+  const providerThreadId = forked.thread.id;
+  const forkedTurnCount = forked.thread.turns.length;
+  const archiveForkedThread = Effect.suspend(() =>
+    input.client.request("thread/archive", { threadId: providerThreadId }),
+  ).pipe(
+    Effect.asVoid,
+    Effect.catchCause((cause) =>
+      Effect.logWarning("failed to archive detached Codex provider fork", {
+        threadId: providerThreadId,
+        cause,
+      }),
+    ),
+  );
+  const retainedTurnIndex =
+    input.retainedTurnId === null
+      ? -1
+      : forked.thread.turns.findIndex((turn) => turn.id === input.retainedTurnId);
+  if (input.retainedTurnId !== null && retainedTurnIndex < 0) {
+    yield* archiveForkedThread;
+    return null;
+  }
+  const turnsToDrop = forkedTurnCount - (retainedTurnIndex + 1);
+  return yield* Effect.gen(function* () {
+    const finalThread =
+      turnsToDrop === 0
+        ? forked.thread
+        : (yield* input.client.request("thread/rollback", {
+            threadId: providerThreadId,
+            numTurns: turnsToDrop,
+          })).thread;
+
+    return {
+      threadId: providerThreadId,
+      turnCount: finalThread.turns.length,
+    };
+  }).pipe(
+    Effect.catchCause((cause) =>
+      archiveForkedThread.pipe(Effect.flatMap(() => Effect.failCause(cause))),
+    ),
+  );
+});
 
 export const openCodexThread = (input: {
   readonly client: CodexThreadOpenClient;
@@ -729,10 +822,17 @@ export const makeCodexSessionRuntime = (
     // `child_process.spawn`; `expandHomePath` lets a configured
     // `CODEX_HOME=~/.codex_work` reach codex as an absolute path.
     const resolvedHomePath = options.homePath ? expandHomePath(options.homePath) : undefined;
-    const env = {
-      ...options.environment,
-      ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
-    };
+    const env = buildCodexChildEnv({
+      threadId: options.threadId,
+      ...(options.t3Environment
+        ? {
+            environmentId: options.t3Environment.id,
+            environmentName: options.t3Environment.name,
+          }
+        : {}),
+      ...(options.environment ? { environment: options.environment } : {}),
+      ...(resolvedHomePath ? { homePath: resolvedHomePath } : {}),
+    });
     const extendEnv = options.environment === undefined;
     const appServerArgs = codexSessionAppServerArgs(options.appServerArgs, options.launchArgs);
     const spawnCommand = yield* resolveSpawnCommand(options.binaryPath, appServerArgs, {
@@ -1360,6 +1460,17 @@ export const makeCodexSessionRuntime = (
             activeTurnId: undefined,
           });
           return parseThreadSnapshot(response);
+        }),
+      forkThread: (input) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          return yield* forkCodexThread({
+            client,
+            sourceThreadId: providerThreadId,
+            cwd: input.cwd,
+            retainedTurnCount: input.retainedTurnCount,
+            retainedTurnId: input.retainedTurnId,
+          });
         }),
       respondToRequest: (requestId, decision) =>
         Effect.gen(function* () {
