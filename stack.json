@@ -1,9 +1,11 @@
 {
   "version": 5,
-  "prev": "b0dce21a7999abebaaa3d618efc88da69d6a38f5",
-  "head": "ac5219a881a2a1ffea0df726151aa51b4d6173bf",
+  "prev": "97851bfcf8111a5678b7b439ebca7b2bcc565aac",
+  "head": "ed419d517f2f7f533d6397144eaae61ccc449c59",
   "applied": [
-    "fork-stgit-stack-policy",
+    "fork-stgit-stack-policy"
+  ],
+  "unapplied": [
     "fork-build-workspace-tooling",
     "fork-t3-thread-operator-cli",
     "fork-provider-turn-reservation",
@@ -29,7 +31,6 @@
     "fork-ci-upstream-sync",
     "fork-ci-stgit-metadata"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
