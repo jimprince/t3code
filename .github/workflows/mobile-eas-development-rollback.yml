@@ -1,0 +1,78 @@
+name: Mobile EAS Development Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      runtime_version:
+        description: "Runtime version to roll back to the embedded update"
+        required: true
+        default: "0.1.0"
+        type: string
+      message:
+        description: "EAS rollback message"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  rollback-development-update:
+    name: Roll back iOS development runtime to embedded
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      APP_VARIANT: development
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - name: Require Expo token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN repository secret is required to roll back EAS updates." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Expose pnpm
+        run: |
+          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
+          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
+          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
+          "$vp_pnpm_bin/pnpm" --version
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          packager: pnpm
+
+      - name: Roll back iOS development runtime to embedded
+        working-directory: apps/mobile
+        env:
+          RUNTIME_VERSION: ${{ inputs.runtime_version }}
+          ROLLBACK_MESSAGE: ${{ inputs.message }}
+        run: |
+          if [ -z "$ROLLBACK_MESSAGE" ]; then
+            ROLLBACK_MESSAGE="rollback development runtime ${RUNTIME_VERSION} to embedded"
+          fi
+
+          APP_VARIANT=development \
+          CI=1 \
+          EXPO_NO_GIT_STATUS=1 \
+          eas update:roll-back-to-embedded \
+            --channel development \
+            --runtime-version "$RUNTIME_VERSION" \
+            --platform ios \
+            --message "$ROLLBACK_MESSAGE" \
+            --non-interactive
