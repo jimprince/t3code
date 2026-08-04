@@ -108,3 +108,12 @@ purpose = "Move threads safely between local and remote environments with coordi
 retire_when = "never"
 depends_on = ["fork-thread-lifecycle-recovery"]
 roles = []
+
+[[patch]]
+name = "fork-thread-fork"
+subject = "feat(threads): fork conversations from messages"
+class = "product"
+purpose = "Create a new conversation from an earlier message while preserving the selected thread context."
+retire_when = "never"
+depends_on = ["fork-thread-lifecycle-recovery"]
+roles = []
