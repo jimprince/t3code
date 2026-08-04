@@ -256,40 +256,52 @@ function findProviderAdapterRequestError(
   return isProviderAdapterRequestError(failReason?.error) ? failReason.error : undefined;
 }
 
-function isUnknownPendingApprovalRequestError(cause: Cause.Cause<ProviderServiceError>): boolean {
+function causeMentionsAny(
+  cause: Cause.Cause<ProviderServiceError>,
+  markers: readonly string[],
+): boolean {
   const error = findProviderAdapterRequestError(cause);
-  if (error) {
-    const detail = error.detail.toLowerCase();
-    return (
-      detail.includes("unknown pending approval request") ||
-      detail.includes("unknown pending permission request") ||
-      detail.includes("unknown pending codex approval request")
-    );
-  }
-  const message = Cause.pretty(cause).toLowerCase();
-  return (
-    message.includes("unknown pending approval request") ||
-    message.includes("unknown pending permission request") ||
-    message.includes("unknown pending codex approval request")
-  );
+  const haystack = (error ? error.detail : Cause.pretty(cause)).toLowerCase();
+  return markers.some((marker) => haystack.includes(marker));
 }
 
-function isUnknownPendingUserInputRequestError(cause: Cause.Cause<ProviderServiceError>): boolean {
-  const error = findProviderAdapterRequestError(cause);
-  if (error) {
-    const detail = error.detail.toLowerCase();
-    return (
-      detail.includes("unknown pending user-input request") ||
-      detail.includes("unknown pending user input request") ||
-      detail.includes("unknown pending codex user input request")
-    );
-  }
-  const message = Cause.pretty(cause).toLowerCase();
-  return (
-    message.includes("unknown pending user-input request") ||
-    message.includes("unknown pending user input request") ||
-    message.includes("unknown pending codex user input request")
-  );
+const UNKNOWN_PENDING_APPROVAL_MARKERS = [
+  "unknown pending approval request",
+  "unknown pending permission request",
+  "unknown pending codex approval request",
+] as const;
+
+const UNKNOWN_PENDING_USER_INPUT_MARKERS = [
+  "unknown pending user-input request",
+  "unknown pending user input request",
+  "unknown pending codex user input request",
+] as const;
+
+/**
+ * The provider session that owned the pending callback is gone and cannot be
+ * rebuilt: no live binding, or nothing persisted to resume from. The response
+ * can never land, so it is as stale as an unknown pending request.
+ */
+const UNRECOVERABLE_PROVIDER_SESSION_MARKERS = [
+  "no provider resume state",
+  "no persisted provider binding",
+] as const;
+
+/**
+ * A pending approval / user-input response the provider can never accept.
+ * Provider callback state does not survive app restarts or recovered
+ * sessions, so the thread has to be released instead of waiting on it.
+ */
+function isStalePendingResponseError(
+  cause: Cause.Cause<ProviderServiceError>,
+  requestKind: "approval" | "user-input",
+): boolean {
+  return causeMentionsAny(cause, [
+    ...(requestKind === "approval"
+      ? UNKNOWN_PENDING_APPROVAL_MARKERS
+      : UNKNOWN_PENDING_USER_INPUT_MARKERS),
+    ...UNRECOVERABLE_PROVIDER_SESSION_MARKERS,
+  ]);
 }
 
 function stalePendingRequestDetail(
@@ -423,7 +435,7 @@ const make = Effect.gen(function* () {
       ),
     );
 
-  const setThreadSessionErrorOnTurnStartFailure = Effect.fnUntraced(function* (input: {
+  const setThreadSessionError = Effect.fnUntraced(function* (input: {
     readonly threadId: ThreadId;
     readonly detail: string;
     readonly createdAt: string;
@@ -448,6 +460,45 @@ const make = Effect.gen(function* () {
         updatedAt: input.createdAt,
       },
       createdAt: input.createdAt,
+    });
+  });
+
+  /**
+   * A failed approval / user-input response always surfaces as an error
+   * activity. When the response was stale the thread is additionally released
+   * from the request it can never satisfy: the session had been left running
+   * with an active turn nothing will ever complete.
+   */
+  const recoverPendingResponseFailure = Effect.fnUntraced(function* (input: {
+    readonly cause: Cause.Cause<ProviderServiceError>;
+    readonly threadId: ThreadId;
+    readonly requestId: string;
+    readonly requestKind: "approval" | "user-input";
+    readonly kind: "provider.approval.respond.failed" | "provider.user-input.respond.failed";
+    readonly summary: string;
+    readonly createdAt: string;
+  }) {
+    const isStale = isStalePendingResponseError(input.cause, input.requestKind);
+    const detail = isStale
+      ? stalePendingRequestDetail(input.requestKind, input.requestId)
+      : Cause.pretty(input.cause);
+
+    if (isStale) {
+      yield* setThreadSessionError({
+        threadId: input.threadId,
+        detail,
+        createdAt: input.createdAt,
+      });
+    }
+
+    yield* appendProviderFailureActivity({
+      threadId: input.threadId,
+      kind: input.kind,
+      summary: input.summary,
+      detail,
+      turnId: null,
+      createdAt: input.createdAt,
+      requestId: input.requestId,
     });
   });
 
@@ -1219,7 +1270,7 @@ const make = Effect.gen(function* () {
         return Effect.void;
       }
       const detail = formatFailureDetail(cause);
-      return setThreadSessionErrorOnTurnStartFailure({
+      return setThreadSessionError({
         threadId: event.payload.threadId,
         detail,
         createdAt: event.payload.createdAt,
@@ -1334,7 +1385,7 @@ const make = Effect.gen(function* () {
       }
       const detail = formatFailureDetail(cause);
       if (!compactionSessionEnsured) {
-        return setThreadSessionErrorOnTurnStartFailure({
+        return setThreadSessionError({
           threadId: event.payload.threadId,
           detail,
           createdAt: event.payload.createdAt,
@@ -1627,16 +1678,14 @@ const make = Effect.gen(function* () {
       })
       .pipe(
         Effect.catchCause((cause) =>
-          appendProviderFailureActivity({
+          recoverPendingResponseFailure({
+            cause,
             threadId: event.payload.threadId,
+            requestId: event.payload.requestId,
+            requestKind: "approval",
             kind: "provider.approval.respond.failed",
             summary: "Provider approval response failed",
-            detail: isUnknownPendingApprovalRequestError(cause)
-              ? stalePendingRequestDetail("approval", event.payload.requestId)
-              : Cause.pretty(cause),
-            turnId: null,
             createdAt: event.payload.createdAt,
-            requestId: event.payload.requestId,
           }),
         ),
       );
@@ -1671,16 +1720,14 @@ const make = Effect.gen(function* () {
         })
         .pipe(
           Effect.catchCause((cause) =>
-            appendProviderFailureActivity({
+            recoverPendingResponseFailure({
+              cause,
               threadId: event.payload.threadId,
+              requestId: event.payload.requestId,
+              requestKind: "user-input",
               kind: "provider.user-input.respond.failed",
               summary: "Provider user input response failed",
-              detail: isUnknownPendingUserInputRequestError(cause)
-                ? stalePendingRequestDetail("user-input", event.payload.requestId)
-                : Cause.pretty(cause),
-              turnId: null,
               createdAt: event.payload.createdAt,
-              requestId: event.payload.requestId,
             }),
           ),
         );
