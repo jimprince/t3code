@@ -6198,7 +6198,8 @@ function ChatViewContent(props: ChatViewProps) {
       hasSendableContent,
     } = deriveComposerSendState({
       prompt: promptForSend,
-      imageCount: composerImages.length + composerFiles.length,
+      imageCount: composerImages.length,
+      fileCount: composerFiles.length,
       terminalContexts: composerTerminalContexts,
       elementContextCount:
         composerElementContexts.length +
@@ -6573,6 +6574,20 @@ function ChatViewContent(props: ChatViewProps) {
         };
       }),
     );
+    const turnFileAttachmentsPromise = Promise.all(
+      composerFilesSnapshot.map(async (file) => {
+        if (file.file === null) {
+          throw new Error(`Reattach '${file.name}' before sending it to the agent.`);
+        }
+        return {
+          type: "file" as const,
+          name: file.name,
+          mimeType: file.mimeType,
+          sizeBytes: file.sizeBytes,
+          dataUrl: await readFileAsDataUrl(file.file),
+        };
+      }),
+    );
     const optimisticAttachments = composerAttachmentsSnapshot.map((attachment) =>
       attachment.type === "image"
         ? {
@@ -6712,9 +6727,17 @@ function ChatViewContent(props: ChatViewProps) {
     if (failure === null && turnAttachmentsResult._tag === "Failure") {
       failure = turnAttachmentsResult;
     }
+    const turnFileAttachmentsResult = await settlePromise(() => turnFileAttachmentsPromise);
+    if (failure === null && turnFileAttachmentsResult._tag === "Failure") {
+      failure = turnFileAttachmentsResult;
+    }
 
     let turnStartSucceeded = false;
-    if (failure === null && turnAttachmentsResult._tag === "Success") {
+    if (
+      failure === null &&
+      turnAttachmentsResult._tag === "Success" &&
+      turnFileAttachmentsResult._tag === "Success"
+    ) {
       const bootstrap =
         isLocalDraftThread || baseBranchForWorktree
           ? {
@@ -6776,6 +6799,9 @@ function ChatViewContent(props: ChatViewProps) {
               role: "user",
               text: outgoingMessageText,
               attachments: turnAttachmentsResult.value,
+              ...(turnFileAttachmentsResult.value.length > 0
+                ? { fileAttachments: turnFileAttachmentsResult.value }
+                : {}),
             },
             modelSelection: ctxSelectedModelSelection,
             titleSeed: title,
