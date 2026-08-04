@@ -73,6 +73,19 @@ export interface ThreadTitleGenerationResult {
   title: string;
 }
 
+export interface GoalEvaluationInput {
+  cwd: string;
+  goal: string;
+  transcript: string;
+  /** What model and provider to use for generation. */
+  modelSelection: ModelSelection;
+}
+
+export interface GoalEvaluationResult {
+  achieved: boolean;
+  reason: string;
+}
+
 export interface TextGenerationService {
   generateCommitMessage(
     input: CommitMessageGenerationInput,
@@ -80,6 +93,7 @@ export interface TextGenerationService {
   generatePrContent(input: PrContentGenerationInput): Promise<PrContentGenerationResult>;
   generateBranchName(input: BranchNameGenerationInput): Promise<BranchNameGenerationResult>;
   generateThreadTitle(input: ThreadTitleGenerationInput): Promise<ThreadTitleGenerationResult>;
+  evaluateGoal(input: GoalEvaluationInput): Promise<GoalEvaluationResult>;
 }
 
 /**
@@ -113,6 +127,13 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    /**
+     * Evaluate whether a transcript-visible goal has been achieved.
+     */
+    readonly evaluateGoal: (
+      input: GoalEvaluationInput,
+    ) => Effect.Effect<GoalEvaluationResult, TextGenerationError>;
   }
 >()("t3/textGeneration/TextGeneration") {}
 
@@ -123,7 +144,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "evaluateGoal";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -162,6 +184,10 @@ export const makeTextGenerationFromRegistry = (
     generateThreadTitle: (input) =>
       resolveInstance(registry, "generateThreadTitle", input.modelSelection.instanceId).pipe(
         Effect.flatMap((textGeneration) => textGeneration.generateThreadTitle(input)),
+      ),
+    evaluateGoal: (input) =>
+      resolveInstance(registry, "evaluateGoal", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) => textGeneration.evaluateGoal(input)),
       ),
   });
 
