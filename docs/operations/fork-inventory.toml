@@ -90,3 +90,12 @@ id = "ws-snapshot-projection"
 date = "2026-07-28"
 decided = "retire"
 rationale = "Upstream's projectThreadDetailSnapshot spreads the complete snapshot and prunes activity payloads, a strict superset of the old hand-rolled projection. Retain upstream's call while binding it to the fork's threadDetailSnapshot name; do not restore the retired projection."
+
+[[patch]]
+name = "fork-thread-goals"
+subject = "feat(goals): persist thread goals"
+class = "product"
+purpose = "Persist, expose, and render durable goals for long-running agent threads."
+retire_when = "never"
+depends_on = ["fork-thread-lifecycle-recovery"]
+roles = []
