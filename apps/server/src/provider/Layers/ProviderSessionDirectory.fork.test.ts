@@ -129,7 +129,131 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
           model: "gpt-5-codex",
           activeTurnId: "turn-1",
         });
+        assert.equal(runtime.value.activeTurnId, "turn-1");
       }
+    }));
+
+  it("clears only the matching active turn and preserves a newer turn", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const threadId = ThreadId.make("thread-terminal-cas");
+      const firstTurnId = TurnId.make("turn-1");
+      const secondTurnId = TurnId.make("turn-2");
+
+      yield* directory.upsert({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        activeTurnId: firstTurnId,
+      });
+      yield* directory.markTurnStarted({ threadId, turnId: secondTurnId });
+
+      const staleCompletionApplied = yield* directory.markTurnTerminal({
+        threadId,
+        expectedTurnId: firstTurnId,
+      });
+      assert.equal(
+        staleCompletionApplied,
+        false,
+        "REGRESSION: a late completion must not clear a newer active turn",
+      );
+
+      const currentCompletionApplied = yield* directory.markTurnTerminal({
+        threadId,
+        expectedTurnId: secondTurnId,
+      });
+      assert.equal(currentCompletionApplied, true);
+
+      const binding = yield* directory.getBinding(threadId);
+      assert.equal(Option.isSome(binding), true);
+      if (Option.isSome(binding)) {
+        assert.equal(binding.value.activeTurnId, null);
+        assert.deepEqual(binding.value.runtimePayload, { activeTurnId: null });
+      }
+    }));
+
+  it("reserves a turn only while the session is idle", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const threadId = ThreadId.make("thread-turn-reservation-cas");
+      const firstTurnId = TurnId.make("pending:first");
+      const secondTurnId = TurnId.make("pending:second");
+
+      yield* directory.upsert({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        activeTurnId: null,
+      });
+      assert.equal(
+        yield* directory.markTurnStarted({
+          threadId,
+          turnId: firstTurnId,
+          expectedActiveTurnId: null,
+        }),
+        true,
+      );
+      assert.equal(
+        yield* directory.markTurnStarted({
+          threadId,
+          turnId: secondTurnId,
+          expectedActiveTurnId: null,
+        }),
+        false,
+        "REGRESSION: a concurrent send replaced an existing turn reservation",
+      );
+
+      const binding = yield* directory.getBinding(threadId);
+      assert.equal(Option.getOrUndefined(binding)?.activeTurnId, firstTurnId);
+    }));
+
+  it("claims only an unchanged idle session and blocks a concurrent turn start", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const threadId = ThreadId.make("thread-idle-recovery-claim");
+      const turnId = TurnId.make("turn-after-preview");
+
+      yield* directory.upsert({
+        provider: ProviderDriverKind.make("codex"),
+        threadId,
+        activeTurnId: null,
+      });
+      const previewValue = (yield* directory.listBindings()).find(
+        (binding) => binding.threadId === threadId,
+      );
+      const previewBinding = previewValue === undefined ? Option.none() : Option.some(previewValue);
+      assert.equal(Option.isSome(previewBinding), true);
+      if (Option.isNone(previewBinding)) return;
+
+      assert.equal(yield* directory.markTurnStarted({ threadId, turnId }), true);
+      assert.equal(
+        yield* directory.claimIdleForRecovery({
+          threadId,
+          expectedLastSeenAt: previewBinding.value.lastSeenAt,
+        }),
+        false,
+        "REGRESSION: recovery claimed a session after a turn started",
+      );
+
+      assert.equal(yield* directory.markTurnTerminal({ threadId, expectedTurnId: turnId }), true);
+      const refreshedValue = (yield* directory.listBindings()).find(
+        (binding) => binding.threadId === threadId,
+      );
+      const refreshedBinding =
+        refreshedValue === undefined ? Option.none() : Option.some(refreshedValue);
+      assert.equal(Option.isSome(refreshedBinding), true);
+      if (Option.isNone(refreshedBinding)) return;
+
+      assert.equal(
+        yield* directory.claimIdleForRecovery({
+          threadId,
+          expectedLastSeenAt: refreshedBinding.value.lastSeenAt,
+        }),
+        true,
+      );
+      assert.equal(
+        yield* directory.markTurnStarted({ threadId, turnId }),
+        false,
+        "REGRESSION: a turn started after recovery atomically claimed the session",
+      );
     }));
 
   it("lists persisted bindings with metadata in oldest-first order", () =>
@@ -244,6 +368,87 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
       if (Option.isSome(runtime)) {
         assert.equal(runtime.value.providerName, "codex");
         assert.equal(runtime.value.adapterKey, "codex");
+      }
+    }));
+
+  it("stamps writes with the current boot generation and persists that generation across restart", () =>
+    Effect.gen(function* () {
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-boot-"));
+      const dbPath = NodePath.join(tempDir, "orchestration.sqlite");
+      const threadId = ThreadId.make("thread-boot-generation");
+
+      yield* Effect.gen(function* () {
+        const directory = yield* ProviderSessionDirectory;
+        yield* directory.upsert({
+          provider: ProviderDriverKind.make("codex"),
+          threadId,
+        });
+
+        const bindings = yield* directory.listBindings();
+        assert.equal(bindings.length, 1);
+        assert.equal(bindings[0]?.bootGenerationId, "boot-a");
+      }).pipe(Effect.provide(makeDirectoryLayer(makeSqlitePersistenceLive(dbPath), "boot-a")));
+
+      yield* Effect.gen(function* () {
+        const directory = yield* ProviderSessionDirectory;
+        const binding = yield* directory.getBinding(threadId);
+        assert.equal(Option.isSome(binding), true);
+        if (Option.isSome(binding)) {
+          assert.equal(
+            binding.value.bootGenerationId,
+            "boot-a",
+            "REGRESSION: persisted boot generation was recomputed from the current server boot",
+          );
+        }
+      }).pipe(Effect.provide(makeDirectoryLayer(makeSqlitePersistenceLive(dbPath), "boot-b")));
+
+      NodeFS.rmSync(tempDir, { recursive: true, force: true });
+    }));
+
+  it("does not settle a binding that recovery already restamped to the current generation", () =>
+    Effect.gen(function* () {
+      const directory = yield* ProviderSessionDirectory;
+      const runtimeRepository = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+      const threadId = ThreadId.make("thread-generation-cas-race");
+      const resumeCursor = { opaque: "resume-after-race" };
+      const runtimePayload = { cwd: "/tmp/cas-race" };
+
+      yield* runtimeRepository.upsert({
+        threadId,
+        providerName: "codex",
+        providerInstanceId: null,
+        bootGenerationId: "previous-boot",
+        adapterKey: "codex",
+        runtimeMode: "full-access",
+        status: "running",
+        activeTurnId: null,
+        lastSeenAt: "2026-07-19T00:00:00.000Z",
+        resumeCursor,
+        runtimePayload,
+      });
+      yield* directory.upsert({
+        threadId,
+        provider: ProviderDriverKind.make("codex"),
+        status: "running",
+      });
+
+      const settled = yield* directory.settleDeadGenerationBinding({
+        threadId,
+        expectedBootGenerationId: "previous-boot",
+      });
+      assert.equal(
+        settled,
+        false,
+        "REGRESSION: stale reaper snapshot settled a concurrently recovered live binding",
+      );
+
+      const runtime = yield* runtimeRepository.getByThreadId({ threadId });
+      assert.equal(Option.isSome(runtime), true);
+      if (Option.isSome(runtime)) {
+        assert.equal(runtime.value.status, "running");
+        assert.equal(runtime.value.bootGenerationId, "boot-a");
+        assert.deepEqual(runtime.value.resumeCursor, resumeCursor);
+        assert.deepEqual(runtime.value.runtimePayload, runtimePayload);
       }
     }));
 
