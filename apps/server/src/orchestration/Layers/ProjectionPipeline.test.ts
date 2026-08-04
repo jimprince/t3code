@@ -1626,8 +1626,6 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       const eventStore = yield* OrchestrationEventStore;
       const sql = yield* SqlClient.SqlClient;
       const now = "2026-01-01T00:00:00.000Z";
-      const projectId = ProjectId.make("project-bootstrap-backlog");
-
       const sequenceRows = yield* sql<{ readonly maxSequence: number | null }>`
         SELECT MAX(sequence) AS "maxSequence" FROM orchestration_events
       `;
@@ -1637,6 +1635,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         (index) => {
           const eventId = EventId.make(`evt-bootstrap-backlog-${index}`);
           const commandId = CommandId.make(`cmd-bootstrap-backlog-${index}`);
+          const projectId = ProjectId.make(`project-bootstrap-backlog-${index}`);
           return eventStore.append({
             type: "project.created",
             eventId,
@@ -1650,7 +1649,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
             payload: {
               projectId,
               title: `Bootstrap backlog ${index}`,
-              workspaceRoot: "/tmp/project-bootstrap-backlog",
+              workspaceRoot: `/tmp/project-bootstrap-backlog-${index}`,
               defaultModelSelection: null,
               scripts: [],
               createdAt: now,
