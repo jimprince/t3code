@@ -17,7 +17,12 @@
 - [Remote access](./user/remote-access.md)
 - [Running in the background](./user/background-service.md)
 - [Updating T3 Code](./user/updating.md)
+- [Source control integrations](./user/source-control.md)
+- [Performance protection and recovery](./user/performance-recovery.md)
+- [Moving threads between machines](./user/moving-threads.md)
 - Provider guides: [Codex](./user/providers-codex.md) · [Claude](./user/providers-claude.md) · [OpenCode](./user/providers-opencode.md) · [Antigravity](./user/providers-antigravity.md)
+
+Mobile app: [apps/mobile/README.md](../apps/mobile/README.md) · [iOS deployment options](./mobile/ios-deployment.md)
 
 ---
 
@@ -31,6 +36,7 @@ source alone does not explain. Most code changes do not need an internal documen
 [documentation rules](../AGENTS.md#documentation) before adding one.
 
 - [Architecture overview](./internals/overview.md)
+- [`t3-thread` operator CLI](./architecture/t3-thread.md)
 - [Glossary](./internals/glossary.md)
 - [Connection runtime](./internals/connection-runtime.md)
 - [Providers](./internals/providers.md)
@@ -51,7 +57,14 @@ source alone does not explain. Most code changes do not need an internal documen
 
 - [Development and local builds](./operations/development.md)
 - [T3 Connect setup](./operations/connect-setup.md)
+- [Rebase the fork or resolve a patch conflict](./operations/fork-maintenance.md#rebase-and-conflict-repair)
+- [Add or change a fork feature](./operations/fork-maintenance.md#adding-or-changing-fork-functionality)
+- [Deploy a reviewed new concern safely](./operations/fork-maintenance.md#isolated-implementation-and-candidate-deployment)
+- [Publish the StGit stack safely](./operations/fork-maintenance.md#publication)
+- [Fork CI](./operations/ci.md)
 - [Release](./operations/release.md)
+- [Fork maintenance](./operations/fork-maintenance.md)
+- [Fork patch inventory](./operations/fork-inventory.toml)
 - [Observability](./operations/observability.md)
 - [Relay observability](./operations/relay-observability.md)
 - [Mobile app store screenshots](./operations/mobile-app-store-screenshots.md)
