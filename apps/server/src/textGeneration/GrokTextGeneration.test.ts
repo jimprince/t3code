@@ -214,6 +214,31 @@ it.layer(GrokTextGenerationTestLayer)("GrokTextGeneration", (it) => {
     ),
   );
 
+  it.effect("evaluates goal completion from structured output", () =>
+    withFakeAcpGrok(
+      {
+        T3_ACP_PROMPT_RESPONSE_TEXT: JSON.stringify({
+          achieved: true,
+          reason: "The transcript shows the lint and typecheck gates passed.",
+        }),
+      },
+      (textGeneration) =>
+        Effect.gen(function* () {
+          const generated = yield* textGeneration.evaluateGoal({
+            cwd: process.cwd(),
+            goal: "Repair the release build",
+            transcript: "vp check passed. vp run typecheck passed.",
+            modelSelection: createModelSelection(ProviderInstanceId.make("grok"), "grok-build"),
+          });
+
+          expect(generated).toEqual({
+            achieved: true,
+            reason: "The transcript shows the lint and typecheck gates passed.",
+          });
+        }),
+    ),
+  );
+
   it.effect("fails with TextGenerationError when output is unparseable JSON", () =>
     withFakeAcpGrok(
       {
