@@ -4,7 +4,7 @@ import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { describe } from "vite-plus/test";
-import { DEFAULT_MODEL, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_MODEL, EnvironmentId, ThreadId, TurnId } from "@t3tools/contracts";
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexRpc from "effect-codex-app-server/rpc";
 
@@ -15,9 +15,11 @@ import {
 } from "../CodexDeveloperInstructions.ts";
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import {
+  buildCodexChildEnv,
   buildTurnStartParams,
   hasConfiguredMcpServer,
   isRecoverableThreadResumeError,
+  forkCodexThread,
   openCodexThread,
 } from "./CodexSessionRuntime.ts";
 const isCodexAppServerRequestError = Schema.is(CodexErrors.CodexAppServerRequestError);
@@ -37,6 +39,164 @@ describe("CodexSessionRuntimeIdentifierGenerationError", () => {
       "Failed to generate Codex App Server identifier for provider-event.",
     );
   });
+});
+
+describe("forkCodexThread", () => {
+  it.effect("forks into the destination cwd and trims trailing turns", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          if (method === "thread/fork") {
+            return Effect.succeed({
+              thread: {
+                id: "provider-fork",
+                turns: [{ id: "turn-1" }, { id: "turn-2" }, { id: "turn-3" }],
+              },
+            });
+          }
+          return Effect.succeed({
+            thread: { id: "provider-fork", turns: [{ id: "turn-1" }, { id: "turn-2" }] },
+          });
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 2,
+        retainedTurnId: TurnId.make("turn-2"),
+      });
+
+      NodeAssert.deepStrictEqual(requests, [
+        {
+          method: "thread/fork",
+          payload: { threadId: "provider-source", cwd: "/tmp/fork-worktree" },
+        },
+        {
+          method: "thread/rollback",
+          payload: { threadId: "provider-fork", numTurns: 1 },
+        },
+      ]);
+      NodeAssert.notEqual(result, null);
+      if (result === null) return;
+      NodeAssert.equal(result.threadId, "provider-fork");
+      NodeAssert.equal(result.turnCount, 2);
+    }),
+  );
+
+  it.effect("anchors rollback to the retained turn id when provider counts diverge", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          return Effect.succeed({
+            thread: {
+              id: "provider-fork",
+              turns: [
+                { id: "turn-1" },
+                { id: "turn-interrupted" },
+                { id: "turn-3" },
+                { id: "turn-4" },
+              ],
+            },
+          });
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 3,
+        retainedTurnId: TurnId.make("turn-4"),
+      });
+
+      NodeAssert.deepStrictEqual(
+        requests.map((request) => request.method),
+        ["thread/fork"],
+        "REGRESSION: ordinal rollback dropped the retained turn after an interrupted provider turn",
+      );
+      NodeAssert.equal(result?.threadId, "provider-fork");
+      NodeAssert.equal(result?.turnCount, 4);
+    }),
+  );
+
+  it.effect("archives a detached provider fork when the retained turn is missing", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          return method === "thread/fork"
+            ? Effect.succeed({
+                thread: { id: "provider-orphan", turns: [{ id: "different-turn" }] },
+              })
+            : Effect.succeed({});
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("missing-turn"),
+      });
+
+      NodeAssert.equal(result, null);
+      NodeAssert.deepStrictEqual(requests, [
+        {
+          method: "thread/fork",
+          payload: { threadId: "provider-source", cwd: "/tmp/fork-worktree" },
+        },
+        {
+          method: "thread/archive",
+          payload: { threadId: "provider-orphan" },
+        },
+      ]);
+    }),
+  );
+
+  it.effect("archives a detached provider fork when rollback fails", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          if (method === "thread/fork") {
+            return Effect.succeed({
+              thread: {
+                id: "provider-orphan",
+                turns: [{ id: "turn-1" }, { id: "turn-2" }],
+              },
+            });
+          }
+          if (method === "thread/rollback") {
+            return Effect.die(new Error("simulated rollback failure"));
+          }
+          return Effect.succeed({});
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("turn-1"),
+      }).pipe(Effect.exit);
+
+      NodeAssert.equal(result._tag, "Failure");
+      NodeAssert.deepStrictEqual(
+        requests.map(({ method }) => method),
+        ["thread/fork", "thread/rollback", "thread/archive"],
+      );
+    }),
+  );
 });
 
 function makeThreadOpenResponse(
@@ -468,4 +628,78 @@ describe("openCodexThread", () => {
       NodeAssert.equal(error.errorMessage, "timed out waiting for server");
     }),
   );
+});
+
+describe("buildCodexChildEnv", () => {
+  it("injects T3 thread and environment metadata while preserving the base env", () => {
+    const env = buildCodexChildEnv({
+      threadId: ThreadId.make("thread-env-test"),
+      environmentId: EnvironmentId.make("environment-env-test"),
+      environmentName: "local-mbp",
+      environment: { EXISTING_ENV: "kept" },
+      homePath: "/tmp/codex-home",
+    });
+
+    NodeAssert.equal(env.T3_THREAD_ID, "thread-env-test");
+    NodeAssert.equal(env.T3_ENVIRONMENT_ID, "environment-env-test");
+    NodeAssert.equal(env.T3_ENVIRONMENT_NAME, "local-mbp");
+    NodeAssert.equal(env.CODEX_HOME, "/tmp/codex-home");
+    NodeAssert.equal(env.EXISTING_ENV, "kept");
+  });
+
+  it("injects T3_THREAD_ID without optional environment metadata or CODEX_HOME", () => {
+    const previousEnvironmentId = process.env.T3_ENVIRONMENT_ID;
+    const previousEnvironmentName = process.env.T3_ENVIRONMENT_NAME;
+    delete process.env.T3_ENVIRONMENT_ID;
+    delete process.env.T3_ENVIRONMENT_NAME;
+    try {
+      const env = buildCodexChildEnv({
+        threadId: ThreadId.make("thread-env-test"),
+        environment: {},
+      });
+
+      NodeAssert.equal(env.T3_THREAD_ID, "thread-env-test");
+      NodeAssert.equal(env.T3_ENVIRONMENT_ID, undefined);
+      NodeAssert.equal(env.T3_ENVIRONMENT_NAME, undefined);
+      NodeAssert.equal(env.CODEX_HOME, undefined);
+    } finally {
+      if (previousEnvironmentId === undefined) {
+        delete process.env.T3_ENVIRONMENT_ID;
+      } else {
+        process.env.T3_ENVIRONMENT_ID = previousEnvironmentId;
+      }
+      if (previousEnvironmentName === undefined) {
+        delete process.env.T3_ENVIRONMENT_NAME;
+      } else {
+        process.env.T3_ENVIRONMENT_NAME = previousEnvironmentName;
+      }
+    }
+  });
+
+  it("uses process-level T3 environment metadata when no runtime override is supplied", () => {
+    const previousEnvironmentId = process.env.T3_ENVIRONMENT_ID;
+    const previousEnvironmentName = process.env.T3_ENVIRONMENT_NAME;
+    process.env.T3_ENVIRONMENT_ID = "environment-process";
+    process.env.T3_ENVIRONMENT_NAME = "process-env";
+    try {
+      const env = buildCodexChildEnv({
+        threadId: ThreadId.make("thread-env-test"),
+        environment: {},
+      });
+
+      NodeAssert.equal(env.T3_ENVIRONMENT_ID, "environment-process");
+      NodeAssert.equal(env.T3_ENVIRONMENT_NAME, "process-env");
+    } finally {
+      if (previousEnvironmentId === undefined) {
+        delete process.env.T3_ENVIRONMENT_ID;
+      } else {
+        process.env.T3_ENVIRONMENT_ID = previousEnvironmentId;
+      }
+      if (previousEnvironmentName === undefined) {
+        delete process.env.T3_ENVIRONMENT_NAME;
+      } else {
+        process.env.T3_ENVIRONMENT_NAME = previousEnvironmentName;
+      }
+    }
+  });
 });
