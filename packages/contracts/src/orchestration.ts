@@ -249,6 +249,33 @@ export type ChatAttachment = typeof ChatAttachment.Type;
 const UploadChatAttachment = Schema.Union([UploadChatImageAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
+// File attachments ride a parallel optional `fileAttachments` field instead of
+// widening ChatAttachment: Union decode hard-fails on an unknown `type`
+// literal in older clients (mobile builds, vendored t3-thread contracts),
+// while Struct decode silently ignores unknown keys.
+export const CHAT_FILE_ATTACHMENT_MAX_BYTES = 32 * 1024 * 1024;
+const CHAT_FILE_ATTACHMENT_MAX_DATA_URL_CHARS = 45_000_000;
+
+export const ChatFileAttachment = Schema.Struct({
+  type: Schema.Literal("file"),
+  id: ChatAttachmentId,
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
+  mimeType: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(CHAT_FILE_ATTACHMENT_MAX_BYTES)),
+  /** Absolute path on the server machine where the thread can read the file. */
+  path: TrimmedNonEmptyString,
+});
+export type ChatFileAttachment = typeof ChatFileAttachment.Type;
+
+export const UploadChatFileAttachment = Schema.Struct({
+  type: Schema.Literal("file"),
+  name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
+  mimeType: TrimmedNonEmptyString.check(Schema.isMaxLength(100)),
+  sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(CHAT_FILE_ATTACHMENT_MAX_BYTES)),
+  dataUrl: TrimmedNonEmptyString.check(Schema.isMaxLength(CHAT_FILE_ATTACHMENT_MAX_DATA_URL_CHARS)),
+});
+export type UploadChatFileAttachment = typeof UploadChatFileAttachment.Type;
+
 export const ProjectScriptIcon = Schema.Literals([
   "play",
   "test",
@@ -315,6 +342,7 @@ export const OrchestrationMessage = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  fileAttachments: Schema.optional(Schema.Array(ChatFileAttachment)),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -1101,6 +1129,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     role: Schema.Literal("user"),
     text: Schema.String,
     attachments: Schema.Array(ChatAttachment),
+    fileAttachments: Schema.optional(Schema.Array(ChatFileAttachment)),
   }),
   modelSelection: Schema.optional(ModelSelection),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
@@ -1122,6 +1151,7 @@ const ClientThreadTurnStartCommand = Schema.Struct({
     role: Schema.Literal("user"),
     text: Schema.String,
     attachments: Schema.Array(Schema.Union([UploadChatAttachment, ChatAttachment])),
+    fileAttachments: Schema.optional(Schema.Array(UploadChatFileAttachment)),
   }),
   modelSelection: Schema.optional(ModelSelection),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
@@ -1568,6 +1598,7 @@ export const ThreadMessageSentPayload = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
+  fileAttachments: Schema.optional(Schema.Array(ChatFileAttachment)),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
