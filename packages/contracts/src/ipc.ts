@@ -173,7 +173,7 @@ export type DesktopUpdateStatus =
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
 export type DesktopTheme = "light" | "dark" | "system";
 export type DesktopUpdateChannel = "latest" | "nightly";
-export type DesktopAppStageLabel = "Alpha" | "Dev" | "Nightly";
+export type DesktopAppStageLabel = "Dev" | "Fork" | "Fork Dev" | "Nightly";
 
 export const DesktopUpdateStatusSchema = Schema.Literals([
   "disabled",
@@ -188,7 +188,7 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
-export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Dev", "Nightly"]);
+export const DesktopAppStageLabelSchema = Schema.Literals(["Dev", "Fork", "Fork Dev", "Nightly"]);
 
 export interface DesktopAppBranding {
   baseName: string;
@@ -1135,6 +1135,9 @@ export interface DesktopBridge {
    * them.
    */
   onQuitShortcut?: (listener: (event: QuitShortcutHintEvent) => void) => () => void;
+  onOpenThread: (
+    listener: (target: { environmentId: string; threadId: string }) => void,
+  ) => () => void;
   getWindowFullscreenState: () => boolean;
   onWindowFullscreenStateChange: (listener: (fullscreen: boolean) => void) => () => void;
   getUpdateState: () => Promise<DesktopUpdateState>;
