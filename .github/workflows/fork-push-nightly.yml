@@ -55,6 +55,9 @@ jobs:
           cache: true
           run-install: false
 
+      - name: Install StGit
+        run: scripts/ci/install-stgit
+
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"

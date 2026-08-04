@@ -2,212 +2,77 @@
 
 set -euo pipefail
 
-# Shared Sync Upstream rebase driver.
-#
-# GitHub Actions and ci-repair-bot both call this file so verification exercises
-# the same conflict policy as production. The repair bot provides the two ref
-# variables directly; workflows derive them from the selected upstream tag.
-#
-# This rebases the fork's curated topic stack (scripts/ci/fork-topics.json,
-# rebuilt by scripts/ci/compact-stack) onto the upstream target, rather than
-# squashing the fork tree onto upstream as one anonymous commit. Squashing
-# would destroy the topic boundaries on the very next sync -- topics only
-# survive if this driver replays them as commits. The topic stack is rebuilt
-# from the net final tree (not by reordering historical commits), and is kept
-# small and bounded by scripts/ci/check-commit-discipline, so replaying it
-# commit-by-commit does not reproduce the old problem of stale conflict-repair
-# commits conflicting again on every nightly.
+# Shared StGit replay driver for Sync Upstream and the CI repair bot. The
+# published stack metadata is loaded before the replay so the patch that fails
+# is the unit repaired by an operator or agent.
 
 : "${CI_REPAIR_BOT_UPSTREAM_TARGET:?CI_REPAIR_BOT_UPSTREAM_TARGET is required}"
 : "${CI_REPAIR_BOT_UPSTREAM_SOURCE_REF:?CI_REPAIR_BOT_UPSTREAM_SOURCE_REF is required}"
 
 UPSTREAM_REMOTE="${CI_REPAIR_BOT_UPSTREAM_REMOTE:-upstream}"
+METADATA_REMOTE="${CI_REPAIR_BOT_METADATA_REMOTE-origin}"
 CONFLICT_MODE="${CI_REPAIR_BOT_CONFLICT_MODE:-fail}"
 GIT_BIN="${CI_REPAIR_BOT_GIT_BIN:-$(command -v git)}"
+STG_BIN="${CI_REPAIR_BOT_STG_BIN:-$(command -v stg || true)}"
+
 if [[ ! -x "$GIT_BIN" ]]; then
   echo "git executable is unavailable: $GIT_BIN" >&2
   exit 2
 fi
-
-# ci-repair-bot provides the system Git path so disposable conflict operations
-# do not hit interactive safety wrappers intended for a user's live worktree.
-git_cmd() {
-  "$GIT_BIN" "$@"
-}
-
-START_HEAD="$(git_cmd rev-parse HEAD)"
-REPLAY_COMPLETE=0
-
-# Persistent conflict memory. Without this, every resolution is discarded when
-# the ephemeral CI workspace is destroyed, and identical conflicts are
-# re-derived from scratch on every sync. SYNC_RERERE_CACHE points at a
-# directory on the self-hosted runner's disk that outlives the workspace.
-# Strictly opt-in: unset OR empty (the hosted-runner fallback sets it to "")
-# leaves rerere disabled -- unchanged behaviour.
-if [[ -n "${SYNC_RERERE_CACHE:-}" ]]; then
-  mkdir -p "$SYNC_RERERE_CACHE"
-  rr_cache_path="$(git_cmd rev-parse --git-path rr-cache)"
-  rerere_cache_wired=1
-
-  if [[ -L "$rr_cache_path" ]]; then
-    # Already a symlink. Only replace it if it points somewhere other than
-    # our cache; otherwise leave it alone.
-    existing_target="$(readlink "$rr_cache_path")"
-    if [[ "$existing_target" != "$SYNC_RERERE_CACHE" ]]; then
-      rm "$rr_cache_path"
-      ln -s "$SYNC_RERERE_CACHE" "$rr_cache_path"
-    fi
-  elif [[ -d "$rr_cache_path" ]]; then
-    # A real directory already occupies this path. This happens when a
-    # self-hosted runner reuses a workspace across jobs: git lazily created a
-    # local rr-cache before this script ever ran. Migrate any resolutions it
-    # already holds into the persistent cache rather than silently losing
-    # them, then replace it with the symlink.
-    if cp -R "$rr_cache_path/." "$SYNC_RERERE_CACHE/" 2>/dev/null && rm -rf "$rr_cache_path"; then
-      ln -s "$SYNC_RERERE_CACHE" "$rr_cache_path"
-    else
-      echo "warning: rr-cache exists as a real directory at $rr_cache_path and could not be migrated to $SYNC_RERERE_CACHE; persistence is unavailable this run, resolutions will not survive the job" >&2
-      rerere_cache_wired=0
-    fi
-  elif [[ -e "$rr_cache_path" ]]; then
-    # Some other filesystem object occupies this path (not a dir, not a
-    # symlink). Do not touch it or pretend persistence is active.
-    echo "warning: $rr_cache_path exists and is neither a directory nor a symlink; persistence is unavailable this run, resolutions will not survive the job" >&2
-    rerere_cache_wired=0
-  else
-    ln -s "$SYNC_RERERE_CACHE" "$rr_cache_path"
-  fi
-
-  git_cmd config rerere.enabled true
-  git_cmd config rerere.autoupdate true
-  if [[ "$rerere_cache_wired" -eq 1 ]]; then
-    echo "rerere enabled with persistent cache at $SYNC_RERERE_CACHE"
-  fi
-else
-  echo "rerere disabled (SYNC_RERERE_CACHE unset); conflicts will be re-derived"
+if [[ -z "$STG_BIN" || ! -x "$STG_BIN" ]]; then
+  echo "StGit 2.6 or newer is required." >&2
+  exit 2
 fi
 
-REBASE_MERGE_DIR="$(git_cmd rev-parse --git-path rebase-merge)"
-REBASE_APPLY_DIR="$(git_cmd rev-parse --git-path rebase-apply)"
+git_cmd() { "$GIT_BIN" "$@"; }
+stg_cmd() { "$STG_BIN" "$@"; }
 
-# Generated release metadata is rewritten after a successful rebase, so the
-# upstream version is authoritative while replaying fork commits.
-#
-# pnpm-lock.yaml is generated, not authored. Never attempt a textual merge of
-# it: take the upstream side here, then let it be regenerated by
-# scripts/ci/prepare-release-tag before tagging. release.yml installs with
-# --frozen-lockfile, so the tagged commit must carry a consistent lockfile.
-UPSTREAM_RESOLVE_FILES=(
-  apps/desktop/package.json
-  apps/server/package.json
-  apps/web/package.json
-  packages/contracts/package.json
-  pnpm-lock.yaml
-)
+stgit_version="$(stg_cmd --version | awk 'NR == 1 { print $3 }')"
+case "$stgit_version" in
+  0.*|1.*|2.[0-5]|2.[0-5].*)
+    echo "StGit 2.6 or newer is required; found $stgit_version." >&2
+    exit 2
+    ;;
+esac
 
-# These files are explicitly fork-owned configuration and documentation.
-FORK_RESOLVE_FILES=(
-  .github/workflows/release.yml
-  apps/mobile/app.config.ts
-  apps/mobile/eas.json
-  docs/operations/ci.md
-  docs/operations/release.md
-  infra/relay/scripts/deploy.test.ts
-)
-
-# The fork owns its atomic `getThreadDetailSnapshotById` contract. It is used
-# by the fork WebSocket handoff to prevent lost or double-applied stream events;
-# upstream's similarly named API is not a drop-in replacement. Keep the fork
-# implementation and its narrow contract mocks/tests together during rebase.
-# Shared integration points such as `apps/server/src/ws.ts` and the
-# `ProjectionSnapshotQuery` layer are deliberately excluded: whole-file fork
-# resolution can silently discard unrelated upstream RPC handlers or newly
-# projected thread fields. Conflicts there require semantic repair.
-FORK_SNAPSHOT_HANDOFF_FILES=(
-  apps/server/src/checkpointing/CheckpointDiffQuery.test.ts
-  apps/server/src/orchestration/Layers/OrchestrationEngine.test.ts
-  apps/server/src/orchestration/Services/ProjectionSnapshotQuery.ts
-  apps/server/src/project/ProjectSetupScriptRunner.test.ts
-  apps/server/src/provider/Layers/ProviderSessionReaper.test.ts
-  apps/server/src/server.test.ts
-  apps/server/src/serverRuntimeStartup.test.ts
-)
-
-# apps/t3-thread is a fork-specific operator CLI with its own lifecycle and
-# watcher semantics. It is intentionally maintained as a coherent workspace,
-# including its generated CLI bundle and operator documentation, so any
-# conflicts under it must take the replayed fork commit as a unit.
-FORK_OWNED_PREFIXES=(
-  apps/t3-thread/
-)
-
-contains_file() {
-  local needle="$1"
-  shift
-  local candidate
-  for candidate in "$@"; do
-    [[ "$needle" == "$candidate" ]] && return 0
-  done
-  return 1
-}
-
-is_fork_owned_file() {
-  local file="$1"
-  local prefix
-  if contains_file "$file" "${FORK_RESOLVE_FILES[@]}" "${FORK_SNAPSHOT_HANDOFF_FILES[@]}"; then
-    return 0
-  fi
-  for prefix in "${FORK_OWNED_PREFIXES[@]}"; do
-    [[ "$file" == "$prefix"* ]] && return 0
-  done
-  return 1
-}
-
-append_unknown() {
-  local needle="$1"
-  local index
-  for ((index = 0; index < unknown_chain_count; index++)); do
-    [[ "$needle" == "${unknown_chain[$index]}" ]] && return 0
-  done
-  unknown_chain[$unknown_chain_count]="$needle"
-  unknown_chain_count=$((unknown_chain_count + 1))
-}
+START_HEAD="$(git_cmd rev-parse HEAD)"
+START_BRANCH="$(git_cmd branch --show-current)"
+STACK_BRANCH="stgit/adopt"
+STACK_REF="refs/stacks/stgit/adopt"
+REPLAY_COMPLETE=0
 
 emit_status() {
   local status="$1"
-  shift
+  local patch="$2"
+  shift 2
   local files=("$@")
 
   echo "sync-upstream reproduction status: $status"
+  if [[ -n "$patch" ]]; then
+    echo "failing patch: $patch"
+  fi
   if [[ ${#files[@]} -gt 0 ]]; then
-    echo "full conflict chain:"
+    echo "conflicting files:"
     printf '  %s\n' "${files[@]}"
   fi
 
   if [[ "$status" == "conflict" ]]; then
     cat <<'EOF'
-On EVERY conflict, ask in this order:
-  1. Is the fork's side still needed at all?  -> retire the patch
-  2. Does upstream now cover part of it?      -> narrow the patch
-  3. Only then: how do I reconcile them?      -> adapt the patch
-Answering 3 first silently preserves patches that no longer need to exist, and they
-conflict again on every future sync. Conflicts cluster exactly where upstream is
-changing the code your patch touches -- which is where supersession happens.
-Fix the PATCH, never add a repair commit beside it.
+On every conflict ask, in order:
+  1. Is the fork behavior still needed?       -> retire
+  2. Does upstream now cover part of it?      -> narrow
+  3. Did upstream move the integration point? -> relocate
+  4. How should the remaining behavior fit?   -> adapt
+Repair and refresh the failing patch. Never create a patch during a rebase and
+never add a repair commit beside the stack.
 EOF
   fi
 
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
     echo "status=$status" >> "$GITHUB_OUTPUT"
+    echo "patch=$patch" >> "$GITHUB_OUTPUT"
     {
       echo "files<<EOF"
-      # Guard the empty case explicitly: on bash 3.2 (macOS system bash),
-      # "${files[@]}" on a zero-element array is treated as an unbound
-      # variable reference under `set -u` and aborts the script here --
-      # AFTER "status=$status" was already appended above, corrupting
-      # GITHUB_OUTPUT with an unterminated `files<<EOF` block and (on the
-      # clean path) tripping the EXIT trap to discard the replay it just
-      # produced. Guarded the same way the stdout branch above already was.
       if [[ ${#files[@]} -gt 0 ]]; then
         printf '%s\n' "${files[@]}"
       fi
@@ -216,141 +81,67 @@ EOF
   fi
 }
 
-restore_start_head() {
-  if [[ -d "$REBASE_MERGE_DIR" || -d "$REBASE_APPLY_DIR" ]]; then
-    git_cmd rebase --abort || true
-  fi
+restore_start() {
+  stg_cmd undo --hard >/dev/null 2>&1 || true
   git_cmd reset --hard "$START_HEAD" >/dev/null
+  if [[ -n "$START_BRANCH" && "$(git_cmd branch --show-current)" != "$START_BRANCH" ]]; then
+    git_cmd switch "$START_BRANCH" >/dev/null
+    git_cmd reset --hard "$START_HEAD" >/dev/null
+  fi
 }
 
-# Safety net for any exit this script did not explicitly account for -- a
-# crash, a signal, an unrelated command tripping `set -e` -- not just the
-# conflict/success paths below. Every intentional exit sets REPLAY_COMPLETE=1
-# first (including the clean success path, where this trap must NOT wipe out
-# the replay it just produced) so this only fires as a fallback.
 restore_interrupted_replay() {
   local exit_code=$?
   if [[ $REPLAY_COMPLETE -eq 0 ]]; then
-    restore_start_head
+    restore_start
   fi
   exit "$exit_code"
 }
-
 trap restore_interrupted_replay EXIT INT TERM
 
-# checkout_stage resolves a conflicted path from one side of a three-way merge
-# (rebase stage 2 = the branch being rebased onto / "ours"; stage 3 = the
-# commit being replayed / "theirs"). Plain `checkout --ours/--theirs` assumes
-# the path exists on that side; for a delete/modify conflict it does not, and
-# the plain checkout silently fails or leaves stale content staged. Falling
-# back to `git rm` when the chosen stage has no blob keeps a genuine deletion
-# a deletion instead of resurrecting content that side removed.
-checkout_stage() {
-  local side="$1"
-  local file="$2"
-  local stage
+if [[ -n "$METADATA_REMOTE" ]]; then
+  git_cmd fetch "$METADATA_REMOTE" \
+    "+${STACK_REF}:${STACK_REF}" \
+    '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+fi
 
-  if [[ "$side" == "ours" ]]; then
-    stage=2
-  else
-    stage=3
-  fi
+recorded_head="$(git_cmd show "${STACK_REF}:stack.json" | bun -e \
+  'process.stdout.write(JSON.parse(await Bun.stdin.text()).head ?? "")')"
+if [[ "$recorded_head" != "$START_HEAD" ]]; then
+  echo "${STACK_REF} records $recorded_head, but the checked-out main is $START_HEAD." >&2
+  echo "Stop and repair or fetch metadata; do not initialize a replacement stack." >&2
+  exit 1
+fi
 
-  if git_cmd cat-file -e ":${stage}:${file}" 2>/dev/null; then
-    git_cmd checkout "--$side" -- "$file"
-    git_cmd add -- "$file"
-  else
-    git_cmd rm --ignore-unmatch -- "$file"
-  fi
-}
+if [[ "$START_BRANCH" != "$STACK_BRANCH" ]]; then
+  git_cmd switch --force-create "$STACK_BRANCH" "$START_HEAD" >/dev/null
+fi
 
 if ! git_cmd remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1; then
   git_cmd remote add "$UPSTREAM_REMOTE" https://github.com/pingdotgg/t3code.git
 fi
-
 git_cmd fetch --no-tags "$UPSTREAM_REMOTE" main:refs/remotes/upstream/main
 git_cmd fetch --no-tags "$UPSTREAM_REMOTE" \
   "+${CI_REPAIR_BOT_UPSTREAM_SOURCE_REF}:${CI_REPAIR_BOT_UPSTREAM_TARGET}"
 
-echo "Rebasing fork topics onto $CI_REPAIR_BOT_UPSTREAM_TARGET..."
-echo "Fork topic commits being replayed (relative to upstream/main):"
-fork_commit_count="$(git_cmd rev-list --count upstream/main..HEAD)"
-echo "Previous fork commits (relative to upstream/main): $fork_commit_count"
-git_cmd log --oneline --max-count=20 upstream/main..HEAD
-if ((fork_commit_count > 20)); then
-  echo "... omitted $((fork_commit_count - 20)) older fork commits"
-fi
-
-# --autosquash folds `fixup!`-prefixed commits into the topic commit they
-# target so the topic stack stays exactly as curated in fork-topics.json
-# after CI or an operator pushes integration fixes as fixup! commits (the
-# fork's commit discipline requires those fixes to be fixup! commits rather
-# than new ad hoc commits). --autosquash only reorders/marks the rebase todo
-# list, which normally requires interactive mode to review; GIT_SEQUENCE_EDITOR=true
-# accepts that generated todo list unattended so this still runs non-interactively in CI.
-if GIT_SEQUENCE_EDITOR=true git_cmd rebase --autosquash --onto "$CI_REPAIR_BOT_UPSTREAM_TARGET" upstream/main; then
-  emit_status clean
+saved_top="$(stg_cmd top)"
+echo "Rebasing the ordered StGit series through $saved_top onto $CI_REPAIR_BOT_UPSTREAM_TARGET..."
+if stg_cmd rebase --merged "$CI_REPAIR_BOT_UPSTREAM_TARGET"; then
+  emit_status clean ""
   REPLAY_COMPLETE=1
   exit 0
 fi
 
-# Unknown conflicts are temporarily resolved to the upstream side so the
-# diagnostic pass can continue and report conflicts from later commits too.
-# If any unknown conflict is observed, the synthetic rebase is always discarded.
-unknown_chain=()
-unknown_chain_count=0
-
-while [[ -d "$REBASE_MERGE_DIR" || -d "$REBASE_APPLY_DIR" ]]; do
-  conflicted=()
-  while IFS= read -r file; do
-    [[ -n "$file" ]] && conflicted+=("$file")
-  done < <(git_cmd diff --name-only --diff-filter=U | sort -u)
-
-  if [[ ${#conflicted[@]} -eq 0 ]]; then
-    git_cmd rebase --skip || break
-    continue
-  fi
-
-  echo "Resolving conflict stop for diagnostic replay: ${conflicted[*]}"
-  for file in "${conflicted[@]}"; do
-    if contains_file "$file" "${UPSTREAM_RESOLVE_FILES[@]}"; then
-      checkout_stage ours "$file"
-    elif is_fork_owned_file "$file"; then
-      checkout_stage theirs "$file"
-    else
-      append_unknown "$file"
-      checkout_stage ours "$file"
-    fi
-  done
-
-  GIT_EDITOR=true git_cmd rebase --continue || true
-done
-
-unresolved=()
-unresolved_count=0
+failing_patch="$(stg_cmd top 2>/dev/null || true)"
+conflicted=()
 while IFS= read -r file; do
-  if [[ -n "$file" ]]; then
-    unresolved[$unresolved_count]="$file"
-    unresolved_count=$((unresolved_count + 1))
-  fi
+  [[ -n "$file" ]] && conflicted+=("$file")
 done < <(git_cmd diff --name-only --diff-filter=U | sort -u)
-for ((index = 0; index < unresolved_count; index++)); do
-  append_unknown "${unresolved[$index]}"
-done
 
-if [[ -d "$REBASE_MERGE_DIR" || -d "$REBASE_APPLY_DIR" || $unknown_chain_count -gt 0 ]]; then
-  restore_start_head
-  REPLAY_COMPLETE=1
-  if [[ $unknown_chain_count -gt 0 ]]; then
-    emit_status conflict "${unknown_chain[@]}"
-  else
-    emit_status conflict
-  fi
-  if [[ "$CONFLICT_MODE" == "output" ]]; then
-    exit 0
-  fi
-  exit 1
-fi
-
-emit_status clean
+restore_start
 REPLAY_COMPLETE=1
+emit_status conflict "$failing_patch" "${conflicted[@]}"
+if [[ "$CONFLICT_MODE" == "output" ]]; then
+  exit 0
+fi
+exit 1

@@ -8,6 +8,33 @@ This repo (`jimprince/t3code`) is a fork of [`pingdotgg/t3code`](https://github.
 The general agent guide is in `CLAUDE.md` / `AGENTS.md`; this file covers only
 things specific to the fork relationship.
 
+## Changing or rebasing this fork
+
+Start with the repo-local [fork patch stack skill](./.agents/skills/fork-patch-stack/SKILL.md),
+then read the [maintenance runbook](./docs/operations/fork-maintenance.md) and
+[ordered inventory](./docs/operations/fork-inventory.toml).
+
+### Route A: rebase or resolve an upstream conflict
+
+Use `stg rebase`, not plain Git rebase. Repair every conflict inside the
+currently failing patch with `stg refresh`, asking
+`retire → narrow → relocate → adapt` before resolving. Never create a new patch
+during a rebase. Preserve patch names and count unless performing an intentional
+retirement or split outside conflict repair, and compare failures with pure
+upstream before trusting the baseline.
+
+### Route B: add or change fork functionality
+
+Identify the owning concern first. Refresh its patch when the work serves an
+existing purpose. A genuinely new, independently droppable concern requires a
+new patch and inventory entry; patch count is not capped. Keep implementation,
+tests, applicable docs, and the inventory stanza together. Never append a plain
+repair commit beside the stack. Generated release stamps remain tag-only and
+never enter a patch.
+
+Use `scripts/ci/publish-stgit-stack --check|--push` as the only supported manual
+landing route for a changed stack.
+
 ## Fast path for release/update work
 
 Current policy: automatic nightly upstream replays/builds are intentional. Do
@@ -116,60 +143,32 @@ and platform behavior remain in `app.config.ts`. The behavioral regression test
 is `apps/mobile/fork-config.test.ts`; the real integration gate is an iOS
 `expo prebuild` for the development variant.
 
-## Maintaining the fork
-
-**Read `docs/operations/fork-maintenance.md` before doing an upstream sync, resolving a
-replay conflict, or reviewing fork health.** It is the agent playbook: the baseline test
-gate (which is _no worse than upstream_, not _green_ — upstream ships red tests), the
-invariants, the sync loop, the retirement ladder, and the surface-reduction ladder.
-
-Two facts that shape everything and are easy to get wrong:
-
-- **Conflicts are the primary retirement signal.** On every conflict ask, in order:
-  is the fork's side still needed at all (retire) → does upstream now cover part of it
-  (narrow) → only then, how do I reconcile them (adapt). Answering the last question
-  first silently preserves patches that no longer need to exist, and they conflict again
-  on every future sync.
-- **Stack size and conflict count are independent.** Collapsing the fork's history does
-  not reduce conflicts; only moving fork code out of upstream files does.
-
-Patch-set tooling lives in `scripts/ci/` (`compact-stack`, `check-commit-discipline`,
-`prepare-release-tag`, `fork-topics.json`). It is wired in: `scripts/ci/reproduce-sync-upstream`
-rebases the curated topic series, `commit-discipline` runs as a job in
-`.github/workflows/ci.yml`, and `scripts/ci/prepare-release-tag` is called from both
-`sync-upstream.yml` and `fork-push-nightly.yml` to keep generated release metadata off
-`main` (see below).
-
 ## The fork-mirroring model
 
 Our version numbers **mirror upstream**. Our release tags are derived from
 upstream release tags plus the fork's curated topic series rebased on top.
 There is no independent versioning axis for the fork.
 
-`main` is not an archive of history — it is the current rendering of the fork's
-patch series (`scripts/ci/fork-topics.json`, ~11 topics, rebuilt by
-`scripts/ci/compact-stack`) on top of one specific upstream point. Read
-`docs/operations/fork-maintenance.md` for the full mental model before doing
-sync work; the notes below are the mechanics of how that model is wired into CI.
+`main` is not an archive of history. It is the rendered tip of the ordered
+StGit series on `stgit/adopt`, applied to one specific upstream point. Read the
+maintenance runbook before sync work; the notes below describe how CI publishes
+that rendering.
 
 - `.github/workflows/sync-upstream.yml` runs every 3 hours and creates release
   tags when upstream ships on the selected channel. Do not manually bump the
   version in `package.json` or invent release numbers.
 - Normal pushes to `main` that affect packaged app/runtime output run
   `.github/workflows/fork-push-nightly.yml`, which publishes the fork
-  changes through the nightly feed. The workflow rebases the fork's topic
+  changes through the nightly feed. The workflow rebases the ordered StGit
   stack onto the latest upstream nightly tag, stamps package versions, and
   tags the result as `${upstream_nightly_tag}-fork.N`. These pushes do **not**
   create stable/latest `vNEXT-fork.N` releases. The next upstream stable sync
   rebases the topic stack onto the upstream stable tag and publishes the
   integrated stable release.
 - sync-upstream fetches upstream tags into `refs/tags/upstream/*` (namespaced)
-  to avoid clobbering our tags, then rebases the fork's topic commits onto the
-  upstream tag with `git rebase --autosquash` (`scripts/ci/reproduce-sync-upstream`).
-  `--autosquash` folds any `fixup!` integration commits into the topic they
-  repair, so the topic count stays exactly what `fork-topics.json` declares —
-  enforced by the `commit-discipline` job in `.github/workflows/ci.yml`
-  (`scripts/ci/check-commit-discipline`). Both automatic taggers call
+  to avoid clobbering our tags, then replays the ordered StGit series through
+  `scripts/ci/reproduce-sync-upstream`. The fork-policy CI job validates the
+  dynamic inventory, rendered commits, and StGit metadata. Both automatic taggers call
   `scripts/ci/prepare-release-tag`, which stamps releasable package versions
   into a separate prep commit, tags it, and reports the pre-stamp SHA. They
   force-push `main` at that exact pre-stamp SHA (not the prep commit), so
@@ -231,8 +230,8 @@ sync work; the notes below are the mechanics of how that model is wired into CI.
   dependency lifecycle hangs do not block macOS updater releases. Keep full
   dependency lifecycle scripts for stable preflight/build jobs.
 
-If you need to put fork patches on top of upstream, push normal commits to
-`main`. The next sync carries their net tree delta forward automatically.
+To change the fork, follow Route B above and publish the refreshed stack with
+the leased stack helper. Do not push an ordinary commit beside the series.
 
 ### Channel: stable and nightly
 
@@ -475,22 +474,9 @@ Release tags must contain the stamped package versions, not only rely on
 version from `apps/server/package.json`, and remote/headless installs may run
 from a tag checkout rather than a desktop release artifact.
 
-## Worktree pattern for commits
+## Worktree isolation
 
-The user often has WIP in the main working tree. When committing fork
-maintenance (workflows, branding, docs) that shouldn't touch their WIP, use a
-detached worktree:
-
-```bash
-git fetch origin main
-git worktree add /tmp/t3code-<task> origin/main
-cd /tmp/t3code-<task>
-git checkout -b <task-branch>
-# ...edit, test, commit...
-git push origin <task-branch>:main
-cd -
-git worktree remove /tmp/t3code-<task>
-```
-
-This keeps the user's dirty files in `/Users/brad/Programming/t3code-fork`
-untouched.
+Use a clean worktree on `stgit/adopt` for stack maintenance so unrelated WIP
+stays untouched. Fetch the metadata namespace before operating, verify the
+series is present, and use the repo-local skill rather than creating an
+ordinary feature branch and pushing it directly to `main`.
