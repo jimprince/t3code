@@ -73,6 +73,7 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         payload: {
           projectId: ProjectId.make("project-1"),
           title: "Project 1",
+          kind: "chat",
           workspaceRoot: "/tmp/project-1",
           defaultModelSelection: null,
           scripts: [],
@@ -134,16 +135,18 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
       const projectRows = yield* sql<{
         readonly projectId: string;
         readonly title: string;
+        readonly kind: string;
         readonly scriptsJson: string;
       }>`
         SELECT
           project_id AS "projectId",
           title,
+          kind,
           scripts_json AS "scriptsJson"
         FROM projection_projects
       `;
       assert.deepEqual(projectRows, [
-        { projectId: "project-1", title: "Project 1", scriptsJson: "[]" },
+        { projectId: "project-1", title: "Project 1", kind: "chat", scriptsJson: "[]" },
       ]);
 
       const messageRows = yield* sql<{
