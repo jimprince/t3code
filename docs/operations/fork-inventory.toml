@@ -302,3 +302,12 @@ decided = "fail-stale-queued-checkouts"
 issue = "brad/t3code-fork#2 comment 2757"
 rationale = "A queued workflow may check out an older event SHA after another writer advances remote main. Bind every automatic writer's lease to its checked-out starting HEAD and fail before replay rather than adopting a newer remote lease."
 standing_policy = "Never renew an automatic main writer's starting lease from the remote."
+
+[[patch]]
+name = "fork-ci-stgit-metadata"
+subject = "fix(ci): publish StGit metadata with nightly replays"
+class = "product"
+purpose = "Publish the rendered stack and canonical StGit metadata together, including leased deletion of obsolete patch refs."
+retire_when = "never"
+depends_on = ["fork-ci-upstream-sync"]
+roles = []
