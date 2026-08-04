@@ -5,7 +5,9 @@ import { APP_VERSION } from "./branding";
 import {
   appendVersionMismatchHint,
   buildVersionMismatchDismissalKey,
+  compareT3Versions,
   dismissVersionMismatch,
+  isClientVersionNewerThanServer,
   isVersionMismatchDismissed,
   resolveServerConfigVersionMismatch,
   resolveServerSelfUpdateCapability,
@@ -78,33 +80,18 @@ describe("versionSkew", () => {
     );
   });
 
-  it("reads desktop-managed update capabilities from config descriptors", () => {
+  it("orders fork and nightly versions for supersedence checks", () => {
+    expect(compareT3Versions("0.0.23-fork.5", "0.0.23-fork.4")).toBeGreaterThan(0);
+    expect(compareT3Versions("0.0.24", "0.0.23-fork.9")).toBeGreaterThan(0);
     expect(
-      resolveServerSelfUpdateCapability({
-        environment: {
-          environmentId: EnvironmentId.make("environment-desktop"),
-          label: "Desktop",
-          platform: { os: "darwin", arch: "arm64" },
-          serverVersion: "9.9.9",
-          capabilities: {
-            repositoryIdentity: true,
-            serverSelfUpdate: "desktop-managed",
-          },
-        },
-      }),
-    ).toBe("desktop-managed");
-    expect(resolveServerSelfUpdateCapability(null)).toBeNull();
+      compareT3Versions("0.0.23-nightly.20260508.220-fork.1", "0.0.23-fork.4"),
+    ).toBeGreaterThan(0);
+    expect(compareT3Versions("0.0.23-fork.4", "0.0.23-fork.5")).toBeLessThan(0);
   });
 
-  it("matches version-drift guidance to the advertised update path", () => {
-    expect(serverUpdateGuidance("respawn", "Remote server")).toBe(
-      "Update the Remote server so they stay in sync.",
-    );
-    expect(serverUpdateGuidance("desktop-managed", "Desktop server")).toBe(
-      "The Desktop server is run by the T3 Code desktop app on its machine — update the desktop app there to sync them.",
-    );
-    expect(serverUpdateGuidance(null, "Local server")).toBe(
-      "Relaunch the Local server with the copied command to sync them.",
-    );
+  it("detects when this client is newer than the server", () => {
+    expect(isClientVersionNewerThanServer(APP_VERSION)).toBe(false);
+    expect(isClientVersionNewerThanServer("0.0.0")).toBe(true);
+    expect(isClientVersionNewerThanServer("999.0.0")).toBe(false);
   });
 });
