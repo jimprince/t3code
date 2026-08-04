@@ -144,6 +144,7 @@ import * as RepositoryIdentityResolver from "./project/RepositoryIdentityResolve
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
+import * as WorkspaceUploads from "./workspace/WorkspaceUploads.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as VcsDriver from "./vcs/VcsDriver.ts";
@@ -683,6 +684,10 @@ const buildAppUnderTest = (options?: {
       WorkspacePaths.layer,
       workspaceEntriesLayer,
       WorkspaceFileSystem.layer.pipe(
+        Layer.provide(WorkspacePaths.layer),
+        Layer.provide(workspaceEntriesLayer),
+      ),
+      WorkspaceUploads.layer.pipe(
         Layer.provide(WorkspacePaths.layer),
         Layer.provide(workspaceEntriesLayer),
       ),
@@ -6476,6 +6481,95 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assert.equal(writeError.failure, "workspace_path_outside_root");
       assert.isDefined(writeError.cause);
       assert.notProperty(writeError, "contents");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("routes websocket rpc projects.uploadFile", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const workspaceDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-ws-project-upload-" });
+      // NUL, high bytes, and invalid UTF-8: corrupted by any text write path.
+      const payload = Uint8Array.from([0x00, 0xff, 0x89, 0x50, 0xc3, 0x28, 0x00, 0x07]);
+
+      yield* buildAppUnderTest();
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const response = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.projectsUploadFile]({
+            cwd: workspaceDir,
+            fileName: "upload.bin",
+            dataUrl: `data:application/octet-stream;base64,${Buffer.from(payload).toString("base64")}`,
+          }),
+        ),
+      );
+
+      assert.equal(response.relativePath, "upload.bin");
+      assert.equal(response.sizeBytes, payload.byteLength);
+      const persisted = yield* fs.readFile(path.join(workspaceDir, "upload.bin"));
+      assert.isTrue(Buffer.from(persisted).equals(Buffer.from(payload)));
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("routes websocket rpc projects.uploadFile with collision auto-rename", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const workspaceDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-ws-project-upload-" });
+      yield* fs.writeFileString(path.join(workspaceDir, "upload.bin"), "already-here");
+
+      yield* buildAppUnderTest();
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const response = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.projectsUploadFile]({
+            cwd: workspaceDir,
+            fileName: "upload.bin",
+            dataUrl: `data:application/octet-stream;base64,${Buffer.from("fresh").toString("base64")}`,
+          }),
+        ),
+      );
+
+      assert.equal(response.relativePath, "upload-1.bin");
+      const original = yield* fs.readFileString(path.join(workspaceDir, "upload.bin"));
+      assert.equal(original, "already-here");
+      const uploaded = yield* fs.readFileString(path.join(workspaceDir, "upload-1.bin"));
+      assert.equal(uploaded, "fresh");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
+  it.effect("routes websocket rpc projects.uploadFile errors", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const workspaceDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-ws-project-upload-" });
+
+      yield* buildAppUnderTest();
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const result = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[WS_METHODS.projectsUploadFile]({
+            cwd: workspaceDir,
+            fileName: "../escape.bin",
+            dataUrl: `data:application/octet-stream;base64,${Buffer.from("nope").toString("base64")}`,
+          }),
+        ).pipe(Effect.result),
+      );
+
+      if (result._tag !== "Failure" || result.failure._tag !== "ProjectUploadFileError") {
+        assert.fail("Expected a ProjectUploadFileError");
+      }
+      const uploadError = result.failure;
+      assert.equal(
+        uploadError.message,
+        `Failed to upload workspace file '../escape.bin' in '${workspaceDir}'.`,
+      );
+      assert.equal(uploadError.cwd, workspaceDir);
+      assert.equal(uploadError.relativePath, "../escape.bin");
+      assert.equal(uploadError.failure, "resolved_path_outside_root");
+      assert.notProperty(uploadError, "dataUrl");
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
