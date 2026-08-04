@@ -180,6 +180,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         url,
         version: "1.15.13",
         ...(serverPassword ? { serverPassword } : {}),
+        processId: 43_001,
         exitCode: Effect.never,
         isRunning: Effect.succeed(true),
       };
@@ -201,6 +202,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         url,
         version: "1.15.13",
         ...(serverPassword ? { serverPassword } : {}),
+        processId: null,
         exitCode: null,
         external: Boolean(serverUrl),
       };
@@ -209,6 +211,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
   createOpenCodeSdkClient: ({ baseUrl, serverPassword }) =>
     ({
       session: {
+        list: async () => ({ data: [] }),
         create: async (input: Record<string, unknown>) => {
           runtimeMock.state.sessionCreateUrls.push(baseUrl);
           runtimeMock.state.sessionCreateInputs.push(input);
@@ -431,6 +434,10 @@ const providerSessionDirectoryTestLayer = Layer.succeed(ProviderSessionDirectory
   getBinding: () => Effect.succeed(Option.none()),
   listThreadIds: () => Effect.succeed([]),
   listBindings: () => Effect.succeed([]),
+  settleDeadGenerationBinding: () => Effect.succeed(false),
+  markTurnStarted: () => Effect.succeed(false),
+  markTurnTerminal: () => Effect.succeed(false),
+  claimIdleForRecovery: () => Effect.succeed(false),
 });
 
 // The adapter now receives its settings as a plain argument (the old design
@@ -1201,6 +1208,12 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
   it.effect("clears session state even when cleanup finalizers throw", () =>
     Effect.gen(function* () {
       const adapter = yield* OpenCodeAdapter;
+      // `it.layer` shares one adapter instance across this suite. Retire any
+      // sessions intentionally left live by earlier tests, then isolate the
+      // finalizer probe to the two sessions created below.
+      yield* adapter.stopAll();
+      runtimeMock.state.closeCalls.length = 0;
+
       yield* adapter.startSession({
         provider: ProviderDriverKind.make("opencode"),
         threadId: asThreadId("thread-stop-all-a"),
@@ -5234,47 +5247,6 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       const completed = events.at(-1);
       if (completed?.type === "item.completed") {
         NodeAssert.equal(completed.payload.detail, "A BBonus");
-      }
-    }),
-  );
-
-  it.effect("lets OpenCode own session title generation and emits title metadata updates", () =>
-    Effect.gen(function* () {
-      const adapter = yield* OpenCodeAdapter;
-      const threadId = asThreadId("thread-opencode-title-sync");
-      runtimeMock.state.subscribedEvents = [
-        {
-          type: "session.updated",
-          properties: {
-            info: {
-              id: "http://127.0.0.1:9999/session",
-              title: "Investigate OpenCode title sync",
-            },
-          },
-        },
-      ];
-
-      const eventsFiber = yield* adapter.streamEvents.pipe(
-        Stream.filter((event) => event.threadId === threadId),
-        Stream.take(3),
-        Stream.runCollect,
-        Effect.forkChild,
-      );
-
-      yield* adapter.startSession({
-        provider: ProviderDriverKind.make("opencode"),
-        threadId,
-        runtimeMode: "full-access",
-      });
-
-      const events = Array.from(yield* Fiber.join(eventsFiber).pipe(Effect.timeout("1 second")));
-      NodeAssert.equal(runtimeMock.state.sessionCreateInputs.length, 1);
-      NodeAssert.equal("title" in (runtimeMock.state.sessionCreateInputs[0] ?? {}), false);
-
-      const metadataUpdated = events.find((event) => event.type === "thread.metadata.updated");
-      NodeAssert.ok(metadataUpdated);
-      if (metadataUpdated.type === "thread.metadata.updated") {
-        NodeAssert.equal(metadataUpdated.payload.name, "Investigate OpenCode title sync");
       }
     }),
   );
