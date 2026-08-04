@@ -740,6 +740,10 @@ export function createEmptyThreadDraft(): ComposerThreadDraftState {
   };
 }
 
+function composerFileDedupKey(file: ComposerFileAttachment): string {
+  return `${file.mimeType}\u0000${file.sizeBytes}\u0000${file.name}`;
+}
+
 function composerImageDedupKey(image: ComposerImageAttachment): string {
   // Keep this independent from File.lastModified so dedupe is stable for hydrated
   // images reconstructed from localStorage (which get a fresh lastModified value).
@@ -3164,6 +3168,64 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
                 },
               },
             };
+          });
+        },
+        addFiles: (threadRef, files) => {
+          const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+          if (threadKey.length === 0 || files.length === 0) {
+            return;
+          }
+          set((state) => {
+            const existing = state.draftsByThreadKey[threadKey] ?? createEmptyThreadDraft();
+            const existingIds = new Set(existing.files.map((file) => file.id));
+            const existingDedupKeys = new Set(
+              existing.files.map((file) => composerFileDedupKey(file)),
+            );
+            const dedupedIncoming: ComposerFileAttachment[] = [];
+            for (const file of files) {
+              const dedupKey = composerFileDedupKey(file);
+              if (existingIds.has(file.id) || existingDedupKeys.has(dedupKey)) {
+                continue;
+              }
+              dedupedIncoming.push(file);
+              existingIds.add(file.id);
+              existingDedupKeys.add(dedupKey);
+            }
+            if (dedupedIncoming.length === 0) {
+              return state;
+            }
+            return {
+              draftsByThreadKey: {
+                ...state.draftsByThreadKey,
+                [threadKey]: {
+                  ...existing,
+                  files: [...existing.files, ...dedupedIncoming],
+                },
+              },
+            };
+          });
+        },
+        removeFile: (threadRef, fileId) => {
+          const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";
+          if (threadKey.length === 0) {
+            return;
+          }
+          set((state) => {
+            const current = state.draftsByThreadKey[threadKey];
+            if (!current) {
+              return state;
+            }
+            const nextDraft: ComposerThreadDraftState = {
+              ...current,
+              files: current.files.filter((file) => file.id !== fileId),
+            };
+            const nextDraftsByThreadKey = { ...state.draftsByThreadKey };
+            if (shouldRemoveDraft(nextDraft)) {
+              delete nextDraftsByThreadKey[threadKey];
+            } else {
+              nextDraftsByThreadKey[threadKey] = nextDraft;
+            }
+            return { draftsByThreadKey: nextDraftsByThreadKey };
           });
         },
         removeImage: (threadRef, imageId) => {
