@@ -95,3 +95,27 @@ date = "2026-07-29"
 decided = "retire+narrow+adapt (per capability)"
 analysis = "docs/analysis/logger-supersession.md"
 rationale = "Upstream v0.0.31 rework (49c0d96ed) superseded per-thread writer splitting, shutdown flush, and native/canonical file separation, so those pieces retired. Keep releaseThread eviction adapted to upstream's store, trace-span rate limiting, and the Spotlight marker. Layer the fork's 2GiB/30d logsDir sweep over upstream's 512MiB/14d provider policy."
+
+[[patch]]
+name = "fork-thread-lifecycle-recovery"
+subject = "fix(server): recover thread lifecycle"
+class = "divergence"
+purpose = "Preserve thread state and snapshot handoff correctness across server reconnects and lifecycle recovery."
+retire_when = "Upstream supplies equivalent lifecycle recovery and atomic snapshot handoff."
+depends_on = ["fork-provider-runtime-recovery"]
+roles = []
+[[patch.decision]]
+id = "ws-snapshot-projection"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream's projectThreadDetailSnapshot spreads the complete snapshot and prunes activity payloads, a strict superset of the old hand-rolled projection. Retain upstream's call while binding it to the fork's threadDetailSnapshot name; do not restore the retired projection."
+[[patch.decision]]
+id = "thread-detail-snapshot-api"
+date = "2026-08-07"
+decided = "retire+narrow"
+rationale = "Upstream v0.0.33 shipped getThreadDetailSnapshot(threadId, window?) returning OrchestrationThreadDetailSnapshot with snapshotSequence read in one transaction — the fork's atomic-handoff guarantee verbatim, plus opt-in turn pagination the fork never had. That is this patch's recorded retire_when for the snapshot capability, so the fork's getThreadDetailSnapshotById is retired and every caller (http.ts, ws.ts, tests) moved to upstream's name. Lifecycle recovery itself is NOT retired and stays in this patch. Narrowed rather than fully retired because one fork behavior survives: upstream's pagination is opt-in, so the unwindowed activity read is still unbounded, and the fork keeps capping it at THREAD_DETAIL_ACTIVITY_LIMIT — an unbounded activity list is what stalls snapshot handoff on reconnect."
+[[patch.decision]]
+id = "provider-session-reconciliation"
+date = "2026-08-21"
+decided = "retire+narrow"
+rationale = "Upstream #7719 now reconciles orphaned provider sessions and running turns while also preserving live sessions, repairing provider-directory bindings, covering archived and stale-active-turn cases, and bounding per-thread failures. Retire the fork's earlier startup reconciler and its duplicate tests so it cannot settle sessions before upstream's stronger reconciliation runs; keep the remaining lifecycle and bounded snapshot behavior in this patch."
