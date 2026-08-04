@@ -52,3 +52,12 @@ id = "providerservice-mcp-touch"
 date = "2026-07-28"
 decided = "adapt"
 rationale = "Upstream added McpSessionRegistry.touchActiveMcpThread before sendTurn; the fork wraps sendTurn in a reservation gate. Independent concerns. The touch belongs inside the gate immediately before the real sendTurn, because touching earlier would change upstream semantics when reservation fails and no turn is sent."
+
+[[patch]]
+name = "fork-provider-runtime-recovery"
+subject = "fix(server): recover provider runtimes"
+class = "divergence"
+purpose = "Recover provider sessions and lifecycle state predictably after crashes, restarts, and partial startup."
+retire_when = "Upstream provides equivalent provider runtime recovery and lifecycle guarantees."
+depends_on = ["fork-provider-turn-reservation"]
+roles = []
