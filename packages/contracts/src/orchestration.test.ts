@@ -8,6 +8,7 @@ import {
   DEFAULT_RUNTIME_MODE,
   ClientOrchestrationCommand,
   ModelSelection,
+  ClientOrchestrationCommand,
   OrchestrationCommand,
   OrchestrationDispatchCommandError,
   OrchestrationEvent,
@@ -37,6 +38,7 @@ const decodeTurnDiffInput = Schema.decodeUnknownEffect(OrchestrationGetTurnDiffI
 const decodeFullThreadDiffInput = Schema.decodeUnknownEffect(OrchestrationGetFullThreadDiffInput);
 const decodeThreadTurnDiff = Schema.decodeUnknownEffect(ThreadTurnDiff);
 const decodeProjectCreateCommand = Schema.decodeUnknownEffect(ProjectCreateCommand);
+const decodeClientOrchestrationCommand = Schema.decodeUnknownEffect(ClientOrchestrationCommand);
 const decodeProjectCreatedPayload = Schema.decodeUnknownEffect(ProjectCreatedPayload);
 const decodeProjectMetaUpdatedPayload = Schema.decodeUnknownEffect(ProjectMetaUpdatedPayload);
 const decodeThreadTurnStartCommand = Schema.decodeUnknownEffect(ThreadTurnStartCommand);
@@ -157,6 +159,7 @@ it.effect("trims branded ids and command string fields at decode boundaries", ()
     assert.strictEqual(parsed.projectId, "project-1");
     assert.strictEqual(parsed.title, "Project Title");
     assert.strictEqual(parsed.workspaceRoot, "/tmp/workspace");
+    assert.strictEqual(parsed.kind, undefined);
     assert.strictEqual(parsed.createWorkspaceRootIfMissing, undefined);
     assert.deepStrictEqual(parsed.defaultModelSelection, {
       instanceId: ProviderInstanceId.make("codex"),
@@ -181,6 +184,40 @@ it.effect("decodes project.create with createWorkspaceRootIfMissing enabled", ()
   }),
 );
 
+it.effect("decodes project.create with an explicit chat kind", () =>
+  Effect.gen(function* () {
+    const parsed = yield* decodeProjectCreateCommand({
+      type: "project.create",
+      commandId: "cmd-1",
+      projectId: "project-1",
+      title: "Chat Project",
+      kind: "chat",
+      workspaceRoot: "/tmp/workspace",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+
+    assert.strictEqual(parsed.kind, "chat");
+  }),
+);
+
+it.effect("rejects client attempts to create server-owned chat projects", () =>
+  Effect.gen(function* () {
+    const exit = yield* Effect.exit(
+      decodeClientOrchestrationCommand({
+        type: "project.create",
+        commandId: "cmd-1",
+        projectId: "forged-chat",
+        title: "Forged chat",
+        kind: "chat",
+        workspaceRoot: "/tmp/attacker-controlled",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+
+    assert.strictEqual(exit._tag, "Failure");
+  }),
+);
+
 it.effect("decodes historical project.created payloads with a default provider", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeProjectCreatedPayload({
@@ -196,6 +233,7 @@ it.effect("decodes historical project.created payloads with a default provider",
       updatedAt: "2026-01-01T00:00:00.000Z",
     });
     assert.strictEqual(parsed.defaultModelSelection?.instanceId, "codex");
+    assert.strictEqual(parsed.kind, undefined);
   }),
 );
 
