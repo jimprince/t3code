@@ -220,3 +220,17 @@ rationale = "Upstream ships single-select projectScope while the fork provides c
 standing_policy = "Do not retire multi-select to upstream's single-select model. Re-escalate only if upstream removes projectScope entirely."
 resolution_kind = "relocate"
 status = "ported-and-uat-verified-2026-07-29"
+
+[[patch]]
+name = "fork-web-copy-thread-id"
+subject = "feat(web): add Sidebar V2 copy thread ID"
+class = "divergence"
+purpose = "Expose a copy-thread-ID action in Sidebar V2 for operator workflows."
+retire_when = "Upstream adds an equivalent discoverable copy action."
+depends_on = ["fork-web-project-scope"]
+roles = []
+[[patch.decision]]
+id = "thread-action-menu-builder"
+date = "2026-08-07"
+decided = "relocate"
+rationale = "Upstream extracted the inline Sidebar V2 menu array into buildThreadActionMenuItems in threadActionMenu.logic.ts. The integration point moved, so the fork's single copy-thread-id entry moved into that builder (and its ThreadActionMenuItemId union) instead of being re-inlined at the call site. Upstream's exact-list assertion in threadActionMenu.logic.test.ts is updated here too, since the fork legitimately adds one item."
