@@ -1,4 +1,4 @@
-import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
+import * as PlatformNodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeCrypto from "node:crypto";
@@ -1437,6 +1437,32 @@ const getWsServerUrl = (
     );
   });
 
+// The macOS Tailscale extension owns a fixed loopback port in the ephemeral
+// range. Bind the integration server to the same address used by the test
+// client so a wildcard listener cannot select that port and misroute requests.
+const NodeHttpServer = {
+  ...PlatformNodeHttpServer,
+  layerTest: HttpServer.layerTestClient.pipe(
+    Layer.provide(
+      Layer.fresh(FetchHttpClient.layer).pipe(
+        Layer.provide(Layer.succeed(FetchHttpClient.RequestInit)({ keepalive: false })),
+      ),
+    ),
+    Layer.provideMerge(
+      Layer.unwrap(
+        Effect.map(
+          Effect.promise(() => import("node:http")),
+          (NodeHttp) =>
+            PlatformNodeHttpServer.layer(NodeHttp.createServer, {
+              host: "127.0.0.1",
+              port: 0,
+            }),
+        ),
+      ),
+    ),
+  ),
+};
+
 // Mirrors NodeHttpServer.layerTest, which does not expose server options,
 // with the production `websocket: { perMessageDeflate: true }` setting.
 const NodeHttpServerTestWithWsDeflate = HttpServer.layerTestClient.pipe(
@@ -1451,6 +1477,7 @@ const NodeHttpServerTestWithWsDeflate = HttpServer.layerTestClient.pipe(
         Effect.promise(() => import("node:http")),
         (NodeHttp) =>
           NodeHttpServer.layer(NodeHttp.createServer, {
+            host: "127.0.0.1",
             port: 0,
             websocket: { perMessageDeflate: true },
           }),
