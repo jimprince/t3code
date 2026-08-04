@@ -14,6 +14,7 @@ import {
   MessageId,
   ModelSelection,
   NonNegativeInt,
+  RuntimeMode,
   ProviderInterruptTurnInput,
   ProviderRespondToRequestInput,
   ProviderRespondToUserInputInput,
@@ -32,10 +33,13 @@ import {
 import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
 import { causeErrorTag } from "@t3tools/shared/observability";
 import { getModelSelectionStringOptionValue } from "@t3tools/shared/model";
+import * as Cause from "effect/Cause";
+import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
+import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
@@ -73,6 +77,7 @@ import * as McpProviderSession from "../../mcp/McpProviderSession.ts";
 import * as McpSessionRegistry from "../../mcp/McpSessionRegistry.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 const isModelSelection = Schema.is(ModelSelection);
+const STALE_TURN_RECONCILIATION_GRACE_MS = 5_000;
 
 interface PendingCompaction {
   readonly completion: Deferred.Deferred<string>;
@@ -179,6 +184,16 @@ const ProviderRollbackConversationInput = Schema.Struct({
   numTurns: NonNegativeInt,
 });
 
+const ProviderForkConversationInput = Schema.Struct({
+  sourceThreadId: ThreadId,
+  targetThreadId: ThreadId,
+  cwd: Schema.String,
+  retainedTurnCount: NonNegativeInt,
+  retainedTurnId: Schema.NullOr(TurnId),
+  runtimeMode: RuntimeMode,
+  modelSelection: ModelSelection,
+});
+
 function toValidationError(
   operation: string,
   issue: string,
@@ -271,6 +286,28 @@ function readPersistedCwd(
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function readTransferredContextHandoff(
+  runtimePayload: ProviderSessionDirectory.ProviderRuntimeBinding["runtimePayload"],
+): { readonly version: 1; readonly consumedExportedAt: string } | undefined {
+  if (!runtimePayload || typeof runtimePayload !== "object" || Array.isArray(runtimePayload)) {
+    return undefined;
+  }
+  const handoff =
+    "threadTransferContextHandoff" in runtimePayload
+      ? runtimePayload.threadTransferContextHandoff
+      : undefined;
+  if (!handoff || typeof handoff !== "object" || Array.isArray(handoff)) return undefined;
+  if (
+    !("version" in handoff) ||
+    handoff.version !== 1 ||
+    !("consumedExportedAt" in handoff) ||
+    typeof handoff.consumedExportedAt !== "string"
+  ) {
+    return undefined;
+  }
+  return { version: 1, consumedExportedAt: handoff.consumedExportedAt };
+}
+
 const dieOnMissingBindingInstanceId = (
   operation: string,
   payload: {
@@ -319,6 +356,14 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   // log writer is attached", which downstream code already handles as a
   // no-op.
   const canonicalEventLogger = options?.canonicalEventLogger ?? eventLoggers.canonical;
+  const releaseThreadEventWriters = (threadId: ThreadId) =>
+    Effect.all(
+      [
+        eventLoggers.native?.releaseThread?.(threadId) ?? Effect.void,
+        canonicalEventLogger?.releaseThread?.(threadId) ?? Effect.void,
+      ],
+      { concurrency: "unbounded", discard: true },
+    );
 
   const registry = yield* ProviderAdapterRegistry.ProviderAdapterRegistry;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
@@ -344,6 +389,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     completedOrder: [],
   });
   let turnAnalyticsRequestId = 0;
+  const pendingTurnSequence = yield* Ref.make(0);
   const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 
   const finishTurnAnalytics = (
@@ -857,10 +903,56 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         providerInstanceId,
         runtimeMode: session.runtimeMode,
         status: toRuntimeStatus(session),
+        activeTurnId: session.activeTurnId ?? null,
         ...(session.resumeCursor !== undefined ? { resumeCursor: session.resumeCursor } : {}),
         runtimePayload: toRuntimePayloadFromSession(session, extra),
       });
     });
+
+  const syncRuntimeBindingForEvent = (
+    source: {
+      readonly instanceId: ProviderInstanceId;
+      readonly provider: ProviderDriverKind;
+    },
+    event: ProviderRuntimeEvent,
+  ) => {
+    if (event.type === "turn.started" && event.turnId !== undefined) {
+      return directory
+        .markTurnStarted({
+          threadId: event.threadId,
+          turnId: event.turnId,
+        })
+        .pipe(Effect.asVoid);
+    }
+    if (
+      (event.type === "turn.completed" || event.type === "turn.aborted") &&
+      event.turnId !== undefined
+    ) {
+      return directory
+        .markTurnTerminal({
+          threadId: event.threadId,
+          expectedTurnId: event.turnId,
+        })
+        .pipe(Effect.asVoid);
+    }
+    if (event.type === "session.exited") {
+      return directory
+        .upsert({
+          threadId: event.threadId,
+          provider: source.provider,
+          providerInstanceId: source.instanceId,
+          status: "stopped",
+          activeTurnId: null,
+          runtimePayload: {
+            activeTurnId: null,
+            lastRuntimeEvent: event.type,
+            lastRuntimeEventAt: event.createdAt,
+          },
+        })
+        .pipe(Effect.ensuring(releaseThreadEventWriters(event.threadId)));
+    }
+    return Effect.void;
+  };
 
   const processRuntimeEvent = (
     source: {
@@ -872,6 +964,16 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     Effect.gen(function* () {
       const canonicalEvent = yield* Effect.sync(() =>
         correlateRuntimeEventWithInstance(source, event),
+      );
+      yield* syncRuntimeBindingForEvent(source, canonicalEvent).pipe(
+        Effect.catchCause((cause) =>
+          Effect.logWarning("provider.runtime.lifecycle-persistence-failed", {
+            threadId: canonicalEvent.threadId,
+            turnId: canonicalEvent.turnId,
+            eventType: canonicalEvent.type,
+            cause,
+          }),
+        ),
       );
       yield* increment(providerRuntimeEventsTotal, {
         provider: canonicalEvent.provider,
@@ -1049,6 +1151,20 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       yield* upsertSessionBinding(
         { ...resumed, providerInstanceId: bindingInstanceId },
         input.binding.threadId,
+      ).pipe(
+        // startSession necessarily precedes the current-generation stamp. If
+        // that stamp fails (including after a dead-generation CAS won the
+        // race), tear down the newly started adapter session so persistence
+        // cannot say stopped/stale while a live session remains untracked.
+        Effect.onError(() =>
+          Effect.all(
+            [
+              adapter.stopSession(input.binding.threadId).pipe(Effect.ignore),
+              clearMcpSession(input.binding.threadId).pipe(Effect.ignore),
+            ],
+            { discard: true },
+          ),
+        ),
       );
       yield* analytics.record("provider.session.recovered", {
         provider: resumed.provider,
@@ -1090,6 +1206,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         threadId: input.threadId,
         runtimeMode: binding.runtimeMode,
         isActive: true,
+        wasRecovered: false,
       } as const;
     }
 
@@ -1100,6 +1217,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         threadId: input.threadId,
         runtimeMode: binding.runtimeMode,
         isActive: false,
+        wasRecovered: false,
       } as const;
     }
 
@@ -1113,7 +1231,151 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       threadId: input.threadId,
       runtimeMode: recovered.session.runtimeMode,
       isActive: true,
+      wasRecovered: true,
     } as const;
+  });
+
+  const reservePendingTurn = Effect.fn("reservePendingTurn")(function* (input: {
+    readonly threadId: ThreadId;
+    readonly pendingTurnId: TurnId;
+    readonly adapter: ProviderAdapterShape<ProviderAdapterError>;
+  }) {
+    const reserved = yield* directory.markTurnStarted({
+      threadId: input.threadId,
+      turnId: input.pendingTurnId,
+      expectedActiveTurnId: null,
+    });
+    if (reserved) {
+      return true;
+    }
+
+    const binding = (yield* directory.listBindings()).find(
+      (candidate) => candidate.threadId === input.threadId,
+    );
+    if (!binding || binding.status === "stopped") {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        reason: binding ? "session-stopped" : "binding-missing",
+      });
+      return false;
+    }
+
+    const activeTurnId = binding.activeTurnId;
+    if (activeTurnId === null || activeTurnId === undefined) {
+      const retryReserved = yield* directory.markTurnStarted({
+        threadId: input.threadId,
+        turnId: input.pendingTurnId,
+        expectedActiveTurnId: null,
+      });
+      if (!retryReserved) {
+        yield* Effect.logDebug("provider.turn.reservation-conflict", {
+          threadId: input.threadId,
+          provider: input.adapter.provider,
+          reason: "reservation-retry-lost",
+        });
+      }
+      return retryReserved;
+    }
+
+    if (String(activeTurnId).startsWith("pending:")) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        reason: "pending-turn",
+      });
+      return false;
+    }
+
+    const liveSessions = yield* input.adapter.listSessions().pipe(
+      Effect.map(Option.some),
+      Effect.catchCause((cause) =>
+        Effect.logWarning("provider.turn.live-session-inspection-failed", {
+          threadId: input.threadId,
+          provider: input.adapter.provider,
+          activeTurnId,
+          cause,
+        }).pipe(Effect.as(Option.none<ReadonlyArray<ProviderSession>>())),
+      ),
+    );
+    if (Option.isNone(liveSessions)) {
+      return false;
+    }
+
+    const liveSession = liveSessions.value.find((session) => session.threadId === input.threadId);
+    // A send to the same live turn is a steer; keep its marker so recovery
+    // cannot claim the session while the adapter delivers the follow-up.
+    if (liveSession?.activeTurnId === activeTurnId) {
+      return true;
+    }
+
+    const markerTimestamp = Date.parse(binding.lastSeenAt);
+    const markerAgeMs = (yield* Clock.currentTimeMillis) - markerTimestamp;
+    if (Number.isNaN(markerTimestamp) || markerAgeMs < STALE_TURN_RECONCILIATION_GRACE_MS) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: Number.isNaN(markerTimestamp) ? "invalid-marker-timestamp" : "recent-turn",
+      });
+      return false;
+    }
+
+    if (
+      liveSession === undefined ||
+      liveSession.activeTurnId !== undefined ||
+      liveSession.status === "running"
+    ) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        liveActiveTurnId: liveSession?.activeTurnId,
+        liveSessionStatus: liveSession?.status,
+        markerAgeMs,
+        reason: liveSession === undefined ? "live-session-missing" : "live-turn-active",
+      });
+      return false;
+    }
+
+    const reconciled = yield* directory.markTurnTerminal({
+      threadId: input.threadId,
+      expectedTurnId: activeTurnId,
+    });
+    if (!reconciled) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: "stale-marker-cas-lost",
+      });
+      return false;
+    }
+
+    yield* Effect.logInfo("provider.turn.stale-marker-reconciled", {
+      threadId: input.threadId,
+      provider: input.adapter.provider,
+      activeTurnId,
+      markerAgeMs,
+    });
+    const retryReserved = yield* directory.markTurnStarted({
+      threadId: input.threadId,
+      turnId: input.pendingTurnId,
+      expectedActiveTurnId: null,
+    });
+    if (!retryReserved) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: "reconciled-reservation-lost",
+      });
+    }
+    return retryReserved;
   });
 
   const stopStaleSessionsForThread = Effect.fn("stopStaleSessionsForThread")(function* (input: {
@@ -1414,69 +1676,113 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
         "provider.kind": routed.adapter.provider,
         ...(input.modelSelection?.model ? { "provider.model": input.modelSelection.model } : {}),
       });
-      // A turn is the clearest sign a session is still alive. The MCP
-      // credential is minted once at session start and cannot be rotated into
-      // an already-spawned agent process, so we keep the existing token valid
-      // rather than issuing a new one: sessions that go a long time between
-      // browser tool calls used to lose the toolkit outright.
-      yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
-      const analyticsModelSelection =
-        input.modelSelection?.instanceId === routed.instanceId ? input.modelSelection : undefined;
-      const turn = yield* Effect.acquireUseRelease(
-        beginTurnAnalytics({
-          providerInstanceId: routed.instanceId,
-          provider: routed.adapter.provider,
-          threadId: input.threadId,
-          modelSelection: analyticsModelSelection,
-          interactionMode: input.interactionMode,
-          runtimeMode: routed.runtimeMode,
-        }),
-        (turnMetadata) =>
-          Effect.gen(function* () {
-            const turn = yield* routed.adapter.sendTurn(input);
-            yield* associateTurnAnalytics({
+      const pendingSequence = yield* Ref.updateAndGet(
+        pendingTurnSequence,
+        (sequence) => sequence + 1,
+      );
+      const pendingTurnId = TurnId.make(
+        `pending:${process.pid}:${pendingSequence}:${String(input.threadId)}`,
+      );
+      const reserved = yield* reservePendingTurn({
+        threadId: input.threadId,
+        pendingTurnId,
+        adapter: routed.adapter,
+      });
+      if (!reserved) {
+        return yield* toValidationError(
+          "ProviderService.sendTurn",
+          `Cannot start a turn for thread '${input.threadId}' because another turn or session transition is in progress. Wait for it to settle, then retry.`,
+        );
+      }
+
+      return yield* Effect.gen(function* () {
+        // A turn is the clearest sign a session is still alive. The MCP
+        // credential is minted once at session start and cannot be rotated into
+        // an already-spawned agent process, so we keep the existing token valid
+        // rather than issuing a new one: sessions that go a long time between
+        // browser tool calls used to lose the toolkit outright.
+        yield* McpSessionRegistry.touchActiveMcpThread(input.threadId);
+        const analyticsModelSelection =
+          input.modelSelection?.instanceId === routed.instanceId ? input.modelSelection : undefined;
+        const turn = yield* Effect.acquireUseRelease(
+          beginTurnAnalytics({
+            providerInstanceId: routed.instanceId,
+            provider: routed.adapter.provider,
+            threadId: input.threadId,
+            modelSelection: analyticsModelSelection,
+            interactionMode: input.interactionMode,
+            runtimeMode: routed.runtimeMode,
+          }),
+          (turnMetadata) =>
+            Effect.gen(function* () {
+              const turn = yield* routed.adapter.sendTurn(input);
+              yield* associateTurnAnalytics({
+                providerInstanceId: routed.instanceId,
+                threadId: input.threadId,
+                turnId: String(turn.turnId),
+                metadata: turnMetadata,
+              });
+              return turn;
+            }),
+          (turnMetadata) =>
+            clearPendingTurnAnalytics({
               providerInstanceId: routed.instanceId,
               threadId: input.threadId,
-              turnId: String(turn.turnId),
-              metadata: turnMetadata,
-            });
-            return turn;
-          }),
-        (turnMetadata) =>
-          clearPendingTurnAnalytics({
-            providerInstanceId: routed.instanceId,
-            threadId: input.threadId,
-            requestId: turnMetadata.requestId,
-          }),
+              requestId: turnMetadata.requestId,
+            }),
+        );
+        yield* directory.markTurnStarted({
+          threadId: input.threadId,
+          turnId: turn.turnId,
+          expectedActiveTurnId: pendingTurnId,
+        });
+        yield* directory.upsert({
+          threadId: input.threadId,
+          provider: routed.adapter.provider,
+          providerInstanceId: routed.instanceId,
+          status: "running",
+          ...(turn.resumeCursor !== undefined ? { resumeCursor: turn.resumeCursor } : {}),
+          runtimePayload: {
+            ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
+            continueAfterServerUpdate: null,
+            continueAfterServerUpdatePrepared: null,
+            lastRuntimeEvent: "provider.sendTurn",
+            lastRuntimeEventAt: yield* nowIso,
+          },
+        });
+        yield* analytics.record("provider.turn.sent", {
+          provider: routed.adapter.provider,
+          model: input.modelSelection?.model,
+          interactionMode: input.interactionMode,
+          // Session-start events alone skew runtime mode toward users who toggle
+          // often, since every toggle restarts the session. Recording it per turn
+          // gives a usage-weighted view and lets it cross with interactionMode.
+          runtimeMode: routed.runtimeMode,
+          attachmentCount: attachments.length,
+          hasInput: typeof input.input === "string" && input.input.trim().length > 0,
+        });
+        return turn;
+      }).pipe(
+        Effect.onExit((exit) =>
+          Exit.isFailure(exit)
+            ? directory
+                .markTurnTerminal({
+                  threadId: input.threadId,
+                  expectedTurnId: pendingTurnId,
+                })
+                .pipe(
+                  Effect.catchCause((cause) =>
+                    Effect.logWarning("provider.turn.pending-marker-clear-failed", {
+                      threadId: input.threadId,
+                      pendingTurnId,
+                      cause,
+                    }),
+                  ),
+                  Effect.asVoid,
+                )
+            : Effect.void,
+        ),
       );
-      yield* directory.upsert({
-        threadId: input.threadId,
-        provider: routed.adapter.provider,
-        providerInstanceId: routed.instanceId,
-        status: "running",
-        ...(turn.resumeCursor !== undefined ? { resumeCursor: turn.resumeCursor } : {}),
-        runtimePayload: {
-          ...(input.modelSelection !== undefined ? { modelSelection: input.modelSelection } : {}),
-          activeTurnId: turn.turnId,
-          // Admission and marker consumption must survive the same restart.
-          continueAfterServerUpdate: null,
-          continueAfterServerUpdatePrepared: null,
-          lastRuntimeEvent: "provider.sendTurn",
-          lastRuntimeEventAt: yield* nowIso,
-        },
-      });
-      yield* analytics.record("provider.turn.sent", {
-        provider: routed.adapter.provider,
-        model: input.modelSelection?.model,
-        interactionMode: input.interactionMode,
-        // Session-start events alone skew runtime mode toward users who toggle
-        // often, since every toggle restarts the session. Recording it per turn
-        // gives a usage-weighted view and lets it cross with interactionMode.
-        runtimeMode: routed.runtimeMode,
-        attachmentCount: attachments.length,
-        hasInput: typeof input.input === "string" && input.input.trim().length > 0,
-      });
-      return turn;
     }).pipe(
       withMetrics({
         counter: providerTurnsTotal,
@@ -1759,12 +2065,14 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           provider: routed.adapter.provider,
           providerInstanceId: routed.instanceId,
           status: "stopped",
+          activeTurnId: null,
           runtimePayload: {
             activeTurnId: null,
             continueAfterServerUpdate: null,
             continueAfterServerUpdatePrepared: null,
           },
         });
+        yield* releaseThreadEventWriters(input.threadId);
         yield* analytics.record("provider.session.stopped", {
           provider: routed.adapter.provider,
         });
@@ -2021,17 +2329,20 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
           "ProviderService.stopAll",
           binding,
         );
-        return yield* directory.upsert({
-          threadId: binding.threadId,
-          provider: binding.provider,
-          providerInstanceId,
-          status: "stopped",
-          runtimePayload: {
+        return yield* directory
+          .upsert({
+            threadId: binding.threadId,
+            provider: binding.provider,
+            providerInstanceId,
+            status: "stopped",
             activeTurnId: null,
-            lastRuntimeEvent: "provider.stopAll",
-            lastRuntimeEventAt: yield* nowIso,
-          },
-        });
+            runtimePayload: {
+              activeTurnId: null,
+              lastRuntimeEvent: "provider.stopAll",
+              lastRuntimeEventAt: yield* nowIso,
+            },
+          })
+          .pipe(Effect.ensuring(releaseThreadEventWriters(binding.threadId)));
       }),
     ).pipe(Effect.asVoid);
     yield* analytics.record("provider.sessions.stopped_all", {
@@ -2050,6 +2361,88 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     ),
   );
 
+  const forkConversation: ProviderServiceMethod<"forkConversation"> = Effect.fn("forkConversation")(
+    function* (rawInput) {
+      const input = yield* decodeInputOrValidationError({
+        operation: "ProviderService.forkConversation",
+        schema: ProviderForkConversationInput,
+        payload: rawInput,
+      });
+      const sourceBinding = Option.getOrUndefined(
+        yield* directory.getBinding(input.sourceThreadId),
+      );
+      if (!sourceBinding) {
+        return { native: false };
+      }
+      const instanceId = yield* requireBindingInstanceId(
+        "ProviderService.forkConversation",
+        sourceBinding,
+      );
+      const adapter = yield* registry.getByInstance(instanceId);
+      const forkProviderThread = adapter.forkThread;
+      const forked = forkProviderThread
+        ? yield* Effect.gen(function* () {
+            const routed = yield* resolveRoutableSession({
+              threadId: input.sourceThreadId,
+              operation: "ProviderService.forkConversation",
+              allowRecovery: true,
+            });
+            return yield* forkProviderThread(input.sourceThreadId, {
+              cwd: input.cwd,
+              retainedTurnCount: input.retainedTurnCount,
+              retainedTurnId: input.retainedTurnId,
+            }).pipe(
+              Effect.ensuring(
+                routed.wasRecovered
+                  ? stopSession({ threadId: input.sourceThreadId }).pipe(
+                      Effect.catchCause((cause) =>
+                        Effect.logWarning("provider fork source cleanup failed", {
+                          threadId: input.sourceThreadId,
+                          provider: sourceBinding.provider,
+                          cause,
+                        }),
+                      ),
+                    )
+                  : Effect.void,
+              ),
+            );
+          }).pipe(
+            Effect.catchCause((cause) => {
+              if (Cause.hasInterruptsOnly(cause)) return Effect.failCause(cause);
+              return Effect.logWarning(
+                "provider native conversation fork fell back to transcript",
+                {
+                  threadId: input.sourceThreadId,
+                  provider: sourceBinding.provider,
+                  cause,
+                },
+              ).pipe(Effect.as(null));
+            }),
+          )
+        : null;
+      const transferredContextHandoff =
+        forked === null ? undefined : readTransferredContextHandoff(sourceBinding.runtimePayload);
+      yield* directory.upsert({
+        threadId: input.targetThreadId,
+        provider: sourceBinding.provider,
+        providerInstanceId: instanceId,
+        ...(sourceBinding.adapterKey !== undefined ? { adapterKey: sourceBinding.adapterKey } : {}),
+        runtimeMode: input.runtimeMode,
+        status: "stopped",
+        activeTurnId: null,
+        resumeCursor: forked?.resumeCursor ?? null,
+        runtimePayload: {
+          cwd: input.cwd,
+          modelSelection: input.modelSelection,
+          ...(transferredContextHandoff !== undefined
+            ? { threadTransferContextHandoff: transferredContextHandoff }
+            : {}),
+        },
+      });
+      return { native: forked !== null };
+    },
+  );
+
   return {
     startSession,
     sendTurn,
@@ -2063,6 +2456,7 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     getInstanceInfo,
     assertConversationRollbackSupported,
     rollbackConversation,
+    forkConversation,
     uploadFeedback,
     // Each access creates a fresh PubSub subscription so that multiple
     // consumers (ProviderRuntimeIngestion, CheckpointReactor, etc.) each
