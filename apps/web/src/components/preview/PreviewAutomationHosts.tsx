@@ -21,7 +21,7 @@ import {
 } from "@t3tools/contracts";
 import { resolvePreviewViewport } from "@t3tools/shared/previewViewport";
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Atom } from "effect/unstable/reactivity";
+import { Atom, type AtomRegistry } from "effect/unstable/reactivity";
 
 import {
   applyPreviewServerSnapshot,
@@ -280,7 +280,7 @@ export function PreviewAutomationHosts() {
 
 function PreviewAutomationHost(props: { readonly environmentId: EnvironmentId }) {
   const { environmentId } = props;
-  const registry = useContext(RegistryContext);
+  const registry = useContext(RegistryContext) as AtomRegistry.AtomRegistry;
   const [automationClientId] = useState(createPreviewAutomationClientId);
   const initialAutomationHost = useMemo<PreviewAutomationHostState>(
     () => ({
