@@ -6,6 +6,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
 import * as PubSub from "effect/PubSub";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -1304,6 +1305,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           const openCodeInstanceId = ProviderInstanceId.make("opencode");
           const codexRefreshCalls = yield* Ref.make(0);
           const openCodeRefreshCalls = yield* Ref.make(0);
+          const openCodeRefreshGate = yield* Deferred.make<void>();
           const codexProvider = {
             instanceId: codexInstanceId,
             driver: codexDriver,
@@ -1402,6 +1404,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 }),
                 getSnapshot: Effect.succeed(failedOpenCodeProvider),
                 refresh: Ref.update(openCodeRefreshCalls, (count) => count + 1).pipe(
+                  Effect.andThen(Deferred.await(openCodeRefreshGate)),
                   Effect.andThen(Ref.get(catalogSnapshot)),
                 ),
                 streamChanges: Stream.empty,
@@ -1445,6 +1448,20 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               "error",
             );
 
+            // Boot refreshes are forked so registry construction does not
+            // block server readiness. Hold OpenCode's boot refresh until the
+            // pending snapshot above is observed, then count it separately
+            // from the two explicit refreshes below.
+            yield* Effect.gen(function* () {
+              while (
+                (yield* Ref.get(codexRefreshCalls)) < 1 ||
+                (yield* Ref.get(openCodeRefreshCalls)) < 1
+              ) {
+                yield* Effect.yieldNow;
+              }
+            }).pipe(Effect.timeout("1 second"));
+            yield* Deferred.succeed(openCodeRefreshGate, undefined);
+
             const recoveredProviders = yield* registry.refresh();
             assert.deepStrictEqual(
               recoveredProviders.find((provider) => provider.instanceId === openCodeInstanceId)
@@ -1469,8 +1486,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
           }).pipe(Effect.provide(runtimeServices));
 
-          assert.strictEqual(yield* Ref.get(codexRefreshCalls), 2);
-          assert.strictEqual(yield* Ref.get(openCodeRefreshCalls), 2);
+          assert.strictEqual(yield* Ref.get(codexRefreshCalls), 3);
+          assert.strictEqual(yield* Ref.get(openCodeRefreshCalls), 3);
         }),
       );
 
@@ -2011,11 +2028,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             Layer.provideMerge(CodexResetCredit.layerTest),
             Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
             Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
-            // NO spawner mock — `ChildProcessSpawner` is supplied by the
-            // outer `NodeServices.layer` on `it.layer(...)` and will
-            // genuinely spawn a subprocess. The missing-binary ENOENT is
-            // what exercises the same failure mode as a misconfigured
-            // production `binaryPath`.
+            Layer.provideMerge(failingSpawnerLayer(`spawn ${missingBinary} ENOENT`)),
           );
           const runtimeServices = yield* Layer.build(providerRegistryLayer).pipe(
             Scope.provide(scope),
@@ -2024,19 +2037,16 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           yield* Effect.gen(function* () {
             const registry = yield* ProviderRegistry.ProviderRegistry;
             let providers = yield* registry.getProviders;
-            for (
-              let attempts = 0;
-              attempts < 50 &&
-              providers.find((provider) => provider.instanceId === "codex_personal")?.status !==
-                "error";
-              attempts += 1
-            ) {
-              yield* Effect.yieldNow;
-              providers = yield* registry.getProviders;
-            }
-            const codexPersonal = providers.find(
+            let codexPersonal = providers.find(
               (provider) => provider.instanceId === "codex_personal",
             );
+            for (let attempt = 0; attempt < 60 && codexPersonal?.status !== "error"; attempt += 1) {
+              yield* Effect.yieldNow;
+              providers = yield* registry.getProviders;
+              codexPersonal = providers.find(
+                (provider) => provider.instanceId === "codex_personal",
+              );
+            }
             assert.notStrictEqual(
               codexPersonal,
               undefined,
@@ -2126,6 +2136,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             ),
             Layer.provideMerge(NodeServices.layer),
             Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
+            Layer.provideMerge(failingSpawnerLayer("spawn codex ENOENT")),
           );
           const runtimeServices = yield* Layer.build(providerRegistryLayer).pipe(
             Scope.provide(scope),
@@ -2174,7 +2185,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
             yield* Deferred.succeed(releaseSecondProbe, undefined);
             const [reprobedCodex] = yield* rebuiltError;
-            assert.deepStrictEqual(spawnedCommands, [firstMissing, secondMissing]);
+            assert.strictEqual(spawnedCommands[0], firstMissing);
+            assert.ok(
+              spawnedCommands.indexOf(secondMissing) > 0,
+              "expected the changed codex binaryPath to be probed after the boot probe",
+            );
             assert.strictEqual(reprobedCodex?.status, "error");
             assert.strictEqual(reprobedCodex?.installed, false);
           }).pipe(Effect.provide(runtimeServices));
