@@ -224,3 +224,17 @@ purpose = "Expose a copy-thread-ID action in Sidebar V2 for operator workflows."
 retire_when = "Upstream adds an equivalent discoverable copy action."
 depends_on = ["fork-web-project-scope"]
 roles = []
+
+[[patch]]
+name = "fork-web-image-timeout"
+subject = "test(web): allow image compression boundary runtime"
+class = "upstream-bound"
+purpose = "Give the deterministic image compression boundary test enough time under parallel CI load."
+retire_when = "Upstream speeds up the encoding walk or adopts a sufficient timeout."
+depends_on = ["fork-build-workspace-tooling"]
+roles = []
+[[patch.decision]]
+id = "stashimagecompression-timeout"
+date = "2026-07-29"
+decided = "adapt"
+rationale = "The too-large boundary test repeatedly exceeded the default timeout under parallel hosted CI while passing in isolation. Accept the one-line upstream-file edit until the test becomes reliably faster."
