@@ -3,6 +3,9 @@ import type { ExpoConfig } from "expo/config";
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
+import forkConfig from "./fork.config.json";
+import { applyMobileForkConfig } from "./fork-config.ts";
+
 type AppVariant = "development" | "preview" | "production";
 
 const repoEnv = loadRepoEnv();
@@ -371,4 +374,4 @@ const config: ExpoConfig = {
   owner: "pingdotgg",
 };
 
-export default config;
+export default applyMobileForkConfig(config, forkConfig);
