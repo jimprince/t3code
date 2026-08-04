@@ -328,6 +328,13 @@ paired environments just to discover ownership. The CLI maps the env id/name/lab
 environment key (for example `local-mbp`) before storing notification routes. Older sessions fall back
 to paired-environment scanning. Unsaved caller records show `saved: false`.
 
+The server stamps `T3_THREAD_ID` on every provider session it spawns — Codex, Claude, Cursor,
+Grok, Antigravity and a locally spawned OpenCode server. A session that connects to an
+_externally_ managed OpenCode server (`serverUrl` configured) is the one case with no thread
+id: T3 does not own that process and cannot set its environment. A session with
+`T3_ENVIRONMENT_ID` but no `T3_THREAD_ID` in any other case means the server predates this
+and needs updating; do not silently fall back to polling.
+
 Register the calling T3 thread as a subscriber for a saved source agent:
 
 ```bash
