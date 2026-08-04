@@ -194,6 +194,15 @@ export interface ProjectionSnapshotQueryShape {
   ) => Effect.Effect<Option.Option<OrchestrationThreadShell>, ProjectionRepositoryError>;
 
   /**
+   * Read a single non-deleted thread shell row by id, including archived
+   * threads. Use for lifecycle cleanup paths that must still operate after
+   * archive removes a thread from active navigation queries.
+   */
+  readonly getThreadShellByIdIncludingArchived: (
+    threadId: ThreadId,
+  ) => Effect.Effect<Option.Option<OrchestrationThreadShell>, ProjectionRepositoryError>;
+
+  /**
    * Read a single active thread detail snapshot by id.
    */
   readonly getThreadDetailById: (
@@ -206,6 +215,11 @@ export interface ProjectionSnapshotQueryShape {
    * sequence in one consistent transaction, so the returned `snapshotSequence`
    * exactly matches the state reflected in `thread` (no interleaving projector
    * update between the two reads).
+   *
+   * The paired `snapshotSequence` is an exact cut point: every domain event at
+   * or below it is already reflected in `thread`. The WS layer uses it to drop
+   * live events that the snapshot already contains, so the snapshot→live
+   * handoff neither loses nor double-applies events.
    *
    * When `window` is provided, the thread's messages, activities, proposed
    * plans, and checkpoints are bounded to a page of recent turns and the
