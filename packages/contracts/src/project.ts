@@ -298,3 +298,47 @@ export class ProjectWriteFileError extends Schema.TaggedErrorClass<ProjectWriteF
     } as any);
   }
 }
+
+export const PROJECT_UPLOAD_FILE_MAX_BYTES = 32 * 1024 * 1024;
+// Base64 inflates by 4/3 plus the data-url header; 45M chars covers 32 MiB.
+const PROJECT_UPLOAD_FILE_MAX_DATA_URL_CHARS = 45_000_000;
+const PROJECT_UPLOAD_FILE_NAME_MAX_LENGTH = 255;
+
+export const ProjectUploadFileInput = Schema.Struct({
+  cwd: TrimmedNonEmptyString,
+  // A single path segment; the server sanitizes and auto-renames on collision.
+  fileName: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_UPLOAD_FILE_NAME_MAX_LENGTH)),
+  dataUrl: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_UPLOAD_FILE_MAX_DATA_URL_CHARS)),
+});
+export type ProjectUploadFileInput = typeof ProjectUploadFileInput.Type;
+
+export const ProjectUploadFileResult = Schema.Struct({
+  relativePath: TrimmedNonEmptyString,
+  sizeBytes: NonNegativeInt,
+});
+export type ProjectUploadFileResult = typeof ProjectUploadFileResult.Type;
+
+export class ProjectUploadFileError extends Schema.TaggedErrorClass<ProjectUploadFileError>()(
+  "ProjectUploadFileError",
+  {
+    cwd: Schema.optional(TrimmedNonEmptyString),
+    relativePath: Schema.optional(TrimmedNonEmptyString),
+    failure: Schema.optional(ProjectFileFailure),
+    resolvedPath: Schema.optional(TrimmedNonEmptyString),
+    resolvedWorkspaceRoot: Schema.optional(TrimmedNonEmptyString),
+    operation: Schema.optional(ProjectFileOperation),
+    operationPath: Schema.optional(TrimmedNonEmptyString),
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {
+  // @effect-diagnostics-next-line overriddenSchemaConstructor:off
+  constructor(props: ProjectFileFailureContext) {
+    super({
+      ...props,
+      message:
+        decodedProjectErrorMessage(props) ??
+        `Failed to upload workspace file '${props.relativePath}' in '${props.cwd}'.`,
+    } as any);
+  }
+}
