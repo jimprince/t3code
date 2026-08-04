@@ -219,6 +219,32 @@ function isInsideRoot(path: Path.Path, root: string, candidate: string): boolean
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
+const realPathWithMissingTail = Effect.fn("AntigravityAdapter.realPathWithMissingTail")(
+  function* (input: {
+    readonly fileSystem: FileSystem.FileSystem;
+    readonly path: Path.Path;
+    readonly candidate: string;
+  }): Effect.fn.Return<string, never> {
+    const { fileSystem, path } = input;
+    let ancestor = path.resolve(input.candidate);
+    const missingSegments: Array<string> = [];
+
+    while (true) {
+      const realAncestor = yield* fileSystem.realPath(ancestor).pipe(Effect.option);
+      if (Option.isSome(realAncestor)) {
+        return path.join(realAncestor.value, ...missingSegments);
+      }
+
+      const parent = path.dirname(ancestor);
+      if (parent === ancestor) {
+        return path.resolve(input.candidate);
+      }
+      missingSegments.unshift(path.basename(ancestor));
+      ancestor = parent;
+    }
+  },
+);
+
 /** Resolves an agent-supplied path and rejects anything outside the session roots. */
 const resolveClientFilePath = Effect.fn("AntigravityAdapter.resolveClientFilePath")(
   function* (input: {
@@ -227,15 +253,16 @@ const resolveClientFilePath = Effect.fn("AntigravityAdapter.resolveClientFilePat
     readonly allowedRoots: ReadonlyArray<string>;
     readonly requestPath: string;
   }) {
-    const { path } = input;
-    const resolved = path.resolve(input.requestPath);
-    // Follow symlinks on the parent so a link out of the workspace cannot escape it.
-    const parent = yield* input.fileSystem
-      .realPath(path.dirname(resolved))
-      .pipe(Effect.orElseSucceed(() => path.dirname(resolved)));
-    const real = path.join(parent, path.basename(resolved));
+    const { fileSystem, path } = input;
+    // Follow symlinks through the closest existing ancestor while preserving a
+    // missing tail for new nested files.
+    const real = yield* realPathWithMissingTail({
+      fileSystem,
+      path,
+      candidate: input.requestPath,
+    });
     const roots = yield* Effect.forEach(input.allowedRoots, (root) =>
-      input.fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => root)),
+      fileSystem.realPath(root).pipe(Effect.orElseSucceed(() => path.resolve(root))),
     );
     if (!roots.some((root) => isInsideRoot(path, root, real))) {
       return yield* EffectAcpErrors.AcpRequestError.invalidParams(
