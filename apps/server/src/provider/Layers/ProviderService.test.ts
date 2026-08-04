@@ -63,6 +63,7 @@ import * as ProviderSessionDirectory from "../Services/ProviderSessionDirectory.
 import { makeProviderServiceLive } from "./ProviderService.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
+import { makeServerBootGenerationLayer } from "./ServerBootGeneration.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as ProviderSessionRuntime from "../../persistence/ProviderSessionRuntime.ts";
 import {
@@ -419,7 +420,10 @@ function makeProviderServiceLayer(
   );
   const directoryLayer =
     input.directory === undefined
-      ? ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer))
+      ? ProviderSessionDirectoryLive.pipe(
+          Layer.provide(runtimeRepositoryLayer),
+          Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+        )
       : Layer.succeed(ProviderSessionDirectory.ProviderSessionDirectory, input.directory);
 
   const layer = it.layer(
@@ -474,7 +478,10 @@ it.effect("ProviderServiceLive catches stopAll failures during shutdown", () =>
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
     const providerLayer = Layer.mergeAll(
       makeProviderServiceLive().pipe(
         Layer.provide(providerAdapterLayer),
@@ -653,7 +660,10 @@ it.effect("ProviderServiceLive rejects new sessions for disabled providers", () 
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
     const providerLayer = makeProviderServiceLive().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
@@ -736,6 +746,7 @@ it.effect(
       );
       const directoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const providerLayer = makeProviderServiceLive().pipe(
         Layer.provide(providerAdapterLayer),
@@ -805,7 +816,10 @@ it.effect("ProviderServiceLive rejects new sessions for disabled custom instance
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
     const providerLayer = makeProviderServiceLive().pipe(
       Layer.provide(providerAdapterLayer),
       Layer.provide(directoryLayer),
@@ -977,6 +991,7 @@ it.effect(
       );
       const directoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const providerLayer = makeProviderServiceLive().pipe(
         Layer.provide(Layer.succeed(ProviderAdapterRegistry.ProviderAdapterRegistry, registry)),
@@ -1026,7 +1041,10 @@ it.effect("ProviderServiceLive writes canonical events to the emitting thread se
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
     const providerLayer = makeProviderServiceLive({
       canonicalEventLogger: {
         filePath: "memory://provider-canonical-events",
@@ -1087,7 +1105,10 @@ it.effect("ProviderServiceLive keeps persisted resumable sessions on startup", (
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(persistenceLayer),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
 
     yield* Effect.gen(function* () {
       const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
@@ -1162,6 +1183,7 @@ it.effect(
 
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const firstProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -1222,6 +1244,7 @@ it.effect(
       });
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const secondProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -1754,6 +1777,30 @@ routing.layer("ProviderServiceLive routing", (it) => {
         mimeType: "image/png",
         sizeBytes: 123,
       };
+      const completeActiveTurn = (eventId: string) =>
+        Effect.gen(function* () {
+          const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+          // The fake adapter publishes through a PubSub without replay, so an
+          // event emitted before the service's subscriber is attached is lost.
+          // Re-emit until the reservation clears; the service treats a repeated
+          // completion for an already-cleared turn as a no-op.
+          while (
+            (yield* directory.listBindings()).some(
+              (binding) => binding.threadId === session.threadId && binding.activeTurnId !== null,
+            )
+          ) {
+            routing.codex.emit({
+              type: "turn.completed",
+              eventId: asEventId(eventId),
+              provider: ProviderDriverKind.make("codex"),
+              createdAt: "2026-01-01T00:00:00.000Z",
+              threadId: session.threadId,
+              turnId: TurnId.make(`turn-${String(session.threadId)}`),
+              status: "completed",
+            });
+            yield* Effect.yieldNow;
+          }
+        });
 
       routing.codex.sendTurn.mockClear();
       yield* provider.sendTurn({
@@ -1769,6 +1816,10 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.include(turnText, '[Attached image "screenshot.png" is saved at: ');
       assert.equal(turnText.endsWith(`${attachment.id}.png]`), true);
 
+      // The fork's reservation gate requires each runtime turn to complete
+      // before the next send. Upstream sends these fixture turns back-to-back.
+      yield* completeActiveTurn("evt-thread-attach-turn-1");
+
       // An attachment-only turn stays valid and the injected line becomes the
       // whole input text, so the agent still learns the path.
       routing.codex.sendTurn.mockClear();
@@ -1778,6 +1829,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const imageOnlyInput = routing.codex.sendTurn.mock.calls[0]?.[0] as ProviderSendTurnInput;
       assert.equal(imageOnlyInput.input?.startsWith('[Attached image "screenshot.png"'), true);
+      yield* completeActiveTurn("evt-thread-attach-turn-2");
 
       const fileAttachment = {
         type: "file" as const,
@@ -1799,6 +1851,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       // Every attachment reaches the adapter; each adapter decides what its
       // provider ingests natively.
       assert.deepEqual(mixedInput.attachments, [attachment, fileAttachment]);
+      yield* completeActiveTurn("evt-thread-attach-turn-3");
 
       routing.codex.sendTurn.mockClear();
       yield* provider.sendTurn({ threadId: session.threadId, attachments: [fileAttachment] });
@@ -2247,6 +2300,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const firstProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -2286,6 +2340,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const secondProviderLayer = makeProviderServiceLive().pipe(
         Layer.provide(
@@ -2355,6 +2410,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         });
         const firstDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
+          Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
         );
         const firstProviderLayer = makeProviderServiceLive().pipe(
           Layer.provide(
@@ -2389,6 +2445,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
         });
         const secondDirectoryLayer = ProviderSessionDirectoryLive.pipe(
           Layer.provide(runtimeRepositoryLayer),
+          Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
         );
         const secondProviderLayer = makeProviderServiceLive().pipe(
           Layer.provide(
@@ -2444,11 +2501,17 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
   it.effect("fans out adapter turn completion events", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
       const session = yield* provider.startSession(asThreadId("thread-1"), {
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
         threadId: asThreadId("thread-1"),
         runtimeMode: "full-access",
+      });
+      const turn = yield* provider.sendTurn({
+        threadId: session.threadId,
+        input: "hello",
+        attachments: [],
       });
 
       const eventsRef = yield* Ref.make<Array<ProviderRuntimeEvent>>([]);
@@ -2463,7 +2526,7 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         provider: ProviderDriverKind.make("codex"),
         createdAt: "2026-01-01T00:00:00.000Z",
         threadId: session.threadId,
-        turnId: asTurnId("turn-1"),
+        turnId: turn.turnId,
         payload: { state: "completed" },
       };
 
@@ -2484,6 +2547,17 @@ fanout.layer("ProviderServiceLive fanout", (it) => {
         ),
         true,
       );
+
+      const binding = yield* directory.getBinding(session.threadId);
+      assert.equal(Option.isSome(binding), true);
+      if (Option.isSome(binding)) {
+        assert.equal(
+          binding.value.activeTurnId,
+          null,
+          "REGRESSION: terminal provider events must release the completed turn",
+        );
+        assert.deepInclude(binding.value.runtimePayload, { activeTurnId: null });
+      }
     }),
   );
 
@@ -2811,6 +2885,7 @@ citations.layer("ProviderServiceLive assistant citations", (it) => {
   it.effect("leaves input without valid citations unchanged", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
       const threadId = asThreadId("thread-citation-passthrough");
       yield* provider.startSession(threadId, {
         provider: CODEX_DRIVER,
@@ -2829,7 +2904,14 @@ citations.layer("ProviderServiceLive assistant citations", (it) => {
 
       citations.codex.sendTurn.mockClear();
       for (const input of prompts) {
-        yield* provider.sendTurn({ threadId, input });
+        const turn = yield* provider.sendTurn({ threadId, input });
+        assert.equal(
+          yield* directory.markTurnTerminal({
+            threadId,
+            expectedTurnId: turn.turnId,
+          }),
+          true,
+        );
       }
 
       assert.deepStrictEqual(
@@ -4074,6 +4156,12 @@ const boundedListing = makeProviderServiceLayer({
     getBinding,
     listThreadIds,
     listBindings: () => Effect.die("ProviderService.listSessions does not use listBindings"),
+    settleDeadGenerationBinding: () =>
+      Effect.die("ProviderService.listSessions does not settle dead bindings"),
+    markTurnStarted: () => Effect.die("ProviderService.listSessions does not mark turns started"),
+    markTurnTerminal: () => Effect.die("ProviderService.listSessions does not mark turns terminal"),
+    claimIdleForRecovery: () =>
+      Effect.die("ProviderService.listSessions does not claim sessions for recovery"),
   },
 });
 
@@ -4116,6 +4204,7 @@ describe("agent browser access", () => {
       );
       const directoryLayer = ProviderSessionDirectoryLive.pipe(
         Layer.provide(runtimeRepositoryLayer),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       );
       const providerLayer = makeProviderServiceLive({
         issueMcpCredential: (request) =>
