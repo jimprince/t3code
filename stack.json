@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "117fdef860bc9cdeb21839cdcfd184089992585b",
-  "head": "26e354fbb666009c854fb3f03f22435e595f9da1",
+  "prev": "17eed094734b07cfc96fb3f6715b397d3305cf3c",
+  "head": "bffa33e5e9e4253feefe93208bf0db966a9c1c8f",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -22,7 +22,8 @@
     "fork-web-project-scope",
     "fork-web-copy-thread-id",
     "fork-web-image-timeout",
-    "fork-desktop-distribution"
+    "fork-desktop-distribution",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -86,6 +87,9 @@
     },
     "fork-web-project-scope": {
       "oid": "f28cba8e7996f2874e0414742dcee71637740c80"
+    },
+    "refresh-temp": {
+      "oid": "bffa33e5e9e4253feefe93208bf0db966a9c1c8f"
     }
   }
 }
