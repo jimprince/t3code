@@ -112,11 +112,6 @@ jobs:
           fi
           echo "Latest upstream nightly release: $upstream_tag"
 
-          export CI_REPAIR_BOT_UPSTREAM_TARGET="refs/tags/upstream/${upstream_tag}"
-          export CI_REPAIR_BOT_UPSTREAM_SOURCE_REF="refs/tags/${upstream_tag}"
-          export CI_REPAIR_BOT_CONFLICT_MODE=fail
-          scripts/ci/reproduce-sync-upstream
-
           mapfile -t existing_numbers < <(git tag --list "${upstream_tag}-fork.*" \
             | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
             | sort -n)
@@ -131,6 +126,32 @@ jobs:
           new_tag="${upstream_tag}-fork.${next_n}"
           echo "needed=true" >> "$GITHUB_OUTPUT"
           echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
+          echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Replay fork onto latest upstream nightly
+        if: steps.resolve.outputs.needed == 'true'
+        id: replay
+        env:
+          CI_REPAIR_BOT_UPSTREAM_TARGET: refs/tags/upstream/${{ steps.resolve.outputs.upstream_tag }}
+          CI_REPAIR_BOT_UPSTREAM_SOURCE_REF: refs/tags/${{ steps.resolve.outputs.upstream_tag }}
+          CI_REPAIR_BOT_CONFLICT_MODE: output
+        run: scripts/ci/reproduce-sync-upstream
+
+      - name: Route replay conflict to autonomous repair
+        if: steps.resolve.outputs.needed == 'true' && steps.replay.outputs.status == 'conflict'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          FAILING_PATCH: ${{ steps.replay.outputs.patch }}
+          CONFLICT_FILES: ${{ steps.replay.outputs.files }}
+        run: |
+          set -euo pipefail
+          gh workflow run sync-upstream.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f channel=nightly
+          echo "::error::Fork push replay conflicted in $FAILING_PATCH; dispatched eligible Sync Upstream repair."
+          echo "$CONFLICT_FILES" | sed 's/^/::error::  /'
+          exit 1
 
       - name: Prepare release tag
         if: steps.resolve.outputs.needed == 'true'
