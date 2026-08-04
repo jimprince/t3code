@@ -238,3 +238,12 @@ id = "stashimagecompression-timeout"
 date = "2026-07-29"
 decided = "adapt"
 rationale = "The too-large boundary test repeatedly exceeded the default timeout under parallel hosted CI while passing in isolation. Accept the one-line upstream-file edit until the test becomes reliably faster."
+
+[[patch]]
+name = "fork-desktop-distribution"
+subject = "feat(desktop): ship fork distribution channels"
+class = "product"
+purpose = "Ship fork branding, packaging, update channels, and desktop lifecycle integrations."
+retire_when = "never"
+depends_on = ["fork-build-workspace-tooling", "fork-thread-transfer"]
+roles = []
