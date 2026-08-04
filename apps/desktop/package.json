@@ -6,7 +6,8 @@
   "main": "dist-electron/main.cjs",
   "scripts": {
     "ensure:electron": "node scripts/ensure-electron-runtime.mjs",
-    "start": "node scripts/start-electron.mjs",
+    "start": "node scripts/build-pressure-monitor.mjs && node scripts/start-electron.mjs",
+    "build:native:pressure": "node scripts/build-pressure-monitor.mjs",
     "typecheck": "tsgo --noEmit",
     "test": "vp test run --passWithNoTests",
     "smoke-test": "node scripts/smoke-test.mjs"
