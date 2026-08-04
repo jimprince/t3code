@@ -400,6 +400,18 @@ describe("DesktopWindow", () => {
     assert.isFalse(
       DesktopWindow.isSameOriginRendererNavigation({
         applicationUrl: "t3code://app/",
+        navigationUrl: "t3code://not-the-app/settings/diagnostics",
+      }),
+    );
+    assert.isFalse(
+      DesktopWindow.isSameOriginRendererNavigation({
+        applicationUrl: "t3code://app/",
+        navigationUrl: "t3code-dev://app/settings/diagnostics",
+      }),
+    );
+    assert.isFalse(
+      DesktopWindow.isSameOriginRendererNavigation({
+        applicationUrl: "t3code://app/",
         navigationUrl: "not a url",
       }),
     );
