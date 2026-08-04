@@ -1,5 +1,9 @@
 # T3 Code
 
+> **Maintained fork:** Before changing this tree, read
+> [LLM_INSTRUCTIONS.md](./LLM_INSTRUCTIONS.md); it determines whether the work
+> refreshes an existing StGit patch or creates a new one.
+
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs (Codex, Claude Code, Cursor, Grok, OpenCode) and serves web, desktop, and mobile clients.
 
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
