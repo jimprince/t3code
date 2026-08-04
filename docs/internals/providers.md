@@ -360,6 +360,11 @@ Provider output comes back as internal commands such as `thread.message.assistan
 `thread.session.set`, which clients observe through `orchestration.subscribeThread`. See
 [overview.md](./overview.md) for the command/event loop.
 
+An approval or user-input response whose provider callback is gone records a stale-response
+failure and clears the session's active turn. Missing persisted bindings or resume state follow
+the same recovery path. Other provider errors remain visible without clearing a recoverable
+turn, and a failed response never fabricates an approval or user-input resolution.
+
 ## Server-side workers
 
 Provider work flows through three queue-backed workers. All three are built with
