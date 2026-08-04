@@ -397,6 +397,47 @@ describe("EventNdjsonLogger", () => {
     }),
   );
 
+  it.effect("releases a thread sink for retention and allows a later write to reopen it", () =>
+    Effect.gen(function* () {
+      const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
+      const basePath = NodePath.join(tempDir, "events.log");
+      const threadId = ThreadId.make("thread-release-writer");
+      const threadPath = ownedLogPath(basePath, "thread-release-writer");
+
+      try {
+        yield* TestClock.setTime(1_800_000_000_000);
+        const store = yield* makeEventNdjsonLogStore(basePath, {
+          batchWindowMs: 0,
+          maxAgeMs: 1,
+          retentionCheckIntervalMs: 1,
+        });
+        const logger = store.logger("canonical");
+        assert.exists(logger.releaseThread);
+
+        yield* logger.write({ id: "before-release" }, threadId);
+        yield* logger.releaseThread?.(threadId);
+        yield* TestClock.adjust("2 millis");
+        yield* logger.write({ id: "retention-trigger" }, ThreadId.make("other"));
+
+        assert.equal(NodeFS.existsSync(threadPath), false);
+
+        yield* logger.write({ id: "after-release" }, threadId);
+        yield* store.close();
+
+        const records = NodeFS.readFileSync(threadPath, "utf8")
+          .trim()
+          .split("\n")
+          .map(parseLogLine);
+        assert.deepEqual(
+          records.map((record) => record.payload),
+          ['{"id":"after-release"}'],
+        );
+      } finally {
+        NodeFS.rmSync(tempDir, { recursive: true, force: true });
+      }
+    }),
+  );
+
   it.effect("rotates per-thread files when max size is exceeded", () =>
     Effect.gen(function* () {
       const tempDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-provider-log-"));
