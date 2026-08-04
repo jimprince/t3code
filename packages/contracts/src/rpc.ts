@@ -56,6 +56,8 @@ import {
   ClientOrchestrationCommand,
   ORCHESTRATION_WS_METHODS,
   OrchestrationDispatchCommandError,
+  OrchestrationExportThreadError,
+  OrchestrationForkThreadError,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetSnapshotError,
@@ -63,6 +65,7 @@ import {
   OrchestrationSearchThreadsInput,
   OrchestrationGetTurnDiffError,
   OrchestrationGetTurnDiffInput,
+  OrchestrationImportThreadError,
   OrchestrationRpcSchemas,
   OrchestrationGetWorkflowScriptError,
 } from "./orchestration.ts";
@@ -153,6 +156,8 @@ import {
   ServerConfig,
   ServerProviderUpdateError,
   ServerProviderUpdateInput,
+  ServerHeadlessUpdateCheckInput,
+  ServerHeadlessUpdateCheckResult,
   ServerLifecycleStreamEvent,
   ServerRemoveKeybindingInput,
   ServerRemoveKeybindingResult,
@@ -167,6 +172,9 @@ import {
   ServerProcessResourceHistoryResult,
   ServerSignalProcessInput,
   ServerSignalProcessResult,
+  ServerRecoveryExecuteInput,
+  ServerRecoveryExecuteResult,
+  ServerRecoveryPreviewResult,
   ServerUpsertKeybindingInput,
   ServerUpsertKeybindingResult,
 } from "./server.ts";
@@ -270,6 +278,10 @@ export const WS_METHODS = {
   serverReportHostPowerState: "server.reportHostPowerState",
   serverGetBackgroundPolicy: "server.getBackgroundPolicy",
   serverGetUsageSummary: "server.getUsageSummary",
+
+  serverPreviewRecovery: "server.previewRecovery",
+  serverExecuteRecovery: "server.executeRecovery",
+  serverRequestHeadlessUpdateCheck: "server.requestHeadlessUpdateCheck",
 
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
@@ -436,6 +448,27 @@ export const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess,
   success: ServerSignalProcessResult,
   error: EnvironmentAuthorizationError,
 });
+
+export const WsServerPreviewRecoveryRpc = Rpc.make(WS_METHODS.serverPreviewRecovery, {
+  payload: Schema.Struct({}),
+  success: ServerRecoveryPreviewResult,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsServerExecuteRecoveryRpc = Rpc.make(WS_METHODS.serverExecuteRecovery, {
+  payload: ServerRecoveryExecuteInput,
+  success: ServerRecoveryExecuteResult,
+  error: EnvironmentAuthorizationError,
+});
+
+export const WsServerRequestHeadlessUpdateCheckRpc = Rpc.make(
+  WS_METHODS.serverRequestHeadlessUpdateCheck,
+  {
+    payload: ServerHeadlessUpdateCheckInput,
+    success: ServerHeadlessUpdateCheckResult,
+    error: EnvironmentAuthorizationError,
+  },
+);
 
 export const WsCloudGetRelayClientStatusRpc = Rpc.make(WS_METHODS.cloudGetRelayClientStatus, {
   payload: Schema.Struct({}),
@@ -921,6 +954,24 @@ export const WsOrchestrationSubscribeThreadRpc = Rpc.make(
   },
 );
 
+export const WsOrchestrationExportThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.exportThread, {
+  payload: OrchestrationRpcSchemas.exportThread.input,
+  success: OrchestrationRpcSchemas.exportThread.output,
+  error: Schema.Union([OrchestrationExportThreadError, EnvironmentAuthorizationError]),
+});
+
+export const WsOrchestrationImportThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.importThread, {
+  payload: OrchestrationRpcSchemas.importThread.input,
+  success: OrchestrationRpcSchemas.importThread.output,
+  error: Schema.Union([OrchestrationImportThreadError, EnvironmentAuthorizationError]),
+});
+
+export const WsOrchestrationForkThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.forkThread, {
+  payload: OrchestrationRpcSchemas.forkThread.input,
+  success: OrchestrationRpcSchemas.forkThread.output,
+  error: Schema.Union([OrchestrationForkThreadError, EnvironmentAuthorizationError]),
+});
+
 export const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
   payload: Schema.Struct({}),
   success: TerminalEvent,
@@ -992,6 +1043,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
+
+  WsServerPreviewRecoveryRpc,
+  WsServerExecuteRecoveryRpc,
+  WsServerRequestHeadlessUpdateCheckRpc,
+
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsPullRequestsListRpc,
@@ -1069,4 +1125,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationGetArchivedShellSnapshotRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
+  WsOrchestrationExportThreadRpc,
+  WsOrchestrationImportThreadRpc,
+  WsOrchestrationForkThreadRpc,
 );
