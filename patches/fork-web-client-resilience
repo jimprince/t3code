@@ -1,0 +1,6 @@
+Bottom: e61dcae383addd7bdba1fec0a8fd9844272d0d4f
+Top:    e61dcae383addd7bdba1fec0a8fd9844272d0d4f
+Author: brad <bradprin@live.com>
+Date:   2026-08-04 03:22:36 +0000
+
+fix(web): preserve client state across disruptions
