@@ -8,6 +8,23 @@ This repo (`jimprince/t3code`) is a fork of [`pingdotgg/t3code`](https://github.
 The general agent guide is in `CLAUDE.md` / `AGENTS.md`; this file covers only
 things specific to the fork relationship.
 
+## Changing code: verify before calling anything done
+
+Every code change, however small, is verified with the repository's own
+commands (the `vp` binary is not on PATH — always invoke through pnpm):
+
+```bash
+corepack pnpm install --frozen-lockfile --prefer-offline
+corepack pnpm exec vp fmt --check      # or `vp fmt` to fix
+corepack pnpm exec vp check            # lint (includes custom oxlint rules)
+corepack pnpm exec vp run typecheck
+corepack pnpm exec vp run test         # full suite; focused: pnpm --dir <app> exec vp test <pattern>
+```
+
+Tests import from `"vite-plus/test"`, not `"vitest"`. New fork functionality is
+not just a commit — it must land as an StGit patch with an inventory entry; see
+Route B below before you start.
+
 ## Changing or rebasing this fork
 
 Start with the repo-local [fork patch stack skill](./.agents/skills/fork-patch-stack/SKILL.md),
