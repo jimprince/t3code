@@ -61,3 +61,18 @@ purpose = "Recover provider sessions and lifecycle state predictably after crash
 retire_when = "Upstream provides equivalent provider runtime recovery and lifecycle guarantees."
 depends_on = ["fork-provider-turn-reservation"]
 roles = []
+
+[[patch]]
+name = "fork-provider-observability"
+subject = "fix(server): bound provider observability"
+class = "divergence"
+purpose = "Retain bounded fork diagnostics, provider-log eviction, trace throttling, and Spotlight markers."
+retire_when = "Upstream covers the retained logging, eviction, and diagnostic capabilities."
+depends_on = ["fork-provider-runtime-recovery"]
+roles = []
+[[patch.decision]]
+id = "logger-supersession-951"
+date = "2026-07-29"
+decided = "retire+narrow+adapt (per capability)"
+analysis = "docs/analysis/logger-supersession.md"
+rationale = "Upstream v0.0.31 rework (49c0d96ed) superseded per-thread writer splitting, shutdown flush, and native/canonical file separation, so those pieces retired. Keep releaseThread eviction adapted to upstream's store, trace-span rate limiting, and the Spotlight marker. Layer the fork's 2GiB/30d logsDir sweep over upstream's 512MiB/14d provider policy."
