@@ -196,3 +196,22 @@ purpose = "Keep web session, stream, and navigation state predictable across dis
 retire_when = "Upstream provides equivalent client recovery semantics."
 depends_on = ["fork-thread-lifecycle-recovery"]
 roles = []
+
+[[patch]]
+name = "fork-web-project-scope"
+subject = "feat(web): add multi-project scope controls"
+class = "product"
+purpose = "Provide multi-select, partial-state, and isolation controls for project scope."
+retire_when = "never"
+depends_on = ["fork-general-chat-projects"]
+roles = []
+[[patch.decision]]
+id = "sidebarv2-project-scope"
+date = "2026-07-28"
+decided = "keep-multiselect"
+decided_by = "brad"
+issue = "http://git.home/brad/fork-decisions/issues/1"
+rationale = "Upstream ships single-select projectScope while the fork provides checkbox partial states and isolation. Preserve the fork's multi-select behavior and port it onto upstream's current menu structure."
+standing_policy = "Do not retire multi-select to upstream's single-select model. Re-escalate only if upstream removes projectScope entirely."
+resolution_kind = "relocate"
+status = "ported-and-uat-verified-2026-07-29"
