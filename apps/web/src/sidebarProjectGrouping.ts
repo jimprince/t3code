@@ -6,9 +6,11 @@ import {
   deriveProjectGroupLabel,
   type ProjectGroupingSettings,
 } from "./logicalProject";
+import { selectCanonicalChatProjectsByEnvironment } from "./projectKind";
 import type { Project } from "./types";
 
 export type EnvironmentPresence = "local-only" | "remote-only" | "mixed";
+export const GENERAL_CHAT_PROJECT_KEY = "general-chat";
 
 export interface SidebarProjectGroupMember extends Project {
   physicalProjectKey: string;
@@ -259,4 +261,59 @@ export function buildSidebarProjectPickerEntries(input: {
     ...entries.slice(0, preferredIndex),
     ...entries.slice(preferredIndex + 1),
   ];
+}
+
+export function buildGeneralChatSidebarSnapshot(input: {
+  projects: ReadonlyArray<Project>;
+  primaryEnvironmentId: EnvironmentId | null;
+  resolveEnvironmentLabel: (environmentId: EnvironmentId) => string | null;
+  isDesktopLocalEnvironment?: (environmentId: EnvironmentId) => boolean;
+}): SidebarProjectSnapshot | null {
+  const representativeProjects = selectCanonicalChatProjectsByEnvironment(input.projects);
+  const representative =
+    (input.primaryEnvironmentId
+      ? representativeProjects.find(
+          (project) => project.environmentId === input.primaryEnvironmentId,
+        )
+      : null) ?? representativeProjects[0];
+  if (!representative) {
+    return null;
+  }
+
+  // Chat projects can have legacy duplicates. Keep every scoped project ref in
+  // this synthetic group so threads created before chat-project reconciliation
+  // remain visible in the single General Chat list.
+  const memberProjects: SidebarProjectGroupMember[] = input.projects.map((project) => ({
+    ...project,
+    physicalProjectKey: derivePhysicalProjectKey(project),
+    environmentLabel: input.resolveEnvironmentLabel(project.environmentId),
+  }));
+  const remoteMembers = memberProjects.filter(
+    (member) =>
+      input.primaryEnvironmentId !== null && member.environmentId !== input.primaryEnvironmentId,
+  );
+  const hasLocal =
+    input.primaryEnvironmentId !== null &&
+    memberProjects.some((member) => member.environmentId === input.primaryEnvironmentId);
+  const hasRemote = remoteMembers.length > 0;
+  const remoteEnvironmentLabels = remoteMembers
+    .flatMap((member) => (member.environmentLabel ? [member.environmentLabel] : []))
+    .filter((label, index, labels) => labels.indexOf(label) === index);
+  const isDesktopLocal = input.isDesktopLocalEnvironment ?? (() => false);
+
+  return {
+    ...representative,
+    projectKey: GENERAL_CHAT_PROJECT_KEY,
+    displayName: "General chat",
+    groupedProjectCount: memberProjects.length,
+    environmentPresence: hasLocal && hasRemote ? "mixed" : hasRemote ? "remote-only" : "local-only",
+    allRemoteMembersAreDesktopLocal:
+      remoteMembers.length > 0 &&
+      remoteMembers.every((member) => isDesktopLocal(member.environmentId)),
+    memberProjects,
+    memberProjectRefs: memberProjects.map((member) =>
+      scopeProjectRef(member.environmentId, member.id),
+    ),
+    remoteEnvironmentLabels,
+  };
 }
