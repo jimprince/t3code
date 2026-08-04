@@ -1,10 +1,16 @@
+// @effect-diagnostics nodeBuiltinImport:off
+
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
 import * as Electron from "electron";
+
+export type ElectronAppFlavor = "stable" | "dev";
 
 export interface ElectronAppMetadata {
   readonly appVersion: string;
@@ -12,6 +18,7 @@ export interface ElectronAppMetadata {
   readonly isPackaged: boolean;
   readonly resourcesPath: string;
   readonly runningUnderArm64Translation: boolean;
+  readonly desktopFlavor: ElectronAppFlavor;
 }
 
 export class ElectronAppMetadataReadError extends Schema.TaggedErrorClass<ElectronAppMetadataReadError>()(
@@ -91,6 +98,17 @@ const addScopedAppListener = <Args extends ReadonlyArray<unknown>>(
       }),
   ).pipe(Effect.asVoid);
 
+function resolvePackagedDesktopFlavor(appPath: string): ElectronAppFlavor {
+  try {
+    const packageJsonPath = NodePath.join(appPath, "package.json");
+    const raw = NodeFS.readFileSync(packageJsonPath, "utf8");
+    const parsed = JSON.parse(raw) as { t3codeDesktopFlavor?: unknown };
+    return parsed.t3codeDesktopFlavor === "dev" ? "dev" : "stable";
+  } catch {
+    return "stable";
+  }
+}
+
 export const make = ElectronApp.of({
   metadata: Effect.gen(function* () {
     const appVersion = yield* Effect.try({
@@ -116,6 +134,7 @@ export const make = ElectronApp.of({
       isPackaged: Electron.app.isPackaged,
       resourcesPath: process.resourcesPath,
       runningUnderArm64Translation: Electron.app.runningUnderARM64Translation === true,
+      desktopFlavor: Electron.app.isPackaged ? resolvePackagedDesktopFlavor(appPath) : "dev",
     };
   }),
   name: Effect.sync(() => Electron.app.name),
