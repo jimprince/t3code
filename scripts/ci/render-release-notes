@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Renders a concise, updater-friendly release body from the upstream GitHub
+# compare API. Release notes must never block publication, so unavailable or
+# invalid compare data produces a minimal body and exits successfully.
+#
+# Required env:
+#   RELEASE_TAG                  fork release tag, e.g. v0.0.34-nightly.20260815.1100-fork.1
+# Optional env:
+#   RELEASE_PREVIOUS_TAG         previous fork release tag; empty for the first release
+#   UPSTREAM_REPO                GitHub upstream owner/repository (default: pingdotgg/t3code)
+#   RELEASE_REPO                 fork owner/repository (default: GITHUB_REPOSITORY, then UPSTREAM_REPO)
+#   RELEASE_NOTES_COMPARE_JSON   offline test seam: compare API response file
+#
+# Optional arg:
+#   output path; otherwise markdown is written to stdout.
+
+: "${RELEASE_TAG:?RELEASE_TAG is required}"
+
+if (( $# > 1 )); then
+  echo "Usage: render-release-notes [output-path]" >&2
+  exit 2
+fi
+
+readonly MAX_SUBJECTS=20
+readonly OUTPUT_PATH="${1:-}"
+readonly UPSTREAM_REPO="${UPSTREAM_REPO:-pingdotgg/t3code}"
+readonly RELEASE_REPO="${RELEASE_REPO:-${GITHUB_REPOSITORY:-$UPSTREAM_REPO}}"
+
+emit() {
+  local body="$1"
+  if [[ -n "$OUTPUT_PATH" ]]; then
+    printf '%s\n' "$body" > "$OUTPUT_PATH"
+  else
+    printf '%s\n' "$body"
+  fi
+}
+
+fork_compare_line() {
+  if [[ -n "${RELEASE_PREVIOUS_TAG:-}" ]]; then
+    printf 'Full Changelog: https://github.com/%s/compare/%s...%s' \
+      "$RELEASE_REPO" "$RELEASE_PREVIOUS_TAG" "$RELEASE_TAG"
+  else
+    printf 'Full Changelog: https://github.com/%s/releases/tag/%s' "$RELEASE_REPO" "$RELEASE_TAG"
+  fi
+}
+
+derive_upstream_tag() {
+  local tag="$1"
+  if [[ "$tag" =~ ^(v[0-9][0-9A-Za-z._-]*)-fork\.[0-9]+$ ]]; then
+    printf '%s' "${BASH_REMATCH[1]}"
+  elif [[ "$tag" =~ ^v[0-9][0-9A-Za-z._-]*$ ]]; then
+    # Stable fork releases use the upstream tag without a -fork.N suffix.
+    printf '%s' "$tag"
+  else
+    return 1
+  fi
+}
+
+minimal_body() {
+  local upstream_previous="${1:-}"
+  local upstream_current="${2:-}"
+  local body="## What's changed"
+
+  if [[ -n "$upstream_previous" && -n "$upstream_current" ]]; then
+    body+=$'\n\n'
+    body+="[Upstream compare](https://github.com/$UPSTREAM_REPO/compare/$upstream_previous...$upstream_current)"
+  fi
+  body+=$'\n\n'
+  body+="$(fork_compare_line)"
+  emit "$body"
+}
+
+sanitize_subject() {
+  local subject="$1"
+  local markdown_character
+  local -a markdown_characters=('`' '*' '_' '[' ']' '<' '>' '|' '\\')
+
+  subject="${subject//$'\r'/ }"
+  subject="${subject//$'\n'/ }"
+  subject="${subject//$'\t'/ }"
+  for markdown_character in "${markdown_characters[@]}"; do
+    subject="${subject//"$markdown_character"/}"
+  done
+  subject="$(printf '%s' "$subject" | sed -E 's/[[:space:]]+/ /g; s/^ +//; s/ +$//')"
+  printf '%s' "$subject"
+}
+
+upstream_previous=""
+upstream_current=""
+if [[ -z "${RELEASE_PREVIOUS_TAG:-}" ]] ||
+  ! upstream_previous="$(derive_upstream_tag "$RELEASE_PREVIOUS_TAG")" ||
+  ! upstream_current="$(derive_upstream_tag "$RELEASE_TAG")"; then
+  minimal_body "$upstream_previous" "$upstream_current"
+  exit 0
+fi
+
+compare_json="${RELEASE_NOTES_COMPARE_JSON:-}"
+temporary_compare_json=""
+cleanup() {
+  if [[ -n "$temporary_compare_json" ]]; then
+    rm -f -- "$temporary_compare_json"
+  fi
+}
+trap cleanup EXIT
+
+if [[ -n "$compare_json" ]]; then
+  if [[ ! -f "$compare_json" ]]; then
+    minimal_body "$upstream_previous" "$upstream_current"
+    exit 0
+  fi
+else
+  temporary_compare_json="$(mktemp "${RUNNER_TEMP:-/tmp}/release-notes-compare.XXXXXX")"
+  compare_json="$temporary_compare_json"
+  if ! gh api "repos/$UPSTREAM_REPO/compare/$upstream_previous...$upstream_current" > "$compare_json" 2>/dev/null; then
+    minimal_body "$upstream_previous" "$upstream_current"
+    exit 0
+  fi
+fi
+
+if ! jq -e '
+  (.commits | type == "array") and
+  all(.commits[]?; (.commit | type == "object") and (.commit.message | type == "string"))
+' "$compare_json" >/dev/null 2>&1; then
+  minimal_body "$upstream_previous" "$upstream_current"
+  exit 0
+fi
+
+subjects=()
+while IFS= read -r raw_subject || [[ -n "$raw_subject" ]]; do
+  subject="$(sanitize_subject "$raw_subject")"
+  if [[ -n "$subject" ]]; then
+    subjects+=("$subject")
+  fi
+done < <(
+  jq -r '[.commits[]? | .commit.message? | select(type == "string") | split("\n")[0]] | reverse[]' \
+    "$compare_json"
+)
+
+body="## Compare: upstream $upstream_previous → $upstream_current"
+subject_count="${#subjects[@]}"
+display_count="$subject_count"
+if (( display_count > MAX_SUBJECTS )); then
+  display_count="$MAX_SUBJECTS"
+fi
+
+for (( index = 0; index < display_count; index += 1 )); do
+  body+=$'\n'
+  body+="- ${subjects[$index]}"
+done
+
+if (( subject_count > MAX_SUBJECTS )); then
+  body+=$'\n'
+  body+="- +$((subject_count - MAX_SUBJECTS)) more upstream changes"
+fi
+
+body+=$'\n\n'
+body+="[Upstream compare](https://github.com/$UPSTREAM_REPO/compare/$upstream_previous...$upstream_current)"
+body+=$'\n\n'
+body+="$(fork_compare_line)"
+emit "$body"
