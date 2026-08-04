@@ -73,10 +73,14 @@ import {
 } from "./previewAutomation.ts";
 import type {
   ClientOrchestrationCommand,
+  OrchestrationExportThreadInput,
+  OrchestrationExportThreadResult,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetFullThreadDiffResult,
   OrchestrationGetTurnDiffInput,
   OrchestrationGetTurnDiffResult,
+  OrchestrationImportThreadInput,
+  OrchestrationImportThreadResult,
   OrchestrationShellSnapshot,
   OrchestrationShellStreamItem,
   OrchestrationSubscribeThreadInput,
@@ -1224,6 +1228,12 @@ export interface EnvironmentApi {
         onResubscribe?: () => void;
       },
     ) => () => void;
+    exportThread: (
+      input: OrchestrationExportThreadInput,
+    ) => Promise<OrchestrationExportThreadResult>;
+    importThread: (
+      input: OrchestrationImportThreadInput,
+    ) => Promise<OrchestrationImportThreadResult>;
   };
   preview: {
     open: (input: typeof PreviewOpenInput.Encoded) => Promise<PreviewSessionSnapshot>;
