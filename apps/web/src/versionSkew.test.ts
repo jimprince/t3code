@@ -146,7 +146,6 @@ describe("versionSkew", () => {
       `Socket closed. Hint: ${MISMATCH_HINT}`,
     );
   });
-
   it("reads desktop-managed update capabilities from config descriptors", () => {
     expect(
       resolveServerSelfUpdateCapability({
