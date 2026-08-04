@@ -42,6 +42,11 @@ export interface ProviderThreadSnapshot {
   readonly turns: ReadonlyArray<ProviderThreadTurnSnapshot>;
 }
 
+export interface ProviderThreadForkResult {
+  readonly resumeCursor: unknown;
+  readonly turnCount: number;
+}
+
 export interface ProviderAdapterShape<TError> {
   /**
    * Provider kind implemented by this adapter.
@@ -113,6 +118,19 @@ export interface ProviderAdapterShape<TError> {
     threadId: ThreadId,
     numTurns: number,
   ) => Effect.Effect<ProviderThreadSnapshot, TError>;
+
+  /**
+   * Fork provider-native context when the underlying runtime supports it.
+   * Returning null asks orchestration to use its transcript-handoff fallback.
+   */
+  readonly forkThread?: (
+    threadId: ThreadId,
+    input: {
+      readonly cwd: string;
+      readonly retainedTurnCount: number;
+      readonly retainedTurnId: TurnId | null;
+    },
+  ) => Effect.Effect<ProviderThreadForkResult | null, TError>;
 
   /**
    * Stop all sessions owned by this adapter.
