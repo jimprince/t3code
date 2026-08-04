@@ -1,11 +1,13 @@
 {
   "version": 5,
-  "prev": "99145da49d8975a3d138f5b4f0f15259e7109146",
-  "head": "3be03390ee7a1d456972b8bbd4432f6f53484165",
+  "prev": "46c7ef53cc33db149c64242ad3aec9a5b733f163",
+  "head": "6d3c378b6c60e18b1c951a267a4ce10bbbc7500d",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
-    "fork-t3-thread-operator-cli",
+    "fork-t3-thread-operator-cli"
+  ],
+  "unapplied": [
     "fork-provider-turn-reservation",
     "fork-provider-runtime-recovery",
     "fork-provider-observability",
@@ -22,9 +24,7 @@
     "fork-web-project-scope",
     "fork-web-copy-thread-id",
     "fork-web-image-timeout",
-    "fork-desktop-distribution"
-  ],
-  "unapplied": [
+    "fork-desktop-distribution",
     "fork-mobile-delivery",
     "fork-ci-runner-compat",
     "fork-ci-release-pipeline",
