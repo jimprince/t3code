@@ -335,4 +335,31 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       );
     }),
   );
+
+  it.effect("emits a versioned autonomous-repair handoff without coupling channels", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const workflow = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/sync-upstream.yml"),
+      );
+
+      assert.include(workflow, 'marker:"t3code.sync-upstream-repair"');
+      assert.include(workflow, "repairEligible:true");
+      assert.include(workflow, "upstreamTarget:$target");
+      assert.include(workflow, "channel:$channel");
+      assert.include(workflow, "failingPatch:$patch");
+      assert.include(workflow, "conflictingFiles:");
+      assert.include(workflow, 'requiredStackContext:"t3code.stgit-stack-context/v1"');
+      assert.include(workflow, "claimWithinMinutes:20");
+      assert.include(workflow, "CI_REPAIR_BOT_HANDOFF=");
+      assert.include(workflow, '>> "$GITHUB_STEP_SUMMARY"');
+      assert.include(workflow, "fail-fast: false");
+      assert.include(
+        workflow,
+        "A conflict in one matrix channel does not block or invalidate the other channel.",
+      );
+    }),
+  );
 });

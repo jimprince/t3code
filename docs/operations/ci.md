@@ -19,12 +19,27 @@
 - `.github/workflows/mobile-eas-preview.yml` handles PR preview mobile
   builds/updates with Expo fingerprinting.
 - `.github/workflows/sync-upstream.yml` replays the ordered StGit series on each
-  selected upstream tag. The repository-owned
-  `scripts/ci/reproduce-sync-upstream` driver is shared with the CI repair bot;
-  a repair operates inside the failing patch and refreshes that patch instead
-  of appending a commit. The inventory and metadata checks derive the live
-  series dynamically. Patch count may grow when an authorized independent
-  concern is added.
+  selected upstream tag. The workflow is the detector: on conflict it fails
+  normally and emits a versioned machine-readable handoff in both its log and
+  job summary, including eligibility, target, channel, failing patch and
+  files, and the required stack-context contract. Stable and nightly are
+  independent matrix channels, so a nightly conflict does not invalidate a
+  stable result.
+- The external CI Repair Bot is the repairer. It should claim an eligible
+  handoff within 20 minutes, check out the exact leased `main` and canonical
+  StGit metadata, and obtain ordered policy from
+  `scripts/ci/check-stgit-stack --format=json`. A repair operates inside the
+  failing patch and refreshes that patch instead of appending a commit. Patch
+  count may grow for an authorized independent concern, but a rebase repair
+  must preserve the ordered names and subjects exactly.
+- The repair service preflights autonomy whenever remote `main` or its stack
+  ref changes and before processing an incident. Its `status.json` reports
+  readiness, check time, remote object IDs, contract, and the precise error.
+  An incompatible checkout becomes `needs_attention` before an agent is
+  launched or an attempt is consumed. A live poller is degraded when an
+  eligible failure remains unclaimed beyond the 15-minute poll interval plus
+  five minutes of grace; readiness notifications are deduplicated while other
+  workflows continue polling.
 - The fork policy CI job checks both the StGit stack and the documentation
   discovery graph. Publishing keeps the rendered `main`, stack metadata, and
   canonical patch refs together; obsolete patch refs are deleted with exact

@@ -388,12 +388,33 @@ jobs:
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'conflict'
         env:
           CHANNEL: ${{ steps.channel.outputs.channel }}
+          FAILING_PATCH: ${{ steps.rebase.outputs.patch }}
+          CONFLICT_FILES: ${{ steps.rebase.outputs.files }}
         run: |
+          set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
+          upstream_target="refs/tags/upstream/${upstream_tag}"
+          handoff="$(jq -cn \
+            --arg target "$upstream_target" \
+            --arg channel "$CHANNEL" \
+            --arg patch "$FAILING_PATCH" \
+            --arg files "$CONFLICT_FILES" \
+            '{marker:"t3code.sync-upstream-repair",version:1,repairEligible:true,upstreamTarget:$target,channel:$channel,failingPatch:$patch,conflictingFiles:($files | split("\n") | map(select(length > 0))),requiredStackContext:"t3code.stgit-stack-context/v1",claimWithinMinutes:20}')"
+
+          echo "CI_REPAIR_BOT_HANDOFF=$handoff"
+          {
+            echo "### Autonomous repair handoff"
+            echo '```json'
+            echo "$handoff"
+            echo '```'
+            echo "The external CI Repair Bot should claim this eligible incident within 20 minutes."
+            echo "A conflict in one matrix channel does not block or invalidate the other channel."
+          } >> "$GITHUB_STEP_SUMMARY"
+
           echo "::error::Rebase conflict syncing to $upstream_tag (channel: $CHANNEL)."
-          echo "::error::Failing patch: ${{ steps.rebase.outputs.patch }}"
+          echo "::error::Failing patch: $FAILING_PATCH"
           echo "::error::Conflicting files:"
-          echo "${{ steps.rebase.outputs.files }}" | sed 's/^/::error::  /'
+          echo "$CONFLICT_FILES" | sed 's/^/::error::  /'
           echo "::error::"
           echo "::error::Resolve locally:"
           echo "::error::  git fetch upstream --tags"
