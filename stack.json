@@ -1,9 +1,15 @@
 {
   "version": 5,
-  "prev": "35bb2ebcddba61ee1292c99ef77d7de8ce34101f",
-  "head": "a261a6440ae7c1a063ff23591f43960c7d2b06e5",
-  "applied": [],
+  "prev": "ee019fddffa8c1a602feb98c9903438720f5d83f",
+  "head": "586945d3028d911a5dd76da104ac7997309731f7",
+  "applied": [
+    "fork-stgit-stack-policy"
+  ],
   "unapplied": [],
   "hidden": [],
-  "patches": {}
+  "patches": {
+    "fork-stgit-stack-policy": {
+      "oid": "586945d3028d911a5dd76da104ac7997309731f7"
+    }
+  }
 }
