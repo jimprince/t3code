@@ -59,6 +59,7 @@ const makeProviderService = (liveThreadIds: ReadonlyArray<ThreadId> = []) =>
     getCapabilities: () => Effect.die("unused"),
     getInstanceInfo: () => Effect.die("unused"),
     rollbackConversation: () => Effect.die("unused"),
+    forkConversation: () => Effect.die("unused"),
     uploadFeedback: () => Effect.die("unused"),
     streamEvents: Stream.empty,
   }) satisfies ProviderService.ProviderService["Service"];
@@ -118,6 +119,7 @@ it.effect("marks active running sessions that have persisted resume state", () =
       queryWithThreads([active, archived, ready, missingResumeState]),
     ),
     Effect.provideService(ProviderSessionDirectory.ProviderSessionDirectory, {
+      ...unusedDirectoryOperations,
       getBinding: (threadId) =>
         Effect.sync(() => bindingReads.push(threadId)).pipe(
           Effect.as(
@@ -206,6 +208,7 @@ it.effect("continues marked sessions after activation with provider-specific inp
       threads: [codex, fallback],
       providerService,
       directory: {
+        ...unusedDirectoryOperations,
         getBinding: (threadId) =>
           Effect.sync(() => {
             const binding = bindings.get(threadId);
@@ -338,6 +341,7 @@ it.effect("does not continue archived or deleted marked sessions", () => {
         }),
     },
     directory: {
+      ...unusedDirectoryOperations,
       getBinding: (threadId) => {
         const thread = threadId === archived.id ? archived : deleted;
         return Effect.succeed(
@@ -395,6 +399,7 @@ it.effect("retries continuation preparation before settling a persistent failure
   return runReconciliation({
     threads: [thread],
     directory: {
+      ...unusedDirectoryOperations,
       getBinding: () =>
         Effect.succeed(
           Option.some({
