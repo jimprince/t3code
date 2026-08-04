@@ -5,6 +5,7 @@ import {
   TurnId,
   ProviderDriverKind,
   ProviderInstanceId,
+  type ProviderSession,
 } from "@t3tools/contracts";
 import * as Clock from "effect/Clock";
 import * as DateTime from "effect/DateTime";
@@ -24,7 +25,14 @@ import { ProviderValidationError } from "../Errors.ts";
 import { ProviderSessionReaper } from "../Services/ProviderSessionReaper.ts";
 import { ProviderService, type ProviderServiceShape } from "../Services/ProviderService.ts";
 import { ProviderSessionDirectoryLive } from "./ProviderSessionDirectory.ts";
-import { makeProviderSessionReaperLive } from "./ProviderSessionReaper.ts";
+import {
+  DEFAULT_INACTIVITY_THRESHOLD_MS,
+  DEFAULT_SWEEP_INTERVAL_MS,
+  makeProviderSessionReaperLive,
+} from "./ProviderSessionReaper.ts";
+import { makeServerBootGenerationLayer } from "./ServerBootGeneration.ts";
+
+const CURRENT_BOOT_GENERATION = "current-boot";
 
 const defaultModelSelection = {
   instanceId: ProviderInstanceId.make("codex"),
@@ -34,6 +42,7 @@ const defaultModelSelection = {
 async function waitFor(
   predicate: () => boolean | Promise<boolean>,
   timeoutMs = 2_000,
+  timeoutMessage = "Timed out waiting for expectation.",
 ): Promise<void> {
   const deadline = (await Effect.runPromise(Clock.currentTimeMillis)) + timeoutMs;
   const poll = async (): Promise<void> => {
@@ -41,7 +50,7 @@ async function waitFor(
       return;
     }
     if ((await Effect.runPromise(Clock.currentTimeMillis)) >= deadline) {
-      throw new Error("Timed out waiting for expectation.");
+      throw new Error(timeoutMessage);
     }
     await Effect.runPromise(Effect.yieldNow);
     return poll();
@@ -59,6 +68,7 @@ const unsupported = () => Effect.die(new Error("Unsupported provider call in tes
 function makeReadModel(
   threads: ReadonlyArray<{
     readonly id: ThreadId;
+    readonly archivedAt?: string | null;
     readonly session: {
       readonly threadId: ThreadId;
       readonly status: "starting" | "running" | "ready" | "interrupted" | "stopped" | "error";
@@ -100,7 +110,6 @@ function makeReadModel(
       worktreePath: null,
       createdAt: now,
       updatedAt: now,
-      archivedAt: null,
       settledOverride: null,
       settledAt: null,
       latestUserMessageAt: null,
@@ -111,6 +120,7 @@ function makeReadModel(
       messages: [],
       session: thread.session,
       backgroundLiveness: thread.backgroundLiveness ?? null,
+      archivedAt: thread.archivedAt ?? null,
       activities: [],
       proposedPlans: [],
       checkpoints: [],
@@ -128,7 +138,7 @@ describe("ProviderSessionReaper", () => {
 
   afterEach(async () => {
     if (scope) {
-      await Effect.runPromise(Scope.close(scope, Exit.void));
+      await runtime!.runPromise(Scope.close(scope, Exit.void));
     }
     scope = null;
     if (runtime) {
@@ -141,23 +151,30 @@ describe("ProviderSessionReaper", () => {
   // (no-manual-effect-runtime-in-tests tracks this file's legacy count).
   async function startReaper() {
     const reaper = await runtime!.runPromise(Effect.service(ProviderSessionReaper));
-    scope = await Effect.runPromise(Scope.make("sequential"));
-    await Effect.runPromise(reaper.start().pipe(Scope.provide(scope)));
+    scope = await runtime!.runPromise(Scope.make("sequential"));
+    await runtime!.runPromise(reaper.start().pipe(Scope.provide(scope)));
   }
 
   async function createHarness(input: {
     readonly readModel: ReturnType<typeof makeReadModel>;
+    readonly bootGenerationId?: string;
     readonly stopSessionImplementation?: (input: {
       readonly threadId: ThreadId;
     }) => ReturnType<ProviderServiceShape["stopSession"]>;
+    readonly onThreadInspected?: (threadId: ThreadId) => Effect.Effect<void>;
+    readonly liveSessions?: ReadonlyArray<ProviderSession>;
   }) {
     const stoppedThreadIds = new Set<ThreadId>();
+    let settleSession: ((threadId: ThreadId) => Effect.Effect<void>) | undefined;
     const stopSession = vi.fn<ProviderServiceShape["stopSession"]>(
       (request) =>
         (input.stopSessionImplementation
           ? input.stopSessionImplementation(request)
-          : Effect.sync(() => {
+          : Effect.gen(function* () {
               stoppedThreadIds.add(request.threadId);
+              if (settleSession) {
+                yield* settleSession(request.threadId);
+              }
             })) as ReturnType<ProviderServiceShape["stopSession"]>,
     );
 
@@ -169,7 +186,7 @@ describe("ProviderSessionReaper", () => {
       respondToRequest: () => unsupported(),
       respondToUserInput: () => unsupported(),
       stopSession,
-      listSessions: () => Effect.succeed([]),
+      listSessions: () => Effect.succeed(input.liveSessions ?? []),
       getCapabilities: () => Effect.succeed({ sessionModelSwitch: "in-session" }),
       assertConversationRollbackSupported: () => unsupported(),
       getInstanceInfo: (instanceId) => {
@@ -186,6 +203,7 @@ describe("ProviderSessionReaper", () => {
         });
       },
       rollbackConversation: () => unsupported(),
+      forkConversation: () => unsupported(),
       uploadFeedback: () => unsupported(),
       streamEvents: Stream.empty,
     };
@@ -194,7 +212,12 @@ describe("ProviderSessionReaper", () => {
       Layer.provide(SqlitePersistenceMemory),
     );
     const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
-      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(
+        Layer.merge(
+          runtimeRepositoryLayer,
+          makeServerBootGenerationLayer(input.bootGenerationId ?? CURRENT_BOOT_GENERATION),
+        ),
+      ),
     );
     const layer = makeProviderSessionReaperLive({
       inactivityThresholdMs: 1_000,
@@ -202,6 +225,9 @@ describe("ProviderSessionReaper", () => {
     }).pipe(
       Layer.provideMerge(providerSessionDirectoryLayer),
       Layer.provideMerge(runtimeRepositoryLayer),
+      Layer.provideMerge(
+        makeServerBootGenerationLayer(input.bootGenerationId ?? CURRENT_BOOT_GENERATION),
+      ),
       Layer.provideMerge(Layer.succeed(ProviderService, providerService)),
       Layer.provideMerge(
         Layer.succeed(ProjectionSnapshotQuery, {
@@ -226,15 +252,39 @@ describe("ProviderSessionReaper", () => {
                 ? Option.some(input.readModel.threads.find((thread) => thread.id === threadId)!)
                 : Option.none(),
             ),
+          getThreadShellByIdIncludingArchived: (threadId) =>
+            Effect.succeed(
+              input.readModel.threads.find((thread) => thread.id === threadId)
+                ? Option.some(input.readModel.threads.find((thread) => thread.id === threadId)!)
+                : Option.none(),
+            ).pipe(Effect.tap(() => input.onThreadInspected?.(threadId) ?? Effect.void)),
           getThreadDetailById: () => Effect.die("unused"),
-          getThreadDetailSnapshot: () => Effect.die("unused"),
           searchThreads: () => Effect.succeed({ matches: [] }),
+          getThreadDetailSnapshotById: () => Effect.die("unused"),
         }),
       ),
       Layer.provideMerge(NodeServices.layer),
     );
 
     runtime = ManagedRuntime.make(layer);
+    const settlementRepository = await runtime.runPromise(
+      Effect.service(ProviderSessionRuntime.ProviderSessionRuntimeRepository),
+    );
+    settleSession = (threadId) =>
+      settlementRepository.getByThreadId({ threadId }).pipe(
+        Effect.flatMap(
+          Option.match({
+            onNone: () => Effect.void,
+            onSome: (binding) =>
+              settlementRepository.upsert({
+                ...binding,
+                bootGenerationId: input.bootGenerationId ?? CURRENT_BOOT_GENERATION,
+                status: "stopped",
+              }),
+          }),
+        ),
+        Effect.orDie,
+      );
     return { stopSession, stoppedThreadIds };
   }
 
@@ -266,6 +316,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -314,6 +365,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -326,7 +378,7 @@ describe("ProviderSessionReaper", () => {
     );
 
     await startReaper();
-    await Effect.runPromise(drainFibers);
+    await runtime!.runPromise(drainFibers);
 
     expect(harness.stopSession).not.toHaveBeenCalled();
     const remaining = await runtime!.runPromise(repository.getByThreadId({ threadId }));
@@ -362,6 +414,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -409,6 +462,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -456,6 +510,7 @@ describe("ProviderSessionReaper", () => {
         threadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "stopped",
@@ -468,7 +523,7 @@ describe("ProviderSessionReaper", () => {
     );
 
     await startReaper();
-    await Effect.runPromise(drainFibers);
+    await runtime!.runPromise(drainFibers);
 
     expect(harness.stopSession).not.toHaveBeenCalled();
     const remaining = await runtime!.runPromise(repository.getByThreadId({ threadId }));
@@ -525,6 +580,7 @@ describe("ProviderSessionReaper", () => {
         threadId: failedThreadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -540,6 +596,7 @@ describe("ProviderSessionReaper", () => {
         threadId: reapedThreadId,
         providerName: "codex",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "codex",
         runtimeMode: "full-access",
         status: "running",
@@ -606,6 +663,7 @@ describe("ProviderSessionReaper", () => {
         threadId: defectThreadId,
         providerName: "claudeAgent",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "claudeAgent",
         runtimeMode: "full-access",
         status: "running",
@@ -621,6 +679,7 @@ describe("ProviderSessionReaper", () => {
         threadId: reapedThreadId,
         providerName: "codex",
         providerInstanceId: null,
+        bootGenerationId: CURRENT_BOOT_GENERATION,
         adapterKey: "codex",
         runtimeMode: "full-access",
         status: "running",
