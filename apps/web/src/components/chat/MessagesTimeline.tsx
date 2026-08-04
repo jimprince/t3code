@@ -53,6 +53,7 @@ import {
   ChevronRightIcon,
   CircleAlertIcon,
   EyeIcon,
+  FileIcon,
   GlobeIcon,
   HammerIcon,
   MessageCircleIcon,
@@ -1090,6 +1091,12 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
   );
 });
 
+function formatUserFileAttachmentSize(sizeBytes: number): string {
+  if (sizeBytes < 1024) return `${sizeBytes} B`;
+  if (sizeBytes < 1024 * 1024) return `${(sizeBytes / 1024).toFixed(1)} KB`;
+  return `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" }> }) {
   const ctx = use(TimelineRowCtx);
   const userImages = row.message.attachments ?? [];
@@ -1145,6 +1152,26 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
                   </div>
                 )}
               </div>
+            ))}
+          </div>
+        )}
+        {(row.message.fileAttachments?.length ?? 0) > 0 && (
+          <div className="mb-2 flex flex-wrap gap-1.5">
+            {(row.message.fileAttachments ?? []).map((file) => (
+              <Tooltip key={file.id}>
+                <TooltipTrigger
+                  render={
+                    <span className="inline-flex max-w-64 items-center gap-1.5 rounded-lg border border-border/80 bg-background/70 px-2 py-1 text-[11px] text-muted-foreground" />
+                  }
+                >
+                  <FileIcon className="size-3.5 shrink-0" />
+                  <span className="truncate font-medium text-foreground/80">{file.name}</span>
+                  <span className="shrink-0">{formatUserFileAttachmentSize(file.sizeBytes)}</span>
+                </TooltipTrigger>
+                <TooltipPopup side="top" className="max-w-80 break-all">
+                  {file.path}
+                </TooltipPopup>
+              </Tooltip>
             ))}
           </div>
         )}
