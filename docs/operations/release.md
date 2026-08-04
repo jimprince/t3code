@@ -53,6 +53,12 @@ version stamp only in the tagged child.
 The next upstream stable sync replays the fork patch onto the stable tag and
 publishes the integrated stable release.
 
+If the push-nightly replay conflicts, it restores the starting checkout,
+dispatches the nightly `Sync Upstream` workflow, and fails visibly. Both
+workflows share the main-writer lock, so the dispatched run starts only after
+the detector exits; that eligible run emits the normal repair handoff for the
+CI Repair Bot instead of leaving the conflict idle until the daily schedule.
+
 ## Normal Commands
 
 Optionally start the local Apple Silicon runner before a desktop release:
@@ -67,12 +73,17 @@ The runner-state probe uses `secrets.T3CODE_RUNNER_STATE_TOKEN` when present,
 falling back to `secrets.GH_PAT`. If neither secret can list repository
 self-hosted runners, preflight intentionally chooses GitHub-hosted macOS.
 
-Sync stable or nightly from upstream:
+Sync from upstream. Scheduled runs sync nightly only, because the fork ships
+the nightly feed; stable runs solely on an explicit `channel=stable` dispatch:
 
 ```bash
-gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
 gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=nightly
+gh workflow run sync-upstream.yml --repo jimprince/t3code -f channel=stable
 ```
+
+A stable replay conflicts by construction whenever the stack sits on a nightly
+base that references upstream files absent from the stable tag, so expect to
+resolve those conflicts by hand when you deliberately ask for a stable sync.
 
 For both channels, `sync-upstream.yml` replays the ordered StGit series onto the
 selected upstream tag and stamps package versions to the derived release

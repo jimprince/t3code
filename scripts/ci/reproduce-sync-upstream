@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+# Shared StGit replay driver for Sync Upstream and the CI repair bot. The
+# published stack metadata is loaded before the replay so the patch that fails
+# is the unit repaired by an operator or agent.
+
+: "${CI_REPAIR_BOT_UPSTREAM_TARGET:?CI_REPAIR_BOT_UPSTREAM_TARGET is required}"
+: "${CI_REPAIR_BOT_UPSTREAM_SOURCE_REF:?CI_REPAIR_BOT_UPSTREAM_SOURCE_REF is required}"
+
+UPSTREAM_REMOTE="${CI_REPAIR_BOT_UPSTREAM_REMOTE:-upstream}"
+METADATA_REMOTE="${CI_REPAIR_BOT_METADATA_REMOTE-origin}"
+CONFLICT_MODE="${CI_REPAIR_BOT_CONFLICT_MODE:-fail}"
+GIT_BIN="${CI_REPAIR_BOT_GIT_BIN:-$(command -v git)}"
+STG_BIN="${CI_REPAIR_BOT_STG_BIN:-$(command -v stg || true)}"
+
+if [[ ! -x "$GIT_BIN" ]]; then
+  echo "git executable is unavailable: $GIT_BIN" >&2
+  exit 2
+fi
+if [[ -z "$STG_BIN" || ! -x "$STG_BIN" ]]; then
+  echo "StGit 2.6 or newer is required." >&2
+  exit 2
+fi
+
+git_cmd() { "$GIT_BIN" "$@"; }
+stg_cmd() { "$STG_BIN" "$@"; }
+
+stgit_version="$(stg_cmd --version | awk 'NR == 1 { print $3 }')"
+case "$stgit_version" in
+  0.*|1.*|2.[0-5]|2.[0-5].*)
+    echo "StGit 2.6 or newer is required; found $stgit_version." >&2
+    exit 2
+    ;;
+esac
+
+START_HEAD="$(git_cmd rev-parse HEAD)"
+START_BRANCH="$(git_cmd branch --show-current)"
+STACK_BRANCH="stgit/adopt"
+STACK_REF="refs/stacks/stgit/adopt"
+REPLAY_COMPLETE=0
+
+emit_status() {
+  local status="$1"
+  local patch="$2"
+  shift 2
+  local files=("$@")
+
+  echo "sync-upstream reproduction status: $status"
+  if [[ -n "$patch" ]]; then
+    echo "failing patch: $patch"
+  fi
+  if [[ ${#files[@]} -gt 0 ]]; then
+    echo "conflicting files:"
+    printf '  %s\n' "${files[@]}"
+  fi
+
+  if [[ "$status" == "conflict" ]]; then
+    cat <<'EOF'
+On every conflict ask, in order:
+  1. Is the fork behavior still needed?       -> retire
+  2. Does upstream now cover part of it?      -> narrow
+  3. Did upstream move the integration point? -> relocate
+  4. How should the remaining behavior fit?   -> adapt
+Repair and refresh the failing patch. Never create a patch during a rebase and
+never add a repair commit beside the stack.
+EOF
+  fi
+
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    echo "status=$status" >> "$GITHUB_OUTPUT"
+    echo "patch=$patch" >> "$GITHUB_OUTPUT"
+    {
+      echo "files<<EOF"
+      if [[ ${#files[@]} -gt 0 ]]; then
+        printf '%s\n' "${files[@]}"
+      fi
+      echo "EOF"
+    } >> "$GITHUB_OUTPUT"
+  fi
+}
+
+restore_start() {
+  stg_cmd undo --hard >/dev/null 2>&1 || true
+  git_cmd reset --hard "$START_HEAD" >/dev/null
+  if [[ -n "$START_BRANCH" && "$(git_cmd branch --show-current)" != "$START_BRANCH" ]]; then
+    git_cmd switch "$START_BRANCH" >/dev/null
+    git_cmd reset --hard "$START_HEAD" >/dev/null
+  fi
+}
+
+restore_interrupted_replay() {
+  local exit_code=$?
+  if [[ $REPLAY_COMPLETE -eq 0 ]]; then
+    restore_start
+  fi
+  exit "$exit_code"
+}
+trap restore_interrupted_replay EXIT INT TERM
+
+if [[ -n "$METADATA_REMOTE" ]]; then
+  git_cmd fetch "$METADATA_REMOTE" \
+    "+${STACK_REF}:${STACK_REF}" \
+    '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+fi
+
+recorded_head="$(git_cmd show "${STACK_REF}:stack.json" | bun -e \
+  'process.stdout.write(JSON.parse(await Bun.stdin.text()).head ?? "")')"
+if [[ "$recorded_head" != "$START_HEAD" ]]; then
+  echo "${STACK_REF} records $recorded_head, but the checked-out main is $START_HEAD." >&2
+  echo "Stop and repair or fetch metadata; do not initialize a replacement stack." >&2
+  exit 1
+fi
+
+if [[ "$START_BRANCH" != "$STACK_BRANCH" ]]; then
+  git_cmd switch --force-create "$STACK_BRANCH" "$START_HEAD" >/dev/null
+fi
+
+if ! git_cmd remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1; then
+  git_cmd remote add "$UPSTREAM_REMOTE" https://github.com/pingdotgg/t3code.git
+fi
+git_cmd fetch --no-tags "$UPSTREAM_REMOTE" main:refs/remotes/upstream/main
+git_cmd fetch --no-tags "$UPSTREAM_REMOTE" \
+  "+${CI_REPAIR_BOT_UPSTREAM_SOURCE_REF}:${CI_REPAIR_BOT_UPSTREAM_TARGET}"
+
+saved_top="$(stg_cmd top)"
+echo "Rebasing the ordered StGit series through $saved_top onto $CI_REPAIR_BOT_UPSTREAM_TARGET..."
+if stg_cmd rebase --merged "$CI_REPAIR_BOT_UPSTREAM_TARGET"; then
+  emit_status clean ""
+  REPLAY_COMPLETE=1
+  exit 0
+fi
+
+failing_patch="$(stg_cmd top 2>/dev/null || true)"
+conflicted=()
+while IFS= read -r file; do
+  [[ -n "$file" ]] && conflicted+=("$file")
+done < <(git_cmd diff --name-only --diff-filter=U | sort -u)
+
+restore_start
+REPLAY_COMPLETE=1
+emit_status conflict "$failing_patch" "${conflicted[@]}"
+if [[ "$CONFLICT_MODE" == "output" ]]; then
+  exit 0
+fi
+exit 1
