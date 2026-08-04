@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "bd2abe889bb52147da3de827dbfe5f3187dca16c",
-  "head": "7f8bc013c0e401daa17154f139836615e85a16fd",
+  "prev": "4cea098d6b9a88b561141c5dfcfd96727d5230cb",
+  "head": "1addd97d6f6d9e71d6dc7545679286707cbfe111",
   "applied": [
     "fork-t3-thread-operator-cli",
     "fork-build-and-release-tooling",
@@ -15,8 +15,7 @@
     "fork-contracts-shared-schema",
     "fork-ci-release-and-sync",
     "fork-ci-stgit-metadata",
-    "fork-stgit-stack-policy",
-    "refresh-temp"
+    "fork-stgit-stack-policy"
   ],
   "unapplied": [],
   "hidden": [],
@@ -52,16 +51,13 @@
       "oid": "aa01f8b6a00ba65e489c4edad26302084d8d0181"
     },
     "fork-stgit-stack-policy": {
-      "oid": "a86857d25ef5c918a8ad47249cddeabe7929c631"
+      "oid": "1addd97d6f6d9e71d6dc7545679286707cbfe111"
     },
     "fork-t3-thread-operator-cli": {
       "oid": "992bc9c24864f25d35ec65764f0d89b77c6183bf"
     },
     "fork-web-client-resilience-and": {
       "oid": "37e2a47ec26a25c1536fe7f5ca688f229f3275ba"
-    },
-    "refresh-temp": {
-      "oid": "7f8bc013c0e401daa17154f139836615e85a16fd"
     }
   }
 }
