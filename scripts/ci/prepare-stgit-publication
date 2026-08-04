@@ -26,10 +26,11 @@ const refs = Object.fromEntries(refsRaw.split('\n').filter(Boolean).map(line => 
 const main = refs['refs/heads/main'];
 const stack = refs['refs/stacks/stgit/adopt'];
 const patches = Object.fromEntries(Object.entries(refs).filter(([ref]) => ref.startsWith('refs/patches/stgit/adopt/')).sort());
-const value = JSON.stringify({remote, main, stack, patches});
+const value = {remote, main, stack, patches};
 const fs = await import('node:fs');
+const {isDeepStrictEqual} = await import('node:util');
 if (fs.existsSync(path)) {
-  if (fs.readFileSync(path, 'utf8').trim() !== value)
+  if (!isDeepStrictEqual(JSON.parse(fs.readFileSync(path, 'utf8')), value))
     throw new Error('Preparation lease already exists for different state; use a fresh checkout.');
 } else {
   if (main !== context.head || stack !== localStack)
@@ -38,7 +39,7 @@ if (fs.existsSync(path)) {
     if (patches[`refs/patches/stgit/adopt/${patch.name}`] !== patch.oid)
       throw new Error(`Remote patch differs from this checkout: ${patch.name}`);
   }
-  fs.writeFileSync(path, value + '\n', {flag: 'wx', mode: 0o600});
+  fs.writeFileSync(path, JSON.stringify(value, null, 2) + '\n', {flag: 'wx', mode: 0o600});
 }
 JS
 if [[ "${1:-}" == '--format=json' ]]; then
