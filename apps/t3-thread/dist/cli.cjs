@@ -47557,6 +47557,15 @@ var UploadChatImageAttachment = Schema_exports.Struct({
 });
 var ChatAttachment = Schema_exports.Union([ChatImageAttachment]);
 var UploadChatAttachment = Schema_exports.Union([UploadChatImageAttachment]);
+var CHAT_FILE_ATTACHMENT_MAX_BYTES = 32 * 1024 * 1024;
+var ChatFileAttachment = Schema_exports.Struct({
+  type: Schema_exports.Literal("file"),
+  id: ChatAttachmentId,
+  name: TrimmedNonEmptyString.check(Schema_exports.isMaxLength(255)),
+  mimeType: TrimmedNonEmptyString.check(Schema_exports.isMaxLength(100)),
+  sizeBytes: NonNegativeInt.check(Schema_exports.isLessThanOrEqualTo(CHAT_FILE_ATTACHMENT_MAX_BYTES)),
+  path: TrimmedNonEmptyString
+});
 var ProjectScriptIcon = Schema_exports.Literals([
   "play",
   "test",
@@ -47589,6 +47598,7 @@ var OrchestrationMessage = Schema_exports.Struct({
   role: OrchestrationMessageRole,
   text: Schema_exports.String,
   attachments: Schema_exports.optional(Schema_exports.Array(ChatAttachment)),
+  fileAttachments: Schema_exports.optional(Schema_exports.Array(ChatFileAttachment)),
   turnId: Schema_exports.NullOr(TurnId),
   streaming: Schema_exports.Boolean,
   createdAt: IsoDateTime,
@@ -48159,6 +48169,7 @@ var ThreadMessageSentPayload = Schema_exports.Struct({
   role: OrchestrationMessageRole,
   text: Schema_exports.String,
   attachments: Schema_exports.optional(Schema_exports.Array(ChatAttachment)),
+  fileAttachments: Schema_exports.optional(Schema_exports.Array(ChatFileAttachment)),
   turnId: Schema_exports.NullOr(TurnId),
   streaming: Schema_exports.Boolean,
   createdAt: IsoDateTime,
