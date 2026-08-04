@@ -10,6 +10,7 @@ import {
   IsoDateTime,
   ModelSelection,
   ProjectId,
+  ProjectKind,
   ProjectScript,
   ThreadEnvMode,
 } from "@t3tools/contracts";
@@ -23,6 +24,7 @@ import type { ProjectionRepositoryError } from "../Errors.ts";
 export const ProjectionProject = Schema.Struct({
   projectId: ProjectId,
   title: Schema.String,
+  kind: ProjectKind,
   workspaceRoot: Schema.String,
   defaultModelSelection: Schema.NullOr(ModelSelection),
   defaultThreadEnvMode: Schema.NullOr(ThreadEnvMode),
