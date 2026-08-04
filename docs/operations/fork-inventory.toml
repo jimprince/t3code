@@ -164,3 +164,12 @@ id = "forkprocessrows-extraction-951"
 date = "2026-07-29"
 decided = "extract-to-additive"
 rationale = "When upstream deleted process-row parsing from ProcessDiagnostics, move ProcessRow and readProcessRows into the additive forkProcessRows module. This keeps all fork behavior out of the upstream diagnostics file."
+
+[[patch]]
+name = "fork-headless-updates"
+subject = "feat(server): add safe headless updates"
+class = "product"
+purpose = "Provide guarded headless server update discovery, installation, and restart behavior."
+retire_when = "never"
+depends_on = ["fork-remote-relay-access"]
+roles = []
