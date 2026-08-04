@@ -2,7 +2,7 @@
   "name": "@t3tools/mobile",
   "version": "0.0.0",
   "private": true,
-  "main": "index.ts",
+  "main": "index.js",
   "scripts": {
     "dev": "expo start --clear",
     "dev:client": "APP_VARIANT=development expo start --dev-client --scheme t3code-dev --clear --lan",
