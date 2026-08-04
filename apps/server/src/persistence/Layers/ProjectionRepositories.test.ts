@@ -230,6 +230,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         worktreePath: null,
         linkedPullRequest,
         latestTurnId: null,
+        goal: null,
         createdAt: "2026-03-24T00:00:00.000Z",
         updatedAt: "2026-03-24T00:00:00.000Z",
         archivedAt: null,
