@@ -19,3 +19,13 @@ purpose = "Route maintainers and agents through the executable StGit maintenance
 retire_when = "never"
 depends_on = []
 roles = ["agent-docs-owner"]
+
+[[patch]]
+name = "fork-build-workspace-tooling"
+subject = "build(fork): configure workspace tooling"
+class = "product"
+purpose = "Configure the fork workspace, dependency graph, and reusable build tooling required by its additive applications."
+retire_when = "never"
+depends_on = ["fork-stgit-stack-policy"]
+roles = ["lockfile-owner"]
+note = "pnpm-lock.yaml is generated: take upstream's lockfile during a conflict, regenerate it, and refresh only this patch."
