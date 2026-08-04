@@ -298,6 +298,11 @@ function createTextGeneration(
       Effect.succeed({
         title: "Update workflow",
       }),
+    evaluateGoal: () =>
+      Effect.succeed({
+        achieved: false,
+        reason: "not evaluated in git manager tests",
+      }),
     ...overrides,
   };
 
@@ -341,6 +346,17 @@ function createTextGeneration(
           (cause) =>
             new TextGenerationError({
               operation: "generateThreadTitle",
+              detail: "fake text generation failed",
+              ...(cause !== undefined ? { cause } : {}),
+            }),
+        ),
+      ),
+    evaluateGoal: (input) =>
+      implementation.evaluateGoal(input).pipe(
+        Effect.mapError(
+          (cause) =>
+            new TextGenerationError({
+              operation: "evaluateGoal",
               detail: "fake text generation failed",
               ...(cause !== undefined ? { cause } : {}),
             }),
