@@ -111,6 +111,7 @@ import {
 } from "./orchestration/Errors.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
+import { ThreadTransfer } from "./orchestration/Services/ThreadTransfer.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { PersistenceSqlError } from "./persistence/Errors.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
@@ -156,6 +157,7 @@ import * as CloudManagedEndpointRuntime from "./cloud/ManagedEndpointRuntime.ts"
 import * as CloudCliTokenManager from "./cloud/CliTokenManager.ts";
 import * as ProcessDiagnostics from "./diagnostics/ProcessDiagnostics.ts";
 import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts";
+import * as SystemRecovery from "./diagnostics/SystemRecovery.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as DesktopTelemetryReceiver from "./resourceTelemetry/DesktopTelemetryReceiver.ts";
 import * as NativeTelemetryClient from "./resourceTelemetry/NativeTelemetryClient.ts";
@@ -527,6 +529,8 @@ const buildAppUnderTest = (options?: {
     desktopTelemetryReceiver?: Partial<
       DesktopTelemetryReceiver.DesktopTelemetryReceiver["Service"]
     >;
+
+    systemRecovery?: Partial<SystemRecovery.SystemRecovery["Service"]>;
   };
 }) =>
   Effect.gen(function* () {
@@ -717,7 +721,7 @@ const buildAppUnderTest = (options?: {
       Layer.provide(Layer.succeed(HostProcessEnvironment, {})),
     );
 
-    const servedRoutesLayer = HttpRouter.serve(
+    const servedRoutesBaseLayer = HttpRouter.serve(
       makeRoutesLayer.pipe(Layer.provide(serviceLauncherClientLayer)),
       {
         disableListenLog: true,
@@ -817,20 +821,39 @@ const buildAppUnderTest = (options?: {
         }),
       ),
       Layer.provide(
-        Layer.mock(ProcessResourceMonitor.ProcessResourceMonitor)({
-          readHistory: (input) =>
-            Effect.succeed({
-              readAt: TEST_EPOCH,
-              windowMs: input.windowMs,
-              bucketMs: input.bucketMs,
-              sampleIntervalMs: 5_000,
-              retainedSampleCount: 0,
-              totalCpuSecondsApprox: 0,
-              buckets: [],
-              topProcesses: [],
-              error: Option.none(),
+        Layer.mergeAll(
+          Layer.mock(ProcessResourceMonitor.ProcessResourceMonitor)({
+            readHistory: (input) =>
+              Effect.succeed({
+                readAt: TEST_EPOCH,
+                windowMs: input.windowMs,
+                bucketMs: input.bucketMs,
+                sampleIntervalMs: 5_000,
+                retainedSampleCount: 0,
+                totalCpuSecondsApprox: 0,
+                buckets: [],
+                topProcesses: [],
+                error: Option.none(),
+              }),
+          }),
+          Layer.mock(SystemRecovery.SystemRecovery)({
+            preview: Effect.succeed({
+              previewId: "test-recovery-preview",
+              createdAt: TEST_EPOCH,
+              expiresAt: TEST_EPOCH,
+              candidates: [],
+              warnings: [],
+              automaticRecovery: false,
             }),
-        }),
+            execute: (input) =>
+              Effect.succeed({
+                previewId: input.previewId,
+                completedAt: TEST_EPOCH,
+                actions: [],
+              }),
+            ...options?.layers?.systemRecovery,
+          }),
+        ),
       ),
       Layer.provide(
         Layer.mock(TraceDiagnostics.TraceDiagnostics)({
@@ -909,8 +932,9 @@ const buildAppUnderTest = (options?: {
           Layer.mock(OrchestrationEngine.OrchestrationEngineService)({
             readEvents: () => Stream.empty,
             dispatch: () => Effect.succeed({ sequence: 0 }),
-            streamDomainEvents: Stream.empty,
             latestSequence: Effect.succeed(0),
+            streamDomainEvents: Stream.empty,
+            subscribeDomainEvents: Effect.succeed(Stream.empty),
             ...options?.layers?.orchestrationEngine,
           }),
           Layer.mock(ThreadDeletionReactor)({
@@ -920,6 +944,7 @@ const buildAppUnderTest = (options?: {
           }),
         ),
       ),
+      Layer.provide(Layer.mock(ThreadTransfer)({})),
       Layer.provide(
         Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
           getCommandReadModel: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
@@ -942,6 +967,7 @@ const buildAppUnderTest = (options?: {
           getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
           getProjectShellById: () => Effect.succeed(Option.none()),
           getThreadShellById: () => Effect.succeed(Option.none()),
+          getThreadShellByIdIncludingArchived: () => Effect.succeed(Option.none()),
           getThreadDetailById: () => Effect.succeed(Option.none()),
           getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
           getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
@@ -953,9 +979,13 @@ const buildAppUnderTest = (options?: {
           getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
           getFirstActiveThreadIdByProjectId: () => Effect.succeed(Option.none()),
           getThreadCheckpointContext: () => Effect.succeed(Option.none()),
+          getFullThreadDiffContext: () => Effect.succeed(Option.none()),
           ...options?.layers?.projectionSnapshotQuery,
         }),
       ),
+    );
+
+    const servedRoutesLayer = servedRoutesBaseLayer.pipe(
       Layer.provide(
         Layer.mock(CheckpointDiffQuery.CheckpointDiffQuery)({
           getTurnDiff: () =>
@@ -4348,6 +4378,27 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }),
   );
 
+  it.effect("routes the lightweight server probe over an authenticated websocket", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+
+      const { response: bootstrapResponse, cookie } = yield* bootstrapBrowserSession();
+
+      assert.equal(bootstrapResponse.status, 200);
+      assert.isDefined(cookie);
+
+      const wsUrl = appendSessionCookieToWsUrl(
+        yield* getWsServerUrl("/ws", { authenticated: false }),
+        cookie?.split(";")[0] ?? "",
+      );
+      const response = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) => client[WS_METHODS.serverProbe]({})),
+      );
+
+      assert.deepEqual(response, {});
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect(
     "rejects websocket rpc handshake when a session token is only provided via query string",
     () =>
@@ -7299,7 +7350,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           orchestrationEngine: {
-            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.map(
+              PubSub.subscribe(liveEvents),
+              Stream.fromSubscription,
+            ),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
@@ -7335,7 +7389,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           orchestrationEngine: {
-            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.map(
+              PubSub.subscribe(liveEvents),
+              Stream.fromSubscription,
+            ),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
@@ -7375,7 +7432,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           orchestrationEngine: {
-            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.map(
+              PubSub.subscribe(liveEvents),
+              Stream.fromSubscription,
+            ),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
@@ -7481,7 +7541,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           orchestrationEngine: {
-            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.map(
+              PubSub.subscribe(liveEvents),
+              Stream.fromSubscription,
+            ),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
@@ -8259,20 +8322,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.equal(dispatchResult.sequence, 1);
-      assert.deepEqual(effects, [
-        "dispatch:thread.archive",
-        "dispatch:thread.session.stop",
-        `terminal.close:${threadId}`,
-      ]);
-      const sessionStopCommand = dispatchedCommands[1];
-      assert.equal(sessionStopCommand?.type, "thread.session.stop");
-      if (sessionStopCommand?.type === "thread.session.stop") {
-        assert.equal(sessionStopCommand.threadId, threadId);
-      }
+      assert.deepEqual(effects, ["dispatch:thread.archive"]);
+      assert.deepEqual(
+        dispatchedCommands.map((command) => command.type),
+        ["thread.archive"],
+      );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("checks session status before archiving removes the thread from active lookups", () =>
+  it.effect("does not run archive cleanup inside the route dispatch path", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-archive-precheck");
       const effects: string[] = [];
@@ -8337,20 +8395,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.equal(dispatchResult.sequence, 1);
-      assert.deepEqual(effects, [
-        "query:thread-shell:active",
-        "dispatch:thread.archive",
-        "dispatch:thread.session.stop",
-        `terminal.close:${threadId}`,
-      ]);
+      assert.deepEqual(effects, ["dispatch:thread.archive"]);
       assert.deepEqual(
         dispatchedCommands.map((command) => command.type),
-        ["thread.archive", "thread.session.stop"],
+        ["thread.archive"],
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("archives without dispatching session stop when the thread has no session", () =>
+  it.effect("archives a thread with no session through the route seam", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-archive-no-session");
       const effects: string[] = [];
@@ -8393,7 +8446,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.equal(dispatchResult.sequence, 1);
-      assert.deepEqual(effects, ["dispatch:thread.archive", `terminal.close:${threadId}`]);
+      assert.deepEqual(effects, ["dispatch:thread.archive"]);
       assert.deepEqual(
         dispatchedCommands.map((command) => command.type),
         ["thread.archive"],
@@ -8401,72 +8454,70 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect(
-    "archives without dispatching session stop when the thread session is already stopped",
-    () =>
-      Effect.gen(function* () {
-        const threadId = ThreadId.make("thread-archive-stopped-session");
-        const effects: string[] = [];
-        const dispatchedCommands: Array<OrchestrationCommand> = [];
-        const now = "2026-01-01T00:00:00.000Z";
+  it.effect("archives a stopped-session thread through the route seam", () =>
+    Effect.gen(function* () {
+      const threadId = ThreadId.make("thread-archive-stopped-session");
+      const effects: string[] = [];
+      const dispatchedCommands: Array<OrchestrationCommand> = [];
+      const now = "2026-01-01T00:00:00.000Z";
 
-        yield* buildAppUnderTest({
-          layers: {
-            terminalManager: {
-              close: (input) =>
-                Effect.sync(() => {
-                  effects.push(`terminal.close:${input.threadId}`);
-                }),
-            },
-            orchestrationEngine: {
-              dispatch: (command) =>
-                Effect.sync(() => {
-                  dispatchedCommands.push(command);
-                  effects.push(`dispatch:${command.type}`);
-                  return { sequence: dispatchedCommands.length };
-                }),
-            },
-            projectionSnapshotQuery: {
-              getThreadShellById: () =>
-                Effect.succeed(
-                  Option.some(
-                    makeDefaultOrchestrationThreadShell({
-                      id: threadId,
-                      updatedAt: now,
-                      session: {
-                        threadId,
-                        status: "stopped",
-                        providerName: "claudeAgent",
-                        runtimeMode: "full-access",
-                        activeTurnId: null,
-                        lastError: null,
-                        updatedAt: now,
-                      },
-                    }),
-                  ),
-                ),
-            },
+      yield* buildAppUnderTest({
+        layers: {
+          terminalManager: {
+            close: (input) =>
+              Effect.sync(() => {
+                effects.push(`terminal.close:${input.threadId}`);
+              }),
           },
-        });
+          orchestrationEngine: {
+            dispatch: (command) =>
+              Effect.sync(() => {
+                dispatchedCommands.push(command);
+                effects.push(`dispatch:${command.type}`);
+                return { sequence: dispatchedCommands.length };
+              }),
+          },
+          projectionSnapshotQuery: {
+            getThreadShellById: () =>
+              Effect.succeed(
+                Option.some(
+                  makeDefaultOrchestrationThreadShell({
+                    id: threadId,
+                    updatedAt: now,
+                    session: {
+                      threadId,
+                      status: "stopped",
+                      providerName: "claudeAgent",
+                      runtimeMode: "full-access",
+                      activeTurnId: null,
+                      lastError: null,
+                      updatedAt: now,
+                    },
+                  }),
+                ),
+              ),
+          },
+        },
+      });
 
-        const wsUrl = yield* getWsServerUrl("/ws");
-        const dispatchResult = yield* Effect.scoped(
-          withWsRpcClient(wsUrl, (client) =>
-            client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
-              type: "thread.archive",
-              commandId: CommandId.make("cmd-thread-archive-stopped-session"),
-              threadId,
-            }),
-          ),
-        );
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const dispatchResult = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+            type: "thread.archive",
+            commandId: CommandId.make("cmd-thread-archive-stopped-session"),
+            threadId,
+          }),
+        ),
+      );
 
-        assert.equal(dispatchResult.sequence, 1);
-        assert.deepEqual(effects, ["dispatch:thread.archive", `terminal.close:${threadId}`]);
-        assert.deepEqual(
-          dispatchedCommands.map((command) => command.type),
-          ["thread.archive"],
-        );
-      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+      assert.equal(dispatchResult.sequence, 1);
+      assert.deepEqual(effects, ["dispatch:thread.archive"]);
+      assert.deepEqual(
+        dispatchedCommands.map((command) => command.type),
+        ["thread.archive"],
+      );
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect("leaves settle cleanup to the event reactor", () =>
@@ -8565,7 +8616,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("archives and still closes terminals when session stop fails", () =>
+  it.effect("returns the archive dispatch result when cleanup would fail", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-archive-stop-failure");
       const effects: string[] = [];
@@ -8630,19 +8681,15 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.equal(dispatchResult.sequence, 1);
-      assert.deepEqual(effects, [
-        "dispatch:thread.archive",
-        "dispatch:thread.session.stop",
-        `terminal.close:${threadId}`,
-      ]);
+      assert.deepEqual(effects, ["dispatch:thread.archive"]);
       assert.deepEqual(
         dispatchedCommands.map((command) => command.type),
-        ["thread.archive", "thread.session.stop"],
+        ["thread.archive"],
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("archives and still closes terminals when session stop defects", () =>
+  it.effect("returns the archive dispatch result when cleanup would defect", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-archive-stop-defect");
       const effects: string[] = [];
@@ -8702,14 +8749,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.equal(dispatchResult.sequence, 1);
-      assert.deepEqual(effects, [
-        "dispatch:thread.archive",
-        "dispatch:thread.session.stop",
-        `terminal.close:${threadId}`,
-      ]);
+      assert.deepEqual(effects, ["dispatch:thread.archive"]);
       assert.deepEqual(
         dispatchedCommands.map((command) => command.type),
-        ["thread.archive", "thread.session.stop"],
+        ["thread.archive"],
       );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
