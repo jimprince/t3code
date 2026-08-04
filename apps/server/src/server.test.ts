@@ -8571,13 +8571,13 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           layers: {
             orchestrationEngine: {
               latestSequence: Effect.sync(() => headSequence),
-              streamDomainEvents: Stream.unwrap(
-                Effect.gen(function* () {
-                  const subscription = yield* PubSub.subscribe(liveEvents);
-                  yield* Deferred.succeed(attached, undefined);
-                  return Stream.fromSubscription(subscription);
-                }),
-              ).pipe(Stream.ensuring(Deferred.succeed(detached, undefined))),
+              subscribeDomainEvents: Effect.gen(function* () {
+                const subscription = yield* PubSub.subscribe(liveEvents);
+                yield* Deferred.succeed(attached, undefined);
+                return Stream.fromSubscription(subscription).pipe(
+                  Stream.ensuring(Deferred.succeed(detached, undefined)),
+                );
+              }),
               readThreadEvents: ({ fromSequenceExclusive, toSequenceInclusive }) => {
                 replayCalls.push({
                   afterSequence: fromSequenceExclusive,
@@ -9081,7 +9081,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         layers: {
           orchestrationEngine: {
             latestSequence: Effect.sync(() => headSequence),
-            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.map(
+              PubSub.subscribe(liveEvents),
+              Stream.fromSubscription,
+            ),
             getThreadReplayStats: () =>
               Effect.sync(() => {
                 headSequence = 100;
