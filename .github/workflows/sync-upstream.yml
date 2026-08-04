@@ -1,0 +1,362 @@
+name: Sync Upstream
+
+# Detects new releases on pingdotgg/t3code, rebases the ordered StGit series
+# onto the upstream tag, and pushes a release tag that triggers release.yml.
+#
+# The fork ships the nightly feed only, so scheduled runs sync the nightly
+# channel. Stable is retained as a manual escape hatch and runs only when
+# explicitly dispatched with channel=stable; see "Select channel" for why.
+#
+# Tag scheme pushed to the fork:
+#   - stable channel: ${upstream_tag} verbatim (e.g. v0.0.21)
+#   - nightly channel: ${upstream_tag}-fork.<N> (e.g.
+#     v0.0.21-nightly.20260421.88-fork.1), where N auto-increments per
+#     upstream nightly tag. The -fork suffix keeps fork artifacts
+#     distinguishable. sync-upstream skips once an existing fork tag contains
+#     the same upstream nightly commit; malformed historical fork tags do not
+#     block a corrected sync. Reroll the same upstream commit by manually
+#     dispatching release.yml with the next explicit -fork.N version.
+#
+# On rebase conflict: fails loudly with instructions to reproduce locally.
+
+on:
+  schedule:
+    # Once nightly (03:00 MDT / 09:00 UTC). Each scheduled sync is an
+    # agent-driven rebase of the whole patch stack, and every rebase is a
+    # chance of a bad conflict resolution being folded into a patch by
+    # auto_land. One sync a day bounds that exposure while still shipping a
+    # daily fork nightly; use workflow_dispatch for an off-cycle sync.
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+    inputs:
+      channel:
+        description: "Upstream channel."
+        required: false
+        type: choice
+        options:
+          - both
+          - stable
+          - nightly
+        default: nightly
+
+concurrency:
+  # One lock for every Actions writer of main (C2 race fix, 2026-07-29:
+  # sync and nightly raced; the loser was saved only by its lease).
+  group: t3code-writes-main
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  sync:
+    name: Sync ${{ matrix.channel }} with upstream
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      # Keep channels sequential inside the workflow because both may force-push main.
+      max-parallel: 1
+      matrix:
+        channel:
+          - stable
+          - nightly
+
+    steps:
+      - name: Select channel
+        id: channel
+        run: |
+          channel="${{ matrix.channel }}"
+          requested="${{ inputs.channel }}"
+          selected=true
+          if [[ -n "$requested" && "$requested" != "both" && "$requested" != "$channel" ]]; then
+            selected=false
+          fi
+          # The fork ships the nightly feed only, so stable never runs on a
+          # schedule or under "both" -- it needs an explicit stable dispatch.
+          # A stable replay conflicts by construction whenever the stack sits on
+          # a nightly base that references upstream files absent from the stable
+          # tag (e.g. a migration added after the last stable release). Letting
+          # that fail on every scheduled run made this workflow permanently red
+          # and destroyed its signal for the channel that actually ships.
+          if [[ "$channel" == "stable" && "$requested" != "stable" ]]; then
+            selected=false
+            echo "Stable channel skipped: fork ships nightly only (dispatch channel=stable to force)."
+          fi
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+          echo "selected=$selected" >> "$GITHUB_OUTPUT"
+          echo "Resolved channel: $channel (selected=$selected)"
+
+      - name: Get latest upstream release tag
+        if: steps.channel.outputs.selected == 'true'
+        id: upstream
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [[ "${{ steps.channel.outputs.channel }}" == "nightly" ]]; then
+            # First upstream release whose tag matches a nightly pattern.
+            # Upstream has used two tag schemes: v<ver>-nightly.* and nightly-v<ver>-nightly.*
+            tag=$(gh release list --repo pingdotgg/t3code --limit 50 \
+              --json tagName,isPrerelease,publishedAt \
+              --jq '[.[] | select(.isPrerelease and (.tagName | test("(^|-)v[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\.")))] | sort_by(.publishedAt) | reverse | .[0].tagName')
+            if [[ -z "$tag" || "$tag" == "null" ]]; then
+              echo "::error::No nightly release found on upstream."
+              exit 1
+            fi
+            echo "Latest upstream nightly release: $tag"
+          else
+            tag=$(gh api repos/pingdotgg/t3code/releases/latest --jq .tag_name)
+            echo "Latest upstream stable release: $tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout fork
+        if: steps.channel.outputs.selected == 'true'
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # Upstream may change workflow files; a PAT with workflow scope is
+          # required to push those changes back to the fork.
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      - name: Setup Vite+
+        if: steps.channel.outputs.selected == 'true'
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Setup Bun
+        if: steps.channel.outputs.selected == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install StGit
+        if: steps.channel.outputs.selected == 'true'
+        run: scripts/ci/install-stgit
+
+      - name: Configure git
+        if: steps.channel.outputs.selected == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Record main lease
+        if: steps.channel.outputs.selected == 'true'
+        id: pre
+        run: |
+          scripts/ci/record-main-lease
+          git fetch origin \
+            '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
+            '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+          scripts/ci/prepare-stgit-publication
+
+      - name: Check if sync needed
+        if: steps.channel.outputs.selected == 'true'
+        id: check
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+        run: |
+          set -euo pipefail
+          upstream_tag="${{ steps.upstream.outputs.tag }}"
+          upstream_ref="refs/tags/upstream/${upstream_tag}"
+
+          ensure_upstream_remote() {
+            if ! git remote get-url upstream >/dev/null 2>&1; then
+              git remote add upstream https://github.com/pingdotgg/t3code.git
+            fi
+          }
+
+          contains_upstream_tag() {
+            local candidate="$1"
+            git merge-base --is-ancestor "${upstream_ref}^{commit}" "${candidate}^{commit}" >/dev/null 2>&1
+          }
+
+          ensure_upstream_remote
+          # Keep upstream tags out of the fork tag namespace. Without --no-tags,
+          # Git auto-follows reachable upstream tags into refs/tags/*, which can
+          # make a missing fork stable tag look already synced.
+          git fetch --no-tags upstream "+refs/tags/${upstream_tag}:${upstream_ref}"
+
+          if [[ "$CHANNEL" == "nightly" ]]; then
+            # Nightly: the fork publishes tags of the form
+            # "${upstream_tag}-fork.<N>". A tag only proves sync if its commit
+            # contains the upstream nightly tag; malformed push-nightly tags from
+            # before this ancestry check must not block a corrected reroll.
+            mapfile -t existing < <(git tag --list "${upstream_tag}-fork.*")
+            synced=()
+            stale=()
+            for tag in "${existing[@]}"; do
+              if contains_upstream_tag "$tag"; then
+                synced+=("$tag")
+              else
+                stale+=("$tag")
+              fi
+            done
+
+            if [[ ${#synced[@]} -gt 0 ]]; then
+              echo "needed=false" >> "$GITHUB_OUTPUT"
+              echo "Fork already has upstream-containing build(s) for $upstream_tag:"
+              printf '  %s\n' "${synced[@]}"
+              echo "Nothing to do."
+            else
+              mapfile -t fork_tags < <(git tag --list 'v*' --sort=-creatordate)
+              fork_latest="${fork_tags[0]:-}"
+              echo "needed=true" >> "$GITHUB_OUTPUT"
+              echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
+              if [[ ${#stale[@]} -gt 0 ]]; then
+                echo "Existing fork tag(s) do not contain $upstream_tag and will not block sync:"
+                printf '  %s\n' "${stale[@]}"
+              fi
+              echo "Upstream nightly at $upstream_tag, fork has no build yet (latest fork tag: $fork_latest). Syncing..."
+            fi
+          else
+            # Stable: fork tag == upstream tag exactly.
+            if git rev-parse --verify "${upstream_tag}^{commit}" >/dev/null 2>&1 && contains_upstream_tag "$upstream_tag"; then
+              echo "needed=false" >> "$GITHUB_OUTPUT"
+              echo "Fork already has upstream-containing $upstream_tag. Nothing to do."
+            else
+              mapfile -t fork_tags < <(git tag --list 'v*' | sort -V)
+              if [[ ${#fork_tags[@]} -eq 0 ]]; then
+                fork_latest=""
+              else
+                fork_latest="${fork_tags[-1]}"
+              fi
+              echo "needed=true" >> "$GITHUB_OUTPUT"
+              echo "fork_latest=$fork_latest" >> "$GITHUB_OUTPUT"
+              if git rev-parse --verify "${upstream_tag}^{commit}" >/dev/null 2>&1; then
+                echo "Existing fork tag $upstream_tag does not contain upstream $upstream_tag; syncing corrected tag."
+              fi
+              echo "Upstream at $upstream_tag, fork at $fork_latest. Syncing..."
+            fi
+          fi
+
+      - name: Rebase fork commits onto upstream tag
+        if: steps.check.outputs.needed == 'true'
+        id: rebase
+        env:
+          CI_REPAIR_BOT_UPSTREAM_TARGET: refs/tags/upstream/${{ steps.upstream.outputs.tag }}
+          CI_REPAIR_BOT_UPSTREAM_SOURCE_REF: refs/tags/${{ steps.upstream.outputs.tag }}
+          CI_REPAIR_BOT_CONFLICT_MODE: output
+        run: scripts/ci/reproduce-sync-upstream
+
+      - name: Verify replay before publication
+        if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-dev pkg-config
+          scripts/ci/verify-stgit-replay
+
+      - name: Prepare release tag
+        if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
+        id: prepare
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          UPSTREAM_TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$CHANNEL" == "nightly" ]]; then
+            # Fork nightly tag: ${upstream_tag}-fork.<N>. N is the next integer
+            # after the largest existing -fork.<N> for this upstream tag.
+            # Semver note: "88-fork" is a single pre-release identifier (hyphens
+            # are valid inside identifiers); because it's alphanumeric (not pure
+            # digits), it sorts strictly higher than the numeric "88" — so the
+            # fork version is always > the upstream nightly it's based on.
+            mapfile -t existing < <(git tag --list "${UPSTREAM_TAG}-fork.*" \
+              | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
+              | sort -n)
+            if [[ ${#existing[@]} -eq 0 ]]; then
+              next_n=1
+            else
+              last="${existing[-1]}"
+              next_n=$((last + 1))
+            fi
+            new_tag="${UPSTREAM_TAG}-fork.${next_n}"
+          else
+            new_tag="$UPSTREAM_TAG"
+          fi
+
+          RELEASE_TAG="$new_tag" scripts/ci/prepare-release-tag
+
+      - name: Publish verified stack and release tag
+        if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
+        env:
+          STGIT_EXPECTED_REMOTE_MAIN: ${{ steps.pre.outputs.main_sha }}
+          MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
+          PREP_SHA: ${{ steps.prepare.outputs.prep_sha }}
+          NEW_TAG: ${{ steps.prepare.outputs.tag }}
+          STGIT_BACKUP_NAMESPACE: bot
+        run: |
+          set -euo pipefail
+          tag_sha="$(git rev-parse "${NEW_TAG}^{commit}")"
+          if [[ "$tag_sha" != "$PREP_SHA" ]]; then
+            echo "::error::Prepared tag changed before publication."
+            exit 1
+          fi
+          if [[ "$PREP_SHA" != "$MAIN_SHA" ]] && [[ "$(git rev-parse "${PREP_SHA}^")" != "$MAIN_SHA" ]]; then
+            echo "::error::Release preparation must be a direct child of the verified stack."
+            exit 1
+          fi
+          # Restore the verified unstamped tip; the prepared child remains tagged.
+          git reset --hard "$MAIN_SHA"
+          STGIT_RELEASE_TAG="$NEW_TAG" STGIT_RELEASE_TAG_SHA="$PREP_SHA" \
+            scripts/ci/publish-stgit-stack --push
+
+      - name: Fail with conflict resolution instructions
+        if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'conflict'
+        env:
+          CHANNEL: ${{ steps.channel.outputs.channel }}
+          FAILING_PATCH: ${{ steps.rebase.outputs.patch }}
+          CONFLICT_FILES: ${{ steps.rebase.outputs.files }}
+        run: |
+          set -euo pipefail
+          upstream_tag="${{ steps.upstream.outputs.tag }}"
+          upstream_target="refs/tags/upstream/${upstream_tag}"
+          handoff="$(jq -cn \
+            --arg target "$upstream_target" \
+            --arg channel "$CHANNEL" \
+            --arg patch "$FAILING_PATCH" \
+            --arg files "$CONFLICT_FILES" \
+            '{marker:"t3code.sync-upstream-repair",version:1,repairEligible:true,upstreamTarget:$target,channel:$channel,failingPatch:$patch,conflictingFiles:($files | split("\n") | map(select(length > 0))),requiredStackContext:"t3code.stgit-stack-context/v1",claimWithinMinutes:20}')"
+
+          echo "CI_REPAIR_BOT_HANDOFF=$handoff"
+          {
+            echo "### Autonomous repair handoff"
+            echo '```json'
+            echo "$handoff"
+            echo '```'
+            echo "The external CI Repair Bot should claim this eligible incident within 20 minutes."
+            echo "A conflict in one matrix channel does not block or invalidate the other channel."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::error::Rebase conflict syncing to $upstream_tag (channel: $CHANNEL)."
+          echo "::error::Failing patch: $FAILING_PATCH"
+          echo "::error::Conflicting files:"
+          echo "$CONFLICT_FILES" | sed 's/^/::error::  /'
+          echo "::error::"
+          echo "::error::Resolve locally:"
+          echo "::error::  git fetch upstream --tags"
+          echo "::error::  saved_top=\$(stg top)"
+          echo "::error::  stg rebase --merged 'refs/tags/upstream/${upstream_tag}'"
+          echo "::error::"
+          echo "::error::On EVERY conflict, ask in this order:"
+          echo "::error::  1. Is the fork's side still needed at all?  -> retire"
+          echo "::error::  2. Does upstream now cover part of it?      -> narrow"
+          echo "::error::  3. Did upstream move the integration point? -> relocate"
+          echo "::error::  4. Only then: how do I reconcile them?       -> adapt"
+          echo "::error::Answering 4 first silently preserves patches that no longer need to"
+          echo "::error::exist, and they conflict again on every future sync. Conflicts"
+          echo "::error::cluster exactly where upstream is changing the code your patch"
+          echo "::error::touches -- which is where supersession happens."
+          echo "::error::Fix the PATCH, never add a repair commit beside it."
+          echo "::error::"
+          echo "::error::  # resolve explicit files, then refresh the failing patch:"
+          echo "::error::  git add <explicit-paths>"
+          echo "::error::  stg refresh"
+          echo "::error::  stg goto \"\$saved_top\""
+          echo "::error::  scripts/ci/publish-stgit-stack --check"
+          exit 1
