@@ -86,7 +86,6 @@ const startupInfrastructureTestLayer = Layer.mergeAll(
   Layer.mock(ExternalLauncher.ExternalLauncher)({}),
   Layer.succeed(ServiceLauncherClient.ServiceLauncherClient, {
     managed: false,
-    trial: false,
     requestUpdate: () => Effect.die("unused"),
     prepareTrial: Effect.succeed(undefined),
   }),
