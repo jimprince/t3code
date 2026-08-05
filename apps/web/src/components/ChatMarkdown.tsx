@@ -91,6 +91,11 @@ import {
   openUrlInPreview,
   BrowserPreviewUnavailableError,
 } from "../browser/openFileInPreview";
+import {
+  createWorkspaceFileDownloadUrl,
+  startBrowserDownload,
+  workspaceFileLinkPolicy,
+} from "../browser/downloadWorkspaceFile";
 
 interface ChatMarkdownProps {
   text: string;
@@ -744,6 +749,8 @@ interface MarkdownFileLinkProps {
   threadRef?: ScopedThreadRef | undefined;
   onOpen: (targetPath: string) => Promise<AtomCommandResult<unknown, unknown>>;
   onOpenInBrowser?: (() => Promise<AtomCommandResult<unknown, unknown>>) | undefined;
+  onDownload?: (() => Promise<AtomCommandResult<string, unknown>>) | undefined;
+  downloadOnClick?: boolean | undefined;
   className?: string | undefined;
 }
 
@@ -1027,6 +1034,8 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
   threadRef,
   onOpen,
   onOpenInBrowser,
+  onDownload,
+  downloadOnClick,
   className,
 }: MarkdownFileLinkProps) {
   const handleOpenInEditor = useCallback(() => {
@@ -1149,6 +1158,37 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
     [targetPath],
   );
 
+  const handleDownload = useCallback(() => {
+    if (!onDownload) return;
+    void onDownload().then(
+      (result) => {
+        if (result._tag === "Success") {
+          startBrowserDownload(result.value);
+          return;
+        }
+        if (isAtomCommandInterrupted(result)) return;
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Unable to download file",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
+        );
+      },
+      (cause) => {
+        reportMarkdownActionFailure({ operation: "download-file", target: targetPath }, cause);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Unable to download file",
+            description: cause instanceof Error ? cause.message : "An error occurred.",
+          }),
+        );
+      },
+    );
+  }, [onDownload, targetPath]);
+
   const handleContextMenu = useCallback(
     async (event: ReactMouseEvent<HTMLAnchorElement>) => {
       event.preventDefault();
@@ -1161,6 +1201,7 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         const clicked = await api.contextMenu.show(
           [
             { id: "open", label: "Open in editor" },
+            ...(onDownload ? ([{ id: "download", label: "Download file" }] as const) : []),
             ...(onOpenInBrowser
               ? ([{ id: "open-in-browser", label: "Open in integrated browser" }] as const)
               : []),
@@ -1172,6 +1213,10 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
 
         if (clicked === "open") {
           handleOpenInEditor();
+          return;
+        }
+        if (clicked === "download") {
+          handleDownload();
           return;
         }
         if (clicked === "open-in-browser") {
@@ -1192,7 +1237,16 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
         );
       }
     },
-    [displayPath, handleCopy, handleOpenInBrowser, handleOpenInEditor, onOpenInBrowser, targetPath],
+    [
+      displayPath,
+      handleCopy,
+      handleDownload,
+      handleOpenInBrowser,
+      handleOpenInEditor,
+      onDownload,
+      onOpenInBrowser,
+      targetPath,
+    ],
   );
 
   return (
@@ -1206,6 +1260,10 @@ const MarkdownFileLink = memo(function MarkdownFileLink({
             onClick={(event) => {
               event.preventDefault();
               event.stopPropagation();
+              if (downloadOnClick && onDownload) {
+                handleDownload();
+                return;
+              }
               if (onOpenInBrowser) {
                 handleOpenInBrowser();
                 return;
@@ -1247,6 +1305,8 @@ function areMarkdownFileLinkPropsEqual(
     previous.threadRef === next.threadRef &&
     previous.onOpen === next.onOpen &&
     previous.onOpenInBrowser === next.onOpenInBrowser &&
+    previous.onDownload === next.onDownload &&
+    previous.downloadOnClick === next.downloadOnClick &&
     previous.className === next.className
   );
 }
@@ -1363,6 +1423,24 @@ function ChatMarkdown({
     },
     [createAssetUrl, openPreview, preparedConnection, threadRef],
   );
+  const downloadMarkdownFile = useCallback(
+    (path: string) => {
+      if (!threadRef || preparedConnection._tag === "None") {
+        return Promise.reject(new Error("Environment is not connected."));
+      }
+      return createWorkspaceFileDownloadUrl({
+        threadRef,
+        filePath: path,
+        httpBaseUrl: preparedConnection.value.httpBaseUrl,
+        createAssetUrl,
+      });
+    },
+    [createAssetUrl, preparedConnection, threadRef],
+  );
+  const fileLinkPolicy = workspaceFileLinkPolicy(
+    preparedConnection._tag === "Some",
+    preparedConnection._tag === "Some" ? preparedConnection.value.target._tag : undefined,
+  );
   /* eslint-disable react/no-unstable-nested-components -- ReactMarkdown requires component
    * renderers that close over this message's metadata. useMemo keeps them stable until that
    * metadata changes. */
@@ -1396,6 +1474,12 @@ function ChatMarkdown({
           theme={resolvedTheme}
           threadRef={threadRef}
           onOpen={openInPreferredEditor}
+          onDownload={
+            threadRef && fileLinkPolicy.downloadAvailable
+              ? () => downloadMarkdownFile(fileLinkMeta.filePath)
+              : undefined
+          }
+          downloadOnClick={fileLinkPolicy.defaultAction === "download"}
           onOpenInBrowser={
             threadRef &&
             isPreviewSupportedInRuntime() &&
@@ -1591,6 +1675,10 @@ function ChatMarkdown({
     openInPreferredEditor,
     openExternalLinkInPreview,
     openMarkdownFileInPreview,
+    downloadMarkdownFile,
+    fileLinkPolicy.defaultAction,
+    fileLinkPolicy.downloadAvailable,
+    preparedConnection,
     resolvedTheme,
     skills,
     text,
