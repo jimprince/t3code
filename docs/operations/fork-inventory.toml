@@ -356,3 +356,12 @@ id = "upstream-chat-file-attachment-name"
 date = "2026-08-28"
 decided = "adapt"
 rationale = "Upstream added a pathless ChatFileAttachment member to ChatAttachment. Rename the fork's parallel path-bearing schema to ChatFileHandoffAttachment so both contracts coexist without changing the fork's fileAttachments wire field or /tmp handoff behavior."
+
+[[patch]]
+name = "fork-remote-file-downloads"
+subject = "feat(remote): download linked workspace files"
+class = "product"
+purpose = "Let web and desktop operators securely download files linked from a thread when those files remain inside that thread's project or active worktree."
+retire_when = "Upstream ships equivalent authenticated linked-file downloads with canonical project/worktree containment across local and remote environments."
+depends_on = ["fork-remote-relay-access"]
+roles = []
