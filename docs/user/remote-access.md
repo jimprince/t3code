@@ -126,6 +126,16 @@ npx t3 serve --tailscale-serve --tailscale-serve-port 8443
 Once paired, add projects normally: open the Command Palette and choose **Add Project**, then pick
 the environment the project lives on. Every saved environment is offered, not only the local one.
 
+When an agent links to a file inside its project or active worktree, the file chip's context menu in
+the web or desktop client offers **Download file** for every connected environment. Saved Bearer,
+Relay, and SSH environments also download on left click; primary connections keep their existing
+open-in-preview or open-in-editor left-click behavior. Primary means the current same-origin server,
+so this explicit download is also available when that server is on another machine.
+
+Generated downloadable artifacts must live inside the thread's project or active worktree. Files
+written elsewhere, including screenshot-style temporary or evidence paths, cannot be downloaded
+from a chat link; move or copy them into the thread workspace first.
+
 ### Option 3: Desktop-Managed SSH Launch
 
 Use this when you want the desktop app to start or reuse T3 Code on another machine over SSH.
