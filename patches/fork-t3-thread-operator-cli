@@ -1,6 +1,6 @@
-Bottom: 73b86ba831639ae389d16c923fd07dce9ecbe655
-Top:    c3e9539943b8cf49a2933ef277452fdebcc73dd6
+Bottom: 3440bd55ce4b7f37f25ec30ea867b9fc7ab47f2f
+Top:    a5a40f0c5119d88001ca31e94b5c7c8e494b6883
 Author: brad <bradprin@live.com>
-Date:   2026-08-04 21:18:33 -0600
+Date:   2026-08-04 22:12:22 -0600
 
 feat(fork): add t3-thread operator CLI
