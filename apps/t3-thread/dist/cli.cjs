@@ -7207,7 +7207,7 @@ var require_websocket_server = __commonJS({
         socket.on("error", socketOnError);
         const key = req.headers["sec-websocket-key"];
         const upgrade = req.headers.upgrade;
-        const version2 = +req.headers["sec-websocket-version"];
+        const version = +req.headers["sec-websocket-version"];
         if (req.method !== "GET") {
           const message = "Invalid HTTP method";
           abortHandshakeOrEmitwsClientError(this, req, socket, 405, message);
@@ -7223,7 +7223,7 @@ var require_websocket_server = __commonJS({
           abortHandshakeOrEmitwsClientError(this, req, socket, 400, message);
           return;
         }
-        if (version2 !== 13 && version2 !== 8) {
+        if (version !== 13 && version !== 8) {
           const message = "Missing or invalid Sec-WebSocket-Version header";
           abortHandshakeOrEmitwsClientError(this, req, socket, 400, message, {
             "Sec-WebSocket-Version": "13, 8"
@@ -7267,7 +7267,7 @@ var require_websocket_server = __commonJS({
         }
         if (this.options.verifyClient) {
           const info = {
-            origin: req.headers[`${version2 === 8 ? "sec-websocket-origin" : "origin"}`],
+            origin: req.headers[`${version === 8 ? "sec-websocket-origin" : "origin"}`],
             secure: !!(req.socket.authorized || req.socket.encrypted),
             req
           };
@@ -7713,33 +7713,33 @@ var require_detect_libc = __commonJS({
       }
       return null;
     };
-    var version2 = async () => {
-      let version3 = null;
+    var version = async () => {
+      let version2 = null;
       if (isLinux()) {
-        version3 = await versionFromFilesystem();
-        if (!version3) {
-          version3 = versionFromReport();
+        version2 = await versionFromFilesystem();
+        if (!version2) {
+          version2 = versionFromReport();
         }
-        if (!version3) {
+        if (!version2) {
           const out = await safeCommand();
-          version3 = versionFromCommand(out);
+          version2 = versionFromCommand(out);
         }
       }
-      return version3;
+      return version2;
     };
     var versionSync = () => {
-      let version3 = null;
+      let version2 = null;
       if (isLinux()) {
-        version3 = versionFromFilesystemSync();
-        if (!version3) {
-          version3 = versionFromReport();
+        version2 = versionFromFilesystemSync();
+        if (!version2) {
+          version2 = versionFromReport();
         }
-        if (!version3) {
+        if (!version2) {
           const out = safeCommandSync();
-          version3 = versionFromCommand(out);
+          version2 = versionFromCommand(out);
         }
       }
-      return version3;
+      return version2;
     };
     module2.exports = {
       GLIBC,
@@ -7748,7 +7748,7 @@ var require_detect_libc = __commonJS({
       familySync,
       isNonGlibcLinux,
       isNonGlibcLinuxSync,
-      version: version2,
+      version,
       versionSync
     };
   }
@@ -8304,7 +8304,7 @@ var NodeCrypto2 = __toESM(require("node:crypto"), 1);
 // src/projects.ts
 var NodePath2 = __toESM(require("node:path"), 1);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Pipeable.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Pipeable.js
 var pipeArguments = (self, args2) => {
   switch (args2.length) {
     case 0:
@@ -8348,7 +8348,7 @@ var Class = /* @__PURE__ */ (function() {
   return PipeableBase;
 })();
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Function.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Function.js
 var dual = function(arity, body) {
   if (typeof arity === "function") {
     return function() {
@@ -8450,7 +8450,7 @@ function memoize(f) {
   };
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/equal.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/equal.js
 var getAllObjectKeys = (obj) => {
   const keys5 = new Set(Reflect.ownKeys(obj));
   if (obj.constructor === Object) return keys5;
@@ -8473,7 +8473,7 @@ var getAllObjectKeys = (obj) => {
 };
 var byReferenceInstances = /* @__PURE__ */ new WeakSet();
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Predicate.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Predicate.js
 function isString(input) {
   return typeof input === "string";
 }
@@ -8528,7 +8528,7 @@ function isIterable(input) {
   return hasProperty(input, Symbol.iterator) || isString(input);
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Hash.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Hash.js
 var symbol = "~effect/interfaces/Hash";
 var hash = (self) => {
   switch (typeof self) {
@@ -8549,6 +8549,9 @@ var hash = (self) => {
       if (self === null) {
         return string("null");
       } else if (self instanceof Date) {
+        if (Number.isNaN(self.getTime())) {
+          return string("Invalid Date");
+        }
         return string(self.toISOString());
       } else if (self instanceof RegExp) {
         return string(self.toString());
@@ -8564,6 +8567,8 @@ var hash = (self) => {
             return self[symbol]();
           } else if (typeof self === "function") {
             return random(self);
+          } else if (self instanceof DataView) {
+            return array(new Uint8Array(self.buffer, self.byteOffset, self.byteLength));
           } else if (Array.isArray(self) || ArrayBuffer.isView(self)) {
             return array(self);
           } else if (self instanceof Map) {
@@ -8647,7 +8652,7 @@ function withVisitedTracking(obj, fn3) {
   return result4;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Equal.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Equal.js
 var symbol2 = "~effect/interfaces/Equal";
 function equals() {
   if (arguments.length === 1) {
@@ -8696,7 +8701,9 @@ function compareObjects(self, that) {
     return false;
   } else if (self instanceof Date) {
     if (!(that instanceof Date)) return false;
-    return self.toISOString() === that.toISOString();
+    const selfTime = self.getTime();
+    const thatTime = that.getTime();
+    return selfTime === thatTime || Number.isNaN(selfTime) && Number.isNaN(thatTime);
   } else if (self instanceof RegExp) {
     if (!(that instanceof RegExp)) return false;
     return self.toString() === that.toString();
@@ -8717,8 +8724,13 @@ function compareObjects(self, that) {
       }
       return compareArrays(self, that);
     } else if (ArrayBuffer.isView(self)) {
-      if (!ArrayBuffer.isView(that) || self.byteLength !== that.byteLength) {
+      const selfIsDataView = self instanceof DataView;
+      if (!ArrayBuffer.isView(that) || self.byteLength !== that.byteLength || selfIsDataView !== that instanceof DataView) {
         return false;
+      }
+      if (selfIsDataView) {
+        const thatDataView = that;
+        return compareTypedArrays(new Uint8Array(self.buffer, self.byteOffset, self.byteLength), new Uint8Array(thatDataView.buffer, thatDataView.byteOffset, thatDataView.byteLength));
       }
       return compareTypedArrays(self, that);
     } else if (self instanceof Map) {
@@ -8829,7 +8841,7 @@ var byReferenceUnsafe = (obj) => {
   return obj;
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Reducer.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Reducer.js
 function make(combine4, initialValue, combineAll) {
   return {
     combine: combine4,
@@ -8844,7 +8856,7 @@ function make(combine4, initialValue, combineAll) {
   };
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Equivalence.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Equivalence.js
 var make2 = (isEquivalent) => (self, that) => self === that || isEquivalent(self, that);
 var isStrictEquivalent = (x, y) => x === y;
 var strictEqual = () => isStrictEquivalent;
@@ -8880,10 +8892,10 @@ function Struct(fields) {
   });
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/array.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/array.js
 var isArrayNonEmpty = (self) => self.length > 0;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/doNotation.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/doNotation.js
 var let_ = (map15) => dual(3, (self, name, f) => map15(self, (a) => ({
   ...a,
   [name]: f(a)
@@ -8896,7 +8908,7 @@ var bind = (map15, flatMap9) => dual(3, (self, name, f) => flatMap9(self, (a) =>
   [name]: b
 }))));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/record.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/record.js
 function assignProperty(self, key, value3) {
   if (key === "__proto__") {
     Object.defineProperty(self, key, {
@@ -8918,7 +8930,7 @@ function assignProperties(self, source) {
   }
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Option.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Option.js
 var Option_exports = {};
 __export(Option_exports, {
   Do: () => Do,
@@ -8983,14 +8995,14 @@ __export(Option_exports, {
   zipWith: () => zipWith
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Combiner.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Combiner.js
 function make3(combine4) {
   return {
     combine: combine4
   };
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Redactable.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Redactable.js
 var symbolRedactable = /* @__PURE__ */ Symbol.for("~effect/Redactable");
 var isRedactable = (u) => hasProperty(u, symbolRedactable);
 function redact(u) {
@@ -9001,18 +9013,21 @@ function getRedacted(redactable) {
   return redactable[symbolRedactable](globalThis[currentFiberTypeId]?.context ?? emptyContext);
 }
 var currentFiberTypeId = "~effect/Fiber/currentFiber";
+var emptyMap = /* @__PURE__ */ new Map();
 var emptyContext = {
   "~effect/Context": {},
-  mapUnsafe: /* @__PURE__ */ new Map(),
+  base: emptyMap,
+  depth: 0,
+  mapUnsafe: emptyMap,
   pipe() {
     return pipeArguments(this, arguments);
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Formatter.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Formatter.js
 function format(input, options) {
   const space = options?.space ?? 0;
-  const seen = /* @__PURE__ */ new WeakSet();
+  const ancestors = /* @__PURE__ */ new WeakSet();
   const gap = !space ? "" : typeof space === "number" ? " ".repeat(space) : space;
   const ind = (d) => gap.repeat(d);
   const wrap = (v, body) => {
@@ -9026,21 +9041,21 @@ function format(input, options) {
       return ["[ownKeys threw]"];
     }
   };
-  function recur5(v, d = 0) {
+  function recur3(v, d = 0) {
     if (Array.isArray(v)) {
-      if (seen.has(v)) return CIRCULAR;
-      seen.add(v);
-      if (!gap || v.length <= 1) return `[${v.map((x) => recur5(x, d)).join(",")}]`;
-      const inner = v.map((x) => recur5(x, d + 1)).join(",\n" + ind(d + 1));
-      return `[
-${ind(d + 1)}${inner}
+      if (ancestors.has(v)) return CIRCULAR;
+      ancestors.add(v);
+      const output = !gap || v.length <= 1 ? `[${v.map((x) => recur3(x, d)).join(",")}]` : `[
+${ind(d + 1)}${v.map((x) => recur3(x, d + 1)).join(",\n" + ind(d + 1))}
 ${ind(d)}]`;
+      ancestors.delete(v);
+      return output;
     }
     if (v instanceof Date) return formatDate(v);
     if (!options?.ignoreToString && hasProperty(v, "toString") && typeof v["toString"] === "function" && v["toString"] !== Object.prototype.toString && v["toString"] !== Array.prototype.toString) {
       const s = safeToString(v);
       if (v instanceof Error && v.cause) {
-        return `${s} (cause: ${recur5(v.cause, d)})`;
+        return `${s} (cause: ${recur3(v.cause, d)})`;
       }
       return s;
     }
@@ -9048,25 +9063,31 @@ ${ind(d)}]`;
     if (typeof v === "number" || v == null || typeof v === "boolean" || typeof v === "symbol") return String(v);
     if (typeof v === "bigint") return String(v) + "n";
     if (typeof v === "object" || typeof v === "function") {
-      if (seen.has(v)) return CIRCULAR;
-      seen.add(v);
-      if (symbolRedactable in v) return format(getRedacted(v));
-      if (Symbol.iterator in v) {
-        return `${v.constructor.name}(${recur5(Array.from(v), d)})`;
-      }
-      const keys5 = ownKeys(v);
-      if (!gap || keys5.length <= 1) {
-        const body2 = `{${keys5.map((k) => `${formatPropertyKey(k)}:${recur5(v[k], d)}`).join(",")}}`;
-        return wrap(v, body2);
-      }
-      const body = `{
-${keys5.map((k) => `${ind(d + 1)}${formatPropertyKey(k)}: ${recur5(v[k], d + 1)}`).join(",\n")}
+      if (ancestors.has(v)) return CIRCULAR;
+      ancestors.add(v);
+      let output;
+      if (symbolRedactable in v) {
+        output = format(getRedacted(v));
+      } else if (Symbol.iterator in v) {
+        output = `${v.constructor.name}(${recur3(Array.from(v), d)})`;
+      } else {
+        const keys5 = ownKeys(v);
+        if (!gap || keys5.length <= 1) {
+          const body = `{${keys5.map((k) => `${formatPropertyKey(k)}:${recur3(v[k], d)}`).join(",")}}`;
+          output = wrap(v, body);
+        } else {
+          const body = `{
+${keys5.map((k) => `${ind(d + 1)}${formatPropertyKey(k)}: ${recur3(v[k], d + 1)}`).join(",\n")}
 ${ind(d)}}`;
-      return wrap(v, body);
+          output = wrap(v, body);
+        }
+      }
+      ancestors.delete(v);
+      return output;
     }
     return String(v);
   }
-  return recur5(input, 0);
+  return recur3(input, 0);
 }
 var CIRCULAR = "[Circular]";
 function formatPropertyKey(name) {
@@ -9105,10 +9126,10 @@ function formatJson(input, options) {
     }
     ancestors.push(redacted);
     return redacted;
-  }, options?.space);
+  }, options?.space) ?? "null";
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Inspectable.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Inspectable.js
 var NodeInspectSymbol = /* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom");
 var toJson = (input) => {
   try {
@@ -9172,7 +9193,7 @@ var Class2 = class {
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Utils.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Utils.js
 var SingleShotGen = class _SingleShotGen {
   called = false;
   self;
@@ -9232,7 +9253,7 @@ var pickInternalCall = () => {
 };
 var internalCall = /* @__PURE__ */ pickInternalCall();
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/core.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/core.js
 var EffectTypeId = `~effect/Effect`;
 var ExitTypeId = `~effect/Exit`;
 var effectVariance = {
@@ -9448,12 +9469,12 @@ var makePrimitive = (options) => {
 };
 var makeExit = (options) => {
   const Proto13 = {
-    ...makePrimitiveProto(options),
     [ExitTypeId]: ExitTypeId,
     _tag: options.op,
     get [options.prop]() {
       return this[args];
     },
+    ...makePrimitiveProto(options),
     toString() {
       return `${options.op}(${format(this[args])})`;
     },
@@ -9593,7 +9614,7 @@ var done = (value3) => {
   return exitFail(Done(value3));
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/option.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/option.js
 var TypeId = "~effect/data/Option";
 var CommonProto = {
   [TypeId]: {
@@ -9659,7 +9680,7 @@ var some = (value3) => {
   return a;
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/result.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/result.js
 var TypeId2 = "~effect/data/Result";
 var CommonProto2 = {
   [TypeId2]: {
@@ -9728,7 +9749,7 @@ var succeed = (success) => {
 var getFailure = (self) => isSuccess(self) ? none : some(self.failure);
 var getSuccess = (self) => isFailure(self) ? none : some(self.success);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Order.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Order.js
 function make4(compare) {
   return (self, that) => self === that ? 0 : compare(self, that);
 }
@@ -9759,7 +9780,7 @@ var isLessThanOrEqualTo = (O) => dual(2, (self, that) => O(self, that) !== 1);
 var isGreaterThanOrEqualTo = (O) => dual(2, (self, that) => O(self, that) !== -1);
 var min = (O) => dual(2, (self, that) => self === that || O(self, that) < 1 ? self : that);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Option.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Option.js
 var none2 = () => none;
 var some2 = some;
 var isOption2 = isOption;
@@ -9937,7 +9958,7 @@ function makeReducerFailFast(reducer2) {
   });
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Result.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Result.js
 var succeed2 = succeed;
 var fail2 = fail;
 var try_ = (evaluate2) => {
@@ -9959,8 +9980,8 @@ var isResult2 = isResult;
 var isFailure2 = isFailure;
 var isSuccess2 = isSuccess;
 var makeEquivalence2 = (success, failure) => make2((x, y) => isFailure2(x) ? isFailure2(y) && failure(x.failure, y.failure) : isSuccess2(y) && success(x.success, y.success));
-var mapError = /* @__PURE__ */ dual(2, (self, f) => isFailure2(self) ? fail2(f(self.failure)) : succeed2(self.success));
-var map2 = /* @__PURE__ */ dual(2, (self, f) => isSuccess2(self) ? succeed2(f(self.success)) : fail2(self.failure));
+var mapError = /* @__PURE__ */ dual(2, (self, f) => isFailure2(self) ? fail2(f(self.failure)) : self);
+var map2 = /* @__PURE__ */ dual(2, (self, f) => isSuccess2(self) ? succeed2(f(self.success)) : self);
 var match2 = /* @__PURE__ */ dual(2, (self, {
   onFailure,
   onSuccess
@@ -9968,10 +9989,10 @@ var match2 = /* @__PURE__ */ dual(2, (self, {
 var getOrElse2 = /* @__PURE__ */ dual(2, (self, onFailure) => isFailure2(self) ? onFailure(self.failure) : self.success);
 var flatMap2 = /* @__PURE__ */ dual(2, (self, f) => isFailure2(self) ? fail2(self.failure) : f(self.success));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Tuple.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Tuple.js
 var makeEquivalence3 = Tuple;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Iterable.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Iterable.js
 var makeBy = (f, options) => {
   const max5 = options?.length !== void 0 ? Math.max(1, Math.floor(options.length)) : Infinity;
   return {
@@ -10072,7 +10093,7 @@ var filter2 = /* @__PURE__ */ dual(2, (self, predicate) => ({
   }
 }));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Record.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Record.js
 var has = /* @__PURE__ */ dual(2, (self, key) => Object.hasOwn(self, key));
 var map3 = /* @__PURE__ */ dual(2, (self, f) => {
   const out = {
@@ -10097,7 +10118,7 @@ var makeEquivalence4 = (equivalence) => {
   return (self, that) => is3(self, that) && is3(that, self);
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Array.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Array.js
 var Array2 = globalThis.Array;
 var makeBy2 = /* @__PURE__ */ dual(2, (n, f) => {
   const max5 = Math.max(1, Math.floor(n));
@@ -10116,7 +10137,7 @@ var isArray = Array2.isArray;
 var isArrayNonEmpty2 = isArrayNonEmpty;
 var isReadonlyArrayNonEmpty = isArrayNonEmpty;
 function isOutOfBounds(i, as4) {
-  return i < 0 || i >= as4.length;
+  return !Number.isFinite(i) || i < 0 || i >= as4.length;
 }
 var getUnsafe = /* @__PURE__ */ dual(2, (self, index2) => {
   const i = Math.floor(index2);
@@ -10205,7 +10226,7 @@ function makeReducerConcat() {
   return reducer;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/BigDecimal.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/BigDecimal.js
 var FINITE_INT_REGEXP = /^[+-]?\d+$/;
 var TypeId3 = "~effect/BigDecimal";
 var BigDecimalProto = {
@@ -10434,17 +10455,17 @@ var floor = /* @__PURE__ */ dual(isBigDecimalArgs, (self, scale2 = 0) => {
   return truncated;
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Boolean.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Boolean.js
 var Boolean2 = globalThis.Boolean;
 var ReducerOr = /* @__PURE__ */ make((a, b) => a || b, false);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Effectable.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Effectable.js
 var Prototype2 = (options) => makePrimitiveProto({
   op: options.label,
   [evaluate]: options.evaluate
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/stackTraceLimit.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/stackTraceLimit.js
 var isStackTraceLimitWritable = () => {
   const desc = Object.getOwnPropertyDescriptor(Error, "stackTraceLimit");
   if (desc === void 0) {
@@ -10461,7 +10482,7 @@ var setStackTraceLimit = (value3) => {
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Context.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Context.js
 var ServiceTypeId = "~effect/Context/Service";
 var Service = function() {
   const prevLimit = getStackTraceLimit();
@@ -10477,22 +10498,22 @@ var Service = function() {
       return err.stack;
     }
   });
-  if (arguments.length > 0) {
-    self.key = arguments[0];
-    if (arguments[1]?.defaultValue) {
-      self[ReferenceTypeId] = ReferenceTypeId;
-      self.defaultValue = arguments[1].defaultValue;
-    }
-    return self;
-  }
-  return function(key, options) {
+  const init = (key, options) => {
     self.key = key;
+    if (options?.defaultValue) {
+      self[ReferenceTypeId] = ReferenceTypeId;
+      self.defaultValue = options.defaultValue;
+    }
     if (options?.make) {
       ;
       self.make = options.make;
     }
+    if (options?.fiberCached) {
+      cacheKeys.add(key);
+    }
     return self;
   };
+  return arguments.length > 0 ? init(arguments[0], arguments[1]) : init;
 };
 var ServiceProto = {
   [ServiceTypeId]: ServiceTypeId,
@@ -10522,18 +10543,61 @@ var ServiceProto = {
     return withFiber((fiber3) => exitSucceed(f(get(fiber3.context, this))));
   }
 };
+var cacheKeys = /* @__PURE__ */ new Set();
 var ReferenceTypeId = "~effect/Context/Reference";
 var TypeId4 = "~effect/Context";
-var makeUnsafe = (mapUnsafe) => {
+var MaxDepth = 8;
+var FlattenAfterBaseHits = 8;
+var makeImpl = (cacheRoot, base2, overlay, depth) => {
   const self = Object.create(Proto);
-  self.mapUnsafe = mapUnsafe;
-  self.mutable = false;
+  self.cacheRoot = cacheRoot ?? self;
+  self.base = base2;
+  self.overlay = overlay;
+  self.depth = depth;
+  self._flat = void 0;
+  self.baseHits = 0;
   return self;
 };
+var applyOverlays = (map15, overlay) => {
+  if (!overlay) return;
+  applyOverlays(map15, overlay.parent);
+  map15.set(overlay.key, overlay.value);
+};
+var flatten3 = (self) => {
+  if (self._flat) return self._flat;
+  if (!self.overlay) return self._flat = self.base;
+  const map15 = new Map(self.base);
+  applyOverlays(map15, self.overlay);
+  return self._flat = map15;
+};
+var withFlat = (self, f) => {
+  const map15 = new Map(self.mapUnsafe);
+  f(map15);
+  return makeUnsafe(map15);
+};
+var notFound = /* @__PURE__ */ Symbol();
+var lookup = (self, key) => {
+  const impl = self;
+  for (let overlay = impl.overlay; overlay; overlay = overlay.parent) {
+    if (overlay.key === key) return overlay.value;
+  }
+  const value3 = impl.base.get(key);
+  if (value3 === void 0 && !impl.base.has(key)) return notFound;
+  if (impl.overlay && ++impl.baseHits >= FlattenAfterBaseHits) {
+    impl.base = flatten3(impl);
+    impl.overlay = void 0;
+    impl.depth = 0;
+  }
+  return value3;
+};
+var makeUnsafe = (mapUnsafe) => makeImpl(void 0, mapUnsafe, void 0, 0);
 var Proto = {
   ...PipeInspectableProto,
   [TypeId4]: {
     _Services: (_) => _
+  },
+  get mapUnsafe() {
+    return flatten3(this);
   },
   toJSON() {
     return {
@@ -10545,11 +10609,12 @@ var Proto = {
     };
   },
   [symbol2](that) {
-    if (!isContext(that) || this.mapUnsafe.size !== that.mapUnsafe.size) return false;
-    for (const k of this.mapUnsafe.keys()) {
-      if (!that.mapUnsafe.has(k) || !equals(this.mapUnsafe.get(k), that.mapUnsafe.get(k))) {
-        return false;
-      }
+    if (!isContext(that)) return false;
+    const self = this.mapUnsafe;
+    const other = that.mapUnsafe;
+    if (self.size !== other.size) return false;
+    for (const [key, value3] of self) {
+      if (!other.has(key) || !equals(value3, other.get(key))) return false;
     }
     return true;
   },
@@ -10557,29 +10622,40 @@ var Proto = {
     return number(this.mapUnsafe.size);
   }
 };
+var hasSameCache = (self, that) => self.cacheRoot === that.cacheRoot;
 var isContext = (u) => hasProperty(u, TypeId4);
-var isReference = (u) => hasProperty(u, ReferenceTypeId);
+var isReference = (u) => !!u[ReferenceTypeId];
 var empty3 = () => emptyContext2;
 var emptyContext2 = /* @__PURE__ */ makeUnsafe(/* @__PURE__ */ new Map());
 var make6 = (key, service4) => makeUnsafe(/* @__PURE__ */ new Map([[key.key, service4]]));
-var add = /* @__PURE__ */ dual(3, (self, key, service4) => withMapUnsafe(self, (map15) => {
-  map15.set(key.key, service4);
-}));
-var getOrUndefined2 = /* @__PURE__ */ dual(2, (self, key) => self.mapUnsafe.get(key.key));
+var add = /* @__PURE__ */ dual(3, (self, key, service4) => {
+  const impl = self;
+  const cacheRoot = cacheKeys.has(key.key) ? void 0 : impl.cacheRoot;
+  if (impl.depth >= MaxDepth) {
+    const map15 = new Map(impl.mapUnsafe);
+    map15.set(key.key, service4);
+    return makeImpl(cacheRoot, map15, void 0, 0);
+  }
+  return makeImpl(cacheRoot, impl.base, {
+    key: key.key,
+    value: service4,
+    parent: impl.overlay
+  }, impl.depth + 1);
+});
+var getOrUndefined2 = /* @__PURE__ */ dual(2, (self, key) => getOrUndefinedUnsafe(self, key.key));
+var getOrUndefinedUnsafe = (self, key) => {
+  const value3 = lookup(self, key);
+  return value3 === notFound ? void 0 : value3;
+};
 var getUnsafe2 = /* @__PURE__ */ dual(2, (self, service4) => {
-  if (!self.mapUnsafe.has(service4.key)) {
-    if (ReferenceTypeId in service4) return getDefaultValue(service4);
+  const value3 = lookup(self, service4.key);
+  if (value3 === notFound) {
+    if (isReference(service4)) return getDefaultValue(service4);
     throw serviceNotFoundError(service4);
   }
-  return self.mapUnsafe.get(service4.key);
+  return value3;
 });
 var get = getUnsafe2;
-var getReferenceUnsafe = (self, service4) => {
-  if (!self.mapUnsafe.has(service4.key)) {
-    return getDefaultValue(service4);
-  }
-  return self.mapUnsafe.get(service4.key);
-};
 var defaultValueCacheKey = "~effect/Context/defaultValue";
 var getDefaultValue = (ref) => {
   if (defaultValueCacheKey in ref) {
@@ -10606,17 +10682,14 @@ var serviceNotFoundError = (service4) => {
   return error;
 };
 var getOption = /* @__PURE__ */ dual(2, (self, service4) => {
-  if (self.mapUnsafe.has(service4.key)) {
-    return some2(self.mapUnsafe.get(service4.key));
-  }
+  const value3 = lookup(self, service4.key);
+  if (value3 !== notFound) return some2(value3);
   return isReference(service4) ? some2(getDefaultValue(service4)) : none2();
 });
 var merge = /* @__PURE__ */ dual(2, (self, that) => {
   if (self.mapUnsafe.size === 0) return that;
   if (that.mapUnsafe.size === 0) return self;
-  return withMapUnsafe(self, (map15) => {
-    that.mapUnsafe.forEach((value3, key) => map15.set(key, value3));
-  });
+  return withFlat(self, (map15) => that.mapUnsafe.forEach((value3, key) => map15.set(key, value3)));
 });
 var mergeAll = (...ctxs) => {
   const map15 = /* @__PURE__ */ new Map();
@@ -10627,18 +10700,9 @@ var mergeAll = (...ctxs) => {
   }
   return makeUnsafe(map15);
 };
-var withMapUnsafe = (self, f) => {
-  if (self.mutable) {
-    f(self.mapUnsafe);
-    return self;
-  }
-  const map15 = new Map(self.mapUnsafe);
-  f(map15);
-  return makeUnsafe(map15);
-};
 var Reference = Service;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Duration.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Duration.js
 var TypeId5 = "~effect/time/Duration";
 var bigint02 = /* @__PURE__ */ BigInt(0);
 var bigint12 = /* @__PURE__ */ BigInt(1);
@@ -10911,7 +10975,7 @@ var subtract = /* @__PURE__ */ dual(2, (self, that) => matchPair(self, that, {
 }));
 var equals3 = /* @__PURE__ */ dual(2, (self, that) => Equivalence2(self, that));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Filter.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Filter.js
 var toPredicate = (self) => (input) => !isFailure2(self(input));
 var has2 = (key) => (input) => input.has(key) ? succeed2(input) : fail2(input);
 var compose = /* @__PURE__ */ dual(2, (left, right) => (input) => {
@@ -10927,8 +10991,9 @@ var composePassthrough = /* @__PURE__ */ dual(2, (left, right) => (input) => {
   return rightOut;
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Scheduler.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Scheduler.js
 var Scheduler = /* @__PURE__ */ Reference("effect/Scheduler", {
+  fiberCached: true,
   defaultValue: () => new MixedScheduler()
 });
 var setImmediate2 = "setImmediate" in globalThis ? (f) => {
@@ -10937,6 +11002,15 @@ var setImmediate2 = "setImmediate" in globalThis ? (f) => {
 } : (f) => {
   const timer = setTimeout(f, 0);
   return () => clearTimeout(timer);
+};
+var setMicrotask = (f) => {
+  let cancelled = false;
+  queueMicrotask(() => {
+    if (!cancelled) f();
+  });
+  return () => {
+    cancelled = true;
+  };
 };
 var PriorityBuckets = class {
   buckets = [];
@@ -10966,9 +11040,9 @@ var PriorityBuckets = class {
 var MixedScheduler = class {
   executionMode;
   setImmediate;
-  constructor(executionMode = "async", setImmediateFn = setImmediate2) {
+  constructor(executionMode = "async", setImmediateFn) {
     this.executionMode = executionMode;
-    this.setImmediate = setImmediateFn;
+    this.setImmediate = setImmediateFn ?? (executionMode === "sync" ? setMicrotask : setImmediate2);
   }
   /**
    * Returns whether the fiber has reached its operation budget and should yield.
@@ -11046,15 +11120,19 @@ var MixedSchedulerDispatcher = class {
   }
 };
 var MaxOpsBeforeYield = /* @__PURE__ */ Reference("effect/Scheduler/MaxOpsBeforeYield", {
+  fiberCached: true,
   defaultValue: () => 2048
 });
 var PreventSchedulerYield = /* @__PURE__ */ Reference("effect/Scheduler/PreventSchedulerYield", {
+  fiberCached: true,
   defaultValue: () => false
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Tracer.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Tracer.js
 var ParentSpanKey = "effect/Tracer/ParentSpan";
-var ParentSpan = class extends (/* @__PURE__ */ Service()(ParentSpanKey)) {
+var ParentSpan = class extends (/* @__PURE__ */ Service()(ParentSpanKey, {
+  fiberCached: true
+})) {
 };
 var make8 = (options) => options;
 var DisablePropagation = /* @__PURE__ */ Reference("effect/Tracer/DisablePropagation", {
@@ -11068,6 +11146,7 @@ var MinimumTraceLevel = /* @__PURE__ */ Reference("effect/Tracer/MinimumTraceLev
 });
 var TracerKey = "effect/Tracer";
 var Tracer = /* @__PURE__ */ Reference(TracerKey, {
+  fiberCached: true,
   defaultValue: () => make8({
     span: (options) => new NativeSpan(options)
   })
@@ -11132,14 +11211,15 @@ var randomHexString = /* @__PURE__ */ (function() {
   };
 })();
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/metric.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/metric.js
 var FiberRuntimeMetricsKey = "effect/observability/Metric/FiberRuntimeMetricsKey";
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/references.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/references.js
 var CurrentErrorReporters = /* @__PURE__ */ Reference("effect/ErrorReporter/CurrentErrorReporters", {
   defaultValue: () => /* @__PURE__ */ new Set()
 });
 var CurrentStackFrame = /* @__PURE__ */ Reference("effect/References/CurrentStackFrame", {
+  fiberCached: true,
   defaultValue: constUndefined
 });
 var TracerEnabled = /* @__PURE__ */ Reference("effect/References/TracerEnabled", {
@@ -11158,9 +11238,11 @@ var CurrentLogAnnotations = /* @__PURE__ */ Reference("effect/References/Current
   defaultValue: () => ({})
 });
 var CurrentLogLevel = /* @__PURE__ */ Reference("effect/References/CurrentLogLevel", {
+  fiberCached: true,
   defaultValue: () => "Info"
 });
 var MinimumLogLevel = /* @__PURE__ */ Reference("effect/References/MinimumLogLevel", {
+  fiberCached: true,
   defaultValue: () => "Info"
 });
 var UnhandledLogLevel = /* @__PURE__ */ Reference("effect/References/UnhandledLogLevel", {
@@ -11170,7 +11252,7 @@ var CurrentLogSpans = /* @__PURE__ */ Reference("effect/References/CurrentLogSpa
   defaultValue: () => []
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/tracer.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/tracer.js
 var addSpanStackTrace = (options) => {
   if (options?.captureStackTrace === false) {
     return options;
@@ -11201,10 +11283,7 @@ var makeStackCleaner = (line) => (stack) => {
 };
 var spanCleaner = /* @__PURE__ */ makeStackCleaner(3);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/version.js
-var version = "dev";
-
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/effect.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/effect.js
 var Interrupt = class extends ReasonBase {
   fiberId;
   constructor(fiberId3, annotations = constEmptyAnnotations) {
@@ -11281,7 +11360,7 @@ var causeMap = /* @__PURE__ */ dual(2, (self, f) => {
   const failures = self.reasons.map((failure) => {
     if (isFailReason(failure)) {
       hasFail = true;
-      return new Fail(f(failure.error));
+      return new Fail(f(failure.error), failure.annotations);
     }
     return failure;
   });
@@ -11450,7 +11529,7 @@ ${prefix}}`;
   }
   return stack;
 };
-var FiberTypeId = `~effect/Fiber/${version}`;
+var FiberTypeId = "~effect/Fiber";
 var fiberVariance = {
   _A: identity,
   _E: identity
@@ -11504,7 +11583,7 @@ var FiberImpl = class {
     return this._dispatcher ??= this.currentScheduler.makeDispatcher();
   }
   getRef(ref) {
-    return getReferenceUnsafe(this.context, ref);
+    return get(this.context, ref);
   }
   addObserver(cb) {
     if (this._exit) {
@@ -11641,20 +11720,22 @@ var FiberImpl = class {
     return pipeArguments(this, arguments);
   }
   setContext(context4) {
+    const previous = this.context;
     this.context = context4;
+    if (previous !== void 0 && hasSameCache(previous, context4)) return;
     const scheduler2 = this.getRef(Scheduler);
     if (scheduler2 !== this.currentScheduler) {
       this.currentScheduler = scheduler2;
       this._dispatcher = void 0;
     }
-    this.currentSpan = context4.mapUnsafe.get(ParentSpanKey);
+    this.currentSpan = getOrUndefinedUnsafe(context4, ParentSpanKey);
     this.currentLogLevel = this.getRef(CurrentLogLevel);
     this.minimumLogLevel = this.getRef(MinimumLogLevel);
-    this.currentStackFrame = context4.mapUnsafe.get(CurrentStackFrame.key);
+    this.currentStackFrame = this.getRef(CurrentStackFrame);
     this.maxOpsBeforeYield = this.getRef(MaxOpsBeforeYield);
     this.currentPreventYield = this.getRef(PreventSchedulerYield);
-    this.runtimeMetrics = context4.mapUnsafe.get(FiberRuntimeMetricsKey);
-    const currentTracer = context4.mapUnsafe.get(TracerKey);
+    this.runtimeMetrics = getOrUndefinedUnsafe(context4, FiberRuntimeMetricsKey);
+    const currentTracer = getOrUndefinedUnsafe(context4, TracerKey);
     this.currentTracerContext = currentTracer ? currentTracer["context"] : void 0;
   }
   get currentSpanLocal() {
@@ -12119,7 +12200,7 @@ var flatMapEager = /* @__PURE__ */ dual(2, (self, f) => {
   }
   return flatMap3(self, f);
 });
-var flatten3 = (self) => flatMap3(self, identity);
+var flatten4 = (self) => flatMap3(self, identity);
 var map5 = /* @__PURE__ */ dual(2, (self, f) => flatMap3(self, (a) => succeed3(internalCall(() => f(a)))));
 var mapEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMap(self, f) : map5(self, f));
 var mapErrorEager = /* @__PURE__ */ dual(2, (self, f) => effectIsExit(self) ? exitMapError(self, f) : mapError2(self, f));
@@ -12476,8 +12557,8 @@ var timeout = /* @__PURE__ */ dual(2, (self, duration) => timeoutOrElse(self, {
 }));
 var timeoutOption = /* @__PURE__ */ dual(2, (self, duration) => raceFirst(asSome(self), as2(sleep2(duration), none2())));
 var timed = (self) => clockWith((clock) => {
-  const start = clock.currentTimeNanosUnsafe();
-  return map5(self, (a) => [nanos(clock.currentTimeNanosUnsafe() - start), a]);
+  const start = clock.monotonicTimeNanosUnsafe();
+  return map5(self, (a) => [nanos(clock.monotonicTimeNanosUnsafe() - start), a]);
 });
 var ScopeTypeId = "~effect/Scope";
 var ScopeCloseableTypeId = "~effect/Scope/Closeable";
@@ -12841,10 +12922,24 @@ var forEachSequential = (iterable, f, options) => suspend(() => {
 var iterateEagerImpl = (options) => {
   const onItem = options.onItem;
   const step = options.step;
+  const runSequential = (state, items2, index2, end3) => {
+    for (; index2 < end3; index2++) {
+      const item = items2[index2];
+      const effect2 = onItem(state, item, index2);
+      if (!effectIsExit(effect2)) {
+        return flatMap3(exit(effect2), (itemExit) => step(state, item, itemExit, index2) ?? runSequential(state, items2, index2 + 1, end3) ?? void_2);
+      }
+      const terminal = step(state, item, effect2, index2);
+      if (terminal) return terminal._tag === "Failure" ? terminal : void 0;
+    }
+  };
   return (state, items2, opts) => {
-    let index2 = opts?.start ?? 0;
+    let index2 = 0;
     const end3 = opts?.end ?? items2.length;
     const concurrency = opts?.concurrency ?? 1;
+    if (concurrency === 1) {
+      return runSequential(state, items2, 0, end3);
+    }
     const orderedStep = opts?.orderedStep === true && concurrency > 1;
     let done4 = false;
     let parentFiber;
@@ -12883,12 +12978,6 @@ var iterateEagerImpl = (options) => {
         if (effectIsExit(eff)) {
           terminal = runStep(item, eff, index2);
           if (terminal) break;
-        } else if (concurrency === 1) {
-          return flatMap3(exit(eff), (exit3) => {
-            terminal = runStep(item, exit3, index2);
-            index2++;
-            return terminal ?? go() ?? void_2;
-          });
         } else if (!parentFiber) {
           return callback((cb) => {
             parentFiber = getCurrentFiber();
@@ -13043,16 +13132,17 @@ var forkChild = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self, optio
   return succeed3(forkUnsafe(fiber3, self, options?.startImmediately, false, options?.uninterruptible ?? false));
 }));
 var forkUnsafe = (parent, effect2, immediate = false, daemon = false, uninterruptible3 = false) => {
-  const interruptible3 = uninterruptible3 === "inherit" ? parent.interruptible : !uninterruptible3;
-  const child = new FiberImpl(parent.context, interruptible3);
+  const parentRuntime = parent;
+  const interruptible3 = uninterruptible3 === "inherit" ? parentRuntime.interruptible : !uninterruptible3;
+  const child = new FiberImpl(parentRuntime.context, interruptible3);
   if (immediate) {
     child.evaluate(effect2);
   } else {
-    parent.currentDispatcher.scheduleTask(() => child.evaluate(effect2), 0);
+    parentRuntime.currentDispatcher.scheduleTask(() => child.evaluate(effect2), 0);
   }
   if (!daemon && !child._exit) {
-    parent.children().add(child);
-    child.addObserver(() => parent._children.delete(child));
+    parentRuntime.children().add(child);
+    child.addObserver(() => parentRuntime._children.delete(child));
   }
   return child;
 };
@@ -13447,9 +13537,13 @@ var ClockImpl = class {
   }
   currentTimeMillis = /* @__PURE__ */ sync(() => this.currentTimeMillisUnsafe());
   currentTimeNanosUnsafe() {
-    return processOrPerformanceNow();
+    return wallTimeNanos();
   }
   currentTimeNanos = /* @__PURE__ */ sync(() => this.currentTimeNanosUnsafe());
+  monotonicTimeNanosUnsafe() {
+    return monotonicNowNanos();
+  }
+  monotonicTimeNanos = /* @__PURE__ */ sync(() => this.monotonicTimeNanosUnsafe());
   sleep(duration) {
     return this.sleepMillis(toMillis(duration));
   }
@@ -13463,24 +13557,41 @@ var ClockImpl = class {
     });
   }
 };
-var performanceNowNanos = /* @__PURE__ */ (function() {
-  const bigint1e6 = /* @__PURE__ */ BigInt(1e6);
-  if (typeof performance === "undefined" || typeof performance.now === "undefined") {
-    return () => BigInt(Date.now()) * bigint1e6;
+var nanosPerMilli = /* @__PURE__ */ BigInt(1e6);
+var monotonicNowNanos = /* @__PURE__ */ (function() {
+  const processHrtime = globalThis.process?.hrtime;
+  if (typeof processHrtime?.bigint === "function") {
+    return () => processHrtime.bigint();
   }
-  let origin;
+  if (typeof performance !== "undefined" && typeof performance.now === "function") {
+    return () => BigInt(Math.round(performance.now() * 1e6));
+  }
+  let previous = /* @__PURE__ */ BigInt(0);
   return () => {
-    origin ??= BigInt(Date.now()) * bigint1e6 - BigInt(Math.round(performance.now() * 1e6));
-    return origin + BigInt(Math.round(performance.now() * 1e6));
+    const current = BigInt(Date.now()) * nanosPerMilli;
+    if (current > previous) {
+      previous = current;
+    }
+    return previous;
   };
 })();
-var processOrPerformanceNow = /* @__PURE__ */ (function() {
-  const processHrtime = typeof process === "object" && "hrtime" in process && typeof process.hrtime.bigint === "function" ? process.hrtime : void 0;
-  if (!processHrtime) {
-    return performanceNowNanos;
-  }
-  const origin = /* @__PURE__ */ BigInt(/* @__PURE__ */ Date.now()) * /* @__PURE__ */ BigInt(1e6) - /* @__PURE__ */ processHrtime.bigint();
-  return () => origin + processHrtime.bigint();
+var wallTimeNanos = /* @__PURE__ */ (function() {
+  const reanchorThresholdNanos = /* @__PURE__ */ BigInt(1e9);
+  let origin;
+  return () => {
+    const monotonic = monotonicNowNanos();
+    const wall = BigInt(Date.now()) * nanosPerMilli;
+    if (origin === void 0) {
+      origin = wall - monotonic;
+    } else {
+      const projected = origin + monotonic;
+      const skew = wall > projected ? wall - projected : projected - wall;
+      if (skew > reanchorThresholdNanos) {
+        origin = wall - monotonic;
+      }
+    }
+    return origin + monotonic;
+  };
 })();
 var clockWith = (f) => withFiber((fiber3) => f(fiber3.getRef(ClockRef)));
 var sleep2 = (duration) => clockWith((clock) => clock.sleep(fromInputUnsafe(duration)));
@@ -13743,7 +13854,7 @@ var reportCauseUnsafe = (fiber3, cause, defectsOnly) => {
   reporters.forEach((reporter) => reporter.report(opts));
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Cause.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Cause.js
 var isCause2 = isCause;
 var isReason = isCauseReason;
 var isFailReason2 = isFailReason;
@@ -13767,7 +13878,7 @@ var done2 = done;
 var IllegalArgumentError2 = IllegalArgumentError;
 var ExceededCapacityError2 = ExceededCapacityError;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Effect.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Effect.js
 var Effect_exports = {};
 __export(Effect_exports, {
   Do: () => Do3,
@@ -13836,7 +13947,7 @@ __export(Effect_exports, {
   firstSuccessOf: () => firstSuccessOf2,
   flatMap: () => flatMap5,
   flatMapEager: () => flatMapEager2,
-  flatten: () => flatten4,
+  flatten: () => flatten5,
   flip: () => flip2,
   fn: () => fn2,
   fnUntraced: () => fnUntraced2,
@@ -13999,7 +14110,7 @@ __export(Effect_exports, {
   zipWith: () => zipWith3
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Exit.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Exit.js
 var Exit_exports = {};
 __export(Exit_exports, {
   asVoid: () => asVoid3,
@@ -14058,7 +14169,7 @@ var getSuccess3 = exitGetSuccess;
 var getCause = exitGetCause;
 var findErrorOption2 = exitFindErrorOption;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Layer.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Layer.js
 var Layer_exports = {};
 __export(Layer_exports, {
   CurrentMemoMap: () => CurrentMemoMap,
@@ -14107,7 +14218,7 @@ __export(Layer_exports, {
   withSpan: () => withSpan2
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Deferred.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Deferred.js
 var TypeId6 = "~effect/Deferred";
 var DeferredProto = {
   [TypeId6]: {
@@ -14150,14 +14261,14 @@ var doneUnsafe = (self, effect2) => {
 };
 var into = /* @__PURE__ */ dual(2, (self, deferred) => uninterruptibleMask((restore) => flatMap3(exit(restore(self)), (exit3) => done3(deferred, exit3))));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/References.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/References.js
 var CurrentLogAnnotations2 = CurrentLogAnnotations;
 var CurrentLogSpans2 = CurrentLogSpans;
 var CurrentStackFrame2 = CurrentStackFrame;
 var TracerTimingEnabled2 = TracerTimingEnabled;
 var UnhandledLogLevel2 = UnhandledLogLevel;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Scope.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Scope.js
 var Scope_exports = {};
 __export(Scope_exports, {
   Scope: () => Scope,
@@ -14184,7 +14295,7 @@ var close = scopeClose;
 var closeUnsafe = scopeCloseUnsafe;
 var use = scopeUse;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Layer.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Layer.js
 var TypeId7 = "~effect/Layer";
 var MemoMapTypeId = "~effect/Layer/MemoMap";
 var memoMapReuse = (entry, scope3) => {
@@ -14410,7 +14521,7 @@ var provideSpanStackFrame2 = (name, stack) => {
   }));
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/ExecutionPlan.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/ExecutionPlan.js
 var TypeId8 = "~effect/ExecutionPlan";
 var Proto2 = {
   [TypeId8]: TypeId8,
@@ -14437,7 +14548,7 @@ var CurrentMetadata = /* @__PURE__ */ Reference("effect/ExecutionPlan/CurrentMet
   })
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Data.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Data.js
 var Class3 = class extends Class {
   constructor(props) {
     super();
@@ -14449,10 +14560,10 @@ var Class3 = class extends Class {
 var Error3 = Error2;
 var TaggedError2 = TaggedError;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Clock.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Clock.js
 var Clock = ClockRef;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/dateTime.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/dateTime.js
 var TypeId9 = "~effect/time/DateTime";
 var TimeZoneTypeId = "~effect/time/DateTime/TimeZone";
 var Proto3 = {
@@ -14846,7 +14957,7 @@ var formatIsoOffset = (self) => {
 };
 var formatIsoZoned = (self) => self.zone._tag === "Offset" ? formatIsoOffset(self) : `${formatIsoOffset(self)}[${self.zone.id}]`;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Number.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Number.js
 var Number3 = globalThis.Number;
 var remainder = /* @__PURE__ */ dual(2, (self, divisor) => {
   const selfString = self.toString();
@@ -14891,12 +15002,12 @@ var nextPow2 = (n) => {
 var ReducerMax = /* @__PURE__ */ make((a, b) => Math.max(a, b), -Infinity);
 var ReducerMin = /* @__PURE__ */ make((a, b) => Math.min(a, b), Infinity);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/String.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/String.js
 var String2 = globalThis.String;
 var isString2 = isString;
 var trim = (self) => self.trim();
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Pull.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Pull.js
 var catchDone = /* @__PURE__ */ dual(2, (effect2, f) => catchCauseFilter(effect2, filterDoneLeftover, (l) => f(l)));
 var isDoneCause = (cause) => cause.reasons.some(isDoneFailure);
 var isDoneFailure = (failure) => failure._tag === "Fail" && isDone2(failure.error);
@@ -14914,7 +15025,7 @@ var matchEffect2 = /* @__PURE__ */ dual(2, (self, options) => matchCauseEffect(s
   }
 }));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Schedule.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Schedule.js
 var TypeId10 = "~effect/Schedule";
 var CurrentMetadata2 = /* @__PURE__ */ Reference("effect/Schedule/CurrentMetadata", {
   defaultValue: /* @__PURE__ */ constant({
@@ -15035,11 +15146,11 @@ var while_ = /* @__PURE__ */ dual(2, (self, predicate) => fromStep(map5(toStep(s
 })));
 var forever3 = /* @__PURE__ */ spaced(zero2);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/layer.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/layer.js
 var provideLayer = (self, layer, options) => scopedWith((scope3) => flatMap3(options?.local ? buildWithMemoMap(layer, makeMemoMapUnsafe(), scope3) : buildWithScope(layer, scope3), (context4) => provideContext(self, context4)));
 var provide3 = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self, source, options) => isContext(source) ? provideContext(self, source) : provideLayer(self, Array.isArray(source) ? mergeAll2(...source) : source, options));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/schedule.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/schedule.js
 var repeatOrElse = /* @__PURE__ */ dual(3, (self, schedule4, orElse2) => flatMap3(toStepWithMetadata(schedule4), (step) => {
   let meta = CurrentMetadata2.defaultValue();
   return catch_(forever2(tap2(flatMap3(suspend(() => provideService(self, CurrentMetadata2, meta)), step), (meta_) => sync(() => {
@@ -15110,7 +15221,7 @@ var buildFromOptions = (options) => {
   return schedule4;
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/executionPlan.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/executionPlan.js
 var withExecutionPlan = /* @__PURE__ */ dual(2, (self, plan) => suspend(() => {
   let i = 0;
   let meta = {
@@ -15169,7 +15280,7 @@ var scheduleFromStep = (step, first) => {
 };
 var scheduleOnce = /* @__PURE__ */ recurs(1);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Request.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Request.js
 var TypeId11 = "~effect/Request";
 var requestVariance = /* @__PURE__ */ byReferenceUnsafe({
   /* c8 ignore next */
@@ -15185,7 +15296,7 @@ var RequestPrototype = {
 };
 var makeEntry = (options) => options;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/request.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/request.js
 var request = /* @__PURE__ */ dual(2, (self, resolver) => {
   const withResolver = (resolver2) => callback((resume) => {
     const entry = addEntry(resolver2, self, resume, getCurrentFiber());
@@ -15295,7 +15406,7 @@ function runBatch(batch) {
   return batch.run;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Metric.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Metric.js
 var CurrentMetricAttributesKey = "effect/Metric/CurrentMetricAttributes";
 var CurrentMetricAttributes = /* @__PURE__ */ Reference(CurrentMetricAttributesKey, {
   defaultValue: () => ({})
@@ -15377,10 +15488,7 @@ function makeKey(metric, attributes) {
   return key;
 }
 function serializeAttributes(attributes) {
-  return serializeEntries(Array.isArray(attributes) ? attributes : Object.entries(attributes));
-}
-function serializeEntries(entries3) {
-  return entries3.map(([key, value3]) => `${key}=${value3}`).join(",");
+  return JSON.stringify(Array.isArray(attributes) ? attributes : Object.entries(attributes));
 }
 function mergeAttributes(self, other) {
   return {
@@ -15398,7 +15506,7 @@ function attributesToRecord(attributes) {
   return attributes;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Effect.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Effect.js
 var TypeId13 = EffectTypeId;
 var isEffect2 = isEffect;
 var all3 = all2;
@@ -15439,7 +15547,7 @@ var fromOption3 = fromOption2;
 var transposeOption2 = transposeOption;
 var fromNullishOr3 = fromNullishOr2;
 var flatMap5 = flatMap3;
-var flatten4 = flatten3;
+var flatten5 = flatten4;
 var andThen3 = andThen2;
 var tap4 = tap2;
 var result2 = result;
@@ -15641,9 +15749,9 @@ var trackDefects = /* @__PURE__ */ dual((args2) => isEffect2(args2[0]), (self, m
   return update(metric, input);
 }));
 var trackDuration = /* @__PURE__ */ dual((args2) => isEffect2(args2[0]), (self, metric, f) => clockWith2((clock) => {
-  const startTime = clock.currentTimeNanosUnsafe();
+  const startTime = clock.monotonicTimeNanosUnsafe();
   return onExit2(self, () => {
-    const endTime = clock.currentTimeNanosUnsafe();
+    const endTime = clock.monotonicTimeNanosUnsafe();
     const duration = subtract(fromInputUnsafe(endTime), fromInputUnsafe(startTime));
     const input = f === void 0 ? duration : internalCall(() => f(duration));
     return update(metric, input);
@@ -15681,9 +15789,9 @@ var tx = (effect2) => withFiber2((fiber3) => {
 });
 var isTransactionConsistent = (state) => {
   for (const [ref, {
-    version: version2
+    version
   }] of state.journal) {
-    if (ref.version !== version2) {
+    if (ref.version !== version) {
       return false;
     }
   }
@@ -15753,7 +15861,7 @@ var flatMapEager2 = flatMapEager;
 var catchEager2 = catchEager;
 var fnUntracedEager2 = fnUntracedEager;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/schema/annotations.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/schema/annotations.js
 function resolve(ast) {
   return ast.checks ? ast.checks[ast.checks.length - 1].annotations : ast.annotations;
 }
@@ -15775,7 +15883,7 @@ var getExpected = /* @__PURE__ */ memoize((ast) => {
 });
 var annotationExcludedKeys = /* @__PURE__ */ new Set([SENTINELS_ANNOTATION_KEY, STRUCTURAL_ANNOTATION_KEY, "representation", "arbitrary", "brands", "toJsonSchema", "toCode", "toArbitrary", "toEquivalence", "toFormatter", "toCodec", "toCodecJson", "toCodecStringTree", "toCodecIso"]);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/SchemaIssue.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/SchemaIssue.js
 var SchemaIssue_exports = {};
 __export(SchemaIssue_exports, {
   AnyOf: () => AnyOf,
@@ -15792,75 +15900,24 @@ __export(SchemaIssue_exports, {
   defaultCheckHook: () => defaultCheckHook,
   defaultFormatter: () => defaultFormatter,
   defaultLeafHook: () => defaultLeafHook,
-  getActual: () => getActual,
   isIssue: () => isIssue,
-  make: () => make12,
   makeFormatterDefault: () => makeFormatterDefault,
   makeFormatterStandardSchemaV1: () => makeFormatterStandardSchemaV1,
   makeSingle: () => makeSingle,
-  redact: () => redact2
+  normalizeFilterOutput: () => normalizeFilterOutput
 });
-
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/redacted.js
-var redactedRegistry = /* @__PURE__ */ new WeakMap();
-var value = (self) => {
-  if (redactedRegistry.has(self)) {
-    return redactedRegistry.get(self);
-  } else {
-    throw new Error("Unable to get redacted value" + (self.label ? ` with label: "${self.label}"` : ""));
-  }
-};
-
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Redacted.js
-var TypeId14 = "~effect/data/Redacted";
-var isRedacted = (u) => hasProperty(u, TypeId14);
-var make11 = (value3, options) => {
-  const self = Object.create(Proto4);
-  if (options?.label) {
-    self.label = options.label;
-  }
-  redactedRegistry.set(self, value3);
-  return self;
-};
-var Proto4 = {
-  [TypeId14]: {
-    _A: (_) => _
-  },
-  label: void 0,
-  ...PipeInspectableProto,
-  toJSON() {
-    return this.toString();
-  },
-  toString() {
-    return `<redacted${isString(this.label) ? ":" + this.label : ""}>`;
-  },
-  [symbol]() {
-    return hash(redactedRegistry.get(this));
-  },
-  [symbol2](that) {
-    return isRedacted(that) && equals(redactedRegistry.get(this), redactedRegistry.get(that));
-  }
-};
-var value2 = value;
-var makeEquivalence6 = (isEquivalent) => make2((x, y) => isEquivalent(value2(x), value2(y)));
-
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/SchemaIssue.js
-var TypeId15 = "~effect/SchemaIssue/Issue";
+var TypeId14 = "~effect/SchemaIssue/Issue";
 function isIssue(u) {
-  return hasProperty(u, TypeId15) && u[TypeId15] === TypeId15;
+  return hasProperty(u, TypeId14) && u[TypeId14] === TypeId14;
 }
 var Base = class {
-  [TypeId15] = TypeId15;
+  [TypeId14] = TypeId14;
   toString() {
     return defaultFormatter(this);
   }
 };
 var Filter = class extends Base {
   _tag = "Filter";
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
   /**
    * The filter that failed.
    */
@@ -15869,9 +15926,8 @@ var Filter = class extends Base {
    * The issue that occurred.
    */
   issue;
-  constructor(actual, filter11, issue) {
+  constructor(filter11, issue) {
     super();
-    this.actual = actual;
     this.filter = filter11;
     this.issue = issue;
   }
@@ -15883,17 +15939,12 @@ var Encoding = class extends Base {
    */
   ast;
   /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
    * The issue that occurred.
    */
   issue;
-  constructor(ast, actual, issue) {
+  constructor(ast, issue) {
     super();
     this.ast = ast;
-    this.actual = actual;
     this.issue = issue;
   }
 };
@@ -15930,14 +15981,9 @@ var UnexpectedKey = class extends Base {
    * The schema that caused the issue.
    */
   ast;
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  constructor(ast, actual) {
+  constructor(ast) {
     super();
     this.ast = ast;
-    this.actual = actual;
   }
 };
 var Composite = class extends Base {
@@ -15947,17 +15993,12 @@ var Composite = class extends Base {
    */
   ast;
   /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
    * The issues that occurred.
    */
   issues;
-  constructor(ast, actual, issues) {
+  constructor(ast, issues) {
     super();
     this.ast = ast;
-    this.actual = actual;
     this.issues = issues;
   }
 };
@@ -15967,45 +16008,30 @@ var InvalidType = class extends Base {
    * The schema that caused the issue.
    */
   ast;
-  /**
-   * The input value that caused the issue.
-   */
-  actual;
-  constructor(ast, actual) {
+  constructor(ast) {
     super();
     this.ast = ast;
-    this.actual = actual;
   }
 };
 var InvalidValue = class extends Base {
   _tag = "InvalidValue";
   /**
-   * The value that caused the issue.
-   */
-  actual;
-  /**
    * The metadata for the issue.
    */
   annotations;
-  constructor(actual, annotations) {
+  constructor(annotations) {
     super();
-    this.actual = actual;
     this.annotations = annotations;
   }
 };
 var Forbidden = class extends Base {
   _tag = "Forbidden";
   /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
    * The metadata for the issue.
    */
   annotations;
-  constructor(actual, annotations) {
+  constructor(annotations) {
     super();
-    this.actual = actual;
     this.annotations = annotations;
   }
 };
@@ -16016,17 +16042,12 @@ var AnyOf = class extends Base {
    */
   ast;
   /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
    * The issues that occurred.
    */
   issues;
-  constructor(ast, actual, issues) {
+  constructor(ast, issues) {
     super();
     this.ast = ast;
-    this.actual = actual;
     this.issues = issues;
   }
 };
@@ -16037,89 +16058,63 @@ var OneOf = class extends Base {
    */
   ast;
   /**
-   * The input value that caused the issue.
-   */
-  actual;
-  /**
    * The schemas that were successful.
    */
   successes;
-  constructor(ast, actual, successes) {
+  constructor(ast, successes) {
     super();
     this.ast = ast;
-    this.actual = actual;
     this.successes = successes;
   }
 };
-function getActual(issue) {
-  switch (issue._tag) {
-    case "Pointer":
-    case "MissingKey":
-      return none2();
-    case "InvalidType":
-    case "InvalidValue":
-    case "Forbidden":
-    case "Encoding":
-    case "Composite":
-      return issue.actual;
-    case "AnyOf":
-    case "UnexpectedKey":
-    case "OneOf":
-    case "Filter":
-      return some2(issue.actual);
-  }
-}
-function makeFilterIssue(input, entry) {
+function makeFilterIssue(entry) {
   if (isIssue(entry)) {
     return entry;
   }
   if (typeof entry === "string") {
-    return new InvalidValue(some2(input), {
+    return new InvalidValue({
       message: entry
     });
   }
-  const inner = typeof entry.issue === "string" ? new InvalidValue(some2(input), {
+  const inner = typeof entry.issue === "string" ? new InvalidValue({
     message: entry.issue
   }) : entry.issue;
   return new Pointer(entry.path, inner);
 }
-function makeSingle(input, out) {
+function makeSingle(out) {
   if (out === void 0) {
     return void 0;
   }
   if (typeof out === "boolean") {
-    return out ? void 0 : new InvalidValue(some2(input));
+    return out ? void 0 : new InvalidValue();
   }
-  return makeFilterIssue(input, out);
+  return makeFilterIssue(out);
 }
-function make12(input, ast, out) {
+function normalizeFilterOutput(ast, out) {
   if (Array.isArray(out)) {
-    if (isReadonlyArrayNonEmpty(out)) {
-      if (out.length === 1) {
-        return makeFilterIssue(input, out[0]);
-      }
-      return new Composite(ast, some2(input), map4(out, (entry) => makeFilterIssue(input, entry)));
+    if (!isReadonlyArrayNonEmpty(out)) {
+      return void 0;
     }
-    return void 0;
+    return out.length === 1 ? makeFilterIssue(out[0]) : new Composite(ast, map4(out, makeFilterIssue));
   }
-  return makeSingle(input, out);
+  return makeSingle(out);
 }
 var defaultLeafHook = (issue) => {
   const message = findMessage(issue);
   if (message !== void 0) return message;
   switch (issue._tag) {
     case "InvalidType":
-      return getExpectedMessage(getExpected(issue.ast), formatOption(issue.actual));
+      return getExpectedMessage(getExpected(issue.ast));
     case "InvalidValue":
-      return `Invalid data ${formatOption(issue.actual)}`;
+      return "Expected a valid value";
     case "MissingKey":
       return "Missing key";
     case "UnexpectedKey":
-      return `Unexpected key with value ${format(issue.actual)}`;
+      return "Expected no excess property";
     case "Forbidden":
       return "Forbidden operation";
     case "OneOf":
-      return `Expected exactly one member to match the input ${format(issue.actual)}`;
+      return "Expected exactly one member to match";
   }
 };
 var defaultCheckHook = (issue) => {
@@ -16130,8 +16125,8 @@ function makeFormatterStandardSchemaV1(options) {
     issues: toDefaultIssues(issue, [], options?.leafHook ?? defaultLeafHook, options?.checkHook ?? defaultCheckHook)
   });
 }
-function getExpectedMessage(expected, actual) {
-  return `Expected ${expected}, got ${actual}`;
+function getExpectedMessage(expected) {
+  return `Expected ${expected}`;
 }
 function toDefaultIssues(issue, path, leafHook, checkHook) {
   switch (issue._tag) {
@@ -16147,7 +16142,7 @@ function toDefaultIssues(issue, path, leafHook, checkHook) {
         case "InvalidValue":
           return [{
             path,
-            message: getExpectedMessage(formatCheck(issue.filter), format(issue.actual))
+            message: getExpectedMessage(formatCheck(issue.filter))
           }];
         default:
           return toDefaultIssues(issue.issue, path, leafHook, checkHook);
@@ -16160,16 +16155,10 @@ function toDefaultIssues(issue, path, leafHook, checkHook) {
     case "Composite":
       return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path, leafHook, checkHook));
     case "AnyOf": {
-      const message = findMessage(issue);
       if (issue.issues.length === 0) {
-        if (message !== void 0) return [{
-          path,
-          message
-        }];
-        const expected = getExpectedMessage(getExpected(issue.ast), format(issue.actual));
         return [{
           path,
-          message: expected
+          message: findMessage(issue) ?? getExpectedMessage(getExpected(issue.ast))
         }];
       }
       return issue.issues.flatMap((issue2) => toDefaultIssues(issue2, path, leafHook, checkHook));
@@ -16228,33 +16217,8 @@ function getMessageAnnotation(annotations, type = "message") {
   const message = annotations?.[type];
   if (typeof message === "string") return message;
 }
-function formatOption(actual) {
-  if (isNone2(actual)) return "no value provided";
-  return format(actual.value);
-}
-function redact2(issue) {
-  switch (issue._tag) {
-    case "MissingKey":
-      return issue;
-    case "Forbidden":
-      return new Forbidden(map(issue.actual, make11), issue.annotations);
-    case "Filter":
-      return new Filter(make11(issue.actual), issue.filter, redact2(issue.issue));
-    case "Pointer":
-      return new Pointer(issue.path, redact2(issue.issue));
-    case "Encoding":
-    case "InvalidType":
-    case "InvalidValue":
-    case "Composite":
-      return new InvalidValue(map(issue.actual, make11));
-    case "AnyOf":
-    case "OneOf":
-    case "UnexpectedKey":
-      return new InvalidValue(some2(make11(issue.actual)));
-  }
-}
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/schema/cause.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/schema/cause.js
 function getSchemaIssue(cause) {
   let issue;
   for (const reason of cause.reasons) {
@@ -16275,7 +16239,15 @@ function getSchemaIssueOrThrow(cause, message) {
   return issue;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/DateTime.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/schema/parser.js
+var missing = /* @__PURE__ */ Symbol();
+var succeed7 = succeed4;
+var missingExit = /* @__PURE__ */ succeed7(missing);
+var sameExit = /* @__PURE__ */ succeed7(missing);
+var toOption2 = (value3) => value3 === missing ? none2() : some2(value3);
+var fromOptionExit = (option4) => option4._tag === "None" ? missingExit : succeed7(option4.value);
+
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/DateTime.js
 var isDateTime2 = isDateTime;
 var isTimeZone2 = isTimeZone;
 var isTimeZoneOffset2 = isTimeZoneOffset;
@@ -16286,7 +16258,7 @@ var Equivalence4 = Equivalence3;
 var Order4 = Order3;
 var fromDateUnsafe2 = fromDateUnsafe;
 var makeZonedUnsafe2 = makeZonedUnsafe;
-var make13 = make10;
+var make11 = make10;
 var makeZonedFromString2 = makeZonedFromString;
 var toUtc2 = toUtc;
 var zoneMakeNamedUnsafe2 = zoneMakeNamedUnsafe;
@@ -16299,7 +16271,7 @@ var toEpochMillis2 = toEpochMillis;
 var formatIso2 = formatIso;
 var formatIsoZoned2 = formatIsoZoned;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Encoding.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Encoding.js
 var EncodingErrorTypeId = "~effect/encoding/EncodingError";
 var EncodingError = class extends (/* @__PURE__ */ TaggedError2("EncodingError")) {
   /**
@@ -16469,7 +16441,7 @@ var fromHexChar = (byte) => {
 };
 var bytesToHex = ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "0a", "0b", "0c", "0d", "0e", "0f", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "1a", "1b", "1c", "1d", "1e", "1f", "20", "21", "22", "23", "24", "25", "26", "27", "28", "29", "2a", "2b", "2c", "2d", "2e", "2f", "30", "31", "32", "33", "34", "35", "36", "37", "38", "39", "3a", "3b", "3c", "3d", "3e", "3f", "40", "41", "42", "43", "44", "45", "46", "47", "48", "49", "4a", "4b", "4c", "4d", "4e", "4f", "50", "51", "52", "53", "54", "55", "56", "57", "58", "59", "5a", "5b", "5c", "5d", "5e", "5f", "60", "61", "62", "63", "64", "65", "66", "67", "68", "69", "6a", "6b", "6c", "6d", "6e", "6f", "70", "71", "72", "73", "74", "75", "76", "77", "78", "79", "7a", "7b", "7c", "7d", "7e", "7f", "80", "81", "82", "83", "84", "85", "86", "87", "88", "89", "8a", "8b", "8c", "8d", "8e", "8f", "90", "91", "92", "93", "94", "95", "96", "97", "98", "99", "9a", "9b", "9c", "9d", "9e", "9f", "a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "a9", "aa", "ab", "ac", "ad", "ae", "af", "b0", "b1", "b2", "b3", "b4", "b5", "b6", "b7", "b8", "b9", "ba", "bb", "bc", "bd", "be", "bf", "c0", "c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8", "c9", "ca", "cb", "cc", "cd", "ce", "cf", "d0", "d1", "d2", "d3", "d4", "d5", "d6", "d7", "d8", "d9", "da", "db", "dc", "dd", "de", "df", "e0", "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9", "ea", "eb", "ec", "ed", "ee", "ef", "f0", "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", "f9", "fa", "fb", "fc", "fd", "fe", "ff"];
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/SchemaGetter.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/SchemaGetter.js
 var Getter = class _Getter extends Class {
   run;
   constructor(run4) {
@@ -16493,7 +16465,7 @@ function fail6(f) {
   return new Getter((oe) => fail5(f(oe)));
 }
 function forbidden(message) {
-  return fail6((oe) => new Forbidden(oe, {
+  return fail6((oe) => new Forbidden({
     message: message(oe)
   }));
 }
@@ -16543,8 +16515,8 @@ function trim2() {
 function parseJson(options) {
   return onSome((input) => try_3({
     try: () => some2(JSON.parse(input, options?.reviver)),
-    catch: (e) => new InvalidValue(some2(input), {
-      message: globalThis.String(e)
+    catch: () => new InvalidValue({
+      message: "Expected a valid JSON string"
     })
   }));
 }
@@ -16557,8 +16529,8 @@ function stringifyJson(options) {
       }
       return some2(output);
     },
-    catch: (e) => new InvalidValue(some2(input), {
-      message: globalThis.String(e)
+    catch: () => new InvalidValue({
+      message: "Expected a JSON-serializable value"
     })
   }));
 }
@@ -16572,46 +16544,46 @@ function encodeHex2() {
   return transform(encodeHex);
 }
 function decodeBase642() {
-  return transformOrFail((input) => mapErrorEager2(fromResult2(decodeBase64(input)), (e) => new InvalidValue(some2(input), {
-    message: e.message
+  return transformOrFail((input) => mapErrorEager2(fromResult2(decodeBase64(input)), () => new InvalidValue({
+    message: "Expected a valid Base64 string"
   })));
 }
 function decodeBase64String2() {
   return transformOrFail((input) => match2(decodeBase64String(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
+    onFailure: () => fail5(new InvalidValue({
+      message: "Expected a valid Base64 string"
     })),
     onSuccess: succeed6
   }));
 }
 function decodeBase64Url2() {
   return transformOrFail((input) => match2(decodeBase64Url(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
+    onFailure: () => fail5(new InvalidValue({
+      message: "Expected a valid Base64Url string"
     })),
     onSuccess: succeed6
   }));
 }
 function decodeBase64UrlString2() {
   return transformOrFail((input) => match2(decodeBase64UrlString(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
+    onFailure: () => fail5(new InvalidValue({
+      message: "Expected a valid Base64Url string"
     })),
     onSuccess: succeed6
   }));
 }
 function decodeHex2() {
   return transformOrFail((input) => match2(decodeHex(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
+    onFailure: () => fail5(new InvalidValue({
+      message: "Expected a valid hexadecimal string"
     })),
     onSuccess: succeed6
   }));
 }
 function decodeHexString2() {
   return transformOrFail((input) => match2(decodeHexString(input), {
-    onFailure: (e) => fail5(new InvalidValue(some2(input), {
-      message: e.message
+    onFailure: () => fail5(new InvalidValue({
+      message: "Expected a valid hexadecimal string"
     })),
     onSuccess: succeed6
   }));
@@ -16623,17 +16595,17 @@ function decodeUriComponent() {
   return transformOrFail((input) => {
     try {
       return succeed6(globalThis.decodeURIComponent(input));
-    } catch (e) {
-      return fail5(new InvalidValue(some2(input), {
-        message: e instanceof URIError ? e.message : "Invalid URI component"
+    } catch {
+      return fail5(new InvalidValue({
+        message: "Expected a valid URI component"
       }));
     }
   });
 }
 function dateTimeUtcFromInput() {
   return transformOrFail((input) => {
-    return match(make13(input), {
-      onNone: () => fail5(new InvalidValue(some2(input), {
+    return match(make11(input), {
+      onNone: () => fail5(new InvalidValue({
         message: "Invalid DateTime input"
       })),
       onSome: (dt) => succeed6(toUtc2(dt))
@@ -16753,7 +16725,7 @@ function collectBracketPathEntries(isLeaf) {
   };
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/SchemaTransformation.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/SchemaTransformation.js
 var Middleware = class _Middleware {
   _tag = "Middleware";
   decode;
@@ -16766,9 +16738,9 @@ var Middleware = class _Middleware {
     return new _Middleware(this.encode, this.decode);
   }
 };
-var TypeId16 = "~effect/SchemaTransformation/Transformation";
+var TypeId15 = "~effect/SchemaTransformation/Transformation";
 var Transformation = class _Transformation {
-  [TypeId16] = TypeId16;
+  [TypeId15] = TypeId15;
   _tag = "Transformation";
   decode;
   encode;
@@ -16784,9 +16756,9 @@ var Transformation = class _Transformation {
   }
 };
 function isTransformation(u) {
-  return hasProperty(u, TypeId16) && u[TypeId16] === TypeId16;
+  return hasProperty(u, TypeId15) && u[TypeId15] === TypeId15;
 }
-var make14 = (options) => {
+var make12 = (options) => {
   if (isTransformation(options)) {
     return options;
   }
@@ -16814,8 +16786,8 @@ var dateFromString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Date3(),
 var dateFromMillis = /* @__PURE__ */ new Transformation(/* @__PURE__ */ Date3(), /* @__PURE__ */ transform((date2) => date2.getTime()));
 var durationFromString = /* @__PURE__ */ transformOrFail2({
   decode: (s) => match(fromInput(s), {
-    onNone: () => fail5(new InvalidValue(some2(s), {
-      message: `Invalid Duration string: ${s}`
+    onNone: () => fail5(new InvalidValue({
+      message: "Expected a valid Duration string"
     })),
     onSome: succeed6
   }),
@@ -16824,8 +16796,8 @@ var durationFromString = /* @__PURE__ */ transformOrFail2({
 var durationFromNanos = /* @__PURE__ */ transformOrFail2({
   decode: (i) => succeed6(nanos(i)),
   encode: (a) => match(toNanos(a), {
-    onNone: () => fail5(new InvalidValue(some2(a), {
-      message: `Unable to encode ${a} into a bigint`
+    onNone: () => fail5(new InvalidValue({
+      message: "Expected a Duration representable as a bigint"
     })),
     onSome: (nanos2) => succeed6(nanos2)
   })
@@ -16921,16 +16893,16 @@ function optionFromOptional() {
   });
 }
 var urlFromString = /* @__PURE__ */ transformOrFail2({
-  decode: (s) => URL.canParse(s) ? succeed6(new URL(s)) : fail5(new InvalidValue(some2(s), {
-    message: `Invalid URL string: ${s}`
+  decode: (s) => URL.canParse(s) ? succeed6(new URL(s)) : fail5(new InvalidValue({
+    message: "Expected a valid URL string"
   })),
   encode: (url) => succeed6(url.href)
 });
 var bigDecimalFromString = /* @__PURE__ */ transformOrFail2({
   decode: (s) => {
     const result4 = fromString(s);
-    return isNone2(result4) ? fail5(new InvalidValue(some2(s), {
-      message: `Invalid BigDecimal string: ${s}`
+    return isNone2(result4) ? fail5(new InvalidValue({
+      message: "Expected a valid BigDecimal string"
     })) : succeed6(result4.value);
   },
   encode: (bd) => succeed6(format2(bd))
@@ -16940,7 +16912,9 @@ var stringFromBase64String = /* @__PURE__ */ new Transformation(/* @__PURE__ */ 
 var stringFromBase64UrlString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeBase64UrlString2(), /* @__PURE__ */ encodeBase64Url2());
 var stringFromHexString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeHexString2(), /* @__PURE__ */ encodeHex2());
 var stringFromUriComponent = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeUriComponent(), /* @__PURE__ */ encodeUriComponent());
-var fromJsonString = /* @__PURE__ */ new Transformation(/* @__PURE__ */ parseJson(), /* @__PURE__ */ stringifyJson());
+function fromJsonString(options) {
+  return new Transformation(parseJson(options ?? {}), stringifyJson(options));
+}
 var fromFormData = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeFormData(), /* @__PURE__ */ encodeFormData());
 var fromURLSearchParams = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeURLSearchParams(), /* @__PURE__ */ encodeURLSearchParams());
 var timeZoneOffsetFromNumber = /* @__PURE__ */ transform2({
@@ -16950,8 +16924,8 @@ var timeZoneOffsetFromNumber = /* @__PURE__ */ transform2({
 var timeZoneNamedFromString = /* @__PURE__ */ transformOrFail2({
   decode: (s) => {
     return match(zoneMakeNamed2(s), {
-      onNone: () => fail5(new InvalidValue(some2(s), {
-        message: `Invalid IANA time zone: ${s}`
+      onNone: () => fail5(new InvalidValue({
+        message: "Expected a valid IANA time zone"
       })),
       onSome: succeed6
     });
@@ -16961,8 +16935,8 @@ var timeZoneNamedFromString = /* @__PURE__ */ transformOrFail2({
 var timeZoneFromString = /* @__PURE__ */ transformOrFail2({
   decode: (s) => {
     return match(zoneFromString2(s), {
-      onNone: () => fail5(new InvalidValue(some2(s), {
-        message: `Invalid time zone: ${s}`
+      onNone: () => fail5(new InvalidValue({
+        message: "Expected a valid time zone"
       })),
       onSome: succeed6
     });
@@ -16971,9 +16945,9 @@ var timeZoneFromString = /* @__PURE__ */ transformOrFail2({
 });
 var dateTimeUtcFromString = /* @__PURE__ */ transformOrFail2({
   decode: (s) => {
-    return match(make13(s), {
-      onNone: () => fail5(new InvalidValue(some2(s), {
-        message: `Invalid UTC DateTime string: ${s}`
+    return match(make11(s), {
+      onNone: () => fail5(new InvalidValue({
+        message: "Expected a valid UTC DateTime string"
       })),
       onSome: (result4) => succeed6(toUtc2(result4))
     });
@@ -16983,8 +16957,8 @@ var dateTimeUtcFromString = /* @__PURE__ */ transformOrFail2({
 var dateTimeZonedFromString = /* @__PURE__ */ transformOrFail2({
   decode: (s) => {
     return match(makeZonedFromString2(s), {
-      onNone: () => fail5(new InvalidValue(some2(s), {
-        message: `Invalid Zoned DateTime string: ${s}`
+      onNone: () => fail5(new InvalidValue({
+        message: "Expected a valid Zoned DateTime string"
       })),
       onSome: succeed6
     });
@@ -16992,7 +16966,7 @@ var dateTimeZonedFromString = /* @__PURE__ */ transformOrFail2({
   encode: (zoned) => succeed6(formatIsoZoned2(zoned))
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/SchemaAST.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/SchemaAST.js
 function makeGuard(tag2) {
   return (ast) => ast._tag === tag2;
 }
@@ -17003,6 +16977,7 @@ var isUniqueSymbol = /* @__PURE__ */ makeGuard("UniqueSymbol");
 var isArrays = /* @__PURE__ */ makeGuard("Arrays");
 var isObjects = /* @__PURE__ */ makeGuard("Objects");
 var isUnion = /* @__PURE__ */ makeGuard("Union");
+var isSuspend = /* @__PURE__ */ makeGuard("Suspend");
 var Link = class {
   to;
   transformation;
@@ -17025,9 +17000,9 @@ var Context = class {
     this.annotations = annotations;
   }
 };
-var TypeId17 = "~effect/Schema";
+var TypeId16 = "~effect/Schema";
 var Base2 = class {
-  [TypeId17] = TypeId17;
+  [TypeId16] = TypeId16;
   annotations;
   checks;
   encoding;
@@ -17055,23 +17030,23 @@ var Declaration = class _Declaration extends Base2 {
   }
   /** @internal */
   getParser() {
-    const run4 = this.run(this.typeParameters);
-    return (oinput, options) => {
-      if (isNone2(oinput)) return succeedNone2;
-      return mapEager2(run4(oinput.value, this, options), some2);
+    let run4;
+    return (input, options) => {
+      if (input === missing) return missingExit;
+      return (run4 ??= this.run(this.typeParameters))(input, this, options);
     };
   }
-  _rebuild(recur5, checks, encodingChecks) {
-    const tps = mapOrSame(this.typeParameters, recur5);
+  _rebuild(recur3, checks, encodingChecks) {
+    const tps = mapOrSame(this.typeParameters, recur3);
     return tps === this.typeParameters && checks === this.checks && encodingChecks === this.encodingChecks ? this : new _Declaration(tps, this.run, this.annotations, checks, void 0, this.context, encodingChecks);
   }
   /** @internal */
-  recur(recur5) {
-    return this._rebuild(recur5, this.checks, this.encodingChecks);
+  recur(recur3) {
+    return this._rebuild(recur3, this.checks, this.encodingChecks);
   }
   /** @internal */
-  flip(recur5) {
-    return this._rebuild(recur5, this.encodingChecks, this.checks);
+  flip(recur3) {
+    return this._rebuild(recur3, this.encodingChecks, this.checks);
   }
   /** @internal */
   getExpected() {
@@ -17113,7 +17088,8 @@ var Void = class extends Base2 {
   _tag = "Void";
   /** @internal */
   getParser() {
-    return fromAnyToConst(void 0);
+    const succeed10 = succeed7(void 0);
+    return (input) => input === missing ? missingExit : succeed10;
   }
   /** @internal */
   toCodecJson() {
@@ -17206,9 +17182,9 @@ function isTemplateLiteralPart(ast) {
       return true;
     case "Literal":
     case "TemplateLiteral":
-      return ast.checks === void 0;
+      return !ast.checks;
     case "Union":
-      return ast.checks === void 0 && ast.types.every(isTemplateLiteralPart);
+      return !ast.checks && ast.types.every(isTemplateLiteralPart);
     default:
       return false;
   }
@@ -17218,27 +17194,47 @@ var TemplateLiteral = class extends Base2 {
   parts;
   /** @internal */
   encodedParts;
+  /** @internal */
+  literals;
+  /** @internal */
+  suffixLengths;
   constructor(parts, annotations, checks, encoding, context4) {
     super(annotations, checks, encoding, context4);
     const encodedParts = [];
+    const literals = [];
     for (const part of parts) {
       const encoded = toEncoded(part);
       if (isTemplateLiteralPart(encoded)) {
         encodedParts.push(encoded);
+        literals.push(encoded._tag === "Literal" ? globalThis.String(encoded.literal) : void 0);
       } else {
         throw new Error(`Invalid TemplateLiteral part ${encoded._tag}`);
       }
     }
+    const suffixLengths = new Array(encodedParts.length + 1);
+    suffixLengths[encodedParts.length] = 0;
+    for (let i = encodedParts.length - 1; i >= 0; i--) {
+      suffixLengths[i] = suffixLengths[i + 1] + (literals[i]?.length ?? 0);
+    }
     this.parts = parts;
     this.encodedParts = encodedParts;
+    this.literals = literals;
+    this.suffixLengths = suffixLengths;
   }
   /** @internal */
-  getParser(recur5) {
-    const parser = recur5(this.asTemplateLiteralParser());
-    return (oinput, options) => mapBothEager2(parser(oinput, options), {
-      onSuccess: () => oinput,
-      onFailure: (issue) => new Composite(this, oinput, [issue])
-    });
+  getParser(recur3) {
+    const parser = recur3(this.asTemplateLiteralParser());
+    return (input, options) => {
+      if (input === missing) return missingExit;
+      const result4 = parser(input, options);
+      if (result4._tag === "Success") {
+        return sameExit;
+      }
+      return mapBothEager2(result4, {
+        onSuccess: () => input,
+        onFailure: (issue) => new Composite(this, [issue])
+      });
+    };
   }
   /** @internal */
   getExpected() {
@@ -17246,16 +17242,16 @@ var TemplateLiteral = class extends Base2 {
   }
   /** @internal */
   matchPart(s, options) {
-    return segmentTemplateLiteralParts(this.encodedParts, s, options) === void 0 ? void 0 : s;
+    return segmentTemplateLiteralParts(this, s, options) === void 0 ? void 0 : s;
   }
   /** @internal */
   asTemplateLiteralParser() {
     const tuple3 = new Arrays(false, this.parts.map(partFromString), []);
     return decodeTo(string2, tuple3, new Transformation(transformOrFail((s, options) => {
-      const segments = segmentTemplateLiteralParts(this.encodedParts, s, options);
-      if (segments !== void 0) return succeed6(segments);
-      return fail5(new InvalidValue(some2(s), {
-        message: `Expected a string matching template literal parts, got ${format(s)}`
+      const segments = segmentTemplateLiteralParts(this, s, options);
+      if (segments) return succeed6(segments);
+      return fail5(new InvalidValue({
+        message: "Expected a string matching template literal parts"
       }));
     }), transform((parts) => parts.join(""))));
   }
@@ -17323,7 +17319,8 @@ var String4 = class extends Base2 {
   }
   /** @internal */
   matchPart(s, options) {
-    return applyTemplateLiteralPartChecks(this, s, options);
+    const checks = this.checks;
+    return checks && !options.disableChecks && collectIssues(checks, s, void 0, this, options) ? void 0 : s;
   }
   /** @internal */
   getExpected() {
@@ -17346,7 +17343,10 @@ var Number5 = class extends Base2 {
     return this._match(isStringFiniteRegExp, s, options);
   }
   _match(regexp, s, options) {
-    return regexp.test(s) ? applyTemplateLiteralPartChecks(this, globalThis.Number(s), options) : void 0;
+    if (!regexp.test(s)) return void 0;
+    const value3 = globalThis.Number(s);
+    if (options.disableChecks || !this.checks) return value3;
+    return collectIssues(this.checks, value3, void 0, this, options) ? void 0 : value3;
   }
   /** @internal */
   toCodecJson() {
@@ -17371,7 +17371,7 @@ function hasCheck(checks, id2) {
   return checks.some((check3) => check3.annotations?.representation?.id === id2 || check3._tag === "FilterGroup" && hasCheck(check3.checks, id2));
 }
 function numberToJson(checks) {
-  const encodedFinite = checks === void 0 ? finite : appendChecks(finite, checks);
+  const encodedFinite = !checks ? finite : appendChecks(finite, checks);
   return new Link(new Union([encodedFinite, nonFiniteLiterals], "anyOf"), new Transformation(Number4(), transform((n) => globalThis.Number.isFinite(n) ? n : globalThis.String(n))));
 }
 var number2 = /* @__PURE__ */ new Number5();
@@ -17395,7 +17395,8 @@ var Symbol2 = class extends Base2 {
   }
   /** @internal */
   matchKey(s, options) {
-    return applyTemplateLiteralPartChecks(this, s, options);
+    if (options.disableChecks || !this.checks) return s;
+    return collectIssues(this.checks, s, void 0, this, options) ? void 0 : s;
   }
   /** @internal */
   toCodecStringTree() {
@@ -17415,7 +17416,10 @@ var BigInt4 = class extends Base2 {
   }
   /** @internal */
   matchPart(s, options) {
-    return isStringBigIntRegExp.test(s) ? applyTemplateLiteralPartChecks(this, globalThis.BigInt(s), options) : void 0;
+    if (!isStringBigIntRegExp.test(s)) return void 0;
+    const value3 = globalThis.BigInt(s);
+    if (options.disableChecks || !this.checks) return value3;
+    return collectIssues(this.checks, value3, void 0, this, options) ? void 0 : value3;
   }
   /** @internal */
   toCodecStringTree() {
@@ -17439,51 +17443,62 @@ var Arrays = class _Arrays extends Base2 {
     this.elements = elements;
     this.rest = rest;
     this.encodingChecks = encodingChecks;
-    const i = elements.findIndex(isOptional);
-    if (i !== -1 && (elements.slice(i + 1).some((e) => !isOptional(e)) || rest.length > 1)) {
+    let hasOptional = false;
+    for (let i = 0; i < elements.length; i++) {
+      if (isOptional(elements[i])) {
+        hasOptional = true;
+      } else if (hasOptional) {
+        throw new Error("A required element cannot follow an optional element. ts(1257)");
+      }
+    }
+    if (hasOptional && rest.length > 1) {
       throw new Error("A required element cannot follow an optional element. ts(1257)");
     }
-    if (rest.length > 1 && rest.slice(1).some(isOptional)) {
-      throw new Error("An optional element cannot follow a rest element. ts(1266)");
+    for (let i = 1; i < rest.length; i++) {
+      if (isOptional(rest[i])) {
+        throw new Error("An optional element cannot follow a rest element. ts(1266)");
+      }
     }
   }
   /** @internal */
-  getParser(recur5) {
+  getParser(recur3) {
     const ast = this;
-    const elements = ast.elements.map((ast2) => ({
-      ast: ast2,
-      parser: recur5(ast2)
-    }));
-    const rest = ast.rest.map((ast2) => ({
-      ast: ast2,
-      parser: recur5(ast2)
-    }));
-    const elementLen = elements.length;
-    const [head2, ...tail] = rest;
-    const tailLen = tail.length;
+    let elements;
+    let rest;
+    const elementLen = ast.elements.length;
+    const tailLen = Math.max(0, ast.rest.length - 1);
     function getParser(tailThreshold, index2) {
       if (index2 < elementLen) {
         return elements[index2];
       } else if (index2 >= tailThreshold) {
-        return tail[index2 - tailThreshold];
+        return rest[index2 - tailThreshold + 1];
       }
-      return head2;
+      return rest[0];
     }
-    return fnUntracedEager2(function* (oinput, options) {
-      if (oinput._tag === "None") {
-        return oinput;
+    return fnUntracedEager2(function* (input, options) {
+      if (input === missing) {
+        return missing;
       }
-      const input = oinput.value;
       if (!Array.isArray(input)) {
-        return yield* fail5(new InvalidType(ast, oinput));
+        return yield* fail5(new InvalidType(ast));
+      }
+      if (!elements) {
+        elements = ast.elements.map((ast2) => ({
+          ast: ast2,
+          parser: recur3(ast2)
+        }));
+        rest = ast.rest.map((ast2) => ({
+          ast: ast2,
+          parser: recur3(ast2)
+        }));
       }
       const len = input.length;
       const state = {
         ast,
         getParser,
-        oinput,
+        input,
         len,
-        tailThreshold: resolveTailThreshold(len, elementLen, tailLen),
+        tailThreshold: Math.max(elementLen, len - tailLen),
         output: new globalThis.Array(len),
         issues: void 0,
         options
@@ -17496,33 +17511,33 @@ var Arrays = class _Arrays extends Base2 {
       if (eff) yield* eff;
       if (ast.rest.length === 0 && len > elementLen) {
         for (let i = elementLen; i <= len - 1; i++) {
-          const issue = new Pointer([i], new UnexpectedKey(ast, input[i]));
+          const issue = new Pointer([i], new UnexpectedKey(ast));
           if (options.errors === "all") {
             if (state.issues) state.issues.push(issue);
             else state.issues = [issue];
           } else {
-            return yield* fail5(new Composite(ast, oinput, [issue]));
+            return yield* fail5(new Composite(ast, [issue]));
           }
         }
       }
       if (state.issues) {
-        return yield* fail5(new Composite(ast, oinput, state.issues));
+        return yield* fail5(new Composite(ast, state.issues));
       }
-      return some2(state.output);
+      return state.output;
     });
   }
-  _rebuild(recur5, checks, encodingChecks) {
-    const elements = mapOrSame(this.elements, recur5);
-    const rest = mapOrSame(this.rest, recur5);
+  _rebuild(recur3, checks, encodingChecks) {
+    const elements = mapOrSame(this.elements, recur3);
+    const rest = mapOrSame(this.rest, recur3);
     return elements === this.elements && rest === this.rest && checks === this.checks && encodingChecks === this.encodingChecks ? this : new _Arrays(this.isMutable, elements, rest, this.annotations, checks, void 0, this.context, encodingChecks);
   }
   /** @internal */
-  recur(recur5) {
-    return this._rebuild(recur5, this.checks, this.encodingChecks);
+  recur(recur3) {
+    return this._rebuild(recur3, this.checks, this.encodingChecks);
   }
   /** @internal */
-  flip(recur5) {
-    return this._rebuild(recur5, this.encodingChecks, this.checks);
+  flip(recur3) {
+    return this._rebuild(recur3, this.encodingChecks, this.checks);
   }
   /** @internal */
   getExpected() {
@@ -17531,14 +17546,16 @@ var Arrays = class _Arrays extends Base2 {
 };
 var parseArray = /* @__PURE__ */ iterateEager()({
   onItem(s, item, i) {
-    const value3 = i < s.len ? some2(item) : none2();
+    const value3 = i < s.len ? item : missing;
     return s.getParser(s.tailThreshold, i).parser(value3, s.options);
   },
-  step(s, _, exit3, i) {
+  step(s, item, exit3, i) {
     if (exit3._tag === "Failure") {
       return wrapPropertyKeyIssue(s, s.ast, i, exit3);
-    } else if (exit3.value._tag === "Some") {
-      s.output[i] = exit3.value.value;
+    }
+    const value3 = exit3 === sameExit ? item : exit3[args];
+    if (value3 !== missing) {
+      s.output[i] = value3;
     } else {
       const p = s.getParser(s.tailThreshold, i);
       if (isOptional(p.ast)) return;
@@ -17547,14 +17564,11 @@ var parseArray = /* @__PURE__ */ iterateEager()({
         if (s.issues) s.issues.push(issue);
         else s.issues = [issue];
       } else {
-        return fail4(new Composite(s.ast, s.oinput, [issue]));
+        return fail4(new Composite(s.ast, [issue]));
       }
     }
   }
 });
-function resolveTailThreshold(inputLen, elementLen, tailLen) {
-  return Math.max(elementLen, inputLen - tailLen);
-}
 var resolveConcurrency = (value3) => {
   value3 = value3 === "unbounded" ? Infinity : value3 ?? 1;
   return value3 > 1 ? {
@@ -17567,14 +17581,14 @@ var wrapPropertyKeyIssue = (s, ast, key, exit3) => {
   }
   const issue = getSchemaIssue(exit3.cause);
   if (issue === void 0) {
-    return failCause2(map6(exit3.cause, (issue2) => new Composite(ast, s.oinput, [new Pointer([key], issue2)])));
+    return failCause2(map6(exit3.cause, (issue2) => new Composite(ast, [new Pointer([key], issue2)])));
   }
   const pointer = new Pointer([key], issue);
   if (s.options.errors === "all") {
     if (s.issues) s.issues.push(pointer);
     else s.issues = [pointer];
   } else {
-    return fail4(new Composite(ast, s.oinput, [pointer]));
+    return fail4(new Composite(ast, [pointer]));
   }
 };
 var FINITE_PATTERN = "[+-]?\\d*\\.?\\d+(?:[Ee][+-]?\\d+)?";
@@ -17606,18 +17620,6 @@ var PropertySignature = class {
     this.type = type;
   }
 };
-var KeyValueCombiner = class _KeyValueCombiner {
-  decode;
-  encode;
-  constructor(decode3, encode3) {
-    this.decode = decode3;
-    this.encode = encode3;
-  }
-  /** @internal */
-  flip() {
-    return new _KeyValueCombiner(this.encode, this.decode);
-  }
-};
 function isIndexSignatureParameterSide(ast) {
   switch (ast._tag) {
     case "String":
@@ -17637,14 +17639,12 @@ function isIndexSignatureParameter(ast) {
 var IndexSignature = class {
   parameter;
   type;
-  merge;
-  constructor(parameter, type, merge6) {
+  constructor(parameter, type) {
     if (!isIndexSignatureParameter(parameter)) {
       throw new Error(`Invalid index signature parameter ${parameter._tag}`);
     }
     this.parameter = parameter;
     this.type = type;
-    this.merge = merge6;
     if (isOptional(type) && !containsUndefined(type)) {
       throw new Error("Cannot use `Schema.optionalKey` with index signatures, use `Schema.optional` instead.");
     }
@@ -17666,72 +17666,80 @@ var Objects = class _Objects extends Base2 {
     }
   }
   /** @internal */
-  getParser(recur5) {
+  getParser(recur3) {
     const ast = this;
     const expectedKeys = [];
-    const expectedKeysSet = /* @__PURE__ */ new Set();
-    const properties = [];
     for (const ps of ast.propertySignatures) {
       expectedKeys.push(ps.name);
-      expectedKeysSet.add(ps.name);
-      properties.push({
-        ps,
-        parser: recur5(ps.type),
-        name: ps.name,
-        type: ps.type
-      });
     }
+    const hasProperties = expectedKeys.length;
     const indexCount = ast.indexSignatures.length;
-    if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
+    let expectedKeysSet = hasProperties && indexCount ? new Set(expectedKeys) : void 0;
+    if (!hasProperties && !indexCount) {
       return fromRefinement(ast, isNotNullish);
     }
-    const parseIndexes = indexCount > 0 ? iterateEager()({
-      onItem: fnUntracedEager2(function* (s, [key, is3]) {
-        const parserKey = recur5(parameterFromPropertyKey(is3.parameter));
-        const effKey = parserKey(some2(key), s.options);
-        const exitKey = effectIsExit(effKey) ? effKey : yield* exit2(effKey);
-        if (exitKey._tag === "Failure") {
-          const eff = wrapPropertyKeyIssue(s, ast, key, exitKey);
-          if (eff) yield* eff;
-          return;
+    let properties;
+    let indexes;
+    const finishIndex = (s, key, k2, inputValue, exitValue) => {
+      if (exitValue._tag === "Failure") {
+        return wrapPropertyKeyIssue(s, ast, key, exitValue) ?? void_3;
+      }
+      const value3 = exitValue === sameExit ? inputValue : exitValue[args];
+      if (k2 !== missing && value3 !== missing) {
+        if (hasProperties && (expectedKeysSet.has(key) || expectedKeysSet.has(k2))) return void_3;
+        assignProperty(s.out, k2, value3);
+      }
+      return void_3;
+    };
+    const parseIndex = (s, key, index2, exitKey) => {
+      if (!exitKey) {
+        const eff = index2.parserKey(key, s.options);
+        if (!effectIsExit(eff)) {
+          return flatMap5(exit2(eff), (exit3) => parseIndex(s, key, index2, exit3));
         }
-        const value3 = some2(s.input[key]);
-        const parserValue = recur5(is3.type);
-        const effValue = parserValue(value3, s.options);
-        const exitValue = effectIsExit(effValue) ? effValue : yield* exit2(effValue);
-        if (exitValue._tag === "Failure") {
-          const eff = wrapPropertyKeyIssue(s, ast, key, exitValue);
-          if (eff) yield* eff;
-          return;
-        } else if (exitKey.value._tag === "Some" && exitValue.value._tag === "Some") {
-          const k2 = exitKey.value.value;
-          if (expectedKeysSet.has(key) || expectedKeysSet.has(k2)) {
-            return;
-          }
-          const v2 = exitValue.value.value;
-          if (is3.merge && is3.merge.decode && Object.hasOwn(s.out, k2)) {
-            const [k, v] = is3.merge.decode.combine([k2, s.out[k2]], [k2, v2]);
-            assignProperty(s.out, k, v);
-          } else {
-            assignProperty(s.out, k2, v2);
-          }
-        }
-      }),
+        exitKey = eff;
+      }
+      if (exitKey._tag === "Failure") {
+        return wrapPropertyKeyIssue(s, ast, key, exitKey) ?? void_3;
+      }
+      const k2 = exitKey === sameExit ? key : exitKey[args];
+      const inputValue = s.input[key];
+      const result4 = index2.parserValue(inputValue, s.options);
+      return effectIsExit(result4) ? finishIndex(s, key, k2, inputValue, result4) : flatMap5(exit2(result4), (exit3) => finishIndex(s, key, k2, inputValue, exit3));
+    };
+    const parseStringIndex = (s, key, index2) => {
+      const inputValue = s.input[key];
+      const result4 = index2.parserValue(inputValue, s.options);
+      return effectIsExit(result4) ? finishIndex(s, key, key, inputValue, result4) : flatMap5(exit2(result4), (exit3) => finishIndex(s, key, key, inputValue, exit3));
+    };
+    const parseIndexes = indexCount ? iterateEager()({
+      onItem: (s, [key, index2]) => parseIndex(s, key, index2),
       step: (_s, _, exit3) => exit3._tag === "Failure" ? exit3 : void 0
     }) : void 0;
-    return fnUntracedEager2(function* (oinput, options) {
-      if (oinput._tag === "None") {
-        return oinput;
+    return fnUntracedEager2(function* (input, options) {
+      if (input === missing) {
+        return missing;
       }
-      const input = oinput.value;
       if (!(typeof input === "object" && input !== null && !Array.isArray(input))) {
-        return yield* fail5(new InvalidType(ast, oinput));
+        return yield* fail5(new InvalidType(ast));
       }
+      if (!properties) {
+        properties = ast.propertySignatures.map((ps) => ({
+          parser: recur3(ps.type),
+          name: ps.name,
+          type: ps.type
+        }));
+        indexes = indexCount ? ast.indexSignatures.map((is3) => ({
+          is: is3,
+          parserKey: recur3(parameterFromPropertyKey(is3.parameter)),
+          parserValue: recur3(is3.type)
+        })) : void 0;
+      }
+      const record3 = input;
       const out = {};
       const state = {
         ast,
-        oinput,
-        input,
+        input: record3,
         out,
         issues: void 0,
         options
@@ -17740,13 +17748,14 @@ var Objects = class _Objects extends Base2 {
       const onExcessPropertyError = options.onExcessProperty === "error";
       const onExcessPropertyPreserve = options.onExcessProperty === "preserve";
       let inputKeys;
-      if (ast.indexSignatures.length === 0 && (onExcessPropertyError || onExcessPropertyPreserve)) {
-        inputKeys = Reflect.ownKeys(input);
+      if (!indexCount && (onExcessPropertyError || onExcessPropertyPreserve)) {
+        expectedKeysSet ??= new Set(expectedKeys);
+        inputKeys = Reflect.ownKeys(record3);
         for (let i = 0; i < inputKeys.length; i++) {
           const key = inputKeys[i];
           if (!expectedKeysSet.has(key)) {
             if (onExcessPropertyError) {
-              const issue = new Pointer([key], new UnexpectedKey(ast, input[key]));
+              const issue = new Pointer([key], new UnexpectedKey(ast));
               if (errorsAllOption) {
                 if (state.issues) {
                   state.issues.push(issue);
@@ -17755,66 +17764,77 @@ var Objects = class _Objects extends Base2 {
                 }
                 continue;
               } else {
-                return yield* fail5(new Composite(ast, oinput, [issue]));
+                return yield* fail5(new Composite(ast, [issue]));
               }
             } else {
-              assignProperty(out, key, input[key]);
+              assignProperty(out, key, record3[key]);
             }
           }
         }
       }
       const concurrency = resolveConcurrency(options?.concurrency);
-      const eff = parseProperties(state, properties, concurrency);
-      if (eff) yield* eff;
-      if (parseIndexes) {
-        const keyPairs = empty2();
+      if (hasProperties) {
+        const eff = parseProperties(state, properties, concurrency);
+        if (eff) yield* eff;
+      }
+      if (indexCount && !concurrency) {
         for (let i = 0; i < indexCount; i++) {
-          const is3 = ast.indexSignatures[i];
-          const keys5 = getIndexSignatureKeys(input, is3.parameter, options);
+          const index2 = indexes[i];
+          const parse = index2.is.parameter === string2 ? parseStringIndex : parseIndex;
+          const keys5 = index2.is.parameter === string2 ? Object.keys(record3) : getIndexSignatureKeys(record3, index2.is.parameter, options);
           for (let j = 0; j < keys5.length; j++) {
-            const key = keys5[j];
-            keyPairs.push([key, is3]);
+            const eff = parse(state, keys5[j], index2);
+            if (!effectIsExit(eff)) yield* eff;
+            else if (eff._tag === "Failure") return yield* eff;
           }
         }
-        const eff2 = parseIndexes(state, keyPairs, concurrency);
-        if (eff2) yield* eff2;
+      } else if (parseIndexes) {
+        const keyPairs = empty2();
+        for (let i = 0; i < indexCount; i++) {
+          const index2 = indexes[i];
+          const keys5 = getIndexSignatureKeys(record3, index2.is.parameter, options);
+          for (let j = 0; j < keys5.length; j++) {
+            keyPairs.push([keys5[j], index2]);
+          }
+        }
+        const eff = parseIndexes(state, keyPairs, concurrency);
+        if (eff) yield* eff;
       }
       if (state.issues) {
-        return yield* fail5(new Composite(ast, oinput, state.issues));
+        return yield* fail5(new Composite(ast, state.issues));
       }
       if (options.propertyOrder === "original") {
-        const keys5 = (inputKeys ?? Reflect.ownKeys(input)).concat(expectedKeys);
+        const keys5 = (inputKeys ?? Reflect.ownKeys(record3)).concat(expectedKeys);
         const preserved = {};
         for (const key of keys5) {
           if (Object.hasOwn(out, key)) {
             assignProperty(preserved, key, out[key]);
           }
         }
-        return some2(preserved);
+        return preserved;
       }
-      return some2(out);
+      return out;
     });
   }
-  _rebuild(recur5, recurParameter, flipMerge, checks, encodingChecks) {
+  _rebuild(recur3, recurParameter, checks, encodingChecks) {
     const props = mapOrSame(this.propertySignatures, (ps) => {
-      const t = recur5(ps.type);
+      const t = recur3(ps.type);
       return t === ps.type ? ps : new PropertySignature(ps.name, t);
     });
     const indexes = mapOrSame(this.indexSignatures, (is3) => {
       const p = recurParameter(is3.parameter);
-      const t = recur5(is3.type);
-      const merge6 = flipMerge ? is3.merge?.flip() : is3.merge;
-      return p === is3.parameter && t === is3.type && merge6 === is3.merge ? is3 : new IndexSignature(p, t, merge6);
+      const t = recur3(is3.type);
+      return p === is3.parameter && t === is3.type ? is3 : new IndexSignature(p, t);
     });
     return props === this.propertySignatures && indexes === this.indexSignatures && checks === this.checks && encodingChecks === this.encodingChecks ? this : new _Objects(props, indexes, this.annotations, checks, void 0, this.context, encodingChecks);
   }
   /** @internal */
-  flip(recur5) {
-    return this._rebuild(recur5, recur5, true, this.encodingChecks, this.checks);
+  flip(recur3) {
+    return this._rebuild(recur3, recur3, this.encodingChecks, this.checks);
   }
   /** @internal */
-  recur(recur5, recurParameter = recur5) {
-    return this._rebuild(recur5, recurParameter, false, this.checks, this.encodingChecks);
+  recur(recur3, recurParameter = recur3) {
+    return this._rebuild(recur3, recurParameter, this.checks, this.encodingChecks);
   }
   /** @internal */
   getExpected() {
@@ -17824,22 +17844,32 @@ var Objects = class _Objects extends Base2 {
 };
 var parseProperties = /* @__PURE__ */ iterateEager()({
   onItem(s, p) {
-    const value3 = Object.hasOwn(s.input, p.name) ? some2(s.input[p.name]) : none2();
+    if (!Object.hasOwn(s.input, p.name)) {
+      return p.parser(missing, s.options);
+    }
+    const value3 = s.input[p.name];
+    assignProperty(s.out, p.name, value3);
     return p.parser(value3, s.options);
   },
   step(s, p, exit3) {
     if (exit3._tag === "Failure") {
       return wrapPropertyKeyIssue(s, s.ast, p.name, exit3);
-    } else if (exit3.value._tag === "Some") {
-      assignProperty(s.out, p.name, exit3.value.value);
-    } else if (!isOptional(p.type)) {
+    }
+    if (exit3 === sameExit) return;
+    const value3 = exit3[args];
+    if (value3 !== missing) {
+      assignProperty(s.out, p.name, value3);
+      return;
+    }
+    delete s.out[p.name];
+    if (!isOptional(p.type)) {
       const issue = new Pointer([p.name], new MissingKey(p.type.context?.annotations));
       if (s.options.errors === "all") {
         if (s.issues) s.issues.push(issue);
         else s.issues = [issue];
         return;
       } else {
-        return fail4(new Composite(s.ast, s.oinput, [issue]));
+        return fail4(new Composite(s.ast, [issue]));
       }
     }
   }
@@ -17883,6 +17913,17 @@ function tupleWithRest(ast, rest) {
   }
   return new Arrays(ast.isMutable, ast.elements, rest, void 0, ast.checks);
 }
+var toCandidate = /* @__PURE__ */ memoize((ast) => {
+  while (true) {
+    if (isSuspend(ast)) return unknown;
+    const encoding = ast.encoding;
+    if (!encoding) {
+      return ast.recur?.(toCandidate, identity) ?? ast;
+    }
+    if (encoding.some((link2) => link2.transformation._tag === "Middleware" && link2.transformation.decode !== identity)) return unknown;
+    ast = encoding[encoding.length - 1].to;
+  }
+});
 function getCandidateTypes(ast) {
   switch (ast._tag) {
     case "Null":
@@ -17946,29 +17987,50 @@ function collectSentinels(ast) {
       });
     case "Arrays":
       return ast.elements.flatMap((e, i) => {
-        return isLiteral(e) && !isOptional(e) ? [{
-          key: i,
-          literal: e.literal
-        }] : [];
+        if (!isOptional(e)) {
+          if (isLiteral(e)) {
+            return [{
+              key: i,
+              literal: e.literal
+            }];
+          }
+          if (isUniqueSymbol(e)) {
+            return [{
+              key: i,
+              literal: e.symbol
+            }];
+          }
+        }
+        return [];
       });
     case "Suspend":
       return collectSentinels(ast.thunk());
   }
 }
 var candidateIndexCache = /* @__PURE__ */ new WeakMap();
+var emptyCandidates = /* @__PURE__ */ Object.freeze([]);
 function getIndex(types) {
   let idx = candidateIndexCache.get(types);
   if (idx) return idx;
   idx = {};
+  let literalCandidates;
   for (let i = 0; i < types.length; i++) {
     const a = types[i];
-    const encoded = toEncoded(a);
+    const encoded = toCandidate(a);
     if (isNever2(encoded)) continue;
-    const candidateTypes = getCandidateTypes(encoded);
+    if (literalCandidates !== null) {
+      if (isLiteral(encoded) || isUniqueSymbol(encoded)) {
+        literalCandidates ??= /* @__PURE__ */ new Map();
+        const literal = isLiteral(encoded) ? encoded.literal : encoded.symbol;
+        let arr = literalCandidates.get(literal);
+        if (!arr) literalCandidates.set(literal, arr = []);
+        arr.push(a);
+      } else {
+        literalCandidates = null;
+      }
+    }
     const sentinels = collectSentinels(encoded);
-    idx.byType ??= {};
-    for (const t of candidateTypes) (idx.byType[t] ??= []).push(i);
-    if (sentinels.length > 0) {
+    if (sentinels.length) {
       idx.bySentinel ??= /* @__PURE__ */ new Map();
       for (const {
         key,
@@ -17978,11 +18040,24 @@ function getIndex(types) {
         if (!m) idx.bySentinel.set(key, m = /* @__PURE__ */ new Map());
         let arr = m.get(literal);
         if (!arr) m.set(literal, arr = []);
-        arr.push(i);
+        if (arr[arr.length - 1] !== i) arr.push(i);
       }
     } else {
       idx.otherwise ??= {};
+      const candidateTypes = getCandidateTypes(encoded);
       for (const t of candidateTypes) (idx.otherwise[t] ??= []).push(i);
+    }
+  }
+  if (literalCandidates) {
+    literalCandidates.forEach(Object.freeze);
+    idx = (input) => literalCandidates.get(input) ?? emptyCandidates;
+  } else if (idx.bySentinel?.size === 1 && !idx.otherwise) {
+    for (const [key, byValue] of idx.bySentinel) {
+      const candidates = byValue;
+      for (const [literal, indexes] of byValue) {
+        candidates.set(literal, Object.freeze(indexes.map((index2) => types[index2])));
+      }
+      idx = (input) => isObjectKeyword(input) && Object.hasOwn(input, key) ? candidates.get(input[key]) ?? emptyCandidates : emptyCandidates;
     }
   }
   candidateIndexCache.set(types, idx);
@@ -17990,16 +18065,17 @@ function getIndex(types) {
 }
 function filterLiterals(input) {
   return (ast) => {
-    const encoded = toEncoded(ast);
+    const encoded = toCandidate(ast);
     return encoded._tag === "Literal" ? encoded.literal === input : encoded._tag === "UniqueSymbol" ? encoded.symbol === input : true;
   };
 }
 function getCandidates(input, types) {
   const idx = getIndex(types);
+  if (typeof idx === "function") return idx(input);
   const runtimeType = input === null ? "null" : Array.isArray(input) ? "array" : typeof input;
   if (idx.bySentinel) {
-    const base2 = idx.otherwise?.[runtimeType] ?? [];
-    if (runtimeType === "object" || runtimeType === "array") {
+    const base2 = idx.otherwise?.[runtimeType] ?? emptyCandidates;
+    if (isObjectKeyword(input)) {
       const selected = new Set(base2);
       for (const [k, m] of idx.bySentinel) {
         if (Object.hasOwn(input, k)) {
@@ -18009,11 +18085,11 @@ function getCandidates(input, types) {
           }
         }
       }
-      return Array.from(selected).sort((a, b) => a - b).map((i) => types[i]).filter(filterLiterals(input));
+      return Array.from(selected).sort((a, b) => a - b).map((i) => types[i]);
     }
     return base2.map((i) => types[i]);
   }
-  return (idx.byType?.[runtimeType] ?? []).map((i) => types[i]).filter(filterLiterals(input));
+  return (idx.otherwise?.[runtimeType] ?? emptyCandidates).map((i) => types[i]).filter(filterLiterals(input));
 }
 var Union = class _Union extends Base2 {
   _tag = "Union";
@@ -18027,21 +18103,24 @@ var Union = class _Union extends Base2 {
     this.encodingChecks = encodingChecks;
   }
   /** @internal */
-  getParser(recur5) {
+  getParser(recur3) {
     const ast = this;
-    return (oinput, options) => {
-      if (oinput._tag === "None") {
-        return succeed6(oinput);
+    return (input, options) => {
+      if (input === missing) {
+        return missingExit;
       }
-      const input = oinput.value;
       const candidates = getCandidates(input, ast.types);
+      if (candidates.length === 1) {
+        const result4 = recur3(candidates[0])(input, options);
+        if (result4._tag === "Success") return result4;
+        return effectIsExit(result4) ? failSingleUnionCandidate(ast, result4.cause) : catchCause3(result4, (cause) => failSingleUnionCandidate(ast, cause));
+      }
       const state = {
         ast,
-        recur: recur5,
-        oinput,
+        recur: recur3,
         input,
         out: void 0,
-        successes: [],
+        successes: ast.mode === "oneOf" ? [] : void 0,
         issues: void 0,
         options
       };
@@ -18051,24 +18130,24 @@ var Union = class _Union extends Base2 {
         orderedStep: true
       } : void 0);
       if (!eff) {
-        return state.out ? succeed6(state.out) : fail5(new AnyOf(ast, input, state.issues ?? []));
+        return state.out ?? fail5(new AnyOf(ast, state.issues ?? []));
       }
-      return flatMap5(eff, (_) => {
-        return state.out ? succeed6(state.out) : fail5(new AnyOf(ast, input, state.issues ?? []));
+      return flatMapEager2(eff, (_) => {
+        return state.out === sameExit ? succeed6(input) : state.out ?? fail5(new AnyOf(ast, state.issues ?? []));
       });
     };
   }
-  _rebuild(recur5, checks, encodingChecks) {
-    const types = mapOrSame(this.types, recur5);
+  _rebuild(recur3, checks, encodingChecks) {
+    const types = mapOrSame(this.types, recur3);
     return types === this.types && checks === this.checks && encodingChecks === this.encodingChecks ? this : new _Union(types, this.mode, this.annotations, checks, void 0, this.context, encodingChecks);
   }
   /** @internal */
-  recur(recur5) {
-    return this._rebuild(recur5, this.checks, this.encodingChecks);
+  recur(recur3) {
+    return this._rebuild(recur3, this.checks, this.encodingChecks);
   }
   /** @internal */
-  flip(recur5) {
-    return this._rebuild(recur5, this.encodingChecks, this.checks);
+  flip(recur3) {
+    return this._rebuild(recur3, this.encodingChecks, this.checks);
   }
   /** @internal */
   matchPart(s, options) {
@@ -18106,10 +18185,14 @@ var Union = class _Union extends Base2 {
     return Array.from(new Set(types)).join(" | ");
   }
 };
+function failSingleUnionCandidate(ast, cause) {
+  const issue = getSchemaIssue(cause);
+  return issue ? fail4(new AnyOf(ast, [issue])) : failCause2(cause);
+}
 var parseUnion = /* @__PURE__ */ iterateEager()({
   onItem(s, ast) {
     const parser = s.recur(ast);
-    return parser(s.oinput, s.options);
+    return parser(s.input, s.options);
   },
   step(s, candidate, exit3) {
     if (exit3._tag === "Failure") {
@@ -18120,13 +18203,14 @@ var parseUnion = /* @__PURE__ */ iterateEager()({
       if (s.issues) s.issues.push(issue);
       else s.issues = [issue];
     } else {
-      if (s.out && s.ast.mode === "oneOf") {
+      if (s.out && s.successes) {
         s.successes.push(candidate);
-        return fail4(new OneOf(s.ast, s.input, s.successes));
+        return fail4(new OneOf(s.ast, s.successes));
       }
-      s.out = exit3.value;
-      s.successes.push(candidate);
-      if (s.ast.mode === "anyOf") {
+      s.out = exit3;
+      if (s.successes) {
+        s.successes.push(candidate);
+      } else {
         return void_3;
       }
     }
@@ -18155,19 +18239,20 @@ var Suspend = class _Suspend extends Base2 {
   _tag = "Suspend";
   thunk;
   constructor(thunk, annotations, checks, encoding, context4) {
-    if (checks !== void 0) {
+    if (checks) {
       throw new Error("Cannot add checks to Suspend");
     }
     super(annotations, void 0, encoding, context4);
     this.thunk = memoizeThunk(thunk);
   }
   /** @internal */
-  getParser(recur5) {
-    return recur5(this.thunk());
+  getParser(recur3) {
+    let parser;
+    return (input, options) => (parser ??= recur3(this.thunk()))(input, options);
   }
   /** @internal */
-  recur(recur5) {
-    return new _Suspend(() => recur5(this.thunk()), this.annotations, void 0, void 0, this.context);
+  recur(recur3) {
+    return new _Suspend(() => recur3(this.thunk()), this.annotations, void 0, void 0, this.context);
   }
   /** @internal */
   getExpected(getExpected2) {
@@ -18221,11 +18306,11 @@ var FilterGroup = class _FilterGroup extends Class {
   }
 };
 function makeFilter(filter11, annotations, aborted = false) {
-  return new Filter2((input, ast, options) => make12(input, ast, filter11(input, ast, options)), annotations, aborted);
+  return new Filter2((input, ast, options) => normalizeFilterOutput(ast, filter11(input, ast, options)), annotations, aborted);
 }
 function makeFilterByGuard(is3, annotations) {
   return new Filter2(
-    (input) => is3(input) ? void 0 : new InvalidValue(some2(input)),
+    (input) => is3(input) ? void 0 : new InvalidValue(),
     annotations,
     true
     // after a guard, we always want to abort
@@ -18256,7 +18341,11 @@ function isFinite2(annotations) {
 var finite = /* @__PURE__ */ appendChecks(number2, [/* @__PURE__ */ isFinite2()]);
 function isPattern(regExp, annotations) {
   const source = regExp.source;
-  return makeFilter((s) => regExp.test(s), {
+  const pattern = new globalThis.RegExp(source, regExp.flags);
+  return makeFilter((s) => {
+    pattern.lastIndex = 0;
+    return pattern.test(s);
+  }, {
     expected: `a string matching the RegExp ${source}`,
     representation: {
       id: "effect/schema/isPattern",
@@ -18313,7 +18402,7 @@ function annotate(ast, annotations) {
   });
 }
 function replaceChecks(ast, checks) {
-  if (ast._tag === "Suspend" && checks !== void 0) {
+  if (ast._tag === "Suspend" && checks) {
     throw new Error("Cannot add checks to Suspend");
   }
   if (ast.checks === checks) {
@@ -18434,12 +18523,12 @@ function parseParameter(ast) {
     parameters
   };
 }
-function record(key, value3, keyValueCombiner) {
+function record(key, value3) {
   const {
     literals,
     parameters: indexSignatures
   } = parseParameter(key);
-  return new Objects(literals.map((literal) => new PropertySignature(literal, value3)), indexSignatures.map((parameter) => new IndexSignature(parameter, value3, keyValueCombiner)));
+  return new Objects(literals.map((literal) => new PropertySignature(literal, value3)), indexSignatures.map((parameter) => new IndexSignature(parameter, value3)));
 }
 function isOptional(ast) {
   return ast.context?.isOptional ?? false;
@@ -18510,46 +18599,32 @@ function containsUndefined(ast) {
   }
 }
 function fromConst(ast, value3) {
-  const succeed9 = succeedSome2(value3);
-  return (oinput) => {
-    if (oinput._tag === "None") {
-      return succeedNone2;
-    }
-    return oinput.value === value3 ? succeed9 : fail5(new InvalidType(ast, oinput));
+  const succeed10 = succeed7(value3);
+  return (input) => {
+    if (input === missing) return missingExit;
+    return input === value3 ? succeed10 : fail5(new InvalidType(ast));
   };
-}
-function fromAnyToConst(value3) {
-  const succeed9 = succeedSome2(value3);
-  return (oinput) => oinput._tag === "None" ? succeedNone2 : succeed9;
 }
 function fromRefinement(ast, refinement) {
-  return (oinput) => {
-    if (oinput._tag === "None") {
-      return succeedNone2;
-    }
-    return refinement(oinput.value) ? succeed6(oinput) : fail5(new InvalidType(ast, oinput));
+  return (input) => {
+    if (input === missing) return missingExit;
+    return refinement(input) ? sameExit : fail5(new InvalidType(ast));
   };
 }
-function applyTemplateLiteralPartChecks(ast, value3, options) {
-  if (options?.disableChecks || ast.checks === void 0) return value3;
-  const issues = [];
-  collectIssues(ast.checks, value3, issues, ast, options);
-  return issues.length === 0 ? value3 : void 0;
-}
-function segmentTemplateLiteralParts(parts, input, options) {
-  const literals = parts.map((part) => part._tag === "Literal" ? globalThis.String(part.literal) : void 0);
-  if (literals.some((literal) => literal !== void 0 && !input.includes(literal))) return void 0;
-  const minimumLengths = new Array(parts.length + 1);
-  minimumLengths[parts.length] = 0;
-  for (let i = parts.length - 1; i >= 0; i--) {
-    minimumLengths[i] = minimumLengths[i + 1] + (literals[i]?.length ?? 0);
+function segmentTemplateLiteralParts(ast, input, options) {
+  const parts = ast.encodedParts;
+  const literals = ast.literals;
+  const inputLength = input.length;
+  for (let i = 0; i < literals.length; i++) {
+    const literal = literals[i];
+    if (literal && !input.includes(literal)) return void 0;
   }
-  if (minimumLengths[0] > input.length) return void 0;
+  if (ast.suffixLengths[0] > inputLength) return void 0;
   const out = new Array(parts.length);
-  const failures = parts.map(() => /* @__PURE__ */ new Set());
+  let failures;
   function go(i, pos) {
-    if (i === parts.length) return pos === input.length;
-    if (failures[i].has(pos)) return false;
+    if (i === parts.length) return pos === inputLength;
+    if (failures?.has(i * (inputLength + 1) + pos)) return false;
     const part = parts[i];
     if (i === parts.length - 1) {
       const s = input.slice(pos);
@@ -18564,7 +18639,7 @@ function segmentTemplateLiteralParts(parts, input, options) {
         return true;
       }
     } else {
-      const maximumEnd = input.length - minimumLengths[i + 1];
+      const maximumEnd = inputLength - ast.suffixLengths[i + 1];
       const anchor = literals[i + 1];
       let end3 = anchor === void 0 ? maximumEnd : input.lastIndexOf(anchor, maximumEnd);
       while (end3 >= pos) {
@@ -18577,7 +18652,8 @@ function segmentTemplateLiteralParts(parts, input, options) {
         end3 = anchor === void 0 ? end3 - 1 : input.lastIndexOf(anchor, end3 - 1);
       }
     }
-    failures[i].add(pos);
+    failures ??= /* @__PURE__ */ new Set();
+    failures.add(i * (inputLength + 1) + pos);
     return false;
   }
   return go(0, 0) ? out : void 0;
@@ -18666,7 +18742,7 @@ var symbolToString = /* @__PURE__ */ new Link(symbolString, /* @__PURE__ */ new 
   if (key !== void 0) {
     return succeed6(globalThis.String(sym));
   }
-  return fail5(new Forbidden(some2(sym), {
+  return fail5(new Forbidden({
     message: "cannot serialize to string, Symbol is not registered"
   }));
 })));
@@ -18687,25 +18763,30 @@ function collectIssues(checks, value3, issues, ast, options) {
   for (let i = 0; i < checks.length; i++) {
     const check3 = checks[i];
     if (check3._tag === "FilterGroup") {
-      collectIssues(check3.checks, value3, issues, ast, options);
+      issues = collectIssues(check3.checks, value3, issues, ast, options);
+      if (issues && (options.errors !== "all" || issues[issues.length - 1].filter.aborted)) {
+        return issues;
+      }
     } else {
       const issue = check3.run(value3, ast, options);
       if (issue) {
-        issues.push(new Filter(value3, check3, issue));
-        if (check3.aborted || options?.errors !== "all") {
-          return;
+        const filter11 = new Filter(check3, issue);
+        if (issues) issues.push(filter11);
+        else issues = [filter11];
+        if (options.errors !== "all" || check3.aborted) {
+          return issues;
         }
       }
     }
   }
+  return issues;
 }
 function runChecks(checks, s) {
-  const issues = [];
-  collectIssues(checks, s, issues, unknown, {
+  const issues = collectIssues(checks, s, void 0, unknown, {
     errors: "all"
   });
-  if (isArrayNonEmpty2(issues)) {
-    const issue = new Composite(unknown, some2(s), issues);
+  if (issues) {
+    const issue = new Composite(unknown, issues);
     return fail2(issue);
   }
   return succeed2(s);
@@ -18768,7 +18849,7 @@ function isTree(u, isLeaf) {
 function isJson(u) {
   return isTree(u, isJsonLeaf);
 }
-var Json = /* @__PURE__ */ new Declaration([], () => (input, ast) => isJson(input) ? succeed6(input) : fail5(new InvalidType(ast, some2(input))), {
+var Json = /* @__PURE__ */ new Declaration([], () => (input, ast) => isJson(input) ? sameExit : fail5(new InvalidType(ast)), {
   representation: {
     id: "effect/schema/Json",
     payload: null
@@ -18785,20 +18866,20 @@ var MutableJson = /* @__PURE__ */ annotate(Json, {
   }
 });
 var unknownToJson = /* @__PURE__ */ new Link(Json, /* @__PURE__ */ passthrough3());
-var objectKeywordToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([/* @__PURE__ */ new Arrays(false, [], [Json]), /* @__PURE__ */ new Objects([], [/* @__PURE__ */ new IndexSignature(string2, Json, void 0)])], "anyOf"), /* @__PURE__ */ passthrough3());
+var objectKeywordToJson = /* @__PURE__ */ new Link(/* @__PURE__ */ new Union([/* @__PURE__ */ new Arrays(false, [], [Json]), /* @__PURE__ */ new Objects([], [/* @__PURE__ */ new IndexSignature(string2, Json)])], "anyOf"), /* @__PURE__ */ passthrough3());
 function isStringTree(u) {
   return isTree(u, isStringTreeLeaf);
 }
-var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast) => isStringTree(input) ? succeed6(input) : fail5(new InvalidType(ast, some2(input))), {
+var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast) => isStringTree(input) ? sameExit : fail5(new InvalidType(ast)), {
   expected: "StringTree",
   toCodecStringTree: () => void 0
 });
 var unknownToStringTree = /* @__PURE__ */ new Link(StringTree, /* @__PURE__ */ passthrough3());
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/MutableHashMap.js
-var TypeId18 = "~effect/collections/MutableHashMap";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/MutableHashMap.js
+var TypeId17 = "~effect/collections/MutableHashMap";
 var MutableHashMapProto = {
-  [TypeId18]: TypeId18,
+  [TypeId17]: TypeId17,
   [Symbol.iterator]() {
     return this.backing[Symbol.iterator]();
   },
@@ -18918,8 +18999,8 @@ var clear = (self) => {
 };
 var size = (self) => self.backing.size;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Chunk.js
-var TypeId19 = "~effect/collections/Chunk";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Chunk.js
+var TypeId18 = "~effect/collections/Chunk";
 function copy(src2, srcPos, dest, destPos, len) {
   for (let i = srcPos; i < Math.min(src2.length, srcPos + len); i++) {
     dest[destPos + i - srcPos] = src2[i];
@@ -18927,10 +19008,10 @@ function copy(src2, srcPos, dest, destPos, len) {
   return dest;
 }
 var emptyArray = [];
-var makeEquivalence7 = (isEquivalent) => make2((self, that) => self.length === that.length && toReadonlyArray(self).every((value3, i) => isEquivalent(value3, getUnsafe3(that, i))));
-var _equivalence = /* @__PURE__ */ makeEquivalence7(equals);
+var makeEquivalence6 = (isEquivalent) => make2((self, that) => self.length === that.length && toReadonlyArray(self).every((value3, i) => isEquivalent(value3, getUnsafe3(that, i))));
+var _equivalence = /* @__PURE__ */ makeEquivalence6(equals);
 var ChunkProto = {
-  [TypeId19]: {
+  [TypeId18]: {
     _A: (_) => _
   },
   toString() {
@@ -19010,7 +19091,7 @@ var makeChunk = (backing) => {
   }
   return chunk;
 };
-var isChunk = (u) => hasProperty(u, TypeId19);
+var isChunk = (u) => hasProperty(u, TypeId18);
 var _empty = /* @__PURE__ */ makeChunk({
   _tag: "IEmpty"
 });
@@ -19102,8 +19183,7 @@ var getUnsafe3 = /* @__PURE__ */ dual(2, (self, index2) => {
 });
 var size2 = (self) => self.length;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Fiber.js
-var TypeId20 = `~effect/Fiber/${version}`;
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Fiber.js
 var await_ = fiberAwait;
 var join3 = fiberJoin;
 var joinAll = fiberJoinAll;
@@ -19112,13 +19192,36 @@ var interruptAll = fiberInterruptAll;
 var getCurrent = getCurrentFiber;
 var runIn = fiberRunIn;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Latch.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Latch.js
 var makeUnsafe5 = makeLatchUnsafe;
-var make15 = makeLatch;
+var make13 = makeLatch;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/MutableList.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/MutableRef.js
+var TypeId19 = "~effect/MutableRef";
+var MutableRefProto = {
+  [TypeId19]: TypeId19,
+  ...PipeInspectableProto,
+  toJSON() {
+    return {
+      _id: "MutableRef",
+      current: toJson(this.current)
+    };
+  }
+};
+var make14 = (value3) => {
+  const ref = Object.create(MutableRefProto);
+  ref.current = value3;
+  return ref;
+};
+var get3 = (self) => self.current;
+var set2 = /* @__PURE__ */ dual(2, (self, value3) => {
+  self.current = value3;
+  return self;
+});
+
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/MutableList.js
 var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
-var make16 = () => ({
+var make15 = () => ({
   head: void 0,
   tail: void 0,
   length: 0
@@ -19146,6 +19249,7 @@ var prepend = (self, message) => {
     offset: 0,
     next: self.head
   };
+  if (!self.tail) self.tail = self.head;
   self.length++;
 };
 var appendAll2 = (self, messages) => appendAllUnsafe(self, fromIterable2(messages), !Array.isArray(messages));
@@ -19239,6 +19343,7 @@ var take = (self) => {
   return message;
 };
 var toArrayN = (self, n) => {
+  if (n <= 0) return [];
   const length = Math.min(n, self.length);
   const out = new Array(length);
   let index2 = 0;
@@ -19277,46 +19382,23 @@ var filter6 = (self, f) => {
 };
 var remove3 = (self, value3) => filter6(self, (v) => v !== value3);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/MutableRef.js
-var TypeId21 = "~effect/MutableRef";
-var MutableRefProto = {
-  [TypeId21]: TypeId21,
-  ...PipeInspectableProto,
-  toJSON() {
-    return {
-      _id: "MutableRef",
-      current: toJson(this.current)
-    };
-  }
-};
-var make17 = (value3) => {
-  const ref = Object.create(MutableRefProto);
-  ref.current = value3;
-  return ref;
-};
-var get3 = (self) => self.current;
-var set2 = /* @__PURE__ */ dual(2, (self, value3) => {
-  self.current = value3;
-  return self;
-});
-
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/PubSub.js
-var TypeId22 = "~effect/PubSub";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/PubSub.js
+var TypeId20 = "~effect/PubSub";
 var SubscriptionTypeId = "~effect/PubSub/Subscription";
-var make18 = (options) => sync3(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe5(false), make17(false), options.strategy()));
-var bounded = (capacity) => make18({
+var make16 = (options) => sync3(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe5(false), make14(false), options.strategy()));
+var bounded = (capacity) => make16({
   atomicPubSub: () => makeAtomicBounded(capacity),
   strategy: () => new BackPressureStrategy()
 });
-var dropping = (capacity) => make18({
+var dropping = (capacity) => make16({
   atomicPubSub: () => makeAtomicBounded(capacity),
   strategy: () => new DroppingStrategy()
 });
-var sliding = (capacity) => make18({
+var sliding = (capacity) => make16({
   atomicPubSub: () => makeAtomicBounded(capacity),
   strategy: () => new SlidingStrategy()
 });
-var unbounded = (options) => make18({
+var unbounded = (options) => make16({
   atomicPubSub: () => makeAtomicUnbounded(options),
   strategy: () => new DroppingStrategy()
 });
@@ -19374,6 +19456,7 @@ var unsubscribe = (self) => uninterruptible2(withFiber2((state) => {
   }).pipe(tap4(() => sync3(() => {
     self.subscribers.delete(self.subscription);
     self.subscription.unsubscribe();
+    self.replayWindow.close();
     self.strategy.onPubSubEmptySpaceUnsafe(self.pubsub, self.subscribers);
   })), when2(self.shutdownHook.open), asVoid4);
 }));
@@ -19442,9 +19525,10 @@ var removeSubscribers = (subscribers, subscription, pollers) => {
     subscribers.delete(subscription);
   }
 };
-var makeSubscriptionUnsafe = (pubsub, subscribers, strategy) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make16(), makeUnsafe5(false), make17(false), strategy, pubsub.replayWindow());
+var makeSubscriptionUnsafe = (pubsub, subscribers, strategy) => new SubscriptionImpl(pubsub, subscribers, pubsub.subscribe(), make15(), makeUnsafe5(false), make14(false), strategy, pubsub.replayWindow());
 var BoundedPubSubArb = class {
   array;
+  replayIndices;
   publisherIndex = 0;
   subscribers;
   subscriberCount = 0;
@@ -19457,6 +19541,9 @@ var BoundedPubSubArb = class {
     this.array = Array.from({
       length: capacity
     });
+    this.replayIndices = replayBuffer ? Array.from({
+      length: capacity
+    }) : [];
     this.subscribers = Array.from({
       length: capacity
     });
@@ -19477,14 +19564,15 @@ var BoundedPubSubArb = class {
     if (this.isFull()) {
       return false;
     }
+    const replayIndex = this.replayBuffer?.offer(value3);
     if (this.subscriberCount !== 0) {
       const index2 = this.publisherIndex % this.capacity;
       this.array[index2] = value3;
+      if (replayIndex !== void 0) {
+        this.replayIndices[index2] = replayIndex;
+      }
       this.subscribers[index2] = this.subscriberCount;
       this.publisherIndex += 1;
-    }
-    if (this.replayBuffer) {
-      this.replayBuffer.offer(value3);
     }
     return true;
   }
@@ -19509,23 +19597,23 @@ var BoundedPubSubArb = class {
       const a = chunk[iteratorIndex++];
       const index2 = this.publisherIndex % this.capacity;
       this.array[index2] = a;
+      const replayIndex = this.replayBuffer?.offer(a);
+      if (replayIndex !== void 0) {
+        this.replayIndices[index2] = replayIndex;
+      }
       this.subscribers[index2] = this.subscriberCount;
       this.publisherIndex += 1;
-      if (this.replayBuffer) {
-        this.replayBuffer.offer(a);
-      }
     }
     return chunk.slice(iteratorIndex);
   }
   slide() {
     if (this.subscribersIndex !== this.publisherIndex) {
       const index2 = this.subscribersIndex % this.capacity;
+      const value3 = this.array[index2];
       this.array[index2] = AbsentValue;
       this.subscribers[index2] = 0;
       this.subscribersIndex += 1;
-    }
-    if (this.replayBuffer) {
-      this.replayBuffer.slide();
+      this.replayBuffer?.slide(value3, this.replayIndices[index2]);
     }
   }
   subscribe() {
@@ -19613,6 +19701,7 @@ var BoundedPubSubArbSubscription = class {
 };
 var BoundedPubSubPow2 = class {
   array;
+  replayIndices;
   mask;
   publisherIndex = 0;
   subscribers;
@@ -19626,6 +19715,9 @@ var BoundedPubSubPow2 = class {
     this.array = Array.from({
       length: capacity
     });
+    this.replayIndices = replayBuffer ? Array.from({
+      length: capacity
+    }) : [];
     this.mask = capacity - 1;
     this.subscribers = Array.from({
       length: capacity
@@ -19647,14 +19739,15 @@ var BoundedPubSubPow2 = class {
     if (this.isFull()) {
       return false;
     }
+    const replayIndex = this.replayBuffer?.offer(value3);
     if (this.subscriberCount !== 0) {
       const index2 = this.publisherIndex & this.mask;
       this.array[index2] = value3;
+      if (replayIndex !== void 0) {
+        this.replayIndices[index2] = replayIndex;
+      }
       this.subscribers[index2] = this.subscriberCount;
       this.publisherIndex += 1;
-    }
-    if (this.replayBuffer) {
-      this.replayBuffer.offer(value3);
     }
     return true;
   }
@@ -19679,23 +19772,23 @@ var BoundedPubSubPow2 = class {
       const elem = chunk[iteratorIndex++];
       const index2 = this.publisherIndex & this.mask;
       this.array[index2] = elem;
+      const replayIndex = this.replayBuffer?.offer(elem);
+      if (replayIndex !== void 0) {
+        this.replayIndices[index2] = replayIndex;
+      }
       this.subscribers[index2] = this.subscriberCount;
       this.publisherIndex += 1;
-      if (this.replayBuffer) {
-        this.replayBuffer.offer(elem);
-      }
     }
     return chunk.slice(iteratorIndex);
   }
   slide() {
     if (this.subscribersIndex !== this.publisherIndex) {
       const index2 = this.subscribersIndex & this.mask;
+      const value3 = this.array[index2];
       this.array[index2] = AbsentValue;
       this.subscribers[index2] = 0;
       this.subscribersIndex += 1;
-    }
-    if (this.replayBuffer) {
-      this.replayBuffer.slide();
+      this.replayBuffer?.slide(value3, this.replayIndices[index2]);
     }
   }
   subscribe() {
@@ -19786,6 +19879,7 @@ var BoundedPubSubSingle = class {
   subscriberCount = 0;
   subscribers = 0;
   value = AbsentValue;
+  replayIndex = 0;
   capacity = 1;
   replayBuffer;
   constructor(replayBuffer) {
@@ -19810,13 +19904,14 @@ var BoundedPubSubSingle = class {
     if (this.isFull()) {
       return false;
     }
+    const replayIndex = this.replayBuffer?.offer(value3);
     if (this.subscriberCount !== 0) {
       this.value = value3;
+      if (replayIndex !== void 0) {
+        this.replayIndex = replayIndex;
+      }
       this.subscribers = this.subscriberCount;
       this.publisherIndex += 1;
-    }
-    if (this.replayBuffer) {
-      this.replayBuffer.offer(value3);
     }
     return true;
   }
@@ -19839,11 +19934,10 @@ var BoundedPubSubSingle = class {
   }
   slide() {
     if (this.isFull()) {
+      const value3 = this.value;
       this.subscribers = 0;
       this.value = AbsentValue;
-    }
-    if (this.replayBuffer) {
-      this.replayBuffer.slide();
+      this.replayBuffer?.slide(value3, this.replayIndex);
     }
   }
   subscribe() {
@@ -19906,6 +20000,7 @@ var BoundedPubSubSingleSubscription = class {
 var UnboundedPubSub = class {
   publisherHead = {
     value: AbsentValue,
+    replayIndex: void 0,
     subscribers: 0,
     next: null
   };
@@ -19930,18 +20025,18 @@ var UnboundedPubSub = class {
     return this.publisherIndex - this.subscribersIndex;
   }
   publish(value3) {
+    const replayIndex = this.replayBuffer?.offer(value3);
     const subscribers = this.publisherTail.subscribers;
     if (subscribers !== 0) {
-      this.publisherTail.next = {
+      const node = {
         value: value3,
+        replayIndex,
         subscribers,
         next: null
       };
+      this.publisherTail.next = node;
       this.publisherTail = this.publisherTail.next;
       this.publisherIndex += 1;
-    }
-    if (this.replayBuffer) {
-      this.replayBuffer.offer(value3);
     }
     return true;
   }
@@ -19957,12 +20052,12 @@ var UnboundedPubSub = class {
   }
   slide() {
     if (this.publisherHead !== this.publisherTail) {
+      const node = this.publisherHead.next;
+      const value3 = node.value;
       this.publisherHead = this.publisherHead.next;
       this.publisherHead.value = AbsentValue;
       this.subscribersIndex += 1;
-    }
-    if (this.replayBuffer) {
-      this.replayBuffer.slide();
+      this.replayBuffer?.slide(value3, node.replayIndex);
     }
   }
   subscribe() {
@@ -20094,7 +20189,7 @@ var SubscriptionImpl = class {
   }
 };
 var PubSubImpl = class {
-  [TypeId22] = {
+  [TypeId20] = {
     _A: identity
   };
   pubsub;
@@ -20122,7 +20217,7 @@ var ensureCapacity = (capacity) => {
   }
 };
 var BackPressureStrategy = class {
-  publishers = /* @__PURE__ */ make16();
+  publishers = /* @__PURE__ */ make15();
   get shutdown() {
     return withFiber2((fiber3) => forEach2(takeAll(this.publishers), ([_, deferred, last]) => last ? interruptWith(deferred, fiber3.id) : void_4, {
       concurrency: "unbounded",
@@ -20270,21 +20365,31 @@ var ReplayBuffer = class {
   capacity;
   head = {
     value: AbsentValue,
+    index: 0,
     next: null
   };
   tail = this.head;
+  slideValues = [];
   size = 0;
   index = 0;
+  publisherIndex = 0;
   constructor(capacity) {
     this.capacity = capacity;
   }
-  slide() {
+  slide(value3, publisherIndex) {
+    this.slideValues[this.index % this.capacity] = {
+      value: value3,
+      index: publisherIndex
+    };
     this.index++;
   }
   offer(a) {
+    const index2 = this.publisherIndex++;
     this.tail.value = a;
+    this.tail.index = index2;
     this.tail.next = {
       value: AbsentValue,
+      index: 0,
       next: null
     };
     this.tail = this.tail.next;
@@ -20293,6 +20398,7 @@ var ReplayBuffer = class {
     } else {
       this.size += 1;
     }
+    return index2;
   }
   offerAll(as4) {
     for (const a of as4) {
@@ -20301,47 +20407,65 @@ var ReplayBuffer = class {
   }
 };
 var ReplayWindowImpl = class {
-  head;
-  index;
-  remaining;
   buffer;
+  values;
+  index = 0;
+  remaining;
+  slideIndex;
+  newestIndex = -1;
   constructor(buffer3) {
     this.buffer = buffer3;
-    this.index = buffer3.index;
     this.remaining = buffer3.size;
-    this.head = buffer3.head;
-  }
-  fastForward() {
-    while (this.index < this.buffer.index) {
-      this.head = this.head.next;
-      this.index++;
+    this.slideIndex = buffer3.index;
+    this.values = new Array(this.remaining);
+    let node = buffer3.head;
+    for (let i = 0; i < this.remaining; i++) {
+      this.values[i] = node.value;
+      this.newestIndex = node.index;
+      node = node.next;
     }
+  }
+  close() {
+    this.values.length = 0;
+    this.remaining = 0;
+  }
+  sync() {
+    const slides = this.buffer.index - this.slideIndex;
+    if (slides === 0 || this.remaining === 0) {
+      return;
+    }
+    const count = Math.min(slides, this.buffer.capacity);
+    const start = this.buffer.index - count;
+    for (let i = 0; i < count; i++) {
+      const entry = this.buffer.slideValues[(start + i) % this.buffer.capacity];
+      if (entry.index > this.newestIndex) {
+        this.index = (this.index + 1) % this.values.length;
+        this.values[(this.index + this.remaining - 1) % this.values.length] = entry.value;
+        this.newestIndex = entry.index;
+      }
+    }
+    this.slideIndex = this.buffer.index;
   }
   take() {
     if (this.remaining === 0) {
       return void 0;
-    } else if (this.index < this.buffer.index) {
-      this.fastForward();
     }
+    this.sync();
+    const value3 = this.values[this.index];
+    this.values[this.index] = AbsentValue;
+    this.index = (this.index + 1) % this.values.length;
     this.remaining--;
-    const value3 = this.head.value;
-    this.head = this.head.next;
+    if (this.remaining === 0) {
+      this.close();
+    }
     return value3;
   }
   takeN(n) {
-    if (this.remaining === 0) {
-      return [];
-    } else if (this.index < this.buffer.index) {
-      this.fastForward();
-    }
     const len = Math.min(n, this.remaining);
     const items2 = new Array(len);
     for (let i = 0; i < len; i++) {
-      const value3 = this.head.value;
-      this.head = this.head.next;
-      items2[i] = value3;
+      items2[i] = this.take();
     }
-    this.remaining -= len;
     return items2;
   }
   takeAll() {
@@ -20352,11 +20476,12 @@ var emptyReplayWindow = {
   remaining: 0,
   take: () => void 0,
   takeN: () => [],
-  takeAll: () => []
+  takeAll: () => [],
+  close: () => void 0
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Queue.js
-var TypeId23 = "~effect/Queue";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Queue.js
+var TypeId21 = "~effect/Queue";
 var EnqueueTypeId = "~effect/Queue/Enqueue";
 var DequeueTypeId = "~effect/Queue/Dequeue";
 var variance = {
@@ -20364,7 +20489,7 @@ var variance = {
   _E: identity
 };
 var QueueProto = {
-  [TypeId23]: variance,
+  [TypeId21]: variance,
   [EnqueueTypeId]: variance,
   [DequeueTypeId]: variance,
   ...PipeInspectableProto,
@@ -20376,12 +20501,12 @@ var QueueProto = {
     };
   }
 };
-var make19 = (options) => withFiber((fiber3) => {
+var make17 = (options) => withFiber((fiber3) => {
   const self = Object.create(QueueProto);
   self.dispatcher = fiber3.currentDispatcher;
   self.capacity = options?.capacity ?? Number.POSITIVE_INFINITY;
   self.strategy = options?.strategy ?? "suspend";
-  self.messages = make16();
+  self.messages = make15();
   self.scheduleRunning = false;
   self.state = {
     _tag: "Open",
@@ -20391,10 +20516,10 @@ var make19 = (options) => withFiber((fiber3) => {
   };
   return succeed3(self);
 });
-var bounded2 = (capacity) => make19({
+var bounded2 = (capacity) => make17({
   capacity
 });
-var unbounded2 = () => make19();
+var unbounded2 = () => make17();
 var offer = (self, message) => suspend(() => {
   if (self.state._tag !== "Open") {
     return exitFalse;
@@ -20680,8 +20805,20 @@ var finalize = (self, exit3) => {
   openState.awaiters.clear();
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Semaphore.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Semaphore.js
 var makeUnsafe6 = (permits) => new SemaphoreImpl(permits);
+var waitForPermits = (self, n, effect2) => callback((resume) => {
+  if (self.free >= n) return resume(effect2);
+  const observer = () => {
+    if (self.free < n) return;
+    self.waiters.delete(observer);
+    resume(effect2);
+  };
+  self.waiters.add(observer);
+  return sync(() => {
+    self.waiters.delete(observer);
+  });
+});
 var SemaphoreImpl = class {
   waiters = /* @__PURE__ */ new Set();
   taken = 0;
@@ -20695,60 +20832,61 @@ var SemaphoreImpl = class {
   take(n) {
     const take6 = suspend(() => {
       if (this.free < n) {
-        return callback((resume) => {
-          if (this.free >= n) return resume(take6);
-          const observer = () => {
-            if (this.free < n) return;
-            this.waiters.delete(observer);
-            resume(take6);
-          };
-          this.waiters.add(observer);
-          return sync(() => {
-            this.waiters.delete(observer);
-          });
-        });
+        return waitForPermits(this, n, take6);
       }
       this.taken += n;
       return succeed3(n);
     });
     return take6;
   }
-  updateTakenUnsafe(fiber3, f) {
-    this.taken = f(this.taken);
+  takeIfAvailable(n) {
+    return suspend(() => {
+      if (this.free < n) return succeed3(false);
+      this.taken += n;
+      return succeed3(true);
+    });
+  }
+  releaseUnsafe(fiber3, n) {
+    this.taken -= n;
     if (this.waiters.size > 0) {
       fiber3.currentDispatcher.scheduleTask(() => {
-        const iter = this.waiters.values();
-        let item = iter.next();
-        while (item.done === false && this.free > 0) {
-          item.value();
-          item = iter.next();
+        for (const observer of this.waiters) {
+          if (this.free <= 0) break;
+          observer();
         }
       }, 0);
     }
     return this.free;
   }
-  updateTaken(f) {
-    return withFiber((fiber3) => succeed3(this.updateTakenUnsafe(fiber3, f)));
-  }
   resize(permits) {
     return withFiber((fiber3) => {
       this.permits = permits;
       if (this.free < 0) return void_2;
-      this.updateTakenUnsafe(fiber3, (taken) => taken);
+      this.releaseUnsafe(fiber3, 0);
       return void_2;
     });
   }
   release(n) {
-    return this.updateTaken((taken) => taken - n);
+    return withFiber((fiber3) => succeed3(this.releaseUnsafe(fiber3, n)));
   }
   get releaseAll() {
-    return this.updateTaken((_) => 0);
+    return withFiber((fiber3) => succeed3(this.releaseUnsafe(fiber3, this.taken)));
   }
   withPermits(n) {
-    return (self) => uninterruptibleMask((restore) => flatMap3(restore(this.take(n)), (permits) => onExitPrimitive(restore(self), () => {
-      this.updateTakenUnsafe(getCurrentFiber(), (taken) => taken - permits);
-      return void 0;
-    }, true)));
+    return (self) => uninterruptibleMask((restore) => {
+      const acquire = suspend(() => {
+        if (this.free < n) {
+          const wait = waitForPermits(this, n, void_2);
+          return flatMap3(restore(wait), () => acquire);
+        }
+        this.taken += n;
+        return onExitPrimitive(restore(self), () => {
+          this.releaseUnsafe(getCurrentFiber(), n);
+          return void 0;
+        }, true);
+      });
+      return acquire;
+    });
   }
   withPermit = /* @__PURE__ */ this.withPermits(1);
   withPermitsIfAvailable(n) {
@@ -20756,21 +20894,21 @@ var SemaphoreImpl = class {
       if (this.free < n) return succeedNone;
       this.taken += n;
       return onExitPrimitive(restore(asSome(self)), () => {
-        this.updateTakenUnsafe(getCurrentFiber(), (taken) => taken - n);
+        this.releaseUnsafe(getCurrentFiber(), n);
         return void 0;
       }, true);
     });
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Take.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Take.js
 var toPull = (take6) => isExit2(take6) ? isSuccess4(take6) ? done2(take6.value) : take6 : succeed6(take6);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Channel.js
-var TypeId24 = "~effect/Channel";
-var isChannel = (u) => hasProperty(u, TypeId24);
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Channel.js
+var TypeId22 = "~effect/Channel";
+var isChannel = (u) => hasProperty(u, TypeId22);
 var ChannelProto = {
-  [TypeId24]: {
+  [TypeId22]: {
     _Env: identity,
     _InErr: identity,
     _InElem: identity,
@@ -20796,7 +20934,7 @@ var fromTransformBracket = (f) => fromTransform(fnUntraced2(function* (upstream,
 }));
 var toTransform = (channel) => channel.transform;
 var DefaultChunkSize = 4096;
-var asyncQueue = (scope3, f, options) => make19({
+var asyncQueue = (scope3, f, options) => make17({
   capacity: options?.bufferSize,
   strategy: options?.strategy
 }).pipe(tap4((queue) => addFinalizer2(scope3, shutdown2(queue))), tap4((queue) => forkIn2(provide(f(queue), scope3), scope3)));
@@ -20834,7 +20972,7 @@ var fromIteratorArray = (iterator, chunkSize = DefaultChunkSize) => fromPull(syn
   });
 }));
 var fromIterableArray = (iterable, chunkSize = DefaultChunkSize) => fromIteratorArray(() => iterable[Symbol.iterator](), chunkSize);
-var succeed7 = (value3) => fromEffect(succeed6(value3));
+var succeed8 = (value3) => fromEffect(succeed6(value3));
 var end2 = (value3) => fromPull(succeed6(done2(value3)));
 var sync4 = (evaluate2) => fromEffect(sync3(evaluate2));
 var empty8 = /* @__PURE__ */ fromPull(/* @__PURE__ */ succeed6(/* @__PURE__ */ done2()));
@@ -20858,6 +20996,33 @@ var fromQueueArray = (queue) => fromPull(succeed6(takeAll3(queue)));
 var fromSubscriptionArray = (subscription) => fromPull(succeed6(onInterrupt2(takeAll2(subscription), () => done2())));
 var fromPubSubArray = (pubsub) => unwrap2(map8(subscribe(pubsub), fromSubscriptionArray));
 var fromPubSubTake = (pubsub) => unwrap2(map8(subscribe(pubsub), (sub) => fromEffectTake(take2(sub))));
+var fromReadableStream = (options) => fromTransform((_, scope3) => readableStreamToPullUnsafe({
+  scope: scope3,
+  readable: options.evaluate(),
+  onError: options.onError,
+  releaseLockOnEnd: options.releaseLockOnEnd
+}));
+var readableStreamToPullUnsafe = (options) => {
+  const reader = options.readable.getReader();
+  const exit3 = options.exit ?? make14(void 0);
+  const pull = suspend3(() => {
+    if (exit3.current) return exit3.current;
+    return matchCauseEffect2(tryPromise2({
+      try: () => reader.read(),
+      catch: options.onError
+    }), {
+      onFailure: (cause) => exit3.current ?? failCause4(cause),
+      onSuccess: ({
+        done: done4,
+        value: value3
+      }) => {
+        if (exit3.current) return exit3.current;
+        return done4 ? done2() : succeed6(of(value3));
+      }
+    });
+  });
+  return as3(addFinalizer2(options.scope, options.releaseLockOnEnd ? sync3(() => reader.releaseLock()) : promise2(() => reader.cancel().catch(constVoid))), pull);
+};
 var fromAsyncIterable = (iterable, onError5) => fromTransform(fnUntraced2(function* (_, scope3) {
   const iter = iterable[Symbol.asyncIterator]();
   if (iter.return) {
@@ -20903,7 +21068,7 @@ var mapEffectConcurrent = (self, f, options) => fromTransformBracket(fnUntraced2
   } else {
     const effects = yield* bounded2(concurrencyN - 2);
     yield* addFinalizer2(forkedScope, shutdown2(queue));
-    yield* take3(effects).pipe(flatten4, flatMap5((value3) => offer(queue, value3)), forever4({
+    yield* take3(effects).pipe(flatten5, flatMap5((value3) => offer(queue, value3)), forever4({
       disableYield: true
     }), catchCause3((cause) => failCause5(queue, cause)), forkIn2(forkedScope));
     let errorCause;
@@ -21220,7 +21385,7 @@ var mergeAll3 = /* @__PURE__ */ dual(2, (channels, {
 }) => fromTransformBracket(fnUntraced2(function* (upstream, scope3, forkedScope) {
   const concurrencyN = concurrency === "unbounded" ? Number.MAX_SAFE_INTEGER : Math.max(1, concurrency);
   const semaphore = switch_ ? void 0 : makeUnsafe6(concurrencyN);
-  const doneLatch = yield* make15(true);
+  const doneLatch = yield* make13(true);
   const fibers = /* @__PURE__ */ new Set();
   const queue = yield* bounded2(bufferSize);
   yield* addFinalizer2(forkedScope, shutdown2(queue));
@@ -21392,7 +21557,7 @@ var unwrap2 = (channel) => fromTransform((upstream, scope3) => {
 var scoped3 = (self) => fromTransformBracket((upstream, scope3, forkedScope) => map8(provide(toTransform(self)(upstream, scope3), forkedScope), provide(forkedScope)));
 var buffer = /* @__PURE__ */ dual(2, (self, options) => fromTransform(fnUntraced2(function* (upstream, scope3) {
   const pull = yield* toTransform(self)(upstream, scope3);
-  const queue = yield* make19({
+  const queue = yield* make17({
     capacity: options.capacity === "unbounded" ? void 0 : options.capacity,
     strategy: options.capacity === "unbounded" ? void 0 : options.strategy
   });
@@ -21404,7 +21569,7 @@ var buffer = /* @__PURE__ */ dual(2, (self, options) => fromTransform(fnUntraced
 })));
 var bufferArray = /* @__PURE__ */ dual(2, (self, options) => fromTransform(fnUntraced2(function* (upstream, scope3) {
   const pull = yield* toTransform(self)(upstream, scope3);
-  const queue = yield* make19({
+  const queue = yield* make17({
     capacity: options.capacity === "unbounded" ? void 0 : options.capacity,
     strategy: options.capacity === "unbounded" ? void 0 : options.strategy
   });
@@ -21539,7 +21704,7 @@ var runIntoQueueArray = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), (se
 }))));
 var toQueueArray = /* @__PURE__ */ dual((args2) => isChannel(args2[0]), /* @__PURE__ */ fnUntraced2(function* (self, options) {
   const scope3 = yield* scope2;
-  const queue = yield* make19({
+  const queue = yield* make17({
     capacity: typeof options.capacity === "number" ? options.capacity : void 0,
     strategy: typeof options.capacity === "number" ? options.strategy : void 0
   });
@@ -21562,7 +21727,7 @@ var toPubSubTake = /* @__PURE__ */ dual(2, /* @__PURE__ */ fnUntraced2(function*
   return pubsub;
 }));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Schema.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Schema.js
 var Schema_exports = {};
 __export(Schema_exports, {
   Any: () => Any2,
@@ -21856,7 +22021,7 @@ __export(Schema_exports, {
   isUppercased: () => isUppercased,
   isUppercasedReviver: () => isUppercasedReviver,
   link: () => link,
-  make: () => make25,
+  make: () => make24,
   makeFilter: () => makeFilter2,
   makeFilterGroup: () => makeFilterGroup,
   makeIsBetween: () => makeIsBetween,
@@ -21875,7 +22040,6 @@ __export(Schema_exports, {
   overrideToEquivalence: () => overrideToEquivalence,
   overrideToFormatter: () => overrideToFormatter,
   readonlyKey: () => readonlyKey,
-  redact: () => redact3,
   refine: () => refine,
   required: () => required,
   requiredKey: () => requiredKey,
@@ -21914,7 +22078,7 @@ __export(Schema_exports, {
   withDecodingDefaultTypeKey: () => withDecodingDefaultTypeKey
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/hashMap.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/hashMap.js
 var HashMapTypeId = "~effect/collections/HashMap";
 var SHIFT = 5;
 var BUCKET_SIZE = 1 << SHIFT;
@@ -22554,14 +22718,14 @@ var entries = (self) => {
 };
 var size3 = (self) => self.size;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/HashMap.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/HashMap.js
 var isHashMap2 = isHashMap;
 var fromIterable5 = fromIterable4;
 var entries2 = entries;
 var toEntries = (self) => Array.from(entries2(self));
 var size4 = size3;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/hashSet.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/hashSet.js
 var HashSetTypeId = "~effect/collections/HashSet";
 var HashSetProto = {
   [symbol]() {
@@ -22589,7 +22753,7 @@ var HashSetProto = {
     return pipeArguments(this, arguments);
   }
 };
-var makeImpl = (keyMap2) => {
+var makeImpl2 = (keyMap2) => {
   const set8 = Object.create(HashSetProto);
   set8[HashSetTypeId] = HashSetTypeId;
   set8.keyMap = keyMap2;
@@ -22602,7 +22766,7 @@ var fromIterable6 = (values2) => {
   for (const value3 of values2) {
     map15 = set3(map15, value3, true);
   }
-  return makeImpl(map15);
+  return makeImpl2(map15);
 };
 var has5 = (self, value3) => has4(keyMap(self), value3);
 var size5 = (self) => size3(keyMap(self));
@@ -22615,15 +22779,15 @@ var every2 = (self, predicate) => {
   return true;
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/HashSet.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/HashSet.js
 var fromIterable7 = fromIterable6;
 var isHashSet2 = isHashSet;
 var size6 = size5;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/SchemaError.js
-var TypeId25 = "~effect/SchemaError/SchemaError";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/SchemaError.js
+var TypeId23 = "~effect/SchemaError/SchemaError";
 var SchemaError = class extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
-  [TypeId25] = TypeId25;
+  [TypeId23] = TypeId23;
   constructor(issue) {
     super({
       issue
@@ -22637,10 +22801,10 @@ var SchemaError = class extends (/* @__PURE__ */ TaggedError2("SchemaError")) {
   }
 };
 function isSchemaError(u) {
-  return hasProperty(u, TypeId25) && u[TypeId25] === TypeId25;
+  return hasProperty(u, TypeId23) && u[TypeId23] === TypeId23;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/SchemaParser.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/SchemaParser.js
 var toConstructorAST = /* @__PURE__ */ memoize((ast) => {
   switch (ast._tag) {
     case "Declaration": {
@@ -22690,7 +22854,7 @@ function makeOption(schema2) {
     return none2();
   };
 }
-function make22(schema2) {
+function make20(schema2) {
   const parser = makeEffect(schema2);
   return (input, options) => {
     const exit3 = runSyncExit2(parser(input, options));
@@ -22774,18 +22938,28 @@ function encodeUnknownSync(schema2, options) {
   return asSync(encodeUnknownEffect(schema2, options));
 }
 var encodeSync = encodeUnknownSync;
-var mergeParseOptions = (options, overrideOptions) => overrideOptions === void 0 ? options : {
+var mergeParseOptions = (options, overrideOptions) => overrideOptions ? {
   ...options,
   ...overrideOptions
+} : options;
+var getValue = (value3) => {
+  if (value3 === missing) {
+    return fail5(new InvalidValue());
+  }
+  return succeed6(value3);
 };
 function run(ast) {
-  const parser = recur(ast);
-  return (input, options) => flatMapEager2(parser(some2(input), options ?? defaultParseOptions), (oa) => {
-    if (oa._tag === "None") {
-      return fail5(new InvalidValue(oa));
+  let parser;
+  return (input, options) => {
+    const result4 = (parser ??= compile(ast))(input, options ?? defaultParseOptions);
+    if (result4 === sameExit) {
+      return succeed6(input);
     }
-    return succeed6(oa.value);
-  });
+    if (!effectIsExit(result4)) {
+      return flatMapEager2(result4, getValue);
+    }
+    return result4[args] === missing ? getValue(missing) : result4;
+  };
 }
 function asExit(parser) {
   return (input, options) => runSyncExit2(parser(input, options));
@@ -22824,89 +22998,126 @@ function asSync(parser) {
     });
   };
 }
-function mapSchemaIssueEffect(self, f) {
-  return catchCause3(self, (cause) => failCauseSync2(() => map6(cause, f)));
+var parserCache = /* @__PURE__ */ new WeakMap();
+function compile(ast) {
+  let parser = parserCache.get(ast);
+  if (!parser) {
+    parserCache.set(ast, parser = makeParser(ast));
+  }
+  return parser;
 }
-var recur = /* @__PURE__ */ memoize((ast) => {
-  let parser;
+function makeParser(ast) {
+  const parser = ast.getParser(compile);
   const checks = ast.checks;
-  const encoding = ast.encoding;
-  const links = encoding;
-  const len = links?.length ?? 0;
+  const links = ast.encoding;
   const encodingChecks = ast.encodingChecks;
   const astOptions = (checks ? checks[checks.length - 1].annotations : ast.annotations)?.["parseOptions"];
-  if (!ast.context && !encoding && !checks && !encodingChecks) {
-    return (ou, options) => {
-      parser ??= ast.getParser(recur);
-      if (astOptions) {
-        options = {
-          ...options,
-          ...astOptions
-        };
-      }
-      return parser(ou, options);
-    };
-  }
-  return (ou, options) => {
-    if (astOptions) {
-      options = {
-        ...options,
-        ...astOptions
-      };
+  if (!links && !checks && !encodingChecks) {
+    if (!astOptions) {
+      return parser;
     }
-    let srou;
-    if (links) {
-      for (let i = len - 1; i >= 0; i--) {
-        const link2 = links[i];
-        const to = link2.to;
-        const parser2 = recur(to);
-        srou = srou ? flatMapEager2(srou, (ou2) => parser2(ou2, options)) : parser2(ou, options);
-        if (link2.transformation._tag === "Transformation") {
-          const getter = link2.transformation.decode;
-          srou = flatMapEager2(srou, (ou2) => getter.run(ou2, options));
+    return (input, options) => parser(input, mergeParseOptions(options, astOptions));
+  }
+  let encodingParsers;
+  const parseLocal = (input, options) => {
+    let result4 = parser(input, options);
+    if (encodingChecks && !options.disableChecks) {
+      if (effectIsExit(result4)) {
+        if (result4._tag === "Success") {
+          const output = result4 === sameExit ? input : result4[args];
+          if (input !== missing && output !== missing) {
+            const issues = collectIssues(encodingChecks, input, void 0, ast, options);
+            if (issues) {
+              result4 = fail5(new Composite(ast, issues));
+            }
+          }
+        }
+      } else {
+        result4 = flatMap5(result4, (value3) => {
+          if (input !== missing && value3 !== missing) {
+            const issues = collectIssues(encodingChecks, input, void 0, ast, options);
+            if (issues) {
+              return fail5(new Composite(ast, issues));
+            }
+          }
+          return succeed6(value3);
+        });
+      }
+    }
+    if (checks && !options.disableChecks) {
+      if (effectIsExit(result4)) {
+        if (result4._tag === "Success") {
+          const value3 = result4 === sameExit ? input : result4[args];
+          if (value3 === missing) return result4;
+          const issues = collectIssues(checks, value3, void 0, ast, options);
+          if (issues) {
+            result4 = fail5(new Composite(ast, issues));
+          }
+        }
+      } else {
+        result4 = flatMap5(result4, (value3) => {
+          if (value3 !== missing) {
+            const issues = collectIssues(checks, value3, void 0, ast, options);
+            if (issues) {
+              return fail5(new Composite(ast, issues));
+            }
+          }
+          return succeed6(value3);
+        });
+      }
+    }
+    return result4;
+  };
+  if (!links) {
+    return astOptions ? (input, options) => parseLocal(input, mergeParseOptions(options, astOptions)) : parseLocal;
+  }
+  return (input, options) => {
+    if (astOptions) {
+      options = mergeParseOptions(options, astOptions);
+    }
+    const parsers = encodingParsers ??= links.map((link2) => compile(link2.to));
+    let current = input;
+    let result4 = parsers[parsers.length - 1](input, options);
+    for (let i = links.length - 1; i >= 0; i--) {
+      const transformation = links[i].transformation;
+      let transformed;
+      if (effectIsExit(result4) && result4._tag === "Success") {
+        const optional2 = toOption2(result4 === sameExit ? current : result4[args]);
+        transformed = transformation._tag === "Transformation" ? transformation.decode.run(optional2, options) : transformation.decode(succeed7(optional2), options);
+      } else if (transformation._tag === "Transformation") {
+        transformed = flatMapEager2(result4, (value3) => transformation.decode.run(toOption2(value3), options));
+      } else {
+        transformed = transformation.decode(mapEager2(result4, toOption2), options);
+      }
+      result4 = effectIsExit(transformed) && transformed._tag === "Success" ? fromOptionExit(transformed[args]) : flatMapEager2(transformed, fromOptionExit);
+      if (i !== 0) {
+        const next = parsers[i - 1];
+        if (result4._tag === "Success") {
+          current = result4[args];
+          result4 = next(current, options);
         } else {
-          srou = link2.transformation.decode(srou, options);
+          result4 = flatMapEager2(result4, (value3) => {
+            const nextResult = next(value3, options);
+            return nextResult === sameExit ? succeed7(value3) : nextResult;
+          });
         }
       }
-      srou = mapSchemaIssueEffect(srou, (issue) => new Encoding(ast, ou, issue));
     }
-    parser ??= ast.getParser(recur);
-    const parseLocal = (localOu) => {
-      let sroa2 = parser(localOu, options);
-      if (encodingChecks && !options?.disableChecks) {
-        sroa2 = flatMapEager2(sroa2, (oa) => {
-          if (isSome2(localOu) && isSome2(oa)) {
-            const issues = [];
-            collectIssues(encodingChecks, localOu.value, issues, ast, options);
-            if (isArrayNonEmpty2(issues)) {
-              return fail5(new Composite(ast, localOu, issues));
-            }
-          }
-          return succeed6(oa);
-        });
-      }
-      if (checks && !options?.disableChecks) {
-        sroa2 = flatMapEager2(sroa2, (oa) => {
-          if (isSome2(oa)) {
-            const value3 = oa.value;
-            const issues = [];
-            collectIssues(checks, value3, issues, ast, options);
-            if (isArrayNonEmpty2(issues)) {
-              return fail5(new Composite(ast, oa, issues));
-            }
-          }
-          return succeed6(oa);
-        });
-      }
-      return sroa2;
-    };
-    const sroa = srou ? flatMapEager2(srou, parseLocal) : parseLocal(ou);
-    return sroa;
+    if (result4._tag === "Success") {
+      const value3 = result4[args];
+      const local = parseLocal(value3, options);
+      return local === sameExit ? result4 : local;
+    }
+    result4 = catchCause3(result4, (cause) => failCauseSync2(() => map6(cause, (issue) => new Encoding(ast, issue))));
+    return flatMapEager2(result4, (value3) => {
+      const local = parseLocal(value3, options);
+      return local === sameExit ? succeed7(value3) : local;
+    });
   };
-});
+}
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/schema/schema.js
-var TypeId26 = "~effect/Schema/Schema";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/schema/schema.js
+var TypeId24 = "~effect/Schema/Schema";
 function makeDeclarationReviver(id2, payloadSchema, revive) {
   return {
     id: id2,
@@ -22922,7 +23133,7 @@ function makeFilterReviver(id2, payloadSchema, revive) {
   };
 }
 var SchemaProto = {
-  [TypeId26]: TypeId26,
+  [TypeId24]: TypeId24,
   pipe() {
     return pipeArguments(this, arguments);
   },
@@ -22936,17 +23147,17 @@ var SchemaProto = {
     return this.rebuild(appendChecks(this.ast, checks));
   }
 };
-function make23(ast, options) {
+function make21(ast, options) {
   function Schema() {
   }
   const self = Object.defineProperties(Object.setPrototypeOf(Schema, SchemaProto), Object.getOwnPropertyDescriptors({
     ...options
   }));
   self.ast = ast;
-  self.rebuild = (ast2) => make23(ast2, options);
+  self.rebuild = (ast2) => make21(ast2, options);
   const makeEffect2 = makeEffect(self);
   self.makeEffect = (input, options2) => fromIssueEffect(makeEffect2(input, options2));
-  self.make = make22(self);
+  self.make = make20(self);
   self.makeOption = makeOption(self);
   return self;
 }
@@ -22954,7 +23165,7 @@ function fromIssueEffect(self) {
   return catchCause3(self, (cause) => failCauseSync2(() => map6(cause, (issue) => new SchemaError(issue))));
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Struct.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Struct.js
 var Struct_exports = {};
 __export(Struct_exports, {
   Record: () => Record,
@@ -22966,7 +23177,7 @@ __export(Struct_exports, {
   keys: () => keys3,
   lambda: () => lambda,
   makeCombiner: () => makeCombiner,
-  makeEquivalence: () => makeEquivalence8,
+  makeEquivalence: () => makeEquivalence7,
   makeOrder: () => makeOrder2,
   makeReducer: () => makeReducer2,
   map: () => map12,
@@ -23002,7 +23213,7 @@ var evolveEntries = /* @__PURE__ */ dual(2, (self, e) => {
 var renameKeys = /* @__PURE__ */ dual(2, (self, mapping) => {
   return buildStruct(self, (k, v) => [Object.hasOwn(mapping, k) ? mapping[k] : k, v]);
 });
-var makeEquivalence8 = Struct;
+var makeEquivalence7 = Struct;
 var makeOrder2 = Struct2;
 var lambda = (f) => f;
 var map12 = /* @__PURE__ */ dual(2, (self, lambda2) => {
@@ -23057,7 +23268,7 @@ function Record(keys5, value3) {
   return out;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/UndefinedOr.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/UndefinedOr.js
 function makeReducer3(combiner2) {
   return make((self, that) => {
     if (self === void 0) return that;
@@ -23066,7 +23277,7 @@ function makeReducer3(combiner2) {
   }, void 0);
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/errors.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/errors.js
 function errorWithPath(message, path) {
   if (path.length > 0) {
     message += `
@@ -23075,7 +23286,7 @@ function errorWithPath(message, path) {
   return new Error(message);
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/schema/toArbitrary.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/schema/toArbitrary.js
 var arbitraryMemoMap = /* @__PURE__ */ new WeakMap();
 var suspendDepthIdentifierMap = /* @__PURE__ */ new WeakMap();
 var emptyRecursionStack = [];
@@ -23480,18 +23691,18 @@ function filterLayer(ast, checks, normalBase, terminalBase) {
     return applyFilterLayer(ast, checks, fc, nextCtx, terminalBase(fc, ctx, nextCtx, recursionStack));
   });
 }
-var memoized = /* @__PURE__ */ memoize((ast) => recur2(ast, []));
-function recur2(ast, path) {
+var memoized = /* @__PURE__ */ memoize((ast) => recur(ast, []));
+function recur(ast, path) {
   const annotation = resolve(ast)?.toArbitrary;
   if (annotation) {
-    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur2(tp, path)) : [];
+    const typeParameters = isDeclaration(ast) ? ast.typeParameters.map((tp) => recur(tp, path)) : [];
     const checks = collectChecks(ast.checks);
     const derive = (lazyNormal) => (fc, ctx, nextCtx, recursionStack) => normalizeDerivation(annotation(makeTypeParameters(typeParameters, fc, resetContext(ctx), recursionStack, lazyNormal))(fc, nextCtx), typeParameters.length > 0)[lazyNormal ? "terminal" : "arbitrary"];
     return filterLayer(ast, checks, derive(false), derive(true));
   }
   if (ast.checks) {
     const checks = collectChecks(ast.checks);
-    const lawc = recur2(replaceChecks(ast, void 0), path);
+    const lawc = recur(replaceChecks(ast, void 0), path);
     return filterLayer(ast, checks, (fc, _ctx, nextCtx, recursionStack) => lawc(fc, nextCtx, recursionStack), (fc, _ctx, nextCtx, recursionStack) => lawc.terminal(fc, nextCtx, recursionStack));
   }
   return base(ast, path);
@@ -23537,20 +23748,20 @@ function base(ast, path) {
     case "ObjectKeyword":
       return same((fc) => fc.oneof(fc.object(), fc.array(fc.anything())));
     case "Enum":
-      return recur2(enumsToLiterals(ast), path);
+      return recur(enumsToLiterals(ast), path);
     case "TemplateLiteral": {
-      const parts = ast.parts.map((part, i) => recur2(toEncoded(part), [...path, i]));
+      const parts = ast.parts.map((part, i) => recur(toEncoded(part), [...path, i]));
       return same((fc, ctx, recursionStack) => fc.tuple(...parts.map((part) => part(fc, finiteNumberContext(ctx), recursionStack))).map((segments) => segments.map((segment) => globalThis.String(segment)).join("")));
     }
     case "Arrays": {
       const elements = ast.elements.map((ast2, i) => ({
         ast: ast2,
-        arbitrary: recur2(ast2, [...path, i])
+        arbitrary: recur(ast2, [...path, i])
       }));
       const len = ast.elements.length;
       const rest = ast.rest.map((ast2, i) => ({
         ast: ast2,
-        arbitrary: recur2(ast2, [...path, len + i])
+        arbitrary: recur(ast2, [...path, len + i])
       }));
       const terminal = (fc, ctx, recursionStack) => {
         const reset = resetContext(ctx);
@@ -23650,12 +23861,12 @@ function base(ast, path) {
     case "Objects": {
       const propertySignatures = ast.propertySignatures.map((ps) => ({
         ps,
-        arbitrary: recur2(ps.type, [...path, ps.name])
+        arbitrary: recur(ps.type, [...path, ps.name])
       }));
       const indexSignatures = ast.indexSignatures.map((is3) => ({
         is: is3,
-        parameter: recur2(is3.parameter, path),
-        type: recur2(is3.type, path)
+        parameter: recur(is3.parameter, path),
+        type: recur(is3.type, path)
       }));
       const terminal = (fc, ctx, recursionStack) => {
         const reset = resetContext(ctx);
@@ -23758,7 +23969,7 @@ function base(ast, path) {
       }, terminal);
     }
     case "Union": {
-      const types = ast.types.map((ast2) => recur2(ast2, path));
+      const types = ast.types.map((ast2) => recur(ast2, path));
       const terminal = (fc, ctx, recursionStack) => oneOf(fc, types.map((type) => type.terminal(fc, ctx, recursionStack)).filter(isNotUndefined));
       return makeLazy((fc, ctx, recursionStack) => {
         const arbitraries = types.map((type) => type(fc, ctx, recursionStack));
@@ -23778,7 +23989,7 @@ function base(ast, path) {
     case "Suspend": {
       const memo2 = arbitraryMemoMap.get(ast);
       if (memo2) return memo2;
-      const get11 = memoizeThunk(() => recur2(ast.thunk(), path));
+      const get11 = memoizeThunk(() => recur(ast.thunk(), path));
       const out = makeLazy((fc, ctx, recursionStack) => {
         const recursion = getSuspendRecursion(fc, ast);
         const nextCtx = {
@@ -23807,14 +24018,14 @@ function base(ast, path) {
   }
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/schema/toEquivalence.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/schema/toEquivalence.js
 var toEquivalence = /* @__PURE__ */ memoize((ast) => {
-  return recur3(ast, []);
+  return recur2(ast, []);
 });
-function recur3(ast, path) {
+function recur2(ast, path) {
   const annotation = resolve(ast)?.["toEquivalence"];
   if (annotation) {
-    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur3(tp, path)) : []);
+    return annotation(isDeclaration(ast) ? ast.typeParameters.map((tp) => recur2(tp, path)) : []);
   }
   switch (ast._tag) {
     case "Never":
@@ -23837,9 +24048,9 @@ function recur3(ast, path) {
     case "TemplateLiteral":
       return equals;
     case "Arrays": {
-      const elements = ast.elements.map((e, i) => recur3(e, [...path, i]));
+      const elements = ast.elements.map((e, i) => recur2(e, [...path, i]));
       const len = ast.elements.length;
-      const rest = ast.rest.map((r, i) => recur3(r, [...path, len + i]));
+      const rest = ast.rest.map((r, i) => recur2(r, [...path, len + i]));
       return make2((a, b) => {
         if (!Array.isArray(a) || !Array.isArray(b)) {
           return false;
@@ -23874,8 +24085,8 @@ function recur3(ast, path) {
       if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
         return equals;
       }
-      const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type, [...path, ps.name]));
-      const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type, path));
+      const propertySignatures = ast.propertySignatures.map((ps) => recur2(ps.type, [...path, ps.name]));
+      const indexSignatures = ast.indexSignatures.map((is3) => recur2(is3.type, path));
       return make2((a, b) => {
         if (!isObject(a) || !isObject(b)) {
           return false;
@@ -23911,7 +24122,7 @@ function recur3(ast, path) {
     }
     case "Union": {
       const types = toType(ast).types;
-      const compiled = new Map(types.map((candidate, i) => [candidate, [_is(candidate), recur3(ast.types[i], path)]]));
+      const compiled = new Map(types.map((candidate, i) => [candidate, [_is(candidate), recur2(ast.types[i], path)]]));
       return make2((a, b) => {
         const candidates = getCandidates(a, types);
         for (let i = 0; i < candidates.length; i++) {
@@ -23924,13 +24135,13 @@ function recur3(ast, path) {
       });
     }
     case "Suspend": {
-      const get11 = memoizeThunk(() => recur3(ast.thunk(), path));
+      const get11 = memoizeThunk(() => recur2(ast.thunk(), path));
       return make2((a, b) => get11()(a, b));
     }
   }
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/JsonPointer.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/JsonPointer.js
 function escapeToken(token) {
   return token.replace(/~/g, "~0").replace(/\//g, "~1");
 }
@@ -23938,11 +24149,11 @@ function unescapeToken(token) {
   return token.replace(/~1/g, "/").replace(/~0/g, "~");
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/RegExp.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/RegExp.js
 var RegExp2 = globalThis.RegExp;
 var escape = (string4) => string4.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&");
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/schema/toJsonSchemaDocument.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/schema/toJsonSchemaDocument.js
 var jsonSchemaAnnotationExcludedKeys = /* @__PURE__ */ new Set([...annotationExcludedKeys, IDENTIFIER_FALLBACK_KEY, ...jsonSchemaAnnotationKeys]);
 function collectJsonSchemaAnnotations(annotations, options) {
   if (annotations === void 0) return void 0;
@@ -24055,17 +24266,56 @@ function appendJsonSchema(left, right) {
 }
 function compileJsonSchema(representations, rootPaths, references, options) {
   const definitions = {};
-  for (const key of Object.keys(references)) {
-    assignProperty(definitions, key, recur5(references[key], ["references", key]));
+  const definitionStates = /* @__PURE__ */ new Map();
+  const compiledRepresentations = /* @__PURE__ */ new WeakMap();
+  const fallbackDefinitions = /* @__PURE__ */ new Map();
+  const referenceKeys = Object.keys(references);
+  for (const key of referenceKeys) {
+    compileDefinition(key, ["references", key]);
   }
-  const schemas = map4(representations, (representation, index2) => recur5(representation, rootPaths[index2]));
+  for (const key of referenceKeys) {
+    const compiled = definitionStates.get(key);
+    if (typeof compiled !== "string") {
+      assignProperty(definitions, key, compiled);
+    }
+  }
+  const schemas = map4(representations, (representation, index2) => recur3(representation, rootPaths[index2]));
   return {
     dialect: "draft-2020-12",
     schemas,
     definitions
   };
+  function compileDefinition(key, path) {
+    const compiled = definitionStates.get(key);
+    if (compiled !== void 0) return typeof compiled === "string" ? compiled : key;
+    if (!Object.hasOwn(references, key)) {
+      throw errorWithPath(`Invalid reference ${key}`, [...path, "$ref"]);
+    }
+    definitionStates.set(key, null);
+    const representation = references[key];
+    const schema2 = recur3(representation, ["references", key]);
+    const fallback = getIdentifierFallback(representation);
+    if (fallback !== void 0) {
+      const candidates = fallbackDefinitions.get(fallback);
+      const match8 = candidates?.find((candidate) => equals(definitionStates.get(candidate), schema2));
+      if (match8 === void 0) {
+        if (candidates === void 0) fallbackDefinitions.set(fallback, [key]);
+        else candidates.push(key);
+      } else {
+        definitionStates.set(key, match8);
+        return match8;
+      }
+    }
+    definitionStates.set(key, schema2);
+    return key;
+  }
+  function getIdentifierFallback(representation) {
+    if (representation._tag === "Reference") return void 0;
+    const annotations = representation.checks.length === 0 ? representation.annotations : representation.checks[representation.checks.length - 1].annotations;
+    return typeof annotations?.identifier !== "string" && typeof annotations?.[IDENTIFIER_FALLBACK_KEY] === "string" ? annotations[IDENTIFIER_FALLBACK_KEY] : void 0;
+  }
   function annotationSchemas(representation, path) {
-    return representation?.schemas?.map((schema2, index2) => recur5(schema2, [...path, "schemas", index2])) ?? [];
+    return representation?.schemas?.map((schema2, index2) => recur3(schema2, [...path, "schemas", index2])) ?? [];
   }
   function compileCheck(check3, type, path) {
     const annotations = check3.annotations;
@@ -24093,15 +24343,15 @@ function compileJsonSchema(representations, rootPaths, references, options) {
       ...ordinary
     };
   }
-  function recur5(representation, path) {
+  function recur3(representation, path) {
     if (representation._tag === "Reference") {
-      if (!Object.hasOwn(references, representation.$ref)) {
-        throw errorWithPath(`Invalid reference ${representation.$ref}`, [...path, "$ref"]);
-      }
+      const canonical = compileDefinition(representation.$ref, path);
       return {
-        $ref: `#/$defs/${escapeToken(representation.$ref)}`
+        $ref: `#/$defs/${escapeToken(canonical)}`
       };
     }
+    const cached3 = compiledRepresentations.get(representation);
+    if (cached3 !== void 0) return cached3;
     let output = on(representation, path);
     const ordinary = collectJsonSchemaAnnotations(representation.annotations, options);
     if (ordinary !== void 0) {
@@ -24117,6 +24367,7 @@ function compileJsonSchema(representations, rootPaths, references, options) {
         output = appendJsonSchema(output, check3);
       }
     }
+    compiledRepresentations.set(representation, output);
     return output;
   }
   function on(representation, path) {
@@ -24157,7 +24408,7 @@ function compileJsonSchema(representations, rootPaths, references, options) {
         return {};
       }
       case "Suspend":
-        return recur5(representation.thunk, [...path, "thunk"]);
+        return recur3(representation.thunk, [...path, "thunk"]);
       case "Never":
         return {
           not: {}
@@ -24226,7 +24477,7 @@ function compileJsonSchema(representations, rootPaths, references, options) {
         let minItems = representation.elements.length;
         const prefixItems = representation.elements.map((element, index2) => {
           if (element.isOptional) minItems--;
-          const compiled = recur5(element.type, [...path, "elements", index2, "type"]);
+          const compiled = recur3(element.type, [...path, "elements", index2, "type"]);
           const annotations = collectJsonSchemaAnnotations(element.annotations, options);
           return annotations === void 0 ? compiled : appendJsonSchema(compiled, annotations);
         });
@@ -24239,7 +24490,7 @@ function compileJsonSchema(representations, rootPaths, references, options) {
         }
         if (representation.rest.length === 1) {
           delete out.maxItems;
-          const rest = recur5(representation.rest[0], [...path, "rest", 0]);
+          const rest = recur3(representation.rest[0], [...path, "rest", 0]);
           if (Object.keys(rest).length > 0) out.items = rest;
           else delete out.items;
         }
@@ -24266,7 +24517,7 @@ function compileJsonSchema(representations, rootPaths, references, options) {
             throw errorWithPath("Invalid schema representation document", [...path, "propertySignatures", index2, "name"]);
           }
           const name = property2.name;
-          const compiled = recur5(property2.type, [...path, "propertySignatures", index2, "type"]);
+          const compiled = recur3(property2.type, [...path, "propertySignatures", index2, "type"]);
           const annotations = collectJsonSchemaAnnotations(property2.annotations, options);
           assignProperty(properties, name, annotations === void 0 ? compiled : appendJsonSchema(compiled, annotations));
           if (!property2.isOptional) required2.push(name);
@@ -24277,7 +24528,7 @@ function compileJsonSchema(representations, rootPaths, references, options) {
         const patternProperties = {};
         for (let index2 = 0; index2 < representation.indexSignatures.length; index2++) {
           const signature = representation.indexSignatures[index2];
-          let type = recur5(signature.type, [...path, "indexSignatures", index2, "type"]);
+          let type = recur3(signature.type, [...path, "indexSignatures", index2, "type"]);
           if (Object.keys(type).length === 1 && "not" in type) type = false;
           const patterns = getParameterPatterns(signature.parameter, [...path, "indexSignatures", index2, "parameter"], /* @__PURE__ */ new Set());
           if (patterns.length === 0) {
@@ -24296,7 +24547,7 @@ function compileJsonSchema(representations, rootPaths, references, options) {
         return out;
       }
       case "Union": {
-        const types = representation.types.map((type, index2) => recur5(type, [...path, "types", index2]));
+        const types = representation.types.map((type, index2) => recur3(type, [...path, "types", index2]));
         if (types.length === 0) return {
           not: {}
         };
@@ -24318,12 +24569,13 @@ function compileJsonSchema(representations, rootPaths, references, options) {
         if (!Object.hasOwn(references, parameter.$ref)) {
           throw errorWithPath(`Invalid reference ${parameter.$ref}`, [...path, "$ref"]);
         }
+        compileDefinition(parameter.$ref, path);
         if (seenReferences.has(parameter.$ref)) return [];
         const next = new Set(seenReferences).add(parameter.$ref);
         return getParameterPatterns(references[parameter.$ref], ["references", parameter.$ref], next);
       }
       case "String":
-        return collectPatterns(recur5(parameter, path));
+        return collectPatterns(recur3(parameter, path));
       case "TemplateLiteral":
         return [`^${parameter.parts.map(getPartPattern).join("")}$`];
       case "Union":
@@ -24393,7 +24645,7 @@ function toJsonSchemaDocument(document, options) {
   };
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/schema/toRepresentation.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/schema/toRepresentation.js
 function toRepresentation(ast) {
   const {
     references,
@@ -24405,7 +24657,7 @@ function toRepresentation(ast) {
   };
 }
 function toRepresentations(asts) {
-  return lowerASTs(asts, []);
+  return fromASTs(asts);
 }
 function annotationsField(annotations) {
   return annotations === void 0 ? void 0 : {
@@ -24415,77 +24667,101 @@ function annotationsField(annotations) {
 function isShareable(ast) {
   return isArrays(ast) || isObjects(ast) || isUnion(ast) && ast.types.some(isShareable);
 }
-function resolveReferenceIdentifier(ast) {
-  const identifier2 = resolveIdentifier(ast);
+function resolveReferenceIdentifier(input, encoded) {
+  const identifier2 = resolveIdentifier(encoded);
   if (identifier2 !== void 0) return {
-    identifier: identifier2,
-    isFallback: false
+    identifier: identifier2
   };
-  const fallback = resolveIdentifierFallback(ast);
+  const fallback = (encoded !== input ? resolveIdentifier(input) : void 0) ?? resolveIdentifierFallback(encoded);
   return fallback === void 0 ? void 0 : {
-    identifier: `${fallback}JsonEncoding`,
-    isFallback: true
+    identifier: `${fallback}Encoded`,
+    fallback
   };
 }
-function hasSameReferenceOwner(self, that) {
-  if (self === that) return true;
-  const selfKeys = Reflect.ownKeys(self);
-  const thatKeys = Reflect.ownKeys(that);
-  if (selfKeys.length !== thatKeys.length) return false;
-  for (const key of selfKeys) {
-    if (key !== "context" && self[key] !== that[key]) return false;
-  }
-  return true;
-}
-function lowerASTs(asts, externalDefinitions) {
+function fromASTs(asts) {
   const references = {};
-  const referenceMap2 = /* @__PURE__ */ new Map();
-  const fallbackReferences = [];
+  const anonymousReferences = /* @__PURE__ */ new Map();
   const referenceOwners = /* @__PURE__ */ new Map();
-  const externalReferences = new Set(externalDefinitions.map((definition) => definition.key));
+  const valueIds = /* @__PURE__ */ new Map();
+  const canonicalByKey = /* @__PURE__ */ new Map();
+  let nextValueId = 0;
+  const buildingReferences = /* @__PURE__ */ new Set();
   const visiting = /* @__PURE__ */ new Set();
   const visited = /* @__PURE__ */ new Set();
   const shared = /* @__PURE__ */ new Set();
-  for (const definition of externalDefinitions) {
-    referenceOwners.set(definition.key, definition.body);
-    referenceMap2.set(definition.original, definition.key);
-    referenceMap2.set(definition.encoded, definition.key);
-  }
   for (const ast of asts) visit(ast);
-  for (const definition of externalDefinitions) visit(definition.body);
-  const representations = map4(asts, (ast) => recur5(ast));
-  for (const definition of externalDefinitions) {
-    assignProperty(references, definition.key, recur5(definition.body, definition.key));
-  }
+  const representations = map4(asts, (ast) => recur3(ast));
   return {
     representations,
     references
   };
-  function generateReference(prefix, owner) {
+  function getReference(prefix, owner, separator = "_") {
     let candidate = prefix;
     let suffix = 0;
     while (referenceOwners.has(candidate)) {
-      candidate = `${prefix}${++suffix}`;
+      if (referenceOwners.get(candidate) === owner) return candidate;
+      candidate = `${prefix}${separator}${++suffix}`;
     }
     referenceOwners.set(candidate, owner);
     return candidate;
   }
+  function getValueId(value3) {
+    if (typeof value3 === "number" && globalThis.Number.isNaN(value3)) {
+      return nextValueId++;
+    }
+    const found = valueIds.get(value3);
+    if (found !== void 0) return found;
+    const id2 = nextValueId++;
+    valueIds.set(value3, id2);
+    return id2;
+  }
+  function getIdentityKey(ast) {
+    let identity2 = ast._tag;
+    for (const [key, value3] of Object.entries(ast)) {
+      if (key !== "_tag" && key !== "context") identity2 += `:${getValueId(value3)}`;
+    }
+    return identity2;
+  }
+  function getCanonicalAST(ast) {
+    const key = getIdentityKey(ast);
+    const canonical = canonicalByKey.get(key);
+    if (canonical === void 0) {
+      canonicalByKey.set(key, ast);
+      return ast;
+    }
+    return canonical;
+  }
+  function annotateReference(ast, referenceIdentifier, reference) {
+    const fallback = referenceIdentifier.fallback;
+    if (fallback !== void 0) {
+      return resolveIdentifierFallback(ast) === fallback ? ast : annotate(ast, {
+        [IDENTIFIER_FALLBACK_KEY]: fallback
+      });
+    }
+    return reference === referenceIdentifier.identifier ? ast : annotate(ast, {
+      identifier: reference
+    });
+  }
+  function makeReference(reference, ast) {
+    if (!Object.hasOwn(references, reference) && !buildingReferences.has(reference)) {
+      buildingReferences.add(reference);
+      const representation = on(ast);
+      buildingReferences.delete(reference);
+      assignProperty(references, reference, representation);
+    }
+    return {
+      _tag: "Reference",
+      $ref: reference
+    };
+  }
   function visit(input) {
     const ast = getLastEncoding(input);
-    if (visited.has(ast)) {
-      if (isShareable(ast)) shared.add(ast);
+    const owner = getCanonicalAST(ast);
+    if (visited.has(owner)) {
+      if (isShareable(ast)) shared.add(owner);
       return;
     }
-    visited.add(ast);
-    const referenceIdentifier = resolveReferenceIdentifier(ast);
-    if (referenceIdentifier !== void 0 && !referenceIdentifier.isFallback) {
-      const owner = referenceOwners.get(referenceIdentifier.identifier);
-      if (owner === void 0) {
-        referenceOwners.set(referenceIdentifier.identifier, ast);
-      } else if (referenceMap2.get(ast) !== referenceIdentifier.identifier && !hasSameReferenceOwner(owner, ast)) {
-        throw new Error(`Duplicate identifier: ${JSON.stringify(referenceIdentifier.identifier)}`);
-      }
-    }
+    visited.add(owner);
     visitChecks(ast.checks);
     switch (ast._tag) {
       case "Declaration":
@@ -24511,52 +24787,35 @@ function lowerASTs(asts, externalDefinitions) {
       if (check3._tag === "FilterGroup") visitChecks(check3.checks);
     });
   }
-  function recur5(ast, ownedReference) {
-    const found = referenceMap2.get(ast);
-    if (found !== void 0 && found !== ownedReference) {
+  function recur3(input) {
+    const ast = getLastEncoding(input);
+    const owner = getCanonicalAST(ast);
+    const referenceIdentifier = resolveReferenceIdentifier(input, ast);
+    if (referenceIdentifier !== void 0) {
+      const reference2 = getReference(referenceIdentifier.identifier, owner);
+      return makeReference(reference2, annotateReference(ast, referenceIdentifier, reference2));
+    }
+    const found = anonymousReferences.get(owner);
+    if (found !== void 0) {
       return {
         _tag: "Reference",
         $ref: found
       };
     }
-    const projected = getLastEncoding(ast);
-    if (projected !== ast) {
-      return recur5(projected, ownedReference);
-    }
-    const referenceIdentifier = ownedReference === void 0 ? resolveReferenceIdentifier(ast) : void 0;
-    if (referenceIdentifier !== void 0) {
-      const reference2 = getReference(referenceIdentifier, ast);
-      referenceMap2.set(ast, reference2);
-      if (!Object.hasOwn(references, reference2) && !externalReferences.has(reference2)) {
-        assignProperty(references, reference2, on(ast));
-      }
-      return {
+    const isShared = shared.has(owner);
+    if (isShared || visiting.has(owner)) {
+      const reference2 = getReference(`${ast._tag}_`, owner, "");
+      anonymousReferences.set(owner, reference2);
+      return isShared ? makeReference(reference2, ast) : {
         _tag: "Reference",
         $ref: reference2
       };
     }
-    if (ownedReference === void 0 && shared.has(ast)) {
-      const reference2 = generateReference(`${ast._tag}_`, ast);
-      referenceMap2.set(ast, reference2);
-      assignProperty(references, reference2, on(ast));
-      return {
-        _tag: "Reference",
-        $ref: reference2
-      };
-    }
-    if (visiting.has(ast)) {
-      const reference2 = generateReference(`${ast._tag}_`, ast);
-      referenceMap2.set(ast, reference2);
-      return {
-        _tag: "Reference",
-        $ref: reference2
-      };
-    }
-    visiting.add(ast);
+    visiting.add(owner);
     const representation = on(ast);
-    visiting.delete(ast);
-    const reference = referenceMap2.get(ast);
-    if (reference !== void 0 && reference !== ownedReference) {
+    visiting.delete(owner);
+    const reference = anonymousReferences.get(owner);
+    if (reference !== void 0) {
       assignProperty(references, reference, representation);
       return {
         _tag: "Reference",
@@ -24565,24 +24824,13 @@ function lowerASTs(asts, externalDefinitions) {
     }
     return representation;
   }
-  function getReference(referenceIdentifier, ast) {
-    if (!referenceIdentifier.isFallback) {
-      return referenceIdentifier.identifier;
-    }
-    for (const [owner, reference2] of fallbackReferences) {
-      if (hasSameReferenceOwner(owner, ast)) return reference2;
-    }
-    const reference = generateReference(referenceIdentifier.identifier, ast);
-    fallbackReferences.push([ast, reference]);
-    return reference;
-  }
   function on(ast) {
     const checks = fromChecks(ast.checks);
     switch (ast._tag) {
       case "Declaration":
         return {
           _tag: "Declaration",
-          typeParameters: ast.typeParameters.map((ast2) => recur5(ast2)),
+          typeParameters: ast.typeParameters.map((ast2) => recur3(ast2)),
           checks,
           ...fromDeclarationAnnotations(ast.annotations)
         };
@@ -24627,7 +24875,7 @@ function lowerASTs(asts, externalDefinitions) {
       case "TemplateLiteral":
         return {
           _tag: "TemplateLiteral",
-          parts: ast.parts.map((ast2) => recur5(ast2)),
+          parts: ast.parts.map((ast2) => recur3(ast2)),
           checks,
           ...annotationsField(ast.annotations)
         };
@@ -24639,11 +24887,11 @@ function lowerASTs(asts, externalDefinitions) {
             const annotations = projected.context?.annotations;
             return {
               isOptional: isOptional(projected),
-              type: recur5(element),
+              type: recur3(element),
               ...annotationsField(annotations)
             };
           }),
-          rest: ast.rest.map((ast2) => recur5(ast2)),
+          rest: ast.rest.map((ast2) => recur3(ast2)),
           checks,
           ...annotationsField(ast.annotations)
         };
@@ -24655,15 +24903,15 @@ function lowerASTs(asts, externalDefinitions) {
             const annotations = projected.context?.annotations;
             return {
               name: property2.name,
-              type: recur5(property2.type),
+              type: recur3(property2.type),
               isOptional: isOptional(projected),
               isMutable: isMutable(projected),
               ...annotationsField(annotations)
             };
           }),
           indexSignatures: ast.indexSignatures.map((index2) => ({
-            parameter: recur5(index2.parameter),
-            type: recur5(index2.type)
+            parameter: recur3(index2.parameter),
+            type: recur3(index2.type)
           })),
           checks,
           ...annotationsField(ast.annotations)
@@ -24671,7 +24919,7 @@ function lowerASTs(asts, externalDefinitions) {
       case "Union":
         return {
           _tag: "Union",
-          types: ast.types.map((ast2) => recur5(ast2)),
+          types: ast.types.map((ast2) => recur3(ast2)),
           mode: ast.mode,
           checks,
           ...annotationsField(ast.annotations)
@@ -24680,7 +24928,7 @@ function lowerASTs(asts, externalDefinitions) {
         return {
           _tag: "Suspend",
           checks: [],
-          thunk: recur5(ast.thunk()),
+          thunk: recur3(ast.thunk()),
           ...annotationsField(ast.annotations)
         };
     }
@@ -24727,7 +24975,7 @@ function lowerASTs(asts, externalDefinitions) {
     } = annotations;
     const projected = representation === void 0 ? void 0 : representation.schemas === void 0 ? representation : {
       ...representation,
-      schemas: representation.schemas.map((schema2) => recur5(toType(schema2)))
+      schemas: representation.schemas.map((schema2) => recur3(toType(schema2)))
     };
     return {
       ...projected === void 0 ? void 0 : {
@@ -24740,105 +24988,81 @@ function lowerASTs(asts, externalDefinitions) {
   }
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/JsonPatch.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/JsonPatch.js
 function get6(oldValue, newValue) {
-  if (Object.is(oldValue, newValue)) return [];
   const patches = [];
+  getLoop(oldValue, newValue, "", patches);
+  return patches;
+}
+function getLoop(oldValue, newValue, path, patches) {
+  if (Object.is(oldValue, newValue)) return;
   if (Array.isArray(oldValue) && Array.isArray(newValue)) {
     const len1 = oldValue.length;
     const len2 = newValue.length;
     const shared = Math.min(len1, len2);
     for (let i = 0; i < shared; i++) {
-      const path = `/${i}`;
-      const patch = get6(oldValue[i], newValue[i]);
-      for (const op of patch) {
-        prefixPathInPlace(op, path);
-        patches.push(op);
-      }
+      getLoop(oldValue[i], newValue[i], `${path}/${i}`, patches);
     }
     for (let i = len1 - 1; i >= len2; i--) {
       patches.push({
         op: "remove",
-        path: `/${i}`
+        path: `${path}/${i}`
       });
     }
     for (let i = len1; i < len2; i++) {
       patches.push({
         op: "add",
-        path: `/${i}`,
+        path: `${path}/${i}`,
         value: newValue[i]
       });
     }
-    return patches;
+    return;
   }
   if (isJsonObject(oldValue) && isJsonObject(newValue)) {
     const keys1 = Object.keys(oldValue);
     const keys22 = Object.keys(newValue);
     const allKeys = Array.from(/* @__PURE__ */ new Set([...keys1, ...keys22])).sort();
     for (const key of allKeys) {
-      const esc = escapeToken(key);
-      const path = `/${esc}`;
+      const keyPath = `${path}/${escapeToken(key)}`;
       const hasKey1 = Object.hasOwn(oldValue, key);
       const hasKey2 = Object.hasOwn(newValue, key);
       if (hasKey1 && hasKey2) {
-        const patch = get6(oldValue[key], newValue[key]);
-        for (const op of patch) {
-          prefixPathInPlace(op, path);
-          patches.push(op);
-        }
+        getLoop(oldValue[key], newValue[key], keyPath, patches);
       } else if (!hasKey1 && hasKey2) {
         patches.push({
           op: "add",
-          path,
+          path: keyPath,
           value: newValue[key]
         });
-      } else if (hasKey1 && !hasKey2) {
+      } else {
         patches.push({
           op: "remove",
-          path
+          path: keyPath
         });
       }
     }
-    return patches;
+    return;
   }
   patches.push({
     op: "replace",
-    path: "",
+    path,
     value: newValue
   });
-  return patches;
 }
 function apply(patch, oldValue) {
   let doc = oldValue;
   for (const op of patch) {
-    switch (op.op) {
-      case "replace": {
-        doc = op.path === "" ? op.value : setAt(doc, op.path, op.value, "replace");
-        break;
-      }
-      case "add": {
-        doc = addAt(doc, op.path, op.value);
-        break;
-      }
-      case "remove": {
-        doc = setAt(doc, op.path, void 0, "remove");
-        break;
-      }
-    }
+    doc = applyOperation(doc, op);
   }
   return doc;
 }
-function prefixPathInPlace(op, parent) {
-  ;
-  op.path = op.path === "" ? parent : parent + op.path;
-}
 function isJsonObject(value3) {
-  return isObject(value3);
+  return typeof value3 === "object" && value3 !== null && !Array.isArray(value3);
 }
 function tokenize(pointer) {
   if (pointer === "") return [];
   if (pointer.charCodeAt(0) !== 47) {
-    throw new Error(`Invalid JSON Pointer, it must start with "/": ${format(pointer)}`);
+    throw new Error(`Invalid JSON Pointer, it must start with "/": ${JSON.stringify(pointer)}`);
   }
   return pointer.split("/").slice(1).map(unescapeToken);
 }
@@ -24848,11 +25072,14 @@ function toIndex(token) {
   }
   return Number(token);
 }
-function addAt(doc, pointer, val) {
-  if (pointer === "") return val;
-  const resolved = resolveParent(doc, pointer);
+function applyOperation(doc, op) {
+  if (op.path === "") {
+    if (op.op === "remove") throw new Error("Unsupported operation at the root");
+    return op.value;
+  }
+  const resolved = resolveParent(doc, op.path);
   if (resolved === null) {
-    throw new Error(`Cannot add at "${pointer}" (parent not found or not a container).`);
+    throw new Error(`Cannot ${op.op} at "${op.path}" (parent not found or not a container).`);
   }
   const {
     lastToken,
@@ -24860,56 +25087,30 @@ function addAt(doc, pointer, val) {
     stack
   } = resolved;
   if (Array.isArray(parent)) {
-    const idx = lastToken === "-" ? parent.length : toIndex(lastToken);
-    if (idx < 0 || idx > parent.length) throw new Error(`Array index out of bounds at "${pointer}".`);
+    if (lastToken === "-" && op.op !== "add") {
+      throw new Error(`"-" is not valid for ${op.op} at "${op.path}".`);
+    }
+    const index2 = lastToken === "-" ? parent.length : toIndex(lastToken);
+    const maxIndex = op.op === "add" ? parent.length : parent.length - 1;
+    if (index2 > maxIndex) throw new Error(`Array index out of bounds at "${op.path}".`);
     const updated = parent.slice();
-    updated.splice(idx, 0, val);
+    if (op.op === "add") updated.splice(index2, 0, op.value);
+    else if (op.op === "remove") updated.splice(index2, 1);
+    else updated[index2] = op.value;
     return rebuildFromStack(stack, updated);
   }
   if (isJsonObject(parent)) {
-    const updated = {
-      ...parent
-    };
-    assignProperty(updated, lastToken, val);
-    return rebuildFromStack(stack, updated);
-  }
-  throw new Error(`Cannot add at "${pointer}" (parent not found or not a container).`);
-}
-function setAt(doc, pointer, val, mode) {
-  if (pointer === "") {
-    if (mode === "remove" || val === void 0) throw new Error("Unsupported operation at the root");
-    return val;
-  }
-  const resolved = resolveParent(doc, pointer);
-  if (resolved === null) {
-    throw new Error(`Cannot ${mode} at "${pointer}" (parent not found or not a container).`);
-  }
-  const {
-    lastToken,
-    parent,
-    stack
-  } = resolved;
-  if (Array.isArray(parent)) {
-    if (lastToken === "-") throw new Error(`"-" is not valid for ${mode} at "${pointer}".`);
-    const idx = toIndex(lastToken);
-    if (idx < 0 || idx >= parent.length) throw new Error(`Array index out of bounds at "${pointer}".`);
-    const updated = parent.slice();
-    if (mode === "remove") updated.splice(idx, 1);
-    else updated[idx] = val;
-    return rebuildFromStack(stack, updated);
-  }
-  if (isJsonObject(parent)) {
-    if (!Object.hasOwn(parent, lastToken)) {
-      throw new Error(`Property "${lastToken}" does not exist at "${pointer}".`);
+    if (op.op !== "add" && !Object.hasOwn(parent, lastToken)) {
+      throw new Error(`Property "${lastToken}" does not exist at "${op.path}".`);
     }
     const updated = {
       ...parent
     };
-    if (mode === "remove") delete updated[lastToken];
-    else assignProperty(updated, lastToken, val);
+    if (op.op === "remove") delete updated[lastToken];
+    else assignProperty(updated, lastToken, op.value);
     return rebuildFromStack(stack, updated);
   }
-  throw new Error(`Cannot ${mode} at "${pointer}" (parent not found or not a container).`);
+  throw new Error(`Cannot ${op.op} at "${op.path}" (parent not found or not a container).`);
 }
 function resolveParent(doc, pointer) {
   const tokens = tokenize(pointer);
@@ -24919,10 +25120,9 @@ function resolveParent(doc, pointer) {
   let cur = doc;
   for (let i = 0; i < tokens.length - 1; i++) {
     const token = tokens[i];
-    if (cur == null) return null;
     if (Array.isArray(cur)) {
       const idx = toIndex(token);
-      if (idx < 0 || idx >= cur.length) return null;
+      if (idx >= cur.length) return null;
       stack.push({
         container: cur,
         token: idx
@@ -24930,7 +25130,7 @@ function resolveParent(doc, pointer) {
       cur = cur[idx];
       continue;
     }
-    if (cur && typeof cur === "object") {
+    if (isJsonObject(cur)) {
       if (!Object.hasOwn(cur, token)) return null;
       stack.push({
         container: cur,
@@ -24969,8 +25169,16 @@ function rebuildFromStack(stack, newParent) {
   return acc;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/JsonSchema.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/JsonSchema.js
 var RE_DEFS = /^#\/\$defs(?=\/|$)/;
+var DRAFT_04_COPY_KEYWORDS = /* @__PURE__ */ new Set(["$ref", "type", "required", "enum", "title", "description", "default", "format", "pattern", "minLength", "maxLength", "minItems", "maxItems", "minProperties", "maxProperties", "multipleOf", "uniqueItems"]);
+var DRAFT_07_COPY_KEYWORDS = /* @__PURE__ */ new Set([...DRAFT_04_COPY_KEYWORDS, "const", "examples", "readOnly", "writeOnly", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"]);
+var DRAFT_07_SINGLE_SUBSCHEMA_KEYWORDS = /* @__PURE__ */ new Set(["not", "additionalProperties", "propertyNames"]);
+var MAP_SUBSCHEMA_KEYWORDS = /* @__PURE__ */ new Set(["properties", "patternProperties"]);
+var ARRAY_SUBSCHEMA_KEYWORDS = /* @__PURE__ */ new Set(["allOf", "anyOf", "oneOf"]);
+var DRAFT_2020_12_MAP_SUBSCHEMA_KEYWORDS = /* @__PURE__ */ new Set(["$defs", ...MAP_SUBSCHEMA_KEYWORDS, "dependentSchemas"]);
+var DRAFT_2020_12_ARRAY_SUBSCHEMA_KEYWORDS = /* @__PURE__ */ new Set([...ARRAY_SUBSCHEMA_KEYWORDS, "prefixItems"]);
+var DRAFT_2020_12_SINGLE_SUBSCHEMA_KEYWORDS = /* @__PURE__ */ new Set([...DRAFT_07_SINGLE_SUBSCHEMA_KEYWORDS, "unevaluatedProperties", "items", "contains", "unevaluatedItems", "if", "then", "else", "contentSchema"]);
 function toDocumentDraft07(document) {
   return {
     dialect: "draft-07",
@@ -24979,64 +25187,23 @@ function toDocumentDraft07(document) {
   };
 }
 function toSchemaDraft07(schema2) {
-  return rewrite(schema2);
-  function rewrite(node) {
-    return walk(rewrite_refs(node, (ref) => ref.replace(RE_DEFS, "#/definitions")), true);
-  }
-  function walk(node, _isRoot) {
-    if (Array.isArray(node)) return node.map((v) => walk(v, false));
-    if (!isObject(node)) return node;
-    const src2 = node;
+  return transformSchema(schema2, (src2) => {
+    rewriteSchemaRef(src2, (ref) => ref.replace(RE_DEFS, "#/definitions"));
     const out = {};
     let prefixItems = void 0;
     let items2 = void 0;
     for (const k of Object.keys(src2)) {
       const v = src2[k];
+      if (k === "required" && Array.isArray(v) && v.length === 0) continue;
+      if (DRAFT_07_COPY_KEYWORDS.has(k)) {
+        out[k] = v;
+        continue;
+      }
+      if (MAP_SUBSCHEMA_KEYWORDS.has(k) || ARRAY_SUBSCHEMA_KEYWORDS.has(k) || DRAFT_07_SINGLE_SUBSCHEMA_KEYWORDS.has(k)) {
+        out[k] = v;
+        continue;
+      }
       switch (k) {
-        // We already rewrote $ref via rewrite_refs, so just copy it through.
-        case "$ref":
-        case "type":
-        case "required":
-        case "enum":
-        case "const":
-        case "title":
-        case "description":
-        case "default":
-        case "examples":
-        case "format":
-        case "pattern":
-        case "minimum":
-        case "maximum":
-        case "exclusiveMinimum":
-        case "exclusiveMaximum":
-        case "minLength":
-        case "maxLength":
-        case "minItems":
-        case "maxItems":
-        case "minProperties":
-        case "maxProperties":
-        case "multipleOf":
-        case "uniqueItems":
-          out[k] = v;
-          break;
-        // Schema maps
-        case "properties":
-        case "patternProperties": {
-          const mapped = walk_object(v, walk);
-          out[k] = mapped ?? v;
-          break;
-        }
-        // Single subschemas
-        case "additionalProperties":
-        case "propertyNames":
-          out[k] = walk(v, false);
-          break;
-        // Schema arrays
-        case "allOf":
-        case "anyOf":
-        case "oneOf":
-          out[k] = Array.isArray(v) ? v.map((x) => walk(x, false)) : v;
-          break;
         // Tuple handling (2020-12 form)
         case "prefixItems":
           prefixItems = v;
@@ -25050,147 +25217,139 @@ function toSchemaDraft07(schema2) {
     }
     if (prefixItems !== void 0) {
       if (Array.isArray(prefixItems)) {
-        out.items = prefixItems.map((x) => walk(x, false));
-        if (items2 !== void 0) out.additionalItems = walk(items2, false);
+        out.items = prefixItems;
+        if (items2 !== void 0) out.additionalItems = items2;
       } else {
-        out.items = walk(prefixItems, false);
+        out.items = prefixItems;
       }
     } else if (items2 !== void 0) {
-      out.items = walk(items2, false);
+      out.items = items2;
+    }
+    const $ref = out.$ref;
+    if (typeof $ref === "string" && Object.keys(out).length > 1) {
+      delete out.$ref;
+      out.allOf = [{
+        $ref
+      }, ...Array.isArray(out.allOf) ? out.allOf : []];
     }
     return out;
-  }
+  });
 }
-function rewrite_refs(node, f) {
-  if (Array.isArray(node)) return node.map((v) => rewrite_refs(v, f));
-  if (!isObject(node)) return node;
-  const out = {};
-  for (const k of Object.keys(node)) {
-    const v = node[k];
-    if (k === "$ref") {
-      assignProperty(out, k, typeof v === "string" ? f(v) : v);
-    } else if (Array.isArray(v) || isObject(v)) {
-      assignProperty(out, k, rewrite_refs(v, f));
-    } else {
-      assignProperty(out, k, v);
+function transformSchema(node, transform3) {
+  return walk(node);
+  function walk(node2) {
+    if (!isObject(node2) || Array.isArray(node2)) return node2;
+    const out = {};
+    for (const key of Object.keys(node2)) {
+      const value3 = node2[key];
+      let transformed = value3;
+      if (DRAFT_2020_12_MAP_SUBSCHEMA_KEYWORDS.has(key)) {
+        transformed = Array.isArray(value3) ? value3 : mapObject(value3, walk) ?? value3;
+      } else if (DRAFT_2020_12_ARRAY_SUBSCHEMA_KEYWORDS.has(key)) {
+        transformed = Array.isArray(value3) ? value3.map(walk) : value3;
+      } else if (DRAFT_2020_12_SINGLE_SUBSCHEMA_KEYWORDS.has(key)) {
+        transformed = walk(value3);
+      }
+      assignProperty(out, key, transformed);
     }
+    return transform3(out);
   }
-  return out;
 }
-function walk_object(value3, walk) {
+function rewriteSchemaRef(schema2, rewrite) {
+  if (typeof schema2.$ref === "string") {
+    assignProperty(schema2, "$ref", rewrite(schema2.$ref));
+  }
+  return schema2;
+}
+function mapObject(value3, f) {
   if (!isObject(value3)) return void 0;
   const out = {};
-  for (const k of Object.keys(value3)) assignProperty(out, k, walk(value3[k], false));
+  for (const k of Object.keys(value3)) assignProperty(out, k, f(value3[k]));
   return out;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Optic.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Optic.js
 function makeIso(get11, set8) {
-  return make24(new IsoNode(get11, set8));
+  return make22(primitiveNode("Iso", get11, set8));
 }
 function makeLens(get11, replace) {
-  return make24(new LensNode(get11, replace));
+  return make22(primitiveNode("Lens", get11, replace));
 }
-var IdentityNode = class {
-  _tag = "IdentityNode";
-};
-var identityNode = /* @__PURE__ */ new IdentityNode();
-var CompositionNode = class {
-  _tag = "CompositionNode";
-  nodes;
-  constructor(nodes) {
-    this.nodes = nodes;
-  }
-};
-var IsoNode = class {
-  _tag = "IsoNode";
-  get;
-  set;
-  constructor(get11, set8) {
-    this.get = get11;
-    this.set = set8;
-  }
-};
-var LensNode = class {
-  _tag = "LensNode";
-  get;
-  set;
-  constructor(get11, set8) {
-    this.get = get11;
-    this.set = set8;
-  }
-};
-var PrismNode = class {
-  _tag = "PrismNode";
-  get;
-  set;
-  constructor(get11, set8) {
-    this.get = get11;
-    this.set = set8;
-  }
-};
-var OptionalNode = class {
-  _tag = "OptionalNode";
-  get;
-  set;
-  constructor(get11, set8) {
-    this.get = get11;
-    this.set = set8;
-  }
+function primitiveNode(kind, get11, set8) {
+  return [{
+    _tag: "PrimitiveNode",
+    kind,
+    get: get11,
+    set: set8
+  }];
+}
+var identityOperation = {
+  kind: "Iso",
+  get: identity,
+  set: identity
 };
 var PathNode = class {
   _tag = "PathNode";
+  kind = "Lens";
   path;
+  get;
+  set;
   constructor(path) {
     this.path = path;
+    this.get = (s) => {
+      let out = s;
+      for (let i = 0; i < path.length; i++) {
+        out = out[path[i]];
+      }
+      return out;
+    };
+    this.set = (a, s) => {
+      const out = cloneShallow(s);
+      let current = out;
+      let i = 0;
+      for (; i < path.length - 1; i++) {
+        const key = path[i];
+        assignProperty(current, key, cloneShallow(current[key]));
+        current = current[key];
+      }
+      assignProperty(current, path[i], a);
+      return out;
+    };
   }
 };
 var CheckNode = class {
   _tag = "CheckNode";
+  kind = "Prism";
   checks;
+  get;
+  set = identity;
   constructor(checks) {
     this.checks = checks;
+    this.get = (s) => mapError(runChecks(checks, s), String);
   }
 };
-function pushNormalized(acc, node) {
-  const last = acc[acc.length - 1];
-  if (last) {
-    if (last._tag === "PathNode" && node._tag === "PathNode") {
-      acc[acc.length - 1] = new PathNode([...last.path, ...node.path]);
-      return;
-    }
-    if (last._tag === "CheckNode" && node._tag === "CheckNode") {
-      acc[acc.length - 1] = new CheckNode([...last.checks, ...node.checks]);
-      return;
-    }
-  }
-  acc.push(node);
-}
-function collect(node, acc) {
-  if (node._tag === "IdentityNode") return;
-  if (node._tag === "CompositionNode") {
-    for (let i = 0; i < node.nodes.length; i++) collect(node.nodes[i], acc);
-    return;
-  }
-  pushNormalized(acc, node);
-}
 function compose2(a, b) {
-  const nodes = [];
-  collect(a, nodes);
-  collect(b, nodes);
-  switch (nodes.length) {
-    case 0:
-      return identityNode;
-    case 1:
-      return nodes[0];
-    default:
-      return new CompositionNode(nodes);
+  if (a.length === 0) return b;
+  if (b.length === 0) return a;
+  const nodes = a.slice();
+  for (let i = 0; i < b.length; i++) {
+    const node = b[i];
+    const last = nodes[nodes.length - 1];
+    if (last._tag === "PathNode" && node._tag === "PathNode") {
+      nodes[nodes.length - 1] = new PathNode([...last.path, ...node.path]);
+    } else if (last._tag === "CheckNode" && node._tag === "CheckNode") {
+      nodes[nodes.length - 1] = new CheckNode([...last.checks, ...node.checks]);
+    } else {
+      nodes.push(node);
+    }
   }
+  return nodes;
 }
 function makeOptional(getResult, set8) {
-  return make24(new OptionalNode(getResult, set8));
+  return make22(primitiveNode("Optional", getResult, set8));
 }
 var OptionalImpl = class {
+  /** @internal */
   node;
   getResult;
   replaceResult;
@@ -25206,13 +25365,13 @@ var OptionalImpl = class {
     return (s) => getOrElse2(flatMap2(this.getResult(s), (a) => this.replaceResult(f(a), s)), () => s);
   }
   compose(that) {
-    return make24(compose2(this.node, that.node));
+    return make22(compose2(this.node, that.node));
   }
   key(key) {
-    return make24(compose2(this.node, new PathNode([key])));
+    return make22(compose2(this.node, [new PathNode([key])]));
   }
   optionalKey(key) {
-    return make24(compose2(this.node, new LensNode((s) => s[key], (a, s) => {
+    return make22(compose2(this.node, primitiveNode("Lens", (s) => s[key], (a, s) => {
       const copy2 = cloneShallow(s);
       if (a === void 0) {
         if (Array.isArray(copy2) && typeof key === "number") {
@@ -25227,17 +25386,17 @@ var OptionalImpl = class {
     })));
   }
   check(...checks) {
-    return make24(compose2(this.node, new CheckNode(checks)));
+    return make22(compose2(this.node, [new CheckNode(checks)]));
   }
   refine(refinement, annotations) {
-    return make24(compose2(this.node, new CheckNode([makeFilterByGuard(refinement, annotations)])));
+    return make22(compose2(this.node, [new CheckNode([makeFilterByGuard(refinement, annotations)])]));
   }
   tag(tag2) {
-    return make24(compose2(this.node, new PrismNode((s) => s._tag === tag2 ? succeed2(s) : fail2(`Expected ${format(tag2)} tag, got ${format(s._tag)}`), identity)));
+    return make22(compose2(this.node, primitiveNode("Prism", (s) => s._tag === tag2 ? succeed2(s) : fail2(`Expected ${format(tag2)} tag, got ${format(s._tag)}`), identity)));
   }
   at(key, ..._rest) {
     const err = fail2(`Key ${format(key)} not found`);
-    return make24(compose2(this.node, new OptionalNode((s) => Object.hasOwn(s, key) ? succeed2(s[key]) : err, (a, s) => {
+    return make22(compose2(this.node, primitiveNode("Optional", (s) => Object.hasOwn(s, key) ? succeed2(s[key]) : err, (a, s) => {
       if (Object.hasOwn(s, key)) {
         const copy2 = cloneShallow(s);
         assignProperty(copy2, key, a);
@@ -25341,16 +25500,24 @@ var PrismImpl = class extends OptionalImpl {
     return (s) => getOrElse2(map2(this.getResult(s), (a) => this.set(f(a))), () => s);
   }
 };
-function make24(node) {
-  const op = recur4(node);
-  switch (op._tag) {
-    case "IsoNode":
+function make22(node) {
+  let op = node[0] ?? identityOperation;
+  if (node.length > 1) {
+    const kind = node.reduce((kind2, step) => composeKind(kind2, step.kind), "Iso");
+    op = {
+      kind,
+      get: compileGet(node, kind),
+      set: compileSet(node, kind)
+    };
+  }
+  switch (op.kind) {
+    case "Iso":
       return new IsoImpl(node, op.get, op.set);
-    case "LensNode":
+    case "Lens":
       return new LensImpl(node, op.get, op.set);
-    case "PrismNode":
+    case "Prism":
       return new PrismImpl(node, op.get, op.set);
-    case "OptionalNode":
+    case "Optional":
       return new OptionalImpl(node, op.get, op.set);
   }
 }
@@ -25367,138 +25534,125 @@ function cloneShallow(pojo) {
   }
   return pojo;
 }
-var recur4 = /* @__PURE__ */ memoize((node) => {
-  switch (node._tag) {
-    case "IdentityNode":
-      return {
-        _tag: "IsoNode",
-        get: identity,
-        set: identity
-      };
-    case "IsoNode":
-    case "LensNode":
-    case "PrismNode":
-    case "OptionalNode":
-      return {
-        _tag: node._tag,
-        get: node.get,
-        set: node.set
-      };
-    case "PathNode": {
-      return {
-        _tag: "LensNode",
-        get: (s) => {
-          const path = node.path;
-          let out = s;
-          for (let i = 0, n = path.length; i < n; i++) {
-            out = out[path[i]];
-          }
-          return out;
-        },
-        set: (a, s) => {
-          const path = node.path;
-          const out = cloneShallow(s);
-          let current = out;
-          let i = 0;
-          for (; i < path.length - 1; i++) {
-            const key = path[i];
-            assignProperty(current, key, cloneShallow(current[key]));
-            current = current[key];
-          }
-          const finalKey = path[i];
-          assignProperty(current, finalKey, a);
-          return out;
+function compileGet(nodes, kind) {
+  return (s) => {
+    for (let i = 0; i < nodes.length; i++) {
+      const op = nodes[i];
+      const result4 = op.get(s);
+      if (hasFailingGet(op.kind)) {
+        if (isFailure2(result4)) {
+          return result4;
         }
-      };
+        s = result4.success;
+      } else {
+        s = result4;
+      }
     }
-    case "CheckNode":
-      return {
-        _tag: "PrismNode",
-        get: (s) => mapError(runChecks(node.checks, s), String),
-        set: identity
-      };
-    case "CompositionNode": {
-      const ops = node.nodes.map(recur4);
-      const _tag = ops.reduce((tag2, op) => getCompositionTag(tag2, op._tag), "IsoNode");
-      return {
-        _tag,
-        get: (s) => {
-          for (let i = 0; i < ops.length; i++) {
-            const op = ops[i];
-            const result4 = op.get(s);
-            if (hasFailingGet(op._tag)) {
-              if (isFailure2(result4)) {
-                return result4;
-              }
-              s = result4.success;
-            } else {
-              s = result4;
-            }
-          }
-          return hasFailingGet(_tag) ? succeed2(s) : s;
-        },
-        set: (a, s) => {
-          const source = s;
-          const len = ops.length;
-          const ss = new Array(len + 1);
-          ss[0] = s;
-          for (let i = 0; i < len; i++) {
-            const op = ops[i];
-            if (hasFailingGet(op._tag)) {
-              const result4 = op.get(s);
-              if (isFailure2(result4)) {
-                return _tag === "OptionalNode" ? result4 : source;
-              }
-              s = result4.success;
-            } else {
-              s = op.get(s);
-            }
-            ss[i + 1] = s;
-          }
-          for (let i = len - 1; i >= 0; i--) {
-            const op = ops[i];
-            if (hasSet(op._tag)) {
-              a = op.set(a);
-            } else if (op._tag === "LensNode") {
-              a = op.set(a, ss[i]);
-            } else {
-              const result4 = op.set(a, ss[i]);
-              if (isFailure2(result4)) {
-                return result4;
-              }
-              a = result4.success;
-            }
-          }
-          return _tag === "OptionalNode" ? succeed2(a) : a;
+    return hasFailingGet(kind) ? succeed2(s) : s;
+  };
+}
+function compileSet(nodes, kind) {
+  if (hasSourceFreeSet(kind)) {
+    return (a) => {
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        a = nodes[i].set(a);
+      }
+      return a;
+    };
+  }
+  return (a, s) => {
+    const len = nodes.length;
+    const sources = new Array(len);
+    for (let i = 0; i < len; i++) {
+      sources[i] = s;
+      const op = nodes[i];
+      if (hasFailingGet(op.kind)) {
+        const result4 = op.get(s);
+        if (isFailure2(result4)) {
+          return result4;
         }
-      };
+        s = result4.success;
+      } else {
+        s = op.get(s);
+      }
     }
-  }
-});
-function hasFailingGet(tag2) {
-  return tag2 === "PrismNode" || tag2 === "OptionalNode";
+    for (let i = len - 1; i >= 0; i--) {
+      const op = nodes[i];
+      if (hasSourceFreeSet(op.kind)) {
+        a = op.set(a);
+      } else if (op.kind === "Lens") {
+        a = op.set(a, sources[i]);
+      } else {
+        const result4 = op.set(a, sources[i]);
+        if (isFailure2(result4)) {
+          return result4;
+        }
+        a = result4.success;
+      }
+    }
+    return kind === "Optional" ? succeed2(a) : a;
+  };
 }
-function hasSet(tag2) {
-  return tag2 === "IsoNode" || tag2 === "PrismNode";
+function hasFailingGet(kind) {
+  return kind === "Prism" || kind === "Optional";
 }
-function getCompositionTag(a, b) {
-  switch (a) {
-    case "IsoNode":
-      return b;
-    case "LensNode":
-      return hasFailingGet(b) ? "OptionalNode" : "LensNode";
-    case "PrismNode":
-      return hasSet(b) ? "PrismNode" : "OptionalNode";
-    case "OptionalNode":
-      return "OptionalNode";
-  }
+function hasSourceFreeSet(kind) {
+  return kind === "Iso" || kind === "Prism";
 }
-var identityIso = /* @__PURE__ */ make24(identityNode);
+function composeKind(a, b) {
+  if (a === "Iso") return b;
+  if (b === "Iso" || a === b) return a;
+  return "Optional";
+}
+var identityIso = /* @__PURE__ */ make22([]);
 function id() {
   return identityIso;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/testing/FastCheck.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/redacted.js
+var redactedRegistry = /* @__PURE__ */ new WeakMap();
+var value = (self) => {
+  if (redactedRegistry.has(self)) {
+    return redactedRegistry.get(self);
+  } else {
+    throw new Error("Unable to get redacted value" + (self.label ? ` with label: "${self.label}"` : ""));
+  }
+};
+
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Redacted.js
+var TypeId25 = "~effect/data/Redacted";
+var isRedacted = (u) => hasProperty(u, TypeId25);
+var make23 = (value3, options) => {
+  const self = Object.create(Proto4);
+  if (options?.label) {
+    self.label = options.label;
+  }
+  redactedRegistry.set(self, value3);
+  return self;
+};
+var Proto4 = {
+  [TypeId25]: {
+    _A: (_) => _
+  },
+  label: void 0,
+  ...PipeInspectableProto,
+  toJSON() {
+    return this.toString();
+  },
+  toString() {
+    return `<redacted${isString(this.label) ? ":" + this.label : ""}>`;
+  },
+  [symbol]() {
+    return hash(redactedRegistry.get(this));
+  },
+  [symbol2](that) {
+    return isRedacted(that) && equals(redactedRegistry.get(this), redactedRegistry.get(that));
+  }
+};
+var value2 = value;
+var makeEquivalence8 = (isEquivalent) => make2((x, y) => isEquivalent(value2(x), value2(y)));
+
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/testing/FastCheck.js
 var FastCheck_exports = {};
 __export(FastCheck_exports, {
   Arbitrary: () => Arbitrary,
@@ -33131,17 +33285,17 @@ function buildVersionsAppliersForUuid(versions) {
 }
 function assertValidVersions(versions) {
   const found = {};
-  for (const version2 of versions) {
-    if (found[version2]) throw new SError(`Version ${version2} has been requested at least twice for uuid`);
-    found[version2] = true;
-    if (version2 < 1 || version2 > 15) throw new SError(`Version must be a value in [1-15] for uuid, but received ${version2}`);
-    if (~~version2 !== version2) throw new SError(`Version must be an integer value for uuid, but received ${version2}`);
+  for (const version of versions) {
+    if (found[version]) throw new SError(`Version ${version} has been requested at least twice for uuid`);
+    found[version] = true;
+    if (version < 1 || version > 15) throw new SError(`Version must be a value in [1-15] for uuid, but received ${version}`);
+    if (~~version !== version) throw new SError(`Version must be an integer value for uuid, but received ${version}`);
   }
   if (versions.length === 0) throw new SError(`Must provide at least one version for uuid`);
 }
 function uuid(constraints = {}) {
   const padded = buildPaddedNumberArbitrary(0, 4294967295);
-  const version2 = constraints.version !== void 0 ? typeof constraints.version === "number" ? [constraints.version] : constraints.version : [
+  const version = constraints.version !== void 0 ? typeof constraints.version === "number" ? [constraints.version] : constraints.version : [
     1,
     2,
     3,
@@ -33151,9 +33305,9 @@ function uuid(constraints = {}) {
     7,
     8
   ];
-  assertValidVersions(version2);
-  const { versionsApplierMapper, versionsApplierUnmapper } = buildVersionsAppliersForUuid(version2);
-  return tuple2(padded, buildPaddedNumberArbitrary(0, 268435456 * version2.length - 1).map(versionsApplierMapper, versionsApplierUnmapper), buildPaddedNumberArbitrary(2147483648, 3221225471), padded).map(paddedEightsToUuidMapper, paddedEightsToUuidUnmapper);
+  assertValidVersions(version);
+  const { versionsApplierMapper, versionsApplierUnmapper } = buildVersionsAppliersForUuid(version);
+  return tuple2(padded, buildPaddedNumberArbitrary(0, 268435456 * version.length - 1).map(versionsApplierMapper, versionsApplierUnmapper), buildPaddedNumberArbitrary(2147483648, 3221225471), padded).map(paddedEightsToUuidMapper, paddedEightsToUuidUnmapper);
 }
 function hostUserInfo(size7) {
   return string3({
@@ -35258,15 +35412,15 @@ var __type = "module";
 var __version = "4.9.0";
 var __commitHash = "0d3c2547dce556f72413607849377530d18ea283";
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Schema.js
-var TypeId27 = TypeId26;
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Schema.js
+var TypeId26 = TypeId24;
 function declareConstructor() {
   return (typeParameters, run4, annotations) => {
-    return make25(new Declaration(typeParameters.map(getAST), (typeParameters2) => run4(typeParameters2.map((ast) => make25(ast))), annotations));
+    return make24(new Declaration(typeParameters.map(getAST), (typeParameters2) => run4(typeParameters2.map((ast) => make24(ast))), annotations));
   };
 }
 function declare(is3, annotations) {
-  return declareConstructor()([], () => (input, ast) => is3(input) ? succeed6(input) : fail5(new InvalidType(ast, some2(input))), annotations);
+  return declareConstructor()([], () => (input, ast) => is3(input) ? succeed6(input) : fail5(new InvalidType(ast)), annotations);
 }
 function revealBottom(bottom) {
   return bottom;
@@ -35300,7 +35454,7 @@ function toStandardSchemaV1(self, options) {
   };
   const formatter = makeFormatterStandardSchemaV1(options);
   const validate3 = (value3) => {
-    const scheduler2 = new MixedScheduler();
+    const scheduler2 = new MixedScheduler("sync");
     const fiber3 = runFork2(match6(decodeUnknownEffect3(value3, parseOptions), {
       onFailure: formatter,
       onSuccess: (value4) => ({
@@ -35429,7 +35583,7 @@ function decodeUnknownExit2(schema2, options) {
   };
 }
 function fromIssueExit(exit3) {
-  return isSuccess4(exit3) ? succeed4(exit3.value) : failCause2(map6(exit3.cause, (issue) => new SchemaError(issue)));
+  return isSuccess4(exit3) ? exit3 : failCause2(map6(exit3.cause, (issue) => new SchemaError(issue)));
 }
 var decodeExit = decodeUnknownExit2;
 var decodeUnknownOption2 = decodeUnknownOption;
@@ -35492,24 +35646,24 @@ function encodeUnknownSync2(schema2, options) {
   };
 }
 var encodeSync2 = encodeUnknownSync2;
-var make25 = make23;
+var make24 = make21;
 function isSchema(u) {
-  return hasProperty(u, TypeId27) && u[TypeId27] === TypeId27;
+  return hasProperty(u, TypeId26) && u[TypeId26] === TypeId26;
 }
-var optionalKey2 = /* @__PURE__ */ lambda((schema2) => make25(optionalKey(schema2.ast), {
+var optionalKey2 = /* @__PURE__ */ lambda((schema2) => make24(optionalKey(schema2.ast), {
   schema: schema2
 }));
 var requiredKey = /* @__PURE__ */ lambda((self) => self.schema);
 var optional = /* @__PURE__ */ lambda((self) => optionalKey2(UndefinedOr(self)));
 var required = /* @__PURE__ */ lambda((self) => self.schema.members[0]);
-var mutableKey2 = /* @__PURE__ */ lambda((schema2) => make25(mutableKey(schema2.ast), {
+var mutableKey2 = /* @__PURE__ */ lambda((schema2) => make24(mutableKey(schema2.ast), {
   schema: schema2
 }));
 var readonlyKey = /* @__PURE__ */ lambda((self) => self.schema);
-var toType2 = /* @__PURE__ */ lambda((schema2) => make25(toType(schema2.ast), {
+var toType2 = /* @__PURE__ */ lambda((schema2) => make24(toType(schema2.ast), {
   schema: schema2
 }));
-var toEncoded2 = /* @__PURE__ */ lambda((schema2) => make25(toEncoded(schema2.ast), {
+var toEncoded2 = /* @__PURE__ */ lambda((schema2) => make24(toEncoded(schema2.ast), {
   schema: schema2
 }));
 var FlipTypeId = "~effect/Schema/flip";
@@ -35520,13 +35674,13 @@ function flip4(schema2) {
   if (isFlip$(schema2)) {
     return schema2.schema.rebuild(flip3(schema2.ast));
   }
-  return make25(flip3(schema2.ast), {
+  return make24(flip3(schema2.ast), {
     [FlipTypeId]: FlipTypeId,
     schema: schema2
   });
 }
 function Literal2(literal) {
-  const out = make25(new Literal(literal), {
+  const out = make24(new Literal(literal), {
     literal,
     transform(to) {
       return out.pipe(decodeTo2(Literal2(to), {
@@ -35541,37 +35695,37 @@ function templateLiteralFromParts(parts) {
   return new TemplateLiteral(parts.map((part) => isSchema(part) ? part.ast : new Literal(part)));
 }
 function TemplateLiteral2(parts) {
-  return make25(templateLiteralFromParts(parts), {
+  return make24(templateLiteralFromParts(parts), {
     parts
   });
 }
 function TemplateLiteralParser(parts) {
-  return make25(templateLiteralFromParts(parts).asTemplateLiteralParser(), {
+  return make24(templateLiteralFromParts(parts).asTemplateLiteralParser(), {
     parts
   });
 }
 function Enum2(enums) {
-  return make25(new Enum(Object.keys(enums).filter((key) => typeof enums[enums[key]] !== "number").map((key) => [key, enums[key]])), {
+  return make24(new Enum(Object.keys(enums).filter((key) => typeof enums[enums[key]] !== "number").map((key) => [key, enums[key]])), {
     enums
   });
 }
-var Never2 = /* @__PURE__ */ make25(never3);
-var Any2 = /* @__PURE__ */ make25(any);
-var Unknown2 = /* @__PURE__ */ make25(unknown);
-var Null2 = /* @__PURE__ */ make25(null_);
-var Undefined2 = /* @__PURE__ */ make25(undefined_3);
-var String5 = /* @__PURE__ */ make25(string2);
-var Number6 = /* @__PURE__ */ make25(number2);
-var Boolean4 = /* @__PURE__ */ make25(boolean);
-var Symbol3 = /* @__PURE__ */ make25(symbol3);
-var BigInt5 = /* @__PURE__ */ make25(bigInt);
-var Void2 = /* @__PURE__ */ make25(void_5);
-var ObjectKeyword2 = /* @__PURE__ */ make25(objectKeyword);
+var Never2 = /* @__PURE__ */ make24(never3);
+var Any2 = /* @__PURE__ */ make24(any);
+var Unknown2 = /* @__PURE__ */ make24(unknown);
+var Null2 = /* @__PURE__ */ make24(null_);
+var Undefined2 = /* @__PURE__ */ make24(undefined_3);
+var String5 = /* @__PURE__ */ make24(string2);
+var Number6 = /* @__PURE__ */ make24(number2);
+var Boolean4 = /* @__PURE__ */ make24(boolean);
+var Symbol3 = /* @__PURE__ */ make24(symbol3);
+var BigInt5 = /* @__PURE__ */ make24(bigInt);
+var Void2 = /* @__PURE__ */ make24(void_5);
+var ObjectKeyword2 = /* @__PURE__ */ make24(objectKeyword);
 function UniqueSymbol2(symbol5) {
-  return make25(new UniqueSymbol(symbol5));
+  return make24(new UniqueSymbol(symbol5));
 }
 function makeStruct(ast, fields) {
-  return make25(ast, {
+  return make24(ast, {
     fields,
     mapFields(f, options) {
       const fields2 = f(this.fields);
@@ -35646,21 +35800,20 @@ function extendTo(fields, derive) {
     })));
   };
 }
-function Record2(key, value3, options) {
-  const keyValueCombiner = options?.keyValueCombiner?.decode || options?.keyValueCombiner?.encode ? new KeyValueCombiner(options.keyValueCombiner.decode, options.keyValueCombiner.encode) : void 0;
-  return make25(record(key.ast, value3.ast, keyValueCombiner), {
+function Record2(key, value3) {
+  return make24(record(key.ast, value3.ast), {
     key,
     value: value3
   });
 }
 function StructWithRest(schema2, records) {
-  return make25(structWithRest(schema2.ast, records.map(getAST)), {
+  return make24(structWithRest(schema2.ast, records.map(getAST)), {
     schema: schema2,
     records
   });
 }
 function makeTuple(ast, elements) {
-  return make25(ast, {
+  return make24(ast, {
     elements,
     mapElements(f, options) {
       const elements2 = f(this.elements);
@@ -35672,15 +35825,15 @@ function Tuple2(elements) {
   return makeTuple(tuple(elements), elements);
 }
 function TupleWithRest(schema2, rest) {
-  return make25(tupleWithRest(schema2.ast, rest.map(getAST)), {
+  return make24(tupleWithRest(schema2.ast, rest.map(getAST)), {
     schema: schema2,
     rest
   });
 }
-var ArraySchema = /* @__PURE__ */ lambda((schema2) => make25(new Arrays(false, [], [schema2.ast]), {
+var ArraySchema = /* @__PURE__ */ lambda((schema2) => make24(new Arrays(false, [], [schema2.ast]), {
   value: schema2
 }));
-var NonEmptyArray = /* @__PURE__ */ lambda((schema2) => make25(new Arrays(false, [schema2.ast], [schema2.ast]), {
+var NonEmptyArray = /* @__PURE__ */ lambda((schema2) => make24(new Arrays(false, [schema2.ast], [schema2.ast]), {
   value: schema2
 }));
 function ArrayEnsure(schema2) {
@@ -35693,12 +35846,12 @@ function UniqueArray(item) {
   return ArraySchema(item).check(isUnique());
 }
 var mutable = /* @__PURE__ */ lambda((schema2) => {
-  return make25(new Arrays(true, schema2.ast.elements, schema2.ast.rest), {
+  return make24(new Arrays(true, schema2.ast.elements, schema2.ast.rest), {
     schema: schema2
   });
 });
 function makeUnion(ast, members) {
-  return make25(ast, {
+  return make24(ast, {
     members,
     mapMembers(f, options) {
       const members2 = f(this.members);
@@ -35711,7 +35864,7 @@ function Union2(members, options) {
 }
 function Literals(literals) {
   const members = literals.map(Literal2);
-  return make25(union2(members, "anyOf", void 0), {
+  return make24(union2(members, "anyOf", void 0), {
     literals,
     members,
     mapMembers(f) {
@@ -35729,18 +35882,18 @@ var NullOr = /* @__PURE__ */ lambda((self) => Union2([self, Null2]));
 var UndefinedOr = /* @__PURE__ */ lambda((self) => Union2([self, Undefined2]));
 var NullishOr = /* @__PURE__ */ lambda((self) => Union2([self, Null2, Undefined2]));
 function suspend5(f) {
-  return make25(new Suspend(() => f().ast));
+  return make24(new Suspend(() => f().ast));
 }
 function check2(...checks) {
   return (self) => self.check(...checks);
 }
 function refine(refinement, annotations) {
-  return (schema2) => make25(appendChecks(schema2.ast, [makeFilterByGuard(refinement, annotations)]), {
+  return (schema2) => make24(appendChecks(schema2.ast, [makeFilterByGuard(refinement, annotations)]), {
     schema: schema2
   });
 }
 function brand2(identifier2) {
-  return (schema2) => make25(brand(schema2.ast, identifier2), {
+  return (schema2) => make24(brand(schema2.ast, identifier2), {
     schema: schema2,
     identifier: identifier2
   });
@@ -35751,12 +35904,12 @@ function fromBrand(identifier2, ctor) {
   };
 }
 function middlewareDecoding2(decode3) {
-  return (schema2) => make25(middlewareDecoding(schema2.ast, new Middleware(decode3, identity)), {
+  return (schema2) => make24(middlewareDecoding(schema2.ast, new Middleware(decode3, identity)), {
     schema: schema2
   });
 }
 function middlewareEncoding2(encode3) {
-  return (schema2) => make25(middlewareEncoding(schema2.ast, new Middleware(identity, encode3)), {
+  return (schema2) => make24(middlewareEncoding(schema2.ast, new Middleware(identity, encode3)), {
     schema: schema2
   });
 }
@@ -35774,7 +35927,7 @@ function catchEncodingWithContext(f) {
 }
 function decodeTo2(to, transformation) {
   return (from) => {
-    return make25(decodeTo(from.ast, to.ast, transformation ? make14(transformation) : passthrough3()), {
+    return make24(decodeTo(from.ast, to.ast, transformation ? make12(transformation) : passthrough3()), {
       from,
       to
     });
@@ -35796,7 +35949,7 @@ function encode(transformation) {
   };
 }
 function withConstructorDefault2(defaultValue) {
-  return (schema2) => make25(withConstructorDefault(schema2.ast, toIssueEffect(defaultValue)), {
+  return (schema2) => make24(withConstructorDefault(schema2.ast, toIssueEffect(defaultValue)), {
     schema: schema2
   });
 }
@@ -35913,7 +36066,7 @@ function TaggedUnion(casesByTag) {
     isAnyOf,
     match: match8
   } = toTaggedUnion("_tag")(union5);
-  return make25(union5.ast, {
+  return make24(union5.ast, {
     cases,
     isAnyOf,
     guards,
@@ -35930,7 +36083,7 @@ function instanceOf(constructor, annotations) {
 }
 function link() {
   return (encodeTo2, transformation) => {
-    return new Link(encodeTo2.ast, make14(transformation));
+    return new Link(encodeTo2.ast, make12(transformation));
   };
 }
 var makeFilter2 = makeFilter;
@@ -36027,20 +36180,20 @@ function isStringSymbol2(annotations) {
 var isStringSymbolReviver = /* @__PURE__ */ makeFilterReviver("effect/schema/isStringSymbol", Null2, ({
   annotations
 }) => isStringSymbol2(annotations));
-var getUUIDRegExp = (version2) => {
-  if (version2) {
-    return new globalThis.RegExp(`^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-${version2}[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$`);
+var getUUIDRegExp = (version) => {
+  if (version) {
+    return new globalThis.RegExp(`^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-${version}[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12})$`);
   }
   return /^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|[fF]{8}-[fF]{4}-[fF]{4}-[fF]{4}-[fF]{12})$/;
 };
-function isUUID(version2, annotations) {
-  const regExp = getUUIDRegExp(version2);
+function isUUID(version, annotations) {
+  const regExp = getUUIDRegExp(version);
   return isPattern2(regExp, {
-    expected: version2 ? `a UUID v${version2}` : "a UUID",
+    expected: version ? `a UUID v${version}` : "a UUID",
     representation: {
       id: "effect/schema/isUUID",
       payload: {
-        version: version2 ?? null
+        version: version ?? null
       }
     },
     toJsonSchema: () => ({
@@ -36048,7 +36201,7 @@ function isUUID(version2, annotations) {
       format: "uuid"
     }),
     toCode: () => ({
-      runtime: version2 === void 0 ? "Schema.isUUID()" : `Schema.isUUID(${version2})`
+      runtime: version === void 0 ? "Schema.isUUID()" : `Schema.isUUID(${version})`
     }),
     ...annotations
   });
@@ -36335,7 +36488,7 @@ function isUncapitalized(annotations) {
 var isUncapitalizedReviver = /* @__PURE__ */ makeFilterReviver("effect/schema/isUncapitalized", Null2, ({
   annotations
 }) => isUncapitalized(annotations));
-var Finite = /* @__PURE__ */ make25(finite);
+var Finite = /* @__PURE__ */ make24(finite);
 var isFinite3 = isFinite2;
 var isFiniteReviver = /* @__PURE__ */ makeFilterReviver("effect/schema/isFinite", Null2, ({
   annotations
@@ -37215,7 +37368,7 @@ function isPropertyNames(keySchema, annotations) {
       }
     }
     if (isArrayNonEmpty2(issues)) {
-      return new Composite(ast, some2(input), issues);
+      return new Composite(ast, issues);
     }
     return true;
   }, {
@@ -37277,10 +37430,10 @@ function Option2(value3) {
       }
       return mapBothEager2(decodeUnknownEffect(value4)(input.value, options), {
         onSuccess: some2,
-        onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["value"], issue)])
+        onFailure: (issue) => new Composite(ast, [new Pointer(["value"], issue)])
       });
     }
-    return fail5(new InvalidType(ast, some2(input)));
+    return fail5(new InvalidType(ast));
   }, {
     representation: {
       id: "effect/schema/Option",
@@ -37319,7 +37472,7 @@ function Option2(value3) {
       onSome: (t) => `some(${value4(t)})`
     })
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -37356,18 +37509,18 @@ function OptionFromOptionalNullOr(schema2, options) {
 function Result(success, failure) {
   const schema2 = declareConstructor()([success, failure], ([success2, failure2]) => (input, ast, options) => {
     if (!isResult2(input)) {
-      return fail5(new InvalidType(ast, some2(input)));
+      return fail5(new InvalidType(ast));
     }
     switch (input._tag) {
       case "Success":
         return mapBothEager2(decodeEffect(success2)(input.success, options), {
           onSuccess: succeed2,
-          onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["success"], issue)])
+          onFailure: (issue) => new Composite(ast, [new Pointer(["success"], issue)])
         });
       case "Failure":
         return mapBothEager2(decodeEffect(failure2)(input.failure, options), {
           onSuccess: fail2,
-          onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["failure"], issue)])
+          onFailure: (issue) => new Composite(ast, [new Pointer(["failure"], issue)])
         });
     }
   }, {
@@ -37410,7 +37563,7 @@ function Result(success, failure) {
       onFailure: (t) => `failure(${failure2(t)})`
     })
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     success,
     failure
   });
@@ -37457,12 +37610,11 @@ function Redacted(value3, options) {
       return flatMapEager2(label2, () => mapBothEager2(decodeUnknownEffect(value4)(value2(input), poptions), {
         onSuccess: () => input,
         onFailure: () => {
-          const oinput = some2(input);
-          return new Composite(ast, oinput, [new Pointer(["value"], new InvalidValue(oinput))]);
+          return new Composite(ast, [new Pointer(["value"], new InvalidValue())]);
         }
       }));
     }
-    return fail5(new InvalidType(ast, some2(input)));
+    return fail5(new InvalidType(ast));
   }, {
     representation: {
       id: "effect/schema/Redacted",
@@ -37476,24 +37628,24 @@ function Redacted(value3, options) {
       importDeclarations: [`import * as Redacted from "effect/Redacted"`]
     }),
     expected: "Redacted",
-    toCodecJson: ([value4]) => link()(redact3(value4), {
-      decode: transform((e) => make11(e, {
+    toCodecJson: ([value4]) => link()(value4, {
+      decode: transform((e) => make23(e, {
         label
       })),
       encode: disallowJsonEncode ? forbidden((oe) => "Cannot serialize Redacted" + (isSome2(oe) && typeof oe.value.label === "string" ? ` with label: "${oe.value.label}"` : "")) : transform(value2)
     }),
     toArbitrary: ([value4]) => () => ({
-      arbitrary: value4.arbitrary.map((a) => make11(a, {
+      arbitrary: value4.arbitrary.map((a) => make23(a, {
         label
       })),
-      terminal: value4.terminal?.map((a) => make11(a, {
+      terminal: value4.terminal?.map((a) => make23(a, {
         label
       }))
     }),
     toFormatter: () => globalThis.String,
-    toEquivalence: ([value4]) => makeEquivalence6(value4)
+    toEquivalence: ([value4]) => makeEquivalence8(value4)
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -37505,35 +37657,32 @@ var RedactedReviver = /* @__PURE__ */ makeDeclarationReviver("effect/schema/Reda
   const schema2 = Redacted(typeParameters[0], payload ?? void 0);
   return annotations === void 0 ? schema2 : schema2.annotate(annotations);
 });
-function redact3(schema2) {
-  return middlewareDecoding2(mapErrorEager2(redact2))(schema2);
-}
 function RedactedFromValue(value3, options) {
-  return redact3(value3).pipe(decodeTo2(Redacted(toType2(value3), {
+  return decodeTo2(Redacted(toType2(value3), {
     label: options?.label,
     disallowJsonEncode: options?.disallowEncode
   }), {
-    decode: transform((t) => make11(t, {
+    decode: transform((t) => make23(t, {
       label: options?.label
     })),
     encode: options?.disallowEncode ? forbidden((oe) => "Cannot encode Redacted" + (isSome2(oe) && typeof oe.value.label === "string" ? ` with label: "${oe.value.label}"` : "")) : transform(value2)
-  }));
+  })(value3);
 }
 function CauseReason(error, defect) {
   const schema2 = declareConstructor()([error, defect], ([error2, defect2]) => (input, ast, options) => {
     if (!isReason(input)) {
-      return fail5(new InvalidType(ast, some2(input)));
+      return fail5(new InvalidType(ast));
     }
     switch (input._tag) {
       case "Fail":
         return mapBothEager2(decodeUnknownEffect(error2)(input.error, options), {
           onSuccess: makeFailReason,
-          onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["error"], issue)])
+          onFailure: (issue) => new Composite(ast, [new Pointer(["error"], issue)])
         });
       case "Die":
         return mapBothEager2(decodeUnknownEffect(defect2)(input.defect, options), {
           onSuccess: makeDieReason,
-          onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["defect"], issue)])
+          onFailure: (issue) => new Composite(ast, [new Pointer(["defect"], issue)])
         });
       case "Interrupt":
         return succeed6(input);
@@ -37577,7 +37726,7 @@ function CauseReason(error, defect) {
     toEquivalence: ([error2, defect2]) => causeReasonToEquivalence(error2, defect2),
     toFormatter: ([error2, defect2]) => causeReasonToFormatter(error2, defect2)
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     error,
     defect
   });
@@ -37628,11 +37777,11 @@ function Cause(error, defect) {
     const failures = ArraySchema(CauseReason(error2, defect2));
     return (input, ast, options) => {
       if (!isCause2(input)) {
-        return fail5(new InvalidType(ast, some2(input)));
+        return fail5(new InvalidType(ast));
       }
       return mapBothEager2(decodeUnknownEffect(failures)(input.reasons, options), {
         onSuccess: fromReasons,
-        onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["failures"], issue)])
+        onFailure: (issue) => new Composite(ast, [new Pointer(["failures"], issue)])
       });
     };
   }, {
@@ -37658,7 +37807,7 @@ function Cause(error, defect) {
     toEquivalence: ([error2, defect2]) => causeToEquivalence(error2, defect2),
     toFormatter: ([error2, defect2]) => causeToFormatter(error2, defect2)
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     error,
     defect
   });
@@ -37761,18 +37910,18 @@ function Exit(value3, error, defect) {
     const cause = Cause(error2, defect2);
     return (input, ast, options) => {
       if (!isExit2(input)) {
-        return fail5(new InvalidType(ast, some2(input)));
+        return fail5(new InvalidType(ast));
       }
       switch (input._tag) {
         case "Success":
           return mapBothEager2(decodeUnknownEffect(value4)(input.value, options), {
             onSuccess: succeed4,
-            onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["value"], issue)])
+            onFailure: (issue) => new Composite(ast, [new Pointer(["value"], issue)])
           });
         case "Failure":
           return mapBothEager2(decodeUnknownEffect(cause)(input.cause, options), {
             onSuccess: failCause2,
-            onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["cause"], issue)])
+            onFailure: (issue) => new Composite(ast, [new Pointer(["cause"], issue)])
           });
       }
     };
@@ -37835,7 +37984,7 @@ function Exit(value3, error, defect) {
       };
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3,
     error,
     defect
@@ -37897,10 +38046,10 @@ function ReadonlyMap(key, value3) {
       if (input instanceof globalThis.Map) {
         return mapBothEager2(decodeUnknownEffect(array4)([...input], options), {
           onSuccess: (array5) => new globalThis.Map(array5),
-          onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["entries"], issue)])
+          onFailure: (issue) => new Composite(ast, [new Pointer(["entries"], issue)])
         });
       }
-      return fail5(new InvalidType(ast, some2(input)));
+      return fail5(new InvalidType(ast));
     };
   }, {
     representation: {
@@ -37929,7 +38078,7 @@ function ReadonlyMap(key, value3) {
       return `ReadonlyMap(${size7}) { ${entries3.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     key,
     value: value3
   });
@@ -37948,10 +38097,10 @@ function HashMap(key, value3) {
       if (isHashMap2(input)) {
         return mapBothEager2(decodeUnknownEffect(entries3)(toEntries(input), options), {
           onSuccess: fromIterable5,
-          onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["entries"], issue)])
+          onFailure: (issue) => new Composite(ast, [new Pointer(["entries"], issue)])
         });
       }
-      return fail5(new InvalidType(ast, some2(input)));
+      return fail5(new InvalidType(ast));
     };
   }, {
     representation: {
@@ -37981,7 +38130,7 @@ function HashMap(key, value3) {
       return `HashMap(${size7}) { ${entries3.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     key,
     value: value3
   });
@@ -38000,10 +38149,10 @@ function ReadonlySet(value3) {
       if (input instanceof globalThis.Set) {
         return mapBothEager2(decodeUnknownEffect(array4)([...input], options), {
           onSuccess: (array5) => new globalThis.Set(array5),
-          onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["values"], issue)])
+          onFailure: (issue) => new Composite(ast, [new Pointer(["values"], issue)])
         });
       }
-      return fail5(new InvalidType(ast, some2(input)));
+      return fail5(new InvalidType(ast));
     };
   }, {
     representation: {
@@ -38032,7 +38181,7 @@ function ReadonlySet(value3) {
       return `ReadonlySet(${size7}) { ${values2.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -38050,10 +38199,10 @@ function HashSet(value3) {
       if (isHashSet2(input)) {
         return mapBothEager2(decodeUnknownEffect(values2)(fromIterable2(input), options), {
           onSuccess: fromIterable7,
-          onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["values"], issue)])
+          onFailure: (issue) => new Composite(ast, [new Pointer(["values"], issue)])
         });
       }
-      return fail5(new InvalidType(ast, some2(input)));
+      return fail5(new InvalidType(ast));
     };
   }, {
     representation: {
@@ -38082,7 +38231,7 @@ function HashSet(value3) {
       return `HashSet(${size7}) { ${values2.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -38100,10 +38249,10 @@ function Chunk(value3) {
       if (isChunk(input)) {
         return mapBothEager2(decodeUnknownEffect(values2)(fromIterable2(input), options), {
           onSuccess: fromIterable3,
-          onFailure: (issue) => new Composite(ast, some2(input), [new Pointer(["values"], issue)])
+          onFailure: (issue) => new Composite(ast, [new Pointer(["values"], issue)])
         });
       }
-      return fail5(new InvalidType(ast, some2(input)));
+      return fail5(new InvalidType(ast));
     };
   }, {
     representation: {
@@ -38122,7 +38271,7 @@ function Chunk(value3) {
       encode: fromIterable2
     })),
     toArbitrary: ([value4]) => (fc, ctx) => collectionArbitrary(fc, ctx, value4.arbitrary, value4.terminal, fromIterable3),
-    toEquivalence: ([value4]) => makeEquivalence7(value4),
+    toEquivalence: ([value4]) => makeEquivalence6(value4),
     toFormatter: ([value4]) => (t) => {
       const size7 = size2(t);
       if (size7 === 0) {
@@ -38132,7 +38281,7 @@ function Chunk(value3) {
       return `Chunk(${size7}) { ${values2.join(", ")} }`;
     }
   });
-  return make25(schema2.ast, {
+  return make24(schema2.ast, {
     value: value3
   });
 }
@@ -38159,8 +38308,8 @@ var RegExp3 = /* @__PURE__ */ instanceOf(globalThis.RegExp, {
   }), transformOrFail2({
     decode: (e) => try_3({
       try: () => new globalThis.RegExp(e.source, e.flags),
-      catch: (e2) => new InvalidValue(some2(e2), {
-        message: globalThis.String(e2)
+      catch: () => new InvalidValue({
+        message: "Expected valid RegExp source and flags"
       })
     }),
     encode: (regExp) => succeed6({
@@ -38401,10 +38550,10 @@ var JsonString = /* @__PURE__ */ String5.annotate({
   expected: "a string that will be decoded as JSON",
   contentMediaType: "application/json"
 });
-var UnknownFromJsonString = /* @__PURE__ */ fromJsonString2(Unknown2);
-function fromJsonString2(schema2) {
-  return JsonString.pipe(decodeTo2(schema2, fromJsonString));
+function fromJsonString2(schema2, options) {
+  return JsonString.pipe(decodeTo2(schema2, fromJsonString(options)));
 }
+var UnknownFromJsonString = /* @__PURE__ */ fromJsonString2(Unknown2);
 var File = /* @__PURE__ */ instanceOf(globalThis.File, {
   representation: {
     id: "effect/schema/File",
@@ -38422,8 +38571,8 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
     lastModified: Int
   }), transformOrFail2({
     decode: (e) => match2(decodeBase64(e.data), {
-      onFailure: (error) => fail5(new InvalidValue(some2(e.data), {
-        message: error.message
+      onFailure: () => fail5(new InvalidValue({
+        message: "Expected a valid Base64 string"
       })),
       onSuccess: (bytes) => {
         const buffer3 = new globalThis.Uint8Array(bytes);
@@ -38443,8 +38592,8 @@ var File = /* @__PURE__ */ instanceOf(globalThis.File, {
           lastModified: file2.lastModified
         };
       },
-      catch: (e) => new InvalidValue(some2(file2), {
-        message: globalThis.String(e)
+      catch: () => new InvalidValue({
+        message: "Expected File to be readable"
       })
     })
   }))
@@ -38522,7 +38671,7 @@ var NumberFromString = /* @__PURE__ */ String5.annotate({
 var FiniteFromString = /* @__PURE__ */ String5.annotate({
   expected: "a string that will be decoded as a finite number"
 }).pipe(/* @__PURE__ */ decodeTo2(Finite, numberFromString));
-var BigIntFromString = /* @__PURE__ */ make25(bigIntString).pipe(/* @__PURE__ */ decodeTo2(BigInt5, bigintFromString));
+var BigIntFromString = /* @__PURE__ */ make24(bigIntString).pipe(/* @__PURE__ */ decodeTo2(BigInt5, bigintFromString));
 var Trimmed = /* @__PURE__ */ String5.check(/* @__PURE__ */ isTrimmed());
 var Trim = /* @__PURE__ */ String5.annotate({
   expected: "a string that will be decoded as a trimmed string"
@@ -38725,7 +38874,7 @@ function makeClass(Inherited, identifier2, struct2, annotations, proto) {
         }
       });
     }
-    static [TypeId27] = TypeId27;
+    static [TypeId26] = TypeId26;
     get [ClassTypeId2]() {
       return ClassTypeId2;
     }
@@ -38782,7 +38931,12 @@ function makeClass(Inherited, identifier2, struct2, annotations, proto) {
   return out;
 }
 function getClassTransformation(self) {
-  return new Transformation(transform((input) => new self(input)), passthrough2());
+  return new Transformation(transform((input) => new self(input, {
+    "~payload": {
+      token: payloadToken,
+      value: input
+    }
+  })), passthrough2());
 }
 function getClassTypeId(identifier2) {
   return `~effect/Schema/Class/${identifier2}`;
@@ -38794,8 +38948,8 @@ function getClassSchemaFactory(from, identifier2, annotations) {
       return memo2;
     }
     const transformation = getClassTransformation(self);
-    const to = make25(new Declaration([from.ast], () => (input, ast) => {
-      return input instanceof self || hasProperty(input, getClassTypeId(identifier2)) ? succeed6(input) : fail5(new InvalidType(ast, some2(input)));
+    const to = make24(new Declaration([from.ast], () => (input, ast) => {
+      return input instanceof self || hasProperty(input, getClassTypeId(identifier2)) ? succeed6(input) : fail5(new InvalidType(ast));
     }, {
       identifier: identifier2,
       [ClassTypeId]: ([from2]) => new Link(from2, transformation),
@@ -38877,14 +39031,14 @@ function overrideToFormatter(toFormatter2) {
   };
 }
 function toFormatter(schema2, options) {
-  return recur5(schema2.ast);
-  function recur5(ast) {
+  return recur3(schema2.ast);
+  function recur3(ast) {
     const annotation = resolve(ast)?.["toFormatter"];
     if (typeof annotation === "function") {
-      return annotation(isDeclaration(ast) ? ast.typeParameters.map(recur5) : []);
+      return annotation(isDeclaration(ast) ? ast.typeParameters.map(recur3) : []);
     }
     if (options?.onBefore) {
-      const onBefore = options.onBefore(ast, recur5);
+      const onBefore = options.onBefore(ast, recur3);
       if (onBefore !== void 0) {
         return onBefore;
       }
@@ -38900,8 +39054,8 @@ function toFormatter(schema2, options) {
       case "Void":
         return () => "void";
       case "Arrays": {
-        const elements = ast.elements.map(recur5);
-        const rest = ast.rest.map(recur5);
+        const elements = ast.elements.map(recur3);
+        const rest = ast.rest.map(recur3);
         return (t) => {
           const out = [];
           let i = 0;
@@ -38927,8 +39081,8 @@ function toFormatter(schema2, options) {
         };
       }
       case "Objects": {
-        const propertySignatures = ast.propertySignatures.map((ps) => recur5(ps.type));
-        const indexSignatures = ast.indexSignatures.map((is3) => recur5(is3.type));
+        const propertySignatures = ast.propertySignatures.map((ps) => recur3(ps.type));
+        const indexSignatures = ast.indexSignatures.map((is3) => recur3(is3.type));
         if (ast.propertySignatures.length === 0 && ast.indexSignatures.length === 0) {
           return format;
         }
@@ -38960,7 +39114,7 @@ function toFormatter(schema2, options) {
       case "Union": {
         const types = toType(ast).types;
         const getCandidates2 = (t) => getCandidates(t, types);
-        const compiled = new Map(types.map((candidate, i) => [candidate, [_is(candidate), recur5(ast.types[i])]]));
+        const compiled = new Map(types.map((candidate, i) => [candidate, [_is(candidate), recur3(ast.types[i])]]));
         return (t) => {
           const candidates = getCandidates2(t);
           for (let i = 0; i < candidates.length; i++) {
@@ -38973,7 +39127,7 @@ function toFormatter(schema2, options) {
         };
       }
       case "Suspend": {
-        const get11 = memoizeThunk(() => recur5(ast.thunk()));
+        const get11 = memoizeThunk(() => recur3(ast.thunk()));
         return (t) => get11()(t);
       }
     }
@@ -38995,7 +39149,7 @@ function toJsonSchemaDocument2(schema2, options) {
   return toJsonSchemaDocument(document, options);
 }
 function toCodecJson(schema2) {
-  return make25(toCodecJsonAST(schema2.ast), {
+  return make24(toCodecJsonAST(schema2.ast), {
     schema: schema2
   });
 }
@@ -39005,19 +39159,7 @@ var toCodecJsonASTBase = /* @__PURE__ */ applyToSelfOrLastLinkEncoding((ast) => 
   if (out === ast || context4 === void 0) return out;
   return replaceContextLastLink(out, withoutConstructorDefault(context4));
 });
-var toCodecJsonAST = /* @__PURE__ */ memoize((ast) => {
-  const identifier2 = resolveIdentifier(ast);
-  const out = toCodecJsonASTBase(ast);
-  if (identifier2 === void 0 || out.encoding === void 0) return out;
-  const encoded = getLastEncoding(out);
-  if (resolveIdentifier(encoded) !== void 0 || resolveIdentifierFallback(encoded) === identifier2) {
-    return out;
-  }
-  const annotated = annotate(encoded, {
-    [IDENTIFIER_FALLBACK_KEY]: identifier2
-  });
-  return applyToSelfOrLastLinkEncoding(() => annotated)(out);
-});
+var toCodecJsonAST = /* @__PURE__ */ memoize(toCodecJsonASTBase);
 function withoutConstructorDefault(context4) {
   return context4.defaultValue === void 0 ? context4 : new Context(context4.isOptional, context4.isMutable, void 0, context4.annotations);
 }
@@ -39057,16 +39199,16 @@ var toCodecJsonReorder = /* @__PURE__ */ makeReorder((ast) => {
       return 1;
   }
 });
-function toCodecJsonBase(ast, recur5) {
+function toCodecJsonBase(ast, recur3) {
   switch (ast._tag) {
     case "Declaration": {
       const getLink = ast.annotations?.toCodecJson ?? ast.annotations?.toCodec;
       if (!isFunction(getLink)) {
         return replaceEncoding(ast, [unknownToJson]);
       }
-      const typeParameters = ast.typeParameters.map((tp) => make23(toEncoded(tp)));
+      const typeParameters = ast.typeParameters.map((tp) => make21(toEncoded(tp)));
       const link2 = getLink(typeParameters);
-      return link2 === void 0 ? ast : replaceEncoding(ast, [mapLink(link2, recur5)]);
+      return link2 === void 0 ? ast : replaceEncoding(ast, [mapLink(link2, recur3)]);
     }
     case "Unknown":
       return replaceEncoding(ast, [unknownToJson]);
@@ -39083,35 +39225,35 @@ function toCodecJsonBase(ast, recur5) {
       return ast.toCodecStringTree();
     case "Objects": {
       validateCanonicalObjectPropertyNames(ast);
-      return ast.recur(recur5, parameterFromString);
+      return ast.recur(recur3, parameterFromString);
     }
     case "Union": {
       const sortedTypes = toCodecJsonReorder(ast.types);
       if (sortedTypes !== ast.types) {
-        return new Union(sortedTypes, ast.mode, ast.annotations, ast.checks, ast.encoding, ast.context, ast.encodingChecks).recur(recur5);
+        return new Union(sortedTypes, ast.mode, ast.annotations, ast.checks, ast.encoding, ast.context, ast.encodingChecks).recur(recur3);
       }
-      return ast.recur(recur5);
+      return ast.recur(recur3);
     }
     case "Arrays":
     case "Suspend":
-      return ast.recur(recur5);
+      return ast.recur(recur3);
   }
   return ast;
 }
 function toCodecIso(schema2) {
-  return make25(toCodecIsoTop(toType(schema2.ast)));
+  return make24(toCodecIsoTop(toType(schema2.ast)));
 }
 var toCodecIsoTop = /* @__PURE__ */ memoize((ast) => {
   const out = toCodecIsoBase(ast, toCodecIsoTop);
   return out !== ast && ast.context !== void 0 ? replaceContextLastLink(out, withoutConstructorDefault(ast.context)) : out;
 });
-function toCodecIsoBase(ast, recur5) {
+function toCodecIsoBase(ast, recur3) {
   switch (ast._tag) {
     case "Declaration": {
       const getLink = ast.annotations?.toCodecIso ?? ast.annotations?.toCodec;
       if (isFunction(getLink)) {
-        const link2 = getLink(ast.typeParameters.map((tp) => make23(tp)));
-        return replaceEncoding(ast, [mapLink(link2, recur5)]);
+        const link2 = getLink(ast.typeParameters.map((tp) => make21(tp)));
+        return replaceEncoding(ast, [mapLink(link2, recur3)]);
       }
       return ast;
     }
@@ -39119,17 +39261,17 @@ function toCodecIsoBase(ast, recur5) {
     case "Objects":
     case "Union":
     case "Suspend":
-      return ast.recur(recur5);
+      return ast.recur(recur3);
   }
   return ast;
 }
 function toCodecStringTree(schema2) {
-  return make25(serializerStringTree(schema2.ast), {
+  return make24(serializerStringTree(schema2.ast), {
     schema: schema2
   });
 }
 function toCodecArrayFromSingle(schema2) {
-  return make25(toCodecArrayFromSingleTop(schema2.ast));
+  return make24(toCodecArrayFromSingleTop(schema2.ast));
 }
 function toEncoderXml(codec, options) {
   const rootName = resolveIdentifier(codec.ast) ?? resolveTitle(codec.ast);
@@ -39147,12 +39289,12 @@ function stringTreeToXml(value3, options) {
   const sortKeys = options.sortKeys ?? true;
   const seen = /* @__PURE__ */ new Set();
   const lines = [];
-  recur5(rootName, value3, 0);
+  recur3(rootName, value3, 0);
   return lines.join(pretty2 ? "\n" : "");
   function push(depth, text2) {
     lines.push(pretty2 ? indent.repeat(depth) + text2 : text2);
   }
-  function recur5(tagName, node, depth, originalNameForMeta) {
+  function recur3(tagName, node, depth, originalNameForMeta) {
     const {
       attrs,
       safe
@@ -39175,7 +39317,7 @@ function stringTreeToXml(value3, options) {
             return;
           }
           push(depth, `<${safe}${attrs}>`);
-          for (const item of node) recur5(arrayItemName, item, depth + 1);
+          for (const item of node) recur3(arrayItemName, item, depth + 1);
           push(depth, `</${safe}>`);
           return;
         }
@@ -39188,7 +39330,7 @@ function stringTreeToXml(value3, options) {
         }
         push(depth, `<${safe}${attrs}>`);
         for (const k of keys5) {
-          recur5(xml.parseTagName(k).safe, obj[k], depth + 1, k);
+          recur3(xml.parseTagName(k).safe, obj[k], depth + 1, k);
         }
         push(depth, `</${safe}>`);
       } finally {
@@ -39241,21 +39383,21 @@ var toStringTreeReorder = /* @__PURE__ */ makeReorder((ast) => {
       return 1;
   }
 });
-function serializerTree(ast, recur5, onMissingAnnotation) {
+function serializerTree(ast, recur3, onMissingAnnotation) {
   switch (ast._tag) {
     case "Declaration": {
-      const typeParameters = ast.typeParameters.map((tp) => make25(recur5(toEncoded(tp))));
+      const typeParameters = ast.typeParameters.map((tp) => make24(recur3(toEncoded(tp))));
       const getStringTreeLink = ast.annotations?.toCodecStringTree;
       if (isFunction(getStringTreeLink)) {
         const link3 = getStringTreeLink(typeParameters);
         if (link3 === void 0) return ast;
-        return replaceEncoding(ast, [mapLink(link3, recur5)]);
+        return replaceEncoding(ast, [mapLink(link3, recur3)]);
       }
       const getJsonLink = ast.annotations?.toCodecJson;
       const jsonLink = isFunction(getJsonLink) ? getJsonLink(typeParameters) : void 0;
       const getLink = jsonLink === void 0 ? ast.annotations?.toCodec : void 0;
       const link2 = jsonLink ?? (isFunction(getLink) ? getLink(typeParameters) : void 0);
-      return link2 === void 0 ? onMissingAnnotation(ast) : replaceEncoding(ast, [mapLink(link2, recur5)]);
+      return link2 === void 0 ? onMissingAnnotation(ast) : replaceEncoding(ast, [mapLink(link2, recur3)]);
     }
     case "Null":
       return replaceEncoding(ast, [nullToString]);
@@ -39273,18 +39415,18 @@ function serializerTree(ast, recur5, onMissingAnnotation) {
       return ast.toCodecStringTree();
     case "Objects": {
       validateCanonicalObjectPropertyNames(ast);
-      return ast.recur(recur5, parameterFromString);
+      return ast.recur(recur3, parameterFromString);
     }
     case "Union": {
       const sortedTypes = toStringTreeReorder(ast.types);
       if (sortedTypes !== ast.types) {
-        return new Union(sortedTypes, ast.mode, ast.annotations, ast.checks, ast.encoding, ast.context, ast.encodingChecks).recur(recur5);
+        return new Union(sortedTypes, ast.mode, ast.annotations, ast.checks, ast.encoding, ast.context, ast.encodingChecks).recur(recur3);
       }
-      return ast.recur(recur5);
+      return ast.recur(recur3);
     }
     case "Arrays":
     case "Suspend":
-      return ast.recur(recur5);
+      return ast.recur(recur3);
   }
   return ast;
 }
@@ -39402,8 +39544,8 @@ function toIsoFocus(_) {
 }
 function overrideToCodecIso(to, transformation) {
   return (schema2) => {
-    return make25(annotate(schema2.ast, {
-      toCodecIso: () => new Link(to.ast, make14(transformation))
+    return make24(annotate(schema2.ast, {
+      toCodecIso: () => new Link(to.ast, make12(transformation))
     }), {
       schema: schema2
     });
@@ -39429,7 +39571,7 @@ function Tree(node) {
   const Tree2 = Union2([node, ArraySchema(Tree$ref), Record2(String5, Tree$ref)]);
   return Tree2;
 }
-var Json2 = /* @__PURE__ */ make25(/* @__PURE__ */ annotate(Json, {
+var Json2 = /* @__PURE__ */ make24(/* @__PURE__ */ annotate(Json, {
   toCode: () => ({
     runtime: "Schema.Json",
     Type: "Schema.Json"
@@ -39442,7 +39584,7 @@ var JsonError = /* @__PURE__ */ Struct3({
   stack: /* @__PURE__ */ optionalKey2(String5),
   cause: /* @__PURE__ */ optionalKey2(Json2)
 });
-var MutableJson2 = /* @__PURE__ */ make25(/* @__PURE__ */ annotate(MutableJson, {
+var MutableJson2 = /* @__PURE__ */ make24(/* @__PURE__ */ annotate(MutableJson, {
   toCode: () => ({
     runtime: "Schema.MutableJson",
     Type: "Schema.MutableJson"
@@ -39456,15 +39598,15 @@ function resolveAnnotationsKey(schema2) {
   return schema2.ast.context?.annotations;
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/stream.js
-var TypeId28 = "~effect/Stream";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/stream.js
+var TypeId27 = "~effect/Stream";
 var streamVariance = {
   _R: identity,
   _E: identity,
   _A: identity
 };
 var StreamProto = {
-  [TypeId28]: streamVariance,
+  [TypeId27]: streamVariance,
   pipe() {
     return pipeArguments(this, arguments);
   }
@@ -39475,8 +39617,8 @@ var fromChannel = (channel) => {
   return self;
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Sink.js
-var TypeId29 = "~effect/Sink";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Sink.js
+var TypeId28 = "~effect/Sink";
 var sinkVariance = {
   _A: identity,
   _In: identity,
@@ -39485,7 +39627,7 @@ var sinkVariance = {
   _R: identity
 };
 var SinkProto = {
-  [TypeId29]: sinkVariance,
+  [TypeId28]: sinkVariance,
   pipe() {
     return pipeArguments(this, arguments);
   }
@@ -39525,12 +39667,12 @@ var take4 = (n) => fromTransform2((upstream) => {
   }), catchDone(() => succeed6([taken, leftover])));
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Stream.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Stream.js
 var Stream_exports = {};
 __export(Stream_exports, {
   DefaultChunkSize: () => DefaultChunkSize2,
   Do: () => Do4,
-  TypeId: () => TypeId32,
+  TypeId: () => TypeId31,
   accumulate: () => accumulate,
   aggregate: () => aggregate,
   aggregateWithin: () => aggregateWithin,
@@ -39556,7 +39698,7 @@ __export(Stream_exports, {
   changesWith: () => changesWith,
   changesWithEffect: () => changesWithEffect,
   chunks: () => chunks,
-  collect: () => collect2,
+  collect: () => collect,
   combine: () => combine3,
   combineArray: () => combineArray,
   concat: () => concat2,
@@ -39586,7 +39728,7 @@ __export(Stream_exports, {
   filterMap: () => filterMap5,
   filterMapEffect: () => filterMapEffect3,
   flatMap: () => flatMap8,
-  flatten: () => flatten5,
+  flatten: () => flatten6,
   flattenArray: () => flattenArray2,
   flattenEffect: () => flattenEffect,
   flattenIterable: () => flattenIterable,
@@ -39610,7 +39752,7 @@ __export(Stream_exports, {
   fromPubSubTake: () => fromPubSubTake2,
   fromPull: () => fromPull2,
   fromQueue: () => fromQueue,
-  fromReadableStream: () => fromReadableStream,
+  fromReadableStream: () => fromReadableStream2,
   fromSchedule: () => fromSchedule,
   fromSubscription: () => fromSubscription,
   groupAdjacentBy: () => groupAdjacentBy,
@@ -39629,7 +39771,8 @@ __export(Stream_exports, {
   isStream: () => isStream,
   iterate: () => iterate,
   let: () => let_5,
-  make: () => make29,
+  limitBytes: () => limitBytes,
+  make: () => make28,
   map: () => map14,
   mapAccum: () => mapAccum3,
   mapAccumArray: () => mapAccumArray,
@@ -39646,6 +39789,7 @@ __export(Stream_exports, {
   mergeLeft: () => mergeLeft,
   mergeResult: () => mergeResult,
   mergeRight: () => mergeRight,
+  mkArrayBuffer: () => mkArrayBuffer,
   mkString: () => mkString,
   mkUint8Array: () => mkUint8Array,
   never: () => never5,
@@ -39703,7 +39847,7 @@ __export(Stream_exports, {
   slidingSize: () => slidingSize,
   split: () => split,
   splitLines: () => splitLines2,
-  succeed: () => succeed8,
+  succeed: () => succeed9,
   suspend: () => suspend6,
   switchMap: () => switchMap2,
   sync: () => sync5,
@@ -39760,10 +39904,10 @@ __export(Stream_exports, {
   zipWithPreviousAndNext: () => zipWithPreviousAndNext
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/RcMap.js
-var TypeId30 = "~effect/RcMap";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/RcMap.js
+var TypeId29 = "~effect/RcMap";
 var makeUnsafe7 = (options) => ({
-  [TypeId30]: TypeId30,
+  [TypeId29]: TypeId29,
   lookup: options.lookup,
   context: options.context,
   scope: options.scope,
@@ -39777,7 +39921,7 @@ var makeUnsafe7 = (options) => ({
     return pipeArguments(this, arguments);
   }
 });
-var make26 = (options) => withFiber2((fiber3) => {
+var make25 = (options) => withFiber2((fiber3) => {
   const context4 = fiber3.context;
   const scope3 = get(context4, Scope);
   const self = makeUnsafe7({
@@ -39877,8 +40021,8 @@ var touch = /* @__PURE__ */ dual(2, (self, key) => clockWith2((clock) => {
   return void_4;
 }));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/internal/rcRef.js
-var TypeId31 = "~effect/RcRef";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/internal/rcRef.js
+var TypeId30 = "~effect/RcRef";
 var stateEmpty = {
   _tag: "Empty"
 };
@@ -39890,7 +40034,7 @@ var variance2 = {
   _E: identity
 };
 var RcRefImpl = class {
-  [TypeId31] = variance2;
+  [TypeId30] = variance2;
   pipe() {
     return pipeArguments(this, arguments);
   }
@@ -39907,7 +40051,7 @@ var RcRefImpl = class {
     this.idleTimeToLive = idleTimeToLive;
   }
 };
-var make27 = (options) => withFiber2((fiber3) => {
+var make26 = (options) => withFiber2((fiber3) => {
   const context4 = fiber3.context;
   const scope3 = get(context4, Scope);
   const ref = new RcRefImpl(options.acquire, context4, scope3, options.idleTimeToLive ? fromInputUnsafe(options.idleTimeToLive) : void 0);
@@ -39975,13 +40119,13 @@ var get8 = /* @__PURE__ */ fnUntraced2(function* (self_) {
   return state.value;
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/RcRef.js
-var make28 = make27;
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/RcRef.js
+var make27 = make26;
 var get9 = get8;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Stream.js
-var TypeId32 = "~effect/Stream";
-var isStream = (u) => hasProperty(u, TypeId32);
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Stream.js
+var TypeId31 = "~effect/Stream";
+var isStream = (u) => hasProperty(u, TypeId31);
 var DefaultChunkSize2 = DefaultChunkSize;
 var fromChannel2 = fromChannel;
 var fromEffect2 = (effect2) => fromChannel2(fromEffect(map8(effect2, of)));
@@ -40023,8 +40167,8 @@ var transformPullBracket = (self, f) => fromChannel2(fromTransformBracket((_, sc
 var toChannel2 = (stream3) => stream3.channel;
 var callback3 = (f, options) => fromChannel2(callbackArray(f, options));
 var empty11 = /* @__PURE__ */ fromChannel2(empty8);
-var succeed8 = (value3) => fromChannel2(succeed7(of(value3)));
-var make29 = (...values2) => fromArray2(values2);
+var succeed9 = (value3) => fromChannel2(succeed8(of(value3)));
+var make28 = (...values2) => fromArray2(values2);
 var sync5 = (evaluate2) => fromChannel2(sync4(() => of(evaluate2())));
 var suspend6 = (stream3) => fromChannel2(suspend4(() => stream3().channel));
 var fail8 = (error) => fromChannel2(fail7(error));
@@ -40036,23 +40180,13 @@ var fromIteratorSucceed = (iterator, maxChunkSize) => fromChannel2(fromIteratorA
 var fromIterable8 = (iterable, options) => Array.isArray(iterable) && options?.chunkSize === void 0 ? fromArray2(iterable) : fromChannel2(fromIterableArray(iterable, options?.chunkSize));
 var fromIterableEffect = (iterable) => unwrap3(map8(iterable, fromIterable8));
 var fromIterableEffectRepeat = (iterable) => flatMap8(fromEffectRepeat(iterable), fromIterable8);
-var fromArray2 = (array4) => isReadonlyArrayNonEmpty(array4) ? fromChannel2(succeed7(array4)) : empty11;
+var fromArray2 = (array4) => isReadonlyArrayNonEmpty(array4) ? fromChannel2(succeed8(array4)) : empty11;
 var fromArrayEffect = (effect2) => unwrap3(map8(effect2, fromArray2));
 var fromArrays = (...arrays) => fromChannel2(fromArray(filter3(arrays, isReadonlyArrayNonEmpty)));
 var fromQueue = (queue) => fromChannel2(fromQueueArray(queue));
 var fromPubSub = (pubsub) => fromChannel2(fromPubSubArray(pubsub));
 var fromPubSubTake2 = (pubsub) => fromChannel2(fromPubSubTake(pubsub));
-var fromReadableStream = (options) => fromChannel2(fromTransform(fnUntraced2(function* (_, scope3) {
-  const reader = options.evaluate().getReader();
-  yield* addFinalizer2(scope3, options.releaseLockOnEnd ? sync3(() => reader.releaseLock()) : promise2(() => reader.cancel().catch(constVoid)));
-  return flatMap5(tryPromise2({
-    try: () => reader.read(),
-    catch: (reason) => options.onError(reason)
-  }), ({
-    done: done4,
-    value: value3
-  }) => done4 ? done2() : succeed6(of(value3)));
-})));
+var fromReadableStream2 = (options) => fromChannel2(fromReadableStream(options));
 var fromAsyncIterable2 = (iterable, onError5) => fromChannel2(fromAsyncIterableArray(iterable, onError5));
 var fromSchedule = (schedule4) => fromPull2(map8(toStepWithSleep(schedule4), (step) => catchDone(map8(step(void 0), of), () => done2())));
 var fromSubscription = (pubsub) => fromChannel2(fromSubscriptionArray(pubsub));
@@ -40090,14 +40224,15 @@ var paginate = (s, f) => fromPull2(sync3(() => {
 }));
 var iterate = (value3, next) => unfold(value3, (a) => succeed6([a, next(a)]));
 var range2 = (min6, max5, chunkSize = DefaultChunkSize) => min6 > max5 ? empty11 : fromPull2(sync3(() => {
+  const size7 = Math.max(1, chunkSize);
   let start = min6;
   let done4 = false;
   return suspend3(() => {
     if (done4) return done2();
     const remaining = max5 - start + 1;
-    if (remaining > chunkSize) {
-      const chunk2 = range(start, start + chunkSize - 1);
-      start += chunkSize;
+    if (remaining > size7) {
+      const chunk2 = range(start, start + size7 - 1);
+      start += size7;
       return succeed6(chunk2);
     }
     const chunk = range(start, start + remaining - 1);
@@ -40117,7 +40252,7 @@ var mapArray = /* @__PURE__ */ dual(2, (self, f) => fromChannel2(map9(self.chann
 var mapEffect2 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, f, options) => self.channel.pipe(flattenArray, mapEffect(f, options), map9(of), fromChannel2));
 var flattenEffect = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, options) => mapEffect2(self, identity, options));
 var mapArrayEffect = /* @__PURE__ */ dual(2, (self, f) => fromChannel2(mapEffect(self.channel, f)));
-var result3 = (self) => self.pipe(map14(succeed2), catch_5((e) => succeed8(fail2(e))));
+var result3 = (self) => self.pipe(map14(succeed2), catch_5((e) => succeed9(fail2(e))));
 var tap5 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, f, options) => mapEffect2(self, (a) => as3(f(a), a), options));
 var tapBoth = /* @__PURE__ */ dual(2, (self, options) => self.pipe(tapError5(options.onError), tap5(options.onElement, {
   concurrency: options.concurrency
@@ -40167,7 +40302,7 @@ var tapSink = /* @__PURE__ */ dual(2, (self, sink) => transformPullBracket(self,
 })));
 var flatMap8 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, f, options) => self.channel.pipe(flattenArray, flatMap6((a) => f(a).channel, options), fromChannel2));
 var switchMap2 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, f, options) => self.channel.pipe(flattenArray, switchMap((a) => f(a).channel, options), fromChannel2));
-var flatten5 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, options) => flatMap8(self, identity, options));
+var flatten6 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, options) => flatMap8(self, identity, options));
 var flattenArray2 = (self) => fromChannel2(flattenArray(self.channel));
 var drain2 = (self) => fromChannel2(drain(self.channel));
 var drainFork = /* @__PURE__ */ dual(2, (self, that) => mergeEffect2(self, runDrain2(that)));
@@ -40232,14 +40367,14 @@ var repeatElements = /* @__PURE__ */ dual(2, (self, schedule4) => fromChannel2(f
 var forever6 = (self) => fromChannel2(forever5(self.channel));
 var flattenIterable = (self) => flatMap8(self, fromIterable8);
 var flattenTake2 = (self) => self.channel.pipe(flattenArray, flattenTake, fromChannel2);
-var concat2 = /* @__PURE__ */ dual(2, (self, that) => flatten5(fromArray2([self, that])));
+var concat2 = /* @__PURE__ */ dual(2, (self, that) => flatten6(fromArray2([self, that])));
 var prepend2 = /* @__PURE__ */ dual(2, (self, values2) => concat2(fromIterable8(values2), self));
 var merge4 = /* @__PURE__ */ dual((args2) => isStream(args2[0]) && isStream(args2[1]), (self, that, options) => fromChannel2(merge3(toChannel2(self), toChannel2(that), options)));
 var mergeEffect2 = /* @__PURE__ */ dual(2, (self, effect2) => self.channel.pipe(mergeEffect(effect2), fromChannel2));
 var mergeResult = /* @__PURE__ */ dual(2, (self, that) => merge4(map14(self, succeed2), map14(that, fail2)));
 var mergeLeft = /* @__PURE__ */ dual(2, (left, right) => mergeEffect2(left, runDrain2(right)));
 var mergeRight = /* @__PURE__ */ dual(2, (left, right) => mergeEffect2(right, runDrain2(left)));
-var mergeAll4 = /* @__PURE__ */ dual(2, (streams, options) => flatten5(fromIterable8(streams), options));
+var mergeAll4 = /* @__PURE__ */ dual(2, (streams, options) => flatten6(fromIterable8(streams), options));
 var cross = /* @__PURE__ */ dual(2, (left, right) => crossWith(left, right, (l, r) => [l, r]));
 var crossWith = /* @__PURE__ */ dual(3, (left, right, f) => flatMap8(left, (l) => map14(right, (r) => f(l, r))));
 var zipWith5 = /* @__PURE__ */ dual(3, (left, right, f) => zipWithArray(left, right, zipArrays(f)));
@@ -40402,10 +40537,10 @@ var partitionQueue = /* @__PURE__ */ dual((args2) => isStream(args2[0]), /* @__P
   const scope3 = yield* scope2;
   const pull = yield* toPullScoped(self.channel, scope3);
   const capacity = options?.capacity === "unbounded" ? void 0 : options?.capacity ?? DefaultChunkSize2;
-  const passes = yield* make19({
+  const passes = yield* make17({
     capacity
   });
-  const fails = yield* make19({
+  const fails = yield* make17({
     capacity
   });
   yield* gen3(function* () {
@@ -40494,11 +40629,19 @@ var mapError6 = /* @__PURE__ */ dual(2, (self, f) => fromChannel2(mapError5(self
 var catchCauseIf4 = /* @__PURE__ */ dual(3, (self, predicate, f) => fromChannel2(catchCauseIf3(self.channel, predicate, (cause) => f(cause).channel)));
 var catchCauseFilter4 = /* @__PURE__ */ dual(3, (self, filter11, f) => fromChannel2(catchCauseFilter3(self.channel, filter11, (failure, cause) => f(failure, cause).channel)));
 var orElseIfEmpty2 = /* @__PURE__ */ dual(2, (self, orElse2) => fromChannel2(orElseIfEmpty(self.channel, (_) => toChannel2(orElse2()))));
-var orElseSucceed3 = /* @__PURE__ */ dual(2, (self, f) => catch_5(self, (e) => succeed8(f(e))));
+var orElseSucceed3 = /* @__PURE__ */ dual(2, (self, f) => catch_5(self, (e) => succeed9(f(e))));
 var orDie5 = (self) => fromChannel2(orDie4(self.channel));
 var ignore4 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, options) => fromChannel2(ignore3(self.channel, options)));
 var ignoreCause4 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, options) => fromChannel2(ignoreCause3(self.channel, options)));
 var retry4 = /* @__PURE__ */ dual(2, (self, policy) => fromChannel2(retry3(self.channel, policy)));
+var retryWithoutReset = (self, schedule4) => unwrap3(map8(toStepWithMetadata(schedule4), (step) => {
+  let meta = CurrentMetadata2.defaultValue();
+  const loop = () => catch_5(provideServiceEffect4(self, CurrentMetadata2, sync3(() => meta)), (error) => unwrap3(catchDone(map8(step(error), (meta_) => {
+    meta = meta_;
+    return unwrap3(as3(yieldNow2, loop()));
+  }), () => succeed6(fail8(error)))));
+  return loop();
+}));
 var withExecutionPlan3 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, policy, options) => suspend6(() => {
   const preventFallbackOnPartialStream = options?.preventFallbackOnPartialStream ?? false;
   let i = 0;
@@ -40530,10 +40673,10 @@ var withExecutionPlan3 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (se
         attempted = true;
         return fail8(error);
       });
-      nextStream = retry4(nextStream, scheduleFromStep(step, false));
+      nextStream = retryWithoutReset(nextStream, scheduleFromStep(step, false));
     } else {
       const schedule4 = scheduleFromStep(step, true);
-      nextStream = schedule4 ? retry4(nextStream, schedule4) : nextStream;
+      nextStream = schedule4 ? retryWithoutReset(nextStream, schedule4) : nextStream;
     }
     return catch_5(preventFallbackOnPartialStream ? onFirst2(nextStream, (_) => {
       receivedElements = true;
@@ -40550,7 +40693,21 @@ var withExecutionPlan3 = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (se
   return loop;
 }));
 var take5 = /* @__PURE__ */ dual(2, (self, n) => n < 1 ? empty11 : takeUntil(self, (_, i) => i === n - 1));
-var takeRight = /* @__PURE__ */ dual(2, (self, n) => mapAccumArray(self, make16, (list, arr) => {
+var limitBytes = /* @__PURE__ */ dual(3, (self, bytes, onLimitReached) => suspend6(() => {
+  const limit = BigInt(bytes);
+  let size7 = BigInt(0);
+  let limitReached = false;
+  return concat2(takeWhile(self, (chunk) => {
+    const nextSize = size7 + BigInt(chunk.length);
+    if (nextSize > limit) {
+      limitReached = true;
+      return false;
+    }
+    size7 = nextSize;
+    return true;
+  }), suspend6(() => limitReached ? onLimitReached() : empty11));
+}));
+var takeRight = /* @__PURE__ */ dual(2, (self, n) => mapAccumArray(self, make15, (list, arr) => {
   appendAll2(list, arr);
   if (list.length > n) {
     takeNVoid(list, list.length - n);
@@ -40678,7 +40835,7 @@ var dropWhileEffect = /* @__PURE__ */ dual(2, (self, predicate) => transformPull
 var dropRight = /* @__PURE__ */ dual(2, (self, n) => {
   if (n <= 0) return self;
   return transformPull2(self, (pull, _scope) => sync3(() => {
-    const list = make16();
+    const list = make15();
     const emit = flatMap5(pull, (arr) => {
       appendAllUnsafe(list, arr);
       const toTake = list.length - n;
@@ -40733,7 +40890,7 @@ var rechunk = /* @__PURE__ */ dual(2, (self, target2) => {
 var sliding2 = /* @__PURE__ */ dual(2, (self, chunkSize) => slidingSize(self, chunkSize, 1));
 var slidingSize = /* @__PURE__ */ dual(3, (self, chunkSize, stepSize) => transformPull2(self, (upstream, _scope) => sync3(() => {
   let cause = null;
-  const list = make16();
+  const list = make15();
   let emitted = false;
   const pull = matchCauseEffect2(upstream, {
     onSuccess(arr) {
@@ -40815,7 +40972,7 @@ var mapAccumEffect = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, 
     return isReadonlyArrayNonEmpty(arr) ? of(arr) : emptyArr;
   }
 } : void 0), fromChannel2));
-var mapAccumArrayEffect = /* @__PURE__ */ dual((args2) => isStream(args2), (self, initial, f, options) => self.channel.pipe(mapAccum2(initial, (state, a) => map8(f(state, a), ([state2, values2]) => [state2, isReadonlyArrayNonEmpty(values2) ? of(values2) : emptyArr]), options?.onHalt ? {
+var mapAccumArrayEffect = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, initial, f, options) => self.channel.pipe(mapAccum2(initial, (state, a) => map8(f(state, a), ([state2, values2]) => [state2, isReadonlyArrayNonEmpty(values2) ? of(values2) : emptyArr]), options?.onHalt ? {
   onHalt(state) {
     const arr = options.onHalt(state);
     return isReadonlyArrayNonEmpty(arr) ? of(arr) : emptyArr;
@@ -40991,8 +41148,8 @@ var groupByImpl = (self, f, options) => transformPullBracket(self, fnUntraced2(f
   const out = yield* unbounded2();
   yield* addFinalizer2(scope3, shutdown2(out));
   const queueMap = empty6();
-  const queues = yield* make26({
-    lookup: (key) => acquireRelease2(make19({
+  const queues = yield* make25({
+    lookup: (key) => acquireRelease2(make17({
       capacity: options?.bufferSize ?? 4096
     }).pipe(tap4((queue) => {
       set(queueMap, key, queue);
@@ -41070,7 +41227,7 @@ var aggregateWithin = /* @__PURE__ */ dual(3, (self, sink, schedule4) => fromCha
   const pull = yield* toPullScoped(self.channel, _);
   const pullLatch = makeUnsafe5(false);
   const scheduleStep = /* @__PURE__ */ Symbol();
-  const buffer3 = yield* make19({
+  const buffer3 = yield* make17({
     capacity: 0
   });
   yield* pull.pipe(
@@ -41088,9 +41245,10 @@ var aggregateWithin = /* @__PURE__ */ dual(3, (self, sink, schedule4) => fromCha
   let leftover;
   let sinkHasInput = false;
   const step = yield* toStepWithSleep(schedule4);
-  const stepToBuffer = suspend3(function loop() {
-    return step(lastOutput).pipe(flatMap5(() => !sinkHasInput ? loop() : offer(buffer3, scheduleStep)), flatMap5(() => never2), catchDone(() => done2()));
+  const stepLoop = suspend3(function loop() {
+    return flatMap5(step(lastOutput), () => !sinkHasInput ? loop() : offer(buffer3, scheduleStep));
   });
+  const stepToBuffer = stepLoop.pipe(flatMap5(() => never2), catchDone(() => done2()));
   const pullFromBuffer = take3(buffer3).pipe(flatMap5((arr) => {
     if (arr === scheduleStep) {
       return done2();
@@ -41136,14 +41294,14 @@ var broadcastN = /* @__PURE__ */ dual(2, /* @__PURE__ */ fnUntraced2(function* (
 }));
 var makePubSub2 = (options) => acquireRelease2(options.capacity === "unbounded" ? unbounded(options) : options.strategy === "dropping" ? dropping(options) : options.strategy === "sliding" ? sliding(options) : bounded(options), shutdown);
 var broadcast = /* @__PURE__ */ dual(2, (self, options) => map8(toPubSubTake2(self, options), fromPubSubTake2));
-var share = /* @__PURE__ */ dual(2, (self, options) => map8(make28({
+var share = /* @__PURE__ */ dual(2, (self, options) => map8(make27({
   acquire: broadcast(self, options),
   idleTimeToLive: options.idleTimeToLive
 }), (ref) => unwrap3(get9(ref))));
 var pipeThroughChannel = /* @__PURE__ */ dual(2, (self, channel) => fromChannel2(pipeTo(self.channel, channel)));
 var pipeThroughChannelOrFail = /* @__PURE__ */ dual(2, (self, channel) => fromChannel2(pipeToOrFail(self.channel, channel)));
-var pipeThrough = /* @__PURE__ */ dual(2, (self, sink) => self.channel.pipe(pipeToOrFail(toChannel(sink)), concatWith(([_, leftover]) => leftover ? succeed7(leftover) : empty8), fromChannel2));
-var collect2 = (self) => fromEffect2(runCollect(self));
+var pipeThrough = /* @__PURE__ */ dual(2, (self, sink) => self.channel.pipe(pipeToOrFail(toChannel(sink)), concatWith(([_, leftover]) => leftover ? succeed8(leftover) : empty8), fromChannel2));
+var collect = (self) => fromEffect2(runCollect(self));
 var accumulate = (self) => mapAccumArray(self, empty2, (acc, as4) => {
   const combined = appendAll(acc, as4);
   return [combined, [combined]];
@@ -41214,7 +41372,7 @@ var intersperse = /* @__PURE__ */ dual(2, (self, element) => mapArray(self, (arr
   }
   return out;
 }));
-var intersperseAffixes = /* @__PURE__ */ dual(2, (self, options) => succeed8(options.start).pipe(concat2(intersperse(self, options.middle)), concat2(succeed8(options.end))));
+var intersperseAffixes = /* @__PURE__ */ dual(2, (self, options) => succeed9(options.start).pipe(concat2(intersperse(self, options.middle)), concat2(succeed9(options.end))));
 var interleave = /* @__PURE__ */ dual(2, (self, that) => interleaveWith(self, that, fromIterable8(forever([true, false]))));
 var interleaveWith = /* @__PURE__ */ dual(3, (self, that, decider) => fromChannel2(fromTransform(fnUntraced2(function* (upstream, scope3) {
   const pullDecider = yield* toTransform(flattenArray(decider.channel))(upstream, scope3);
@@ -41267,7 +41425,7 @@ var withSpan5 = function() {
   }
   return (self) => fromChannel2(withSpan4(self.channel, name, options));
 };
-var Do4 = /* @__PURE__ */ succeed8({});
+var Do4 = /* @__PURE__ */ succeed9({});
 var let_5 = /* @__PURE__ */ dual(3, (self, name, f) => map14(self, (a) => ({
   ...a,
   [name]: f(a)
@@ -41341,7 +41499,7 @@ var runForEachArray = /* @__PURE__ */ dual(2, (self, f) => runForEach(self.chann
 var runDrain2 = (self) => runDrain(self.channel);
 var toPull3 = (self) => toPull2(self.channel);
 var mkString = (self) => runFold(self.channel, () => "", (acc, chunk) => acc + chunk.join(""));
-var mkUint8Array = (self) => map8(runFold(self.channel, () => ({
+var mkArrayBuffer = (self) => map8(runFold(self.channel, () => ({
   bytes: 0,
   arrays: []
 }), (acc, chunk) => {
@@ -41361,8 +41519,9 @@ var mkUint8Array = (self) => map8(runFold(self.channel, () => ({
     result4.set(array4, offset);
     offset += array4.length;
   }
-  return result4;
+  return result4.buffer;
 });
+var mkUint8Array = (self) => map8(mkArrayBuffer(self), (buffer3) => new Uint8Array(buffer3));
 var toReadableStreamWith = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (self, context4, options) => {
   let currentResolve = void 0;
   let fiber3 = void 0;
@@ -41471,11 +41630,11 @@ var toPubSubTake2 = /* @__PURE__ */ dual(2, (self, options) => toPubSubTake(self
 var toQueue = /* @__PURE__ */ dual(2, (self, options) => toQueueArray(self.channel, options));
 var runIntoQueue = /* @__PURE__ */ dual(2, (self, queue) => runIntoQueueArray(self.channel, queue));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/FiberSet.js
-var TypeId33 = "~effect/FiberSet";
-var isFiberSet = (u) => hasProperty(u, TypeId33);
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/FiberSet.js
+var TypeId32 = "~effect/FiberSet";
+var isFiberSet = (u) => hasProperty(u, TypeId32);
 var Proto5 = {
-  [TypeId33]: TypeId33,
+  [TypeId32]: TypeId32,
   [Symbol.iterator]() {
     if (this.state._tag === "Closed") {
       return empty();
@@ -41499,7 +41658,7 @@ var makeUnsafe8 = (backing, deferred) => {
   self.deferred = deferred;
   return self;
 };
-var make30 = () => acquireRelease2(sync3(() => makeUnsafe8(/* @__PURE__ */ new Set(), makeUnsafe2())), (set8) => suspend3(() => {
+var make29 = () => acquireRelease2(sync3(() => makeUnsafe8(/* @__PURE__ */ new Set(), makeUnsafe2())), (set8) => suspend3(() => {
   const state = set8.state;
   if (state._tag === "Closed") return void_4;
   set8.state = {
@@ -41544,24 +41703,24 @@ var runtime = (self) => () => map8(context2(), (services) => {
       return constInterruptedFiber();
     }
     const fiber3 = runFork3(effect2, options);
-    addUnsafe(self, fiber3);
+    addUnsafe(self, fiber3, options);
     return fiber3;
   };
 });
 var join4 = (self) => _await(self.deferred);
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/PrimaryKey.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/PrimaryKey.js
 var symbol4 = "~effect/interfaces/PrimaryKey";
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/ManagedRuntime.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/ManagedRuntime.js
 var ManagedRuntime_exports = {};
 __export(ManagedRuntime_exports, {
   isManagedRuntime: () => isManagedRuntime,
-  make: () => make31
+  make: () => make30
 });
-var TypeId34 = "~effect/ManagedRuntime";
-var isManagedRuntime = (input) => hasProperty(input, TypeId34);
-var make31 = (layer, options) => {
+var TypeId33 = "~effect/ManagedRuntime";
+var isManagedRuntime = (input) => hasProperty(input, TypeId33);
+var make30 = (layer, options) => {
   const memoMap = options?.memoMap ?? makeMemoMapUnsafe();
   const scope3 = makeUnsafe3("parallel");
   const layerScope = forkUnsafe2(scope3, "sequential");
@@ -41585,10 +41744,10 @@ var make31 = (layer, options) => {
         scheduler: fiber3.currentScheduler
       });
     }
-    return flatten4(await_(buildFiber));
+    return flatten5(await_(buildFiber));
   });
   const self = {
-    [TypeId34]: TypeId34,
+    [TypeId33]: TypeId33,
     memoMap,
     scope: scope3,
     contextEffect,
@@ -41633,9 +41792,9 @@ function provide7(managed, effect2) {
   return flatMap5(managed.contextEffect, (context4) => provideContext2(effect2, context4));
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/Pool.js
-var TypeId35 = "~effect/Pool";
-var make32 = (options) => makeWithStrategy({
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/Pool.js
+var TypeId34 = "~effect/Pool";
+var make31 = (options) => makeWithStrategy({
   ...options,
   min: options.size,
   max: options.size,
@@ -41670,7 +41829,7 @@ var makeWithStrategy = (options) => uninterruptibleMask2(fnUntraced2(function* (
     waiters: 0
   };
   const self = {
-    [TypeId35]: TypeId35,
+    [TypeId34]: TypeId34,
     config,
     state,
     pipe() {
@@ -42381,11 +42540,11 @@ async function resolveWebSocketUrl(input) {
   return url.toString();
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/socket/Socket.js
-var TypeId36 = "~effect/socket/Socket";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/socket/Socket.js
+var TypeId35 = "~effect/socket/Socket";
 var Socket = /* @__PURE__ */ Service("effect/socket/Socket");
-var make33 = (options) => Socket.of({
-  [TypeId36]: TypeId36,
+var make32 = (options) => Socket.of({
+  [TypeId35]: TypeId35,
   runRaw: options.runRaw,
   run: options.run ?? ((handler, opts) => options.runRaw((data) => typeof data === "string" ? handler(encoder2.encode(data)) : data instanceof Uint8Array ? handler(data) : handler(new Uint8Array(data)), opts)),
   runString: options.runString ?? (options.run ? (handler, opts) => options.run((data) => handler(decoder2.decode(data)), opts) : (handler, opts) => options.runRaw((data) => typeof data === "string" ? handler(data) : data instanceof Uint8Array ? handler(decoder2.decode(data)) : handler(decoder2.decode(new Uint8Array(data))), opts)),
@@ -42518,11 +42677,12 @@ var WebSocketConstructor = class extends (/* @__PURE__ */ Service()("@effect/pla
 var makeWebSocket = (url, options) => WebSocketConstructor.use((makeWs) => fromWebSocket(acquireRelease2((typeof url === "string" ? succeed6(url) : url).pipe(map8((url2) => makeWs(url2, options?.protocols))), (ws) => sync3(() => ws.close(1e3))), options));
 var fromWebSocket = (acquire, options) => withFiber2((fiber3) => {
   let currentWS;
+  let initial = true;
   const latch = makeUnsafe5(false);
   const acquireContext = fiber3.context;
   const closeCodeIsError = options?.closeCodeIsError ?? defaultCloseCodeIsError;
   const runRaw = (handler, opts) => scopedWith2(fnUntraced2(function* (scope3) {
-    const fiberSet = yield* make30().pipe(provide(scope3));
+    const fiberSet = yield* make29().pipe(provide(scope3));
     const ws = yield* provide(acquire, scope3);
     const run4 = yield* provideService2(runtime(fiberSet)(), WebSocket, ws);
     let open2 = false;
@@ -42534,7 +42694,7 @@ var fromWebSocket = (acquire, options) => withFiber2((fiber3) => {
         });
         return run4(effect2);
       }
-      const result4 = handler(event.data);
+      const result4 = handler(event.data instanceof ArrayBuffer ? new Uint8Array(event.data) : event.data);
       if (isEffect2(result4)) {
         run4(result4);
       }
@@ -42590,6 +42750,10 @@ var fromWebSocket = (acquire, options) => withFiber2((fiber3) => {
     open2 = true;
     currentWS = ws;
     latch.openUnsafe();
+    if (initial && options?.onInitialRun) {
+      initial = false;
+      for (const event of options.onInitialRun(ws)) onMessage(event);
+    }
     if (opts?.onOpen) yield* opts.onOpen;
     return yield* catchFilter2(join4(fiberSet), SocketCloseError.filterClean((_) => !closeCodeIsError(_)), () => void_4);
   })).pipe(updateContext2((input) => merge(acquireContext, input)), ensuring2(sync3(() => {
@@ -42605,7 +42769,7 @@ var fromWebSocket = (acquire, options) => withFiber2((fiber3) => {
     }
   }));
   const writer = succeed6(write);
-  return succeed6(make33({
+  return succeed6(make32({
     runRaw,
     writer
   }));
@@ -42635,7 +42799,7 @@ var import_websocket = __toESM(require_websocket(), 1);
 var import_websocket_server = __toESM(require_websocket_server(), 1);
 var wrapper_default = import_websocket.default;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/RpcSchema.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/RpcSchema.js
 var StreamSchemaTypeId = "~effect/rpc/RpcSchema/StreamSchema";
 function isStreamSchema(schema2) {
   return hasProperty(schema2, StreamSchemaTypeId);
@@ -42648,17 +42812,17 @@ function getStreamSchemas(schema2) {
 }
 var schema = /* @__PURE__ */ declare(isStream);
 function Stream3(success, error) {
-  return make25(schema.ast, {
+  return make24(schema.ast, {
     [StreamSchemaTypeId]: StreamSchemaTypeId,
     success,
     error
   });
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/Rpc.js
-var TypeId37 = "~effect/rpc/Rpc";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/Rpc.js
+var TypeId36 = "~effect/rpc/Rpc";
 var Proto6 = {
-  [TypeId37]: TypeId37,
+  [TypeId36]: TypeId36,
   pipe() {
     return pipeArguments(this, arguments);
   },
@@ -42748,7 +42912,7 @@ var makeProto2 = (options) => {
   Rpc.key = `effect/rpc/Rpc/${options._tag}`;
   return Rpc;
 };
-var make34 = (tag2, options) => {
+var make33 = (tag2, options) => {
   const successSchema = options?.success ?? Void2;
   const errorSchema = options?.error ?? Never2;
   const defectSchema = options?.defect ?? Defect();
@@ -42793,7 +42957,7 @@ var exitSchema = (self) => {
 var WrapperTypeId = "~effect/rpc/Rpc/Wrapper";
 var isWrapper = (u) => WrapperTypeId in u;
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/RpcClient.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/RpcClient.js
 var RpcClient_exports = {};
 __export(RpcClient_exports, {
   ConnectionHooks: () => ConnectionHooks,
@@ -42803,7 +42967,7 @@ __export(RpcClient_exports, {
   layerProtocolHttp: () => layerProtocolHttp,
   layerProtocolSocket: () => layerProtocolSocket,
   layerProtocolWorker: () => layerProtocolWorker,
-  make: () => make38,
+  make: () => make37,
   makeNoSerialization: () => makeNoSerialization,
   makeProtocolHttp: () => makeProtocolHttp,
   makeProtocolSocket: () => makeProtocolSocket,
@@ -42811,15 +42975,15 @@ __export(RpcClient_exports, {
   withHeaders: () => withHeaders
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/Headers.js
-var TypeId38 = /* @__PURE__ */ Symbol.for("~effect/http/Headers");
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/Headers.js
+var TypeId37 = /* @__PURE__ */ Symbol.for("~effect/http/Headers");
 var Proto7 = /* @__PURE__ */ Object.defineProperties(/* @__PURE__ */ Object.create(null), {
-  [TypeId38]: {
-    value: TypeId38
+  [TypeId37]: {
+    value: TypeId37
   },
   [symbolRedactable]: {
     value(context4) {
-      return redact4(this, get(context4, CurrentRedactedNames));
+      return redact2(this, get(context4, CurrentRedactedNames));
     }
   },
   toJSON: {
@@ -42844,7 +43008,7 @@ var Proto7 = /* @__PURE__ */ Object.defineProperties(/* @__PURE__ */ Object.crea
     value: BaseProto[NodeInspectSymbol]
   }
 });
-var make35 = (input) => Object.assign(Object.create(Proto7), input);
+var make34 = (input) => Object.assign(Object.create(Proto7), input);
 var Equivalence5 = /* @__PURE__ */ makeEquivalence4(/* @__PURE__ */ strictEqual());
 var empty12 = /* @__PURE__ */ Object.create(Proto7);
 var fromInput2 = (input) => {
@@ -42868,25 +43032,25 @@ var fromInput2 = (input) => {
   return out;
 };
 var set5 = /* @__PURE__ */ dual(3, (self, key, value3) => {
-  const out = make35(self);
+  const out = make34(self);
   out[key.toLowerCase()] = value3;
   return out;
 });
-var setAll = /* @__PURE__ */ dual(2, (self, headers) => make35({
+var setAll = /* @__PURE__ */ dual(2, (self, headers) => make34({
   ...self,
   ...fromInput2(headers)
 }));
 var merge5 = /* @__PURE__ */ dual(2, (self, headers) => {
-  const out = make35(self);
+  const out = make34(self);
   Object.assign(out, headers);
   return out;
 });
 var remove6 = /* @__PURE__ */ dual(2, (self, key) => {
-  const out = make35(self);
+  const out = make34(self);
   delete out[key.toLowerCase()];
   return out;
 });
-var redact4 = /* @__PURE__ */ dual(2, (self, key) => {
+var redact2 = /* @__PURE__ */ dual(2, (self, key) => {
   const out = {
     ...self
   };
@@ -42894,12 +43058,12 @@ var redact4 = /* @__PURE__ */ dual(2, (self, key) => {
     if (typeof key2 === "string") {
       const k = key2.toLowerCase();
       if (k in self) {
-        out[k] = make11(self[k]);
+        out[k] = make23(self[k]);
       }
     } else {
       for (const name in self) {
         if (key2.test(name)) {
-          out[name] = make11(self[name]);
+          out[name] = make23(self[name]);
         }
       }
     }
@@ -42917,12 +43081,12 @@ var CurrentRedactedNames = /* @__PURE__ */ Reference("effect/Headers/CurrentReda
   defaultValue: () => ["authorization", "cookie", "set-cookie", "x-api-key"]
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/UrlParams.js
-var TypeId39 = "~effect/http/UrlParams";
-var isUrlParams = (u) => hasProperty(u, TypeId39);
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/UrlParams.js
+var TypeId38 = "~effect/http/UrlParams";
+var isUrlParams = (u) => hasProperty(u, TypeId38);
 var Proto8 = {
   ...PipeInspectableProto,
-  [TypeId39]: TypeId39,
+  [TypeId38]: TypeId38,
   [Symbol.iterator]() {
     return this.params[Symbol.iterator]();
   },
@@ -42939,7 +43103,7 @@ var Proto8 = {
     return array(this.params.flat());
   }
 };
-var make36 = (params) => {
+var make35 = (params) => {
   const self = Object.create(Proto8);
   self.params = params;
   return self;
@@ -42958,7 +43122,7 @@ var fromInput3 = (input) => {
       out.push(parsed[i]);
     }
   }
-  return make36(out);
+  return make35(out);
 };
 var fromInputNested = (input) => {
   const entries3 = typeof input[Symbol.iterator] === "function" ? fromIterable2(input) : Object.entries(input);
@@ -42983,7 +43147,7 @@ var fromInputNested = (input) => {
 };
 var Equivalence6 = /* @__PURE__ */ make2((a, b) => arrayEquivalence(a.params, b.params));
 var arrayEquivalence = /* @__PURE__ */ makeEquivalence5(/* @__PURE__ */ makeEquivalence3([/* @__PURE__ */ strictEqual(), /* @__PURE__ */ strictEqual()]));
-var empty13 = /* @__PURE__ */ make36([]);
+var empty13 = /* @__PURE__ */ make35([]);
 var setAll2 = /* @__PURE__ */ dual(2, (self, input) => {
   const out = fromInput3(input);
   const params = out.params;
@@ -42998,8 +43162,8 @@ var setAll2 = /* @__PURE__ */ dual(2, (self, input) => {
   return out;
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/HttpBody.js
-var TypeId40 = "~effect/http/HttpBody";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/HttpBody.js
+var TypeId39 = "~effect/http/HttpBody";
 var HttpBodyErrorTypeId = "~effect/http/HttpBody/HttpBodyError";
 var HttpBodyError = class extends (/* @__PURE__ */ TaggedError2("HttpBodyError")) {
   /**
@@ -43010,9 +43174,9 @@ var HttpBodyError = class extends (/* @__PURE__ */ TaggedError2("HttpBodyError")
   [HttpBodyErrorTypeId] = HttpBodyErrorTypeId;
 };
 var Proto9 = class {
-  [TypeId40];
+  [TypeId39];
   constructor() {
-    this[TypeId40] = TypeId40;
+    this[TypeId39] = TypeId39;
   }
   [NodeInspectSymbol]() {
     return this.toJSON();
@@ -43059,8 +43223,8 @@ var uint8Array2 = (body, contentType) => new Uint8Array3(body, contentType ?? "a
 var encoder3 = /* @__PURE__ */ new TextEncoder();
 var text = (body, contentType) => uint8Array2(encoder3.encode(body), contentType ?? "text/plain");
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/Cookies.js
-var TypeId41 = "~effect/http/Cookies";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/Cookies.js
+var TypeId40 = "~effect/http/Cookies";
 var CookieTypeId = "~effect/http/Cookies/Cookie";
 var CookieErrorTypeId = "~effect/http/Cookies/CookieError";
 var CookiesErrorReason = class extends Error3 {
@@ -43095,7 +43259,7 @@ var CookiesError = class _CookiesError extends (/* @__PURE__ */ TaggedError2("Co
   }
 };
 var Proto10 = {
-  [TypeId41]: TypeId41,
+  [TypeId40]: TypeId40,
   ...BaseProto,
   toJSON() {
     return {
@@ -43274,8 +43438,8 @@ var tryDecodeURIComponent = (str) => {
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/HttpClientError.js
-var TypeId42 = "~effect/http/HttpClientError";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/HttpClientError.js
+var TypeId41 = "~effect/http/HttpClientError";
 var HttpClientError = class extends (/* @__PURE__ */ TaggedError2("HttpClientError")) {
   constructor(props) {
     if ("cause" in props.reason) {
@@ -43292,7 +43456,7 @@ var HttpClientError = class extends (/* @__PURE__ */ TaggedError2("HttpClientErr
    *
    * @since 4.0.0
    */
-  [TypeId42] = TypeId42;
+  [TypeId41] = TypeId41;
   /**
    * HTTP request associated with the client failure.
    *
@@ -43353,7 +43517,7 @@ var EmptyBodyError = class extends (/* @__PURE__ */ TaggedError2("EmptyBodyError
     return formatMessage(formatReason(this._tag), this.description, info);
   }
 };
-var HttpClientErrorSchema = class _HttpClientErrorSchema extends (/* @__PURE__ */ ErrorClass(TypeId42)({
+var HttpClientErrorSchema = class _HttpClientErrorSchema extends (/* @__PURE__ */ ErrorClass(TypeId41)({
   _tag: /* @__PURE__ */ tag("HttpError"),
   kind: /* @__PURE__ */ Literals(["EncodeError", "DecodeError", "TransportError", "InvalidUrlError", "StatusCodeError", "EmptyBodyError"]),
   cause: /* @__PURE__ */ optional(/* @__PURE__ */ Defect())
@@ -43372,13 +43536,13 @@ var HttpClientErrorSchema = class _HttpClientErrorSchema extends (/* @__PURE__ *
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/HttpMethod.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/HttpMethod.js
 var allShort = [["GET", "get"], ["POST", "post"], ["PUT", "put"], ["DELETE", "del"], ["PATCH", "patch"], ["HEAD", "head"], ["OPTIONS", "options"], ["TRACE", "trace"]];
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/HttpClientRequest.js
-var TypeId43 = "~effect/http/HttpClientRequest";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/HttpClientRequest.js
+var TypeId42 = "~effect/http/HttpClientRequest";
 var Proto11 = {
-  [TypeId43]: TypeId43,
+  [TypeId42]: TypeId42,
   ...BaseProto,
   toJSON() {
     return {
@@ -43406,7 +43570,7 @@ function makeWith(method, url, urlParams2, hash3, headers, body) {
   return self;
 }
 var empty15 = /* @__PURE__ */ makeWith("GET", "", empty13, /* @__PURE__ */ none2(), empty12, empty14);
-var make37 = (method) => (url, options) => modify3(empty15, {
+var make36 = (method) => (url, options) => modify3(empty15, {
   method,
   url,
   ...options ?? void 0
@@ -43478,13 +43642,15 @@ var setBody = /* @__PURE__ */ dual(2, (self, body) => {
     }
     if (body.contentLength !== void 0) {
       headers = set5(headers, "content-length", body.contentLength.toString());
+    } else {
+      headers = remove6(headers, "content-length");
     }
   }
   return makeWith(self.method, self.url, self.urlParams, self.hash, headers, body);
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/HttpIncomingMessage.js
-var TypeId44 = "~effect/http/HttpIncomingMessage";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/HttpIncomingMessage.js
+var TypeId43 = "~effect/http/HttpIncomingMessage";
 var inspect = (self, that) => {
   const contentType = self.headers["content-type"] ?? "";
   let body;
@@ -43510,19 +43676,19 @@ var inspect = (self, that) => {
   return obj;
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/HttpClientResponse.js
-var TypeId45 = "~effect/http/HttpClientResponse";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/HttpClientResponse.js
+var TypeId44 = "~effect/http/HttpClientResponse";
 var WebHttpClientResponse = class extends Class2 {
+  [TypeId43];
   [TypeId44];
-  [TypeId45];
   request;
   source;
   constructor(request3, source) {
     super();
     this.request = request3;
     this.source = source;
+    this[TypeId43] = TypeId43;
     this[TypeId44] = TypeId44;
-    this[TypeId45] = TypeId45;
   }
   toJSON() {
     return inspect(this, {
@@ -43548,7 +43714,7 @@ var WebHttpClientResponse = class extends Class2 {
     return none2();
   }
   get stream() {
-    return this.source.body ? fromReadableStream({
+    return this.source.body ? fromReadableStream2({
       evaluate: () => this.source.body,
       onError: (cause) => new HttpClientError({
         reason: new DecodeError({
@@ -43643,8 +43809,8 @@ var WebHttpClientResponse = class extends Class2 {
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/http/HttpClient.js
-var TypeId46 = "~effect/http/HttpClient";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/http/HttpClient.js
+var TypeId45 = "~effect/http/HttpClient";
 var HttpClient = /* @__PURE__ */ Service("effect/HttpClient");
 var makeWith2 = (postprocess, preprocess) => {
   const self = Object.create(Proto12);
@@ -43656,7 +43822,7 @@ var makeWith2 = (postprocess, preprocess) => {
   return self;
 };
 var Proto12 = {
-  [TypeId46]: TypeId46,
+  [TypeId45]: TypeId45,
   pipe() {
     return pipeArguments(this, arguments);
   },
@@ -43667,7 +43833,7 @@ var Proto12 = {
     };
   },
   .../* @__PURE__ */ Object.fromEntries(/* @__PURE__ */ allShort.map(([fullMethod, method]) => [method, function(url, options) {
-    return this.execute(make37(fullMethod)(url, options));
+    return this.execute(make36(fullMethod)(url, options));
   }]))
 };
 var mapRequest = /* @__PURE__ */ dual(2, (self, f) => makeWith2(self.postprocess, (request3) => map8(self.preprocess(request3), f)));
@@ -43705,8 +43871,8 @@ var InterruptibleResponse = class {
     this.original = original;
     this.controller = controller;
   }
-  [TypeId45] = TypeId45;
   [TypeId44] = TypeId44;
+  [TypeId43] = TypeId43;
   applyInterrupt(effect2) {
     return suspend3(() => {
       responseRegistry.unregister(this.original);
@@ -43764,7 +43930,7 @@ var InterruptibleResponse = class {
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/workers/Transferable.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/workers/Transferable.js
 var Collector = class extends (/* @__PURE__ */ Service()("effect/workers/Transferable/Collector")) {
 };
 var makeCollectorUnsafe = () => {
@@ -43788,8 +43954,8 @@ var makeCollectorUnsafe = () => {
   });
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/workers/WorkerError.js
-var TypeId47 = "~effect/workers/WorkerError";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/workers/WorkerError.js
+var TypeId46 = "~effect/workers/WorkerError";
 var WorkerSpawnError = class extends (/* @__PURE__ */ ErrorClass("effect/workers/WorkerError/WorkerSpawnError")({
   _tag: /* @__PURE__ */ tag("WorkerSpawnError"),
   message: String5,
@@ -43815,7 +43981,7 @@ var WorkerUnknownError = class extends (/* @__PURE__ */ ErrorClass("effect/worke
 })) {
 };
 var WorkerErrorReason = /* @__PURE__ */ Union2([WorkerSpawnError, WorkerSendError, WorkerReceiveError, WorkerUnknownError]);
-var WorkerError = class extends (/* @__PURE__ */ ErrorClass(TypeId47)({
+var WorkerError = class extends (/* @__PURE__ */ ErrorClass(TypeId46)({
   _tag: /* @__PURE__ */ tag("WorkerError"),
   reason: WorkerErrorReason
 })) {
@@ -43831,25 +43997,25 @@ var WorkerError = class extends (/* @__PURE__ */ ErrorClass(TypeId47)({
    *
    * @since 4.0.0
    */
-  [TypeId47] = TypeId47;
+  [TypeId46] = TypeId46;
   get message() {
     return this.reason.message;
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/workers/Worker.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/workers/Worker.js
 var WorkerPlatform = class extends (/* @__PURE__ */ Service()("effect/workers/Worker/WorkerPlatform")) {
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/RpcClientError.js
-var TypeId48 = "~effect/rpc/RpcClientError";
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/RpcClientError.js
+var TypeId47 = "~effect/rpc/RpcClientError";
 var RpcClientDefect = class extends (/* @__PURE__ */ ErrorClass("effect/rpc/RpcClientError/RpcClientDefect")({
   _tag: /* @__PURE__ */ tag("RpcClientDefect"),
   message: String5,
   cause: /* @__PURE__ */ Defect()
 })) {
 };
-var RpcClientError = class extends (/* @__PURE__ */ ErrorClass(TypeId48)({
+var RpcClientError = class extends (/* @__PURE__ */ ErrorClass(TypeId47)({
   _tag: /* @__PURE__ */ tag("RpcClientError"),
   reason: /* @__PURE__ */ Union2([WorkerErrorReason, SocketErrorReason, HttpClientErrorSchema, RpcClientDefect])
 })) {
@@ -43858,13 +44024,13 @@ var RpcClientError = class extends (/* @__PURE__ */ ErrorClass(TypeId48)({
    *
    * @since 4.0.0
    */
-  [TypeId48] = TypeId48;
+  [TypeId47] = TypeId47;
   get message() {
     return `${this.reason._tag}: ${this.reason.message}`;
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/RpcMessage.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/RpcMessage.js
 var RequestId = (id2) => id2;
 var constPing = {
   _tag: "Ping"
@@ -43882,18 +44048,22 @@ var isTerminalResponse = (response) => {
   }
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/RpcSerialization.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/RpcSerialization.js
 var RpcSerialization_exports = {};
 __export(RpcSerialization_exports, {
+  MaxBufferSizeExceeded: () => MaxBufferSizeExceeded,
   RpcSerialization: () => RpcSerialization,
   json: () => json3,
   jsonRpc: () => jsonRpc,
   layerJson: () => layerJson,
   layerJsonRpc: () => layerJsonRpc,
   layerMsgPack: () => layerMsgPack,
+  layerMsgPackWith: () => layerMsgPackWith,
   layerNdJsonRpc: () => layerNdJsonRpc,
   layerNdjson: () => layerNdjson,
+  layerNdjsonWith: () => layerNdjsonWith,
   makeMsgPack: () => makeMsgPack,
+  makeNdjson: () => makeNdjson,
   msgPack: () => msgPack,
   ndJsonRpc: () => ndJsonRpc,
   ndjson: () => ndjson
@@ -46096,9 +46266,16 @@ if (!nativeAccelerationDisabled) {
   }
 }
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/RpcSerialization.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/RpcSerialization.js
 var RpcSerialization = class extends (/* @__PURE__ */ Service()("effect/rpc/RpcSerialization")) {
 };
+var MaxBufferSizeExceeded = class extends (/* @__PURE__ */ TaggedError2("MaxBufferSizeExceeded")) {
+  get message() {
+    return `RPC serialization buffer exceeded the maximum size of ${this.maxBufferSize}`;
+  }
+};
+var defaultMaxBufferSize = 16 * 1024 * 1024;
+var isBufferSizeExceeded = (bufferSize, maxBufferSize) => maxBufferSize !== "unbounded" && bufferSize > maxBufferSize;
 var json3 = /* @__PURE__ */ RpcSerialization.of({
   contentType: "application/json",
   includesFraming: false,
@@ -46113,41 +46290,57 @@ var json3 = /* @__PURE__ */ RpcSerialization.of({
     };
   }
 });
-var ndjson = /* @__PURE__ */ RpcSerialization.of({
-  contentType: "application/ndjson",
-  includesFraming: true,
-  makeUnsafe: () => {
-    const decoder4 = new TextDecoder();
-    let buffer3 = "";
-    return {
-      decode: (bytes) => {
-        buffer3 += typeof bytes === "string" ? bytes : decoder4.decode(bytes);
-        let position3 = 0;
-        let nlIndex = buffer3.indexOf("\n", position3);
-        const items2 = [];
-        while (nlIndex !== -1) {
-          const item = JSON.parse(buffer3.slice(position3, nlIndex));
-          items2.push(item);
-          position3 = nlIndex + 1;
-          nlIndex = buffer3.indexOf("\n", position3);
-        }
-        buffer3 = buffer3.slice(position3);
-        return items2;
-      },
-      encode: (response) => {
-        if (Array.isArray(response)) {
-          if (response.length === 0) return void 0;
-          let data = "";
-          for (let i = 0; i < response.length; i++) {
-            data += JSON.stringify(response[i]) + "\n";
+var makeNdjson = (options) => {
+  const maxBufferSize = options?.maxBufferSize ?? defaultMaxBufferSize;
+  return RpcSerialization.of({
+    contentType: "application/ndjson",
+    includesFraming: true,
+    makeUnsafe: () => {
+      const decoder4 = new TextDecoder();
+      let buffer3 = "";
+      const failMaxBufferSize = (maxBufferSize2) => {
+        buffer3 = "";
+        throw new MaxBufferSizeExceeded({
+          maxBufferSize: maxBufferSize2
+        });
+      };
+      return {
+        decode: (bytes) => {
+          buffer3 += typeof bytes === "string" ? bytes : decoder4.decode(bytes);
+          let position3 = 0;
+          let nlIndex = buffer3.indexOf("\n", position3);
+          const items2 = [];
+          while (nlIndex !== -1) {
+            if (isBufferSizeExceeded(nlIndex - position3, maxBufferSize)) {
+              failMaxBufferSize(maxBufferSize);
+            }
+            const item = JSON.parse(buffer3.slice(position3, nlIndex));
+            items2.push(item);
+            position3 = nlIndex + 1;
+            nlIndex = buffer3.indexOf("\n", position3);
           }
-          return data;
+          buffer3 = buffer3.slice(position3);
+          if (isBufferSizeExceeded(buffer3.length, maxBufferSize)) {
+            failMaxBufferSize(maxBufferSize);
+          }
+          return items2;
+        },
+        encode: (response) => {
+          if (Array.isArray(response)) {
+            if (response.length === 0) return void 0;
+            let data = "";
+            for (let i = 0; i < response.length; i++) {
+              data += JSON.stringify(response[i]) + "\n";
+            }
+            return data;
+          }
+          return JSON.stringify(response) + "\n";
         }
-        return JSON.stringify(response) + "\n";
-      }
-    };
-  }
-});
+      };
+    }
+  });
+};
+var ndjson = /* @__PURE__ */ makeNdjson();
 var jsonRpc = (options) => RpcSerialization.of({
   contentType: options?.contentType ?? "application/json",
   includesFraming: false,
@@ -46170,7 +46363,9 @@ var ndJsonRpc = (options) => RpcSerialization.of({
   contentType: options?.contentType ?? "application/json-rpc",
   includesFraming: true,
   makeUnsafe: () => {
-    const parser = ndjson.makeUnsafe();
+    const parser = makeNdjson({
+      maxBufferSize: options?.maxBufferSize
+    }).makeUnsafe();
     const batches = /* @__PURE__ */ new Map();
     return {
       decode: (bytes) => {
@@ -46210,10 +46405,11 @@ function decodeJsonRpcRaw(decoded, batches) {
   return [decodeJsonRpcMessage(decoded)];
 }
 function decodeJsonRpcMessage(decoded) {
-  if ("method" in decoded) {
-    if (isNullish(decoded.id) && decoded.method.startsWith("@effect/rpc/")) {
-      const tag2 = decoded.method.slice("@effect/rpc/".length);
-      const requestId = decoded.params?.requestId;
+  if (Object.hasOwn(decoded, "method")) {
+    const request3 = decoded;
+    if (isNullish(request3.id) && request3.method.startsWith("@effect/rpc/")) {
+      const tag2 = request3.method.slice("@effect/rpc/".length);
+      const requestId = request3.params?.requestId;
       return requestId ? {
         _tag: tag2,
         requestId
@@ -46223,40 +46419,46 @@ function decodeJsonRpcMessage(decoded) {
     }
     return {
       _tag: "Request",
-      id: decoded.id ?? "",
-      tag: decoded.method,
-      payload: decoded.params ?? null,
-      headers: decoded.headers ?? [],
-      ...decoded.spanId ? {
-        traceId: decoded.traceId,
-        spanId: decoded.spanId,
-        sampled: decoded.sampled
+      id: request3.id ?? "",
+      tag: request3.method,
+      payload: request3.params ?? null,
+      headers: request3.headers ?? [],
+      ...hasProperty(request3, "id") ? {} : {
+        isNotification: true
+      },
+      ...request3.spanId ? {
+        traceId: request3.traceId,
+        spanId: request3.spanId,
+        sampled: request3.sampled
       } : {}
     };
-  } else if (decoded.error && decoded.error._tag === "Defect") {
+  }
+  const response = decoded;
+  const hasError = Object.hasOwn(response, "error");
+  if (hasError && response.error && response.error._tag === "Defect") {
     return {
       _tag: "Defect",
-      defect: decoded.error.data
+      defect: response.error.data
     };
-  } else if (decoded.chunk === true) {
+  } else if (Object.hasOwn(response, "chunk") && response.chunk === true) {
     return {
       _tag: "Chunk",
-      requestId: decoded.id ?? "",
-      values: decoded.result
+      requestId: response.id ?? "",
+      values: response.result
     };
   }
   return {
     _tag: "Exit",
-    requestId: decoded.id ?? "",
-    exit: decoded.error != null ? {
+    requestId: response.id ?? "",
+    exit: hasError && response.error != null ? {
       _tag: "Failure",
-      cause: decoded.error._tag === "Cause" ? decoded.error.data : [{
+      cause: response.error._tag === "Cause" ? response.error.data : [{
         _tag: "Die",
-        defect: decoded.error
+        defect: response.error
       }]
     } : {
       _tag: "Success",
-      value: decoded.result
+      value: response.result
     }
   };
 }
@@ -46346,7 +46548,8 @@ function encodeJsonRpcMessage(response) {
           result: response.exit.value
         };
       }
-      const error = response.exit.cause.find((failure) => failure._tag === "Fail");
+      const failure = response.exit.cause.find((failure2) => failure2._tag === "Fail");
+      const error = failure?._tag === "Fail" ? failure.error : void 0;
       return {
         jsonrpc: "2.0",
         id: response.requestId ?? void 0,
@@ -46374,54 +46577,74 @@ function encodeJsonRpcMessage(response) {
   }
 }
 var jsonRpcInternalError = -32603;
-var makeMsgPack = (options) => RpcSerialization.of({
-  contentType: "application/msgpack",
-  includesFraming: true,
-  makeUnsafe: () => {
-    const unpackr = new Unpackr(options);
-    const packr = new Packr(options);
-    const encoder4 = new TextEncoder();
-    let incomplete = void 0;
-    return {
-      decode(bytes) {
-        let buf = typeof bytes === "string" ? encoder4.encode(bytes) : bytes;
-        if (incomplete !== void 0) {
-          const prev = buf;
-          bytes = new Uint8Array(incomplete.length + buf.length);
-          bytes.set(incomplete);
-          bytes.set(prev, incomplete.length);
-          buf = bytes;
-          incomplete = void 0;
-        }
-        try {
-          return unpackr.unpackMultiple(buf);
-        } catch (error_) {
-          const error = error_;
-          if (error.incomplete) {
-            incomplete = buf.subarray(error.lastPosition);
-            return error.values ?? [];
+var makeMsgPack = (options) => {
+  const {
+    maxBufferSize = defaultMaxBufferSize,
+    ...msgpackOptions
+  } = options ?? {};
+  return RpcSerialization.of({
+    contentType: "application/msgpack",
+    includesFraming: true,
+    makeUnsafe: () => {
+      const unpackr = new Unpackr(msgpackOptions);
+      const packr = new Packr(msgpackOptions);
+      const encoder4 = new TextEncoder();
+      let incomplete = void 0;
+      const failMaxBufferSize = (maxBufferSize2) => {
+        incomplete = void 0;
+        throw new MaxBufferSizeExceeded({
+          maxBufferSize: maxBufferSize2
+        });
+      };
+      return {
+        decode(bytes) {
+          let buf = typeof bytes === "string" ? encoder4.encode(bytes) : bytes;
+          if (incomplete !== void 0) {
+            if (isBufferSizeExceeded(incomplete.length + buf.length, maxBufferSize)) {
+              failMaxBufferSize(maxBufferSize);
+            }
+            const prev = buf;
+            bytes = new Uint8Array(incomplete.length + buf.length);
+            bytes.set(incomplete);
+            bytes.set(prev, incomplete.length);
+            buf = bytes;
+            incomplete = void 0;
           }
-          throw error_;
-        }
-      },
-      encode: (response) => packr.pack(response)
-    };
-  }
-});
+          try {
+            return unpackr.unpackMultiple(buf);
+          } catch (error_) {
+            const error = error_;
+            if (error.incomplete) {
+              incomplete = buf.subarray(error.lastPosition);
+              if (isBufferSizeExceeded(incomplete.length, maxBufferSize)) {
+                failMaxBufferSize(maxBufferSize);
+              }
+              return error.values ?? [];
+            }
+            throw error_;
+          }
+        },
+        encode: (response) => packr.pack(response)
+      };
+    }
+  });
+};
 var msgPack = /* @__PURE__ */ makeMsgPack({
   useRecords: true
 });
 var layerJson = /* @__PURE__ */ succeed5(RpcSerialization)(json3);
 var layerNdjson = /* @__PURE__ */ succeed5(RpcSerialization)(ndjson);
+var layerNdjsonWith = (options) => succeed5(RpcSerialization)(makeNdjson(options));
 var layerJsonRpc = (options) => succeed5(RpcSerialization)(jsonRpc(options));
 var layerNdJsonRpc = (options) => succeed5(RpcSerialization)(ndJsonRpc(options));
 var layerMsgPack = /* @__PURE__ */ succeed5(RpcSerialization)(msgPack);
+var layerMsgPackWith = (options) => succeed5(RpcSerialization)(makeMsgPack(options));
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/RpcWorker.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/RpcWorker.js
 var InitialMessage = class extends (/* @__PURE__ */ Service()("effect/rpc/RpcWorker/InitialMessage")) {
 };
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/Utils.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/Utils.js
 var withRunClient = (f) => suspend3(() => {
   const clientIds = /* @__PURE__ */ new Set();
   const clientBuffers = /* @__PURE__ */ new Map();
@@ -46464,7 +46687,7 @@ var withRunClient = (f) => suspend3(() => {
   }));
 });
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/RpcClient.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/RpcClient.js
 var requestIdCounter = 0;
 var makeNoSerialization = /* @__PURE__ */ fnUntraced2(function* (group, options) {
   const spanPrefix = options?.spanPrefix ?? "RpcClient";
@@ -46729,7 +46952,7 @@ var makeNoSerialization = /* @__PURE__ */ fnUntraced2(function* (group, options)
   };
 });
 var clientIdCounter = 0;
-var make38 = /* @__PURE__ */ fnUntraced2(function* (group, options) {
+var make37 = /* @__PURE__ */ fnUntraced2(function* (group, options) {
   const clientId = clientIdCounter++;
   const {
     run: run4,
@@ -46996,11 +47219,12 @@ var makeProtocolSocket = (options) => Protocol.make(fnUntraced2(function* (write
             if (response._tag === "Pong") {
               return pinger.onPong;
             }
-            if ("requestId" in response) {
-              const clientId = requestClientMap.get(response.requestId);
+            if (Object.hasOwn(response, "requestId")) {
+              const requestId = response.requestId;
+              const clientId = requestClientMap.get(requestId);
               if (clientId !== void 0) {
                 if (response._tag === "Exit") {
-                  requestClientMap.delete(response.requestId);
+                  requestClientMap.delete(requestId);
                 }
                 return writeResponse(clientId, response);
               }
@@ -47152,7 +47376,7 @@ var makeProtocolWorker = (options) => Protocol.make(fnUntraced2(function* (write
     concurrency: options.concurrency,
     targetUtilization: options.targetUtilization,
     timeToLive: options.timeToLive
-  }) : yield* make32({
+  }) : yield* make31({
     acquire,
     size: options.size,
     concurrency: options.concurrency,
@@ -47207,7 +47431,7 @@ var ConnectionHooks = class extends (/* @__PURE__ */ Service()("effect/rpc/RpcCl
 };
 var decodeDefect2 = /* @__PURE__ */ decodeSync2(/* @__PURE__ */ Defect());
 
-// ../../node_modules/.pnpm/effect@4.0.0-beta.102_patch_hash=71215759e1ac0a7f65d7b75d816986687ae6c3a6cba02d928d184ca71790d488/node_modules/effect/dist/unstable/rpc/RpcGroup.js
+// ../../node_modules/.pnpm/effect@4.0.0-beta.103_patch_hash=a18f963109656ddbeb2a99ca45f942ecf54830986259eb01ce6a970421c9c6a9/node_modules/effect/dist/unstable/rpc/RpcGroup.js
 var RpcGroupProto = {
   add(...rpcs) {
     const requests = new Map(this.requests);
@@ -47346,7 +47570,7 @@ var makeProto3 = (options) => Object.assign(function() {
   requests: options.requests,
   annotations: options.annotations
 });
-var make39 = (...rpcs) => makeProto3({
+var make38 = (...rpcs) => makeProto3({
   requests: new Map(rpcs.map((rpc) => [rpc._tag, rpc])),
   annotations: empty3()
 });
@@ -49763,136 +49987,136 @@ var WS_METHODS = {
   subscribeServerLifecycle: "subscribeServerLifecycle",
   subscribeAuthAccess: "subscribeAuthAccess"
 };
-var WsServerUpsertKeybindingRpc = make34(WS_METHODS.serverUpsertKeybinding, {
+var WsServerUpsertKeybindingRpc = make33(WS_METHODS.serverUpsertKeybinding, {
   payload: ServerUpsertKeybindingInput,
   success: ServerUpsertKeybindingResult,
   error: KeybindingsConfigError
 });
-var WsServerGetConfigRpc = make34(WS_METHODS.serverGetConfig, {
+var WsServerGetConfigRpc = make33(WS_METHODS.serverGetConfig, {
   payload: Schema_exports.Struct({}),
   success: ServerConfig,
   error: Schema_exports.Union([KeybindingsConfigError, ServerSettingsError])
 });
-var WsServerRefreshProvidersRpc = make34(WS_METHODS.serverRefreshProviders, {
+var WsServerRefreshProvidersRpc = make33(WS_METHODS.serverRefreshProviders, {
   payload: Schema_exports.Struct({}),
   success: ServerProviderUpdatedPayload
 });
-var WsServerGetSettingsRpc = make34(WS_METHODS.serverGetSettings, {
+var WsServerGetSettingsRpc = make33(WS_METHODS.serverGetSettings, {
   payload: Schema_exports.Struct({}),
   success: ServerSettings,
   error: ServerSettingsError
 });
-var WsServerUpdateSettingsRpc = make34(WS_METHODS.serverUpdateSettings, {
+var WsServerUpdateSettingsRpc = make33(WS_METHODS.serverUpdateSettings, {
   payload: Schema_exports.Struct({ patch: ServerSettingsPatch }),
   success: ServerSettings,
   error: ServerSettingsError
 });
-var WsProjectsSearchEntriesRpc = make34(WS_METHODS.projectsSearchEntries, {
+var WsProjectsSearchEntriesRpc = make33(WS_METHODS.projectsSearchEntries, {
   payload: ProjectSearchEntriesInput,
   success: ProjectSearchEntriesResult,
   error: ProjectSearchEntriesError
 });
-var WsProjectsWriteFileRpc = make34(WS_METHODS.projectsWriteFile, {
+var WsProjectsWriteFileRpc = make33(WS_METHODS.projectsWriteFile, {
   payload: ProjectWriteFileInput,
   success: ProjectWriteFileResult,
   error: ProjectWriteFileError
 });
-var WsShellOpenInEditorRpc = make34(WS_METHODS.shellOpenInEditor, {
+var WsShellOpenInEditorRpc = make33(WS_METHODS.shellOpenInEditor, {
   payload: OpenInEditorInput,
   error: OpenError
 });
-var WsFilesystemBrowseRpc = make34(WS_METHODS.filesystemBrowse, {
+var WsFilesystemBrowseRpc = make33(WS_METHODS.filesystemBrowse, {
   payload: FilesystemBrowseInput,
   success: FilesystemBrowseResult,
   error: FilesystemBrowseError
 });
-var WsSubscribeGitStatusRpc = make34(WS_METHODS.subscribeGitStatus, {
+var WsSubscribeGitStatusRpc = make33(WS_METHODS.subscribeGitStatus, {
   payload: GitStatusInput,
   success: GitStatusStreamEvent,
   error: GitManagerServiceError,
   stream: true
 });
-var WsGitPullRpc = make34(WS_METHODS.gitPull, {
+var WsGitPullRpc = make33(WS_METHODS.gitPull, {
   payload: GitPullInput,
   success: GitPullResult,
   error: GitCommandError
 });
-var WsGitRefreshStatusRpc = make34(WS_METHODS.gitRefreshStatus, {
+var WsGitRefreshStatusRpc = make33(WS_METHODS.gitRefreshStatus, {
   payload: GitStatusInput,
   success: GitStatusResult,
   error: GitManagerServiceError
 });
-var WsGitRunStackedActionRpc = make34(WS_METHODS.gitRunStackedAction, {
+var WsGitRunStackedActionRpc = make33(WS_METHODS.gitRunStackedAction, {
   payload: GitRunStackedActionInput,
   success: GitActionProgressEvent,
   error: GitManagerServiceError,
   stream: true
 });
-var WsGitResolvePullRequestRpc = make34(WS_METHODS.gitResolvePullRequest, {
+var WsGitResolvePullRequestRpc = make33(WS_METHODS.gitResolvePullRequest, {
   payload: GitPullRequestRefInput,
   success: GitResolvePullRequestResult,
   error: GitManagerServiceError
 });
-var WsGitPreparePullRequestThreadRpc = make34(WS_METHODS.gitPreparePullRequestThread, {
+var WsGitPreparePullRequestThreadRpc = make33(WS_METHODS.gitPreparePullRequestThread, {
   payload: GitPreparePullRequestThreadInput,
   success: GitPreparePullRequestThreadResult,
   error: GitManagerServiceError
 });
-var WsGitListBranchesRpc = make34(WS_METHODS.gitListBranches, {
+var WsGitListBranchesRpc = make33(WS_METHODS.gitListBranches, {
   payload: GitListBranchesInput,
   success: GitListBranchesResult,
   error: GitCommandError
 });
-var WsGitCreateWorktreeRpc = make34(WS_METHODS.gitCreateWorktree, {
+var WsGitCreateWorktreeRpc = make33(WS_METHODS.gitCreateWorktree, {
   payload: GitCreateWorktreeInput,
   success: GitCreateWorktreeResult,
   error: GitCommandError
 });
-var WsGitRemoveWorktreeRpc = make34(WS_METHODS.gitRemoveWorktree, {
+var WsGitRemoveWorktreeRpc = make33(WS_METHODS.gitRemoveWorktree, {
   payload: GitRemoveWorktreeInput,
   error: GitCommandError
 });
-var WsGitCreateBranchRpc = make34(WS_METHODS.gitCreateBranch, {
+var WsGitCreateBranchRpc = make33(WS_METHODS.gitCreateBranch, {
   payload: GitCreateBranchInput,
   success: GitCreateBranchResult,
   error: GitCommandError
 });
-var WsGitCheckoutRpc = make34(WS_METHODS.gitCheckout, {
+var WsGitCheckoutRpc = make33(WS_METHODS.gitCheckout, {
   payload: GitCheckoutInput,
   success: GitCheckoutResult,
   error: GitCommandError
 });
-var WsGitInitRpc = make34(WS_METHODS.gitInit, {
+var WsGitInitRpc = make33(WS_METHODS.gitInit, {
   payload: GitInitInput,
   error: GitCommandError
 });
-var WsTerminalOpenRpc = make34(WS_METHODS.terminalOpen, {
+var WsTerminalOpenRpc = make33(WS_METHODS.terminalOpen, {
   payload: TerminalOpenInput,
   success: TerminalSessionSnapshot,
   error: TerminalError
 });
-var WsTerminalWriteRpc = make34(WS_METHODS.terminalWrite, {
+var WsTerminalWriteRpc = make33(WS_METHODS.terminalWrite, {
   payload: TerminalWriteInput,
   error: TerminalError
 });
-var WsTerminalResizeRpc = make34(WS_METHODS.terminalResize, {
+var WsTerminalResizeRpc = make33(WS_METHODS.terminalResize, {
   payload: TerminalResizeInput,
   error: TerminalError
 });
-var WsTerminalClearRpc = make34(WS_METHODS.terminalClear, {
+var WsTerminalClearRpc = make33(WS_METHODS.terminalClear, {
   payload: TerminalClearInput,
   error: TerminalError
 });
-var WsTerminalRestartRpc = make34(WS_METHODS.terminalRestart, {
+var WsTerminalRestartRpc = make33(WS_METHODS.terminalRestart, {
   payload: TerminalRestartInput,
   success: TerminalSessionSnapshot,
   error: TerminalError
 });
-var WsTerminalCloseRpc = make34(WS_METHODS.terminalClose, {
+var WsTerminalCloseRpc = make33(WS_METHODS.terminalClose, {
   payload: TerminalCloseInput,
   error: TerminalError
 });
-var WsOrchestrationDispatchCommandRpc = make34(
+var WsOrchestrationDispatchCommandRpc = make33(
   ORCHESTRATION_WS_METHODS.dispatchCommand,
   {
     payload: ClientOrchestrationCommand,
@@ -49900,12 +50124,12 @@ var WsOrchestrationDispatchCommandRpc = make34(
     error: OrchestrationDispatchCommandError
   }
 );
-var WsOrchestrationGetTurnDiffRpc = make34(ORCHESTRATION_WS_METHODS.getTurnDiff, {
+var WsOrchestrationGetTurnDiffRpc = make33(ORCHESTRATION_WS_METHODS.getTurnDiff, {
   payload: OrchestrationGetTurnDiffInput,
   success: OrchestrationRpcSchemas.getTurnDiff.output,
   error: OrchestrationGetTurnDiffError
 });
-var WsOrchestrationGetFullThreadDiffRpc = make34(
+var WsOrchestrationGetFullThreadDiffRpc = make33(
   ORCHESTRATION_WS_METHODS.getFullThreadDiff,
   {
     payload: OrchestrationGetFullThreadDiffInput,
@@ -49913,18 +50137,18 @@ var WsOrchestrationGetFullThreadDiffRpc = make34(
     error: OrchestrationGetFullThreadDiffError
   }
 );
-var WsOrchestrationReplayEventsRpc = make34(ORCHESTRATION_WS_METHODS.replayEvents, {
+var WsOrchestrationReplayEventsRpc = make33(ORCHESTRATION_WS_METHODS.replayEvents, {
   payload: OrchestrationReplayEventsInput,
   success: OrchestrationRpcSchemas.replayEvents.output,
   error: OrchestrationReplayEventsError
 });
-var WsOrchestrationSubscribeShellRpc = make34(ORCHESTRATION_WS_METHODS.subscribeShell, {
+var WsOrchestrationSubscribeShellRpc = make33(ORCHESTRATION_WS_METHODS.subscribeShell, {
   payload: OrchestrationRpcSchemas.subscribeShell.input,
   success: OrchestrationRpcSchemas.subscribeShell.output,
   error: OrchestrationGetSnapshotError,
   stream: true
 });
-var WsOrchestrationSubscribeThreadRpc = make34(
+var WsOrchestrationSubscribeThreadRpc = make33(
   ORCHESTRATION_WS_METHODS.subscribeThread,
   {
     payload: OrchestrationRpcSchemas.subscribeThread.input,
@@ -49933,28 +50157,28 @@ var WsOrchestrationSubscribeThreadRpc = make34(
     stream: true
   }
 );
-var WsSubscribeTerminalEventsRpc = make34(WS_METHODS.subscribeTerminalEvents, {
+var WsSubscribeTerminalEventsRpc = make33(WS_METHODS.subscribeTerminalEvents, {
   payload: Schema_exports.Struct({}),
   success: TerminalEvent,
   stream: true
 });
-var WsSubscribeServerConfigRpc = make34(WS_METHODS.subscribeServerConfig, {
+var WsSubscribeServerConfigRpc = make33(WS_METHODS.subscribeServerConfig, {
   payload: Schema_exports.Struct({}),
   success: ServerConfigStreamEvent,
   error: Schema_exports.Union([KeybindingsConfigError, ServerSettingsError]),
   stream: true
 });
-var WsSubscribeServerLifecycleRpc = make34(WS_METHODS.subscribeServerLifecycle, {
+var WsSubscribeServerLifecycleRpc = make33(WS_METHODS.subscribeServerLifecycle, {
   payload: Schema_exports.Struct({}),
   success: ServerLifecycleStreamEvent,
   stream: true
 });
-var WsSubscribeAuthAccessRpc = make34(WS_METHODS.subscribeAuthAccess, {
+var WsSubscribeAuthAccessRpc = make33(WS_METHODS.subscribeAuthAccess, {
   payload: Schema_exports.Struct({}),
   success: AuthAccessStreamEvent,
   stream: true
 });
-var WsRpcGroup = make39(
+var WsRpcGroup = make38(
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
   WsServerUpsertKeybindingRpc,
