@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "846727bee2141551e6495677a3a270b42bb77027",
-  "head": "d8fc0923947694c4755396d43421b49a817b4f41",
+  "prev": "78d694f0bc443e8a95522e13e3f1d0f6fbfa8977",
+  "head": "045f75017bddb2b1520c1642dc45339adb158203",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -23,9 +23,7 @@
     "fork-web-copy-thread-id",
     "fork-web-image-timeout",
     "fork-desktop-distribution",
-    "fork-mobile-delivery"
-  ],
-  "unapplied": [
+    "fork-mobile-delivery",
     "fork-ci-runner-compat",
     "fork-ci-release-pipeline",
     "fork-ci-upstream-sync",
@@ -33,25 +31,26 @@
     "fork-web-files-upload",
     "fork-chat-file-attachments"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
       "oid": "bd1ab5b217de350f492261b86acd06182f10274b"
     },
     "fork-chat-file-attachments": {
-      "oid": "ddea0bc21162d8e7c191246c72a1c694b75fe0c9"
+      "oid": "045f75017bddb2b1520c1642dc45339adb158203"
     },
     "fork-ci-release-pipeline": {
-      "oid": "3a99d766279437ed4e7b6725316f54f0dedfda78"
+      "oid": "a54d57a320c00289e8f7efc4bb401a230bd48346"
     },
     "fork-ci-runner-compat": {
-      "oid": "85ed5b706db86e33311cb71e6dfba8170058bd66"
+      "oid": "0ea0f59a4a16f22f8b28b44bce3ea5a442679e75"
     },
     "fork-ci-stgit-metadata": {
-      "oid": "277d88875d0fef7e26a8e7812f2d565261c3f77a"
+      "oid": "3914f6c3a3e89a37bece7616d7e5068af5bcc024"
     },
     "fork-ci-upstream-sync": {
-      "oid": "d2a3e0d8207368fde0213c056dedb204a41765fa"
+      "oid": "75cb807ab78b3411f8ed75f5fcd99b813bd44cfb"
     },
     "fork-desktop-distribution": {
       "oid": "678e00d84506cdba55346c8a9cbc060f4a9bc23a"
@@ -108,7 +107,7 @@
       "oid": "141a4e7d8b55912329fd7930404eaa2ba9fe4ff5"
     },
     "fork-web-files-upload": {
-      "oid": "77d720a7528aa65a040d283115e3bac0646792d3"
+      "oid": "edbf511a56de4cae291ce6fc26612656233f815e"
     },
     "fork-web-image-timeout": {
       "oid": "d4a7210cd37a100e55ef39571364d7f71fb053aa"
