@@ -16,6 +16,14 @@ import {
   TurnId,
 } from "./baseSchemas.js";
 
+const makeInvalidValue = (actual: unknown, message: string) => {
+  const annotations = { message };
+  return Reflect.construct(
+    SchemaIssue.InvalidValue,
+    SchemaIssue.InvalidValue.length >= 2 ? [Option.some(actual), annotations] : [annotations],
+  ) as SchemaIssue.InvalidValue;
+};
+
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
   getTurnDiff: "orchestration.getTurnDiff",
@@ -1168,9 +1176,10 @@ export const TurnCountRange = Schema.Struct({
   Schema.makeFilter(
     (input) =>
       input.fromTurnCount <= input.toTurnCount ||
-      new SchemaIssue.InvalidValue(Option.some(input.fromTurnCount), {
-        message: "fromTurnCount must be less than or equal to toTurnCount",
-      }),
+      makeInvalidValue(
+        input.fromTurnCount,
+        "fromTurnCount must be less than or equal to toTurnCount",
+      ),
     { identifier: "OrchestrationTurnDiffRange" },
   ),
 );
