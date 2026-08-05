@@ -209,6 +209,9 @@ export const assetRouteLayer = HttpRouter.add(
       status: 200,
       headers: {
         "Cache-Control": "private, max-age=3600",
+        ...(asset.downloadName
+          ? { "Content-Disposition": contentDispositionAttachment(asset.downloadName) }
+          : {}),
         "X-Content-Type-Options": "nosniff",
       },
     }).pipe(
@@ -216,6 +219,20 @@ export const assetRouteLayer = HttpRouter.add(
     );
   }),
 );
+
+export function contentDispositionAttachment(fileName: string): string {
+  const fallback =
+    fileName
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7e]/g, "_")
+      .replace(/["\\]/g, "_")
+      .replace(/[\r\n]/g, "_") || "download";
+  const encoded = encodeURIComponent(fileName).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
 
 export const staticAndDevRouteLayer = HttpRouter.add(
   "GET",
