@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "b89f4f19b0c9b90d930d706a2343fccd47c498bc",
-  "head": "195b1927d893b72e75341563af9f45fef98e2783",
+  "prev": "ebad58e7bfeb83768e5ea96b82edc5d1ea2ff4f0",
+  "head": "84db4454db2c5699dc73a5af145811035d1badae",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -16,7 +16,9 @@
     "fork-general-chat-projects",
     "fork-remote-relay-access",
     "fork-performance-recovery",
-    "fork-headless-updates",
+    "fork-headless-updates"
+  ],
+  "unapplied": [
     "fork-text-generation",
     "fork-web-client-resilience",
     "fork-web-project-scope",
@@ -31,7 +33,6 @@
     "fork-web-files-upload",
     "fork-chat-file-attachments"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
