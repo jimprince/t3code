@@ -487,7 +487,6 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Older thread",
         updatedAt: "2026-06-02T00:00:00.000Z",
-        latestUserMessageAt: "2026-06-02T00:00:00.000Z",
       }),
       makeThread({
         environmentId,
@@ -495,7 +494,6 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Newer thread",
         updatedAt: "2026-06-03T00:00:00.000Z",
-        latestUserMessageAt: "2026-06-03T00:00:00.000Z",
       }),
     ];
 
@@ -654,7 +652,6 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Today",
         updatedAt: "2026-06-28T00:00:00.000Z",
-        latestUserMessageAt: "2026-06-28T00:00:00.000Z",
       }),
       makeThread({
         environmentId,
@@ -662,7 +659,6 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Within window",
         updatedAt: "2026-06-25T00:00:00.000Z",
-        latestUserMessageAt: "2026-06-25T00:00:00.000Z",
       }),
       makeThread({
         environmentId,
@@ -670,7 +666,6 @@ describe("buildHomeThreadGroups", () => {
         projectId: project.id,
         title: "Two weeks ago",
         updatedAt: "2026-06-14T00:00:00.000Z",
-        latestUserMessageAt: "2026-06-14T00:00:00.000Z",
       }),
     ];
 
@@ -696,7 +691,6 @@ describe("buildHomeThreadGroups", () => {
           projectId: project.id,
           title: `Thread ${index}`,
           updatedAt: `${day}T00:00:00.000Z`,
-          latestUserMessageAt: `${day}T00:00:00.000Z`,
         }),
     );
 
@@ -724,7 +718,6 @@ describe("buildHomeThreadGroups", () => {
           projectId: project.id,
           title: `Thread ${index}`,
           updatedAt: `${day}T00:00:00.000Z`,
-          latestUserMessageAt: `${day}T00:00:00.000Z`,
         }),
     );
 
@@ -793,7 +786,6 @@ describe("buildHomeThreadGroups", () => {
         projectId: laptopProject.id,
         title: "Older laptop thread",
         updatedAt: "2026-06-27T00:00:00.000Z",
-        latestUserMessageAt: "2026-06-27T00:00:00.000Z",
       }),
       makeThread({
         environmentId: desktopEnv,
@@ -801,7 +793,6 @@ describe("buildHomeThreadGroups", () => {
         projectId: desktopProject.id,
         title: "Newest desktop thread",
         updatedAt: "2026-06-28T00:00:00.000Z",
-        latestUserMessageAt: "2026-06-28T00:00:00.000Z",
       }),
     ];
 
