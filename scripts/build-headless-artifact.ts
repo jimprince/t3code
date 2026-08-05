@@ -23,7 +23,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const HeadlessPlatform = Schema.Literals(["linux"]);
 const HeadlessArch = Schema.Literals(["x64"]);
-const encodeJsonString = Schema.encodeEffect(Schema.UnknownFromJsonString);
+const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 const HeadlessWorkspaceConfig = Schema.Struct({
   catalog: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   overrides: Schema.optional(Schema.Record(Schema.String, Schema.String)),
