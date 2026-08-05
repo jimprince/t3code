@@ -952,6 +952,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           settled_at AS "settledAt",
           snoozed_until AS "snoozedUntil",
           snoozed_at AS "snoozedAt",
+          pinned_at AS "pinnedAt",
           latest_user_message_at AS "latestUserMessageAt",
           pending_approval_count AS "pendingApprovalCount",
           pending_user_input_count AS "pendingUserInputCount",
