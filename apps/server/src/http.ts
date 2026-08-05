@@ -223,12 +223,31 @@ export const assetRouteLayer = HttpRouter.add(
     }
     return yield* HttpServerResponse.file(asset.path, {
       status: 200,
-      headers: assetResponseHeaders(asset.path),
+      headers: {
+        ...assetResponseHeaders(asset.path),
+        ...(asset.downloadName
+          ? { "Content-Disposition": contentDispositionAttachment(asset.downloadName) }
+          : {}),
+      },
     }).pipe(
       Effect.orElseSucceed(() => HttpServerResponse.text("Internal Server Error", { status: 500 })),
     );
   }),
 );
+
+export function contentDispositionAttachment(fileName: string): string {
+  const fallback =
+    fileName
+      .normalize("NFKD")
+      .replace(/[^\x20-\x7e]/g, "_")
+      .replace(/["\\]/g, "_")
+      .replace(/[\r\n]/g, "_") || "download";
+  const encoded = encodeURIComponent(fileName).replace(
+    /[!'()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
 
 export const staticAndDevRouteLayer = HttpRouter.add(
   "GET",
