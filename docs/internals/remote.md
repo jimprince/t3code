@@ -212,6 +212,32 @@ Hosted pairing is a client-side convenience only. The hosted app must not receiv
 through query parameters, must not store pairing state server-side, and must not imply that an HTTP
 backend is reachable from an HTTPS browser context.
 
+### Remote file downloads
+
+Assistant Markdown file links use the existing authenticated asset-capability flow. On a remote
+web or desktop connection, the client asks `assets.createUrl` for a `workspace-file-download`
+resource containing the current thread id and linked path. The server derives the workspace root
+from that thread's project or worktree; client-supplied environment or workspace roots are never
+trusted. It canonicalizes both root and file, rejects traversal and symlinks escaping the root, and
+issues a short-lived signed URL for that exact regular file.
+
+The `/api/assets` route streams the file and adds `Content-Disposition: attachment` with a sanitized
+ASCII fallback plus an RFC 5987 UTF-8 filename. The browser therefore downloads directly from the
+environment endpoint without base64 encoding, WebSocket transfer, or buffering the file in client
+JavaScript. Every connected environment offers **Download file** in the file-chip context menu.
+Primary means same-origin, not necessarily the same physical machine, so primary file chips retain
+their existing preview/editor left-click behavior while still allowing an explicit download.
+Saved Bearer, Relay, and SSH targets download on left click and retain open-in-editor in their
+context menu. The contracts and asset URL machinery are shared with mobile, but mobile does not yet
+expose the download action because saving a streamed response requires platform document-picker and
+filesystem UX.
+
+Download capabilities preserve the canonical project/worktree containment boundary. Agents that
+generate downloadable artifacts must write them inside the thread's project or active worktree and
+link that path. An artifact written to an external location, such as a screenshot tool's temporary
+or evidence directory, is intentionally rejected even if its absolute path appears in Markdown;
+move or copy it into the thread workspace before linking it for download.
+
 ## Version coordination
 
 Remote environments stay online while clients move to newer releases. The environment descriptor
