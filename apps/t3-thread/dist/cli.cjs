@@ -47406,6 +47406,13 @@ var ScopedThreadSessionRef = Schema_exports.Struct({
 });
 
 // src/vendor/t3contracts/orchestration.ts
+var makeInvalidValue = (actual, message) => {
+  const annotations = { message };
+  return Reflect.construct(
+    SchemaIssue_exports.InvalidValue,
+    SchemaIssue_exports.InvalidValue.length >= 2 ? [Option_exports.some(actual), annotations] : [annotations]
+  );
+};
 var ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
   getTurnDiff: "orchestration.getTurnDiff",
@@ -48374,9 +48381,10 @@ var TurnCountRange = Schema_exports.Struct({
   toTurnCount: NonNegativeInt
 }).check(
   Schema_exports.makeFilter(
-    (input) => input.fromTurnCount <= input.toTurnCount || new SchemaIssue_exports.InvalidValue(Option_exports.some(input.fromTurnCount), {
-      message: "fromTurnCount must be less than or equal to toTurnCount"
-    }),
+    (input) => input.fromTurnCount <= input.toTurnCount || makeInvalidValue(
+      input.fromTurnCount,
+      "fromTurnCount must be less than or equal to toTurnCount"
+    ),
     { identifier: "OrchestrationTurnDiffRange" }
   )
 );
