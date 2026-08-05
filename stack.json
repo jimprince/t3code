@@ -1,11 +1,13 @@
 {
   "version": 5,
-  "prev": "6af74423041641abbebb2cc4f836de8f11e258be",
-  "head": "664b8257eab1cf73db9fc86ed553f31f7b8a5ccd",
+  "prev": "8fcf7cc361e01b261b1146ecc7e74c967f46ab26",
+  "head": "15ecac17d1aa97052d9b79fc5901c94dd7cb8bff",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
-    "fork-t3-thread-operator-cli",
+    "fork-t3-thread-operator-cli"
+  ],
+  "unapplied": [
     "fork-provider-turn-reservation",
     "fork-provider-runtime-recovery",
     "fork-provider-observability",
@@ -16,9 +18,7 @@
     "fork-general-chat-projects",
     "fork-remote-relay-access",
     "fork-performance-recovery",
-    "fork-headless-updates"
-  ],
-  "unapplied": [
+    "fork-headless-updates",
     "fork-text-generation",
     "fork-web-client-resilience",
     "fork-web-project-scope",
