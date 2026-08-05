@@ -102,6 +102,7 @@ const runDriver = (repo: FixtureRepo, conflictMode = "fail"): DriverResult => {
       encoding: "utf8",
       env: {
         ...process.env,
+        PATH: `/usr/bin:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH ?? ""}`,
         CI_REPAIR_BOT_UPSTREAM_TARGET: syncTargetRef,
         CI_REPAIR_BOT_UPSTREAM_SOURCE_REF: releaseTargetRef,
         CI_REPAIR_BOT_UPSTREAM_REMOTE: "upstream",
@@ -112,9 +113,10 @@ const runDriver = (repo: FixtureRepo, conflictMode = "fail"): DriverResult => {
         GITHUB_OUTPUT: githubOutput,
       },
     });
+    const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
     return {
       status: result.status ?? 1,
-      output: `${result.stdout ?? ""}${result.stderr ?? ""}`,
+      output,
       ...parseGithubOutput(NodeFS.readFileSync(githubOutput, "utf8")),
     };
   } finally {
@@ -141,7 +143,7 @@ suite("reproduce-sync-upstream StGit replay", () => {
 
       const result = runDriver(repo);
       assert.strictEqual(result.status, 0, result.output);
-      assert.strictEqual(result.ghStatus, "clean");
+      assert.strictEqual(result.ghStatus, "clean", JSON.stringify(result, null, 2));
       const after = NodeChildProcess.execFileSync(stgBin!, ["series", "--noprefix"], {
         cwd: repo.dir,
         encoding: "utf8",
@@ -173,7 +175,7 @@ suite("reproduce-sync-upstream StGit replay", () => {
 
       const result = runDriver(repo, "output");
       assert.strictEqual(result.status, 0, result.output);
-      assert.strictEqual(result.ghStatus, "conflict");
+      assert.strictEqual(result.ghStatus, "conflict", JSON.stringify(result, null, 2));
       assert.strictEqual(result.ghPatch, names[0]);
       assert.deepStrictEqual(result.ghFiles, ["shared/base.ts"]);
       assert.include(result.output, "retire");
