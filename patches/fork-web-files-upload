@@ -1,6 +1,6 @@
-Bottom: c2e3cc6f2f5055a0bceb0d03e0707d9d576581e4
-Top:    2de74e57c5a87a7ff71ee59acb4cd3a5518c2f08
+Bottom: 086ce4660e0749e6976c7afcfbcb63d5af885c7c
+Top:    229e95010e6aed5c2500577fbebbe5211be6b23d
 Author: Codex <codex@users.noreply.github.com>
-Date:   2026-08-04 20:44:04 -0600
+Date:   2026-08-04 21:18:46 -0600
 
 feat(web): upload files into workspace via drag-and-drop
