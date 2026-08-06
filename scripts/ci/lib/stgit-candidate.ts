@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off
 import * as NodePath from "node:path";
 
 export const candidateContract = "t3code.stgit-candidate/v1" as const;
