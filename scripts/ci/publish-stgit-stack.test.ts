@@ -204,6 +204,8 @@ describe("publish-stgit-stack", () => {
       const release = prepareRelease(fixture);
       const result = run(fixture.repo, "--push", {
         STGIT_EXPECTED_REMOTE_MAIN: fixture.remoteBase,
+        STGIT_EXPECTED_REMOTE_STACK: fixture.stackOid,
+        STGIT_EXPECTED_PATCH_REFS_JSON: remotePatchRefs(fixture),
         STGIT_RELEASE_TAG: release.tag,
         STGIT_RELEASE_TAG_SHA: release.sha,
         STGIT_BACKUP_NAMESPACE: "bot",

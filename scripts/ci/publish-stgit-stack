@@ -138,7 +138,7 @@ if [[ -n "$expected_remote_stack" && "$remote_stack" != "$expected_remote_stack"
 fi
 if [[ -n "$expected_patch_refs_json" ]]; then
   actual_patch_refs_json="$(bun -e '
-    const text = process.argv[1];
+    const text = await Bun.file(process.argv[1]).text();
     const result = {};
     for (const line of text.split("\n")) {
       const [oid, ref] = line.split("\t");
