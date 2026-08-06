@@ -13,6 +13,8 @@ git_cmd() { "$GIT_BIN" "$@"; }
 
 remote="${STGIT_REMOTE:-origin}"
 expected_remote_main="${STGIT_EXPECTED_REMOTE_MAIN:-}"
+expected_remote_stack="${STGIT_EXPECTED_REMOTE_STACK:-}"
+expected_patch_refs_json="${STGIT_EXPECTED_PATCH_REFS_JSON:-}"
 release_tag="${STGIT_RELEASE_TAG:-}"
 release_tag_sha="${STGIT_RELEASE_TAG_SHA:-}"
 backup_namespace="${STGIT_BACKUP_NAMESPACE:-manual}"
@@ -24,6 +26,22 @@ fi
 if [[ -n "$expected_remote_main" ]] &&
   [[ ! "$expected_remote_main" =~ ^[0-9a-f]{40}$ ]]; then
   echo "STGIT_EXPECTED_REMOTE_MAIN must be a full lowercase Git oid." >&2
+  exit 2
+fi
+if [[ -n "$expected_remote_stack" ]] &&
+  [[ ! "$expected_remote_stack" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "STGIT_EXPECTED_REMOTE_STACK must be a full lowercase Git oid." >&2
+  exit 2
+fi
+if [[ -n "$expected_patch_refs_json" ]] && ! bun -e '
+  const value = JSON.parse(process.argv[1]);
+  if (!value || Array.isArray(value) || typeof value !== "object") process.exit(1);
+  for (const [ref, oid] of Object.entries(value)) {
+    if (!/^refs\/patches\/stgit\/adopt\/[A-Za-z0-9._-]+$/.test(ref)) process.exit(1);
+    if (!/^[0-9a-f]{40}$/.test(String(oid))) process.exit(1);
+  }
+' "$expected_patch_refs_json"; then
+  echo "STGIT_EXPECTED_PATCH_REFS_JSON must map canonical patch refs to full oids." >&2
   exit 2
 fi
 if [[ -n "$release_tag" || -n "$release_tag_sha" ]]; then
@@ -114,6 +132,29 @@ refspecs=("${head}:refs/heads/main")
 printf 'refs/heads/main\t%s\n' "$head" >> "$expected_refs"
 
 remote_stack="$(remote_oid "$stack_ref")"
+if [[ -n "$expected_remote_stack" && "$remote_stack" != "$expected_remote_stack" ]]; then
+  echo "remote stack lease changed: expected $expected_remote_stack, found ${remote_stack:-<absent>}." >&2
+  exit 1
+fi
+if [[ -n "$expected_patch_refs_json" ]]; then
+  actual_patch_refs_json="$(bun -e '
+    const text = process.argv[1];
+    const result = {};
+    for (const line of text.split("\n")) {
+      const [oid, ref] = line.split("\t");
+      if (ref?.startsWith("refs/patches/stgit/adopt/")) result[ref] = oid;
+    }
+    process.stdout.write(JSON.stringify(result, Object.keys(result).sort()));
+  ' "$remote_refs")"
+  normalized_expected_patch_refs_json="$(bun -e '
+    const value = JSON.parse(process.argv[1]);
+    process.stdout.write(JSON.stringify(value, Object.keys(value).sort()));
+  ' "$expected_patch_refs_json")"
+  if [[ "$actual_patch_refs_json" != "$normalized_expected_patch_refs_json" ]]; then
+    echo "remote patch-ref leases changed since the candidate was claimed." >&2
+    exit 1
+  fi
+fi
 leases+=("--force-with-lease=${stack_ref}:${remote_stack}")
 refspecs+=("${stack_oid}:${stack_ref}")
 printf '%s\t%s\n' "$stack_ref" "$stack_oid" >> "$expected_refs"

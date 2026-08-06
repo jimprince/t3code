@@ -35,6 +35,13 @@ never enter a patch.
 Use `scripts/ci/publish-stgit-stack --check|--push` as the only supported manual
 landing route for a changed stack.
 
+For a genuinely new concern produced as one reviewed candidate commit, prefer
+the skill's isolated candidate workflow. Its manifest binds the review to exact
+remote main and stack metadata, declares the only paths the concern may change,
+and supplies argv-only verification. Run `deploy-stgit-concern --check` before
+the explicit `--push`; the helper converts the candidate into a real StGit
+patch rather than publishing the candidate commit beside the stack.
+
 ## Fast path for release/update work
 
 Current policy: automatic nightly upstream replays/builds are intentional. Do

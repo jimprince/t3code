@@ -36,6 +36,7 @@ const createValidDocs = (): string => {
       "Run `stg rebase` and never run `stg new` during a rebase.",
       "## New-concern workflow",
       "Run `stg new` for an independent feature.",
+      "Use `prepare-stgit-agent-worktree`, `create-stgit-candidate-manifest`, and `deploy-stgit-concern` for isolated candidate work.",
       "Read the [runbook](../../../docs/operations/fork-maintenance.md) and [inventory](../../../docs/operations/fork-inventory.toml).",
     ].join("\n"),
   );
@@ -45,11 +46,19 @@ const createValidDocs = (): string => {
     [
       "[Rebase the fork or resolve a patch conflict](./operations/fork-maintenance.md#rebase-the-stack).",
       "[Add or change a fork feature](../.agents/skills/fork-patch-stack/SKILL.md#new-concern-workflow).",
+      "[Deploy a reviewed new concern safely](../.agents/skills/fork-patch-stack/SKILL.md#isolated-agent-and-reviewed-candidate-workflow).",
       "[Publish the StGit stack safely](./operations/fork-maintenance.md#publish-the-stack).",
     ].join("\n"),
   );
   write(root, "docs/operations/fork-maintenance.md", "# Fork maintenance\n");
   write(root, "docs/operations/fork-inventory.toml", "schema = 2\n");
+  for (const tool of [
+    "check-stgit-candidate",
+    "create-stgit-candidate-manifest",
+    "deploy-stgit-concern",
+    "prepare-stgit-agent-worktree",
+  ])
+    write(root, `scripts/ci/${tool}`, "#!/usr/bin/env bash\n");
   return root;
 };
 
@@ -82,6 +91,16 @@ describe("check-fork-docs", () => {
         "---\nname: fork-patch-stack\ndescription: Maintain patches.\n---\n## Rebase workflow\nRun `stg rebase`.\n",
       );
       assert.include(checkForkDocs(root).join("\n"), "new-concern workflow");
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("REGRESSION: fails when candidate deployment disappears from discovery", () => {
+    const root = createValidDocs();
+    try {
+      NodeFS.rmSync(NodePath.join(root, "scripts/ci/deploy-stgit-concern"));
+      assert.include(checkForkDocs(root).join("\n"), "missing required fork tool");
     } finally {
       NodeFS.rmSync(root, { recursive: true, force: true });
     }

@@ -118,6 +118,24 @@ const prepareRelease = (
   return { tag: "nightly-v0.0.0-test", sha };
 };
 
+const remotePatchRefs = (fixture: ReturnType<typeof seedPublication>): string =>
+  JSON.stringify(
+    Object.fromEntries(
+      gitAt(
+        fixture.remote,
+        "for-each-ref",
+        "--format=%(refname) %(objectname)",
+        "refs/patches/stgit/adopt",
+      )
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const [ref, oid] = line.split(" ");
+          return [ref, oid];
+        }),
+    ),
+  );
+
 const racingGit = (): { readonly bin: string; readonly marker: string; readonly dir: string } => {
   const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-racing-git-"));
   const bin = NodePath.join(dir, "git");
@@ -205,6 +223,43 @@ describe("publish-stgit-stack", () => {
         gitAt(fixture.remote, "for-each-ref", "--format=%(refname)", "refs/heads/backup/bot"),
         "refs/heads/backup/bot/stgit-",
       );
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a stack that changed after candidate claim without publishing main", () => {
+    const fixture = seedPublication();
+    try {
+      gitAt(fixture.remote, "update-ref", "refs/stacks/stgit/adopt", fixture.remoteBase);
+      const result = run(fixture.repo, "--push", {
+        STGIT_EXPECTED_REMOTE_MAIN: fixture.remoteBase,
+        STGIT_EXPECTED_REMOTE_STACK: fixture.stackOid,
+      });
+      assert.notStrictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.include(result.stderr, "remote stack lease changed");
+      assert.strictEqual(gitAt(fixture.remote, "rev-parse", "refs/heads/main"), fixture.remoteBase);
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects patch-ref set drift after candidate claim without publishing main", () => {
+    const fixture = seedPublication();
+    try {
+      const expected = remotePatchRefs(fixture);
+      const [name] = fixture.patches[0]!;
+      gitAt(fixture.remote, "update-ref", `refs/patches/stgit/adopt/${name}`, fixture.remoteBase);
+      const result = run(fixture.repo, "--push", {
+        STGIT_EXPECTED_REMOTE_MAIN: fixture.remoteBase,
+        STGIT_EXPECTED_REMOTE_STACK: fixture.stackOid,
+        STGIT_EXPECTED_PATCH_REFS_JSON: expected,
+      });
+      assert.notStrictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      assert.include(result.stderr, "remote patch-ref leases changed");
+      assert.strictEqual(gitAt(fixture.remote, "rev-parse", "refs/heads/main"), fixture.remoteBase);
     } finally {
       fixture.repo.cleanup();
       NodeFS.rmSync(fixture.remote, { recursive: true, force: true });

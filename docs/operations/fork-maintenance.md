@@ -157,6 +157,39 @@ scripts/ci/check-stgit-stack
 File overlap is not a reason to combine concerns. Never append a plain repair
 commit beside the stack.
 
+### Isolated implementation and candidate deployment
+
+Use `scripts/ci/prepare-stgit-agent-worktree` when an implementation agent
+needs a disposable checkout. It clones current remote `main`, fetches the
+canonical metadata namespace, validates stack context before mutation, checks
+an optional claim-time main lease, and can create the requested empty new patch.
+The agent still owns implementation, tests, applicable feature documentation,
+and the inventory stanza in that patch.
+
+When review produced a single ordinary candidate commit outside the stack, do
+not hand-port it into the maintenance checkout. Generate a
+`t3code.stgit-candidate/v1` manifest with
+`scripts/ci/create-stgit-candidate-manifest`, review its exact base leases,
+patch purpose, allowed paths, and verification argv, then run:
+
+```bash
+scripts/ci/deploy-stgit-concern --manifest <candidate.json> --check
+scripts/ci/deploy-stgit-concern --manifest <candidate.json> --push
+```
+
+The helper creates a fresh isolated stack checkout; requires the candidate to
+be one non-merge commit; rejects duplicate patch names, missing dependencies,
+scope drift, inventory drift, and verification failures; applies the commit
+with no commit; stages only declared paths plus the inventory; and refreshes
+the new patch. It then requires the ordered name, subject, and object ID of
+every pre-existing patch to remain identical. Publication receives the
+claim-time main, stack, and full patch-ref set, so any intervening metadata
+change loses safely before the atomic push. The isolated checkout is retained
+for audit and recovery.
+
+This path is for a genuinely new concern. Existing-purpose work still refreshes
+its owning patch directly. Rebase repair still never creates a patch.
+
 ## Reducing maintenance cost
 
 Use this surface-reduction ladder whenever a patch repeatedly conflicts:
@@ -221,6 +254,11 @@ the claim-time main lease in `STGIT_EXPECTED_REMOTE_MAIN`, the prepared tag in
 namespace. The helper never refreshes a rejected lease or retries against
 newly observed state, and it verifies every resulting remote object ID when a
 push reports an ambiguous transport failure.
+
+Candidate deployment additionally supplies `STGIT_EXPECTED_REMOTE_STACK` and
+`STGIT_EXPECTED_PATCH_REFS_JSON`. These bind publication to the complete
+metadata state observed when the candidate was claimed, including obsolete
+refs scheduled for deletion.
 
 ## Recovery
 

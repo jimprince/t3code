@@ -94,6 +94,48 @@ scripts/ci/check-stgit-stack
 Add exactly one ordered schema-v2 inventory entry in the new patch. Name and
 subject must match StGit and the commit subject exactly.
 
+### Isolated agent and reviewed-candidate workflow
+
+When an agent should implement a new concern away from the maintenance
+checkout, prepare its exact remote stack and empty owning patch with:
+
+```bash
+scripts/ci/prepare-stgit-agent-worktree \
+  --output <disposable-directory> \
+  --remote <origin-url> \
+  --expected-main <claim-time-main-sha> \
+  --patch-name <patch-name> \
+  --patch-subject "<conventional subject>"
+```
+
+For an already reviewed single candidate commit, create a lease-bound manifest,
+inspect it, then use the deployment helper:
+
+```bash
+scripts/ci/create-stgit-candidate-manifest \
+  --candidate <commit> \
+  --name <patch-name> \
+  --subject "<conventional subject>" \
+  --class <product|divergence|upstream-bound> \
+  --purpose "<coherent purpose>" \
+  --retire-when "<condition>" \
+  --depends-on-json '["<earlier-patch>"]' \
+  --verification-json '[["vp","test","run","<focused-test>"]]' \
+  --output <candidate.json>
+
+scripts/ci/deploy-stgit-concern --manifest <candidate.json> --check
+scripts/ci/deploy-stgit-concern --manifest <candidate.json> --push
+```
+
+The manifest contains exact main and metadata leases, the candidate object,
+the new patch identity, its allowed paths, and shell-free verification argv.
+Deployment clones the claimed stack, rejects undeclared paths, applies the
+candidate without creating a plain commit, writes the inventory stanza, stages
+explicit paths, refreshes exactly one patch, proves every existing patch object
+unchanged, and delegates publication to the atomic helper. Check mode is the
+default and never publishes. A lease loss fails safely; create a new manifest
+after reviewing the new remote state instead of refreshing leases implicitly.
+
 ## Rebase workflow
 
 Run the fork baseline and compare failures with pure upstream before trusting

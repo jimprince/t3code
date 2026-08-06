@@ -14,6 +14,13 @@ const requiredFiles = [
   "docs/operations/fork-inventory.toml",
 ] as const;
 
+const requiredForkTools = [
+  "scripts/ci/check-stgit-candidate",
+  "scripts/ci/create-stgit-candidate-manifest",
+  "scripts/ci/deploy-stgit-concern",
+  "scripts/ci/prepare-stgit-agent-worktree",
+] as const;
+
 const historicalDocuments = new Set([
   "docs/superpowers/specs/2026-07-24-fork-maintenance-design.md",
   "docs/superpowers/plans/2026-07-24-fork-maintenance-phase-0-2.md",
@@ -76,6 +83,10 @@ export const checkForkDocs = (root = process.cwd()): string[] => {
     if (!NodeFS.existsSync(NodePath.join(absoluteRoot, file)))
       errors.push(`missing required fork document: ${file}`);
   }
+  for (const file of requiredForkTools) {
+    if (!NodeFS.existsSync(NodePath.join(absoluteRoot, file)))
+      errors.push(`missing required fork tool: ${file}`);
+  }
   if (errors.length > 0) return errors;
 
   const agentsLinks = resolvedLinks(absoluteRoot, "AGENTS.md");
@@ -96,6 +107,7 @@ export const checkForkDocs = (root = process.cwd()): string[] => {
   for (const route of [
     "Rebase the fork or resolve a patch conflict",
     "Add or change a fork feature",
+    "Deploy a reviewed new concern safely",
     "Publish the StGit stack safely",
   ]) {
     if (!docsReadme.includes(route))
@@ -108,6 +120,13 @@ export const checkForkDocs = (root = process.cwd()): string[] => {
   }
   if (!/new-concern workflow/i.test(skill) || !/stg new/.test(skill)) {
     errors.push("fork-patch-stack skill must contain the new-concern workflow");
+  }
+  for (const command of [
+    "prepare-stgit-agent-worktree",
+    "create-stgit-candidate-manifest",
+    "deploy-stgit-concern",
+  ]) {
+    if (!skill.includes(command)) errors.push(`fork-patch-stack skill must route to ${command}`);
   }
 
   const markdownFiles = [
