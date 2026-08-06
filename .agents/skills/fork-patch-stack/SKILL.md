@@ -81,7 +81,7 @@ Never use `git add -A`. Inspect the staged diff before every refresh.
 
 ```bash
 test -z "$(git status --porcelain)"
-stg push --all
+test -z "$(stg series --unapplied)" || stg push --all
 stg new <patch-name> --message "<conventional subject>"
 
 # Add implementation, tests, applicable docs, and the inventory stanza.

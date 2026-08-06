@@ -146,7 +146,7 @@ without dropping another feature, creates a new concern:
 
 ```bash
 test -z "$(git status --porcelain)"
-stg push --all
+test -z "$(stg series --unapplied)" || stg push --all
 stg new <patch-name> --message "<conventional subject>"
 # add implementation, tests, applicable docs, and one inventory stanza
 git add <explicit-paths>

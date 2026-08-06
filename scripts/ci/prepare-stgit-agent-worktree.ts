@@ -79,7 +79,6 @@ const main = (): void => {
       ...process.env,
       PATH: `/usr/bin:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH ?? ""}`,
     };
-    runCommand(stg, ["push", "--all"], { cwd: output, env: stgEnv });
     runCommand(stg, ["new", patchName, "--message", patchSubject], {
       cwd: output,
       env: stgEnv,

@@ -49,10 +49,13 @@ const main = (): void => {
       ? (flags.get("--candidate-repo") as string)
       : sourceCwd,
   );
-  const remote =
+  const remoteInput =
     typeof flags.get("--remote") === "string"
       ? (flags.get("--remote") as string)
       : runCommand(git, ["remote", "get-url", "origin"], { cwd: sourceCwd, quiet: true });
+  const remote = /^[A-Za-z0-9._-]+$/.test(remoteInput)
+    ? runCommand(git, ["remote", "get-url", remoteInput], { cwd: sourceCwd, quiet: true })
+    : remoteInput;
   const output = NodePath.resolve(
     typeof flags.get("--output") === "string"
       ? (flags.get("--output") as string)
@@ -127,7 +130,6 @@ const main = (): void => {
     ...process.env,
     PATH: `/usr/bin:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH ?? ""}`,
   };
-  runCommand(stg, ["push", "--all"], { cwd: output, env: stgEnv });
   runCommand(stg, ["new", manifest.patch.name, "--message", manifest.patch.subject], {
     cwd: output,
     env: stgEnv,
