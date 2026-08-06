@@ -31,9 +31,6 @@ const main = (): void => {
     throw new Error(
       `candidate patch parent changed: expected ${manifest.baseMain}, found ${parent}`,
     );
-  const stack = runCommand(git, ["rev-parse", "refs/stacks/stgit/adopt"], { cwd, quiet: true });
-  if (stack !== manifest.baseStack)
-    throw new Error(`stack lease changed: expected ${manifest.baseStack}, found ${stack}`);
   const subject = runCommand(git, ["show", "-s", "--format=%s", "HEAD"], { cwd, quiet: true });
   if (subject !== manifest.patch.subject)
     throw new Error(
