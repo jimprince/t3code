@@ -1,6 +1,3 @@
-// @effect-diagnostics nodeBuiltinImport:off
-import * as NodePath from "node:path";
-
 export const candidateContract = "t3code.stgit-candidate/v1" as const;
 export const inventoryPath = "docs/operations/fork-inventory.toml" as const;
 
@@ -54,7 +51,7 @@ const stringArray = (value: unknown, name: string): readonly string[] => {
 
 const safeRelativePath = (value: string, name: string): string => {
   if (
-    NodePath.posix.isAbsolute(value) ||
+    value.startsWith("/") ||
     value.includes("\\") ||
     value.split("/").some((part) => part === "" || part === "." || part === "..") ||
     value === ".git" ||
