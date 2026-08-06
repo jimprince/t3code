@@ -1,9 +1,8 @@
 {
   "version": 5,
-  "prev": "b66585379fa64ab7c45fd787bb85fe56c25d152a",
-  "head": "e4abc31f1e3f930e521a5bb62b38a9c5b28d8fb1",
-  "applied": [],
-  "unapplied": [
+  "prev": "ae8d5dae8b912ec9c6b8a5a10d008786e9395708",
+  "head": "0a30be144effdbf55d56169949ef2f6448f7f541",
+  "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
     "fork-t3-thread-operator-cli",
@@ -21,7 +20,9 @@
     "fork-text-generation",
     "fork-web-client-resilience",
     "fork-web-project-scope",
-    "fork-web-copy-thread-id",
+    "fork-web-copy-thread-id"
+  ],
+  "unapplied": [
     "fork-web-image-timeout",
     "fork-desktop-distribution",
     "fork-mobile-delivery",
@@ -36,7 +37,7 @@
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
-      "oid": "8b4853c8c64ca45971494d36f0381cba60f01dfd"
+      "oid": "9d645587a70d1dffa8223f6c708fe8642fb2f0aa"
     },
     "fork-chat-file-attachments": {
       "oid": "c47757d7636d73e0e6cf193b00abb13c314cbe9c"
@@ -57,58 +58,58 @@
       "oid": "cb2438b16d575aa1f87bc4544afcc8466cc7711d"
     },
     "fork-general-chat-projects": {
-      "oid": "10923437dd5702a63288f07fc0528cb9d75e2350"
+      "oid": "0b0d1c7b3a7c4a07b1ca68006bfc5b1d32062109"
     },
     "fork-headless-updates": {
-      "oid": "78775c38d45853b253817537f93e01159407b500"
+      "oid": "0d88ef9b5da0a66bb9ec0f4c781b50a70a6086dd"
     },
     "fork-mobile-delivery": {
       "oid": "ff1d8e494637e6581d2cf9bab8a01ed1d3e90ca0"
     },
     "fork-performance-recovery": {
-      "oid": "984489d9690063c9e7bd9e852516c1f1a9878116"
+      "oid": "a4dd25ca685b306ac82ecacfddccbdb5730f22f4"
     },
     "fork-provider-observability": {
-      "oid": "263e183a03e544d2ead662052650dbe5a0da3df7"
+      "oid": "98a2ce96461025b2127bb6403e8f2116577369e4"
     },
     "fork-provider-runtime-recovery": {
-      "oid": "a97d6e2a793e40a1a2b7ee4c39f8ec070129a411"
+      "oid": "0fdff626c0f487ff6b25f5a3bf316f31cc66a1e5"
     },
     "fork-provider-turn-reservation": {
-      "oid": "0e80e7d9deed95460e9eeceb088c533faadaf651"
+      "oid": "bd0d419da7fff429bd2ab7667a4610d9758910b7"
     },
     "fork-remote-file-downloads": {
       "oid": "2faca9f18315e2df8c5a2c69610f2918d60f1735"
     },
     "fork-remote-relay-access": {
-      "oid": "c27a7697f5af54e4f885696c8d9962f03e822a3d"
+      "oid": "d0f170ba71b8f66bd4ea694c04b458ae0fce3cef"
     },
     "fork-stgit-stack-policy": {
-      "oid": "f9d8a93f9795bc4c899bdbea8638dc1b72af1065"
+      "oid": "f5df85e90eeb130ab3a528840229842be732073f"
     },
     "fork-t3-thread-operator-cli": {
-      "oid": "1ded77fe2c339dfb3d53b49bb871fa61d49e367c"
+      "oid": "e7c02a1a4a04dd965f3d4b474fb53524ac6da76e"
     },
     "fork-text-generation": {
-      "oid": "034998d8b20d8712f08bff06a01488eb7bec5e8e"
+      "oid": "169009b9cd46b17cbd0f782a30ba9d2274a4a3e1"
     },
     "fork-thread-fork": {
-      "oid": "ad2a25d9ecb153b69b3fadc813dfc5a5bfdbe41d"
+      "oid": "d65cc05c16610bb86da77a9b3e5915caec83b904"
     },
     "fork-thread-goals": {
-      "oid": "d6adbf7dac78a1629f41560bfdf64b5109ec3423"
+      "oid": "82ae5c3bddae5f7b2eed63af841dcf747d44c819"
     },
     "fork-thread-lifecycle-recovery": {
-      "oid": "8c69e2b20f1b9f0bb50613940390aaa1d9013b3e"
+      "oid": "85a5e2b45b2f747d6947db9d75347c6078fe007e"
     },
     "fork-thread-transfer": {
-      "oid": "4db49707c305da4c67c785292a1f4f7b456cd52d"
+      "oid": "b936d664135dd2df58935983a741bb95d62ca892"
     },
     "fork-web-client-resilience": {
-      "oid": "e167ee7250410b7435e73f52320cf53627f3a8f3"
+      "oid": "eb3c11f032117f051ff5b71265c9e0a256734a95"
     },
     "fork-web-copy-thread-id": {
-      "oid": "19148af8dfe122cefa3483f35f6f49ddd61af56d"
+      "oid": "0a30be144effdbf55d56169949ef2f6448f7f541"
     },
     "fork-web-files-upload": {
       "oid": "af0789e180fd5e5c4c86d81b726a25b089d62d15"
@@ -117,7 +118,7 @@
       "oid": "e82d2f4032e671fd243b1c3836b64fb1f766382e"
     },
     "fork-web-project-scope": {
-      "oid": "2e09f561173d24d202bdf14e2b0470ecc0126198"
+      "oid": "9c110ab604a7091c4ed2a52059580034479e45bd"
     }
   }
 }
