@@ -41,6 +41,7 @@ import { OrchestrationProjectionSnapshotQueryLive } from "./orchestration/Layers
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as OrchestrationReactor from "./orchestration/Services/OrchestrationReactor.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ThreadBackgroundLiveness from "./orchestration/ThreadBackgroundLiveness.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
@@ -56,6 +57,7 @@ const startupReconciliationTestLayer = Layer.mergeAll(
   ),
   OrchestrationProjectionSnapshotQueryLive,
 ).pipe(
+  Layer.provide(ThreadBackgroundLiveness.layer),
   Layer.provide(OrchestrationEventStoreLive),
   Layer.provide(OrchestrationCommandReceiptRepositoryLive),
   Layer.provide(RepositoryIdentityResolver.layer),
