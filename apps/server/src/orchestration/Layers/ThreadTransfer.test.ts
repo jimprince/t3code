@@ -34,6 +34,7 @@ import {
 } from "../../provider/Services/ProviderService.ts";
 import { layer as RepositoryIdentityResolverLive } from "../../project/RepositoryIdentityResolver.ts";
 import * as VcsProcess from "../../vcs/VcsProcess.ts";
+import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ThreadTransfer } from "../Services/ThreadTransfer.ts";
@@ -176,6 +177,7 @@ const makeTransferSystemLayer = (input: TransferSystemInput) => {
       }),
     ),
   ).pipe(
+    Layer.provide(ThreadBackgroundLiveness.layer),
     Layer.provide(OrchestrationEventStoreLive),
     Layer.provide(OrchestrationCommandReceiptRepositoryLive),
     Layer.provide(RepositoryIdentityResolverLive),
