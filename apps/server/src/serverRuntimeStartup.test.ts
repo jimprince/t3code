@@ -59,7 +59,7 @@ const startupReconciliationTestLayer = Layer.mergeAll(
   OrchestrationProjectionSnapshotQueryLive,
 ).pipe(
   Layer.provide(ThreadBackgroundLiveness.layer),
-    Layer.provide(ThreadPlanProgress.layer),
+  Layer.provide(ThreadPlanProgress.layer),
   Layer.provide(OrchestrationEventStoreLive),
   Layer.provide(OrchestrationCommandReceiptRepositoryLive),
   Layer.provide(RepositoryIdentityResolver.layer),
