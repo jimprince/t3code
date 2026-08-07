@@ -19,10 +19,18 @@ wrapper because `stg rebase` calls `git reset --hard` internally:
 command -v stg
 stg --version
 export PATH="/usr/bin:/usr/local/bin:/opt/homebrew/bin:$PATH"
+export HUSKY=0 VITE_GIT_HOOKS=0
 ```
 
 On macOS, install StGit with Homebrew. On Linux, use an upstream prebuilt
 package or a current source build; distribution packages may be obsolete.
+
+`stg refresh` commits, so it runs the repo's `pre-commit` hook (`vp staged`).
+Mid-stack the worktree is a partial tree, so that hook fails on unrelated files
+and aborts the refresh with `index not clean`. Disable hooks for the whole
+stack session with the two variables above, and run the real gates
+(`pnpm typecheck`, `pnpm test`, `pnpm fmt:check`) at the stack tip instead,
+where the tree is complete.
 
 The canonical namespace is:
 
@@ -159,6 +167,19 @@ For each conflict:
 Never run `stg new` during a rebase. A rebase repair belongs in the failing
 patch. Preserve patch names and count unless intentionally retiring, splitting,
 or adding a concern outside the rebase-repair workflow.
+
+Step 5 is best-effort mid-stack: patches are not individually standalone, so a
+failing patch's own tests may not even import cleanly at its stack position.
+Treat the stack tip as the real gate — after the last patch applies, run
+`pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, and
+`pnpm fmt:check` there, then carry each fix back into its owning patch with
+`stg goto <patch>` and `stg refresh`.
+
+Generated files must be regenerated at the tip, not at their owning patch.
+Regenerating `pnpm-lock.yaml` while only the first patches are applied silently
+omits workspaces that later patches add (for example `apps/t3-thread`), and the
+lockfile then fails `--frozen-lockfile` in CI. Regenerate at the tip, save the
+file, then `stg goto fork-build-workspace-tooling`, copy it in, and refresh.
 
 ## Structural stack changes
 
