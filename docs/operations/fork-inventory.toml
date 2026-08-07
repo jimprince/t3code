@@ -28,4 +28,4 @@ purpose = "Configure the fork workspace, dependency graph, and reusable build to
 retire_when = "never"
 depends_on = ["fork-stgit-stack-policy"]
 roles = ["lockfile-owner"]
-note = "pnpm-lock.yaml is generated: take upstream's lockfile during a conflict, regenerate it, and refresh only this patch."
+note = "pnpm-lock.yaml is generated: take upstream's lockfile during a conflict, then regenerate it AT THE STACK TIP and copy it back into this patch. Regenerating while only the early patches are applied omits workspaces that later patches add (apps/t3-thread), which then fails --frozen-lockfile in CI."
