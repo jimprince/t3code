@@ -1635,6 +1635,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
       // aggregator sync pipeline and asserts that `getProviders` reflects
       // the new background probe's outcome.
       //
+      // Each poll iteration advances virtual time and yields, but the probe
+      // completes on real fibers. Under CPU contention (CI) those fibers can be
+      // starved for many iterations, so a small cap asserts before the work has
+      // had a chance to land. The bound only exists to avoid hanging forever; a
+      // genuine regression still fails, just after more (cheap) iterations.
+      const PROBE_WAIT_ATTEMPTS = 2000;
       it.effect("re-probes when settings change the codex binaryPath", () =>
         Effect.gen(function* () {
           const firstMissing = `t3code_codex_first_`;
@@ -1692,11 +1698,16 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             // Boot-time probe: the default codex instance is enabled with
             // `firstMissing`, so the real spawner yields ENOENT and the
             // snapshot should be `status: "error"`.
+            // Each iteration advances virtual time and yields, but the probe
+            // itself completes on real fibers. Under CPU contention (CI) those
+            // fibers can be starved for many iterations, so a small attempt cap
+            // asserts before the work has had a chance to land. Wait generously
+            // instead — a genuine regression still fails, via the test timeout.
             let initialProviders = yield* registry.getProviders;
             let initialCodex = initialProviders.find((provider) => provider.instanceId === "codex");
             for (
               let attempts = 0;
-              attempts < 60 && initialCodex?.status !== "error";
+              attempts < PROBE_WAIT_ATTEMPTS && initialCodex?.status !== "error";
               attempts += 1
             ) {
               yield* TestClock.adjust("50 millis");
@@ -1706,7 +1717,20 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             }
             assert.strictEqual(initialCodex?.status, "error");
             assert.strictEqual(initialCodex?.installed, false);
-            assert.deepStrictEqual(spawnedCommands, [firstMissing]);
+            // The poll above advances TestClock repeatedly while the fork's
+            // forked boot refresh is in flight, so an armed background refresh
+            // can probe the same binary again before the loop exits. Assert the
+            // contract that actually matters here — boot probes `firstMissing`
+            // and nothing has probed the not-yet-configured binary — instead of
+            // an exact count that depends on scheduling. Probe counts at boot
+            // are covered deterministically by "does not run provider probes
+            // during layer construction" and "does not wait for boot refreshes
+            // before exposing fallback providers" above.
+            assert.strictEqual(spawnedCommands[0], firstMissing);
+            assert.ok(
+              spawnedCommands.every((command) => command === firstMissing),
+              `boot should only probe ${firstMissing}, saw ${JSON.stringify(spawnedCommands)}`,
+            );
 
             // Drive a settings change. The Hydration layer's
             // `SettingsWatcherLive` consumes this via `streamChanges`,
@@ -1726,7 +1750,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             // executable. This verifies the public settings-to-probe behavior
             // without depending on timestamps assigned by TestClock.
             const refreshed = yield* Effect.gen(function* () {
-              for (let attempts = 0; attempts < 60; attempts += 1) {
+              for (let attempts = 0; attempts < PROBE_WAIT_ATTEMPTS; attempts += 1) {
                 const providers = yield* registry.getProviders;
                 const codex = providers.find((provider) => provider.instanceId === "codex");
                 if (
