@@ -1,5 +1,6 @@
 import {
   ChatAttachment,
+  ChatFileAttachment,
   CheckpointRef,
   IsoDateTime,
   MessageId,
@@ -80,6 +81,7 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   Struct.assign({
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
+    fileAttachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatFileAttachment))),
   }),
 );
 const ProjectionThreadProposedPlanDbRowSchema = ProjectionThreadProposedPlan;
@@ -542,6 +544,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
+          file_attachments_json AS "fileAttachments",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -1020,6 +1023,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           role,
           text,
           attachments_json AS "attachments",
+          file_attachments_json AS "fileAttachments",
           is_streaming AS "isStreaming",
           created_at AS "createdAt",
           updated_at AS "updatedAt"
@@ -1500,6 +1504,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
                   role: row.role,
                   text: row.text,
                   ...(row.attachments !== null ? { attachments: row.attachments } : {}),
+                  ...(row.fileAttachments !== null ? { fileAttachments: row.fileAttachments } : {}),
                   turnId: row.turnId,
                   streaming: row.isStreaming === 1,
                   createdAt: row.createdAt,
@@ -2585,10 +2590,14 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
             createdAt: row.createdAt,
             updatedAt: row.updatedAt,
           };
-          if (row.attachments !== null) {
-            return Object.assign(message, { attachments: row.attachments });
+          const withAttachments =
+            row.attachments !== null
+              ? Object.assign(message, { attachments: row.attachments })
+              : message;
+          if (row.fileAttachments !== null) {
+            return Object.assign(withAttachments, { fileAttachments: row.fileAttachments });
           }
-          return message;
+          return withAttachments;
         }),
         proposedPlans: proposedPlanRows.map(mapProposedPlanRow),
         activities: activityRows.map((row) => {
