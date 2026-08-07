@@ -1,13 +1,15 @@
 {
   "version": 5,
-  "prev": "85441e256ab09f8fcf5110059ae8b1baa53298fb",
-  "head": "549401586b86d8a322d2b6281f02b203783de8a1",
+  "prev": "472970362779dbf96a6e0bd6a0578dd5edd064ee",
+  "head": "eec960769e7ed05c33b3c0387dbe141cb0e58c63",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
     "fork-t3-thread-operator-cli",
     "fork-provider-turn-reservation",
-    "fork-provider-runtime-recovery",
+    "fork-provider-runtime-recovery"
+  ],
+  "unapplied": [
     "fork-provider-observability",
     "fork-thread-lifecycle-recovery",
     "fork-thread-goals",
@@ -32,7 +34,6 @@
     "fork-chat-file-attachments",
     "fork-remote-file-downloads"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
