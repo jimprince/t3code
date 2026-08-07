@@ -24,7 +24,12 @@
   job summary, including eligibility, target, channel, failing patch and
   files, and the required stack-context contract. Stable and nightly are
   independent matrix channels, so a nightly conflict does not invalidate a
-  stable result.
+  stable result. The fork ships the nightly feed, so scheduled runs sync
+  nightly only and stable runs solely on an explicit `channel=stable`
+  dispatch: a stable replay conflicts by construction whenever the stack sits
+  on a nightly base referencing upstream files the stable tag lacks (such as a
+  migration added after the last stable release), and letting that fail every
+  three hours left this workflow permanently red for the channel that ships.
 - The external CI Repair Bot is the repairer. It should claim an eligible
   handoff within 20 minutes, check out the exact leased `main` and canonical
   StGit metadata, and obtain ordered policy from

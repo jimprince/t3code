@@ -3,8 +3,9 @@ name: Sync Upstream
 # Detects new releases on pingdotgg/t3code, rebases the ordered StGit series
 # onto the upstream tag, and pushes a release tag that triggers release.yml.
 #
-# Scheduled runs check both channels independently. Manual runs can target one
-# channel or explicitly select both.
+# The fork ships the nightly feed only, so scheduled runs sync the nightly
+# channel. Stable is retained as a manual escape hatch and runs only when
+# explicitly dispatched with channel=stable; see "Select channel" for why.
 #
 # Tag scheme pushed to the fork:
 #   - stable channel: ${upstream_tag} verbatim (e.g. v0.0.21)
@@ -31,7 +32,7 @@ on:
           - both
           - stable
           - nightly
-        default: both
+        default: nightly
 
 concurrency:
   # One lock for every Actions writer of main (C2 race fix, 2026-07-29:
@@ -109,6 +110,17 @@ jobs:
           selected=true
           if [[ -n "$requested" && "$requested" != "both" && "$requested" != "$channel" ]]; then
             selected=false
+          fi
+          # The fork ships the nightly feed only, so stable never runs on a
+          # schedule or under "both" -- it needs an explicit stable dispatch.
+          # A stable replay conflicts by construction whenever the stack sits on
+          # a nightly base that references upstream files absent from the stable
+          # tag (e.g. a migration added after the last stable release). Letting
+          # that fail on every scheduled run made this workflow permanently red
+          # and destroyed its signal for the channel that actually ships.
+          if [[ "$channel" == "stable" && "$requested" != "stable" ]]; then
+            selected=false
+            echo "Stable channel skipped: fork ships nightly only (dispatch channel=stable to force)."
           fi
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
           echo "selected=$selected" >> "$GITHUB_OUTPUT"
