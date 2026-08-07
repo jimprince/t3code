@@ -117,3 +117,22 @@ purpose = "Create a new conversation from an earlier message while preserving th
 retire_when = "never"
 depends_on = ["fork-thread-lifecycle-recovery"]
 roles = []
+
+[[patch]]
+name = "fork-general-chat-projects"
+subject = "feat(projects): add General Chat projects"
+class = "product"
+purpose = "Provide flat General Chat projects and their server projection and sidebar behavior."
+retire_when = "never"
+depends_on = ["fork-thread-lifecycle-recovery"]
+roles = []
+[[patch.decision]]
+id = "chat-enrichment-guard-951"
+date = "2026-07-29"
+decided = "retire"
+rationale = "Upstream adopted isChatProjectRow filtering in ProjectionSnapshotQuery enrichment, covering the fork guard. Retire the duplicate ws.ts enrichment and the related obsolete IPC, local API, and server stubs."
+[[patch.decision]]
+id = "sidebar-project-header-styling"
+date = "2026-07-28"
+decided = "adapt"
+rationale = "The fork owns the General Chat structure (hideProjectHeader wrapper and chat affordance); upstream owns the design system. Preserve the structural additions while taking upstream styling."
