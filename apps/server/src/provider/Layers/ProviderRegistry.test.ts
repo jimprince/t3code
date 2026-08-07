@@ -1727,9 +1727,16 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             // during layer construction" and "does not wait for boot refreshes
             // before exposing fallback providers" above.
             assert.strictEqual(spawnedCommands[0], firstMissing);
-            assert.ok(
-              spawnedCommands.every((command) => command === firstMissing),
-              `boot should only probe ${firstMissing}, saw ${JSON.stringify(spawnedCommands)}`,
+            // Collect rather than `every`: an inferred type predicate would
+            // narrow `spawnedCommands` to the boot binary for the rest of the
+            // test, breaking the `secondMissing` assertions below.
+            const unexpectedBootProbes: Array<string> = spawnedCommands.filter(
+              (command): boolean => command !== firstMissing,
+            );
+            assert.deepStrictEqual(
+              unexpectedBootProbes,
+              [],
+              `boot should only probe ${firstMissing}, also saw ${unexpectedBootProbes.join(", ")}`,
             );
 
             // Drive a settings change. The Hydration layer's
