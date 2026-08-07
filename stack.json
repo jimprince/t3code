@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3ea25036782e6540a7fc4fc052198d1c648f5099",
-  "head": "225c255f778f7ecbc4a341e131e0d1fab7320154",
+  "prev": "314555aef021d7644f22292a26b6515228562286",
+  "head": "2da76457e4d6c017c7faeec7a85c1deafeebf99b",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -9,7 +9,9 @@
     "fork-provider-turn-reservation",
     "fork-provider-runtime-recovery",
     "fork-provider-observability",
-    "fork-thread-lifecycle-recovery",
+    "fork-thread-lifecycle-recovery"
+  ],
+  "unapplied": [
     "fork-thread-goals",
     "fork-thread-transfer",
     "fork-thread-fork",
@@ -32,7 +34,6 @@
     "fork-chat-file-attachments",
     "fork-remote-file-downloads"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
