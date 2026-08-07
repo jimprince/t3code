@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "31d1a594cf783d431c5cc7b14d035d71da6682ca",
-  "head": "d445c0ee37039d4c3ea6c2c3e94ce9f6204cd28a",
+  "prev": "4999d78b6c00e99cf4770fbb10743d2f8234c238",
+  "head": "d0c4dee2b553a0e2e0dd38fe5e27cd1de9a40a3c",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -26,21 +26,20 @@
     "fork-mobile-delivery",
     "fork-ci-runner-compat",
     "fork-ci-release-pipeline",
-    "fork-ci-upstream-sync"
-  ],
-  "unapplied": [
+    "fork-ci-upstream-sync",
     "fork-ci-stgit-metadata",
     "fork-web-files-upload",
     "fork-chat-file-attachments",
     "fork-remote-file-downloads"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
       "oid": "e8675d75f02f1c7883aead4d7aa548c004258c68"
     },
     "fork-chat-file-attachments": {
-      "oid": "b35587ce8d6035719b69cb430a2fa22b604a0be5"
+      "oid": "d5836b9e8e8279756d61c57d492b468e67e163a1"
     },
     "fork-ci-release-pipeline": {
       "oid": "a4ce69844642a4c3853ca8d82f9dbb8dac00613d"
@@ -49,7 +48,7 @@
       "oid": "88f292e3148c3d5cfac72afb4c3f5d4e958f8467"
     },
     "fork-ci-stgit-metadata": {
-      "oid": "f6f6ed33e4924b9c327ca3580b9f760f8ec9bda7"
+      "oid": "be2082c5543a47c176ee20d5321626d56ca27a6b"
     },
     "fork-ci-upstream-sync": {
       "oid": "d445c0ee37039d4c3ea6c2c3e94ce9f6204cd28a"
@@ -79,7 +78,7 @@
       "oid": "3ae9d944179b227cc42f167e0787c3f2636cacf9"
     },
     "fork-remote-file-downloads": {
-      "oid": "549401586b86d8a322d2b6281f02b203783de8a1"
+      "oid": "d0c4dee2b553a0e2e0dd38fe5e27cd1de9a40a3c"
     },
     "fork-remote-relay-access": {
       "oid": "6a18a3e4f6fe64fa5196d1a243226023edf51a2e"
@@ -112,7 +111,7 @@
       "oid": "ef761fb52fd40c8969373c9f7f4791531e496708"
     },
     "fork-web-files-upload": {
-      "oid": "8fe228e6e2dd5a122b092303bf25874fc22eb55a"
+      "oid": "eef1cea634d7581aed4699af07651e59c7e21484"
     },
     "fork-web-image-timeout": {
       "oid": "7dc1146bdc5235ded7e9f14952d0fd24c24bd609"
