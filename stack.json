@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "436cb0a2158172a0003f8d014c04595b1de22c0b",
-  "head": "a2bbc9d82610a13964c54625296bea5ce391a982",
+  "prev": "7e2b2ba2ac51d4399dd7fdc90433cf2796f4ef92",
+  "head": "6266d3f16b7c31f0735ec453351158e472255daf",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -14,13 +14,13 @@
     "fork-thread-transfer",
     "fork-thread-fork",
     "fork-general-chat-projects",
-    "fork-remote-relay-access"
-  ],
-  "unapplied": [
+    "fork-remote-relay-access",
     "fork-performance-recovery",
     "fork-headless-updates",
     "fork-text-generation",
-    "fork-web-client-resilience",
+    "fork-web-client-resilience"
+  ],
+  "unapplied": [
     "fork-web-project-scope",
     "fork-web-copy-thread-id",
     "fork-web-image-timeout",
@@ -61,13 +61,13 @@
       "oid": "25dcd2ac19070094025305640c1410047f7adbb5"
     },
     "fork-headless-updates": {
-      "oid": "e0be3815615a6c23404b64e2e39108cb3f8f3f1f"
+      "oid": "b2a5fce39da5e9c6088922a52c7e33766a05fb37"
     },
     "fork-mobile-delivery": {
       "oid": "d7b14dc4af126fad82dc62dddfe227bcfe4862d7"
     },
     "fork-performance-recovery": {
-      "oid": "2a9d9bb7cecee8eb3924696a8704cb74ddf76e35"
+      "oid": "a2cfb32b82203b07f691feefe2dbc86e651960b2"
     },
     "fork-provider-observability": {
       "oid": "c03131ff223c088157e2dbc68e27e27c82ae350a"
@@ -91,7 +91,7 @@
       "oid": "46f4c5b539da97be0b41d44913b600d4b36b49c5"
     },
     "fork-text-generation": {
-      "oid": "8be11f59389e056d2bdbf8c85c4700109f5e5aca"
+      "oid": "f4bf706b725bd68c587ae5f8401a0da1742abbf6"
     },
     "fork-thread-fork": {
       "oid": "ba8097e026abc4577ae7e13ae2c5f40d8137d05b"
@@ -106,7 +106,7 @@
       "oid": "6b4a754541f636da9183f3eb83f033421dc113fe"
     },
     "fork-web-client-resilience": {
-      "oid": "1475221f312df917043805eaaad422d67fec5593"
+      "oid": "6266d3f16b7c31f0735ec453351158e472255daf"
     },
     "fork-web-copy-thread-id": {
       "oid": "b4c9a4653724d94d70004f59dc60801e2e9d4317"
