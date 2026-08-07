@@ -1,6 +1,6 @@
-Bottom: dd1b8eb6c2a1fb69ef0e37a5ea9af0378ab74358
-Top:    a23bf7afa0c5676b5872c9323804a65c921df6fd
+Bottom: 976eb73e8530e5b7b3496ada6dafbd541111fcfd
+Top:    43fa8c1e7220d18ce7f092ac7cd8aa65d770b538
 Author: brad <bradprin@live.com>
-Date:   2026-08-07 18:01:06 +0000
+Date:   2026-08-07 18:02:51 +0000
 
 feat(web): add Sidebar V2 copy thread ID
