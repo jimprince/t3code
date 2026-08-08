@@ -51508,7 +51508,6 @@ var AGENT_COMMAND_ALIASES = /* @__PURE__ */ new Set([
   "create",
   "attach",
   "list",
-  "search",
   "archive",
   "forget",
   "caller",
@@ -51823,7 +51822,7 @@ agent.command("list").action(async () => {
   const state = await loadState();
   printJson(state.agents);
 });
-agent.command("search").description("Locate an exact thread UUID across saved mappings and paired environments").argument("<thread-uuid>", "full T3 thread UUID").option("--env <name>", "restrict remote search to one saved environment").action(async (threadId, options) => {
+program2.command("search").description("Locate an exact thread UUID across saved mappings and paired environments").argument("<thread-uuid>", "full T3 thread UUID").option("--env <name>", "restrict remote search to one saved environment").action(async (threadId, options) => {
   assertThreadSearchUuid(threadId);
   const state = await loadState();
   const target2 = await resolveAgentTarget(state, threadId, {

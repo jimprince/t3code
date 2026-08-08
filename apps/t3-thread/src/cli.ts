@@ -208,7 +208,6 @@ const AGENT_COMMAND_ALIASES = new Set([
   "create",
   "attach",
   "list",
-  "search",
   "archive",
   "forget",
   "caller",
@@ -625,7 +624,7 @@ agent.command("list").action(async () => {
   printJson(state.agents);
 });
 
-agent
+program
   .command("search")
   .description("Locate an exact thread UUID across saved mappings and paired environments")
   .argument("<thread-uuid>", "full T3 thread UUID")
