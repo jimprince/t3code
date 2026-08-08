@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "13625a1db8e35b121d5f883f1d2335f3fa68d6ec",
-  "head": "f065a8cf8f8e6809146ce263a4767eaa2e6bcc6d",
+  "prev": "783f129170d899f3faae76da1a15f7c9e1db90dc",
+  "head": "43cf8472e08b5442019ffe621981fd5c6b62b79f",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -30,8 +30,7 @@
     "fork-ci-stgit-metadata",
     "fork-web-files-upload",
     "fork-chat-file-attachments",
-    "fork-remote-file-downloads",
-    "refresh-temp"
+    "fork-remote-file-downloads"
   ],
   "unapplied": [],
   "hidden": [],
@@ -40,34 +39,34 @@
       "oid": "71eff96b4b1dc2997ac3eb75fa41793bc3bc804f"
     },
     "fork-chat-file-attachments": {
-      "oid": "1eb063fc142d2cb9bf8464f0063e63d31582f311"
+      "oid": "d8bb7544fbe16b0cd0847f019cc24a678ec56c76"
     },
     "fork-ci-release-pipeline": {
-      "oid": "65adf57a51234a2a8c96830878bd1c9e1d939574"
+      "oid": "bfdaa79709e876eaaa54acc672e478413febed39"
     },
     "fork-ci-runner-compat": {
-      "oid": "01288d49fe9c8dcb1ba7461999be8cd7baf45ff1"
+      "oid": "0f54360d1b045bf75a771f099f8c7560a6f0b57c"
     },
     "fork-ci-stgit-metadata": {
-      "oid": "c6331b6b614c9f56baa8857c31a9de8349ce8b57"
+      "oid": "9086a46f458801e44517b84b5644a33608536a7b"
     },
     "fork-ci-upstream-sync": {
-      "oid": "9047f2736500ace6f5fe0ada46b52150eb5f3a2b"
+      "oid": "1329323cd19876509a93c9f42bf919eec9703145"
     },
     "fork-desktop-distribution": {
-      "oid": "38b29fd5fb32275d99bd048474e3f82a7faec994"
+      "oid": "4c579341e9e44bedbe3c38f2b32d23d5864837a4"
     },
     "fork-general-chat-projects": {
-      "oid": "3a72bc99557101702aaa84da1354cd5ae1777d13"
+      "oid": "5987ed8fea97732e8ea9e2d806cf4a2cb2fa421e"
     },
     "fork-headless-updates": {
-      "oid": "aa65a5bf022308e9853b241b554df2f59ca873f1"
+      "oid": "6d0c251654019b3a552025c0d6c1d1fc16285b5c"
     },
     "fork-mobile-delivery": {
-      "oid": "195fd5ede230e0a2c4974f0a15ba7630ffcb2285"
+      "oid": "ff178da9817d2946c41084f8891eaae20d1b8efc"
     },
     "fork-performance-recovery": {
-      "oid": "5dbd598be7b5e804d76fb052b52b95252a098e98"
+      "oid": "c5e1270cf2e7ba7b51b82eb9f9c309699a94316c"
     },
     "fork-provider-observability": {
       "oid": "95801c6264d0e09dd026cf022046c14573118888"
@@ -79,10 +78,10 @@
       "oid": "577e56c22861c78b9535873d77210276b3901497"
     },
     "fork-remote-file-downloads": {
-      "oid": "ce76a6bed28ec8b78f14318857beda94aed7e974"
+      "oid": "43cf8472e08b5442019ffe621981fd5c6b62b79f"
     },
     "fork-remote-relay-access": {
-      "oid": "08d53069459373e8079ebe68c1a2339e4097c855"
+      "oid": "62d1033fb054f9373007435e2690bc58d782a344"
     },
     "fork-stgit-stack-policy": {
       "oid": "bc67c36a1a92d46438dd84390f3f11248d7598df"
@@ -91,7 +90,7 @@
       "oid": "5f158aef1e07100265ea7e190c148cdd795423d0"
     },
     "fork-text-generation": {
-      "oid": "6b549d88c2d8b42f82f43a1db5bfed54a9670f25"
+      "oid": "81cf8bf7de0871dade843de531e11f23b9256c5c"
     },
     "fork-thread-fork": {
       "oid": "e6be3421eb393f14539f126baf51eb9bad85ee0f"
@@ -106,22 +105,19 @@
       "oid": "627f1f34d2f2aeeb3d84bbc553dd1f57b9155094"
     },
     "fork-web-client-resilience": {
-      "oid": "26726623c8a7fa593eec8bde127da18f52365f75"
+      "oid": "9f4ca18c9b97b3cf63d2aba733896d9b30171e23"
     },
     "fork-web-copy-thread-id": {
-      "oid": "9e37f253292771141fd97e664fdc9e22453f6d86"
+      "oid": "e782dd3d40aefb03d8c101fa134f9c7f15772820"
     },
     "fork-web-files-upload": {
-      "oid": "a16762386edcac7c10ba7710b61bc7b197a68a40"
+      "oid": "01919d5597ec8505cb1a900af96a3a8f93bea035"
     },
     "fork-web-image-timeout": {
-      "oid": "3c632db917092684251b7b93f9a167b9876798b7"
+      "oid": "ccae7b13b60a772c1c7508119895f8360d494c57"
     },
     "fork-web-project-scope": {
-      "oid": "a9a3e9a89d0a9f0e467cbed2eb2b00bee5fa517d"
-    },
-    "refresh-temp": {
-      "oid": "f065a8cf8f8e6809146ce263a4767eaa2e6bcc6d"
+      "oid": "4ca080906278b67695ca3b859a76afca4339bb75"
     }
   }
 }
