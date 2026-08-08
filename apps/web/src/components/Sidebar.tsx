@@ -1568,18 +1568,16 @@ export default function Sidebar() {
   );
   const projectDisplayNameByKey = useMemo(
     () =>
-      new Map(
-        [
-          ...projectGroups.flatMap((group) =>
-            group.memberProjects.map(
-              (project) => [`${project.environmentId}:${project.id}`, group.displayName] as const,
-            ),
+      new Map([
+        ...projectGroups.flatMap((group) =>
+          group.memberProjects.map(
+            (project) => [`${project.environmentId}:${project.id}`, group.displayName] as const,
           ),
-          ...chatProjects.map(
-            (project) => [`${project.environmentId}:${project.id}`, "General chat"] as const,
-          ),
-        ],
-      ),
+        ),
+        ...chatProjects.map(
+          (project) => [`${project.environmentId}:${project.id}`, "General chat"] as const,
+        ),
+      ]),
     [chatProjects, projectGroups],
   );
 
@@ -3075,78 +3073,81 @@ export default function Sidebar() {
   // General Chat is the default compose target. With multiple connected
   // environments the desktop shell provides a compact environment picker;
   // browsers fall back to the primary environment.
-  const handleNewThreadClick = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const defaultChatProject = chatEnvironmentProjects[0];
-    if (defaultChatProject) {
-      if (chatEnvironmentProjects.length === 1) {
-        createChatForProject(defaultChatProject);
-        return;
-      }
-      void (async () => {
-        const api = readLocalApi();
-        if (!api) {
+  const handleNewThreadClick = useCallback(
+    (event: ReactMouseEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const defaultChatProject = chatEnvironmentProjects[0];
+      if (defaultChatProject) {
+        if (chatEnvironmentProjects.length === 1) {
           createChatForProject(defaultChatProject);
           return;
         }
-        const clickedResult = await settlePromise(() =>
-          api.contextMenu.show(
-            chatEnvironmentProjects.map((project) => ({
-              id: scopedProjectKey(scopeProjectRef(project.environmentId, project.id)),
-              label:
-                project.environmentId === primaryEnvironmentId
-                  ? "This device"
-                  : (environmentLabelById.get(project.environmentId) ?? "Remote environment"),
-            })),
-            { x: event.clientX, y: event.clientY },
-          ),
-        );
-        if (clickedResult._tag === "Failure") {
-          const error = squashAtomCommandFailure(clickedResult);
-          toastManager.add(
-            stackedThreadToast({
-              type: "error",
-              title: "Could not choose environment",
-              description: error instanceof Error ? error.message : "An error occurred.",
-            }),
+        void (async () => {
+          const api = readLocalApi();
+          if (!api) {
+            createChatForProject(defaultChatProject);
+            return;
+          }
+          const clickedResult = await settlePromise(() =>
+            api.contextMenu.show(
+              chatEnvironmentProjects.map((project) => ({
+                id: scopedProjectKey(scopeProjectRef(project.environmentId, project.id)),
+                label:
+                  project.environmentId === primaryEnvironmentId
+                    ? "This device"
+                    : (environmentLabelById.get(project.environmentId) ?? "Remote environment"),
+              })),
+              { x: event.clientX, y: event.clientY },
+            ),
           );
-          return;
-        }
-        const selectedProject = chatEnvironmentProjects.find(
-          (project) =>
-            scopedProjectKey(scopeProjectRef(project.environmentId, project.id)) ===
-            clickedResult.value,
-        );
-        if (selectedProject) createChatForProject(selectedProject);
-      })();
-      return;
-    }
+          if (clickedResult._tag === "Failure") {
+            const error = squashAtomCommandFailure(clickedResult);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Could not choose environment",
+                description: error instanceof Error ? error.message : "An error occurred.",
+              }),
+            );
+            return;
+          }
+          const selectedProject = chatEnvironmentProjects.find(
+            (project) =>
+              scopedProjectKey(scopeProjectRef(project.environmentId, project.id)) ===
+              clickedResult.value,
+          );
+          if (selectedProject) createChatForProject(selectedProject);
+        })();
+        return;
+      }
 
-    // Without a chat project, retain upstream's contextual workspace flow.
-    // One project: nothing to pick, create immediately.
-    if (projectGroups.length <= 1) {
+      // Without a chat project, retain upstream's contextual workspace flow.
+      // One project: nothing to pick, create immediately.
+      if (projectGroups.length <= 1) {
+        if (isMobile) setOpenMobile(false);
+        void startNewThreadFromContext({
+          activeDraftThread: newThreadContext.activeDraftThread,
+          activeThread: newThreadContext.activeThread ?? undefined,
+          defaultProjectRef: newThreadContext.defaultProjectRef,
+          handleNewThread: newThreadContext.handleNewThread,
+        });
+        return;
+      }
       if (isMobile) setOpenMobile(false);
-      void startNewThreadFromContext({
-        activeDraftThread: newThreadContext.activeDraftThread,
-        activeThread: newThreadContext.activeThread ?? undefined,
-        defaultProjectRef: newThreadContext.defaultProjectRef,
-        handleNewThread: newThreadContext.handleNewThread,
-      });
-      return;
-    }
-    if (isMobile) setOpenMobile(false);
-    openCommandPalette({ open: "new-thread-in" });
-  }, [
-    chatEnvironmentProjects,
-    createChatForProject,
-    environmentLabelById,
-    isMobile,
-    newThreadContext,
-    primaryEnvironmentId,
-    projectGroups.length,
-    setOpenMobile,
-  ]);
+      openCommandPalette({ open: "new-thread-in" });
+    },
+    [
+      chatEnvironmentProjects,
+      createChatForProject,
+      environmentLabelById,
+      isMobile,
+      newThreadContext,
+      primaryEnvironmentId,
+      projectGroups.length,
+      setOpenMobile,
+    ],
+  );
 
   // The button mirrors chat.new: in multi-project setups both route through
   // the command palette's "New thread in..." picker, and in single-project
