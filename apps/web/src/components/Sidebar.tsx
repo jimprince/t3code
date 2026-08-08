@@ -26,6 +26,7 @@ import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/model
 import {
   scopeProjectRef,
   scopeThreadRef,
+  scopedProjectKey,
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef, SidebarProjectGroupingMode } from "@t3tools/contracts";
@@ -99,6 +100,7 @@ import {
   type SidebarProjectGroupMember,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
+import { partitionProjectsByKind, selectCanonicalChatProjectsByEnvironment } from "../projectKind";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useThreadActions } from "../hooks/useThreadActions";
@@ -1356,6 +1358,10 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 
 export default function Sidebar() {
   const projects = useProjects();
+  const { chatProjects, workspaceProjects } = useMemo(
+    () => partitionProjectsByKind(projects),
+    [projects],
+  );
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
   const router = useRouter();
@@ -1476,7 +1482,7 @@ export default function Sidebar() {
   const orderedProjects = useMemo(
     () =>
       orderItemsByPreferredIds({
-        items: projects,
+        items: workspaceProjects,
         preferredIds: projectOrder,
         getId: getProjectOrderKey,
         getPreferenceIds: (project) => [
@@ -1484,12 +1490,12 @@ export default function Sidebar() {
           legacyProjectCwdPreferenceKey(project.workspaceRoot),
         ],
       }),
-    [projectOrder, projects],
+    [projectOrder, workspaceProjects],
   );
   const unsortedProjectGroups = useMemo(
     () =>
       buildSidebarProjectSnapshots({
-        projects: sidebarProjectSortOrder === "manual" ? orderedProjects : projects,
+        projects: sidebarProjectSortOrder === "manual" ? orderedProjects : workspaceProjects,
         settings: projectGroupingSettings,
         primaryEnvironmentId,
         resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
@@ -1499,8 +1505,8 @@ export default function Sidebar() {
       orderedProjects,
       primaryEnvironmentId,
       projectGroupingSettings,
-      projects,
       sidebarProjectSortOrder,
+      workspaceProjects,
     ],
   );
   const projectGroups = useMemo(
@@ -1530,13 +1536,18 @@ export default function Sidebar() {
   const projectDisplayNameByKey = useMemo(
     () =>
       new Map(
-        projectGroups.flatMap((group) =>
-          group.memberProjects.map(
-            (project) => [`${project.environmentId}:${project.id}`, group.displayName] as const,
+        [
+          ...projectGroups.flatMap((group) =>
+            group.memberProjects.map(
+              (project) => [`${project.environmentId}:${project.id}`, group.displayName] as const,
+            ),
           ),
-        ),
+          ...chatProjects.map(
+            (project) => [`${project.environmentId}:${project.id}`, "General chat"] as const,
+          ),
+        ],
       ),
-    [projectGroups],
+    [chatProjects, projectGroups],
   );
 
   // now is quantized to the minute so effectiveSettled memoization doesn't
@@ -2988,11 +2999,92 @@ export default function Sidebar() {
     autoAnimate(node, { duration: 150, easing: "ease-out" });
   }, []);
 
-  // New thread defaults to the project you're in (active thread's project,
-  // falling back to the top project) — same resolution the command palette
-  // uses. The command palette already offers a "New thread in..." submenu
-  // for multi-project setups.
-  const handleNewThreadClick = useCallback(() => {
+  const chatEnvironmentProjects = useMemo(
+    () =>
+      [...selectCanonicalChatProjectsByEnvironment(chatProjects)].sort((left, right) => {
+        const leftIsPrimary = left.environmentId === primaryEnvironmentId;
+        const rightIsPrimary = right.environmentId === primaryEnvironmentId;
+        if (leftIsPrimary !== rightIsPrimary) return leftIsPrimary ? -1 : 1;
+        const leftLabel = environmentLabelById.get(left.environmentId) ?? "Remote environment";
+        const rightLabel = environmentLabelById.get(right.environmentId) ?? "Remote environment";
+        return leftLabel.localeCompare(rightLabel);
+      }),
+    [chatProjects, environmentLabelById, primaryEnvironmentId],
+  );
+  const createChatForProject = useCallback(
+    (project: (typeof chatEnvironmentProjects)[number]) => {
+      if (isMobile) setOpenMobile(false);
+      void (async () => {
+        const result = await settlePromise(() =>
+          handleNewThreadRef.current(scopeProjectRef(project.environmentId, project.id)),
+        );
+        if (result._tag === "Failure") {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not create chat",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      })();
+    },
+    [isMobile, setOpenMobile],
+  );
+
+  // General Chat is the default compose target. With multiple connected
+  // environments the desktop shell provides a compact environment picker;
+  // browsers fall back to the primary environment.
+  const handleNewThreadClick = useCallback((event: ReactMouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const defaultChatProject = chatEnvironmentProjects[0];
+    if (defaultChatProject) {
+      if (chatEnvironmentProjects.length === 1) {
+        createChatForProject(defaultChatProject);
+        return;
+      }
+      void (async () => {
+        const api = readLocalApi();
+        if (!api) {
+          createChatForProject(defaultChatProject);
+          return;
+        }
+        const clickedResult = await settlePromise(() =>
+          api.contextMenu.show(
+            chatEnvironmentProjects.map((project) => ({
+              id: scopedProjectKey(scopeProjectRef(project.environmentId, project.id)),
+              label:
+                project.environmentId === primaryEnvironmentId
+                  ? "This device"
+                  : (environmentLabelById.get(project.environmentId) ?? "Remote environment"),
+            })),
+            { x: event.clientX, y: event.clientY },
+          ),
+        );
+        if (clickedResult._tag === "Failure") {
+          const error = squashAtomCommandFailure(clickedResult);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not choose environment",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+          return;
+        }
+        const selectedProject = chatEnvironmentProjects.find(
+          (project) =>
+            scopedProjectKey(scopeProjectRef(project.environmentId, project.id)) ===
+            clickedResult.value,
+        );
+        if (selectedProject) createChatForProject(selectedProject);
+      })();
+      return;
+    }
+
+    // Without a chat project, retain upstream's contextual workspace flow.
     // One project: nothing to pick, create immediately.
     if (projectGroups.length <= 1) {
       if (isMobile) setOpenMobile(false);
@@ -3006,7 +3098,16 @@ export default function Sidebar() {
     }
     if (isMobile) setOpenMobile(false);
     openCommandPalette({ open: "new-thread-in" });
-  }, [isMobile, newThreadContext, projectGroups.length, setOpenMobile]);
+  }, [
+    chatEnvironmentProjects,
+    createChatForProject,
+    environmentLabelById,
+    isMobile,
+    newThreadContext,
+    primaryEnvironmentId,
+    projectGroups.length,
+    setOpenMobile,
+  ]);
 
   // The button mirrors chat.new: in multi-project setups both route through
   // the command palette's "New thread in..." picker, and in single-project
