@@ -57,6 +57,24 @@ Resolution order for a raw UUID:
 - otherwise scan paired environments and infer environment/project metadata from the remote thread shell
 - if not found, report the paired environments checked
 
+## Find a Thread by UUID
+
+When all you have is a T3 thread UUID, use `search` before choosing a lifecycle
+command or attaching a persistent alias:
+
+```bash
+t3-thread search 22222222-2222-4222-8222-222222222222
+t3-thread search 22222222-2222-4222-8222-222222222222 --env dev-vm
+```
+
+`search` accepts a full UUID only. It returns stable JSON with the thread id,
+saved environment key, project id, whether the thread is saved locally, its
+saved alias when present, and its available title. It checks a saved mapping
+first, then searches paired environments for an exact thread-id match; it does
+not search titles or message content. `--env` limits only the remote search. If
+the UUID is already saved in a different environment, the command stops with a
+clear mismatch error instead of silently bypassing that mapping.
+
 ## Creation Model
 
 `t3-thread create` is a thin wrapper over T3 Code's native `thread.turn.start` bootstrap flow.
@@ -82,6 +100,7 @@ t3-thread project set-model --env local-mbp PROJECT_ID --provider opencode --mod
 t3-thread project remove --env local-mbp PROJECT_ID
 
 t3-thread threads --env local-mbp
+t3-thread search 22222222-2222-4222-8222-222222222222
 t3-thread status worker-a
 t3-thread status 22222222-2222-4222-8222-222222222222
 t3-thread worklog worker-a --tail 10

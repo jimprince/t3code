@@ -170,6 +170,22 @@ Attach a saved name to an existing thread:
 t3-thread attach --name <agent> --env <environment> --thread <thread-id> --project <project-id>
 ```
 
+Locate a thread when the only known identifier is its UUID:
+
+```bash
+t3-thread search <thread-id>
+t3-thread search <thread-id> --env <environment>
+```
+
+`search` accepts only a full UUID and returns stable JSON: `threadId`,
+`environment`, `projectId`, `saved`, `savedName`, and `title`. It first uses a
+saved local mapping, otherwise scans paired environments for an exact thread-id
+match and derives its environment/project from the remote thread shell. It does
+not perform title or message-content search. `--env` limits the remote scan; a
+saved mapping in another environment is an explicit error, not a silent
+bypass. If an unscoped search sees the UUID in multiple paired environments,
+select one with `--env`.
+
 For common lifecycle commands you can now use the raw thread UUID directly
 without attaching first. The CLI resolves raw UUIDs by:
 

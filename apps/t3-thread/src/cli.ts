@@ -2,7 +2,12 @@
 
 import { Command } from "commander";
 
-import { assertSavedAgentCapability, resolveAgentTarget } from "./agent-targets.js";
+import {
+  assertSavedAgentCapability,
+  assertThreadSearchUuid,
+  resolveAgentTarget,
+  toThreadSearchResult,
+} from "./agent-targets.js";
 import { buildFollowUpMessage } from "./agentPrompts.js";
 import { RemoteEnvironmentClient } from "./client.js";
 import { resolvePairingTarget } from "./http.js";
@@ -203,6 +208,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "create",
   "attach",
   "list",
+  "search",
   "archive",
   "forget",
   "caller",
@@ -237,6 +243,7 @@ Direct thread commands:
   project      Manage T3 Code projects on a paired environment
   models       List live provider/model slugs from a paired environment
   create       Create and start a branch-pinned T3 worker thread
+  search       Locate a thread UUID across paired environments
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
   result       Fetch latest/final worker output
@@ -249,6 +256,7 @@ Examples:
   t3-thread models --env dev-vm
   t3-thread project add --env dev-vm --path /home/brad/Programming/repo --title Repo --create-dir
   t3-thread create --name worker-a --env local-mbp --project PROJECT_ID --title "Worker A" --branch t3/worker-a --message "Fix the issue."
+  t3-thread search 22222222-2222-4222-8222-222222222222
   t3-thread status worker-a
   t3-thread implement worker-a
   t3-thread result worker-a --wait 120 --final-message
@@ -616,6 +624,23 @@ agent.command("list").action(async () => {
   const state = await loadState();
   printJson(state.agents);
 });
+
+agent
+  .command("search")
+  .description("Locate an exact thread UUID across saved mappings and paired environments")
+  .argument("<thread-uuid>", "full T3 thread UUID")
+  .option("--env <name>", "restrict remote search to one saved environment")
+  .action(async (threadId, options) => {
+    assertThreadSearchUuid(threadId);
+    const state = await loadState();
+    const target = await resolveAgentTarget(state, threadId, {
+      environmentFilter: options.env,
+      requireUniqueRemoteMatch: true,
+      clientFactory: (environmentName) =>
+        new RemoteEnvironmentClient(requireEnvironment(state, environmentName)),
+    });
+    printJson(toThreadSearchResult(target));
+  });
 
 agent
   .command("archive")
