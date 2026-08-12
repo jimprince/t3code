@@ -213,7 +213,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "start-from-origin",
-    title: "Start from origin",
+    title: "Start from remote",
     to: "/settings/general",
     targetId: "new-threads",
     searchTerms: ["new worktrees latest matching remote branch local"],
