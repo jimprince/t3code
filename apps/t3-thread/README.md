@@ -216,5 +216,8 @@ pnpm --filter t3-thread build
 pnpm --filter t3-thread smoke
 ```
 
-`dist/cli.cjs` remains committed and the dist-freshness test verifies it matches
-the source build.
+`dist/cli.cjs` is a build artifact, not a tracked file. The `prepare` script
+builds it on install, so package-style installs always get a bundle matching
+`src/`. It used to be committed with a freshness test guarding it, but the
+bundle inlines upstream code, so every upstream sync made it stale and blocked
+the rebase; building it removes that failure class entirely.

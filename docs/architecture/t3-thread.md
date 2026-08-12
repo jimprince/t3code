@@ -11,7 +11,9 @@ tested in the same tree, but it remains a separate workspace application:
 
 - package and executable names remain `t3-thread` (plus the deprecated
   `t3-agent` compatibility bin)
-- it produces a self-contained `dist/cli.cjs` for package-style installation
+- it produces a self-contained `dist/cli.cjs` for package-style installation,
+  built by the `prepare` script rather than committed (a committed bundle
+  inlines upstream code and goes stale on every upstream sync)
 - it talks to an already-running T3 Code environment through public HTTP and
   WebSocket/RPC boundaries
 - it does not import server implementation layers or become part of the web or
