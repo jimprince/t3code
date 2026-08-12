@@ -167,14 +167,7 @@ import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import {
-  Menu,
-  MenuCheckboxItem,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuTrigger,
-} from "./ui/menu";
+import { Menu, MenuCheckboxItem, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "./ui/menu";
 import { SidebarContent, SidebarGroup, SidebarMenuButton, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { Popover, PopoverPopup, PopoverTrigger } from "./ui/popover";
@@ -3564,8 +3557,7 @@ export default function Sidebar() {
                     </MenuItem>
                     <MenuSeparator />
                     {projectGroups.map((project) => {
-                      const isIsolated =
-                        scopedProjectGroup?.projectKey === project.projectKey;
+                      const isIsolated = scopedProjectGroup?.projectKey === project.projectKey;
                       return (
                         <MenuCheckboxItem
                           key={project.projectKey}
