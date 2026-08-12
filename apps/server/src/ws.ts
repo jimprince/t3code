@@ -28,6 +28,7 @@ import {
   type OrchestrationClientOrigin,
   type OrchestrationCommand,
   type GitActionProgressEvent,
+  GitCommandError,
   type GitManagerServiceError,
   OrchestrationDispatchCommandError,
   type OrchestrationEvent,
@@ -114,6 +115,7 @@ import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
+import { selectRemoteWorktreeBase } from "./git/remoteWorktreeBase.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as ServerEnvironment from "./environment/ServerEnvironment.ts";
@@ -1063,24 +1065,43 @@ const makeWsRpcLayer = (
 
             if (bootstrap?.prepareWorktree) {
               let worktreeBaseRef = bootstrap.prepareWorktree.baseBranch;
-              // "Start from origin" is a stored default; repos without an
-              // origin remote fall back to the local base branch instead of
-              // failing the whole bootstrap on `git fetch origin`.
-              const startFromOrigin =
-                bootstrap.prepareWorktree.startFromOrigin === true &&
-                (yield* gitWorkflow.remoteExists({
-                  cwd: bootstrap.prepareWorktree.projectCwd,
-                  remoteName: "origin",
-                }));
-              if (startFromOrigin) {
+              // Keep the persisted startFromOrigin key for compatibility, but
+              // make it mean "start from the selected remote". An explicitly
+              // qualified supported remote wins; otherwise gitea is preferred
+              // over origin so repos never need to rename their remotes.
+              if (bootstrap.prepareWorktree.startFromOrigin === true) {
+                const [hasGitea, hasOrigin] = yield* Effect.all([
+                  gitWorkflow.remoteExists({
+                    cwd: bootstrap.prepareWorktree.projectCwd,
+                    remoteName: "gitea",
+                  }),
+                  gitWorkflow.remoteExists({
+                    cwd: bootstrap.prepareWorktree.projectCwd,
+                    remoteName: "origin",
+                  }),
+                ]);
+                const remoteName = selectRemoteWorktreeBase({
+                  baseBranch: bootstrap.prepareWorktree.baseBranch,
+                  hasGitea,
+                  hasOrigin,
+                });
+                if (!remoteName) {
+                  return yield* new GitCommandError({
+                    operation: "worktree bootstrap",
+                    command: "git remote get-url gitea|origin",
+                    cwd: bootstrap.prepareWorktree.projectCwd,
+                    detail:
+                      "Remote-based worktree creation requires a gitea or origin remote. Add one, select a local base, or disable remote-based creation.",
+                  });
+                }
                 yield* gitWorkflow.fetchRemote({
                   cwd: bootstrap.prepareWorktree.projectCwd,
-                  remoteName: "origin",
+                  remoteName,
                 });
                 const resolvedRemoteBase = yield* gitWorkflow.resolveRemoteTrackingCommit({
                   cwd: bootstrap.prepareWorktree.projectCwd,
                   refName: bootstrap.prepareWorktree.baseBranch,
-                  fallbackRemoteName: "origin",
+                  fallbackRemoteName: remoteName,
                 });
                 worktreeBaseRef = resolvedRemoteBase.commitSha;
               }
