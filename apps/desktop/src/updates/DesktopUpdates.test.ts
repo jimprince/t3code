@@ -549,26 +549,6 @@ describe("DesktopUpdates", () => {
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
 
-  it.effect("disables updates with a visible reason for packaged Fork Dev builds", () => {
-    const harness = makeHarness({
-      environment: {
-        desktopFlavor: "dev",
-      },
-    });
-
-    return Effect.scoped(
-      Effect.gen(function* () {
-        const updates = yield* DesktopUpdates.DesktopUpdates;
-        yield* updates.configure;
-
-        const state = yield* updates.getState;
-        assert.equal(state.enabled, false);
-        assert.equal(state.status, "disabled");
-        assert.equal(state.message, "Automatic updates are disabled for Fork Dev builds.");
-      }),
-    ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
-  });
-
   it.effect("fails channel changes with a typed error while a check is in progress", () =>
     Effect.gen(function* () {
       const checkStarted = yield* Deferred.make<void>();

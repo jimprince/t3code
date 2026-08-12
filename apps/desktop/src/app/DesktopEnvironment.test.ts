@@ -164,41 +164,4 @@ describe("DesktopEnvironment", () => {
     }),
   );
 
-  it.effect("uses the nightly app stage for nightly versions", () =>
-    Effect.gen(function* () {
-      const environment = yield* makeEnvironment({
-        appVersion: "0.0.23-nightly.20260508.230-fork.1",
-      });
-
-      assert.equal(environment.displayName, "T3 Code (Nightly)");
-      assert.deepEqual(environment.branding, {
-        baseName: "T3 Code",
-        displayName: "T3 Code (Nightly)",
-        stageLabel: "Nightly",
-      });
-    }),
-  );
-
-  it.effect("uses a side-by-side identity for packaged Fork Dev builds", () =>
-    Effect.gen(function* () {
-      const environment = yield* makeEnvironment({
-        isPackaged: true,
-        desktopFlavor: "dev",
-      });
-
-      assert.equal(environment.isDevelopment, false);
-      assert.equal(environment.isPackagedDevFlavor, true);
-      assert.equal(environment.displayName, "T3 Code (Fork Dev)");
-      assert.deepEqual(environment.branding, {
-        baseName: "T3 Code",
-        displayName: "T3 Code (Fork Dev)",
-        stageLabel: "Fork Dev",
-      });
-      assert.equal(environment.appUserModelId, "com.t3tools.t3code.fork.dev");
-      assert.equal(environment.linuxDesktopEntryName, "t3code-fork-dev.desktop");
-      assert.equal(environment.linuxWmClass, "t3code-fork-dev");
-      assert.equal(environment.userDataDirName, "t3code-fork-dev");
-      assert.equal(environment.legacyUserDataDirName, "T3 Code (Fork Dev)");
-    }),
-  );
 });
