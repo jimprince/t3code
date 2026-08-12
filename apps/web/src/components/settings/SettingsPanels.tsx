@@ -2369,12 +2369,12 @@ export function GeneralSettingsPanel() {
             serverScoped
             className="bg-muted/20 sm:pl-9"
             title={searchableSetting("start-from-origin").title}
-            description="Creates the worktree from the latest matching branch on origin instead of your local branch."
+            description="Creates the worktree from the latest matching remote branch (gitea when available, otherwise origin) instead of your local branch."
             resetAction={
               settings.newWorktreesStartFromOrigin !==
               DEFAULT_UNIFIED_SETTINGS.newWorktreesStartFromOrigin ? (
                 <SettingResetButton
-                  label="new worktrees start from origin"
+                  label="new worktrees start from remote"
                   onClick={() =>
                     updateSettings({
                       newWorktreesStartFromOrigin:
@@ -2390,7 +2390,7 @@ export function GeneralSettingsPanel() {
                 onCheckedChange={(checked) =>
                   updateSettings({ newWorktreesStartFromOrigin: Boolean(checked) })
                 }
-                aria-label="Start new worktrees from origin by default"
+                aria-label="Start new worktrees from remote by default"
               />
             }
           />
