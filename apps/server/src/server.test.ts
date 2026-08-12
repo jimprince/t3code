@@ -7228,7 +7228,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect("stops the provider session after settle without closing terminals", () =>
+  it.effect("does not run settle cleanup inside the route dispatch path", () =>
     Effect.gen(function* () {
       const threadId = ThreadId.make("thread-settle");
       const effects: string[] = [];
@@ -7286,14 +7286,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       );
 
       assert.equal(dispatchResult.sequence, 1);
-      assert.deepEqual(effects, ["dispatch:thread.settle", "dispatch:thread.session.stop"]);
-      const sessionStopCommand = dispatchedCommands[1];
-      assert.equal(sessionStopCommand?.type, "thread.session.stop");
-      if (sessionStopCommand?.type === "thread.session.stop") {
-        assert.equal(sessionStopCommand.threadId, threadId);
-        assert.equal(sessionStopCommand.commandId, "session-stop-for-settle:cmd-thread-settle");
-        assert.equal(sessionStopCommand.onlyIfSettled, true);
-      }
+      // Settle cleanup is event-driven via the parking reactor
+      // (ThreadArchiveCleanupReactor), not inline in the dispatch path — the
+      // reactor's own tests cover the onlyIfSettled session stop.
+      assert.deepEqual(effects, ["dispatch:thread.settle"]);
+      assert.deepEqual(
+        dispatchedCommands.map((command) => command.type),
+        ["thread.settle"],
+      );
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 

@@ -16,13 +16,18 @@ import {
 import { logCleanupCauseUnlessInterrupted } from "./ThreadDeletionReactor.ts";
 
 type ThreadArchivedEvent = Extract<OrchestrationEvent, { type: "thread.archived" }>;
+type ThreadSettledEvent = Extract<OrchestrationEvent, { type: "thread.settled" }>;
+// "Parking" a thread — archive or settle — means "done with this thread", so a
+// live provider session must not keep running background work afterwards.
+// Archive additionally closes terminals; settle leaves them open.
+type ThreadParkedEvent = ThreadArchivedEvent | ThreadSettledEvent;
 
 const make = Effect.gen(function* () {
   const orchestrationEngine = yield* OrchestrationEngineService;
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const terminalManager = yield* TerminalManager;
 
-  const requestProviderSessionStop = (event: ThreadArchivedEvent) =>
+  const requestProviderSessionStop = (event: ThreadParkedEvent) =>
     logCleanupCauseUnlessInterrupted({
       effect: Effect.gen(function* () {
         const thread = yield* projectionSnapshotQuery
@@ -32,14 +37,21 @@ const make = Effect.gen(function* () {
           return;
         }
 
+        const parkingKind = event.type === "thread.archived" ? "archive" : "settle";
         yield* orchestrationEngine.dispatch({
           type: "thread.session.stop",
-          commandId: CommandId.make(`server:session-stop-for-archive:${event.eventId}`),
+          commandId: CommandId.make(`server:session-stop-for-${parkingKind}:${event.eventId}`),
           threadId: event.payload.threadId,
           createdAt: event.occurredAt,
+          // A settled thread can be re-engaged before this stop is decided;
+          // the decider then drops the stop instead of killing the new
+          // session. Archive stops stay unconditional: turn starts on
+          // archived threads are rejected, so there is no new session to
+          // protect.
+          ...(event.type === "thread.settled" ? { onlyIfSettled: true } : {}),
         });
       }),
-      message: "thread archive cleanup skipped provider session stop",
+      message: "thread parking cleanup skipped provider session stop",
       threadId: event.payload.threadId,
     });
 
@@ -50,21 +62,23 @@ const make = Effect.gen(function* () {
       threadId,
     });
 
-  const processThreadArchived = Effect.fn("processThreadArchived")(function* (
-    event: ThreadArchivedEvent,
+  const processThreadParked = Effect.fn("processThreadParked")(function* (
+    event: ThreadParkedEvent,
   ) {
     const { threadId } = event.payload;
     yield* requestProviderSessionStop(event);
-    yield* closeThreadTerminals(threadId);
+    if (event.type === "thread.archived") {
+      yield* closeThreadTerminals(threadId);
+    }
   });
 
-  const processThreadArchivedSafely = (event: ThreadArchivedEvent) =>
-    processThreadArchived(event).pipe(
+  const processThreadParkedSafely = (event: ThreadParkedEvent) =>
+    processThreadParked(event).pipe(
       Effect.catchCause((cause) => {
         if (Cause.hasInterruptsOnly(cause)) {
           return Effect.failCause(cause);
         }
-        return Effect.logWarning("thread archive cleanup reactor failed to process event", {
+        return Effect.logWarning("thread parking cleanup reactor failed to process event", {
           eventType: event.type,
           threadId: event.payload.threadId,
           cause: Cause.pretty(cause),
@@ -72,12 +86,12 @@ const make = Effect.gen(function* () {
       }),
     );
 
-  const worker = yield* makeDrainableWorker(processThreadArchivedSafely);
+  const worker = yield* makeDrainableWorker(processThreadParkedSafely);
 
   const start: ThreadArchiveCleanupReactorShape["start"] = Effect.fn("start")(function* () {
     yield* Effect.forkScoped(
       Stream.runForEach(orchestrationEngine.streamDomainEvents, (event) => {
-        if (event.type !== "thread.archived") {
+        if (event.type !== "thread.archived" && event.type !== "thread.settled") {
           return Effect.void;
         }
         return worker.enqueue(event);

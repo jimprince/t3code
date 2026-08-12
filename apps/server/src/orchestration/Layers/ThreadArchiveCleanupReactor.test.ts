@@ -49,6 +49,28 @@ function archivedEvent(
   };
 }
 
+function settledEvent(
+  threadId: ThreadId,
+): Extract<OrchestrationEvent, { type: "thread.settled" }> {
+  return {
+    sequence: 1,
+    eventId: EventId.make("event-thread-settled"),
+    aggregateKind: "thread",
+    aggregateId: threadId,
+    type: "thread.settled",
+    occurredAt: "2026-01-01T00:00:00.000Z",
+    commandId: CommandId.make("cmd-thread-settle"),
+    causationEventId: null,
+    correlationId: CommandId.make("cmd-thread-settle"),
+    payload: {
+      threadId,
+      settledAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    metadata: {},
+  };
+}
+
 function shell(
   threadId: ThreadId,
   session: OrchestrationThreadShell["session"],
@@ -96,6 +118,7 @@ describe("ThreadArchiveCleanupReactor", () => {
 
   async function createHarness(input: {
     readonly thread: OrchestrationThreadShell;
+    readonly event?: OrchestrationEvent;
     readonly dispatchImplementation?: (
       command: OrchestrationCommand,
     ) => Effect.Effect<{ readonly sequence: number }, OrchestrationListenerCallbackError>;
@@ -103,7 +126,7 @@ describe("ThreadArchiveCleanupReactor", () => {
   }) {
     const effects: string[] = [];
     const dispatchedCommands: OrchestrationCommand[] = [];
-    const event = archivedEvent(input.thread.id);
+    const event = input.event ?? archivedEvent(input.thread.id);
     const defaultDispatch = (command: OrchestrationCommand) =>
       Effect.sync(() => {
         dispatchedCommands.push(command);
@@ -272,5 +295,66 @@ describe("ThreadArchiveCleanupReactor", () => {
     });
 
     expect(harness.effects).toEqual([`terminal.close:${threadId}`]);
+  });
+
+  // Settle parking (upstream v0.0.34 generalised archive cleanup to archive +
+  // settle). Settle stops an idle provider session but must NOT close
+  // terminals, and the stop must be onlyIfSettled so a thread re-engaged
+  // before the stop is decided keeps its new session.
+  it("dispatches an onlyIfSettled session stop after settle without closing terminals", async () => {
+    const threadId = ThreadId.make("thread-settle-cleanup");
+    const harness = await createHarness({
+      thread: shell(threadId, {
+        threadId,
+        status: "ready",
+        providerName: "codex",
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        runtimeMode: "full-access",
+        activeTurnId: null,
+        lastError: null,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }),
+      event: settledEvent(threadId),
+    });
+
+    expect(harness.effects).toEqual(["dispatch:thread.session.stop"]);
+    const stop = harness.dispatchedCommands[0];
+    expect(stop?.type).toBe("thread.session.stop");
+    if (stop?.type === "thread.session.stop") {
+      expect(stop.onlyIfSettled).toBe(true);
+      expect(stop.commandId).toBe("server:session-stop-for-settle:event-thread-settled");
+    }
+    expect(harness.close).not.toHaveBeenCalled();
+  });
+
+  it("does nothing after settle when the thread has no session", async () => {
+    const threadId = ThreadId.make("thread-settle-no-session");
+    const harness = await createHarness({
+      thread: shell(threadId, null),
+      event: settledEvent(threadId),
+    });
+
+    expect(harness.effects).toEqual([]);
+    expect(harness.close).not.toHaveBeenCalled();
+  });
+
+  it("does nothing after settle when the session is already stopped", async () => {
+    const threadId = ThreadId.make("thread-settle-stopped");
+    const harness = await createHarness({
+      thread: shell(threadId, {
+        threadId,
+        status: "stopped",
+        providerName: "codex",
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        runtimeMode: "full-access",
+        activeTurnId: null,
+        lastError: null,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }),
+      event: settledEvent(threadId),
+    });
+
+    expect(harness.effects).toEqual([]);
+    expect(harness.close).not.toHaveBeenCalled();
   });
 });
