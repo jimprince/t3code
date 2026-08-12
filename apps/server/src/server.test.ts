@@ -7708,7 +7708,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         );
 
         assert.equal(error._tag, "OrchestrationDispatchCommandError");
-        assert.match(String((error as { message?: unknown }).message ?? error), /requires a gitea or origin remote/);
+        assert.match(
+          String((error as { message?: unknown }).message ?? error),
+          /requires a gitea or origin remote/,
+        );
         assert.deepEqual(remoteExists.mock.calls[0]?.[0], {
           cwd: "/tmp/project",
           remoteName: "gitea",
