@@ -163,5 +163,4 @@ describe("DesktopEnvironment", () => {
       );
     }),
   );
-
 });
