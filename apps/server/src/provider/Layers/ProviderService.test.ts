@@ -1456,6 +1456,27 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.include(turnText, '[Attached image "screenshot.png" is saved at: ');
       assert.equal(turnText.endsWith(`${attachment.id}.png]`), true);
 
+      // The fork's turn reservation keeps the first turn active until the
+      // runtime reports completion, so complete it before the next sendTurn
+      // can reserve. Upstream has no reservation gate and sends back-to-back.
+      routing.codex.emit({
+        type: "turn.completed",
+        eventId: asEventId("evt-thread-attach-turn-1"),
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        threadId: session.threadId,
+        turnId: TurnId.make(`turn-${String(session.threadId)}`),
+        status: "completed",
+      });
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      while (
+        (yield* directory.listBindings()).some(
+          (binding) => binding.threadId === session.threadId && binding.activeTurnId !== null,
+        )
+      ) {
+        yield* Effect.yieldNow;
+      }
+
       // An attachment-only turn stays valid and the injected line becomes the
       // whole input text, so the agent still learns the path.
       routing.codex.sendTurn.mockClear();
