@@ -537,7 +537,7 @@ agent
       model: options.model,
       branch: options.branch,
       baseBranch: options.baseBranch,
-      startFromOrigin: options.localBase ? false : true,
+      startFromOrigin: !options.localBase,
       runtimeMode: options.runtimeMode,
       interactionMode: options.interactionMode,
       initialMessage,
