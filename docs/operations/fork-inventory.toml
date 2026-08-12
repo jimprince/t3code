@@ -180,6 +180,15 @@ depends_on = ["fork-remote-relay-access"]
 roles = []
 
 [[patch]]
+name = "fork-remote-worktree-base"
+subject = "feat(worktrees): base new worktrees on selected remote"
+class = "product"
+purpose = "Create T3 worktrees from a freshly fetched selected remote branch, preferring gitea over origin while preserving explicit remote choices and a local opt-out."
+retire_when = "Upstream ships equivalent remote-selection, freshness, and no-local-fallback semantics."
+depends_on = ["fork-t3-thread-operator-cli"]
+roles = []
+
+[[patch]]
 name = "fork-text-generation"
 subject = "feat(server): add fork text generation"
 class = "product"
