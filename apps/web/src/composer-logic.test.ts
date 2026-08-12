@@ -6,7 +6,6 @@ import {
   detectComposerTrigger,
   expandCollapsedComposerCursor,
   isCollapsedCursorAdjacentToInlineToken,
-  parseComposerGoalSlashCommand,
   parseStandaloneComposerSlashCommand,
   replaceTextRange,
   shouldSubmitComposerOnEnter,
@@ -371,22 +370,5 @@ describe("parseStandaloneComposerSlashCommand", () => {
 
   it("ignores slash commands with extra message text", () => {
     expect(parseStandaloneComposerSlashCommand("/plan explain this")).toBeNull();
-  });
-});
-
-describe("parseComposerGoalSlashCommand", () => {
-  it("parses /goal status", () => {
-    expect(parseComposerGoalSlashCommand(" /goal ")).toEqual({ type: "status" });
-  });
-
-  it("parses /goal clear aliases", () => {
-    expect(parseComposerGoalSlashCommand("/goal stop")).toEqual({ type: "clear" });
-  });
-
-  it("parses /goal condition text", () => {
-    expect(parseComposerGoalSlashCommand("/goal make lint pass")).toEqual({
-      type: "set",
-      goal: "make lint pass",
-    });
   });
 });
