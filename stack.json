@@ -1,8 +1,9 @@
 {
   "version": 5,
-  "prev": "3c78b31f17f11984710cee11eb6cafe61675eafa",
-  "head": "e981bce7052f5113e4a146c5f56f61df1e60c5dd",
-  "applied": [
+  "prev": "24d70cb200ed050c868acffd4455812304b62028",
+  "head": "e70cdb478d34342d13ba4f433992394bf7303c1d",
+  "applied": [],
+  "unapplied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
     "fork-t3-thread-operator-cli",
@@ -32,7 +33,6 @@
     "fork-chat-file-attachments",
     "fork-remote-file-downloads"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
