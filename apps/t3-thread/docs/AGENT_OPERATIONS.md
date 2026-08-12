@@ -128,6 +128,7 @@ Recommended:
 
 - `--branch` should be the exact branch you expect the worker to use. The CLI passes it to T3's native `thread.turn.start` bootstrap flow.
 - T3 chooses and records the worktree path. Do not pass or manage a worktree path from this wrapper.
+- Worktree creation starts from the freshly fetched `gitea` remote when it exists, otherwise `origin`; pass `--local-base` only when a local base is intentional. Qualified bases such as `gitea/main` and `origin/main` select that remote explicitly.
 - Reuse the same `--name` if you want to replace a failed or obsolete saved agent mapping.
 - When you invoke `t3-thread create` from inside a T3 caller thread, that caller is auto-subscribed to completion/attention events from the new worker by default.
 - Add `--no-notify` when you want to suppress that default subscription.
