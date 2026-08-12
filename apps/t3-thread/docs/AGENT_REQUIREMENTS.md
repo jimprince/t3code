@@ -30,8 +30,8 @@
   existing warnings remain across the fork.
 - Root `pnpm exec vp run typecheck` passed across all 16 workspaces.
 - `pnpm --filter t3-thread test` passed: 13 files, 103 tests.
-- `pnpm --filter t3-thread typecheck`, `build`, and read-only `smoke` passed;
-  committed `dist/cli.cjs` is fresh.
+- `pnpm --filter t3-thread typecheck`, `build`, and read-only `smoke` passed.
+  `dist/cli.cjs` is built by `prepare`, not committed.
 - `pnpm --filter @t3tools/contracts test` passed: 14 files, 179 tests.
 - `git diff --check` passed.
 
