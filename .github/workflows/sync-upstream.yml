@@ -21,7 +21,12 @@ name: Sync Upstream
 
 on:
   schedule:
-    - cron: "0 */3 * * *" # every 3 hours
+    # Once nightly (03:00 MDT / 09:00 UTC). Each scheduled sync is an
+    # agent-driven rebase of the whole patch stack, and every rebase is a
+    # chance of a bad conflict resolution being folded into a patch by
+    # auto_land. One sync a day bounds that exposure while still shipping a
+    # daily fork nightly; use workflow_dispatch for an off-cycle sync.
+    - cron: "0 9 * * *"
   workflow_dispatch:
     inputs:
       channel:
