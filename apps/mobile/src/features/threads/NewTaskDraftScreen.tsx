@@ -615,8 +615,8 @@ export function NewTaskDraftScreen(props: {
         ? [
             {
               id: "workspace:start-from-origin",
-              title: "Start from origin",
-              subtitle: "Base the worktree on the latest origin branch",
+              title: "Start from remote",
+              subtitle: "Base the worktree on the latest remote branch",
               image: "arrow.triangle.pull",
               state: flow.startFromOrigin ? ("on" as const) : undefined,
             },
