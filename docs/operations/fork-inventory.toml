@@ -35,3 +35,13 @@ retire_when = "Upstream or maintained shared tooling provides equivalent capabil
 depends_on = ["fork-stgit-stack-policy"]
 roles = ["lockfile-owner"]
 note = "pnpm-lock.yaml is generated: take upstream's lockfile during a conflict, then regenerate it AT THE STACK TIP and copy it back into this patch. Regenerating while only the early patches are applied omits workspaces that later patches add (apps/t3-thread), which then fails --frozen-lockfile in CI."
+
+[[patch]]
+name = "fork-t3-thread-operator-cli"
+subject = "feat(fork): add t3-thread operator CLI"
+class = "product"
+purpose = "Provide the additive t3-thread operator CLI, which has no upstream equivalent."
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
+depends_on = ["fork-build-workspace-tooling"]
+roles = []
+note = "CLI sends still require an explicit allowWhileRunning path; this is distinct from server adapter steering. Focused send-while-running tests document the rejection and the separate durable queue gap (Gitea PR25/issue27)."
