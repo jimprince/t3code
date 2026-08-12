@@ -49,9 +49,7 @@ function archivedEvent(
   };
 }
 
-function settledEvent(
-  threadId: ThreadId,
-): Extract<OrchestrationEvent, { type: "thread.settled" }> {
+function settledEvent(threadId: ThreadId): Extract<OrchestrationEvent, { type: "thread.settled" }> {
   return {
     sequence: 1,
     eventId: EventId.make("event-thread-settled"),
