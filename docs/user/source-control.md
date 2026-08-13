@@ -48,6 +48,10 @@ T3 Code works with the platforms your team already uses:
 - Filter the list by author or labels, rank authors by merges in the loaded results, see label and
   change-size context on each row, and sort the results currently shown by readiness, update time,
   creation time, or change size. Your filters, search, scope, and sort are restored when you return.
+- Use the row checkboxes or **Select all visible pull requests** to select several reviews, then
+  choose **Remove from list** to hide them without closing or changing them on the Git host
+- Removed reviews stay hidden for that environment in this browser. Choose **Restore removed**
+  above the list to bring them back.
 - Merge now, or on GitHub, GitLab, and Azure DevOps, leave an auto-merge instruction with a chosen
   strategy while checks are outstanding; see the completed state in the same control after the
   pull request merges
