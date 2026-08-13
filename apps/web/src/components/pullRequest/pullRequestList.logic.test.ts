@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   filterPullRequestsByInvolvement,
+  filterRemovedPullRequests,
   findScopedProject,
   mergePullRequestLists,
   pullRequestEntryKey,
@@ -18,12 +19,15 @@ import {
   mergePullRequestDiffStats,
   narrowPullRequestsToFilters,
   partitionPullRequestsWithPriority,
+  readRemovedPullRequestKeys,
   readPullRequestListSnapshot,
+  setVisiblePullRequestsSelected,
   writePullRequestListSnapshot,
   rankPullRequestMatches,
   scorePullRequestMatch,
   retainVisiblePullRequestStatsBatches,
   withDiffStat,
+  writeRemovedPullRequestKeys,
   resolveProjectScope,
   resolveQueryEnvironmentIds,
   resolveSelectedEnvironmentId,
@@ -309,6 +313,86 @@ describe("pull request involvement filtering", () => {
     expect(
       filterPullRequestsByInvolvement(mixed, VIEWERS, "authored").map((item) => item.number),
     ).toEqual([1]);
+  });
+});
+
+describe("removing pull requests from the local list", () => {
+  const makeStorage = () => {
+    const held = new Map<string, string>();
+    return {
+      getItem: (key: string) => held.get(key) ?? null,
+      setItem: (key: string, value: string) => void held.set(key, value),
+    };
+  };
+
+  it("leaves the list untouched when nothing has been removed", () => {
+    const entries = [entry({ number: 1 })];
+    expect(filterRemovedPullRequests(entries, new Set())).toBe(entries);
+  });
+
+  it("selects and clears one pull request", () => {
+    const key = pullRequestEntryKey(entry({ number: 1 }));
+    const selected = setVisiblePullRequestsSelected(new Set(), [key], true);
+    expect([...selected]).toEqual([key]);
+    expect([...setVisiblePullRequestsSelected(selected, [key], false)]).toEqual([]);
+  });
+
+  it("selects every visible pull request and can clear only that visible selection", () => {
+    const first = entry({ number: 1 });
+    const second = entry({ number: 2 });
+    const alreadySelected = "env-2:github.com:other/project#9";
+    const visibleKeys = [first, second].map(pullRequestEntryKey);
+
+    const selected = setVisiblePullRequestsSelected(new Set([alreadySelected]), visibleKeys, true);
+    expect([...selected]).toEqual([alreadySelected, ...visibleKeys]);
+    expect([...setVisiblePullRequestsSelected(selected, visibleKeys, false)]).toEqual([
+      alreadySelected,
+    ]);
+  });
+
+  it("removes several selected t3code pull requests without hiding another project's PR", () => {
+    const t3codeOne = entry({ number: 1 });
+    const t3codeTwo = entry({ number: 2 });
+    const otherProject = entry({
+      number: 3,
+      projectId: "project-2" as PullRequestListEntry["projectId"],
+      repository: "acme/important-app",
+    });
+
+    expect(
+      filterRemovedPullRequests(
+        [t3codeOne, t3codeTwo, otherProject],
+        new Set([pullRequestEntryKey(t3codeOne), pullRequestEntryKey(t3codeTwo)]),
+      ),
+    ).toEqual([otherProject]);
+  });
+
+  it("keeps the same pull request on another environment visible", () => {
+    const firstEnvironment = entry({ number: 1 });
+    const secondEnvironment = entry({ number: 1, environmentId: "env-2" as EnvironmentId });
+
+    expect(
+      filterRemovedPullRequests(
+        [firstEnvironment, secondEnvironment],
+        new Set([pullRequestEntryKey(firstEnvironment)]),
+      ),
+    ).toEqual([secondEnvironment]);
+  });
+
+  it("persists removals per environment and tolerates corrupt storage", () => {
+    const storage = makeStorage();
+    const removed = new Set([
+      "env-1:github.com:pingdotgg/t3code#1",
+      "env-1:github.com:pingdotgg/t3code#2",
+    ]);
+
+    writeRemovedPullRequestKeys(storage, "env-1", removed);
+    expect([...readRemovedPullRequestKeys(storage, "env-1")]).toEqual([...removed]);
+    expect([...readRemovedPullRequestKeys(storage, "env-2")]).toEqual([]);
+
+    storage.setItem("t3.pullRequests.removed:env-1", "{not json");
+    expect([...readRemovedPullRequestKeys(storage, "env-1")]).toEqual([]);
+    expect([...readRemovedPullRequestKeys(undefined, "env-1")]).toEqual([]);
   });
 });
 
