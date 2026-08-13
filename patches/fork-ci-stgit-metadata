@@ -1,6 +1,6 @@
-Bottom: 58e2097501dd7fa5a376405962a055a52626cfac
-Top:    7d32c780a42733e90105024078578ba43daed5e6
+Bottom: ae994903216b7fdeb0dba170ef5cf0c59efafa13
+Top:    21f761cd634c7dc9624a2e1d616d2560487ab3d3
 Author: brad <bradprin@live.com>
-Date:   2026-08-12 14:46:33 -0600
+Date:   2026-08-12 19:12:34 -0600
 
 fix(ci): publish StGit metadata with nightly replays
