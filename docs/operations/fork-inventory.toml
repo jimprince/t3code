@@ -359,3 +359,12 @@ purpose = "Create T3 worktrees from a freshly fetched selected remote branch, pr
 retire_when = "Upstream ships equivalent remote-selection, freshness, and no-local-fallback semantics."
 depends_on = ["fork-t3-thread-operator-cli"]
 roles = []
+
+[[patch]]
+name = "fork-web-pr-multiselect"
+subject = "feat(web): add pull request bulk removal"
+class = "product"
+purpose = "Let operators select visible pull requests in bulk, persistently remove them from the local environment view without mutating provider state, and restore removed entries."
+retire_when = "Upstream ships equivalent multi-select dismissal and restoration in the Pull Requests view."
+depends_on = ["fork-build-workspace-tooling"]
+roles = []
