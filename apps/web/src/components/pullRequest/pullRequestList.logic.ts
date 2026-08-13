@@ -582,6 +582,65 @@ export function retainVisiblePullRequestStatsBatches(
   });
 }
 
+/** A locally removed row is hidden by its environment-qualified identity, never changed upstream. */
+export function filterRemovedPullRequests<Entry extends ScopedEntry>(
+  entries: ReadonlyArray<Entry>,
+  removedKeys: ReadonlySet<string>,
+): ReadonlyArray<Entry> {
+  if (removedKeys.size === 0) return entries;
+  return entries.filter((entry) => !removedKeys.has(pullRequestEntryKey(entry)));
+}
+
+/** Add or remove the rendered rows from a selection without disturbing keys outside that view. */
+export function setVisiblePullRequestsSelected(
+  selectedKeys: ReadonlySet<string>,
+  visibleKeys: ReadonlyArray<string>,
+  selected: boolean,
+): ReadonlySet<string> {
+  const next = new Set(selectedKeys);
+  for (const key of visibleKeys) {
+    if (selected) next.add(key);
+    else next.delete(key);
+  }
+  return next;
+}
+
+type RemovedPullRequestStorage = Pick<Storage, "getItem" | "setItem">;
+
+const removedPullRequestsStorageKey = (environmentId: string) =>
+  `t3.pullRequests.removed:${environmentId}`;
+const decodeRemovedPullRequestKeys = Schema.decodeUnknownOption(Schema.Array(Schema.String));
+
+/** Local dismissals are scoped to one environment so one server cannot hide another's rows. */
+export function readRemovedPullRequestKeys(
+  storage: RemovedPullRequestStorage | undefined,
+  environmentId: string,
+): ReadonlySet<string> {
+  try {
+    const raw = storage?.getItem(removedPullRequestsStorageKey(environmentId));
+    if (!raw) return new Set();
+    const decoded = decodeRemovedPullRequestKeys(JSON.parse(raw));
+    return decoded._tag === "Some" ? new Set(decoded.value) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+export function writeRemovedPullRequestKeys(
+  storage: RemovedPullRequestStorage | undefined,
+  environmentId: string,
+  removedKeys: ReadonlySet<string>,
+): void {
+  try {
+    storage?.setItem(
+      removedPullRequestsStorageKey(environmentId),
+      JSON.stringify([...removedKeys]),
+    );
+  } catch {
+    // Storage can be full or denied; removals still apply for this renderer session.
+  }
+}
+
 /**
  * The priority groups built from the hosts' own answers rather than re-partitioned from the
  * paginated feed. The feed is sliced by recency, so an older authored or review-requested row
