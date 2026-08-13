@@ -1,0 +1,12 @@
+Bottom: 8218d2792d899af9dceafb9c9b30c8dd092cc34e
+Top:    8218d2792d899af9dceafb9c9b30c8dd092cc34e
+Author: Codex <codex@users.noreply.github.com>
+Date:   2026-08-12 19:37:47 -0600
+
+feat(web): add pull request bulk removal
+
+Naive-agent test artifact (attempt 2, gpt-5.6-sol): implemented from a
+product-owner brief with no repo guidance beyond the repository's own
+instructions, which the agent discovered and followed (Route B, inventory
+stanza, vp verification). Landed by the operator through the route the
+agent itself prescribed.
