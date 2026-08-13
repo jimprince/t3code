@@ -5,6 +5,7 @@ import { cn } from "~/lib/utils";
 import { getSourceControlPresentationForKind } from "~/sourceControlPresentation";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 
+import { Checkbox } from "../ui/checkbox";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { PullRequestChecksPopover } from "./PullRequestChecksPopover";
 import { pullRequestLabelColor, type EnvironmentPullRequestEntry } from "./pullRequestList.logic";
@@ -63,6 +64,8 @@ function PullRequestRowLabels({ labels }: { labels: EnvironmentPullRequestEntry[
 function PullRequestRowImpl({
   entry,
   selected,
+  checked,
+  onCheckedChange,
   showProjectTitle,
   showProvider,
   environmentLabel,
@@ -73,6 +76,8 @@ function PullRequestRowImpl({
 }: {
   entry: EnvironmentPullRequestEntry;
   selected: boolean;
+  checked: boolean;
+  onCheckedChange: (entry: EnvironmentPullRequestEntry) => void;
   showProjectTitle: boolean;
   /** Only when the list spans more than one host, where the repository alone is ambiguous. */
   showProvider: boolean;
@@ -90,6 +95,13 @@ function PullRequestRowImpl({
 }) {
   const { Icon, providerName } = getSourceControlPresentationForKind(entry.provider);
   return (
+    <div className={cn("flex w-full items-center rounded-lg", selected ? "bg-accent" : checked ? "bg-accent/60" : "hover:bg-accent/60")}>
+      <Checkbox
+        aria-label={`Select pull request #${entry.number}: ${entry.title}`}
+        checked={checked}
+        onCheckedChange={() => onCheckedChange(entry)}
+        className="ml-3"
+      />
     <button
       ref={statsRef}
       data-pull-request-stats-key={statsKey}
@@ -97,12 +109,11 @@ function PullRequestRowImpl({
       aria-current={selected ? "true" : undefined}
       onClick={() => onSelect(entry)}
       className={cn(
-        "@container/pr-row grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        "@container/pr-row grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg px-3 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         // Offscreen rows are skipped for style, layout and paint: a long list costs what the
         // viewport shows, not what the pages have loaded. The intrinsic size keeps the
         // scrollbar honest while a row is skipped.
         "[contain-intrinsic-block-size:66px] [content-visibility:auto]",
-        selected ? "bg-accent" : "hover:bg-accent/60",
       )}
     >
       <PullRequestStateGlyph
@@ -203,6 +214,7 @@ function PullRequestRowImpl({
         </span>
       </span>
     </button>
+    </div>
   );
 }
 
