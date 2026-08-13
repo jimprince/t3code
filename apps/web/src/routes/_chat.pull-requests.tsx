@@ -30,7 +30,9 @@ import {
   Maximize2Icon,
   Minimize2Icon,
   RefreshCwIcon,
+  RotateCcwIcon,
   SearchIcon,
+  XIcon,
 } from "lucide-react";
 import {
   useCallback,
@@ -45,6 +47,7 @@ import {
 
 import {
   filterPullRequestsByInvolvement,
+  filterRemovedPullRequests,
   findScopedProject,
   collectPullRequestListFacets,
   groupPullRequestsByInvolvement,
@@ -60,11 +63,14 @@ import {
   rankPullRequestMatches,
   sortPullRequestGroups,
   pullRequestEnvironmentSetKey,
+  readRemovedPullRequestKeys,
   readPullRequestListSnapshot,
   resolveProjectScope,
   resolveQueryEnvironmentIds,
   resolveSelectedEnvironmentId,
+  setVisiblePullRequestsSelected,
   withDiffStat,
+  writeRemovedPullRequestKeys,
   writePullRequestListSnapshot,
   scorePullRequestMatch,
   pullRequestStatsRefreshBatches,
@@ -115,6 +121,7 @@ import { resolveShortcutCommand } from "../keybindings";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { PanelLayoutControls } from "../components/chat/PanelLayoutControls";
 import { Button } from "../components/ui/button";
+import { Checkbox } from "../components/ui/checkbox";
 import { Menu, MenuPopup, MenuRadioGroup, MenuRadioItem, MenuTrigger } from "../components/ui/menu";
 import { SidebarInset } from "../components/ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
@@ -242,6 +249,7 @@ function pullRequestSearchLabels(raw: unknown): Partial<Pick<PullRequestsSearch,
   }
   return labels.length === 0 ? {} : { labels };
 }
+const EMPTY_PULL_REQUEST_KEYS: ReadonlySet<string> = new Set();
 
 export const Route = createFileRoute("/_chat/pull-requests")({
   validateSearch: (raw: Record<string, unknown>): PullRequestsSearch => ({
@@ -333,6 +341,29 @@ function PullRequestsRouteView() {
     () => pullRequestEnvironmentSetKey(environmentIds),
     [environmentIds],
   );
+  const [removedPullRequests, setRemovedPullRequests] = useState<{
+    environmentKey: string;
+    keys: ReadonlySet<string>;
+  }>({ environmentKey: "", keys: EMPTY_PULL_REQUEST_KEYS });
+  useEffect(() => {
+    if (environmentKey.length === 0) {
+      setRemovedPullRequests({ environmentKey: "", keys: EMPTY_PULL_REQUEST_KEYS });
+      return;
+    }
+    const storage = typeof window === "undefined" ? undefined : window.localStorage;
+    setRemovedPullRequests({
+      environmentKey,
+      keys: new Set(
+        environmentIds.flatMap((environmentId) => [
+          ...readRemovedPullRequestKeys(storage, environmentId),
+        ]),
+      ),
+    });
+  }, [environmentIds, environmentKey]);
+  const removedPullRequestKeys =
+    removedPullRequests.environmentKey === environmentKey
+      ? removedPullRequests.keys
+      : EMPTY_PULL_REQUEST_KEYS;
   // An environment may still be connecting, or may predate this feature. Until at least one has
   // reported, an empty set means "not known yet" rather than "no environment can", and the page
   // waits rather than telling a reader to upgrade a server that has not spoken.
@@ -1149,7 +1180,7 @@ function PullRequestsRouteView() {
     [baselineQuery.data?.providers, listData?.providers],
   );
 
-  const entries = useMemo(() => {
+  const matchingEntries = useMemo(() => {
     const known = ordered?.key === filterKey ? ordered.entries : (listData?.entries ?? []);
     const involvementEntries = filterPullRequestsByInvolvement(known, viewers, search.involvement);
     // The hosts search more than the row shows — a body, a review, a commit message — so once
@@ -1192,6 +1223,10 @@ function PullRequestsRouteView() {
     typedParsed.text,
     viewers,
   ]);
+  const entries = useMemo(
+    () => filterRemovedPullRequests(matchingEntries, removedPullRequestKeys),
+    [matchingEntries, removedPullRequestKeys],
+  );
 
   // Seed the first tab paint from list rows while each tab's cached detail read lands.
   const listedPullRequestTabStatuses = useMemo<Record<string, PullRequestTabStatusSeed>>(
@@ -1277,12 +1312,15 @@ function PullRequestsRouteView() {
     // The priority reads answer the same question the feed does, so they take the same local
     // narrowing: a host that cannot filter for itself would otherwise put rows into Authored
     // that the filters above just took out of the feed.
-    const narrow = (rows: ReadonlyArray<EnvironmentPullRequestEntry> | undefined) =>
-      rows === undefined || !hasLocalFilters
-        ? rows
-        : rows.filter((entry) =>
+    const narrow = (rows: ReadonlyArray<EnvironmentPullRequestEntry> | undefined) => {
+      if (rows === undefined) return undefined;
+      const locallyNarrowed = hasLocalFilters
+        ? rows.filter((entry) =>
             matchesPullRequestFilters(entry, localFilters, pullRequestEntryViewer(entry, viewers)),
-          );
+          )
+        : rows;
+      return filterRemovedPullRequests(locallyNarrowed, removedPullRequestKeys);
+    };
     const authored = narrow(
       partitionsWanted ? (authoredQuery.data?.entries ?? held?.authored) : undefined,
     );
@@ -1301,11 +1339,89 @@ function PullRequestsRouteView() {
     environmentKey,
     loaded,
     partitionsWanted,
+    removedPullRequestKeys,
     reviewingQuery.data?.entries,
     scopeKey,
     search.involvement,
     viewers,
   ]);
+
+  const visiblePullRequestEntries = useMemo(
+    () => groups.flatMap((group) => group.entries),
+    [groups],
+  );
+  const visiblePullRequestKeys = useMemo(
+    () => visiblePullRequestEntries.map(pullRequestEntryKey),
+    [visiblePullRequestEntries],
+  );
+  const [selectedPullRequestKeys, setSelectedPullRequestKeys] =
+    useState<ReadonlySet<string>>(EMPTY_PULL_REQUEST_KEYS);
+  useEffect(() => {
+    setSelectedPullRequestKeys((current) =>
+      current.size === 0 ? current : EMPTY_PULL_REQUEST_KEYS,
+    );
+  }, [filterKey]);
+  const selectedVisibleCount = visiblePullRequestKeys.reduce(
+    (count, key) => count + Number(selectedPullRequestKeys.has(key)),
+    0,
+  );
+  const allVisibleSelected =
+    visiblePullRequestKeys.length > 0 && selectedVisibleCount === visiblePullRequestKeys.length;
+  const someVisibleSelected = selectedVisibleCount > 0 && !allVisibleSelected;
+  const toggleEntrySelection = useCallback((entry: EnvironmentPullRequestEntry) => {
+    const key = pullRequestEntryKey(entry);
+    setSelectedPullRequestKeys((current) =>
+      setVisiblePullRequestsSelected(current, [key], !current.has(key)),
+    );
+  }, []);
+  const toggleAllVisible = useCallback(() => {
+    setSelectedPullRequestKeys((current) =>
+      setVisiblePullRequestsSelected(current, visiblePullRequestKeys, !allVisibleSelected),
+    );
+  }, [allVisibleSelected, visiblePullRequestKeys]);
+  const removeSelectedFromList = useCallback(() => {
+    if (selectedVisibleCount === 0) return;
+    const storage = typeof window === "undefined" ? undefined : window.localStorage;
+    const next = new Set(removedPullRequestKeys);
+    const selectedByEnvironment = new Map<EnvironmentId, Set<string>>();
+    for (const entry of visiblePullRequestEntries) {
+      const key = pullRequestEntryKey(entry);
+      if (!selectedPullRequestKeys.has(key)) continue;
+      next.add(key);
+      const environmentKeys = selectedByEnvironment.get(entry.environmentId) ?? new Set<string>();
+      environmentKeys.add(key);
+      selectedByEnvironment.set(entry.environmentId, environmentKeys);
+    }
+    for (const [environmentId, selectedKeys] of selectedByEnvironment) {
+      const stored = new Set(readRemovedPullRequestKeys(storage, environmentId));
+      for (const key of selectedKeys) stored.add(key);
+      writeRemovedPullRequestKeys(storage, environmentId, stored);
+    }
+    setRemovedPullRequests({ environmentKey, keys: next });
+    setSelectedPullRequestKeys(EMPTY_PULL_REQUEST_KEYS);
+  }, [
+    environmentKey,
+    removedPullRequestKeys,
+    selectedPullRequestKeys,
+    selectedVisibleCount,
+    visiblePullRequestEntries,
+  ]);
+  const restoreRemovedPullRequests = useCallback(() => {
+    const storage = typeof window === "undefined" ? undefined : window.localStorage;
+    for (const environmentId of environmentIds) {
+      writeRemovedPullRequestKeys(storage, environmentId, EMPTY_PULL_REQUEST_KEYS);
+    }
+    setRemovedPullRequests({ environmentKey, keys: EMPTY_PULL_REQUEST_KEYS });
+  }, [environmentIds, environmentKey]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.key !== "Escape" || selectedVisibleCount === 0) return;
+      event.preventDefault();
+      setSelectedPullRequestKeys(EMPTY_PULL_REQUEST_KEYS);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedVisibleCount]);
 
   // Date sorts keep optional line-count reads near the viewport. Size sorts need every loaded
   // count before their order is final. Received counts stay cached across both policies.
@@ -1622,8 +1738,48 @@ function PullRequestsRouteView() {
   // in its own words and is left to.
   const carriedToNothing =
     showingCarried && listQuery.isPending && entries.length === 0 && typedQuery.length === 0;
+  const selectionControls =
+    pullRequestsSupported &&
+    (visiblePullRequestKeys.length > 0 || removedPullRequestKeys.size > 0) ? (
+      <div
+        role="toolbar"
+        aria-label="Pull request selection"
+        className="flex min-h-9 flex-wrap items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2"
+      >
+        <Checkbox
+          aria-label={
+            allVisibleSelected
+              ? "Clear visible pull request selection"
+              : "Select all visible pull requests"
+          }
+          checked={allVisibleSelected}
+          indeterminate={someVisibleSelected}
+          disabled={visiblePullRequestKeys.length === 0}
+          onCheckedChange={toggleAllVisible}
+        />
+        <span className="text-xs text-muted-foreground">
+          {selectedVisibleCount > 0
+            ? `${selectedVisibleCount} selected`
+            : `${visiblePullRequestKeys.length} visible`}
+        </span>
+        <span className="min-w-0 flex-1" />
+        {removedPullRequestKeys.size > 0 ? (
+          <Button size="xs" variant="ghost" onClick={restoreRemovedPullRequests}>
+            <RotateCcwIcon aria-hidden className="size-3.5" />
+            Restore removed ({removedPullRequestKeys.size})
+          </Button>
+        ) : null}
+        {selectedVisibleCount > 0 ? (
+          <Button size="xs" variant="outline" onClick={removeSelectedFromList}>
+            <XIcon aria-hidden className="size-3.5" />
+            Remove from list
+          </Button>
+        ) : null}
+      </div>
+    ) : null;
   const listBody = (
     <>
+      {selectionControls}
       {!capabilityKnown ? (
         <PullRequestListGhost rows={7} />
       ) : !pullRequestsSupported ? (
@@ -1637,7 +1793,7 @@ function PullRequestsRouteView() {
         <PullRequestsUnavailableState error={listQuery.error} onRetry={() => listQuery.refresh()} />
       ) : carriedToNothing ? (
         <PullRequestListGhost rows={7} />
-      ) : entries.length === 0 ? (
+      ) : visiblePullRequestKeys.length === 0 ? (
         <PullRequestListEmptyState
           hasProjects={!projectsKnown || projects.length > 0}
           refreshing={refreshing}
@@ -1690,7 +1846,9 @@ function PullRequestsRouteView() {
                       selected.repository === entry.repository &&
                       selected.number === entry.number
                     }
+                    checked={selectedPullRequestKeys.has(entryKey)}
                     onSelect={selectEntry}
+                    onCheckedChange={toggleEntrySelection}
                   />
                 );
               })}
@@ -1707,7 +1865,7 @@ function PullRequestsRouteView() {
           </Button>
         </div>
       ) : null}
-      {listData?.truncated && entries.length > 0 ? (
+      {listData?.truncated && visiblePullRequestKeys.length > 0 ? (
         <div ref={sentinelRef} className="flex justify-center py-2 text-xs text-muted-foreground">
           {loadingMore ? (
             <span className="flex items-center gap-2">
