@@ -41,6 +41,10 @@ T3 Code works with the platforms your team already uses:
 
 - See if your current branch already has an open PR/MR
 - Open several reviews from the **Pull requests** page as tabs in the right panel
+- Use the row checkboxes or **Select all visible pull requests** to select several reviews, then
+  choose **Remove from list** to hide them without closing or changing them on the Git host
+- Removed reviews stay hidden for that environment in this browser. Choose **Restore removed**
+  above the list to bring them back.
 - While working in a thread, open linked reviews in the same compact right-panel tabs without
   leaving the conversation
 - Open the review directly in your browser with one click
