@@ -77,7 +77,6 @@ describe("versionSkew", () => {
       "Socket closed. Hint: Version mismatch. Try syncing the client and server to the same T3 Code version.",
     );
   });
-
   it("reads desktop-managed update capabilities from config descriptors", () => {
     expect(
       resolveServerSelfUpdateCapability({
