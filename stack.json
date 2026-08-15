@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3d2761479c232f52709b62790423fb7bd5890672",
-  "head": "cbe8f41e524b502907492530d9c624ea37745c68",
+  "prev": "3568ce2e56ecbcc4119c9c9dfd3f34be90295309",
+  "head": "eb465d971ab9e468fe5f94bdba950771674109d5",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -31,8 +31,7 @@
     "fork-chat-file-attachments",
     "fork-remote-file-downloads",
     "fork-remote-worktree-base",
-    "fork-web-pr-multiselect",
-    "refresh-temp"
+    "fork-web-pr-multiselect"
   ],
   "unapplied": [],
   "hidden": [],
@@ -41,19 +40,19 @@
       "oid": "d9d5633273721a90ff49932b51d93b507beba08e"
     },
     "fork-chat-file-attachments": {
-      "oid": "46b4169a1e1840319b603f0a85ac0a46180ad2ef"
+      "oid": "5aa1d22ae36404c9f1459ab96d6e52b41c20b009"
     },
     "fork-ci-release-pipeline": {
-      "oid": "fe7fff0f4320db6e98b889d4c03c05b131750575"
+      "oid": "8e3cc811c597e6ee7926f0cfc8fa5467828632bd"
     },
     "fork-ci-runner-compat": {
       "oid": "eb4d2cfe9dceb1567fcadd3aa7d09297c25e7d6e"
     },
     "fork-ci-stgit-metadata": {
-      "oid": "23c0ea841820fd69761e2b6130284fe86d4938a3"
+      "oid": "fb84025b7731b3ed0769fd05cb22ec506d0e5cc1"
     },
     "fork-ci-upstream-sync": {
-      "oid": "0b8c27c7eec2d169acd6a5bf7764716f96b3d018"
+      "oid": "42d2c0c3951ec5ee42f51284b1542526d755b218"
     },
     "fork-desktop-distribution": {
       "oid": "5531672d7f521fa83285d7984cb14e6dd5900c49"
@@ -80,13 +79,13 @@
       "oid": "9d9a27942a275a5562802f68a69c53b44a5c61c8"
     },
     "fork-remote-file-downloads": {
-      "oid": "acd0a18dc24be0af61e8ad0c73de24ddc8d4d0d2"
+      "oid": "cf46e6362602926380dddff26346202759d7191b"
     },
     "fork-remote-relay-access": {
       "oid": "3e735bf38a7350daa74bcc6c1cbff8c8b1888c94"
     },
     "fork-remote-worktree-base": {
-      "oid": "bf2b8ac871cb10544906c1ccdb8af305bd5a8def"
+      "oid": "4796a240336e34d41f8d8a08603fc722f497bb95"
     },
     "fork-stgit-stack-policy": {
       "oid": "b6158e322d3fad4faa098556dec1f63ed5a66328"
@@ -113,19 +112,16 @@
       "oid": "daae2da37ce5256c50c4ddda86c57759953340d1"
     },
     "fork-web-files-upload": {
-      "oid": "d8ce647d5edd14068433f52b171a5cf755f19c4d"
+      "oid": "1cbd0b6858612058608f694f547ec5af624818ab"
     },
     "fork-web-image-timeout": {
       "oid": "6a1edf754c9d40fe51f884db2bcceac153d4ad62"
     },
     "fork-web-pr-multiselect": {
-      "oid": "99eefaafb43cfe644d7035f2a46d106d6a2c5b99"
+      "oid": "eb465d971ab9e468fe5f94bdba950771674109d5"
     },
     "fork-web-project-scope": {
       "oid": "83072b751dc512dddd94fa773a8f153ece72473f"
-    },
-    "refresh-temp": {
-      "oid": "cbe8f41e524b502907492530d9c624ea37745c68"
     }
   }
 }
