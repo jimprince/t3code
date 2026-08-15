@@ -150,6 +150,40 @@ describe("prepare-release-tag", () => {
     }
   });
 
+  it("REGRESSION: the prep commit survives the stack-branch plain-commit guard", () => {
+    // Run 31877092694: the CI repair bot's release prep died because the
+    // guard hook blocked the script's plain commit on stgit/adopt. The script
+    // must carry the sanctioned override for its own commit.
+    const repo = createFixtureRepo();
+    try {
+      seedForkRepo(repo);
+      repo.git("branch", "-m", "stgit/adopt");
+      const hookPath = NodePath.join(repo.dir, ".git", "hooks", "pre-commit");
+      NodeFS.writeFileSync(
+        hookPath,
+        '#!/bin/sh\nbranch="$(git symbolic-ref --quiet --short HEAD || true)"\n' +
+          'if [ "$branch" = "stgit/adopt" ] && [ -z "$T3_ALLOW_PLAIN_COMMIT" ]; then\n' +
+          '  echo "guard: plain commit on stgit/adopt is blocked" >&2\n' +
+          "  exit 1\n" +
+          "fi\n",
+      );
+      NodeFS.chmodSync(hookPath, 0o755);
+
+      const output = runPrepare(repo, "v1.2.3-fork.1");
+      const mainSha = outputValue(output, "main_sha");
+      const prepSha = outputValue(output, "prep_sha");
+
+      assert.notStrictEqual(
+        prepSha,
+        mainSha,
+        "prep commit must be created even with the guard hook active",
+      );
+      assert.strictEqual(repo.git("rev-parse", "v1.2.3-fork.1^{commit}"), prepSha);
+    } finally {
+      repo.cleanup();
+    }
+  });
+
   it("stamps the release version into every manifest at the tagged commit", () => {
     const repo = createFixtureRepo();
     try {

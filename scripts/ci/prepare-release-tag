@@ -73,7 +73,9 @@ if git_cmd diff --quiet -- "${MANIFESTS[@]}" pnpm-lock.yaml; then
   prep_sha="$main_sha"
 else
   git_cmd add -- "${MANIFESTS[@]}" pnpm-lock.yaml
-  git_cmd commit -m "chore(release): prepare $RELEASE_TAG"
+  # This plain commit is sanctioned: it lives off the stack (tag-only, never
+  # pushed to main), so the stgit/adopt plain-commit guard must let it through.
+  T3_ALLOW_PLAIN_COMMIT=1 git_cmd commit -m "chore(release): prepare $RELEASE_TAG"
   prep_sha="$(git_cmd rev-parse HEAD)"
 fi
 
