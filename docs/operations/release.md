@@ -21,6 +21,11 @@ file is the concise runbook.
 - The prepared release commit is a direct child of the rendered fork stack tip:
   the tag points at the stamped child, while `main` points at the unstamped
   parent. `release.yml` publishes that bound tag/source and never pushes `main`.
+- `scripts/ci/render-release-notes` builds the GitHub release body from the
+  upstream commits between the previous and current upstream base tags, newest
+  first, so desktop updater notes remain useful after `main` is rebased. Release
+  reruns refresh the same body; unavailable or malformed compare data degrades
+  to compare links and never blocks publication.
 
 ## Push Nightly Trigger
 
