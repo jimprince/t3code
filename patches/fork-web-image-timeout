@@ -1,6 +1,6 @@
-Bottom: 423ceba14ca0c31b4b18456e7c154a4971cdb63b
-Top:    e315d60a98f57448230c756d319e4705a8d34dc2
+Bottom: a754cae5d9fb80591d69651d524152cf8046a879
+Top:    ebc9e2231f37d01445e29207105991517125e3fb
 Author: brad <bradprin@live.com>
-Date:   2026-08-15 22:23:42 -0600
+Date:   2026-08-15 22:24:39 -0600
 
 test(web): allow image compression boundary runtime
