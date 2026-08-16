@@ -52,6 +52,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
+export const DESKTOP_STABLE_PRODUCT_NAME = "T3 Code (Fork)";
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -1956,7 +1957,7 @@ function resolveDesktopFlavorMetadata(flavor: typeof DesktopFlavor.Type): {
   }
 
   return {
-    productName: "T3 Code (Fork)",
+    productName: DESKTOP_STABLE_PRODUCT_NAME,
     appId: "com.t3tools.t3code.fork",
     artifactName: "T3-Code-Fork-${version}-${arch}.${ext}",
     executableName: "t3code-fork",
