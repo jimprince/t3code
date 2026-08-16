@@ -1,6 +1,6 @@
-Bottom: d1e80fc97c1456c9c598f6f3a4b6b483fc3b10fc
-Top:    d2fd2249c94f7d4bead0d02cb8019e97a212b4bc
+Bottom: 8b43f6e2cb2c32859efb69e7f8688476cc9d086b
+Top:    cf3bb809c87e4f94ca3bda0f0f66673f4823a63d
 Author: brad <bradprin@live.com>
-Date:   2026-08-15 22:41:30 -0600
+Date:   2026-08-16 01:04:30 -0600
 
 feat(remote): support authenticated relay access
