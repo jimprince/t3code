@@ -1,14 +1,13 @@
 {
   "version": 5,
-  "prev": "8eb084c04a9cc95cb7636dbb261e5f0361f8706c",
-  "head": "712a61523e65dccbf1ea4cac8854c9fa46e50990",
+  "prev": "5a3b9097cbb9cf598d78972b4be3e20d6b65d62e",
+  "head": "65975e8ccd5c9ff740734aa146af00ca1468fca5",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
     "fork-t3-thread-operator-cli",
     "fork-provider-turn-reservation",
-    "fork-provider-runtime-recovery",
-    "refresh-temp"
+    "fork-provider-runtime-recovery"
   ],
   "unapplied": [
     "fork-provider-observability",
@@ -75,7 +74,7 @@
       "oid": "b127ca99149922fdaa619adbe84efebddad2d122"
     },
     "fork-provider-runtime-recovery": {
-      "oid": "63ae7eae8c6993a440b9e97a151ce619481d03ef"
+      "oid": "65975e8ccd5c9ff740734aa146af00ca1468fca5"
     },
     "fork-provider-turn-reservation": {
       "oid": "883717de06482bb73b2b576f603db27580938dba"
@@ -124,9 +123,6 @@
     },
     "fork-web-project-scope": {
       "oid": "4e21a5e51d349f98cc886f74360cb7eb7e7110ae"
-    },
-    "refresh-temp": {
-      "oid": "712a61523e65dccbf1ea4cac8854c9fa46e50990"
     }
   }
 }
