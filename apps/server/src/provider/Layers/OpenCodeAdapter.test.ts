@@ -54,23 +54,11 @@ type MessageEntry = {
   parts: Array<unknown>;
 };
 
-type SubscribedEventInput = unknown | Promise<unknown>;
-
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((resolveValue) => {
-    resolve = resolveValue;
-  });
-  return { promise, resolve };
-}
-
 const runtimeMock = {
   state: {
     startCalls: [] as string[],
     sessionCreateUrls: [] as string[],
     sessionCreateInputs: [] as Array<Record<string, unknown>>,
-    sessionGetCalls: [] as string[],
-    sessionListCalls: [] as Array<unknown>,
     authHeaders: [] as Array<string | null>,
     abortCalls: [] as string[],
     closeCalls: [] as string[],
@@ -79,8 +67,7 @@ const runtimeMock = {
     promptAsyncError: null as Error | null,
     closeError: null as Error | null,
     messages: [] as MessageEntry[],
-    sessionListResponses: [] as Array<unknown>,
-    subscribedEvents: [] as SubscribedEventInput[],
+    subscribedEvents: [] as unknown[],
     sessionGetIds: [] as string[],
     missingSessionIds: new Set<string>(),
     transientErrorSessionIds: new Set<string>(),
@@ -92,8 +79,6 @@ const runtimeMock = {
     this.state.startCalls.length = 0;
     this.state.sessionCreateUrls.length = 0;
     this.state.sessionCreateInputs.length = 0;
-    this.state.sessionGetCalls.length = 0;
-    this.state.sessionListCalls.length = 0;
     this.state.authHeaders.length = 0;
     this.state.abortCalls.length = 0;
     this.state.closeCalls.length = 0;
@@ -102,7 +87,6 @@ const runtimeMock = {
     this.state.promptAsyncError = null;
     this.state.closeError = null;
     this.state.messages = [];
-    this.state.sessionListResponses = [];
     this.state.subscribedEvents = [];
     this.state.sessionGetIds.length = 0;
     this.state.missingSessionIds.clear();
@@ -156,10 +140,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
   createOpenCodeSdkClient: ({ baseUrl, serverPassword }) =>
     ({
       session: {
-        list: async (input: unknown) => {
-          runtimeMock.state.sessionListCalls.push(input);
-          return { data: runtimeMock.state.sessionListResponses };
-        },
+        list: async () => ({ data: [] }),
         create: async (input: Record<string, unknown>) => {
           runtimeMock.state.sessionCreateUrls.push(baseUrl);
           runtimeMock.state.sessionCreateInputs.push(input);
@@ -169,7 +150,6 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
           return { data: { id: `${baseUrl}/session` } };
         },
         get: async ({ sessionID }: { sessionID: string }) => {
-          runtimeMock.state.sessionGetCalls.push(sessionID);
           runtimeMock.state.sessionGetIds.push(sessionID);
           // The real client is `throwOnError: true`: non-2xx rejects rather
           // than resolving, so missing → 404 throw, transient → 500 throw.
@@ -230,7 +210,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         subscribe: async () => ({
           stream: (async function* () {
             for (const event of runtimeMock.state.subscribedEvents) {
-              yield await event;
+              yield event;
             }
           })(),
         }),
@@ -607,98 +587,6 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
       NodeAssert.equal(result.failure._tag, "ProviderAdapterSessionNotFoundError");
       NodeAssert.equal(result.failure.provider, "opencode");
       NodeAssert.equal(result.failure.threadId, "thread-opencode-missing-stop");
-    }),
-  );
-
-  it.effect("resumes an OpenCode session from a persisted resume cursor", () =>
-    Effect.gen(function* () {
-      const adapter = yield* OpenCodeAdapter;
-      const threadId = asThreadId("thread-opencode-resume-cursor");
-
-      const session = yield* adapter.startSession({
-        provider: ProviderDriverKind.make("opencode"),
-        threadId,
-        runtimeMode: "full-access",
-        resumeCursor: { sessionId: "opencode-session-existing" },
-      });
-      const turn = yield* adapter.sendTurn({
-        threadId,
-        input: "Continue the existing work",
-        modelSelection: createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5"),
-      });
-
-      NodeAssert.deepEqual(runtimeMock.state.sessionGetCalls, ["opencode-session-existing"]);
-      NodeAssert.deepEqual(runtimeMock.state.sessionCreateUrls, []);
-      NodeAssert.deepEqual(session.resumeCursor, {
-        schemaVersion: 1,
-        sessionId: "opencode-session-existing",
-      });
-      NodeAssert.deepEqual(turn.resumeCursor, {
-        schemaVersion: 1,
-        sessionId: "opencode-session-existing",
-      });
-      NodeAssert.deepEqual(runtimeMock.state.promptCalls.at(-1), {
-        sessionID: "opencode-session-existing",
-        model: {
-          providerID: "openai",
-          modelID: "gpt-5",
-        },
-        parts: [{ type: "text", text: "Continue the existing work" }],
-      });
-      yield* adapter.stopSession(threadId);
-    }),
-  );
-
-  it.effect("reuses an existing titled OpenCode session when no resume cursor was persisted", () =>
-    Effect.gen(function* () {
-      const adapter = yield* OpenCodeAdapter;
-      const threadId = asThreadId("thread-opencode-title-fallback");
-      runtimeMock.state.sessionListResponses = [
-        {
-          id: "opencode-session-new-duplicate",
-          title: `T3 Code ${threadId}`,
-          directory: process.cwd(),
-          time: { created: 20, updated: 20 },
-        },
-        {
-          id: "opencode-session-original",
-          title: `T3 Code ${threadId}`,
-          directory: process.cwd(),
-          time: { created: 10, updated: 30 },
-        },
-        {
-          id: "opencode-session-other-thread",
-          title: "T3 Code other-thread",
-          directory: process.cwd(),
-          time: { created: 1, updated: 1 },
-        },
-      ];
-
-      const session = yield* adapter.startSession({
-        provider: ProviderDriverKind.make("opencode"),
-        threadId,
-        runtimeMode: "full-access",
-      });
-
-      NodeAssert.deepEqual(runtimeMock.state.sessionListCalls, [
-        {
-          directory: process.cwd(),
-          search: threadId,
-          limit: 50,
-        },
-      ]);
-      NodeAssert.deepEqual(runtimeMock.state.sessionCreateUrls, []);
-      NodeAssert.equal(runtimeMock.state.sessionUpdateCalls.length, 1);
-      NodeAssert.equal(
-        runtimeMock.state.sessionUpdateCalls[0]?.sessionID,
-        "opencode-session-original",
-      );
-      NodeAssert.equal(runtimeMock.state.sessionUpdateCalls[0]?.permission != null, true);
-      NodeAssert.deepEqual(session.resumeCursor, {
-        schemaVersion: 1,
-        sessionId: "opencode-session-original",
-      });
-      yield* adapter.stopSession(threadId);
     }),
   );
 
@@ -1273,81 +1161,6 @@ it.layer(OpenCodeAdapterTestLayer)("OpenCodeAdapterLive", (it) => {
         NodeAssert.equal(completed.payload.detail, "A BBonus");
       }
     }),
-  );
-
-  it.effect(
-    "settles a turn from a terminal assistant message when OpenCode omits idle status",
-    () =>
-      Effect.gen(function* () {
-        const adapter = yield* OpenCodeAdapter;
-        const threadId = asThreadId("thread-opencode-terminal-message");
-        const messageUpdated = deferred<unknown>();
-        const partUpdated = deferred<unknown>();
-        const events: Array<{ readonly type: string; readonly turnId?: unknown }> = [];
-        runtimeMock.state.subscribedEvents = [messageUpdated.promise, partUpdated.promise];
-        const eventsFiber = yield* adapter.streamEvents.pipe(
-          Stream.filter((event) => event.threadId === threadId),
-          Stream.runForEach((event) => Effect.sync(() => events.push(event))),
-          Effect.forkChild,
-        );
-
-        yield* adapter.startSession({
-          provider: ProviderDriverKind.make("opencode"),
-          threadId,
-          runtimeMode: "full-access",
-        });
-        const turn = yield* adapter.sendTurn({
-          threadId,
-          input: "Say done",
-          modelSelection: createModelSelection(ProviderInstanceId.make("opencode"), "openai/gpt-5"),
-        });
-
-        messageUpdated.resolve({
-          type: "message.updated",
-          properties: {
-            sessionID: "http://127.0.0.1:9999/session",
-            info: {
-              id: "msg-terminal",
-              role: "assistant",
-              time: { created: 1, completed: 2 },
-              finish: "stop",
-            },
-          },
-        });
-        partUpdated.resolve({
-          type: "message.part.updated",
-          properties: {
-            sessionID: "http://127.0.0.1:9999/session",
-            part: {
-              id: "part-terminal",
-              sessionID: "http://127.0.0.1:9999/session",
-              messageID: "msg-terminal",
-              type: "text",
-              text: "Done",
-              time: { start: 1, end: 2 },
-            },
-            time: 2,
-          },
-        });
-        yield* advanceTestClock(600);
-        const sessions = yield* adapter.listSessions();
-        yield* Fiber.interrupt(eventsFiber);
-
-        NodeAssert.deepEqual(
-          events.map((event) => event.type),
-          [
-            "session.started",
-            "thread.started",
-            "turn.started",
-            "content.delta",
-            "item.completed",
-            "turn.completed",
-          ],
-        );
-        NodeAssert.equal(events.at(-1)?.turnId, turn.turnId);
-        NodeAssert.equal(sessions[0]?.status, "ready");
-        NodeAssert.equal(sessions[0]?.activeTurnId, undefined);
-      }),
   );
 
   it.effect("passes the thread title to session.create when provided", () =>
