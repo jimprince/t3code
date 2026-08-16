@@ -1044,6 +1044,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("uses the nightly DMG background for nightly macOS builds", () =>
     Effect.gen(function* () {
       const config = yield* createBuildConfig(
+        "stable",
         "mac",
         "dmg",
         "1.2.3-nightly.20260815.1",
