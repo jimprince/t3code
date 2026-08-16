@@ -53,6 +53,12 @@ version stamp only in the tagged child.
 The next upstream stable sync replays the fork patch onto the stable tag and
 publishes the integrated stable release.
 
+If the push-nightly replay conflicts, it restores the starting checkout,
+dispatches the nightly `Sync Upstream` workflow, and fails visibly. Both
+workflows share the main-writer lock, so the dispatched run starts only after
+the detector exits; that eligible run emits the normal repair handoff for the
+CI Repair Bot instead of leaving the conflict idle until the daily schedule.
+
 ## Normal Commands
 
 Optionally start the local Apple Silicon runner before a desktop release:

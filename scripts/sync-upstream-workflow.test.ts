@@ -362,4 +362,26 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       );
     }),
   );
+
+  it.effect("routes fork push conflicts through the eligible repair workflow", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      const workflow = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/fork-push-nightly.yml"),
+      );
+
+      assert.include(workflow, "CI_REPAIR_BOT_CONFLICT_MODE: output");
+      assert.include(workflow, "steps.replay.outputs.status == 'conflict'");
+      assert.include(workflow, "gh workflow run sync-upstream.yml");
+      assert.include(workflow, "--ref main");
+      assert.include(workflow, "-f channel=nightly");
+      assert.isBelow(
+        workflow.indexOf("scripts/ci/reproduce-sync-upstream"),
+        workflow.indexOf("gh workflow run sync-upstream.yml"),
+        "the push-nightly replay must detect a conflict before dispatching repair",
+      );
+    }),
+  );
 });
