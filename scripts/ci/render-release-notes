@@ -76,7 +76,7 @@ minimal_body() {
 sanitize_subject() {
   local subject="$1"
   local markdown_character
-  local -a markdown_characters=('`' '*' '_' '[' ']' '(' ')' '<' '>' '#' '|' '\\')
+  local -a markdown_characters=('`' '*' '_' '[' ']' '<' '>' '|' '\\')
 
   subject="${subject//$'\r'/ }"
   subject="${subject//$'\n'/ }"
@@ -147,12 +147,12 @@ if (( display_count > MAX_SUBJECTS )); then
 fi
 
 for (( index = 0; index < display_count; index += 1 )); do
-  body+=$'\n\n'
+  body+=$'\n'
   body+="- ${subjects[$index]}"
 done
 
 if (( subject_count > MAX_SUBJECTS )); then
-  body+=$'\n\n'
+  body+=$'\n'
   body+="- +$((subject_count - MAX_SUBJECTS)) more upstream changes"
 fi
 

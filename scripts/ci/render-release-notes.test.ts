@@ -78,6 +78,7 @@ describe("render-release-notes", () => {
         "the subject list is capped at 20 items",
       );
       assert.include(result.stdout, "- +2 more upstream changes");
+      assert.notInclude(result.stdout, "\n\n- ");
       assert.include(
         result.stdout,
         "[Upstream compare](https://github.com/pingdotgg/t3code/compare/v0.0.34-nightly.20260813.1084...v0.0.34-nightly.20260815.1100)",
@@ -150,10 +151,36 @@ describe("render-release-notes", () => {
       const result = runRenderer(fixture.path);
 
       assert.strictEqual(result.status, 0, result.stderr);
-      assert.include(result.stdout, "- feat: Bold tag heading code");
+      assert.include(result.stdout, "- feat: Bold tag #heading code");
       assert.notInclude(result.stdout, "**[Bold]**");
       assert.notInclude(result.stdout, "<tag>");
       assert.notInclude(result.stdout, "second line");
+    } finally {
+      fixture.cleanup();
+    }
+  });
+
+  it("keeps scoped conventional commits and pull request references readable in adjacent bullets", () => {
+    const fixture = writeComparePayload(
+      comparePayload([
+        "test: remove redundant and stale tests (#6267)",
+        "fix(web): keep highlighted command menu items clear of the scroll fade (#7132)",
+        "refactor(web): simplify advanced theme controls (#7107)",
+      ]),
+    );
+    try {
+      const result = runRenderer(fixture.path);
+
+      assert.strictEqual(result.status, 0, result.stderr);
+      assert.include(
+        result.stdout,
+        [
+          "- refactor(web): simplify advanced theme controls (#7107)",
+          "- fix(web): keep highlighted command menu items clear of the scroll fade (#7132)",
+          "- test: remove redundant and stale tests (#6267)",
+        ].join("\n"),
+      );
+      assert.notInclude(result.stdout, "\n\n- ");
     } finally {
       fixture.cleanup();
     }
