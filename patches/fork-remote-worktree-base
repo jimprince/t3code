@@ -1,6 +1,6 @@
-Bottom: e067856671c713f5ad8e8836d99e0d79884de7e8
-Top:    d7f1d35569243863df7129ba602f23971addab3f
+Bottom: 056c7f1325aaab491efe7d9a504e46801cd6b373
+Top:    286c0731bd103683702f38e8f775e0c23399dbb5
 Author: Codex <codex@users.noreply.github.com>
-Date:   2026-08-15 22:41:30 -0600
+Date:   2026-08-15 23:23:38 -0600
 
 feat(worktrees): base new worktrees on selected remote
