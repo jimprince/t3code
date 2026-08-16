@@ -3168,6 +3168,8 @@ describe("ProviderRuntimeIngestion", () => {
       },
     });
 
+    await harness.drain();
+
     const thread = await waitForThread(
       harness.readModel,
       (entry) =>
