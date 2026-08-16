@@ -95,8 +95,3 @@ id = "thread-detail-snapshot-api"
 date = "2026-08-07"
 decided = "retire+narrow"
 rationale = "Upstream v0.0.33 shipped getThreadDetailSnapshot(threadId, window?) returning OrchestrationThreadDetailSnapshot with snapshotSequence read in one transaction — the fork's atomic-handoff guarantee verbatim, plus opt-in turn pagination the fork never had. That is this patch's recorded retire_when for the snapshot capability, so the fork's getThreadDetailSnapshotById is retired and every caller (http.ts, ws.ts, tests) moved to upstream's name. Lifecycle recovery itself is NOT retired and stays in this patch. Narrowed rather than fully retired because one fork behavior survives: upstream's pagination is opt-in, so the unwindowed activity read is still unbounded, and the fork keeps capping it at THREAD_DETAIL_ACTIVITY_LIMIT — an unbounded activity list is what stalls snapshot handoff on reconnect."
-[[patch.decision]]
-id = "thread-activity-hydration-bound"
-date = "2026-08-15"
-decided = "retire+narrow"
-rationale = "Upstream 71c6f8248 now bounds full and windowed activity hydration to the same 500-row limit and preserves older unresolved approval and user-input requests, a strict superset of the fork's remaining snapshot cap. Retire the fork's duplicate SQL variant and retain upstream's bounded hydration; lifecycle recovery itself remains in this patch."
