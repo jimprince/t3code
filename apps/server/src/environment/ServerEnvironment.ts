@@ -152,6 +152,7 @@ export const make = Effect.gen(function* () {
       threadSnooze: true,
       threadPinning: true,
       threadPinReorder: true,
+      threadSidebarReorder: true,
       threadTitleRegeneration: true,
       ...(serverSelfUpdate === null ? {} : { serverSelfUpdate }),
       ...(serverSelfUpdate === "boot-service" ? { serverSelfUpdateProgress: true } : {}),
