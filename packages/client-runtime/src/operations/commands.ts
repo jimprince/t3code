@@ -42,6 +42,7 @@ export type UnsnoozeThreadInput = CommandInput<"thread.unsnooze">;
 export type PinThreadInput = CommandInput<"thread.pin">;
 export type UnpinThreadInput = CommandInput<"thread.unpin">;
 export type ReorderPinnedThreadInput = CommandInput<"thread.pin.reorder">;
+export type ReorderSidebarThreadInput = CommandInput<"thread.sidebar.reorder">;
 export type UpdateThreadMetadataInput = CommandInput<"thread.meta.update">;
 export type SetThreadRuntimeModeInput = CommandInput<"thread.runtime-mode.set">;
 export type SetThreadInteractionModeInput = CommandInput<"thread.interaction-mode.set">;
@@ -228,6 +229,16 @@ export const reorderPinnedThread: (input: ReorderPinnedThreadInput) => CommandEf
   return yield* dispatch({
     ...input,
     type: "thread.pin.reorder",
+    commandId: yield* commandId(input),
+  });
+});
+
+export const reorderSidebarThread: (input: ReorderSidebarThreadInput) => CommandEffect = Effect.fn(
+  "EnvironmentCommands.reorderSidebarThread",
+)(function* (input) {
+  return yield* dispatch({
+    ...input,
+    type: "thread.sidebar.reorder",
     commandId: yield* commandId(input),
   });
 });
