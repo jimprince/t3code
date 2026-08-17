@@ -224,6 +224,7 @@ export const make = Effect.gen(function* () {
       usageLimitSources: true,
       threadPinning: true,
       threadPinReorder: true,
+      threadSidebarReorder: true,
       threadTitleRegeneration: true,
       threadPullRequestLinking: true,
       environmentIcon: true,
