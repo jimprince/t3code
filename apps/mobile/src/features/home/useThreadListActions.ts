@@ -11,6 +11,7 @@ import { refreshArchivedThreadsForEnvironment } from "../archive/useArchivedThre
 import {
   pinOrderKeyBetween,
   planPinnedMove,
+  planSidebarMove,
   sortPinnedThreadsByOrderKey,
 } from "@t3tools/client-runtime/state/thread-sort";
 import { appAtomRegistry } from "../../state/atom-registry";
@@ -45,6 +46,14 @@ function environmentSupportsPinReorder(environmentId: EnvironmentThreadShell["en
   return (
     appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
       .threadPinReorder === true
+  );
+}
+
+/** Fork: server understands thread.sidebar.reorder. */
+function environmentSupportsSidebarReorder(environmentId: EnvironmentThreadShell["environmentId"]) {
+  return (
+    appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+      .threadSidebarReorder === true
   );
 }
 
@@ -236,6 +245,12 @@ export function useThreadListActions(): {
     thread: EnvironmentThreadShell,
     direction: "up" | "down",
   ) => Promise<boolean>;
+  readonly moveInboxThread: (
+    thread: EnvironmentThreadShell,
+    direction: "up" | "down",
+    inboxOrder: ReadonlyArray<string>,
+  ) => Promise<boolean>;
+  readonly clearInboxThreadPosition: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly regenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
 } {
   const executeAction = useThreadActionExecutor();
@@ -540,6 +555,105 @@ export function useThreadListActions(): {
     [reorderPinnedMutation],
   );
 
+  // Fork: Move up / Move down for the inbox block — the keyboard/menu
+  // equivalent of web's drag, sharing the same fractional-key plan.
+  //
+  // Unlike movePinnedThread this works from the list as RENDERED (the caller
+  // passes the layout's inboxOrder), not a canonical order recomputed here.
+  // The inbox partition depends on the per-device settle/snooze settings the
+  // layout builder resolves, and planning against rows the user cannot see
+  // would let a move silently reposition filtered-out threads.
+  const reorderSidebarMutation = useAtomCommand(threadEnvironment.reorderSidebar, {
+    reportFailure: false,
+  });
+  const moveInboxInFlightRef = useRef(false);
+  const moveInboxThread = useCallback(
+    async (
+      thread: EnvironmentThreadShell,
+      direction: "up" | "down",
+      inboxOrder: ReadonlyArray<string>,
+    ) => {
+      if (moveInboxInFlightRef.current) return false;
+      if (!environmentSupportsSidebarReorder(thread.environmentId)) {
+        Alert.alert(
+          "Could not move thread",
+          "This environment's server does not support reordering threads yet. Update the server to arrange the list.",
+        );
+        return false;
+      }
+      const shellByKey = new Map(
+        appAtomRegistry
+          .get(environmentThreadShells.threadShellsAtom)
+          .map((shell) => [scopedThreadKey(shell.environmentId, shell.id), shell]),
+      );
+      // Only reorder-capable rows can carry a key, so a legacy-server row in
+      // the middle of the list must not become a planning anchor.
+      const orderedIds = inboxOrder.filter((key) => {
+        const shell = shellByKey.get(key);
+        return shell !== undefined && environmentSupportsSidebarReorder(shell.environmentId);
+      });
+      const assignments = planSidebarMove({
+        orderedIds,
+        keysById: new Map(
+          orderedIds.map((key) => [key, shellByKey.get(key)?.sidebarOrderKey ?? null]),
+        ),
+        movedId: scopedThreadKey(thread.environmentId, thread.id),
+        direction,
+      });
+      if (assignments === null || assignments.length === 0) return false;
+      selectionHaptic();
+      moveInboxInFlightRef.current = true;
+      try {
+        for (const assignment of assignments) {
+          const target = shellByKey.get(assignment.id);
+          if (target === undefined) continue;
+          const result = await reorderSidebarMutation({
+            environmentId: target.environmentId,
+            input: { threadId: target.id, orderKey: assignment.orderKey },
+          });
+          if (result._tag === "Failure") {
+            const error = Cause.squash(result.cause);
+            Alert.alert(
+              "Could not move thread",
+              error instanceof Error && error.message.trim().length > 0
+                ? error.message
+                : "The thread could not be moved.",
+            );
+            // No rollback, same reasoning as movePinnedThread.
+            return false;
+          }
+        }
+        return true;
+      } finally {
+        moveInboxInFlightRef.current = false;
+      }
+    },
+    [reorderSidebarMutation],
+  );
+
+  /** Release a manual placement so the thread rejoins the recency order. */
+  const clearInboxThreadPosition = useCallback(
+    async (thread: EnvironmentThreadShell) => {
+      if (!environmentSupportsSidebarReorder(thread.environmentId)) return false;
+      const result = await reorderSidebarMutation({
+        environmentId: thread.environmentId,
+        input: { threadId: thread.id, orderKey: null },
+      });
+      if (result._tag === "Failure") {
+        const error = Cause.squash(result.cause);
+        Alert.alert(
+          "Could not clear position",
+          error instanceof Error && error.message.trim().length > 0
+            ? error.message
+            : "The manual position could not be cleared.",
+        );
+        return false;
+      }
+      return true;
+    },
+    [reorderSidebarMutation],
+  );
+
   const confirmDeleteThread = useConfirmDeleteThread(executeAction);
 
   return {
@@ -552,6 +666,8 @@ export function useThreadListActions(): {
     pinThread,
     unpinThread,
     movePinnedThread,
+    moveInboxThread,
+    clearInboxThreadPosition,
     regenerateThreadTitle,
   };
 }

@@ -73,6 +73,7 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
           { migration_id: 1, name: "ProviderSessionRuntimeBootGeneration" },
           { migration_id: 2, name: "ProviderSessionRuntimeActiveTurn" },
           { migration_id: 3, name: "ProjectionThreadMessageFileAttachments" },
+          { migration_id: 4, name: "ProjectionThreadsSidebarOrderKey" },
         ]);
 
         const upstreamCollision = yield* sql<{ readonly name: string }>`
