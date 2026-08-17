@@ -3630,34 +3630,40 @@ export default function Sidebar() {
                     )}
                     <span className="min-w-0 flex-1 truncate">{projectScopeTriggerLabel}</span>
                     {scopedProjectGroup ? (
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        aria-label="Stop isolating project"
-                        title="Stop isolating"
-                        className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-primary"
-                        onPointerDown={(event) => {
-                          event.stopPropagation();
-                          event.preventDefault();
-                        }}
-                        onMouseDown={(event) => {
-                          event.stopPropagation();
-                          event.preventDefault();
-                        }}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          event.preventDefault();
-                          setProjectScopeKey(null);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key !== "Enter" && event.key !== " ") return;
-                          event.stopPropagation();
-                          event.preventDefault();
-                          setProjectScopeKey(null);
-                        }}
-                      >
-                        <CircleDotIcon className="size-3.5" />
-                      </span>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              aria-label="Stop isolating project"
+                              className="inline-flex size-5 shrink-0 cursor-pointer items-center justify-center rounded text-primary"
+                              onPointerDown={(event) => {
+                                event.stopPropagation();
+                                event.preventDefault();
+                              }}
+                              onMouseDown={(event) => {
+                                event.stopPropagation();
+                                event.preventDefault();
+                              }}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                event.preventDefault();
+                                setProjectScopeKey(null);
+                              }}
+                              onKeyDown={(event) => {
+                                if (event.key !== "Enter" && event.key !== " ") return;
+                                event.stopPropagation();
+                                event.preventDefault();
+                                setProjectScopeKey(null);
+                              }}
+                            />
+                          }
+                        >
+                          <CircleDotIcon className="size-3.5" />
+                        </TooltipTrigger>
+                        <TooltipPopup>Stop isolating</TooltipPopup>
+                      </Tooltip>
                     ) : null}
                     <ChevronDownIcon className="-mr-px size-4 shrink-0" />
                   </MenuTrigger>
@@ -3715,32 +3721,40 @@ export default function Sidebar() {
                           <span className="min-w-0 flex-1 truncate text-sm">
                             {project.displayName}
                           </span>
-                          <button
-                            type="button"
-                            aria-label={
-                              isIsolated
-                                ? `Show all projects instead of ${project.displayName}`
-                                : `Scope to ${project.displayName}`
-                            }
-                            title={isIsolated ? "Show all projects" : "Scope to this project"}
-                            className={`ml-auto inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md outline-none transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring ${
-                              isIsolated
-                                ? "text-primary"
-                                : "text-muted-foreground/55 hover:text-foreground"
-                            }`}
-                            onPointerDown={(event) => event.stopPropagation()}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setProjectScopeKey(isIsolated ? null : project.projectKey);
-                              setProjectScopeMenuOpen(false);
-                            }}
-                          >
-                            {isIsolated ? (
-                              <CircleDotIcon className="size-3.5" />
-                            ) : (
-                              <TargetIcon className="size-3.5" />
-                            )}
-                          </button>
+                          <Tooltip>
+                            <TooltipTrigger
+                              render={
+                                <button
+                                  type="button"
+                                  aria-label={
+                                    isIsolated
+                                      ? `Show all projects instead of ${project.displayName}`
+                                      : `Scope to ${project.displayName}`
+                                  }
+                                  className={`ml-auto inline-flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md outline-none transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:ring-2 focus-visible:ring-ring ${
+                                    isIsolated
+                                      ? "text-primary"
+                                      : "text-muted-foreground/55 hover:text-foreground"
+                                  }`}
+                                  onPointerDown={(event) => event.stopPropagation()}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setProjectScopeKey(isIsolated ? null : project.projectKey);
+                                    setProjectScopeMenuOpen(false);
+                                  }}
+                                />
+                              }
+                            >
+                              {isIsolated ? (
+                                <CircleDotIcon className="size-3.5" />
+                              ) : (
+                                <TargetIcon className="size-3.5" />
+                              )}
+                            </TooltipTrigger>
+                            <TooltipPopup>
+                              {isIsolated ? "Show all projects" : "Scope to this project"}
+                            </TooltipPopup>
+                          </Tooltip>
                           <Button
                             size="icon-xs"
                             variant="ghost-muted"
