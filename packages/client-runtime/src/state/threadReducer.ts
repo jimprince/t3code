@@ -209,6 +209,18 @@ export function applyThreadDetailEvent(
         },
       };
 
+    // Fork: inbox placement. Independent of the pin, so thread.unpinned
+    // leaves it alone.
+    case "thread.sidebar-reordered":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          sidebarOrderKey: event.payload.orderKey,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     // ── Thread metadata ─────────────────────────────────────────────
     case "thread.meta-updated":
       return {

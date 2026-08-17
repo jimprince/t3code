@@ -15,6 +15,7 @@ import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-searc
 import {
   activeThreadAnchorTimestampMs,
   sortPinnedThreadsByOrderKey,
+  sortThreadsByManualOrderKey,
 } from "@t3tools/client-runtime/state/thread-sort";
 import type { EnvironmentId, ProjectId, ThreadLinkedPullRequest } from "@t3tools/contracts";
 
@@ -229,6 +230,11 @@ export interface ThreadListV2Item {
 
 export interface ThreadListV2Layout {
   readonly items: ThreadListV2Item[];
+  /** Fork: scoped thread keys of the inbox block in rendered order, for the
+      Move up / Move down actions. Reflects the SAME filters the list was
+      built with, so a move planned from it can only ever reposition rows the
+      user can actually see. */
+  readonly inboxOrder: string[];
   /** Settled threads beyond the render limit (behind "Show more"). */
   readonly hiddenSettledCount: number;
   /** Snoozed threads matching the current filters. */
@@ -459,7 +465,10 @@ export function buildThreadListV2Items(input: {
     }
   }
 
-  const orderedActive = sortThreadsForListV2(active);
+  // Fork: default order first, then hoist manually placed threads. Same
+  // shared rule the web sidebar applies, so both clients render the same
+  // inbox order from the same data.
+  const orderedActive = sortThreadsByManualOrderKey(sortThreadsForListV2(active));
   const orderedSnoozed = [...snoozed].sort(
     (left, right) =>
       parseTimestampMs(left.snoozedUntil ?? "") - parseTimestampMs(right.snoozedUntil ?? ""),
@@ -535,6 +544,7 @@ export function buildThreadListV2Items(input: {
   }
   return {
     items,
+    inboxOrder: orderedActive.map((thread) => `${thread.environmentId}:${thread.id}`),
     hiddenSettledCount: orderedSettled.length - pagedSettled.length,
     snoozedCount: orderedSnoozed.length,
     snoozedShelfHeaderIndex,
