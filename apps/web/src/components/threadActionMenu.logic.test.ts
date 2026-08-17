@@ -5,12 +5,22 @@ import { buildThreadActionMenuItems, type ThreadActionMenuState } from "./thread
 const baseState: ThreadActionMenuState = {
   branch: null,
   isPinned: false,
+  canReorderInInbox: false,
+  hasManualPosition: false,
+  canMoveUp: false,
+  canMoveDown: false,
   isSettled: false,
   isSnoozed: false,
   canSnoozeNow: true,
   isRegeneratingTitle: false,
   isRunning: false,
-  supports: { settlement: true, snooze: true, pinning: true, titleRegeneration: true },
+  supports: {
+    settlement: true,
+    snooze: true,
+    pinning: true,
+    sidebarReorder: true,
+    titleRegeneration: true,
+  },
   snoozePresets: [
     { id: "hour", label: "In 1 hour", whenLabel: "3:00 PM", snoozedUntil: "2026-08-07T15:00:00Z" },
   ],
@@ -31,7 +41,13 @@ describe("buildThreadActionMenuItems", () => {
     expect(
       ids({
         ...baseState,
-        supports: { settlement: false, snooze: false, pinning: false, titleRegeneration: false },
+        supports: {
+          settlement: false,
+          snooze: false,
+          pinning: false,
+          sidebarReorder: false,
+          titleRegeneration: false,
+        },
       }),
     ).toEqual(["rename", "mark-unread", "copy", "project-settings", "archive", "delete"]);
   });
@@ -95,9 +111,48 @@ describe("buildThreadActionMenuItems", () => {
     expect(
       ids({
         ...baseState,
-        supports: { settlement: false, snooze: false, pinning: false, titleRegeneration: false },
+        supports: {
+          settlement: false,
+          snooze: false,
+          pinning: false,
+          sidebarReorder: false,
+          titleRegeneration: false,
+        },
       }),
     ).toContain("archive");
+  });
+
+  it("offers inbox arrangement only for reorder-capable inbox rows", () => {
+    expect(ids(baseState)).not.toContain("move-up");
+    const inbox = ids({ ...baseState, canReorderInInbox: true, canMoveDown: true });
+    expect(inbox).toContain("move-up");
+    expect(inbox).toContain("move-down");
+    // No placement yet, so there is nothing to clear.
+    expect(inbox).not.toContain("clear-manual-position");
+    expect(ids({ ...baseState, canReorderInInbox: true, hasManualPosition: true })).toContain(
+      "clear-manual-position",
+    );
+  });
+
+  it("disables the move that would run off the end of the inbox", () => {
+    const items = buildThreadActionMenuItems({
+      ...baseState,
+      canReorderInInbox: true,
+      canMoveUp: false,
+      canMoveDown: true,
+    });
+    expect(items.find((item) => item.id === "move-up")?.disabled).toBe(true);
+    expect(items.find((item) => item.id === "move-down")?.disabled).toBe(false);
+  });
+
+  it("hides inbox arrangement on servers without the capability", () => {
+    expect(
+      ids({
+        ...baseState,
+        canReorderInInbox: true,
+        supports: { ...baseState.supports, sidebarReorder: false },
+      }),
+    ).not.toContain("move-up");
   });
 
   it("disables archive while the thread is running", () => {
