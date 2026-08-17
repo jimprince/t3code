@@ -5,11 +5,6 @@
 # implementation, tests, applicable documentation, and this stanza. Paths may
 # overlap; coherent purpose, not exclusive files, determines ownership.
 #
-# STANZA POSITION MATTERS: [[patch]] blocks must appear in exactly the same
-# order as stack.json.applied, so a NEW patch created at the top of the stack
-# adds its stanza at the END of this file — not next to thematically related
-# entries. scripts/ci/check-stgit-stack fails the stack otherwise.
-#
 # class: product | divergence | upstream-bound
 
 schema = 2

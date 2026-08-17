@@ -295,18 +295,8 @@ export const inspectStgitStack = (): {
       continue;
     }
     const expectedPrefix = applied.slice(0, index + 1);
-    const atPatchNames = atPatch.map((entry) => entry.name);
-    if (JSON.stringify(atPatchNames) !== JSON.stringify(expectedPrefix)) {
-      const foundAt = atPatchNames.indexOf(name);
-      const positionHint =
-        foundAt === -1
-          ? `its stanza is missing at that patch`
-          : `its stanza sits at position ${foundAt + 1} of ${atPatchNames.length}, expected position ${index + 1}`;
-      errors.push(
-        `${name} must add exactly its own ordered inventory stanza: ` +
-          `${positionHint}. Stanza order must match stack.json.applied — ` +
-          `a new top-of-stack patch's [[patch]] block goes LAST in ${inventoryPath}`,
-      );
+    if (JSON.stringify(atPatch.map((entry) => entry.name)) !== JSON.stringify(expectedPrefix)) {
+      errors.push(`${name} must add exactly its own ordered inventory stanza`);
     }
   }
 

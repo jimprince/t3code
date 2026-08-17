@@ -228,8 +228,6 @@ describe("check-stgit-stack", () => {
       const result = run(repo);
       assert.notStrictEqual(result.status, 0);
       assert.include(result.output, "inventory");
-      // The failure must teach the fix: stanza order mirrors stack order.
-      assert.include(result.output, "stack.json.applied");
     } finally {
       repo.cleanup();
     }
