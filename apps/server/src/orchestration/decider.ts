@@ -798,6 +798,37 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    // Fork: manual placement in the inbox list. Unlike thread.pin.reorder
+    // there is no membership precondition to protect — the key describes
+    // where the thread sits whenever it IS in the inbox, so a thread that is
+    // currently pinned or snoozed can carry a placement it will use on
+    // return. A null orderKey is the documented way back to recency order.
+    case "thread.sidebar.reorder": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      // Idempotent by re-emission (see thread.settle): a duplicate drop on
+      // the same slot keeps the existing updatedAt so it projects as a no-op.
+      const keyUnchanged = (thread.sidebarOrderKey ?? null) === command.orderKey;
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.sidebar-reordered",
+        payload: {
+          threadId: command.threadId,
+          orderKey: command.orderKey,
+          updatedAt: keyUnchanged ? thread.updatedAt : occurredAt,
+        },
+      };
+    }
+
     case "thread.meta.update": {
       const thread = yield* requireThread({
         readModel,
