@@ -911,3 +911,77 @@ describe("buildThreadListV2ListItems", () => {
     ]);
   });
 });
+
+describe("inbox manual order", () => {
+  const baseInput = {
+    environmentId,
+    searchQuery: "",
+    now: NOW,
+    settlementEnvironmentIds: new Set([environmentId]),
+    snoozeEnvironmentIds: new Set([environmentId]),
+  };
+
+  it("hoists manually placed inbox threads above the recency order", () => {
+    const layout = buildThreadListV2Items({
+      ...baseInput,
+      threads: [
+        makeThread({
+          id: ThreadId.make("newest"),
+          title: "Newest",
+          createdAt: "2026-06-01T03:00:00.000Z",
+        }),
+        makeThread({
+          id: ThreadId.make("placed"),
+          title: "Placed",
+          createdAt: "2026-06-01T01:00:00.000Z",
+          sidebarOrderKey: "mm",
+        }),
+        makeThread({
+          id: ThreadId.make("middle"),
+          title: "Middle",
+          createdAt: "2026-06-01T02:00:00.000Z",
+        }),
+      ],
+    });
+    expect(layout.inboxOrder).toEqual([
+      `${environmentId}:placed`,
+      `${environmentId}:newest`,
+      `${environmentId}:middle`,
+    ]);
+  });
+
+  it("leaves the inbox in recency order when nothing has been placed", () => {
+    const layout = buildThreadListV2Items({
+      ...baseInput,
+      threads: [
+        makeThread({
+          id: ThreadId.make("older"),
+          title: "Older",
+          createdAt: "2026-06-01T01:00:00.000Z",
+        }),
+        makeThread({
+          id: ThreadId.make("newer"),
+          title: "Newer",
+          createdAt: "2026-06-01T02:00:00.000Z",
+        }),
+      ],
+    });
+    expect(layout.inboxOrder).toEqual([`${environmentId}:newer`, `${environmentId}:older`]);
+  });
+
+  it("keeps pinned threads out of the inbox order", () => {
+    const layout = buildThreadListV2Items({
+      ...baseInput,
+      threads: [
+        makeThread({
+          id: ThreadId.make("pinned"),
+          title: "Pinned",
+          pinnedAt: "2026-06-01T00:00:00.000Z",
+          sidebarOrderKey: "mm",
+        }),
+        makeThread({ id: ThreadId.make("inbox"), title: "Inbox" }),
+      ],
+    });
+    expect(layout.inboxOrder).toEqual([`${environmentId}:inbox`]);
+  });
+});
