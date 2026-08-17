@@ -11,6 +11,9 @@ export type ThreadActionMenuId =
   | "project-settings"
   | "pin"
   | "unpin"
+  | "move-up"
+  | "move-down"
+  | "clear-manual-position"
   | "settle"
   | "unsettle"
   | "snooze"
@@ -29,6 +32,16 @@ export type ThreadActionMenuId =
 export interface ThreadActionMenuState {
   readonly branch: string | null;
   readonly isPinned: boolean;
+  /** Fork: inbox rows can be arranged by hand. Absent (false) for rows that
+      are not in the inbox — pinned, snoozed, and settled rows are ordered by
+      their own rules. */
+  readonly canReorderInInbox: boolean;
+  /** Fork: this row already carries a manual placement, so it can be
+      released back into the recency order. */
+  readonly hasManualPosition: boolean;
+  /** Fork: false at the ends of the inbox list, where the move is a no-op. */
+  readonly canMoveUp: boolean;
+  readonly canMoveDown: boolean;
   readonly isSettled: boolean;
   readonly isSnoozed: boolean;
   readonly canSnoozeNow: boolean;
@@ -39,6 +52,7 @@ export interface ThreadActionMenuState {
     readonly settlement: boolean;
     readonly snooze: boolean;
     readonly pinning: boolean;
+    readonly sidebarReorder: boolean;
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
@@ -67,6 +81,19 @@ export function buildThreadActionMenuItems(
           state.isPinned
             ? { id: "unpin" as const, label: "Unpin thread", icon: "pin-off" }
             : { id: "pin" as const, label: "Pin thread", icon: "pin" },
+        ]
+      : []),
+    // Fork: keyboard-reachable equivalents of the inbox drag. Pointer drag
+    // has no keyboard sensor (matching the pinned block), so these menu
+    // items are how the arrangement is reachable without a mouse — and the
+    // only way to see and undo a manual placement.
+    ...(state.supports.sidebarReorder && state.canReorderInInbox
+      ? [
+          { id: "move-up" as const, label: "Move up", disabled: !state.canMoveUp },
+          { id: "move-down" as const, label: "Move down", disabled: !state.canMoveDown },
+          ...(state.hasManualPosition
+            ? [{ id: "clear-manual-position" as const, label: "Clear manual position" }]
+            : []),
         ]
       : []),
     // Both lifecycle actions stay available on pinned threads: settling
