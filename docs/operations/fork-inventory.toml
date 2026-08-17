@@ -363,3 +363,12 @@ purpose = "Let operators select visible pull requests in bulk, persistently remo
 retire_when = "Upstream ships equivalent multi-select dismissal and restoration in the Pull Requests view."
 depends_on = ["fork-build-workspace-tooling"]
 roles = []
+[[patch]]
+name = "fork-sidebar-thread-order"
+subject = "feat(sidebar): drag threads into your own order"
+class = "upstream-bound"
+purpose = "Let operators arrange the inbox thread list by hand and have that order persist per server and converge across clients, reusing upstream's fractional-key scheme on a separate sidebarOrderKey."
+retire_when = "Upstream ships manual ordering for the unpinned thread list, at which point the fork's sidebarOrderKey field, thread.sidebar.reorder command, and threadSidebarReorder capability retire in favor of upstream's equivalent."
+depends_on = ["fork-build-workspace-tooling"]
+roles = []
+note = "sidebarOrderKey is a SEPARATE column from upstream's pin_order_key on purpose: thread.unpinned clears pin_order_key, so sharing the field would silently destroy an inbox placement on every pin/unpin cycle. The fork schema change lands in ForkMigrations, not upstream's Migrations sequence."
