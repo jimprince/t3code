@@ -31,6 +31,7 @@ import {
   ThreadSettledPayload,
   ThreadPinnedPayload,
   ThreadPinReorderedPayload,
+  ThreadSidebarReorderedPayload,
   ThreadSnoozedPayload,
   ThreadUnpinnedPayload,
   ThreadUnarchivedPayload,
@@ -493,6 +494,24 @@ export function projectEvent(
           ...nextBase,
           threads: updateThread(nextBase.threads, payload.threadId, {
             pinOrderKey: payload.orderKey,
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    // Fork: inbox placement is independent of the pin, so unlike
+    // thread.unpinned nothing else in the lifecycle clears this key.
+    case "thread.sidebar-reordered":
+      return decodeForEvent(
+        ThreadSidebarReorderedPayload,
+        event.payload,
+        event.type,
+        "payload",
+      ).pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            sidebarOrderKey: payload.orderKey,
             updatedAt: payload.updatedAt,
           }),
         })),
