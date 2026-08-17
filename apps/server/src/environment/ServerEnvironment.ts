@@ -223,6 +223,7 @@ export const make = Effect.gen(function* () {
       environmentThemes: true,
       threadPinning: true,
       threadPinReorder: true,
+      threadSidebarReorder: true,
       threadTitleRegeneration: true,
       threadPullRequestLinking: true,
       environmentIcon: true,
