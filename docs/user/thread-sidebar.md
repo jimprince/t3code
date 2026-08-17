@@ -22,6 +22,23 @@ If reordering is unavailable for one environment, update the T3 Code server runn
 environment. Older servers can still pin and unpin threads, but do not understand synced ordering;
 their pinned threads keep the default newest-first order below the ones you have arranged.
 
+## Arranging the thread list
+
+The thread list below the pinned section is ordered newest first and does not move as agents work.
+To put a thread somewhere specific, drag it there on web and desktop, or open its menu and choose
+**Move up** or **Move down** on mobile.
+
+Threads you place by hand stay in the order you gave them, at the top of the list. Threads you have
+not placed keep appearing where they normally would, below the ones you arranged. To let a thread
+rejoin the normal order, open its menu and choose **Clear manual position**.
+
+The order is stored by the server, so it survives restarts and appears on your other connected
+devices. As with pinned threads, an environment running an older server cannot store an arrangement;
+its threads stay in the default order and the menu items are hidden.
+
+Pinning and arranging are independent. Pinning a thread you have arranged does not spend its place
+in the list — unpin it and it returns to where you put it.
+
 ## Environment artwork
 
 Dev and Nightly environments can identify themselves with artwork at the top of the sidebar and in
