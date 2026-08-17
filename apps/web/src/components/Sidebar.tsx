@@ -1,4 +1,3 @@
-import { autoAnimate } from "@formkit/auto-animate";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
@@ -152,8 +151,6 @@ import {
   searchSidebarThreadsByTitle,
   shouldCreateNewThreadInCurrentProject,
   shouldRecedeSidebarThread,
-  SIDEBAR_THREAD_ROW_IDLE_CLASS,
-  SIDEBAR_THREAD_ROW_SORTING_CLASS,
   resolveWorkingStartedAt,
   sortLogicalProjectsForSidebar,
   sortPinnedThreadsForSidebar,
@@ -501,7 +498,7 @@ function SnoozePopoverButton(props: {
 // with the skipped row landing somewhere it never appeared during the drag.
 type SortablePinnedRowBag = Pick<
   ReturnType<typeof useSortable>,
-  "listeners" | "setNodeRef" | "transform" | "transition" | "isDragging" | "isSorting"
+  "listeners" | "setNodeRef" | "transform" | "transition" | "isDragging"
 >;
 
 function SortablePinnedThreadRow(props: {
@@ -509,12 +506,12 @@ function SortablePinnedThreadRow(props: {
   draggable: boolean;
   children: (bag: SortablePinnedRowBag) => ReactNode;
 }) {
-  const { listeners, setNodeRef, transform, transition, isDragging, isSorting } = useSortable({
+  const { listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: props.id,
     animateLayoutChanges: animatePinnedLayoutChanges,
     disabled: !props.draggable,
   });
-  return props.children({ listeners, setNodeRef, transform, transition, isDragging, isSorting });
+  return props.children({ listeners, setNodeRef, transform, transition, isDragging });
 }
 
 // Unsent work shares one look: the new-thread draft rows and thread rows
@@ -1511,12 +1508,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       {...(sortable?.listeners ?? {})}
       className={cn(
         "list-none py-0.5",
-        // A skipped row reports its placeholder size, not its real one, so
-        // an off-screen row that has never painted measures wrong for the
-        // whole drag. The intrinsic size therefore matches the rendered box
-        // exactly (py-0.5 + h-[4.875rem]), and while a drag is in flight the
-        // block renders in full so every rect is the real one.
-        sortable?.isSorting ? SIDEBAR_THREAD_ROW_SORTING_CLASS : SIDEBAR_THREAD_ROW_IDLE_CLASS,
+        // Keep cards in normal layout/paint throughout a reorder. Switching
+        // content-visibility at drop changes containment while dnd-kit clears
+        // transforms, which can leave neighbouring cards painted in old slots.
         sortable?.isDragging && "z-20 opacity-80",
       )}
     >
@@ -3918,11 +3912,6 @@ export default function Sidebar() {
     updateThreadJumpHintsVisibility(shouldShowJumpHintsNow);
   }, [shouldShowJumpHintsNow, updateThreadJumpHintsVisibility]);
 
-  const attachListAutoAnimateRef = useCallback((node: HTMLUListElement | null) => {
-    if (!node) return;
-    autoAnimate(node, { duration: 150, easing: "ease-out" });
-  }, []);
-
   const chatEnvironmentProjects = useMemo(
     () =>
       [...selectCanonicalChatProjectsByEnvironment(chatProjects)].sort((left, right) => {
@@ -4492,7 +4481,9 @@ export default function Sidebar() {
               closeDelay={0}
               timeout={400}
             >
-              <ul ref={attachListAutoAnimateRef} role="list" className="flex flex-col gap-px">
+              {/* dnd-kit alone owns card movement. An outer auto-animate would
+                  also transform these direct children when their DOM order changes. */}
+              <ul role="list" className="flex flex-col gap-px">
                 {(() => {
                   const renderThreadRow = (
                     thread: EnvironmentThreadShell,
@@ -4510,12 +4501,7 @@ export default function Sidebar() {
                     const rowVariant = isCard ? "card" : "slim";
                     return (
                       <SidebarThreadRow
-                        // Keyed per variant on purpose: when a thread settles,
-                        // the card fades out in place and the slim row fades
-                        // in at its settled position instead of one element
-                        // FLIP-sliding through every row in between (rows here
-                        // are translucent, so a crossing row reads as text
-                        // painted over text).
+                        // Remount when switching between card and slim layouts.
                         key={`${threadKey}:${rowVariant}`}
                         thread={thread}
                         variant={rowVariant}
