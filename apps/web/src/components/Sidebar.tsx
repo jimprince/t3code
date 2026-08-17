@@ -135,6 +135,8 @@ import {
   orderItemsByPreferredIds,
   planPinnedReorder,
   resolveAdjacentThreadId,
+  applyManualSidebarOrder,
+  planSidebarReorder,
   resolveSettledTimestamp,
   resolveSidebarThreadStatus,
   searchSidebarThreadsByTitle,
@@ -443,11 +445,13 @@ function SnoozePopoverButton(props: {
   );
 }
 
-// Subset of useSortable applied to a pinned card's root <li>. Listeners go
+// Subset of useSortable applied to a draggable card's root <li> — the pinned
+// block, and (fork) the inbox below it. Listeners go
 // on the whole card (no dedicated handle): the pointer sensor's distance
 // constraint keeps plain clicks working, and we skip dnd-kit's aria
 // attributes since there is no keyboard sensor and the card body already
-// carries its own button semantics.
+// carries its own button semantics. Keyboard users reorder through the row's
+// context menu instead (Move up / Move down).
 type SortablePinnedRowBag = Pick<
   ReturnType<typeof useSortable>,
   "listeners" | "setNodeRef" | "transform" | "transition" | "isDragging"
@@ -1737,6 +1741,7 @@ export default function Sidebar() {
     pinThread,
     unpinThread,
     reorderPinnedThread,
+    reorderSidebarThread,
     archiveThread,
     deleteThread,
   } = useThreadActions();
@@ -2052,6 +2057,7 @@ export default function Sidebar() {
     pinnedThreads,
     reorderablePinnedKeys,
     activeThreads,
+    reorderableActiveKeys,
     snoozedThreads,
     settledThreads,
     snoozeNow,
@@ -2135,7 +2141,22 @@ export default function Sidebar() {
           )
           .map((thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
       ),
-      activeThreads: sortThreadsForSidebar(active),
+      // Fork: default order first, then hoist the threads the user has
+      // placed by hand. Threads that were never dragged keep exactly the
+      // position the default sort gave them. Like the pinned block, server
+      // capability gates DRAGGING only — it must never influence the sort,
+      // or a mixed-version fleet would render different orders from the
+      // same data.
+      activeThreads: applyManualSidebarOrder(sortThreadsForSidebar(active)),
+      reorderableActiveKeys: new Set(
+        active
+          .filter(
+            (thread) =>
+              serverConfigs.get(thread.environmentId)?.environment.capabilities
+                .threadSidebarReorder === true,
+          )
+          .map((thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
+      ),
       // Soonest wake first: "what comes back next" is the shelf's question.
       snoozedThreads: snoozed.toSorted(
         (left, right) =>
@@ -2337,6 +2358,17 @@ export default function Sidebar() {
   );
   const snoozedThreadKeysRef = useRef(snoozedThreadKeys);
   snoozedThreadKeysRef.current = snoozedThreadKeys;
+  // Fork: the inbox order as rendered, so the row context menu can offer
+  // Move up / Move down with the correct ends disabled.
+  const reorderableActiveKeyOrder = useMemo(
+    () =>
+      activeThreads
+        .map((thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)))
+        .filter((threadKey) => reorderableActiveKeys.has(threadKey)),
+    [activeThreads, reorderableActiveKeys],
+  );
+  const reorderableActiveKeyOrderRef = useRef(reorderableActiveKeyOrder);
+  reorderableActiveKeyOrderRef.current = reorderableActiveKeyOrder;
 
   const jumpLabelByKey = useMemo(() => {
     const mapping = new Map<string, string>();
@@ -2777,6 +2809,187 @@ export default function Sidebar() {
     },
     [orderedPinnedThreads, reorderPinnedThread, reorderablePinnedKeys],
   );
+
+  // ── Fork: drag-to-arrange the inbox ────────────────────────────────
+  // Same shape as the pinned block above (see that comment for why the
+  // optimistic override releases when it does), on the inbox's own
+  // sidebarOrderKey. The one behavioral difference is scale: a drop onto a
+  // never-arranged inbox materializes the whole manual region in one plan
+  // (see planSidebarReorder), so holding the override until the LAST write
+  // lands matters more here than it does for pins.
+  const [optimisticActiveOrder, setOptimisticActiveOrder] = useState<{
+    readonly order: readonly string[];
+    readonly keysAtDrop: ReadonlyMap<string, string | null>;
+    readonly assignedKeys: ReadonlyMap<string, string>;
+  } | null>(null);
+  const orderedActiveThreads = useMemo(() => {
+    if (optimisticActiveOrder === null) return activeThreads;
+    return orderItemsByPreferredIds({
+      items: activeThreads,
+      preferredIds: optimisticActiveOrder.order,
+      getId: (thread) => scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+    });
+  }, [activeThreads, optimisticActiveOrder]);
+  useEffect(() => {
+    if (optimisticActiveOrder === null) return;
+    const canonical = activeThreads.filter((thread) =>
+      reorderableActiveKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
+    );
+    const canonicalKeys = canonical.map((thread) =>
+      scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+    );
+    const membershipChanged =
+      canonicalKeys.length !== optimisticActiveOrder.order.length ||
+      canonicalKeys.some((key) => !optimisticActiveOrder.order.includes(key));
+    const foreignKeyLanded = canonical.some((thread, index) => {
+      const threadKey = canonicalKeys[index]!;
+      const currentKey = thread.sidebarOrderKey ?? null;
+      if (currentKey === optimisticActiveOrder.keysAtDrop.get(threadKey)) return false;
+      return currentKey !== optimisticActiveOrder.assignedKeys.get(threadKey);
+    });
+    const currentKeyByThreadKey = new Map(
+      canonical.map((thread, index) => [canonicalKeys[index]!, thread.sidebarOrderKey ?? null]),
+    );
+    const allAssignmentsLanded = [...optimisticActiveOrder.assignedKeys].every(
+      ([threadKey, orderKey]) => currentKeyByThreadKey.get(threadKey) === orderKey,
+    );
+    const orderConfirmed =
+      !membershipChanged &&
+      canonicalKeys.every((key, index) => key === optimisticActiveOrder.order[index]);
+    if (membershipChanged || foreignKeyLanded || allAssignmentsLanded || orderConfirmed) {
+      setOptimisticActiveOrder(null);
+    }
+  }, [activeThreads, optimisticActiveOrder, reorderableActiveKeys]);
+
+  /** Apply one planned arrangement: optimistic order now, then the key
+      writes in sequence. Shared by the drag handler and the keyboard
+      Move up / Move down menu items so both produce identical state. */
+  const applySidebarReorderPlan = useCallback(
+    (input: {
+      readonly newOrder: readonly string[];
+      readonly keysAtDrop: ReadonlyMap<string, string | null>;
+      readonly threadByKey: ReadonlyMap<string, EnvironmentThreadShell>;
+      readonly movedKey: string;
+    }) => {
+      const assignments = planSidebarReorder({
+        orderedIds: input.newOrder,
+        keysById: input.keysAtDrop,
+        movedId: input.movedKey,
+      });
+      if (assignments.length === 0) return;
+      setOptimisticActiveOrder({
+        order: input.newOrder,
+        keysAtDrop: input.keysAtDrop,
+        assignedKeys: new Map(
+          assignments.map((assignment) => [assignment.id, assignment.orderKey]),
+        ),
+      });
+      void (async () => {
+        // Sequential, stop on first failure, no rollback — same reasoning as
+        // the pinned block: each key write is a valid placement on its own.
+        for (const assignment of assignments) {
+          const thread = input.threadByKey.get(assignment.id);
+          if (thread === undefined) continue;
+          const result = await reorderSidebarThread(
+            scopeThreadRef(thread.environmentId, thread.id),
+            assignment.orderKey,
+          );
+          if (result._tag === "Failure") {
+            setOptimisticActiveOrder(null);
+            if (isAtomCommandInterrupted(result)) return;
+            const error = squashAtomCommandFailure(result);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Failed to reorder threads",
+                description: error instanceof Error ? error.message : "An error occurred.",
+              }),
+            );
+            return;
+          }
+        }
+      })();
+    },
+    [reorderSidebarThread],
+  );
+
+  /** Reorder-capable inbox rows in displayed order, with the data a plan
+      needs. Recomputed per interaction so it always reflects the list the
+      user is actually looking at. */
+  const readReorderableActiveList = useCallback(() => {
+    const reorderable = orderedActiveThreads.filter((thread) =>
+      reorderableActiveKeys.has(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id))),
+    );
+    const keys = reorderable.map((thread) =>
+      scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+    );
+    return {
+      keys,
+      threadByKey: new Map(reorderable.map((thread, index) => [keys[index]!, thread])),
+      keysAtDrop: new Map<string, string | null>(
+        reorderable.map((thread, index) => [keys[index]!, thread.sidebarOrderKey ?? null]),
+      ),
+    };
+  }, [orderedActiveThreads, reorderableActiveKeys]);
+
+  const handleActiveDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const activeKey = String(event.active.id);
+      const overKey = event.over === null ? null : String(event.over.id);
+      if (overKey === null || activeKey === overKey) return;
+      const { keys, threadByKey, keysAtDrop } = readReorderableActiveList();
+      const fromIndex = keys.indexOf(activeKey);
+      const toIndex = keys.indexOf(overKey);
+      if (fromIndex === -1 || toIndex === -1) return;
+      applySidebarReorderPlan({
+        newOrder: arrayMove([...keys], fromIndex, toIndex),
+        keysAtDrop,
+        threadByKey,
+        movedKey: activeKey,
+      });
+    },
+    [applySidebarReorderPlan, readReorderableActiveList],
+  );
+
+  /** Keyboard/menu equivalent of dragging one slot. */
+  const moveActiveThread = useCallback(
+    (threadRef: ScopedThreadRef, direction: "up" | "down") => {
+      const { keys, threadByKey, keysAtDrop } = readReorderableActiveList();
+      const movedKey = scopedThreadKey(threadRef);
+      const from = keys.indexOf(movedKey);
+      if (from === -1) return;
+      const to = direction === "up" ? from - 1 : from + 1;
+      if (to < 0 || to >= keys.length) return;
+      applySidebarReorderPlan({
+        newOrder: arrayMove([...keys], from, to),
+        keysAtDrop,
+        threadByKey,
+        movedKey,
+      });
+    },
+    [applySidebarReorderPlan, readReorderableActiveList],
+  );
+
+  /** Release a manual placement: the thread rejoins the recency order. */
+  const clearActiveThreadPosition = useCallback(
+    (threadRef: ScopedThreadRef) => {
+      void (async () => {
+        const result = await reorderSidebarThread(threadRef, null);
+        if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Failed to clear manual position",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      })();
+    },
+    [reorderSidebarThread],
+  );
+
   // One snooze per thread at a time — same double-dispatch guard as settle.
   const snoozingThreadKeysRef = useRef(new Set<string>());
   const performSnooze = useCallback(
@@ -3111,6 +3324,13 @@ export default function Sidebar() {
         const isSettled = settledThreadKeysRef.current.has(threadKey);
         const isSnoozed = snoozedThreadKeysRef.current.has(threadKey);
         const isPinned = thread.pinnedAt != null;
+        // Fork: arrangement items only make sense for a row that is actually
+        // in the inbox list they reorder.
+        const supportsSidebarReorder =
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadSidebarReorder ===
+          true;
+        const inboxOrder = reorderableActiveKeyOrderRef.current;
+        const inboxIndex = inboxOrder.indexOf(threadKey);
         // Presets resolve at menu-open time (same as the popover).
         const snoozePresets = resolveSnoozePresets(new Date(), timestampFormat);
         const clicked = await settlePromise(() =>
@@ -3118,6 +3338,10 @@ export default function Sidebar() {
             buildThreadActionMenuItems({
               branch: thread.branch ?? null,
               isPinned,
+              canReorderInInbox: inboxIndex !== -1,
+              hasManualPosition: thread.sidebarOrderKey != null,
+              canMoveUp: inboxIndex > 0,
+              canMoveDown: inboxIndex !== -1 && inboxIndex < inboxOrder.length - 1,
               isSettled,
               isSnoozed,
               canSnoozeNow: canSnooze(thread, { now: new Date().toISOString() }),
@@ -3128,6 +3352,7 @@ export default function Sidebar() {
                 settlement: supportsSettlement,
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
+                sidebarReorder: supportsSidebarReorder,
                 titleRegeneration: supportsTitleRegeneration,
               },
               snoozePresets,
@@ -3181,6 +3406,15 @@ export default function Sidebar() {
             return;
           case "unpin":
             attemptUnpin(threadRef);
+            return;
+          case "move-up":
+            moveActiveThread(threadRef, "up");
+            return;
+          case "move-down":
+            moveActiveThread(threadRef, "down");
+            return;
+          case "clear-manual-position":
+            clearActiveThreadPosition(threadRef);
             return;
           case "rename":
             startThreadRename(threadRef, thread.title);
@@ -3295,6 +3529,7 @@ export default function Sidebar() {
       attemptUnpin,
       attemptUnsettle,
       attemptUnsnooze,
+      clearActiveThreadPosition,
       confirmThreadArchive,
       confirmThreadDelete,
       copyBranchToClipboard,
@@ -3303,6 +3538,7 @@ export default function Sidebar() {
       deleteThread,
       handleMultiSelectContextMenu,
       markThreadUnread,
+      moveActiveThread,
       projectCwdByKey,
       serverConfigs,
       startThreadRename,
@@ -4026,9 +4262,41 @@ export default function Sidebar() {
                       />,
                     );
                   }
-                  for (const thread of activeThreads) {
-                    items.push(renderThreadRow(thread, "active"));
-                  }
+                  // Fork: the inbox is drag-arrangeable on capable servers.
+                  // Rows from legacy servers render in place as plain rows,
+                  // exactly like legacy pins.
+                  items.push(
+                    <DndContext
+                      key="active-dnd"
+                      sensors={pinnedDndSensors}
+                      collisionDetection={closestCenter}
+                      modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]}
+                      onDragEnd={handleActiveDragEnd}
+                    >
+                      <SortableContext
+                        items={orderedActiveThreads
+                          .map((thread) =>
+                            scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+                          )
+                          .filter((threadKey) => reorderableActiveKeys.has(threadKey))}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {orderedActiveThreads.map((thread) => {
+                          const threadKey = scopedThreadKey(
+                            scopeThreadRef(thread.environmentId, thread.id),
+                          );
+                          if (!reorderableActiveKeys.has(threadKey)) {
+                            return renderThreadRow(thread, "active");
+                          }
+                          return (
+                            <SortablePinnedThreadRow key={threadKey} id={threadKey}>
+                              {(bag) => renderThreadRow(thread, "active", bag)}
+                            </SortablePinnedThreadRow>
+                          );
+                        })}
+                      </SortableContext>
+                    </DndContext>,
+                  );
                   // Snoozed shelf: between the inbox and Settled — out of the
                   // way, never gone. The header always renders while anything
                   // is snoozed (the count is the whole footprint when
