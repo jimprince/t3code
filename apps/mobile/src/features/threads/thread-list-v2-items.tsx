@@ -362,6 +362,15 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       Move up / Move down menu items. */
   readonly pinReorderSupported?: boolean;
   readonly onMovePinnedThread?: (thread: EnvironmentThreadShell, direction: "up" | "down") => void;
+  /** Fork: false on servers that predate thread.sidebar.reorder. Gates the
+      inbox Move up / Move down / Clear position menu items. */
+  readonly sidebarReorderSupported?: boolean;
+  readonly onMoveInboxThread?: (thread: EnvironmentThreadShell, direction: "up" | "down") => void;
+  readonly onClearInboxPosition?: (thread: EnvironmentThreadShell) => void;
+  /** Fork: position flags for the inbox block, same contract as the pinned
+      ones above. */
+  readonly canMoveInboxUp?: boolean;
+  readonly canMoveInboxDown?: boolean;
   /** Position flags for the pinned block so the menu disables the move that
       would fall off the end of the list. */
   readonly canMovePinnedUp?: boolean;
@@ -390,6 +399,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     onPinThread,
     onUnpinThread,
     onMovePinnedThread,
+    onMoveInboxThread,
+    onClearInboxPosition,
   } = props;
   const snoozedRow = props.snoozed === true;
   const pinnedRow = props.pinned === true;
@@ -429,6 +440,18 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const handleMovePinnedDown = useCallback(
     () => onMovePinnedThread?.(thread, "down"),
     [onMovePinnedThread, thread],
+  );
+  const handleMoveInboxUp = useCallback(
+    () => onMoveInboxThread?.(thread, "up"),
+    [onMoveInboxThread, thread],
+  );
+  const handleMoveInboxDown = useCallback(
+    () => onMoveInboxThread?.(thread, "down"),
+    [onMoveInboxThread, thread],
+  );
+  const handleClearInboxPosition = useCallback(
+    () => onClearInboxPosition?.(thread),
+    [onClearInboxPosition, thread],
   );
   const handleArchive = useCallback(() => onArchiveThread(thread), [onArchiveThread, thread]);
 
@@ -510,6 +533,45 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       }),
     [props.titleRegenerationSupported, thread.titleRegeneration],
   );
+  // Fork: inbox arrangement. Only the inbox block (card rows that are not
+  // pinned and not snoozed) has a manual order to move within.
+  const inboxOrderMenuItems = useMemo<MenuAction[]>(
+    () =>
+      props.sidebarReorderSupported === true && variant === "card" && !pinnedRow && !snoozedRow
+        ? [
+            {
+              id: "move-inbox-up",
+              title: "Move up",
+              image: "arrow.up",
+              attributes: { disabled: props.canMoveInboxUp !== true },
+            } satisfies MenuAction,
+            {
+              id: "move-inbox-down",
+              title: "Move down",
+              image: "arrow.down",
+              attributes: { disabled: props.canMoveInboxDown !== true },
+            } satisfies MenuAction,
+            ...(thread.sidebarOrderKey != null
+              ? [
+                  {
+                    id: "clear-inbox-position",
+                    title: "Clear manual position",
+                    image: "arrow.uturn.backward",
+                  } satisfies MenuAction,
+                ]
+              : []),
+          ]
+        : [],
+    [
+      pinnedRow,
+      props.canMoveInboxDown,
+      props.canMoveInboxUp,
+      props.sidebarReorderSupported,
+      snoozedRow,
+      thread.sidebarOrderKey,
+      variant,
+    ],
+  );
   const snoozableCardMenuActions = useMemo<MenuAction[]>(
     () => [
       { id: "settle", title: "Settle", image: "checkmark" },
@@ -520,19 +582,21 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
         subactions: snoozePresetActions,
       },
       ...pinMenuItem,
+      ...inboxOrderMenuItems,
       ...titleRegenerationMenuItems,
       { id: "delete", title: "Delete", image: "trash", attributes: { destructive: true } },
     ],
-    [pinMenuItem, snoozePresetActions, titleRegenerationMenuItems],
+    [inboxOrderMenuItems, pinMenuItem, snoozePresetActions, titleRegenerationMenuItems],
   );
   const cardMenuActions = useMemo<MenuAction[]>(
     () => [
       CARD_MENU_ACTIONS[0]!,
       ...pinMenuItem,
+      ...inboxOrderMenuItems,
       ...titleRegenerationMenuItems,
       ...CARD_MENU_ACTIONS.slice(1),
     ],
-    [pinMenuItem, titleRegenerationMenuItems],
+    [inboxOrderMenuItems, pinMenuItem, titleRegenerationMenuItems],
   );
   const slimMenuActions = useMemo<MenuAction[]>(
     () => [
@@ -560,6 +624,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "unpin") handleUnpin();
       if (nativeEvent.event === "move-pin-up") handleMovePinnedUp();
       if (nativeEvent.event === "move-pin-down") handleMovePinnedDown();
+      if (nativeEvent.event === "move-inbox-up") handleMoveInboxUp();
+      if (nativeEvent.event === "move-inbox-down") handleMoveInboxDown();
+      if (nativeEvent.event === "clear-inbox-position") handleClearInboxPosition();
       if (nativeEvent.event === "archive") handleArchive();
       if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
       if (nativeEvent.event === "delete") handleDelete();
@@ -580,6 +647,9 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleRegenerateTitle,
       handleMovePinnedDown,
       handleMovePinnedUp,
+      handleMoveInboxDown,
+      handleMoveInboxUp,
+      handleClearInboxPosition,
       handlePin,
       handleSettle,
       handleSnooze,
