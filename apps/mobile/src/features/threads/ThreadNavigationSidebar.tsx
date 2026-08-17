@@ -161,6 +161,8 @@ function ThreadNavigationSidebarPane(
     pinThread,
     unpinThread,
     movePinnedThread,
+    moveInboxThread,
+    clearInboxThreadPosition,
     regenerateThreadTitle,
   } = useThreadListActions();
   const threadListV2Enabled = useThreadListV2Enabled();
@@ -470,6 +472,15 @@ function ThreadNavigationSidebarPane(
     }
     return supported;
   }, [serverConfigs]);
+  const sidebarReorderEnvironmentIds = useMemo(() => {
+    const supported = new Set<EnvironmentId>();
+    for (const [environmentId, config] of serverConfigs) {
+      if (config.environment.capabilities.threadSidebarReorder === true) {
+        supported.add(environmentId);
+      }
+    }
+    return supported;
+  }, [serverConfigs]);
   const titleRegenerationEnvironmentIds = useMemo(() => {
     const supported = new Set<EnvironmentId>();
     for (const [environmentId, config] of serverConfigs) {
@@ -496,6 +507,7 @@ function ThreadNavigationSidebarPane(
     if (!threadListV2Enabled)
       return {
         items: [],
+        inboxOrder: [],
         hiddenSettledCount: 0,
         snoozedCount: 0,
         snoozedShelfHeaderIndex: null,
@@ -540,6 +552,13 @@ function ThreadNavigationSidebarPane(
   ]);
   // Re-partition the moment the earliest snooze expires (clamped to the
   // signed-32-bit setTimeout range; far-future wakes re-arm at the clamp).
+  const inboxOrder = threadListV2Layout.inboxOrder;
+  const handleMoveInboxThread = useCallback(
+    (thread: EnvironmentThreadShell, direction: "up" | "down") => {
+      void moveInboxThread(thread, direction, inboxOrder);
+    },
+    [inboxOrder, moveInboxThread],
+  );
   const nextSnoozeWakeAt = threadListV2Layout.nextSnoozeWakeAt;
   useEffect(() => {
     if (nextSnoozeWakeAt === null) return;
@@ -931,6 +950,14 @@ function ThreadNavigationSidebarPane(
               onPinThread={pinThread}
               onUnpinThread={unpinThread}
               onMovePinnedThread={movePinnedThread}
+              sidebarReorderSupported={sidebarReorderEnvironmentIds.has(thread.environmentId)}
+              canMoveInboxUp={inboxOrder.indexOf(`${thread.environmentId}:${thread.id}`) > 0}
+              canMoveInboxDown={(() => {
+                const index = inboxOrder.indexOf(`${thread.environmentId}:${thread.id}`);
+                return index !== -1 && index < inboxOrder.length - 1;
+              })()}
+              onMoveInboxThread={handleMoveInboxThread}
+              onClearInboxPosition={clearInboxThreadPosition}
               onChangeRequestState={handleChangeRequestState}
               projectCwd={projectCwdByKey.get(scopeKey) ?? null}
               onSwipeableClose={handleSwipeableClose}
@@ -1063,6 +1090,10 @@ function ThreadNavigationSidebarPane(
       handleSwipeableClose,
       handleSwipeableWillOpen,
       movePinnedThread,
+      handleMoveInboxThread,
+      clearInboxThreadPosition,
+      inboxOrder,
+      sidebarReorderEnvironmentIds,
       openPendingTask,
       pinReorderEnvironmentIds,
       pinThread,
