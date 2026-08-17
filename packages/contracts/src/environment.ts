@@ -108,6 +108,10 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   /** Server understands thread.pin.reorder (and orderKey on thread.pin).
       Same version-skew contract as threadSettlement. */
   threadPinReorder: Schema.optionalKey(Schema.Boolean),
+  /** Fork: server understands thread.sidebar.reorder, so the inbox list can
+      be dragged into a manual order. Same version-skew contract as
+      threadSettlement. */
+  threadSidebarReorder: Schema.optionalKey(Schema.Boolean),
   /** Server understands regenerateTitle on thread.meta.update. Absent on
       older servers, so clients hide the action instead of sending it. */
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),

@@ -113,6 +113,12 @@ interface HomeScreenProps {
   readonly onUnsettleThread: (thread: EnvironmentThreadShell) => void;
   readonly onPinThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly onUnpinThread: (thread: EnvironmentThreadShell) => Promise<boolean>;
+  readonly onMoveInboxThread: (
+    thread: EnvironmentThreadShell,
+    direction: "up" | "down",
+    inboxOrder: ReadonlyArray<string>,
+  ) => Promise<boolean>;
+  readonly onClearInboxPosition: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly onMovePinnedThread: (
     thread: EnvironmentThreadShell,
     direction: "up" | "down",
@@ -604,6 +610,15 @@ export function HomeScreen(props: HomeScreenProps) {
     }
     return supported;
   }, [serverConfigs]);
+  const sidebarReorderEnvironmentIds = useMemo(() => {
+    const supported = new Set<EnvironmentId>();
+    for (const [environmentId, config] of serverConfigs) {
+      if (config.environment.capabilities.threadSidebarReorder === true) {
+        supported.add(environmentId);
+      }
+    }
+    return supported;
+  }, [serverConfigs]);
   const titleRegenerationEnvironmentIds = useMemo(() => {
     const supported = new Set<EnvironmentId>();
     for (const [environmentId, config] of serverConfigs) {
@@ -641,6 +656,7 @@ export function HomeScreen(props: HomeScreenProps) {
     if (!threadListV2Enabled)
       return {
         items: [],
+        inboxOrder: [],
         hiddenSettledCount: 0,
         snoozedCount: 0,
         snoozedShelfHeaderIndex: null,
@@ -679,6 +695,19 @@ export function HomeScreen(props: HomeScreenProps) {
     threadListV2Enabled,
     v2ScopedProjectGroup,
   ]);
+  const inboxOrder = threadListV2Layout.inboxOrder;
+  const handleMoveInboxThread = useCallback(
+    (thread: EnvironmentThreadShell, direction: "up" | "down") => {
+      void props.onMoveInboxThread(thread, direction, inboxOrder);
+    },
+    [inboxOrder, props.onMoveInboxThread],
+  );
+  const handleClearInboxPosition = useCallback(
+    (thread: EnvironmentThreadShell) => {
+      void props.onClearInboxPosition(thread);
+    },
+    [props.onClearInboxPosition],
+  );
   // Re-partition the moment the earliest snooze expires (clamped to the
   // signed-32-bit setTimeout range; far-future wakes re-arm at the clamp).
   const nextSnoozeWakeAt = threadListV2Layout.nextSnoozeWakeAt;
@@ -838,6 +867,14 @@ export function HomeScreen(props: HomeScreenProps) {
           onPinThread={handlePinThread}
           onUnpinThread={handleUnpinThread}
           onMovePinnedThread={handleMovePinnedThread}
+          sidebarReorderSupported={sidebarReorderEnvironmentIds.has(thread.environmentId)}
+          canMoveInboxUp={inboxOrder.indexOf(`${thread.environmentId}:${thread.id}`) > 0}
+          canMoveInboxDown={(() => {
+            const index = inboxOrder.indexOf(`${thread.environmentId}:${thread.id}`);
+            return index !== -1 && index < inboxOrder.length - 1;
+          })()}
+          onMoveInboxThread={handleMoveInboxThread}
+          onClearInboxPosition={handleClearInboxPosition}
           projectCwd={
             projectCwdByKey.get(scopedProjectKey(thread.environmentId, thread.projectId)) ?? null
           }
@@ -850,6 +887,10 @@ export function HomeScreen(props: HomeScreenProps) {
       handleDeleteThread,
       arrangedPinnedKeys,
       handleMovePinnedThread,
+      handleMoveInboxThread,
+      handleClearInboxPosition,
+      inboxOrder,
+      sidebarReorderEnvironmentIds,
       handlePinThread,
       handleRegenerateThreadTitle,
       handleSettleThread,
