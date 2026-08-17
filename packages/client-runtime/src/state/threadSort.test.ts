@@ -3,8 +3,11 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   planPinnedMove,
   resolveSettledThreadTimestamp,
+  planSidebarMove,
+  planSidebarReorder,
   sortPinnedThreadsByOrderKey,
   sortThreads,
+  sortThreadsByManualOrderKey,
   type ThreadSortInput,
 } from "./threadSort.ts";
 
@@ -171,5 +174,197 @@ describe("sortPinnedThreadsByOrderKey", () => {
       },
     ]);
     expect(sorted.map((thread) => thread.environmentId)).toEqual(["env-a", "env-b"]);
+  });
+});
+
+// ── Fork: manual inbox order ───────────────────────────────────────────
+
+type InboxThread = {
+  readonly id: string;
+  readonly sidebarOrderKey?: string | null;
+  readonly environmentId?: string;
+};
+
+/** Applies a plan to a keys map, mirroring what the server writes. */
+function applyPlan(
+  keysById: Map<string, string | null>,
+  assignments: ReadonlyArray<{ readonly id: string; readonly orderKey: string }>,
+): Map<string, string | null> {
+  const next = new Map(keysById);
+  for (const assignment of assignments) next.set(assignment.id, assignment.orderKey);
+  return next;
+}
+
+/** Renders the list the way the sidebar does: default order in, manual
+    placements hoisted out. */
+function renderOrder(
+  defaultOrder: readonly string[],
+  keysById: ReadonlyMap<string, string | null>,
+): string[] {
+  return sortThreadsByManualOrderKey(
+    defaultOrder.map((id): InboxThread => ({ id, sidebarOrderKey: keysById.get(id) ?? null })),
+  ).map((thread) => thread.id);
+}
+
+describe("sortThreadsByManualOrderKey", () => {
+  it("hoists placed threads above unplaced ones, in key order", () => {
+    expect(
+      sortThreadsByManualOrderKey<InboxThread>([
+        { id: "a" },
+        { id: "b", sidebarOrderKey: "t" },
+        { id: "c" },
+        { id: "d", sidebarOrderKey: "f" },
+      ]).map((thread) => thread.id),
+    ).toEqual(["d", "b", "a", "c"]);
+  });
+
+  it("leaves unplaced threads in the order the default sort gave them", () => {
+    expect(
+      sortThreadsByManualOrderKey<InboxThread>([{ id: "a" }, { id: "b" }, { id: "c" }]).map(
+        (thread) => thread.id,
+      ),
+    ).toEqual(["a", "b", "c"]);
+  });
+
+  it("breaks equal keys by id THEN environment so merged lists are stable everywhere", () => {
+    expect(
+      sortThreadsByManualOrderKey<InboxThread>([
+        { id: "thread-1", sidebarOrderKey: "m", environmentId: "env-b" },
+        { id: "thread-1", sidebarOrderKey: "m", environmentId: "env-a" },
+      ]).map((thread) => thread.environmentId),
+    ).toEqual(["env-a", "env-b"]);
+  });
+});
+
+describe("planSidebarReorder", () => {
+  it("writes a single key when everything above the drop is already placed", () => {
+    const assignments = planSidebarReorder({
+      orderedIds: ["a", "c", "b"],
+      keysById: new Map([
+        ["a", "f"],
+        ["b", "m"],
+        ["c", "t"],
+      ]),
+      movedId: "c",
+    });
+    expect(assignments).toHaveLength(1);
+    expect(assignments[0]!.id).toBe("c");
+    expect(assignments[0]!.orderKey > "f" && assignments[0]!.orderKey < "m").toBe(true);
+  });
+
+  it("needs no upper bound when the row below the drop is unplaced", () => {
+    const assignments = planSidebarReorder({
+      orderedIds: ["a", "c", "b"],
+      keysById: new Map<string, string | null>([
+        ["a", "f"],
+        ["b", null],
+        ["c", null],
+      ]),
+      movedId: "c",
+    });
+    expect(assignments).toEqual([{ id: "c", orderKey: expect.any(String) }]);
+    expect(assignments[0]!.orderKey > "f").toBe(true);
+  });
+
+  it("renders the dropped order when a thread is dragged below unplaced rows", () => {
+    // Nothing is placed yet: dropping "c" into slot 2 has to materialize the
+    // rows above it, or the sort would keep hoisting "c" to the top.
+    const defaultOrder = ["a", "b", "c", "d"];
+    const keys = new Map<string, string | null>(defaultOrder.map((id) => [id, null]));
+    const dropped = ["a", "b", "d", "c"];
+    const assignments = planSidebarReorder({
+      orderedIds: dropped,
+      keysById: keys,
+      movedId: "c",
+    });
+    expect(renderOrder(defaultOrder, applyPlan(keys, assignments))).toEqual(dropped);
+  });
+
+  it("keeps a placed row below the drop from sorting back above it", () => {
+    // "d" carries an old placement and now belongs BELOW the drop. Respread
+    // has to cover it too: leaving "d" on its original key would sort it
+    // back to the top of the manual region.
+    const defaultOrder = ["a", "b", "c", "d"];
+    const keys = new Map<string, string | null>([
+      ["a", null],
+      ["b", null],
+      ["c", null],
+      ["d", "f"],
+    ]);
+    const dropped = ["a", "c", "b", "d"];
+    const assignments = planSidebarReorder({
+      orderedIds: dropped,
+      keysById: keys,
+      movedId: "c",
+    });
+    expect(renderOrder(defaultOrder, applyPlan(keys, assignments))).toEqual(dropped);
+  });
+
+  it("leaves threads below the manual region unplaced and free to move", () => {
+    const keys = new Map<string, string | null>([
+      ["a", null],
+      ["b", null],
+      ["c", null],
+      ["d", null],
+    ]);
+    const assignments = planSidebarReorder({
+      orderedIds: ["b", "a", "c", "d"],
+      keysById: keys,
+      movedId: "b",
+    });
+    const written = applyPlan(keys, assignments);
+    expect(written.get("b")).not.toBeNull();
+    // "b" moved to the top, so only "b" needs a key; "c" and "d" stay in the
+    // recency order.
+    expect(written.get("c")).toBeNull();
+    expect(written.get("d")).toBeNull();
+  });
+
+  it("produces assignments in ascending key order", () => {
+    const assignments = planSidebarReorder({
+      orderedIds: ["a", "b", "c", "d"],
+      keysById: new Map<string, string | null>([
+        ["a", null],
+        ["b", null],
+        ["c", null],
+        ["d", "f"],
+      ]),
+      movedId: "a",
+    });
+    const keys = assignments.map((entry) => entry.orderKey);
+    expect([...keys].sort()).toEqual(keys);
+  });
+
+  it("returns nothing when the moved thread is not in the list", () => {
+    expect(planSidebarReorder({ orderedIds: ["a"], keysById: new Map(), movedId: "zzz" })).toEqual(
+      [],
+    );
+  });
+});
+
+describe("planSidebarMove", () => {
+  it("swaps a thread with its neighbor and renders the swapped order", () => {
+    const defaultOrder = ["a", "b", "c"];
+    const keys = new Map<string, string | null>(defaultOrder.map((id) => [id, null]));
+    const assignments = planSidebarMove({
+      orderedIds: defaultOrder,
+      keysById: keys,
+      movedId: "c",
+      direction: "up",
+    });
+    expect(assignments).not.toBeNull();
+    expect(renderOrder(defaultOrder, applyPlan(keys, assignments!))).toEqual(["a", "c", "b"]);
+  });
+
+  it("returns null when the move falls off the end of the list", () => {
+    const input = {
+      orderedIds: ["a", "b"],
+      keysById: new Map<string, string | null>([
+        ["a", "f"],
+        ["b", "m"],
+      ]),
+    };
+    expect(planSidebarMove({ ...input, movedId: "a", direction: "up" })).toBeNull();
+    expect(planSidebarMove({ ...input, movedId: "b", direction: "down" })).toBeNull();
   });
 });
