@@ -47,6 +47,8 @@ export function HomeRouteScreen() {
     pinThread,
     unpinThread,
     movePinnedThread,
+    moveInboxThread,
+    clearInboxThreadPosition,
     regenerateThreadTitle,
     unsettleThread,
   } = useThreadListActions();
@@ -195,6 +197,8 @@ export function HomeRouteScreen() {
           onPinThread={pinThread}
           onUnpinThread={unpinThread}
           onMovePinnedThread={movePinnedThread}
+          onMoveInboxThread={moveInboxThread}
+          onClearInboxPosition={clearInboxThreadPosition}
           onRegenerateThreadTitle={regenerateThreadTitle}
           onEnvironmentChange={setSelectedEnvironmentId}
           onProjectChange={setSelectedProjectKey}
