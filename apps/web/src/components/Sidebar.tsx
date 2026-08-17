@@ -1,4 +1,4 @@
-import { autoAnimate } from "@formkit/auto-animate";
+import { autoAnimate, type AnimationController } from "@formkit/auto-animate";
 import { useAtomValue } from "@effect/atom-react";
 import * as Schema from "effect/Schema";
 import {
@@ -3182,8 +3182,26 @@ export default function Sidebar() {
     };
   }, [orderedActiveThreads, reorderableActiveKeys]);
 
+  // The thread list's auto-animate FLIPs its DIRECT children whenever their
+  // DOM order changes, from coordinates it cached before the drag began. The
+  // pinned block sits inside its own <ul>, so its drops are invisible to it;
+  // inbox rows are direct children, so a drop would replay the move from the
+  // pre-drag slot on top of dnd-kit's already-settled transforms (the row
+  // snaps back, then slides). Pause it for the drag and resume only after the
+  // drop mutation has been observed: MutationObserver callbacks are
+  // microtasks, so a macrotask is guaranteed to run after them. Positions
+  // are still re-cached while paused, so later animations start from truth.
+  const listAutoAnimateRef = useRef<AnimationController | null>(null);
+  const pauseListAnimation = useCallback(() => {
+    listAutoAnimateRef.current?.disable();
+  }, []);
+  const resumeListAnimation = useCallback(() => {
+    setTimeout(() => listAutoAnimateRef.current?.enable(), 0);
+  }, []);
+
   const handleActiveDragEnd = useCallback(
     (event: DragEndEvent) => {
+      resumeListAnimation();
       const activeKey = String(event.active.id);
       const { renderedKeys, threadByKey, keysAtDrop } = readReorderableActiveList();
       const plan = planThreadBlockDrop({
@@ -3201,7 +3219,12 @@ export default function Sidebar() {
         movedKey: activeKey,
       });
     },
-    [applySidebarReorderPlan, readReorderableActiveList, reorderableActiveKeys],
+    [
+      applySidebarReorderPlan,
+      readReorderableActiveList,
+      reorderableActiveKeys,
+      resumeListAnimation,
+    ],
   );
 
   /** Keyboard/menu equivalent of dragging one slot. */
@@ -3920,7 +3943,7 @@ export default function Sidebar() {
 
   const attachListAutoAnimateRef = useCallback((node: HTMLUListElement | null) => {
     if (!node) return;
-    autoAnimate(node, { duration: 150, easing: "ease-out" });
+    listAutoAnimateRef.current = autoAnimate(node, { duration: 150, easing: "ease-out" });
   }, []);
 
   const chatEnvironmentProjects = useMemo(
@@ -4689,6 +4712,8 @@ export default function Sidebar() {
                       sensors={pinnedDndSensors}
                       collisionDetection={closestCenter}
                       modifiers={[restrictToVerticalAxis, restrictToFirstScrollableAncestor]}
+                      onDragStart={pauseListAnimation}
+                      onDragCancel={resumeListAnimation}
                       onDragEnd={handleActiveDragEnd}
                     >
                       <SortableContext
