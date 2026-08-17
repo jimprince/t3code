@@ -273,6 +273,118 @@ export function sortPinnedThreadsByOrderKey<
   return [...keyed, ...keyless];
 }
 
+// ── Fork: manual inbox order ───────────────────────────────────────────
+// The inbox reuses the pinned block's fractional-key math on its own field
+// (sidebarOrderKey), so a drag writes ONE key to ONE thread on that thread's
+// own server. The difference is what "no key" means: a pinned thread without
+// a key falls back to creation order, but an inbox thread the user never
+// placed must keep whatever position the caller's default sort gave it.
+
+/**
+ * Hoist manually placed threads above the rest. `threads` must already be in
+ * the list's default order; placed threads sort by key comparison at the top
+ * and unplaced threads keep their incoming relative order below. This is the
+ * "manual order takes precedence, everything else stays where it was" rule.
+ */
+export function sortThreadsByManualOrderKey<
+  T extends {
+    readonly id: string;
+    readonly sidebarOrderKey?: string | null | undefined;
+    /** Thread ids are only unique within an environment and the inbox merges
+        environments, so equal keys tie-break on both parts. */
+    readonly environmentId?: string | undefined;
+  },
+>(threads: readonly T[]): T[] {
+  const placed: T[] = [];
+  const unplaced: T[] = [];
+  for (const thread of threads) {
+    (thread.sidebarOrderKey != null ? placed : unplaced).push(thread);
+  }
+  placed.sort((left, right) => {
+    const leftKey = left.sidebarOrderKey!;
+    const rightKey = right.sidebarOrderKey!;
+    if (leftKey !== rightKey) return leftKey < rightKey ? -1 : 1;
+    return (
+      left.id.localeCompare(right.id) ||
+      (left.environmentId ?? "").localeCompare(right.environmentId ?? "")
+    );
+  });
+  return [...placed, ...unplaced];
+}
+
+/**
+ * Assignments needed to realize a new inbox order after a drop.
+ *
+ * Unlike the pinned block, an unplaced neighbor is the COMMON case here —
+ * every thread starts unplaced — and the sort renders every placed thread
+ * above every unplaced one. So dropping a row below an unplaced row cannot
+ * be expressed by one key: the rows above it have to become placed too.
+ *
+ * Single write when the rows above the drop are already placed (the steady
+ * state once a user has arranged a head of threads). Otherwise the "manual
+ * region" — everything from the top of the list down to the last placed row
+ * or the drop, whichever is lower — is respread in one pass. The region is
+ * whatever the user built by hand, so it stays small, and every thread below
+ * it keeps moving with recency.
+ */
+export function planSidebarReorder(input: {
+  /** Thread ids in the desired visual order (after the move). */
+  readonly orderedIds: readonly string[];
+  readonly keysById: ReadonlyMap<string, string | null | undefined>;
+  readonly movedId: string;
+}): ReadonlyArray<{ readonly id: string; readonly orderKey: string }> {
+  const { orderedIds, keysById, movedId } = input;
+  const movedIndex = orderedIds.indexOf(movedId);
+  if (movedIndex === -1) return [];
+  const isPlaced = (id: string) => (keysById.get(id) ?? null) !== null;
+  const beforeId = movedIndex > 0 ? orderedIds[movedIndex - 1]! : null;
+  const afterId = movedIndex < orderedIds.length - 1 ? orderedIds[movedIndex + 1]! : null;
+  if (beforeId === null || isPlaced(beforeId)) {
+    // Everything above the drop is placed (only the moved row can be out of
+    // sort position after a single move). An unplaced row below imposes no
+    // upper bound: placed rows already sort above every unplaced one.
+    const beforeKey = beforeId === null ? null : (keysById.get(beforeId) ?? null);
+    const afterKey = afterId !== null && isPlaced(afterId) ? keysById.get(afterId)! : null;
+    const key = pinOrderKeyBetween(beforeKey, afterKey);
+    if (key !== null) return [{ id: movedId, orderKey: key }];
+  }
+  // Respread the manual region so the dropped row can sit below rows that
+  // were previously unplaced, without any already-placed row below the drop
+  // keeping a key that would sort it back into the region.
+  let lastPlacedIndex = movedIndex;
+  for (const [index, id] of orderedIds.entries()) {
+    if (id !== movedId && isPlaced(id)) lastPlacedIndex = Math.max(lastPlacedIndex, index);
+  }
+  const region = orderedIds.slice(0, lastPlacedIndex + 1);
+  const keys = generateSpreadPinOrderKeys(region.length);
+  return region.flatMap((id, index) => {
+    const key = keys[index]!;
+    return keysById.get(id) === key ? [] : [{ id, orderKey: key }];
+  });
+}
+
+/**
+ * planSidebarReorder specialized for mobile's Move up / Move down menu
+ * actions. Same single-write-per-move semantics as a web drag; null when the
+ * move falls off either end of the list.
+ */
+export function planSidebarMove(input: {
+  readonly orderedIds: readonly string[];
+  readonly keysById: ReadonlyMap<string, string | null | undefined>;
+  readonly movedId: string;
+  readonly direction: "up" | "down";
+}): ReadonlyArray<{ readonly id: string; readonly orderKey: string }> | null {
+  const { orderedIds, keysById, movedId, direction } = input;
+  const from = orderedIds.indexOf(movedId);
+  if (from === -1) return null;
+  const to = direction === "up" ? from - 1 : from + 1;
+  if (to < 0 || to >= orderedIds.length) return null;
+  const newOrder = [...orderedIds];
+  newOrder.splice(from, 1);
+  newOrder.splice(to, 0, movedId);
+  return planSidebarReorder({ orderedIds: newOrder, keysById, movedId });
+}
+
 /**
  * planPinnedReorder specialized for mobile's Move up / Move down menu
  * actions: swap the moved thread with its displayed neighbor. Null when the
