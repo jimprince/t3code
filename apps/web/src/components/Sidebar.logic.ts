@@ -553,6 +553,11 @@ export {
   planPinnedReorder,
 } from "@t3tools/client-runtime/state/thread-sort";
 export { sortPinnedThreadsByOrderKey as sortPinnedThreadsForSidebar } from "@t3tools/client-runtime/state/thread-sort";
+// Fork: the inbox's manual order shares the same key math. The sort takes an
+// already-default-ordered list, so callers apply it on top of
+// sortThreadsForSidebar rather than instead of it.
+export { planSidebarReorder } from "@t3tools/client-runtime/state/thread-sort";
+export { sortThreadsByManualOrderKey as applyManualSidebarOrder } from "@t3tools/client-runtime/state/thread-sort";
 
 /**
  * Search the already-ordered sidebar thread collection by title only.
