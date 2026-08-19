@@ -721,10 +721,7 @@ export const ModelPickerContent = memo(function ModelPickerContent(props: {
                   data={filteredItemKeys}
                   extraData={modelListExtraData}
                   keyExtractor={(modelKey: string) => modelKey}
-                  renderItem={({
-                    item: modelKey,
-                    index,
-                  }: LegendListRenderItemProps<string>) => {
+                  renderItem={({ item: modelKey, index }: LegendListRenderItemProps<string>) => {
                     const matchedLegacySection =
                       legacySection?.key === modelKey ? legacySection : null;
                     if (matchedLegacySection) {
