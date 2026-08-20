@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "bdb3e42fbf9b2c3e13e99d15dcb836ef9298143e",
-  "head": "aa3010b24e20bc09019a41b78ef13bdbe6ff8d79",
+  "prev": "0a1ab0d17930f81c43e510c598737acc049fa93c",
+  "head": "3108f0bb16a7d2ad4528dcbac2d6b4f919cd0b7b",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -18,12 +18,12 @@
     "fork-performance-recovery",
     "fork-headless-updates",
     "fork-text-generation",
-    "fork-web-client-resilience"
-  ],
-  "unapplied": [
+    "fork-web-client-resilience",
     "fork-web-project-scope",
     "fork-web-image-timeout",
-    "fork-desktop-distribution",
+    "fork-desktop-distribution"
+  ],
+  "unapplied": [
     "fork-mobile-delivery",
     "fork-ci-runner-compat",
     "fork-ci-release-pipeline",
@@ -57,7 +57,7 @@
       "oid": "fd00f1155b376ce344b5637e58fa3da2ae27d008"
     },
     "fork-desktop-distribution": {
-      "oid": "5a1f32f7ec9378d76318264e617e72009c9ea258"
+      "oid": "3108f0bb16a7d2ad4528dcbac2d6b4f919cd0b7b"
     },
     "fork-general-chat-projects": {
       "oid": "51ef79895b6dd75a049652ae169bc132b880ca58"
@@ -120,13 +120,13 @@
       "oid": "6c5fdfb6866567208d680b6f804493de64a753da"
     },
     "fork-web-image-timeout": {
-      "oid": "c2941ba7446c69de7d0533e3e69e12126514ff29"
+      "oid": "f86b994c97fea0c1ca156b0ca9df6a09aaa36c53"
     },
     "fork-web-pr-multiselect": {
       "oid": "812c570d31bbb955b1b0611104b6c9d9eab591ed"
     },
     "fork-web-project-scope": {
-      "oid": "e41fc1e90f82f0945a0ea81832560c5e666efdbe"
+      "oid": "22da846806e278b4169943c78772bcc4c706784f"
     }
   }
 }
