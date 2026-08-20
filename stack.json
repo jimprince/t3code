@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e1f55430b144151d6d8a9e586b637abe9f8dc732",
-  "head": "e76c4fd16bebd4ac52008078622ad7a6ce041bd0",
+  "prev": "53264dc2d4d18b0840973ca4400f14dc1cf5a5cc",
+  "head": "59d7a3df39109e16eb0fed0bfaf452f04132edc6",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -21,8 +21,7 @@
     "fork-web-client-resilience",
     "fork-web-project-scope",
     "fork-web-image-timeout",
-    "fork-desktop-distribution",
-    "refresh-temp"
+    "fork-desktop-distribution"
   ],
   "unapplied": [
     "fork-mobile-delivery",
@@ -58,7 +57,7 @@
       "oid": "fd00f1155b376ce344b5637e58fa3da2ae27d008"
     },
     "fork-desktop-distribution": {
-      "oid": "3108f0bb16a7d2ad4528dcbac2d6b4f919cd0b7b"
+      "oid": "59d7a3df39109e16eb0fed0bfaf452f04132edc6"
     },
     "fork-general-chat-projects": {
       "oid": "51ef79895b6dd75a049652ae169bc132b880ca58"
@@ -128,9 +127,6 @@
     },
     "fork-web-project-scope": {
       "oid": "22da846806e278b4169943c78772bcc4c706784f"
-    },
-    "refresh-temp": {
-      "oid": "e76c4fd16bebd4ac52008078622ad7a6ce041bd0"
     }
   }
 }
