@@ -58,11 +58,13 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
     Effect.succeed({
       providerList: { connected: [], all: [], default: {} },
       agents: [],
+      skills: [],
     }),
   loadInventoryFromCli: () =>
     Effect.succeed({
       providerList: { connected: [], all: [], default: {} },
       agents: [],
+      skills: [],
     }),
 };
 
