@@ -75,7 +75,7 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       ];
 
       for (const [name, workflow, operation] of [
-        ["CI Test", testJob, "vp run test"],
+        ["CI Test", testJob, "vp run --parallel"],
         ["CI Fork patch policy", policyJob, "scripts/ci/check-stgit-stack"],
         ["Release Preflight", releasePreflight, "vp run test"],
         ["Sync Upstream", stackWriters[0]!, "scripts/ci/reproduce-sync-upstream"],
