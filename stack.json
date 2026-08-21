@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "d9dcfc6e8f817052ed1568c1f0af88df6c7e3314",
-  "head": "49cba8360794e25841f529e5d8c1bf1e68ed9f96",
+  "prev": "1a34b776401a313493a35d2c0b89a88e30b35caf",
+  "head": "8d7178753251622dedcb4e04422df1bc861ce5a3",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -25,7 +25,8 @@
     "fork-mobile-delivery",
     "fork-ci-runner-compat",
     "fork-ci-release-pipeline",
-    "fork-ci-upstream-sync"
+    "fork-ci-upstream-sync",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-ci-stgit-metadata",
@@ -127,6 +128,9 @@
     },
     "fork-web-project-scope": {
       "oid": "e1f2045497683322ea63ae0c1bee567d8d2b3e8c"
+    },
+    "refresh-temp": {
+      "oid": "8d7178753251622dedcb4e04422df1bc861ce5a3"
     }
   }
 }
