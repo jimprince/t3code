@@ -336,3 +336,12 @@ retire_when = "Upstream ships non-image chat attachments with a path or file han
 depends_on = ["fork-build-workspace-tooling"]
 roles = []
 note = "fileAttachments is a parallel optional message field, never a ChatAttachment union member: union decode hard-fails on unknown type literals in old mobile/t3-thread decoders."
+
+[[patch]]
+name = "fork-remote-file-downloads"
+subject = "feat(remote): download linked workspace files"
+class = "product"
+purpose = "Let web and desktop operators securely download files linked from a thread when those files remain inside that thread's project or active worktree."
+retire_when = "Upstream ships equivalent authenticated linked-file downloads with canonical project/worktree containment across local and remote environments."
+depends_on = ["fork-remote-relay-access"]
+roles = []
