@@ -52,9 +52,7 @@ function turnStartCommand(input: {
         mimeType: "image/png",
         ...attachment,
       })),
-      ...(input.fileAttachments !== undefined
-        ? { fileAttachments: input.fileAttachments }
-        : {}),
+      ...(input.fileAttachments !== undefined ? { fileAttachments: input.fileAttachments } : {}),
     },
     runtimeMode: "full-access",
     interactionMode: "default",
