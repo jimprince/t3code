@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3400de80fc5d722589a909bda376a680b2c10847",
-  "head": "08871fbdb08b3dbc3391e40ca9b6f32e0460212c",
+  "prev": "26b1dd09e37472173ba08c7316016b9f372e0c36",
+  "head": "ee13fad818b43a54a3be1b9ebef28305e09f32af",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -9,11 +9,11 @@
     "fork-provider-turn-reservation",
     "fork-provider-runtime-recovery",
     "fork-provider-observability",
-    "fork-thread-lifecycle-recovery"
+    "fork-thread-lifecycle-recovery",
+    "fork-thread-goals",
+    "fork-thread-transfer"
   ],
   "unapplied": [
-    "fork-thread-goals",
-    "fork-thread-transfer",
     "fork-thread-fork",
     "fork-general-chat-projects",
     "fork-remote-relay-access",
@@ -105,13 +105,13 @@
       "oid": "7a0f492a8d772b63ad941753d4eacce3368159ea"
     },
     "fork-thread-goals": {
-      "oid": "4afd341aa4fa8e04806530227143d99503a6333c"
+      "oid": "fae7c2a72a2259d151aa8fde5578bd80cc1f782a"
     },
     "fork-thread-lifecycle-recovery": {
       "oid": "08871fbdb08b3dbc3391e40ca9b6f32e0460212c"
     },
     "fork-thread-transfer": {
-      "oid": "f6f7f7fbfe2c0985fabeba72fb8b1b67e2442368"
+      "oid": "ee13fad818b43a54a3be1b9ebef28305e09f32af"
     },
     "fork-web-client-resilience": {
       "oid": "8d18dd6bf03e913bca63f5428ca90238b56641dd"
