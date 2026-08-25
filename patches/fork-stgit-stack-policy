@@ -1,6 +1,6 @@
-Bottom: bcff92529017a600605fce875f00f58a9ab1c426
-Top:    65821104cbcae1cf5488c03cc6cca8b7a0a3b4fb
+Bottom: db45b2074de7e33495a8a56ecc9efbe9d86099bf
+Top:    0529a100783372e60a7394bb31809b9cf84a24fd
 Author: brad <bradprin@live.com>
-Date:   2026-08-24 03:54:28 -0600
+Date:   2026-08-25 03:42:26 -0600
 
 docs(fork): define StGit stack policy
