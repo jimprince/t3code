@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
+
+const branding = vi.hoisted(() => ({ APP_VERSION: "0.0.34" }));
+vi.mock("./branding", () => branding);
 
 import { APP_VERSION } from "./branding";
 import { compareT3Versions, isClientVersionNewerThanServer } from "./versionSkew";
