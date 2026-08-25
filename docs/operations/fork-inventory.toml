@@ -244,8 +244,3 @@ id = "stashimagecompression-timeout"
 date = "2026-07-29"
 decided = "adapt"
 rationale = "The too-large boundary test repeatedly exceeded the default timeout under parallel hosted CI while passing in isolation. Accept the one-line upstream-file edit until the test becomes reliably faster."
-[[patch.decision]]
-id = "session-logic-performance-budget"
-date = "2026-08-25"
-decided = "adapt"
-rationale = "Upstream's 100 ms absolute work-log update budget passed in isolation but took 152 ms in the repo-wide parallel verifier. Preserve the regression guard with a 250 ms shared-runner budget that still catches superlinear regressions."
