@@ -25,6 +25,7 @@ import { readLocalApi } from "../localApi";
 import {
   readEnvironmentSupportsPinning,
   readEnvironmentSupportsPinReorder,
+  readEnvironmentSupportsSidebarReorder,
   readEnvironmentSupportsSettlement,
   readEnvironmentSupportsSnooze,
   readEnvironmentThreadRefs,
@@ -136,6 +137,19 @@ export class ThreadPinReorderUnsupportedError extends Schema.TaggedErrorClass<Th
   }
 }
 
+/** Fork: raised when a drop targets a server that predates inbox ordering. */
+export class ThreadSidebarReorderUnsupportedError extends Schema.TaggedErrorClass<ThreadSidebarReorderUnsupportedError>()(
+  "ThreadSidebarReorderUnsupportedError",
+  {
+    environmentId: EnvironmentId,
+    threadId: ThreadId,
+  },
+) {
+  override get message(): string {
+    return "This environment's server does not support reordering threads yet. Update the server to arrange the list.";
+  }
+}
+
 export function useThreadActions() {
   const closeTerminal = useAtomCommand(terminalEnvironment.close);
   const archiveThreadMutation = useAtomCommand(threadEnvironment.archive, {
@@ -160,6 +174,9 @@ export function useThreadActions() {
     reportFailure: false,
   });
   const reorderPinnedThreadMutation = useAtomCommand(threadEnvironment.reorderPin, {
+    reportFailure: false,
+  });
+  const reorderSidebarThreadMutation = useAtomCommand(threadEnvironment.reorderSidebar, {
     reportFailure: false,
   });
   const snoozeThreadMutation = useAtomCommand(threadEnvironment.snooze, {
@@ -613,6 +630,30 @@ export function useThreadActions() {
     [reorderPinnedThreadMutation],
   );
 
+  // orderKey null clears the manual placement, returning the thread to the
+  // default recency order.
+  const reorderSidebarThread = useCallback(
+    async (target: ScopedThreadRef, orderKey: string | null) => {
+      // Callers only enable dragging on capable environments; this guard
+      // covers races around capability changes mid-drag.
+      if (!readEnvironmentSupportsSidebarReorder(target.environmentId)) {
+        return AsyncResult.failure(
+          Cause.fail(
+            new ThreadSidebarReorderUnsupportedError({
+              environmentId: target.environmentId,
+              threadId: target.threadId,
+            }),
+          ),
+        );
+      }
+      return reorderSidebarThreadMutation({
+        environmentId: target.environmentId,
+        input: { threadId: target.threadId, orderKey },
+      });
+    },
+    [reorderSidebarThreadMutation],
+  );
+
   const snoozeThread = useCallback(
     async (target: ScopedThreadRef, snoozedUntil: string) => {
       // Version skew: never send the command to a server that predates it.
@@ -710,6 +751,7 @@ export function useThreadActions() {
       pinThread,
       unpinThread,
       reorderPinnedThread,
+      reorderSidebarThread,
     }),
     [
       archiveThread,
@@ -717,6 +759,7 @@ export function useThreadActions() {
       deleteThread,
       pinThread,
       reorderPinnedThread,
+      reorderSidebarThread,
       settleThread,
       snoozeThread,
       unarchiveThread,
