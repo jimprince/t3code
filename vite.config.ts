@@ -21,8 +21,10 @@ export default defineConfig({
     testTimeout: 60_000,
   },
   staged: {
-    // Formatter only for now — no lint or typecheck on commit.
-    "*": "vp fmt",
+    // Guard first (fails plain commits on the stack branch with directions —
+    // StGit's own commits bypass hooks, so firing here means a plain commit),
+    // then format. No lint or typecheck on commit.
+    "*": "scripts/ci/guard-plain-commit-and-fmt",
   },
   fmt: {
     ignorePatterns: [
@@ -67,7 +69,7 @@ export default defineConfig({
       "apps/mobile/uniwind-types.d.ts",
     ],
     plugins: ["eslint", "oxc", "react", "unicorn", "typescript"],
-    jsPlugins: ["./oxlint-plugin-t3code/index.ts"],
+    jsPlugins: ["./oxlint-plugin-t3code/dist/index.js"],
     categories: {
       correctness: "warn",
       suspicious: "warn",
