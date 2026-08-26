@@ -49,7 +49,9 @@ Pair from host plus credential:
 t3-thread pair --name <name> --host http://host:3773 --credential PAIRCODE
 ```
 
-The runtime state is stored in `~/.config/t3-remote-agents/state.json`.
+The runtime state is stored in `~/.config/t3-remote-agents/state.json` and is
+managed by `t3-thread`. Do not hand-edit it, including its authentication
+fields; use the first-class pairing and lifecycle commands below.
 
 ## Project Discovery
 
@@ -494,28 +496,35 @@ Fix:
 1. Stop using that thread.
 2. Create a replacement thread with explicit `--branch`.
 
-## Renewal Guidance
+## Authentication and Credential Renewal
 
-This repo does **not** implement automatic bearer-token renewal.
+Pairing is the authentication bootstrap. Give `t3-thread pair` a full pairing
+URL or a pairing code and host:
 
-Current observed auth shape:
+```bash
+t3-thread pair --name <name> --pairing-url "http://host:3773/pair#token=PAIRCODE"
+t3-thread pair --name <name> --host http://host:3773 --credential PAIRCODE
+```
 
-- bootstrap: `/api/auth/bootstrap/bearer`
-- websocket token issuance: `/api/auth/ws-token`
-- no separate bearer-session refresh endpoint confirmed yet
+The command exchanges the pairing credential for a Bearer access token through
+the OAuth token-exchange endpoint (`POST /oauth/token`), verifies the resulting
+session, and saves the paired environment and token expiry under the supplied
+name. Reusing an existing `--name` replaces that saved environment through the
+CLI.
 
-Operational renewal path for now:
+Normal authenticated HTTP requests use the saved access token. Before opening
+a WebSocket, the client obtains a short-lived ticket from
+`POST /api/auth/websocket-ticket` and connects to `/ws?wsTicket=<ticket>`.
+Operators should not mint, copy, or store WebSocket tickets themselves.
 
-1. Mint a fresh pairing credential on the target machine.
-2. Run `pair` again for the saved environment.
-3. Replace the stored bearer token in `~/.config/t3-remote-agents/state.json`.
-
-Examples:
-
-- local machine: generate a new pairing credential locally, then re-pair against the local server URL
-- remote machine: generate a new pairing credential over SSH, then re-pair locally
-
-Do not implement a custom renewal mechanism unless T3 exposes a first-class API for it.
+The CLI does not automatically refresh an expired access token. If a saved
+environment expires or authentication fails, obtain a fresh pairing URL or
+credential through T3 Code's first-class pairing flow, then run
+`t3-thread pair` again with the same environment name. Do not replace tokens or
+edit any other authentication state by hand. For generating pairing credentials
+on a local or remote T3 Code service, follow
+[`REMOTE_T3CODE_UPDATE.md`](./REMOTE_T3CODE_UPDATE.md) and the
+`t3code-remote-ops` skill.
 
 ## Coordination Hygiene
 
