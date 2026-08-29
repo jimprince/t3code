@@ -1,6 +1,6 @@
-Bottom: a5a7cbca3f1e5ec6d99e7940dd07a5490b293df1
-Top:    4dfc97f42ad42cfeb5b8e1cc7be14744da12644a
+Bottom: 3ba4d5a88351c33cd411dbdb04de6f021458d109
+Top:    d1f34d7b139d5c6b48d1f1b3f06debb07bb6812e
 Author: brad <bradprin@live.com>
-Date:   2026-08-28 23:39:57 -0600
+Date:   2026-08-28 23:40:39 -0600
 
 feat(server): add fork text generation
