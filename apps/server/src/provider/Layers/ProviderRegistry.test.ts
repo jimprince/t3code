@@ -955,6 +955,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           const openCodeInstanceId = ProviderInstanceId.make("opencode");
           const codexRefreshCalls = yield* Ref.make(0);
           const openCodeRefreshCalls = yield* Ref.make(0);
+          const openCodeRefreshGate = yield* Deferred.make<void>();
           const codexProvider = {
             instanceId: codexInstanceId,
             driver: codexDriver,
@@ -1052,6 +1053,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 }),
                 getSnapshot: Effect.succeed(failedOpenCodeProvider),
                 refresh: Ref.update(openCodeRefreshCalls, (count) => count + 1).pipe(
+                  Effect.andThen(Deferred.await(openCodeRefreshGate)),
                   Effect.andThen(Ref.get(catalogSnapshot)),
                 ),
                 streamChanges: Stream.empty,
@@ -1094,6 +1096,20 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               "error",
             );
 
+            // Boot refreshes are forked so registry construction does not
+            // block server readiness. Hold OpenCode's boot refresh until the
+            // pending snapshot above is observed, then count it separately
+            // from the two explicit refreshes below.
+            yield* Effect.gen(function* () {
+              while (
+                (yield* Ref.get(codexRefreshCalls)) < 1 ||
+                (yield* Ref.get(openCodeRefreshCalls)) < 1
+              ) {
+                yield* Effect.yieldNow;
+              }
+            }).pipe(Effect.timeout("1 second"));
+            yield* Deferred.succeed(openCodeRefreshGate, undefined);
+
             const recoveredProviders = yield* registry.refresh();
             assert.deepStrictEqual(
               recoveredProviders.find((provider) => provider.instanceId === openCodeInstanceId)
@@ -1118,8 +1134,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
           }).pipe(Effect.provide(runtimeServices));
 
-          assert.strictEqual(yield* Ref.get(codexRefreshCalls), 2);
-          assert.strictEqual(yield* Ref.get(openCodeRefreshCalls), 2);
+          assert.strictEqual(yield* Ref.get(codexRefreshCalls), 3);
+          assert.strictEqual(yield* Ref.get(openCodeRefreshCalls), 3);
         }),
       );
 
