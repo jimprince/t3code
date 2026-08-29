@@ -594,6 +594,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         true,
       );
       const winWithoutWslPrebuild = yield* createBuildConfig(
+        "stable",
         "win",
         "nsis",
         "1.2.3",
