@@ -1,9 +1,10 @@
 {
   "version": 5,
-  "prev": "90a8a6cdcbd23571fb1f87200f602c8e87c4909d",
-  "head": "6b30cb95ee2d99ce588c03dccb2008354e91fde9",
+  "prev": "9b204e870f5aad1a928b3a4be75b647066d7f83e",
+  "head": "ff99c679bb1778f48ba54bcec95a493dfe7ed508",
   "applied": [
-    "fork-stgit-stack-policy"
+    "fork-stgit-stack-policy",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-build-workspace-tooling",
@@ -127,6 +128,9 @@
     },
     "fork-web-project-scope": {
       "oid": "f9284b7021e12d7e46a6edf74624509f9e97737a"
+    },
+    "refresh-temp": {
+      "oid": "ff99c679bb1778f48ba54bcec95a493dfe7ed508"
     }
   }
 }
