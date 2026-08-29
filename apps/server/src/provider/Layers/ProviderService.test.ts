@@ -1601,6 +1601,26 @@ routing.layer("ProviderServiceLive routing", (it) => {
         mimeType: "image/png",
         sizeBytes: 123,
       };
+      const completeActiveTurn = (eventId: string) =>
+        Effect.gen(function* () {
+          routing.codex.emit({
+            type: "turn.completed",
+            eventId: asEventId(eventId),
+            provider: ProviderDriverKind.make("codex"),
+            createdAt: "2026-01-01T00:00:00.000Z",
+            threadId: session.threadId,
+            turnId: TurnId.make(`turn-${String(session.threadId)}`),
+            status: "completed",
+          });
+          const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+          while (
+            (yield* directory.listBindings()).some(
+              (binding) => binding.threadId === session.threadId && binding.activeTurnId !== null,
+            )
+          ) {
+            yield* Effect.yieldNow;
+          }
+        });
 
       routing.codex.sendTurn.mockClear();
       yield* provider.sendTurn({
@@ -1616,26 +1636,9 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.include(turnText, '[Attached image "screenshot.png" is saved at: ');
       assert.equal(turnText.endsWith(`${attachment.id}.png]`), true);
 
-      // The fork's turn reservation keeps the first turn active until the
-      // runtime reports completion, so complete it before the next sendTurn
-      // can reserve. Upstream has no reservation gate and sends back-to-back.
-      routing.codex.emit({
-        type: "turn.completed",
-        eventId: asEventId("evt-thread-attach-turn-1"),
-        provider: ProviderDriverKind.make("codex"),
-        createdAt: "2026-01-01T00:00:00.000Z",
-        threadId: session.threadId,
-        turnId: TurnId.make(`turn-${String(session.threadId)}`),
-        status: "completed",
-      });
-      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
-      while (
-        (yield* directory.listBindings()).some(
-          (binding) => binding.threadId === session.threadId && binding.activeTurnId !== null,
-        )
-      ) {
-        yield* Effect.yieldNow;
-      }
+      // The fork's reservation gate requires each runtime turn to complete
+      // before the next send. Upstream sends these fixture turns back-to-back.
+      yield* completeActiveTurn("evt-thread-attach-turn-1");
 
       // An attachment-only turn stays valid and the injected line becomes the
       // whole input text, so the agent still learns the path.
@@ -1646,6 +1649,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const imageOnlyInput = routing.codex.sendTurn.mock.calls[0]?.[0] as ProviderSendTurnInput;
       assert.equal(imageOnlyInput.input?.startsWith('[Attached image "screenshot.png"'), true);
+      yield* completeActiveTurn("evt-thread-attach-turn-2");
 
       const fileAttachment = {
         type: "file" as const,
@@ -1667,6 +1671,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       // Every attachment reaches the adapter; each adapter decides what its
       // provider ingests natively.
       assert.deepEqual(mixedInput.attachments, [attachment, fileAttachment]);
+      yield* completeActiveTurn("evt-thread-attach-turn-3");
 
       routing.codex.sendTurn.mockClear();
       yield* provider.sendTurn({ threadId: session.threadId, attachments: [fileAttachment] });
