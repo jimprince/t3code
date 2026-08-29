@@ -270,6 +270,16 @@ describe("OrchestrationEngine", () => {
       readFromSequence: (sequenceExclusive) =>
         Stream.fromIterable(events.filter((event) => event.sequence > sequenceExclusive)),
       readAll: () => Stream.fromIterable(events),
+      hasEventAfter: (input) =>
+        Effect.succeed(
+          events.some(
+            (event) =>
+              event.aggregateKind === input.aggregateKind &&
+              event.aggregateId === input.aggregateId &&
+              event.type === input.type &&
+              event.sequence > input.sequenceExclusive,
+          ),
+        ),
     };
 
     const projectionSnapshot = {
