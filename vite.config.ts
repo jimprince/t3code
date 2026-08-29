@@ -24,8 +24,7 @@ export default defineConfig({
     // Guard first (fails plain commits on the stack branch with directions —
     // StGit's own commits bypass hooks, so firing here means a plain commit),
     // then format. No lint or typecheck on commit.
-    "*":
-      "scripts/ci/guard-plain-commit-and-fmt --no-error-on-unmatched-pattern",
+    "*": "scripts/ci/guard-plain-commit-and-fmt --no-error-on-unmatched-pattern",
   },
   fmt: {
     ignorePatterns: [
