@@ -335,4 +335,9 @@ purpose = "Let operators drop non-image files on the chat composer; the server s
 retire_when = "Upstream ships non-image chat attachments with a path or file handoff to providers."
 depends_on = ["fork-build-workspace-tooling"]
 roles = []
-note = "fileAttachments is a parallel optional message field, never a ChatAttachment union member: union decode hard-fails on unknown type literals in old mobile/t3-thread decoders."
+note = "fileAttachments remains a parallel optional message field carrying fork-only ChatFileHandoffAttachment values with server paths. Upstream now also has a distinct pathless ChatFileAttachment member in ChatAttachment; do not merge the two wire shapes."
+[[patch.decision]]
+id = "upstream-chat-file-attachment-name"
+date = "2026-08-28"
+decided = "adapt"
+rationale = "Upstream added a pathless ChatFileAttachment member to ChatAttachment. Rename the fork's parallel path-bearing schema to ChatFileHandoffAttachment so both contracts coexist without changing the fork's fileAttachments wire field or /tmp handoff behavior."

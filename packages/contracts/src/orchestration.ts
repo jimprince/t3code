@@ -249,14 +249,14 @@ export type ChatAttachment = typeof ChatAttachment.Type;
 const UploadChatAttachment = Schema.Union([UploadChatImageAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
-// File attachments ride a parallel optional `fileAttachments` field instead of
-// widening ChatAttachment: Union decode hard-fails on an unknown `type`
-// literal in older clients (mobile builds, vendored t3-thread contracts),
-// while Struct decode silently ignores unknown keys.
+// Fork path handoffs ride a parallel optional `fileAttachments` field. They
+// remain distinct from upstream's pathless ChatFileAttachment union member so
+// older clients can ignore the parallel field and never receive server paths
+// through the shared attachment union.
 export const CHAT_FILE_ATTACHMENT_MAX_BYTES = 32 * 1024 * 1024;
 const CHAT_FILE_ATTACHMENT_MAX_DATA_URL_CHARS = 45_000_000;
 
-export const ChatFileAttachment = Schema.Struct({
+export const ChatFileHandoffAttachment = Schema.Struct({
   type: Schema.Literal("file"),
   id: ChatAttachmentId,
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
@@ -265,7 +265,7 @@ export const ChatFileAttachment = Schema.Struct({
   /** Absolute path on the server machine where the thread can read the file. */
   path: TrimmedNonEmptyString,
 });
-export type ChatFileAttachment = typeof ChatFileAttachment.Type;
+export type ChatFileHandoffAttachment = typeof ChatFileHandoffAttachment.Type;
 
 export const UploadChatFileAttachment = Schema.Struct({
   type: Schema.Literal("file"),
@@ -342,7 +342,7 @@ export const OrchestrationMessage = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
-  fileAttachments: Schema.optional(Schema.Array(ChatFileAttachment)),
+  fileAttachments: Schema.optional(Schema.Array(ChatFileHandoffAttachment)),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -1129,7 +1129,7 @@ export const ThreadTurnStartCommand = Schema.Struct({
     role: Schema.Literal("user"),
     text: Schema.String,
     attachments: Schema.Array(ChatAttachment),
-    fileAttachments: Schema.optional(Schema.Array(ChatFileAttachment)),
+    fileAttachments: Schema.optional(Schema.Array(ChatFileHandoffAttachment)),
   }),
   modelSelection: Schema.optional(ModelSelection),
   titleSeed: Schema.optional(TrimmedNonEmptyString),
@@ -1598,7 +1598,7 @@ export const ThreadMessageSentPayload = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
-  fileAttachments: Schema.optional(Schema.Array(ChatFileAttachment)),
+  fileAttachments: Schema.optional(Schema.Array(ChatFileHandoffAttachment)),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,

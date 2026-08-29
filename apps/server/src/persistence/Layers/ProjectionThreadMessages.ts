@@ -5,7 +5,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Struct from "effect/Struct";
-import { ChatAttachment, ChatFileAttachment } from "@t3tools/contracts";
+import { ChatAttachment, ChatFileHandoffAttachment } from "@t3tools/contracts";
 
 import { toPersistenceSqlError } from "../Errors.ts";
 import {
@@ -21,7 +21,7 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   Struct.assign({
     isStreaming: Schema.Number,
     attachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatAttachment))),
-    fileAttachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatFileAttachment))),
+    fileAttachments: Schema.NullOr(Schema.fromJsonString(Schema.Array(ChatFileHandoffAttachment))),
   }),
 );
 

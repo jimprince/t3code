@@ -8,7 +8,7 @@
  *
  * @module fileAttachmentPrompt
  */
-import type { ChatFileAttachment } from "@t3tools/contracts";
+import type { ChatFileHandoffAttachment } from "@t3tools/contracts";
 
 export function formatFileAttachmentSize(sizeBytes: number): string {
   if (sizeBytes < 1024) return `${sizeBytes} B`;
@@ -22,7 +22,7 @@ export function formatFileAttachmentSize(sizeBytes: number): string {
  */
 export function appendFileAttachmentPromptLines(
   text: string,
-  fileAttachments: ReadonlyArray<ChatFileAttachment> | undefined,
+  fileAttachments: ReadonlyArray<ChatFileHandoffAttachment> | undefined,
 ): string {
   if (fileAttachments === undefined || fileAttachments.length === 0) return text;
   const lines = fileAttachments.map(

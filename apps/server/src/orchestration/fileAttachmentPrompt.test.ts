@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
-import type { ChatFileAttachment } from "@t3tools/contracts";
+import type { ChatFileHandoffAttachment } from "@t3tools/contracts";
 
 import {
   appendFileAttachmentPromptLines,
   formatFileAttachmentSize,
 } from "./fileAttachmentPrompt.ts";
 
-function fileAttachment(overrides: Partial<ChatFileAttachment> = {}): ChatFileAttachment {
+function fileAttachment(
+  overrides: Partial<ChatFileHandoffAttachment> = {},
+): ChatFileHandoffAttachment {
   return {
     type: "file",
     id: "thread-1-abc",

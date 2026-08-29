@@ -233,12 +233,12 @@ export type ChatAttachment = typeof ChatAttachment.Type;
 const UploadChatAttachment = Schema.Union([UploadChatImageAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
-// Mirrors packages/contracts ChatFileAttachment: non-image files handed to
+// Mirrors packages/contracts ChatFileHandoffAttachment: non-image files handed to
 // the thread as absolute server-local paths on the optional parallel
 // `fileAttachments` message field (never part of the ChatAttachment union).
 export const CHAT_FILE_ATTACHMENT_MAX_BYTES = 32 * 1024 * 1024;
 
-export const ChatFileAttachment = Schema.Struct({
+export const ChatFileHandoffAttachment = Schema.Struct({
   type: Schema.Literal("file"),
   id: ChatAttachmentId,
   name: TrimmedNonEmptyString.check(Schema.isMaxLength(255)),
@@ -246,7 +246,7 @@ export const ChatFileAttachment = Schema.Struct({
   sizeBytes: NonNegativeInt.check(Schema.isLessThanOrEqualTo(CHAT_FILE_ATTACHMENT_MAX_BYTES)),
   path: TrimmedNonEmptyString,
 });
-export type ChatFileAttachment = typeof ChatFileAttachment.Type;
+export type ChatFileHandoffAttachment = typeof ChatFileHandoffAttachment.Type;
 
 export const ProjectScriptIcon = Schema.Literals([
   "play",
@@ -288,7 +288,7 @@ export const OrchestrationMessage = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
-  fileAttachments: Schema.optional(Schema.Array(ChatFileAttachment)),
+  fileAttachments: Schema.optional(Schema.Array(ChatFileHandoffAttachment)),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,
@@ -954,7 +954,7 @@ export const ThreadMessageSentPayload = Schema.Struct({
   role: OrchestrationMessageRole,
   text: Schema.String,
   attachments: Schema.optional(Schema.Array(ChatAttachment)),
-  fileAttachments: Schema.optional(Schema.Array(ChatFileAttachment)),
+  fileAttachments: Schema.optional(Schema.Array(ChatFileHandoffAttachment)),
   turnId: Schema.NullOr(TurnId),
   streaming: Schema.Boolean,
   createdAt: IsoDateTime,

@@ -17,7 +17,11 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 
-import type { ChatFileAttachment, ThreadId, UploadChatFileAttachment } from "@t3tools/contracts";
+import type {
+  ChatFileHandoffAttachment,
+  ThreadId,
+  UploadChatFileAttachment,
+} from "@t3tools/contracts";
 import {
   CHAT_FILE_ATTACHMENT_MAX_BYTES,
   OrchestrationDispatchCommandError,
@@ -66,7 +70,7 @@ export const normalizeUploadFileAttachments = Effect.fn("normalizeUploadFileAtta
   }) {
     const tmpRoot = input.tmpRoot ?? fileAttachmentsTmpRoot();
     const fileSystem = yield* FileSystem.FileSystem;
-    const normalized: Array<ChatFileAttachment> = [];
+    const normalized: Array<ChatFileHandoffAttachment> = [];
     for (const attachment of input.fileAttachments) {
       const parsed = parseBase64DataUrl(attachment.dataUrl);
       if (!parsed) {

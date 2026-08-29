@@ -4,16 +4,16 @@ import * as Schema from "effect/Schema";
 
 import {
   ChatAttachment,
-  ChatFileAttachment,
+  ChatFileHandoffAttachment,
   ClientOrchestrationCommand,
   OrchestrationMessage,
 } from "./orchestration.ts";
 
 // ---------------------------------------------------------------------------
-// File attachments (fork): parallel optional field, never a union member
+// File handoffs (fork): parallel optional field, distinct from the upstream union member
 // ---------------------------------------------------------------------------
 
-const decodeChatFileAttachment = Schema.decodeUnknownEffect(ChatFileAttachment);
+const decodeChatFileHandoffAttachment = Schema.decodeUnknownEffect(ChatFileHandoffAttachment);
 const decodeClientOrchestrationCommand = Schema.decodeUnknownEffect(ClientOrchestrationCommand);
 const decodeOrchestrationMessage = Schema.decodeUnknownEffect(OrchestrationMessage);
 
@@ -37,9 +37,9 @@ const messageWithFileAttachmentsWire = {
   fileAttachments: [fileAttachmentWire],
 };
 
-it.effect("ChatFileAttachment round-trips through the schema", () =>
+it.effect("ChatFileHandoffAttachment round-trips through the schema", () =>
   Effect.gen(function* () {
-    const decoded = yield* decodeChatFileAttachment(fileAttachmentWire);
+    const decoded = yield* decodeChatFileHandoffAttachment(fileAttachmentWire);
     assert.deepStrictEqual(decoded, fileAttachmentWire);
   }),
 );
@@ -122,14 +122,15 @@ it.effect("old decoders ignore the fileAttachments field instead of failing", ()
   }),
 );
 
-it.effect("ChatAttachment union still rejects unknown type literals", () =>
+it.effect("ChatAttachment keeps upstream file metadata separate from fork handoff paths", () =>
   Effect.gen(function* () {
-    // Canary for the compat rationale: if someone later widens ChatAttachment
-    // with type:"file", old decoders would break — this documents that a
-    // "file" member is NOT decodable as a ChatAttachment.
-    const result = yield* Effect.exit(
-      Schema.decodeUnknownEffect(ChatAttachment)(fileAttachmentWire),
-    );
-    assert.strictEqual(result._tag, "Failure");
+    const decoded = yield* Schema.decodeUnknownEffect(ChatAttachment)(fileAttachmentWire);
+    assert.deepStrictEqual(decoded, {
+      type: "file",
+      id: fileAttachmentWire.id,
+      name: fileAttachmentWire.name,
+      mimeType: fileAttachmentWire.mimeType,
+      sizeBytes: fileAttachmentWire.sizeBytes,
+    });
   }),
 );
