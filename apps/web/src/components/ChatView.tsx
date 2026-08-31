@@ -6204,7 +6204,7 @@ function ChatViewContent(props: ChatViewProps) {
             mimeType: attachment.mimeType,
             sizeBytes: attachment.sizeBytes,
             downloadable: false,
-        },
+          },
     );
     const shouldAnchorFirstMessage =
       activeThread.latestTurn === null &&

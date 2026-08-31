@@ -2336,9 +2336,9 @@ function toHydratedThreadDraft(
   const activeProvider = normalizeProviderInstanceId(persistedDraft.activeProvider) ?? null;
 
   return {
-      prompt: persistedDraft.prompt,
-      images: hydrateImagesFromPersisted(persistedDraft.attachments),
-      files:
+    prompt: persistedDraft.prompt,
+    images: hydrateImagesFromPersisted(persistedDraft.attachments),
+    files:
       persistedDraft.files?.map((file) => ({
         type: "file" as const,
         id: file.id,
@@ -2353,7 +2353,7 @@ function toHydratedThreadDraft(
           ? { uploadedAttachmentId: file.attachmentId, uploadEnvironmentId: file.environmentId }
           : {}),
       })) ?? [],
-      nonPersistedImageIds: [],
+    nonPersistedImageIds: [],
     persistedAttachments: [...persistedDraft.attachments],
     terminalContexts:
       persistedDraft.terminalContexts?.map((context) => ({
