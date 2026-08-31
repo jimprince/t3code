@@ -6,6 +6,7 @@ import { getSourceControlPresentationForKind } from "~/sourceControlPresentation
 import { formatRelativeTimeLabel } from "~/timestampFormat";
 
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { Checkbox } from "../ui/checkbox";
 import { PullRequestChecksPopover } from "./PullRequestChecksPopover";
 import type { EnvironmentPullRequestEntry } from "./pullRequestList.logic";
 import { openOnHostLabel, showPullRequestLinkContextMenu } from "./pullRequestLinkContextMenu";
@@ -19,14 +20,17 @@ import {
 function PullRequestRowImpl({
   entry,
   selected,
+  checked,
   showProjectTitle,
   showProvider,
   environmentLabel,
   matchedElsewhere,
   onSelect,
+  onCheckedChange,
 }: {
   entry: EnvironmentPullRequestEntry;
   selected: boolean;
+  checked: boolean;
   showProjectTitle: boolean;
   /** Only when the list spans more than one host, where the repository alone is ambiguous. */
   showProvider: boolean;
@@ -38,28 +42,38 @@ function PullRequestRowImpl({
    */
   matchedElsewhere?: boolean;
   onSelect: (entry: EnvironmentPullRequestEntry) => void;
+  onCheckedChange: (entry: EnvironmentPullRequestEntry) => void;
 }) {
   const { Icon, providerName } = getSourceControlPresentationForKind(entry.provider);
   return (
-    <button
-      type="button"
-      aria-current={selected ? "true" : undefined}
-      onClick={() => onSelect(entry)}
+    <div
       className={cn(
-        "grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+        "flex w-full items-center rounded-lg transition-colors",
         // Offscreen rows are skipped for style, layout and paint: a long list costs what the
         // viewport shows, not what the pages have loaded. The intrinsic size keeps the
         // scrollbar honest while a row is skipped.
         "[contain-intrinsic-block-size:54px] [content-visibility:auto]",
-        selected ? "bg-accent" : "hover:bg-accent/60",
+        selected ? "bg-accent" : checked ? "bg-accent/60" : "hover:bg-accent/60",
       )}
     >
-      <PullRequestStateGlyph
-        state={entry.state}
-        isDraft={entry.isDraft}
-        mergeability={entry.mergeability}
-        baseBranch={entry.baseBranch}
+      <Checkbox
+        aria-label={`Select pull request #${entry.number}: ${entry.title}`}
+        checked={checked}
+        onCheckedChange={() => onCheckedChange(entry)}
+        className="ml-3"
       />
+      <button
+        type="button"
+        aria-current={selected ? "true" : undefined}
+        onClick={() => onSelect(entry)}
+        className="grid min-w-0 flex-1 grid-cols-[auto_minmax(0,1fr)] items-center gap-3 rounded-lg px-3 py-2 text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        <PullRequestStateGlyph
+          state={entry.state}
+          isDraft={entry.isDraft}
+          mergeability={entry.mergeability}
+          baseBranch={entry.baseBranch}
+        />
       <span className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5">
         <span className="col-start-1 row-start-1 block truncate text-sm font-medium text-foreground">
           {entry.title}
@@ -95,18 +109,19 @@ function PullRequestRowImpl({
             ) : null}
             {/* The number carries the link, here as much as on the detail: a right-click on it
                 copies the pull request's own address rather than opening the editing menu. */}
-            <span
-              onContextMenu={(event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                void showPullRequestLinkContextMenu({
-                  url: entry.url,
-                  openLabel: openOnHostLabel(entry.provider),
-                  position: { x: event.clientX, y: event.clientY },
-                });
-              }}
-            >
-              #{entry.number}
+              <span
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  void showPullRequestLinkContextMenu({
+                    url: entry.url,
+                    openLabel: openOnHostLabel(entry.provider),
+                    position: { x: event.clientX, y: event.clientY },
+                  });
+                }}
+              >
+                #{entry.number}
+              </span>
             </span>
           </span>
           {showProjectTitle ? <span className="truncate">{entry.repository}</span> : null}
@@ -151,12 +166,14 @@ function PullRequestRowImpl({
         />
       </span>
     </button>
+    </div>
   );
 }
 
 /**
  * Memoized: the list re-renders on every keystroke of a search and every status poll, and a
- * row whose entry, selection and match state are unchanged has nothing new to say. Effective
+ * row whose entry, active state, checked state and match state are unchanged has nothing new to
+ * say. Effective
  * because the route hands it a stable `onSelect`.
  */
 export const PullRequestRow = memo(PullRequestRowImpl);
