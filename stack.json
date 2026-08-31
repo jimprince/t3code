@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7bf48a93b836fd02850f24e683c5ba387643fd48",
-  "head": "5bd098d39d5f5990a865e1a295f4ec5610447ea9",
+  "prev": "1c9d43f39a5ca16cddc7aecbd07e2e012ded52dd",
+  "head": "372fd7c1eddf80a1840cb48e89a92697ac2ab26b",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -14,13 +14,13 @@
     "fork-thread-transfer",
     "fork-thread-fork",
     "fork-general-chat-projects",
-    "fork-remote-relay-access"
-  ],
-  "unapplied": [
+    "fork-remote-relay-access",
     "fork-performance-recovery",
     "fork-headless-updates",
     "fork-text-generation",
-    "fork-web-client-resilience",
+    "fork-web-client-resilience"
+  ],
+  "unapplied": [
     "fork-web-project-scope",
     "fork-web-image-timeout",
     "fork-desktop-distribution",
@@ -63,13 +63,13 @@
       "oid": "a0cdec160f23d74cc6e945508195d70b2e9db161"
     },
     "fork-headless-updates": {
-      "oid": "8bf8b8f7a1627bd5736a9d59b1c05cf18623eb7a"
+      "oid": "26953479da4a2b84a63e4ae7973a15b903d35a62"
     },
     "fork-mobile-delivery": {
       "oid": "88ac88d0f5efa3e95e8315ce011061ae9c9dcc39"
     },
     "fork-performance-recovery": {
-      "oid": "aea979d9434e9dec87b56216a0c1bd2e243757e0"
+      "oid": "2dc797a27a72763f12ec9ff0a12ee0b1bf8f0402"
     },
     "fork-provider-observability": {
       "oid": "0963125d96d3c52bf70fc90901b335e472711281"
@@ -99,7 +99,7 @@
       "oid": "379c7de40ee0da4c1450201d804f8850969eebdd"
     },
     "fork-text-generation": {
-      "oid": "3a34610243994eb8186fb7d9e9e6627534474c3a"
+      "oid": "7af786d11024147b2c9364081cb34814d2249ed3"
     },
     "fork-thread-fork": {
       "oid": "0129287490a3263c2eab16e8f8e8fe3a9d6a402e"
@@ -114,7 +114,7 @@
       "oid": "577c0c922ec1bf7d45bdfcd54fcf619b04d4085f"
     },
     "fork-web-client-resilience": {
-      "oid": "95e73c36e69c727d6fcd67dba77ead20e07665fd"
+      "oid": "372fd7c1eddf80a1840cb48e89a92697ac2ab26b"
     },
     "fork-web-files-upload": {
       "oid": "11c0027b93f17af205cd5809b2c9e0411847ab01"
