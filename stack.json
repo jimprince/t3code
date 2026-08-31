@@ -1,18 +1,18 @@
 {
   "version": 5,
-  "prev": "9fd290629f19cc792ca7eacc5382ee08038c7326",
-  "head": "9eee2f7c69dc2bba4d615572335250b7b9b28d80",
+  "prev": "09bf5416df16e0b320eedd0c73bf8c05028c441d",
+  "head": "49578733b2459e2c2cd302deb7d32c97b39723d4",
   "applied": [
     "fork-stgit-stack-policy",
-    "fork-build-workspace-tooling"
-  ],
-  "unapplied": [
+    "fork-build-workspace-tooling",
     "fork-t3-thread-operator-cli",
     "fork-provider-turn-reservation",
     "fork-provider-runtime-recovery",
     "fork-provider-observability",
     "fork-thread-lifecycle-recovery",
-    "fork-thread-goals",
+    "fork-thread-goals"
+  ],
+  "unapplied": [
     "fork-thread-transfer",
     "fork-thread-fork",
     "fork-general-chat-projects",
@@ -72,13 +72,13 @@
       "oid": "aea979d9434e9dec87b56216a0c1bd2e243757e0"
     },
     "fork-provider-observability": {
-      "oid": "8bc1e1b312851b28390b1a2c180e840d70d0eb90"
+      "oid": "0963125d96d3c52bf70fc90901b335e472711281"
     },
     "fork-provider-runtime-recovery": {
-      "oid": "b61420224dc7059d92aca130420f807b2a8f1bdd"
+      "oid": "c3536497b04d97edadfc05f49bbbede26ae831a1"
     },
     "fork-provider-turn-reservation": {
-      "oid": "b8fb3eed9306cf7d9a49cbcf1e72341b547f7e65"
+      "oid": "e0c1d31d2b4aa5aac8f1a94cfa9d61df9b1b8dda"
     },
     "fork-remote-file-downloads": {
       "oid": "76fed89e4750d8c96ee0ddb2868dc1eabdecb45f"
@@ -96,7 +96,7 @@
       "oid": "2f616ae2c17b7b93fb70880a47d3e792518da9f7"
     },
     "fork-t3-thread-operator-cli": {
-      "oid": "ccd93e33c9abda4a3c14aac3b4f7d13e40ebbbee"
+      "oid": "379c7de40ee0da4c1450201d804f8850969eebdd"
     },
     "fork-text-generation": {
       "oid": "3a34610243994eb8186fb7d9e9e6627534474c3a"
@@ -105,10 +105,10 @@
       "oid": "dce0b085b5a95344c55872f4db3f35c52c40f500"
     },
     "fork-thread-goals": {
-      "oid": "86b769dfa9da4cb40daa7571859e6d6668016cfc"
+      "oid": "49578733b2459e2c2cd302deb7d32c97b39723d4"
     },
     "fork-thread-lifecycle-recovery": {
-      "oid": "126344149cffe22490e8c6fb5914d8698c81ffdf"
+      "oid": "2a61d9ba7bd48ff51f2f0cdda470a51f1c1b3969"
     },
     "fork-thread-transfer": {
       "oid": "24b8c6f350634c32b9e9faa022c78205a410410c"
