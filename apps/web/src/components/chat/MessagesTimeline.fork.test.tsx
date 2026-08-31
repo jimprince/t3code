@@ -188,6 +188,7 @@ function buildProps() {
     canForkToNewWorktree: true,
     isRevertingCheckpoint: false,
     onImageExpand: () => {},
+    openingVideoAttachmentId: null,
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
     markdownCwd: undefined,
     resolvedTheme: "light" as const,

@@ -7439,7 +7439,6 @@ function ChatViewContent(props: ChatViewProps) {
                 onOpenAgents={addAgentsSurface}
                 key={activeThread.id}
                 isWorking={isWorking}
-                workingStepLabel={workingStepLabel}
                 isThreadDetailLoading={isThreadDetailLoading}
                 activeTurnStartedAt={activeWorkStartedAt}
                 listRef={legendListRef}
