@@ -73,7 +73,6 @@ describe("isVideoPreviewRequestCurrent", () => {
 });
 
 it("hydrates selected-message image attachments for the fork composer", async () => {
-it("hydrates selected-message image attachments for the fork composer", async () => {
   const fetchedUrls: string[] = [];
   const result = await hydrateForkedMessageAttachments({
     attachments: [
