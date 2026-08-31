@@ -35,6 +35,7 @@ describe("composerDraftStore file attachments", () => {
 
   function makeFile(overrides: Partial<ComposerFileAttachment> = {}): ComposerFileAttachment {
     return {
+      type: "file",
       id: "file-1",
       name: "report.pdf",
       mimeType: "application/pdf",
