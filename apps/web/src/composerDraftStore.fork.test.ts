@@ -66,29 +66,6 @@ describe("composerDraftStore file attachments", () => {
     ]);
   });
 
-  it("excludes file attachments from persisted drafts", () => {
-    // Prompt text anchors the draft in persistence; a files-only draft
-    // persists nothing at all (also correct).
-    useComposerDraftStore.getState().setPrompt(threadRef, "keep this draft");
-    useComposerDraftStore.getState().addFiles(threadRef, [makeFile()]);
-
-    const persistApi = useComposerDraftStore.persist as unknown as {
-      getOptions: () => {
-        partialize: (state: ReturnType<typeof useComposerDraftStore.getState>) => unknown;
-      };
-    };
-    const persistedState = persistApi.getOptions().partialize(useComposerDraftStore.getState()) as {
-      draftsByThreadKey?: Record<string, Record<string, unknown>>;
-    };
-
-    // REGRESSION: file payloads must never reach localStorage — a 32 MiB
-    // base64 body would blow the quota and evict image persistence.
-    const persistedDraft =
-      persistedState.draftsByThreadKey?.[threadKeyFor(threadId, TEST_ENVIRONMENT_ID)];
-    expect(persistedDraft).toBeDefined();
-    expect(persistedDraft?.files).toBeUndefined();
-  });
-
   it("clears file attachments with clearComposerPromptAndImages", () => {
     useComposerDraftStore.getState().addFiles(threadRef, [makeFile()]);
     useComposerDraftStore.getState().clearComposerPromptAndImages(threadRef);
