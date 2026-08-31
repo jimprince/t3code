@@ -74,41 +74,41 @@ function PullRequestRowImpl({
           mergeability={entry.mergeability}
           baseBranch={entry.baseBranch}
         />
-      <span className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5">
-        <span className="col-start-1 row-start-1 block truncate text-sm font-medium text-foreground">
-          {entry.title}
-        </span>
-        <span className="col-start-2 row-start-1 justify-self-end whitespace-nowrap text-xs text-muted-foreground/70 tabular-nums">
-          {formatRelativeTimeLabel(entry.updatedAt)}
-        </span>
-        <PullRequestMetaLine className="@container/pr-row-meta col-start-1 row-start-2 overflow-hidden text-xs text-muted-foreground/70">
-          {matchedElsewhere ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span className="flex min-w-6 items-center gap-1 overflow-hidden rounded-full border border-border/60 px-1 text-[10px]" />
-                }
-              >
-                <span className="sr-only">matched in the description</span>
-                <SearchIcon aria-hidden className="size-3 shrink-0" />
-                <span aria-hidden className="hidden truncate @xs/pr-row-meta:block">
-                  matched in the description
-                </span>
-              </TooltipTrigger>
-              <TooltipPopup side="top">Matched in the description</TooltipPopup>
-            </Tooltip>
-          ) : null}
-          <span className="flex shrink-0 items-center gap-1">
-            {showProvider ? (
+        <span className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5">
+          <span className="col-start-1 row-start-1 block truncate text-sm font-medium text-foreground">
+            {entry.title}
+          </span>
+          <span className="col-start-2 row-start-1 justify-self-end whitespace-nowrap text-xs text-muted-foreground/70 tabular-nums">
+            {formatRelativeTimeLabel(entry.updatedAt)}
+          </span>
+          <PullRequestMetaLine className="@container/pr-row-meta col-start-1 row-start-2 overflow-hidden text-xs text-muted-foreground/70">
+            {matchedElsewhere ? (
               <Tooltip>
-                <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
-                  <Icon aria-label={providerName} className="size-3" />
+                <TooltipTrigger
+                  render={
+                    <span className="flex min-w-6 items-center gap-1 overflow-hidden rounded-full border border-border/60 px-1 text-[10px]" />
+                  }
+                >
+                  <span className="sr-only">matched in the description</span>
+                  <SearchIcon aria-hidden className="size-3 shrink-0" />
+                  <span aria-hidden className="hidden truncate @xs/pr-row-meta:block">
+                    matched in the description
+                  </span>
                 </TooltipTrigger>
-                <TooltipPopup>{providerName}</TooltipPopup>
+                <TooltipPopup side="top">Matched in the description</TooltipPopup>
               </Tooltip>
             ) : null}
-            {/* The number carries the link, here as much as on the detail: a right-click on it
-                copies the pull request's own address rather than opening the editing menu. */}
+            <span className="flex shrink-0 items-center gap-1">
+              {showProvider ? (
+                <Tooltip>
+                  <TooltipTrigger render={<span className="inline-flex shrink-0" />}>
+                    <Icon aria-label={providerName} className="size-3" />
+                  </TooltipTrigger>
+                  <TooltipPopup>{providerName}</TooltipPopup>
+                </Tooltip>
+              ) : null}
+              {/* The number carries the link, here as much as on the detail: a right-click on it
+                  copies the pull request's own address rather than opening the editing menu. */}
               <span
                 onContextMenu={(event) => {
                   event.preventDefault();
@@ -123,48 +123,48 @@ function PullRequestRowImpl({
                 #{entry.number}
               </span>
             </span>
-          {showProjectTitle ? <span className="truncate">{entry.repository}</span> : null}
-          {environmentLabel ? (
-            <span className="min-w-0 max-w-32 truncate">{environmentLabel}</span>
-          ) : null}
-          <PullRequestActorLabel
-            actor={entry.author}
-            className="min-w-4 max-w-40"
-            labelClassName="sr-only @xs/pr-row-meta:not-sr-only @xs/pr-row-meta:truncate"
-          />
-          {/* Only a verdict somebody has actually given: "review required" is the absence of
-              one, and saying so on every unreviewed row would say nothing. */}
-          {entry.reviewDecision === "approved" || entry.reviewDecision === "changes-requested" ? (
-            <span
-              className={cn(
-                "min-w-0 truncate",
-                entry.reviewDecision === "approved"
-                  ? "text-emerald-600/90 dark:text-emerald-400/80"
-                  : "text-amber-600/90 dark:text-amber-400/80",
-              )}
-            >
-              {entry.reviewDecision === "approved" ? "Approved" : "Changes requested"}
-            </span>
-          ) : null}
-          {entry.checksState === undefined ? null : (
-            <PullRequestChecksPopover
-              checksState={entry.checksState}
-              environmentId={entry.environmentId}
-              reference={{
-                projectId: entry.projectId,
-                repository: entry.repository,
-                number: entry.number,
-              }}
+            {showProjectTitle ? <span className="truncate">{entry.repository}</span> : null}
+            {environmentLabel ? (
+              <span className="min-w-0 max-w-32 truncate">{environmentLabel}</span>
+            ) : null}
+            <PullRequestActorLabel
+              actor={entry.author}
+              className="min-w-4 max-w-40"
+              labelClassName="sr-only @xs/pr-row-meta:not-sr-only @xs/pr-row-meta:truncate"
             />
-          )}
-        </PullRequestMetaLine>
-        <PullRequestDiffStat
-          additions={entry.additions}
-          deletions={entry.deletions}
-          className="col-start-2 row-start-2 justify-self-end text-xs"
-        />
-      </span>
-    </button>
+            {/* Only a verdict somebody has actually given: "review required" is the absence of
+                one, and saying so on every unreviewed row would say nothing. */}
+            {entry.reviewDecision === "approved" || entry.reviewDecision === "changes-requested" ? (
+              <span
+                className={cn(
+                  "min-w-0 truncate",
+                  entry.reviewDecision === "approved"
+                    ? "text-emerald-600/90 dark:text-emerald-400/80"
+                    : "text-amber-600/90 dark:text-amber-400/80",
+                )}
+              >
+                {entry.reviewDecision === "approved" ? "Approved" : "Changes requested"}
+              </span>
+            ) : null}
+            {entry.checksState === undefined ? null : (
+              <PullRequestChecksPopover
+                checksState={entry.checksState}
+                environmentId={entry.environmentId}
+                reference={{
+                  projectId: entry.projectId,
+                  repository: entry.repository,
+                  number: entry.number,
+                }}
+              />
+            )}
+          </PullRequestMetaLine>
+          <PullRequestDiffStat
+            additions={entry.additions}
+            deletions={entry.deletions}
+            className="col-start-2 row-start-2 justify-self-end text-xs"
+          />
+        </span>
+      </button>
     </div>
   );
 }
