@@ -123,7 +123,6 @@ function PullRequestRowImpl({
                 #{entry.number}
               </span>
             </span>
-          </span>
           {showProjectTitle ? <span className="truncate">{entry.repository}</span> : null}
           {environmentLabel ? (
             <span className="min-w-0 max-w-32 truncate">{environmentLabel}</span>
