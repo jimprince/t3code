@@ -1,9 +1,11 @@
 import {
   type ChatFileAttachment,
+  type ContextMenuItem,
   type EnvironmentId,
   type MessageId,
   type ScopedThreadRef,
   type ServerProviderSkill,
+  type ThreadForkWorkspaceMode,
   type TurnId,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
@@ -124,6 +126,7 @@ import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
+import { readLocalApi } from "../../localApi";
 
 import {
   buildInlineTerminalContextText,
@@ -157,6 +160,9 @@ interface TimelineRowSharedState {
   activeThreadEnvironmentId: EnvironmentId;
   onRevertUserMessage: (messageId: MessageId) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
+  onForkMessage: (messageId: MessageId, workspaceMode: ThreadForkWorkspaceMode) => void;
+  canForkThread: boolean;
+  canForkToNewWorktree: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
   openingVideoAttachmentId: string | null;
@@ -225,6 +231,8 @@ interface MessagesTimelineProps {
   agentPanelModel?: AgentPanelModel;
   onOpenAgents?: () => void;
   isWorking: boolean;
+  workingStepLabel?: string | null;
+  isThreadDetailLoading?: boolean;
   activeTurnStartedAt: string | null;
   listRef: React.RefObject<LegendListRef | null>;
   timelineEntries: ReturnType<typeof deriveTimelineEntries>;
@@ -236,6 +244,9 @@ interface MessagesTimelineProps {
   revertTurnCountByUserMessageId: Map<MessageId, number>;
   onRevertUserMessage: (messageId: MessageId) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
+  onForkMessage: (messageId: MessageId, workspaceMode: ThreadForkWorkspaceMode) => void;
+  canForkThread: boolean;
+  canForkToNewWorktree: boolean;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen?: (attachment: ChatFileAttachment) => void;
@@ -270,6 +281,8 @@ interface MessagesTimelineProps {
 
 export const MessagesTimeline = memo(function MessagesTimeline({
   isWorking,
+  workingStepLabel = null,
+  isThreadDetailLoading = false,
   activeTurnStartedAt,
   agentPanelModel = EMPTY_AGENT_PANEL_MODEL,
   onOpenAgents = NOOP_OPEN_AGENTS,
@@ -283,6 +296,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   revertTurnCountByUserMessageId,
   onRevertUserMessage,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
+  onForkMessage,
+  canForkThread,
+  canForkToNewWorktree,
   isRevertingCheckpoint,
   onImageExpand,
   onFileOpen = NOOP_OPEN_ATTACHMENT,
@@ -545,6 +561,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onUseArtifactTemplate,
+      onForkMessage,
+      canForkThread,
+      canForkToNewWorktree,
       onImageExpand,
       onFileOpen,
       openingVideoAttachmentId,
@@ -564,6 +583,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertUserMessage,
       onUseArtifactTemplate,
+      onForkMessage,
+      canForkThread,
+      canForkToNewWorktree,
       onImageExpand,
       onFileOpen,
       openingVideoAttachmentId,
@@ -598,6 +620,33 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     if (hideEmptyPlaceholder) {
       return null;
     }
+    if (isThreadDetailLoading) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex max-w-sm flex-col items-center gap-3 px-6 text-center text-sm text-muted-foreground"
+          >
+            <div className="space-y-1.5">
+              <p className="font-medium text-foreground/80">Refreshing conversation state...</p>
+              <p className="text-xs leading-relaxed">
+                The sidebar has backend activity for this thread, but the conversation detail has
+                not arrived yet.
+              </p>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Refreshing conversation state"
+              className="h-1 w-48 overflow-hidden rounded-full bg-muted"
+            >
+              <div className="h-full w-2/3 rounded-full bg-primary/60 motion-safe:animate-pulse" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-placeholder text-sm">Send a message to start the conversation.</p>
@@ -954,11 +1003,69 @@ function TimelineMinimap({
 type TimelineWorkEntry = Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"][number];
 type TimelineRow = MessagesTimelineRow;
 
+type MessageForkContextMenuAction = "fork" | "fork-current" | "fork-new-worktree";
+
+export function buildMessageForkContextMenuItems(input: {
+  readonly disabled: boolean;
+  readonly canForkToNewWorktree: boolean;
+}): ReadonlyArray<ContextMenuItem<MessageForkContextMenuAction>> {
+  return [
+    {
+      id: "fork",
+      label: "Fork thread from here",
+      disabled: input.disabled,
+      children: [
+        {
+          id: "fork-current",
+          label: "Use current worktree",
+          disabled: input.disabled,
+        },
+        {
+          id: "fork-new-worktree",
+          label: "Create new worktree from here",
+          disabled: input.disabled || !input.canForkToNewWorktree,
+        },
+      ],
+    },
+  ];
+}
+
+export function shouldClaimMessageForkContextMenu(api: unknown | undefined): boolean {
+  return api !== undefined;
+}
+
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
   const isExpandedToolGroupEntry = row.kind === "work" && row.isExpandedToolGroupEntry;
   const isLastExpandedToolGroupEntry = row.kind === "work" && row.isLastExpandedToolGroupEntry;
   const isExpandedToolGroupHeader =
-    (row.kind === "work-toggle" && row.expanded) || (row.kind === "work-live" && row.expanded);
+    (row.kind === "work-toggle" && row.summary !== null && row.onlyToolEntries && row.expanded) ||
+    (row.kind === "work-live" && row.expanded);
+  const ctx = use(TimelineRowCtx);
+  const activity = use(TimelineRowActivityCtx);
+  const handleContextMenu = useCallback(
+    async (event: MouseEvent<HTMLDivElement>) => {
+      if (row.kind !== "message") return;
+      const api = readLocalApi();
+      if (!shouldClaimMessageForkContextMenu(api)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!api) return;
+      const disabled = !ctx.canForkThread || activity.isWorking || row.message.streaming;
+      const clicked = await api.contextMenu.show(
+        buildMessageForkContextMenuItems({
+          disabled,
+          canForkToNewWorktree: ctx.canForkToNewWorktree,
+        }),
+        { x: event.clientX, y: event.clientY },
+      );
+      if (clicked === "fork-current") {
+        ctx.onForkMessage(row.message.id, "current");
+      } else if (clicked === "fork-new-worktree") {
+        ctx.onForkMessage(row.message.id, "new-worktree");
+      }
+    },
+    [activity.isWorking, ctx, row],
+  );
 
   return (
     <div
@@ -987,6 +1094,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       data-timeline-row-kind={row.kind}
       data-message-id={row.kind === "message" ? row.message.id : undefined}
       data-message-role={row.kind === "message" ? row.message.role : undefined}
+      onContextMenu={row.kind === "message" ? handleContextMenu : undefined}
     >
       {row.kind === "work" ? (
         <WorkGroupSection
