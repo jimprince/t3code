@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ac96b79ae348c857044f3587be0408d3b20a09b1",
-  "head": "5706d26a5c4dd3010202cff25b5f008579286c35",
+  "prev": "587180509f9d6247ff211c5171d6a15bcfc5f062",
+  "head": "cfffde150cd673813b6bc425335807dd61634430",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -22,15 +22,15 @@
     "fork-web-project-scope",
     "fork-web-image-timeout",
     "fork-desktop-distribution",
-    "fork-mobile-delivery"
-  ],
-  "unapplied": [
+    "fork-mobile-delivery",
     "fork-ci-runner-compat",
     "fork-ci-release-pipeline",
     "fork-ci-upstream-sync",
     "fork-ci-stgit-metadata",
     "fork-web-files-upload",
-    "fork-chat-file-attachments",
+    "fork-chat-file-attachments"
+  ],
+  "unapplied": [
     "fork-remote-file-downloads",
     "fork-remote-worktree-base",
     "fork-web-pr-multiselect",
@@ -42,19 +42,19 @@
       "oid": "9eee2f7c69dc2bba4d615572335250b7b9b28d80"
     },
     "fork-chat-file-attachments": {
-      "oid": "5353b0dc4727538499101ef74c96a4faa1e8dbc5"
+      "oid": "cfffde150cd673813b6bc425335807dd61634430"
     },
     "fork-ci-release-pipeline": {
-      "oid": "d2a526dd02ba26dd7e2638127cd454eedafa36fb"
+      "oid": "01b1613e248e41bbf7ecd0f6138283d4cc07ae34"
     },
     "fork-ci-runner-compat": {
-      "oid": "9ddbf92b922bef9c892aad4223f16cc0dc2b352e"
+      "oid": "a7c8bd405840c36925b810301148a596b7963af0"
     },
     "fork-ci-stgit-metadata": {
-      "oid": "706f5ce1682581275bce0251d2aceab5d288a33e"
+      "oid": "0dd3e60ff7e65f69845856b00c49d05bd0d567b7"
     },
     "fork-ci-upstream-sync": {
-      "oid": "95b6c919b3388745d9c3bffb9ffa3497e4fc7bd2"
+      "oid": "1e30d609c110f2852a8512356a1ecc67fe71fb59"
     },
     "fork-desktop-distribution": {
       "oid": "33f8e945422a1c2c474eecd843b277597f2165ff"
@@ -117,7 +117,7 @@
       "oid": "4329cf169572a194fbf4334a29671ab8c370cb42"
     },
     "fork-web-files-upload": {
-      "oid": "11c0027b93f17af205cd5809b2c9e0411847ab01"
+      "oid": "6ad9819f99472b4d075ad7c1c193428ca08f085b"
     },
     "fork-web-image-timeout": {
       "oid": "1618c9788fd2dde6077a96b0a3fafeacbb49810b"
