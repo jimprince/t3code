@@ -1,6 +1,6 @@
-Bottom: 40fc2464c850464c142189ee6e6cbf16d1847d43
-Top:    07f2727275d07aa3f067a86bf01289fff64c6f41
+Bottom: 4979f1b31fc2fd379821450a8e8f544645edea8b
+Top:    2a4c7b45cb933ca928b3f9dd42b4752d03b8dbd6
 Author: brad <bradprin@live.com>
-Date:   2026-09-02 00:42:28 -0600
+Date:   2026-09-02 00:42:33 -0600
 
 feat(server): add safe headless updates
