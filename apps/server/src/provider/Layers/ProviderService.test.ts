@@ -2786,6 +2786,7 @@ citations.layer("ProviderServiceLive assistant citations", (it) => {
   it.effect("leaves input without valid citations unchanged", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
       const threadId = asThreadId("thread-citation-passthrough");
       yield* provider.startSession(threadId, {
         provider: CODEX_DRIVER,
@@ -2804,7 +2805,14 @@ citations.layer("ProviderServiceLive assistant citations", (it) => {
 
       citations.codex.sendTurn.mockClear();
       for (const input of prompts) {
-        yield* provider.sendTurn({ threadId, input });
+        const turn = yield* provider.sendTurn({ threadId, input });
+        assert.equal(
+          yield* directory.markTurnTerminal({
+            threadId,
+            expectedTurnId: turn.turnId,
+          }),
+          true,
+        );
       }
 
       assert.deepStrictEqual(
