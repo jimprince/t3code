@@ -166,6 +166,7 @@ describe("ThreadArchiveCleanupReactor", () => {
             searchThreads: () => unsupported(),
             getSnapshotSequence: () => unsupported(),
             getCounts: () => unsupported(),
+            getEventReplayStats: () => unsupported(),
             getActiveProjectByWorkspaceRoot: () => unsupported(),
             getProjectShellById: () => unsupported(),
             getFirstActiveThreadIdByProjectId: () => unsupported(),
