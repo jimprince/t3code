@@ -86,7 +86,6 @@ export interface OrchestrationEngineShape {
    * choosing between an incremental replay and a fresh projected snapshot.
    */
   readonly latestSequence: Effect.Effect<number, never, never>;
-
 }
 
 /**
