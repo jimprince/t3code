@@ -2765,6 +2765,12 @@ const boundedListing = makeProviderServiceLayer({
     getBinding,
     listThreadIds,
     listBindings: () => Effect.die("ProviderService.listSessions does not use listBindings"),
+    settleDeadGenerationBinding: () =>
+      Effect.die("ProviderService.listSessions does not settle dead bindings"),
+    markTurnStarted: () => Effect.die("ProviderService.listSessions does not mark turns started"),
+    markTurnTerminal: () => Effect.die("ProviderService.listSessions does not mark turns terminal"),
+    claimIdleForRecovery: () =>
+      Effect.die("ProviderService.listSessions does not claim sessions for recovery"),
   },
 });
 
