@@ -55,6 +55,7 @@ import {
   findPendingTransferredThreadHandoff,
   markThreadTransferContextHandoffConsumed,
   readConsumedThreadTransferContextExportedAt,
+  THREAD_TRANSFER_IMPORTED_ACTIVITY_KIND,
 } from "../threadTransferContextHandoff.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderDriverKind = Schema.is(ProviderDriverKind);
@@ -491,7 +492,7 @@ const make = Effect.gen(function* () {
 
   const resolveThread = Effect.fnUntraced(function* (threadId: ThreadId) {
     return yield* projectionSnapshotQuery
-      .getThreadDetailById(threadId, { activityKinds: [] })
+      .getThreadDetailById(threadId, { activityKinds: [THREAD_TRANSFER_IMPORTED_ACTIVITY_KIND] })
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
