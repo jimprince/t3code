@@ -44,6 +44,10 @@ T3 Code works with the platforms your team already uses:
 - Filter the list by author or labels, rank authors by merges in the loaded results, see label and
   change-size context on each row, and sort the results currently shown by update time, creation
   time, or change size
+- Use the row checkboxes or **Select all visible pull requests** to select several reviews, then
+  choose **Remove from list** to hide them without closing or changing them on the Git host
+- Removed reviews stay hidden for that environment in this browser. Choose **Restore removed**
+  above the list to bring them back.
 - While working in a thread, open linked reviews in the same compact right-panel tabs without
   leaving the conversation
 - Open the review directly in your browser with one click
