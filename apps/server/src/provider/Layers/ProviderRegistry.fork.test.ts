@@ -43,9 +43,7 @@ import { ProviderInstanceRegistryHydrationLive } from "./ProviderInstanceRegistr
 import {
   haveProvidersChanged,
   mergeProviderSnapshot,
-  mergeProviderSnapshots,
   ProviderRegistryLive,
-  selectProvidersByKind,
 } from "./ProviderRegistry.ts";
 import * as ServerConfig from "../../config.ts";
 import * as ServerSettingsModule from "../../serverSettings.ts";
@@ -943,11 +941,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           models: [],
         } satisfies ServerProvider;
 
-        const mergedProviders = mergeProviderSnapshots(previousProviders, [refreshedCursor]);
-        const persistedProviders = selectProvidersByKind(
-          mergedProviders,
-          new Set([ProviderDriverKind.make("cursor")]),
-        );
+        const persistedProviders = [mergeProviderSnapshot(previousProviders[0], refreshedCursor)];
 
         assert.deepStrictEqual(persistedProviders, [
           {
