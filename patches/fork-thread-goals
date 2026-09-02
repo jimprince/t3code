@@ -1,6 +1,6 @@
-Bottom: b1f2bc28a2d801dedfb4aca3c89e5e4f8409d980
-Top:    7be9662a84611366eeb8e580c3a86b24556c5150
+Bottom: 0c44202565eed62994eed66a5602f27777ecc332
+Top:    fbabb12c63a4bd1166051b1edc209fd1f8efc5d0
 Author: brad <bradprin@live.com>
-Date:   2026-09-02 07:38:00 -0600
+Date:   2026-09-02 07:43:31 -0600
 
 feat(goals): persist thread goals
