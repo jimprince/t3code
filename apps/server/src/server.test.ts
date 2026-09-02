@@ -7016,7 +7016,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           orchestrationEngine: {
-            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.map(
+              PubSub.subscribe(liveEvents),
+              Stream.fromSubscription,
+            ),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
@@ -7056,7 +7059,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           orchestrationEngine: {
-            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.map(
+              PubSub.subscribe(liveEvents),
+              Stream.fromSubscription,
+            ),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
@@ -7162,7 +7168,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       yield* buildAppUnderTest({
         layers: {
           orchestrationEngine: {
-            streamDomainEvents: Stream.fromPubSub(liveEvents),
+            subscribeDomainEvents: Effect.map(
+              PubSub.subscribe(liveEvents),
+              Stream.fromSubscription,
+            ),
           },
           projectionSnapshotQuery: {
             getThreadDetailSnapshot: () =>
