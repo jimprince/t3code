@@ -1,6 +1,6 @@
-Bottom: 96abc560b75d59b4e6207e30166e08944829b03c
-Top:    0efe9d15c9f8a534c6966db5322179c21c86148a
+Bottom: d870ecf8bf1184b74913e5fe0a5434bcab2249ce
+Top:    8a36376175cb7070c417172818e028bb641edb07
 Author: brad <bradprin@live.com>
-Date:   2026-09-02 00:44:44 -0600
+Date:   2026-09-02 00:47:43 -0600
 
 ci: replay StGit stack onto upstream
