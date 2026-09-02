@@ -1,8 +1,9 @@
 {
   "version": 5,
-  "prev": "86f0e13061a661acaa992c72a6b9a960683ad62b",
-  "head": "161da48548f09d0999d68d31c13f467fb383bcf3",
-  "applied": [
+  "prev": "4bb69c0b22c8114973620f832302e91be4be1636",
+  "head": "47a95332a2b8fe47da9fb0af97fd6f0b542a18ee",
+  "applied": [],
+  "unapplied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
     "fork-t3-thread-operator-cli",
@@ -34,7 +35,6 @@
     "fork-web-pr-multiselect",
     "fork-sidebar-thread-order"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
