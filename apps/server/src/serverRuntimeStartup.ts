@@ -267,7 +267,7 @@ export const ensureChatProject = Effect.gen(function* () {
     workspaceRoot,
     createWorkspaceRootIfMissing: true,
     kind: "chat",
-    defaultModelSelection: getAutoBootstrapDefaultModelSelection(),
+    defaultModelSelection: getAutoBootstrapThreadModelSelection(),
     createdAt,
   });
 
