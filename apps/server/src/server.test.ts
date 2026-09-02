@@ -8737,24 +8737,24 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             }),
         );
 
-      yield* buildAppUnderTest({
-        layers: {
-          gitVcsDriver: {
-            remoteExists,
-            fetchRemote,
-            resolveRemoteTrackingCommit,
-            createWorktree,
+        yield* buildAppUnderTest({
+          layers: {
+            gitVcsDriver: {
+              remoteExists,
+              fetchRemote,
+              resolveRemoteTrackingCommit,
+              createWorktree,
+            },
+            orchestrationEngine: {
+              dispatch: (command) =>
+                Effect.sync(() => {
+                  dispatchedCommands.push(command);
+                  return { sequence: dispatchedCommands.length };
+                }),
+              readEvents: () => Stream.empty,
+            },
           },
-          orchestrationEngine: {
-            dispatch: (command) =>
-              Effect.sync(() => {
-                dispatchedCommands.push(command);
-                return { sequence: dispatchedCommands.length };
-              }),
-            readEvents: () => Stream.empty,
-          },
-        },
-      });
+        });
 
         const createdAt = "2026-01-01T00:00:00.000Z";
         const wsUrl = yield* getWsServerUrl("/ws");
