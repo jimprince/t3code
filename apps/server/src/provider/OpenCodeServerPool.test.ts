@@ -60,12 +60,14 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
       agents: [],
       skills: [],
     }),
+  loadOpenCodeSkills: () => Effect.succeed([]),
   loadInventoryFromCli: () =>
     Effect.succeed({
       providerList: { connected: [], all: [], default: {} },
       agents: [],
       skills: [],
     }),
+  loadSkillsFromCli: () => Effect.succeed([]),
 };
 
 const testLayer = Layer.succeed(OpenCodeRuntime, OpenCodeRuntimeTestDouble).pipe(
