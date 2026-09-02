@@ -236,6 +236,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
                 if (committedReceipt.value.status === "accepted") {
                   return {
                     committedEvents: [],
+                    attachmentCleanups: [],
                     lastSequence: committedReceipt.value.resultSequence,
                     nextCommandReadModel: commandReadModel,
                   } as const;
