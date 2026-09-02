@@ -25,9 +25,11 @@ import { ServerConfig } from "../../config.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { OrchestrationCommandReceiptRepositoryLive } from "../../persistence/Layers/OrchestrationCommandReceipts.ts";
 import { OrchestrationEventStoreLive } from "../../persistence/Layers/OrchestrationEventStore.ts";
-import { ProviderSessionRuntimeRepositoryLive } from "../../persistence/Layers/ProviderSessionRuntime.ts";
 import { SqlitePersistenceMemory } from "../../persistence/Layers/Sqlite.ts";
-import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
+import {
+  layer as ProviderSessionRuntimeRepositoryLive,
+  ProviderSessionRuntimeRepository,
+} from "../../persistence/ProviderSessionRuntime.ts";
 import {
   ProviderService,
   type ProviderServiceShape,
