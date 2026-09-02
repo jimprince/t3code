@@ -274,6 +274,7 @@ const makeOrchestrationEngine = Effect.gen(function* () {
 
                 return {
                   committedEvents,
+                  attachmentCleanups,
                   lastSequence: commandReadModel.snapshotSequence,
                   nextCommandReadModel,
                 } as const;
