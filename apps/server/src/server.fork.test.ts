@@ -289,6 +289,11 @@ const makeAuthTestLayer = () =>
   EnvironmentAuth.layer.pipe(
     Layer.provide(SqlitePersistenceMemory),
     Layer.provide(ServerSecretStore.layer),
+    Layer.provide(
+      Layer.mock(ServerEnvironment.ServerEnvironmentIdentity)({
+        getEnvironmentId: Effect.succeed(testEnvironmentDescriptor.environmentId),
+      }),
+    ),
   );
 
 const makeBrowserOtlpPayload = (spanName: string) =>
