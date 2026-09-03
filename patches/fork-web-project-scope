@@ -1,6 +1,6 @@
-Bottom: 51e50e946b53dc6f6e467a69823d17eab119839c
-Top:    16eae5c9c3d2b1d728fe837df3eb0a09867a8686
+Bottom: a4b2bfb8f393a68a6a981f751bdce37570b3cebd
+Top:    62c9b5c09a32ebedbcbe5b8d9ad89a05c4315096
 Author: brad <bradprin@live.com>
-Date:   2026-09-03 16:37:58 -0600
+Date:   2026-09-03 16:44:14 -0600
 
 feat(web): add multi-project scope controls
