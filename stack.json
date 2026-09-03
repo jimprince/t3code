@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "3cf656bb94c93e5214443a827f10c4d60695452c",
+  "prev": "5eeaaf5bc04f6d70a093cc94102fd9d6c3aca65d",
   "head": "9c6ae39d6e0ca1b693674518eba59f1cb12caece",
   "applied": [
     "fork-stgit-stack-policy"
