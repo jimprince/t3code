@@ -9,7 +9,7 @@ import {
   runForkMigrations,
 } from "../ForkMigrations.ts";
 import { migrationEntries, runMigrations } from "../Migrations.ts";
-import * as NodeSqliteClient from "../NodeSqliteClient.ts";
+import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import Migration0001 from "./001_ProviderSessionRuntimeBootGeneration.ts";
 
 const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
