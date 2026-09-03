@@ -9,7 +9,16 @@
 set -euo pipefail
 
 branch="$(git symbolic-ref --quiet --short HEAD || true)"
-if [[ "$branch" == "stgit/adopt" && -z "${T3_ALLOW_PLAIN_COMMIT:-}" ]]; then
+# StGit commits are the intended way to change the stack. Git exports
+# GIT_EXEC_PATH (and GIT_INDEX_FILE) to every hook it runs, while StGit runs
+# hooks itself with a bare environment, so a plain `git commit` is the case
+# where GIT_EXEC_PATH is present. StGit refreshes therefore pass straight
+# through to formatting without needing HUSKY=0 or T3_ALLOW_PLAIN_COMMIT.
+plain_git_commit=0
+if [[ -n "${GIT_EXEC_PATH:-}" || -n "${GIT_INDEX_FILE:-}" ]]; then
+  plain_git_commit=1
+fi
+if [[ "$branch" == "stgit/adopt" && "$plain_git_commit" == 1 && -z "${T3_ALLOW_PLAIN_COMMIT:-}" ]]; then
   cat >&2 <<'MSG'
 ✗ Plain git commit on the StGit stack branch (stgit/adopt).
 
