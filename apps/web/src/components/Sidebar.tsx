@@ -143,7 +143,6 @@ import {
   resolveAdjacentThreadId,
   applyManualSidebarOrder,
   planSidebarReorder,
-  resolveSettledTimestamp,
   resolveSidebarThreadStatus,
   searchSidebarThreadsByTitle,
   shouldCreateNewThreadInCurrentProject,
@@ -4208,15 +4207,15 @@ export default function Sidebar() {
                                 >
                                   {!projectHidden ? <CheckIcon className="size-3.5" /> : null}
                                 </button>
-                                 <ProjectFavicon
-                                   environmentId={project.environmentId}
-                                   cwd={project.workspaceRoot}
-                                   projectName={project.displayName}
-                                   faviconPath={project.faviconPath}
-                                   projectIcon={project.projectIcon}
-                                   className="size-4 shrink-0"
-                                 />
-                               </>
+                                <ProjectFavicon
+                                  environmentId={project.environmentId}
+                                  cwd={project.workspaceRoot}
+                                  projectName={project.displayName}
+                                  faviconPath={project.faviconPath}
+                                  projectIcon={project.projectIcon}
+                                  className="size-4 shrink-0"
+                                />
+                              </>
                             ) : (
                               <FolderIcon className="size-4 shrink-0" />
                             )}

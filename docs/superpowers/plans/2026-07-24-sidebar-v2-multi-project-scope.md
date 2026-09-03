@@ -541,7 +541,7 @@ export function resolveProjectScope(input: {
     settledResetKey:
       allCheckboxState === "all"
         ? "all"
-        : `selected:${[...effectiveProjectKeys].toSorted().join(" ")}`,
+        : `selected:${[...effectiveProjectKeys].toSorted().join("�")}`,
   };
 }
 ```
