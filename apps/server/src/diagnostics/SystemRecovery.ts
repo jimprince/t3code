@@ -244,13 +244,11 @@ export const make = Effect.gen(function* () {
         return {
           previewId: input.previewId,
           completedAt,
-          actions: selectedIds.map(
-            (candidateId): ServerRecoveryActionResult => ({
-              candidateId,
-              outcome: "skipped",
-              message: Option.some("Recovery preview expired; refresh before attempting recovery."),
-            }),
-          ),
+          actions: selectedIds.map((candidateId): ServerRecoveryActionResult => ({
+            candidateId,
+            outcome: "skipped",
+            message: Option.some("Recovery preview expired; refresh before attempting recovery."),
+          })),
         };
       }
 
