@@ -2173,7 +2173,11 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             );
             yield* Deferred.succeed(releaseSecondProbe, undefined);
             const [reprobedCodex] = yield* rebuiltError;
-            assert.deepStrictEqual(spawnedCommands, [firstMissing, secondMissing]);
+            assert.strictEqual(spawnedCommands[0], firstMissing);
+            assert.ok(
+              spawnedCommands.indexOf(secondMissing) > 0,
+              "expected the changed codex binaryPath to be probed after the boot probe",
+            );
             assert.strictEqual(reprobedCodex?.status, "error");
             assert.strictEqual(reprobedCodex?.installed, false);
           }).pipe(Effect.provide(runtimeServices));
