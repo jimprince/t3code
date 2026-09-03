@@ -765,7 +765,10 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    yield* providerService.assertConversationRollbackSupported(event.payload.threadId);
+    const rolledBackTurns = Math.max(0, currentTurnCount - event.payload.turnCount);
+    if (rolledBackTurns > 0) {
+      yield* providerService.assertConversationRollbackSupported(event.payload.threadId);
+    }
 
     const restored = yield* checkpointStore.restoreCheckpoint({
       cwd: revertCwd,
@@ -786,7 +789,6 @@ const make = Effect.gen(function* () {
     // reflects the reverted filesystem state.
     yield* workspaceEntries.refresh(revertCwd);
 
-    const rolledBackTurns = Math.max(0, currentTurnCount - event.payload.turnCount);
     if (rolledBackTurns > 0) {
       yield* providerService.rollbackConversation({
         threadId: event.payload.threadId,
