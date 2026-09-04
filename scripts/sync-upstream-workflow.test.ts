@@ -155,10 +155,10 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
         const workflow = yield* fs.readFileString(
           path.join(repoRoot, ".github/workflows", workflowName),
         );
-        assert.include(workflow, "LEASE_SHA:");
+        assert.include(workflow, "STGIT_EXPECTED_REMOTE_MAIN:");
         assert.include(
           workflow,
-          "--force-with-lease=refs/heads/main:${LEASE_SHA}",
+          "STGIT_EXPECTED_REMOTE_MAIN: ${{ steps.pre.outputs.main_sha }}",
           `REGRESSION: ${workflowName} must reject a stale main lease`,
         );
         assert.notInclude(
@@ -187,7 +187,7 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
         );
         assert.include(
           workflow,
-          "run: scripts/ci/record-main-lease",
+          "scripts/ci/record-main-lease",
           `REGRESSION: ${workflowName} must compare checked-out HEAD with remote main before replay`,
         );
       }
@@ -233,16 +233,39 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
 
       assert.include(syncWorkflow, "group: t3code-writes-main");
       assert.include(nightlyWorkflow, "group: t3code-writes-main");
-      assert.include(syncWorkflow, "refs/heads/backup/auto/sync-");
-      assert.include(nightlyWorkflow, "refs/heads/backup/auto/nightly-");
+      assert.include(syncWorkflow, "STGIT_BACKUP_NAMESPACE: bot");
+      assert.include(nightlyWorkflow, "STGIT_BACKUP_NAMESPACE: bot");
       assert.include(syncWorkflow, 'new_tag="${UPSTREAM_TAG}-fork.${next_n}"');
       assert.include(syncWorkflow, 'new_tag="$UPSTREAM_TAG"');
       assert.include(nightlyWorkflow, 'new_tag="${upstream_tag}-fork.${next_n}"');
-      assert.include(syncWorkflow, "git push --atomic origin");
-      assert.include(syncWorkflow, '"refs/tags/${NEW_TAG}:refs/tags/${NEW_TAG}"');
-      assert.include(nightlyWorkflow, "git push --atomic origin");
-      assert.include(nightlyWorkflow, '"refs/tags/${NEW_TAG}:refs/tags/${NEW_TAG}"');
+      assert.include(syncWorkflow, "scripts/ci/publish-stgit-stack --push");
+      assert.include(syncWorkflow, 'STGIT_RELEASE_TAG="$NEW_TAG"');
+      assert.include(nightlyWorkflow, "scripts/ci/publish-stgit-stack --push");
+      assert.include(nightlyWorkflow, 'STGIT_RELEASE_TAG="$NEW_TAG"');
       assert.include(releaseWorkflow, "push:\n    tags:");
+    }),
+  );
+
+  it.effect("validates the unstamped candidate before either automatic publication", () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
+      for (const name of ["sync-upstream.yml", "fork-push-nightly.yml"]) {
+        const workflow = yield* fs.readFileString(path.join(repoRoot, ".github/workflows", name));
+        const prepare = workflow.indexOf("scripts/ci/prepare-stgit-publication");
+        const replay = workflow.indexOf("run: scripts/ci/reproduce-sync-upstream");
+        const gate = workflow.indexOf("scripts/ci/verify-stgit-replay");
+        const stamp = workflow.indexOf("scripts/ci/prepare-release-tag");
+        const publish = workflow.indexOf("scripts/ci/publish-stgit-stack --push");
+        assert.isAtLeast(prepare, 0);
+        assert.isBelow(prepare, replay);
+        assert.isBelow(replay, gate);
+        assert.isBelow(gate, stamp);
+        assert.isBelow(stamp, publish);
+        assert.notInclude(workflow, "scripts/ci/refresh-stgit-metadata");
+        assert.notInclude(workflow, "git push --atomic");
+      }
     }),
   );
 

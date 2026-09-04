@@ -33,7 +33,8 @@
 - The external CI Repair Bot is the repairer. It should claim an eligible
   handoff within 20 minutes, check out the exact leased `main` and canonical
   StGit metadata, and obtain ordered policy from
-  `scripts/ci/check-stgit-stack --format=json`. A repair operates inside the
+  `scripts/ci/prepare-stgit-publication --format=json`, capturing publication
+  leases before replay. A repair operates inside the
   failing patch and refreshes that patch instead of appending a commit. Patch
   count may grow for an authorized independent concern, but a rebase repair
   must preserve the ordered names and subjects exactly.
@@ -51,3 +52,10 @@
   leases in the same atomic transaction.
 - See [Release Workflow](./release.md) for the full fork release and mobile
   EAS model.
+
+Clean automatic replays pass `scripts/ci/verify-stgit-replay` before main or a
+release tag changes. The gate includes all workspace typechecks and tests.
+All writers publish through `publish-stgit-stack`, using preparation-time main
+and metadata leases and immutable snapshots in the same transaction. A gate
+failure leaves the published stack intact; subsequent release preflight protects
+the stamped build as a separate check.

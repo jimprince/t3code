@@ -191,6 +191,47 @@ suite("reproduce-sync-upstream StGit replay", () => {
     }
   });
 
+  it("preserves dirty files, HEAD and stack metadata when rejecting replay", () => {
+    const repo = createFixtureRepo();
+    try {
+      repo.writeFile("topic.txt", "committed\n");
+      repo.commitAll("feat: concern");
+      convertCommitsToStack(repo, 1);
+      repo.writeFile("topic.txt", "uncommitted work\n");
+      const head = repo.git("rev-parse", "HEAD");
+      const stack = repo.git("rev-parse", "refs/stacks/stgit/adopt");
+      const result = runDriver(repo);
+      assert.notStrictEqual(result.status, 0);
+      assert.strictEqual(
+        NodeFS.readFileSync(NodePath.join(repo.dir, "topic.txt"), "utf8"),
+        "uncommitted work\n",
+      );
+      assert.strictEqual(repo.git("rev-parse", "HEAD"), head);
+      assert.strictEqual(repo.git("rev-parse", "refs/stacks/stgit/adopt"), stack);
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it("preserves the last stack operation when upstream fetch fails", () => {
+    const repo = createFixtureRepo();
+    try {
+      repo.writeFile("topic.txt", "committed\n");
+      repo.commitAll("feat: concern");
+      const names = convertCommitsToStack(repo, 1);
+      repo.git("remote", "add", "upstream", NodePath.join(repo.dir, "missing-remote"));
+      const head = repo.git("rev-parse", "HEAD");
+      const stack = repo.git("rev-parse", "refs/stacks/stgit/adopt");
+      const result = runDriver(repo);
+      assert.notStrictEqual(result.status, 0);
+      assert.strictEqual(repo.git("rev-parse", "HEAD"), head);
+      assert.strictEqual(repo.git("rev-parse", "refs/stacks/stgit/adopt"), stack);
+      assert.deepStrictEqual(convertSeries(repo), names);
+    } finally {
+      repo.cleanup();
+    }
+  });
+
   it("fails on a metadata head mismatch before replay", () => {
     const repo = createFixtureRepo();
     try {

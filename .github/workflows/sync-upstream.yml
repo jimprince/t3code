@@ -96,7 +96,7 @@ jobs:
     name: Sync ${{ matrix.channel }} with upstream
     needs: runner
     runs-on: ${{ fromJSON(needs.runner.outputs.labels) }}
-    timeout-minutes: 15
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       # Keep channels sequential inside the workflow because both may force-push main.
@@ -190,7 +190,12 @@ jobs:
       - name: Record main lease
         if: steps.channel.outputs.selected == 'true'
         id: pre
-        run: scripts/ci/record-main-lease
+        run: |
+          scripts/ci/record-main-lease
+          git fetch origin \
+            '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
+            '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+          scripts/ci/prepare-stgit-publication
 
       - name: Check if sync needed
         if: steps.channel.outputs.selected == 'true'
@@ -300,6 +305,13 @@ jobs:
           CI_REPAIR_BOT_CONFLICT_MODE: output
         run: scripts/ci/reproduce-sync-upstream
 
+      - name: Verify replay before publication
+        if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsecret-1-dev pkg-config
+          scripts/ci/verify-stgit-replay
+
       - name: Prepare release tag
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
         id: prepare
@@ -332,74 +344,29 @@ jobs:
 
           RELEASE_TAG="$new_tag" scripts/ci/prepare-release-tag
 
-      - name: Refresh StGit stack metadata
-        if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
-        id: stgit
-        env:
-          STGIT_BRANCH: adopt
-          STGIT_EXPECTED_HEAD: ${{ steps.pre.outputs.main_sha }}
-          STGIT_MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
-        run: |
-          set -euo pipefail
-          git fetch origin \
-            '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
-            '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
-          scripts/ci/refresh-stgit-metadata
-
-      - name: Atomically push main, StGit metadata, and release tag
+      - name: Publish verified stack and release tag
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
         env:
-          CHANNEL: ${{ steps.channel.outputs.channel }}
-          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
-          LEASE_SHA: ${{ steps.pre.outputs.main_sha }}
+          STGIT_EXPECTED_REMOTE_MAIN: ${{ steps.pre.outputs.main_sha }}
           MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
           PREP_SHA: ${{ steps.prepare.outputs.prep_sha }}
           NEW_TAG: ${{ steps.prepare.outputs.tag }}
-          STGIT_STACK_REF: ${{ steps.stgit.outputs.stack_ref }}
-          STGIT_STACK_LEASE: ${{ steps.stgit.outputs.stack_lease }}
-          STGIT_STACK_SHA: ${{ steps.stgit.outputs.stack_sha }}
-          STGIT_PUSH_PLAN: ${{ steps.stgit.outputs.push_plan }}
+          STGIT_BACKUP_NAMESPACE: bot
         run: |
           set -euo pipefail
-
           tag_sha="$(git rev-parse "${NEW_TAG}^{commit}")"
           if [[ "$tag_sha" != "$PREP_SHA" ]]; then
-            echo "::error::Tag/source mismatch: $NEW_TAG resolves to $tag_sha, expected $PREP_SHA."
+            echo "::error::Prepared tag changed before publication."
             exit 1
           fi
           if [[ "$PREP_SHA" != "$MAIN_SHA" ]] && [[ "$(git rev-parse "${PREP_SHA}^")" != "$MAIN_SHA" ]]; then
-            echo "::error::Release-prep commit $PREP_SHA is not a direct child of main $MAIN_SHA."
+            echo "::error::Release preparation must be a direct child of the verified stack."
             exit 1
           fi
-
-          # main is pushed at the pre-prep sha. The release-prep commit is
-          # reachable only from the tag, so main never accumulates generated
-          # release metadata and the rebase stack stays flat.
-          # Backup current main before the force-push (bounded: one ref/day).
-          git push origin "+${LEASE_SHA}:refs/heads/backup/auto/sync-$(date -u +%Y%m%d)" || true
-          leases=(
-            "--force-with-lease=refs/heads/main:${LEASE_SHA}"
-            "--force-with-lease=${STGIT_STACK_REF}:${STGIT_STACK_LEASE}"
-          )
-          refspecs=(
-            "${MAIN_SHA}:refs/heads/main"
-            "${STGIT_STACK_SHA}:${STGIT_STACK_REF}"
-          )
-          if [[ "$CHANNEL" == "nightly" ]]; then
-            refspecs+=("refs/tags/${NEW_TAG}:refs/tags/${NEW_TAG}")
-          else
-            refspecs+=("+refs/tags/${NEW_TAG}:refs/tags/${NEW_TAG}")
-          fi
-          while IFS=$'\t' read -r ref old new; do
-            [[ -z "$ref" ]] && continue
-            leases+=("--force-with-lease=${ref}:${old}")
-            refspecs+=("${new}:${ref}")
-          done <<< "$STGIT_PUSH_PLAN"
-          git push --atomic origin "${leases[@]}" "${refspecs[@]}"
-          echo "Pushed $NEW_TAG (main at $MAIN_SHA) — release.yml will build and publish."
-
-          # The persisted GH_PAT credential makes this tag push trigger
-          # release.yml. Do not dispatch it again or the same tag builds twice.
+          # Restore the verified unstamped tip; the prepared child remains tagged.
+          git reset --hard "$MAIN_SHA"
+          STGIT_RELEASE_TAG="$NEW_TAG" STGIT_RELEASE_TAG_SHA="$PREP_SHA" \
+            scripts/ci/publish-stgit-stack --push
 
       - name: Fail with conflict resolution instructions
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'conflict'

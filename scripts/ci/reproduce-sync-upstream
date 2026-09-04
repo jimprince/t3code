@@ -35,11 +35,18 @@ case "$stgit_version" in
     ;;
 esac
 
+if [[ -n "$(git_cmd status --porcelain)" ]]; then
+  echo "Replay requires a clean disposable checkout; local work was not changed." >&2
+  exit 1
+fi
+
 START_HEAD="$(git_cmd rev-parse HEAD)"
 START_BRANCH="$(git_cmd branch --show-current)"
 STACK_BRANCH="stgit/adopt"
 STACK_REF="refs/stacks/stgit/adopt"
 REPLAY_COMPLETE=0
+REPLAY_STARTED=0
+START_STACK=""
 
 emit_status() {
   local status="$1"
@@ -82,7 +89,13 @@ EOF
 }
 
 restore_start() {
-  stg_cmd undo --hard >/dev/null 2>&1 || true
+  # Undo only a stack operation started here, never a preparation failure.
+  if [[ $REPLAY_STARTED -eq 0 ]]; then
+    return
+  fi
+  if [[ "$(git_cmd rev-parse "$STACK_REF")" != "$START_STACK" ]]; then
+    stg_cmd undo --hard
+  fi
   git_cmd reset --hard "$START_HEAD" >/dev/null
   if [[ -n "$START_BRANCH" && "$(git_cmd branch --show-current)" != "$START_BRANCH" ]]; then
     git_cmd switch "$START_BRANCH" >/dev/null
@@ -97,7 +110,9 @@ restore_interrupted_replay() {
   fi
   exit "$exit_code"
 }
-trap restore_interrupted_replay EXIT INT TERM
+trap restore_interrupted_replay EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 if [[ -n "$METADATA_REMOTE" ]]; then
   git_cmd fetch "$METADATA_REMOTE" \
@@ -124,8 +139,10 @@ git_cmd fetch --no-tags "$UPSTREAM_REMOTE" main:refs/remotes/upstream/main
 git_cmd fetch --no-tags "$UPSTREAM_REMOTE" \
   "+${CI_REPAIR_BOT_UPSTREAM_SOURCE_REF}:${CI_REPAIR_BOT_UPSTREAM_TARGET}"
 
+START_STACK="$(git_cmd rev-parse "$STACK_REF")"
 saved_top="$(stg_cmd top)"
 echo "Rebasing the ordered StGit series through $saved_top onto $CI_REPAIR_BOT_UPSTREAM_TARGET..."
+REPLAY_STARTED=1
 if stg_cmd rebase --merged "$CI_REPAIR_BOT_UPSTREAM_TARGET"; then
   emit_status clean ""
   REPLAY_COMPLETE=1
