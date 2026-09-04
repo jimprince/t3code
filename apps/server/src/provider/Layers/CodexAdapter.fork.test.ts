@@ -86,6 +86,8 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
       }),
   );
 
+  public readonly compactThread = Effect.void;
+
   public readonly interruptTurnImpl = vi.fn((_turnId?: TurnId): Promise<void> =>
     Promise.resolve(undefined),
   );

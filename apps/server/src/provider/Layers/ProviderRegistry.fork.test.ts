@@ -40,6 +40,7 @@ import { AntigravityInstallation } from "../AntigravityInstallation.ts";
 import * as ModelManifest from "../ModelManifest.ts";
 import * as OpenCodeRuntime from "../opencodeRuntime.ts";
 import * as ProviderEventLoggers from "./ProviderEventLoggers.ts";
+import * as CodexResetCredit from "./codexResetCredit.ts";
 import { ProviderInstanceRegistryHydrationLive } from "./ProviderInstanceRegistryHydration.ts";
 import {
   haveProvidersChanged,
@@ -851,6 +852,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 provider: codexDriver,
                 packageName: null,
               }),
+              applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(initialProvider),
               refresh: Ref.update(refreshCalls, (count) => count + 1).pipe(
                 Effect.andThen(Effect.never),
@@ -1002,6 +1004,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 provider: cursorDriver,
                 packageName: null,
               }),
+              applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(initialProvider),
               refresh: Effect.succeed(refreshedProvider),
               streamChanges: Stream.fromPubSub(changes),
@@ -1131,6 +1134,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   provider: openCodeDriver,
                   packageName: null,
                 }),
+                applyUsageLimits: () => Effect.void,
                 getSnapshot: Effect.succeed(initialProvider),
                 refresh: Effect.succeed(authoritativeProvider),
                 streamChanges: Stream.fromPubSub(changes),
@@ -1238,6 +1242,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 provider: codexDriver,
                 packageName: null,
               }),
+              applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(cachedProvider),
               refresh: Effect.die(new Error("simulated refresh failure")),
               streamChanges: Stream.empty,
@@ -1327,6 +1332,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 provider: codexDriver,
                 packageName: null,
               }),
+              applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(fallbackProvider),
               refresh: Effect.gen(function* () {
                 yield* Deferred.succeed(refreshStarted, undefined).pipe(Effect.ignore);
@@ -1437,6 +1443,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 provider: provider.driver,
                 packageName: null,
               }),
+              applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(provider),
               refresh: Effect.succeed(provider),
               streamChanges: Stream.empty,
@@ -1581,6 +1588,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             ),
             Layer.provideMerge(ModelManifest.layerTest),
+            Layer.provideMerge(CodexResetCredit.layerTest),
             Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
             Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
             Layer.provideMerge(failingSpawnerLayer(`spawn ${missingBinary} ENOENT`)),
@@ -1675,6 +1683,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             ),
             Layer.provideMerge(ModelManifest.layerTest),
+            Layer.provideMerge(CodexResetCredit.layerTest),
             Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
             Layer.updateService(ChildProcessSpawner.ChildProcessSpawner, (spawner) =>
               ChildProcessSpawner.make((command) => {
@@ -1833,6 +1842,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
             ),
             Layer.provideMerge(ModelManifest.layerTest),
+            Layer.provideMerge(CodexResetCredit.layerTest),
             Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
             Layer.provideMerge(NodeServices.layer),
             Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
@@ -1897,6 +1907,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 ),
               ),
               Layer.provideMerge(ModelManifest.layerTest),
+              Layer.provideMerge(CodexResetCredit.layerTest),
               Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
               Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
               Layer.provideMerge(

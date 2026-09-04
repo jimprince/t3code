@@ -188,6 +188,7 @@ describe("ProviderSessionReaper", () => {
     const providerService: ProviderServiceShape = {
       startSession: () => unsupported(),
       sendTurn: () => unsupported(),
+      compactThread: () => unsupported(),
       interruptTurn: () => unsupported(),
       respondToRequest: () => unsupported(),
       respondToUserInput: () => unsupported(),
@@ -250,6 +251,7 @@ describe("ProviderSessionReaper", () => {
           getFirstActiveThreadIdByProjectId: () => Effect.die("unused"),
           getThreadCheckpointContext: () => Effect.die("unused"),
           getFullThreadDiffContext: () => Effect.die("unused"),
+          getUserInputActivity: () => Effect.die("unused"),
           getThreadShellById: (threadId) =>
             Effect.succeed(
               input.readModel.threads.find((thread) => thread.id === threadId)
