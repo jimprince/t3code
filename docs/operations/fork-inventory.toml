@@ -222,7 +222,7 @@ name = "fork-web-project-scope"
 subject = "feat(web): add multi-project scope controls"
 class = "product"
 purpose = "Provide multi-select, partial-state, and isolation controls for project scope."
-retire_when = "never"
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-general-chat-projects"]
 roles = []
 [[patch.decision]]
