@@ -1,3 +1,4 @@
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- verbatim copies of the upstream test file's harness helpers; the upstream file carries the same legacy allowance. */
 import {
   CommandId,
   DEFAULT_PROVIDER_INTERACTION_MODE,
