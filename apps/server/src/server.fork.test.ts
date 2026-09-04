@@ -111,6 +111,7 @@ import * as Keybindings from "./keybindings.ts";
 import * as ExternalLauncher from "./process/externalLauncher.ts";
 import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
+import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import { OrchestrationListenerCallbackError } from "./orchestration/Errors.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
@@ -661,6 +662,11 @@ const buildAppUnderTest = (options?: {
           Layer.mock(EnvironmentTheme.EnvironmentThemeService)({
             current: Effect.succeed([]),
             streamChanges: Stream.empty,
+          }),
+          Layer.mock(UsageLimitSources.UsageLimitSources)({
+            current: Effect.succeed([]),
+            streamChanges: Stream.empty,
+            refresh: Effect.void,
           }),
         ),
       ),
