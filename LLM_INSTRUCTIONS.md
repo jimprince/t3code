@@ -10,17 +10,11 @@ things specific to the fork relationship.
 
 ## Changing code: verify before calling anything done
 
-Every code change, however small, is verified with the repository's own
-commands (the `vp` binary is not on PATH — always invoke through pnpm):
-
-```bash
-corepack pnpm install --frozen-lockfile --prefer-offline
-corepack pnpm exec vp fmt --check      # or `vp fmt` to fix
-corepack pnpm --filter @t3tools/oxlint-plugin-t3code build   # required before vp check
-corepack pnpm exec vp check            # lint (includes custom oxlint rules)
-corepack pnpm exec vp run typecheck
-corepack pnpm exec vp run test         # full suite; focused: pnpm --dir <app> exec vp test <pattern>
-```
+Use focused tests, formatting and typechecks for the files being changed.
+Invoke Vite+ through `corepack pnpm exec vp` when `vp` is absent from PATH.
+Do not run repository-wide checks locally unless requested; CI owns the full
+suite. Automatic replay runs `scripts/ci/verify-stgit-replay` on the complete
+unstamped candidate before publication, including all workspace typechecks.
 
 Tests import from `"vite-plus/test"`, not `"vitest"`. Prefer precise,
 single-site edits over regex bulk rewrites (`perl -pi`, broad `sed`) — bulk
