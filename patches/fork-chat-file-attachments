@@ -1,6 +1,6 @@
-Bottom: c23be76b0daa3133f569cb9b95edc38b23a2c8e9
-Top:    3eb659996c1f8586fffd39740aa28a5d20b17ad3
+Bottom: 80c435a50647e85861815752712222d3e8aba2d7
+Top:    69190ca5f26786d469b42f462c609bb065543f76
 Author: Codex <codex@users.noreply.github.com>
-Date:   2026-09-04 15:27:30 -0600
+Date:   2026-09-04 15:45:43 -0600
 
 feat(chat): attach non-image files to threads via /tmp handoff
