@@ -15,6 +15,9 @@ const requiredFiles = [
 ] as const;
 
 const requiredForkTools = [
+  "scripts/ci/prepare-stgit-publication",
+  "scripts/ci/verify-stgit-replay",
+  "scripts/ci/publish-stgit-stack",
   "scripts/ci/check-stgit-candidate",
   "scripts/ci/create-stgit-candidate-manifest",
   "scripts/ci/deploy-stgit-concern",
@@ -122,6 +125,9 @@ export const checkForkDocs = (root = process.cwd()): string[] => {
     errors.push("fork-patch-stack skill must contain the new-concern workflow");
   }
   for (const command of [
+    "prepare-stgit-publication",
+    "verify-stgit-replay",
+    "publish-stgit-stack",
     "prepare-stgit-agent-worktree",
     "create-stgit-candidate-manifest",
     "deploy-stgit-concern",

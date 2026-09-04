@@ -323,3 +323,43 @@ obsolete publication ref disappear together.
 The official [StGit tutorial](https://stacked-git.github.io/guides/tutorial/)
 and [rebase manual](https://stacked-git.github.io/man/stg-rebase/) define the
 commands used here.
+
+### Recover a published stack
+
+Use a fresh disposable clone with the current published stack and fetched
+metadata. First run `scripts/ci/prepare-stgit-publication` so recovery is leased
+against the publication being replaced. Select an exact history ref using
+`git ls-remote origin 'refs/stack-history/stgit/adopt/*'`; the timestamp without
+`-previous` identifies the new stack, and its `-previous` partner identifies
+the stack before that publication. Inspect the chosen snapshot's head and
+inventory before restoring anything. Preserve the current publisher outside
+the checkout so rolling back code cannot roll back publication safeguards.
+
+```bash
+publisher_copy="$(mktemp)"
+cp scripts/ci/publish-stgit-stack "$publisher_copy"
+# Set restore_ref to the reviewed exact refs/stack-history/... ref.
+git fetch origin "$restore_ref:refs/recovery/reviewed-stack"
+git show refs/recovery/reviewed-stack:stack.json
+# Only after reviewing that snapshot, restore the clean disposable checkout:
+git update-ref refs/stacks/stgit/adopt refs/recovery/reviewed-stack
+restore_head="$(git show refs/stacks/stgit/adopt:stack.json | bun -e 'console.log(JSON.parse(await Bun.stdin.text()).head)')"
+git reset --hard "$restore_head"
+git for-each-ref --format='delete %(refname)' refs/patches/stgit/adopt/ | git update-ref --stdin
+git show refs/stacks/stgit/adopt:stack.json | bun -e '
+  const stack = JSON.parse(await Bun.stdin.text());
+  for (const name of stack.applied)
+    console.log(`update refs/patches/stgit/adopt/${name} ${stack.patches[name].oid}`);
+' | git update-ref --stdin
+scripts/ci/check-stgit-stack
+# Verify the restored behavior before publication.
+bash "$publisher_copy" --check
+bash "$publisher_copy" --push
+```
+
+The current checkout's lease file stays under `.git` throughout recovery. The
+publisher atomically restores main, stack and canonical patch refs, removes
+obsolete remote patch refs, and creates a new recovery snapshot pair. Never
+force-push just main. Source rollback does not roll back an installed app or a
+migrated database; use the release runbook to publish a new monotonic version
+when an application rollback is required.

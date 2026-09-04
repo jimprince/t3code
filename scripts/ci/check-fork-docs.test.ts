@@ -36,7 +36,7 @@ const createValidDocs = (): string => {
       "Run `stg rebase` and never run `stg new` during a rebase.",
       "## New-concern workflow",
       "Run `stg new` for an independent feature.",
-      "Use `prepare-stgit-agent-worktree`, `create-stgit-candidate-manifest`, and `deploy-stgit-concern` for isolated candidate work.",
+      "Use `prepare-stgit-publication`, `verify-stgit-replay`, `publish-stgit-stack`, `prepare-stgit-agent-worktree`, `create-stgit-candidate-manifest`, and `deploy-stgit-concern` for isolated candidate work.",
       "Read the [runbook](../../../docs/operations/fork-maintenance.md) and [inventory](../../../docs/operations/fork-inventory.toml).",
     ].join("\n"),
   );
@@ -53,6 +53,9 @@ const createValidDocs = (): string => {
   write(root, "docs/operations/fork-maintenance.md", "# Fork maintenance\n");
   write(root, "docs/operations/fork-inventory.toml", "schema = 2\n");
   for (const tool of [
+    "prepare-stgit-publication",
+    "verify-stgit-replay",
+    "publish-stgit-stack",
     "check-stgit-candidate",
     "create-stgit-candidate-manifest",
     "deploy-stgit-concern",
@@ -67,6 +70,19 @@ describe("check-fork-docs", () => {
     const root = createValidDocs();
     try {
       assert.deepEqual(checkForkDocs(root), []);
+    } finally {
+      NodeFS.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a checkout missing a publication helper", () => {
+    const root = createValidDocs();
+    try {
+      NodeFS.unlinkSync(NodePath.join(root, "scripts/ci/prepare-stgit-publication"));
+      assert.include(
+        checkForkDocs(root).join("\n"),
+        "missing required fork tool: scripts/ci/prepare-stgit-publication",
+      );
     } finally {
       NodeFS.rmSync(root, { recursive: true, force: true });
     }

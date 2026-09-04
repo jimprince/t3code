@@ -238,6 +238,11 @@ printf '%s\\n' '${JSON.stringify({ head: fixture.head, patches: fixture.patches.
       const leasePath = NodePath.join(fixture.repo.dir, ".git/stgit-publication-lease.json");
       const saved = NodeFS.readFileSync(leasePath, "utf8");
       assert.strictEqual(capture().status, 0, "preparation is idempotent on unchanged state");
+      // The repair bot asks for context again after refreshing its patches.
+      fixture.repo.git("update-ref", "refs/stacks/stgit/adopt", fixture.remoteBase);
+      assert.strictEqual(capture().status, 0, "post-repair context must reuse the original leases");
+      assert.strictEqual(NodeFS.readFileSync(leasePath, "utf8"), saved);
+      fixture.repo.git("update-ref", "refs/stacks/stgit/adopt", fixture.stackOid);
       gitAt(fixture.remote, "update-ref", "refs/stacks/stgit/adopt", fixture.remoteBase);
       assert.notStrictEqual(capture().status, 0);
       assert.strictEqual(NodeFS.readFileSync(leasePath, "utf8"), saved);
