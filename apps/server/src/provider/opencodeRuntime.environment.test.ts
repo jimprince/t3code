@@ -226,7 +226,7 @@ server.listen(0, "127.0.0.1", () => {
         const response = yield* HttpClient.get(`${server.url}/output`);
 
         expect(yield* response.text).toBe("drained");
-        expect(yield* (server.isRunning ?? Effect.succeed(false))).toBe(true);
+        expect(yield* server.isRunning ?? Effect.succeed(false)).toBe(true);
       }).pipe(
         Effect.scoped,
         Effect.provide([
