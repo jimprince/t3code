@@ -2652,6 +2652,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     const path = yield* Path.Path;
     const repoRoot = yield* RepoRoot;
     buildConfig.extraResources = [
+      ...DESKTOP_EXTRA_RESOURCES,
       {
         from: "apps/desktop/resources/T3PressureMonitor",
         to: "T3PressureMonitor",
