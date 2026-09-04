@@ -176,7 +176,7 @@ name = "fork-performance-recovery"
 subject = "feat(recovery): add performance recovery controls"
 class = "product"
 purpose = "Expose resource pressure diagnosis and bounded system recovery controls."
-retire_when = "never"
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-provider-observability"]
 roles = []
 [[patch.decision]]
