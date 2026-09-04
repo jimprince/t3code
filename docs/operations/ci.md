@@ -28,8 +28,7 @@
   nightly only and stable runs solely on an explicit `channel=stable`
   dispatch: a stable replay conflicts by construction whenever the stack sits
   on a nightly base referencing upstream files the stable tag lacks (such as a
-  migration added after the last stable release), and letting that fail every
-  three hours left this workflow permanently red for the channel that ships.
+  migration added after the last stable release), so scheduled runs select nightly only. The daily schedule is 09:00 UTC.
 - The external CI Repair Bot is the repairer. It should claim an eligible
   handoff within 20 minutes, check out the exact leased `main` and canonical
   StGit metadata, and obtain ordered policy from
