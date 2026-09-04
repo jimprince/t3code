@@ -134,6 +134,6 @@ name = "fork-thread-fork"
 subject = "feat(threads): fork conversations from messages"
 class = "product"
 purpose = "Create a new conversation from an earlier message while preserving the selected thread context."
-retire_when = "never"
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-thread-lifecycle-recovery"]
 roles = []
