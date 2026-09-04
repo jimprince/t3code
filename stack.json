@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "355891b6a7fc349bf11b8476adf5806ecd9d2503",
-  "head": "2dfbe3da35d977c8c69ae6ece1018a2f24281dfc",
+  "prev": "ef1d5c60d20cfc49075c05cedb6f2801c4f9ab98",
+  "head": "5a64c3f42a850247335e9dce5f757bacc797bd32",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -14,7 +14,9 @@
     "fork-thread-transfer",
     "fork-thread-fork",
     "fork-general-chat-projects",
-    "fork-remote-relay-access",
+    "fork-remote-relay-access"
+  ],
+  "unapplied": [
     "fork-performance-recovery",
     "fork-headless-updates",
     "fork-text-generation",
@@ -34,7 +36,6 @@
     "fork-web-pr-multiselect",
     "fork-sidebar-thread-order"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
