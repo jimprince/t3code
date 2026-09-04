@@ -105,6 +105,8 @@ describe("OrchestrationEngine (fork)", () => {
         }),
       readFromSequence: (sequenceExclusive) =>
         Stream.fromIterable(events.filter((event) => event.sequence > sequenceExclusive)),
+      readAggregateRange: () => Stream.die("unused aggregate replay"),
+      getAggregateReplayStats: () => Effect.die("unused aggregate replay stats"),
       readAll: () => Stream.fromIterable(events),
       hasEventAfter: (input) =>
         Effect.succeed(
@@ -143,6 +145,7 @@ describe("OrchestrationEngine (fork)", () => {
           getFullThreadDiffContext: () => Effect.succeed(Option.none()),
           getUserInputActivity: () => Effect.die("unused"),
           getThreadShellById: () => Effect.succeed(Option.none()),
+          getThreadRuntimeContext: () => Effect.succeed(Option.none()),
           getThreadShellByIdIncludingArchived: () => Effect.succeed(Option.none()),
           getThreadDetailById: () => Effect.succeed(Option.none()),
           getThreadDetailSnapshot: () => Effect.succeed(Option.none()),

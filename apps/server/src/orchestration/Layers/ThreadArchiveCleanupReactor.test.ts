@@ -151,6 +151,8 @@ describe("ThreadArchiveCleanupReactor", () => {
         Layer.provideMerge(
           Layer.succeed(OrchestrationEngineService, {
             readEvents: () => Stream.empty,
+            readThreadEvents: () => Stream.empty,
+            getThreadReplayStats: () => unsupported(),
             dispatch,
             latestSequence: Effect.succeed(0),
             streamDomainEvents: Stream.make(event),
@@ -174,6 +176,7 @@ describe("ThreadArchiveCleanupReactor", () => {
             getFullThreadDiffContext: () => unsupported(),
             getUserInputActivity: () => unsupported(),
             getThreadShellById: () => unsupported(),
+            getThreadRuntimeContext: () => unsupported(),
             getThreadShellByIdIncludingArchived: (threadId) =>
               threadId === input.thread.id
                 ? Effect.succeed(Option.some(input.thread))
