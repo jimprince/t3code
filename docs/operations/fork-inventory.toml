@@ -143,7 +143,7 @@ name = "fork-general-chat-projects"
 subject = "feat(projects): add General Chat projects"
 class = "product"
 purpose = "Provide flat General Chat projects and their server projection and sidebar behavior."
-retire_when = "never"
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-thread-lifecycle-recovery"]
 roles = []
 [[patch.decision]]
