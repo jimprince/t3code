@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7f822d007bdb3910d6843412b73a2562761792ec",
-  "head": "ab01eb9e511e32f2a2768b619ac0c7b8214f0271",
+  "prev": "f05b91e38c28498cdfcf234dc2f50e9e0224ebb1",
+  "head": "46aa38a833b437591ddfd4bd245bbab811439f81",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -32,8 +32,7 @@
     "fork-remote-file-downloads",
     "fork-remote-worktree-base",
     "fork-web-pr-multiselect",
-    "fork-sidebar-thread-order",
-    "refresh-temp"
+    "fork-sidebar-thread-order"
   ],
   "unapplied": [],
   "hidden": [],
@@ -42,7 +41,7 @@
       "oid": "435543533e30a00ca3b78cb0f731b7f028887635"
     },
     "fork-chat-file-attachments": {
-      "oid": "2cc8b954fffd23daa76149993355ac1f0a2c1dac"
+      "oid": "2870a812db75a88d0dfe8a17da73395f5bc29ced"
     },
     "fork-ci-release-pipeline": {
       "oid": "6ac9e7121899162e2a69a4a535052809a00e38fc"
@@ -81,16 +80,16 @@
       "oid": "0da2d092953680d1501e55a35a3f24f309fd0f10"
     },
     "fork-remote-file-downloads": {
-      "oid": "84e6cafb3c569b80c03ccd62583d7e1ae32f80bf"
+      "oid": "89feeab34e21f8f346610248caf845a7a78e7ffc"
     },
     "fork-remote-relay-access": {
       "oid": "200657b52d01e0df1945144ebc31c8c96cb1a0bf"
     },
     "fork-remote-worktree-base": {
-      "oid": "b89a1334285851d92cbef2750e364107f3cfb13a"
+      "oid": "9cb7daecbdd5fb618c7c6e25032143edc13f7be1"
     },
     "fork-sidebar-thread-order": {
-      "oid": "3915e416c7350acf58aa2d42ce6f4653f208d73d"
+      "oid": "46aa38a833b437591ddfd4bd245bbab811439f81"
     },
     "fork-stgit-stack-policy": {
       "oid": "f5a3d234cec6db94ddd5d18f0e3ee87c3f7a75fe"
@@ -123,13 +122,10 @@
       "oid": "e952b97b8ad9b4df9c3c7fe27b77150cee2d5e72"
     },
     "fork-web-pr-multiselect": {
-      "oid": "3cd2c0c7ebea3b9948bbc84b7e38220555ed316b"
+      "oid": "ee4bfce4d6e69d38f1a48bb7780aff70129435c5"
     },
     "fork-web-project-scope": {
       "oid": "5e6f632ce45734902d406529ffc3b3973ab36c71"
-    },
-    "refresh-temp": {
-      "oid": "ab01eb9e511e32f2a2768b619ac0c7b8214f0271"
     }
   }
 }
