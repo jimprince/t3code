@@ -172,6 +172,7 @@ describe("ThreadArchiveCleanupReactor", () => {
             getFirstActiveThreadIdByProjectId: () => unsupported(),
             getThreadCheckpointContext: () => unsupported(),
             getFullThreadDiffContext: () => unsupported(),
+            getUserInputActivity: () => unsupported(),
             getThreadShellById: () => unsupported(),
             getThreadShellByIdIncludingArchived: (threadId) =>
               threadId === input.thread.id
