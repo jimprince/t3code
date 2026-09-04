@@ -6,7 +6,7 @@ file is the concise runbook.
 
 ## Release Model
 
-- `sync-upstream.yml` checks upstream every 3 hours and can also be dispatched
+- `sync-upstream.yml` checks the latest upstream nightly once daily at 09:00 UTC and can also be dispatched
   manually.
 - `release.yml` builds only after a release tag is pushed, or when manually
   dispatched with an explicit version.
@@ -46,20 +46,16 @@ because the headless `t3` server reports its version from
 `apps/server/package.json`. The `main` rewrite binds its lease to the exact
 checked-out starting HEAD and requires live `origin/main` to still equal it
 before replay. A stale queued checkout therefore fails before preparation or
-tag publication. The bounded daily backup ref is retained.
+tag publication.
 
-The replay also refreshes the canonical StGit `adopt` metadata. Before writing,
-the workflow fetches `refs/stacks/stgit/adopt` and all of its patch refs, and
-requires the recorded `stack.json.head` to equal the same pre-replay `main`
-lease. `scripts/ci/refresh-stgit-metadata` then rewrites every patch named by
-`stack.json.applied` and the stack head to the replayed `main` commits. That
-ordered list—not the raw `refs/patches/stgit/adopt/*` glob—is the canonical
-series. Patch refs left by renamed, split, or retired patches are scheduled for
-leased deletion. The resulting `main`, StGit stack ref, current patch refs,
-obsolete-ref deletions, and release tag are pushed in one `git push --atomic`
-transaction with an explicit lease for every mutable ref. A metadata mismatch
-therefore rejects the release instead of publishing a branch that StGit cannot
-safely adopt.
+Before replay, `prepare-stgit-publication` records the exact main, stack and
+complete patch-ref set. StGit itself updates metadata during replay. The fixed
+`verify-stgit-replay` gate runs on the unstamped candidate before preparation.
+After stamping, the checkout returns to that verified stack tip and both
+automatic workflows call `publish-stgit-stack --push`. This one helper publishes
+main, metadata, patch refs, obsolete-ref deletions, immutable snapshots and the
+prepared release tag in one leased atomic transaction. A metadata mismatch or
+failed gate stops publication. Metadata is not reconstructed by commit subject.
 The next upstream stable sync replays the fork patch onto the stable tag and
 publishes the integrated stable release.
 
@@ -100,17 +96,16 @@ selected upstream tag and stamps package versions to the derived release
 version via `scripts/ci/prepare-release-tag`. The release tag points at that
 stamped child while `main` stays at the exact pre-stamp stack tip. Fork Push
 Nightly uses the same helper and ref split. Both workflows share the
-`t3code-writes-main` lock, preserve daily backup refs, and use exact pinned
+`t3code-writes-main` lock, preserve immutable publication snapshots, and use exact pinned
 leases bound to their checked-out starting HEAD; live `origin/main` must match
 before replay. The unstamped `main`, stack metadata, current patch refs,
 obsolete-ref deletions, and the stamped tag are published in one atomic
 transaction. `release.yml` is tag-triggered and performs no `main` write or
 post-release finalization.
 
-During that rebase, package version files are auto-resolved to upstream and
-re-stamped later. `.github/workflows/release.yml` is auto-resolved to the fork
-side because the fork intentionally owns its reduced macOS/headless release
-matrix and local-runner fallback.
+The replay driver stops on conflicts. The external repair bot performs semantic
+repair and must pass its verification gate; it does not make a clean textual
+merge sufficient for publication.
 
 Shared runtime integration files are not safe for whole-file conflict
 resolution. In particular, `apps/server/src/ws.ts` and
