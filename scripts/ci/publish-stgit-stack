@@ -37,6 +37,13 @@ if [[ -f "$lease_file" ]]; then
   fi
   expected_remote_main="${expected_remote_main:-$recorded_main}"
   expected_remote_stack="${expected_remote_stack:-$recorded_stack}"
+  if [[ -n "$expected_patch_refs_json" ]] && ! bun -e '
+    const normalize = raw => { const value = JSON.parse(raw); return JSON.stringify(value, Object.keys(value).sort()); };
+    if (normalize(process.argv[1]) !== normalize(process.argv[2])) process.exit(1);
+  ' "$expected_patch_refs_json" "$recorded_patches"; then
+    echo "Explicit patch leases disagree with this checkout's preparation record." >&2
+    exit 1
+  fi
   expected_patch_refs_json="${expected_patch_refs_json:-$recorded_patches}"
 fi
 if [[ -z "$expected_remote_main" || -z "$expected_remote_stack" || -z "$expected_patch_refs_json" ]]; then
