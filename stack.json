@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3eb942cfdeffa64ea4cf0617ff6a13d9e57d1940",
-  "head": "fd353705521ae1cd8be778b054640c799a8da138",
+  "prev": "f4961525fb02dc2693b22e160d6ba84d6e8ad60a",
+  "head": "47868c259ea7f562a3e03192e9892609cc94100f",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -9,14 +9,14 @@
     "fork-provider-turn-reservation",
     "fork-provider-runtime-recovery",
     "fork-provider-observability",
-    "fork-thread-lifecycle-recovery"
-  ],
-  "unapplied": [
+    "fork-thread-lifecycle-recovery",
     "fork-thread-goals",
     "fork-thread-transfer",
     "fork-thread-fork",
     "fork-general-chat-projects",
-    "fork-remote-relay-access",
+    "fork-remote-relay-access"
+  ],
+  "unapplied": [
     "fork-performance-recovery",
     "fork-headless-updates",
     "fork-text-generation",
@@ -60,7 +60,7 @@
       "oid": "81d37e295bb78a491759612de4610bc1a4fc507d"
     },
     "fork-general-chat-projects": {
-      "oid": "cbf3cd3a21afbd64c9f930ba1b0a55d1c20f6a67"
+      "oid": "03e3274d7c788abe9cddf838d0e21a7331f0d6db"
     },
     "fork-headless-updates": {
       "oid": "a21b7677632fc8b1c9ea4b57739fbb74680b514c"
@@ -84,7 +84,7 @@
       "oid": "f3253e76baf26a7cdddfa3e4d939b7ff709ccd9e"
     },
     "fork-remote-relay-access": {
-      "oid": "da913aa4e73d69c742e84129c6c169310d9d7e15"
+      "oid": "47868c259ea7f562a3e03192e9892609cc94100f"
     },
     "fork-remote-worktree-base": {
       "oid": "c20304ce2dbdab67708c1ba17e5e11a6cd6deb6a"
@@ -102,16 +102,16 @@
       "oid": "459538d67c846c78fe53e3eca71708cc1f3368a3"
     },
     "fork-thread-fork": {
-      "oid": "62a89a6bd05ab597349e5a942f8c2a099d03a874"
+      "oid": "408223a7c7b48c5305e6f5bd025ec6b749b46eab"
     },
     "fork-thread-goals": {
-      "oid": "262f086468eeca25e28722875738e2e18950974c"
+      "oid": "782032e212a1be33de1f53f4d357bbdc473e54af"
     },
     "fork-thread-lifecycle-recovery": {
       "oid": "fd353705521ae1cd8be778b054640c799a8da138"
     },
     "fork-thread-transfer": {
-      "oid": "7de7ddb91cdec42d84e21c244d83714d3ad2d348"
+      "oid": "77360c67cde411bd7e19a07a539ae9620597d32f"
     },
     "fork-web-client-resilience": {
       "oid": "a5d7ffa63da6e7d34edd277501022b79e5da0b85"
