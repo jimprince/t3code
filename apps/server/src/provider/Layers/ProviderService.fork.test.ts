@@ -1,3 +1,5 @@
+/* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- verbatim copies of the upstream test file's harness helpers; the upstream file carries the same legacy allowance. */
+import type { EventId } from "@t3tools/contracts";
 import type {
   ProviderApprovalDecision,
   ProviderRuntimeEvent,
@@ -46,6 +48,19 @@ import * as ServerConfig from "../../config.ts";
 import * as ServerSettings from "../../serverSettings.ts";
 import * as AnalyticsService from "../../telemetry/AnalyticsService.ts";
 import { makeAdapterRegistryMock } from "../testUtils/providerAdapterRegistryMock.ts";
+
+type LegacyProviderRuntimeEvent = {
+  readonly type: string;
+  readonly eventId: EventId;
+  readonly provider: ProviderDriverKind;
+  readonly createdAt: string;
+  readonly threadId: ThreadId;
+  readonly turnId?: string | undefined;
+  readonly itemId?: string | undefined;
+  readonly requestId?: string | undefined;
+  readonly payload?: unknown | undefined;
+  readonly [key: string]: unknown;
+};
 // Fork-added test cases extracted from the upstream test file so that upstream
 // edits to that file never conflict with the fork. Helpers are copied, not
 // imported: upstream keeps them file-local.
