@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "4371740e245f2643aa905d6b8a718fd81333acd2",
-  "head": "03728361aa7beb9c13da320097450e6fe65aac3e",
+  "prev": "a445844af29b8416ca9cadfea7220c99ef1469c1",
+  "head": "2675e3c70327719a99af4ae6e53e7b74fb8a9be0",
   "applied": [],
   "unapplied": [
     "fork-stgit-stack-policy",
