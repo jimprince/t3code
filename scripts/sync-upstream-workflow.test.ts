@@ -33,7 +33,7 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       assert.include(rebaseDriver, "recorded_head");
       assert.include(rebaseDriver, '"$recorded_head" != "$START_HEAD"');
       assert.include(rebaseDriver, "do not initialize a replacement stack");
-      assert.include(rebaseDriver, "stg_cmd undo --hard");
+      assert.include(rebaseDriver, 'stg_cmd reset --hard "$START_STACK"');
     }),
   );
 
