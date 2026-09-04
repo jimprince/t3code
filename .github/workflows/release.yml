@@ -189,12 +189,7 @@ jobs:
         run: vp check
 
       - name: Typecheck
-        run: |
-          # Keep the fork's strict Effect diagnostics in normal CI. Upstream
-          # nightlies can temporarily contain TypeScript-Go errors in the
-          # server package, whose artifact build transpiles independently.
-          # The release still runs the server's runtime test suite below.
-          vp run --filter '!t3' typecheck
+        run: vp run typecheck
 
       - name: Install browser secret helper build libraries
         run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
