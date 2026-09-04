@@ -1766,30 +1766,18 @@ routing.layer("ProviderServiceLive routing", (it) => {
         mimeType: "image/png",
         sizeBytes: 123,
       };
-      const completeActiveTurn = (eventId: string) =>
-        Effect.gen(function* () {
-          const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
-          // The fake adapter publishes through a PubSub without replay, so an
-          // event emitted before the service's subscriber is attached is lost.
-          // Re-emit until the reservation clears; the service treats a repeated
-          // completion for an already-cleared turn as a no-op.
-          while (
-            (yield* directory.listBindings()).some(
-              (binding) => binding.threadId === session.threadId && binding.activeTurnId !== null,
-            )
-          ) {
-            routing.codex.emit({
-              type: "turn.completed",
-              eventId: asEventId(eventId),
-              provider: ProviderDriverKind.make("codex"),
-              createdAt: "2026-01-01T00:00:00.000Z",
+      const restartSession = () =>
+        provider.stopSession({ threadId: session.threadId }).pipe(
+          Effect.andThen(
+            provider.startSession(session.threadId, {
+              provider: CODEX_DRIVER,
+              providerInstanceId: codexInstanceId,
               threadId: session.threadId,
-              turnId: TurnId.make(`turn-${String(session.threadId)}`),
-              status: "completed",
-            });
-            yield* Effect.yieldNow;
-          }
-        });
+              cwd: "/tmp/project",
+              runtimeMode: "full-access",
+            }),
+          ),
+        );
 
       routing.codex.sendTurn.mockClear();
       yield* provider.sendTurn({
@@ -1805,9 +1793,8 @@ routing.layer("ProviderServiceLive routing", (it) => {
       assert.include(turnText, '[Attached image "screenshot.png" is saved at: ');
       assert.equal(turnText.endsWith(`${attachment.id}.png]`), true);
 
-      // The fork's reservation gate requires each runtime turn to complete
-      // before the next send. Upstream sends these fixture turns back-to-back.
-      yield* completeActiveTurn("evt-thread-attach-turn-1");
+      // Each attachment case starts a fresh session with no active turn.
+      yield* restartSession();
 
       // An attachment-only turn stays valid and the injected line becomes the
       // whole input text, so the agent still learns the path.
@@ -1818,7 +1805,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       });
       const imageOnlyInput = routing.codex.sendTurn.mock.calls[0]?.[0] as ProviderSendTurnInput;
       assert.equal(imageOnlyInput.input?.startsWith('[Attached image "screenshot.png"'), true);
-      yield* completeActiveTurn("evt-thread-attach-turn-2");
+      yield* restartSession();
 
       const fileAttachment = {
         type: "file" as const,
@@ -1840,7 +1827,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       // Every attachment reaches the adapter; each adapter decides what its
       // provider ingests natively.
       assert.deepEqual(mixedInput.attachments, [attachment, fileAttachment]);
-      yield* completeActiveTurn("evt-thread-attach-turn-3");
+      yield* restartSession();
 
       routing.codex.sendTurn.mockClear();
       yield* provider.sendTurn({ threadId: session.threadId, attachments: [fileAttachment] });
