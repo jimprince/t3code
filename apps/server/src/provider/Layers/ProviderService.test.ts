@@ -2911,6 +2911,23 @@ const turnAnalytics = makeProviderServiceLayer({
   ]),
 });
 
+// These analytics fixtures deliberately admit overlapping sends to exercise
+// out-of-order association and bounded buffering. Release the fork reservation
+// explicitly; its same-thread exclusion is covered by the reservation tests.
+const releaseAnalyticsReservation = (threadId: ThreadId) =>
+  Effect.gen(function* () {
+    const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+    const binding = Option.getOrThrow(yield* directory.getBinding(threadId));
+    assert.isNotNull(binding.activeTurnId);
+    assert.equal(
+      yield* directory.markTurnTerminal({
+        threadId,
+        expectedTurnId: binding.activeTurnId!,
+      }),
+      true,
+    );
+  });
+
 turnAnalytics.layer("ProviderServiceLive turn analytics", (it) => {
   it.effect("records one completed-turn event with the allowed properties", () =>
     Effect.gen(function* () {
@@ -3132,6 +3149,7 @@ turnAnalytics.layer("ProviderServiceLive turn analytics", (it) => {
         })
         .pipe(Effect.forkChild);
       yield* Deferred.await(firstStarted);
+      yield* releaseAnalyticsReservation(threadId);
       const secondSend = yield* provider
         .sendTurn({
           threadId,
@@ -3405,6 +3423,7 @@ turnAnalytics.layer("ProviderServiceLive turn analytics", (it) => {
         })
         .pipe(Effect.forkChild);
       yield* Deferred.await(firstStarted);
+      yield* releaseAnalyticsReservation(threadId);
       yield* advanceTestClock(10);
       const secondSend = yield* provider
         .sendTurn({
@@ -3567,25 +3586,21 @@ turnAnalytics.layer("ProviderServiceLive turn analytics", (it) => {
       recordedTurnAnalytics.reset();
       const provider = yield* ProviderService.ProviderService;
       const threadId = asThreadId("thread-turn-analytics-bounded-deferred");
-      const allStarted = yield* Deferred.make<void>();
       const sendRelease = yield* Deferred.make<void>();
       const turnIds = Array.from({ length: 9 }, (_, index) =>
         asTurnId(`turn-analytics-bounded-deferred-${index + 1}`),
       );
-      let startedCount = 0;
+      const starts = yield* Effect.forEach(turnIds, () => Deferred.make<void>());
       yield* provider.startSession(threadId, {
         provider: CODEX_DRIVER,
         providerInstanceId: codexInstanceId,
         threadId,
         runtimeMode: "full-access",
       });
-      for (const turnId of turnIds) {
+      for (const [index, turnId] of turnIds.entries()) {
         primaryAnalyticsCodex.sendTurn.mockImplementationOnce((input) =>
           Effect.gen(function* () {
-            startedCount += 1;
-            if (startedCount === turnIds.length) {
-              yield* Deferred.succeed(allStarted, undefined);
-            }
+            yield* Deferred.succeed(starts[index]!, undefined);
             yield* Deferred.await(sendRelease);
             return { threadId: input.threadId, turnId };
           }),
@@ -3609,8 +3624,9 @@ turnAnalytics.layer("ProviderServiceLive turn analytics", (it) => {
             })
             .pipe(Effect.forkChild),
         );
+        yield* Deferred.await(starts[index]!);
+        if (index < turnIds.length - 1) yield* releaseAnalyticsReservation(threadId);
       }
-      yield* Deferred.await(allStarted);
 
       for (const [index, turnId] of turnIds.entries()) {
         primaryAnalyticsCodex.emit({
@@ -3677,6 +3693,7 @@ turnAnalytics.layer("ProviderServiceLive turn analytics", (it) => {
         .sendTurn({ threadId, input: "first", attachments: [] })
         .pipe(Effect.forkChild);
       yield* Deferred.await(firstStarted);
+      yield* releaseAnalyticsReservation(threadId);
       const secondSend = yield* provider
         .sendTurn({ threadId, input: "second", attachments: [] })
         .pipe(Effect.forkChild);
@@ -3760,6 +3777,7 @@ turnAnalytics.layer("ProviderServiceLive turn analytics", (it) => {
       yield* Fiber.join(reroutedEvent);
       yield* advanceTestClock(15);
 
+      yield* releaseAnalyticsReservation(threadId);
       const steeredTurn = yield* provider.sendTurn({
         threadId,
         input: "steer",
