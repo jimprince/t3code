@@ -3237,6 +3237,7 @@ describe("ClaudeAdapterLive", () => {
         "Bash",
         { command: "pwd" },
         {
+          requestId: "request-tool-use-1",
           signal: new AbortController().signal,
           suggestions: [
             {
@@ -3320,6 +3321,7 @@ describe("ClaudeAdapterLive", () => {
         "Agent",
         {},
         {
+          requestId: "request-tool-agent-1",
           signal: new AbortController().signal,
           toolUseID: "tool-agent-1",
         },
@@ -3344,6 +3346,7 @@ describe("ClaudeAdapterLive", () => {
         "Grep",
         { pattern: "foo", path: "src" },
         {
+          requestId: "request-tool-grep-approval-1",
           signal: new AbortController().signal,
           toolUseID: "tool-grep-approval-1",
         },
@@ -4217,6 +4220,7 @@ describe("ClaudeAdapterLive", () => {
           allowedPrompts: [{ tool: "Bash", prompt: "run tests" }],
         },
         {
+          requestId: "request-tool-exit-1",
           signal: new AbortController().signal,
           toolUseID: "tool-exit-1",
         },
@@ -4383,6 +4387,7 @@ describe("ClaudeAdapterLive", () => {
       };
 
       const permissionPromise = canUseTool("AskUserQuestion", askInput, {
+        requestId: "request-tool-ask-1",
         signal: new AbortController().signal,
         toolUseID: "tool-ask-1",
       });
@@ -4509,6 +4514,7 @@ describe("ClaudeAdapterLive", () => {
       };
 
       const permissionPromise = canUseTool("AskUserQuestion", askInput, {
+        requestId: "request-tool-ask-2",
         signal: new AbortController().signal,
         toolUseID: "tool-ask-2",
       });
@@ -4574,6 +4580,7 @@ describe("ClaudeAdapterLive", () => {
           ],
         },
         {
+          requestId: "request-tool-ask-abort",
           signal: controller.signal,
           toolUseID: "tool-ask-abort",
         },
