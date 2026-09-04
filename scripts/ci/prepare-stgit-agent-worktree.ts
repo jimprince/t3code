@@ -60,7 +60,7 @@ const main = (): void => {
     throw new Error(
       "StGit series is empty; metadata was not fetched or does not describe this checkout",
     );
-  const contextText = runCommand("scripts/ci/check-stgit-stack", ["--format=json"], {
+  const contextText = runCommand("scripts/ci/prepare-stgit-publication", ["--format=json"], {
     cwd: output,
     quiet: true,
     env: { ...process.env, SYNC_GIT_BIN: git },
