@@ -243,6 +243,11 @@ atomically publishes:
 
 - `HEAD` to `refs/heads/main`;
 - `refs/stacks/stgit/adopt`;
+- `refs/stack-history/stgit/adopt/<timestamp>`: an immutable snapshot of the
+  stack metadata commit created by every publication (same timestamp as the
+  backup branch). `refs/stacks` is force-updated and its log does not survive
+  re-inits in disposable clones, so this is the durable record for rollbacks
+  and benchmark replays; delete only deliberately.
 - every patch ref named by `stack.json.applied`;
 - leased deletions for remote patch refs absent from the applied list.
 

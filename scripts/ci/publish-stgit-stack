@@ -217,12 +217,27 @@ leases+=("--force-with-lease=${backup_ref}:")
 refspecs+=("${remote_main}:${backup_ref}")
 printf '%s\t%s\n' "$backup_ref" "$remote_main" >> "$expected_refs"
 echo "  create ${backup_ref} -> ${remote_main}"
+# Immutable snapshot of the StGit metadata being published. refs/stacks is
+# force-updated on every publish and its log does not survive re-inits in
+# disposable clones, so without this the previous stack state (patch commit
+# oids, applied order) is only recoverable by reconstruction from the backup
+# branch. One snapshot per publish, never rewritten; prune deliberately.
+history_ref="refs/stack-history/stgit/adopt/${backup_ref##*/stgit-}"
+if [[ -n "$(git_cmd ls-remote --refs "$remote" "$history_ref")" ]]; then
+  echo "stack history ref already exists: $history_ref" >&2
+  exit 1
+fi
+leases+=("--force-with-lease=${history_ref}:")
+refspecs+=("${stack_oid}:${history_ref}")
+printf '%s\t%s\n' "$history_ref" "$stack_oid" >> "$expected_refs"
+echo "  create ${history_ref} -> ${stack_oid}"
 
 verify_remote_state() {
   local failed=false
   local verify_query=(
     refs/heads/main
     "$backup_ref"
+    "$history_ref"
     "$stack_ref"
     'refs/patches/stgit/adopt/*'
   )
@@ -258,4 +273,4 @@ if ! git_cmd push --atomic "$remote" "${leases[@]}" "${refspecs[@]}"; then
 else
   verify_remote_state
 fi
-echo "Published HEAD and canonical StGit metadata atomically; backup: $backup_ref"
+echo "Published HEAD and canonical StGit metadata atomically; backup: $backup_ref; stack snapshot: $history_ref"
