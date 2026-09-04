@@ -32,8 +32,10 @@ tests, applicable docs, and the inventory stanza together. Never append a plain
 repair commit beside the stack. Generated release stamps remain tag-only and
 never enter a patch.
 
-Use `scripts/ci/publish-stgit-stack --check|--push` as the only supported manual
-landing route for a changed stack.
+Before editing a freshly fetched stack, run
+`scripts/ci/prepare-stgit-publication` to capture immutable preparation-time
+main and metadata leases. Use `scripts/ci/publish-stgit-stack --check|--push`
+as the only landing route for manual and automatic stack publication.
 
 For a genuinely new concern produced as one reviewed candidate commit, prefer
 the skill's isolated candidate workflow. Its manifest binds the review to exact
@@ -161,7 +163,7 @@ StGit series on `stgit/adopt`, applied to one specific upstream point. Read the
 maintenance runbook before sync work; the notes below describe how CI publishes
 that rendering.
 
-- `.github/workflows/sync-upstream.yml` runs every 3 hours and creates release
+- `.github/workflows/sync-upstream.yml` runs once daily at 09:00 UTC and creates release
   tags when upstream ships on the selected channel. Do not manually bump the
   version in `package.json` or invent release numbers.
 - Normal pushes to `main` that affect packaged app/runtime output run
@@ -183,31 +185,17 @@ that rendering.
   grows a per-release commit. Each main rewrite is guarded by an explicit
   lease bound to the exact checked-out starting HEAD. Before replay, the
   workflow requires live `origin/main` to still equal that HEAD; a stale queued
-  checkout loses before preparation or tag publication. A bounded daily backup
-  ref is written before the attempted rewrite.
+  checkout loses before preparation or tag publication. Immutable previous-main and metadata snapshots are published
+  in the same transaction as the new stack.
   Pushing the release tag is what drives the build: `release.yml` has no
   `schedule:` trigger and fires only on tag pushes (and `workflow_dispatch`).
-  Rebase conflict auto-resolution is intentionally asymmetric: package version
-  files resolve to upstream and are re-stamped later, while
-  `.github/workflows/release.yml` resolves to the fork side because this fork's
-  release matrix and runner fallback are deliberately custom. Fork-owned CI and
-  release documentation (`docs/operations/ci.md` and
-  `docs/operations/release.md`) also resolves to the fork side so upstream
-  documentation edits cannot stall scheduled syncs.
-  Do not add shared runtime integration files such as `apps/server/src/ws.ts`
-  or `apps/server/src/orchestration/Layers/ProjectionSnapshotQuery.ts` to
-  whole-file fork-side resolution. Those conflicts must stop for semantic
-  repair so unrelated upstream RPC additions or projected thread fields are
-  not silently discarded.
-- The `sync` job prefers a self-hosted runner labelled `t3code-linux-sync`
-  (persistent `rerere` cache, so recorded conflict resolutions survive across
-  syncs) and falls back to GitHub-hosted `ubuntu-24.04` (rerere disabled) when
-  that runner is offline or busy — the self-hosted runner does not exist yet,
-  so every sync today takes the fallback path. The `runner` job picks the
-  label before the `sync` job is created (GitHub Actions cannot migrate an
-  already-queued self-hosted job), and the rerere cache path is resolved from
-  `$HOME` inside the `sync` job itself, since the `runner` probe job never
-  runs on the machine that ends up doing the rebase.
+  Clean replay is followed by the fixed repository gate before publication.
+  Conflicts stop for semantic repair; the replay driver does not implement
+  whole-file conflict-side overrides. The external repair service may have its
+  own resolution policy, but its result must still pass verification.
+  All writers use the shared publication helper and the preparation-time main,
+  stack and patch-ref leases. A successful textual replay alone is not proof
+  that the resulting product works.
 - Tag scheme by channel:
   - **stable**: `${upstream_tag}` verbatim (e.g. `v0.0.21`). The fork and
     upstream share the tag name; the commit on the fork is upstream's commit
@@ -242,11 +230,9 @@ the leased stack helper. Do not push an ordinary commit beside the series.
 
 ### Channel: stable and nightly
 
-Scheduled `sync-upstream` runs check **both** upstream stable releases
-(`/releases/latest`, excludes pre-releases) and upstream nightly pre-releases
-(first release whose tag matches `v<ver>-nightly.*` or
-`nightly-v<ver>-nightly.*`). Manual runs can target one channel, or select
-`both` to check both.
+Scheduled `sync-upstream` runs select the latest upstream nightly release
+once daily at 09:00 UTC. They do not replay every intervening nightly. Stable
+and `both` remain explicit manual dispatch options.
 
 **One-off run for a channel:**
 
@@ -266,14 +252,14 @@ There is no persistent channel variable anymore. If you see a stale
 
 **Tradeoffs of tracking nightlies:**
 
-- Upstream ships 2–3 nightlies/day; our sync runs every 3h, so at most ~1 lag.
+- The daily run selects the latest upstream nightly; off-cycle sync is manual.
 - More frequent upstream replays = more chances for conflicts with our fork patch.
   On conflict, the workflow fails with resolution instructions (see lines
   106–121 of the workflow). Our previous nightly stays in place until resolved
   — no data loss.
-- `main` gets force-pushed on every sync. Any local work on `main` needs
-  `git pull --rebase`; long-running feature branches should branch off and
-  rebase when ready.
+- `main` gets force-pushed on every sync. Prepare a fresh stack checkout for maintenance; do not
+  use `git pull --rebase` to repair a rewritten stack. Reapply reviewed work
+  to its owning concern and capture new leases only after reviewing remote changes.
 - No GitHub billing concern: `jimprince/t3code` is public, so Actions minutes
   are unlimited and free.
 

@@ -22,7 +22,11 @@ rendered code.
 A fork patch has one coherent purpose and one retirement condition. Patch
 count is not a health metric or a cap: an independent feature normally gets a
 new patch. Conflict surface matters more. Additive files usually cost less to
-carry than edits inside fast-moving upstream integration points.
+carry than edits inside fast-moving upstream integration points. They can still
+have add/add conflicts or silently break when upstream interfaces change.
+Folding a resolution into its patch preserves that adaptation, but does not
+prevent future conflicts. A curated Git rebase can follow the same discipline;
+StGit makes patch identities and operations explicit.
 
 Classify each concern in the inventory:
 
@@ -108,8 +112,9 @@ moved the integration point while the fork behavior remains necessary. Port
 the smallest behavior into the new location instead of restoring a stale
 file wholesale.
 
-Conflicts are the primary retirement signal because they identify code both
-upstream and the fork are actively changing. Never resolve the text first and
+Review retirement on successful replays too: upstream can supersede a capability
+without changing the same files. Conflicts are useful evidence because they
+identify code both upstream and the fork are actively changing. Never resolve the text first and
 ask whether the patch is still needed afterward.
 
 ## Bounded resolution loop
@@ -232,14 +237,16 @@ checker is the compatibility adapter when the inventory schema evolves.
 The only supported manual landing route for a changed stack is:
 
 ```bash
+# In a fresh, fully fetched checkout, BEFORE editing or replay:
+scripts/ci/prepare-stgit-publication
+# After completing and verifying the changed stack:
 scripts/ci/publish-stgit-stack --check
 scripts/ci/publish-stgit-stack --push
 ```
 
 Check mode is non-mutating. Push mode requires `stgit/adopt`, a clean tree, all
-patches applied, and `stack.json.head == HEAD`. It fetches remote ref values
-for exact leases without adopting their content, backs up remote `main`, then
-atomically publishes:
+patches applied, and `stack.json.head == HEAD`. It requires the preparation-time main, stack and complete patch-ref leases,
+compares them with remote state, and atomically publishes:
 
 - `HEAD` to `refs/heads/main`;
 - `refs/stacks/stgit/adopt`;
@@ -248,6 +255,9 @@ atomically publishes:
   backup branch). `refs/stacks` is force-updated and its log does not survive
   re-inits in disposable clones, so this is the durable record for rollbacks
   and benchmark replays; delete only deliberately.
+- `refs/stack-history/stgit/adopt/<timestamp>-previous`: the old metadata
+  paired with the previous-main backup, even if the prior writer did not
+  create a history snapshot;
 - every patch ref named by `stack.json.applied`;
 - leased deletions for remote patch refs absent from the applied list.
 
@@ -260,10 +270,42 @@ namespace. The helper never refreshes a rejected lease or retries against
 newly observed state, and it verifies every resulting remote object ID when a
 push reports an ambiguous transport failure.
 
-Candidate deployment additionally supplies `STGIT_EXPECTED_REMOTE_STACK` and
+Candidate deployment supplies `STGIT_EXPECTED_REMOTE_STACK` and
 `STGIT_EXPECTED_PATCH_REFS_JSON`. These bind publication to the complete
 metadata state observed when the candidate was claimed, including obsolete
 refs scheduled for deletion.
+
+## Verification and maintenance review
+
+Automatic replay runs `scripts/ci/verify-stgit-replay` before version stamping
+or publication. The gate installs the frozen candidate, runs stack/docs checks,
+lint, all workspace typechecks and tests, and rejects changes to the candidate.
+A failure keeps remote main and the release tag unchanged. Do not add a blanket
+package exemption for an upstream failure; compare the exact failing check at
+pure upstream and repair or explicitly review a narrowly scoped exception.
+Release builds validate the stamped child separately.
+
+`prepare-stgit-publication` stores leases under the checkout's Git directory.
+It is idempotent for the same initial state and refuses to renew a record for
+new remote state. After publication or lease loss, use a fresh checkout. Explicit
+`STGIT_EXPECTED_REMOTE_MAIN`, `STGIT_EXPECTED_REMOTE_STACK` and
+`STGIT_EXPECTED_PATCH_REFS_JSON` remain supported for candidate deployment.
+The external repair bot uses `prepare-stgit-publication --format=json` as its
+stack-context command, capturing the lease before its own rebase begins while
+receiving the same validated context contract.
+
+At retirement reviews, measure repair duration, repeated conflicting files,
+upstream lag and regressions after promotion alongside textual conflict count.
+Use workflow logs and immutable stack snapshots as the evidence; do not create
+a second status tracker. Record meaningful semantic decisions in the owning
+inventory entry. A durable product requirement does not make its downstream
+implementation permanent: retire it when upstream meets that requirement.
+
+`depends_on` means a required capability or implementation, not merely a useful
+ordering. When a temporary dependency retires, verify the dependent feature
+against upstream's replacement and remove or narrow that dependency. Test feature
+removal in a disposable clone before claiming independent removability. Mid-stack
+buildability is not guaranteed, particularly for the generated lockfile.
 
 ## Recovery
 

@@ -19,6 +19,31 @@ release_tag="${STGIT_RELEASE_TAG:-}"
 release_tag_sha="${STGIT_RELEASE_TAG_SHA:-}"
 backup_namespace="${STGIT_BACKUP_NAMESPACE:-manual}"
 
+# A preparation record is local to this checkout and is never renewed here.
+lease_file="$(git_cmd rev-parse --git-path stgit-publication-lease.json)"
+if [[ -f "$lease_file" ]]; then
+  recorded_leases="$(bun -e '
+    const lease = await Bun.file(process.argv[1]).json();
+    if (lease.remote !== process.argv[2]) throw new Error("publication remote changed");
+    console.log(lease.main); console.log(lease.stack); console.log(JSON.stringify(lease.patches));
+  ' "$lease_file" "$remote")"
+  recorded_main="$(printf '%s\n' "$recorded_leases" | sed -n '1p')"
+  recorded_stack="$(printf '%s\n' "$recorded_leases" | sed -n '2p')"
+  recorded_patches="$(printf '%s\n' "$recorded_leases" | sed -n '3p')"
+  if [[ -n "$expected_remote_main" && "$expected_remote_main" != "$recorded_main" ]] ||
+    [[ -n "$expected_remote_stack" && "$expected_remote_stack" != "$recorded_stack" ]]; then
+    echo "Explicit leases disagree with this checkout's preparation record." >&2
+    exit 1
+  fi
+  expected_remote_main="${expected_remote_main:-$recorded_main}"
+  expected_remote_stack="${expected_remote_stack:-$recorded_stack}"
+  expected_patch_refs_json="${expected_patch_refs_json:-$recorded_patches}"
+fi
+if [[ -z "$expected_remote_main" || -z "$expected_remote_stack" || -z "$expected_patch_refs_json" ]]; then
+  echo "Preparation-time main, stack and patch-ref leases are required. Run scripts/ci/prepare-stgit-publication before editing or replaying." >&2
+  exit 2
+fi
+
 if [[ "$backup_namespace" != "bot" && "$backup_namespace" != "manual" ]]; then
   echo "STGIT_BACKUP_NAMESPACE must be bot or manual." >&2
   exit 2
@@ -232,12 +257,28 @@ refspecs+=("${stack_oid}:${history_ref}")
 printf '%s\t%s\n' "$history_ref" "$stack_oid" >> "$expected_refs"
 echo "  create ${history_ref} -> ${stack_oid}"
 
+# Preserve the metadata that belongs to the backed-up previous main as well
+# as the new metadata. Recovery never depends on a previous writer's history.
+previous_history_ref="${history_ref}-previous"
+if [[ -n "$(git_cmd ls-remote --refs "$remote" "$previous_history_ref")" ]]; then
+  echo "previous stack history ref already exists: $previous_history_ref" >&2
+  exit 1
+fi
+if ! git_cmd cat-file -e "${remote_stack}^{commit}"; then
+  echo "Previous stack object is unavailable locally; fetch the pinned object before publishing." >&2
+  exit 1
+fi
+leases+=("--force-with-lease=${previous_history_ref}:")
+refspecs+=("${remote_stack}:${previous_history_ref}")
+printf '%s\t%s\n' "$previous_history_ref" "$remote_stack" >> "$expected_refs"
+
 verify_remote_state() {
   local failed=false
   local verify_query=(
     refs/heads/main
     "$backup_ref"
     "$history_ref"
+    "$previous_history_ref"
     "$stack_ref"
     'refs/patches/stgit/adopt/*'
   )

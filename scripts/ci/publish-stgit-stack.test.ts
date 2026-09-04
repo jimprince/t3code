@@ -77,6 +77,8 @@ const seedPublication = (): {
   repo.git("update-ref", stackRef, stackOid);
   for (const [name, oid] of patches)
     repo.git("update-ref", `refs/patches/stgit/adopt/${name}`, oid);
+  repo.git("config", "test.leaseMain", remoteBase);
+  repo.git("config", "test.leaseStack", stackOid);
   const obsoleteRef = "refs/patches/stgit/adopt/fork-retired";
   repo.git("update-ref", obsoleteRef, remoteBase);
   repo.git(
@@ -85,6 +87,16 @@ const seedPublication = (): {
     `${stackRef}:${stackRef}`,
     ...patches.map(([name]) => `refs/patches/stgit/adopt/${name}:refs/patches/stgit/adopt/${name}`),
     `${obsoleteRef}:${obsoleteRef}`,
+  );
+  repo.git(
+    "config",
+    "test.leasePatches",
+    JSON.stringify(
+      Object.fromEntries([
+        ...patches.map(([name, oid]) => [`refs/patches/stgit/adopt/${name}`, oid]),
+        [obsoleteRef, remoteBase],
+      ]),
+    ),
   );
   return { repo, remote, remoteBase, head, stackOid, patches, obsoleteRef };
 };
@@ -97,7 +109,14 @@ const run = (
   NodeChildProcess.spawnSync(script, [mode], {
     cwd: repo.dir,
     encoding: "utf8",
-    env: { ...process.env, SYNC_GIT_BIN: "/usr/bin/git", ...env },
+    env: {
+      ...process.env,
+      SYNC_GIT_BIN: "/usr/bin/git",
+      STGIT_EXPECTED_REMOTE_MAIN: repo.git("config", "test.leaseMain"),
+      STGIT_EXPECTED_REMOTE_STACK: repo.git("config", "test.leaseStack"),
+      STGIT_EXPECTED_PATCH_REFS_JSON: repo.git("config", "test.leasePatches"),
+      ...env,
+    },
   });
 
 const prepareRelease = (
@@ -158,6 +177,85 @@ const racingGit = (): { readonly bin: string; readonly marker: string; readonly 
 };
 
 describe("publish-stgit-stack", () => {
+  it("rejects publication without preparation-time leases", () => {
+    const fixture = seedPublication();
+    try {
+      const before = gitAt(fixture.remote, "show-ref");
+      const result = run(fixture.repo, "--push", {
+        STGIT_EXPECTED_REMOTE_MAIN: "",
+        STGIT_EXPECTED_REMOTE_STACK: "",
+        STGIT_EXPECTED_PATCH_REFS_JSON: "",
+      });
+      assert.notStrictEqual(result.status, 0);
+      assert.strictEqual(gitAt(fixture.remote, "show-ref"), before);
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a remote advance that happened before publication started", () => {
+    const fixture = seedPublication();
+    try {
+      const expectedPatches = remotePatchRefs(fixture);
+      gitAt(fixture.remote, "update-ref", "refs/heads/main", fixture.patches[0]![1]);
+      const before = gitAt(fixture.remote, "show-ref");
+      const result = run(fixture.repo, "--push", {
+        STGIT_EXPECTED_REMOTE_MAIN: fixture.remoteBase,
+        STGIT_EXPECTED_REMOTE_STACK: fixture.stackOid,
+        STGIT_EXPECTED_PATCH_REFS_JSON: expectedPatches,
+      });
+      assert.notStrictEqual(result.status, 0);
+      assert.strictEqual(gitAt(fixture.remote, "show-ref"), before);
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
+  it("captures leases once and refuses to renew them after remote metadata changes", () => {
+    const fixture = seedPublication();
+    try {
+      fixture.repo.git("push", "origin", `${fixture.head}:refs/heads/main`);
+      fixture.repo.writeFile(
+        "scripts/ci/check-stgit-stack",
+        `#!/usr/bin/env bash
+printf '%s\\n' '${JSON.stringify({ head: fixture.head, patches: fixture.patches.map(([name, oid]) => ({ name, oid })) })}'
+`,
+      );
+      // Keep the fixture clean while providing the same context contract as the real checker.
+      fixture.repo.git("update-index", "--assume-unchanged", "scripts/ci/check-stgit-stack");
+      const prepare = NodePath.join(repoRoot, "scripts/ci/prepare-stgit-publication");
+      const capture = () =>
+        NodeChildProcess.spawnSync(prepare, ["--format=json"], {
+          cwd: fixture.repo.dir,
+          encoding: "utf8",
+          env: { ...process.env, SYNC_GIT_BIN: "/usr/bin/git" },
+        });
+      const first = capture();
+      assert.strictEqual(first.status, 0, `${first.stdout}\n${first.stderr}`);
+      assert.strictEqual(JSON.parse(first.stdout).head, fixture.head);
+      const leasePath = NodePath.join(fixture.repo.dir, ".git/stgit-publication-lease.json");
+      const saved = NodeFS.readFileSync(leasePath, "utf8");
+      assert.strictEqual(capture().status, 0, "preparation is idempotent on unchanged state");
+      gitAt(fixture.remote, "update-ref", "refs/stacks/stgit/adopt", fixture.remoteBase);
+      assert.notStrictEqual(capture().status, 0);
+      assert.strictEqual(NodeFS.readFileSync(leasePath, "utf8"), saved);
+      const before = gitAt(fixture.remote, "show-ref");
+      const result = run(fixture.repo, "--push", {
+        STGIT_EXPECTED_REMOTE_MAIN: "",
+        STGIT_EXPECTED_REMOTE_STACK: "",
+        STGIT_EXPECTED_PATCH_REFS_JSON: "",
+      });
+      assert.notStrictEqual(result.status, 0);
+      assert.include(result.stderr, "remote stack lease changed");
+      assert.strictEqual(gitAt(fixture.remote, "show-ref"), before);
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
   it("plans obsolete-ref deletion without mutating the remote in check mode", () => {
     const fixture = seedPublication();
     try {
@@ -192,6 +290,15 @@ describe("publish-stgit-stack", () => {
         "refs/heads/backup/manual",
       );
       assert.include(backups, "refs/heads/backup/manual/stgit-");
+      const history = gitAt(
+        fixture.remote,
+        "for-each-ref",
+        "--format=%(objectname) %(refname)",
+        "refs/stack-history/stgit/adopt",
+      );
+      assert.strictEqual(history.split("\n").length, 2);
+      assert.include(history, "-previous");
+      for (const line of history.split("\n")) assert.isTrue(line.startsWith(fixture.stackOid));
     } finally {
       fixture.repo.cleanup();
       NodeFS.rmSync(fixture.remote, { recursive: true, force: true });

@@ -29,8 +29,8 @@ package or a current source build; distribution packages may be obsolete.
 Mid-stack the worktree is a partial tree, so that hook fails on unrelated files
 and aborts the refresh with `index not clean`. Disable hooks for the whole
 stack session with the two variables above, and run the real gates
-(`pnpm typecheck`, `pnpm test`, `pnpm fmt:check`) at the stack tip instead,
-where the tree is complete.
+appropriate to the change at the stack tip instead,
+where the tree is complete. Use focused local checks; CI runs the complete replay gate.
 
 The canonical namespace is:
 
@@ -48,6 +48,7 @@ git fetch origin \
   '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
   '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
 stg series --all --description
+scripts/ci/prepare-stgit-publication
 ```
 
 Stop if the series is unexpectedly empty. Fetch or repair metadata; never run
@@ -171,8 +172,8 @@ or adding a concern outside the rebase-repair workflow.
 Step 5 is best-effort mid-stack: patches are not individually standalone, so a
 failing patch's own tests may not even import cleanly at its stack position.
 Treat the stack tip as the real gate — after the last patch applies, run
-`pnpm install --frozen-lockfile`, `pnpm typecheck`, `pnpm test`, and
-`pnpm fmt:check` there, then carry each fix back into its owning patch with
+focused checks there (the automatic CI gate is `scripts/ci/verify-stgit-replay`),
+then carry each fix back into its owning patch with
 `stg goto <patch>` and `stg refresh`.
 
 Generated files must be regenerated at the tip, not at their owning patch.
@@ -202,6 +203,10 @@ scripts/ci/publish-stgit-stack --check
 scripts/ci/publish-stgit-stack --push
 ```
 
+Capture leases with `scripts/ci/prepare-stgit-publication` in the fresh checkout
+before making changes. Both modes require those preparation-time main, stack
+and complete patch-ref leases; they never infer permission from newly observed
+remote state. After lease loss, review the new state in a fresh checkout.
 Check mode is non-mutating. Push mode backs up remote `main`, then atomically
 publishes `main`, the stack ref, every patch named by `stack.json.applied`, and
 leased deletions for obsolete patch refs. Stop on any lease failure.
