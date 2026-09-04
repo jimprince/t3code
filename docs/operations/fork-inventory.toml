@@ -116,6 +116,6 @@ name = "fork-thread-goals"
 subject = "feat(goals): persist thread goals"
 class = "product"
 purpose = "Persist, expose, and render durable goals for long-running agent threads."
-retire_when = "never"
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-thread-lifecycle-recovery"]
 roles = []
