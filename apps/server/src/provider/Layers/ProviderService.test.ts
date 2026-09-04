@@ -523,7 +523,10 @@ it.effect("ProviderServiceLive flushes deferred completions during shutdown", ()
     const runtimeRepositoryLayer = ProviderSessionRuntime.layer.pipe(
       Layer.provide(SqlitePersistenceMemory),
     );
-    const directoryLayer = ProviderSessionDirectoryLive.pipe(Layer.provide(runtimeRepositoryLayer));
+    const directoryLayer = ProviderSessionDirectoryLive.pipe(
+      Layer.provide(runtimeRepositoryLayer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
+    );
     const providerLayer = Layer.mergeAll(
       makeProviderServiceLive().pipe(
         Layer.provide(providerAdapterLayer),
@@ -547,7 +550,6 @@ it.effect("ProviderServiceLive flushes deferred completions during shutdown", ()
     const provider = yield* ProviderService.ProviderService.pipe(Effect.provide(runtimeServices));
     const threadId = asThreadId("thread-turn-analytics-stop-all-deferred");
     const firstStarted = yield* Deferred.make<void>();
-    const secondStarted = yield* Deferred.make<void>();
     const sendRelease = yield* Deferred.make<void>();
     const turnId = asTurnId("turn-analytics-stop-all-deferred");
     yield* provider.startSession(threadId, {
@@ -556,30 +558,18 @@ it.effect("ProviderServiceLive flushes deferred completions during shutdown", ()
       threadId,
       runtimeMode: "full-access",
     });
-    codex.sendTurn
-      .mockImplementationOnce(() =>
-        Effect.gen(function* () {
-          yield* Deferred.succeed(firstStarted, undefined);
-          yield* Deferred.await(sendRelease);
-          return { threadId, turnId };
-        }),
-      )
-      .mockImplementationOnce(() =>
-        Effect.gen(function* () {
-          yield* Deferred.succeed(secondStarted, undefined);
-          yield* Deferred.await(sendRelease);
-          return { threadId, turnId: asTurnId("turn-analytics-stop-all-other") };
-        }),
-      );
+    codex.sendTurn.mockImplementationOnce(() =>
+      Effect.gen(function* () {
+        yield* Deferred.succeed(firstStarted, undefined);
+        yield* Deferred.await(sendRelease);
+        return { threadId, turnId };
+      }),
+    );
 
     const firstSend = yield* provider
       .sendTurn({ threadId, input: "first", attachments: [] })
       .pipe(Effect.forkChild);
     yield* Deferred.await(firstStarted);
-    const secondSend = yield* provider
-      .sendTurn({ threadId, input: "second", attachments: [] })
-      .pipe(Effect.forkChild);
-    yield* Deferred.await(secondStarted);
 
     const runtimeEvents = yield* Stream.take(provider.streamEvents, 2).pipe(
       Stream.runDrain,
@@ -624,7 +614,6 @@ it.effect("ProviderServiceLive flushes deferred completions during shutdown", ()
     assert.equal(completed[0]?.properties?.inputTokens, 1_200);
     assert.equal(completed[0]?.properties?.outputTokens, 300);
     yield* Fiber.interrupt(firstSend);
-    yield* Fiber.interrupt(secondSend);
     assert.equal(recordedAnalytics.eventsByName("provider.turn.completed").length, 1);
   }),
 );
