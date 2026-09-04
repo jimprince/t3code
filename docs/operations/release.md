@@ -50,7 +50,7 @@ tag publication.
 
 Before replay, `prepare-stgit-publication` records the exact main, stack and
 complete patch-ref set. StGit itself updates metadata during replay. The fixed
-`verify-stgit-replay` gate runs on the unstamped candidate before preparation.
+`verify-stgit-replay` gate runs on the unstamped candidate before release-tag preparation.
 After stamping, the checkout returns to that verified stack tip and both
 automatic workflows call `publish-stgit-stack --push`. This one helper publishes
 main, metadata, patch refs, obsolete-ref deletions, immutable snapshots and the
@@ -616,13 +616,9 @@ Windows builds are not part of the fork release matrix.
 
 ## Troubleshooting
 
-- An upstream nightly can temporarily fail the fork's stricter Effect-aware
-  TypeScript diagnostics in the server package. Release preflight runs strict
-  typechecking for every other workspace; the server artifact build and runtime
-  test suite remain required. Keep the regular `vp run typecheck` gate in
-  normal CI; do not weaken it to make a release green.
-  Keep the regular `vp run typecheck` gate in normal CI; do not weaken it to
-  make a release green.
+- A failed typecheck blocks replay promotion and release preflight, including
+  the server package. Compare the precise failure against pure upstream before
+  repairing it; do not disable a package's checks to make a release green.
 
 - `403 Resource not accessible by integration` while publishing a release:
   ensure `release.yml` grants `contents: write`, the release step can use
