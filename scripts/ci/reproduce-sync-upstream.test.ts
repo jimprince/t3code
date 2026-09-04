@@ -172,6 +172,7 @@ suite("reproduce-sync-upstream StGit replay", () => {
       const names = convertCommitsToStack(repo, 2);
       repo.git("remote", "add", "upstream", remote);
       const startingHead = repo.git("rev-parse", "HEAD");
+      const startingStack = repo.git("show", "refs/stacks/stgit/adopt:stack.json");
 
       const result = runDriver(repo, "output");
       assert.strictEqual(result.status, 0, result.output);
@@ -185,6 +186,11 @@ suite("reproduce-sync-upstream StGit replay", () => {
       assert.strictEqual(repo.git("status", "--porcelain"), "");
       assert.strictEqual(repo.git("branch", "--show-current"), "stgit/adopt");
       assert.deepStrictEqual(convertSeries(repo), names);
+      const { prev: _beforeLog, ...beforeState } = JSON.parse(startingStack);
+      const { prev: _afterLog, ...afterState } = JSON.parse(
+        repo.git("show", "refs/stacks/stgit/adopt:stack.json"),
+      );
+      assert.deepStrictEqual(afterState, beforeState);
     } finally {
       repo.cleanup();
       if (remote) NodeFS.rmSync(remote, { recursive: true, force: true });
