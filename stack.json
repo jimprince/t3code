@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "c523bdda6089962b65d8f9fddc8bc3ad5618da30",
-  "head": "e1cf251814628ff0ee73cfdfb1f552a207924baa",
+  "prev": "be06745e125ba620dab66898951d9198c7cf9cb4",
+  "head": "706193aa16102532e85edfbce3f3ac0631048a6e",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -36,10 +36,11 @@
     "fork-pr-status-unsupported-hosts",
     "fork-worktree-gc",
     "fork-gitea-instance-pr-badges",
-    "fork-gitea-pr-actions",
+    "fork-gitea-pr-actions"
+  ],
+  "unapplied": [
     "fork-pr-project-exclusions"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
