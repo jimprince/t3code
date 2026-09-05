@@ -1006,7 +1006,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               }),
               applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(initialProvider),
-              refresh: Effect.succeed(refreshedProvider),
+              // Keep the boot probe pending; this test drives the live-update path.
+              refresh: Effect.never,
               streamChanges: Stream.fromPubSub(changes),
             },
             adapter: {} as ProviderInstance["adapter"],
@@ -1051,18 +1052,16 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             assert.deepStrictEqual((yield* registry.getProviders)[0]?.models, [
               ...initialProvider.models,
             ]);
+            const nextUpdate = yield* Stream.toPull(
+              registry.streamChanges.pipe(
+                Stream.filter((providers) =>
+                  providers.some((provider) => provider.checkedAt === refreshedProvider.checkedAt),
+                ),
+              ),
+            );
             yield* PubSub.publish(changes, refreshedProvider);
-
-            let cachedProvider = yield* readProviderStatusCache(filePath);
-            for (
-              let attempt = 0;
-              attempt < 50 && cachedProvider?.checkedAt !== refreshedProvider.checkedAt;
-              attempt += 1
-            ) {
-              yield* TestClock.adjust("10 millis");
-              yield* Effect.yieldNow;
-              cachedProvider = yield* readProviderStatusCache(filePath);
-            }
+            yield* nextUpdate;
+            const cachedProvider = yield* readProviderStatusCache(filePath);
 
             assert.deepStrictEqual(cachedProvider, {
               ...refreshedProvider,
@@ -1179,13 +1178,21 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
 
               yield* registry.refreshInstance(openCodeInstanceId);
               let cachedProvider = yield* readProviderStatusCache(filePath);
+              assert.strictEqual(cachedProvider?.checkedAt, authoritativeProvider.checkedAt);
 
               assert.deepStrictEqual(cachedProvider?.models, [authoritativeProvider.models[0]!]);
 
-              const nextUpdate = yield* Stream.toPull(registry.streamChanges);
+              const nextUpdate = yield* Stream.toPull(
+                registry.streamChanges.pipe(
+                  Stream.filter((providers) =>
+                    providers.some((provider) => provider.checkedAt === failedProvider.checkedAt),
+                  ),
+                ),
+              );
               yield* PubSub.publish(changes, failedProvider);
               yield* nextUpdate;
               cachedProvider = yield* readProviderStatusCache(filePath);
+              assert.strictEqual(cachedProvider?.checkedAt, failedProvider.checkedAt);
 
               assert.deepStrictEqual(cachedProvider?.models, [authoritativeProvider.models[0]!]);
               assert.deepStrictEqual((yield* registry.getProviders)[0]?.models, [
@@ -1622,12 +1629,6 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
       // aggregator sync pipeline and asserts that `getProviders` reflects
       // the new background probe's outcome.
       //
-      // Each poll iteration advances virtual time and yields, but the probe
-      // completes on real fibers. Under CPU contention (CI) those fibers can be
-      // starved for many iterations, so a small cap asserts before the work has
-      // had a chance to land. The bound only exists to avoid hanging forever; a
-      // genuine regression still fails, just after more (cheap) iterations.
-      const PROBE_WAIT_ATTEMPTS = 2000;
       it.effect("re-probes when settings change the codex binaryPath", () =>
         Effect.gen(function* () {
           const firstMissing = `t3code_codex_first_`;
@@ -1685,37 +1686,24 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
 
           yield* Effect.gen(function* () {
             const registry = yield* ProviderRegistry.ProviderRegistry;
-            // Boot-time probe: the default codex instance is enabled with
-            // `firstMissing`, so the real spawner yields ENOENT and the
-            // snapshot should be `status: "error"`.
-            // Each iteration advances virtual time and yields, but the probe
-            // itself completes on real fibers. Under CPU contention (CI) those
-            // fibers can be starved for many iterations, so a small attempt cap
-            // asserts before the work has had a chance to land. Wait generously
-            // instead — a genuine regression still fails, via the test timeout.
-            let initialProviders = yield* registry.getProviders;
-            let initialCodex = initialProviders.find((provider) => provider.instanceId === "codex");
-            for (
-              let attempts = 0;
-              attempts < PROBE_WAIT_ATTEMPTS && initialCodex?.status !== "error";
-              attempts += 1
-            ) {
-              yield* TestClock.adjust("50 millis");
-              yield* Effect.yieldNow;
-              initialProviders = yield* registry.getProviders;
-              initialCodex = initialProviders.find((provider) => provider.instanceId === "codex");
-            }
+            const nextUpdate = yield* Stream.toPull(registry.streamChanges);
+            const waitForProbe = Effect.fn("test.waitForProbe")(function* (binaryPath: string) {
+              let providers = yield* registry.getProviders;
+              while (
+                !spawnedCommands.includes(binaryPath) ||
+                providers.find((provider) => provider.instanceId === "codex")?.status !== "error"
+              ) {
+                yield* nextUpdate;
+                providers = yield* registry.getProviders;
+              }
+              return providers;
+            });
+            const initialProviders = yield* waitForProbe(firstMissing);
+            const initialCodex = initialProviders.find(
+              (provider) => provider.instanceId === "codex",
+            );
             assert.strictEqual(initialCodex?.status, "error");
             assert.strictEqual(initialCodex?.installed, false);
-            // The poll above advances TestClock repeatedly while the fork's
-            // forked boot refresh is in flight, so an armed background refresh
-            // can probe the same binary again before the loop exits. Assert the
-            // contract that actually matters here — boot probes `firstMissing`
-            // and nothing has probed the not-yet-configured binary — instead of
-            // an exact count that depends on scheduling. Probe counts at boot
-            // are covered deterministically by "does not run provider probes
-            // during layer construction" and "does not wait for boot refreshes
-            // before exposing fallback providers" above.
             assert.strictEqual(spawnedCommands[0], firstMissing);
             // Collect rather than `every`: an inferred type predicate would
             // narrow `spawnedCommands` to the boot binary for the rest of the
@@ -1743,34 +1731,8 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               },
             });
 
-            // Poll until the injected process boundary observes the new
-            // executable. This verifies the public settings-to-probe behavior
-            // without depending on timestamps assigned by TestClock.
-            const refreshed = yield* Effect.gen(function* () {
-              for (let attempts = 0; attempts < PROBE_WAIT_ATTEMPTS; attempts += 1) {
-                const providers = yield* registry.getProviders;
-                const codex = providers.find((provider) => provider.instanceId === "codex");
-                if (
-                  codex !== undefined &&
-                  codex.status === "error" &&
-                  spawnedCommands.includes(secondMissing)
-                ) {
-                  return providers;
-                }
-                yield* TestClock.adjust("50 millis");
-                yield* Effect.yieldNow;
-              }
-              return yield* registry.getProviders;
-            });
-
+            const refreshed = yield* waitForProbe(secondMissing);
             const reprobedCodex = refreshed.find((provider) => provider.instanceId === "codex");
-            // The poll above advances TestClock repeatedly, which can drive
-            // additional background-refresh probes of either binary under slower
-            // (CI) scheduling, making an exact `spawnedCommands` match flaky. The
-            // no-extra-refresh behavior is already covered by the boot-refresh
-            // tests above; here assert the observable settings-change behavior:
-            // the original binary is probed at boot and the new binaryPath is
-            // re-probed afterward.
             assert.strictEqual(spawnedCommands[0], firstMissing);
             assert.ok(
               spawnedCommands.indexOf(secondMissing) > 0,
