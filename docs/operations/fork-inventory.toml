@@ -407,3 +407,13 @@ purpose = "Stop pull request status polling from repeatedly asking, and repeated
 retire_when = "Upstream skips change request lookups for remotes with no registered provider instead of retrying the guaranteed failure."
 depends_on = ["fork-stgit-stack-policy"]
 roles = []
+
+[[patch]]
+name = "fork-worktree-gc"
+subject = "feat(t3-thread): retire archived worker worktrees"
+class = "product"
+purpose = "Plan and execute retirement of the per-worker git worktrees T3 creates, removing only checkouts whose threads are all archived past a recovery window and whose git state is clean, so a host does not accumulate duplicated dependency trees."
+retire_when = "never"
+depends_on = ["fork-t3-thread-operator-cli"]
+roles = []
+note = "Removal never passes --force to `git worktree remove`, so git independently refuses a dirty checkout and the branch ref plus its commits survive. Retention checks run before inspection so a checkout with a live thread is never touched. Fetch archived and active snapshots explicitly: the normal CLI thread listing excludes archived threads."
