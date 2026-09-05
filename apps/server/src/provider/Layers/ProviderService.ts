@@ -1277,19 +1277,6 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
       return false;
     }
 
-    const markerTimestamp = Date.parse(binding.lastSeenAt);
-    const markerAgeMs = (yield* Clock.currentTimeMillis) - markerTimestamp;
-    if (Number.isNaN(markerTimestamp) || markerAgeMs < STALE_TURN_RECONCILIATION_GRACE_MS) {
-      yield* Effect.logDebug("provider.turn.reservation-conflict", {
-        threadId: input.threadId,
-        provider: input.adapter.provider,
-        activeTurnId,
-        markerAgeMs,
-        reason: Number.isNaN(markerTimestamp) ? "invalid-marker-timestamp" : "recent-turn",
-      });
-      return false;
-    }
-
     const liveSessions = yield* input.adapter.listSessions().pipe(
       Effect.map(Option.some),
       Effect.catchCause((cause) =>
@@ -1306,6 +1293,25 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
     }
 
     const liveSession = liveSessions.value.find((session) => session.threadId === input.threadId);
+    // A send to the same live turn is a steer; keep its marker so recovery
+    // cannot claim the session while the adapter delivers the follow-up.
+    if (liveSession?.activeTurnId === activeTurnId) {
+      return true;
+    }
+
+    const markerTimestamp = Date.parse(binding.lastSeenAt);
+    const markerAgeMs = (yield* Clock.currentTimeMillis) - markerTimestamp;
+    if (Number.isNaN(markerTimestamp) || markerAgeMs < STALE_TURN_RECONCILIATION_GRACE_MS) {
+      yield* Effect.logDebug("provider.turn.reservation-conflict", {
+        threadId: input.threadId,
+        provider: input.adapter.provider,
+        activeTurnId,
+        markerAgeMs,
+        reason: Number.isNaN(markerTimestamp) ? "invalid-marker-timestamp" : "recent-turn",
+      });
+      return false;
+    }
+
     if (
       liveSession === undefined ||
       liveSession.activeTurnId !== undefined ||

@@ -525,14 +525,13 @@ routing.layer("ProviderServiceLive routing (fork)", (it) => {
       routing.codex.sendTurn.mockClear();
     }),
   );
-  it.effect(
-    "does not reconcile a persisted marker while the live provider has an active turn",
-    () =>
+  for (const markerAgeMs of [0, 5_001]) {
+    it.effect(`delivers a steer without replacing a live marker aged ${markerAgeMs}ms`, () =>
       Effect.gen(function* () {
         const provider = yield* ProviderService.ProviderService;
         const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
-        const threadId = asThreadId("thread-send-live-marker");
-        const activeTurnId = asTurnId("turn-send-live-marker");
+        const threadId = asThreadId(`thread-send-steer-${markerAgeMs}`);
+        const activeTurnId = asTurnId(`turn-send-steer-${markerAgeMs}`);
         yield* provider.startSession(threadId, {
           provider: CODEX_DRIVER,
           providerInstanceId: codexInstanceId,
@@ -545,24 +544,113 @@ routing.layer("ProviderServiceLive routing (fork)", (it) => {
           activeTurnId,
         }));
         assert.equal(yield* directory.markTurnStarted({ threadId, turnId: activeTurnId }), true);
-        routing.codex.sendTurn.mockClear();
-        yield* advanceTestClock(5_001);
+        if (markerAgeMs > 0) yield* advanceTestClock(markerAgeMs);
 
-        const failure = yield* Effect.flip(
-          provider.sendTurn({
-            threadId,
-            input: "do not start a concurrent provider turn",
-            attachments: [],
-          }),
+        const deliveredInputs: string[] = [];
+        routing.codex.sendTurn.mockImplementationOnce((input) =>
+          Effect.gen(function* () {
+            const binding = yield* directory.getBinding(threadId);
+            assert.equal(Option.getOrUndefined(binding)?.activeTurnId, activeTurnId);
+            deliveredInputs.push(input.input ?? "");
+            return { threadId, turnId: activeTurnId };
+          }).pipe(Effect.orDie),
         );
+        const turn = yield* provider.sendTurn({
+          threadId,
+          input: "incorporate this follow-up into the running turn",
+          attachments: [],
+        });
 
-        assert.instanceOf(failure, ProviderValidationError);
-        assert.include(failure.issue, "another turn or session transition is in progress");
-        assert.equal(routing.codex.sendTurn.mock.calls.length, 0);
+        assert.deepEqual(deliveredInputs, ["incorporate this follow-up into the running turn"]);
+        assert.equal(turn.turnId, activeTurnId);
         const binding = yield* directory.getBinding(threadId);
         assert.equal(Option.getOrUndefined(binding)?.activeTurnId, activeTurnId);
+        assert.equal(
+          yield* directory.claimIdleForRecovery({
+            threadId,
+            expectedLastSeenAt: Option.getOrThrow(binding).lastSeenAt,
+          }),
+          false,
+        );
         yield* provider.stopSession({ threadId });
+        routing.codex.sendTurn.mockClear();
       }),
+    );
+  }
+  it.effect("preserves the live marker when a steer fails in the adapter", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const threadId = asThreadId("thread-send-steer-failure");
+      const activeTurnId = asTurnId("turn-send-steer-failure");
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "full-access",
+      });
+      routing.codex.updateSession(threadId, (session) => ({
+        ...session,
+        status: "running",
+        activeTurnId,
+      }));
+      assert.equal(yield* directory.markTurnStarted({ threadId, turnId: activeTurnId }), true);
+      const adapterError = new ProviderAdapterRequestError({
+        provider: CODEX_DRIVER,
+        operation: "sendTurn",
+        message: "steer rejected by provider",
+      });
+      routing.codex.sendTurn.mockImplementationOnce(() => Effect.fail(adapterError));
+      const failure = yield* Effect.flip(
+        provider.sendTurn({
+          threadId,
+          input: "follow-up rejected by adapter",
+          attachments: [],
+        }),
+      );
+      assert.equal(failure, adapterError);
+      const binding = yield* directory.getBinding(threadId);
+      assert.equal(Option.getOrUndefined(binding)?.activeTurnId, activeTurnId);
+      yield* provider.stopSession({ threadId });
+      routing.codex.sendTurn.mockClear();
+    }),
+  );
+  it.effect("rejects a persisted marker that differs from the live provider turn", () =>
+    Effect.gen(function* () {
+      const provider = yield* ProviderService.ProviderService;
+      const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+      const threadId = asThreadId("thread-send-live-marker");
+      const activeTurnId = asTurnId("turn-send-live-marker");
+      yield* provider.startSession(threadId, {
+        provider: CODEX_DRIVER,
+        providerInstanceId: codexInstanceId,
+        threadId,
+        runtimeMode: "full-access",
+      });
+      routing.codex.updateSession(threadId, (session) => ({
+        ...session,
+        status: "running",
+        activeTurnId: asTurnId("different-live-turn"),
+      }));
+      assert.equal(yield* directory.markTurnStarted({ threadId, turnId: activeTurnId }), true);
+      routing.codex.sendTurn.mockClear();
+      yield* advanceTestClock(5_001);
+
+      const failure = yield* Effect.flip(
+        provider.sendTurn({
+          threadId,
+          input: "do not start a concurrent provider turn",
+          attachments: [],
+        }),
+      );
+
+      assert.instanceOf(failure, ProviderValidationError);
+      assert.include(failure.issue, "another turn or session transition is in progress");
+      assert.equal(routing.codex.sendTurn.mock.calls.length, 0);
+      const binding = yield* directory.getBinding(threadId);
+      assert.equal(Option.getOrUndefined(binding)?.activeTurnId, activeTurnId);
+      yield* provider.stopSession({ threadId });
+    }),
   );
   it.effect("does not reconcile pending or recently-created turn markers", () =>
     Effect.gen(function* () {
