@@ -41,6 +41,7 @@ import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
 import { ProviderAuthService } from "../../provider/Services/ProviderAuthService.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
+import { ProviderSessionDirectory } from "../../provider/Services/ProviderSessionDirectory.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
@@ -55,6 +56,13 @@ import {
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import {
+  buildTransferredThreadProviderInput,
+  findPendingTransferredThreadHandoff,
+  markThreadTransferContextHandoffConsumed,
+  readConsumedThreadTransferContextExportedAt,
+  THREAD_TRANSFER_IMPORTED_ACTIVITY_KIND,
+} from "../threadTransferContextHandoff.ts";
 const isProviderAdapterRequestError = Schema.is(ProviderAdapterRequestError);
 const isProviderAdapterValidationError = Schema.is(ProviderAdapterValidationError);
 const isProviderWorkspaceMissingError = Schema.is(ProviderWorkspaceMissingError);
@@ -322,6 +330,7 @@ const make = Effect.gen(function* () {
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const providerAuthService = yield* ProviderAuthService;
   const providerService = yield* ProviderService;
+  const providerSessionDirectory = yield* ProviderSessionDirectory;
   const providerRegistry = yield* ProviderRegistry;
   const gitWorkflow = yield* GitWorkflowService;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -538,7 +547,7 @@ const make = Effect.gen(function* () {
 
   const resolveThreadDetail = Effect.fnUntraced(function* (threadId: ThreadId) {
     return yield* projectionSnapshotQuery
-      .getThreadDetailById(threadId, { activityKinds: [] })
+      .getThreadDetailById(threadId, { activityKinds: [THREAD_TRANSFER_IMPORTED_ACTIVITY_KIND] })
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
@@ -709,7 +718,7 @@ const make = Effect.gen(function* () {
     }
     const project = yield* resolveProject(thread.projectId);
     const effectiveCwd = resolveThreadWorkspaceCwd({
-      thread,
+      thread: project?.kind === "chat" ? { ...thread, worktreePath: null } : thread,
       projects: project ? [project] : [],
     });
     const refreshWorkspaceSnapshot = effectiveCwd
@@ -1421,9 +1430,36 @@ const make = Effect.gen(function* () {
         "Wait for context compaction to finish before sending another message.",
       );
     }
+    const providerBinding = yield* providerSessionDirectory.getBinding(event.payload.threadId).pipe(
+      Effect.map(Option.getOrUndefined),
+      Effect.catchCause((cause) =>
+        Effect.logWarning(
+          "provider command reactor could not read transferred context handoff state",
+          {
+            threadId: event.payload.threadId,
+            cause: Cause.pretty(cause),
+          },
+        ).pipe(Effect.as(undefined)),
+      ),
+    );
+    const transferredContextHandoff = findPendingTransferredThreadHandoff({
+      thread,
+      currentMessageId: message.id,
+      consumedExportedAt: readConsumedThreadTransferContextExportedAt(
+        providerBinding?.runtimePayload,
+      ),
+    });
+    const providerMessageText =
+      transferredContextHandoff === undefined
+        ? message.text
+        : buildTransferredThreadProviderInput({
+            historyMessages: transferredContextHandoff.historyMessages,
+            currentRequest: message.text,
+          });
+
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
-      messageText: message.text,
+      messageText: providerMessageText,
       ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }
@@ -1439,9 +1475,44 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    yield* providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.asVoid, Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
+    const markTransferredContextConsumed =
+      transferredContextHandoff === undefined
+        ? Effect.void
+        : providerSessionDirectory.getBinding(event.payload.threadId).pipe(
+            Effect.flatMap(
+              Option.match({
+                onNone: () =>
+                  Effect.logWarning(
+                    "provider command reactor could not persist transferred context handoff consumption because the provider binding is missing",
+                    { threadId: event.payload.threadId },
+                  ),
+                onSome: (binding) =>
+                  providerSessionDirectory.upsert({
+                    ...binding,
+                    runtimePayload: markThreadTransferContextHandoffConsumed(
+                      binding.runtimePayload,
+                      transferredContextHandoff.exportedAt,
+                    ),
+                  }),
+              }),
+            ),
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                "provider command reactor could not persist transferred context handoff consumption",
+                {
+                  threadId: event.payload.threadId,
+                  cause: Cause.pretty(cause),
+                },
+              ),
+            ),
+          );
+
+    yield* providerService.sendTurn(sendTurnRequest.value).pipe(
+      Effect.tap(() => markTransferredContextConsumed),
+      Effect.asVoid,
+      Effect.catchCause(recoverTurnStartFailure),
+      Effect.forkScoped,
+    );
   });
 
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (
@@ -1630,7 +1701,9 @@ const make = Effect.gen(function* () {
   const processSessionStopRequested = Effect.fn("processSessionStopRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.session-stop-requested" }>,
   ) {
-    const thread = yield* resolveThreadShell(event.payload.threadId);
+    const thread = yield* projectionSnapshotQuery
+      .getThreadShellByIdIncludingArchived(event.payload.threadId)
+      .pipe(Effect.map(Option.getOrUndefined));
     if (!thread) {
       return;
     }
