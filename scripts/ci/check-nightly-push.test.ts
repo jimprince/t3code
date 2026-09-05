@@ -34,13 +34,24 @@ describe("nightly push tree filter", () => {
       repo.writeFile(".github/workflows/release.yml", "name: Maintenance\n");
       repo.commitAll("re-rendered history");
       assert.equal(needed(repo, before), "needed=false");
-    } finally { repo.cleanup(); }
+    } finally {
+      repo.cleanup();
+    }
   });
 
-  for (const path of ["apps/server/source.ts", "apps/web/source.ts", "apps/desktop/source.ts",
-    "packages/contracts/source.ts", "assets/icon.png", "package.json", "pnpm-lock.yaml",
-    "pnpm-workspace.yaml", "scripts/build-desktop-artifact.ts", "scripts/build-headless-artifact.ts",
-    "scripts/lib/brand-assets.ts"]) {
+  for (const path of [
+    "apps/server/source.ts",
+    "apps/web/source.ts",
+    "apps/desktop/source.ts",
+    "packages/contracts/source.ts",
+    "assets/icon.png",
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "scripts/build-desktop-artifact.ts",
+    "scripts/build-headless-artifact.ts",
+    "scripts/lib/brand-assets.ts",
+  ]) {
     it(`releases a change to ${path}`, () => {
       const repo = createFixtureRepo();
       try {
@@ -48,7 +59,9 @@ describe("nightly push tree filter", () => {
         repo.writeFile(path, "changed\n");
         repo.commitAll("runtime change");
         assert.equal(needed(repo, before), "needed=true");
-      } finally { repo.cleanup(); }
+      } finally {
+        repo.cleanup();
+      }
     });
   }
 
@@ -60,7 +73,9 @@ describe("nightly push tree filter", () => {
       repo.git("mv", "apps/server/source.ts", "removed-source.ts");
       repo.commitAll("remove runtime file");
       assert.equal(needed(repo, before), "needed=true");
-    } finally { repo.cleanup(); }
+    } finally {
+      repo.cleanup();
+    }
   });
 
   it("keeps manual and unknown-history releases available", () => {
@@ -71,6 +86,8 @@ describe("nightly push tree filter", () => {
       assert.equal(needed(repo, head, "workflow_dispatch"), "needed=true");
       assert.equal(needed(repo, "0".repeat(40)), "needed=true");
       assert.equal(needed(repo, "a".repeat(40)), "needed=true");
-    } finally { repo.cleanup(); }
+    } finally {
+      repo.cleanup();
+    }
   });
 });
