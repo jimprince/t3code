@@ -452,6 +452,28 @@ List all threads for an environment:
 t3-thread threads --env <environment>
 ```
 
+## Retiring Worker Worktrees
+
+Every worker gets its own checkout, and their dependency trees and caches are
+what actually fill a host's disk. Retire them from the machine that owns them:
+
+```bash
+t3-thread worktree gc --env <environment>                 # report only
+t3-thread worktree gc --env <environment> --execute       # remove the plan
+t3-thread worktree gc --env <environment> --recovery-window-days 14
+```
+
+The plan reports each worktree as removable or retained with a reason. A
+checkout is removable only when every T3 thread that used it is archived, none
+reports active work, its newest archive is older than the recovery window
+(seven days by default), and it is a linked git worktree with no tracked or
+untracked changes. Removal never passes `--force`, so git independently refuses
+a dirty checkout, and the branch and its commits survive.
+
+Paths that do not exist on the machine running the command are reported as
+`missing` and never removed, so running this against a remote environment
+simply finds nothing.
+
 ## Replacing A Failed Thread
 
 If a delegated thread is dead or attached to the wrong checkout, do not keep using it.
@@ -582,3 +604,6 @@ When validating that a fresh agent can discover and use this repo:
 Important caveat:
 
 - Do **not** use the stripped-down `subagents --backend opencode ...` one-shot path for this validation. That harness is intentionally tool-stripped and may fail the test for reasons unrelated to the repo docs. Use a full agent backend instead.
+
+Detached worktrees are retained even when clean, because their commits may not
+be protected by a branch ref. Attach the work to a branch before retirement.

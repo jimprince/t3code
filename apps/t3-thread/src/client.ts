@@ -233,6 +233,21 @@ export class RemoteEnvironmentClient {
     return snapshot.threads;
   }
 
+  async listWorktreeGcThreads(): Promise<OrchestrationThreadShell[]> {
+    const rpc = await this.openRpc();
+    try {
+      const archived = await rpc.request<OrchestrationShellSnapshot>(
+        "getArchivedShellSnapshot",
+        {},
+      );
+      // Read active threads last so a just-unarchived thread vetoes retirement.
+      const active = await this.listThreads();
+      return [...archived.threads, ...active];
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   async listProjects(): Promise<OrchestrationProjectShell[]> {
     const snapshot = await this.getShellSnapshot();
     return snapshot.projects;
