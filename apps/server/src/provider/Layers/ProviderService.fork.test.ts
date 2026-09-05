@@ -565,10 +565,14 @@ routing.layer("ProviderServiceLive routing (fork)", (it) => {
         assert.equal(turn.turnId, activeTurnId);
         const binding = yield* directory.getBinding(threadId);
         assert.equal(Option.getOrUndefined(binding)?.activeTurnId, activeTurnId);
+        const metadata = (yield* directory.listBindings()).find(
+          (candidate) => candidate.threadId === threadId,
+        );
+        assert.isDefined(metadata);
         assert.equal(
           yield* directory.claimIdleForRecovery({
             threadId,
-            expectedLastSeenAt: Option.getOrThrow(binding).lastSeenAt,
+            expectedLastSeenAt: metadata!.lastSeenAt,
           }),
           false,
         );
