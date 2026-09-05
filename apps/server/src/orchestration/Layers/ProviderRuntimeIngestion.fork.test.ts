@@ -1,3 +1,6 @@
+import * as CheckpointStore from "../../checkpointing/CheckpointStore.ts";
+import * as VcsDriverRegistry from "../../vcs/VcsDriverRegistry.ts";
+import * as VcsProcess from "../../vcs/VcsProcess.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
@@ -254,6 +257,8 @@ describe("ProviderRuntimeIngestion", () => {
       Layer.provideMerge(SqlitePersistenceMemory),
       Layer.provideMerge(Layer.succeed(ProviderService, provider.service)),
       Layer.provideMerge(makeTestServerSettingsLayer(options?.serverSettings)),
+      Layer.provideMerge(CheckpointStore.layer.pipe(Layer.provide(VcsDriverRegistry.layer))),
+      Layer.provideMerge(VcsProcess.layer),
       Layer.provideMerge(ServerConfig.layerTest(process.cwd(), process.cwd())),
       Layer.provideMerge(NodeServices.layer),
     );

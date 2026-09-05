@@ -284,6 +284,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         );
         const binding = {
           threadId,
+          activeTurnId: TurnId.make("live-import-turn"),
           provider: ProviderDriverKind.make("codex"),
           providerInstanceId: ProviderInstanceId.make("codex"),
         };
@@ -294,6 +295,14 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         expect(Option.getOrThrow(yield* directory.getBinding(threadId)).runtimePayload).toEqual({
           cwd: "/tmp/project",
         });
+
+        const stored = Option.getOrThrow(
+          yield* (yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository).getByThreadId({
+            threadId,
+          }),
+        );
+        expect(stored.activeTurnId).toBe(binding.activeTurnId);
+        expect(stored.bootGenerationId).toBe("boot-a");
 
         yield* directory.recordImportedTranscript({ threadId, source });
         yield* directory.upsert({ ...binding, runtimePayload: null });
@@ -400,19 +409,19 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
         const runtimeRepository = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
         const threadId = ThreadId.make("thread-provider-change");
 
-      yield* runtimeRepository.upsert({
-        threadId,
-        providerName: "claudeAgent",
-        providerInstanceId: null,
-        bootGenerationId: "legacy-boot",
-        adapterKey: "claudeAgent",
-        runtimeMode: "full-access",
-        status: "running",
-        activeTurnId: null,
-        lastSeenAt: "2026-01-01T00:00:00.000Z",
-        resumeCursor: null,
-        runtimePayload: null,
-      });
+        yield* runtimeRepository.upsert({
+          threadId,
+          providerName: "claudeAgent",
+          providerInstanceId: null,
+          bootGenerationId: "legacy-boot",
+          adapterKey: "claudeAgent",
+          runtimeMode: "full-access",
+          status: "running",
+          activeTurnId: null,
+          lastSeenAt: "2026-01-01T00:00:00.000Z",
+          resumeCursor: null,
+          runtimePayload: null,
+        });
 
         yield* directory.upsert({
           provider: ProviderDriverKind.make("codex"),

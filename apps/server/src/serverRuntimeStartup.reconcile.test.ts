@@ -250,7 +250,7 @@ it.effect.each(["marked update", "opt-in restart"] as const)(
         continueAfterRestart: recovery === "opt-in restart",
         providerService,
         directory: {
-        ...unusedDirectoryOperations,
+          ...unusedDirectoryOperations,
           getBinding: (threadId) =>
             Effect.sync(() => {
               const binding = bindings.get(threadId);
@@ -755,6 +755,7 @@ for (const scenario of [
       threads: [thread],
       continueAfterRestart: scenario !== "disabled",
       directory: {
+        ...unusedDirectoryOperations,
         getBinding: () =>
           Effect.succeed(
             Option.some({
@@ -845,6 +846,7 @@ for (const preparedStatus of [
             }),
         },
         directory: {
+          ...unusedDirectoryOperations,
           getBinding: () => Effect.sync(() => Option.some(binding)),
           upsert: (next: ProviderSessionDirectory.ProviderRuntimeBinding) =>
             Effect.gen(function* () {
@@ -863,7 +865,13 @@ for (const preparedStatus of [
                     detail: "unreadable unrelated binding",
                   }),
                 )
-              : Effect.sync(() => [{ ...binding, lastSeenAt: "2026-01-01T00:00:00.000Z" }]),
+              : Effect.sync(() => [
+                  {
+                    ...binding,
+                    bootGenerationId: binding.bootGenerationId ?? null,
+                    lastSeenAt: "2026-01-01T00:00:00.000Z",
+                  },
+                ]),
         },
         dispatch: (command: OrchestrationCommand) =>
           Effect.sync(() => {
@@ -953,6 +961,7 @@ it.effect("settles failed opt-in recovery without retrying the provider turn", (
           }),
       },
       directory: {
+        ...unusedDirectoryOperations,
         getBinding: () => Effect.sync(() => Option.some(binding)),
         upsert: (next) =>
           Effect.sync(() => {

@@ -1582,7 +1582,11 @@ const make = Effect.gen(function* () {
         .getThreadCheckpointContext(input.threadId)
         .pipe(Effect.map(Option.getOrUndefined));
       const workspaceCwd = checkpointContext?.worktreePath ?? checkpointContext?.workspaceRoot;
-      if (!checkpointContext || !workspaceCwd || !(yield* checkpointStore.isGitRepository(workspaceCwd))) {
+      if (
+        !checkpointContext ||
+        !workspaceCwd ||
+        !(yield* checkpointStore.isGitRepository(workspaceCwd))
+      ) {
         return;
       }
 

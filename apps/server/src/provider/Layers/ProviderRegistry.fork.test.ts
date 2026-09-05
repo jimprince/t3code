@@ -848,10 +848,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             displayName: undefined,
             enabled: true,
             snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
-                provider: codexDriver,
-                packageName: null,
-              }),
+              resolveMaintenance: () =>
+                Effect.succeed(
+                  makeManualOnlyProviderMaintenanceCapabilities({
+                    provider: codexDriver,
+                    packageName: null,
+                  }),
+                ),
               applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(initialProvider),
               refresh: Ref.update(refreshCalls, (count) => count + 1).pipe(
@@ -1000,10 +1003,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             displayName: undefined,
             enabled: true,
             snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
-                provider: cursorDriver,
-                packageName: null,
-              }),
+              resolveMaintenance: () =>
+                Effect.succeed(
+                  makeManualOnlyProviderMaintenanceCapabilities({
+                    provider: cursorDriver,
+                    packageName: null,
+                  }),
+                ),
               applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(initialProvider),
               // Keep the boot probe pending; this test drives the live-update path.
@@ -1129,10 +1135,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               displayName: undefined,
               enabled: true,
               snapshot: {
-                maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
-                  provider: openCodeDriver,
-                  packageName: null,
-                }),
+                resolveMaintenance: () =>
+                  Effect.succeed(
+                    makeManualOnlyProviderMaintenanceCapabilities({
+                      provider: openCodeDriver,
+                      packageName: null,
+                    }),
+                  ),
                 applyUsageLimits: () => Effect.void,
                 getSnapshot: Effect.succeed(initialProvider),
                 refresh: Effect.succeed(authoritativeProvider),
@@ -1229,10 +1238,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             displayName: undefined,
             enabled: true,
             snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
-                provider: codexDriver,
-                packageName: null,
-              }),
+              resolveMaintenance: () =>
+                Effect.succeed(
+                  makeManualOnlyProviderMaintenanceCapabilities({
+                    provider: codexDriver,
+                    packageName: null,
+                  }),
+                ),
               applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(cachedProvider),
               refresh: Effect.die(new Error("simulated refresh failure")),
@@ -1319,10 +1331,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             displayName: undefined,
             enabled: true,
             snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
-                provider: codexDriver,
-                packageName: null,
-              }),
+              resolveMaintenance: () =>
+                Effect.succeed(
+                  makeManualOnlyProviderMaintenanceCapabilities({
+                    provider: codexDriver,
+                    packageName: null,
+                  }),
+                ),
               applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(fallbackProvider),
               refresh: Effect.gen(function* () {
@@ -1430,10 +1445,13 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             displayName: undefined,
             enabled: true,
             snapshot: {
-              maintenanceCapabilities: makeManualOnlyProviderMaintenanceCapabilities({
-                provider: provider.driver,
-                packageName: null,
-              }),
+              resolveMaintenance: () =>
+                Effect.succeed(
+                  makeManualOnlyProviderMaintenanceCapabilities({
+                    provider: provider.driver,
+                    packageName: null,
+                  }),
+                ),
               applyUsageLimits: () => Effect.void,
               getSnapshot: Effect.succeed(provider),
               refresh: Effect.succeed(provider),

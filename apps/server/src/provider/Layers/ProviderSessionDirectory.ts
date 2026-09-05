@@ -130,30 +130,35 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
       });
     }
     yield* repository
-      .upsert({
-        threadId: resolvedThreadId,
-        providerName: binding.provider,
-        providerInstanceId,
-        bootGenerationId,
-        adapterKey:
-          binding.adapterKey ??
-          (providerChanged ? binding.provider : (existingRuntime?.adapterKey ?? binding.provider)),
-        runtimeMode: binding.runtimeMode ?? existingRuntime?.runtimeMode ?? "full-access",
-        status: binding.status ?? existingRuntime?.status ?? "running",
-        activeTurnId:
-          binding.activeTurnId !== undefined
-            ? binding.activeTurnId
-            : (existingRuntime?.activeTurnId ?? null),
-        lastSeenAt: now,
-        resumeCursor:
-          binding.resumeCursor !== undefined
-            ? binding.resumeCursor
-            : (existingRuntime?.resumeCursor ?? null),
-        runtimePayload: mergeRuntimePayload(
-          existingRuntime?.runtimePayload ?? null,
-          binding.runtimePayload,
-        ),
-      }, options)
+      .upsert(
+        {
+          threadId: resolvedThreadId,
+          providerName: binding.provider,
+          providerInstanceId,
+          bootGenerationId,
+          adapterKey:
+            binding.adapterKey ??
+            (providerChanged
+              ? binding.provider
+              : (existingRuntime?.adapterKey ?? binding.provider)),
+          runtimeMode: binding.runtimeMode ?? existingRuntime?.runtimeMode ?? "full-access",
+          status: binding.status ?? existingRuntime?.status ?? "running",
+          activeTurnId:
+            binding.activeTurnId !== undefined
+              ? binding.activeTurnId
+              : (existingRuntime?.activeTurnId ?? null),
+          lastSeenAt: now,
+          resumeCursor:
+            binding.resumeCursor !== undefined
+              ? binding.resumeCursor
+              : (existingRuntime?.resumeCursor ?? null),
+          runtimePayload: mergeRuntimePayload(
+            existingRuntime?.runtimePayload ?? null,
+            binding.runtimePayload,
+          ),
+        },
+        options,
+      )
       .pipe(Effect.mapError(toPersistenceError("ProviderSessionDirectory.upsert:upsert")));
   });
 

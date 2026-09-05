@@ -10,11 +10,7 @@ import { DEFAULT_MODEL, EnvironmentId, ThreadId, TurnId } from "@t3tools/contrac
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexRpc from "effect-codex-app-server/rpc";
 
-import {
-  buildCodexDeveloperInstructions,
-  codexDefaultModeDeveloperInstructions,
-  codexPlanModeDeveloperInstructions,
-} from "../CodexDeveloperInstructions.ts";
+import { buildCodexDeveloperInstructions } from "../CodexDeveloperInstructions.ts";
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import {
   buildCodexChildEnv,
@@ -415,7 +411,7 @@ describe("buildCodexDeveloperInstructions", () => {
       reasoningEffort: "high",
     });
 
-    NodeAssert.ok(instructions.startsWith(codexDefaultModeDeveloperInstructions(true)));
+    NodeAssert.match(instructions, /Collaboration Mode: Default/);
     NodeAssert.match(instructions, /T3 Code/);
     NodeAssert.match(instructions, /Codex harness/);
     NodeAssert.match(instructions, /as gpt-5\.3-codex with high reasoning effort/);
@@ -427,7 +423,7 @@ describe("buildCodexDeveloperInstructions", () => {
       reasoningEffort: "medium",
     });
 
-    NodeAssert.ok(instructions.startsWith(codexPlanModeDeveloperInstructions(true)));
+    NodeAssert.match(instructions, /Plan Mode/);
     NodeAssert.match(instructions, /as gpt-5\.3-codex with medium reasoning effort/);
   });
 
@@ -458,8 +454,12 @@ describe("buildCodexDeveloperInstructions", () => {
 describe("T3 browser developer instructions", () => {
   it("prefers the product-native preview tools in both collaboration modes", () => {
     for (const instructions of [
-      codexDefaultModeDeveloperInstructions(true),
-      codexPlanModeDeveloperInstructions(true),
+      buildCodexDeveloperInstructions(
+        "default",
+        { model: "gpt-5", reasoningEffort: "medium" },
+        true,
+      ),
+      buildCodexDeveloperInstructions("plan", { model: "gpt-5", reasoningEffort: "medium" }, true),
     ]) {
       NodeAssert.match(instructions, /t3-code/);
       NodeAssert.match(instructions, /preview_status/);
