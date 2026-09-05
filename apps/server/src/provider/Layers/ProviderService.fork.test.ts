@@ -597,8 +597,8 @@ routing.layer("ProviderServiceLive routing (fork)", (it) => {
       assert.equal(yield* directory.markTurnStarted({ threadId, turnId: activeTurnId }), true);
       const adapterError = new ProviderAdapterRequestError({
         provider: CODEX_DRIVER,
-        operation: "sendTurn",
-        message: "steer rejected by provider",
+        method: "sendTurn",
+        detail: "steer rejected by provider",
       });
       routing.codex.sendTurn.mockImplementationOnce(() => Effect.fail(adapterError));
       const failure = yield* Effect.flip(
