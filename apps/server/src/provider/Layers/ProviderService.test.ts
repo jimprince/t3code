@@ -1971,7 +1971,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
               provider: CODEX_DRIVER,
               providerInstanceId: codexInstanceId,
               threadId: session.threadId,
-              cwd: "/tmp/project",
+              cwd: fixtureCwd("project"),
               runtimeMode: "full-access",
             }),
           ),
