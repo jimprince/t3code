@@ -79,6 +79,13 @@ const queryWithThreads = (threads: ReadonlyArray<ReturnType<typeof makeThread>>)
     getCommandReadModel: () => Effect.succeed({ threads } as never),
   }) as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"];
 
+const unusedDirectoryOperations = {
+  settleDeadGenerationBinding: () => Effect.die("unused"),
+  markTurnStarted: () => Effect.die("unused"),
+  markTurnTerminal: () => Effect.die("unused"),
+  claimIdleForRecovery: () => Effect.die("unused"),
+};
+
 const runReconciliation = (input: {
   readonly threads: ReadonlyArray<ReturnType<typeof makeThread>>;
   readonly continueAfterRestart?: boolean;
@@ -506,6 +513,7 @@ it.effect("reconciles multiple active and archived orphans but skips live sessio
     threads: [starting, running, staleActiveTurn, archived, live, settled],
     liveThreadIds: [live.id],
     directory: {
+      ...unusedDirectoryOperations,
       getBinding: (candidate) =>
         Effect.sync(() => bindingReads.push(candidate)).pipe(
           Effect.as(
@@ -593,6 +601,7 @@ it.effect(
     return runReconciliation({
       threads: [absent, corrupt, upsertFailure],
       directory: {
+        ...unusedDirectoryOperations,
         getBinding: (candidate) =>
           candidate === absent.id
             ? Effect.succeed(Option.none())
@@ -642,6 +651,7 @@ it.effect("retries failed projections and continues after a persistent failure",
   return runReconciliation({
     threads: [transient, persistent, later],
     directory: {
+      ...unusedDirectoryOperations,
       getBinding: () => Effect.succeed(Option.none()),
       upsert: () => Effect.void,
       recordImportedTranscript: () => Effect.die("unused"),
@@ -692,6 +702,7 @@ it.effect("does not fail startup when the live provider session inventory cannot
       listSessions: () => Effect.die("provider inventory unavailable"),
     }),
     Effect.provideService(ProviderSessionDirectory.ProviderSessionDirectory, {
+      ...unusedDirectoryOperations,
       getBinding: () => Effect.die("unused"),
       upsert: () => Effect.die("unused"),
       recordImportedTranscript: () => Effect.die("unused"),

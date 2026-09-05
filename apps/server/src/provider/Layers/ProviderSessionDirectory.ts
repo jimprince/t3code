@@ -13,6 +13,7 @@ import {
   type ProviderRuntimeBindingWithMetadata,
   type ProviderSessionDirectoryShape,
 } from "../Services/ProviderSessionDirectory.ts";
+import { ServerBootGeneration } from "../Services/ServerBootGeneration.ts";
 const decodeProviderDriverKindValue = Schema.decodeUnknownEffect(ProviderDriverKind);
 
 function toPersistenceError(operation: string) {
@@ -75,9 +76,11 @@ function toRuntimeBinding(
           adapterKey: runtime.adapterKey,
           runtimeMode: runtime.runtimeMode,
           status: runtime.status,
+          activeTurnId: runtime.activeTurnId ?? null,
           resumeCursor: runtime.resumeCursor,
           runtimePayload: runtime.runtimePayload,
           lastSeenAt: runtime.lastSeenAt,
+          bootGenerationId: runtime.bootGenerationId,
         }) satisfies ProviderRuntimeBindingWithMetadata,
     ),
   );
@@ -85,6 +88,7 @@ function toRuntimeBinding(
 
 const makeProviderSessionDirectory = Effect.gen(function* () {
   const repository = yield* ProviderSessionRuntime.ProviderSessionRuntimeRepository;
+  const { bootGenerationId } = yield* ServerBootGeneration;
 
   const getBinding = (threadId: ThreadId) =>
     repository.getByThreadId({ threadId }).pipe(
@@ -126,30 +130,30 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
       });
     }
     yield* repository
-      .upsert(
-        {
-          threadId: resolvedThreadId,
-          providerName: binding.provider,
-          providerInstanceId,
-          adapterKey:
-            binding.adapterKey ??
-            (providerChanged
-              ? binding.provider
-              : (existingRuntime?.adapterKey ?? binding.provider)),
-          runtimeMode: binding.runtimeMode ?? existingRuntime?.runtimeMode ?? "full-access",
-          status: binding.status ?? existingRuntime?.status ?? "running",
-          lastSeenAt: now,
-          resumeCursor:
-            binding.resumeCursor !== undefined
-              ? binding.resumeCursor
-              : (existingRuntime?.resumeCursor ?? null),
-          runtimePayload: mergeRuntimePayload(
-            existingRuntime?.runtimePayload ?? null,
-            binding.runtimePayload,
-          ),
-        },
-        options,
-      )
+      .upsert({
+        threadId: resolvedThreadId,
+        providerName: binding.provider,
+        providerInstanceId,
+        bootGenerationId,
+        adapterKey:
+          binding.adapterKey ??
+          (providerChanged ? binding.provider : (existingRuntime?.adapterKey ?? binding.provider)),
+        runtimeMode: binding.runtimeMode ?? existingRuntime?.runtimeMode ?? "full-access",
+        status: binding.status ?? existingRuntime?.status ?? "running",
+        activeTurnId:
+          binding.activeTurnId !== undefined
+            ? binding.activeTurnId
+            : (existingRuntime?.activeTurnId ?? null),
+        lastSeenAt: now,
+        resumeCursor:
+          binding.resumeCursor !== undefined
+            ? binding.resumeCursor
+            : (existingRuntime?.resumeCursor ?? null),
+        runtimePayload: mergeRuntimePayload(
+          existingRuntime?.runtimePayload ?? null,
+          binding.runtimePayload,
+        ),
+      }, options)
       .pipe(Effect.mapError(toPersistenceError("ProviderSessionDirectory.upsert:upsert")));
   });
 
@@ -196,6 +200,65 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
       ),
     );
 
+  const settleDeadGenerationBinding: ProviderSessionDirectoryShape["settleDeadGenerationBinding"] =
+    Effect.fn("ProviderSessionDirectory.settleDeadGenerationBinding")(function* (input) {
+      const lastSeenAt = DateTime.formatIso(yield* DateTime.now);
+      return yield* repository
+        .settleDeadGeneration({
+          ...input,
+          currentBootGenerationId: bootGenerationId,
+          lastSeenAt,
+        })
+        .pipe(
+          Effect.mapError(
+            toPersistenceError("ProviderSessionDirectory.settleDeadGenerationBinding:update"),
+          ),
+        );
+    });
+
+  const markTurnStarted: ProviderSessionDirectoryShape["markTurnStarted"] = Effect.fn(
+    "ProviderSessionDirectory.markTurnStarted",
+  )(function* (input) {
+    const lastSeenAt = DateTime.formatIso(yield* DateTime.now);
+    return yield* repository
+      .markTurnStarted({
+        ...input,
+        currentBootGenerationId: bootGenerationId,
+        lastSeenAt,
+      })
+      .pipe(Effect.mapError(toPersistenceError("ProviderSessionDirectory.markTurnStarted:update")));
+  });
+
+  const markTurnTerminal: ProviderSessionDirectoryShape["markTurnTerminal"] = Effect.fn(
+    "ProviderSessionDirectory.markTurnTerminal",
+  )(function* (input) {
+    const lastSeenAt = DateTime.formatIso(yield* DateTime.now);
+    return yield* repository
+      .markTurnTerminal({
+        ...input,
+        currentBootGenerationId: bootGenerationId,
+        lastSeenAt,
+      })
+      .pipe(
+        Effect.mapError(toPersistenceError("ProviderSessionDirectory.markTurnTerminal:update")),
+      );
+  });
+
+  const claimIdleForRecovery: ProviderSessionDirectoryShape["claimIdleForRecovery"] = Effect.fn(
+    "ProviderSessionDirectory.claimIdleForRecovery",
+  )(function* (input) {
+    const lastSeenAt = DateTime.formatIso(yield* DateTime.now);
+    return yield* repository
+      .claimIdleForRecovery({
+        ...input,
+        currentBootGenerationId: bootGenerationId,
+        lastSeenAt,
+      })
+      .pipe(
+        Effect.mapError(toPersistenceError("ProviderSessionDirectory.claimIdleForRecovery:update")),
+      );
+  });
+
   return {
     upsert,
     recordImportedTranscript,
@@ -203,6 +266,10 @@ const makeProviderSessionDirectory = Effect.gen(function* () {
     getBinding,
     listThreadIds,
     listBindings,
+    settleDeadGenerationBinding,
+    markTurnStarted,
+    markTurnTerminal,
+    claimIdleForRecovery,
   } satisfies ProviderSessionDirectoryShape;
 });
 
