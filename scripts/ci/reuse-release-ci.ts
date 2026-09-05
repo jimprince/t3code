@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off
 // @effect-diagnostics globalConsole:off
-import { execFileSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
-import { isDeepStrictEqual } from "node:util";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
+import * as NodeUtil from "node:util";
 
 const manifests = [
   "apps/server/package.json",
@@ -23,7 +23,8 @@ const record = (value: unknown): value is Record<string, unknown> =>
 
 /** A stamped child may inherit tests only when its sole change is package versions. */
 export function releaseCISource(ref: string, version: string, cwd = process.cwd()): string {
-  const git = (...args: string[]) => execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
+  const git = (...args: string[]) =>
+    NodeChildProcess.execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
   const target = git("rev-parse", "--verify", `${ref}^{commit}`);
   const parents = git("rev-list", "--parents", "-n", "1", target).split(" ");
   if (parents.length !== 2) return target;
@@ -38,14 +39,14 @@ export function releaseCISource(ref: string, version: string, cwd = process.cwd(
     if (!record(before) || !record(after) || after.version !== version) return target;
     const { version: _beforeVersion, ...beforeSource } = before;
     const { version: _afterVersion, ...afterSource } = after;
-    if (!isDeepStrictEqual(beforeSource, afterSource)) return target;
+    if (!NodeUtil.isDeepStrictEqual(beforeSource, afterSource)) return target;
   }
   return parent;
 }
 
 const github = (endpoint: string): unknown =>
   JSON.parse(
-    execFileSync("gh", ["api", endpoint], {
+    NodeChildProcess.execFileSync("gh", ["api", endpoint], {
       encoding: "utf8",
       timeout: 30_000,
       stdio: ["ignore", "pipe", "pipe"],
@@ -145,9 +146,9 @@ if (import.meta.main) {
   });
   console.log(result.reason);
   if (result.runUrl) console.log(result.runUrl);
-  appendFileSync(process.env.GITHUB_OUTPUT!, `reused=${result.reused}\n`);
+  NodeFS.appendFileSync(process.env.GITHUB_OUTPUT!, `reused=${result.reused}\n`);
   if (process.env.GITHUB_STEP_SUMMARY)
-    appendFileSync(
+    NodeFS.appendFileSync(
       process.env.GITHUB_STEP_SUMMARY,
       `${result.reason}${result.runUrl ? ` [CI run](${result.runUrl})` : ""}\n`,
     );
