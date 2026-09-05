@@ -416,4 +416,4 @@ purpose = "Plan and execute retirement of the per-worker git worktrees T3 create
 retire_when = "never"
 depends_on = ["fork-t3-thread-operator-cli"]
 roles = []
-note = "Removal never passes --force to `git worktree remove`, so git independently refuses a dirty checkout and the branch ref plus its commits survive. Retention checks run before inspection so a checkout with a live thread is never touched. Fetch archived and active snapshots explicitly: the normal CLI thread listing excludes archived threads."
+note = "Removal never passes --force to `git worktree remove`, so git independently refuses a dirty checkout and the branch ref plus its commits survive. Retention checks run before inspection so a checkout with a live thread is never touched. Detached HEAD worktrees are retained because their commits may lack a protecting branch. Fetch archived and active snapshots explicitly: the normal CLI thread listing excludes archived threads."

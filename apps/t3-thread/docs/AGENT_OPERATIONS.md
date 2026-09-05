@@ -604,3 +604,6 @@ When validating that a fresh agent can discover and use this repo:
 Important caveat:
 
 - Do **not** use the stripped-down `subagents --backend opencode ...` one-shot path for this validation. That harness is intentionally tool-stripped and may fail the test for reasons unrelated to the repo docs. Use a full agent backend instead.
+
+Detached worktrees are retained even when clean, because their commits may not
+be protected by a branch ref. Attach the work to a branch before retirement.

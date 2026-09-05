@@ -170,6 +170,23 @@ async function withRepo(
 }
 
 describe("worktree gc against real git state", () => {
+  it("retains a clean detached worktree with an unreferenced commit", async () => {
+    await withRepo(async ({ clean }) => {
+      await git(["checkout", "--detach"], clean);
+      await git(
+        ["-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "detached work"],
+        clean,
+      );
+      const plan = await planWorktreeGc({
+        threads: [thread({ id: "detached", worktreePath: clean })],
+        inspect: inspectWorktree,
+        now: NOW,
+      });
+      expect(plan.removable).toEqual([]);
+      expect(plan.retained[0]?.reason).toBe("detached-head");
+      await expect(NodeFSP.access(clean)).resolves.toBeUndefined();
+    });
+  });
   it("retains an archived path when an active thread uses a symlink alias", async () => {
     await withRepo(async ({ root, clean }) => {
       const alias = NodePath.join(root, "alias");

@@ -24,6 +24,7 @@ export interface WorktreeGcThread {
 
 export type WorktreeState =
   | { readonly kind: "clean" }
+  | { readonly kind: "detached-head"; readonly detail: string }
   | { readonly kind: "dirty"; readonly detail: string }
   | { readonly kind: "missing" }
   | { readonly kind: "not-a-linked-worktree"; readonly detail: string };
@@ -36,6 +37,7 @@ export type RetentionReason =
   | "active-turn"
   | "recovery-window"
   | "dirty"
+  | "detached-head"
   | "missing"
   | "not-a-linked-worktree";
 
@@ -230,6 +232,11 @@ export const inspectWorktree: WorktreeInspector = async (path) => {
     NodePath.resolve(topLevel.stdout.trim()) !== (await NodeFSP.realpath(path))
   ) {
     return { kind: "not-a-linked-worktree", detail: "path is not a worktree root" };
+  }
+
+  const branch = await runGit(["symbolic-ref", "--quiet", "HEAD"], path);
+  if (branch.status !== 0) {
+    return { kind: "detached-head", detail: "detached HEAD may hold commits with no branch ref" };
   }
 
   const status = await runGit(["status", "--porcelain"], path);
