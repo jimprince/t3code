@@ -1,4 +1,5 @@
 import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
 
 /**
@@ -70,16 +71,16 @@ function hasActiveWork(thread: WorktreeGcThread): boolean {
   );
 }
 
-function groupByWorktreePath(
+async function groupByWorktreePath(
   threads: ReadonlyArray<WorktreeGcThread>,
-): Map<string, WorktreeGcThread[]> {
+): Promise<Map<string, WorktreeGcThread[]>> {
   const groups = new Map<string, WorktreeGcThread[]>();
   for (const thread of threads) {
     const path = thread.worktreePath?.trim();
     if (!path) {
       continue;
     }
-    const normalized = NodePath.resolve(path);
+    const normalized = await NodeFSP.realpath(path).catch(() => NodePath.resolve(path));
     const group = groups.get(normalized);
     if (group) {
       group.push(thread);
@@ -107,8 +108,8 @@ export async function planWorktreeGc(input: {
   const removable: WorktreeGcCandidate[] = [];
   const retained: WorktreeGcRetention[] = [];
 
-  for (const [path, group] of [...groupByWorktreePath(input.threads)].sort(([left], [right]) =>
-    left.localeCompare(right),
+  for (const [path, group] of [...(await groupByWorktreePath(input.threads))].sort(
+    ([left], [right]) => left.localeCompare(right),
   )) {
     const threadIds = group.map((thread) => thread.id);
 
@@ -226,7 +227,7 @@ export const inspectWorktree: WorktreeInspector = async (path) => {
   const topLevel = await runGit(["rev-parse", "--show-toplevel"], path);
   if (
     topLevel.status !== 0 ||
-    NodePath.resolve(topLevel.stdout.trim()) !== NodePath.resolve(path)
+    NodePath.resolve(topLevel.stdout.trim()) !== (await NodeFSP.realpath(path))
   ) {
     return { kind: "not-a-linked-worktree", detail: "path is not a worktree root" };
   }

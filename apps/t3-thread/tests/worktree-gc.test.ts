@@ -144,7 +144,9 @@ async function git(args: ReadonlyArray<string>, cwd: string): Promise<void> {
 async function withRepo(
   test: (paths: { root: string; main: string; clean: string; dirty: string }) => Promise<void>,
 ): Promise<void> {
-  const root = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-thread-worktree-gc-"));
+  const root = await NodeFSP.realpath(
+    await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-thread-worktree-gc-")),
+  );
   const main = NodePath.join(root, "main");
   await NodeFSP.mkdir(main);
   await git(["init", "--initial-branch=main", "."], main);
@@ -168,6 +170,24 @@ async function withRepo(
 }
 
 describe("worktree gc against real git state", () => {
+  it("retains an archived path when an active thread uses a symlink alias", async () => {
+    await withRepo(async ({ root, clean }) => {
+      const alias = NodePath.join(root, "alias");
+      await NodeFSP.symlink(clean, alias, "dir");
+      const plan = await planWorktreeGc({
+        threads: [
+          thread({ id: "old", worktreePath: clean }),
+          thread({ id: "active", worktreePath: alias, archivedAt: null }),
+        ],
+        inspect: inspectWorktree,
+        now: NOW,
+      });
+      expect(plan.removable).toEqual([]);
+      expect(plan.retained).toHaveLength(1);
+      expect(plan.retained[0]?.reason).toBe("unarchived-thread");
+      expect(await inspectWorktree(alias)).toEqual({ kind: "clean" });
+    });
+  });
   it("classifies clean, dirty, main and missing paths", async () => {
     await withRepo(async ({ root, main, clean, dirty }) => {
       expect(await inspectWorktree(clean)).toEqual({ kind: "clean" });
