@@ -177,6 +177,7 @@ Control settings**.
 - **GitHub says it could not verify sign-in status** – T3 Code needs GitHub CLI 2.81.0 or newer to check sign-in status. Update `gh` (e.g., `brew upgrade gh`), then rescan
 - **Bitbucket not connecting** – Double-check your environment variables are set in the correct shell profile and the server was restarted
 - **Can't push to a remote** – Verify your Git remote URL matches the provider you've authenticated with (SSH vs HTTPS remotes may need different credentials)
+- **No pull request status for a repository** – T3 Code reads change request status only from the four supported providers above. A remote on any other host (a self-hosted service or a plain SSH remote) is skipped rather than polled, so the branch shows no pull request
 
 **Need more help?** Check your provider's CLI documentation:
 

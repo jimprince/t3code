@@ -402,3 +402,12 @@ retire_when = "Upstream ships manual ordering for the unpinned thread list, at w
 depends_on = ["fork-build-workspace-tooling"]
 roles = []
 note = "sidebarOrderKey is a SEPARATE column from upstream's pin_order_key on purpose: thread.unpinned clears pin_order_key, so sharing the field would silently destroy an inbox placement on every pin/unpin cycle. The fork schema change lands in ForkMigrations, not upstream's Migrations sequence."
+
+[[patch]]
+name = "fork-pr-status-unsupported-hosts"
+subject = "fix(server): skip PR status lookups for unsupported hosts"
+class = "upstream-bound"
+purpose = "Stop pull request status polling from repeatedly asking, and repeatedly warning about, a remote whose host has no implemented provider."
+retire_when = "Upstream skips change request lookups for remotes with no registered provider instead of retrying the guaranteed failure."
+depends_on = ["fork-stgit-stack-policy"]
+roles = []
