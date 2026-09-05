@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "56756b8ee6622af7495b7ca71729ad7e212919f1",
-  "head": "77f2199a500ce128d6a04339c4cc60bc9e57dbb3",
+  "prev": "fba83d04d3c84f7576b101f975a3da135e3cbe3c",
+  "head": "dea88d65c4d2f5be3e28ee0e4be1a71d4b3d3241",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -33,11 +33,11 @@
     "fork-remote-worktree-base",
     "fork-web-pr-multiselect",
     "fork-sidebar-thread-order",
-    "fork-pr-status-unsupported-hosts"
+    "fork-pr-status-unsupported-hosts",
+    "fork-worktree-gc",
+    "fork-gitea-instance-pr-badges"
   ],
   "unapplied": [
-    "fork-worktree-gc",
-    "fork-gitea-instance-pr-badges",
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions"
   ],
@@ -68,7 +68,7 @@
       "oid": "69b6192e100a0223705ed202ea618f123969124e"
     },
     "fork-gitea-instance-pr-badges": {
-      "oid": "226ce8c51d61b1d0920091fb133d0978ece4d583"
+      "oid": "dea88d65c4d2f5be3e28ee0e4be1a71d4b3d3241"
     },
     "fork-gitea-pr-actions": {
       "oid": "8f1babe4d7edd51876ae3b428c5daec6335e258a"
@@ -146,7 +146,7 @@
       "oid": "ee7b11624a2a271e3dcdd882d2b1e60a8cbae50f"
     },
     "fork-worktree-gc": {
-      "oid": "2851a37dac50602797e8610acb482eb9708f2d57"
+      "oid": "a0531d376f0616347c0e42580896389e8869975a"
     }
   }
 }
