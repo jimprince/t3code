@@ -236,7 +236,11 @@ printf '%s\\n' '${JSON.stringify({ head: fixture.head, patches: fixture.patches.
       assert.strictEqual(first.status, 0, `${first.stdout}\n${first.stderr}`);
       assert.strictEqual(JSON.parse(first.stdout).head, fixture.head);
       const leasePath = NodePath.join(fixture.repo.dir, ".git/stgit-publication-lease.json");
-      const saved = NodeFS.readFileSync(leasePath, "utf8");
+      const lease = JSON.parse(NodeFS.readFileSync(leasePath, "utf8"));
+      // Formatters can rewrite metadata kept in a separate Git directory.
+      const saved =
+        JSON.stringify(Object.fromEntries(Object.entries(lease).reverse()), null, 4) + "\n";
+      NodeFS.writeFileSync(leasePath, saved);
       assert.strictEqual(capture().status, 0, "preparation is idempotent on unchanged state");
       // The repair bot asks for context again after refreshing its patches.
       fixture.repo.git("update-ref", "refs/stacks/stgit/adopt", fixture.remoteBase);
