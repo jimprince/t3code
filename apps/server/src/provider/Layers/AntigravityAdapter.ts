@@ -791,6 +791,7 @@ export const makeAntigravityAdapter = Effect.fn("makeAntigravityAdapter")(functi
               // leaf directory holding only uploads.
               const runtime = yield* options.makeRuntime({
                 cwd,
+                t3ThreadId: input.threadId,
                 clientInfo: { name: "t3-code", version: "0.0.0" },
                 clientFileSystem: true,
                 additionalDirectories: [serverConfig.attachmentsDir],
