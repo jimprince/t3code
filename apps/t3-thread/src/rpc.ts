@@ -9,6 +9,7 @@ import { WS_METHODS, WsRpcGroup } from "./vendor/t3contracts/rpc.js";
 const RPC_METHODS = {
   serverGetConfig: WS_METHODS.serverGetConfig,
   dispatchCommand: ORCHESTRATION_WS_METHODS.dispatchCommand,
+  getArchivedShellSnapshot: ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot,
   getTurnDiff: ORCHESTRATION_WS_METHODS.getTurnDiff,
   getFullThreadDiff: ORCHESTRATION_WS_METHODS.getFullThreadDiff,
   subscribeShell: ORCHESTRATION_WS_METHODS.subscribeShell,
@@ -44,7 +45,12 @@ export class T3RpcClient {
   }
 
   async request<T>(
-    method: "serverGetConfig" | "dispatchCommand" | "getTurnDiff" | "getFullThreadDiff",
+    method:
+      | "serverGetConfig"
+      | "dispatchCommand"
+      | "getTurnDiff"
+      | "getFullThreadDiff"
+      | "getArchivedShellSnapshot",
     input: unknown,
   ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<
