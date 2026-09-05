@@ -1,10 +1,11 @@
 {
   "version": 5,
-  "prev": "d853658fe6917563b771474e853044b7fab039cd",
-  "head": "8a597dbcf136e15c5f3bc871495ab143385ac4e4",
+  "prev": "6dd9969b75d9e59627fd0e6e0550e4c917842255",
+  "head": "cb7b968b729de12b7f619f12ca06fa044a3a11f8",
   "applied": [
     "fork-stgit-stack-policy",
-    "fork-build-workspace-tooling"
+    "fork-build-workspace-tooling",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-t3-thread-operator-cli",
@@ -147,6 +148,9 @@
     },
     "fork-worktree-gc": {
       "oid": "f8d4920e30c257af430ce4c4f59f2248abffacea"
+    },
+    "refresh-temp": {
+      "oid": "cb7b968b729de12b7f619f12ca06fa044a3a11f8"
     }
   }
 }
