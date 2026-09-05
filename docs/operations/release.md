@@ -27,6 +27,19 @@ file is the concise runbook.
   reruns refresh the same body; unavailable or malformed compare data degrades
   to compare links and never blocks publication.
 
+## Release Verification
+
+Preflight checks out the resolved release source before installing dependencies
+and running formatting/lint and typechecks. It reuses tests only from a successful
+`CI` push run on `main` for that exact commit, or its direct parent when the
+release child changes only the four package version fields to the release version.
+Lockfile, dependency, source, workflow, or file-mode changes disqualify parent reuse.
+The required CI check, test shards and release smoke jobs must all succeed in the
+same run attempt. Preflight waits up to five minutes for matching CI already in
+progress; missing, failed, incomplete or unavailable evidence runs the full release
+tests instead. The job summary links any reused CI run. Desktop packaging and
+headless artifact smoke checks always run.
+
 ## Push Nightly Trigger
 
 `fork-push-nightly.yml` publishes updater-visible nightly fork builds for
