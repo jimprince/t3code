@@ -34,6 +34,13 @@ normal pushes to `main`, but only for changes that can affect packaged
 app/runtime output: `apps/**`, `packages/**`, `assets/**`, root package/build
 files, and desktop artifact build inputs.
 
+A lightweight job compares the exact push-before and push-after trees before
+installing replay tools. GitHub's coarse path filter can include replayed
+commits after a StGit force push; the tree comparison skips maintenance-only
+rewrites. Missing history conservatively follows the normal release path,
+and manual dispatch bypasses this filter. Main and prepared tags publish
+atomically, so tag discovery needs no fixed visibility delay.
+
 Docs, workflow maintenance, release helper scripts, and other repo plumbing
 should not create push nightlies. Use manual `release.yml` dispatch if a
 maintenance-only commit genuinely needs to ship as a desktop update.

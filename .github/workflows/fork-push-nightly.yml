@@ -36,7 +36,24 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  changes:
+    name: Check packaged-source changes
+    runs-on: ubuntu-24.04
+    outputs:
+      needed: ${{ steps.changes.outputs.needed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: changes
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: scripts/ci/check-nightly-push
+
   tag:
+    needs: changes
+    if: needs.changes.outputs.needed == 'true'
     name: Tag fork push nightly
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -84,11 +101,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # sync-upstream pushes main and then a release tag. Give the tag push
-          # a moment to appear so sync-created commits do not get double-tagged
-          # as push nightlies. The tag now points at main's stamped child, so
-          # checking only tags directly at HEAD is insufficient.
-          sleep 30
+          # Main and its prepared release tag are published atomically.
+          # Fetch once; no visibility delay is needed.
           git fetch --tags origin
 
           head_sha="$(git rev-parse HEAD)"

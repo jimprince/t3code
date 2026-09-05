@@ -318,3 +318,8 @@ decided = "fail-stale-queued-checkouts"
 issue = "brad/t3code-fork#2 comment 2757"
 rationale = "A queued workflow may check out an older event SHA after another writer advances remote main. Bind every automatic writer's lease to its checked-out starting HEAD and fail before replay rather than adopting a newer remote lease."
 standing_policy = "Never renew an automatic main writer's starting lease from the remote."
+[[patch.decision]]
+id = "nightly-net-source-change"
+date = "2026-09-05"
+decided = "narrow"
+rationale = "Gate fork-only nightlies on the exact push-before and push-after packaged-source trees, not replayed commit history. Unknown history and manual dispatch retain the release path. Atomic main/tag publication removes the old 30-second visibility delay."
