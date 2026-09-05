@@ -1,4 +1,4 @@
-# Gitea branch pull-request badges
+# Gitea pull requests
 
 In **Settings → Source Control → Gitea instances**, choose **Add Gitea instance**.
 Configuration belongs to the selected primary server environment. Every client
@@ -16,7 +16,7 @@ host and port. An SCP alias has no explicit port, so it must identify one
 instance unambiguously. Two instances may share a hostname if their SSH ports
 and web ports differ; give them different aliases when using SCP-style remotes.
 
-Enter a personal access token with repository read access and user read access
+Enter a personal access token with repository read access (write access to create pull requests) and user read access
 (for the authentication scan). Save the instance, then use **Rescan server
 environment** to check authentication. Tokens are stored in the server secret
 store; settings display a redacted marker. Leave the token field blank when
@@ -32,10 +32,17 @@ source-control provider uses `origin` when present. Configuration changes are
 picked up without restarting; a cached branch badge may wait for its normal
 refresh interval.
 
-This integration supports branch badges. Create, checkout, repository lookup,
-and the in-app pull-request browser are not supported for Gitea yet. Open the
-badge link to use Gitea in your browser. Clone a Gitea repository using its Git
-URL. Unconfigured hosts retain their existing unknown-host behavior.
+Use **Create PR** to create a pull request from your pushed branch. When template
+following is enabled, templates in `.gitea` are included in the generated description.
+Paste a Gitea pull-request URL or number into the pull-request checkout flow to
+start working on it. Fork repositories are supported; local checkout fetches the
+retained pull-request reference, including after the source branch is deleted.
+Git fetches use your existing Git credentials, separately from the API token.
+
+Open a badge link to review the pull request in Gitea. The in-app pull-request
+browser and repository creation are not supported for Gitea yet. Clone a Gitea
+repository using its Git URL. Unconfigured hosts retain their existing
+unknown-host behavior.
 
 Branch badges also work when the repository remote is named `gitea` or another alias instead of `origin`. The branch and repository must match the pull request.
 
