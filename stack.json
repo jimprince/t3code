@@ -1,15 +1,15 @@
 {
   "version": 5,
-  "prev": "2838e69cd1c944afcfc8011c193ea5462d0cafd3",
-  "head": "3784a58698b3900ac867a7ad9dff5d5720b752a0",
+  "prev": "96a96cd29b76b4a0958b4cb7965381157c79256b",
+  "head": "94b84847ca0bbdb52f9689bf96f85d6046fde61e",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
     "fork-t3-thread-operator-cli",
-    "fork-provider-turn-reservation"
+    "fork-provider-turn-reservation",
+    "fork-provider-runtime-recovery"
   ],
   "unapplied": [
-    "fork-provider-runtime-recovery",
     "fork-provider-observability",
     "fork-thread-lifecycle-recovery",
     "fork-thread-goals",
@@ -75,7 +75,7 @@
       "oid": "92942f7ab43506e4eb3b01bfa4394e7fa69cb083"
     },
     "fork-provider-runtime-recovery": {
-      "oid": "c6086d43a6dc2a5370844cfa656f3005e44400c8"
+      "oid": "94b84847ca0bbdb52f9689bf96f85d6046fde61e"
     },
     "fork-provider-turn-reservation": {
       "oid": "3784a58698b3900ac867a7ad9dff5d5720b752a0"
