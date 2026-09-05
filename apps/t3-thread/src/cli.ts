@@ -10,6 +10,7 @@ import {
 } from "./agent-targets.js";
 import { buildFollowUpMessage } from "./agentPrompts.js";
 import { RemoteEnvironmentClient } from "./client.js";
+import { formatCliError } from "./errorOutput.js";
 import { resolvePairingTarget } from "./http.js";
 import {
   buildAgentOverview,
@@ -1195,6 +1196,6 @@ agent
   });
 
 program.parseAsync(process.argv).catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+  process.stderr.write(`${formatCliError(error)}\n`);
   process.exitCode = 1;
 });

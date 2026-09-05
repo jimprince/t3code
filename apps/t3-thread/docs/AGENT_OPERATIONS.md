@@ -496,6 +496,27 @@ Fix:
 1. Stop using that thread.
 2. Create a replacement thread with explicit `--branch`.
 
+### 3. Schema Error Naming A Provider Instance Id
+
+Symptoms:
+
+- Every remote call fails with `SchemaError(Expected "codex" | "claudeAgent" | "opencode", got "<something>_<suffix>")`.
+
+Cause:
+
+- A stale CLI checkout. Custom provider instance ids such as `claudeAgent_ucalgary`
+  are first-class, and the current contracts accept any provider slug.
+
+Fix:
+
+1. Check which workspace the wrapper resolved (`T3_THREAD_REPO`, or the wrapper's
+   default path) and point it at a current `apps/t3-thread`.
+2. Re-run the command from that workspace.
+
+Unexpected failures print at most a bounded prefix of the error message; a
+`… truncated N more characters` line means the remainder was suppressed on
+purpose, not lost detail worth recovering from stdout.
+
 ## Authentication and Credential Renewal
 
 Pairing is the authentication bootstrap. Give `t3-thread pair` a full pairing
