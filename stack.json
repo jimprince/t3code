@@ -1,8 +1,9 @@
 {
   "version": 5,
-  "prev": "aeabe6f91f75550d41ca94c13907d64d1b9e06a8",
-  "head": "65bab885e785c53b20867a6eb83e5c6c0f8b292e",
-  "applied": [
+  "prev": "0ef57fd2602908eefeb52e8efb2705f5864640de",
+  "head": "d6e29dc9dee943b34d6b0d11441fa944c7bff7c9",
+  "applied": [],
+  "unapplied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
     "fork-t3-thread-operator-cli",
@@ -39,7 +40,6 @@
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
