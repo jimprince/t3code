@@ -185,4 +185,3 @@ so this explicit download is also available when that server is on another machi
 Generated downloadable artifacts must live inside the thread's project or active worktree. Files
 written elsewhere, including screenshot-style temporary or evidence paths, cannot be downloaded
 from a chat link; move or copy them into the thread workspace first.
-

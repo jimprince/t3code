@@ -83,4 +83,3 @@ generate downloadable artifacts must write them inside the thread's project or a
 link that path. An artifact written to an external location, such as a screenshot tool's temporary
 or evidence directory, is intentionally rejected even if its absolute path appears in Markdown;
 move or copy it into the thread workspace before linking it for download.
-
