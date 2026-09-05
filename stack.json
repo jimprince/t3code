@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "12946ec4db34926c89c0587a07e7621c4fb761d7",
-  "head": "7429f214dabede28dce67bb8e95f5843d061c7e6",
+  "prev": "aaa8c4c1e82ad3216605b096691a0f60a98b81e8",
+  "head": "28fdc2374b3139def37e0c86bfdf90a14007578f",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -35,7 +35,8 @@
     "fork-sidebar-thread-order",
     "fork-pr-status-unsupported-hosts",
     "fork-worktree-gc",
-    "fork-gitea-instance-pr-badges"
+    "fork-gitea-instance-pr-badges",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -138,6 +139,9 @@
     },
     "fork-worktree-gc": {
       "oid": "b36eb2f25a9a83854f0f7d0283a1268316ee71b4"
+    },
+    "refresh-temp": {
+      "oid": "28fdc2374b3139def37e0c86bfdf90a14007578f"
     }
   }
 }
