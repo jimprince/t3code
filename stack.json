@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "036e9a22c8c76c91fcfd0050d7cce41fbcd24b1b",
-  "head": "1e698ec65657040944f46a8185631fe507769d4a",
+  "prev": "12946ec4db34926c89c0587a07e7621c4fb761d7",
+  "head": "7429f214dabede28dce67bb8e95f5843d061c7e6",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -35,8 +35,7 @@
     "fork-sidebar-thread-order",
     "fork-pr-status-unsupported-hosts",
     "fork-worktree-gc",
-    "fork-gitea-instance-pr-badges",
-    "refresh-temp"
+    "fork-gitea-instance-pr-badges"
   ],
   "unapplied": [],
   "hidden": [],
@@ -66,7 +65,7 @@
       "oid": "e78787c082e4ad11d940a4fe4b742f474ab082b6"
     },
     "fork-gitea-instance-pr-badges": {
-      "oid": "5680de46f6c97a52646890996c7a28d7f0a7baf4"
+      "oid": "7429f214dabede28dce67bb8e95f5843d061c7e6"
     },
     "fork-headless-updates": {
       "oid": "14814962f0dd9e22cb8fa10d818a13bf9b6f96f6"
@@ -139,9 +138,6 @@
     },
     "fork-worktree-gc": {
       "oid": "b36eb2f25a9a83854f0f7d0283a1268316ee71b4"
-    },
-    "refresh-temp": {
-      "oid": "1e698ec65657040944f46a8185631fe507769d4a"
     }
   }
 }
