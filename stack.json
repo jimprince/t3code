@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "98fdb627d7116573ad1ecd98985fbeca2b3ade0b",
-  "head": "e5f344ba58759aeb292434b654fa589d174eb8de",
+  "prev": "6722b5779450e04dfb62edcb2f8836ea8af68058",
+  "head": "95c45f80460edf710224a9e32eb51b4ee3d30fbd",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -37,8 +37,7 @@
     "fork-worktree-gc",
     "fork-gitea-instance-pr-badges",
     "fork-gitea-pr-actions",
-    "fork-pr-project-exclusions",
-    "refresh-temp"
+    "fork-pr-project-exclusions"
   ],
   "unapplied": [],
   "hidden": [],
@@ -68,10 +67,10 @@
       "oid": "f3814291ae8762640383a7abcf642d53288d686c"
     },
     "fork-gitea-instance-pr-badges": {
-      "oid": "7b37bbb29e39308107d96276f87b3f1bced60d24"
+      "oid": "b812f4be9d2a4f51a4a2667aea01da5961e9731e"
     },
     "fork-gitea-pr-actions": {
-      "oid": "468c0d27c99d2213c8c4ca0aadab86e849adf7b2"
+      "oid": "e872890c18eed8a79d08a07d37a21e2c4f9f0a3c"
     },
     "fork-headless-updates": {
       "oid": "272d4f2461b711dd05d837469e3d183f48af0b17"
@@ -83,10 +82,10 @@
       "oid": "30f593f160dc69afccab7d67c2b2f0e2be4b0f21"
     },
     "fork-pr-project-exclusions": {
-      "oid": "9fe6130d71371278c43057557c2a30fbf65dccef"
+      "oid": "95c45f80460edf710224a9e32eb51b4ee3d30fbd"
     },
     "fork-pr-status-unsupported-hosts": {
-      "oid": "59d6d77f71d203cb909aaf95987ce2d9f679aca1"
+      "oid": "541b8e9a7ab4192ca8d1e779a26cbd5d966062cd"
     },
     "fork-provider-observability": {
       "oid": "8a81d94a388fcf8b98040d9c287bfa138e4881e6"
@@ -107,7 +106,7 @@
       "oid": "5f9012dbe2050ecaef207787e7a067f8ca461da6"
     },
     "fork-sidebar-thread-order": {
-      "oid": "5862b77be1a1ceb80296a6ab049838e4e9a81ae1"
+      "oid": "b5363449c66ccd37372bce9cc29b3b8c7885cdac"
     },
     "fork-stgit-stack-policy": {
       "oid": "4dbf06ed837f3806f0d89d5386c914cced1810bc"
@@ -146,10 +145,7 @@
       "oid": "5e3842b5ee4493a4b7b9c116edd5e9165431a5f3"
     },
     "fork-worktree-gc": {
-      "oid": "85684492e609002b619a0c41d3dafb27ea8e5186"
-    },
-    "refresh-temp": {
-      "oid": "e5f344ba58759aeb292434b654fa589d174eb8de"
+      "oid": "39dade3e737898535625611e42da9cf788304ed5"
     }
   }
 }
