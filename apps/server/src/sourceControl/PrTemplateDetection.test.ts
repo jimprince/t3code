@@ -12,6 +12,8 @@ import * as VcsProcess from "../vcs/VcsProcess.ts";
 import { detectPrTemplate } from "./PrTemplateDetection.ts";
 
 const SINGLE_TEMPLATE_PATHS = [
+  ".gitea/pull_request_template.md",
+  ".gitea/PULL_REQUEST_TEMPLATE.md",
   ".github/pull_request_template.md",
   ".github/PULL_REQUEST_TEMPLATE.md",
   "pull_request_template.md",
@@ -21,6 +23,7 @@ const SINGLE_TEMPLATE_PATHS = [
 ] as const;
 
 const TEMPLATE_DIRECTORIES = [
+  ".gitea/PULL_REQUEST_TEMPLATE",
   ".github/PULL_REQUEST_TEMPLATE",
   "PULL_REQUEST_TEMPLATE",
   "docs/PULL_REQUEST_TEMPLATE",

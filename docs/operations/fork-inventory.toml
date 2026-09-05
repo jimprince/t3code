@@ -433,3 +433,12 @@ roles = []
 
 note = "PR lookup and unsupported-host cache keys include non-secret Gitea routing configuration, so adding or removing a configured host takes effect without waiting out the negative cache. Tokens never enter these keys. PR head identity is compared with the hosting provider’s selected target remote, including repositories whose sole remote is named gitea; a remote alias alone does not imply a cross-repository PR. Terminal Gitea PRs whose deleted head becomes refs/pull/N/head retain branch identity through head.label, with repository checks preserved."
 
+
+[[patch]]
+name = "fork-gitea-pr-actions"
+subject = "feat(source-control): create and check out Gitea pull requests"
+class = "upstream-bound"
+purpose = "Create and resolve Gitea pull requests, check out retained PR heads, retrieve fork clone URLs and default branches, and recognize Gitea templates and pasted URLs."
+retire_when = "Upstream supports equivalent configured-instance Gitea create and checkout flows."
+depends_on = ["fork-gitea-instance-pr-badges"]
+roles = []
