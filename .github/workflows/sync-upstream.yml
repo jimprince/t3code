@@ -50,52 +50,9 @@ permissions:
   contents: write
 
 jobs:
-  runner:
-    name: Select sync runner
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      labels: ${{ steps.pick.outputs.labels }}
-      # A relative path suffix, NOT an absolute path. This job runs on
-      # ubuntu-24.04 (GitHub-hosted, ephemeral) regardless of which runner is
-      # picked for `sync` — it has to, since it decides the label before the
-      # `sync` job exists. So this job's own $HOME is never the right machine
-      # to resolve the cache location against. Resolving `$HOME/<suffix>`
-      # happens in the `sync` job instead, which genuinely executes on
-      # whichever machine was picked (see "Resolve rerere cache path" below).
-      rerere_cache: ${{ steps.pick.outputs.rerere_cache }}
-    steps:
-      # Mirrors the mac-runner probe in release.yml. GitHub Actions cannot
-      # migrate a job already queued on a self-hosted label, so the choice
-      # must happen before the sync job is created. The self-hosted runner
-      # labelled t3code-linux-sync does not exist yet, so every sync today
-      # takes the ubuntu-24.04 fallback below.
-      - name: Pick runner
-        id: pick
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
-        run: |
-          set -euo pipefail
-          hosted='["ubuntu-24.04"]'
-          self_hosted='["self-hosted","Linux","X64","t3code-linux-sync"]'
-          self_hosted_rerere_cache_suffix=".t3code-fork-meta/rr-cache"
-
-          if runner_name=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runners" \
-            --jq '.runners[] | select(.status == "online" and .busy == false and ([.labels[].name] | index("t3code-linux-sync"))) | .name' \
-            2>/dev/null | head -n1) && [[ -n "$runner_name" ]]; then
-            echo "Using self-hosted sync runner: $runner_name (rerere enabled)."
-            echo "labels=$self_hosted" >> "$GITHUB_OUTPUT"
-            echo "rerere_cache=$self_hosted_rerere_cache_suffix" >> "$GITHUB_OUTPUT"
-          else
-            echo "Self-hosted sync runner offline or busy; using GitHub-hosted (rerere disabled)."
-            echo "labels=$hosted" >> "$GITHUB_OUTPUT"
-            echo "rerere_cache=" >> "$GITHUB_OUTPUT"
-          fi
-
   sync:
     name: Sync ${{ matrix.channel }} with upstream
-    needs: runner
-    runs-on: ${{ fromJSON(needs.runner.outputs.labels) }}
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -275,25 +232,6 @@ jobs:
               fi
               echo "Upstream at $upstream_tag, fork at $fork_latest. Syncing..."
             fi
-          fi
-
-      - name: Resolve rerere cache path
-        if: steps.check.outputs.needed == 'true'
-        id: rerere
-        env:
-          RERERE_CACHE_SUFFIX: ${{ needs.runner.outputs.rerere_cache }}
-        run: |
-          set -euo pipefail
-          # This step genuinely executes on whichever machine `sync` landed
-          # on (self-hosted runner or the ubuntu-24.04 fallback), so its
-          # $HOME is correct — unlike the `runner` job's probe, which never
-          # runs on the target machine. On the hosted fallback,
-          # RERERE_CACHE_SUFFIX is empty, so SYNC_RERERE_CACHE resolves to an
-          # empty string and the driver keeps rerere disabled.
-          if [[ -n "$RERERE_CACHE_SUFFIX" ]]; then
-            echo "SYNC_RERERE_CACHE=$HOME/$RERERE_CACHE_SUFFIX" >> "$GITHUB_ENV"
-          else
-            echo "SYNC_RERERE_CACHE=" >> "$GITHUB_ENV"
           fi
 
       - name: Rebase fork commits onto upstream tag

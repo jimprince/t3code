@@ -303,45 +303,6 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
     }),
   );
 
-  it.effect("prefers the self-hosted sync runner but falls back to GitHub-hosted", () =>
-    Effect.gen(function* () {
-      const fs = yield* FileSystem.FileSystem;
-      const path = yield* Path.Path;
-      const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
-      const workflow = yield* fs.readFileString(
-        path.join(repoRoot, ".github/workflows/sync-upstream.yml"),
-      );
-
-      assert.include(workflow, "t3code-linux-sync");
-      assert.include(
-        workflow,
-        "ubuntu-24.04",
-        "REGRESSION: sync must still run when the self-hosted runner is offline",
-      );
-      assert.include(workflow, "SYNC_RERERE_CACHE");
-      assert.include(
-        workflow,
-        "needs: runner",
-        "REGRESSION: the sync job must declare needs: runner to read its outputs",
-      );
-      assert.include(
-        workflow,
-        "runs-on: ${{ fromJSON(needs.runner.outputs.labels) }}",
-        "REGRESSION: sync must select its runner from the runner job's labels output via fromJSON",
-      );
-      assert.include(
-        workflow,
-        'echo "SYNC_RERERE_CACHE=$HOME/$RERERE_CACHE_SUFFIX" >> "$GITHUB_ENV"',
-        "the self-hosted cache path must be resolved from $HOME on the machine that actually runs sync, not guessed by the ubuntu-24.04 probe job",
-      );
-      assert.notInclude(
-        workflow,
-        "/home/",
-        "REGRESSION: the rerere cache path must not be hardcoded to a specific account; an unguarded mkdir -p on a mismatched account hard-fails the whole rebase step",
-      );
-    }),
-  );
-
   it.effect("carries the retirement-rule guidance into the conflict-failure step", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
