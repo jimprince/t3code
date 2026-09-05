@@ -67,6 +67,10 @@ The runner-state probe uses `secrets.T3CODE_RUNNER_STATE_TOKEN` when present,
 falling back to `secrets.GH_PAT`. If neither secret can list repository
 self-hosted runners, preflight intentionally chooses GitHub-hosted macOS.
 
+Self-hosted Mac builds reuse the machine's persistent pnpm store directly.
+The setup action's remote dependency cache stays enabled only on hosted runners;
+archiving the shared local store adds an unnecessary upload to every release.
+
 Sync stable or nightly from upstream:
 
 ```bash
