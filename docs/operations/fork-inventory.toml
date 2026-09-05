@@ -28,6 +28,8 @@ note = "Upstream1286 reorganized the docs index; retain its navigation and provi
 
 [[patch]]
 name = "fork-build-workspace-tooling"
+# Upstream1286 Knip: declare shell/Expo entries and complete vendored CLI contracts.
+# Remove the obsolete Electron installer and redundant plugin-local Effect TSGo dependency.
 subject = "build(fork): configure workspace tooling"
 class = "product"
 purpose = "Configure the fork workspace, dependency graph, and reusable build tooling required by its additive applications."
