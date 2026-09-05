@@ -2044,7 +2044,8 @@ export const make = Effect.gen(function* () {
     const rangeContext = yield* gitCore.readRangeContext(cwd, baseRangeRef);
     const policy = yield* resolveStylePolicy(cwd, settings);
     const changeRequestTemplate =
-      settings.style.followChangeRequestTemplates && provider.kind === "github"
+      settings.style.followChangeRequestTemplates &&
+      (provider.kind === "github" || provider.kind === "gitea")
         ? Option.getOrUndefined(yield* detectPrTemplate(cwd, baseRangeRef, gitCore.execute))
         : undefined;
 
