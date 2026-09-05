@@ -1,9 +1,10 @@
 {
   "version": 5,
-  "prev": "dfd9520614ca4b2c65bc5598e6572523b7b4843f",
-  "head": "34977b412b0a826eb132aab0b3aed8ac2d1db533",
+  "prev": "e2d8373ef1216692c69aa6e508bc43c0fa765733",
+  "head": "c64e11e6e07a483f706c0776dcdf2e8ced792c86",
   "applied": [
-    "fork-stgit-stack-policy"
+    "fork-stgit-stack-policy",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-build-workspace-tooling",
@@ -147,6 +148,9 @@
     },
     "fork-worktree-gc": {
       "oid": "2851a37dac50602797e8610acb482eb9708f2d57"
+    },
+    "refresh-temp": {
+      "oid": "c64e11e6e07a483f706c0776dcdf2e8ced792c86"
     }
   }
 }
