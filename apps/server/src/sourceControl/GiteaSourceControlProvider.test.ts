@@ -72,8 +72,12 @@ function harness(pages: ReadonlyArray<unknown>, status = 200, instances = [insta
           );
         }),
       ),
-      Effect.provide(ServerSettingsService.layerTest({ giteaInstances: instances })),
-      Effect.provide(runtimeLayer),
+      Effect.provide(
+        Layer.mergeAll(
+          ServerSettingsService.layerTest({ giteaInstances: instances }),
+          runtimeLayer,
+        ),
+      ),
     );
   return { requests, run };
 }
@@ -144,8 +148,12 @@ describe("Gitea branch pull requests", () => {
             { preconnect: () => undefined },
           ),
         ),
-        Effect.provide(ServerSettingsService.layerTest({ giteaInstances: [instance] })),
-        Effect.provide(runtimeLayer),
+        Effect.provide(
+          Layer.mergeAll(
+            ServerSettingsService.layerTest({ giteaInstances: [instance] }),
+            runtimeLayer,
+          ),
+        ),
       );
       expect(error.detail).toBe("Gitea API returned HTTP 302.");
       expect(calls).toBe(1);
