@@ -33,6 +33,7 @@ import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import { formatTokens } from "@t3tools/shared/usageFormat";
 
+import { openCodeAssistantSegmentIsTerminal } from "../../provider/openCodeAssistantSegment.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
@@ -1916,6 +1917,12 @@ const make = Effect.gen(function* () {
                 `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
               ),
               fallbackText: event.payload.detail,
+              // OpenCode completes an assistant text segment whenever the part
+              // ends, including the narration that precedes a tool call. Only a
+              // segment whose message reached a terminal finish ends the turn.
+              // An unmarked event keeps the previous behaviour, so a provider
+              // that settles without a terminal lifecycle event still recovers.
+              endsTurn: openCodeAssistantSegmentIsTerminal(event.payload.data) !== false,
             }
           : undefined;
       const proposedPlanCompletion =
@@ -1974,7 +1981,7 @@ const make = Effect.gen(function* () {
           }
         }
 
-        if (event.provider === "opencode" && turnId) {
+        if (event.provider === "opencode" && turnId && assistantCompletion.endsTurn) {
           yield* completeMissingTurnDiff({
             event,
             threadId: thread.id,

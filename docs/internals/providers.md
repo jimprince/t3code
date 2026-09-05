@@ -282,6 +282,21 @@ empty inventory is authoritative. Existing threads keep their explicit model ide
 options when catalog metadata is missing; the catalog is not permission to choose a different
 model for a thread.
 
+### OpenCode turn completion
+
+An OpenCode assistant text part can end while the turn continues. Some models narrate before
+calling a tool and emit that narration as its own assistant message that finishes with
+`finish: "tool-calls"`; the next tool call opens a new message. The adapter still completes the
+text segment so the UI can close it, so `item.completed` for an `assistant_message` is a segment
+boundary, not an end-of-turn signal.
+
+The adapter marks each assistant-segment completion with whether its message reached a terminal
+finish (`openCodeAssistantSegment.ts`). A turn ends on the adapter's `turn.completed`, which
+requires a terminal finish or an error, or on idle reconciliation after `session.status` confirms
+the OpenCode session is idle. Ingestion's assistant-completion recovery only settles the projected
+session for a segment marked terminal, so the provider runtime and the projected session cannot
+disagree while a turn is still running.
+
 ## Model manifest
 
 The model picker's legacy section is driven by `apps/server/src/provider/model-manifest.json`, which

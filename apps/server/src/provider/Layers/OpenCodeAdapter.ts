@@ -57,6 +57,7 @@ import {
   toOpenCodeQuestionAnswers,
   type OpenCodeServerConnection,
 } from "../opencodeRuntime.ts";
+import { openCodeAssistantSegmentData } from "../openCodeAssistantSegment.ts";
 import * as Option from "effect/Option";
 import {
   completeOpenCodeTurnFromTerminalAssistant,
@@ -1645,6 +1646,12 @@ export function makeOpenCodeAdapter(
             status: "completed",
             title: "Assistant message",
             ...(latestText.length > 0 ? { detail: latestText } : {}),
+            // An intermediate narration segment ends here, but the turn does
+            // not. Say which one this is so turn-level recovery cannot read a
+            // `finish: "tool-calls"` segment as the end of the turn.
+            data: openCodeAssistantSegmentData(
+              context.terminalAssistantMessages.has(part.messageID),
+            ),
           },
         });
       }
@@ -2370,6 +2377,10 @@ export function makeOpenCodeAdapter(
             if (usage) {
               usage.assistantOwnershipByMessageId.set(event.properties.info.id, ownership);
             }
+            const terminal = terminalAssistantMessageFromInfo(event.properties.info);
+            if (terminal) {
+              context.terminalAssistantMessages.set(event.properties.info.id, terminal);
+            }
             for (const part of context.partById.values()) {
               if (part.messageID !== event.properties.info.id) {
                 continue;
@@ -2380,9 +2391,7 @@ export function makeOpenCodeAdapter(
               }
               yield* emitAssistantTextDelta(context, part, turnId, event);
             }
-            const terminal = terminalAssistantMessageFromInfo(event.properties.info);
             if (terminal) {
-              context.terminalAssistantMessages.set(event.properties.info.id, terminal);
               if (
                 terminal.state === "failed" ||
                 hasSettledOpenCodePartForMessage(
@@ -2857,6 +2866,7 @@ export function makeOpenCodeAdapter(
                 serverUrl,
                 ...(serverPassword ? { serverPassword } : {}),
                 ...(options?.environment ? { environment: options.environment } : {}),
+                t3ThreadId: input.threadId,
               });
               const client = openCodeRuntime.createOpenCodeSdkClient({
                 baseUrl: server.url,

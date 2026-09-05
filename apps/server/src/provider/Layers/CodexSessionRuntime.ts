@@ -41,6 +41,7 @@ import { buildCodexInitializeParams } from "./CodexProvider.ts";
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import { expandHomePath } from "../../pathExpansion.ts";
 import { buildCodexDeveloperInstructions } from "../CodexDeveloperInstructions.ts";
+import { withT3ThreadIdentityEnv } from "../t3ThreadIdentityEnv.ts";
 const decodeV2TurnStartResponse = Schema.decodeUnknownEffect(EffectCodexSchema.V2TurnStartResponse);
 
 const PROVIDER = ProviderDriverKind.make("codex");
@@ -696,13 +697,12 @@ export function buildCodexChildEnv(input: {
   readonly environment?: NodeJS.ProcessEnv;
   readonly homePath?: string;
 }): NodeJS.ProcessEnv {
-  const environmentId = input.environmentId ?? process.env.T3_ENVIRONMENT_ID;
-  const environmentName = input.environmentName ?? process.env.T3_ENVIRONMENT_NAME;
   return {
-    ...(input.environment ?? process.env),
-    T3_THREAD_ID: String(input.threadId),
-    ...(environmentId ? { T3_ENVIRONMENT_ID: String(environmentId) } : {}),
-    ...(environmentName ? { T3_ENVIRONMENT_NAME: environmentName } : {}),
+    ...withT3ThreadIdentityEnv(input.environment ?? process.env, {
+      threadId: input.threadId,
+      ...(input.environmentId ? { environmentId: input.environmentId } : {}),
+      ...(input.environmentName ? { environmentName: input.environmentName } : {}),
+    }),
     ...(input.homePath ? { CODEX_HOME: input.homePath } : {}),
   };
 }

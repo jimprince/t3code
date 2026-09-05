@@ -49,6 +49,7 @@ import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
+import { openCodeAssistantSegmentData } from "../../provider/openCodeAssistantSegment.ts";
 import { ProviderRuntimeIngestionLive } from "./ProviderRuntimeIngestion.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
@@ -3819,5 +3820,123 @@ describe("ProviderRuntimeIngestion", () => {
     );
     expect(thread.session?.status).toBe("error");
     expect(thread.session?.lastError).toBe("runtime still processed");
+  });
+
+  // GLM via OpenRouter narrates in its own assistant message finishing with
+  // `finish: "tool-calls"`, so the adapter completes that text segment while
+  // the turn keeps running. Reading it as end-of-turn showed the thread as
+  // ready while OpenCode was still executing tools.
+  it("keeps an OpenCode turn running through a non-terminal assistant segment", async () => {
+    const harness = await createHarness();
+    const now = "2026-01-01T00:00:00.000Z";
+    const turnId = asTurnId("turn-opencode-narrated-tool-loop");
+
+    harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-turn-started-narrated-tool-loop"),
+      provider: ProviderDriverKind.make("opencode"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId,
+    });
+
+    await harness.drain();
+    const started = (await harness.readModel()).threads.find((thread) => thread.id === "thread-1");
+    expect(started?.session?.status).toBe("running");
+    expect(started?.session?.activeTurnId).toBe(turnId);
+
+    harness.emit({
+      type: "content.delta",
+      eventId: asEventId("evt-narration-delta-narrated-tool-loop"),
+      provider: ProviderDriverKind.make("opencode"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId,
+      itemId: asItemId("item-narration-narrated-tool-loop"),
+      payload: {
+        streamKind: "assistant_text",
+        delta: "Let me set up the environment:",
+      },
+    });
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-narration-completed-narrated-tool-loop"),
+      provider: ProviderDriverKind.make("opencode"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId,
+      itemId: asItemId("item-narration-narrated-tool-loop"),
+      payload: {
+        itemType: "assistant_message",
+        status: "completed",
+        data: openCodeAssistantSegmentData(false),
+      },
+    });
+
+    // The narrated segment is finalized for display, but the turn stays open.
+    await harness.drain();
+    const midTurn = (await harness.readModel()).threads.find((thread) => thread.id === "thread-1")!;
+    expect(
+      midTurn.messages.some(
+        (message: ProviderRuntimeTestMessage) =>
+          message.turnId === turnId && message.role === "assistant" && !message.streaming,
+      ),
+    ).toBe(true);
+    expect(midTurn.session?.status).toBe("running");
+    expect(midTurn.session?.activeTurnId).toBe(turnId);
+    expect(midTurn.latestTurn?.state).toBe("running");
+
+    // Tool activity after the narration still belongs to the active turn.
+    harness.emit({
+      type: "item.started",
+      eventId: asEventId("evt-tool-started-narrated-tool-loop"),
+      provider: ProviderDriverKind.make("opencode"),
+      createdAt: "2026-01-01T00:00:02.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId,
+      itemId: asItemId("item-tool-narrated-tool-loop"),
+      payload: {
+        itemType: "command_execution",
+        status: "inProgress",
+        title: "bash",
+      },
+    });
+
+    await harness.drain();
+    const duringTool = (await harness.readModel()).threads.find(
+      (thread) => thread.id === "thread-1",
+    )!;
+    expect(
+      duringTool.activities.some(
+        (activity: ProviderRuntimeTestActivity) =>
+          activity.id === "evt-tool-started-narrated-tool-loop",
+      ),
+    ).toBe(true);
+    expect(duringTool.session?.status).toBe("running");
+    expect(duringTool.session?.activeTurnId).toBe(turnId);
+
+    // The genuine terminal assistant message ends the turn exactly once.
+    harness.emit({
+      type: "item.completed",
+      eventId: asEventId("evt-final-completed-narrated-tool-loop"),
+      provider: ProviderDriverKind.make("opencode"),
+      createdAt: "2026-01-01T00:00:03.000Z",
+      threadId: asThreadId("thread-1"),
+      turnId,
+      itemId: asItemId("item-final-narrated-tool-loop"),
+      payload: {
+        itemType: "assistant_message",
+        status: "completed",
+        detail: "Done.",
+        data: openCodeAssistantSegmentData(true),
+      },
+    });
+
+    await harness.drain();
+    const settled = (await harness.readModel()).threads.find((thread) => thread.id === "thread-1")!;
+    expect(settled.latestTurn?.turnId).toBe(turnId);
+    expect(settled.latestTurn?.state).toBe("completed");
+    expect(settled.session?.status).toBe("ready");
+    expect(settled.session?.activeTurnId).toBeNull();
   });
 });
