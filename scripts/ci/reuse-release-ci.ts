@@ -1,5 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off
 // @effect-diagnostics globalConsole:off
+// @effect-diagnostics globalTimers:off
+// @effect-diagnostics globalDate:off
+// Copied to RUNNER_TEMP before checkout; use native timers without workspace dependencies.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeUtil from "node:util";
