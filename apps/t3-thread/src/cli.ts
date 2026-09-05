@@ -24,6 +24,12 @@ import {
 } from "./monitor.js";
 import { classifyThread, formatThreadLine } from "./status.js";
 import {
+  DEFAULT_RECOVERY_WINDOW_DAYS,
+  inspectWorktree,
+  planWorktreeGc,
+  removeWorktree,
+} from "./worktreeGc.js";
+import {
   assertNotSelfSubscription,
   buildSubscriptionRecord,
   loadState,
@@ -358,6 +364,49 @@ program
         defaultModelSelection: project.defaultModelSelection,
       })),
     );
+  });
+
+const worktree = program
+  .command("worktree")
+  .description("Manage the git worktrees T3 created for worker threads");
+
+worktree
+  .command("gc")
+  .requiredOption("--env <name>", "saved environment name")
+  .option(
+    "--recovery-window-days <days>",
+    "keep a worktree for this long after its last thread was archived",
+    String(DEFAULT_RECOVERY_WINDOW_DAYS),
+  )
+  .option("--execute", "remove the planned worktrees instead of only reporting them")
+  .description("Retire worktrees whose threads are all archived, on this host")
+  .action(async (options) => {
+    const recoveryWindowDays = Number(options.recoveryWindowDays);
+    if (!Number.isFinite(recoveryWindowDays) || recoveryWindowDays < 0) {
+      throw new Error("`--recovery-window-days` must be a non-negative number.");
+    }
+
+    const state = await loadState();
+    const environment = requireEnvironment(state, options.env);
+    const client = new RemoteEnvironmentClient(environment);
+    const plan = await planWorktreeGc({
+      threads: await client.listThreads(),
+      inspect: inspectWorktree,
+      recoveryWindowDays,
+    });
+
+    const removals = options.execute
+      ? await Promise.all(plan.removable.map((candidate) => removeWorktree(candidate.path)))
+      : [];
+
+    printJson({
+      environment: environment.name,
+      recoveryWindowDays,
+      executed: Boolean(options.execute),
+      removable: plan.removable,
+      retained: plan.retained,
+      removals,
+    });
   });
 
 const project = program.command("project").description("Manage T3 Code projects");
