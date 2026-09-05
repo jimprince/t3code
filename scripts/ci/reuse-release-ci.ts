@@ -3,6 +3,7 @@
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFS from "node:fs";
 import * as NodeUtil from "node:util";
+import { Clock, Effect } from "effect";
 
 const manifests = [
   "apps/server/package.json",
@@ -66,8 +67,9 @@ export async function reuseReleaseCI(options: {
   try {
     const source = releaseCISource(options.ref, options.version, options.cwd);
     const query = options.query ?? github;
-    const sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-    const deadline = Date.now() + (options.maxWaitMs ?? 300_000);
+    const sleep = options.sleep ?? ((ms) => Effect.runPromise(Effect.sleep(ms)));
+    const deadline =
+      (await Effect.runPromise(Clock.currentTimeMillis)) + (options.maxWaitMs ?? 300_000);
     for (;;) {
       const response = query(
         `repos/${options.repository}/actions/workflows/ci.yml/runs?head_sha=${source}&event=push&branch=main&per_page=1`,
@@ -124,11 +126,16 @@ export async function reuseReleaseCI(options: {
       }
       if (
         !["queued", "in_progress", "waiting", "pending"].includes(String(run.status)) ||
-        Date.now() >= deadline
+        (await Effect.runPromise(Clock.currentTimeMillis)) >= deadline
       ) {
         return { reused: false, reason: "Matching CI is not ready; running release tests." };
       }
-      await sleep(Math.min(15_000, Math.max(0, deadline - Date.now())));
+      await sleep(
+        Math.min(
+          15_000,
+          Math.max(0, deadline - (await Effect.runPromise(Clock.currentTimeMillis))),
+        ),
+      );
     }
   } catch {
     return {
