@@ -46,6 +46,7 @@ import {
 } from "react";
 
 import {
+  filterExcludedProjectPullRequests,
   filterPullRequestsByInvolvement,
   filterRemovedPullRequests,
   findScopedProject,
@@ -63,13 +64,17 @@ import {
   rankPullRequestMatches,
   sortPullRequestGroups,
   pullRequestEnvironmentSetKey,
+  pullRequestProjectKey,
+  readExcludedProjectIds,
   readRemovedPullRequestKeys,
   readPullRequestListSnapshot,
   resolveProjectScope,
   resolveQueryEnvironmentIds,
   resolveSelectedEnvironmentId,
+  retainListedProjects,
   setVisiblePullRequestsSelected,
   withDiffStat,
+  writeExcludedProjectIds,
   writeRemovedPullRequestKeys,
   writePullRequestListSnapshot,
   scorePullRequestMatch,
@@ -99,7 +104,6 @@ import {
   PullRequestFilterOptionIcon,
   PullRequestSearchInput,
   pullRequestHostLabel,
-  pullRequestProjectKey,
   type PullRequestExpectedHost,
   type PullRequestFilterOption,
 } from "../components/pullRequest/PullRequestListFilters";
@@ -364,6 +368,33 @@ function PullRequestsRouteView() {
     removedPullRequests.environmentKey === environmentKey
       ? removedPullRequests.keys
       : EMPTY_PULL_REQUEST_KEYS;
+  // Projects the reader has taken out of the list for good, read back per server the same way
+  // dismissed rows are: a project id only names a project on its own machine.
+  const [excludedProjects, setExcludedProjects] = useState<{
+    environmentKey: string;
+    keys: ReadonlySet<string>;
+  }>({ environmentKey: "", keys: EMPTY_PULL_REQUEST_KEYS });
+  useEffect(() => {
+    if (environmentKey.length === 0) {
+      setExcludedProjects({ environmentKey: "", keys: EMPTY_PULL_REQUEST_KEYS });
+      return;
+    }
+    const storage = typeof window === "undefined" ? undefined : window.localStorage;
+    setExcludedProjects({
+      environmentKey,
+      keys: new Set(
+        environmentIds.flatMap((environmentId) =>
+          readExcludedProjectIds(storage, environmentId).map((projectId) =>
+            pullRequestProjectKey({ id: projectId, environmentId }),
+          ),
+        ),
+      ),
+    });
+  }, [environmentIds, environmentKey]);
+  const storedExcludedProjectKeys =
+    excludedProjects.environmentKey === environmentKey
+      ? excludedProjects.keys
+      : EMPTY_PULL_REQUEST_KEYS;
   // An environment may still be connecting, or may predate this feature. Until at least one has
   // reported, an empty set means "not known yet" rather than "no environment can", and the page
   // waits rather than telling a reader to upgrade a server that has not spoken.
@@ -417,6 +448,11 @@ function PullRequestsRouteView() {
     () => findScopedProject(projects, scopedEnvironmentId, scopedProjectId),
     [projects, scopedEnvironmentId, scopedProjectId],
   );
+  // Hiding projects narrows "All projects". Naming one project is the more specific word on the
+  // same question, so a scope of its own is answered whole — a project asked for by name is shown
+  // even while it is hidden from the list at large.
+  const excludedProjectKeys =
+    scopedProjectId === undefined ? storedExcludedProjectKeys : EMPTY_PULL_REQUEST_KEYS;
 
   // A link from a thread or the sidebar only knows the repository, so the owning project is
   // resolved here; an explicit `projectId` in the URL still wins.
@@ -647,14 +683,18 @@ function PullRequestsRouteView() {
       totals.set(project.environmentId, (totals.get(project.environmentId) ?? 0) + 1);
     }
     return queryEnvironmentIds.flatMap((environmentId) => {
-      const projectIds = assignment.get(environmentId);
-      if (projectIds === undefined) return [];
+      const assigned = assignment.get(environmentId);
+      if (assigned === undefined) return [];
+      // Hidden projects are dropped from the question itself, so their reviews are never read,
+      // never paged through, and never counted against the page a reader is waiting for.
+      const projectIds = retainListedProjects(environmentId, assigned, excludedProjectKeys);
+      if (projectIds.length === 0) return [];
       // It lists everything it holds anyway, so the filter is left off and a one-server workspace
       // asks exactly the question it asked before.
       if (projectIds.length === (totals.get(environmentId) ?? 0)) return [{ environmentId }];
       return [{ environmentId, projectIds }];
     });
-  }, [projects, projectsKnown, queryEnvironmentIds, scopedProjectId]);
+  }, [excludedProjectKeys, projects, projectsKnown, queryEnvironmentIds, scopedProjectId]);
   // Part of the scope, since a different split is a different question and its answers must not
   // be filed under the same page state.
   const assignmentKey = useMemo(
@@ -1223,9 +1263,16 @@ function PullRequestsRouteView() {
     typedParsed.text,
     viewers,
   ]);
+  // The rows the hosts were still asked for: a project hidden while its answer was in flight, or
+  // hidden before the workspace had said which projects it holds, arrives anyway and is left out
+  // here rather than sitting in the list until the next read comes back.
   const entries = useMemo(
-    () => filterRemovedPullRequests(matchingEntries, removedPullRequestKeys),
-    [matchingEntries, removedPullRequestKeys],
+    () =>
+      filterExcludedProjectPullRequests(
+        filterRemovedPullRequests(matchingEntries, removedPullRequestKeys),
+        excludedProjectKeys,
+      ),
+    [excludedProjectKeys, matchingEntries, removedPullRequestKeys],
   );
 
   // Seed the first tab paint from list rows while each tab's cached detail read lands.
@@ -1319,7 +1366,10 @@ function PullRequestsRouteView() {
             matchesPullRequestFilters(entry, localFilters, pullRequestEntryViewer(entry, viewers)),
           )
         : rows;
-      return filterRemovedPullRequests(locallyNarrowed, removedPullRequestKeys);
+      return filterExcludedProjectPullRequests(
+        filterRemovedPullRequests(locallyNarrowed, removedPullRequestKeys),
+        excludedProjectKeys,
+      );
     };
     const authored = narrow(
       partitionsWanted ? (authoredQuery.data?.entries ?? held?.authored) : undefined,
@@ -1332,6 +1382,7 @@ function PullRequestsRouteView() {
     }
     return partitionPullRequestsWithPriority(entries, authored, reviewing);
   }, [
+    excludedProjectKeys,
     hasLocalFilters,
     localFilters,
     authoredQuery.data?.entries,
@@ -1406,6 +1457,28 @@ function PullRequestsRouteView() {
     selectedVisibleCount,
     visiblePullRequestEntries,
   ]);
+  const setProjectExcluded = useCallback(
+    (projectId: ProjectId, environmentId: EnvironmentId, excluded: boolean) => {
+      const storage = typeof window === "undefined" ? undefined : window.localStorage;
+      const stored = readExcludedProjectIds(storage, environmentId).filter(
+        (id) => id !== projectId,
+      );
+      writeExcludedProjectIds(storage, environmentId, excluded ? [...stored, projectId] : stored);
+      const key = pullRequestProjectKey({ id: projectId, environmentId });
+      const keys = new Set(storedExcludedProjectKeys);
+      if (excluded) keys.add(key);
+      else keys.delete(key);
+      setExcludedProjects({ environmentKey, keys });
+    },
+    [environmentKey, storedExcludedProjectKeys],
+  );
+  const showAllProjects = useCallback(() => {
+    const storage = typeof window === "undefined" ? undefined : window.localStorage;
+    for (const environmentId of environmentIds) {
+      writeExcludedProjectIds(storage, environmentId, []);
+    }
+    setExcludedProjects({ environmentKey, keys: EMPTY_PULL_REQUEST_KEYS });
+  }, [environmentIds, environmentKey]);
   const restoreRemovedPullRequests = useCallback(() => {
     const storage = typeof window === "undefined" ? undefined : window.localStorage;
     for (const environmentId of environmentIds) {
@@ -1740,7 +1813,9 @@ function PullRequestsRouteView() {
     showingCarried && listQuery.isPending && entries.length === 0 && typedQuery.length === 0;
   const selectionControls =
     pullRequestsSupported &&
-    (visiblePullRequestKeys.length > 0 || removedPullRequestKeys.size > 0) ? (
+    (visiblePullRequestKeys.length > 0 ||
+      removedPullRequestKeys.size > 0 ||
+      storedExcludedProjectKeys.size > 0) ? (
       <div
         role="toolbar"
         aria-label="Pull request selection"
@@ -1763,6 +1838,13 @@ function PullRequestsRouteView() {
             : `${visiblePullRequestKeys.length} visible`}
         </span>
         <span className="min-w-0 flex-1" />
+        {storedExcludedProjectKeys.size > 0 ? (
+          <Button size="xs" variant="ghost" onClick={showAllProjects}>
+            <RotateCcwIcon aria-hidden className="size-3.5" />
+            Show {storedExcludedProjectKeys.size} hidden{" "}
+            {storedExcludedProjectKeys.size === 1 ? "project" : "projects"}
+          </Button>
+        ) : null}
         {removedPullRequestKeys.size > 0 ? (
           <Button size="xs" variant="ghost" onClick={restoreRemovedPullRequests}>
             <RotateCcwIcon aria-hidden className="size-3.5" />
@@ -1804,6 +1886,7 @@ function PullRequestsRouteView() {
             search.state !== "open" ||
             search.involvement !== "all" ||
             scopedProjectId !== undefined ||
+            excludedProjectKeys.size > 0 ||
             search.host !== undefined
           }
           searching={typedQuery.length > 0 && (!querySettled || showingCarried)}
@@ -1957,6 +2040,11 @@ function PullRequestsRouteView() {
       onProject={(projectId, environmentId) =>
         updateListScope(environmentId === undefined ? { projectId } : { projectId, environmentId })
       }
+      // Hiding is remembered per server in this browser rather than written into the URL: it is a
+      // standing preference about a workspace, not part of the list a link hands to someone else.
+      excludedProjectKeys={storedExcludedProjectKeys}
+      onExcludeProject={setProjectExcluded}
+      onShowAllProjects={showAllProjects}
     />
   );
   const columnProps = {

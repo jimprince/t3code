@@ -438,3 +438,13 @@ purpose = "Create and resolve Gitea pull requests, check out retained PR heads, 
 retire_when = "Upstream supports equivalent configured-instance Gitea create and checkout flows."
 depends_on = ["fork-gitea-instance-pr-badges"]
 roles = []
+
+[[patch]]
+name = "fork-pr-project-exclusions"
+subject = "feat(web): hide projects from the pull request list"
+class = "product"
+purpose = "Let operators keep whole projects out of the aggregated Pull Requests view, persistently and per environment, without giving up the single-project scope or any other filter."
+retire_when = "Upstream ships equivalent multi-project exclusion in the Pull Requests view, with per-environment project identity and query-level narrowing."
+depends_on = ["fork-web-pr-multiselect"]
+roles = []
+note = "Hidden projects are keyed by pullRequestProjectKey (environment plus project id) and stored under t3.pullRequests.excludedProjects:<environmentId>, so one server's id can never hide another server's project. The exclusion is applied AFTER assignProjectsToEnvironments has settled which server lists each repository: dropping a hidden project before that decision would hand the repository to another server holding a copy and the rows would come straight back. Rows are also filtered locally, because an answer already in flight, or a hiding made before the workspace reported its projects, still arrives. A single-project scope wins over hiding, so a project asked for by name is answered whole."
