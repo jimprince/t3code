@@ -10,6 +10,7 @@ T3 Code works with the platforms your team already uses:
 - **GitLab** – Merge requests, repository publishing, and hosted clones
 - **Bitbucket** – Pull request workflows (via API token authentication)
 - **Azure DevOps** – Pull request support for Microsoft-hosted repositories
+- **Gitea** – [Configured instances and branch pull-request badges](./gitea.md)
 
 ## What You Can Do
 

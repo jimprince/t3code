@@ -709,3 +709,17 @@ export const PiAgentIcon: Icon = ({ className, ...props }) => (
     <path fill="#fff" d="M517.36 400H634.72V634.72H517.36Z" />
   </svg>
 );
+
+/** Tea cup mark for configured Gitea hosts. */
+export const GiteaIcon: Icon = (props) => (
+  <svg {...props} viewBox="0 0 24 24" fill="none">
+    <path d="M5 5h15v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-7-7V5Z" fill="#609926" />
+    <path d="M5 7H3a2 2 0 0 0-2 2v2a4 4 0 0 0 4 4" stroke="#609926" strokeWidth="2" />
+    <path
+      d="m11 8 5 5-4 4-5-5 4-4Zm0 0v5h3"
+      stroke="white"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
