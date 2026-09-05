@@ -401,8 +401,8 @@ export interface PullRequestFilterProject {
   readonly environmentId: EnvironmentId;
   readonly title: string;
   readonly workspaceRoot: string;
-  readonly faviconPath?: string | null;
-  readonly projectIcon?: ProjectIconOverride | null;
+  readonly faviconPath?: string | null | undefined;
+  readonly projectIcon?: ProjectIconOverride | null | undefined;
 }
 
 /**
