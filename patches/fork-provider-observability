@@ -1,6 +1,6 @@
-Bottom: e72a14388c375356753ffc0ca028313fe017dcf1
-Top:    a1657cc6f09ee8ad9579b434bc63e011ea3d8e67
+Bottom: ad19e41cdf12009855a35e26d78e3532a7c06d54
+Top:    b4c88919658c355a322b6adf38df37a5d8ed8c71
 Author: brad <bradprin@live.com>
-Date:   2026-09-05 16:23:02 -0600
+Date:   2026-09-05 16:23:06 -0600
 
 fix(server): bound provider observability
