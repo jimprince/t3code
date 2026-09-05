@@ -2,6 +2,7 @@ import type { EnvironmentId, ProjectId, PullRequestListEntry } from "@t3tools/co
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  filterExcludedProjectPullRequests,
   filterPullRequestsByInvolvement,
   filterRemovedPullRequests,
   findScopedProject,
@@ -19,6 +20,8 @@ import {
   mergePullRequestDiffStats,
   narrowPullRequestsToFilters,
   partitionPullRequestsWithPriority,
+  pullRequestProjectKey,
+  readExcludedProjectIds,
   readRemovedPullRequestKeys,
   readPullRequestListSnapshot,
   setVisiblePullRequestsSelected,
@@ -27,14 +30,17 @@ import {
   rankPullRequestsByMergeReadiness,
   scorePullRequestMatch,
   sortPullRequestGroups,
+  retainListedProjects,
   retainVisiblePullRequestStatsBatches,
   withDiffStat,
+  writeExcludedProjectIds,
   writeRemovedPullRequestKeys,
   resolveProjectScope,
   resolveQueryEnvironmentIds,
   resolveSelectedEnvironmentId,
   type EnvironmentPullRequestEntry,
 } from "./pullRequestList.logic";
+import { assignProjectsToEnvironments } from "./pullRequestProjectAssignment.logic";
 import {
   pullRequestListPreferences,
   readPullRequestListPreferences,
@@ -400,6 +406,133 @@ describe("removing pull requests from the local list", () => {
     storage.setItem("t3.pullRequests.removed:env-1", "{not json");
     expect([...readRemovedPullRequestKeys(storage, "env-1")]).toEqual([]);
     expect([...readRemovedPullRequestKeys(undefined, "env-1")]).toEqual([]);
+  });
+});
+
+describe("hiding projects from the pull request list", () => {
+  const makeStorage = () => {
+    const held = new Map<string, string>();
+    return {
+      getItem: (key: string) => held.get(key) ?? null,
+      setItem: (key: string, value: string) => void held.set(key, value),
+    };
+  };
+  const project = (id: string, environmentId: string, canonicalKey?: string) => ({
+    id: id as ProjectId,
+    environmentId: environmentId as EnvironmentId,
+    ...(canonicalKey === undefined ? {} : { repositoryIdentity: { canonicalKey } }),
+  });
+
+  it("leaves the list untouched when no project is hidden", () => {
+    const entries = [entry({ number: 1 })];
+    expect(filterExcludedProjectPullRequests(entries, new Set())).toBe(entries);
+  });
+
+  it("hides every review of a hidden project and keeps the other projects", () => {
+    const hiddenOne = entry({ number: 1 });
+    const hiddenTwo = entry({ number: 2 });
+    const kept = entry({
+      number: 3,
+      projectId: "project-2" as ProjectId,
+      repository: "acme/important-app",
+    });
+
+    expect(
+      filterExcludedProjectPullRequests(
+        [hiddenOne, hiddenTwo, kept],
+        new Set([
+          pullRequestProjectKey({
+            id: "project-1" as ProjectId,
+            environmentId: "env-1" as EnvironmentId,
+          }),
+        ]),
+      ),
+    ).toEqual([kept]);
+  });
+
+  it("keeps another server's project of the same id visible", () => {
+    const hidden = entry({ number: 1 });
+    const elsewhere = entry({ number: 2, environmentId: "env-2" as EnvironmentId });
+
+    expect(
+      filterExcludedProjectPullRequests(
+        [hidden, elsewhere],
+        new Set([
+          pullRequestProjectKey({
+            id: "project-1" as ProjectId,
+            environmentId: "env-1" as EnvironmentId,
+          }),
+        ]),
+      ),
+    ).toEqual([elsewhere]);
+  });
+
+  it("stops asking a server about the projects hidden on it alone", () => {
+    const excluded = new Set([
+      pullRequestProjectKey({
+        id: "project-1" as ProjectId,
+        environmentId: "env-1" as EnvironmentId,
+      }),
+    ]);
+
+    expect(
+      retainListedProjects(
+        "env-1" as EnvironmentId,
+        ["project-1", "project-2"] as ProjectId[],
+        excluded,
+      ),
+    ).toEqual(["project-2"]);
+    expect(
+      retainListedProjects("env-2" as EnvironmentId, ["project-1"] as ProjectId[], excluded),
+    ).toEqual(["project-1"]);
+  });
+
+  it("does not hand a hidden repository to the other server holding a copy of it", () => {
+    const projects = [
+      project("shared-1", "env-1", "github.com/pingdotgg/t3code"),
+      project("own-1", "env-1", "github.com/acme/important-app"),
+      project("shared-2", "env-2", "github.com/pingdotgg/t3code"),
+    ];
+    const environmentIds = ["env-1", "env-2"] as EnvironmentId[];
+    const assignment = assignProjectsToEnvironments(projects, environmentIds, environmentIds[0]);
+    const excluded = new Set([
+      pullRequestProjectKey({
+        id: "shared-1" as ProjectId,
+        environmentId: "env-1" as EnvironmentId,
+      }),
+    ]);
+
+    expect(
+      retainListedProjects(
+        "env-1" as EnvironmentId,
+        assignment.get("env-1" as EnvironmentId) ?? [],
+        excluded,
+      ),
+    ).toEqual(["own-1"]);
+    // The second server was never the one listing that repository, so hiding it there is what
+    // takes it out of the list: it must not become the fallback that brings the rows back.
+    expect(
+      retainListedProjects(
+        "env-2" as EnvironmentId,
+        assignment.get("env-2" as EnvironmentId) ?? [],
+        excluded,
+      ),
+    ).toEqual([]);
+  });
+
+  it("persists hidden projects per environment and tolerates corrupt storage", () => {
+    const storage = makeStorage();
+
+    writeExcludedProjectIds(storage, "env-1", ["project-1", "project-2"] as ProjectId[]);
+    expect([...readExcludedProjectIds(storage, "env-1")]).toEqual(["project-1", "project-2"]);
+    expect([...readExcludedProjectIds(storage, "env-2")]).toEqual([]);
+
+    writeExcludedProjectIds(storage, "env-1", []);
+    expect([...readExcludedProjectIds(storage, "env-1")]).toEqual([]);
+
+    storage.setItem("t3.pullRequests.excludedProjects:env-1", "{not json");
+    expect([...readExcludedProjectIds(storage, "env-1")]).toEqual([]);
+    expect([...readExcludedProjectIds(undefined, "env-1")]).toEqual([]);
   });
 });
 

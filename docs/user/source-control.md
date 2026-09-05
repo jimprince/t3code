@@ -56,6 +56,13 @@ T3 Code works with the platforms your team already uses:
   choose **Remove from list** to hide them without closing or changing them on the Git host
 - Removed reviews stay hidden for that environment in this browser. Choose **Restore removed**
   above the list to bring them back.
+- Choose **Filters** → **Hidden projects** to keep whole projects out of the list. Tick as many as
+  you like: every other project stays, and a hidden project is no longer read from your Git host,
+  so its reviews never take up room in the page you are waiting for.
+- Hidden projects stay hidden for that environment in this browser and count towards the
+  **Filters** badge. Choose **Show all projects**, in that menu or above the list, to bring them
+  back. Picking a single project under **Filters** → **Project** still shows it, even while it is
+  hidden from the list at large.
 - Merge now, or on GitHub, GitLab, and Azure DevOps, leave an auto-merge instruction with a chosen
   strategy while checks are outstanding; see the completed state in the same control after the
   pull request merges
