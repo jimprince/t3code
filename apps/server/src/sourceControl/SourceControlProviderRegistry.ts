@@ -1,3 +1,6 @@
+import * as GiteaSourceControlProvider from "./GiteaSourceControlProvider.ts";
+import { ServerSettingsService } from "../serverSettings.ts";
+import type { GiteaInstanceConfig } from "@t3tools/contracts";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -129,10 +132,11 @@ function selectProviderContext(
     readonly name: string;
     readonly url: string;
   }>,
+  instances: ReadonlyArray<GiteaInstanceConfig>,
 ): SourceControlProvider.SourceControlProviderContext | null {
   const candidates: Array<SourceControlProvider.SourceControlProviderContext> = [];
   for (const remote of remotes) {
-    const provider = detectSourceControlProviderFromRemoteUrl(remote.url);
+    const provider = detectSourceControlProviderFromRemoteUrl(remote.url, instances);
     if (provider) {
       candidates.push({
         provider,
@@ -197,6 +201,19 @@ function bindProviderContext(
 export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWithProviders")(
   function* (registrations: ReadonlyArray<SourceControlProviderRegistration>) {
     const config = yield* ServerConfig;
+    const settings = yield* ServerSettingsService;
+    const getInstances = settings.getSettings.pipe(
+      Effect.map((value) => value.giteaInstances),
+      Effect.mapError(
+        () =>
+          new SourceControlProviderError({
+            provider: "gitea",
+            operation: "settings",
+            cwd: config.cwd,
+            detail: "Could not read Gitea configuration.",
+          }),
+      ),
+    );
     const process = yield* VcsProcess.VcsProcess;
     const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
     const providers = new Map<
@@ -234,7 +251,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
               }),
           ),
         );
-        const context = selectProviderContext(remotes.remotes);
+        const context = selectProviderContext(remotes.remotes, yield* getInstances);
 
         return yield* refineUnknownRemoteProvider({
           specs: discoverySpecs,
@@ -254,25 +271,35 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
       timeToLive: (exit) => (Exit.isSuccess(exit) ? PROVIDER_DETECTION_CACHE_TTL : Duration.zero),
     });
 
-    const resolveHandle: SourceControlProviderRegistry["Service"]["resolveHandle"] = (input) =>
-      (input.context === undefined
-        ? Cache.get(providerContextCache, input.cwd)
-        : refineUnknownRemoteProvider({
-            specs: discoverySpecs,
-            process,
-            cwd: input.cwd,
-            context: input.context,
-          })
-      ).pipe(
-        Effect.map((context) => {
-          const kind = context?.provider.kind ?? "unknown";
-          const provider = providers.get(kind) ?? unsupportedProvider(kind);
-          return {
-            provider: bindProviderContext(provider, context),
-            context,
-          } satisfies SourceControlProviderHandle;
-        }),
-      );
+    const configuredContext = (
+      context: SourceControlProvider.SourceControlProviderContext | null,
+      instances: ReadonlyArray<GiteaInstanceConfig>,
+    ) => {
+      if (context === null) return null;
+      const detected = detectSourceControlProviderFromRemoteUrl(context.remoteUrl, instances);
+      return detected && (detected.kind === "gitea" || context.provider.kind === "gitea")
+        ? { ...context, provider: detected }
+        : context;
+    };
+
+    const resolveHandle: SourceControlProviderRegistry["Service"]["resolveHandle"] = Effect.fn(
+      "SourceControlProviderRegistry.resolveHandle",
+    )(function* (input) {
+      const instances = yield* getInstances;
+      const resolved =
+        input.context === undefined
+          ? yield* Cache.get(providerContextCache, input.cwd)
+          : yield* refineUnknownRemoteProvider({
+              specs: discoverySpecs,
+              process,
+              cwd: input.cwd,
+              context: configuredContext(input.context, instances),
+            });
+      const context = configuredContext(resolved, instances);
+      const kind = context?.provider.kind ?? "unknown";
+      const provider = providers.get(kind) ?? unsupportedProvider(kind);
+      return { provider: bindProviderContext(provider, context), context };
+    });
 
     return SourceControlProviderRegistry.of({
       get,
@@ -293,6 +320,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
 );
 
 export const make = Effect.gen(function* () {
+  const gitea = yield* GiteaSourceControlProvider.make;
   const github = yield* GitHubSourceControlProvider.make;
   const gitlab = yield* GitLabSourceControlProvider.make;
   const bitbucket = yield* BitbucketSourceControlProvider.make;
@@ -319,6 +347,7 @@ export const make = Effect.gen(function* () {
       provider: bitbucket,
       discovery: bitbucketDiscovery,
     },
+    { kind: "gitea", ...gitea },
   ]);
 });
 
