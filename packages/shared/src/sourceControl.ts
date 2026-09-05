@@ -1,7 +1,11 @@
-import type { SourceControlProviderInfo, SourceControlProviderKind } from "@t3tools/contracts";
+import type {
+  GiteaInstanceConfig,
+  SourceControlProviderInfo,
+  SourceControlProviderKind,
+} from "@t3tools/contracts";
 
 export interface ChangeRequestPresentation {
-  readonly icon: "github" | "gitlab" | "azure-devops" | "bitbucket" | "change-request";
+  readonly icon: "github" | "gitlab" | "azure-devops" | "bitbucket" | "gitea" | "change-request";
   readonly providerName: string;
   readonly shortName: string;
   readonly longName: string;
@@ -87,6 +91,14 @@ export function resolveChangeRequestPresentation(
       return AZURE_DEVOPS_CHANGE_REQUEST_PRESENTATION;
     case "bitbucket":
       return BITBUCKET_CHANGE_REQUEST_PRESENTATION;
+    case "gitea":
+      return {
+        ...BITBUCKET_CHANGE_REQUEST_PRESENTATION,
+        icon: "gitea",
+        providerName: "Gitea",
+        providerLongName: "Gitea pull request",
+        urlExample: "https://gitea.example/owner/repo/pulls/42",
+      };
     case "unknown":
       return GENERIC_CHANGE_REQUEST_PRESENTATION;
   }
@@ -200,7 +212,11 @@ function isBitbucketHost(host: string): boolean {
 
 export function detectSourceControlProviderFromRemoteUrl(
   remoteUrl: string,
+  giteaInstances: ReadonlyArray<GiteaInstanceConfig> = [],
 ): SourceControlProviderInfo | null {
+  const gitea = resolveGiteaRemote(remoteUrl, giteaInstances);
+  if (gitea)
+    return { kind: "gitea", name: "Gitea", baseUrl: gitea.instance.webOrigin.replace(/\/$/, "") };
   const host = parseRemoteHost(remoteUrl);
   if (!host) {
     return null;
@@ -244,4 +260,47 @@ export function detectSourceControlProviderFromRemoteUrl(
     name: host,
     baseUrl: toBaseUrl(host),
   };
+}
+
+/** Explicit endpoint matching prevents an SSH port from becoming a browser/API port.
+ * Ambiguous configurations deliberately remain on the unknown-host path.
+ */
+export function resolveGiteaRemote(
+  remoteUrl: string,
+  instances: ReadonlyArray<GiteaInstanceConfig>,
+) {
+  const trimmed = remoteUrl.trim();
+  const scp = trimmed.includes("://") ? null : /^(?:[a-zA-Z0-9._-]+@)?([^:/]+):(.+)$/.exec(trimmed);
+  let url: URL;
+  try {
+    url = new URL(scp ? `ssh://${scp[1]}/${scp[2]}` : trimmed);
+  } catch {
+    return null;
+  }
+  const ssh = url.protocol === "ssh:";
+  if (!ssh && url.protocol !== "http:" && url.protocol !== "https:") return null;
+  const matches = instances.filter((instance) =>
+    ssh
+      ? [instance.host, ...instance.sshAliases].some(
+          (host) => host.toLowerCase() === url.hostname.toLowerCase(),
+        ) &&
+        (scp !== null || instance.sshPorts.includes(Number(url.port || 22)))
+      : new URL(instance.webOrigin).host.toLowerCase() === url.host.toLowerCase(),
+  );
+  if (matches.length !== 1) return null;
+  const instance = matches[0]!;
+  let repository: string;
+  try {
+    repository = decodeURIComponent(url.pathname)
+      .replace(/^\/+|\/+$/g, "")
+      .replace(/\.git$/i, "");
+  } catch {
+    return null;
+  }
+  if (
+    !/^[^/\s]+\/[^/\s]+$/.test(repository) ||
+    repository.split("/").some((part) => part === "." || part === "..")
+  )
+    return null;
+  return { instance, repository };
 }

@@ -1,3 +1,4 @@
+import { GiteaSettingsSection } from "./GiteaSettings";
 import { ChevronDownIcon, GitPullRequestIcon, RefreshCwIcon } from "lucide-react";
 import * as Duration from "effect/Duration";
 import * as Option from "effect/Option";
@@ -48,6 +49,7 @@ import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   AzureDevOpsIcon,
   BitbucketIcon,
+  GiteaIcon,
   GitHubIcon,
   GitIcon,
   GitLabIcon,
@@ -72,6 +74,7 @@ const EMPTY_DISCOVERY_RESULT: SourceControlDiscoveryResult = {
 };
 
 const SOURCE_CONTROL_PROVIDER_ICONS: Partial<Record<SourceControlProviderKind, Icon>> = {
+  gitea: GiteaIcon,
   github: GitHubIcon,
   gitlab: GitLabIcon,
   "azure-devops": AzureDevOpsIcon,
@@ -588,6 +591,7 @@ export function SourceControlSettingsPanel() {
 
       {/* Its rows are serverScoped: without a primary they render inert with
           an explanation, which beats disappearing. */}
+      <GiteaSettingsSection />
       <SourceControlWritingSettingsSection />
     </SettingsPageContainer>
   );

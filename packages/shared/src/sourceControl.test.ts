@@ -160,3 +160,76 @@ describe("isSshRemoteUrl", () => {
     expect(isSshRemoteUrl("deploy@github.com/project/repo")).toBe(false);
   });
 });
+
+describe("configured Gitea remote detection", () => {
+  const instance = {
+    id: "home",
+    host: "git.home",
+    sshAliases: ["home-git"],
+    sshPorts: [22, 2222],
+    webOrigin: "http://git.home:3000",
+    apiOrigin: "http://git.home:3000",
+    token: "",
+  };
+  it.each([
+    "git@git.home:brad/repo.git",
+    "git@git.home:/brad/repo.git",
+    "git.home:brad/repo.git",
+    "ssh://git@git.home:2222/brad/repo.git",
+    "ssh://git@git.home/brad/repo.git",
+    "http://git.home:3000/brad/repo.git",
+    "https://git.home:3000/brad/repo.git",
+    "git@home-git:brad/repo.git",
+    "ssh://git@home-git:2222/brad/repo.git",
+  ])("maps %s to the configured web origin", (remote) => {
+    expect(detectSourceControlProviderFromRemoteUrl(remote, [instance])).toEqual({
+      kind: "gitea",
+      name: "Gitea",
+      baseUrl: instance.webOrigin,
+    });
+  });
+  it("keeps unknown hosts and unconfigured ports graceful", () => {
+    expect(
+      detectSourceControlProviderFromRemoteUrl("ssh://git@git.home:2222/brad/repo.git")?.kind,
+    ).toBe("unknown");
+    expect(
+      detectSourceControlProviderFromRemoteUrl("ssh://git@git.home:2022/brad/repo.git", [instance])
+        ?.kind,
+    ).toBe("unknown");
+    expect(
+      detectSourceControlProviderFromRemoteUrl("https://git.home/brad/repo.git", [instance])?.kind,
+    ).toBe("unknown");
+  });
+  it("separates two instances on the same hostname by port and rejects ambiguous SCP aliases", () => {
+    const second = {
+      ...instance,
+      id: "work",
+      sshPorts: [2022],
+      sshAliases: ["work-git"],
+      webOrigin: "https://git.home:4000",
+    };
+    expect(
+      detectSourceControlProviderFromRemoteUrl("ssh://git@git.home:2022/brad/repo.git", [
+        instance,
+        second,
+      ])?.baseUrl,
+    ).toBe(second.webOrigin);
+    expect(
+      detectSourceControlProviderFromRemoteUrl("git@work-git:brad/repo.git", [instance, second])
+        ?.baseUrl,
+    ).toBe(second.webOrigin);
+    expect(
+      detectSourceControlProviderFromRemoteUrl("git@git.home:brad/repo.git", [instance, second])
+        ?.kind,
+    ).toBe("unknown");
+  });
+  it("names Gitea and its icon", () => {
+    expect(
+      resolveChangeRequestPresentation({
+        kind: "gitea",
+        name: "Gitea",
+        baseUrl: instance.webOrigin,
+      }),
+    ).toMatchObject({ icon: "gitea", providerName: "Gitea", shortName: "PR" });
+  });
+});
