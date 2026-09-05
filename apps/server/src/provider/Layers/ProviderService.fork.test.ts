@@ -1,3 +1,4 @@
+import * as FileSystem from "effect/FileSystem";
 /* oxlint-disable t3code/no-manual-effect-runtime-in-tests -- verbatim copies of the upstream test file's harness helpers; the upstream file carries the same legacy allowance. */
 import type { EventId } from "@t3tools/contracts";
 import type {
@@ -304,6 +305,7 @@ function makeProviderServiceLayer(
   const layer = it.layer(
     Layer.mergeAll(
       makeProviderServiceLive().pipe(
+        Layer.provide(NodeServices.layer),
         Layer.provide(providerAdapterLayer),
         Layer.provide(directoryLayer),
         Layer.provide(defaultServerSettingsLayer),
@@ -725,7 +727,9 @@ routing.layer("ProviderServiceLive routing (fork)", (it) => {
         provider: ProviderDriverKind.make("codex"),
         providerInstanceId: codexInstanceId,
         threadId: sourceThreadId,
-        cwd: "/tmp/source-project",
+        cwd: yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped({
+          prefix: "t3-fork-source-",
+        }),
         runtimeMode: "full-access",
       });
       yield* provider.stopSession({ threadId: sourceThreadId });
@@ -775,7 +779,9 @@ routing.layer("ProviderServiceLive routing (fork)", (it) => {
         provider: CLAUDE_AGENT_DRIVER,
         providerInstanceId: claudeAgentInstanceId,
         threadId: sourceThreadId,
-        cwd: "/tmp/source-project",
+        cwd: yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped({
+          prefix: "t3-fork-source-",
+        }),
         runtimeMode: "full-access",
       });
 
@@ -825,7 +831,9 @@ routing.layer("ProviderServiceLive routing (fork)", (it) => {
         provider: CLAUDE_AGENT_DRIVER,
         providerInstanceId: claudeAgentInstanceId,
         threadId: sourceThreadId,
-        cwd: "/tmp/source-project",
+        cwd: yield* (yield* FileSystem.FileSystem).makeTempDirectoryScoped({
+          prefix: "t3-fork-source-",
+        }),
         runtimeMode: "full-access",
       });
       yield* provider.stopSession({ threadId: sourceThreadId });

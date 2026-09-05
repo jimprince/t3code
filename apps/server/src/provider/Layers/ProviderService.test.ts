@@ -481,6 +481,7 @@ for (const [enabled, completed] of [
         const codex = makeFakeCodexAdapter();
         const persistence = yield* Layer.build(
           ProviderSessionDirectoryLive.pipe(
+            Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
             Layer.provide(
               ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistenceMemory)),
             ),
