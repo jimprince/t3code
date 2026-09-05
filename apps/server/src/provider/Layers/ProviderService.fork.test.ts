@@ -563,16 +563,16 @@ routing.layer("ProviderServiceLive routing (fork)", (it) => {
 
         assert.deepEqual(deliveredInputs, ["incorporate this follow-up into the running turn"]);
         assert.equal(turn.turnId, activeTurnId);
-        const binding = yield* directory.getBinding(threadId);
-        assert.equal(Option.getOrUndefined(binding)?.activeTurnId, activeTurnId);
-        const metadata = (yield* directory.listBindings()).find(
+        const activeTurnBinding = yield* directory.getBinding(threadId);
+        assert.equal(Option.getOrUndefined(activeTurnBinding)?.activeTurnId, activeTurnId);
+        const recoveryBinding = (yield* directory.listBindings()).find(
           (candidate) => candidate.threadId === threadId,
         );
-        assert.isDefined(metadata);
+        assert.isDefined(recoveryBinding);
         assert.equal(
           yield* directory.claimIdleForRecovery({
             threadId,
-            expectedLastSeenAt: metadata!.lastSeenAt,
+            expectedLastSeenAt: recoveryBinding!.lastSeenAt,
           }),
           false,
         );
