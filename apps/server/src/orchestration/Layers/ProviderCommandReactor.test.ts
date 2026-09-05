@@ -456,6 +456,7 @@ describe("ProviderCommandReactor", () => {
       settleDeadGenerationBinding: () => Effect.succeed(false),
       markTurnStarted: () => Effect.succeed(false),
       markTurnTerminal: () => Effect.succeed(false),
+      recordImportedTranscript: () => Effect.die("unused"),
       claimIdleForRecovery: () => Effect.succeed(false),
     });
 

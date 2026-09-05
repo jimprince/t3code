@@ -182,6 +182,7 @@ describe("ThreadArchiveCleanupReactor", () => {
                 ? Effect.succeed(Option.some(input.thread))
                 : Effect.succeed(Option.none()),
             getThreadDetailById: () => unsupported(),
+            getImportedAgentSessionSources: () => Effect.die("unused"),
             getThreadDetailSnapshot: () => unsupported(),
           }),
         ),

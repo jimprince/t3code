@@ -148,6 +148,7 @@ describe("OrchestrationEngine (fork)", () => {
           getThreadRuntimeContext: () => Effect.succeed(Option.none()),
           getThreadShellByIdIncludingArchived: () => Effect.succeed(Option.none()),
           getThreadDetailById: () => Effect.succeed(Option.none()),
+          getImportedAgentSessionSources: () => Effect.die("unused"),
           getThreadDetailSnapshot: () => Effect.succeed(Option.none()),
         }),
       ),
