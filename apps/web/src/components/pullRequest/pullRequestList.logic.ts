@@ -605,21 +605,22 @@ export function setVisiblePullRequestsSelected(
   return next;
 }
 
-type RemovedPullRequestStorage = Pick<Storage, "getItem" | "setItem">;
+/** The little of `localStorage` the list's own remembered choices need. */
+type LocalPullRequestStorage = Pick<Storage, "getItem" | "setItem">;
 
 const removedPullRequestsStorageKey = (environmentId: string) =>
   `t3.pullRequests.removed:${environmentId}`;
-const decodeRemovedPullRequestKeys = Schema.decodeUnknownOption(Schema.Array(Schema.String));
+const decodeStoredKeys = Schema.decodeUnknownOption(Schema.Array(Schema.String));
 
 /** Local dismissals are scoped to one environment so one server cannot hide another's rows. */
 export function readRemovedPullRequestKeys(
-  storage: RemovedPullRequestStorage | undefined,
+  storage: LocalPullRequestStorage | undefined,
   environmentId: string,
 ): ReadonlySet<string> {
   try {
     const raw = storage?.getItem(removedPullRequestsStorageKey(environmentId));
     if (!raw) return new Set();
-    const decoded = decodeRemovedPullRequestKeys(JSON.parse(raw));
+    const decoded = decodeStoredKeys(JSON.parse(raw));
     return decoded._tag === "Some" ? new Set(decoded.value) : new Set();
   } catch {
     return new Set();
@@ -627,7 +628,7 @@ export function readRemovedPullRequestKeys(
 }
 
 export function writeRemovedPullRequestKeys(
-  storage: RemovedPullRequestStorage | undefined,
+  storage: LocalPullRequestStorage | undefined,
   environmentId: string,
   removedKeys: ReadonlySet<string>,
 ): void {
@@ -638,6 +639,81 @@ export function writeRemovedPullRequestKeys(
     );
   } catch {
     // Storage can be full or denied; removals still apply for this renderer session.
+  }
+}
+
+/**
+ * A project's identity across the workspace. An id only names a project within its own server, so
+ * two machines holding the same id hold two projects and are keyed apart here.
+ */
+export const pullRequestProjectKey = (project: {
+  readonly id: ProjectId;
+  readonly environmentId: EnvironmentId;
+}) => JSON.stringify([project.environmentId, project.id]);
+
+/** A row whose project the reader has hidden is left out, by that project's own server's copy. */
+export function filterExcludedProjectPullRequests<
+  Entry extends PullRequestListEntry & { readonly environmentId: EnvironmentId },
+>(entries: ReadonlyArray<Entry>, excludedProjectKeys: ReadonlySet<string>): ReadonlyArray<Entry> {
+  if (excludedProjectKeys.size === 0) return entries;
+  return entries.filter(
+    (entry) =>
+      !excludedProjectKeys.has(
+        pullRequestProjectKey({ id: entry.projectId, environmentId: entry.environmentId }),
+      ),
+  );
+}
+
+/**
+ * The projects one server is still asked about, once the reader's hidden ones are dropped.
+ *
+ * Applied after the listing has settled which server owns each repository, never before: two
+ * servers can hold the same repository and only one of them is asked for it, so dropping a hidden
+ * project from that decision would hand the repository to the other server and its rows would
+ * come straight back under a different name.
+ */
+export function retainListedProjects(
+  environmentId: EnvironmentId,
+  projectIds: ReadonlyArray<ProjectId>,
+  excludedProjectKeys: ReadonlySet<string>,
+): ReadonlyArray<ProjectId> {
+  if (excludedProjectKeys.size === 0) return projectIds;
+  return projectIds.filter(
+    (id) => !excludedProjectKeys.has(pullRequestProjectKey({ id, environmentId })),
+  );
+}
+
+const excludedProjectsStorageKey = (environmentId: string) =>
+  `t3.pullRequests.excludedProjects:${environmentId}`;
+
+/**
+ * Hidden projects are stored under the server that holds them, the same way local dismissals are:
+ * the id alone is not unique across servers, so a shared list would hide an unrelated repository
+ * that happens to carry the same id on another machine.
+ */
+export function readExcludedProjectIds(
+  storage: LocalPullRequestStorage | undefined,
+  environmentId: string,
+): ReadonlyArray<ProjectId> {
+  try {
+    const raw = storage?.getItem(excludedProjectsStorageKey(environmentId));
+    if (!raw) return [];
+    const decoded = decodeStoredKeys(JSON.parse(raw));
+    return decoded._tag === "Some" ? (decoded.value as ReadonlyArray<ProjectId>) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function writeExcludedProjectIds(
+  storage: LocalPullRequestStorage | undefined,
+  environmentId: string,
+  projectIds: ReadonlyArray<ProjectId>,
+): void {
+  try {
+    storage?.setItem(excludedProjectsStorageKey(environmentId), JSON.stringify([...projectIds]));
+  } catch {
+    // Storage can be full or denied; the projects stay hidden for this renderer session.
   }
 }
 
