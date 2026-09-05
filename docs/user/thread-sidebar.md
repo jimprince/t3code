@@ -88,4 +88,3 @@ its threads stay in the default order and the menu items are hidden.
 
 Pinning and arranging are independent. Pinning a thread you have arranged does not spend its place
 in the list — unpin it and it returns to where you put it.
-
