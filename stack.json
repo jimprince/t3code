@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "cddbbc39fd9108ced2f9976d4da583fb3a6ef29a",
-  "head": "dd0b1ba1b3ab5adbd2e1f7b6c25bebaddce8d2e3",
+  "prev": "367c77937081690a6047fb61c645090c837ce64e",
+  "head": "075c6d5fe24ec3c991a798c1403c645ab18f7de6",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -15,13 +15,13 @@
     "fork-thread-fork",
     "fork-general-chat-projects",
     "fork-remote-relay-access",
-    "fork-performance-recovery"
-  ],
-  "unapplied": [
+    "fork-performance-recovery",
     "fork-headless-updates",
     "fork-text-generation",
     "fork-web-client-resilience",
-    "fork-web-project-scope",
+    "fork-web-project-scope"
+  ],
+  "unapplied": [
     "fork-web-image-timeout",
     "fork-desktop-distribution",
     "fork-mobile-delivery",
@@ -74,7 +74,7 @@
       "oid": "8f1babe4d7edd51876ae3b428c5daec6335e258a"
     },
     "fork-headless-updates": {
-      "oid": "410858629c149fe9b96280c396aeb012c5b603ac"
+      "oid": "d1ac909a43e53df509b3b7167abcff41e4d0c065"
     },
     "fork-mobile-delivery": {
       "oid": "358bf18f7d6bcee64eeb1b7aa954f757dc8d1533"
@@ -116,7 +116,7 @@
       "oid": "cde506aae8b064eb550ac3c2ea8a9da48b2976de"
     },
     "fork-text-generation": {
-      "oid": "4f23f6d29b7890c959c13555e92bacd420ee48af"
+      "oid": "7090f6b094642c62214ee0c10e9e019a1db49553"
     },
     "fork-thread-fork": {
       "oid": "fcfe974ef25b8d5e31bc73550b68f9605831f172"
@@ -131,7 +131,7 @@
       "oid": "0eb512b905723edcf2bee78818c808be455b6fe0"
     },
     "fork-web-client-resilience": {
-      "oid": "447a7f03e9a7738b506f247d42784e29160f19c4"
+      "oid": "3063521d92bf10b722474ac03bb8842132e32faf"
     },
     "fork-web-files-upload": {
       "oid": "33bc2f05ef7dcd29a34d82460bde2db7974fac88"
@@ -143,7 +143,7 @@
       "oid": "2404123ddfa6be6931ee68c13f3b24a5fbb6c286"
     },
     "fork-web-project-scope": {
-      "oid": "8ffa64f19a174b35967a2a09285af36ea4c8caba"
+      "oid": "075c6d5fe24ec3c991a798c1403c645ab18f7de6"
     },
     "fork-worktree-gc": {
       "oid": "2851a37dac50602797e8610acb482eb9708f2d57"
