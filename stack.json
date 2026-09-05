@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7e7dc79d32b22cc8dc1af01bb686fe221b7ecd45",
-  "head": "ee7b11624a2a271e3dcdd882d2b1e60a8cbae50f",
+  "prev": "5cac852ed7c249707888a22b94ece96489c3904a",
+  "head": "8c376c6e66e11f008881d89a0ba33351b62d804c",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -19,13 +19,13 @@
     "fork-headless-updates",
     "fork-text-generation",
     "fork-web-client-resilience",
-    "fork-web-project-scope"
-  ],
-  "unapplied": [
+    "fork-web-project-scope",
     "fork-web-image-timeout",
     "fork-desktop-distribution",
     "fork-mobile-delivery",
-    "fork-ci-runner-compat",
+    "fork-ci-runner-compat"
+  ],
+  "unapplied": [
     "fork-ci-release-pipeline",
     "fork-ci-upstream-sync",
     "fork-ci-stgit-metadata",
@@ -53,7 +53,7 @@
       "oid": "4eb8b2b2b89ac8e39ba638c1b28efab85beab129"
     },
     "fork-ci-runner-compat": {
-      "oid": "43f692117c4e0e38643d70d0df71a2cf7badc620"
+      "oid": "8c376c6e66e11f008881d89a0ba33351b62d804c"
     },
     "fork-ci-stgit-metadata": {
       "oid": "79d5a6c852bd478b5f1092d3634e5a1e85d3aeab"
@@ -62,7 +62,7 @@
       "oid": "4e0d759b2c9c9ca6d101967928ecad77dc581e03"
     },
     "fork-desktop-distribution": {
-      "oid": "51b804854339cccc02f8a6e30a5e477280faad58"
+      "oid": "aad54361c768974bf282871b2936a85d1cb15013"
     },
     "fork-general-chat-projects": {
       "oid": "69b6192e100a0223705ed202ea618f123969124e"
@@ -77,7 +77,7 @@
       "oid": "d1ac909a43e53df509b3b7167abcff41e4d0c065"
     },
     "fork-mobile-delivery": {
-      "oid": "358bf18f7d6bcee64eeb1b7aa954f757dc8d1533"
+      "oid": "7e78b22cbc6fda84ff0f4020a5b6bbf723c2a909"
     },
     "fork-performance-recovery": {
       "oid": "dd0b1ba1b3ab5adbd2e1f7b6c25bebaddce8d2e3"
@@ -137,7 +137,7 @@
       "oid": "33bc2f05ef7dcd29a34d82460bde2db7974fac88"
     },
     "fork-web-image-timeout": {
-      "oid": "3fa174f1761b5b3eea8c8de25a77129fc6bfed60"
+      "oid": "cb330831ea62034e7f5c56d0d0a5d2b9a69b85c3"
     },
     "fork-web-pr-multiselect": {
       "oid": "2404123ddfa6be6931ee68c13f3b24a5fbb6c286"
