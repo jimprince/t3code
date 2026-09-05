@@ -8318,6 +8318,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           layers: {
             orchestrationEngine: {
               streamDomainEvents: Stream.concat(Stream.make(event), Stream.never),
+              subscribeDomainEvents: Effect.succeed(
+                Stream.concat(Stream.make(event), Stream.never),
+              ),
             },
             projectionSnapshotQuery: {
               getThreadDetailSnapshot: () =>
