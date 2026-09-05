@@ -5,6 +5,7 @@ import * as NodeChildProcess from "node:child_process";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -29,9 +30,14 @@ import {
   ProviderInstanceId,
   TextGenerationError,
 } from "@t3tools/contracts";
+import * as AzureDevOpsCli from "../sourceControl/AzureDevOpsCli.ts";
+import * as BitbucketApi from "../sourceControl/BitbucketApi.ts";
 import * as GitHubCli from "../sourceControl/GitHubCli.ts";
+import * as GitLabCli from "../sourceControl/GitLabCli.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
+import type * as VcsDriver from "../vcs/VcsDriver.ts";
+import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
 import * as GitHubSourceControlProvider from "../sourceControl/GitHubSourceControlProvider.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
@@ -634,8 +640,97 @@ function preparePullRequestThread(
   return manager.preparePullRequestThread(input);
 }
 
+const REGISTRY_TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
+
+/**
+ * A source control registry that picks the provider from the repository's
+ * remotes the way production does, so a remote on a host with no
+ * implementation resolves to the unimplemented `unknown` provider instead of
+ * the GitHub fake every other test here relies on.
+ *
+ * `resolveCalls` is the measure of a retry storm: one entry per provider
+ * resolution GitManager asks for while looking a change request up.
+ */
+function createDetectingSourceControlRegistry(input: {
+  readonly remotes: ReadonlyArray<{ readonly name: string; readonly url: string }>;
+  readonly gitHubCli: GitHubCli.GitHubCli["Service"];
+  readonly listMergeRequests?: GitLabCli.GitLabCli["Service"]["listMergeRequests"];
+}) {
+  const resolveCalls: string[] = [];
+  const freshness = {
+    source: "live-local" as const,
+    observedAt: REGISTRY_TEST_EPOCH,
+    expiresAt: Option.none(),
+  };
+  const driver = {
+    listRemotes: () =>
+      Effect.succeed({
+        remotes: input.remotes.map((remote) => ({
+          ...remote,
+          pushUrl: Option.none(),
+          isPrimary: remote.name === "origin",
+        })),
+        freshness,
+      }),
+  } satisfies Partial<VcsDriver.VcsDriver["Service"]>;
+  const vcsDriver = driver as unknown as VcsDriver.VcsDriver["Service"];
+
+  const layer = Layer.effect(
+    SourceControlProviderRegistry.SourceControlProviderRegistry,
+    SourceControlProviderRegistry.make.pipe(
+      Effect.map((registry) =>
+        SourceControlProviderRegistry.SourceControlProviderRegistry.of({
+          ...registry,
+          resolve: (resolveInput) =>
+            Effect.sync(() => resolveCalls.push(resolveInput.cwd)).pipe(
+              Effect.andThen(registry.resolve(resolveInput)),
+            ),
+        }),
+      ),
+      Effect.provide(
+        Layer.mergeAll(
+          Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({
+            get: () => Effect.succeed(vcsDriver),
+            resolve: () =>
+              Effect.succeed({
+                kind: "git" as const,
+                repository: {
+                  kind: "git" as const,
+                  rootPath: "/repo",
+                  metadataPath: null,
+                  freshness,
+                },
+                driver: vcsDriver,
+              }),
+          }),
+          // No provider CLI answers a refinement probe, so an unknown host
+          // stays unknown instead of depending on this machine's gh/glab.
+          Layer.mock(VcsProcess.VcsProcess)({
+            run: () => Effect.succeed(fakeGhOutput("")),
+          }),
+          Layer.succeed(GitHubCli.GitHubCli, input.gitHubCli),
+          Layer.mock(GitLabCli.GitLabCli)(
+            input.listMergeRequests ? { listMergeRequests: input.listMergeRequests } : {},
+          ),
+          Layer.mock(BitbucketApi.BitbucketApi)({}),
+          Layer.mock(AzureDevOpsCli.AzureDevOpsCli)({}),
+          ServerConfig.layerTest(process.cwd(), {
+            prefix: "t3-git-manager-registry-test-",
+          }).pipe(Layer.provide(NodeServices.layer)),
+        ),
+      ),
+    ),
+  );
+
+  return { layer, resolveCalls };
+}
+
 function makeManager(input?: {
   ghScenario?: FakeGhScenario;
+  sourceControlRegistryLayer?: Layer.Layer<
+    SourceControlProviderRegistry.SourceControlProviderRegistry,
+    PlatformError.PlatformError
+  >;
   textGeneration?: Partial<FakeGitTextGeneration>;
   serverSettings?: Parameters<typeof ServerSettings.layerTest>[0];
   setupScriptRunner?: ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"];
@@ -673,20 +768,22 @@ function makeManager(input?: {
         Layer.provideMerge(NodeServices.layer),
         Layer.provideMerge(serverConfigLayer),
       );
-  const sourceControlRegistryLayer = Layer.effect(
-    SourceControlProviderRegistry.SourceControlProviderRegistry,
-    GitHubSourceControlProvider.make.pipe(
-      Effect.map((provider) =>
-        SourceControlProviderRegistry.SourceControlProviderRegistry.of({
-          get: () => Effect.succeed(provider),
-          resolveHandle: () => Effect.succeed({ provider, context: null }),
-          resolve: () => Effect.succeed(provider),
-          discover: Effect.succeed([]),
-        }),
+  const sourceControlRegistryLayer =
+    input?.sourceControlRegistryLayer ??
+    Layer.effect(
+      SourceControlProviderRegistry.SourceControlProviderRegistry,
+      GitHubSourceControlProvider.make.pipe(
+        Effect.map((provider) =>
+          SourceControlProviderRegistry.SourceControlProviderRegistry.of({
+            get: () => Effect.succeed(provider),
+            resolveHandle: () => Effect.succeed({ provider, context: null }),
+            resolve: () => Effect.succeed(provider),
+            discover: Effect.succeed([]),
+          }),
+        ),
+        Effect.provide(Layer.succeed(GitHubCli.GitHubCli, gitHubCli)),
       ),
-      Effect.provide(Layer.succeed(GitHubCli.GitHubCli, gitHubCli)),
-    ),
-  );
+    );
 
   const managerLayer = Layer.mergeAll(
     Layer.succeed(TextGeneration.TextGeneration, textGeneration),
@@ -1091,6 +1188,152 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       );
       expect(callsAfterFailure).toBeGreaterThan(0);
       expect(ghCalls).toHaveLength(callsAfterFailure);
+    }),
+  );
+
+  it.effect("turn-end refresh keeps polling a GitHub remote for a missing PR", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/github-host"]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "feature/github-host"]);
+
+      const { service: gitHubCli, ghCalls } = createGitHubCliWithFakeGh({
+        prListSequence: [
+          "[]",
+          // Fake gh returns raw JSON stdout, matching the CLI boundary under test.
+          // @effect-diagnostics-next-line preferSchemaOverJson:off
+          JSON.stringify([
+            {
+              number: 214,
+              title: "Opened on GitHub",
+              url: "https://github.com/acme/widgets/pull/214",
+              baseRefName: "main",
+              headRefName: "feature/github-host",
+            },
+          ]),
+        ],
+      });
+      const registry = createDetectingSourceControlRegistry({
+        remotes: [{ name: "origin", url: "git@github.com:acme/widgets.git" }],
+        gitHubCli,
+      });
+      const { manager } = yield* makeManager({ sourceControlRegistryLayer: registry.layer });
+
+      expect(
+        (yield* manager.remoteStatus(
+          { cwd: repoDir },
+          { refreshUpstream: false, refreshMissingPullRequest: true },
+        ))?.pr,
+      ).toBeNull();
+      expect(
+        (yield* manager.remoteStatus(
+          { cwd: repoDir },
+          { refreshUpstream: false, refreshMissingPullRequest: true },
+        ))?.pr?.number,
+      ).toBe(214);
+      expect(ghCalls.filter((call) => call.startsWith("pr list "))).toHaveLength(2);
+    }),
+  );
+
+  it.effect("turn-end refresh keeps polling a GitLab remote for a missing MR", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/gitlab-host"]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "feature/gitlab-host"]);
+
+      const mergeRequestPages: Array<ReadonlyArray<GitLabCli.GitLabMergeRequestSummary>> = [
+        [],
+        [
+          {
+            number: 314,
+            title: "Opened on GitLab",
+            url: "https://gitlab.com/acme/widgets/-/merge_requests/314",
+            baseRefName: "main",
+            headRefName: "feature/gitlab-host",
+            state: "open",
+          },
+        ],
+      ];
+      const glabCalls: string[] = [];
+      const { service: gitHubCli } = createGitHubCliWithFakeGh();
+      const registry = createDetectingSourceControlRegistry({
+        remotes: [{ name: "origin", url: "git@gitlab.com:acme/widgets.git" }],
+        gitHubCli,
+        listMergeRequests: (mrInput) =>
+          Effect.sync(() => {
+            glabCalls.push(mrInput.headSelector);
+            return mergeRequestPages.shift() ?? [];
+          }),
+      });
+      const { manager } = yield* makeManager({ sourceControlRegistryLayer: registry.layer });
+
+      expect(
+        (yield* manager.remoteStatus(
+          { cwd: repoDir },
+          { refreshUpstream: false, refreshMissingPullRequest: true },
+        ))?.pr,
+      ).toBeNull();
+      expect(
+        (yield* manager.remoteStatus(
+          { cwd: repoDir },
+          { refreshUpstream: false, refreshMissingPullRequest: true },
+        ))?.pr?.number,
+      ).toBe(314);
+      expect(glabCalls).toHaveLength(2);
+    }),
+  );
+
+  it.effect("a remote on an unsupported host costs one lookup and one warning per window", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/unsupported-host"]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "feature/unsupported-host"]);
+
+      const { service: gitHubCli, ghCalls } = createGitHubCliWithFakeGh();
+      const registry = createDetectingSourceControlRegistry({
+        remotes: [{ name: "origin", url: "ssh://git@gitea.example.test:2222/acme/widgets.git" }],
+        gitHubCli,
+      });
+      const { manager } = yield* makeManager({ sourceControlRegistryLayer: registry.layer });
+
+      const logs: Array<{ message: string; annotations: Record<string, unknown> }> = [];
+      const logger = Logger.make<unknown, void>(({ fiber, message }) => {
+        logs.push({
+          message: String(message),
+          annotations: { ...fiber.getRef(References.CurrentLogAnnotations) },
+        });
+      });
+
+      for (let poll = 0; poll < 3; poll += 1) {
+        const remote = yield* manager
+          .remoteStatus(
+            { cwd: repoDir },
+            { refreshUpstream: false, refreshMissingPullRequest: true },
+          )
+          .pipe(Effect.provide(Logger.layer([logger], { mergeWithExisting: false })));
+        expect(remote?.pr).toBeNull();
+      }
+
+      // One host resolution and one diagnostic for three polls: without the
+      // skip, every poll re-reads the cached provider failure and re-logs it.
+      expect(registry.resolveCalls).toHaveLength(1);
+      expect(ghCalls).toHaveLength(0);
+      const diagnostics = logs.filter(
+        (entry) =>
+          entry.message.includes("No hosting provider") ||
+          entry.message.includes("PR lookup failed"),
+      );
+      expect(diagnostics).toHaveLength(1);
+      expect(diagnostics[0]?.annotations).toMatchObject({ operation: "prHostSupport" });
     }),
   );
 
