@@ -520,6 +520,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           yield* projectionProjectRepository.upsert({
             projectId: event.payload.projectId,
             title: event.payload.title,
+            kind: event.payload.kind ?? "workspace",
             workspaceRoot: event.payload.workspaceRoot,
             defaultModelSelection: event.payload.defaultModelSelection,
             defaultThreadEnvMode: null,
@@ -650,6 +651,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             pendingApprovalCount: 0,
             pendingUserInputCount: 0,
             hasActionableProposedPlan: 0,
+            goal: null,
             deletedAt: null,
           });
           return;
@@ -868,6 +870,64 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "thread.goal-set": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            goal: event.payload.goal,
+            updatedAt: event.payload.goal.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.goal-cleared": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            goal: null,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.goal-evaluated": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow) || existingRow.value.goal === null) {
+            return;
+          }
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            goal: {
+              ...existingRow.value.goal,
+              status: event.payload.achieved ? "achieved" : "active",
+              updatedAt: event.payload.updatedAt,
+              achievedAt: event.payload.achieved
+                ? event.payload.evaluatedAt
+                : existingRow.value.goal.achievedAt,
+              lastEvaluatedAt: event.payload.evaluatedAt,
+              lastReason: event.payload.reason,
+              lastTurnId: event.payload.turnId,
+              continuationCount: event.payload.continuationRequested
+                ? existingRow.value.goal.continuationCount + 1
+                : existingRow.value.goal.continuationCount,
+            },
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         case "thread.deleted": {
           // A draft retry can re-create this id later in the log. During
           // replay the attachment files on disk already belong to that later
@@ -946,10 +1006,15 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           if (Option.isNone(existingRow)) {
             return;
           }
+          const latestTurnId =
+            event.payload.session.status === "running" &&
+            event.payload.session.activeTurnId !== null
+              ? event.payload.session.activeTurnId
+              : existingRow.value.latestTurnId;
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,
             // activeTurnId describes current work; a terminal session must not erase history.
-            latestTurnId: event.payload.session.activeTurnId ?? existingRow.value.latestTurnId,
+            latestTurnId,
             updatedAt: event.occurredAt,
           });
           yield* refreshThreadShellSummary(event.payload.threadId);

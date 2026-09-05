@@ -3908,7 +3908,7 @@ describe("ProviderCommandReactor", () => {
           status: "running",
           providerName: "codex",
           runtimeMode: "approval-required",
-          activeTurnId: null,
+          activeTurnId: asTurnId("turn-1"),
           lastError: null,
           updatedAt: now,
         },
@@ -3970,6 +3970,12 @@ describe("ProviderCommandReactor", () => {
       detail: expect.stringContaining("Stale pending approval request: approval-request-1"),
     });
 
+    expect(thread?.session?.status).toBe("error");
+    expect(thread?.session?.activeTurnId).toBeNull();
+    expect(thread?.session?.lastError).toContain(
+      "Stale pending approval request: approval-request-1",
+    );
+
     const resolvedActivity = thread?.activities.find(
       (activity) =>
         activity.kind === "approval.resolved" &&
@@ -4003,7 +4009,7 @@ describe("ProviderCommandReactor", () => {
           status: "running",
           providerName: "claudeAgent",
           runtimeMode: "approval-required",
-          activeTurnId: null,
+          activeTurnId: asTurnId("turn-1"),
           lastError: null,
           updatedAt: now,
         },
@@ -4079,6 +4085,12 @@ describe("ProviderCommandReactor", () => {
       detail: expect.stringContaining("Stale pending user-input request: user-input-request-1"),
     });
 
+    expect(thread?.session?.status).toBe("error");
+    expect(thread?.session?.activeTurnId).toBeNull();
+    expect(thread?.session?.lastError).toContain(
+      "Stale pending user-input request: user-input-request-1",
+    );
+
     const resolvedActivity = thread?.activities.find(
       (activity) =>
         activity.kind === "user-input.resolved" &&
@@ -4088,6 +4100,105 @@ describe("ProviderCommandReactor", () => {
     );
     expect(resolvedActivity).toBeUndefined();
   });
+
+  it.each([
+    {
+      detail: "Cannot recover thread 'thread-1' because no provider resume state is persisted.",
+      stale: true,
+    },
+    { detail: "No persisted provider binding for thread 'thread-1'.", stale: true },
+    { detail: "Cannot recover thread 'thread-1': provider temporarily unavailable.", stale: false },
+  ])(
+    "handles a pending approval failure without discarding recoverable work: $detail",
+    async ({ detail, stale }) => {
+      const harness = await createHarness();
+      const now = "2026-01-01T00:00:00.000Z";
+      harness.respondToRequest.mockImplementation(() =>
+        Effect.fail(
+          new ProviderAdapterRequestError({
+            provider: ProviderDriverKind.make("codex"),
+            method: "item/requestApproval/decision",
+            detail,
+          }),
+        ),
+      );
+
+      await harness.runEffect(
+        harness.engine.dispatch({
+          type: "thread.session.set",
+          commandId: CommandId.make("cmd-session-set-for-unrecoverable-approval"),
+          threadId: ThreadId.make("thread-1"),
+          session: {
+            threadId: ThreadId.make("thread-1"),
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "approval-required",
+            activeTurnId: asTurnId("turn-1"),
+            lastError: null,
+            updatedAt: now,
+          },
+          createdAt: now,
+        }),
+      );
+
+      await harness.runEffect(
+        harness.engine.dispatch({
+          type: "thread.activity.append",
+          commandId: CommandId.make("cmd-unrecoverable-approval-requested"),
+          threadId: ThreadId.make("thread-1"),
+          activity: {
+            id: EventId.make("activity-unrecoverable-approval-requested"),
+            tone: "approval",
+            kind: "approval.requested",
+            summary: "Command approval requested",
+            payload: {
+              requestId: "approval-request-1",
+              requestKind: "command",
+            },
+            turnId: null,
+            createdAt: now,
+          },
+          createdAt: now,
+        }),
+      );
+
+      await harness.runEffect(
+        harness.engine.dispatch({
+          type: "thread.approval.respond",
+          commandId: CommandId.make("cmd-approval-respond-unrecoverable"),
+          threadId: ThreadId.make("thread-1"),
+          requestId: asApprovalRequestId("approval-request-1"),
+          decision: "acceptForSession",
+          createdAt: now,
+        }),
+      );
+
+      await harness.drain();
+
+      const readModel = await harness.readModel();
+      const thread = readModel.threads.find((entry) => entry.id === ThreadId.make("thread-1"));
+
+      const failureActivity = thread?.activities.find(
+        (activity) => activity.kind === "provider.approval.respond.failed",
+      );
+      expect(failureActivity?.payload).toMatchObject({
+        requestId: "approval-request-1",
+        detail: expect.stringContaining(
+          stale ? "Stale pending approval request: approval-request-1" : detail,
+        ),
+      });
+
+      expect(thread?.session?.status).toBe(stale ? "error" : "running");
+      expect(thread?.session?.activeTurnId).toBe(stale ? null : asTurnId("turn-1"));
+      if (stale) {
+        expect(thread?.session?.lastError).toContain(
+          "Stale pending approval request: approval-request-1",
+        );
+      } else {
+        expect(thread?.session?.lastError).toBeNull();
+      }
+    },
+  );
 
   effectIt.effect("stops a provider session without reading unrelated message bodies", () =>
     Effect.gen(function* () {
