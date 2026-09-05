@@ -1,3 +1,7 @@
+import {
+  detectSourceControlProviderFromRemoteUrl,
+  resolveGiteaRemote,
+} from "@t3tools/shared/sourceControl";
 import * as Arr from "effect/Array";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
@@ -33,7 +37,6 @@ import {
   type SourceControlWritingStyleSettings,
 } from "@t3tools/contracts";
 import {
-  detectSourceControlProviderFromGitRemoteUrl,
   mergeGitStatusParts,
   normalizeGitRemoteUrl,
   resolveAutoFeatureBranchName,
@@ -639,6 +642,18 @@ export const make = Effect.gen(function* () {
 
   const sourceControlProvider = (cwd: string) => sourceControlProviders.resolve({ cwd });
   const serverSettingsService = yield* ServerSettings.ServerSettingsService;
+  const giteaInstances = serverSettingsService.getSettings.pipe(
+    Effect.map((value) => value.giteaInstances),
+    Effect.mapError(
+      (cause) =>
+        new GitManagerError({
+          operation: "settings",
+          cwd: "",
+          detail: "Could not read Gitea configuration.",
+          cause,
+        }),
+    ),
+  );
   const readRepositoryInstructions = (cwd: string, fileName: string) =>
     Effect.gen(function* () {
       const root = yield* fileSystem.realPath(cwd);
@@ -1279,7 +1294,8 @@ export const make = Effect.gen(function* () {
       (yield* readConfigValueNullable(cwd, `remote.${preferredRemoteName}.url`)) ??
       (yield* readConfigValueNullable(cwd, "remote.origin.url"));
 
-    return remoteUrl ? detectSourceControlProviderFromGitRemoteUrl(remoteUrl) : null;
+    const instances = yield* giteaInstances;
+    return remoteUrl ? detectSourceControlProviderFromRemoteUrl(remoteUrl, instances) : null;
   });
 
   const resolveRemoteRepositoryContext = Effect.fn("resolveRemoteRepositoryContext")(function* (
@@ -1295,9 +1311,15 @@ export const make = Effect.gen(function* () {
     }
 
     const remoteUrl = yield* readConfigValueNullable(cwd, `remote.${remoteName}.url`);
-    const repositoryNameWithOwner = parseGitHubRepositoryNameWithOwnerFromRemoteUrl(remoteUrl);
+    const gitea = remoteUrl ? resolveGiteaRemote(remoteUrl, yield* giteaInstances) : null;
+    const repositoryNameWithOwner =
+      gitea?.repository ?? parseGitHubRepositoryNameWithOwnerFromRemoteUrl(remoteUrl);
     return {
-      remoteUrlKey: remoteUrl ? normalizeGitRemoteUrl(remoteUrl) : null,
+      remoteUrlKey: gitea
+        ? `${gitea.instance.id}:${gitea.repository.toLowerCase()}`
+        : remoteUrl
+          ? normalizeGitRemoteUrl(remoteUrl)
+          : null,
       repositoryNameWithOwner,
       ownerLogin: parseRepositoryOwnerLogin(repositoryNameWithOwner),
     };
@@ -1552,9 +1574,18 @@ export const make = Effect.gen(function* () {
     >,
   ) {
     for (const headSelector of headContext.headSelectors) {
-      const pullRequests = yield* (yield* sourceControlProvider(cwd)).listChangeRequests({
+      const provider = yield* sourceControlProvider(cwd);
+      const pullRequests = yield* provider.listChangeRequests({
         cwd,
         headSelector,
+        ...(provider.kind === "gitea" && headContext.headRepositoryNameWithOwner
+          ? {
+              source: {
+                refName: headContext.headBranch,
+                repository: headContext.headRepositoryNameWithOwner,
+              },
+            }
+          : {}),
         state: "open",
         limit: 1,
       });
@@ -1582,9 +1613,18 @@ export const make = Effect.gen(function* () {
     const parsedByNumber = new Map<number, PullRequestInfo>();
 
     for (const headSelector of headContext.headSelectors) {
-      const pullRequests = yield* (yield* sourceControlProvider(cwd)).listChangeRequests({
+      const provider = yield* sourceControlProvider(cwd);
+      const pullRequests = yield* provider.listChangeRequests({
         cwd,
         headSelector,
+        ...(provider.kind === "gitea" && headContext.headRepositoryNameWithOwner
+          ? {
+              source: {
+                refName: headContext.headBranch,
+                repository: headContext.headRepositoryNameWithOwner,
+              },
+            }
+          : {}),
         state: "all",
         limit: 20,
       });
