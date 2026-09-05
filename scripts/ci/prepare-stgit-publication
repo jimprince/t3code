@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Capture publication leases before editing/replay. The JSON context remains
+# compatible with the repair bot's stack_context_command contract.
+if [[ $# -gt 1 || ( $# -eq 1 && "$1" != "--format=json" ) ]]; then
+  echo 'usage: scripts/ci/prepare-stgit-publication [--format=json]' >&2
+  exit 2
+fi
+GIT_BIN="${SYNC_GIT_BIN:-$(command -v git)}"
+remote="${STGIT_REMOTE:-origin}"
+if [[ -n "$("$GIT_BIN" status --porcelain)" ]]; then
+  echo 'Publication preparation requires a clean checkout before editing.' >&2
+  exit 1
+fi
+context="$(scripts/ci/check-stgit-stack --format=json)"
+refs="$("$GIT_BIN" ls-remote --refs "$remote" refs/heads/main refs/stacks/stgit/adopt 'refs/patches/stgit/adopt/*')"
+local_stack="$("$GIT_BIN" rev-parse refs/stacks/stgit/adopt)"
+lease_file="$("$GIT_BIN" rev-parse --git-path stgit-publication-lease.json)"
+bun - "$context" "$refs" "$local_stack" "$remote" "$lease_file" <<'JS'
+const [contextRaw, refsRaw, localStack, remote, path] = process.argv.slice(2);
+const context = JSON.parse(contextRaw);
+const refs = Object.fromEntries(refsRaw.split('\n').filter(Boolean).map(line => {
+  const [oid, ref] = line.split('\t'); return [ref, oid];
+}));
+const main = refs['refs/heads/main'];
+const stack = refs['refs/stacks/stgit/adopt'];
+const patches = Object.fromEntries(Object.entries(refs).filter(([ref]) => ref.startsWith('refs/patches/stgit/adopt/')).sort());
+const value = JSON.stringify({remote, main, stack, patches});
+const fs = await import('node:fs');
+if (fs.existsSync(path)) {
+  if (fs.readFileSync(path, 'utf8').trim() !== value)
+    throw new Error('Preparation lease already exists for different state; use a fresh checkout.');
+} else {
+  if (main !== context.head || stack !== localStack)
+    throw new Error('Remote main or metadata differs from this checkout; prepare a fresh stack.');
+  for (const patch of context.patches) {
+    if (patches[`refs/patches/stgit/adopt/${patch.name}`] !== patch.oid)
+      throw new Error(`Remote patch differs from this checkout: ${patch.name}`);
+  }
+  fs.writeFileSync(path, value + '\n', {flag: 'wx', mode: 0o600});
+}
+JS
+if [[ "${1:-}" == '--format=json' ]]; then
+  printf '%s\n' "$context"
+else
+  echo "Publication leases captured in $lease_file. Do not renew them after remote changes."
+fi
