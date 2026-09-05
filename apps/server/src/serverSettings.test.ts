@@ -1,3 +1,5 @@
+import { GITEA_TOKEN_REDACTED } from "@t3tools/contracts";
+import { giteaTokenSecretName } from "./sourceControl/giteaSettings.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import {
   DEFAULT_SERVER_SETTINGS,
@@ -73,6 +75,54 @@ const recordProviderUsage = (provider: string, instanceId: string | null = provi
   });
 
 it.layer(NodeServices.layer)("server settings", (it) => {
+  it.effect(
+    "stores Gitea tokens separately, redacts clients, preserves on edit, rotates and removes",
+    () =>
+      Effect.gen(function* () {
+        const service = yield* ServerSettingsModule.ServerSettingsService;
+        const config = yield* ServerConfig.ServerConfig;
+        const fs = yield* FileSystem.FileSystem;
+        const instance = {
+          id: "home",
+          host: "git.home",
+          sshAliases: ["home-git"],
+          sshPorts: [2222],
+          webOrigin: "http://git.home:3000",
+          apiOrigin: "http://git.home:3000",
+          token: "first-secret",
+        };
+        const saved = yield* service.updateSettings({ giteaInstances: [instance] });
+        assert.strictEqual(saved.giteaInstances[0]?.token, "first-secret");
+        const disk = yield* fs.readFileString(config.settingsPath);
+        assert.notInclude(disk, "first-secret");
+        assert.include(disk, GITEA_TOKEN_REDACTED);
+        const client = ServerSettingsModule.redactServerSettingsForClient(saved);
+        assert.strictEqual(client.giteaInstances[0]?.token, GITEA_TOKEN_REDACTED);
+        const edited = yield* service.updateSettings({
+          giteaInstances: [{ ...client.giteaInstances[0]!, sshAliases: ["new-alias"] }],
+        });
+        assert.strictEqual(edited.giteaInstances[0]?.token, "first-secret");
+        const restarted = yield* ServerSettingsModule.ServerSettingsService.pipe(
+          Effect.provide(
+            Layer.fresh(ServerSettingsModule.layer).pipe(Layer.provide(ServerSecretStore.layer)),
+          ),
+        );
+        assert.strictEqual((yield* restarted.getSettings).giteaInstances[0]?.token, "first-secret");
+        yield* service.updateSettings({
+          giteaInstances: [{ ...instance, token: "replacement-secret" }],
+        });
+        const secretPath = `${config.secretsDir}/${giteaTokenSecretName(instance.id)}.bin`;
+        assert.strictEqual(yield* fs.readFileString(secretPath), "replacement-secret");
+        yield* service.updateSettings({ giteaInstances: [{ ...instance, token: "" }] });
+        assert.isFalse(yield* fs.exists(secretPath));
+        assert.strictEqual((yield* service.getSettings).giteaInstances[0]?.token, "");
+        yield* service.updateSettings({ giteaInstances: [instance] });
+        yield* service.updateSettings({ giteaInstances: [] });
+        assert.isFalse(yield* fs.exists(secretPath));
+        assert.deepEqual((yield* service.getSettings).giteaInstances, []);
+      }).pipe(Effect.provide(makeServerSettingsLayer())),
+  );
+
   it.effect("preserves context when reading a provider environment secret fails", () => {
     const platformCause = PlatformError.systemError({
       _tag: "PermissionDenied",
