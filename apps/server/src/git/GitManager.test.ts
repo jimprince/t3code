@@ -715,6 +715,11 @@ function createDetectingSourceControlRegistry(input: {
           Layer.mock(GitLabCli.GitLabCli)(
             input.listMergeRequests ? { listMergeRequests: input.listMergeRequests } : {},
           ),
+          ServerSettings.layerTest(),
+          Layer.succeed(
+            HttpClient.HttpClient,
+            HttpClient.make(() => Effect.die("Unexpected HTTP request")),
+          ),
           Layer.mock(BitbucketApi.BitbucketApi)({}),
           Layer.mock(AzureDevOpsCli.AzureDevOpsCli)({}),
           ServerConfig.layerTest(process.cwd(), {
@@ -731,10 +736,7 @@ function createDetectingSourceControlRegistry(input: {
 function makeManager(input?: {
   sourceControl?: SourceControlProvider.SourceControlProvider["Service"];
   ghScenario?: FakeGhScenario;
-  sourceControlRegistryLayer?: Layer.Layer<
-    SourceControlProviderRegistry.SourceControlProviderRegistry,
-    PlatformError.PlatformError
-  >;
+  sourceControlRegistryLayer?: ReturnType<typeof createDetectingSourceControlRegistry>["layer"];
   textGeneration?: Partial<FakeGitTextGeneration>;
   serverSettings?: Parameters<typeof ServerSettings.layerTest>[0];
   setupScriptRunner?: ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"];
@@ -776,7 +778,10 @@ function makeManager(input?: {
     input?.sourceControlRegistryLayer ??
     Layer.effect(
       SourceControlProviderRegistry.SourceControlProviderRegistry,
-      (input?.sourceControl ? Effect.succeed(input.sourceControl) : GitHubSourceControlProvider.make).pipe(
+      (input?.sourceControl
+        ? Effect.succeed(input.sourceControl)
+        : GitHubSourceControlProvider.make
+      ).pipe(
         Effect.map((provider) =>
           SourceControlProviderRegistry.SourceControlProviderRegistry.of({
             get: () => Effect.succeed(provider),
@@ -804,10 +809,11 @@ function makeManager(input?: {
     serverSettingsLayer,
   ).pipe(Layer.provideMerge(sourceControlRegistryLayer), Layer.provideMerge(NodeServices.layer));
 
-  return GitManager.make.pipe(
-    Effect.provide(managerLayer),
-    Effect.map((manager) => ({ manager, ghCalls })),
-  );
+  return Effect.gen(function* () {
+    const manager = yield* GitManager.make;
+    const settings = yield* ServerSettings.ServerSettingsService;
+    return { manager, ghCalls, settings };
+  }).pipe(Effect.provide(managerLayer));
 }
 
 const asThreadId = (threadId: string) => threadId as ThreadId;
@@ -878,10 +884,14 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
             ),
           ),
         );
-        const { manager } = yield* makeManager({
-          serverSettings: { giteaInstances: [instance] },
+        let configured = false;
+        const { manager, settings } = yield* makeManager({
+          serverSettings: { giteaInstances: [] },
           sourceControl: {
             ...provider,
+            get kind() {
+              return configured ? "gitea" : "unknown";
+            },
             listChangeRequests: (input) =>
               provider.listChangeRequests({
                 ...input,
@@ -893,13 +903,21 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
               }),
           },
         });
+        expect(
+          (yield* manager.remoteStatus({ cwd: repoDir }, { refreshUpstream: false }))?.pr,
+        ).toBeNull();
+        yield* settings.updateSettings({ giteaInstances: [instance] });
+        configured = true;
         const local = yield* manager.localStatus({ cwd: repoDir });
         expect(local.sourceControlProvider).toEqual({
           kind: "gitea",
           name: "Gitea",
           baseUrl: instance.webOrigin,
         });
-        const remote = yield* manager.remoteStatus({ cwd: repoDir }, { refreshUpstream: false });
+        const remote = yield* manager.remoteStatus(
+          { cwd: repoDir },
+          { refreshUpstream: false, refreshMissingPullRequest: true },
+        );
         expect(remote?.pr).toMatchObject({
           number: 91,
           state: "merged",

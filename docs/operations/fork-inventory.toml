@@ -424,5 +424,7 @@ subject = "feat(source-control): configure Gitea instances and branch PR badges"
 class = "upstream-bound"
 purpose = "Configure environment-local Gitea hosts and protected tokens, resolve SSH aliases and ports to explicit web/API origins, and show repository-safe branch pull-request badges."
 retire_when = "Upstream supports configured Gitea instances, secret-store tokens, and equivalent branch and repository identity filtering for PR badges."
-depends_on = []
+depends_on = ["fork-pr-status-unsupported-hosts"]
 roles = []
+
+note = "PR lookup and unsupported-host cache keys include non-secret Gitea routing configuration, so adding or removing a configured host takes effect without waiting out the negative cache. Tokens never enter these keys."

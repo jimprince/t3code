@@ -16,7 +16,9 @@ Ambiguous mappings remain unknown.
 
 The existing `SourceControlProviderRegistry` registers the additive Gitea
 provider. It rechecks mappings on cached contexts so adding/removing an instance
-does not require a restart. GitManager uses the same mapping for presentation
+does not require a restart. PR lookup and unsupported-host cache keys include the
+non-secret routing configuration, so a settings change bypasses a prior negative
+lookup. Tokens are excluded from those keys. GitManager uses the same mapping for presentation
 and repository identity, and passes structured head repository selectors to
 Gitea. The origin-first provider selection policy is unchanged.
 

@@ -134,6 +134,7 @@ const STATUS_RESULT_CACHE_CAPACITY = 2_048;
 // host (a local probe answers first), and failed lookups still back off
 // exponentially via prLookupFailureTtl, so throttling pressure still drops
 // under 429s instead of amplifying it.
+const encodeRoutingKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const PR_LOOKUP_CACHE_TTL = Duration.seconds(60);
 const PR_LOOKUP_FAILURE_BASE_TTL = Duration.seconds(20);
 const PR_LOOKUP_FAILURE_MAX_TTL = Duration.minutes(15);
@@ -654,6 +655,20 @@ export const make = Effect.gen(function* () {
         }),
     ),
   );
+  const giteaRoutingKey = giteaInstances.pipe(
+    Effect.map((instances) =>
+      encodeRoutingKey(
+        instances.map(({ id, host, sshAliases, sshPorts, webOrigin, apiOrigin }) => ({
+          id,
+          host,
+          sshAliases,
+          sshPorts,
+          webOrigin,
+          apiOrigin,
+        })),
+      ),
+    ),
+  );
   const readRepositoryInstructions = (cwd: string, fileName: string) =>
     Effect.gen(function* () {
       const root = yield* fileSystem.realPath(cwd);
@@ -993,16 +1008,21 @@ export const make = Effect.gen(function* () {
       remoteName?: string | null;
     },
   ) =>
-    [
-      cwd,
-      details.branch,
-      details.upstreamRef ?? "",
-      details.defaultBranch ?? "",
-      details.localBranchExists === false ? "0" : "1",
-      details.remoteName ?? "",
-      String(prLookupEpoch(cwd)),
-    ].join("\u0000");
-  // A remote on a host no provider implements (Gitea, a bare SSH remote) can
+    giteaRoutingKey.pipe(
+      Effect.map((routingKey) =>
+        [
+          cwd,
+          details.branch,
+          details.upstreamRef ?? "",
+          details.defaultBranch ?? "",
+          details.localBranchExists === false ? "0" : "1",
+          details.remoteName ?? "",
+          String(prLookupEpoch(cwd)),
+          routingKey,
+        ].join("\u0000"),
+      ),
+    );
+  // A remote on a host no provider implements (an unconfigured host, a bare SSH remote) can
   // never answer a change request lookup, and asking costs a provider probe
   // plus a guaranteed-failing API call whose failure the poller then retries.
   // Detect it once and remember the verdict per repository, so an unsupported
@@ -1010,7 +1030,9 @@ export const make = Effect.gen(function* () {
   // poll. The epoch is part of the key, so the same explicit refresh that
   // bypasses the PR lookup cache also re-checks the host.
   const unsupportedPrHostCacheKey = (cwd: string) =>
-    [cwd, String(prLookupEpoch(cwd))].join("\u0000");
+    giteaRoutingKey.pipe(
+      Effect.map((routingKey) => [cwd, String(prLookupEpoch(cwd)), routingKey].join("\u0000")),
+    );
   const unsupportedPrHostCache = yield* Cache.makeWith(
     (key: string) => {
       const [cwd = ""] = key.split("\u0000");
@@ -1032,7 +1054,8 @@ export const make = Effect.gen(function* () {
   // A probe that could not answer reads as "supported": the lookup goes ahead
   // and fails the way it does today rather than silently dropping the badge.
   const isUnsupportedPrHost = (cwd: string) =>
-    Cache.get(unsupportedPrHostCache, unsupportedPrHostCacheKey(cwd)).pipe(
+    unsupportedPrHostCacheKey(cwd).pipe(
+      Effect.flatMap((key) => Cache.get(unsupportedPrHostCache, key)),
       Effect.orElseSucceed(() => false),
     );
   // Consecutive failures per cache key, so a branch that keeps failing waits
@@ -1175,7 +1198,7 @@ export const make = Effect.gen(function* () {
     // Keyed by (cwd, branch) only: the upstream ref changing (e.g. a first
     // `push -u`) must not orphan the fallback value for the same branch.
     const branchKey = `${cwd}\u0000${details.branch}`;
-    const cacheKey = prLookupCacheKey(cwd, details);
+    const cacheKey = yield* prLookupCacheKey(cwd, details);
     if (refreshMissingPullRequest) {
       const cached = yield* Cache.getOption(prLookupCache, cacheKey).pipe(
         Effect.orElseSucceed(() => Option.none()),
@@ -2178,7 +2201,7 @@ export const make = Effect.gen(function* () {
     const defaultBranch = yield* gitCore
       .resolveDefaultBranchName(cacheCwd, defaultRemoteName)
       .pipe(Effect.orElseSucceed(() => null));
-    const cacheKey = prLookupCacheKey(cacheCwd, {
+    const cacheKey = yield* prLookupCacheKey(cacheCwd, {
       branch,
       upstreamRef,
       defaultBranch,
