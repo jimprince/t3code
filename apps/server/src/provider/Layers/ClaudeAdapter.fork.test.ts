@@ -2223,7 +2223,6 @@ describe("ClaudeAdapterLive", () => {
           uuid: "tu",
         },
         { type: "system", subtype: "commands_changed", session_id: "session", uuid: "cc" },
-        { type: "system", subtype: "model_refusal_fallback", session_id: "session", uuid: "mrf" },
         { type: "system", subtype: "local_command_output", session_id: "session", uuid: "lco" },
         { type: "system", subtype: "plugin_install", session_id: "session", uuid: "pi" },
         { type: "system", subtype: "memory_recall", session_id: "session", uuid: "mr" },
@@ -2241,6 +2240,14 @@ describe("ClaudeAdapterLive", () => {
       ]) {
         harness.query.emit(message as unknown as SDKMessage);
       }
+      // Upstream surfaces a model switch as a user-facing warning.
+      harness.query.emit({
+        type: "system",
+        subtype: "model_refusal_fallback",
+        content: "Switched to the fallback model",
+        session_id: "session",
+        uuid: "mrf",
+      } as unknown as SDKMessage);
       // High-priority notifications DO surface as a warning row.
       harness.query.emit({
         type: "system",
@@ -2281,10 +2288,10 @@ describe("ClaudeAdapterLive", () => {
       yield* Effect.yieldNow;
 
       const warnings = runtimeEvents.filter((event) => event.type === "runtime.warning");
-      // Exactly one warning: the high-priority notification. Nothing else.
+      // Only the model switch and high-priority notification surface warnings.
       assert.deepEqual(
         warnings.map((event) => event.payload.message),
-        ["context window nearly full"],
+        ["Switched to the fallback model", "context window nearly full"],
       );
       const sessionStates = runtimeEvents
         .filter((event) => event.type === "session.state.changed")
