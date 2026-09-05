@@ -38,3 +38,5 @@ badge link to use Gitea in your browser. Clone a Gitea repository using its Git
 URL. Unconfigured hosts retain their existing unknown-host behavior.
 
 Branch badges also work when the repository remote is named `gitea` or another alias instead of `origin`. The branch and repository must match the pull request.
+
+Merged and closed PR badges remain associated with their original branch when Gitea replaces a deleted source branch with an internal pull-request reference.

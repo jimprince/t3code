@@ -22,7 +22,11 @@ import {
 } from "./SourceControlProviderDiscovery.ts";
 
 const Repository = Schema.Struct({ id: Schema.Number, full_name: Schema.String });
-const Ref = Schema.Struct({ ref: Schema.String, repo: Schema.NullOr(Repository) });
+const Ref = Schema.Struct({
+  ref: Schema.String,
+  label: Schema.optional(Schema.NullOr(Schema.String)),
+  repo: Schema.NullOr(Repository),
+});
 const PullRequest = Schema.Struct({
   number: Schema.Number,
   title: Schema.String,
@@ -122,8 +126,13 @@ export const make = Effect.gen(function* () {
         if (items.length === 0) return results;
         for (const pr of items) {
           const state = pr.merged ? "merged" : pr.state;
+          // Gitea retains the original branch in label after replacing a deleted head.
+          const headRefName =
+            state !== "open" && pr.head.ref === `refs/pull/${pr.number}/head` && pr.head.label
+              ? pr.head.label
+              : pr.head.ref;
           if (
-            pr.head.ref !== branch ||
+            headRefName !== branch ||
             pr.head.repo?.full_name.toLowerCase() !== expectedRepository.toLowerCase() ||
             pr.base.repo?.full_name.toLowerCase() !== remote.repository.toLowerCase() ||
             (input.state !== "all" && state !== input.state)
@@ -135,7 +144,7 @@ export const make = Effect.gen(function* () {
             title: pr.title,
             url: pr.html_url,
             baseRefName: pr.base.ref,
-            headRefName: pr.head.ref,
+            headRefName,
             state,
             updatedAt: pr.updated_at ? DateTime.make(pr.updated_at) : Option.none(),
             isCrossRepository: pr.head.repo.id !== pr.base.repo.id,

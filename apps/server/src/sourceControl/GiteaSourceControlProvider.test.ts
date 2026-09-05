@@ -57,6 +57,51 @@ function harness(pages: ReadonlyArray<unknown>, status = 200, instances = [insta
 }
 const input = { cwd: "/repo", context, headSelector: "feature/slash", state: "all" as const };
 describe("Gitea branch pull requests", () => {
+  it.effect.each([false, true])("retains deleted-head PR identity (merged=%s)", (merged) =>
+    Effect.gen(function* () {
+      const deleted = {
+        ...pr,
+        state: "closed",
+        merged,
+        head: { ...pr.head, ref: "refs/pull/42/head", label: "feature/slash" },
+      };
+      const h = harness([
+        [
+          { ...deleted, head: { ...deleted.head, repo: { id: 2, full_name: "brad/other" } } },
+          deleted,
+        ],
+        [],
+      ]);
+      const results = yield* h.run(({ provider }) => provider.listChangeRequests(input));
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        number: 42,
+        headRefName: "feature/slash",
+        state: merged ? "merged" : "closed",
+        isCrossRepository: false,
+      });
+    }),
+  );
+
+  it.effect("does not use labels to override ordinary or invalid head references", () =>
+    Effect.gen(function* () {
+      const h = harness([
+        [
+          { ...pr, state: "closed", head: { ...pr.head, ref: "other", label: "feature/slash" } },
+          { ...pr, head: { ...pr.head, ref: "refs/pull/42/head", label: "feature/slash" } },
+          {
+            ...pr,
+            state: "closed",
+            head: { ...pr.head, ref: "refs/pull/99/head", label: "feature/slash" },
+          },
+          { ...pr, state: "closed", head: { ...pr.head, ref: "refs/pull/42/head", label: null } },
+        ],
+        [],
+      ]);
+      expect(yield* h.run(({ provider }) => provider.listChangeRequests(input))).toEqual([]);
+    }),
+  );
+
   it.effect("disables redirect following in the actual fetch transport", () =>
     Effect.gen(function* () {
       let calls = 0;
