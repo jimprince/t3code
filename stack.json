@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f4a9ede2ac9adda75a3822a53b7f766e427ab2d2",
-  "head": "bb9dc488f13de8340e58261a3df3f968fc715da6",
+  "prev": "952bee9b54b71cd985995fe42c1c650d53df6ebd",
+  "head": "947fc0aadacdfd59c2355856064ce4cbd87aed14",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
@@ -10,13 +10,13 @@
     "fork-provider-runtime-recovery",
     "fork-provider-observability",
     "fork-thread-lifecycle-recovery",
-    "fork-thread-goals"
-  ],
-  "unapplied": [
+    "fork-thread-goals",
     "fork-thread-transfer",
     "fork-thread-fork",
     "fork-general-chat-projects",
-    "fork-remote-relay-access",
+    "fork-remote-relay-access"
+  ],
+  "unapplied": [
     "fork-performance-recovery",
     "fork-headless-updates",
     "fork-text-generation",
@@ -65,7 +65,7 @@
       "oid": "51b804854339cccc02f8a6e30a5e477280faad58"
     },
     "fork-general-chat-projects": {
-      "oid": "1a536823c4b37f288606add8477760fb078a4cd7"
+      "oid": "69b6192e100a0223705ed202ea618f123969124e"
     },
     "fork-gitea-instance-pr-badges": {
       "oid": "226ce8c51d61b1d0920091fb133d0978ece4d583"
@@ -101,7 +101,7 @@
       "oid": "8b7e24266e8832406da175b423164fbcd65b358c"
     },
     "fork-remote-relay-access": {
-      "oid": "18f2ebeece890fb81fab9d0b6bc32d83cc85c6d4"
+      "oid": "947fc0aadacdfd59c2355856064ce4cbd87aed14"
     },
     "fork-remote-worktree-base": {
       "oid": "eccca319cf8a7d40d3f26377dbf508242f408d5d"
@@ -119,7 +119,7 @@
       "oid": "4f23f6d29b7890c959c13555e92bacd420ee48af"
     },
     "fork-thread-fork": {
-      "oid": "8293f8cd2b4714094ea9e64de8cea9310c382d52"
+      "oid": "fcfe974ef25b8d5e31bc73550b68f9605831f172"
     },
     "fork-thread-goals": {
       "oid": "bb9dc488f13de8340e58261a3df3f968fc715da6"
@@ -128,7 +128,7 @@
       "oid": "975a5f5a78acc35841ee4d9380eb140ddef71a1c"
     },
     "fork-thread-transfer": {
-      "oid": "bd3c862ef4de032ce4b7e21e4c7f0fe18a8f8c7e"
+      "oid": "0eb512b905723edcf2bee78818c808be455b6fe0"
     },
     "fork-web-client-resilience": {
       "oid": "447a7f03e9a7738b506f247d42784e29160f19c4"
