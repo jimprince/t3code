@@ -2,7 +2,7 @@ import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
   inspectWorktree,
@@ -12,6 +12,9 @@ import {
   type WorktreeInspector,
   type WorktreeState,
 } from "../src/worktreeGc.js";
+
+import { RemoteEnvironmentClient } from "../src/client.js";
+import type { SavedEnvironment } from "../src/types.js";
 
 const NOW = new Date("2026-09-04T00:00:00.000Z");
 const LONG_AGO = "2026-08-01T00:00:00.000Z";
@@ -223,5 +226,45 @@ describe("worktree gc against real git state", () => {
       expect(removal.error).toContain("modified or untracked files");
       await expect(NodeFSP.access(NodePath.join(dirty, "scratch.txt"))).resolves.toBeUndefined();
     });
+  });
+});
+
+describe("worktree gc snapshot integration", () => {
+  it("finds archived candidates while retaining paths shared with active threads", async () => {
+    const archived = [
+      thread({ id: "old" }),
+      thread({ id: "shared", worktreePath: "/worktrees/shared" }),
+    ];
+    const active = [thread({ id: "live", worktreePath: "/worktrees/shared", archivedAt: null })];
+    const request = vi.fn(async () => ({ threads: archived }));
+    const rpc = {
+      request,
+      subscribeShellSnapshot: vi.fn(async () => ({
+        kind: "snapshot",
+        snapshot: { projects: [], threads: active },
+      })),
+      subscribeThreadSnapshot: vi.fn(),
+      dispose: vi.fn(async () => undefined),
+    };
+    const environment: SavedEnvironment = {
+      name: "test",
+      httpBaseUrl: "http://127.0.0.1:3773",
+      wsBaseUrl: "ws://127.0.0.1:3773",
+      environmentId: "test",
+      label: "Test",
+      serverVersion: "0.1.0",
+      bearerToken: "token",
+      expiresAt: "2099-01-01T00:00:00.000Z",
+      pairedAt: "2026-09-04T00:00:00.000Z",
+    };
+    const client = new RemoteEnvironmentClient(environment, { rpcFactory: () => rpc });
+    const plan = await planWorktreeGc({
+      threads: await client.listWorktreeGcThreads(),
+      inspect: alwaysClean,
+      now: NOW,
+    });
+    expect(plan.removable.map(({ path }) => path)).toEqual(["/worktrees/old"]);
+    expect(plan.retained.map(({ reason }) => reason)).toEqual(["unarchived-thread"]);
+    expect(request).toHaveBeenCalledWith("getArchivedShellSnapshot", {});
   });
 });

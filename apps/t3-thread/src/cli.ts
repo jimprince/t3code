@@ -390,7 +390,7 @@ worktree
     const environment = requireEnvironment(state, options.env);
     const client = new RemoteEnvironmentClient(environment);
     const plan = await planWorktreeGc({
-      threads: await client.listThreads(),
+      threads: await client.listWorktreeGcThreads(),
       inspect: inspectWorktree,
       recoveryWindowDays,
     });
