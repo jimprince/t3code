@@ -1,10 +1,13 @@
 {
   "version": 5,
-  "prev": "2f9ca12bf510175ee5f48a6063221a7507c5f52e",
-  "head": "5046e291fd5247ffc3a280bc9bc1f838a929a6cf",
+  "prev": "14a529d9a15d76e96b55ac85f24b033c9d573e32",
+  "head": "a8e91f8e1dc6984c074cabdd4223757ecc0567ed",
   "applied": [
     "fork-stgit-stack-policy",
     "fork-build-workspace-tooling",
+    "refresh-temp"
+  ],
+  "unapplied": [
     "fork-t3-thread-operator-cli",
     "fork-provider-turn-reservation",
     "fork-provider-runtime-recovery",
@@ -37,10 +40,8 @@
     "fork-worktree-gc",
     "fork-gitea-instance-pr-badges",
     "fork-gitea-pr-actions",
-    "fork-pr-project-exclusions",
-    "refresh-temp"
+    "fork-pr-project-exclusions"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-build-workspace-tooling": {
@@ -149,7 +150,7 @@
       "oid": "f041464fcd9bc1312d421ec1dbb4e16cc997888e"
     },
     "refresh-temp": {
-      "oid": "5046e291fd5247ffc3a280bc9bc1f838a929a6cf"
+      "oid": "a8e91f8e1dc6984c074cabdd4223757ecc0567ed"
     }
   }
 }
