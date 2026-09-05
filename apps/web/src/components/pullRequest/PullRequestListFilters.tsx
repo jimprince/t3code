@@ -18,6 +18,7 @@ import {
   LayersIcon,
   ListFilterIcon,
   LoaderIcon,
+  RotateCcwIcon,
   SearchIcon,
   TagIcon,
   UserRoundIcon,
@@ -46,6 +47,7 @@ import {
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
   pullRequestLabelColor,
+  pullRequestProjectKey,
   type PullRequestAuthorFacet,
   type PullRequestLabelFacet,
 } from "./pullRequestList.logic";
@@ -143,14 +145,6 @@ const ALL_HOSTS_VALUE = "";
 const ALL_SERVERS_VALUE = "";
 /** The unset value of each narrowing group, which no filter of theirs is named after. */
 const UNFILTERED_VALUE = "all";
-/**
- * A project's own radio value, carrying the server along with the id: the id alone is only
- * unique within its own server, so two rows sharing one would otherwise both read as checked.
- */
-export const pullRequestProjectKey = (project: {
-  readonly id: ProjectId;
-  readonly environmentId: EnvironmentId;
-}) => JSON.stringify([project.environmentId, project.id]);
 
 const DRAFT_OPTIONS = [
   { value: UNFILTERED_VALUE, label: "All", Icon: LayersIcon },
@@ -399,6 +393,98 @@ function PullRequestLabelFilter({
   );
 }
 
+/** The projects the menu offers, each carrying the server whose copy of it is being named. */
+export interface PullRequestFilterProject {
+  readonly id: ProjectId;
+  readonly environmentId: EnvironmentId;
+  readonly title: string;
+  readonly workspaceRoot: string;
+  readonly faviconPath?: string | null;
+  readonly projectIcon?: ProjectIconOverride | null;
+}
+
+/**
+ * The projects kept out of the list. Separate from the scope above, which picks a single project
+ * to look at: this one takes projects out of "All projects" and leaves every other one in, so a
+ * repository whose reviews are never yours stops filling the page without narrowing it to one.
+ */
+function PullRequestHiddenProjectsFilter({
+  projects,
+  serverOptions,
+  excludedProjectKeys,
+  onExcludeProject,
+  onShowAllProjects,
+}: {
+  projects: ReadonlyArray<PullRequestFilterProject>;
+  serverOptions: ReadonlyArray<PullRequestFilterOption<string>>;
+  /** Keyed by `pullRequestProjectKey`, so one server's project never hides another's. */
+  excludedProjectKeys: ReadonlySet<string>;
+  onExcludeProject: (projectId: ProjectId, environmentId: EnvironmentId, excluded: boolean) => void;
+  onShowAllProjects: () => void;
+}) {
+  return (
+    <MenuSub>
+      <MenuSubTrigger>
+        <EyeOffIcon aria-hidden className="size-3.5" />
+        <span className="flex-1">Hidden projects</span>
+        <span className="text-xs text-muted-foreground">
+          {excludedProjectKeys.size === 0 ? "None" : `${excludedProjectKeys.size} hidden`}
+        </span>
+      </MenuSubTrigger>
+      <MenuSubPopup className="w-72">
+        {projects.length === 0 ? (
+          <MenuItem disabled>No projects to hide</MenuItem>
+        ) : (
+          projects.map((project) => {
+            const key = pullRequestProjectKey(project);
+            const serverLabel = serverOptions.find(
+              (option) => option.value === project.environmentId,
+            )?.label;
+            const hasDuplicateTitle = projects.some(
+              (other) =>
+                other.title === project.title && other.environmentId !== project.environmentId,
+            );
+            return (
+              <MenuCheckboxItem
+                key={key}
+                className="grid-cols-[1rem_minmax(0,1fr)]"
+                checked={excludedProjectKeys.has(key)}
+                onCheckedChange={(next) =>
+                  onExcludeProject(project.id, project.environmentId, next)
+                }
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  <ProjectFavicon
+                    environmentId={project.environmentId}
+                    cwd={project.workspaceRoot}
+                    projectName={project.title}
+                    faviconPath={project.faviconPath ?? null}
+                    projectIcon={project.projectIcon ?? null}
+                    className="size-3.5"
+                  />
+                  <span className="min-w-0 flex-1 truncate">
+                    {project.title}
+                    {hasDuplicateTitle ? ` (${serverLabel ?? project.environmentId})` : ""}
+                  </span>
+                </span>
+              </MenuCheckboxItem>
+            );
+          })
+        )}
+        {excludedProjectKeys.size > 0 ? (
+          <>
+            <MenuSeparator />
+            <MenuItem onClick={onShowAllProjects}>
+              <RotateCcwIcon aria-hidden className="size-3.5" />
+              Show all projects
+            </MenuItem>
+          </>
+        ) : null}
+      </MenuSubPopup>
+    </MenuSub>
+  );
+}
+
 export function PullRequestFiltersMenu({
   onOpenChange,
   state,
@@ -422,6 +508,9 @@ export function PullRequestFiltersMenu({
   projectEnvironmentId,
   unavailable,
   onProject,
+  excludedProjectKeys,
+  onExcludeProject,
+  onShowAllProjects,
 }: {
   onOpenChange?: (open: boolean) => void;
   state: PullRequestListState;
@@ -450,14 +539,7 @@ export function PullRequestFiltersMenu({
   serverOptions: ReadonlyArray<PullRequestFilterOption<string>>;
   onServer: (server: EnvironmentId | undefined) => void;
   /** The projects of every connected environment, each carrying the one its favicon is read from. */
-  projects: ReadonlyArray<{
-    readonly id: ProjectId;
-    readonly environmentId: EnvironmentId;
-    readonly title: string;
-    readonly workspaceRoot: string;
-    readonly faviconPath?: string | null;
-    readonly projectIcon?: ProjectIconOverride | null;
-  }>;
+  projects: ReadonlyArray<PullRequestFilterProject>;
   projectId: ProjectId | undefined;
   /**
    * The server the selected project belongs to. A project id is only unique within its own
@@ -472,20 +554,25 @@ export function PullRequestFiltersMenu({
   unavailable: ReadonlyMap<string, string>;
   /** The environment comes with the project id, since picking a row picks a specific server's copy of it. */
   onProject: (projectId: ProjectId | undefined, environmentId: EnvironmentId | undefined) => void;
+  /** The projects kept out of the list, keyed the same way the scope's radio values are. */
+  excludedProjectKeys: ReadonlySet<string>;
+  onExcludeProject: (projectId: ProjectId, environmentId: EnvironmentId, excluded: boolean) => void;
+  onShowAllProjects: () => void;
 }) {
   const selectedLabels = (filters.labels ?? []).flatMap((group) => group);
-  const filterCount = [
-    state !== "open",
-    involvement !== "all",
-    host,
-    server,
-    projectId,
-    filters.draft,
-    filters.review,
-    filters.checks,
-    filters.author,
-    ...selectedLabels,
-  ].filter(Boolean).length;
+  const filterCount =
+    [
+      state !== "open",
+      involvement !== "all",
+      host,
+      server,
+      projectId,
+      filters.draft,
+      filters.review,
+      filters.checks,
+      filters.author,
+      ...selectedLabels,
+    ].filter(Boolean).length + excludedProjectKeys.size;
   const updateFilters = (next: Partial<PullRequestListFilters>) =>
     onFilters(
       Object.fromEntries(
@@ -621,6 +708,13 @@ export function PullRequestFiltersMenu({
             if (project) onProject(project.id, project.environmentId);
             else if (projectId !== undefined) onProject(undefined, undefined);
           }}
+        />
+        <PullRequestHiddenProjectsFilter
+          projects={projects}
+          serverOptions={serverOptions}
+          excludedProjectKeys={excludedProjectKeys}
+          onExcludeProject={onExcludeProject}
+          onShowAllProjects={onShowAllProjects}
         />
       </MenuPopup>
     </Menu>
