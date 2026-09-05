@@ -15,7 +15,13 @@ import {
   resolveChangeRequestPresentation,
   type ChangeRequestTerminology,
 } from "@t3tools/shared/sourceControl";
-import { AzureDevOpsIcon, BitbucketIcon, GitHubIcon, GitLabIcon } from "./components/Icons";
+import {
+  GiteaIcon,
+  AzureDevOpsIcon,
+  BitbucketIcon,
+  GitHubIcon,
+  GitLabIcon,
+} from "./components/Icons";
 
 export interface SourceControlPresentation {
   readonly providerName: string;
@@ -51,6 +57,12 @@ export function getSourceControlPresentation(
         providerName: provider?.name || presentation.providerName,
         terminology: getChangeRequestTerminology(provider),
         Icon: BitbucketIcon,
+      };
+    case "gitea":
+      return {
+        providerName: "Gitea",
+        terminology: getChangeRequestTerminology(provider),
+        Icon: GiteaIcon,
       };
     case "change-request":
       return {

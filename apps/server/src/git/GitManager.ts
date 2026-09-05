@@ -1,3 +1,7 @@
+import {
+  detectSourceControlProviderFromRemoteUrl,
+  resolveGiteaRemote,
+} from "@t3tools/shared/sourceControl";
 import * as Arr from "effect/Array";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
@@ -33,7 +37,6 @@ import {
   type SourceControlWritingStyleSettings,
 } from "@t3tools/contracts";
 import {
-  detectSourceControlProviderFromGitRemoteUrl,
   mergeGitStatusParts,
   normalizeGitRemoteUrl,
   resolveAutoFeatureBranchName,
@@ -131,6 +134,7 @@ const STATUS_RESULT_CACHE_CAPACITY = 2_048;
 // host (a local probe answers first), and failed lookups still back off
 // exponentially via prLookupFailureTtl, so throttling pressure still drops
 // under 429s instead of amplifying it.
+const encodeRoutingKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 const PR_LOOKUP_CACHE_TTL = Duration.seconds(60);
 const PR_LOOKUP_FAILURE_BASE_TTL = Duration.seconds(20);
 const PR_LOOKUP_FAILURE_MAX_TTL = Duration.minutes(15);
@@ -639,6 +643,32 @@ export const make = Effect.gen(function* () {
 
   const sourceControlProvider = (cwd: string) => sourceControlProviders.resolve({ cwd });
   const serverSettingsService = yield* ServerSettings.ServerSettingsService;
+  const giteaInstances = serverSettingsService.getSettings.pipe(
+    Effect.map((value) => value.giteaInstances),
+    Effect.mapError(
+      (cause) =>
+        new GitManagerError({
+          operation: "settings",
+          cwd: "",
+          detail: "Could not read Gitea configuration.",
+          cause,
+        }),
+    ),
+  );
+  const giteaRoutingKey = giteaInstances.pipe(
+    Effect.map((instances) =>
+      encodeRoutingKey(
+        instances.map(({ id, host, sshAliases, sshPorts, webOrigin, apiOrigin }) => ({
+          id,
+          host,
+          sshAliases,
+          sshPorts,
+          webOrigin,
+          apiOrigin,
+        })),
+      ),
+    ),
+  );
   const readRepositoryInstructions = (cwd: string, fileName: string) =>
     Effect.gen(function* () {
       const root = yield* fileSystem.realPath(cwd);
@@ -978,16 +1008,21 @@ export const make = Effect.gen(function* () {
       remoteName?: string | null;
     },
   ) =>
-    [
-      cwd,
-      details.branch,
-      details.upstreamRef ?? "",
-      details.defaultBranch ?? "",
-      details.localBranchExists === false ? "0" : "1",
-      details.remoteName ?? "",
-      String(prLookupEpoch(cwd)),
-    ].join("\u0000");
-  // A remote on a host no provider implements (Gitea, a bare SSH remote) can
+    giteaRoutingKey.pipe(
+      Effect.map((routingKey) =>
+        [
+          cwd,
+          details.branch,
+          details.upstreamRef ?? "",
+          details.defaultBranch ?? "",
+          details.localBranchExists === false ? "0" : "1",
+          details.remoteName ?? "",
+          String(prLookupEpoch(cwd)),
+          routingKey,
+        ].join("\u0000"),
+      ),
+    );
+  // A remote on a host no provider implements (an unconfigured host, a bare SSH remote) can
   // never answer a change request lookup, and asking costs a provider probe
   // plus a guaranteed-failing API call whose failure the poller then retries.
   // Detect it once and remember the verdict per repository, so an unsupported
@@ -995,7 +1030,9 @@ export const make = Effect.gen(function* () {
   // poll. The epoch is part of the key, so the same explicit refresh that
   // bypasses the PR lookup cache also re-checks the host.
   const unsupportedPrHostCacheKey = (cwd: string) =>
-    [cwd, String(prLookupEpoch(cwd))].join("\u0000");
+    giteaRoutingKey.pipe(
+      Effect.map((routingKey) => [cwd, String(prLookupEpoch(cwd)), routingKey].join("\u0000")),
+    );
   const unsupportedPrHostCache = yield* Cache.makeWith(
     (key: string) => {
       const [cwd = ""] = key.split("\u0000");
@@ -1017,7 +1054,8 @@ export const make = Effect.gen(function* () {
   // A probe that could not answer reads as "supported": the lookup goes ahead
   // and fails the way it does today rather than silently dropping the badge.
   const isUnsupportedPrHost = (cwd: string) =>
-    Cache.get(unsupportedPrHostCache, unsupportedPrHostCacheKey(cwd)).pipe(
+    unsupportedPrHostCacheKey(cwd).pipe(
+      Effect.flatMap((key) => Cache.get(unsupportedPrHostCache, key)),
       Effect.orElseSucceed(() => false),
     );
   // Consecutive failures per cache key, so a branch that keeps failing waits
@@ -1160,7 +1198,7 @@ export const make = Effect.gen(function* () {
     // Keyed by (cwd, branch) only: the upstream ref changing (e.g. a first
     // `push -u`) must not orphan the fallback value for the same branch.
     const branchKey = `${cwd}\u0000${details.branch}`;
-    const cacheKey = prLookupCacheKey(cwd, details);
+    const cacheKey = yield* prLookupCacheKey(cwd, details);
     if (refreshMissingPullRequest) {
       const cached = yield* Cache.getOption(prLookupCache, cacheKey).pipe(
         Effect.orElseSucceed(() => Option.none()),
@@ -1279,7 +1317,8 @@ export const make = Effect.gen(function* () {
       (yield* readConfigValueNullable(cwd, `remote.${preferredRemoteName}.url`)) ??
       (yield* readConfigValueNullable(cwd, "remote.origin.url"));
 
-    return remoteUrl ? detectSourceControlProviderFromGitRemoteUrl(remoteUrl) : null;
+    const instances = yield* giteaInstances;
+    return remoteUrl ? detectSourceControlProviderFromRemoteUrl(remoteUrl, instances) : null;
   });
 
   const resolveRemoteRepositoryContext = Effect.fn("resolveRemoteRepositoryContext")(function* (
@@ -1295,12 +1334,29 @@ export const make = Effect.gen(function* () {
     }
 
     const remoteUrl = yield* readConfigValueNullable(cwd, `remote.${remoteName}.url`);
-    const repositoryNameWithOwner = parseGitHubRepositoryNameWithOwnerFromRemoteUrl(remoteUrl);
+    const gitea = remoteUrl ? resolveGiteaRemote(remoteUrl, yield* giteaInstances) : null;
+    const repositoryNameWithOwner =
+      gitea?.repository ?? parseGitHubRepositoryNameWithOwnerFromRemoteUrl(remoteUrl);
     return {
-      remoteUrlKey: remoteUrl ? normalizeGitRemoteUrl(remoteUrl) : null,
+      remoteUrlKey: gitea
+        ? `${gitea.instance.id}:${gitea.repository.toLowerCase()}`
+        : remoteUrl
+          ? normalizeGitRemoteUrl(remoteUrl)
+          : null,
       repositoryNameWithOwner,
       ownerLogin: parseRepositoryOwnerLogin(repositoryNameWithOwner),
     };
+  });
+
+  const resolvePrTargetRepository = Effect.fn("resolvePrTargetRepository")(function* (cwd: string) {
+    const { provider, context } = yield* sourceControlProviders.resolveHandle({ cwd });
+    // Gitea requests target the registry-selected remote; GitHub retains its CLI fork semantics.
+    const remoteName =
+      provider.kind === "gitea"
+        ? (context?.remoteName ??
+          (yield* gitCore.resolvePrimaryRemoteName(cwd).pipe(Effect.orElseSucceed(() => null))))
+        : "origin";
+    return { ...(yield* resolveRemoteRepositoryContext(cwd, remoteName)), remoteName };
   });
 
   const resolvePrLookupRepositoryIdentity = Effect.fn("resolvePrLookupRepositoryIdentity")(
@@ -1308,10 +1364,7 @@ export const make = Effect.gen(function* () {
       const remoteName =
         remoteNameOverride ?? (yield* readConfigValueNullable(cwd, `branch.${branch}.remote`));
       const [headRemote, targetRemote] = yield* Effect.all(
-        [
-          resolveRemoteRepositoryContext(cwd, remoteName),
-          resolveRemoteRepositoryContext(cwd, "origin"),
-        ],
+        [resolveRemoteRepositoryContext(cwd, remoteName), resolvePrTargetRepository(cwd)],
         { concurrency: "unbounded" },
       );
       return {
@@ -1337,21 +1390,18 @@ export const make = Effect.gen(function* () {
     const shouldProbeLocalBranchSelector =
       headBranchFromUpstream.length === 0 || headBranch === details.branch;
 
-    const [remoteRepository, originRepository] = yield* Effect.all(
-      [
-        resolveRemoteRepositoryContext(cwd, remoteName),
-        resolveRemoteRepositoryContext(cwd, "origin"),
-      ],
+    const [remoteRepository, targetRepository] = yield* Effect.all(
+      [resolveRemoteRepositoryContext(cwd, remoteName), resolvePrTargetRepository(cwd)],
       { concurrency: "unbounded" },
     );
 
     const isCrossRepository =
       remoteRepository.repositoryNameWithOwner !== null &&
-      originRepository.repositoryNameWithOwner !== null
+      targetRepository.repositoryNameWithOwner !== null
         ? remoteRepository.repositoryNameWithOwner.toLowerCase() !==
-          originRepository.repositoryNameWithOwner.toLowerCase()
+          targetRepository.repositoryNameWithOwner.toLowerCase()
         : remoteName !== null &&
-          remoteName !== "origin" &&
+          remoteName !== targetRepository.remoteName &&
           remoteRepository.repositoryNameWithOwner !== null;
 
     const ownerHeadSelector =
@@ -1361,7 +1411,7 @@ export const make = Effect.gen(function* () {
     const remoteAliasHeadSelector =
       remoteName && headBranch.length > 0 ? `${remoteName}:${headBranch}` : null;
     const shouldProbeRemoteOwnedSelectors =
-      isCrossRepository || (remoteName !== null && remoteName !== "origin");
+      isCrossRepository || (remoteName !== null && remoteName !== targetRepository.remoteName);
 
     const headSelectors: string[] = [];
     if (isCrossRepository && shouldProbeRemoteOwnedSelectors) {
@@ -1392,8 +1442,8 @@ export const make = Effect.gen(function* () {
       remoteName,
       headRemoteUrlKey:
         remoteRepository.remoteUrlKey ??
-        (remoteName === null ? originRepository.remoteUrlKey : null),
-      targetRemoteUrlKey: originRepository.remoteUrlKey,
+        (remoteName === null ? targetRepository.remoteUrlKey : null),
+      targetRemoteUrlKey: targetRepository.remoteUrlKey,
       headRepositoryNameWithOwner: remoteRepository.repositoryNameWithOwner,
       headRepositoryOwnerLogin: remoteRepository.ownerLogin,
       isCrossRepository,
@@ -1552,9 +1602,18 @@ export const make = Effect.gen(function* () {
     >,
   ) {
     for (const headSelector of headContext.headSelectors) {
-      const pullRequests = yield* (yield* sourceControlProvider(cwd)).listChangeRequests({
+      const provider = yield* sourceControlProvider(cwd);
+      const pullRequests = yield* provider.listChangeRequests({
         cwd,
         headSelector,
+        ...(provider.kind === "gitea" && headContext.headRepositoryNameWithOwner
+          ? {
+              source: {
+                refName: headContext.headBranch,
+                repository: headContext.headRepositoryNameWithOwner,
+              },
+            }
+          : {}),
         state: "open",
         limit: 1,
       });
@@ -1582,9 +1641,18 @@ export const make = Effect.gen(function* () {
     const parsedByNumber = new Map<number, PullRequestInfo>();
 
     for (const headSelector of headContext.headSelectors) {
-      const pullRequests = yield* (yield* sourceControlProvider(cwd)).listChangeRequests({
+      const provider = yield* sourceControlProvider(cwd);
+      const pullRequests = yield* provider.listChangeRequests({
         cwd,
         headSelector,
+        ...(provider.kind === "gitea" && headContext.headRepositoryNameWithOwner
+          ? {
+              source: {
+                refName: headContext.headBranch,
+                repository: headContext.headRepositoryNameWithOwner,
+              },
+            }
+          : {}),
         state: "all",
         limit: 20,
       });
@@ -2138,7 +2206,7 @@ export const make = Effect.gen(function* () {
     const defaultBranch = yield* gitCore
       .resolveDefaultBranchName(cacheCwd, defaultRemoteName)
       .pipe(Effect.orElseSucceed(() => null));
-    const cacheKey = prLookupCacheKey(cacheCwd, {
+    const cacheKey = yield* prLookupCacheKey(cacheCwd, {
       branch,
       upstreamRef,
       defaultBranch,

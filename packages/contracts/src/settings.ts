@@ -760,6 +760,48 @@ export const ObservabilitySettings = Schema.Struct({
 });
 export type ObservabilitySettings = typeof ObservabilitySettings.Type;
 
+/** The token is replaced by a marker on disk and in client snapshots. */
+export const GITEA_TOKEN_REDACTED = "••••••";
+const GiteaOrigin = TrimmedNonEmptyString.check(
+  Schema.makeFilter(
+    (value) => {
+      try {
+        const url = new URL(value);
+        return (
+          (url.protocol === "http:" || url.protocol === "https:") &&
+          !url.username &&
+          !url.password &&
+          !url.search &&
+          !url.hash &&
+          url.pathname === "/"
+        );
+      } catch {
+        return false;
+      }
+    },
+    { message: "Expected an HTTP or HTTPS origin without credentials or a path." },
+  ),
+);
+const GiteaHost = TrimmedNonEmptyString.check(Schema.isPattern(/^[a-zA-Z0-9][a-zA-Z0-9.-]*$/));
+export const GiteaInstanceConfig = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  host: GiteaHost,
+  sshAliases: Schema.Array(GiteaHost).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  sshPorts: Schema.Array(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 65535 }))).pipe(
+    Schema.withDecodingDefault(Effect.succeed([22])),
+  ),
+  webOrigin: GiteaOrigin,
+  apiOrigin: GiteaOrigin,
+  token: TrimmedString.pipe(Schema.withDecodingDefault(Effect.succeed(""))),
+});
+export type GiteaInstanceConfig = typeof GiteaInstanceConfig.Type;
+export const GiteaInstances = Schema.Array(GiteaInstanceConfig).check(
+  Schema.makeFilter(
+    (instances) => new Set(instances.map((instance) => instance.id)).size === instances.length,
+    { message: "Gitea instance IDs must be unique." },
+  ),
+);
+
 export const SourceControlWritingStyleMode = Schema.Literals([
   "repo_conventions",
   "conventional_commits",
@@ -907,6 +949,7 @@ export const ServerSettings = Schema.Struct({
       }),
     ),
   ),
+  giteaInstances: GiteaInstances.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   sourceControlWritingStyle: SourceControlWritingStyleSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1121,6 +1164,7 @@ export const ServerSettingsPatch = Schema.Struct({
   newWorktreesStartFromOrigin: Schema.optionalKey(Schema.Boolean),
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
+  giteaInstances: Schema.optionalKey(GiteaInstances),
   sourceControlWritingStyle: Schema.optionalKey(
     Schema.Struct({
       mode: Schema.optionalKey(SourceControlWritingStyleMode),
