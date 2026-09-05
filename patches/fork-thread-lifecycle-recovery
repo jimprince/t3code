@@ -1,6 +1,6 @@
-Bottom: df29fcc94d0aafd95318bdd3e737d285c5cd31ef
-Top:    fa7da18684c81e57c7346be57b63d209a81eb874
+Bottom: 6c180e673d66031f8b468a95f862aa634444bece
+Top:    7879a9332f2a3e79ba701d5669354e94fd2f5234
 Author: brad <bradprin@live.com>
-Date:   2026-09-04 23:52:46 -0600
+Date:   2026-09-05 00:06:57 -0600
 
 fix(server): recover thread lifecycle

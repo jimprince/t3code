@@ -1,6 +1,6 @@
-Bottom: 90e4f80cc9cce3bf8c3894128f62bb4dca166d93
-Top:    1c3e176bcdd491eba7313ecd7710a7c30aa84dbc
+Bottom: 32475fa9c7b5f628617f01ebba27466cf07bc2b7
+Top:    048621b1ea35522c9458364ec4f73bdec7faacdd
 Author: Codex <codex@users.noreply.github.com>
-Date:   2026-09-04 23:53:01 -0600
+Date:   2026-09-05 00:06:57 -0600
 
 feat(sidebar): drag threads into your own order
