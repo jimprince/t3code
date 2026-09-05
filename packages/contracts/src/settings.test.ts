@@ -550,3 +550,31 @@ describe("ServerSettings environment icon", () => {
     expect(encodeServerSettings(settings).environmentIcon).toBe("laptop");
   });
 });
+
+describe("Gitea instance settings", () => {
+  const instance = {
+    id: "home",
+    host: "git.home",
+    webOrigin: "http://git.home:3000",
+    apiOrigin: "http://git.home:3000",
+  };
+  it("defaults old settings to no instances and defaults optional instance values", () => {
+    expect(decodeServerSettings({}).giteaInstances).toEqual([]);
+    expect(decodeServerSettingsPatch({ giteaInstances: [instance] }).giteaInstances).toEqual([
+      { ...instance, sshAliases: [], sshPorts: [22], token: "" },
+    ]);
+  });
+  it.each([
+    { ...instance, webOrigin: "ssh://git.home:2222" },
+    { ...instance, apiOrigin: "http://user:secret@git.home:3000" },
+    { ...instance, apiOrigin: "http://git.home:3000/api/v1" },
+    { ...instance, sshPorts: [0] },
+    { ...instance, sshPorts: [65536] },
+    { ...instance, host: "git.home:2222" },
+  ])("rejects invalid endpoints and ports", (invalid) => {
+    expect(() => decodeServerSettingsPatch({ giteaInstances: [invalid] })).toThrow();
+  });
+  it("rejects duplicate IDs that would share a token", () => {
+    expect(() => decodeServerSettingsPatch({ giteaInstances: [instance, instance] })).toThrow();
+  });
+});

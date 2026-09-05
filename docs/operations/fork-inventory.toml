@@ -417,3 +417,15 @@ retire_when = "never"
 depends_on = ["fork-t3-thread-operator-cli"]
 roles = []
 note = "Removal never passes --force to `git worktree remove`, so git independently refuses a dirty checkout and the branch ref plus its commits survive. Retention checks run before inspection so a checkout with a live thread is never touched. Detached HEAD worktrees are retained because their commits may lack a protecting branch. Fetch archived and active snapshots explicitly: the normal CLI thread listing excludes archived threads."
+
+[[patch]]
+name = "fork-gitea-instance-pr-badges"
+subject = "feat(source-control): configure Gitea instances and branch PR badges"
+class = "upstream-bound"
+purpose = "Configure environment-local Gitea hosts and protected tokens, resolve SSH aliases and ports to explicit web/API origins, and show repository-safe branch pull-request badges."
+retire_when = "Upstream supports configured Gitea instances, secret-store tokens, and equivalent branch and repository identity filtering for PR badges."
+depends_on = ["fork-pr-status-unsupported-hosts"]
+roles = []
+
+note = "PR lookup and unsupported-host cache keys include non-secret Gitea routing configuration, so adding or removing a configured host takes effect without waiting out the negative cache. Tokens never enter these keys. PR head identity is compared with the hosting provider’s selected target remote, including repositories whose sole remote is named gitea; a remote alias alone does not imply a cross-repository PR."
+
