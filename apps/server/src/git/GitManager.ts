@@ -1348,15 +1348,23 @@ export const make = Effect.gen(function* () {
     };
   });
 
+  const resolvePrTargetRepository = Effect.fn("resolvePrTargetRepository")(function* (cwd: string) {
+    const { provider, context } = yield* sourceControlProviders.resolveHandle({ cwd });
+    // Gitea requests target the registry-selected remote; GitHub retains its CLI fork semantics.
+    const remoteName =
+      provider.kind === "gitea"
+        ? (context?.remoteName ??
+          (yield* gitCore.resolvePrimaryRemoteName(cwd).pipe(Effect.orElseSucceed(() => null))))
+        : "origin";
+    return { ...(yield* resolveRemoteRepositoryContext(cwd, remoteName)), remoteName };
+  });
+
   const resolvePrLookupRepositoryIdentity = Effect.fn("resolvePrLookupRepositoryIdentity")(
     function* (cwd: string, branch: string, remoteNameOverride?: string) {
       const remoteName =
         remoteNameOverride ?? (yield* readConfigValueNullable(cwd, `branch.${branch}.remote`));
       const [headRemote, targetRemote] = yield* Effect.all(
-        [
-          resolveRemoteRepositoryContext(cwd, remoteName),
-          resolveRemoteRepositoryContext(cwd, "origin"),
-        ],
+        [resolveRemoteRepositoryContext(cwd, remoteName), resolvePrTargetRepository(cwd)],
         { concurrency: "unbounded" },
       );
       return {
@@ -1382,21 +1390,18 @@ export const make = Effect.gen(function* () {
     const shouldProbeLocalBranchSelector =
       headBranchFromUpstream.length === 0 || headBranch === details.branch;
 
-    const [remoteRepository, originRepository] = yield* Effect.all(
-      [
-        resolveRemoteRepositoryContext(cwd, remoteName),
-        resolveRemoteRepositoryContext(cwd, "origin"),
-      ],
+    const [remoteRepository, targetRepository] = yield* Effect.all(
+      [resolveRemoteRepositoryContext(cwd, remoteName), resolvePrTargetRepository(cwd)],
       { concurrency: "unbounded" },
     );
 
     const isCrossRepository =
       remoteRepository.repositoryNameWithOwner !== null &&
-      originRepository.repositoryNameWithOwner !== null
+      targetRepository.repositoryNameWithOwner !== null
         ? remoteRepository.repositoryNameWithOwner.toLowerCase() !==
-          originRepository.repositoryNameWithOwner.toLowerCase()
+          targetRepository.repositoryNameWithOwner.toLowerCase()
         : remoteName !== null &&
-          remoteName !== "origin" &&
+          remoteName !== targetRepository.remoteName &&
           remoteRepository.repositoryNameWithOwner !== null;
 
     const ownerHeadSelector =
@@ -1406,7 +1411,7 @@ export const make = Effect.gen(function* () {
     const remoteAliasHeadSelector =
       remoteName && headBranch.length > 0 ? `${remoteName}:${headBranch}` : null;
     const shouldProbeRemoteOwnedSelectors =
-      isCrossRepository || (remoteName !== null && remoteName !== "origin");
+      isCrossRepository || (remoteName !== null && remoteName !== targetRepository.remoteName);
 
     const headSelectors: string[] = [];
     if (isCrossRepository && shouldProbeRemoteOwnedSelectors) {
@@ -1437,8 +1442,8 @@ export const make = Effect.gen(function* () {
       remoteName,
       headRemoteUrlKey:
         remoteRepository.remoteUrlKey ??
-        (remoteName === null ? originRepository.remoteUrlKey : null),
-      targetRemoteUrlKey: originRepository.remoteUrlKey,
+        (remoteName === null ? targetRepository.remoteUrlKey : null),
+      targetRemoteUrlKey: targetRepository.remoteUrlKey,
       headRepositoryNameWithOwner: remoteRepository.repositoryNameWithOwner,
       headRepositoryOwnerLogin: remoteRepository.ownerLogin,
       isCrossRepository,

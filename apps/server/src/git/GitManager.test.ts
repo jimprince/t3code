@@ -825,107 +825,109 @@ const GitManagerTestLayer = GitVcsDriver.layer.pipe(
 );
 
 it.layer(GitManagerTestLayer)("GitManager", (it) => {
-  it.effect(
-    "shows a Gitea branch badge with the configured HTTP URL and excludes same-owner fork collisions",
-    () =>
-      Effect.gen(function* () {
-        const repoDir = yield* makeTempDir("t3code-gitea-manager-");
-        yield* initRepo(repoDir);
-        const remoteDir = yield* createBareRemote();
-        yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
-        yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
-        yield* runGit(repoDir, ["checkout", "-b", "feature/slash"]);
-        yield* runGit(repoDir, ["push", "-u", "origin", "feature/slash"]);
-        const remoteUrl = "ssh://git@git.home:2222/brad/repo.git";
-        yield* runGit(repoDir, ["remote", "set-url", "origin", remoteUrl]);
-        const instance = {
-          id: "home",
-          host: "git.home",
-          sshAliases: ["alias"],
-          sshPorts: [2222],
-          webOrigin: "http://git.home:3000",
-          apiOrigin: "http://git.home:3000",
-          token: "fake-token",
-        };
-        const pr = {
-          number: 91,
-          title: "Gitea PR",
-          html_url: "http://git.home:3000/brad/repo/pulls/91",
-          state: "closed",
-          merged: true,
-          updated_at: "2026-09-04T12:00:00Z",
-          base: { ref: "main", repo: { id: 1, full_name: "brad/repo" } },
-          head: { ref: "feature/slash", repo: { id: 1, full_name: "brad/repo" } },
-        };
-        const { provider } = yield* GiteaSourceControlProvider.make.pipe(
-          Effect.provide(ServerSettings.layerTest({ giteaInstances: [instance] })),
-          Effect.provideService(
-            HttpClient.HttpClient,
-            HttpClient.make((request) =>
-              Effect.succeed(
-                HttpClientResponse.fromWeb(
-                  request,
-                  new Response(
-                    JSON.stringify(
-                      request.url.includes("page=1&")
-                        ? [
-                            {
-                              ...pr,
-                              number: 90,
-                              head: { ...pr.head, repo: { id: 2, full_name: "brad/other-fork" } },
-                            },
-                            pr,
-                          ]
-                        : [],
+  for (const remoteName of ["origin", "gitea"]) {
+    it.effect(
+      `shows a Gitea branch badge through ${remoteName} and excludes same-owner fork collisions`,
+      () =>
+        Effect.gen(function* () {
+          const repoDir = yield* makeTempDir("t3code-gitea-manager-");
+          yield* initRepo(repoDir);
+          const remoteDir = yield* createBareRemote();
+          yield* runGit(repoDir, ["remote", "add", remoteName, remoteDir]);
+          yield* runGit(repoDir, ["push", "-u", remoteName, "main"]);
+          yield* runGit(repoDir, ["checkout", "-b", "feature/slash"]);
+          yield* runGit(repoDir, ["push", "-u", remoteName, "feature/slash"]);
+          const remoteUrl = "ssh://git@git.home:2222/brad/repo.git";
+          yield* runGit(repoDir, ["remote", "set-url", remoteName, remoteUrl]);
+          const instance = {
+            id: "home",
+            host: "git.home",
+            sshAliases: ["alias"],
+            sshPorts: [2222],
+            webOrigin: "http://git.home:3000",
+            apiOrigin: "http://git.home:3000",
+            token: "fake-token",
+          };
+          const pr = {
+            number: 91,
+            title: "Gitea PR",
+            html_url: "http://git.home:3000/brad/repo/pulls/91",
+            state: "closed",
+            merged: true,
+            updated_at: "2026-09-04T12:00:00Z",
+            base: { ref: "main", repo: { id: 1, full_name: "brad/repo" } },
+            head: { ref: "feature/slash", repo: { id: 1, full_name: "brad/repo" } },
+          };
+          const { provider } = yield* GiteaSourceControlProvider.make.pipe(
+            Effect.provide(ServerSettings.layerTest({ giteaInstances: [instance] })),
+            Effect.provideService(
+              HttpClient.HttpClient,
+              HttpClient.make((request) =>
+                Effect.succeed(
+                  HttpClientResponse.fromWeb(
+                    request,
+                    new Response(
+                      JSON.stringify(
+                        request.url.includes("page=1&")
+                          ? [
+                              {
+                                ...pr,
+                                number: 90,
+                                head: { ...pr.head, repo: { id: 2, full_name: "brad/other-fork" } },
+                              },
+                              pr,
+                            ]
+                          : [],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
-        let configured = false;
-        const { manager, settings } = yield* makeManager({
-          serverSettings: { giteaInstances: [] },
-          sourceControl: {
-            ...provider,
-            get kind() {
-              return configured ? "gitea" : "unknown";
+          );
+          let configured = false;
+          const { manager, settings } = yield* makeManager({
+            serverSettings: { giteaInstances: [] },
+            sourceControl: {
+              ...provider,
+              get kind() {
+                return configured ? "gitea" : "unknown";
+              },
+              listChangeRequests: (input) =>
+                provider.listChangeRequests({
+                  ...input,
+                  context: {
+                    provider: { kind: "gitea", name: "Gitea", baseUrl: instance.webOrigin },
+                    remoteName,
+                    remoteUrl,
+                  },
+                }),
             },
-            listChangeRequests: (input) =>
-              provider.listChangeRequests({
-                ...input,
-                context: {
-                  provider: { kind: "gitea", name: "Gitea", baseUrl: instance.webOrigin },
-                  remoteName: "origin",
-                  remoteUrl,
-                },
-              }),
-          },
-        });
-        expect(
-          (yield* manager.remoteStatus({ cwd: repoDir }, { refreshUpstream: false }))?.pr,
-        ).toBeNull();
-        yield* settings.updateSettings({ giteaInstances: [instance] });
-        configured = true;
-        const local = yield* manager.localStatus({ cwd: repoDir });
-        expect(local.sourceControlProvider).toEqual({
-          kind: "gitea",
-          name: "Gitea",
-          baseUrl: instance.webOrigin,
-        });
-        const remote = yield* manager.remoteStatus(
-          { cwd: repoDir },
-          { refreshUpstream: false, refreshMissingPullRequest: true },
-        );
-        expect(remote?.pr).toMatchObject({
-          number: 91,
-          state: "merged",
-          url: pr.html_url,
-          updatedAt: "2026-09-04T12:00:00.000Z",
-        });
-      }),
-  );
+          });
+          expect(
+            (yield* manager.remoteStatus({ cwd: repoDir }, { refreshUpstream: false }))?.pr,
+          ).toBeNull();
+          yield* settings.updateSettings({ giteaInstances: [instance] });
+          configured = true;
+          const local = yield* manager.localStatus({ cwd: repoDir });
+          expect(local.sourceControlProvider).toEqual({
+            kind: "gitea",
+            name: "Gitea",
+            baseUrl: instance.webOrigin,
+          });
+          const remote = yield* manager.remoteStatus(
+            { cwd: repoDir },
+            { refreshUpstream: false, refreshMissingPullRequest: true },
+          );
+          expect(remote?.pr).toMatchObject({
+            number: 91,
+            state: "merged",
+            url: pr.html_url,
+            updatedAt: "2026-09-04T12:00:00.000Z",
+          });
+        }),
+    );
+  }
 
   it.effect("status includes draft PR metadata when branch already has a draft PR", () =>
     Effect.gen(function* () {

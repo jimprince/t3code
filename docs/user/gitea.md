@@ -36,3 +36,5 @@ This integration supports branch badges. Create, checkout, repository lookup,
 and the in-app pull-request browser are not supported for Gitea yet. Open the
 badge link to use Gitea in your browser. Clone a Gitea repository using its Git
 URL. Unconfigured hosts retain their existing unknown-host behavior.
+
+Branch badges also work when the repository remote is named `gitea` or another alias instead of `origin`. The branch and repository must match the pull request.
