@@ -752,3 +752,48 @@ id = "release-test-git-fixture"
 date = "2026-09-16"
 decided = "relocate"
 rationale = "Move the shared Git fixture from the later maintenance patch into release publication because release-tag, lease, CI-reuse, and release-note tests import it and must execute independently at this layer."
+
+[[patch]]
+name = "fork-maintenance-automation"
+subject = "chore(fork): automate StGit stack maintenance and upstream replay"
+class = "product"
+purpose = "Route maintainers and agents through the StGit policy, validate and publish the stack with immutable leases and atomic metadata, replay during upstream synchronization, and publish fork-feature pushes on the already integrated upstream base."
+retire_when = "Upstream or maintained shared tooling provides equivalent maintained-fork automation, or the fork intentionally stops requiring this concern."
+depends_on = ["fork-release-publication", "fork-build-ci-compat"]
+roles = ["agent-docs-owner"]
+note = "Requires authored release entries for user-visible changes and validates them before publication. CI owns the shared verify-source checks including Knip; verify-stgit-replay stages immutable source/metadata inputs and waits for exact candidate CI. Main and release dereference that evidence instead of rerunning source verification, retaining published-stack policy, transfer-report baselines and artifact checks. Server verification stops scheduling tests after the first failure; passing candidates still run the full suite. Independent verification stages collect failures in one pass without weakening the publication gate. Nightly release-tag discovery uses a constant number of Git processes and aborts on lookup failure. Removed unused subject-based metadata reconstruction and obsolete maintenance plans; leased publication remains authoritative. Retiring persisted functionality requires an explicit data transition, immutable shipped migration IDs and frozen historical upgrade coverage. Product-bug instructions require evidence for each reported symptom, including cross-project PR routing and existing saved links/snapshots. Review also checked snapshot plumbing, diagnostics and obsolete mobile controller removals: these did not remove persisted orchestration event types. Retry limits remain unchanged pending genuine unattended observations."
+[[patch.decision]]
+id = "feature-push-integrated-base"
+date = "2026-09-19"
+decided = "separate-feature-release-from-upstream-migration"
+rationale = "Feature publication releases reviewed integrated source; selecting the newest upstream nightly caused redundant migrations and repair dispatches. The exact-base tag selector and successful main-push CI evidence preserve ancestry without another replay."
+standing_policy = "Only upstream synchronization selects a new upstream source. Feature pushes use the unique nightly tag at the current stack base, or fail/skip explicitly; immutable leases and atomic publication remain required."
+[[patch.decision]]
+id = "queued-main-writer-start-binding"
+date = "2026-07-30"
+decided = "fail-stale-queued-checkouts"
+issue = "brad/t3code-fork#2 comment 2757"
+rationale = "A queued workflow may check out an older event SHA after another writer advances remote main. Bind every automatic writer's lease to its checked-out starting HEAD and fail before replay rather than adopting a newer remote lease."
+standing_policy = "Never renew an automatic main writer's starting lease from the remote."
+[[patch.decision]]
+id = "nightly-net-source-change"
+date = "2026-09-05"
+decided = "narrow"
+rationale = "Gate fork-only nightlies on the exact push-before and push-after packaged-source trees, not replayed commit history. Unknown history and manual dispatch retain the release path. Atomic main/tag publication removes the old 30-second visibility delay."
+
+[[patch.decision]]
+id = "mechanical-replay-and-reliability-measurement"
+date = "2026-09-09"
+decided = "narrow"
+rationale = "Remove generated lockfile content from replay input and regenerate at the full tip; move fork task routes into an additive index. Measure per-target delivery, intervention and conflict exposure from retained evidence instead of inferring success from healthy polling."
+[[patch.decision]]
+id = "upstream-maintained-fork-automation"
+date = "2026-09-16"
+decided = "retain"
+rationale = "Upstream does not provide the fork's concern-driven StGit replay, leased atomic publication, immutable snapshots, conflict handoff, fork reliability measurement, or agent maintenance policy. The shared Git fixture is omitted here after relocation to release publication."
+
+[[patch.decision]]
+id = "stgit-conflict-exit-status"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Normalize replay failures that leave unmerged files to the driver's stable semantic-conflict status while preserving StGit's raw status for non-conflict failures; StGit 2.6.1 reports merge conflicts with exit 3 rather than the earlier exit 1."
