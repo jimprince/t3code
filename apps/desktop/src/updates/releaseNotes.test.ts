@@ -3,7 +3,10 @@ import { describe, expect, it } from "vite-plus/test";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 
 describe("normalizeDesktopUpdateReleaseNotes", () => {
-  it("shows the newest changes and counts all real changes", () => {
+  // Release note bodies are authored most-important-first (see the comment on
+  // extractReleaseNoteItems), so the popup keeps the leading items and counts
+  // everything else instead of reversing the list.
+  it("keeps the leading changes in note order and counts all real changes", () => {
     const result = normalizeDesktopUpdateReleaseNotes(
       [
         "- feat: first change",
@@ -28,16 +31,68 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
         {
           version: "0.0.36-nightly.20260828.1213",
           items: [
-            "fix(opencode): handle child approvals, stops, and model catalogs by @human in #8480",
-            "fix(web): keep long task drawers usable on small screens by @human in #8313",
-            "fix: eighth change",
-            "fix: seventh change",
-            "fix: sixth change",
-            "fix: fifth change",
-            "fix: fourth change",
+            "feat: first change",
+            "fix: second change",
             "fix: third change",
+            "fix: fourth change",
+            "fix: fifth change",
+            "fix: sixth change",
+            "fix: seventh change",
+            "fix: eighth change",
           ],
           totalItems: 10,
+        },
+      ],
+      omittedReleaseCount: 0,
+    });
+  });
+
+  it("truncates to the leading, highest-priority items instead of the trailing ones", () => {
+    const bullets = Array.from({ length: 10 }, (_, index) => `- Feature ${index + 1}`);
+    const result = normalizeDesktopUpdateReleaseNotes(bullets.join("\n"), "1.0.0");
+
+    expect(result.releaseNotes).toEqual([
+      {
+        version: "1.0.0",
+        items: Array.from({ length: 8 }, (_, index) => `Feature ${index + 1}`),
+        totalItems: 10,
+      },
+    ]);
+  });
+
+  it("filters compare links and the '+N more' summary line while preserving note order", () => {
+    const result = normalizeDesktopUpdateReleaseNotes(
+      [
+        "## Fork changes",
+        "",
+        "### Features",
+        "",
+        "- Create and check out Gitea pull requests",
+        "- Configure Gitea instances and branch PR badges",
+        "",
+        "## Compare: upstream v1 -> v2",
+        "- feat: upstream change 2",
+        "- feat: upstream change 1",
+        "- +3 more upstream changes",
+        "",
+        "[Upstream compare](https://github.com/pingdotgg/t3code/compare/v1...v2)",
+        "",
+        "Full Changelog: https://github.com/jimprince/t3code/compare/v1-fork.1...v2-fork.1",
+      ].join("\n"),
+      "0.0.40-fork.1",
+    );
+
+    expect(result).toEqual({
+      releaseNotes: [
+        {
+          version: "0.0.40-fork.1",
+          items: [
+            "Create and check out Gitea pull requests",
+            "Configure Gitea instances and branch PR badges",
+            "feat: upstream change 2",
+            "feat: upstream change 1",
+          ],
+          totalItems: 4,
         },
       ],
       omittedReleaseCount: 0,
@@ -53,7 +108,7 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
     );
 
     expect(result).toEqual({
-      releaseNotes: [{ version: "1.2.3", items: ["Newer fix", "Older fix"], totalItems: 2 }],
+      releaseNotes: [{ version: "1.2.3", items: ["Older fix", "Newer fix"], totalItems: 2 }],
       omittedReleaseCount: 0,
     });
   });
@@ -72,8 +127,8 @@ describe("normalizeDesktopUpdateReleaseNotes", () => {
     );
 
     expect(result.releaseNotes).toEqual([
-      { version: "1.2.4", items: changes.toReversed(), totalItems: 8 },
-      { version: "1.2.3", items: changes.toReversed(), totalItems: 8 },
+      { version: "1.2.4", items: changes, totalItems: 8 },
+      { version: "1.2.3", items: changes, totalItems: 8 },
     ]);
   });
 
