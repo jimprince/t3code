@@ -1,0 +1,4 @@
+id = "gitea-linked-pr-refresh"
+category = "fix"
+functionality = "pull requests"
+text = "Open linked Gitea pull requests at the correct URL and refresh saved links to their current status."
