@@ -6861,7 +6861,7 @@ export default function ChatView(props: ChatViewProps) {
               messageId: messageIdForSend,
               role: "user",
               text: outgoingMessageText,
-                : {}),
+              attachments: turnAttachmentsResult.value,
             },
             modelSelection: ctxSelectedModelSelection,
             titleSeed: title,
