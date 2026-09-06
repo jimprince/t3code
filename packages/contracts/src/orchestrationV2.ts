@@ -2771,6 +2771,7 @@ export const OrchestrationV2Command = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("thread.pull-request-link.sync"),
+    url: Schema.optional(TrimmedNonEmptyString),
     commandId: CommandId,
     threadId: ThreadId,
     ...ThreadPullRequestKey.fields,
