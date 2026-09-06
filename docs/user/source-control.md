@@ -50,6 +50,10 @@ If you have multiple `tea` accounts on one server, select one with
 `tea login default <login-name>`. Git push and clone also need Git credentials or an SSH key
 for that server.
 
+Configured Gitea instances can also use HTTP access without a CLI. Open **Settings → Source Control**,
+add the public web URL and access token, and set a separate API URL or SSH aliases when needed.
+The token stays on the environment server; Git clone and push still use Git credentials.
+
 ### GitLab
 
 Install [GitLab CLI](https://gitlab.com/gitlab-org/cli), then sign in:
