@@ -1,6 +1,0 @@
-Bottom: b0d8416740efc6a77bccf32ea0429c7a685bfe49
-Top:    286d7f889021e1e1bbe6341e47984248ec5c9a57
-Author: User <user@example.com>
-Date:   2026-09-05 20:59:59 -0600
-
-chore(fork): automate StGit stack maintenance and upstream replay
