@@ -15,6 +15,7 @@ describe("verify-stgit-replay", () => {
       try {
         repo.writeFile("scripts/ci/check-stgit-stack", "#!/usr/bin/env bash\nexit 0\n");
         repo.writeFile("scripts/ci/check-fork-docs.ts", "process.exit(0);\n");
+        repo.writeFile("scripts/ci/check-fork-release-notes.ts", "process.exit(0);\n");
         repo.writeFile(
           "bin/vp",
           `#!/usr/bin/env bash
