@@ -128,6 +128,7 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
+import { ThreadTransferLive } from "./orchestration/Layers/ThreadTransfer.ts";
 import {
   clearPersistedServerRuntimeState,
   makePersistedServerRuntimeState,
@@ -458,7 +459,18 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
   Layer.provideMerge(ProviderAuthServiceLive),
   // Core Services
   Layer.provideMerge(ServerSettingsLayerLive),
-  Layer.provideMerge(CheckpointingLayerLive),
+  // Thread moves need the provider runtime repository (private to the
+  // provider session directory elsewhere) and a raw VcsProcess for git
+  // bundle/fetch/apply; everything else resolves from the merges below.
+  Layer.provideMerge(
+    Layer.mergeAll(
+      ThreadTransferLive.pipe(
+        Layer.provide(VcsProcess.layer),
+        Layer.provide(ProviderSessionRuntime.layer),
+      ),
+      CheckpointingLayerLive,
+    ),
+  ),
   Layer.provideMerge(
     Layer.mergeAll(SourceControlProviderRegistryLayerLive, PullRequestServiceLive),
   ),
