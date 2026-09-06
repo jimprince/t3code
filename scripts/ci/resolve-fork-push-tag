@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+upstream_url="https://github.com/pingdotgg/t3code.git"
+stack_base=""
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --stack-base)
+      stack_base="${2:-}"
+      shift 2
+      ;;
+    --upstream-url)
+      upstream_url="${2:-}"
+      shift 2
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+emit() {
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    printf '%s=%s\n' "$1" "$2" >> "$GITHUB_OUTPUT"
+  fi
+}
+
+# A tag on HEAD or its prepared child means this exact rendered source was
+# already released. Stop before querying upstream so rerunning is harmless.
+existing_release_tags="$($script_dir/list-release-tags-at-head)"
+if [[ -n "$existing_release_tags" ]]; then
+  echo "Main already has release tag(s) at HEAD or its prepared child:"
+  sed 's/^/  /' <<<"$existing_release_tags"
+  emit needed false
+  emit reason already-released
+  exit 0
+fi
+
+if [[ -z "$stack_base" ]]; then
+  stack_context="$($script_dir/check-stgit-stack --format=json)"
+  stack_base="$(node -e '
+    const value = JSON.parse(process.argv[1]);
+    if (value.contract !== "t3code.stgit-stack-context" || value.version !== 1 ||
+        typeof value.base !== "string" || !/^[0-9a-f]{40}$/.test(value.base)) process.exit(1);
+    process.stdout.write(value.base);
+  ' "$stack_context")"
+fi
+
+if [[ ! "$stack_base" =~ ^[0-9a-f]{40}$ ]] ||
+  ! git cat-file -e "${stack_base}^{commit}" 2>/dev/null; then
+  echo "::error::Invalid or unavailable StGit base: $stack_base" >&2
+  exit 1
+fi
+if ! git merge-base --is-ancestor "$stack_base" HEAD; then
+  echo "::error::StGit base $stack_base is not an ancestor of HEAD." >&2
+  exit 1
+fi
+
+# Inspect tag refs only. Unlike the old release query, this never selects or
+# fetches a newer upstream source and never changes the integrated stack.
+remote_tags="$(git ls-remote --tags "$upstream_url" 'refs/tags/v*')"
+matching_tags="$(
+  awk -v base="$stack_base" '$1 == base {
+    ref=$2
+    sub(/^refs\/tags\//, "", ref)
+    sub(/\^\{\}$/, "", ref)
+    print ref
+  }' <<<"$remote_tags" | sort -u
+)"
+nightly_tags="$(
+  printf '%s\n' "$matching_tags" |
+    awk '/^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$/'
+)"
+nightly_count="$(printf '%s\n' "$nightly_tags" | awk 'NF { count++ } END { print count + 0 }')"
+
+if [[ "$nightly_count" -eq 0 ]]; then
+  stable_tags="$(
+    printf '%s\n' "$matching_tags" |
+      awk '/^v[0-9]+\.[0-9]+\.[0-9]+$/'
+  )"
+  stable_count="$(printf '%s\n' "$stable_tags" | awk 'NF { count++ } END { print count + 0 }')"
+  if [[ "$stable_count" -eq 1 ]]; then
+    echo "Stack base $stack_base is upstream stable $stable_tags; fork-push nightly is not applicable."
+    emit needed false
+    emit reason stable-base
+    emit stack_base "$stack_base"
+    exit 0
+  fi
+  echo "::error::StGit base $stack_base does not resolve to one upstream nightly tag." >&2
+  exit 1
+fi
+if [[ "$nightly_count" -ne 1 ]]; then
+  echo "::error::StGit base $stack_base resolves to multiple upstream nightly tags:" >&2
+  sed 's/^/::error::  /' <<<"$nightly_tags" >&2
+  exit 1
+fi
+
+upstream_tag="$nightly_tags"
+last_number="$(
+  git tag --list "${upstream_tag}-fork.*" |
+    awk -F '-fork\\.' 'NF == 2 && $2 ~ /^[0-9]+$/ { print $2 }' |
+    sort -n | tail -n 1
+)"
+if [[ -z "$last_number" ]]; then
+  next_n=1
+else
+  next_n=$((last_number + 1))
+fi
+
+new_tag="${upstream_tag}-fork.${next_n}"
+echo "Fork push will release integrated base $stack_base as $new_tag."
+emit needed true
+emit reason release
+emit tag "$new_tag"
+emit upstream_tag "$upstream_tag"
+emit stack_base "$stack_base"
