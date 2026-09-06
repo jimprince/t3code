@@ -96,6 +96,11 @@ import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../termina
 import { isMacPlatform } from "~/lib/utils";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { releaseComposerDraftUploads } from "../lib/composerDraftUploads";
+import {
+  buildThreadMoveFailureReport,
+  moveThreadToEnvironment,
+  type ThreadMovePhase,
+} from "../lib/threadMove";
 import { readLocalApi } from "../localApi";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
 import {
@@ -126,6 +131,7 @@ import {
 import { environmentServerConfigsAtom, primaryServerKeybindingsAtom } from "../state/server";
 import { vcsEnvironment } from "../state/vcs";
 import { threadEnvironment } from "../state/threads";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { useEnvironmentQuery } from "../state/query";
 import { useAtomCommand } from "../state/use-atom-command";
 import {
@@ -1900,6 +1906,12 @@ export default function Sidebar() {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const exportThreadForMove = useAtomCommand(orchestrationEnvironment.exportThread, {
+    reportFailure: false,
+  });
+  const importThreadForMove = useAtomCommand(orchestrationEnvironment.importThread, {
+    reportFailure: false,
+  });
   const { copyToClipboard: copyPathToClipboard } = useCopyToClipboard<{ path: string }>({
     onCopy: ({ path }) => {
       toastManager.add({
@@ -3304,6 +3316,16 @@ export default function Sidebar() {
           thread.worktreePath ??
           projectCwdByKey.get(`${thread.environmentId}:${thread.projectId}`) ??
           null;
+        const projectGroup = projectGroupsRef.current.find((group) =>
+          group.memberProjects.some(
+            (member) =>
+              member.environmentId === thread.environmentId && member.id === thread.projectId,
+          ),
+        );
+        const moveTargets =
+          projectGroup?.memberProjects.filter(
+            (member) => member.environmentId !== thread.environmentId,
+          ) ?? [];
         // Un-settle pins the thread active until real activity clears the pin.
         // Environments without
         // the settlement capability get no lifecycle items at all.
@@ -3334,6 +3356,7 @@ export default function Sidebar() {
               isRegeneratingTitle,
               isRunning:
                 thread.session?.status === "running" && thread.session.activeTurnId != null,
+              canMoveToMachine: moveTargets.length > 0,
               supports: {
                 settlement: supportsSettlement,
                 snooze: supportsSnooze,
@@ -3355,13 +3378,6 @@ export default function Sidebar() {
         }
         switch (clicked.value) {
           case "project-settings": {
-            const projectGroup = projectGroupsRef.current.find((group) =>
-              group.memberProjectRefs.some(
-                (projectRef) =>
-                  projectRef.environmentId === thread.environmentId &&
-                  projectRef.projectId === thread.projectId,
-              ),
-            );
             if (projectGroup) openProjectSettings(projectGroup);
             return;
           }
@@ -3448,6 +3464,134 @@ export default function Sidebar() {
           case "copy-thread-id":
             copyThreadIdToClipboard(thread.id, { threadId: thread.id });
             return;
+          case "move-to-machine": {
+            const targetChoice =
+              moveTargets.length === 1
+                ? { _tag: "Success" as const, value: moveTargets[0]!.physicalProjectKey }
+                : await settlePromise(() =>
+                    api.contextMenu.show(
+                      moveTargets.map((member) => ({
+                        id: member.physicalProjectKey,
+                        label: member.environmentLabel ?? member.workspaceRoot,
+                      })),
+                      position,
+                    ),
+                  );
+            if (targetChoice._tag === "Failure") return;
+            const targetMember = moveTargets.find(
+              (member) => member.physicalProjectKey === targetChoice.value,
+            );
+            if (!targetMember) return;
+
+            const targetLabel = targetMember.environmentLabel ?? targetMember.workspaceRoot;
+            const confirmLines = [`Move thread "${thread.title}" to ${targetLabel}?`];
+            if (thread.session?.status === "running") {
+              confirmLines.push("The active turn will be interrupted before the move.");
+            }
+            const confirmed = await settlePromise(() => api.dialogs.confirm(confirmLines.join("\n")));
+            if (confirmed._tag === "Failure" || !confirmed.value) return;
+
+            const progressToastId = toastManager.add({
+              type: "loading",
+              title: "Moving thread…",
+              description: "Exporting from the source machine",
+              timeout: 0,
+            });
+            let movePhase: ThreadMovePhase | "preparing" = "preparing";
+            try {
+              const moved = await moveThreadToEnvironment({
+                source: threadRef,
+                target: {
+                  environmentId: targetMember.environmentId,
+                  projectId: targetMember.id,
+                },
+                exportThread: async (request) => {
+                  const result = await exportThreadForMove({
+                    environmentId: threadRef.environmentId,
+                    input: request,
+                  });
+                  if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+                  return result.value;
+                },
+                importThread: async (request) => {
+                  const result = await importThreadForMove({
+                    environmentId: targetMember.environmentId,
+                    input: request,
+                  });
+                  if (result._tag === "Failure") throw squashAtomCommandFailure(result);
+                  return result.value;
+                },
+                confirmBranchFallback: async (branch) => {
+                  const result = await settlePromise(() =>
+                    api.dialogs.confirm(
+                      [
+                        `Branch "${branch}" already exists on ${targetLabel}.`,
+                        "Create a new worktree on a fallback branch and continue the thread there instead?",
+                        "The existing branch on the target machine is left untouched.",
+                      ].join("\n"),
+                    ),
+                  );
+                  return result._tag === "Success" && result.value;
+                },
+                onProgress: (phase) => {
+                  movePhase = phase;
+                  toastManager.update(progressToastId, {
+                    type: "loading",
+                    title: "Moving thread…",
+                    description:
+                      phase === "importing"
+                        ? `Importing on ${targetLabel}`
+                        : "Exporting from the source machine",
+                  });
+                },
+              });
+
+              const archiveResult = await archiveThread(threadRef);
+              const followUpNotes = [
+                ...moved.warnings,
+                ...(archiveResult._tag === "Failure"
+                  ? ["The source copy could not be archived; archive it manually."]
+                  : []),
+              ];
+              toastManager.update(
+                progressToastId,
+                stackedThreadToast({
+                  type: followUpNotes.length > 0 ? "warning" : "success",
+                  title: "Thread moved",
+                  description:
+                    followUpNotes.length > 0
+                      ? followUpNotes.join("\n")
+                      : `"${thread.title}" now runs on ${targetLabel}.`,
+                  timeout: followUpNotes.length > 0 ? 0 : 8000,
+                }),
+              );
+            } catch (error) {
+              toastManager.update(
+                progressToastId,
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to move thread",
+                  description: buildThreadMoveFailureReport({
+                    error,
+                    threadTitle: thread.title,
+                    source: threadRef,
+                    sourceLabel:
+                      projectGroup?.memberProjects.find(
+                        (member) => member.environmentId === thread.environmentId,
+                      )?.environmentLabel ?? null,
+                    target: {
+                      environmentId: targetMember.environmentId,
+                      projectId: targetMember.id,
+                    },
+                    targetLabel,
+                    phase: movePhase,
+                  }),
+                  timeout: 0,
+                }),
+              );
+            }
+            return;
+          }
           case "archive": {
             if (confirmThreadArchive) {
               const confirmed = await settlePromise(() =>
@@ -3522,7 +3666,9 @@ export default function Sidebar() {
       copyPathToClipboard,
       copyThreadIdToClipboard,
       deleteThread,
+      exportThreadForMove,
       handleMultiSelectContextMenu,
+      importThreadForMove,
       markThreadUnread,
       openProjectSettings,
       projectCwdByKey,
