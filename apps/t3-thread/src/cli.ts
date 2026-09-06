@@ -23,12 +23,7 @@ import {
   summarizeMessageText,
 } from "./monitor.js";
 import { classifyThread, formatThreadLine } from "./status.js";
-import {
-  DEFAULT_RECOVERY_WINDOW_DAYS,
-  inspectWorktree,
-  planWorktreeGc,
-  removeWorktree,
-} from "./worktreeGc.js";
+import { DEFAULT_RECOVERY_WINDOW_DAYS, runWorktreeGc } from "./worktreeGc.js";
 import {
   assertNotSelfSubscription,
   buildSubscriptionRecord,
@@ -373,6 +368,7 @@ const worktree = program
 worktree
   .command("gc")
   .requiredOption("--env <name>", "saved environment name")
+  .requiredOption("--local-state-dir <path>", "local T3 state directory containing environment-id")
   .option(
     "--recovery-window-days <days>",
     "keep a worktree for this long after its last thread was archived",
@@ -389,15 +385,14 @@ worktree
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
     const client = new RemoteEnvironmentClient(environment);
-    const plan = await planWorktreeGc({
-      threads: await client.listWorktreeGcThreads(),
-      inspect: inspectWorktree,
+    const descriptor = await client.describe();
+    const plan = await runWorktreeGc({
+      localStateDir: options.localStateDir,
+      environmentId: descriptor.environmentId,
+      listThreads: () => client.listWorktreeGcThreads(),
       recoveryWindowDays,
+      execute: Boolean(options.execute),
     });
-
-    const removals = options.execute
-      ? await Promise.all(plan.removable.map((candidate) => removeWorktree(candidate.path)))
-      : [];
 
     printJson({
       environment: environment.name,
@@ -405,7 +400,7 @@ worktree
       executed: Boolean(options.execute),
       removable: plan.removable,
       retained: plan.retained,
-      removals,
+      removals: plan.removals,
     });
   });
 

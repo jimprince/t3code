@@ -167,6 +167,50 @@ export async function planWorktreeGc(input: {
   return { removable, retained };
 }
 
+/** Bind local filesystem work to the selected environment and refresh each deletion decision. */
+export async function runWorktreeGc(input: {
+  readonly localStateDir: string;
+  readonly environmentId: string;
+  readonly listThreads: () => Promise<ReadonlyArray<WorktreeGcThread>>;
+  readonly execute: boolean;
+  readonly recoveryWindowDays?: number;
+  readonly now?: Date;
+  readonly inspect?: WorktreeInspector;
+  readonly remove?: (path: string) => Promise<WorktreeRemoval>;
+}): Promise<WorktreeGcPlan & { readonly removals: ReadonlyArray<WorktreeRemoval> }> {
+  const localId = (
+    await NodeFSP.readFile(NodePath.join(input.localStateDir, "environment-id"), "utf8")
+  ).trim();
+  if (!localId || localId !== input.environmentId) {
+    throw new Error(
+      "The selected environment does not match this local T3 state directory. Run cleanup on the environment's host with its real state directory.",
+    );
+  }
+  const inspect = input.inspect ?? inspectWorktree;
+  const remove = input.remove ?? removeWorktree;
+  const plan = await planWorktreeGc({ ...input, threads: await input.listThreads(), inspect });
+  const removals: WorktreeRemoval[] = [];
+  if (input.execute) {
+    for (const candidate of plan.removable) {
+      const fresh = await planWorktreeGc({ ...input, threads: await input.listThreads(), inspect });
+      if (!fresh.removable.some((entry) => entry.path === candidate.path)) {
+        const retained = fresh.retained.find((entry) => entry.path === candidate.path);
+        removals.push({
+          path: candidate.path,
+          removed: false,
+          error:
+            retained?.detail ??
+            retained?.reason ??
+            "Worktree is no longer an eligible archived-thread checkout.",
+        });
+        continue;
+      }
+      removals.push(await remove(candidate.path));
+    }
+  }
+  return { ...plan, removals };
+}
+
 interface GitResult {
   readonly status: number;
   readonly stdout: string;
