@@ -365,7 +365,7 @@ purpose = "Maintain fork mobile identity, EAS routing, widget identifiers, runti
 retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-build-ci-compat"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-mobile-delivery. [fork-mobile-delivery] Keep mobile configuration as an overlay; replacing upstream's config can silently drop new native plugins."
+note = "Removed the retired mobile-track controller, resolver and service template after caller checks (including no installed controller or container on the dev VM). Mobile project grouping/sorting is owned by project selection."
 
 [[patch]]
 name = "fork-release-publication"
