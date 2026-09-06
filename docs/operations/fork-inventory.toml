@@ -155,3 +155,18 @@ retire_when = "Upstream ships equivalent cross-environment thread moves."
 depends_on = ["fork-thread-client-recovery", "fork-conversation-fork", "fork-general-chat"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-thread-transfer. Turn starts inspect the import marker without hydrating ordinary thread history; transferred threads retain context handoff."
+
+[[patch]]
+name = "fork-thread-history-compatibility"
+subject = "fix(threads): preserve historical goal data without goal automation"
+class = "divergence"
+purpose = "Keep existing thread snapshots, event replay and transferred history readable after retiring fork features; migrate legacy sidebar ordering events once to upstream metadata events. No goal creation, evaluation or automatic continuation remains."
+retire_when = "Support for databases and transferred histories containing legacy goal records has explicitly ended or those records have been losslessly migrated."
+depends_on = ["fork-thread-client-recovery", "fork-thread-transfer"]
+roles = []
+note = "Brad approved removing goals on 2026-09-05. Retain historical goal schema, projection and import compatibility; numbered migrations remain in the migration ledger. Migration 5 converts sidebar-reordered/orderKey to meta-updated/activeOrderKey transactionally without changing event identity or sequence. ID 4 remains reserved for the previously shipped sidebar-order column migration. Thread transfer bundles contain snapshots, not raw ordering events."
+[[patch.decision]]
+id = "gitmanager-faketextgeneration"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream replaced the duplicate hand-written interface with TextGeneration['Service']; keep the upstream type alias and do not restore the redundant interface."
