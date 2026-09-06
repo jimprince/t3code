@@ -1,0 +1,34 @@
+# Fork Patch Inventory — schema version 2
+#
+# This ordered registry is part of the stack interface. Every applied StGit
+# patch has exactly one entry, in stack.json.applied order. A patch owns its
+# implementation, tests, applicable documentation, and this stanza. Paths may
+# overlap; coherent purpose, not exclusive files, determines ownership.
+#
+# STANZA POSITION MATTERS: [[patch]] blocks must appear in exactly the same
+# order as stack.json.applied, so a NEW patch created at the top of the stack
+# adds its stanza at the END of this file — not next to thematically related
+# entries. scripts/ci/check-stgit-stack fails the stack otherwise.
+#
+# class: product | divergence | upstream-bound
+
+schema = 2
+fork = "jimprince/t3code"
+upstream = "pingdotgg/t3code"
+
+[[patch]]
+# Upstream1286 Knip: declare shell/Expo entries and complete vendored CLI contracts.
+# Remove the obsolete Electron installer and redundant plugin-local Effect TSGo dependency.
+name = "fork-build-ci-compat"
+subject = "build(fork): support fork workspace, runners, and CI budgets"
+class = "product"
+purpose = "Configure the fork workspace, dependency graph, lockfile, available CI runners, and the targeted test budgets its additive applications need."
+retire_when = "Upstream or maintained shared tooling provides equivalent workspace, runner, and test-budget support, or the fork intentionally stops requiring this concern."
+depends_on = []
+roles = ["lockfile-owner"]
+note = "Reorganized 2026-09-06 from fork-build-workspace-tooling, fork-ci-runner-compat, fork-web-image-timeout. [fork-build-workspace-tooling] pnpm-lock.yaml is generated: take upstream's lockfile during a conflict, then regenerate it AT THE STACK TIP and copy it back into this patch. Regenerating while only the early patches are applied omits workspaces that later patches add (apps/t3-thread), which then fails --frozen-lockfile in CI."
+[[patch.decision]]
+id = "stashimagecompression-timeout"
+date = "2026-07-29"
+decided = "adapt"
+rationale = "The too-large boundary test repeatedly exceeded the default timeout under parallel hosted CI while passing in isolation. Accept the one-line upstream-file edit until the test becomes reliably faster."
