@@ -224,6 +224,7 @@ export interface ProjectionSnapshotQueryShape {
     Option.Option<{
       readonly message: OrchestrationMessage;
       readonly hasOtherUserMessages: boolean;
+      readonly hasTransferredHistory: boolean;
     }>,
     ProjectionRepositoryError
   >;
