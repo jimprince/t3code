@@ -369,3 +369,37 @@ id = "sidebar-project-header-styling"
 date = "2026-07-28"
 decided = "adapt"
 rationale = "The fork owns the General Chat structure (hideProjectHeader wrapper and chat affordance); upstream owns the design system. Preserve the structural additions while taking upstream styling."
+
+[[patch]]
+name = "fork-conversation-fork"
+subject = "feat(threads): fork a conversation from a selected message"
+class = "product"
+purpose = "Branch a conversation from a selected message with retained checkpoints: the boundary logic, orchestration command and RPC, provider-native fork support, and the web message menu."
+retire_when = "Upstream ships equivalent end-to-end conversation forking."
+depends_on = ["fork-provider-turn-safety", "fork-thread-client-recovery"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-thread-fork."
+
+[[patch.decision]]
+id = "upstream2237-thread-revert-boundary"
+date = "2026-09-25"
+decided = "relocate"
+rationale = "Codex 0.156 removed the count-based thread/rollback endpoint; history is replaced at a turn boundary through thread/revert. The fork's provider fork already resolves the retained turn by id, so it now names the first turn to drop instead of a count, and keeps the retained count it computed rather than re-reading the trimmed thread."
+
+[[patch.decision]]
+id = "upstream-chat-route-layout"
+date = "2026-09-16"
+decided = "relocate"
+rationale = "Upstream now renders both draft and server thread routes through the shared ThreadRouteView so draft promotion preserves one ChatView instance. Keep the leaf route inert and relocate the fork's unknown-environment redirect into ThreadRouteView."
+
+[[patch.decision]]
+id = "upstream-worktree-and-queue-state"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Treat conversation forking as one additional working state alongside upstream's persisted worktree setup state, and retain upstream's queued-message restoration before the fork action callback."
+
+[[patch.decision]]
+id = "claude-upstream-turn-start-boundaries"
+date = "2026-09-16"
+decided = "narrow"
+rationale = "Upstream replaced the fork's bounded assistant-boundary map with durable native turn-start ids. Keep exact native Claude forks at the current retained tip, use those upstream ids in the resume cursor, and fall back to transcript handoff for older selected turns rather than guessing an assistant anchor across compaction or interrupted turns."
