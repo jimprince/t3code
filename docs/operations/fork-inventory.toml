@@ -250,7 +250,7 @@ purpose = "TEMPORARY structural holder for the duplicate non-image chat attachme
 retire_when = "Scheduled: remove after the structural reorganization lands, retaining historical-message and older-client compatibility."
 depends_on = ["fork-provider-turn-safety", "fork-thread-transfer", "fork-resource-recovery", "fork-workspace-file-uploads"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-chat-file-attachments. [fork-chat-file-attachments] fileAttachments remains a parallel optional message field carrying fork-only ChatFileHandoffAttachment values with server paths. Upstream now also has a distinct pathless ChatFileAttachment member in ChatAttachment; do not merge the two wire shapes."
+note = "Current clients use upstream file uploads and composer display once. Legacy file handoff decoding, old-client upload handling and persisted-message rendering remain for compatibility."
 [[patch.decision]]
 id = "upstream-chat-file-attachment-name"
 date = "2026-08-28"

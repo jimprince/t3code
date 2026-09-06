@@ -251,7 +251,9 @@ export type ChatAttachment = typeof ChatAttachment.Type;
 const UploadChatAttachment = Schema.Union([UploadChatImageAttachment]);
 export type UploadChatAttachment = typeof UploadChatAttachment.Type;
 
-// Fork path handoffs ride a parallel optional `fileAttachments` field. They
+// Legacy fork clients used a parallel optional `fileAttachments` field. Current
+// clients use upstream attachments. Keep this shape for old clients and persisted
+// events until those compatibility requirements can be retired. These handoffs
 // remain distinct from upstream's pathless ChatFileAttachment union member so
 // older clients can ignore the parallel field and never receive server paths
 // through the shared attachment union.

@@ -1,8 +1,8 @@
 // @effect-diagnostics nodeBuiltinImport:off
 /**
- * fileAttachmentStore - tmp-dir store for chat file attachments.
- *
- * Non-image files dropped on the chat composer are decoded here and written
+ * Compatibility store for older fork clients using `message.fileAttachments`.
+ * Current clients use upstream attachment uploads; keep this decoder only
+ * while older paired clients still send the legacy field. Those files are written
  * under the OS tmp dir; the thread receives the absolute path (see
  * fileAttachmentPrompt.ts) instead of inline bytes. One directory per
  * attachment id keeps original file names collision-free.
