@@ -16,11 +16,13 @@
       // Knip loads its preprocessor by CLI option; shell wrappers launch the CI scripts.
       "entry": [
         "knip-schemas.ts",
+        "smoke-desktop-history.ts",
         "ci/check-stgit-candidate.ts",
         "ci/check-stgit-stack.ts",
         "ci/create-stgit-candidate-manifest.ts",
         "ci/deploy-stgit-concern.ts",
         "ci/prepare-stgit-agent-worktree.ts",
+        "ci/render-fork-release-notes.ts",
       ],
     },
     "apps/server": {
