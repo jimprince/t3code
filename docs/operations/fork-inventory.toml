@@ -38,3 +38,13 @@ id = "editor-worker-test-animation-cleanup"
 date = "2026-09-09"
 decided = "adapt"
 rationale = "Upstream1439 language-readiness tests can leave a worker state broadcast queued after animation globals are removed. Track and cancel remaining callbacks after worker/highlighter teardown; retire this edit when upstream owns equivalent cleanup."
+
+[[patch]]
+name = "fork-worker-operations"
+subject = "feat(fork): operate worker threads from the t3-thread CLI"
+class = "product"
+purpose = "Provide the additive t3-thread operator CLI with pairing, persistent worker identity injected into provider processes, creation, continuation, results, and monitoring."
+retire_when = "Upstream or maintained shared tooling provides an equivalent scriptable worker interface, or the fork intentionally stops requiring this concern."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
