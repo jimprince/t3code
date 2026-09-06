@@ -33,8 +33,8 @@ cache holds at most 256 entries. Changed tips or tokens bypass cached absence; e
 and incomplete scans are never cached. A branch whose tip cannot be resolved is
 read directly. This bounds repeated absent-branch polling without a page cutoff
 that would silently lose older PRs. Merged
-is determined from `merged`, independently of `state=closed`. `html_url` and
-`updated_at` are preserved. Authentication discovery uses `GET /api/v1/user`.
+is determined from `merged`, independently of `state=closed`. Public URLs use the configured web origin;
+`updated_at` is preserved. Authentication discovery uses `GET /api/v1/user`.
 No undocumented head-filter endpoint, CLI, or redirect following is required.
 HTTP errors include only the status, not headers or response bodies.
 
