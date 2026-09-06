@@ -1,0 +1,6 @@
+Bottom: 0c583232865ed7c878a37e54ac5cdd987c2883b7
+Top:    0c583232865ed7c878a37e54ac5cdd987c2883b7
+Author: User <user@example.com>
+Date:   2026-09-05 21:01:27 -0600
+
+feat(goals): carry thread goals pending removal
