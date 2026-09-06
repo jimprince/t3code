@@ -129,6 +129,7 @@ export function pullRequestCheckoutCommand(
       }
       return `git clone --single-branch --branch ${headBranch} https://bitbucket.org/${headRepositoryNameWithOwner}.git t3code-pr-${number}`;
     }
+    case "gitea":
     case "unknown":
       return null;
   }
