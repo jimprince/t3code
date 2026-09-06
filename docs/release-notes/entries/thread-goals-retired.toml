@@ -1,0 +1,4 @@
+id = "thread-goals-retired"
+category = "removal"
+functionality = "thread goals"
+text = "Removed thread goals and automatic goal continuation. Existing conversation history remains readable."
