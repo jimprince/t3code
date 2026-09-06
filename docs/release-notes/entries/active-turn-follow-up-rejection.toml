@@ -1,0 +1,4 @@
+id = "active-turn-follow-up-rejection"
+category = "fix"
+functionality = "thread status"
+text = "Rejected follow-up messages no longer mark a still-running provider turn as failed."
