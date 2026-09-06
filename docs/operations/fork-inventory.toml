@@ -559,3 +559,23 @@ id = "upstream-pr-conflict-glyph"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Keep bulk-selection checkboxes outside the clickable PR row while preserving upstream's separate lifecycle and conflict glyphs, responsive metadata, and row visibility containment."
+
+[[patch]]
+name = "fork-unsupported-pr-hosts"
+subject = "fix(server): skip PR status lookups for unsupported hosts"
+class = "upstream-bound"
+purpose = "Stop pull request status polling from repeatedly asking, and repeatedly warning about, a remote whose host has no implemented provider."
+retire_when = "Upstream skips change request lookups for remotes with no registered provider instead of retrying the guaranteed failure."
+depends_on = []
+roles = []
+note = "Unsupported provider results share the ordinary PR cache with a ten-minute TTL. Explicit status refresh and configured-provider routing changes invalidate the result; missing-PR refreshes do not repeat unsupported probes. Provider resolution occurs once per lookup. Reorganized 2026-09-06 from fork-pr-status-unsupported-hosts."
+[[patch.decision]]
+id = "upstream-provider-link-resolution"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Keep the unsupported-host registry seam while preserving upstream's resolveLink delegation in the default test registry."
+[[patch.decision]]
+id = "future-gitea-routing-key"
+date = "2026-09-16"
+decided = "relocate"
+rationale = "Keep the unsupported-host cache self-contained with cwd and epoch keys. The later Gitea connections patch owns routing-key invalidation and can adapt the shared PR cache coherently."
