@@ -2,6 +2,7 @@ import {
   ApprovalRequestId,
   DEFAULT_MODEL,
   EventId,
+  type EnvironmentId,
   ProviderDriverKind,
   ProviderItemId,
   type ProviderInstanceId,
@@ -169,6 +170,10 @@ type CodexThreadItem =
 
 export interface CodexSessionRuntimeOptions {
   readonly threadId: ThreadId;
+  readonly t3Environment?: {
+    readonly id: EnvironmentId;
+    readonly name: string;
+  };
   readonly providerInstanceId?: ProviderInstanceId;
   readonly binaryPath: string;
   readonly homePath?: string;
@@ -699,6 +704,23 @@ const CodexThreadResumeMetadata = Schema.Struct({
 });
 const decodeCodexThreadResumeMetadata = Schema.decodeUnknownEffect(CodexThreadResumeMetadata);
 
+export function buildCodexChildEnv(input: {
+  readonly threadId: ThreadId;
+  readonly environmentId?: EnvironmentId;
+  readonly environmentName?: string;
+  readonly environment?: NodeJS.ProcessEnv;
+  readonly homePath?: string;
+}): NodeJS.ProcessEnv {
+  return {
+    ...withT3ThreadIdentityEnv(input.environment ?? process.env, {
+      threadId: input.threadId,
+      ...(input.environmentId ? { environmentId: input.environmentId } : {}),
+      ...(input.environmentName ? { environmentName: input.environmentName } : {}),
+    }),
+    ...(input.homePath ? { CODEX_HOME: input.homePath } : {}),
+  };
+}
+
 interface CodexThreadOpenClient {
   readonly raw: {
     readonly request: (
@@ -1220,10 +1242,17 @@ export const makeCodexSessionRuntime = (
     // `child_process.spawn`; `expandHomePath` lets a configured
     // `CODEX_HOME=~/.codex_work` reach codex as an absolute path.
     const resolvedHomePath = options.homePath ? expandHomePath(options.homePath) : undefined;
-    const env = {
-      ...options.environment,
-      ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
-    };
+    const env = buildCodexChildEnv({
+      threadId: options.threadId,
+      ...(options.t3Environment
+        ? {
+            environmentId: options.t3Environment.id,
+            environmentName: options.t3Environment.name,
+          }
+        : {}),
+      ...(options.environment ? { environment: options.environment } : {}),
+      ...(resolvedHomePath ? { homePath: resolvedHomePath } : {}),
+    });
     const extendEnv = options.environment === undefined;
     const appServerArgs = codexSessionAppServerArgs(options.appServerArgs, options.launchArgs);
     const spawnCommand = yield* resolveSpawnCommand(options.binaryPath, appServerArgs, {
