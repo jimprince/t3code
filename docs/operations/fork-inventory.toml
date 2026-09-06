@@ -273,3 +273,18 @@ retire_when = "Upstream ships equivalent authenticated linked-file downloads wit
 depends_on = []
 roles = []
 note = "Reorganized 2026-09-06 from fork-remote-file-downloads."
+
+[[patch]]
+name = "fork-fresh-remote-worktrees"
+subject = "feat(worktrees): base new worktrees on a freshly fetched remote"
+class = "product"
+purpose = "Create T3 worktrees from a freshly fetched selected remote branch, honoring explicit choices and local branch tracking before preferring gitea over origin, with a local opt-out."
+retire_when = "Upstream ships equivalent remote-selection, freshness, and no-local-fallback semantics."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "Fetches any explicitly selected configured remote, including custom and nested names. Local branches use their configured upstream remote and branch; untracked branches prefer gitea then origin. Failed fetches and absent defaults never silently fall back locally."
+[[patch.decision]]
+id = "missing-remote-base-guidance"
+date = "2026-09-09"
+decided = "adapt"
+rationale = "Brad clarified that Socrates uses Gitea while T3Fork uses GitHub. Honor each selected branch's configured upstream before default remote preference, preserve explicit remote choices, and name unresolved remote refs with recovery guidance. No persisted or wire-schema changes."
