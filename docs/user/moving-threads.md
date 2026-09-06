@@ -13,9 +13,9 @@ the target confirms the import, so a failed move never loses the thread.
 
 ## What moves
 
-- **Visible history** — messages, activities, proposed plans, goal, and
-  checkpoint summaries are replayed into the target server's event log under
-  the same thread id.
+- **Visible history** — messages, activities, proposed plans, and checkpoint
+  summaries are replayed into the target server's event log under the same
+  thread id.
 - **Git state** — the thread branch and its `refs/t3/checkpoints/*` refs
   travel as a thin git bundle; a new worktree is created in the target clone,
   and uncommitted tracked changes plus untracked files are restored into it.
