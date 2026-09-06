@@ -1,0 +1,4 @@
+id = "sidebar-filter-only-hint"
+category = "feature"
+functionality = "web sidebar"
+text = "Sidebar project filter rows now say what a click does: \"Only\" shows just that project, and \"Show all\" on the isolated project brings every project back."
