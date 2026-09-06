@@ -26,6 +26,9 @@ import type {
   MessageId,
   ThreadId,
   ProviderTurnStartResult,
+  ModelSelection,
+  RuntimeMode,
+  TurnId,
 } from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import type * as Effect from "effect/Effect";
