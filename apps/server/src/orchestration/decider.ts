@@ -1143,6 +1143,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           role: "user",
           text: command.message.text,
           attachments: command.message.attachments,
+          ...(command.message.fileAttachments !== undefined
+            ? { fileAttachments: command.message.fileAttachments }
+            : {}),
           turnId: null,
           streaming: false,
           createdAt: command.createdAt,
@@ -1845,6 +1848,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             role: message.role,
             text: message.text,
             ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
+            ...(message.fileAttachments !== undefined
+              ? { fileAttachments: message.fileAttachments }
               : {}),
             turnId: message.turnId,
             streaming: false,
