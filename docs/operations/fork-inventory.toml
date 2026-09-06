@@ -311,3 +311,13 @@ retire_when = "Upstream or the t3-thread CLI host binding provides equivalent gu
 depends_on = ["fork-worker-operations"]
 roles = []
 note = "Requires an explicit local state directory whose environment ID matches the selected server before local inspection. Execution rereads lifecycle and Git state before each non-forced removal; the dry run remains non-mutating."
+
+[[patch]]
+name = "fork-gitea-connections"
+subject = "feat(source-control): configure Gitea instances and branch PR badges"
+class = "upstream-bound"
+purpose = "Configure environment-local Gitea hosts and protected tokens, resolve SSH aliases and ports to explicit web/API origins, and show repository-safe branch pull-request badges."
+retire_when = "Upstream supports configured Gitea instances, secret-store tokens, and equivalent branch and repository identity filtering for PR badges."
+depends_on = ["fork-unsupported-pr-hosts"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-gitea-instance-pr-badges. [fork-gitea-instance-pr-badges] PR lookup and unsupported-host cache keys include non-secret Gitea routing configuration, so adding or removing a configured host takes effect without waiting out the negative cache. Tokens never enter these keys. PR head identity is compared with the hosting provider’s selected target remote, including repositories whose sole remote is named gitea; a remote alias alone does not imply a cross-repository PR. Terminal Gitea PRs whose deleted head becomes refs/pull/N/head retain branch identity through head.label, with repository checks preserved."
