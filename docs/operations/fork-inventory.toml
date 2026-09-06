@@ -306,3 +306,13 @@ retire_when = "Upstream or the t3-thread CLI host binding provides equivalent gu
 depends_on = ["fork-worker-operations"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-worktree-gc. [fork-worktree-gc] Removal never passes --force to `git worktree remove`, so git independently refuses a dirty checkout and the branch ref plus its commits survive. Retention checks run before inspection so a checkout with a live thread is never touched. Detached HEAD worktrees are retained because their commits may lack a protecting branch. Fetch archived and active snapshots explicitly: the normal CLI thread listing excludes archived threads."
+
+[[patch]]
+name = "fork-gitea-connections"
+subject = "feat(source-control): configure Gitea instances and branch PR badges"
+class = "upstream-bound"
+purpose = "Configure environment-local Gitea hosts and protected tokens, resolve SSH aliases and ports to explicit web/API origins, and show repository-safe branch pull-request badges."
+retire_when = "Upstream supports configured Gitea instances, secret-store tokens, and equivalent branch and repository identity filtering for PR badges."
+depends_on = ["fork-unsupported-pr-hosts"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-gitea-instance-pr-badges. [fork-gitea-instance-pr-badges] PR lookup and unsupported-host cache keys include non-secret Gitea routing configuration, so adding or removing a configured host takes effect without waiting out the negative cache. Tokens never enter these keys. PR head identity is compared with the hosting provider’s selected target remote, including repositories whose sole remote is named gitea; a remote alias alone does not imply a cross-repository PR. Terminal Gitea PRs whose deleted head becomes refs/pull/N/head retain branch identity through head.label, with repository checks preserved."
