@@ -1,0 +1,4 @@
+id = "sidebar-filter-general-chat"
+category = "fix"
+functionality = "web sidebar"
+text = "The sidebar project filter now includes General chat, clicking a project shows only that project, and its checkboxes always take effect."
