@@ -31,6 +31,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import { isWindowsCommandNotFound } from "../processRunner.ts";
 import { collectStreamAsString } from "./providerSnapshot.ts";
+import { t3ThreadIdentityEnv } from "./t3ThreadIdentityEnv.ts";
 import * as NetService from "@t3tools/shared/Net";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { compareSemverVersions, parseSemver } from "@t3tools/shared/semver";
@@ -221,6 +222,8 @@ export interface OpenCodeRuntimeShape {
     readonly directory: string;
     readonly serverPassword?: string;
     readonly environment?: NodeJS.ProcessEnv;
+    /** Stamps `T3_THREAD_ID` on a locally spawned server. */
+    readonly t3ThreadId?: ThreadId;
     readonly port?: number;
     readonly hostname?: string;
     readonly timeoutMs?: number;
@@ -236,6 +239,12 @@ export interface OpenCodeRuntimeShape {
     readonly serverUrl?: string | null;
     readonly serverPassword?: string;
     readonly environment?: NodeJS.ProcessEnv;
+    /**
+     * Stamps `T3_THREAD_ID` on a locally spawned server. Ignored for an
+     * external `serverUrl`: that process already exists and T3 cannot change
+     * its environment.
+     */
+    readonly t3ThreadId?: ThreadId;
     readonly port?: number;
     readonly hostname?: string;
     readonly timeoutMs?: number;
@@ -676,6 +685,9 @@ const makeOpenCodeRuntime = Effect.gen(function* () {
             shell: spawnCommand.shell,
             env: {
               ...input.environment,
+              ...(input.t3ThreadId === undefined
+                ? {}
+                : t3ThreadIdentityEnv({ threadId: input.t3ThreadId })),
               ...(serverPassword !== undefined ? { OPENCODE_SERVER_PASSWORD: serverPassword } : {}),
               // Respect an OPENCODE_CONFIG_CONTENT provided by the caller or
               // the inherited process environment, only falling back to the
