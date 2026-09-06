@@ -12,6 +12,7 @@ const baseState: ThreadActionMenuState = {
   canSnoozeNow: true,
   isRegeneratingTitle: false,
   isRunning: false,
+  canMoveToMachine: false,
   supports: {
     settlement: true,
     autoSettleOptOut: true,
@@ -80,6 +81,11 @@ describe("buildThreadActionMenuItems", () => {
     expect(items[filterIndex]).toMatchObject({ label: "Show all projects", icon: "folder-tree" });
     expect(items[filterIndex - 1]?.id).toBe("mark-unread");
     expect(items[filterIndex + 1]?.id).toBe("auto-settle");
+  });
+
+  it("offers a machine move only when another environment hosts the project", () => {
+    expect(ids(baseState)).not.toContain("move-to-machine");
+    expect(ids({ ...baseState, canMoveToMachine: true })).toContain("move-to-machine");
   });
 
   it("includes branch items only for threads with a branch", () => {
