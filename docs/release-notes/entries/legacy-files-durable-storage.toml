@@ -1,0 +1,4 @@
+id = "legacy-files-durable-storage"
+category = "fix"
+functionality = "attachments"
+text = "Files uploaded by older clients now survive server restarts and follow normal thread attachment cleanup."
