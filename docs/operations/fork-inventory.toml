@@ -277,3 +277,13 @@ depends_on = ["fork-worker-operations"]
 roles = []
 note = "Fetches any explicitly selected configured remote, including custom and nested names. Bare branch names prefer gitea then origin; failed fetches and absent defaults never silently fall back locally."
 
+[[patch]]
+name = "fork-pr-dismissal"
+subject = "feat(web): dismiss pull requests in bulk"
+class = "product"
+purpose = "Let operators select visible pull requests in bulk, persistently remove them from the local environment view without mutating provider state, and restore removed entries."
+retire_when = "Upstream ships equivalent multi-select dismissal and restoration in the Pull Requests view."
+depends_on = []
+roles = []
+note = "Reorganized 2026-09-06 from fork-web-pr-multiselect."
+
