@@ -1,3 +1,4 @@
+import { supportedPrHost, UNSUPPORTED_PR_HOST_CACHE_TTL } from "./prHostSupportPolicy.ts";
 import * as Arr from "effect/Array";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
@@ -1132,7 +1133,11 @@ export const make = Effect.gen(function* () {
       return Effect.gen(function* () {
         const { headContext, lookup } = yield* resolveLookupHeadContext(cwd, details);
         if (!lookup) {
-          return { latest: null, headContext };
+          return { latest: null, headContext, unsupportedHost: false };
+        }
+        const provider = yield* supportedPrHost(sourceControlProvider(cwd), cwd);
+        if (provider === null) {
+          return { latest: null, headContext, unsupportedHost: true };
         }
         // Only skip when the branch is untracked as well: anything carrying an
         // upstream keeps the old behaviour.
@@ -1141,10 +1146,10 @@ export const make = Effect.gen(function* () {
           details.upstreamRef === null &&
           (yield* isUnpublishedBranch(cwd, headContext))
         ) {
-          return { latest: null, headContext };
+          return { latest: null, headContext, unsupportedHost: false };
         }
-        const latest = yield* findLatestPrForHeadContext(cwd, headContext);
-        return { latest, headContext };
+        const latest = yield* findLatestPrForHeadContext(cwd, headContext, provider);
+        return { latest, headContext, unsupportedHost: false };
       });
     },
     {
@@ -1152,6 +1157,11 @@ export const make = Effect.gen(function* () {
       timeToLive: (exit, key) => {
         if (Exit.isSuccess(exit)) {
           prLookupFailureStreakByKey.delete(key);
+          // An unsupported host has no lookup to retry, so its longer skip
+          // wins over upstream's open/closed distinction.
+          if (exit.value.unsupportedHost) {
+            return UNSUPPORTED_PR_HOST_CACHE_TTL;
+          }
           return exit.value.latest?.state === "open"
             ? PR_LOOKUP_CACHE_TTL
             : PR_LOOKUP_NO_OPEN_PR_CACHE_TTL;
@@ -1237,7 +1247,7 @@ export const make = Effect.gen(function* () {
       const cached = yield* Cache.getOption(prLookupCache, cacheKey).pipe(
         Effect.orElseSucceed(() => Option.none()),
       );
-      if (Option.isSome(cached) && cached.value.latest === null) {
+      if (Option.isSome(cached) && cached.value.latest === null && !cached.value.unsupportedHost) {
         yield* Cache.invalidate(prLookupCache, cacheKey);
       }
     }
@@ -1675,10 +1685,10 @@ export const make = Effect.gen(function* () {
   const findLatestPrForHeadContext = Effect.fn("findLatestPrForHeadContext")(function* (
     cwd: string,
     headContext: BranchHeadContext,
+    provider: Effect.Success<ReturnType<typeof sourceControlProvider>>,
   ) {
     const parsedByNumber = new Map<number, PullRequestInfo>();
 
-    const provider = yield* sourceControlProvider(cwd);
     for (const headSelector of probeableHeadSelectors(provider.kind, headContext.headSelectors)) {
       const pullRequests = yield* provider.listChangeRequests({
         cwd,
