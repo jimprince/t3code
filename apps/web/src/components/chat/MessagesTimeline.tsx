@@ -306,6 +306,7 @@ interface MessagesTimelineProps {
   isWorking: boolean;
   isPreparingWorktree?: boolean;
   isCompacting?: boolean;
+  isThreadDetailLoading?: boolean;
   activeTurnStartedAt: string | null;
   listRef: React.RefObject<LegendListRef | null>;
   timelineEntries: ReturnType<typeof deriveTimelineEntries>;
@@ -362,6 +363,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   isWorking,
   isPreparingWorktree = false,
   isCompacting = false,
+  isThreadDetailLoading = false,
   activeTurnStartedAt,
   agentPanelModel = EMPTY_AGENT_PANEL_MODEL,
   onOpenAgents = NOOP_OPEN_AGENTS,
@@ -793,6 +795,33 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     if (hideEmptyPlaceholder) {
       return null;
     }
+    if (isThreadDetailLoading) {
+      return (
+        <div className="flex h-full items-center justify-center">
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex max-w-sm flex-col items-center gap-3 px-6 text-center text-sm text-muted-foreground"
+          >
+            <div className="space-y-1.5">
+              <p className="font-medium text-foreground/80">Refreshing conversation state...</p>
+              <p className="text-xs leading-relaxed">
+                The sidebar has backend activity for this thread, but the conversation detail has
+                not arrived yet.
+              </p>
+            </div>
+            <div
+              role="progressbar"
+              aria-label="Refreshing conversation state"
+              className="h-1 w-48 overflow-hidden rounded-full bg-muted"
+            >
+              <div className="h-full w-2/3 rounded-full bg-primary/60 motion-safe:animate-pulse" />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-placeholder text-sm">Send a message to start the conversation.</p>
