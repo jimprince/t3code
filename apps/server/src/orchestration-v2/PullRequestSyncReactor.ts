@@ -186,12 +186,14 @@ export const make = Effect.gen(function* () {
 
     const syncEntry = Effect.fn("PullRequestSyncReactor.syncEntry")(function* (
       entry: LinkEntry,
+      url: string,
       fields: SnapshotFields,
       fetchedStack: { readonly stack: ThreadPullRequestStack | null } | null,
     ) {
       const { thread, link } = entry;
       const nextStack = fetchedStack === null ? link.stack : fetchedStack.stack;
       const changed =
+        link.url !== url ||
         link.snapshot === null ||
         !snapshotFieldsEqual(link.snapshot, fields) ||
         !stacksEqual(link.stack, nextStack);
@@ -234,6 +236,7 @@ export const make = Effect.gen(function* () {
           host: normalizeThreadPullRequestKey(link).host,
           repository: link.repository,
           number: link.number,
+          url,
           snapshot: { ...fields, syncedAt: nowIso },
           stack: nextStack,
         });
@@ -299,7 +302,7 @@ export const make = Effect.gen(function* () {
       yield* Effect.forEach(
         entries,
         (entry) =>
-          syncEntry(entry, fields, fetchedStack).pipe(
+          syncEntry(entry, summary.url, fields, fetchedStack).pipe(
             persistence.withPermits(1),
             Effect.catchCause((cause) => {
               if (!Cause.hasInterruptsOnly(cause)) retryStacks.add(key);
