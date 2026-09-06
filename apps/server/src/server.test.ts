@@ -10291,214 +10291,216 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  it.effect(
-    "bootstraps first-send worktree turns from a freshly fetched preferred gitea remote before dispatching turn start",
-    () =>
-      Effect.gen(function* () {
-        const dispatchedCommands: Array<OrchestrationCommand> = [];
-        const bootstrapGitOperations: string[] = [];
-        const refreshStatus = vi.fn((_: string) =>
-          Effect.succeed({
-            isRepo: true,
-            hasPrimaryRemote: true,
-            isDefaultRef: false,
-            refName: "t3code/bootstrap-refName",
-            hasWorkingTreeChanges: false,
-            workingTree: {
-              files: [],
-              insertions: 0,
-              deletions: 0,
-            },
-            hasUpstream: true,
-            aheadCount: 0,
-            behindCount: 0,
-            pr: null,
-          }),
-        );
-        const remoteExists = vi.fn(
-          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["remoteExists"]>[0]) =>
-            Effect.sync(() => {
-              bootstrapGitOperations.push(`remote-exists:${_.remoteName}`);
-              return _.remoteName === "gitea";
-            }),
-        );
-        const fetchRemote = vi.fn(
-          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["fetchRemote"]>[0]) =>
-            Effect.sync(() => {
-              bootstrapGitOperations.push("fetch");
-            }),
-        );
-        const fetchedGiteaCommit = "0123456789abcdef0123456789abcdef01234567";
-        const resolveRemoteTrackingCommit = vi.fn(
-          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["resolveRemoteTrackingCommit"]>[0]) =>
-            Effect.sync(() => {
-              bootstrapGitOperations.push("resolve-remote-commit");
-              return {
-                commitSha: fetchedGiteaCommit,
-                remoteRefName: "gitea/main",
-              };
-            }),
-        );
-        const createWorktree = vi.fn(
-          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
-            Effect.sync(() => {
-              bootstrapGitOperations.push("create-worktree");
-              return {
-                worktree: {
-                  refName: "t3code/bootstrap-refName",
-                  path: "/tmp/bootstrap-worktree",
-                },
-              };
-            }),
-        );
-        const runForThread = vi.fn(
-          (
-            _: Parameters<
-              ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]["runForThread"]
-            >[0],
-          ) =>
+  for (const baseBranch of ["main", "upstream/main"]) {
+    const selectedRemote = baseBranch === "main" ? "gitea" : "upstream";
+    it.effect(
+      `bootstraps first-send worktree turns from freshly fetched ${selectedRemote} before dispatching turn start`,
+      () =>
+        Effect.gen(function* () {
+          const dispatchedCommands: Array<OrchestrationCommand> = [];
+          const bootstrapGitOperations: string[] = [];
+          const refreshStatus = vi.fn((_: string) =>
             Effect.succeed({
-              status: "started" as const,
-              scriptId: "setup",
-              scriptName: "Setup",
-              terminalId: "setup-setup",
-              cwd: "/tmp/bootstrap-worktree",
-            }),
-        );
-
-        yield* buildAppUnderTest({
-          layers: {
-            gitVcsDriver: {
-              remoteExists,
-              fetchRemote,
-              resolveRemoteTrackingCommit,
-              createWorktree,
-            },
-            vcsStatusBroadcaster: {
-              refreshStatus,
-            },
-            orchestrationEngine: {
-              dispatch: (command) =>
-                Effect.sync(() => {
-                  dispatchedCommands.push(command);
-                  return { sequence: dispatchedCommands.length };
-                }),
-              readEvents: () => Stream.empty,
-            },
-            projectSetupScriptRunner: {
-              runForThread,
-            },
-          },
-        });
-
-        const createdAt = "2026-01-01T00:00:00.000Z";
-        const wsUrl = yield* getWsServerUrl("/ws");
-        const response = yield* Effect.scoped(
-          withWsRpcClient(wsUrl, (client) =>
-            client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
-              type: "thread.turn.start",
-              commandId: CommandId.make("cmd-bootstrap-turn-start"),
-              threadId: ThreadId.make("thread-bootstrap"),
-              message: {
-                messageId: MessageId.make("msg-bootstrap"),
-                role: "user",
-                text: "hello",
-                attachments: [],
+              isRepo: true,
+              hasPrimaryRemote: true,
+              isDefaultRef: false,
+              refName: "t3code/bootstrap-refName",
+              hasWorkingTreeChanges: false,
+              workingTree: {
+                files: [],
+                insertions: 0,
+                deletions: 0,
               },
-              modelSelection: defaultModelSelection,
-              runtimeMode: "full-access",
-              interactionMode: "default",
-              bootstrap: {
-                createThread: {
-                  projectId: defaultProjectId,
-                  title: "Bootstrap Thread",
-                  modelSelection: defaultModelSelection,
-                  runtimeMode: "full-access",
-                  interactionMode: "default",
-                  branch: "main",
-                  worktreePath: null,
-                  createdAt,
-                },
-                prepareWorktree: {
-                  projectCwd: "/tmp/project",
-                  baseBranch: "main",
-                  branch: "t3code/bootstrap-refName",
-                  startFromOrigin: true,
-                },
-                runSetupScript: true,
-              },
-              createdAt,
+              hasUpstream: true,
+              aheadCount: 0,
+              behindCount: 0,
+              pr: null,
             }),
-          ),
-        );
+          );
+          const listRemoteNames = vi.fn(() =>
+            Effect.sync(() => {
+              bootstrapGitOperations.push("list-remotes");
+              return ["gitea", "origin", "upstream"];
+            }),
+          );
+          const fetchRemote = vi.fn(
+            (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["fetchRemote"]>[0]) =>
+              Effect.sync(() => {
+                bootstrapGitOperations.push("fetch");
+              }),
+          );
+          const fetchedGiteaCommit = "0123456789abcdef0123456789abcdef01234567";
+          const resolveRemoteTrackingCommit = vi.fn(
+            (
+              _: Parameters<GitVcsDriver.GitVcsDriver["Service"]["resolveRemoteTrackingCommit"]>[0],
+            ) =>
+              Effect.sync(() => {
+                bootstrapGitOperations.push("resolve-remote-commit");
+                return {
+                  commitSha: fetchedGiteaCommit,
+                  remoteRefName: `${selectedRemote}/main`,
+                };
+              }),
+          );
+          const createWorktree = vi.fn(
+            (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
+              Effect.sync(() => {
+                bootstrapGitOperations.push("create-worktree");
+                return {
+                  worktree: {
+                    refName: "t3code/bootstrap-refName",
+                    path: "/tmp/bootstrap-worktree",
+                  },
+                };
+              }),
+          );
+          const runForThread = vi.fn(
+            (
+              _: Parameters<
+                ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"]["runForThread"]
+              >[0],
+            ) =>
+              Effect.succeed({
+                status: "started" as const,
+                scriptId: "setup",
+                scriptName: "Setup",
+                terminalId: "setup-setup",
+                cwd: "/tmp/bootstrap-worktree",
+              }),
+          );
 
-        assert.equal(response.sequence, 5);
-        assert.deepEqual(
-          dispatchedCommands.map((command) => command.type),
-          [
-            "thread.create",
-            "thread.meta.update",
-            "thread.activity.append",
-            "thread.activity.append",
-            "thread.turn.start",
-          ],
-        );
-        assert.deepEqual(createWorktree.mock.calls[0]?.[0], {
-          cwd: "/tmp/project",
-          refName: fetchedGiteaCommit,
-          newRefName: "t3code/bootstrap-refName",
-          baseRefName: "main",
-          path: null,
-        });
-        assert.deepEqual(fetchRemote.mock.calls[0]?.[0], {
-          cwd: "/tmp/project",
-          remoteName: "gitea",
-        });
-        assert.deepEqual(resolveRemoteTrackingCommit.mock.calls[0]?.[0], {
-          cwd: "/tmp/project",
-          refName: "main",
-          fallbackRemoteName: "gitea",
-        });
-        assert.deepEqual(bootstrapGitOperations, [
-          "remote-exists:gitea",
-          "remote-exists:origin",
-          "fetch",
-          "resolve-remote-commit",
-          "create-worktree",
-        ]);
-        assert.deepEqual(runForThread.mock.calls[0]?.[0], {
-          threadId: ThreadId.make("thread-bootstrap"),
-          projectId: defaultProjectId,
-          projectCwd: "/tmp/project",
-          worktreePath: "/tmp/bootstrap-worktree",
-        });
-        assert.deepEqual(refreshStatus.mock.calls[0]?.[0], "/tmp/bootstrap-worktree");
+          yield* buildAppUnderTest({
+            layers: {
+              gitVcsDriver: {
+                listRemoteNames,
+                fetchRemote,
+                resolveRemoteTrackingCommit,
+                createWorktree,
+              },
+              vcsStatusBroadcaster: {
+                refreshStatus,
+              },
+              orchestrationEngine: {
+                dispatch: (command) =>
+                  Effect.sync(() => {
+                    dispatchedCommands.push(command);
+                    return { sequence: dispatchedCommands.length };
+                  }),
+                readEvents: () => Stream.empty,
+              },
+              projectSetupScriptRunner: {
+                runForThread,
+              },
+            },
+          });
 
-        const setupActivities = dispatchedCommands.filter(
-          (command): command is Extract<OrchestrationCommand, { type: "thread.activity.append" }> =>
-            command.type === "thread.activity.append",
-        );
-        assert.deepEqual(
-          setupActivities.map((command) => command.activity.kind),
-          ["setup-script.requested", "setup-script.started"],
-        );
-        const finalCommand = dispatchedCommands[4];
-        assertTrue(finalCommand?.type === "thread.turn.start");
-        if (finalCommand?.type === "thread.turn.start") {
-          assert.equal(finalCommand.bootstrap, undefined);
-        }
-      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
-  );
+          const createdAt = "2026-01-01T00:00:00.000Z";
+          const wsUrl = yield* getWsServerUrl("/ws");
+          const response = yield* Effect.scoped(
+            withWsRpcClient(wsUrl, (client) =>
+              client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+                type: "thread.turn.start",
+                commandId: CommandId.make("cmd-bootstrap-turn-start"),
+                threadId: ThreadId.make("thread-bootstrap"),
+                message: {
+                  messageId: MessageId.make("msg-bootstrap"),
+                  role: "user",
+                  text: "hello",
+                  attachments: [],
+                },
+                modelSelection: defaultModelSelection,
+                runtimeMode: "full-access",
+                interactionMode: "default",
+                bootstrap: {
+                  createThread: {
+                    projectId: defaultProjectId,
+                    title: "Bootstrap Thread",
+                    modelSelection: defaultModelSelection,
+                    runtimeMode: "full-access",
+                    interactionMode: "default",
+                    branch: "main",
+                    worktreePath: null,
+                    createdAt,
+                  },
+                  prepareWorktree: {
+                    projectCwd: "/tmp/project",
+                    baseBranch,
+                    branch: "t3code/bootstrap-refName",
+                    startFromOrigin: true,
+                  },
+                  runSetupScript: true,
+                },
+                createdAt,
+              }),
+            ),
+          );
+
+          assert.equal(response.sequence, 5);
+          assert.deepEqual(
+            dispatchedCommands.map((command) => command.type),
+            [
+              "thread.create",
+              "thread.meta.update",
+              "thread.activity.append",
+              "thread.activity.append",
+              "thread.turn.start",
+            ],
+          );
+          assert.deepEqual(createWorktree.mock.calls[0]?.[0], {
+            cwd: "/tmp/project",
+            refName: fetchedGiteaCommit,
+            newRefName: "t3code/bootstrap-refName",
+            baseRefName: baseBranch,
+            path: null,
+          });
+          assert.deepEqual(fetchRemote.mock.calls[0]?.[0], {
+            cwd: "/tmp/project",
+            remoteName: selectedRemote,
+          });
+          assert.deepEqual(resolveRemoteTrackingCommit.mock.calls[0]?.[0], {
+            cwd: "/tmp/project",
+            refName: baseBranch,
+            fallbackRemoteName: selectedRemote,
+          });
+          assert.deepEqual(bootstrapGitOperations, [
+            "list-remotes",
+            "fetch",
+            "resolve-remote-commit",
+            "create-worktree",
+          ]);
+          assert.deepEqual(runForThread.mock.calls[0]?.[0], {
+            threadId: ThreadId.make("thread-bootstrap"),
+            projectId: defaultProjectId,
+            projectCwd: "/tmp/project",
+            worktreePath: "/tmp/bootstrap-worktree",
+          });
+          assert.deepEqual(refreshStatus.mock.calls[0]?.[0], "/tmp/bootstrap-worktree");
+
+          const setupActivities = dispatchedCommands.filter(
+            (
+              command,
+            ): command is Extract<OrchestrationCommand, { type: "thread.activity.append" }> =>
+              command.type === "thread.activity.append",
+          );
+          assert.deepEqual(
+            setupActivities.map((command) => command.activity.kind),
+            ["setup-script.requested", "setup-script.started"],
+          );
+          const finalCommand = dispatchedCommands[4];
+          assertTrue(finalCommand?.type === "thread.turn.start");
+          if (finalCommand?.type === "thread.turn.start") {
+            assert.equal(finalCommand.bootstrap, undefined);
+          }
+        }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+    );
+  }
 
   it.effect(
     "fails with an actionable error when remote-based creation has no supported remote",
     () =>
       Effect.gen(function* () {
         const dispatchedCommands: Array<OrchestrationCommand> = [];
-        const remoteExists = vi.fn(
-          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["remoteExists"]>[0]) =>
-            Effect.succeed(false),
-        );
+        const listRemoteNames = vi.fn(() => Effect.succeed([] as string[]));
         const fetchRemote = vi.fn(
           (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["fetchRemote"]>[0]) => Effect.void,
         );
@@ -10522,7 +10524,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         yield* buildAppUnderTest({
           layers: {
             gitVcsDriver: {
-              remoteExists,
+              listRemoteNames,
               fetchRemote,
               resolveRemoteTrackingCommit,
               createWorktree,
@@ -10583,16 +10585,9 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         assert.equal(error._tag, "OrchestrationDispatchCommandError");
         assert.match(
           String((error as { message?: unknown }).message ?? error),
-          /requires a gitea or origin remote/,
+          /requires a configured remote-qualified branch/,
         );
-        assert.deepEqual(remoteExists.mock.calls[0]?.[0], {
-          cwd: "/tmp/project",
-          remoteName: "gitea",
-        });
-        assert.deepEqual(remoteExists.mock.calls[1]?.[0], {
-          cwd: "/tmp/project",
-          remoteName: "origin",
-        });
+        assert.equal(listRemoteNames.mock.calls.length, 1);
         assert.equal(fetchRemote.mock.calls.length, 0);
         assert.equal(resolveRemoteTrackingCommit.mock.calls.length, 0);
         assert.equal(createWorktree.mock.calls.length, 0);

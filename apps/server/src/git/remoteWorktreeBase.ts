@@ -1,11 +1,15 @@
-/** Keeps the legacy wire flag remote-neutral while selecting its remote deterministically. */
+import { parseRemoteRefWithRemoteNames } from "./remoteRefs.ts";
+
+/** Uses the same remote-prefix rules as tracking-ref resolution. */
 export function selectRemoteWorktreeBase(input: {
   readonly baseBranch: string;
-  readonly hasGitea: boolean;
-  readonly hasOrigin: boolean;
-}): "gitea" | "origin" | null {
-  if (input.baseBranch.startsWith("gitea/")) return input.hasGitea ? "gitea" : null;
-  if (input.baseBranch.startsWith("origin/")) return input.hasOrigin ? "origin" : null;
-  if (input.hasGitea) return "gitea";
-  return input.hasOrigin ? "origin" : null;
+  readonly remoteNames: readonly string[];
+}): string | null {
+  const explicit = parseRemoteRefWithRemoteNames(
+    input.baseBranch,
+    input.remoteNames.toSorted((left, right) => right.length - left.length),
+  );
+  if (explicit) return explicit.remoteName;
+  if (input.remoteNames.includes("gitea")) return "gitea";
+  return input.remoteNames.includes("origin") ? "origin" : null;
 }

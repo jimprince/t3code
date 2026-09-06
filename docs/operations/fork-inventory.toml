@@ -275,4 +275,5 @@ purpose = "Create T3 worktrees from a freshly fetched selected remote branch, pr
 retire_when = "Upstream ships equivalent remote-selection, freshness, and no-local-fallback semantics."
 depends_on = ["fork-worker-operations"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-remote-worktree-base."
+note = "Fetches any explicitly selected configured remote, including custom and nested names. Bare branch names prefer gitea then origin; failed fetches and absent defaults never silently fall back locally."
+

@@ -1126,23 +1126,15 @@ const makeWsRpcLayer = (
               let worktreeBaseRef = bootstrap.prepareWorktree.baseBranch;
               // Keep the persisted startFromOrigin key for compatibility, but
               // make it mean "start from the selected remote". An explicitly
-              // qualified supported remote wins; otherwise gitea is preferred
+              // qualified configured remote wins; otherwise gitea is preferred
               // over origin so repos never need to rename their remotes.
               if (bootstrap.prepareWorktree.startFromOrigin === true) {
-                const [hasGitea, hasOrigin] = yield* Effect.all([
-                  gitWorkflow.remoteExists({
-                    cwd: bootstrap.prepareWorktree.projectCwd,
-                    remoteName: "gitea",
-                  }),
-                  gitWorkflow.remoteExists({
-                    cwd: bootstrap.prepareWorktree.projectCwd,
-                    remoteName: "origin",
-                  }),
-                ]);
+                const remoteNames = yield* gitWorkflow.listRemoteNames(
+                  bootstrap.prepareWorktree.projectCwd,
+                );
                 const remoteName = selectRemoteWorktreeBase({
                   baseBranch: bootstrap.prepareWorktree.baseBranch,
-                  hasGitea,
-                  hasOrigin,
+                  remoteNames,
                 });
                 if (!remoteName) {
                   return yield* new GitCommandError({
@@ -1150,7 +1142,7 @@ const makeWsRpcLayer = (
                     command: "git remote get-url gitea|origin",
                     cwd: bootstrap.prepareWorktree.projectCwd,
                     detail:
-                      "Remote-based worktree creation requires a gitea or origin remote. Add one, select a local base, or disable remote-based creation.",
+                      "Remote-based worktree creation requires a configured remote-qualified branch or a gitea/origin default. Select a remote branch, add a default remote, or disable remote-based creation.",
                   });
                 }
                 yield* gitWorkflow.fetchRemote({

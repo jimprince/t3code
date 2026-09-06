@@ -1,32 +1,19 @@
 import { describe, expect, it } from "vite-plus/test";
-
 import { selectRemoteWorktreeBase } from "./remoteWorktreeBase.ts";
 
 describe("selectRemoteWorktreeBase", () => {
-  it("prefers gitea when both supported remotes exist", () => {
-    expect(selectRemoteWorktreeBase({ baseBranch: "main", hasGitea: true, hasOrigin: true })).toBe(
-      "gitea",
-    );
-  });
-  it("uses whichever supported remote exists", () => {
-    expect(selectRemoteWorktreeBase({ baseBranch: "main", hasGitea: true, hasOrigin: false })).toBe(
-      "gitea",
-    );
-    expect(selectRemoteWorktreeBase({ baseBranch: "main", hasGitea: false, hasOrigin: true })).toBe(
-      "origin",
-    );
-  });
-  it("honors an explicit qualified supported remote", () => {
-    expect(
-      selectRemoteWorktreeBase({ baseBranch: "origin/main", hasGitea: true, hasOrigin: true }),
-    ).toBe("origin");
-    expect(
-      selectRemoteWorktreeBase({ baseBranch: "gitea/main", hasGitea: true, hasOrigin: true }),
-    ).toBe("gitea");
-  });
-  it("returns no selection when no supported remote exists", () => {
-    expect(
-      selectRemoteWorktreeBase({ baseBranch: "main", hasGitea: false, hasOrigin: false }),
-    ).toBeNull();
+  it.each([
+    ["main", ["origin", "gitea"], "gitea"],
+    ["main", ["origin"], "origin"],
+    ["main", ["gitea"], "gitea"],
+    ["origin/main", ["origin", "gitea"], "origin"],
+    ["upstream/main", ["origin", "gitea", "upstream"], "upstream"],
+    ["team/upstream/main", ["team", "team/upstream", "origin"], "team/upstream"],
+    ["upstream/main", ["upstream"], "upstream"],
+    ["feature/topic", ["origin", "gitea"], "gitea"],
+    ["main", [], null],
+    ["main", ["upstream"], null],
+  ])("selects the remote for %s with %j", (baseBranch, remoteNames, expected) => {
+    expect(selectRemoteWorktreeBase({ baseBranch, remoteNames })).toBe(expected);
   });
 });
