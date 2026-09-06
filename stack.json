@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "fb826204a32399623350545d695ea80ff70cf782",
-  "head": "9d8a7870215d892ee9524f10764315d76dee5b7c",
+  "prev": "ae5f6397a3b3ad8239919ae6a7a4d12822519232",
+  "head": "942a26a5d6cf95cbabeaeb881181c018defcaa2c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -16,10 +16,10 @@
     "fork-manual-thread-order",
     "fork-private-connection-defaults",
     "fork-resource-recovery",
-    "fork-workspace-file-uploads"
+    "fork-workspace-file-uploads",
+    "fork-chat-file-attachments-temporary"
   ],
   "unapplied": [
-    "fork-chat-file-attachments-temporary",
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
@@ -43,7 +43,7 @@
       "oid": "86ffc6e08fad0c1afbd6fb73baa49be7c80c633a"
     },
     "fork-chat-file-attachments-temporary": {
-      "oid": "b0c0b0b97372dfa04dcf6030ec081fe95af1ff90"
+      "oid": "942a26a5d6cf95cbabeaeb881181c018defcaa2c"
     },
     "fork-conversation-fork": {
       "oid": "e22581f26c62f5743e3291372a1313c2e16fa404"
