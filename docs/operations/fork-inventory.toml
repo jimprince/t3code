@@ -500,3 +500,18 @@ id = "upstream-headless-delivery"
 date = "2026-09-16"
 decided = "retain"
 rationale = "Upstream does not provide the fork's service-managed headless Linux artifact, authenticated update check, idle-aware promotion and rollback workflow, or historical-database release smoke coverage."
+
+[[patch]]
+name = "fork-desktop-delivery"
+subject = "feat(desktop): deliver the fork desktop app with its own identity and updates"
+class = "product"
+purpose = "Ship fork desktop identity, flavors, code signing, isolated app data, updater channels, packaging, and desktop lifecycle integrations such as deep links."
+retire_when = "Upstream or maintained shared tooling provides equivalent fork identity, signing, and update-channel handling."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-desktop-distribution. The packaged Linux portal identity fixture retains the fork desktop-entry name when upstream changes its own identity."
+[[patch.decision]]
+id = "upstream-desktop-delivery"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Preserve upstream preview-channel isolation, remote-only startup, OTLP defaults, macOS passkey signing, and WSL runtime packaging while retaining fork identity, fork-nightly channel recognition, updater publication, deep links, and release packaging."
