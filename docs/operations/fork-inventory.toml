@@ -170,3 +170,24 @@ id = "gitmanager-faketextgeneration"
 date = "2026-07-28"
 decided = "retire"
 rationale = "Upstream replaced the duplicate hand-written interface with TextGeneration['Service']; keep the upstream type alias and do not restore the redundant interface."
+
+[[patch]]
+name = "fork-project-selection"
+subject = "feat(web): select multiple projects in the sidebar"
+class = "product"
+purpose = "Provide multi-select, partial-state, and isolation controls for sidebar project scope."
+retire_when = "Upstream ships equivalent multi-project selection and isolation."
+depends_on = ["fork-general-chat"]
+roles = []
+note = "Owns multi-project selection and mobile project activity grouping; obsolete implementation plans removed."
+[[patch.decision]]
+id = "sidebarv2-project-scope"
+date = "2026-07-28"
+decided = "keep-multiselect"
+decided_by = "brad"
+issue = "http://git.home/brad/fork-decisions/issues/1"
+rationale = "Upstream ships single-select projectScope while the fork provides checkbox partial states and isolation. Preserve the fork's multi-select behavior and port it onto upstream's current menu structure."
+note = "Upstream1286 persists single-project scope in the UI store; retain that persistence while layering fork hidden-project selection."
+standing_policy = "Do not retire multi-select to upstream's single-select model. Re-escalate only if upstream removes projectScope entirely."
+resolution_kind = "relocate"
+status = "ported-and-uat-verified-2026-07-29"
