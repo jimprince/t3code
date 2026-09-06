@@ -9,6 +9,7 @@ import * as Cause from "effect/Cause";
 import * as Data from "effect/Data";
 import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import { createModelCapabilities } from "@t3tools/shared/model";
 import { compareSemverVersions } from "@t3tools/shared/semver";
@@ -385,13 +386,9 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
   openCodeSettings: OpenCodeSettings,
   cwd: string,
   environment?: NodeJS.ProcessEnv,
-): Effect.fn.Return<
-  ServerProviderDraft,
-  never,
-  OpenCodeRuntime | OpenCodeServerOwner.OpenCodeServerOwner
-> {
+): Effect.fn.Return<ServerProviderDraft, never, OpenCodeRuntime> {
   const openCodeRuntime = yield* OpenCodeRuntime;
-  const serverOwner = yield* OpenCodeServerOwner.OpenCodeServerOwner;
+  const serverOwner = yield* Effect.serviceOption(OpenCodeServerOwner.OpenCodeServerOwner);
   const resolvedEnvironment = environment ?? process.env;
   const checkedAt = DateTime.formatIso(yield* DateTime.now);
   const customModels = openCodeSettings.customModels;
@@ -495,11 +492,14 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
     }
   }
 
-  const loadInventory = (server: {
-    readonly url: string;
-    readonly serverPassword?: string;
-    readonly version: string;
-  }) =>
+  const loadInventory = (
+    server: {
+      readonly url: string;
+      readonly serverPassword?: string;
+      readonly version?: string;
+    },
+    fallbackVersion: string | null,
+  ) =>
     openCodeRuntime
       .loadOpenCodeInventory(
         openCodeRuntime.createOpenCodeSdkClient({
@@ -508,7 +508,7 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
           ...(server.serverPassword !== undefined ? { serverPassword: server.serverPassword } : {}),
         }),
       )
-      .pipe(Effect.map((inventory) => ({ inventory, version: server.version })));
+      .pipe(Effect.map((inventory) => ({ inventory, version: server.version ?? fallbackVersion })));
   const inventoryEffect = isExternalServer
     ? openCodeRuntime
         .connectToOpenCodeServer({
@@ -518,9 +518,22 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
           ...(openCodeSettings.serverPassword
             ? { serverPassword: openCodeSettings.serverPassword }
             : {}),
+          environment: resolvedEnvironment,
         })
-        .pipe(Effect.flatMap(loadInventory), Effect.scoped)
-    : serverOwner.withServer(loadInventory);
+        .pipe(
+          Effect.flatMap((server) => loadInventory(server, version)),
+          Effect.scoped,
+        )
+    : Option.isSome(serverOwner)
+      ? serverOwner.value.withServer((server) => loadInventory(server, version))
+      : openCodeRuntime
+          .loadInventoryFromCli({
+            binaryPath: openCodeSettings.binaryPath,
+            cwd,
+            environment: resolvedEnvironment,
+          })
+          .pipe(Effect.map((inventory) => ({ inventory, version })));
+
   const inventoryExit = yield* Effect.exit(
     inventoryEffect.pipe(
       Effect.mapError(
