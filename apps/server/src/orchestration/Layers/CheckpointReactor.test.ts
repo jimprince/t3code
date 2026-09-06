@@ -1970,7 +1970,6 @@ describe("CheckpointReactor", () => {
         ...(useProjectCwd ? { threadWorktreePath: null } : {}),
       });
       const createdAt = "2026-01-01T00:00:00.000Z";
-
       await Effect.runPromise(
         harness.engine.dispatch({
           type: "thread.turn.diff.complete",
