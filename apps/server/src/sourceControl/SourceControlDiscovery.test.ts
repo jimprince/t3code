@@ -1,3 +1,5 @@
+import { HttpClient } from "effect/unstable/http";
+import { ServerSettingsService } from "../serverSettings.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
@@ -26,6 +28,11 @@ const sourceControlProviderRegistryTestLayer = (input: {
         ServerConfig.layerTest(process.cwd(), {
           prefix: "t3-source-control-registry-test-",
         }).pipe(Layer.provide(NodeServices.layer)),
+        ServerSettingsService.layerTest(),
+        Layer.succeed(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.die("Unexpected HTTP request")),
+        ),
         Layer.mock(AzureDevOpsCli.AzureDevOpsCli)({}),
         Layer.mock(BitbucketApi.BitbucketApi)(input.bitbucket),
         Layer.mock(GitHubCli.GitHubCli)({}),
@@ -161,6 +168,7 @@ it.effect("reports implemented tools separately from locally available executabl
           auth: "unauthenticated",
           account: Option.none(),
         },
+        { kind: "gitea", status: "available", auth: "unauthenticated", account: Option.none() },
       ],
     );
     const bitbucket = result.sourceControlProviders.find((item) => item.kind === "bitbucket");
@@ -276,6 +284,12 @@ Logged in to gitlab.com as gitlab-user
           auth: "authenticated",
           account: Option.some("bitbucket-user"),
           detail: Option.none(),
+        },
+        {
+          kind: "gitea",
+          auth: "unauthenticated",
+          account: Option.none(),
+          detail: Option.some("No Gitea instances configured."),
         },
       ],
     );
