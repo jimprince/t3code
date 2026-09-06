@@ -31,6 +31,7 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import { ProviderWorkspaceMissingError } from "../provider/Errors.ts";
+import { releaseThreadLogs } from "../fork/diagnostics/LogLifecycle.ts";
 import * as ProjectService from "../project/ProjectService.ts";
 import * as McpProviderSession from "../mcp/McpProviderSession.ts";
 import * as ServerSettings from "../serverSettings.ts";
@@ -934,6 +935,7 @@ export const layerWithOptions = (
                   const recorded = yield* Effect.exit(
                     writeReleaseRecords({ ...records, replaced: false }),
                   );
+                  yield* releaseThreadLogs(entry.attachedThreadIds);
                   if (Exit.isFailure(recorded)) {
                     yield* retryReleaseRecords(records);
                     return yield* recorded;
@@ -2002,6 +2004,7 @@ export const layerWithOptions = (
             // and the token must not outlive the thread.
             if (input.revokeMcpCredential === true) {
               yield* clearMcpSession(input.threadId);
+              yield* releaseThreadLogs([input.threadId]);
             }
             if (Option.isNone(detached)) {
               return;
