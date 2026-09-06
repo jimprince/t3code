@@ -1,6 +1,6 @@
-Bottom: af79b83f2a6e01631c60bfdc933f888613244d37
-Top:    8587601582ade68d845c9fe45342c1772ac444d9
+Bottom: ec912cb69678b828e8e6f436b93350c432fbdfb4
+Top:    f22231313ee4356f4f8092aa7b6dba4fb347b9e5
 Author: User <user@example.com>
-Date:   2026-09-05 21:16:39 -0600
+Date:   2026-09-05 21:16:43 -0600
 
 feat(goals): carry thread goals pending removal
