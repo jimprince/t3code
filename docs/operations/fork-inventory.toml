@@ -470,3 +470,18 @@ id = "upstream-forgejo-reference-parser"
 date = "2026-09-16"
 decided = "retire"
 rationale = "Retire the duplicate Gitea URL regex because upstream's generalized Forgejo pulls URL parser already accepts configured Gitea hosts and nested repository paths. Retain Gitea action tests against the shared parser."
+
+[[patch]]
+name = "fork-pr-project-exclusions"
+subject = "feat(web): hide projects from the pull request list"
+class = "product"
+purpose = "Let operators keep whole projects out of the aggregated Pull Requests view, persistently and per environment, without giving up the single-project scope or any other filter."
+retire_when = "Upstream ships equivalent multi-project exclusion in the Pull Requests view, with per-environment project identity and query-level narrowing."
+depends_on = ["fork-pr-dismissal"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-pr-project-exclusions. [fork-pr-project-exclusions] Hidden projects are keyed by pullRequestProjectKey (environment plus project id) and stored under t3.pullRequests.excludedProjects:<environmentId>, so one server's id can never hide another server's project. The exclusion is applied AFTER assignProjectsToEnvironments has settled which server lists each repository: dropping a hidden project before that decision would hand the repository to another server holding a copy and the rows would come straight back. Rows are also filtered locally, because an answer already in flight, or a hiding made before the workspace reported its projects, still arrives. A single-project scope wins over hiding, so a project asked for by name is answered whole."
+[[patch.decision]]
+id = "upstream-pr-dismissal-toolbar"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Share upstream-adapted local-storage decoding with project exclusions, apply both row filters in one memo, and extend the existing dismissal toolbar with hidden-project restoration without changing its selection behavior."
