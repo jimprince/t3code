@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "4defd24d3ad00e15804acdd8224200a2300c6a99",
+  "prev": "e3de81b905b7362a2b3a2d72e15c8eb0a3edc858",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -10,7 +10,7 @@
     "old-fork-bounded-diagnostics",
     "old-fork-thread-client-recovery",
     "old-fork-general-chat",
-    "fork-conversation-fork",
+    "old-fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-goals-temporary",
     "fork-project-selection",
@@ -37,9 +37,6 @@
   "patches": {
     "fork-chat-file-attachments-temporary": {
       "oid": "78d689098e6377dd60c74729803bda81b3bdbff7"
-    },
-    "fork-conversation-fork": {
-      "oid": "bc69dd1ef58f297c8c96cf7ea9afb989e6ff20c1"
     },
     "fork-desktop-delivery": {
       "oid": "d1ec9c475b0aadbc176ae038d9dd60388877e0a0"
@@ -106,6 +103,9 @@
     },
     "old-fork-build-ci-compat": {
       "oid": "b0a008cfe2f49150998ad46b3d31cba3aa6291e8"
+    },
+    "old-fork-conversation-fork": {
+      "oid": "bc69dd1ef58f297c8c96cf7ea9afb989e6ff20c1"
     },
     "old-fork-general-chat": {
       "oid": "ab31654c3bb148c10a72c09bc2637094b7280905"
