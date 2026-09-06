@@ -634,6 +634,7 @@ function formatOutgoingPrompt(params: {
   const promptEffort = resolvePromptInjectedEffort(caps, params.effort);
   return applyClaudePromptEffortPrefix(params.text, promptEffort);
 }
+
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
 
@@ -6843,87 +6844,90 @@ export default function ChatView(props: ChatViewProps) {
                 : {}),
             }
           : undefined;
-      const backgroundThreadRef =
-        resolvedSubmissionIntent === "background"
-          ? scopeThreadRef(activeThread.environmentId, threadIdForSend)
-          : null;
-      if (backgroundThreadRef) {
-        beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
-      }
-      const startResult = await startThreadTurn({
-        environmentId,
-        input: {
-          threadId: threadIdForSend,
-          message: {
-            messageId: messageIdForSend,
-            role: "user",
-            text: outgoingMessageText,
-            attachments: turnAttachmentsResult.value,
+
+      if (failure === null) {
+        const backgroundThreadRef =
+          resolvedSubmissionIntent === "background"
+            ? scopeThreadRef(activeThread.environmentId, threadIdForSend)
+            : null;
+        if (backgroundThreadRef) {
+          beginBackgroundDraftSubmissionByRef(backgroundThreadRef);
+        }
+        const startResult = await startThreadTurn({
+          environmentId,
+          input: {
+            threadId: threadIdForSend,
+            message: {
+              messageId: messageIdForSend,
+              role: "user",
+              text: outgoingMessageText,
+                : {}),
+            },
+            modelSelection: ctxSelectedModelSelection,
+            titleSeed: title,
+            runtimeMode,
+            interactionMode: sendInteractionMode,
+            ...(bootstrap ? { bootstrap } : {}),
+            createdAt: messageCreatedAt,
           },
-          modelSelection: ctxSelectedModelSelection,
-          titleSeed: title,
-          runtimeMode,
-          interactionMode: sendInteractionMode,
-          ...(bootstrap ? { bootstrap } : {}),
-          createdAt: messageCreatedAt,
-        },
-      });
-      if (startResult._tag === "Failure") {
-        if (backgroundThreadRef) {
-          clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
-        }
-        failure = startResult;
-      } else {
-        turnStartSucceeded = true;
-        if (turnUsesAttachmentUploads) {
-          releaseDraftAttachments(composerAttachmentsSnapshot);
-        }
-        acknowledgeActiveThreadWoke();
-        if (backgroundThreadRef) {
-          markPromotedDraftThreadByRef(backgroundThreadRef);
-          try {
-            const nextDraft = await handleNewThread(
-              scopeProjectRef(activeProject.environmentId, activeProject.id),
-              resolveBackgroundDraftWorkspaceOptions({
-                envMode: sendEnvMode,
-                branch: activeThreadBranch,
-                startFromOrigin,
-              }),
-            );
-            if (nextDraft) {
-              finalizePromotedDraftThreadByRef(backgroundThreadRef);
-              toastManager.add(
-                stackedThreadToast({
-                  type: "success",
-                  title: "Started in background",
-                  timeout: 5_000,
-                  actionProps: {
-                    children: "Open",
-                    onClick: () => {
-                      void navigate({
-                        to: "/$environmentId/$threadId",
-                        params: buildThreadRouteParams(backgroundThreadRef),
-                      });
-                    },
-                  },
+        });
+        if (startResult._tag === "Failure") {
+          if (backgroundThreadRef) {
+            clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
+          }
+          failure = startResult;
+        } else {
+          turnStartSucceeded = true;
+          if (turnUsesAttachmentUploads) {
+            releaseDraftAttachments(composerAttachmentsSnapshot);
+          }
+          acknowledgeActiveThreadWoke();
+          if (backgroundThreadRef) {
+            markPromotedDraftThreadByRef(backgroundThreadRef);
+            try {
+              const nextDraft = await handleNewThread(
+                scopeProjectRef(activeProject.environmentId, activeProject.id),
+                resolveBackgroundDraftWorkspaceOptions({
+                  envMode: sendEnvMode,
+                  branch: activeThreadBranch,
+                  startFromOrigin,
                 }),
               );
-            } else {
+              if (nextDraft) {
+                finalizePromotedDraftThreadByRef(backgroundThreadRef);
+                toastManager.add(
+                  stackedThreadToast({
+                    type: "success",
+                    title: "Started in background",
+                    timeout: 5_000,
+                    actionProps: {
+                      children: "Open",
+                      onClick: () => {
+                        void navigate({
+                          to: "/$environmentId/$threadId",
+                          params: buildThreadRouteParams(backgroundThreadRef),
+                        });
+                      },
+                    },
+                  }),
+                );
+              } else {
+                clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
+              }
+            } catch (error) {
               clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
+              resetLocalDispatch();
+              toastManager.add(
+                stackedThreadToast({
+                  type: "warning",
+                  title: "Task started in the background",
+                  description:
+                    error instanceof Error
+                      ? `Could not open a fresh composer: ${error.message}`
+                      : "Could not open a fresh composer.",
+                }),
+              );
             }
-          } catch (error) {
-            clearBackgroundDraftSubmissionByRef(backgroundThreadRef);
-            resetLocalDispatch();
-            toastManager.add(
-              stackedThreadToast({
-                type: "warning",
-                title: "Task started in the background",
-                description:
-                  error instanceof Error
-                    ? `Could not open a fresh composer: ${error.message}`
-                    : "Could not open a fresh composer.",
-              }),
-            );
           }
         }
       }
