@@ -925,6 +925,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           }
           yield* projectionThreadPullRequestRepository.upsert({
             ...link,
+            ...(event.payload.url === undefined ? {} : { url: event.payload.url }),
             snapshot: event.payload.snapshot,
             stack: event.payload.stack,
           });
