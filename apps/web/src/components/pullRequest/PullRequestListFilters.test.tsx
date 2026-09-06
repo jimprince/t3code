@@ -3,7 +3,8 @@ import { CircleIcon } from "lucide-react";
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { PullRequestFiltersMenu, pullRequestProjectKey } from "./PullRequestListFilters";
+import { pullRequestProjectKey } from "./pullRequestList.logic";
+import { PullRequestFiltersMenu } from "./PullRequestListFilters";
 
 function findValueChange(
   node: ReactNode,
@@ -67,6 +68,9 @@ function menu(overrides: Partial<Parameters<typeof PullRequestFiltersMenu>[0]>) 
     projectEnvironmentId: undefined,
     unavailable: new Map(),
     onProject: () => undefined,
+    excludedProjectKeys: new Set<string>(),
+    onExcludeProject: () => undefined,
+    onShowAllProjects: () => undefined,
     ...overrides,
   });
 }
