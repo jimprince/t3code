@@ -1,5 +1,6 @@
 import { scopedThreadKey } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 
@@ -7,6 +8,7 @@ import ChatView from "./ChatView";
 import { resolveDraftPromotionNavigationTarget, threadHasStarted } from "./ChatView.logic";
 import { waitForDraftHeroTransition } from "./chat/draftHeroTransition";
 import { SidebarInset } from "./ui/sidebar";
+import { environmentCatalog } from "../connection/catalog";
 import {
   finalizePromotedDraftThreadByRef,
   markPromotedDraftThreadByRef,
@@ -46,6 +48,7 @@ import { resolveThreadSyncPhase } from "../threadSync";
  */
 export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   const navigate = useNavigate();
+  const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
   const draftId = target.kind === "draft" ? target.draftId : null;
   const draftSession = useComposerDraftStore((store) =>
     draftId === null ? null : store.getDraftSession(draftId),
@@ -122,6 +125,15 @@ export function ThreadRouteView({ target }: { target: ThreadRouteTarget }) {
   });
   const serverThreadStarted = threadHasStarted(serverThreadDetail);
   const environmentHasAnyThreads = environmentThreadRefs.length > 0 || environmentHasDraftThreads;
+  const environmentIsKnown =
+    serverThreadRef !== null && catalog.entries.has(serverThreadRef.environmentId);
+
+  useEffect(() => {
+    if (target.kind !== "server" || !catalog.isReady || environmentIsKnown) {
+      return;
+    }
+    void navigate({ to: "/", replace: true });
+  }, [catalog.isReady, environmentIsKnown, navigate, target.kind]);
 
   useEffect(() => {
     if (!inferredThreadRef || draftSession?.promotedTo) {
