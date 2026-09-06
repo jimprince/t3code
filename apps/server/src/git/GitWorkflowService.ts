@@ -69,6 +69,9 @@ export class GitWorkflowService extends Context.Service<
       readonly cwd: string;
       readonly remoteName: string;
     }) => Effect.Effect<void, GitCommandError>;
+    readonly listRemoteNames: (
+      cwd: string,
+    ) => Effect.Effect<ReadonlyArray<string>, GitCommandError>;
     readonly remoteExists: (input: {
       readonly cwd: string;
       readonly remoteName: string;
@@ -314,6 +317,10 @@ export const make = Effect.gen(function* () {
     fetchRemote: (input) =>
       ensureGitCommand("GitWorkflowService.fetchRemote", input.cwd).pipe(
         Effect.andThen(git.fetchRemote(input)),
+      ),
+    listRemoteNames: (cwd) =>
+      ensureGitCommand("GitWorkflowService.listRemoteNames", cwd).pipe(
+        Effect.andThen(git.listRemoteNames(cwd)),
       ),
     remoteExists: (input) =>
       ensureGitCommand("GitWorkflowService.remoteExists", input.cwd).pipe(
