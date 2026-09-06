@@ -13,10 +13,11 @@ import * as Path from "effect/Path";
 
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
-import { resolveLinuxDesktopEntryName } from "./DesktopEarlyElectronStartup.ts";
 import { resolveDesktopBaseDir, resolveDesktopStateDir } from "./DesktopStatePaths.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 import type { OtlpProtocol } from "@t3tools/shared/observability";
+
+export type DesktopAppFlavor = "stable" | "dev";
 
 export interface MakeDesktopEnvironmentInput {
   readonly dirname: string;
@@ -28,6 +29,7 @@ export interface MakeDesktopEnvironmentInput {
   readonly isPackaged: boolean;
   readonly resourcesPath: string;
   readonly runningUnderArm64Translation: boolean;
+  readonly desktopFlavor?: DesktopAppFlavor;
 }
 
 export class DesktopEnvironment extends Context.Service<
@@ -39,6 +41,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly processArch: string;
     readonly isPackaged: boolean;
     readonly isDevelopment: boolean;
+    readonly isPackagedDevFlavor: boolean;
+    readonly desktopFlavor: DesktopAppFlavor;
     readonly appVersion: string;
     readonly appPath: string;
     readonly resourcesPath: string;
@@ -95,17 +99,22 @@ const APP_BASE_NAME = "T3 Code";
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
+  readonly isPackagedDevFlavor: boolean;
   readonly appVersion: string;
 }): DesktopAppStageLabel {
   if (input.isDevelopment) {
     return "Dev";
   }
+  if (input.isPackagedDevFlavor) {
+    return "Fork Dev";
+  }
 
-  return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Alpha";
+  return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Fork";
 }
 
 export function resolveDesktopAppBranding(input: {
   readonly isDevelopment: boolean;
+  readonly isPackagedDevFlavor: boolean;
   readonly appVersion: string;
 }): DesktopAppBranding {
   const stageLabel = resolveDesktopAppStageLabel(input);
@@ -173,8 +182,11 @@ const make = Effect.fn("desktop.environment.make")(function* (
     input.isPackaged && input.platform === "win32"
       ? path.join(input.resourcesPath, "server.asar")
       : appRoot;
+  const desktopFlavor = input.desktopFlavor ?? "stable";
+  const isPackagedDevFlavor = !isDevelopment && desktopFlavor === "dev";
   const branding = resolveDesktopAppBranding({
     isDevelopment,
+    isPackagedDevFlavor,
     appVersion: input.appVersion,
   });
   const displayName = branding.displayName;
@@ -184,8 +196,16 @@ const make = Effect.fn("desktop.environment.make")(function* (
     joinPath: path.join,
     t3Home: config.t3Home,
   });
-  const userDataDirName = isDevelopment ? "t3code-dev" : "t3code";
-  const legacyUserDataDirName = isDevelopment ? "T3 Code (Dev)" : "T3 Code (Alpha)";
+  const userDataDirName = isDevelopment
+    ? "t3code-dev"
+    : isPackagedDevFlavor
+      ? "t3code-fork-dev"
+      : "t3code-fork";
+  const legacyUserDataDirName = isDevelopment
+    ? "T3 Code (Dev)"
+    : isPackagedDevFlavor
+      ? "T3 Code (Fork Dev)"
+      : "T3 Code (Fork)";
   const linuxApplicationsDir = path.join(
     Option.getOrElse(config.xdgDataHome, () => path.join(homeDirectory, ".local", "share")),
     "applications",
@@ -199,6 +219,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     processArch: input.processArch,
     isPackaged: input.isPackaged,
     isDevelopment,
+    isPackagedDevFlavor,
+    desktopFlavor,
     appVersion: input.appVersion,
     appPath: input.appPath,
     resourcesPath,
@@ -233,10 +255,22 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.t3tools.t3code.dev" : "com.t3tools.t3code",
+      isDevelopment
+        ? "com.t3tools.t3code.dev"
+        : isPackagedDevFlavor
+          ? "com.t3tools.t3code.fork.dev"
+          : "com.t3tools.t3code.fork",
     ),
-    linuxDesktopEntryName: resolveLinuxDesktopEntryName(isDevelopment),
-    linuxWmClass: isDevelopment ? "t3code-dev" : "t3code",
+    linuxDesktopEntryName: isDevelopment
+      ? "t3code-dev.desktop"
+      : isPackagedDevFlavor
+        ? "t3code-fork-dev.desktop"
+        : "t3code-fork.desktop",
+    linuxWmClass: isDevelopment
+      ? "t3code-dev"
+      : isPackagedDevFlavor
+        ? "t3code-fork-dev"
+        : "t3code-fork",
     linuxApplicationsDir,
     appImagePath: config.appImagePath,
     userDataDirName,
