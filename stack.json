@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "fe1dd145684dcbf9076285e1887027fc5b265d18",
+  "prev": "c6e5c7de12b10f80a5de1d8d59865372583a9c0e",
   "head": "42ead5386028896fa2fa40aaa916ddb54de86884",
   "applied": [
     "fork-build-ci-compat",
@@ -31,7 +31,7 @@
     "old-fork-web-project-scope",
     "old-fork-web-image-timeout",
     "old-fork-desktop-distribution",
-    "fork-mobile-delivery",
+    "old-fork-mobile-delivery",
     "fork-ci-runner-compat",
     "fork-ci-release-pipeline",
     "fork-ci-upstream-sync",
@@ -83,9 +83,6 @@
     "fork-gitea-pr-actions": {
       "oid": "a4213323e29a6b8d878b212b608a3e840eaf3fdc"
     },
-    "fork-mobile-delivery": {
-      "oid": "27733c0cdb755ed1e6255db9cc167ea3f74c3340"
-    },
     "fork-pr-project-exclusions": {
       "oid": "b5c70c0443c5a97f19301f7d43d87ea774d939db"
     },
@@ -130,6 +127,9 @@
     },
     "old-fork-headless-updates": {
       "oid": "370529cb561e494ec025e7c443fb835f29892c55"
+    },
+    "old-fork-mobile-delivery": {
+      "oid": "27733c0cdb755ed1e6255db9cc167ea3f74c3340"
     },
     "old-fork-performance-recovery": {
       "oid": "ab88601ded5f14f41ca02c3cb4841c93d852f83a"
