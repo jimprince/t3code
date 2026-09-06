@@ -496,3 +496,13 @@ id = "upstream-per-signal-otlp-export"
 date = "2026-09-21"
 decided = "adapt"
 rationale = "Upstream replaced the flat otlpProtocol/otlpHeaders/otlpExportIntervalMs server config fields with per-signal otlpTracesExport/otlpMetricsExport/otlpLogsExport records. Build the fork-only attachment server harness config from DEFAULT_SIGNAL_EXPORT and read the trace protocol from otlpTracesExport, matching upstream's harness; the fork carries no observability behavior of its own here."
+
+[[patch]]
+name = "fork-remote-file-downloads"
+subject = "feat(remote): download linked workspace files"
+class = "product"
+purpose = "Let web and desktop operators securely download files linked from a thread when those files remain inside that thread's project or active worktree."
+retire_when = "Upstream ships equivalent authenticated linked-file downloads with canonical project/worktree containment across local and remote environments."
+depends_on = []
+roles = []
+note = "Reorganized 2026-09-06 from fork-remote-file-downloads."
