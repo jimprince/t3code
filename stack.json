@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "fd026b8537b94746c054568b2f437b58a85f48a8",
+  "prev": "e63901fff601ecfe382167359f553f2749f587b5",
   "head": "42ead5386028896fa2fa40aaa916ddb54de86884",
   "applied": [
     "fork-build-ci-compat",
@@ -20,7 +20,7 @@
     "old-fork-provider-observability",
     "old-fork-thread-lifecycle-recovery",
     "old-fork-thread-goals",
-    "fork-thread-transfer",
+    "old-fork-thread-transfer",
     "fork-thread-fork",
     "fork-general-chat-projects",
     "fork-remote-relay-access",
@@ -128,9 +128,6 @@
     "fork-thread-fork": {
       "oid": "4d6acac2548d47ce9df974b42905421cc3f9b69a"
     },
-    "fork-thread-transfer": {
-      "oid": "f4949dd1649a03cd89212b38041b37aefaf56643"
-    },
     "fork-web-client-resilience": {
       "oid": "26bdd55b64813c473be94616ec2afe3423338fb0"
     },
@@ -175,6 +172,9 @@
     },
     "old-fork-thread-lifecycle-recovery": {
       "oid": "4f31efcf94301d425bd43379d3cc36adca551c49"
+    },
+    "old-fork-thread-transfer": {
+      "oid": "f4949dd1649a03cd89212b38041b37aefaf56643"
     }
   }
 }
