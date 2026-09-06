@@ -226,6 +226,7 @@ describe("persistence error correlation", () => {
         lastSeenAt,
         resumeCursor: null,
         runtimePayload: null,
+        bootGenerationId: null,
       });
 
       const listed = yield* runtimes.list();
@@ -246,6 +247,7 @@ describe("persistence error correlation", () => {
           lastSeenAt,
           resumeCursor: null,
           runtimePayload: { secret: runtimePayload },
+          bootGenerationId: null,
         }),
       );
       assert.instanceOf(sqlFailure, PersistenceErrors.PersistenceSqlError);
