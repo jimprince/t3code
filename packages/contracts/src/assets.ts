@@ -1,3 +1,4 @@
+import { WorkspaceFileDownloadResource } from "./workspaceFileDownload.ts";
 import * as Schema from "effect/Schema";
 
 import { NonNegativeInt, ThreadId, TrimmedNonEmptyString, TurnItemId } from "./baseSchemas.ts";
@@ -29,6 +30,7 @@ export const AssetResource = Schema.Union([
     cwd: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
     path: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
   }),
+  WorkspaceFileDownloadResource,
   Schema.TaggedStruct("attachment", {
     attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
     /** Display name and mime from the `ChatAttachment` the caller holds. The
