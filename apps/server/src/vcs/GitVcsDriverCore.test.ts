@@ -1,3 +1,4 @@
+import { resolveRemoteWorktreeBase } from "../git/remoteWorktreeBase.ts";
 // @effect-diagnostics nodeBuiltinImport:off - realpathSync.native resolves Windows 8.3 short names, which the Effect realPath does not.
 import * as NodeFS from "node:fs";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -1766,6 +1767,35 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
   });
 
   describe("remote operations", () => {
+    it.effect(
+      "names the missing Gitea base without falling back to an origin or local branch",
+      () =>
+        Effect.gen(function* () {
+          const cwd = yield* makeTmpDir();
+          const remote = yield* makeTmpDir("git-remote-");
+          yield* initRepoWithCommit(cwd);
+          yield* git(remote, ["init", "--bare"]);
+          yield* git(cwd, ["remote", "add", "origin", remote]);
+          yield* git(cwd, ["remote", "add", "gitea", remote]);
+          yield* git(cwd, ["checkout", "-b", "feature/topic"]);
+          yield* git(cwd, ["push", "-u", "origin", "feature/topic"]);
+          const driver = yield* GitVcsDriver.GitVcsDriver;
+          const failure = yield* driver
+            .resolveRemoteTrackingCommit({
+              cwd,
+              refName: "feature/topic",
+              fallbackRemoteName: "gitea",
+            })
+            .pipe(Effect.flip);
+          assert.include(failure.message, "gitea/feature/topic");
+          assert.include(failure.message, "Select an existing remote branch");
+          assert.equal(
+            yield* git(cwd, ["rev-parse", "--abbrev-ref", "@{upstream}"]),
+            "origin/feature/topic",
+          );
+        }),
+    );
+
     it.effect("creates a worktree from the latest fetched remote commit", () =>
       Effect.gen(function* () {
         const cwd = yield* makeTmpDir();
@@ -1789,7 +1819,12 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
         assert.notEqual(beforeFetch, remoteHead);
 
         const driver = yield* GitVcsDriver.GitVcsDriver;
-        yield* driver.fetchRemote({ cwd, remoteName: "origin" });
+        // A second remote must not override this local branch's upstream.
+        yield* git(cwd, ["remote", "add", "gitea", yield* makeTmpDir("other-remote-")]);
+        const base = yield* resolveRemoteWorktreeBase(driver, { cwd, baseBranch: initialBranch });
+        assert.deepEqual(base, { remoteName: "origin", refName: `origin/${initialBranch}` });
+        assert.isNotNull(base);
+        yield* driver.fetchRemote({ cwd, remoteName: base!.remoteName });
 
         assert.equal(
           yield* driver.remoteBranchExists({
@@ -1810,8 +1845,8 @@ it.layer(TestLayer)("GitVcsDriver core integration", (it) => {
 
         const resolvedBase = yield* driver.resolveRemoteTrackingCommit({
           cwd,
-          refName: initialBranch,
-          fallbackRemoteName: "origin",
+          refName: base!.refName,
+          fallbackRemoteName: base!.remoteName,
         });
         const explicitlyResolvedBase = yield* driver.resolveRemoteTrackingCommit({
           cwd,
