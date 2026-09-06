@@ -151,6 +151,13 @@ your login; `t3 connect logout` also clears that login. Background-service
 Treat pairing URLs and authorization codes as passwords. Do not include them in
 screenshots, logs, or bug reports.
 
+## Private server addresses
+
+A bare local, LAN, or tailnet hostname without a port connects over HTTP on port 3773.
+An explicit address such as `https://server.local` keeps its protocol and port,
+including the standard HTTPS port. Enter the full address when your private server
+uses HTTPS or a custom port.
+
 ## T3 Connect troubleshooting
 
 Run `t3 connect status` on the host to inspect saved authorization and link

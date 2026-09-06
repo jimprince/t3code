@@ -247,16 +247,20 @@ describe("remote", () => {
     });
   });
 
-  it("repairs scheme-only LAN host entries that would otherwise try HTTPS port 443", () => {
-    expect(
-      resolveRemotePairingTarget({
-        host: "https://192.168.50.131",
-        pairingCode: "pairing-token",
-      }),
-    ).toEqual({
-      credential: "pairing-token",
-      httpBaseUrl: "http://192.168.50.131:3773/",
-      wsBaseUrl: "ws://192.168.50.131:3773/",
-    });
-  });
+  it.each([
+    ["https://192.168.50.131", "https://192.168.50.131/", "wss://192.168.50.131/"],
+    ["https://192.168.50.131:443", "https://192.168.50.131/", "wss://192.168.50.131/"],
+    ["http://localhost", "http://localhost/", "ws://localhost/"],
+    ["wss://server.local", "https://server.local/", "wss://server.local/"],
+    ["https://100.64.0.4:8443", "https://100.64.0.4:8443/", "wss://100.64.0.4:8443/"],
+  ])(
+    "preserves explicit private-host connection settings for %s",
+    (host, httpBaseUrl, wsBaseUrl) => {
+      expect(resolveRemotePairingTarget({ host, pairingCode: "pairing-token" })).toEqual({
+        credential: "pairing-token",
+        httpBaseUrl,
+        wsBaseUrl,
+      });
+    },
+  );
 });
