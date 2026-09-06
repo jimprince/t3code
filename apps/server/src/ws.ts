@@ -50,6 +50,7 @@ import {
   ProjectReadFileError,
   ProjectSearchContentsError,
   ProjectSearchEntriesError,
+  ProjectUploadFileError,
   ProjectWriteFileError,
   ProviderUploadFeedbackError,
   ProviderSetupError,
@@ -120,6 +121,7 @@ import * as PortScanner from "./preview/PortScanner.ts";
 import * as WorkspaceEntries from "./workspace/WorkspaceEntries.ts";
 import * as WorkspaceFileSystem from "./workspace/WorkspaceFileSystem.ts";
 import { readWorkflowScript } from "./orchestration/workflowScriptQuery.ts";
+import * as WorkspaceUploads from "./workspace/WorkspaceUploads.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
@@ -573,6 +575,7 @@ const makeWsRpcLayer = (
         }
         return true;
       });
+      const workspaceUploads = yield* WorkspaceUploads.WorkspaceUploads;
       const projectSetupScriptRunner = yield* ProjectSetupScriptRunner.ProjectSetupScriptRunner;
       const agentSessionScanner = yield* AgentSessionScanner.AgentSessionScanner;
       const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
@@ -2310,6 +2313,22 @@ const makeWsRpcLayer = (
                   new ProjectWriteFileError({
                     cwd: input.cwd,
                     relativePath: input.relativePath,
+                    ...projectFileFailureContext(cause),
+                    cause,
+                  }),
+              ),
+            ),
+            { "rpc.aggregate": "workspace" },
+          ),
+        [WS_METHODS.projectsUploadFile]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectsUploadFile,
+            workspaceUploads.uploadFile(input).pipe(
+              Effect.mapError(
+                (cause) =>
+                  new ProjectUploadFileError({
+                    cwd: input.cwd,
+                    relativePath: input.fileName,
                     ...projectFileFailureContext(cause),
                     cause,
                   }),
