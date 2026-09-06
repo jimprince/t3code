@@ -1,9 +1,11 @@
 {
   "version": 5,
-  "prev": "f00884c26a57e99f71d8156f55c7f4ad92dd397d",
-  "head": "e3eb819c2f505fe72c805f322d53c32a983b8825",
+  "prev": "0b1bfc8fee8a4418a35c06d1d3a54880744df268",
+  "head": "41853730faf59c66996baa68a063ae4a0f4277f6",
   "applied": [
-    "fork-build-ci-compat",
+    "fork-build-ci-compat"
+  ],
+  "unapplied": [
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
@@ -32,7 +34,6 @@
     "fork-release-publication",
     "fork-maintenance-automation"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
