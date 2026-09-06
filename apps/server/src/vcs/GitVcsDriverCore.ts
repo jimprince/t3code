@@ -3332,6 +3332,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     fetchRemote: (input) => withListRefsInvalidation(input.cwd, fetchRemote(input)),
     remoteExists,
     remoteBranchExists,
+    listRemoteNames,
     resolveRemoteTrackingCommit,
     fetchRemoteBranch: (input) => withListRefsInvalidation(input.cwd, fetchRemoteBranch(input)),
     fetchRemoteTrackingBranch: (input) =>
