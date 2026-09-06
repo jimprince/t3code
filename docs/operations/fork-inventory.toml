@@ -26,7 +26,7 @@ purpose = "Configure the fork workspace, dependency graph, lockfile, available C
 retire_when = "Upstream or maintained shared tooling provides equivalent workspace, runner, and test-budget support, or the fork intentionally stops requiring this concern."
 depends_on = []
 roles = ["lockfile-owner"]
-note = "Removed the unrelated wall-clock assertion from activity-reuse coverage; the observable identity-reuse test and justified compression-test headroom remain. Regenerate pnpm-lock.yaml only at the complete stack tip, then copy it into this owning patch; mid-stack generation omits later workspaces."
+note = "Keep upstream and fork script entry points in one Knip workspace stanza. Removed the unrelated wall-clock assertion from activity-reuse coverage; the observable identity-reuse test and justified compression-test headroom remain. Regenerate pnpm-lock.yaml only at the complete stack tip, then copy it into this owning patch; mid-stack generation omits later workspaces."
 [[patch.decision]]
 id = "stashimagecompression-timeout"
 date = "2026-07-29"
