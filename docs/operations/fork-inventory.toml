@@ -746,3 +746,24 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Register configured HTTP Gitea beside native Forgejo and preserve V2 native PR synchronization and import; do not restore V1 reducers or projections."
+
+[[patch]]
+name = "fork-gitea-pr-actions"
+subject = "feat(source-control): create and check out Gitea pull requests"
+class = "upstream-bound"
+purpose = "Create and resolve Gitea pull requests, check out retained PR heads, retrieve fork clone URLs and default branches, and recognize Gitea templates and pasted URLs."
+retire_when = "Upstream supports equivalent configured-instance Gitea create and checkout flows."
+depends_on = ["fork-gitea-connections"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-gitea-pr-actions. Numeric linked-PR targets require a known provider on the thread project host; cross-host or unknown-provider targets require a canonical URL instead of inventing a GitHub route."
+[[patch.decision]]
+id = "upstream-forgejo-reference-parser"
+date = "2026-09-16"
+decided = "retire"
+rationale = "Retire the duplicate Gitea URL regex because upstream's generalized Forgejo pulls URL parser already accepts configured Gitea hosts and nested repository paths. Retain Gitea action tests against the shared parser."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Retain native V2 explicit project/thread targets and watchers while adding configured HTTP actions and canonical-URL guards."
