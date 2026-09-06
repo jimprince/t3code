@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+version="2.6.1"
+archive="stgit_${version}-1_amd64.deb"
+expected_sha="df3a131398d4a10aa2aef506a03b9cb88f428446f8a24f298d79c068541a3fa0"
+install_root="${RUNNER_TEMP:?RUNNER_TEMP is required}/stgit-${version}"
+download="$(mktemp)"
+trap 'rm -f "$download"' EXIT
+
+if [[ "$(uname -s)" != "Linux" || "$(uname -m)" != "x86_64" ]]; then
+  echo "install-stgit currently supports the Linux x64 CI runners only." >&2
+  exit 2
+fi
+
+curl --fail --location --silent --show-error \
+  "https://github.com/stacked-git/stgit/releases/download/v${version}/${archive}" \
+  --output "$download"
+echo "${expected_sha}  ${download}" | sha256sum --check --status
+mkdir -p "$install_root"
+dpkg-deb --extract "$download" "$install_root"
+"$install_root/usr/bin/stg" --version
+
+if [[ -n "${GITHUB_PATH:-}" ]]; then
+  echo "$install_root/usr/bin" >> "$GITHUB_PATH"
+else
+  echo "Add $install_root/usr/bin to PATH."
+fi
