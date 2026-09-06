@@ -1092,6 +1092,11 @@ export function createServerEnvironmentAtoms<R, E>(
       tag: WS_METHODS.serverUpdateThreadSubscriptions,
     }),
 
+    recoveryPreview: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:recovery-preview",
+      tag: WS_METHODS.serverPreviewRecovery,
+    }),
+
     configProjection,
     welcome,
     consumeResetCredit: createEnvironmentRpcCommand(runtime, {
@@ -1162,6 +1167,11 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         key: ({ environmentId }) => environmentId,
       },
+    }),
+
+    executeRecovery: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:execute-recovery",
+      tag: WS_METHODS.serverExecuteRecovery,
     }),
   };
 }
