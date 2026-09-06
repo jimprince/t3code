@@ -1,4 +1,5 @@
 import * as ProviderEventLoggers from "@t3tools/provider-core/server/ProviderEventLoggers";
+import { configuredGiteaIdentity } from "./sourceControl/ForkGiteaLinkAdapter.ts";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Clock from "effect/Clock";
 import * as Random from "effect/Random";
@@ -318,6 +319,8 @@ const layerRepositoryIdentityResolver = Layer.effect(
     return yield* RepositoryIdentityResolver.make({
       // Each host that can refine an identity gets a turn; the first one that changes it wins.
       refine: Effect.fn(function* (identity: RepositoryIdentity) {
+        const gitea = yield* configuredGiteaIdentity(registry, identity);
+        if (gitea !== null) return gitea;
         for (const kind of SourceControlBuiltInDrivers.BUILT_IN_SOURCE_CONTROL_DRIVERS.map(
           (driver) => driver.kind,
         )) {
