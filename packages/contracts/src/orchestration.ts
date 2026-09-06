@@ -33,6 +33,7 @@ export const ORCHESTRATION_WS_METHODS = {
   getArchivedShellSnapshot: "orchestration.getArchivedShellSnapshot",
   subscribeShell: "orchestration.subscribeShell",
   subscribeThread: "orchestration.subscribeThread",
+  forkThread: "orchestration.forkThread",
 } as const;
 
 export const ProviderApprovalPolicy = Schema.Literals([
@@ -756,6 +757,10 @@ export const OrchestrationThreadDetailSnapshot = Schema.Struct({
 });
 export type OrchestrationThreadDetailSnapshot = typeof OrchestrationThreadDetailSnapshot.Type;
 
+export const OrchestrationForkThreadInput = Schema.Struct({
+export type OrchestrationForkThreadInput = typeof OrchestrationForkThreadInput.Type;
+export const OrchestrationForkThreadResult = Schema.Struct({
+export type OrchestrationForkThreadResult = typeof OrchestrationForkThreadResult.Type;
 export const ProjectCreateCommand = Schema.Struct({
   type: Schema.Literal("project.create"),
   commandId: CommandId,
@@ -1884,6 +1889,9 @@ export const OrchestrationRpcSchemas = {
     input: OrchestrationSubscribeShellInput,
     output: OrchestrationShellStreamItem,
   },
+  forkThread: {
+    input: OrchestrationForkThreadInput,
+    output: OrchestrationForkThreadResult,
 } as const;
 
 export class OrchestrationGetSnapshotError extends Schema.TaggedErrorClass<OrchestrationGetSnapshotError>()(
@@ -1926,3 +1934,5 @@ export class OrchestrationSearchThreadsError extends Schema.TaggedErrorClass<Orc
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}
+export class OrchestrationForkThreadError extends Schema.TaggedErrorClass<OrchestrationForkThreadError>()(
+  "OrchestrationForkThreadError",

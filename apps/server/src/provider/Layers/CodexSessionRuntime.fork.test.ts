@@ -39,6 +39,187 @@ describe("CodexSessionRuntimeIdentifierGenerationError", () => {
   });
 });
 
+describe("forkCodexThread", () => {
+  it.effect("forks into the destination cwd and trims trailing turns", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          if (method === "thread/fork") {
+            return Effect.succeed({
+              thread: {
+                id: "provider-fork",
+                turns: [{ id: "turn-1" }, { id: "turn-2" }, { id: "turn-3" }],
+              },
+            });
+          }
+          return Effect.succeed({
+            thread: { id: "provider-fork", turns: [{ id: "turn-1" }, { id: "turn-2" }] },
+          });
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 2,
+        retainedTurnId: TurnId.make("turn-2"),
+      });
+
+      NodeAssert.deepStrictEqual(requests, [
+        {
+          method: "thread/fork",
+          payload: { threadId: "provider-source", cwd: "/tmp/fork-worktree" },
+        },
+        {
+          method: "thread/rollback",
+          payload: { threadId: "provider-fork", numTurns: 1 },
+        },
+      ]);
+      NodeAssert.notEqual(result, null);
+      if (result === null) return;
+      NodeAssert.equal(result.threadId, "provider-fork");
+      NodeAssert.equal(result.turnCount, 2);
+    }),
+  );
+
+  it.effect("anchors rollback to the retained turn id when provider counts diverge", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          return Effect.succeed({
+            thread: {
+              id: "provider-fork",
+              turns: [
+                { id: "turn-1" },
+                { id: "turn-interrupted" },
+                { id: "turn-3" },
+                { id: "turn-4" },
+              ],
+            },
+          });
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 3,
+        retainedTurnId: TurnId.make("turn-4"),
+      });
+
+      NodeAssert.deepStrictEqual(
+        requests.map((request) => request.method),
+        ["thread/fork"],
+        "REGRESSION: ordinal rollback dropped the retained turn after an interrupted provider turn",
+      );
+      NodeAssert.equal(result?.threadId, "provider-fork");
+      NodeAssert.equal(result?.turnCount, 4);
+    }),
+  );
+
+  it.effect("archives a detached provider fork when the retained turn is missing", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          return method === "thread/fork"
+            ? Effect.succeed({
+                thread: { id: "provider-orphan", turns: [{ id: "different-turn" }] },
+              })
+            : Effect.succeed({});
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("missing-turn"),
+      });
+
+      NodeAssert.equal(result, null);
+      NodeAssert.deepStrictEqual(requests, [
+        {
+          method: "thread/fork",
+          payload: { threadId: "provider-source", cwd: "/tmp/fork-worktree" },
+        },
+        {
+          method: "thread/archive",
+          payload: { threadId: "provider-orphan" },
+        },
+      ]);
+    }),
+  );
+
+  it.effect("archives a detached provider fork when rollback fails", () =>
+    Effect.gen(function* () {
+      const requests: Array<{ method: string; payload: unknown }> = [];
+      const client = {
+        request: (method: string, payload: unknown) => {
+          requests.push({ method, payload });
+          if (method === "thread/fork") {
+            return Effect.succeed({
+              thread: {
+                id: "provider-orphan",
+                turns: [{ id: "turn-1" }, { id: "turn-2" }],
+              },
+            });
+          }
+          if (method === "thread/rollback") {
+            return Effect.die(new Error("simulated rollback failure"));
+          }
+          return Effect.succeed({});
+        },
+      };
+
+      const result = yield* forkCodexThread({
+        client: client as never,
+        sourceThreadId: "provider-source",
+        cwd: "/tmp/fork-worktree",
+        retainedTurnCount: 1,
+        retainedTurnId: TurnId.make("turn-1"),
+      }).pipe(Effect.exit);
+
+      NodeAssert.equal(result._tag, "Failure");
+      NodeAssert.deepStrictEqual(
+        requests.map(({ method }) => method),
+        ["thread/fork", "thread/rollback", "thread/archive"],
+      );
+    }),
+  );
+});
+
+function makeThreadOpenResponse(
+  threadId: string,
+): CodexRpc.ClientRequestResponsesByMethod["thread/start"] {
+  return {
+    cwd: "/tmp/project",
+    model: "gpt-5.3-codex",
+    modelProvider: "openai",
+    approvalPolicy: "never",
+    approvalsReviewer: "user",
+    sandbox: { type: "danger-full-access" },
+    thread: {
+      id: threadId,
+      createdAt: "2026-04-18T00:00:00.000Z",
+      source: { session: "cli" },
+      turns: [],
+      status: {
+        state: "idle",
+        activeFlags: [],
+      },
+    },
+  } as unknown as CodexRpc.ClientRequestResponsesByMethod["thread/start"];
+}
+
 describe("buildTurnStartParams", () => {
   it("keeps invalid turn values only in the schema cause", () => {
     const secret = "codex-turn-input-secret-sentinel";
