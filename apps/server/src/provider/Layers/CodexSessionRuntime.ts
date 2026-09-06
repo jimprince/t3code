@@ -229,6 +229,14 @@ export interface CodexSessionRuntimeShape {
   readonly rollbackThread: (
     numTurns: number,
   ) => Effect.Effect<CodexThreadSnapshot, CodexSessionRuntimeError>;
+  readonly forkThread: (input: {
+    readonly cwd: string;
+    readonly retainedTurnCount: number;
+    readonly retainedTurnId: TurnId | null;
+  }) => Effect.Effect<
+    { readonly threadId: string; readonly turnCount: number } | null,
+    CodexSessionRuntimeError
+  >;
   readonly uploadFeedback: (
     reason?: string,
   ) => Effect.Effect<EffectCodexSchema.V2FeedbackUploadResponse, CodexSessionRuntimeError>;
@@ -754,6 +762,70 @@ interface CodexThreadOpenClient {
     CodexErrors.CodexAppServerError
   >;
 }
+
+type CodexThreadForkMethod = "thread/fork" | "thread/revert" | "thread/archive";
+
+interface CodexThreadForkClient {
+  readonly request: <M extends CodexThreadForkMethod>(
+    method: M,
+    payload: CodexRpc.ClientRequestParamsByMethod[M],
+  ) => Effect.Effect<CodexRpc.ClientRequestResponsesByMethod[M], CodexErrors.CodexAppServerError>;
+}
+
+export const forkCodexThread = Effect.fn("forkCodexThread")(function* (input: {
+  readonly client: CodexThreadForkClient;
+  readonly sourceThreadId: string;
+  readonly cwd: string;
+  readonly retainedTurnCount: number;
+  readonly retainedTurnId: TurnId | null;
+}) {
+  const forked = yield* input.client.request("thread/fork", {
+    threadId: input.sourceThreadId,
+    cwd: input.cwd,
+  });
+  const providerThreadId = forked.thread.id;
+  const forkedTurnCount = forked.thread.turns.length;
+  const archiveForkedThread = Effect.suspend(() =>
+    input.client.request("thread/archive", { threadId: providerThreadId }),
+  ).pipe(
+    Effect.asVoid,
+    Effect.catchCause((cause) =>
+      Effect.logWarning("failed to archive detached Codex provider fork", {
+        threadId: providerThreadId,
+        cause,
+      }),
+    ),
+  );
+  const retainedTurnIndex =
+    input.retainedTurnId === null
+      ? -1
+      : forked.thread.turns.findIndex((turn) => turn.id === input.retainedTurnId);
+  if (input.retainedTurnId !== null && retainedTurnIndex < 0) {
+    yield* archiveForkedThread;
+    return null;
+  }
+  const keptTurnCount = retainedTurnIndex + 1;
+  return yield* Effect.gen(function* () {
+    // Codex dropped its count-based rollback endpoint; history is now replaced
+    // at a turn boundary, so name the first turn the fork must not keep.
+    const firstRemovedTurn = forked.thread.turns[keptTurnCount];
+    if (firstRemovedTurn !== undefined) {
+      yield* input.client.request("thread/revert", {
+        threadId: providerThreadId,
+        beforeTurnId: firstRemovedTurn.id,
+      });
+    }
+
+    return {
+      threadId: providerThreadId,
+      turnCount: keptTurnCount,
+    };
+  }).pipe(
+    Effect.catchCause((cause) =>
+      archiveForkedThread.pipe(Effect.flatMap(() => Effect.failCause(cause))),
+    ),
+  );
+});
 
 export const openCodexThread = (input: {
   readonly client: CodexThreadOpenClient;
@@ -2713,6 +2785,17 @@ export const makeCodexSessionRuntime = (
             activeTurnId: undefined,
           });
           return snapshot;
+        }),
+      forkThread: (input) =>
+        Effect.gen(function* () {
+          const providerThreadId = yield* readProviderThreadId;
+          return yield* forkCodexThread({
+            client,
+            sourceThreadId: providerThreadId,
+            cwd: input.cwd,
+            retainedTurnCount: input.retainedTurnCount,
+            retainedTurnId: input.retainedTurnId,
+          });
         }),
       uploadFeedback: (reason) =>
         Effect.gen(function* () {
