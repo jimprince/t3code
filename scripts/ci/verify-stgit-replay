@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This gate runs on the complete unstamped candidate before main is published.
+# No package-wide baseline exemptions: failures stop promotion.
+head="$(git rev-parse HEAD)"
+tree="$(git rev-parse 'HEAD^{tree}')"
+scripts/ci/check-stgit-stack
+bun scripts/ci/check-fork-docs.ts
+vp install --frozen-lockfile
+vp run --filter @t3tools/desktop ensure:electron
+vp run --filter @t3tools/oxlint-plugin-t3code build
+vp check
+vp run typecheck
+vp run test
+if [[ "$(git rev-parse HEAD)" != "$head" || "$(git write-tree)" != "$tree" || -n "$(git status --porcelain)" ]]; then
+  echo 'Verification changed the candidate; fold changes into their owning patches and reverify.' >&2
+  exit 1
+fi
