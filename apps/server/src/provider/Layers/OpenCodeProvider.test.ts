@@ -167,6 +167,7 @@ const runtimeMock = {
     inventoryError: null as Error | null,
     connectionError: null as Error | null,
     inventoryCwd: null as string | null,
+    startCalls: 0,
     closeCalls: 0,
     sdkClientInputs: [] as Array<{
       baseUrl: string;
@@ -186,6 +187,7 @@ const runtimeMock = {
     this.state.inventoryError = null;
     this.state.connectionError = null;
     this.state.inventoryCwd = null;
+    this.state.startCalls = 0;
     this.state.closeCalls = 0;
     this.state.sdkClientInputs.length = 0;
     this.state.inventory = {
@@ -199,6 +201,7 @@ const runtimeMock = {
 const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
   startOpenCodeServerProcess: ({ serverPassword, environment }) =>
     Effect.gen(function* () {
+      runtimeMock.state.startCalls += 1;
       yield* Effect.addFinalizer(() =>
         Effect.sync(() => {
           runtimeMock.state.closeCalls += 1;
@@ -211,6 +214,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
       });
       return {
         url: "http://127.0.0.1:4301",
+        processId: 43_001,
         ...(effectiveServerPassword !== undefined
           ? { serverPassword: effectiveServerPassword }
           : {}),
@@ -239,6 +243,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntimeShape = {
         url: serverUrl ?? "http://127.0.0.1:4301",
         ...(serverPassword ? { serverPassword } : {}),
         version: "1.14.19",
+        processId: null,
         exitCode: null,
         external: Boolean(serverUrl),
       };
