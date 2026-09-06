@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "87dd5784587d2bd96b3a83d873e7594e0556dc79",
+  "prev": "5ccb3311cfa0e31bd10e51e697503db7ce5ceb19",
   "head": "42ead5386028896fa2fa40aaa916ddb54de86884",
   "applied": [
     "fork-build-ci-compat",
@@ -46,7 +46,7 @@
     "old-fork-worktree-gc",
     "old-fork-gitea-instance-pr-badges",
     "old-fork-gitea-pr-actions",
-    "fork-pr-project-exclusions"
+    "old-fork-pr-project-exclusions"
   ],
   "hidden": [],
   "patches": {
@@ -61,9 +61,6 @@
     },
     "fork-general-chat": {
       "oid": "8ad2d3dd49c7aa1f8f206075fb89ff438600bb5a"
-    },
-    "fork-pr-project-exclusions": {
-      "oid": "b5c70c0443c5a97f19301f7d43d87ea774d939db"
     },
     "fork-provider-turn-safety": {
       "oid": "96e0bb546e94139a5ced0cc5ca4354579de69c79"
@@ -112,6 +109,9 @@
     },
     "old-fork-performance-recovery": {
       "oid": "ab88601ded5f14f41ca02c3cb4841c93d852f83a"
+    },
+    "old-fork-pr-project-exclusions": {
+      "oid": "b5c70c0443c5a97f19301f7d43d87ea774d939db"
     },
     "old-fork-pr-status-unsupported-hosts": {
       "oid": "5b01d0edaa2ef7e65990a8d0a9c6e0fdb5201937"
