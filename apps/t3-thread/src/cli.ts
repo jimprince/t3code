@@ -23,6 +23,7 @@ import {
   summarizeMessageText,
 } from "./monitor.js";
 import { classifyThread, formatThreadLine } from "./status.js";
+import { DEFAULT_RECOVERY_WINDOW_DAYS, runWorktreeGc } from "./worktreeGc.js";
 import {
   assertNotSelfSubscription,
   buildSubscriptionRecord,
@@ -358,6 +359,49 @@ program
         defaultModelSelection: project.defaultModelSelection,
       })),
     );
+  });
+
+const worktree = program
+  .command("worktree")
+  .description("Manage the git worktrees T3 created for worker threads");
+
+worktree
+  .command("gc")
+  .requiredOption("--env <name>", "saved environment name")
+  .requiredOption("--local-state-dir <path>", "local T3 state directory containing environment-id")
+  .option(
+    "--recovery-window-days <days>",
+    "keep a worktree for this long after its last thread was archived",
+    String(DEFAULT_RECOVERY_WINDOW_DAYS),
+  )
+  .option("--execute", "remove the planned worktrees instead of only reporting them")
+  .description("Retire worktrees whose threads are all archived, on this host")
+  .action(async (options) => {
+    const recoveryWindowDays = Number(options.recoveryWindowDays);
+    if (!Number.isFinite(recoveryWindowDays) || recoveryWindowDays < 0) {
+      throw new Error("`--recovery-window-days` must be a non-negative number.");
+    }
+
+    const state = await loadState();
+    const environment = requireEnvironment(state, options.env);
+    const client = new RemoteEnvironmentClient(environment);
+    const descriptor = await client.describe();
+    const plan = await runWorktreeGc({
+      localStateDir: options.localStateDir,
+      environmentId: descriptor.environmentId,
+      listThreads: () => client.listWorktreeGcThreads(),
+      recoveryWindowDays,
+      execute: Boolean(options.execute),
+    });
+
+    printJson({
+      environment: environment.name,
+      recoveryWindowDays,
+      executed: Boolean(options.execute),
+      removable: plan.removable,
+      retained: plan.retained,
+      removals: plan.removals,
+    });
   });
 
 const project = program.command("project").description("Manage T3 Code projects");
