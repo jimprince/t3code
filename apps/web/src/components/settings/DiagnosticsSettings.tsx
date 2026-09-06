@@ -17,6 +17,7 @@ import type {
   ServerProcessDiagnosticsEntry,
   ServerProcessResourceHistorySummary,
   ServerProcessSignal,
+  ServerRecoveryCandidate,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
 import * as Option from "effect/Option";
@@ -29,18 +30,32 @@ import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { shellEnvironment } from "../../state/shell";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
+import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
 import { Button } from "../ui/button";
+import { Checkbox } from "../ui/checkbox";
 import { ScrollArea } from "../ui/scroll-area";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
+import { Switch } from "../ui/switch";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { toastManager } from "../ui/toast";
 import { ExpandableText } from "./ExpandableText";
 import { ResourceTelemetryDiagnostics } from "./ResourceTelemetryDiagnostics";
-import { SettingsPageContainer, SettingsSection, useRelativeTimeTick } from "./settingsLayout";
+import {
+  SettingsPageContainer,
+  SettingsRow,
+  SettingsSection,
+  useRelativeTimeTick,
+} from "./settingsLayout";
+
 import { useAtomCommand } from "../../state/use-atom-command";
 import { useSettingsScope } from "./SettingsScopeContext";
 
 const NUMBER_FORMAT = new Intl.NumberFormat();
+const RECOVERY_GROUP_LABELS = {
+  "idle-provider-sessions": "Idle provider sessions",
+  "diagnostic-captures": "Diagnostic captures",
+  "orphaned-provider-workers": "Orphaned provider workers",
+} as const;
 
 function formatCount(value: number): string {
   return NUMBER_FORMAT.format(value);
@@ -714,7 +729,12 @@ export function DiagnosticsSettingsPanel() {
   const environmentId = environment?.environmentId ?? null;
   const observability = environment?.serverConfig?.observability;
   const availableEditors = environment?.serverConfig?.availableEditors;
+  const settings = usePrimarySettings();
+  const updateSettings = useUpdatePrimarySettings();
   const signalServerProcess = useAtomCommand(serverEnvironment.signalProcess, {
+    reportFailure: false,
+  });
+  const executeRecoveryCommand = useAtomCommand(serverEnvironment.executeRecovery, {
     reportFailure: false,
   });
   const openInEditor = useAtomCommand(shellEnvironment.openInEditor, {
@@ -740,6 +760,14 @@ export function DiagnosticsSettingsPanel() {
       : serverEnvironment.processDiagnostics({ environmentId, input: {} }),
   );
   const {
+    data: recoveryPreview,
+    error: recoveryPreviewError,
+    isPending: isRecoveryPreviewPending,
+    refresh: refreshRecoveryPreview,
+  } = useEnvironmentQuery(
+    environmentId === null ? null : serverEnvironment.recoveryPreview({ environmentId, input: {} }),
+  );
+  const {
     data: resourceData,
     error: resourceError,
     isPending: isResourcePending,
@@ -761,6 +789,11 @@ export function DiagnosticsSettingsPanel() {
   const signalingPidRef = useRef<number | null>(null);
   const environmentIdRef = useRef(environmentId);
   const processDataRef = useRef(processData);
+  const [selectedRecoveryCandidateIds, setSelectedRecoveryCandidateIds] = useState<
+    ReadonlySet<string>
+  >(new Set());
+  const [isExecutingRecovery, setIsExecutingRecovery] = useState(false);
+
   useEffect(() => {
     processDataRef.current = processData;
   }, [processData]);
@@ -770,6 +803,16 @@ export function DiagnosticsSettingsPanel() {
       environmentIdRef.current = null;
     };
   }, [environmentId]);
+
+  useEffect(() => {
+    setSelectedRecoveryCandidateIds(
+      new Set(
+        recoveryPreview?.candidates
+          .filter((candidate) => candidate.recommended)
+          .map((candidate) => candidate.candidateId) ?? [],
+      ),
+    );
+  }, [recoveryPreview?.previewId]);
 
   const openLogsDirectory = useCallback(() => {
     const logsDirectoryPath = observability?.logsDirectoryPath ?? null;
@@ -896,6 +939,91 @@ export function DiagnosticsSettingsPanel() {
     [refreshProcesses, signalServerProcess],
   );
 
+  const toggleRecoveryCandidate = useCallback((candidateId: string, selected: boolean) => {
+    setSelectedRecoveryCandidateIds((current) => {
+      const next = new Set(current);
+      if (selected) {
+        next.add(candidateId);
+      } else {
+        next.delete(candidateId);
+      }
+      return next;
+    });
+  }, []);
+
+  const executeRecovery = useCallback(() => {
+    if (
+      environmentId === null ||
+      recoveryPreview === null ||
+      selectedRecoveryCandidateIds.size === 0 ||
+      !window.confirm(
+        `Attempt recovery for ${selectedRecoveryCandidateIds.size} selected item(s)? Active turns and macOS system services will not be stopped.`,
+      )
+    ) {
+      return;
+    }
+
+    setIsExecutingRecovery(true);
+    void (async () => {
+      const result = await executeRecoveryCommand({
+        environmentId,
+        input: {
+          previewId: recoveryPreview.previewId,
+          candidateIds: [...selectedRecoveryCandidateIds],
+        },
+      });
+      setIsExecutingRecovery(false);
+      if (result._tag === "Failure") {
+        if (!isAtomCommandInterrupted(result)) {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add({
+            type: "error",
+            title: "Recovery could not run",
+            description: error instanceof Error ? error.message : "Recovery request failed.",
+          });
+        }
+        return;
+      }
+
+      const completed = result.value.actions.filter(
+        (action) => action.outcome === "stopped" || action.outcome === "signaled",
+      ).length;
+      const failed = result.value.actions.length - completed;
+      toastManager.add({
+        type: failed === 0 ? "success" : "info",
+        title: "Recovery attempt complete",
+        description: `${completed} item(s) handled${failed > 0 ? `; ${failed} skipped or failed` : ""}.`,
+      });
+      refreshRecoveryPreview();
+      refreshProcesses();
+      refreshResources();
+    })();
+  }, [
+    environmentId,
+    executeRecoveryCommand,
+    recoveryPreview,
+    refreshProcesses,
+    refreshRecoveryPreview,
+    refreshResources,
+    selectedRecoveryCandidateIds,
+  ]);
+
+  const recoveryCandidatesByGroup = useMemo(() => {
+    const groups = new Map<
+      ServerRecoveryCandidate["groupId"],
+      ReadonlyArray<ServerRecoveryCandidate>
+    >();
+    for (const groupId of Object.keys(RECOVERY_GROUP_LABELS) as Array<
+      ServerRecoveryCandidate["groupId"]
+    >) {
+      groups.set(
+        groupId,
+        recoveryPreview?.candidates.filter((candidate) => candidate.groupId === groupId) ?? [],
+      );
+    }
+    return groups;
+  }, [recoveryPreview?.candidates]);
+
   const processDiagnosticsError = processData ? Option.getOrNull(processData.error) : null;
   const processResourceError = resourceData ? Option.getOrNull(resourceData.error) : null;
   const traceDiagnosticsError = data ? Option.getOrNull(data.error) : null;
@@ -906,6 +1034,104 @@ export function DiagnosticsSettingsPanel() {
   return (
     <SettingsPageContainer width="expanded" className="gap-10">
       <ResourceTelemetryDiagnostics environmentId={environmentId} />
+      <SettingsSection title="Performance Protection">
+        <SettingsRow
+          title="System pressure notifications"
+          description="Monitor sustained macOS CPU pressure in a lightweight login helper and offer a recovery preview. Recovery is never run automatically."
+          control={
+            <Switch
+              checked={settings.systemPressureNotificationsEnabled}
+              onCheckedChange={(checked) =>
+                updateSettings({ systemPressureNotificationsEnabled: Boolean(checked) })
+              }
+              aria-label="Enable system pressure notifications"
+            />
+          }
+        />
+        <div className="border-t border-border/60 px-4 py-3 sm:px-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[13px] font-semibold">Recovery preview</div>
+              <p className="mt-1 text-xs text-muted-foreground/80">
+                Review and select only the cleanup actions you want. Nothing runs automatically.
+              </p>
+            </div>
+            <DiagnosticsRefreshButton
+              isPending={isRecoveryPreviewPending}
+              label="Refresh recovery preview"
+              onClick={refreshRecoveryPreview}
+            />
+          </div>
+
+          {recoveryPreviewError ? (
+            <div className="mt-3 text-xs text-destructive">{recoveryPreviewError}</div>
+          ) : null}
+          {recoveryPreview?.warnings.map((warning) => (
+            <div key={warning} className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+              {warning}
+            </div>
+          ))}
+
+          <div className="mt-3 space-y-3">
+            {[...recoveryCandidatesByGroup.entries()].map(([groupId, candidates]) => (
+              <div key={groupId}>
+                <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                  {RECOVERY_GROUP_LABELS[groupId]}
+                </div>
+                {candidates.length === 0 ? (
+                  <div className="mt-1 text-xs text-muted-foreground/60">No candidates.</div>
+                ) : (
+                  <div className="mt-1 divide-y divide-border/50 rounded-lg border border-border/60">
+                    {candidates.map((candidate) => (
+                      <label
+                        key={candidate.candidateId}
+                        className="flex cursor-pointer items-start gap-3 px-3 py-2.5"
+                      >
+                        <Checkbox
+                          className="mt-0.5"
+                          checked={selectedRecoveryCandidateIds.has(candidate.candidateId)}
+                          onCheckedChange={(checked) =>
+                            toggleRecoveryCandidate(candidate.candidateId, checked === true)
+                          }
+                          aria-label={`Select ${candidate.label}`}
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-xs font-medium text-foreground">
+                            {candidate.label}
+                            {candidate.recommended ? (
+                              <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                                Recommended
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="mt-0.5 block break-all font-mono text-[11px] text-muted-foreground/70">
+                            {candidate.detail}
+                          </span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 flex justify-end">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={
+                isExecutingRecovery ||
+                isRecoveryPreviewPending ||
+                selectedRecoveryCandidateIds.size === 0
+              }
+              onClick={executeRecovery}
+            >
+              {isExecutingRecovery ? "Attempting recovery..." : "Attempt selected recovery"}
+            </Button>
+          </div>
+        </div>
+      </SettingsSection>
 
       <SettingsSection
         title="Live Processes"
