@@ -318,7 +318,6 @@ id = "forkprocessrows-extraction-951"
 date = "2026-07-29"
 decided = "extract-to-additive"
 rationale = "When upstream deleted process-row parsing from ProcessDiagnostics, move ProcessRow and readProcessRows into the additive forkProcessRows module. This keeps all fork behavior out of the upstream diagnostics file."
-
 [[patch.decision]]
 id = "upstream-scoped-diagnostics-settings"
 date = "2026-09-16"
@@ -330,3 +329,18 @@ id = "upstream-server-owned-sidebar-settlement"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Upstream now treats sidebar settlement preferences as environment- and project-scoped server settings. Preserve the fork's legacy client-schema fields for stored-setting compatibility, but give server keys precedence when a key exists in both schemas so scoped writes do not also persist a conflicting client value."
+
+[[patch]]
+name = "fork-workspace-file-uploads"
+subject = "feat(web): upload files into workspace via drag-and-drop"
+class = "product"
+purpose = "Let operators drop files onto the files pane to upload them (binary-safe, collision auto-rename) into the workspace root of the paired server."
+retire_when = "Upstream ships a binary-capable workspace upload RPC with drag-and-drop in the files pane."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-web-files-upload."
+[[patch.decision]]
+id = "upstream-directory-entry-refresh"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Keep the upload RPC and drop overlay alongside upstream's incremental FileTree rendering, and refresh the new directory-entry and path-search data sources after a successful upload instead of the retired project entries query."
