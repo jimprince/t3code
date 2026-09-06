@@ -21,6 +21,22 @@ interrupted, and threads without saved provider resume state need a new message.
 If you previously enabled continuation for updates, enable this setting once
 to allow recovery without a connected client.
 
+## Linux fork server updates
+
+The Linux headless updater waits while threads have active or queued work,
+including approval and input requests. A deferred update retries after work ends;
+you do not need to close completed thread conversations. The app’s remote update
+request uses this same idle check.
+
+To deliberately interrupt active work, run this command on the Linux host:
+
+```sh
+~/.local/bin/t3code-headless-upgrade --force
+```
+
+Normal scheduled checks never use that override. To inspect readiness without
+installing anything, use `~/.local/bin/t3code-headless-upgrade --check-idle`.
+
 ## Update a connected server
 
 The offered action depends on how the server runs:
