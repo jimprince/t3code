@@ -191,3 +191,13 @@ note = "Upstream1286 persists single-project scope in the UI store; retain that 
 standing_policy = "Do not retire multi-select to upstream's single-select model. Re-escalate only if upstream removes projectScope entirely."
 resolution_kind = "relocate"
 status = "ported-and-uat-verified-2026-07-29"
+
+[[patch]]
+name = "fork-manual-thread-order"
+subject = "feat(sidebar): arrange inbox threads by hand"
+class = "upstream-bound"
+purpose = "Let operators arrange the unpinned inbox list by drag, menu, and mobile move controls, persisting a separate sidebarOrderKey per server with a reset to default order."
+retire_when = "Upstream ships manual ordering for the unpinned thread list, at which point the sidebarOrderKey field, thread.sidebar.reorder command, and threadSidebarReorder capability retire in favor of upstream."
+depends_on = ["fork-provider-turn-safety"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-sidebar-thread-order. [fork-sidebar-thread-order] sidebarOrderKey is a SEPARATE column from upstream's pin_order_key on purpose: thread.unpinned clears pin_order_key, so sharing the field would silently destroy an inbox placement on every pin/unpin cycle. The fork schema change lands in ForkMigrations, not upstream's Migrations sequence. dnd-kit alone owns sidebar card movement; do not attach outer list auto-animation or toggle card content-visibility at drop, which combines competing transforms with paint-containment changes."
