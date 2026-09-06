@@ -1,7 +1,9 @@
+import { useAtomValue } from "@effect/atom-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import ChatView from "../components/ChatView";
+import { environmentCatalog } from "../connection/catalog";
 import { threadHasStarted } from "../components/ChatView.logic";
 import { finalizePromotedDraftThreadByRef, useComposerDraftStore } from "../composerDraftStore";
 import { resolveThreadRouteRef, resolveThreadRouteRenderState } from "../threadRoutes";
@@ -24,6 +26,8 @@ function ChatThreadRouteView() {
   const shell = useEnvironmentQuery(
     threadRef === null ? null : environmentShell.stateAtom(threadRef.environmentId),
   );
+  const catalog = useAtomValue(environmentCatalog.catalogValueAtom);
+  const environmentIsKnown = threadRef !== null && catalog.entries.has(threadRef.environmentId);
   const serverThreadShell = useThreadShell(threadRef);
   const serverThreadDetail = useThreadDetail(threadRef);
   const serverThreadStatus = useThreadStatus(threadRef);
@@ -58,14 +62,29 @@ function ChatThreadRouteView() {
   const environmentHasAnyThreads = environmentHasServerThreads || environmentHasDraftThreads;
 
   useEffect(() => {
-    if (!threadRef || !bootstrapComplete) {
+    if (!threadRef) {
       return;
     }
+
+    if (catalog.isReady && !environmentIsKnown) {
+      void navigate({ to: "/", replace: true });
+      return;
+    }
+
+    if (!bootstrapComplete) return;
 
     if (renderState === "missing" && environmentHasAnyThreads) {
       void navigate({ to: "/", replace: true });
     }
-  }, [bootstrapComplete, environmentHasAnyThreads, navigate, renderState, threadRef]);
+  }, [
+    bootstrapComplete,
+    catalog.isReady,
+    environmentHasAnyThreads,
+    environmentIsKnown,
+    navigate,
+    renderState,
+    threadRef,
+  ]);
 
   useEffect(() => {
     if (!threadRef || !serverThreadStarted || !draftThread) {
