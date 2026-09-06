@@ -157,14 +157,14 @@ roles = []
 note = "Reorganized 2026-09-06 from fork-thread-transfer."
 
 [[patch]]
-name = "fork-thread-goals-temporary"
-subject = "feat(goals): carry thread goals pending removal"
-class = "product"
-purpose = "TEMPORARY structural holder for durable thread goals, goal evaluation text generation, automatic continuation, and the /goal composer command. Brad approved removing goals; this concern isolates the whole feature so the follow-up removal drops it in one step while keeping historical data interpretable."
-retire_when = "Scheduled: remove after the structural reorganization lands, preserving historical goal data compatibility."
+name = "fork-thread-history-compatibility"
+subject = "fix(threads): preserve historical goal data without goal automation"
+class = "divergence"
+purpose = "Keep existing thread snapshots, event replay and transferred history readable after removing the fork goal feature. No goal creation, evaluation or automatic continuation remains."
+retire_when = "Support for databases and transferred histories containing legacy goal records has explicitly ended or those records have been losslessly migrated."
 depends_on = ["fork-thread-client-recovery", "fork-thread-transfer"]
 roles = []
-note = "Goal UI, mutation commands, evaluation and automatic continuation removed. Legacy goal fields/events and import/replay compatibility remain; historical migration numbering is preserved."
+note = "Brad approved removing goals on 2026-09-05. Retain only historical schema, projection and import compatibility; numbered migrations remain in the migration ledger."
 [[patch.decision]]
 id = "gitmanager-faketextgeneration"
 date = "2026-07-28"
