@@ -724,7 +724,12 @@ export function projectEvent(
           }
           const pullRequests = thread.pullRequests.map((link) =>
             threadPullRequestKeysEqual(link, payload)
-              ? { ...link, snapshot: payload.snapshot, stack: payload.stack }
+              ? {
+                  ...link,
+                  ...(payload.url === undefined ? {} : { url: payload.url }),
+                  snapshot: payload.snapshot,
+                  stack: payload.stack,
+                }
               : link,
           );
           return {

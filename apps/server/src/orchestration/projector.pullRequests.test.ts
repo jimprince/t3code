@@ -179,6 +179,7 @@ it.effect("projects link, sync, and unlink onto the thread", () =>
           host: "github.com",
           repository: "t3tools/t3code",
           number: 42,
+          url: "https://github.com/t3tools/t3code/pull/42?canonical=1",
           snapshot,
           stack: null,
           updatedAt: LATER,
@@ -186,6 +187,9 @@ it.effect("projects link, sync, and unlink onto the thread", () =>
       }),
     );
     expect(synced.threads[0]?.pullRequests[0]?.snapshot).toEqual(snapshot);
+    expect(synced.threads[0]?.pullRequests[0]?.url).toBe(
+      "https://github.com/t3tools/t3code/pull/42?canonical=1",
+    );
 
     const unlinked = yield* projectEvent(
       synced,
