@@ -41,6 +41,20 @@ function allIds(state: ThreadActionMenuState): string[] {
 
 describe("buildThreadActionMenuItems", () => {
   it.each([false, true])(
+    "keeps project filtering available without operation permission (active: %s)",
+    (isActive) => {
+      const items = buildThreadActionMenuItems({
+        ...baseState,
+        canOperate: false,
+        projectFilter: { label: "Project", isActive },
+      });
+      expect(items.find((item) => item.id === "filter-by-project")?.disabled).toBeFalsy();
+      expect(items.find((item) => item.id === "filter-by-project")?.label).toBe(
+        isActive ? "Show all projects" : "Filter by Project",
+      );
+    },
+  );
+  it.each([false, true])(
     "disables both lifecycle directions without permission (reversed: %s)",
     (reversed) => {
       const items = buildThreadActionMenuItems({
