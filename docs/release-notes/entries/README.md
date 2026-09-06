@@ -8,7 +8,7 @@ GitHub release body, ahead of and separate from upstream's own commit list.
 ## Adding an entry
 
 Create `docs/release-notes/entries/<id>.toml` alongside the patch that owns
-the functionality (see `LLM_INSTRUCTIONS.md` Route B):
+the functionality (see the [fork stack instructions](../../../LLM_INSTRUCTIONS.md#change-rebase-or-publish-the-fork-stack)):
 
 ```toml
 id = "gitea-pr-checkout"
