@@ -1,10 +1,10 @@
 {
   "version": 5,
-  "prev": "95ac5f96898df8e170747d83febf0e3f246d97ef",
+  "prev": "8088364161771ac0da8381247a0307ef473eeeef",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
-    "fork-build-ci-compat",
+    "old-fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
@@ -37,9 +37,6 @@
   "patches": {
     "fork-bounded-diagnostics": {
       "oid": "764fda2c9c796e3a46d3a5584cb11b79e533e3bb"
-    },
-    "fork-build-ci-compat": {
-      "oid": "b0a008cfe2f49150998ad46b3d31cba3aa6291e8"
     },
     "fork-chat-file-attachments-temporary": {
       "oid": "78d689098e6377dd60c74729803bda81b3bdbff7"
@@ -118,6 +115,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "e92cecec0ad413ab5c58b4ceae3a0f4260f96d8c"
+    },
+    "old-fork-build-ci-compat": {
+      "oid": "b0a008cfe2f49150998ad46b3d31cba3aa6291e8"
     }
   }
 }
