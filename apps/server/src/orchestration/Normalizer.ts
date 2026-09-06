@@ -3,7 +3,9 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import {
+  type ChatAttachment,
   type ClientOrchestrationCommand,
+  CHAT_FILE_ATTACHMENT_MAX_BYTES,
   type UserInputAttachments,
   getProviderAttachmentLimitError,
   type IsoDateTime,
@@ -13,6 +15,7 @@ import {
 } from "@t3tools/contracts";
 
 import {
+  attachmentFileExtension,
   createAttachmentId,
   planAttachmentClaim,
   PENDING_ATTACHMENT_THREAD_SEGMENT,
@@ -158,7 +161,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
         clientAttachmentIds.add(attachment.id);
       }
     }
-    const claimedAttachmentPaths: string[] = [];
+    const persistedAttachmentPaths: string[] = [];
     const attachmentsWithDecodedSizes = [...attachments];
     // Context records bind to attachments by the id the client knew; they follow the rename.
     const finalAttachmentIdByClientId = new Map<string, string>();
@@ -221,7 +224,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
                   }),
               ),
             );
-            claimedAttachmentPaths.push(claim.finalPath);
+            persistedAttachmentPaths.push(claim.finalPath);
             finalAttachmentIdByClientId.set(attachment.id, claim.finalId);
 
             return normalizedAttachment;
@@ -288,7 +291,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
                 }),
             ),
           );
-          claimedAttachmentPaths.push(attachmentPath);
+          persistedAttachmentPaths.push(attachmentPath);
           if (attachment.id !== undefined) {
             finalAttachmentIdByClientId.set(attachment.id, attachmentId);
           }
@@ -296,7 +299,7 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
           return persistedAttachment;
         }),
       { concurrency: 1 },
-    ).pipe(Effect.tapError(() => removeClaimedAttachmentPaths(claimedAttachmentPaths)));
+    ).pipe(Effect.tapError(() => removeClaimedAttachmentPaths(persistedAttachmentPaths)));
 
     if (canonicalCommand.type === "thread.user-input.respond") {
       let index = 0;
@@ -317,30 +320,131 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
         ...(attachments.length > 0 ? { attachmentsByQuestionId } : {}),
       };
     }
-    const context = canonicalCommand.message.context;
-    const normalizedContext =
-      context === undefined
-        ? undefined
-        : {
-            ...context,
-            records: context.records.map((record) =>
-              (record.kind === "image" || record.kind === "file") && "attachmentId" in record
-                ? {
-                    ...record,
-                    attachmentId:
-                      finalAttachmentIdByClientId.get(record.attachmentId) ?? record.attachmentId,
+    return yield* Effect.gen(function* () {
+      const uploadFileAttachments = canonicalCommand.message.fileAttachments;
+      // Legacy handoffs are appended to the provider attachment list on dispatch,
+      // so they share upstream's per-message count and image-payload budget.
+      const budgetedAttachments: Array<Pick<ChatAttachment, "type" | "mimeType" | "sizeBytes">> = [
+        ...normalizedAttachments,
+        ...(uploadFileAttachments ?? []),
+      ];
+      if (uploadFileAttachments !== undefined) {
+        const uploadLimitError = getProviderAttachmentLimitError(budgetedAttachments);
+        if (uploadLimitError) {
+          return yield* new OrchestrationDispatchCommandError({ message: uploadLimitError });
+        }
+      }
+      const normalizedFileAttachments =
+        uploadFileAttachments === undefined
+          ? undefined
+          : yield* Effect.forEach(
+              uploadFileAttachments,
+              (attachment, index) =>
+                Effect.gen(function* () {
+                  const parsed = parseBase64DataUrl(attachment.dataUrl);
+                  if (!parsed) {
+                    return yield* new OrchestrationDispatchCommandError({
+                      message: `Invalid file attachment payload for '${attachment.name}'.`,
+                    });
                   }
-                : record,
-            ),
-          };
-    return {
-      ...canonicalCommand,
-      message: {
-        ...canonicalCommand.message,
-        attachments: normalizedAttachments,
-        ...(normalizedContext !== undefined ? { context: normalizedContext } : {}),
-      },
-    } satisfies OrchestrationCommand;
+                  const bytes = Buffer.from(parsed.base64, "base64");
+                  if (bytes.byteLength === 0 || bytes.byteLength > CHAT_FILE_ATTACHMENT_MAX_BYTES) {
+                    return yield* new OrchestrationDispatchCommandError({
+                      message: `File attachment '${attachment.name}' is empty or too large.`,
+                    });
+                  }
+                  const attachmentId = createAttachmentId(
+                    canonicalCommand.threadId,
+                    attachmentFileExtension(attachment.name),
+                  );
+                  if (!attachmentId) {
+                    return yield* new OrchestrationDispatchCommandError({
+                      message: "Failed to create a safe attachment id.",
+                    });
+                  }
+                  const nativeAttachment = {
+                    type: "file" as const,
+                    id: attachmentId,
+                    name: attachment.name,
+                    mimeType: attachment.mimeType.toLowerCase(),
+                    sizeBytes: bytes.byteLength,
+                  };
+                  budgetedAttachments[normalizedAttachments.length + index] = nativeAttachment;
+                  const decodedLimitError = getProviderAttachmentLimitError(budgetedAttachments);
+                  if (decodedLimitError) {
+                    return yield* new OrchestrationDispatchCommandError({
+                      message: decodedLimitError,
+                    });
+                  }
+                  const attachmentPath = resolveAttachmentPath({
+                    attachmentsDir: serverConfig.attachmentsDir,
+                    attachment: nativeAttachment,
+                  });
+                  if (!attachmentPath) {
+                    return yield* new OrchestrationDispatchCommandError({
+                      message: `Failed to resolve persisted path for '${attachment.name}'.`,
+                    });
+                  }
+                  yield* fileSystem
+                    .makeDirectory(path.dirname(attachmentPath), { recursive: true })
+                    .pipe(
+                      Effect.mapError(
+                        () =>
+                          new OrchestrationDispatchCommandError({
+                            message: `Failed to create attachment directory for '${attachment.name}'.`,
+                          }),
+                      ),
+                    );
+                  yield* Effect.scoped(
+                    Effect.gen(function* () {
+                      const file = yield* fileSystem.open(attachmentPath, { flag: "wx" });
+                      persistedAttachmentPaths.push(attachmentPath);
+                      yield* file.writeAll(bytes);
+                    }),
+                  ).pipe(
+                    Effect.mapError(
+                      () =>
+                        new OrchestrationDispatchCommandError({
+                          message: `Failed to persist file attachment '${attachment.name}'.`,
+                        }),
+                    ),
+                  );
+                  return { ...nativeAttachment, path: attachmentPath };
+                }),
+              { concurrency: 1 },
+            );
+      const context = canonicalCommand.message.context;
+      const normalizedContext =
+        context === undefined
+          ? undefined
+          : {
+              ...context,
+              records: context.records.map((record) =>
+                (record.kind === "image" || record.kind === "file") && "attachmentId" in record
+                  ? {
+                      ...record,
+                      attachmentId:
+                        finalAttachmentIdByClientId.get(record.attachmentId) ?? record.attachmentId,
+                    }
+                  : record,
+              ),
+            };
+
+      // Strip the client upload shape so only normalized (path-bearing) file
+      // attachments survive into the orchestration command.
+      const { fileAttachments: _uploadShape, ...clientMessage } = canonicalCommand.message;
+      return {
+        ...canonicalCommand,
+        message: {
+          ...clientMessage,
+          attachments: normalizedAttachments,
+          ...(normalizedContext !== undefined ? { context: normalizedContext } : {}),
+          ...(normalizedFileAttachments !== undefined
+            ? { fileAttachments: normalizedFileAttachments }
+            : {}),
+        },
+      } satisfies OrchestrationCommand;
+    }).pipe(Effect.tapError(() => removeClaimedAttachmentPaths(persistedAttachmentPaths)));
   });
 
 export const cleanupFailedUploadedAttachments = Effect.fn(
@@ -358,15 +462,15 @@ export const cleanupFailedUploadedAttachments = Effect.fn(
       : normalizedCommand.type === "thread.user-input.respond"
         ? Object.values(normalizedCommand.attachmentsByQuestionId ?? {}).flat()
         : [];
-  if (normalizedAttachments.length === 0) return;
-
   const serverConfig = yield* ServerConfig;
   const claimedPaths: string[] = [];
   for (const [index, attachment] of normalizedAttachments.entries()) {
     const original = originalAttachments[index];
+    if (!original) {
+      continue;
+    }
     if (
-      !original ||
-      "dataUrl" in original ||
+      !("dataUrl" in original) &&
       parseThreadSegmentFromAttachmentId(original.id) !== PENDING_ATTACHMENT_THREAD_SEGMENT
     ) {
       continue;
@@ -378,6 +482,20 @@ export const cleanupFailedUploadedAttachments = Effect.fn(
     });
     if (claimedPath) {
       claimedPaths.push(claimedPath);
+    }
+  }
+  if (command.type === "thread.turn.start" && normalizedCommand.type === "thread.turn.start") {
+    for (const [index, attachment] of (normalizedCommand.message.fileAttachments ?? []).entries()) {
+      if (command.message.fileAttachments?.[index] === undefined) {
+        continue;
+      }
+      const nativePath = resolveAttachmentPath({
+        attachmentsDir: serverConfig.attachmentsDir,
+        attachment,
+      });
+      if (nativePath === attachment.path) {
+        claimedPaths.push(nativePath);
+      }
     }
   }
   yield* removeClaimedAttachmentPaths(claimedPaths);
