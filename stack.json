@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "1c6189398cb958164f8e7feceace6e1638c8945d",
+  "prev": "09924276c07f3b1dd7b64e2ae8b03013c9a6703a",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -21,7 +21,7 @@
     "old-fork-chat-file-attachments-temporary",
     "old-fork-remote-file-downloads",
     "old-fork-fresh-remote-worktrees",
-    "fork-pr-dismissal",
+    "old-fork-pr-dismissal",
     "fork-unsupported-pr-hosts",
     "fork-worktree-cleanup",
     "fork-gitea-connections",
@@ -52,9 +52,6 @@
     },
     "fork-mobile-delivery": {
       "oid": "bcc89dd8098894bf72b6d71829db1f879ffbedef"
-    },
-    "fork-pr-dismissal": {
-      "oid": "4e7351b2c34a18d5427076fee30bc254ffcaf2d6"
     },
     "fork-pr-project-exclusions": {
       "oid": "03957e861d3a6c52ebec2a87f48794538efa83da"
@@ -88,6 +85,9 @@
     },
     "old-fork-manual-thread-order": {
       "oid": "a13dd31e4050c8abfcdf488887118a5def98aa87"
+    },
+    "old-fork-pr-dismissal": {
+      "oid": "4e7351b2c34a18d5427076fee30bc254ffcaf2d6"
     },
     "old-fork-private-connection-defaults": {
       "oid": "9605206cd52def6909cfb69dbcf445142c9e7433"
