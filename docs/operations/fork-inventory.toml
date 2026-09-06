@@ -155,3 +155,18 @@ retire_when = "Upstream ships equivalent cross-environment thread moves."
 depends_on = ["fork-thread-client-recovery", "fork-conversation-fork", "fork-general-chat"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-thread-transfer."
+
+[[patch]]
+name = "fork-thread-goals-temporary"
+subject = "feat(goals): carry thread goals pending removal"
+class = "product"
+purpose = "TEMPORARY structural holder for durable thread goals, goal evaluation text generation, automatic continuation, and the /goal composer command. Brad approved removing goals; this concern isolates the whole feature so the follow-up removal drops it in one step while keeping historical data interpretable."
+retire_when = "Scheduled: remove after the structural reorganization lands, preserving historical goal data compatibility."
+depends_on = ["fork-thread-client-recovery", "fork-thread-transfer"]
+roles = []
+note = "Goal UI, mutation commands, evaluation and automatic continuation removed. Legacy goal fields/events and import/replay compatibility remain; historical migration numbering is preserved."
+[[patch.decision]]
+id = "gitmanager-faketextgeneration"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream replaced the duplicate hand-written interface with TextGeneration['Service']; keep the upstream type alias and do not restore the redundant interface."
