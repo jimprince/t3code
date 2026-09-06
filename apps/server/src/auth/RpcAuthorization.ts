@@ -32,6 +32,10 @@ export const RPC_REQUIRED_SCOPES = {
   [ORCHESTRATION_WS_METHODS.subscribeThread]: AuthOrchestrationReadScope,
   [WS_METHODS.serverThreadSubscriptions]: AuthOrchestrationReadScope,
   [WS_METHODS.serverUpdateThreadSubscriptions]: AuthOrchestrationOperateScope,
+  // Fork methods (transport/thread-transfer + recovery + headless updates).
+  // Export interrupts/stops the provider session, so it is an operate action.
+  [ORCHESTRATION_WS_METHODS.exportThread]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_WS_METHODS.importThread]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_WS_METHODS.forkThread]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverProbe]: AuthOrchestrationReadScope,
   [WS_METHODS.serverGetConfig]: AuthOrchestrationReadScope,
