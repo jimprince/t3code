@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "22a2581b37e8fe70160ca480cf0532be31c296a7",
+  "prev": "a1e63681cced564e343947c2a0fd41a4274bf246",
   "head": "38f63a7db2e6e9b7cdd1f976b8e744e3af71e579",
   "applied": [
     "fork-build-ci-compat",
@@ -32,36 +32,7 @@
     "fork-release-publication",
     "fork-maintenance-automation"
   ],
-  "unapplied": [
-    "old-fork-build-ci-compat",
-    "old-fork-worker-operations",
-    "old-fork-provider-turn-safety",
-    "old-fork-bounded-diagnostics",
-    "old-fork-thread-client-recovery",
-    "old-fork-general-chat",
-    "old-fork-conversation-fork",
-    "old-fork-thread-transfer",
-    "old-fork-thread-goals-temporary",
-    "old-fork-project-selection",
-    "old-fork-manual-thread-order",
-    "old-fork-private-connection-defaults",
-    "old-fork-resource-recovery",
-    "old-fork-workspace-file-uploads",
-    "old-fork-chat-file-attachments-temporary",
-    "old-fork-remote-file-downloads",
-    "old-fork-fresh-remote-worktrees",
-    "old-fork-pr-dismissal",
-    "old-fork-unsupported-pr-hosts",
-    "old-fork-worktree-cleanup",
-    "old-fork-gitea-connections",
-    "old-fork-gitea-pr-actions",
-    "old-fork-pr-project-exclusions",
-    "old-fork-headless-delivery",
-    "old-fork-desktop-delivery",
-    "old-fork-mobile-delivery",
-    "old-fork-release-publication",
-    "old-fork-maintenance-automation"
-  ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-bounded-diagnostics": {
@@ -147,90 +118,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "e92cecec0ad413ab5c58b4ceae3a0f4260f96d8c"
-    },
-    "old-fork-bounded-diagnostics": {
-      "oid": "d43961dcc243fede1362d608ca31dcc4950fc7df"
-    },
-    "old-fork-build-ci-compat": {
-      "oid": "cd59e1f8ee85d8cbe394904af8ede12d2de03b6c"
-    },
-    "old-fork-chat-file-attachments-temporary": {
-      "oid": "a42f331e023f444ea218902bd9c57be94abc71c5"
-    },
-    "old-fork-conversation-fork": {
-      "oid": "d1c2c691a5bdfc95b8e4507f85208dc94e3844f5"
-    },
-    "old-fork-desktop-delivery": {
-      "oid": "08570dac1c08a2fd9e25317725e7a2d3a725526f"
-    },
-    "old-fork-fresh-remote-worktrees": {
-      "oid": "15e771ec3c6ad4367c845f3b7c1c6e6a0bcc395f"
-    },
-    "old-fork-general-chat": {
-      "oid": "1b87e8e0814fc958616cb77b1f611ed11e998ce6"
-    },
-    "old-fork-gitea-connections": {
-      "oid": "1f7ce9c2e9b80d016762f5c1105dd3118d7fb071"
-    },
-    "old-fork-gitea-pr-actions": {
-      "oid": "31804d6235a6ee274f66eb66512b37742b4f31f1"
-    },
-    "old-fork-headless-delivery": {
-      "oid": "b7b05e79656566cdc944ffc3fb0199a6ebda1bb4"
-    },
-    "old-fork-maintenance-automation": {
-      "oid": "99467c944e3c2fdcc3089dabec5019188b2aca4f"
-    },
-    "old-fork-manual-thread-order": {
-      "oid": "6509b362bf491c4132a49d74b620c05b270a6fcb"
-    },
-    "old-fork-mobile-delivery": {
-      "oid": "cdc209d2a931cb1d7d4f77c90fe4510727b84e33"
-    },
-    "old-fork-pr-dismissal": {
-      "oid": "04af81dbfd5d4b0cc7d40cba2b24ab1338ed3b1a"
-    },
-    "old-fork-pr-project-exclusions": {
-      "oid": "bdbbf4b7ff4fb7b5896ca9e2af25faa92572ea92"
-    },
-    "old-fork-private-connection-defaults": {
-      "oid": "197ef36575a835184039393bfc82e2686cf00192"
-    },
-    "old-fork-project-selection": {
-      "oid": "8061c71dde0277995982bc98ccb21fb81b6e2056"
-    },
-    "old-fork-provider-turn-safety": {
-      "oid": "43581acce678aaa1af26f1ae8f0fa107c6793b86"
-    },
-    "old-fork-release-publication": {
-      "oid": "d2fb60db45bdcaec68f0b6e5966409baab5eb65f"
-    },
-    "old-fork-remote-file-downloads": {
-      "oid": "1344084d7d6ca644ee6c45018aa0b8633eaf7997"
-    },
-    "old-fork-resource-recovery": {
-      "oid": "98fafa354fc35d7e8ca0ccf957f6df016967a652"
-    },
-    "old-fork-thread-client-recovery": {
-      "oid": "edb5c3b484a25630d86a87c3dfbfaec79942eee2"
-    },
-    "old-fork-thread-goals-temporary": {
-      "oid": "7f58f0c0170ce0bcfaff2b8a335b0db13ed5d688"
-    },
-    "old-fork-thread-transfer": {
-      "oid": "3b8710ec9375317238ef891371084c4740f28dc8"
-    },
-    "old-fork-unsupported-pr-hosts": {
-      "oid": "0b443713806aab9f90f31c7779ba71d985697df7"
-    },
-    "old-fork-worker-operations": {
-      "oid": "88ef956aa05d9b29f5958a985e3a7d456e25f599"
-    },
-    "old-fork-workspace-file-uploads": {
-      "oid": "f5353ef16a4e1b5cdb470ed05b7676ebe23c29e3"
-    },
-    "old-fork-worktree-cleanup": {
-      "oid": "1b8e81e98f015a3df8f29ecbf954abd843d7fbe2"
     }
   }
 }

@@ -1,6 +1,0 @@
-Bottom: 877d7942209844cb3d6a1bf8b7f0833f9d8abbf8
-Top:    ffd66616f480c6e31f9a872255daae93b2d71812
-Author: User <user@example.com>
-Date:   2026-09-05 20:57:38 -0600
-
-feat(fork): operate worker threads from the t3-thread CLI
