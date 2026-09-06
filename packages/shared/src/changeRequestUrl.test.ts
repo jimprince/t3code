@@ -150,6 +150,18 @@ describe("siblingPullRequestUrl", () => {
 });
 
 describe("changeRequestUrlFor", () => {
+  it("builds Gitea pull request URLs with the host's pulls route", () => {
+    expect(
+      changeRequestUrlFor(
+        "gitea",
+        "git.bradleyprince.com",
+        "brad/ci-repair-bot",
+        75,
+        "https://git.bradleyprince.com/brad/ci-repair-bot.git",
+      ),
+    ).toBe("https://git.bradleyprince.com/brad/ci-repair-bot/pulls/75");
+  });
+
   it("preserves the origin when the Forgejo host already contains its port", () => {
     expect(
       changeRequestUrlFor(
