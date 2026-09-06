@@ -805,7 +805,10 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    yield* providerService.assertConversationRollbackSupported(event.payload.threadId);
+    const rolledBackTurns = Math.max(0, currentTurnCount - event.payload.turnCount);
+    if (rolledBackTurns > 0) {
+      yield* providerService.assertConversationRollbackSupported(event.payload.threadId);
+    }
 
     if (event.payload.restoreFiles !== false) {
       if (!checkpointCwd) {
@@ -866,7 +869,6 @@ const make = Effect.gen(function* () {
       yield* refreshWorkspaceEntries(checkpointCwd);
     }
 
-    const rolledBackTurns = Math.max(0, currentTurnCount - event.payload.turnCount);
     if (rolledBackTurns > 0) {
       yield* providerService.rollbackConversation({
         threadId: event.payload.threadId,
