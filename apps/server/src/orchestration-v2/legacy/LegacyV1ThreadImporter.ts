@@ -1,9 +1,10 @@
+import { makeHistoricalAttachmentRecovery } from "../../forkLegacy/AttachmentImport.ts";
+import { decodeHistoricalAttachments } from "../../forkLegacy/AttachmentDecoder.ts";
 import {
   threadPullRequestKeysEqual,
   threadPullRequestsOf,
 } from "@t3tools/shared/threadPullRequests";
 import {
-  ChatAttachment,
   OrchestrationMessageContext,
   DEFAULT_MODEL,
   EventId,
@@ -120,7 +121,6 @@ export class LegacyV1ThreadImporter extends Context.Service<
 >()("t3/orchestration-v2/legacy/LegacyV1ThreadImporter") {}
 
 const decodeModelSelection = Schema.decodeUnknownOption(ModelSelection);
-const decodeAttachments = Schema.decodeUnknownOption(Schema.Array(ChatAttachment));
 const decodePullRequests = Schema.decodeUnknownOption(Schema.Array(ThreadPullRequestLink));
 const decodeLinkedPullRequest = Schema.decodeUnknownOption(ThreadLinkedPullRequest);
 const decodeStoredThread = Schema.decodeUnknownOption(
@@ -147,8 +147,7 @@ function modelSelectionFor(row: LegacyThreadRow) {
 }
 
 function attachmentsFor(row: LegacyMessageRow) {
-  if (row.attachments_json === null) return [];
-  return Option.getOrElse(decodeAttachments(parseJson(row.attachments_json)), () => []);
+  return decodeHistoricalAttachments(row.attachments_json);
 }
 
 function linkedPullRequestFor(row: LegacyThreadRow) {
@@ -346,6 +345,7 @@ function chunks<A>(items: ReadonlyArray<A>, size: number): Array<ReadonlyArray<A
 
 const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  const recoverAttachments = yield* makeHistoricalAttachmentRecovery;
   const eventSink = yield* EventSink.EventSinkV2;
   const transcriptImports = yield* KeyedLock.make<ThreadId>();
 
@@ -587,7 +587,7 @@ const make = Effect.gen(function* () {
     let importedMessageCount = 0;
     for (const row of rows) {
       const thread = importedThread(row);
-      const previews = yield* listShellMessages(thread.id);
+      const previews = yield* listShellMessages(thread.id).pipe(Effect.flatMap(recoverAttachments));
       const events: Array<OrchestrationV2DomainEvent> = [
         {
           id: EventId.make(`${IMPORT_EVENT_PREFIX}:thread:${row.thread_id}:created`),
@@ -708,7 +708,7 @@ const make = Effect.gen(function* () {
           }
           return { importedThreadCount: 0, importedMessageCount: 0 };
         }
-        const messages = yield* listMessages(threadId);
+        const messages = yield* listMessages(threadId).pipe(Effect.flatMap(recoverAttachments));
         const existingRows = yield* sql<{ readonly event_id: string }>`
           SELECT event_id
           FROM orchestration_events
