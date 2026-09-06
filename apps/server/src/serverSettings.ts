@@ -1,3 +1,8 @@
+import {
+  redactGiteaInstances,
+  materializeGiteaTokens,
+  persistGiteaTokens,
+} from "./sourceControl/giteaSettings.ts";
 /**
  * ServerSettings - Server-authoritative settings service.
  *
@@ -186,7 +191,12 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
       },
     ]),
   );
-  return { ...settings, providerInstances, usageLimitSources };
+  return {
+    ...settings,
+    providerInstances,
+    usageLimitSources,
+    giteaInstances: redactGiteaInstances(settings.giteaInstances),
+  };
 }
 
 export class ServerSettingsService extends Context.Service<
@@ -711,6 +721,11 @@ const make = Effect.gen(function* () {
       }
       return {
         ...settings,
+        giteaInstances: yield* materializeGiteaTokens(settings.giteaInstances, secretStore).pipe(
+          Effect.mapError(
+            (cause) => new ServerSettingsError({ settingsPath, operation: "read-secret", cause }),
+          ),
+        ),
         providerInstances: providerInstances as ServerSettings["providerInstances"],
         usageLimitSources: usageLimitSources as ServerSettings["usageLimitSources"],
       };
@@ -883,6 +898,15 @@ const make = Effect.gen(function* () {
 
       return {
         ...next,
+        giteaInstances: yield* persistGiteaTokens(
+          current.giteaInstances,
+          next.giteaInstances,
+          secretStore,
+        ).pipe(
+          Effect.mapError(
+            (cause) => new ServerSettingsError({ settingsPath, operation: "write-secret", cause }),
+          ),
+        ),
         providerInstances: providerInstances as ServerSettings["providerInstances"],
         usageLimitSources: usageLimitSources as ServerSettings["usageLimitSources"],
       };
