@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "c0c2a55f1432ef75c3f41009d3ce20578ccfc8e8",
-  "head": "7f7c502614c72c65792bb3e6d980383f3ca23870",
+  "prev": "e508aa58f145d715c84d2e523778095260cad9dc",
+  "head": "9701cd29b76813c788cabd38e663e41dbff36d57",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -42,82 +42,82 @@
       "oid": "c203d9157409dee3e6a18d7a502ddde2430866f6"
     },
     "fork-chat-file-attachments-temporary": {
-      "oid": "c9ffadfd54d8fb36d1a6bed42e295e0164d19071"
+      "oid": "b064bdcbd18a7b3e96b393eacf87645234ca81c1"
     },
     "fork-conversation-fork": {
       "oid": "c0bd480feef852dcb6c7c16e0d5f488cce4ed69e"
     },
     "fork-desktop-delivery": {
-      "oid": "9d6db7400f75ef8002f2edf6f35f7cfc03ed5e29"
+      "oid": "249f2fed62ed5d386654d5ccd85e646669b23bc0"
     },
     "fork-fresh-remote-worktrees": {
-      "oid": "b7b7544da70ebd63ec5086aa807baa2367edf725"
+      "oid": "e1876bdae2a31e4125cd580f7ccf2548ca4778f2"
     },
     "fork-general-chat": {
       "oid": "a709f2ffe6efb0ce95f170b4e6fed1e3c2c0e1c6"
     },
     "fork-gitea-connections": {
-      "oid": "ce8b6af4daf7211f771a734e841742f127fa69c1"
+      "oid": "71f0310e74990a46a2cd9d9f4c03bb664fd37c1d"
     },
     "fork-gitea-pr-actions": {
-      "oid": "57f36f2f54004b2f2ae8da4c1a79144afd95c417"
+      "oid": "8da8044a24d04b0e8fe9307d952403ae37b2212a"
     },
     "fork-headless-delivery": {
-      "oid": "75635af2a31dd0761cc3d605c2b1fd96ca2a26a0"
+      "oid": "be34c1917dec8e1a6593e2100411242e11623b43"
     },
     "fork-maintenance-automation": {
-      "oid": "7f7c502614c72c65792bb3e6d980383f3ca23870"
+      "oid": "9701cd29b76813c788cabd38e663e41dbff36d57"
     },
     "fork-manual-thread-order": {
-      "oid": "2305bac6785a9fe037bf46523c3fce695ba6c013"
+      "oid": "6da294836e16933bb491c8aa403d89df21554d40"
     },
     "fork-mobile-delivery": {
-      "oid": "d99192d732c29d26f800350cab8aea27126f8dce"
+      "oid": "cdb2cee5edac93c1f086ff7a63c8e9e9bba8d6bc"
     },
     "fork-pr-dismissal": {
-      "oid": "d3715d0ec1de3f180b59f00d0a1e3ad38f422703"
+      "oid": "cd8b35c802a2312455a7abadcb3db9267c8e1257"
     },
     "fork-pr-project-exclusions": {
-      "oid": "7753a209b4385306f05a886da233cbebdf3203d4"
+      "oid": "2c9fa8eb1e02150e42d53a6124a4aa6a052fb48b"
     },
     "fork-private-connection-defaults": {
-      "oid": "6abd24bb04ae9351254cb2c18ac0ed645bf7904f"
+      "oid": "2f9dc5529bf6cf3c8b63eda40d6132276311b83c"
     },
     "fork-project-selection": {
-      "oid": "0256160d6f4ccfad27f211727c0f6bd01564fdb9"
+      "oid": "0e14bf3816c0a386c059ebc47a4a89a4c2d4fbde"
     },
     "fork-provider-turn-safety": {
       "oid": "eb88c44ecd4e63ff9dc211f46abab4b46c285a74"
     },
     "fork-release-publication": {
-      "oid": "6da5c2805f19bb14e47e26564c5af6b02f9f4e97"
+      "oid": "16f28a54dedd90dc3d0d1e90e22d9879682ef0e0"
     },
     "fork-remote-file-downloads": {
-      "oid": "6d4097596cba8f0ba333363c5b74f44bd81ab11d"
+      "oid": "31ef497b361c44443285981415c6cdf30793832b"
     },
     "fork-resource-recovery": {
-      "oid": "59028087e84b889c058e21b1f8556385442c080c"
+      "oid": "9c371cbb19daa4323d920d784996f315f79ef75a"
     },
     "fork-thread-client-recovery": {
       "oid": "0d1172750ffc11c00fc2bd264e0516b1c0471b6b"
     },
     "fork-thread-history-compatibility": {
-      "oid": "90c251ed1f18d8f4ddb94bcfb607a9357fd31727"
+      "oid": "61f00d7133c6502870b2b41c86f38c49f73dddd4"
     },
     "fork-thread-transfer": {
       "oid": "1a2ebdd134caec02b832c9c057ac836e02b3856b"
     },
     "fork-unsupported-pr-hosts": {
-      "oid": "09448b506313e7cc64943e1508cbe147a2822ee7"
+      "oid": "7c6cce3e377c4ba7256cf29a5adcf8ed11ac5428"
     },
     "fork-worker-operations": {
       "oid": "00174f062e7ddc9fdd91ad7dac732a670abe303b"
     },
     "fork-workspace-file-uploads": {
-      "oid": "1c0bf86759596fa75decda5677c0c79fe50eb189"
+      "oid": "e580b50183d9cae2a0c739c071004de8e8dc6d83"
     },
     "fork-worktree-cleanup": {
-      "oid": "98f3b0fc4c4fc84e2c9d30e4a24bff563d4ea227"
+      "oid": "3b7e90358d418918091f28c112aa1aab5c0b62ec"
     }
   }
 }

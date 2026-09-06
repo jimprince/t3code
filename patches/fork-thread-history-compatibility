@@ -1,6 +1,6 @@
 Bottom: dd76c0d75dd36ca460672297461e958fc7bc2fbf
 Top:    4382e60d0c6ee71bf4fdeb189b0f3b38c9e720e1
 Author: User <user@example.com>
-Date:   2026-09-05 21:16:47 -0600
+Date:   2026-09-05 21:20:46 -0600
 
-feat(goals): carry thread goals pending removal
+fix(threads): preserve historical goal data without goal automation
