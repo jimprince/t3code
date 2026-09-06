@@ -502,3 +502,12 @@ date = "2026-09-22"
 decided = "adapt"
 rationale = "Upstream gave ThreadMessageSentPayload.turnId a decoding default so events persisted before that field existed still decode. Keep it alongside the fork's optional legacy fileAttachments on the same payload: both describe older persisted events, and neither supersedes the other."
 
+[[patch]]
+name = "fork-remote-file-downloads"
+subject = "feat(remote): download linked workspace files"
+class = "product"
+purpose = "Let web and desktop operators securely download files linked from a thread when those files remain inside that thread's project or active worktree."
+retire_when = "Upstream ships equivalent authenticated linked-file downloads with canonical project/worktree containment across local and remote environments."
+depends_on = []
+roles = []
+note = "Reorganized 2026-09-06 from fork-remote-file-downloads."
