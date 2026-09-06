@@ -21,11 +21,16 @@ file is the concise runbook.
 - The prepared release commit is a direct child of the rendered fork stack tip:
   the tag points at the stamped child, while `main` points at the unstamped
   parent. `release.yml` publishes that bound tag/source and never pushes `main`.
-- `scripts/ci/render-release-notes` builds the GitHub release body from the
-  upstream commits between the previous and current upstream base tags, newest
-  first, so desktop updater notes remain useful after `main` is rebased. Release
-  reruns refresh the same body; unavailable or malformed compare data degrades
-  to compare links and never blocks publication.
+- `scripts/ci/render-release-notes` builds the GitHub release body. It leads
+  with the fork's own new-since-last-release feature/fix/performance/
+  maintenance/removal notes (see `docs/release-notes/entries/README.md`),
+  then the upstream commits between the previous and current upstream base
+  tags, newest first, so desktop updater notes remain useful after `main` is
+  rebased. A fork-only rebuild of the same upstream base skips the upstream
+  section instead of showing an empty self-compare. Release reruns refresh
+  the same body without re-announcing fork entries that already shipped;
+  unavailable or malformed compare data degrades to compare links and never
+  blocks publication.
 
 ## Release Verification
 

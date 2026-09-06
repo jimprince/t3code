@@ -29,6 +29,15 @@ readonly OUTPUT_PATH="${1:-}"
 readonly UPSTREAM_REPO="${UPSTREAM_REPO:-pingdotgg/t3code}"
 readonly RELEASE_REPO="${RELEASE_REPO:-${GITHUB_REPOSITORY:-$UPSTREAM_REPO}}"
 
+# Fork features/fixes are rendered separately from, and ahead of, upstream's
+# commit list — see docs/release-notes/entries/README.md. This must never
+# block publication either: any failure degrades to an empty section.
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+fork_section=""
+if [[ -x "$script_dir/render-fork-release-notes" ]]; then
+  fork_section="$("$script_dir/render-fork-release-notes" 2>/dev/null || true)"
+fi
+
 emit() {
   local body="$1"
   if [[ -n "$OUTPUT_PATH" ]]; then
@@ -60,9 +69,15 @@ derive_upstream_tag() {
 }
 
 minimal_body() {
-  local upstream_previous="${1:-}"
-  local upstream_current="${2:-}"
-  local body="## What's changed"
+  local fork_section="${1:-}"
+  local upstream_previous="${2:-}"
+  local upstream_current="${3:-}"
+  local body=""
+
+  if [[ -n "$fork_section" ]]; then
+    body+="## Fork changes"$'\n\n'"$fork_section"$'\n\n'
+  fi
+  body+="## What's changed"
 
   if [[ -n "$upstream_previous" && -n "$upstream_current" ]]; then
     body+=$'\n\n'
@@ -93,7 +108,15 @@ upstream_current=""
 if [[ -z "${RELEASE_PREVIOUS_TAG:-}" ]] ||
   ! upstream_previous="$(derive_upstream_tag "$RELEASE_PREVIOUS_TAG")" ||
   ! upstream_current="$(derive_upstream_tag "$RELEASE_TAG")"; then
-  minimal_body "$upstream_previous" "$upstream_current"
+  minimal_body "$fork_section" "$upstream_previous" "$upstream_current"
+  exit 0
+fi
+
+if [[ "$upstream_previous" == "$upstream_current" ]]; then
+  # A fork-only rebuild of the same upstream base (e.g. an intentional reroll
+  # or a fork-specific fix) has nothing new to compare upstream, so skip the
+  # self-compare link entirely rather than showing an empty commit list.
+  minimal_body "$fork_section" "" ""
   exit 0
 fi
 
@@ -108,14 +131,14 @@ trap cleanup EXIT
 
 if [[ -n "$compare_json" ]]; then
   if [[ ! -f "$compare_json" ]]; then
-    minimal_body "$upstream_previous" "$upstream_current"
+    minimal_body "$fork_section" "$upstream_previous" "$upstream_current"
     exit 0
   fi
 else
   temporary_compare_json="$(mktemp "${RUNNER_TEMP:-/tmp}/release-notes-compare.XXXXXX")"
   compare_json="$temporary_compare_json"
   if ! gh api "repos/$UPSTREAM_REPO/compare/$upstream_previous...$upstream_current" > "$compare_json" 2>/dev/null; then
-    minimal_body "$upstream_previous" "$upstream_current"
+    minimal_body "$fork_section" "$upstream_previous" "$upstream_current"
     exit 0
   fi
 fi
@@ -124,7 +147,7 @@ if ! jq -e '
   (.commits | type == "array") and
   all(.commits[]?; (.commit | type == "object") and (.commit.message | type == "string"))
 ' "$compare_json" >/dev/null 2>&1; then
-  minimal_body "$upstream_previous" "$upstream_current"
+  minimal_body "$fork_section" "$upstream_previous" "$upstream_current"
   exit 0
 fi
 
@@ -139,7 +162,11 @@ done < <(
     "$compare_json"
 )
 
-body="## Compare: upstream $upstream_previous → $upstream_current"
+body=""
+if [[ -n "$fork_section" ]]; then
+  body+="## Fork changes"$'\n\n'"$fork_section"$'\n\n'
+fi
+body+="## Compare: upstream $upstream_previous → $upstream_current"
 subject_count="${#subjects[@]}"
 display_count="$subject_count"
 if (( display_count > MAX_SUBJECTS )); then

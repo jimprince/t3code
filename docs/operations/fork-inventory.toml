@@ -375,7 +375,7 @@ purpose = "Build and publish the fork's desktop, headless, updater, and mobile r
 retire_when = "Upstream or maintained shared tooling provides equivalent release publication for the fork."
 depends_on = ["fork-desktop-delivery", "fork-mobile-delivery", "fork-headless-delivery", "fork-build-ci-compat"]
 roles = ["release-workflow-owner"]
-note = "Reorganized 2026-09-06 from fork-ci-release-pipeline."
+note = "Release notes compare stable authored change IDs between actual released tags, list fork features/fixes/removals before upstream changes, and preserve popup order. Published entries remain history; later fixes get new IDs. Bun and strict entry validation are configured in publication."
 [[patch.decision]]
 id = "release-version-stamps"
 date = "2026-07-28"
