@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+GIT_BIN="${SYNC_GIT_BIN:-$(command -v git)}"
+if [[ ! -x "$GIT_BIN" ]]; then
+  echo "::error::Git executable not found: $GIT_BIN" >&2
+  exit 1
+fi
+
+checkout_sha="$("$GIT_BIN" rev-parse HEAD)"
+remote_sha="$("$GIT_BIN" ls-remote --exit-code origin refs/heads/main | awk 'NR == 1 { print $1 }')"
+
+if [[ ! "$checkout_sha" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "::error::Unable to resolve the exact checked-out HEAD." >&2
+  exit 1
+fi
+if [[ ! "$remote_sha" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "::error::Unable to resolve the exact origin/main revision." >&2
+  exit 1
+fi
+if [[ "$checkout_sha" != "$remote_sha" ]]; then
+  echo "::error::Stale queued checkout: checked-out HEAD $checkout_sha does not match origin/main $remote_sha. Refusing to replay or write main." >&2
+  exit 1
+fi
+
+echo "main_sha=$checkout_sha" >> "$GITHUB_OUTPUT"
+echo "Main lease pinned to checked-out HEAD $checkout_sha."
