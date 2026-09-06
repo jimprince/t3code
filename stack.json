@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "77f819329143dabd9a96f2f10f1a999954e5227a",
+  "prev": "4b1f0df5e36d5c2725314e8e86b7103a9aa01e1d",
   "head": "42ead5386028896fa2fa40aaa916ddb54de86884",
   "applied": [
     "fork-build-ci-compat",
@@ -24,7 +24,7 @@
     "old-fork-thread-fork",
     "old-fork-general-chat-projects",
     "old-fork-remote-relay-access",
-    "fork-performance-recovery",
+    "old-fork-performance-recovery",
     "fork-headless-updates",
     "fork-text-generation",
     "fork-web-client-resilience",
@@ -92,9 +92,6 @@
     "fork-mobile-delivery": {
       "oid": "27733c0cdb755ed1e6255db9cc167ea3f74c3340"
     },
-    "fork-performance-recovery": {
-      "oid": "ab88601ded5f14f41ca02c3cb4841c93d852f83a"
-    },
     "fork-pr-project-exclusions": {
       "oid": "b5c70c0443c5a97f19301f7d43d87ea774d939db"
     },
@@ -145,6 +142,9 @@
     },
     "old-fork-general-chat-projects": {
       "oid": "0782ac4a22f4755d631c3f29fbecaced2037bfde"
+    },
+    "old-fork-performance-recovery": {
+      "oid": "ab88601ded5f14f41ca02c3cb4841c93d852f83a"
     },
     "old-fork-provider-observability": {
       "oid": "2fb1b2f7367a7b6afdc289158db6f1b094b3b504"
