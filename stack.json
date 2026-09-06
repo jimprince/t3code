@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ec93721de12cf6b08078d435e71fc93feb1a0a24",
-  "head": "00dac4755b0c5bcc2e82990e6b1e6ed5a2dda8d7",
+  "prev": "28d579a2df26a95d9db77a6a4bc9a9251abf7e39",
+  "head": "4d2f43393c6c5ba3bf671f909f831b6c182b8b6d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -15,8 +15,7 @@
     "fork-project-selection",
     "fork-manual-thread-order",
     "fork-private-connection-defaults",
-    "fork-resource-recovery",
-    "refresh-temp"
+    "fork-resource-recovery"
   ],
   "unapplied": [
     "old-fork-stgit-stack-policy",
@@ -82,7 +81,7 @@
       "oid": "96e0bb546e94139a5ced0cc5ca4354579de69c79"
     },
     "fork-resource-recovery": {
-      "oid": "8e6bf3c04af332010dbeac3692bd8af83b17184b"
+      "oid": "4d2f43393c6c5ba3bf671f909f831b6c182b8b6d"
     },
     "fork-thread-client-recovery": {
       "oid": "b418790c25250c3291e08fa842819b9b90ea35eb"
@@ -200,9 +199,6 @@
     },
     "old-fork-worktree-gc": {
       "oid": "3c3a041670be6bf472942d47ba71b4bdf5f9dd06"
-    },
-    "refresh-temp": {
-      "oid": "00dac4755b0c5bcc2e82990e6b1e6ed5a2dda8d7"
     }
   }
 }
