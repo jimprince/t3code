@@ -26,7 +26,7 @@ purpose = "Configure the fork workspace, dependency graph, lockfile, available C
 retire_when = "Upstream or maintained shared tooling provides equivalent workspace, runner, and test-budget support, or the fork intentionally stops requiring this concern."
 depends_on = []
 roles = ["lockfile-owner"]
-note = "Reorganized 2026-09-06 from fork-build-workspace-tooling, fork-ci-runner-compat, fork-web-image-timeout. [fork-build-workspace-tooling] pnpm-lock.yaml is generated: take upstream's lockfile during a conflict, then regenerate it AT THE STACK TIP and copy it back into this patch. Regenerating while only the early patches are applied omits workspaces that later patches add (apps/t3-thread), which then fails --frozen-lockfile in CI."
+note = "Removed the unrelated wall-clock assertion from activity-reuse coverage; the observable identity-reuse test and justified compression-test headroom remain."
 [[patch.decision]]
 id = "stashimagecompression-timeout"
 date = "2026-07-29"

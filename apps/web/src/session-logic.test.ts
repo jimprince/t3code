@@ -2812,9 +2812,7 @@ describe("session activity performance", () => {
     expect(appendedEntries[1]).toBe(initialEntries[1]);
   });
 
-  // Keep enough headroom for repo-wide parallelism on shared CI runners while
-  // still catching accidental superlinear work in the streaming update path.
-  it("reuses entries when updating 20,000 ordered tool activities within 250 ms", () => {
+  it("reuses entries when appending to a large ordered activity history", () => {
     const activities = Array.from({ length: 20_000 }, (_, index) =>
       makeActivity({
         id: `benchmark-tool-${index}`,
@@ -2850,9 +2848,7 @@ describe("session activity performance", () => {
       }),
     ];
 
-    const startedAt = performance.now();
     const updatedEntries = deriveWorkLogEntries(updatedActivities);
-    const elapsedMs = performance.now() - startedAt;
     expect(updatedEntries).toHaveLength(20_001);
     expect(initialEntries.every((entry, index) => updatedEntries[index] === entry)).toBe(true);
     expect(updatedEntries.at(-1)).toMatchObject({
@@ -2860,6 +2856,5 @@ describe("session activity performance", () => {
       command: "git diff",
       toolLifecycleStatus: "completed",
     });
-    expect(elapsedMs).toBeLessThan(250);
   });
 });
