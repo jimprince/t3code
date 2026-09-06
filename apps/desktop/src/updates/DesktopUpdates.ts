@@ -215,11 +215,13 @@ function createBaseUpdateState(
   channel: DesktopUpdateChannel,
   enabled: boolean,
   environment: DesktopEnvironment.DesktopEnvironment["Service"],
+  disabledReason: Option.Option<string>,
 ): DesktopUpdateState {
   return {
     ...createInitialDesktopUpdateState(environment.appVersion, environment.runtimeInfo, channel),
     enabled,
     status: enabled ? "idle" : "disabled",
+    message: enabled ? null : Option.getOrNull(disabledReason),
   };
 }
 
@@ -253,18 +255,22 @@ function getAutoUpdateDisabledReason(args: {
   isDebPackage: boolean;
   disabledByEnv: boolean;
   hasUpdateFeedConfig: boolean;
+  devFlavor: boolean;
 }): string | null {
-  if (!args.hasUpdateFeedConfig) {
-    return "Automatic updates are not available because no update feed is configured.";
-  }
   if (args.isDevelopment || !args.isPackaged) {
     return "Automatic updates are only available in packaged production builds.";
+  }
+  if (args.devFlavor) {
+    return "Automatic updates are disabled for Fork Dev builds.";
   }
   if (args.disabledByEnv) {
     return "Automatic updates are disabled by the T3CODE_DISABLE_AUTO_UPDATE setting.";
   }
   if (args.platform === "linux" && !args.appImage && !args.isDebPackage) {
     return "Automatic updates on Linux require the AppImage or the .deb package.";
+  }
+  if (!args.hasUpdateFeedConfig) {
+    return "Automatic updates are unavailable for this build because it does not include release update metadata.";
   }
   return null;
 }
@@ -360,6 +366,7 @@ export const make = Effect.gen(function* () {
         isDebPackage,
         disabledByEnv: config.disableAutoUpdate,
         hasUpdateFeedConfig: hasFeedConfig,
+        devFlavor: environment.isPackagedDevFlavor,
       }),
     );
   });
@@ -403,8 +410,6 @@ export const make = Effect.gen(function* () {
       fullChangelog: allowsPrerelease,
     });
   });
-
-  const shouldEnableAutoUpdates = resolveDisabledReason.pipe(Effect.map(Option.isNone));
 
   const checkForUpdates = Effect.fn("desktop.updates.checkForUpdates")(function* (
     reason: string,
@@ -923,8 +928,11 @@ export const make = Effect.gen(function* () {
       }
 
       const settings = yield* desktopSettings.get;
-      const enabled = yield* shouldEnableAutoUpdates;
-      yield* setState(createBaseUpdateState(settings.updateChannel, enabled, environment));
+      const disabledReason = yield* resolveDisabledReason;
+      const enabled = Option.isNone(disabledReason);
+      yield* setState(
+        createBaseUpdateState(settings.updateChannel, enabled, environment, disabledReason),
+      );
       if (!enabled) {
         return;
       }
@@ -994,8 +1002,9 @@ export const make = Effect.gen(function* () {
             ),
           );
 
-        const enabled = yield* shouldEnableAutoUpdates;
-        yield* setState(createBaseUpdateState(nextChannel, enabled, environment));
+        const disabledReason = yield* resolveDisabledReason;
+        const enabled = Option.isNone(disabledReason);
+        yield* setState(createBaseUpdateState(nextChannel, enabled, environment, disabledReason));
 
         if (!enabled || !(yield* Ref.get(updaterConfiguredRef))) {
           return yield* Ref.get(updateStateRef);
