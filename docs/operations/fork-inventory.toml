@@ -231,3 +231,13 @@ id = "forkprocessrows-extraction-951"
 date = "2026-07-29"
 decided = "extract-to-additive"
 rationale = "When upstream deleted process-row parsing from ProcessDiagnostics, move ProcessRow and readProcessRows into the additive forkProcessRows module. This keeps all fork behavior out of the upstream diagnostics file."
+
+[[patch]]
+name = "fork-workspace-file-uploads"
+subject = "feat(web): upload files into workspace via drag-and-drop"
+class = "product"
+purpose = "Let operators drop files onto the files pane to upload them (binary-safe, collision auto-rename) into the workspace root of the paired server."
+retire_when = "Upstream ships a binary-capable workspace upload RPC with drag-and-drop in the files pane."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-web-files-upload."
