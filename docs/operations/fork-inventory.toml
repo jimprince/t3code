@@ -273,9 +273,36 @@ id = "upstream-worktree-and-queue-state"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Treat conversation forking as one additional working state alongside upstream's persisted worktree setup state, and retain upstream's queued-message restoration before the fork action callback."
-
 [[patch.decision]]
 id = "claude-upstream-turn-start-boundaries"
 date = "2026-09-16"
 decided = "narrow"
 rationale = "Upstream replaced the fork's bounded assistant-boundary map with durable native turn-start ids. Keep exact native Claude forks at the current retained tip, use those upstream ids in the resume cursor, and fall back to transcript handoff for older selected turns rather than guessing an assistant anchor across compaction or interrupted turns."
+
+[[patch]]
+name = "fork-thread-transfer"
+subject = "feat(threads): transfer threads between environments"
+class = "product"
+purpose = "Move a thread and its workspace context between environments: export/import bundles, provider context handoff, RPC registration, and coordinated web and desktop flows."
+retire_when = "Upstream ships equivalent cross-environment thread moves."
+depends_on = ["fork-thread-client-recovery", "fork-conversation-fork", "fork-general-chat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-thread-transfer. Turn starts inspect the import marker without hydrating ordinary thread history; transferred threads retain context handoff."
+
+[[patch.decision]]
+id = "upstream1895-thread-menu-project-group"
+date = "2026-09-18"
+decided = "adapt"
+rationale = "Reuse upstream's project-group lookup and project-filter action when deriving cross-environment move targets, so filtering, project settings, and transfer all address the same grouped project."
+
+[[patch.decision]]
+id = "upstream-composer-context-records"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Project the current request's structured composer context before wrapping it with transferred visible history, preserve context records on imported messages, then append file-attachment prompt lines once. This keeps upstream context without duplicating the imported request or UI history."
+
+[[patch.decision]]
+id = "upstream-pr-asset-github-cli-runtime"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Retain upstream's shared GitHub CLI layer for pull-request asset downloads alongside the fork's independent thread-transfer runtime. Upstream still has no cross-environment thread transfer, and both services use the same unchanged runtime integration seam."
