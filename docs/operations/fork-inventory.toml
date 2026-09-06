@@ -337,3 +337,13 @@ depends_on = ["fork-pr-dismissal"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-pr-project-exclusions. [fork-pr-project-exclusions] Hidden projects are keyed by pullRequestProjectKey (environment plus project id) and stored under t3.pullRequests.excludedProjects:<environmentId>, so one server's id can never hide another server's project. The exclusion is applied AFTER assignProjectsToEnvironments has settled which server lists each repository: dropping a hidden project before that decision would hand the repository to another server holding a copy and the rows would come straight back. Rows are also filtered locally, because an answer already in flight, or a hiding made before the workspace reported its projects, still arrives. A single-project scope wins over hiding, so a project asked for by name is answered whole."
 
+[[patch]]
+name = "fork-headless-delivery"
+subject = "feat(server): deliver and update the headless Linux server"
+class = "product"
+purpose = "Build the Linux headless artifact and provide service-managed update discovery, installation, health checks, restart, and rollback with an authenticated immediate update check."
+retire_when = "Upstream or maintained shared tooling provides an equivalent headless artifact and update workflow."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-headless-updates."
+
