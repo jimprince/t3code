@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "1270ff0bd889aeace1728f25d2211e0286ebbc6b",
-  "head": "1ab702d3b2e16fcb2b853359f15dc88235a11904",
+  "prev": "7031bcb56e6399e31e7b8c0a806ef5e85b14544d",
+  "head": "3b4bb4bd4440e01c42a91b1b472b98fa40d8af33",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -10,7 +10,8 @@
     "fork-thread-client-recovery",
     "fork-general-chat",
     "fork-conversation-fork",
-    "fork-thread-transfer"
+    "fork-thread-transfer",
+    "fork-thread-goals-temporary"
   ],
   "unapplied": [
     "old-fork-stgit-stack-policy",
@@ -68,6 +69,9 @@
     },
     "fork-thread-client-recovery": {
       "oid": "b418790c25250c3291e08fa842819b9b90ea35eb"
+    },
+    "fork-thread-goals-temporary": {
+      "oid": "3b4bb4bd4440e01c42a91b1b472b98fa40d8af33"
     },
     "fork-thread-transfer": {
       "oid": "1ab702d3b2e16fcb2b853359f15dc88235a11904"
