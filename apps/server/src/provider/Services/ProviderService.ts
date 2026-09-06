@@ -124,6 +124,16 @@ export interface ProviderServiceShape {
     readonly numTurns: number;
   }) => Effect.Effect<void, ProviderServiceError>;
 
+  readonly forkConversation: (input: {
+    readonly sourceThreadId: ThreadId;
+    readonly targetThreadId: ThreadId;
+    readonly cwd: string;
+    readonly retainedTurnCount: number;
+    readonly retainedTurnId: TurnId | null;
+    readonly runtimeMode: RuntimeMode;
+    readonly modelSelection: ModelSelection;
+  }) => Effect.Effect<{ readonly native: boolean }, ProviderServiceError>;
+
   /**
    * Upload a thread and return the provider's shareable feedback identifier.
    */
