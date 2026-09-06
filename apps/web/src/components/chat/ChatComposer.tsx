@@ -1408,7 +1408,6 @@ export interface ChatComposerProps {
     decision: ProviderApprovalDecision,
   ) => Promise<unknown>;
   onSelectActivePendingUserInputOption: (questionId: string, optionValue: string) => void;
-  onAdvanceActivePendingUserInput: () => void;
   onDismissActivePendingUserInput: (requestId: ApprovalRequestId) => void;
   onPreviousActivePendingUserInputQuestion: () => void;
   onChangeActivePendingUserInputCustomAnswer: (
@@ -1514,7 +1513,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     onImplementPlanInNewThread,
     onRespondToApproval,
     onSelectActivePendingUserInputOption,
-    onAdvanceActivePendingUserInput,
     onDismissActivePendingUserInput,
     onPreviousActivePendingUserInputQuestion,
     onChangeActivePendingUserInputCustomAnswer,
@@ -6081,7 +6079,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     answers={activePendingDraftAnswers}
                     questionIndex={activePendingQuestionIndex}
                     onToggleOption={onSelectActivePendingUserInputOption}
-                    onAdvance={onAdvanceActivePendingUserInput}
                     onDismiss={onDismissActivePendingUserInput}
                   />
                 ) : !isComposerCollapsedMobile && showPlanFollowUpPrompt && activeProposedPlan ? (
@@ -6101,7 +6098,6 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                       answers={activePendingDraftAnswers}
                       questionIndex={activePendingQuestionIndex}
                       onToggleOption={onSelectActivePendingUserInputOption}
-                      onAdvance={onAdvanceActivePendingUserInput}
                       onDismiss={onDismissActivePendingUserInput}
                     />
                     {!isChoiceOnlyPendingQuestion ||
