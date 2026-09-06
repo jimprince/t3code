@@ -1840,6 +1840,7 @@ const ThreadPullRequestLinkSyncCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   ...ThreadPullRequestKey.fields,
+  url: TrimmedNonEmptyString,
   snapshot: ThreadPullRequestSnapshot,
   stack: Schema.NullOr(ThreadPullRequestStack),
 });
@@ -2089,6 +2090,8 @@ export type ThreadPullRequestUnlinkedPayload = typeof ThreadPullRequestUnlinkedP
 export const ThreadPullRequestSyncedPayload = Schema.Struct({
   threadId: ThreadId,
   ...ThreadPullRequestKey.fields,
+  // Optional so events written before canonical-link repair still replay.
+  url: Schema.optional(TrimmedNonEmptyString),
   snapshot: ThreadPullRequestSnapshot,
   stack: Schema.NullOr(ThreadPullRequestStack),
   updatedAt: IsoDateTime,
