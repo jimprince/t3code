@@ -134,12 +134,20 @@ export function useThreadActionMenu(input: {
           snooze: readEnvironmentSupportsSnooze(threadRef.environmentId),
           pinning: readEnvironmentSupportsPinning(threadRef.environmentId),
           titleRegeneration: readEnvironmentSupportsTitleRegeneration(threadRef.environmentId),
+          // The chat header menu has no sidebar list to move within, so the
+          // fork's inbox-arrangement items are deliberately absent here;
+          // they live on the sidebar row menu next to the list they reorder.
+          sidebarReorder: false,
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const snoozePresets = resolveSnoozePresets(now, timestampFormat);
         const items = buildThreadActionMenuItems({
           branch: thread.branch ?? null,
           isPinned: thread.pinnedAt != null,
+          canReorderInInbox: false,
+          hasManualPosition: thread.sidebarOrderKey != null,
+          canMoveUp: false,
+          canMoveDown: false,
           isSettled: supports.settlement && thread.settledOverride === "settled",
           isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
           canSnoozeNow: canSnooze(thread, { now: now.toISOString() }),
