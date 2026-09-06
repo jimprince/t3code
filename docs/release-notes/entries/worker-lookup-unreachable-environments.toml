@@ -1,0 +1,4 @@
+id = "worker-lookup-unreachable-environments"
+category = "fix"
+functionality = "t3-thread lookup"
+text = "Thread lookup continues past unreachable or expired paired environments and reports which environments were attempted and unavailable."
