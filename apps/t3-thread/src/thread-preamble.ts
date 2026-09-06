@@ -1,5 +1,3 @@
-import { threadSendCommand, type ThreadIdentity } from "./thread-identity.js";
-
 /**
  * Canonical preamble injected into the initial message of every
  * `t3-thread create` invocation (unless `--no-preamble` is passed).
@@ -27,43 +25,6 @@ export const THREAD_PREAMBLE = [
  * @param message - raw brief provided by the caller via `--message`
  * @returns preamble + brief, joined with a newline
  */
-export interface WorkerContext {
-  name: string;
-  parent: ThreadIdentity | null;
-  notifyLevel: string;
-}
-
-export function wrapWithPreamble(
-  message: string,
-  context?: WorkerContext & {
-    threadId: string;
-    environment: string;
-    projectId: string;
-    projectTitle: string;
-    branch: string | null;
-    worktreePath: string | null;
-    createdAt: string;
-  },
-): string {
-  if (!context) return `${THREAD_PREAMBLE}\n${message}`;
-  const fields = {
-    thread_id: context.threadId,
-    saved_name: context.name,
-    environment: context.environment,
-    project_id: context.projectId,
-    project_title: context.projectTitle,
-    branch: context.branch,
-    worktree_path: context.worktreePath,
-    parent_thread_id: context.parent?.threadId ?? "none",
-    parent_saved_name: context.parent?.name ?? "none",
-    parent_title: context.parent?.title ?? "none",
-    parent_environment: context.parent?.environment ?? "none",
-    parent_send_command: context.parent ? threadSendCommand(context.parent) : "none",
-    notify_level: context.notifyLevel,
-    date_utc: context.createdAt.slice(0, 10),
-  };
-  const header = Object.entries(fields)
-    .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
-    .join("\n");
-  return `${header}\n\n${THREAD_PREAMBLE}\n${message}`;
+export function wrapWithPreamble(message: string): string {
+  return `${THREAD_PREAMBLE}\n${message}`;
 }
