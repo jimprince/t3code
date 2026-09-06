@@ -371,3 +371,34 @@ retire_when = "Upstream or maintained shared tooling provides equivalent capabil
 depends_on = ["fork-build-ci-compat"]
 roles = []
 note = "Removed the retired mobile-track controller, resolver and service template after caller checks (including no installed controller or container on the dev VM). Mobile project grouping/sorting is owned by project selection."
+
+[[patch]]
+name = "fork-release-publication"
+subject = "ci: publish fork releases with version stamping and notes"
+class = "product"
+purpose = "Build and publish the fork's desktop, headless, updater, and mobile release lanes with tag-only version stamping, bounded CI evidence reuse, and rendered release notes."
+retire_when = "Upstream or maintained shared tooling provides equivalent release publication for the fork."
+depends_on = [
+  "fork-desktop-delivery",
+  "fork-mobile-delivery",
+  "fork-headless-delivery",
+  "fork-build-ci-compat",
+]
+roles = ["release-workflow-owner"]
+note = "Release notes compare stable authored change IDs between actual released tags, list fork features/fixes/removals before upstream changes, and preserve popup order. Published entries remain history; later fixes get new IDs. Bun and strict entry validation are configured in publication; Knip recognizes the shell-launched renderer entry point."
+[[patch.decision]]
+id = "release-version-stamps"
+date = "2026-07-28"
+decided = "narrow"
+rationale = "Committed package versions are redundant because release automation derives them from the tag. Always take upstream versions during replay and keep generated stamps out of main."
+[[patch.decision]]
+id = "stamp-free-release-tags"
+date = "2026-07-30"
+decided = "tag-stamped-child-main-unstamped-parent"
+rationale = "Both automatic release writers call prepare-release-tag, tag its prepared child, and keep main at the exact unstamped stack tip. Release consumes that bound tag and never finalizes versions onto main."
+standing_policy = "Generated version stamps and release lockfile changes are tag-only."
+[[patch.decision]]
+id = "reuse-exact-source-ci-tests"
+date = "2026-09-05"
+decided = "narrow"
+rationale = "Reuse successful main-push CI tests only for the exact release commit or its verified version-only direct parent. Require all test shards, check and release smoke jobs from that attempt; bound waiting and fall back to full release tests without trustworthy evidence. Always check the resolved release source, formatting, types and packaged artifacts."
