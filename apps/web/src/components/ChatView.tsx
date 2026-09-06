@@ -33,6 +33,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
   type ThreadLinkedPullRequest,
+  type ThreadForkWorkspaceMode,
   type TurnId,
   type KeybindingCommand,
   OrchestrationThreadActivity,
@@ -106,6 +107,7 @@ import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
+import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
@@ -308,6 +310,7 @@ import {
   threadHasOlderTurns,
 } from "@t3tools/client-runtime/state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { vcsEnvironment } from "../state/vcs";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
 import {
@@ -394,6 +397,7 @@ import {
   shouldOpenProactiveTurnDiff,
   shouldRenderPreviewMiniPlayer,
   getStartedThreadModelChangeBlockReason,
+  hydrateForkedMessageAttachments,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
   type LocalDispatchSnapshot,
@@ -1448,6 +1452,9 @@ export default function ChatView(props: ChatViewProps) {
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
     reportFailure: false,
   });
+  const forkThread = useAtomCommand(orchestrationEnvironment.forkThread, {
+    reportFailure: false,
+  });
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
   const closePreview = useAtomCommand(previewEnvironment.close, "preview close");
   const { environments } = useEnvironments();
@@ -1620,6 +1627,7 @@ export default function ChatView(props: ChatViewProps) {
   >({});
   const [isConnecting, _setIsConnecting] = useState(false);
   const [isRevertingCheckpoint, setIsRevertingCheckpoint] = useState(false);
+  const [isForkingThread, setIsForkingThread] = useState(false);
   const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
     null,
   );
@@ -2948,7 +2956,12 @@ export default function ChatView(props: ChatViewProps) {
     compactRequestIsActive &&
     !compactionSettled;
   const isWorking =
-    phase === "running" || isSendBusy || isConnecting || isRevertingCheckpoint || isCompacting;
+    phase === "running" ||
+    isSendBusy ||
+    isConnecting ||
+    isRevertingCheckpoint ||
+    isCompacting ||
+    isForkingThread;
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
     activeLatestTurn,
     activeThread?.session ?? null,
@@ -5275,6 +5288,7 @@ export default function ChatView(props: ChatViewProps) {
   const sendEnvMode = resolveSendEnvMode({
     requestedEnvMode: envMode,
     isGitRepo,
+    hasWorktreeBaseRef: activeThreadBranch !== null || activeThreadWorktreePath !== null,
   });
   const localCheckoutBranchMismatch = useMemo(
     () =>
@@ -6398,6 +6412,103 @@ export default function ChatView(props: ChatViewProps) {
       revertThreadCheckpoint,
       setThreadError,
       supportsConversationRollback,
+    ],
+  );
+
+  const onForkMessage = useCallback(
+    async (messageId: MessageId, workspaceMode: ThreadForkWorkspaceMode) => {
+      if (!activeThread || !isServerThread || isWorking) return;
+
+      setIsForkingThread(true);
+      try {
+        const result = await forkThread({
+          environmentId: activeThread.environmentId,
+          input: {
+            sourceThreadId: activeThread.id,
+            messageId,
+            workspaceMode,
+          },
+        });
+        if (result._tag === "Failure") {
+          if (!isAtomCommandInterrupted(result)) {
+            const error = squashAtomCommandFailure(result);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Could not fork thread",
+                description:
+                  error instanceof Error ? error.message : "An unexpected error occurred.",
+              }),
+            );
+          }
+          return;
+        }
+
+        const targetThreadRef = scopeThreadRef(activeThread.environmentId, result.value.threadId);
+        if (result.value.prefilledPrompt !== null) {
+          setComposerDraftPrompt(targetThreadRef, result.value.prefilledPrompt);
+        }
+        const warnings = [...result.value.warnings];
+        if (result.value.prefilledAttachments.length > 0) {
+          const hydratedAttachments = await hydrateForkedMessageAttachments({
+            attachments: result.value.prefilledAttachments,
+            assetUrlById: serverAttachmentUrlById,
+            ...(activeThread.environmentId === primaryEnvironmentId
+              ? {
+                  resolveAssetUrl: (assetUrl: string) => {
+                    const sourceUrl = new URL(assetUrl);
+                    const proxyUrl = new URL(resolvePrimaryEnvironmentHttpUrl(sourceUrl.pathname));
+                    proxyUrl.search = sourceUrl.search;
+                    return proxyUrl.toString();
+                  },
+                }
+              : {}),
+          });
+          addComposerDraftImages(targetThreadRef, hydratedAttachments.images);
+          if (hydratedAttachments.unavailableCount > 0) {
+            warnings.push(
+              `${hydratedAttachments.unavailableCount} selected-message attachment${hydratedAttachments.unavailableCount === 1 ? " was" : "s were"} unavailable and could not be copied into the fork draft.`,
+            );
+          }
+        }
+        if (warnings.length > 0) {
+          toastManager.add(
+            stackedThreadToast({
+              type: "info",
+              title: "Thread forked",
+              description: warnings.join(" "),
+            }),
+          );
+        }
+        await navigate({
+          to: "/$environmentId/$threadId",
+          params: {
+            environmentId: activeThread.environmentId,
+            threadId: result.value.threadId,
+          },
+        });
+      } catch (error) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not open forked thread",
+            description: error instanceof Error ? error.message : "An unexpected error occurred.",
+          }),
+        );
+      } finally {
+        setIsForkingThread(false);
+      }
+    },
+    [
+      activeThread,
+      addComposerDraftImages,
+      forkThread,
+      isServerThread,
+      isWorking,
+      navigate,
+      primaryEnvironmentId,
+      serverAttachmentUrlById,
+      setComposerDraftPrompt,
     ],
   );
 
@@ -8273,6 +8384,13 @@ export default function ChatView(props: ChatViewProps) {
                 supportsConversationRollback={supportsConversationRollback}
                 onRevertToTurnCount={onRevertTimelineTurn}
                 onUseArtifactTemplate={useArtifactTemplate}
+                onForkMessage={onForkMessage}
+                canForkThread={Boolean(
+                  isServerThread && activeProject && activeProject.kind !== "chat",
+                )}
+                canForkToNewWorktree={Boolean(
+                  isServerThread && activeProject && activeProject.kind !== "chat" && isGitRepo,
+                )}
                 isRevertingCheckpoint={isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 onFileOpen={openFileAttachment}
