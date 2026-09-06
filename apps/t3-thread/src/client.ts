@@ -1,4 +1,3 @@
-import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
 import type { ProjectAutomation } from "@t3tools/contracts";
 import * as NodeCrypto from "node:crypto";
 
@@ -265,6 +264,21 @@ export class RemoteEnvironmentClient {
     return this.listAutomations(command.projectId);
   }
 
+  async listWorktreeGcThreads(): Promise<OrchestrationThreadShell[]> {
+    const rpc = await this.openRpc();
+    try {
+      const archived = await rpc.request<OrchestrationShellSnapshot>(
+        "getArchivedShellSnapshot",
+        {},
+      );
+      // Read active threads last so a just-unarchived thread vetoes retirement.
+      const active = await this.listThreads();
+      return [...archived.threads, ...active];
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   async listProjects(): Promise<OrchestrationProjectShell[]> {
     const snapshot = await this.getShellSnapshot();
     return snapshot.projects;
@@ -446,7 +460,6 @@ export class RemoteEnvironmentClient {
     baseBranch?: string;
     startFromOrigin?: boolean;
     initialMessage?: string;
-    workerContext?: WorkerContext;
     pin?: boolean;
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
     const snapshot = await this.getShellSnapshot();
@@ -484,18 +497,7 @@ export class RemoteEnvironmentClient {
         message: {
           messageId: NodeCrypto.randomUUID(),
           role: "user",
-          text: input.workerContext
-            ? wrapWithPreamble(initialMessage, {
-                ...input.workerContext,
-                threadId,
-                environment: this.environment.name,
-                projectId: project.id,
-                projectTitle: project.title,
-                branch: input.branch ?? null,
-                worktreePath: input.branch ? null : project.workspaceRoot,
-                createdAt,
-              })
-            : initialMessage,
+          text: initialMessage,
           attachments: [],
         },
         modelSelection,
