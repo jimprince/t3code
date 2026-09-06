@@ -51,6 +51,8 @@ const monogramSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme
 
 const isScriptRunCommand = Schema.is(SCRIPT_RUN_COMMAND_PATTERN);
 
+const isChatProject = (project: { readonly kind?: unknown }): boolean => project.kind === "chat";
+
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const decodeUserInputRequestedPayload = Schema.decodeUnknownOption(UserInputRequestedPayload);
 const threadPullRequestLinksEqual = Schema.toEquivalence(Schema.NullOr(ThreadLinkedPullRequest));
@@ -289,6 +291,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           }
         }
       }
+      if (
+        isChatProject(project) &&
+        (command.title !== undefined ||
+          command.workspaceRoot !== undefined ||
+          command.scripts !== undefined ||
+          command.defaultModelSelection !== undefined)
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat project '${command.projectId}' has server-owned metadata that cannot be changed.`,
+        });
+      }
       if (command.workspaceRoot !== undefined) {
         yield* requireActiveProjectWorkspaceRootAbsent({
           readModel,
@@ -331,6 +345,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         projectId: command.projectId,
       });
+      if (isChatProject(project)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat project '${command.projectId}' is server-owned and cannot be deleted.`,
+        });
+      }
       const activeThreads = listThreadsByProjectId(readModel, command.projectId).filter(
         (thread) => thread.deletedAt === null,
       );
@@ -382,6 +402,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         projectId: command.projectId,
       });
+      if (isChatProject(project) && command.worktreePath !== null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat thread '${command.threadId}' cannot override its server workspace.`,
+        });
+      }
       yield* requireThreadAbsent({
         readModel,
         command,
@@ -930,13 +956,29 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const project = yield* requireProject({
+        readModel,
+        command,
+        projectId: thread.projectId,
+      });
+      if (
+        isChatProject(project) &&
+        command.worktreePath !== undefined &&
+        command.worktreePath !== null
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Chat thread '${command.threadId}' cannot override its server workspace.`,
+        });
+      }
+
       // Old clients only see the derived single link. Unlink that request through
       // the same command path as modern clients, including stack dismissal, while
       // retaining other links they cannot see. Historical metadata events still replay unchanged.
       const legacy = legacyLinkedPullRequestOf(
         thread.pullRequests,
         thread.projectId,
-        readModel.projects.find((project) => project.id === thread.projectId)?.repositoryIdentity,
+        project.repositoryIdentity,
       );
       const currentPullRequest =
         legacy === null
@@ -946,11 +988,10 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             ) ?? null);
       if (command.linkedPullRequest != null) {
         const { linkedPullRequest: linked, ...metadata } = command;
-        const project = readModel.projects.find((project) => project.id === thread.projectId);
         // Historical clients can send links without a parseable URL.
         const host = URL.canParse(linked.url)
           ? new URL(linked.url).hostname
-          : (project?.repositoryIdentity?.canonicalKey.split("/")[0] ?? "unknown");
+          : (project.repositoryIdentity?.canonicalKey.split("/")[0] ?? "unknown");
         const hasMetadata = Object.entries(metadata).some(
           ([key, value]) => !["type", "commandId", "threadId"].includes(key) && value !== undefined,
         );

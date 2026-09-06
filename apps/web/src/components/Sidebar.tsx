@@ -31,6 +31,7 @@ import {
   parseScopedThreadKey,
   scopeProjectRef,
   scopeThreadRef,
+  scopedProjectKey,
   scopedThreadKey,
 } from "@t3tools/client-runtime/environment";
 import {
@@ -114,6 +115,11 @@ import {
   projectGroupsSpanEnvironments,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
+import {
+  partitionProjectsByKind,
+  selectCanonicalChatProjectsByEnvironment,
+  selectRecentThreadProjectRef,
+} from "../projectKind";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import {
   getThreadKeysToDeselectAfterDelete,
@@ -122,7 +128,7 @@ import {
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
+import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -130,6 +136,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
   readThreadShell,
+  readThreadShells,
   useAllEnvironmentProjectSnapshotsReady,
   useProjects,
   useThreadShells,
@@ -2143,6 +2150,14 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
 
 export default function Sidebar() {
   const projects = useProjects();
+  const { chatProjects, workspaceProjects } = useMemo(
+    () => partitionProjectsByKind(projects),
+    [projects],
+  );
+  const chatProjectRefKeys = useMemo(
+    () => new Set(chatProjects.map((project) => `${project.environmentId}:${project.id}`)),
+    [chatProjects],
+  );
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
   const router = useRouter();
@@ -2287,7 +2302,7 @@ export default function Sidebar() {
   const orderedProjects = useMemo(
     () =>
       orderItemsByPreferredIds({
-        items: projects,
+        items: workspaceProjects,
         preferredIds: projectOrder,
         getId: getProjectOrderKey,
         getPreferenceIds: (project) => [
@@ -2295,12 +2310,12 @@ export default function Sidebar() {
           legacyProjectCwdPreferenceKey(project.workspaceRoot),
         ],
       }),
-    [projectOrder, projects],
+    [projectOrder, workspaceProjects],
   );
   const unsortedProjectGroups = useMemo(
     () =>
       buildSidebarProjectSnapshots({
-        projects: sidebarProjectSortOrder === "manual" ? orderedProjects : projects,
+        projects: sidebarProjectSortOrder === "manual" ? orderedProjects : workspaceProjects,
         settings: projectGroupingSettings,
         primaryEnvironmentId,
         resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
@@ -2310,8 +2325,8 @@ export default function Sidebar() {
       orderedProjects,
       primaryEnvironmentId,
       projectGroupingSettings,
-      projects,
       sidebarProjectSortOrder,
+      workspaceProjects,
     ],
   );
   const projectGroups = useMemo(
@@ -2341,14 +2356,17 @@ export default function Sidebar() {
   );
   const projectDisplayNameByKey = useMemo(
     () =>
-      new Map(
-        projectGroups.flatMap((group) =>
+      new Map([
+        ...projectGroups.flatMap((group) =>
           group.memberProjects.map(
             (project) => [`${project.environmentId}:${project.id}`, group.displayName] as const,
           ),
         ),
-      ),
-    [projectGroups],
+        ...chatProjects.map(
+          (project) => [`${project.environmentId}:${project.id}`, "General chat"] as const,
+        ),
+      ]),
+    [chatProjects, projectGroups],
   );
 
   const nowMinute = useNowMinute();
@@ -2539,12 +2557,15 @@ export default function Sidebar() {
     // memo exactly at the next wake boundary.
     void snoozeWakeTick;
     const preciseNow = new Date().toISOString();
-    const visible = threads.filter(
-      (thread) =>
+    const visible = threads.filter((thread) => {
+      const projectRefKey = `${thread.environmentId}:${thread.projectId}`;
+      return (
         thread.archivedAt === null &&
         (scopedProjectKeys === null ||
-          scopedProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
-    );
+          chatProjectRefKeys.has(projectRefKey) ||
+          scopedProjectKeys.has(projectRefKey))
+      );
+    });
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const snoozed: EnvironmentThreadShell[] = [];
@@ -2629,7 +2650,15 @@ export default function Sidebar() {
       settledThreads: sortSettledThreadsForSidebar(settled),
       snoozeNow: preciseNow,
     };
-  }, [nowMinute, optimisticDrop, scopedProjectKeys, serverConfigs, snoozeWakeTick, threads]);
+  }, [
+    chatProjectRefKeys,
+    nowMinute,
+    optimisticDrop,
+    scopedProjectKeys,
+    serverConfigs,
+    snoozeWakeTick,
+    threads,
+  ]);
 
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
@@ -4369,16 +4398,110 @@ export default function Sidebar() {
     updateThreadJumpHintsVisibility(shouldShowJumpHintsNow);
   }, [shouldShowJumpHintsNow, updateThreadJumpHintsVisibility]);
 
-  // New thread defaults to the project you're in (active thread's project,
-  // falling back to the top project) — same resolution the command palette
-  // uses. The command palette already offers a "New thread in..." submenu
-  // for multi-project setups.
+  const chatEnvironmentProjects = useMemo(
+    () =>
+      [...selectCanonicalChatProjectsByEnvironment(chatProjects)].sort((left, right) => {
+        const leftIsPrimary = left.environmentId === primaryEnvironmentId;
+        const rightIsPrimary = right.environmentId === primaryEnvironmentId;
+        if (leftIsPrimary !== rightIsPrimary) return leftIsPrimary ? -1 : 1;
+        const leftLabel = environmentLabelById.get(left.environmentId) ?? "Remote environment";
+        const rightLabel = environmentLabelById.get(right.environmentId) ?? "Remote environment";
+        return leftLabel.localeCompare(rightLabel);
+      }),
+    [chatProjects, environmentLabelById, primaryEnvironmentId],
+  );
+  const createChatForProject = useCallback(
+    (project: (typeof chatEnvironmentProjects)[number]) => {
+      if (isMobile) setOpenMobile(false);
+      void (async () => {
+        const result = await settlePromise(() =>
+          handleNewThreadRef.current(scopeProjectRef(project.environmentId, project.id)),
+        );
+        if (result._tag === "Failure") {
+          const error = squashAtomCommandFailure(result);
+          toastManager.add(
+            stackedThreadToast({
+              type: "error",
+              title: "Could not create chat",
+              description: error instanceof Error ? error.message : "An error occurred.",
+            }),
+          );
+        }
+      })();
+    },
+    [isMobile, setOpenMobile],
+  );
+
+  // New threads start where the user was last working: the open thread's or
+  // draft's project, else the project they most recently messaged. General
+  // Chat is the fallback; with multiple connected environments the desktop
+  // shell then provides a compact environment picker, and browsers fall back
+  // to the primary environment.
   const handleNewThreadClick = useCallback(
-    (event?: ReactMouseEvent) => {
+    (event: ReactMouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const lastWorkedContext = {
+        activeDraftThread: newThreadContext.activeDraftThread,
+        activeThread: newThreadContext.activeThread ?? undefined,
+        defaultProjectRef: selectRecentThreadProjectRef(readThreadShells(), projects),
+        handleNewThread: newThreadContext.handleNewThread,
+      };
+      if (resolveThreadActionProjectRef(lastWorkedContext)) {
+        if (isMobile) setOpenMobile(false);
+        void startNewThreadFromContext(lastWorkedContext);
+        return;
+      }
+      const defaultChatProject = chatEnvironmentProjects[0];
+      if (defaultChatProject) {
+        if (chatEnvironmentProjects.length === 1) {
+          createChatForProject(defaultChatProject);
+          return;
+        }
+        void (async () => {
+          const api = readLocalApi();
+          if (!api) {
+            createChatForProject(defaultChatProject);
+            return;
+          }
+          const clickedResult = await settlePromise(() =>
+            api.contextMenu.show(
+              chatEnvironmentProjects.map((project) => ({
+                id: scopedProjectKey(scopeProjectRef(project.environmentId, project.id)),
+                label:
+                  project.environmentId === primaryEnvironmentId
+                    ? "This device"
+                    : (environmentLabelById.get(project.environmentId) ?? "Remote environment"),
+              })),
+              { x: event.clientX, y: event.clientY },
+            ),
+          );
+          if (clickedResult._tag === "Failure") {
+            const error = squashAtomCommandFailure(clickedResult);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Could not choose environment",
+                description: error instanceof Error ? error.message : "An error occurred.",
+              }),
+            );
+            return;
+          }
+          const selectedProject = chatEnvironmentProjects.find(
+            (project) =>
+              scopedProjectKey(scopeProjectRef(project.environmentId, project.id)) ===
+              clickedResult.value,
+          );
+          if (selectedProject) createChatForProject(selectedProject);
+        })();
+        return;
+      }
+
+      // Without a chat project, retain upstream's contextual workspace flow.
       // One project: nothing to pick, create immediately. Shift+click creates
       // directly in the current project even with several projects, skipping
       // the palette picker.
-      if (shouldCreateNewThreadInCurrentProject(event?.shiftKey ?? false, projectGroups.length)) {
+      if (shouldCreateNewThreadInCurrentProject(event.shiftKey, projectGroups.length)) {
         if (isMobile) setOpenMobile(false);
         void startNewThreadFromContext({
           activeDraftThread: newThreadContext.activeDraftThread,
@@ -4391,7 +4514,17 @@ export default function Sidebar() {
       if (isMobile) setOpenMobile(false);
       openCommandPalette({ open: "new-thread-in" });
     },
-    [isMobile, newThreadContext, projectGroups.length, setOpenMobile],
+    [
+      chatEnvironmentProjects,
+      createChatForProject,
+      environmentLabelById,
+      isMobile,
+      newThreadContext,
+      primaryEnvironmentId,
+      projectGroups.length,
+      projects,
+      setOpenMobile,
+    ],
   );
 
   // The button mirrors chat.new: in multi-project setups both route through
@@ -4555,7 +4688,9 @@ export default function Sidebar() {
               newThreadDisabled={projects.length === 0}
               newThreadShortcutLabel={newThreadShortcutLabel}
               newThreadInProjectShortcutLabel={newThreadInProjectShortcutLabel}
-              showNewThreadInProjectHint={projectGroups.length > 1}
+              // The button already starts in the current project, so the
+              // Shift+click hint would advertise the same action twice.
+              showNewThreadInProjectHint={false}
               searchInputRef={threadSearchInputRef}
               searchQuery={threadSearchQuery}
               onSearchQueryChange={(value) => {
