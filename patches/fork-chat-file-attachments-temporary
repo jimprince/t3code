@@ -1,6 +1,6 @@
-Bottom: cad3c979efd114f605dc0488f7a385c80955c816
-Top:    b5e195cdff8bb72c3e73015ab764df95e4759567
+Bottom: d5488e96f67e70aefc1995b8da3d5ea1546e0bd1
+Top:    a9619fcfa824e55441754fe22f86639965b5d0de
 Author: User <user@example.com>
-Date:   2026-09-05 21:03:50 -0600
+Date:   2026-09-05 21:07:54 -0600
 
 feat(chat): carry tmp file attachment handoff pending removal
