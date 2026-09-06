@@ -1,4 +1,3 @@
-import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
 import type { ProjectAutomation } from "@t3tools/contracts";
 import * as NodeCrypto from "node:crypto";
 
@@ -444,8 +443,8 @@ export class RemoteEnvironmentClient {
     interactionMode?: string;
     branch?: string;
     baseBranch?: string;
+    startFromOrigin?: boolean;
     initialMessage?: string;
-    workerContext?: WorkerContext;
     pin?: boolean;
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
     const snapshot = await this.getShellSnapshot();
@@ -483,18 +482,7 @@ export class RemoteEnvironmentClient {
         message: {
           messageId: NodeCrypto.randomUUID(),
           role: "user",
-          text: input.workerContext
-            ? wrapWithPreamble(initialMessage, {
-                ...input.workerContext,
-                threadId,
-                environment: this.environment.name,
-                projectId: project.id,
-                projectTitle: project.title,
-                branch: input.branch ?? null,
-                worktreePath: input.branch ? null : project.workspaceRoot,
-                createdAt,
-              })
-            : initialMessage,
+          text: initialMessage,
           attachments: [],
         },
         modelSelection,
@@ -518,6 +506,9 @@ export class RemoteEnvironmentClient {
                   projectCwd: project.workspaceRoot,
                   baseBranch: input.baseBranch ?? "main",
                   branch: input.branch,
+                  // The wire key is retained for server compatibility. Its
+                  // current meaning is remote-based creation (gitea, then origin).
+                  startFromOrigin: input.startFromOrigin ?? true,
                 },
                 runSetupScript: true,
               }
