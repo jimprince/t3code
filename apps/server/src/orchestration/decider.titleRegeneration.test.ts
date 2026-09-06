@@ -15,7 +15,18 @@ const UPDATED_AT = "2026-01-01T00:00:00.000Z";
 
 const readModel: OrchestrationReadModel = {
   snapshotSequence: 0,
-  projects: [],
+  projects: [
+    {
+      id: ProjectId.make("project-1"),
+      title: "Project",
+      workspaceRoot: "/tmp/project-1",
+      defaultModelSelection: null,
+      scripts: [],
+      createdAt: UPDATED_AT,
+      updatedAt: UPDATED_AT,
+      deletedAt: null,
+    },
+  ],
   threads: [
     {
       id: ThreadId.make("thread-1"),
