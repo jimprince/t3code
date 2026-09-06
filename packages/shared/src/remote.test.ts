@@ -220,4 +220,47 @@ describe("remote", () => {
     expect(hostError).toMatchObject({ source: "direct-host" });
     expect((hostError as RemoteBackendUrlInvalidError).cause).toBeInstanceOf(TypeError);
   });
+
+  it("defaults bare LAN hosts to the local T3 backend endpoint", () => {
+    expect(
+      resolveRemotePairingTarget({
+        host: "192.168.50.131",
+        pairingCode: "pairing-token",
+      }),
+    ).toEqual({
+      credential: "pairing-token",
+      httpBaseUrl: "http://192.168.50.131:3773/",
+      wsBaseUrl: "ws://192.168.50.131:3773/",
+    });
+  });
+
+  it("defaults bare Tailscale hosts to the local T3 backend endpoint", () => {
+    expect(
+      resolveRemotePairingTarget({
+        host: "100.64.0.4",
+        pairingCode: "pairing-token",
+      }),
+    ).toEqual({
+      credential: "pairing-token",
+      httpBaseUrl: "http://100.64.0.4:3773/",
+      wsBaseUrl: "ws://100.64.0.4:3773/",
+    });
+  });
+
+  it.each([
+    ["https://192.168.50.131", "https://192.168.50.131/", "wss://192.168.50.131/"],
+    ["https://192.168.50.131:443", "https://192.168.50.131/", "wss://192.168.50.131/"],
+    ["http://localhost", "http://localhost/", "ws://localhost/"],
+    ["wss://server.local", "https://server.local/", "wss://server.local/"],
+    ["https://100.64.0.4:8443", "https://100.64.0.4:8443/", "wss://100.64.0.4:8443/"],
+  ])(
+    "preserves explicit private-host connection settings for %s",
+    (host, httpBaseUrl, wsBaseUrl) => {
+      expect(resolveRemotePairingTarget({ host, pairingCode: "pairing-token" })).toEqual({
+        credential: "pairing-token",
+        httpBaseUrl,
+        wsBaseUrl,
+      });
+    },
+  );
 });
