@@ -356,3 +356,13 @@ retire_when = "Upstream or maintained shared tooling provides equivalent fork id
 depends_on = ["fork-build-ci-compat"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-desktop-distribution."
+
+[[patch]]
+name = "fork-mobile-delivery"
+subject = "feat(mobile): add EAS delivery lanes"
+class = "product"
+purpose = "Maintain fork mobile identity, EAS routing, widget identifiers, runtime policy, and delivery documentation."
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-mobile-delivery. [fork-mobile-delivery] Keep mobile configuration as an overlay; replacing upstream's config can silently drop new native plugins."
