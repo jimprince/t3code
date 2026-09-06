@@ -162,6 +162,7 @@ import * as ProcessResourceMonitor from "./diagnostics/ProcessResourceMonitor.ts
 import * as SystemRecovery from "./diagnostics/SystemRecovery.ts";
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as DesktopTelemetryReceiver from "./resourceTelemetry/DesktopTelemetryReceiver.ts";
+import * as HostResources from "./resourceTelemetry/HostResources.ts";
 import * as NativeTelemetryClient from "./resourceTelemetry/NativeTelemetryClient.ts";
 import * as ResourceAttribution from "./resourceTelemetry/ResourceAttribution.ts";
 import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
@@ -631,13 +632,14 @@ const buildAppUnderTest = (options?: {
         })
       : VcsStatusBroadcaster.layer.pipe(Layer.provide(gitWorkflowLayer));
     const resourceTelemetryLayer = ResourceTelemetry.layer.pipe(
-      Layer.provide(
+      Layer.provide([
+        HostResources.layer,
         Layer.mergeAll(
           NativeTelemetryClient.layerTest(options?.layers?.nativeTelemetryClient),
           DesktopTelemetryReceiver.layerTest(options?.layers?.desktopTelemetryReceiver),
           ResourceAttribution.layer,
         ),
-      ),
+      ]),
     );
     const serviceLauncherClientLayer = ServiceLauncherClient.layer.pipe(
       Layer.provide(Layer.succeed(HostProcessEnvironment, {})),
