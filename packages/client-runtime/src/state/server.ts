@@ -1082,6 +1082,9 @@ export function createServerEnvironmentAtoms<R, E>(
       staleTimeMs: 60_000,
       refreshTrigger: ({ environmentId }) => usageScanSettingsAtom(environmentId),
     }),
+
+    }),
+
     configProjection,
     welcome,
     consumeResetCredit: createEnvironmentRpcCommand(runtime, {
