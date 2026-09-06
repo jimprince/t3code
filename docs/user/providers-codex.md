@@ -42,6 +42,9 @@ from the other home.
 Choose the other account from the thread's model picker. T3 Code offers compatible
 Codex instances that share the thread's **CODEX_HOME path**. Changing accounts does
 not move the conversation into a separate Codex home.
+T3 Code closes the previous session before resuming the conversation with the
+selected account, so both accounts do not try to write the same conversation at
+once. If closing the previous session fails, the account switch stops there.
 
 If the account is missing from the picker, compare the home paths in provider
 settings. If two instances show the same unexpected account or models, check their
