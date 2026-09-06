@@ -144,7 +144,7 @@ purpose = "Provide the additive t3-thread operator CLI with pairing, persistent 
 retire_when = "Upstream or maintained shared tooling provides an equivalent scriptable worker interface, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-build-ci-compat"]
 roles = []
-note = "env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). Worker bootstrap and inter-thread messages include identity and reply headers. Notifications to an explicitly settled subscriber are held (not keeping the watcher awake, since each pass snapshots every saved agent), superseded down to the newest per route, re-checked each minute while a watcher runs, and released immediately by t3-thread unsettle; settle lists the subscriber's routes and unsubscribe accepts --subscriber and raw routed thread ids. order/move write the server's shared pinned or active sibling order, and order --reset restores automatic placement. The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
+note = "env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). Notifications to an explicitly settled subscriber are held (not keeping the watcher awake, since each pass snapshots every saved agent), superseded down to the newest per route, re-checked each minute while a watcher runs, and released immediately by t3-thread unsettle; settle lists the subscriber's routes and unsubscribe accepts --subscriber and raw routed thread ids. order/move write the server's shared pinned or active sibling order, and order --reset restores automatic placement. The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
 
 [[patch]]
 name = "fork-provider-turn-safety"
@@ -899,3 +899,34 @@ id = "upstream-headless-delivery"
 date = "2026-09-16"
 decided = "retain"
 rationale = "Upstream does not provide the fork's service-managed headless Linux artifact, authenticated update check, idle-aware promotion and rollback workflow, or historical-database release smoke coverage."
+
+[[patch]]
+name = "fork-desktop-delivery"
+subject = "feat(desktop): deliver the fork desktop app with its own identity and updates"
+class = "product"
+purpose = "Ship fork desktop identity, flavors, code signing, isolated app data, updater channels, packaging, and desktop lifecycle integrations such as deep links."
+retire_when = "Upstream or maintained shared tooling provides equivalent fork identity, signing, and update-channel handling."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-desktop-distribution. The packaged Linux portal identity fixture retains the fork desktop-entry name when upstream changes its own identity."
+[[patch.decision]]
+id = "upstream-update-disabled-reason-arg-shape"
+date = "2026-09-26"
+decided = "narrow"
+rationale = "This patch had rewritten every field of getAutoUpdateDisabledReason's argument literal as readonly, which added no fork behavior and turned upstream's one-line isDebPackage addition into a whole-block conflict. Keep upstream's field lines verbatim and add only the fork's devFlavor field."
+
+[[patch.decision]]
+id = "upstream-desktop-delivery"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Preserve upstream preview-channel isolation, remote-only startup, OTLP defaults, macOS passkey signing, and WSL runtime packaging while retaining fork identity, fork-nightly channel recognition, updater publication, deep links, and release packaging."
+[[patch.decision]]
+id = "upstream-effect-cli-literals"
+date = "2026-09-20"
+decided = "adapt"
+rationale = "Use upstream's Effect CLI Literals constructor for both upstream build selectors and the fork desktop flavor selector."
+[[patch.decision]]
+id = "desktop-entry-name-unexport"
+date = "2026-09-24"
+decided = "adapt"
+rationale = "This patch removes DesktopEnvironment's import of resolveLinuxDesktopEntryName, leaving DesktopEarlyElectronStartup as its only user, so the patch also un-exports it to keep Knip clean. Relocated here from fork-build-ci-compat."
