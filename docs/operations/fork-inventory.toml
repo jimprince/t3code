@@ -97,3 +97,96 @@ retire_when = "Upstream or maintained shared tooling provides an equivalent scri
 depends_on = ["fork-build-ci-compat"]
 roles = []
 note = "The standalone CLI bundles shared contract subpaths and keeps only a narrow adapter for legacy model selections and sparse provider config. Opaque activity, context, metadata and provider-option payloads pass through unchanged. env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
+
+[[patch]]
+name = "fork-provider-turn-safety"
+subject = "fix(server): protect provider turns across recovery and restarts"
+class = "divergence"
+purpose = "Reserve pending sends against reaper recovery, keep live turn markers and steering, reconcile boot generations, recover provider runtimes and lifecycle events, and keep the fork migration ledger with historical migration compatibility."
+retire_when = "Upstream adds equivalent pending-turn reservation, boot-generation reconciliation, and provider runtime recovery."
+depends_on = []
+roles = []
+note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
+
+[[patch.decision]]
+id = "upstream-provider-registry-model-manifest"
+date = "2026-09-23"
+decided = "adapt"
+rationale = "ProviderRegistryLive now requires the ModelManifest service, so this concern's fork tests build it with Layer.provideMerge(ModelManifest.layerTest) the way upstream's own ProviderRegistry tests do. The replay stays textually clean, so only the server typecheck catches this drift."
+
+[[patch.decision]]
+id = "upstream-sqlite-layer-configuration"
+date = "2026-09-20"
+decided = "adapt"
+rationale = "Use upstream's explicit in-memory SQLite layer configuration in migration tests while preserving the fork's shipped migration-ID offset and its historical-ledger assertions."
+
+[[patch.decision]]
+id = "upstream-codex-stop-settlement-order"
+date = "2026-09-20"
+decided = "adapt"
+rationale = "Settle upstream's blocking approval and user-input requests before the fork pauses an active Codex goal, then interrupt child and parent turns. This preserves Stop's deadlock avoidance and prevents goal continuation from restarting work."
+
+[[patch.decision]]
+id = "release-writer-before-instance-handoff"
+date = "2026-09-09"
+decided = "adapt"
+rationale = "Compatible Codex instances share conversation storage. Stop the old instance before resuming on the replacement and propagate stop failures; preserve upstream binding and resume-cursor structures without adding schemas or migrations."
+
+[[patch.decision]]
+id = "providerservice-mcp-touch"
+date = "2026-07-28"
+decided = "adapt"
+rationale = "Upstream added McpSessionRegistry.touchActiveMcpThread before sendTurn; the fork wraps sendTurn in a reservation gate. Independent concerns. The touch belongs inside the gate immediately before the real sendTurn, because touching earlier would change upstream semantics when reservation fails and no turn is sent."
+[[patch.decision]]
+id = "allow-live-turn-steering"
+date = "2026-09-05"
+decided = "narrow"
+rationale = "Upstream adapters accept follow-ups during a running turn. Permit sends when the adapter reports the same real turn id, without replacing its marker; inspect live state before the stale-marker age gate. Keep pending-send exclusion and conservative reconciliation for unmatched markers so recovery cannot claim an in-flight send."
+[[patch.decision]]
+id = "upstream1286-restart-import"
+date = "2026-09-05"
+decided = "adapt"
+rationale = "Preserve upstream shell-only metadata commands, transcript import writes and restart-continuation marker consumption inside the reservation-protected send. Keep archived-session stop lookup and live-turn steering."
+[[patch.decision]]
+id = "upstream-opencode-probe-pool"
+date = "2026-08-29"
+decided = "adapt"
+rationale = "Retain upstream's explicit probe pool and CLI inventory path while keeping the fork's per-instance server owner for runtime recovery and text generation. Configured external servers continue through the fork's password-aware, version-validating connection path."
+
+[[patch.decision]]
+id = "upstream11338-claude-native-rewind"
+date = "2026-09-16"
+decided = "retire"
+rationale = "Upstream commits fd5553f1a and eed974c12 now persist native Claude turn-start message IDs and fork exact provider history during rewind, including remapping retained boundaries when fork history lengths change. Retire the fork's older assistant-boundary map while preserving its independent imported-session controls and provider recovery safeguards."
+
+[[patch.decision]]
+id = "upstream1825-migration-ledger-extension"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "The fork has already shipped migration IDs 33-37, so upstream migrations 33-50 remain mapped to 38-55. Extend that compatibility ledger by mapping new upstream migrations 51 and 52 to fork IDs 56 and 57."
+
+[[patch.decision]]
+id = "upstream1895-migration-ledger-extension"
+date = "2026-09-18"
+decided = "adapt"
+rationale = "The fork has already shipped migration IDs 33-37, so preserve the established offset and map upstream migration 53 to fork ID 58."
+
+[[patch.decision]]
+id = "upstream-codex-binary-diagnostic"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Keep the fork's registry recovery coverage aligned with upstream's more actionable Codex spawn diagnostic: identify the configured server-side binary-path setting and explain that desktop app installation does not imply a CLI on PATH."
+
+[[patch.decision]]
+id = "upstream1895-codex-local-image-input"
+date = "2026-09-18"
+decided = "adapt"
+rationale = "Update the fork's turn-parameter diagnostic and collaboration-mode cases to upstream's path-based localImage input, preserving the fork assertions without restoring oversized data-URL requests."
+
+[[patch.decision]]
+id = "upstream11970-nonblocking-vcs-probe"
+date = "2026-09-17"
+decided = "narrow"
+rationale = "Retire the fork's generic synchronous turn-diff path in favor of upstream's ordered diff worker. Keep only the OpenCode missing-terminal fallback, relocate its repository probe to that non-blocking worker, settle the lifecycle first, and reject late placeholders once a newer turn becomes latest."
+
+# Cache-removal tests await refresh completion and persisted update events, avoiding fixed clock-poll loops.
