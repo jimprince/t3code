@@ -3060,11 +3060,14 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
       );
       const remoteRefName =
         parsedRemoteRef?.remoteRef ?? `${input.fallbackRemoteName}/${input.refName}`;
-      const commitSha = yield* runGitStdout("GitVcsDriver.resolveRemoteTrackingCommit", input.cwd, [
-        "rev-parse",
-        "--verify",
-        `refs/remotes/${remoteRefName}^{commit}`,
-      ]).pipe(Effect.map((stdout) => stdout.trim()));
+      const commitSha = yield* runGitStdoutWithOptions(
+        "GitVcsDriver.resolveRemoteTrackingCommit",
+        input.cwd,
+        ["rev-parse", "--verify", `refs/remotes/${remoteRefName}^{commit}`],
+        {
+          fallbackErrorDetail: `Cannot resolve remote base branch '${remoteRefName}'. Select an existing remote branch, publish the branch to that remote, or disable Use remote base branch to start from the local branch.`,
+        },
+      ).pipe(Effect.map((stdout) => stdout.trim()));
 
       return { commitSha, remoteRefName };
     });
@@ -3368,6 +3371,7 @@ export const makeGitVcsDriverCore = Effect.fn("makeGitVcsDriverCore")(function* 
     fetchRemote: (input) => withListRefsInvalidation(input.cwd, fetchRemote(input)),
     remoteExists,
     remoteBranchExists,
+    listRemoteNames,
     resolveRemoteTrackingCommit,
     fetchRemoteBranch: (input) => withListRefsInvalidation(input.cwd, fetchRemoteBranch(input)),
     fetchRemoteTrackingBranch: (input) =>
