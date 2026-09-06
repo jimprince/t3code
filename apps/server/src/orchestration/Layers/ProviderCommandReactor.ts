@@ -762,7 +762,7 @@ const make = Effect.gen(function* () {
     }
     const project = yield* resolveProject(thread.projectId);
     const effectiveCwd = resolveThreadWorkspaceCwd({
-      thread,
+      thread: project?.kind === "chat" ? { ...thread, worktreePath: null } : thread,
       projects: project ? [project] : [],
     });
     const refreshWorkspaceSnapshot = effectiveCwd
