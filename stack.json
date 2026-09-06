@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "5e34375cb728f625017b6606277e5fc4fb6051bb",
-  "head": "5ddfef09dcb287846d849ea1a678384aee74350f",
+  "prev": "b00733e87922574256f21c81508b839cd4e84045",
+  "head": "d2782f0b25569facba541faa08fe25385ad1c71d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -13,7 +13,8 @@
     "fork-thread-transfer",
     "fork-thread-goals-temporary",
     "fork-project-selection",
-    "fork-manual-thread-order"
+    "fork-manual-thread-order",
+    "refresh-temp"
   ],
   "unapplied": [
     "old-fork-stgit-stack-policy",
@@ -191,6 +192,9 @@
     },
     "old-fork-worktree-gc": {
       "oid": "3c3a041670be6bf472942d47ba71b4bdf5f9dd06"
+    },
+    "refresh-temp": {
+      "oid": "d2782f0b25569facba541faa08fe25385ad1c71d"
     }
   }
 }
