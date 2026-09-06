@@ -244,8 +244,8 @@ export function BranchToolbarBranchSelector({
     branchRefState.data?.nextCursor !== null && branchRefState.data?.nextCursor !== undefined;
   const isFetchingNextPage = branchRefState.isFetchingNextPage;
   const isInitialBranchesLoadPending = branchRefState.isPending && branchRefState.data === null;
-  const currentGitBranch =
-    branchStatusQuery.data?.refName ?? refs.find((refName) => refName.current)?.name ?? null;
+  const currentRefBranch = refs.find((refName) => refName.current)?.name ?? null;
+  const currentGitBranch = currentRefBranch ?? branchStatusQuery.data?.refName ?? null;
   const sourceControlPresentation = useMemo(
     () => getSourceControlPresentation(branchStatusQuery.data?.sourceControlProvider),
     [branchStatusQuery.data?.sourceControlProvider],
@@ -490,33 +490,19 @@ export function BranchToolbarBranchSelector({
     });
   };
 
-  // Default the worktree base to the repo default branch (origin/HEAD), only
-  // falling back to the checked-out branch when no default is known.
-  const defaultBranchName = useMemo(
-    () => refs.find((refName) => refName.isDefault)?.name ?? null,
-    [refs],
-  );
-  const worktreeBaseBranchCandidate = isInitialBranchesLoadPending
-    ? null
-    : (defaultBranchName ?? currentGitBranch);
-
+  // Keep the automatic base branch bare so the server can select and refresh
+  // the preferred configured remote instead of pinning it to origin/HEAD.
   useEffect(() => {
     if (
       effectiveEnvMode !== "worktree" ||
       activeWorktreePath ||
       activeThreadBranch ||
-      !worktreeBaseBranchCandidate
+      !currentRefBranch
     ) {
       return;
     }
-    setThreadBranch(worktreeBaseBranchCandidate, null, true);
-  }, [
-    activeThreadBranch,
-    activeWorktreePath,
-    effectiveEnvMode,
-    setThreadBranch,
-    worktreeBaseBranchCandidate,
-  ]);
+    setThreadBranch(currentRefBranch, null, true);
+  }, [activeThreadBranch, activeWorktreePath, currentRefBranch, effectiveEnvMode, setThreadBranch]);
 
   // ---------------------------------------------------------------------------
   // Combobox / list plumbing

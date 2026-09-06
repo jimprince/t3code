@@ -33,3 +33,5 @@ upstream.
 T3 Code only pulls when it can fast-forward and the checkout has no changed files, untracked files,
 or local commits. It skips checkouts on another branch or without an upstream. If a checkout has
 local work, resolve it yourself before automatic pulls can resume.
+
+For remote-based worktree creation, see [New worktrees from a remote branch](./worktrees.md).
