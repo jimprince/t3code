@@ -515,3 +515,50 @@ id = "upstream-directory-entry-refresh"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Keep the upload RPC and drop overlay alongside upstream's incremental FileTree rendering, and refresh the new directory-entry and path-search data sources after a successful upload instead of the retired project entries query."
+
+[[patch]]
+name = "fork-attachment-compatibility"
+subject = "fix(chat): preserve legacy attachment history and older clients"
+class = "divergence"
+purpose = "Read historical file handoff records and accept legacy fork clients while current clients use upstream attachment uploads and display once."
+retire_when = "Support for legacy file handoff clients and their persisted message metadata has explicitly ended or been losslessly migrated."
+depends_on = [
+  "fork-provider-turn-safety",
+  "fork-thread-transfer",
+  "fork-resource-recovery",
+  "fork-workspace-file-uploads",
+]
+roles = []
+note = "Legacy uploads use native durable storage, retention and provider file input while keeping the parallel path-bearing field for old clients and historical messages. Available historical temporary objects materialize lazily into durable storage; no old metadata or migration IDs are removed. Partial upload/dispatch failures clean newly created files, and revert preserves referenced legacy objects. Current clients retain one upload and one display entry. The narrow turn-start query preserves legacy file handoffs. Legacy handoffs join the provider attachment list on dispatch, so they are budgeted with upstream's shared attachment-limit helper against decoded bytes rather than a fork-local cap."
+
+[[patch.decision]]
+id = "upstream-server-harness-model-manifest"
+date = "2026-09-23"
+decided = "adapt"
+rationale = "This concern keeps a trimmed copy of upstream's buildAppUnderTest, so a new served-route dependency never reaches it as a textual conflict. Mock ModelManifest with BUNDLED_MODEL_MANIFEST as upstream does, and re-check the trimmed harness against upstream's service graph whenever the server typecheck reports a missing Effect context."
+[[patch.decision]]
+id = "upstream-chat-file-attachment-name"
+date = "2026-08-28"
+decided = "adapt"
+rationale = "Upstream added a pathless ChatFileAttachment member to ChatAttachment. Rename the fork's parallel path-bearing schema to ChatFileHandoffAttachment so both contracts coexist without changing the fork's fileAttachments wire field or /tmp handoff behavior."
+[[patch.decision]]
+id = "upstream-composer-context-persistence"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Preserve upstream structured message context alongside legacy file handoffs in event projection, SQL snapshots and client reducers. Keep legacy handoff chips separate from upstream attachment rendering so historical records display once."
+[[patch.decision]]
+id = "upstream-pr-asset-github-cli-test-runtime"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Provide the upstream GitHub CLI layer in the fork-only attachment server harness over its existing VCS process layer, matching upstream's harness after pull-request asset downloads gained the same runtime dependency."
+[[patch.decision]]
+id = "upstream-per-signal-otlp-export"
+date = "2026-09-21"
+decided = "adapt"
+rationale = "Upstream replaced the flat otlpProtocol/otlpHeaders/otlpExportIntervalMs server config fields with per-signal otlpTracesExport/otlpMetricsExport/otlpLogsExport records. Build the fork-only attachment server harness config from DEFAULT_SIGNAL_EXPORT and read the trace protocol from otlpTracesExport, matching upstream's harness; the fork carries no observability behavior of its own here."
+[[patch.decision]]
+id = "upstream-message-sent-turnid-default"
+date = "2026-09-22"
+decided = "adapt"
+rationale = "Upstream gave ThreadMessageSentPayload.turnId a decoding default so events persisted before that field existed still decode. Keep it alongside the fork's optional legacy fileAttachments on the same payload: both describe older persisted events, and neither supersedes the other."
+
