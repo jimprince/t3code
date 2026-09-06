@@ -11,8 +11,8 @@ import { parseChangeRequestUrl } from "./changeRequestUrl.ts";
 import { canonicalRepositoryKey, sourceControlRepositorySelector } from "./sourceControl.ts";
 
 type ThreadPullRequestKeySource = ThreadPullRequestKey & {
-  readonly authority?: string;
-  readonly url?: string;
+  readonly authority?: string | undefined;
+  readonly url?: string | undefined;
 };
 
 /** Normalize stored links, recovering Forgejo HTTP ports from old links' URLs. */
