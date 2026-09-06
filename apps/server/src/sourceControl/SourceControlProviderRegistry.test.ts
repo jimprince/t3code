@@ -1,3 +1,7 @@
+import { configuredGiteaIdentity } from "./ForkGiteaLinkAdapter.ts";
+import type { GiteaInstanceConfig } from "@t3tools/contracts";
+import { HttpClient } from "effect/http";
+import * as ServerSettings from "../serverSettings.ts";
 import { assert, it } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as DateTime from "effect/DateTime";
@@ -8,7 +12,6 @@ import * as Redacted from "effect/Redacted";
 import { ChildProcessSpawner } from "effect/process";
 import { VcsRepositoryDetectionError } from "@t3tools/contracts";
 
-import * as ServerSettings from "../serverSettings.ts";
 import * as ServerConfig from "../config.ts";
 import type * as VcsDriver from "../vcs/VcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
@@ -44,6 +47,8 @@ const processOutput = (
 });
 
 function makeRegistry(input: {
+  readonly giteaInstances?: ReadonlyArray<GiteaInstanceConfig>;
+  readonly settings?: ServerSettings.ServerSettingsService["Service"];
   readonly remotes: ReadonlyArray<{
     readonly name: string;
     readonly url: string;
@@ -95,6 +100,10 @@ function makeRegistry(input: {
     ...input.process,
   });
 
+  const layerSettings = input.settings
+    ? Layer.succeed(ServerSettings.ServerSettingsService, input.settings)
+    : ServerSettings.layerTest({ giteaInstances: input.giteaInstances ?? [] });
+
   return SourceControlProviderRegistry.make.pipe(
     Effect.provide(
       Layer.mergeAll(
@@ -106,16 +115,20 @@ function makeRegistry(input: {
             Layer.mergeAll(
               layerProcess,
               layerRegistry,
-              ServerSettings.ServerSettingsService.layerTest(),
+              layerSettings,
               Layer.mock(GitVcsDriver.GitVcsDriver)({}),
             ),
           ),
+        ),
+        Layer.succeed(
+          HttpClient.HttpClient,
+          HttpClient.make(() => Effect.die("Unexpected HTTP request")),
         ),
         Layer.mock(AzureDevOpsCli.AzureDevOpsCli)({}),
         Layer.mock(AzureDevOpsPullRequestCli.AzureDevOpsPullRequestCli)({}),
         Layer.mock(BitbucketApi.BitbucketApi)({}),
         Layer.mock(BitbucketPullRequestApi.BitbucketPullRequestApi)({}),
-        ServerSettings.ServerSettingsService.layerTest(),
+        layerSettings,
         Layer.mock(GitHubPullRequestApi.GitHubPullRequestApi)({}),
         Layer.mock(GitHubApi.GitHubApi)({
           // No GitHub credential unless a test supplies one, so custom hosts stay unclaimed.
@@ -327,7 +340,6 @@ it.effect("falls back to a non-origin remote when origin is not configured", () 
     assert.strictEqual(provider.kind, "azure-devops");
   }),
 );
-
 it.effect(
   "routes linked subjects by URL independently of the checkout and skips unsupported links",
   () =>
@@ -451,4 +463,78 @@ it.effect("skips GitHub discovery for the identity resolver's empty base URL", (
     );
     assert.deepStrictEqual(hosts, ["githubenterprise.dev.example.com"]);
   }),
+);
+
+it.effect("routes configured Gitea SSH aliases through the registered provider", () =>
+  Effect.gen(function* () {
+    const registry = yield* makeRegistry({
+      giteaInstances: [
+        {
+          id: "home",
+          host: "git.home",
+          sshAliases: ["home-git"],
+          sshPorts: [2222],
+          webOrigin: "http://git.home:3000",
+          apiOrigin: "http://git.home:3000",
+          token: "",
+        },
+      ],
+      remotes: [{ name: "origin", url: "ssh://git@home-git:2222/brad/repo.git" }],
+    });
+    const handle = yield* registry.resolveHandle({ cwd: "/repo" });
+    assert.strictEqual(handle.provider.kind, "gitea");
+    assert.strictEqual(handle.context?.provider.baseUrl, "http://git.home:3000");
+    const explicit = yield* registry.resolveHandle({
+      cwd: "/repo",
+      context: {
+        provider: { kind: "unknown", name: "git.home", baseUrl: "https://git.home:2222" },
+        remoteName: "origin",
+        remoteUrl: "ssh://git@git.home:2222/brad/repo.git",
+      },
+    });
+    assert.strictEqual(explicit.provider.kind, "gitea");
+    const identity = yield* configuredGiteaIdentity(registry, {
+      canonicalKey: "home-git/brad/repo",
+      rootPath: "/repo",
+      locator: {
+        source: "git-remote",
+        remoteName: "origin",
+        remoteUrl: "ssh://git@home-git:2222/brad/repo.git",
+      },
+      provider: "unknown",
+    });
+    assert.ok(identity);
+    assert.strictEqual(identity.provider, "gitea");
+    assert.strictEqual(identity.canonicalKey, "git.home:3000/brad/repo");
+    assert.strictEqual(identity.webUrl, "http://git.home:3000/brad/repo");
+  }),
+);
+
+it.effect("rechecks configured instances for cached contexts without restarting", () =>
+  Effect.gen(function* () {
+    const settings = yield* ServerSettings.ServerSettingsService;
+    const registry = yield* makeRegistry({
+      settings,
+      remotes: [{ name: "origin", url: "ssh://git@git.home:2222/brad/repo.git" }],
+    });
+    assert.strictEqual((yield* registry.resolve({ cwd: "/repo" })).kind, "unknown");
+    yield* settings.updateSettings({
+      giteaInstances: [
+        {
+          id: "home",
+          host: "git.home",
+          sshAliases: [],
+          sshPorts: [2222],
+          webOrigin: "http://git.home:3000",
+          apiOrigin: "http://git.home:3000",
+          token: "",
+        },
+      ],
+    });
+    assert.strictEqual((yield* registry.resolve({ cwd: "/repo" })).kind, "gitea");
+    assert.strictEqual((yield* registry.resolve({ cwd: "/initial-configured" })).kind, "gitea");
+    yield* settings.updateSettings({ giteaInstances: [] });
+    assert.strictEqual((yield* registry.resolve({ cwd: "/repo" })).kind, "unknown");
+    assert.strictEqual((yield* registry.resolve({ cwd: "/initial-configured" })).kind, "unknown");
+  }).pipe(Effect.provide(ServerSettings.layerTest())),
 );
