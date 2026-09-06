@@ -423,6 +423,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         {
           id: asProjectId("project-1"),
           title: "Project 1",
+          kind: "workspace",
           workspaceRoot: "/tmp/project-1",
           repositoryIdentity: null,
           defaultModelSelection: {
@@ -551,6 +552,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
         {
           id: asProjectId("project-1"),
           title: "Project 1",
+          kind: "workspace",
           workspaceRoot: "/tmp/project-1",
           repositoryIdentity: null,
           defaultModelSelection: {
