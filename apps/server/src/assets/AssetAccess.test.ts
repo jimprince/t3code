@@ -690,6 +690,101 @@ describe("AssetAccess", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("issues exact download URLs for arbitrary files inside the thread workspace", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-asset-download-",
+      });
+      const downloadPath = path.join(root, "build artifact.bin");
+      yield* fileSystem.writeFile(downloadPath, new Uint8Array([1, 2, 3]));
+      const canonicalPath = yield* fileSystem.realPath(downloadPath);
+
+      const result = yield* issueAssetUrl({
+        resource: {
+          _tag: "workspace-file-download",
+          threadId: ThreadId.make("thread-1"),
+          path: downloadPath,
+        },
+        workspaceRoot: root,
+      });
+      const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const separatorIndex = suffix.indexOf("/");
+      const token = suffix.slice(0, separatorIndex);
+
+      expect(yield* resolveAsset(token, "build%20artifact.bin")).toEqual({
+        kind: "file",
+        path: canonicalPath,
+        download: true,
+        fileName: "build artifact.bin",
+      });
+      expect(yield* resolveAsset(token, "other.bin")).toBeNull();
+      expect(yield* resolveAsset(token, "..%2Fbuild%20artifact.bin")).toBeNull();
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("rejects downloads outside the canonical thread workspace", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-download-root-",
+      });
+      const externalArtifacts = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-screenshot-artifacts-",
+      });
+      const screenshotPath = path.join(externalArtifacts, "screenshot.png");
+      yield* fileSystem.writeFile(screenshotPath, new Uint8Array([1, 2, 3]));
+
+      const error = yield* issueAssetUrl({
+        resource: {
+          _tag: "workspace-file-download",
+          threadId: ThreadId.make("thread-1"),
+          path: screenshotPath,
+        },
+        workspaceRoot: root,
+      }).pipe(Effect.flip);
+
+      expect(error).toMatchObject({
+        _tag: "AssetWorkspacePathValidationError",
+        resource: { _tag: "workspace-file-download", path: screenshotPath },
+      });
+      expect(error.cause).toBeInstanceOf(WorkspacePaths.WorkspacePathOutsideRootError);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect.skipIf(!symlinksSupported)(
+    "rejects a download whose file is replaced by an escaping symlink",
+    () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const path = yield* Path.Path;
+        const root = yield* fs.makeTempDirectoryScoped({ prefix: "download-symlink-root-" });
+        const external = yield* fs.makeTempDirectoryScoped({
+          prefix: "download-symlink-external-",
+        });
+        const file = path.join(root, "report.bin");
+        const secret = path.join(external, "secret.bin");
+        yield* fs.writeFile(file, new Uint8Array([1]));
+        yield* fs.writeFile(secret, new Uint8Array([2]));
+        const result = yield* issueAssetUrl({
+          resource: {
+            _tag: "workspace-file-download",
+            threadId: ThreadId.make("thread-1"),
+            path: file,
+          },
+          workspaceRoot: root,
+        });
+        const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+        const token = suffix.slice(0, suffix.indexOf("/"));
+        yield* fs.remove(file);
+        yield* fs.symlink(secret, file);
+        expect(yield* resolveAsset(token, "report.bin")).toBeNull();
+        expect(Array.from(yield* fs.readFile(secret))).toEqual([2]);
+      }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("preserves non-missing canonical path failures when issuing asset URLs", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
