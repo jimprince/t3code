@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "e47f56d898e680ee50372c6972646475d52008f7",
+  "prev": "2213647aefc4c79c56d8337408db47cab9bddd97",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -27,7 +27,7 @@
     "old-fork-gitea-connections",
     "old-fork-gitea-pr-actions",
     "old-fork-pr-project-exclusions",
-    "fork-headless-delivery",
+    "old-fork-headless-delivery",
     "fork-desktop-delivery",
     "fork-mobile-delivery",
     "fork-release-publication",
@@ -37,9 +37,6 @@
   "patches": {
     "fork-desktop-delivery": {
       "oid": "08570dac1c08a2fd9e25317725e7a2d3a725526f"
-    },
-    "fork-headless-delivery": {
-      "oid": "b7b05e79656566cdc944ffc3fb0199a6ebda1bb4"
     },
     "fork-maintenance-automation": {
       "oid": "99467c944e3c2fdcc3089dabec5019188b2aca4f"
@@ -73,6 +70,9 @@
     },
     "old-fork-gitea-pr-actions": {
       "oid": "31804d6235a6ee274f66eb66512b37742b4f31f1"
+    },
+    "old-fork-headless-delivery": {
+      "oid": "b7b05e79656566cdc944ffc3fb0199a6ebda1bb4"
     },
     "old-fork-manual-thread-order": {
       "oid": "6509b362bf491c4132a49d74b620c05b270a6fcb"
