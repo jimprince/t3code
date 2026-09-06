@@ -164,6 +164,7 @@ await Effect.runPromise(
           Layer.provide(GitVcsDriver.layer),
           Layer.provide(VcsProcess.layer),
           Layer.provide(FetchHttpClient.layer),
+          Layer.provide(ServerSettings.layerTest()),
         ),
       ).pipe(
         Layer.provideMerge(
