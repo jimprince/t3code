@@ -358,3 +358,14 @@ retire_when = "Upstream or maintained shared tooling provides an equivalent head
 depends_on = ["fork-build-ci-compat"]
 roles = []
 note = "Automatic upgrades check active and queued work before download and before promotion, defer with a retry marker, and require explicit manual --force to bypass activity checks or escalate SIGKILL. Reorganized 2026-09-06 from fork-headless-updates. The unattended updater preserves an explicit PATH runtime and falls back to ~/.local/node/bin under cron; fail before downloading when Node is unavailable (Gitea29). Release smoke now starts the unpacked server against frozen historical databases and verifies migrated state plus restart, in addition to empty-data startup."
+
+[[patch]]
+name = "fork-desktop-delivery"
+subject = "feat(desktop): deliver the fork desktop app with its own identity and updates"
+class = "product"
+purpose = "Ship fork desktop identity, flavors, code signing, isolated app data, updater channels, packaging, and desktop lifecycle integrations such as deep links."
+retire_when = "Upstream or maintained shared tooling provides equivalent fork identity, signing, and update-channel handling."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-desktop-distribution. The packaged Linux portal identity fixture retains the fork desktop-entry name when upstream changes its own identity."
+
