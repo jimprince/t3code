@@ -1,3 +1,4 @@
+import * as FileSystem from "effect/FileSystem";
 import type { GiteaInstanceConfig } from "@t3tools/contracts";
 import { HttpClient } from "effect/unstable/http";
 import { ServerSettingsService } from "../serverSettings.ts";
@@ -91,6 +92,7 @@ function makeRegistry(input: {
   return SourceControlProviderRegistry.make.pipe(
     Effect.provide(
       Layer.mergeAll(
+        Layer.succeed(FileSystem.FileSystem, FileSystem.makeNoop({})),
         registryLayer,
         processLayer,
         input.settings
