@@ -1,0 +1,58 @@
+name = "fork-gitea-connections"
+subject = "feat(source-control): configure Gitea instances and branch PR badges"
+class = "upstream-bound"
+purpose = "Configure environment-local Gitea hosts and protected tokens, resolve SSH aliases and ports to explicit web/API origins, and show repository-safe branch pull-request badges."
+retire_when = "Upstream supports configured Gitea instances, secret-store tokens, and equivalent branch and repository identity filtering for PR badges."
+depends_on = ["fork-unsupported-pr-hosts"]
+roles = []
+note = "Complete no-PR scans are cached for five minutes per instance, credentials, repository, branch, state and tip SHA; incomplete/error scans never become absence. Reorganized 2026-09-06 from fork-gitea-instance-pr-badges. [fork-gitea-instance-pr-badges] The unified PR cache key includes non-secret Gitea routing configuration, so adding or removing a configured host takes effect without waiting out the negative cache. Tokens never enter these keys. PR head identity is compared with the hosting provider’s selected target remote, including repositories whose sole remote is named gitea; a remote alias alone does not imply a cross-repository PR. Terminal Gitea PRs whose deleted head becomes refs/pull/N/head retain branch identity through head.label, with repository checks preserved."
+
+[[decision]]
+id = "upstream-transactional-settings-secrets"
+date = "2026-09-20"
+decided = "adapt"
+rationale = "Plan Gitea token writes and removals inside upstream's transactional settings-secret batch so response materialization or settings-file failures roll them back with provider and usage-limit secrets. Retire the eager Gitea-only persistence helper."
+
+[[decision]]
+id = "upstream1895-source-control-selector-tests"
+date = "2026-09-18"
+decided = "relocate"
+rationale = "Keep upstream's repository-selector compatibility cases and place the independent configured-Gitea remote cases after them; the shared source-control behavior does not overlap."
+
+[[decision]]
+id = "upstream-forgejo-provider"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Keep upstream's native Forgejo provider, discovery, icons and terminology alongside the fork's explicitly configured Gitea provider. Configured Gitea routes take precedence; unconfigured Forgejo and Gitea hosts retain upstream CLI discovery."
+[[decision]]
+id = "gitea-provider-test-harness"
+date = "2026-09-16"
+decided = "relocate"
+rationale = "Move the Gitea provider test harness setup and two truncated assertions from the later PR-actions patch into this provider-owning patch, so branch lookup and credential isolation are independently executable."
+[[decision]]
+id = "gitea-get-request-construction"
+date = "2026-09-16"
+decided = "relocate"
+rationale = "Move baseline authenticated GET request construction from the later PR-actions patch into this provider-owning patch. The connection and branch-badge path must execute independently; the later patch owns only POST bodies and pull-request actions."
+[[decision]]
+id = "gitea-linked-pr-canonical-refresh"
+date = "2026-09-19"
+decided = "adapt"
+rationale = "Generate configured Gitea links with /pulls/ and let the normal linked-PR sync persist the provider's canonical URL together with current state, repairing previously saved /pull/ links and stale open snapshots."
+[[decision]]
+id = "upstream-source-control-provider-contract"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Implement explicit unavailable stubs for Gitea operations this patch does not yet own, and provide environment settings to the title-evaluation registry layer, satisfying upstream's complete provider service contract without stealing later PR-action behavior."
+
+[[decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Register configured HTTP Gitea beside native Forgejo and preserve V2 native PR synchronization and import; do not restore V1 reducers or projections."
+
+[[decision]]
+id = "catchup-2908-configured-gitea-routing"
+date = "2026-10-10"
+decided = "relocate+adapt"
+rationale = "Compose the configured Gitea HTTP provider with upstream builtInDrivers/source-control packages (#17573–#17624). Explicit configured-instance identity precedes native refinement, while unconfigured Forgejo discovery remains. Preserve Settings/secret-store tokens, separate web/API origins, SSH aliases, selected target remotes and canonical /pulls/ links. Upstream fj has direct HTTP but still uses fj/tea authentication, so overlap does not absorb this configuration contract. Static routing/provider review passed; composed credential and action tests remain required."
