@@ -2,7 +2,6 @@ import * as NodeAssert from "node:assert/strict";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
@@ -12,7 +11,6 @@ import { beforeEach } from "vite-plus/test";
 
 import { OpenCodeSettings } from "@t3tools/contracts";
 import { ServerConfig } from "../../config.ts";
-import { makeOpenCodeServerPool } from "../OpenCodeServerPool.ts";
 import {
   OpenCodeRuntime,
   OpenCodeRuntimeError,

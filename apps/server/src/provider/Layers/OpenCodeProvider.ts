@@ -26,7 +26,6 @@ import {
   openCodeRuntimeErrorDetail,
   type OpenCodeInventory,
 } from "../opencodeRuntime.ts";
-import type { OpenCodeServerPool } from "../OpenCodeServerPool.ts";
 import type { Agent, ProviderListResponse } from "@opencode-ai/sdk/v2";
 import * as OpenCodeServerOwner from "../OpenCodeServerOwner.ts";
 
@@ -362,15 +361,10 @@ export const makePendingOpenCodeProvider = (
     });
   });
 
-export interface CheckOpenCodeProviderStatusOptions {
-  readonly serverPool?: OpenCodeServerPool;
-}
-
 export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatus")(function* (
   openCodeSettings: OpenCodeSettings,
   cwd: string,
   environment?: NodeJS.ProcessEnv,
-  options: CheckOpenCodeProviderStatusOptions = {},
 ): Effect.fn.Return<ServerProviderDraft, never, OpenCodeRuntime> {
   const openCodeRuntime = yield* OpenCodeRuntime;
   const serverOwner = yield* Effect.serviceOption(OpenCodeServerOwner.OpenCodeServerOwner);
@@ -509,25 +503,15 @@ export const checkOpenCodeProviderStatus = Effect.fn("checkOpenCodeProviderStatu
           Effect.flatMap((server) => loadInventory(server, version)),
           Effect.scoped,
         )
-    : options.serverPool !== undefined
-      ? options.serverPool.withServer(
-          {
+    : Option.isSome(serverOwner)
+      ? serverOwner.value.withServer((server) => loadInventory(server, version))
+      : openCodeRuntime
+          .loadInventoryFromCli({
             binaryPath: openCodeSettings.binaryPath,
-            directory: cwd,
-            serverUrl: openCodeSettings.serverUrl,
+            cwd,
             environment: resolvedEnvironment,
-          },
-          (server) => loadInventory(server, version),
-        )
-      : Option.isSome(serverOwner)
-        ? serverOwner.value.withServer((server) => loadInventory(server, version))
-        : openCodeRuntime
-            .loadInventoryFromCli({
-              binaryPath: openCodeSettings.binaryPath,
-              cwd,
-              environment: resolvedEnvironment,
-            })
-            .pipe(Effect.map((inventory) => ({ inventory, version })));
+          })
+          .pipe(Effect.map((inventory) => ({ inventory, version })));
 
   const inventoryExit = yield* Effect.exit(
     inventoryEffect.pipe(

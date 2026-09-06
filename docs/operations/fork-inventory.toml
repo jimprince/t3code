@@ -51,7 +51,7 @@ purpose = "Reserve pending sends against reaper recovery, keep live turn markers
 retire_when = "Upstream adds equivalent pending-turn reservation, boot-generation reconciliation, and provider runtime recovery."
 depends_on = []
 roles = []
-note = "Reorganized 2026-09-06 from fork-provider-turn-reservation, fork-provider-runtime-recovery. [fork-provider-runtime-recovery] Upstream1286 import insertion preserves fork boot generation and turn markers; missing-diff recovery uses the upstream asynchronous checkpoint repository check. Provider registry tests await matching persisted snapshot events and settings-driven probe completion instead of advancing virtual time through capped polling loops."
+note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
 [[patch.decision]]
 id = "providerservice-mcp-touch"
 date = "2026-07-28"

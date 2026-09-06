@@ -2,16 +2,13 @@ import * as NodeAssert from "node:assert/strict";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
-import * as TestClock from "effect/testing/TestClock";
 import { beforeEach } from "vite-plus/test";
 
 import { OpenCodeSettings } from "@t3tools/contracts";
 import { ServerConfig } from "../../config.ts";
-import { makeOpenCodeServerPool } from "../OpenCodeServerPool.ts";
 import {
   OpenCodeRuntime,
   OpenCodeRuntimeError,
@@ -247,32 +244,6 @@ it.layer(testLayer)("checkOpenCodeProviderStatus", (it) => {
         "Failed to load OpenCode provider inventory: opencode models failed",
       );
     }),
-  );
-
-  it.effect("reuses a pooled local OpenCode server across provider refreshes", () =>
-    Effect.scoped(
-      Effect.gen(function* () {
-        const pool = yield* makeOpenCodeServerPool({
-          idleTtl: Duration.minutes(10),
-        });
-
-        yield* checkOpenCodeProviderStatus(makeOpenCodeSettings(), process.cwd(), process.env, {
-          serverPool: pool,
-        });
-        yield* checkOpenCodeProviderStatus(makeOpenCodeSettings(), process.cwd(), process.env, {
-          serverPool: pool,
-        });
-
-        NodeAssert.equal(runtimeMock.state.startCalls, 1);
-        NodeAssert.equal(runtimeMock.state.closeCalls, 0);
-
-        yield* Effect.yieldNow;
-        yield* TestClock.adjust(Duration.millis(600_001));
-        yield* Effect.yieldNow;
-
-        NodeAssert.equal(runtimeMock.state.closeCalls, 1);
-      }),
-    ).pipe(Effect.provide(TestClock.layer())),
   );
 });
 
