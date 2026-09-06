@@ -322,6 +322,43 @@ describe("PullRequestSyncReactor", () => {
       }),
     ),
   );
+  it.effect("repairs a saved Gitea URL while refreshing its stale state", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const link = makeLink(
+          75,
+          { state: "open" },
+          {
+            host: "git.bradleyprince.com",
+            repository: "brad/ci-repair-bot",
+            url: "https://git.bradleyprince.com/brad/ci-repair-bot/pull/75",
+          },
+        );
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("one", { pullRequests: [link] })]),
+          summary: (input) =>
+            Effect.succeed(
+              makeSummary(input, {
+                provider: "gitea",
+                url: "https://git.bradleyprince.com/brad/ci-repair-bot/pulls/75",
+                state: "merged",
+                mergedAt: NOW,
+              }),
+            ),
+        });
+        yield* Effect.gen(function* () {
+          yield* startAndSweep(fixture);
+          const command = (yield* Ref.get(fixture.syncCommands))[0];
+          assert.strictEqual(
+            command?.url,
+            "https://git.bradleyprince.com/brad/ci-repair-bot/pulls/75",
+          );
+          assert.strictEqual(command?.snapshot.state, "merged");
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
   it.effect("retries a failed stack read after the summary becomes terminal", () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -495,6 +532,7 @@ describe("PullRequestSyncReactor", () => {
                 host: "github.com",
                 repository: "owner/repository",
                 number: 42,
+                url: "https://github.com/owner/repository/pull/42",
                 snapshot: {
                   state: "open",
                   title: "Ship it",
