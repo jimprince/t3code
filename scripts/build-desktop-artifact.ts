@@ -32,6 +32,7 @@ import {
   findInlinedExternalPackages,
   selectCliRuntimeExternalDependencies,
 } from "./lib/cli-external-packages.ts";
+import { validateBundledClientAssets } from "./lib/client-assets.ts";
 import { loadRepoEnv } from "./lib/public-config.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
@@ -2428,42 +2429,6 @@ function stageWindowsIcons(stageResourcesDir: string, sourceIco: string) {
 
     const iconPath = path.join(stageResourcesDir, "icon.ico");
     yield* fs.copyFile(sourceIco, iconPath);
-  });
-}
-
-function validateBundledClientAssets(clientDir: string) {
-  return Effect.gen(function* () {
-    const fs = yield* FileSystem.FileSystem;
-    const path = yield* Path.Path;
-    const indexPath = path.join(clientDir, "index.html");
-    const indexHtml = yield* fs.readFileString(indexPath);
-    const refs = [...indexHtml.matchAll(/\b(?:src|href)=["']([^"']+)["']/g)]
-      .map((match) => match[1])
-      .filter((value): value is string => value !== undefined);
-    const missing: string[] = [];
-
-    for (const ref of refs) {
-      const normalizedRef = ref.split("#")[0]?.split("?")[0] ?? "";
-      if (!normalizedRef) continue;
-      if (normalizedRef.startsWith("http://") || normalizedRef.startsWith("https://")) continue;
-      if (normalizedRef.startsWith("data:") || normalizedRef.startsWith("mailto:")) continue;
-
-      const ext = path.extname(normalizedRef);
-      if (!ext) continue;
-
-      const relativePath = normalizedRef.replace(/^\/+/, "");
-      const assetPath = path.join(clientDir, relativePath);
-      if (!(yield* fs.exists(assetPath))) {
-        missing.push(normalizedRef);
-      }
-    }
-
-    if (missing.length > 0) {
-      return yield* new BundledClientAssetsMissingError({
-        indexPath,
-        missingFiles: missing,
-      });
-    }
   });
 }
 

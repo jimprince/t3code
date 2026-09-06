@@ -52,6 +52,7 @@ catalog:
   jose: 6.2.2
   lightningcss: 1.33.0
   tailwindcss: 4.3.3
+  tsdown: ^0.20.3
   typescript: ~6.0.3
   vite: npm:@voidzero-dev/vite-plus-core@0.3.0
   vite-plus: 0.3.0
