@@ -271,3 +271,13 @@ retire_when = "Upstream ships equivalent authenticated linked-file downloads wit
 depends_on = []
 roles = []
 note = "Reorganized 2026-09-06 from fork-remote-file-downloads."
+
+[[patch]]
+name = "fork-fresh-remote-worktrees"
+subject = "feat(worktrees): base new worktrees on a freshly fetched remote"
+class = "product"
+purpose = "Create T3 worktrees from a freshly fetched selected remote branch, preferring gitea over origin while preserving explicit remote choices and a local opt-out."
+retire_when = "Upstream ships equivalent remote-selection, freshness, and no-local-fallback semantics."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "Fetches any explicitly selected configured remote, including custom and nested names. Bare branch names prefer gitea then origin; failed fetches and absent defaults never silently fall back locally."
