@@ -24,6 +24,7 @@ import type * as TextGeneration from "./TextGeneration.ts";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
+  buildGoalEvaluationPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
@@ -401,10 +402,30 @@ export const makeAntigravityTextGeneration = Effect.fn("makeAntigravityTextGener
       return { title: sanitizeThreadTitle(generated.title) };
     });
 
+  const evaluateGoal: TextGeneration.TextGeneration["Service"]["evaluateGoal"] = Effect.fn(
+    "AntigravityTextGeneration.evaluateGoal",
+  )(function* (input) {
+    const { prompt, outputSchema } = buildGoalEvaluationPrompt({
+      goal: input.goal,
+      transcript: input.transcript,
+    });
+    const generated = yield* runAntigravityJson({
+      operation: "evaluateGoal",
+      prompt,
+      outputSchema,
+      modelSelection: input.modelSelection,
+    });
+    return {
+      achieved: generated.achieved,
+      reason: generated.reason.trim(),
+    };
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    evaluateGoal,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
