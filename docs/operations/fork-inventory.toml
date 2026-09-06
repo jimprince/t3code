@@ -340,3 +340,26 @@ id = "v2-preview-ledger-compatibility"
 date = "2026-10-07"
 decided = "adapt"
 rationale = "Restore upstream published-preview upgrades behind the exact named V2 ledger marker at 53/54. Atomically translate upstream history into immutable fork ids, preserve V2/import progress at 61 and optional cleanup at 62, and add missing fork schema. Normal V1 fork ledger 60 has no preview marker and must execute 61/62."
+
+[[patch]]
+name = "fork-bounded-diagnostics"
+subject = "fix(server): bound diagnostics, log retention, and trace volume"
+class = "divergence"
+purpose = "Retain bounded fork diagnostics: log-directory retention budget, stopped-thread sink eviction, trace throttling, and Spotlight exclusion markers."
+retire_when = "Upstream covers the retained logging, eviction, and diagnostic capabilities."
+depends_on = ["fork-provider-turn-safety"]
+roles = []
+note = "Removed the stale logger-supersession assessment; bounded logs, traces and retention behavior remain."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Keep native batching and rotation; register global retention in V2 server composition and release shared sinks after V2 session release or terminal detach."
+
+[[patch.decision]]
+id = "logger-supersession-951"
+date = "2026-07-29"
+decided = "retire+narrow+adapt (per capability)"
+analysis = "docs/analysis/logger-supersession.md"
+rationale = "Upstream v0.0.31 rework (49c0d96ed) superseded per-thread writer splitting, shutdown flush, and native/canonical file separation, so those pieces retired. Keep releaseThread eviction adapted to upstream's store, trace-span rate limiting, and the Spotlight marker. Layer the fork's 2GiB/30d logsDir sweep over upstream's 512MiB/14d provider policy."
