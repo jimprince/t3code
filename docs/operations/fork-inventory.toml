@@ -164,7 +164,7 @@ purpose = "TEMPORARY structural holder for durable thread goals, goal evaluation
 retire_when = "Scheduled: remove after the structural reorganization lands, preserving historical goal data compatibility."
 depends_on = ["fork-thread-client-recovery", "fork-thread-transfer"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-thread-goals, fork-text-generation."
+note = "Goal UI, mutation commands, evaluation and automatic continuation removed. Legacy goal fields/events and import/replay compatibility remain; historical migration numbering is preserved."
 [[patch.decision]]
 id = "gitmanager-faketextgeneration"
 date = "2026-07-28"
