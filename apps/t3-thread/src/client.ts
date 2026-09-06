@@ -419,6 +419,7 @@ export class RemoteEnvironmentClient {
     interactionMode?: string;
     branch?: string;
     baseBranch?: string;
+    startFromOrigin?: boolean;
     initialMessage?: string;
     pin?: boolean;
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
@@ -481,6 +482,9 @@ export class RemoteEnvironmentClient {
                   projectCwd: project.workspaceRoot,
                   baseBranch: input.baseBranch ?? "main",
                   branch: input.branch,
+                  // The wire key is retained for server compatibility. Its
+                  // current meaning is remote-based creation (gitea, then origin).
+                  startFromOrigin: input.startFromOrigin ?? true,
                 },
                 runSetupScript: true,
               }
