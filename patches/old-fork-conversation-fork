@@ -1,6 +1,0 @@
-Bottom: e31d1311dea5913887d1df5be036ac05d2fc488f
-Top:    9f6d52d32aa356142bc38f4fa52cd4c12fe812e6
-Author: User <user@example.com>
-Date:   2026-09-05 21:01:26 -0600
-
-feat(threads): fork a conversation from a selected message
