@@ -83,7 +83,7 @@ purpose = "Retain bounded fork diagnostics: log-directory retention budget, stop
 retire_when = "Upstream covers the retained logging, eviction, and diagnostic capabilities."
 depends_on = ["fork-provider-turn-safety"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-provider-observability."
+note = "Removed the stale logger-supersession assessment; bounded logs, traces and retention behavior remain."
 [[patch.decision]]
 id = "logger-supersession-951"
 date = "2026-07-29"
