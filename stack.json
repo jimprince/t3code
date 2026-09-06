@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "c07be11fe55fdd0623f45db98a93806a2acbc506",
+  "prev": "42317699808469fc9b4031da0c71600df2258a02",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -25,7 +25,7 @@
     "old-fork-unsupported-pr-hosts",
     "old-fork-worktree-cleanup",
     "old-fork-gitea-connections",
-    "fork-gitea-pr-actions",
+    "old-fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
     "fork-headless-delivery",
     "fork-desktop-delivery",
@@ -37,9 +37,6 @@
   "patches": {
     "fork-desktop-delivery": {
       "oid": "eb708ea4bfed650898d78eb901ab0417abe859e0"
-    },
-    "fork-gitea-pr-actions": {
-      "oid": "f5c1eb547416ec4e959b805848d7d294c196b218"
     },
     "fork-headless-delivery": {
       "oid": "d91c4bfe8d09733db160b1143aef87cacf17a9cf"
@@ -76,6 +73,9 @@
     },
     "old-fork-gitea-connections": {
       "oid": "2c03ce82fab51dc80f4d9e9cff5295cb67f68423"
+    },
+    "old-fork-gitea-pr-actions": {
+      "oid": "f5c1eb547416ec4e959b805848d7d294c196b218"
     },
     "old-fork-manual-thread-order": {
       "oid": "341dd148c2e3653febff123011ee57732f889508"
