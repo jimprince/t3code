@@ -201,3 +201,19 @@ retire_when = "Upstream ships manual ordering for the unpinned thread list, at w
 depends_on = ["fork-provider-turn-safety"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-sidebar-thread-order. [fork-sidebar-thread-order] sidebarOrderKey is a SEPARATE column from upstream's pin_order_key on purpose: thread.unpinned clears pin_order_key, so sharing the field would silently destroy an inbox placement on every pin/unpin cycle. The fork schema change lands in ForkMigrations, not upstream's Migrations sequence. dnd-kit alone owns sidebar card movement; do not attach outer list auto-animation or toggle card content-visibility at drop, which combines competing transforms with paint-containment changes."
+
+[[patch]]
+name = "fork-private-connection-defaults"
+subject = "fix(remote): default bare private hosts to plain HTTP pairing"
+class = "divergence"
+purpose = "Default bare LAN and Tailscale hosts to http://host:3773 while preserving explicit schemes and ports, and keep the historical auth migration repairs and relay deployment guards."
+retire_when = "Upstream ships equivalent private-host connection defaults and the historical repairs are no longer needed by existing databases."
+depends_on = []
+roles = []
+note = "Only bare private hostnames without an explicit protocol/default port receive HTTP:3773 defaults. Explicit HTTPS and ports are preserved. Historical auth-repair migrations and relay deployment routing remain."
+[[patch.decision]]
+id = "rpc-scope-map-relocation-951"
+date = "2026-07-29"
+decided = "relocate"
+rationale = "Upstream moved the RPC scope map into auth/RpcAuthorization.ts and type-coupled it to WsRpcGroup. Keep the fork's transfer, recovery, and headless scopes at that new location so missing scope coverage remains a compile-time error."
+
