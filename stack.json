@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "301039e98271a7dce3996ef97a45774b8b74d00f",
+  "prev": "dec0831b5d5d01c4d9a7950b113bc466a6a8f791",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -16,7 +16,7 @@
     "old-fork-project-selection",
     "old-fork-manual-thread-order",
     "old-fork-private-connection-defaults",
-    "fork-resource-recovery",
+    "old-fork-resource-recovery",
     "fork-workspace-file-uploads",
     "fork-chat-file-attachments-temporary",
     "fork-remote-file-downloads",
@@ -71,9 +71,6 @@
     "fork-remote-file-downloads": {
       "oid": "b54022b3d88c81ffccb2bfac012b80cd22304769"
     },
-    "fork-resource-recovery": {
-      "oid": "fea9bb70c7ae376e1edf6d3412b5909cbd256bc2"
-    },
     "fork-unsupported-pr-hosts": {
       "oid": "e2e1073f4b96c2b6afb38497f6455340af441146"
     },
@@ -106,6 +103,9 @@
     },
     "old-fork-provider-turn-safety": {
       "oid": "bce590f4b1376f8b79fd9a75ed0db925852f4c5d"
+    },
+    "old-fork-resource-recovery": {
+      "oid": "fea9bb70c7ae376e1edf6d3412b5909cbd256bc2"
     },
     "old-fork-thread-client-recovery": {
       "oid": "4d0ca5f783c4f6375941ca994515cbec4f260654"
