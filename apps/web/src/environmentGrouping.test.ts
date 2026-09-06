@@ -9,6 +9,8 @@ import {
   resolveProjectGroupingMode,
 } from "./logicalProject";
 import {
+  GENERAL_CHAT_PROJECT_KEY,
+  buildGeneralChatSidebarSnapshot,
   buildPhysicalToLogicalProjectKeyMap,
   buildSidebarProjectPickerEntries,
   buildSidebarProjectSnapshots,
@@ -51,6 +53,59 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 }
 
 describe("environment grouping", () => {
+  it("builds one General Chat group across local, remote, and legacy chat projects", () => {
+    const legacyPrimary = makeProject({
+      id: ProjectId.make("chat-primary-legacy"),
+      kind: "chat",
+      title: "Legacy chat",
+      workspaceRoot: "/tmp/chat-primary-legacy",
+      createdAt: "2026-01-01T00:00:00.000Z",
+    });
+    const primary = makeProject({
+      id: ProjectId.make("chat-primary"),
+      kind: "chat",
+      title: "Primary chat",
+      workspaceRoot: "/tmp/chat-primary",
+      createdAt: "2026-07-18T00:00:00.000Z",
+    });
+    const remote = makeProject({
+      id: ProjectId.make("chat-remote"),
+      environmentId: remoteEnvironmentId,
+      kind: "chat",
+      title: "Remote chat",
+      workspaceRoot: "/tmp/chat-remote",
+    });
+
+    const snapshot = buildGeneralChatSidebarSnapshot({
+      projects: [legacyPrimary, primary, remote],
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: (environmentId) =>
+        environmentId === remoteEnvironmentId ? "remote" : "primary",
+    });
+
+    expect(snapshot?.projectKey).toBe(GENERAL_CHAT_PROJECT_KEY);
+    expect(snapshot?.displayName).toBe("General chat");
+    expect(snapshot?.id).toBe(primary.id);
+    expect(snapshot?.environmentPresence).toBe("mixed");
+    expect(snapshot?.remoteEnvironmentLabels).toEqual(["remote"]);
+    expect(snapshot?.memberProjects.map((project) => project.id)).toEqual([
+      legacyPrimary.id,
+      primary.id,
+      remote.id,
+    ]);
+    expect(snapshot?.memberProjectRefs).toHaveLength(3);
+  });
+
+  it("does not build a General Chat group without chat projects", () => {
+    expect(
+      buildGeneralChatSidebarSnapshot({
+        projects: [],
+        primaryEnvironmentId,
+        resolveEnvironmentLabel: () => null,
+      }),
+    ).toBeNull();
+  });
+
   it("groups matching repository identities across environments", () => {
     const primary = makeProject({ repositoryIdentity });
     const remote = makeProject({
