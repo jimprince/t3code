@@ -16,9 +16,9 @@ the move; update it and try again.
 
 ## What moves
 
-- **Visible history** — messages, activities, proposed plans, goal, and
-  checkpoint summaries are replayed into the target server's event log under
-  the same thread id.
+- **Visible history** — messages, activities, proposed plans, and checkpoint
+  summaries are replayed into the target server's event log under the same
+  thread id.
 - **Attachments** — available images and files are copied to the target, up to
   50 MiB per file and 64 MiB in total. Missing historical files are reported as
   warnings, with their names retained in the conversation.
