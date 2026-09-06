@@ -36,7 +36,6 @@ import {
   TextGenerationError,
   ThreadId,
 } from "@t3tools/contracts";
-import * as DateTime from "effect/DateTime";
 import * as AzureDevOpsCli from "../sourceControl/AzureDevOpsCli.ts";
 import * as BitbucketApi from "../sourceControl/BitbucketApi.ts";
 import * as ForgejoCli from "../sourceControl/ForgejoCli.ts";
@@ -54,7 +53,6 @@ import {
   ForgejoPullRequestSchema,
   toForgejoChangeRequest,
 } from "../sourceControl/forgejoPullRequests.ts";
-import type { SourceControlProvider } from "../sourceControl/SourceControlProvider.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as ServerConfig from "../config.ts";
 import * as ProjectionStore from "../orchestration-v2/ProjectionStore.ts";
@@ -63,6 +61,9 @@ import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ProviderRegistry from "../provider/Services/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as GiteaSourceControlProvider from "../sourceControl/GiteaSourceControlProvider.ts";
+import type * as SourceControlProvider from "../sourceControl/SourceControlProvider.ts";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import * as GitManager from "./GitManager.ts";
 
 const encodeCliJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
@@ -741,6 +742,11 @@ function createDetectingSourceControlRegistry(input: {
           Layer.mock(GitLabCli.GitLabCli)(
             input.listMergeRequests ? { listMergeRequests: input.listMergeRequests } : {},
           ),
+          ServerSettings.layerTest(),
+          Layer.succeed(
+            HttpClient.HttpClient,
+            HttpClient.make(() => Effect.die("Unexpected HTTP request")),
+          ),
           Layer.mock(BitbucketApi.BitbucketApi)({}),
           Layer.mock(AzureDevOpsCli.AzureDevOpsCli)({}),
           Layer.mock(ForgejoCli.ForgejoCli)({ listLogins: () => Effect.succeed([]) }),
@@ -756,8 +762,9 @@ function createDetectingSourceControlRegistry(input: {
 }
 
 function makeManager(input?: {
+  sourceControl?: SourceControlProvider.SourceControlProvider["Service"];
   ghScenario?: FakeGhScenario;
-  sourceControlProvider?: SourceControlProvider["Service"];
+  sourceControlProvider?: SourceControlProvider.SourceControlProvider["Service"];
   sourceControlRegistryLayer?: ReturnType<typeof createDetectingSourceControlRegistry>["layer"];
   textGeneration?: Partial<FakeGitTextGeneration>;
   serverSettings?: Parameters<typeof ServerSettings.layerTest>[0];
@@ -802,12 +809,13 @@ function makeManager(input?: {
         Layer.provideMerge(NodeServices.layer),
         Layer.provideMerge(serverConfigLayer),
       );
+  const sourceControlProvider = input?.sourceControl ?? input?.sourceControlProvider;
   const sourceControlRegistryLayer =
     input?.sourceControlRegistryLayer ??
     Layer.effect(
       SourceControlProviderRegistry.SourceControlProviderRegistry,
-      (input?.sourceControlProvider
-        ? Effect.succeed(input.sourceControlProvider)
+      (sourceControlProvider
+        ? Effect.succeed(sourceControlProvider)
         : GitHubSourceControlProvider.make
       ).pipe(
         Effect.map((provider) =>
@@ -847,11 +855,15 @@ function makeManager(input?: {
     if (input?.seed !== undefined) {
       yield* input.seed.pipe(Effect.provideContext(stores), Effect.orDie);
     }
+    const dependencies = yield* Layer.build(managerLayer);
     const manager = yield* GitManager.make.pipe(
-      Effect.provide(managerLayer),
+      Effect.provideContext(dependencies),
       Effect.provideContext(stores),
     );
-    return { manager, ghCalls };
+    const settings = yield* ServerSettings.ServerSettingsService.pipe(
+      Effect.provideContext(dependencies),
+    );
+    return { manager, ghCalls, settings };
   });
 }
 
@@ -864,6 +876,108 @@ const GitManagerTestLayer = GitVcsDriver.layer.pipe(
 );
 
 it.layer(GitManagerTestLayer)("GitManager", (it) => {
+  it.effect.each(["origin", "gitea"])(
+    "shows a Gitea branch badge through %s and excludes same-owner fork collisions",
+    (remoteName) =>
+      Effect.gen(function* () {
+        const repoDir = yield* makeTempDir("t3code-gitea-manager-");
+        yield* initRepo(repoDir);
+        const remoteDir = yield* createBareRemote();
+        yield* runGit(repoDir, ["remote", "add", remoteName, remoteDir]);
+        yield* runGit(repoDir, ["push", "-u", remoteName, "main"]);
+        yield* runGit(repoDir, ["checkout", "-b", "feature/slash"]);
+        yield* runGit(repoDir, ["push", "-u", remoteName, "feature/slash"]);
+        const remoteUrl = "ssh://git@git.home:2222/brad/repo.git";
+        yield* runGit(repoDir, ["remote", "set-url", remoteName, remoteUrl]);
+        const instance = {
+          id: "home",
+          host: "git.home",
+          sshAliases: ["alias"],
+          sshPorts: [2222],
+          webOrigin: "http://git.home:3000",
+          apiOrigin: "http://git.home:3000",
+          token: "fake-token",
+        };
+        const pr = {
+          number: 91,
+          title: "Gitea PR",
+          html_url: "http://git.home:3000/brad/repo/pulls/91",
+          state: "closed",
+          merged: true,
+          updated_at: "2026-09-04T12:00:00Z",
+          base: { ref: "main", repo: { id: 1, full_name: "brad/repo" } },
+          head: { ref: "feature/slash", repo: { id: 1, full_name: "brad/repo" } },
+        };
+        const { provider } = yield* GiteaSourceControlProvider.make.pipe(
+          Effect.provide(ServerSettings.layerTest({ giteaInstances: [instance] })),
+          Effect.provideService(
+            HttpClient.HttpClient,
+            HttpClient.make((request) =>
+              Effect.succeed(
+                HttpClientResponse.fromWeb(
+                  request,
+                  new Response(
+                    JSON.stringify(
+                      request.url.includes("page=1&")
+                        ? [
+                            {
+                              ...pr,
+                              number: 90,
+                              head: { ...pr.head, repo: { id: 2, full_name: "brad/other-fork" } },
+                            },
+                            pr,
+                          ]
+                        : [],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        let configured = false;
+        const { manager, settings } = yield* makeManager({
+          serverSettings: { giteaInstances: [] },
+          sourceControl: {
+            ...provider,
+            get kind() {
+              return configured ? "gitea" : "unknown";
+            },
+            listChangeRequests: (input) =>
+              provider.listChangeRequests({
+                ...input,
+                context: {
+                  provider: { kind: "gitea", name: "Gitea", baseUrl: instance.webOrigin },
+                  remoteName,
+                  remoteUrl,
+                },
+              }),
+          },
+        });
+        expect(
+          (yield* manager.remoteStatus({ cwd: repoDir }, { refreshUpstream: false }))?.pr,
+        ).toBeNull();
+        yield* settings.updateSettings({ giteaInstances: [instance] });
+        configured = true;
+        const local = yield* manager.localStatus({ cwd: repoDir });
+        expect(local.sourceControlProvider).toEqual({
+          kind: "gitea",
+          name: "Gitea",
+          baseUrl: instance.webOrigin,
+        });
+        const remote = yield* manager.remoteStatus(
+          { cwd: repoDir },
+          { refreshUpstream: false, refreshMissingPullRequest: true },
+        );
+        expect(remote?.pr).toMatchObject({
+          number: 91,
+          state: "merged",
+          url: pr.html_url,
+          updatedAt: "2026-09-04T12:00:00.000Z",
+        });
+      }),
+  );
+
   it.effect("status includes draft PR metadata when branch already has a draft PR", () =>
     Effect.gen(function* () {
       const repoDir = yield* makeTempDir("t3code-git-manager-");
