@@ -23,6 +23,7 @@ import {
   ProviderService,
   type ProviderServiceShape,
 } from "../src/provider/Services/ProviderService.ts";
+import { makeServerBootGenerationLayer } from "../src/provider/Layers/ServerBootGeneration.ts";
 import * as ServerConfig from "../src/config.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
 import { AnalyticsService } from "../src/telemetry/AnalyticsService.ts";
@@ -89,6 +90,11 @@ const makeIntegrationFixture = (options?: { readonly analytics?: Layer.Layer<Ana
 
     const directoryLayer = ProviderSessionDirectoryLive.pipe(
       Layer.provide(ProviderSessionRuntime.layer),
+      // Fork adapt (not relocatable): the fork's ProviderService requires
+      // ServerBootGeneration, so upstream's own integration tests need it
+      // provided here even though the fork-specific cases live in the
+      // sibling .fork.test.ts.
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
     );
 
     const shared = Layer.mergeAll(
