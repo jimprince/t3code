@@ -14,5 +14,6 @@ if (!majorVersion) {
 }
 
 module.exports = {
+  ...require("./fingerprint.config.cjs"),
   extraSources: [{ type: "contents", id: "appMajorVersion", contents: majorVersion }],
 };
