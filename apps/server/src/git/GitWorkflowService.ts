@@ -29,6 +29,7 @@ import {
 } from "@t3tools/contracts";
 
 import * as GitManager from "./GitManager.ts";
+import { resolveRemoteWorktreeBase } from "./remoteWorktreeBase.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 
@@ -65,10 +66,20 @@ export class GitWorkflowService extends Context.Service<
     readonly createWorktree: (
       input: VcsCreateWorktreeInput,
     ) => Effect.Effect<VcsCreateWorktreeResult, GitCommandError>;
+    readonly resolveRemoteWorktreeBase: (input: {
+      readonly cwd: string;
+      readonly baseBranch: string;
+    }) => Effect.Effect<
+      { readonly remoteName: string; readonly refName: string } | null,
+      GitCommandError
+    >;
     readonly fetchRemote: (input: {
       readonly cwd: string;
       readonly remoteName: string;
     }) => Effect.Effect<void, GitCommandError>;
+    readonly listRemoteNames: (
+      cwd: string,
+    ) => Effect.Effect<ReadonlyArray<string>, GitCommandError>;
     readonly remoteExists: (input: {
       readonly cwd: string;
       readonly remoteName: string;
@@ -312,9 +323,17 @@ export const make = Effect.gen(function* () {
       ensureGitCommand("GitWorkflowService.createWorktree", input.cwd).pipe(
         Effect.andThen(git.createWorktree(input)),
       ),
+    resolveRemoteWorktreeBase: (input) =>
+      ensureGitCommand("GitWorkflowService.resolveRemoteWorktreeBase", input.cwd).pipe(
+        Effect.andThen(resolveRemoteWorktreeBase(git, input)),
+      ),
     fetchRemote: (input) =>
       ensureGitCommand("GitWorkflowService.fetchRemote", input.cwd).pipe(
         Effect.andThen(git.fetchRemote(input)),
+      ),
+    listRemoteNames: (cwd) =>
+      ensureGitCommand("GitWorkflowService.listRemoteNames", cwd).pipe(
+        Effect.andThen(git.listRemoteNames(cwd)),
       ),
     remoteExists: (input) =>
       ensureGitCommand("GitWorkflowService.remoteExists", input.cwd).pipe(
