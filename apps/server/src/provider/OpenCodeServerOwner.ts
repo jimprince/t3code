@@ -86,7 +86,7 @@ export const make = Effect.fn("OpenCodeServerOwner.make")(function* (input: {
     Effect.gen(function* () {
       yield* cancelIdleClose();
       if (state.server !== null) {
-        if (yield* state.server.isRunning) {
+        if (state.server.isRunning === undefined || (yield* state.server.isRunning)) {
           state.borrowers += 1;
           return state.server;
         }
