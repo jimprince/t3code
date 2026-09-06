@@ -1,23 +1,9 @@
-// Fork-owned process-row diagnostics (pre-rework ProcessDiagnostics, verbatim
-// except two survival edits marked FORK-EDIT below).
-//
-// Upstream's ProcessDiagnostics dropped ps-row parsing in the v0.0.31 native
-// resource diagnostics rework. The fork's SystemRecovery still builds its
-// preview-only recovery candidates from ps rows (ProcessRow + readProcessRows),
-// so the pre-rework module lives on here as a fork-owned ADDITIVE file. This
-// removes fork code from upstream's hot ProcessDiagnostics.ts entirely.
-import type {
-  ServerProcessDiagnosticsEntry,
-  ServerProcessDiagnosticsResult,
-  ServerProcessSignal,
-  ServerSignalProcessResult,
-} from "@t3tools/contracts";
+// On-demand host-wide process rows for recovery candidates outside T3's process
+// tree (orphaned providers and diagnostic captures). Normal process diagnostics
+// and signaling use upstream ResourceTelemetry; do not duplicate that service here.
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import * as Context from "effect/Context";
-import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as ChildProcess from "effect/unstable/process/ChildProcess";
@@ -39,17 +25,6 @@ export interface ProcessRow {
 const PROCESS_QUERY_TIMEOUT_MS = 1_000;
 const POSIX_PROCESS_QUERY_COMMAND = "pid=,ppid=,pgid=,stat=,pcpu=,rss=,etime=,command=";
 const PROCESS_QUERY_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
-
-export class ProcessDiagnostics extends Context.Service<
-  ProcessDiagnostics,
-  {
-    readonly read: Effect.Effect<ServerProcessDiagnosticsResult>;
-    readonly signal: (input: {
-      readonly pid: number;
-      readonly signal: ServerProcessSignal;
-    }) => Effect.Effect<ServerSignalProcessResult>;
-  }
->()("t3/diagnostics/forkProcessRows/ProcessDiagnostics") {}
 
 class ProcessDiagnosticsQueryTimeoutError extends Schema.TaggedErrorClass<ProcessDiagnosticsQueryTimeoutError>()(
   "ProcessDiagnosticsQueryTimeoutError",
@@ -85,46 +60,9 @@ class ProcessDiagnosticsQueryFailedError extends Schema.TaggedErrorClass<Process
   }
 }
 
-class ProcessDiagnosticsServerProcessSignalError extends Schema.TaggedErrorClass<ProcessDiagnosticsServerProcessSignalError>()(
-  "ProcessDiagnosticsServerProcessSignalError",
-  { pid: Schema.Number },
-) {
-  override get message(): string {
-    return "Refusing to signal the T3 server process.";
-  }
-}
-
-class ProcessDiagnosticsNotDescendantError extends Schema.TaggedErrorClass<ProcessDiagnosticsNotDescendantError>()(
-  "ProcessDiagnosticsNotDescendantError",
-  {
-    pid: Schema.Number,
-    serverPid: Schema.Number,
-  },
-) {
-  override get message(): string {
-    return `Process ${this.pid} is not a live descendant of the T3 server.`;
-  }
-}
-
-class ProcessDiagnosticsSignalFailedError extends Schema.TaggedErrorClass<ProcessDiagnosticsSignalFailedError>()(
-  "ProcessDiagnosticsSignalFailedError",
-  {
-    pid: Schema.Number,
-    signal: Schema.String,
-    cause: Schema.Defect(),
-  },
-) {
-  override get message(): string {
-    return `Failed to signal process ${this.pid} with ${this.signal}.`;
-  }
-}
-
 const ProcessDiagnosticsError = Schema.Union([
   ProcessDiagnosticsQueryTimeoutError,
   ProcessDiagnosticsQueryFailedError,
-  ProcessDiagnosticsServerProcessSignalError,
-  ProcessDiagnosticsNotDescendantError,
-  ProcessDiagnosticsSignalFailedError,
 ]);
 type ProcessDiagnosticsError = typeof ProcessDiagnosticsError.Type;
 const isProcessDiagnosticsError = Schema.is(ProcessDiagnosticsError);
@@ -254,86 +192,6 @@ function parseWindowsProcessRows(output: string): ReadonlyArray<ProcessRow> {
   } catch {
     return [];
   }
-}
-
-export function buildDescendantEntries(
-  rows: ReadonlyArray<ProcessRow>,
-  serverPid: number,
-): ReadonlyArray<ServerProcessDiagnosticsEntry> {
-  const childrenByParent = new Map<number, ProcessRow[]>();
-  for (const row of rows) {
-    const children = childrenByParent.get(row.ppid) ?? [];
-    children.push(row);
-    childrenByParent.set(row.ppid, children);
-  }
-
-  const entries: ServerProcessDiagnosticsEntry[] = [];
-  const visited = new Set<number>();
-  const stack = [...(childrenByParent.get(serverPid) ?? [])]
-    .toSorted((left, right) => left.pid - right.pid)
-    .map((row) => ({ row, depth: 0 }));
-
-  while (stack.length > 0) {
-    const item = stack.shift();
-    if (!item || visited.has(item.row.pid)) continue;
-    visited.add(item.row.pid);
-
-    const children = [...(childrenByParent.get(item.row.pid) ?? [])].toSorted(
-      (left, right) => left.pid - right.pid,
-    );
-    entries.push({
-      pid: item.row.pid,
-      // FORK-EDIT: ps rows carry no start time; upstream's native monitor does.
-      startTimeMs: 0,
-      ppid: item.row.ppid,
-      pgid: Option.fromNullishOr(item.row.pgid),
-      status: item.row.status,
-      cpuPercent: item.row.cpuPercent,
-      rssBytes: item.row.rssBytes,
-      elapsed: item.row.elapsed || "n/a",
-      command: item.row.command,
-      depth: item.depth,
-      childPids: children.map((child) => child.pid),
-    });
-
-    stack.unshift(...children.map((row) => ({ row, depth: item.depth + 1 })));
-  }
-
-  return entries;
-}
-
-export function isDiagnosticsQueryProcess(row: ProcessRow, serverPid: number): boolean {
-  if (row.ppid !== serverPid) return false;
-
-  const command = row.command.trim();
-  return (
-    /(?:^|[/\\])ps\s+-axo\s+pid=,ppid=,pgid=,stat=,pcpu=,rss=,etime=,command=/.test(command) ||
-    (/\bpowershell(?:\.exe)?\b/i.test(command) &&
-      /\bGet-CimInstance\s+Win32_Process\b/i.test(command))
-  );
-}
-
-function makeResult(input: {
-  readonly serverPid: number;
-  readonly rows: ReadonlyArray<ProcessRow>;
-  readonly readAt: DateTime.Utc;
-  readonly error?: string;
-}): ServerProcessDiagnosticsResult {
-  const readAt = input.readAt;
-  const rows = input.rows.filter((row) => !isDiagnosticsQueryProcess(row, input.serverPid));
-  const processes = buildDescendantEntries(rows, input.serverPid);
-  const totalRssBytes = processes.reduce((total, process) => total + process.rssBytes, 0);
-  const totalCpuPercent = processes.reduce((total, process) => total + process.cpuPercent, 0);
-
-  return {
-    serverPid: input.serverPid,
-    readAt,
-    processCount: processes.length,
-    totalRssBytes,
-    totalCpuPercent,
-    processes,
-    error: input.error ? Option.some({ message: input.error }) : Option.none(),
-  };
 }
 
 interface ProcessOutput {
@@ -487,99 +345,3 @@ export const readProcessRows = Effect.gen(function* () {
   const platform = yield* HostProcessPlatform;
   return yield* platform === "win32" ? readWindowsProcessRows() : readPosixProcessRows();
 });
-
-export function aggregateProcessDiagnostics(input: {
-  readonly serverPid: number;
-  readonly rows: ReadonlyArray<ProcessRow>;
-  readonly readAt: DateTime.Utc;
-}): ServerProcessDiagnosticsResult {
-  return makeResult(input);
-}
-
-function assertDescendantPid(
-  pid: number,
-): Effect.Effect<void, ProcessDiagnosticsError, ChildProcessSpawner.ChildProcessSpawner> {
-  if (pid === process.pid) {
-    return Effect.fail(
-      new ProcessDiagnosticsServerProcessSignalError({
-        pid,
-      }),
-    );
-  }
-
-  return readProcessRows.pipe(
-    Effect.flatMap((rows) => {
-      const filteredRows = rows.filter((row) => !isDiagnosticsQueryProcess(row, process.pid));
-      const descendant = buildDescendantEntries(filteredRows, process.pid).some(
-        (entry) => entry.pid === pid,
-      );
-      return descendant
-        ? Effect.void
-        : Effect.fail(
-            new ProcessDiagnosticsNotDescendantError({
-              pid,
-              serverPid: process.pid,
-            }),
-          );
-    }),
-  );
-}
-
-export const make = Effect.gen(function* () {
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-
-  const read: ProcessDiagnostics["Service"]["read"] = Effect.gen(function* () {
-    const readAt = yield* DateTime.now;
-    const rows = yield* readProcessRows.pipe(
-      Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-    );
-    return makeResult({ serverPid: process.pid, rows, readAt });
-  }).pipe(
-    Effect.catch((error: ProcessDiagnosticsError) =>
-      DateTime.now.pipe(
-        Effect.map((readAt) =>
-          makeResult({ serverPid: process.pid, rows: [], readAt, error: error.message }),
-        ),
-      ),
-    ),
-  );
-
-  const signal: ProcessDiagnostics["Service"]["signal"] = Effect.fn("ProcessDiagnostics.signal")(
-    function* (input) {
-      return yield* assertDescendantPid(input.pid).pipe(
-        Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
-        Effect.flatMap(() =>
-          Effect.try({
-            try: () => {
-              process.kill(input.pid, input.signal);
-              return {
-                pid: input.pid,
-                signal: input.signal,
-                signaled: true,
-                message: Option.none(),
-              };
-            },
-            catch: (cause) =>
-              new ProcessDiagnosticsSignalFailedError({
-                pid: input.pid,
-                signal: input.signal,
-                cause,
-              }),
-          }),
-        ),
-        Effect.catch((error: ProcessDiagnosticsError) =>
-          Effect.succeed({
-            pid: input.pid,
-            signal: input.signal,
-            signaled: false,
-            message: Option.some(error.message),
-          }),
-        ),
-      );
-    },
-  );
-
-  return ProcessDiagnostics.of({ read, signal });
-});
-
-export const layer = Layer.effect(ProcessDiagnostics, make);

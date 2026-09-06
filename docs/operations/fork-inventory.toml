@@ -225,7 +225,7 @@ purpose = "Expose resource pressure diagnosis, grouped recovery previews and exe
 retire_when = "Upstream telemetry and signaling cover the retained recovery actions and notifications."
 depends_on = ["fork-bounded-diagnostics"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-performance-recovery."
+note = "Normal process telemetry and signaling use upstream. Removed the unused duplicate diagnostics service; retain the bounded on-demand host-wide query for orphaned workers/captures and the distinct opt-out pressure notifications."
 [[patch.decision]]
 id = "forkprocessrows-extraction-951"
 date = "2026-07-29"
