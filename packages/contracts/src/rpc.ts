@@ -244,6 +244,8 @@ import {
   ServerConfig,
   ServerProviderUpdateError,
   ServerProviderUpdateInput,
+  ServerHeadlessUpdateCheckInput,
+  ServerHeadlessUpdateCheckResult,
   ServerLifecycleStreamEvent,
   ServerRemoveKeybindingInput,
   ServerRemoveKeybindingResult,
@@ -420,6 +422,8 @@ export const WS_METHODS = {
 
   serverPreviewRecovery: "server.previewRecovery",
   serverExecuteRecovery: "server.executeRecovery",
+  serverRequestHeadlessUpdateCheck: "server.requestHeadlessUpdateCheck",
+
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -740,6 +744,15 @@ const WsServerExecuteRecoveryRpc = Rpc.make(WS_METHODS.serverExecuteRecovery, {
   success: ServerRecoveryExecuteResult,
   error: EnvironmentAuthorizationError,
 });
+
+const WsServerRequestHeadlessUpdateCheckRpc = Rpc.make(
+  WS_METHODS.serverRequestHeadlessUpdateCheck,
+  {
+    payload: ServerHeadlessUpdateCheckInput,
+    success: ServerHeadlessUpdateCheckResult,
+    error: EnvironmentAuthorizationError,
+  },
+);
 
 const WsCloudGetRelayClientStatusRpc = Rpc.make(WS_METHODS.cloudGetRelayClientStatus, {
   payload: Schema.Struct({}),
@@ -1540,6 +1553,8 @@ export const WsRpcGroup = RpcGroup.make(
 
   WsServerPreviewRecoveryRpc,
   WsServerExecuteRecoveryRpc,
+  WsServerRequestHeadlessUpdateCheckRpc,
+
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsPullRequestsListRpc,
