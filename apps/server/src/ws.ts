@@ -36,6 +36,7 @@ import {
   type OrchestrationClientOrigin,
   type OrchestrationCommand,
   type GitActionProgressEvent,
+  GitCommandError,
   type GitManagerServiceError,
   OrchestrationDispatchCommandError,
   type OrchestrationEvent,
@@ -1316,51 +1317,40 @@ const makeWsRpcLayer = (
             let worktreeBaseRef = prepareWorktree?.baseBranch ?? null;
 
             if (prepareWorktree && shouldPrepareWorktree) {
-              // "Start from origin" is a stored default; repos without the
-              // requested remote branch fall back to the local base branch.
-              const startFromOrigin =
-                prepareWorktree.startFromOrigin === true &&
-                (yield* gitWorkflow.remoteExists({
+              if (prepareWorktree.startFromOrigin === true) {
+                const remoteBase = yield* gitWorkflow.resolveRemoteWorktreeBase({
                   cwd: prepareWorktree.projectCwd,
-                  remoteName: "origin",
-                }));
-              if (startFromOrigin) {
+                  baseBranch: prepareWorktree.baseBranch,
+                });
+                if (!remoteBase) {
+                  return yield* new GitCommandError({
+                    operation: "worktree bootstrap",
+                    command: "git remote get-url gitea|origin",
+                    cwd: prepareWorktree.projectCwd,
+                    detail:
+                      "Remote-based worktree creation requires a configured remote-qualified branch or a gitea/origin default. Select a remote branch, add a default remote, or disable remote-based creation.",
+                  });
+                }
                 yield* track(worktreeSetupTracker.stageStatus(threadId, "fetch", "running"));
                 yield* gitWorkflow.fetchRemote({
                   cwd: prepareWorktree.projectCwd,
-                  remoteName: "origin",
-                  refName: prepareWorktree.baseBranch,
+                  remoteName: remoteBase.remoteName,
+                  refName: remoteBase.refName,
                 });
-                const remoteBaseExists = yield* gitWorkflow.remoteBranchExists({
+                const resolvedRemoteBase = yield* gitWorkflow.resolveRemoteTrackingCommit({
                   cwd: prepareWorktree.projectCwd,
-                  refName: prepareWorktree.baseBranch,
-                  remoteName: "origin",
+                  refName: remoteBase.refName,
+                  fallbackRemoteName: remoteBase.remoteName,
                 });
-                if (remoteBaseExists) {
-                  const resolvedRemoteBase = yield* gitWorkflow.resolveRemoteTrackingCommit({
-                    cwd: prepareWorktree.projectCwd,
-                    refName: prepareWorktree.baseBranch,
-                    fallbackRemoteName: "origin",
-                  });
-                  worktreeBaseRef = resolvedRemoteBase.commitSha;
-                  yield* track(
-                    worktreeSetupTracker.stageStatus(
-                      threadId,
-                      "fetch",
-                      "done",
-                      `origin/${prepareWorktree.baseBranch} at ${resolvedRemoteBase.commitSha.slice(0, 7)}`,
-                    ),
-                  );
-                } else {
-                  yield* track(
-                    worktreeSetupTracker.stageStatus(
-                      threadId,
-                      "fetch",
-                      "warning",
-                      `origin/${prepareWorktree.baseBranch} not found, using local branch`,
-                    ),
-                  );
-                }
+                worktreeBaseRef = resolvedRemoteBase.commitSha;
+                yield* track(
+                  worktreeSetupTracker.stageStatus(
+                    threadId,
+                    "fetch",
+                    "done",
+                    `${resolvedRemoteBase.remoteRefName} at ${resolvedRemoteBase.commitSha.slice(0, 7)}`,
+                  ),
+                );
               } else {
                 yield* track(worktreeSetupTracker.stageStatus(threadId, "fetch", "skipped"));
               }
