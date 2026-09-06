@@ -1,3 +1,4 @@
+import { makeServerBootGenerationLayer } from "../provider/Layers/ServerBootGeneration.ts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it, vi } from "@effect/vitest";
 import {
@@ -229,6 +230,10 @@ it.layer(NodeServices.layer)("AgentSessionImporter", (it) => {
           latestSequence: Effect.succeed(0),
         });
         const directory = ProviderSessionDirectory.ProviderSessionDirectory.of({
+          settleDeadGenerationBinding: () => Effect.die("unused"),
+          markTurnStarted: () => Effect.die("unused"),
+          markTurnTerminal: () => Effect.die("unused"),
+          claimIdleForRecovery: () => Effect.die("unused"),
           upsert: (binding) => Effect.sync(() => void bindings.push(binding)),
           getProvider: () => Effect.die("unused"),
           recordImportedTranscript: () => Effect.void,
@@ -334,6 +339,10 @@ it.layer(NodeServices.layer)("AgentSessionImporter", (it) => {
           latestSequence: Effect.succeed(0),
         });
         const directory = ProviderSessionDirectory.ProviderSessionDirectory.of({
+          settleDeadGenerationBinding: () => Effect.die("unused"),
+          markTurnStarted: () => Effect.die("unused"),
+          markTurnTerminal: () => Effect.die("unused"),
+          claimIdleForRecovery: () => Effect.die("unused"),
           upsert: () => Effect.die("must not bind a scanner skip"),
           getProvider: () => Effect.die("unused"),
           recordImportedTranscript: () => Effect.die("unused"),
@@ -399,6 +408,10 @@ it.layer(NodeServices.layer)("AgentSessionImporter", (it) => {
           latestSequence: Effect.succeed(0),
         });
         const directory = ProviderSessionDirectory.ProviderSessionDirectory.of({
+          settleDeadGenerationBinding: () => Effect.die("unused"),
+          markTurnStarted: () => Effect.die("unused"),
+          markTurnTerminal: () => Effect.die("unused"),
+          claimIdleForRecovery: () => Effect.die("unused"),
           upsert: (binding) => {
             bindingAttemptCount += 1;
             if (bindingAttemptCount === 1) {
@@ -453,6 +466,10 @@ it.layer(NodeServices.layer)("AgentSessionImporter", (it) => {
           resumeCursor: { threadId: "newer-codex-session" },
         };
         const directory = ProviderSessionDirectory.ProviderSessionDirectory.of({
+          settleDeadGenerationBinding: () => Effect.die("unused"),
+          markTurnStarted: () => Effect.die("unused"),
+          markTurnTerminal: () => Effect.die("unused"),
+          claimIdleForRecovery: () => Effect.die("unused"),
           upsert: () => Effect.die("must not replace an active binding"),
           getProvider: () => Effect.die("unused"),
           recordImportedTranscript: () => Effect.void,
@@ -508,6 +525,10 @@ it.layer(NodeServices.layer)("AgentSessionImporter", (it) => {
           latestSequence: Effect.succeed(0),
         });
         const directory = ProviderSessionDirectory.ProviderSessionDirectory.of({
+          settleDeadGenerationBinding: () => Effect.die("unused"),
+          markTurnStarted: () => Effect.die("unused"),
+          markTurnTerminal: () => Effect.die("unused"),
+          claimIdleForRecovery: () => Effect.die("unused"),
           upsert: () => Effect.die("must not bind malformed or wrong-project sessions"),
           getProvider: () => Effect.die("unused"),
           recordImportedTranscript: () => Effect.die("unused"),
@@ -567,7 +588,10 @@ const integrationLayer = Layer.mergeAll(
   ),
   OrchestrationProjectionSnapshotQueryLive,
   integrationRuntimeRepository,
-  ProviderSessionDirectoryLive.pipe(Layer.provide(integrationRuntimeRepository)),
+  ProviderSessionDirectoryLive.pipe(
+    Layer.provide(makeServerBootGenerationLayer("test-import-boot")),
+    Layer.provide(integrationRuntimeRepository),
+  ),
   Layer.succeed(AgentSessionScanner.AgentSessionScanner, integrationScanner),
 ).pipe(
   Layer.provide(ThreadBackgroundLiveness.layer),
@@ -1040,6 +1064,7 @@ it.layer(integrationLayer)("AgentSessionImporter integration", (it) => {
       const importerDirectory = yield* ProviderSessionDirectory.ProviderSessionDirectory.pipe(
         Effect.provide(
           Layer.fresh(ProviderSessionDirectoryLive).pipe(
+            Layer.provide(makeServerBootGenerationLayer("test-import-boot")),
             Layer.provide(
               Layer.succeed(
                 ProviderSessionRuntime.ProviderSessionRuntimeRepository,
@@ -1134,6 +1159,7 @@ it.layer(integrationLayer)("AgentSessionImporter integration", (it) => {
       const importerDirectory = yield* ProviderSessionDirectory.ProviderSessionDirectory.pipe(
         Effect.provide(
           Layer.fresh(ProviderSessionDirectoryLive).pipe(
+            Layer.provide(makeServerBootGenerationLayer("test-import-boot")),
             Layer.provide(
               Layer.succeed(
                 ProviderSessionRuntime.ProviderSessionRuntimeRepository,
