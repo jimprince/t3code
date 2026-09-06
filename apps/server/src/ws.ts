@@ -135,6 +135,9 @@ import * as ResourceTelemetry from "./resourceTelemetry/ResourceTelemetry.ts";
 import * as AnalyticsService from "./telemetry/AnalyticsService.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as UsageService from "./usage/UsageService.ts";
+
+import * as SystemRecovery from "./diagnostics/SystemRecovery.ts";
+
 import * as TraceDiagnostics from "./diagnostics/TraceDiagnostics.ts";
 import * as PullRequestService from "./pullRequest/PullRequestService.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
@@ -606,6 +609,9 @@ const makeWsRpcLayer = (
       const processResourceMonitor = yield* ProcessResourceMonitor.ProcessResourceMonitor;
       const resourceTelemetry = yield* ResourceTelemetry.ResourceTelemetry;
       const usage = yield* UsageService.UsageService;
+
+      const systemRecovery = yield* SystemRecovery.SystemRecovery;
+
       const relayClient = yield* RelayClient.RelayClient;
       const authorizationError = (requiredScope: AuthEnvironmentScope) =>
         new EnvironmentAuthorizationError({
@@ -2042,8 +2048,12 @@ const makeWsRpcLayer = (
             "rpc.aggregate": "server",
           }),
 
+        [WS_METHODS.serverPreviewRecovery]: (_input) =>
+          observeRpcEffect(WS_METHODS.serverPreviewRecovery, systemRecovery.preview, {
             "rpc.aggregate": "server",
           }),
+        [WS_METHODS.serverExecuteRecovery]: (input) =>
+          observeRpcEffect(WS_METHODS.serverExecuteRecovery, systemRecovery.execute(input), {
             "rpc.aggregate": "server",
           }),
           observeRpcEffect(
