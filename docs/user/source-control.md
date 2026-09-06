@@ -98,3 +98,6 @@ Use the row checkboxes or **Select all visible pull requests** to select several
 choose **Remove from list** to hide them without closing or changing them on the Git host.
 Removed reviews stay hidden for that environment in this browser. Choose **Restore removed**
 above the list to bring them back.
+
+Repositories on hosts without a configured source-control provider are skipped during pull request
+status checks, so their branches show no pull request badge.
