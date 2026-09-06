@@ -10,13 +10,8 @@ import {
 import { INLINE_TERMINAL_CONTEXT_PLACEHOLDER } from "./lib/terminalContext";
 
 export type ComposerTriggerKind = "path" | "slash-command" | "skill";
-export type ComposerSlashCommand = "model" | "plan" | "default" | "goal";
+export type ComposerSlashCommand = "model" | "plan" | "default";
 export type ComposerSubmissionIntent = "foreground" | "background";
-
-export type ComposerGoalSlashCommand =
-  | { type: "status" }
-  | { type: "clear" }
-  | { type: "set"; goal: string };
 
 export interface ComposerTrigger {
   kind: ComposerTriggerKind;
@@ -268,7 +263,7 @@ export function detectComposerTrigger(text: string, cursorInput: number): Compos
 
 export function parseStandaloneComposerSlashCommand(
   text: string,
-): Exclude<ComposerSlashCommand, "model" | "goal"> | null {
+): Exclude<ComposerSlashCommand, "model"> | null {
   const match = /^\/(plan|default)\s*$/i.exec(text.trim());
   if (!match) {
     return null;
@@ -276,17 +271,6 @@ export function parseStandaloneComposerSlashCommand(
   const command = match[1]?.toLowerCase();
   if (command === "plan") return "plan";
   return "default";
-}
-
-const GOAL_CLEAR_ALIASES = new Set(["clear", "stop", "off", "reset", "none", "cancel"]);
-
-export function parseComposerGoalSlashCommand(text: string): ComposerGoalSlashCommand | null {
-  const match = /^\/goal(?:\s+(.*))?$/is.exec(text.trim());
-  if (!match) return null;
-  const arg = (match[1] ?? "").trim();
-  if (!arg) return { type: "status" };
-  if (GOAL_CLEAR_ALIASES.has(arg.toLowerCase())) return { type: "clear" };
-  return { type: "set", goal: arg };
 }
 
 export function replaceTextRange(

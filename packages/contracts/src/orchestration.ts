@@ -517,6 +517,10 @@ export const ThreadLinkedPullRequest = Schema.Struct({
 });
 export type ThreadLinkedPullRequest = typeof ThreadLinkedPullRequest.Type;
 
+// Compat: thread goals (set/clear/evaluate, auto-continuation) were removed.
+// This type and the `goal` field below remain only so pre-removal threads and
+// event history still decode and replay; there is no way to create a new
+// goal, and nothing evaluates or continues one.
 export const OrchestrationThreadGoalStatus = Schema.Literals(["active", "achieved"]);
 export type OrchestrationThreadGoalStatus = typeof OrchestrationThreadGoalStatus.Type;
 
@@ -1159,21 +1163,6 @@ const ThreadInteractionModeSetCommand = Schema.Struct({
   createdAt: IsoDateTime,
 });
 
-const ThreadGoalSetCommand = Schema.Struct({
-  type: Schema.Literal("thread.goal.set"),
-  commandId: CommandId,
-  threadId: ThreadId,
-  goal: OrchestrationThreadGoal.fields.goal,
-  createdAt: IsoDateTime,
-});
-
-const ThreadGoalClearCommand = Schema.Struct({
-  type: Schema.Literal("thread.goal.clear"),
-  commandId: CommandId,
-  threadId: ThreadId,
-  createdAt: IsoDateTime,
-});
-
 const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
@@ -1308,8 +1297,6 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
-  ThreadGoalSetCommand,
-  ThreadGoalClearCommand,
   ThreadTurnStartCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
@@ -1339,8 +1326,6 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
-  ThreadGoalSetCommand,
-  ThreadGoalClearCommand,
   ClientThreadTurnStartCommand,
   ThreadTurnInterruptCommand,
   ThreadApprovalRespondCommand,
@@ -1437,17 +1422,6 @@ const ThreadTitleRegenerationCompleteCommand = Schema.Struct({
   title: Schema.optional(TrimmedNonEmptyString),
 });
 
-const ThreadGoalEvaluationRecordCommand = Schema.Struct({
-  type: Schema.Literal("thread.goal.evaluation.record"),
-  commandId: CommandId,
-  threadId: ThreadId,
-  turnId: TurnId,
-  achieved: Schema.Boolean,
-  reason: Schema.String,
-  continuationRequested: Schema.Boolean,
-  createdAt: IsoDateTime,
-});
-
 /**
  * Server-internal command dispatched by the thread-move import path. Carries a
  * `PortableThread` and target-environment values; the decider expands it into
@@ -1476,7 +1450,6 @@ const InternalOrchestrationCommand = Schema.Union([
   ThreadActivityAppendCommand,
   ThreadRevertCompleteCommand,
   ThreadTitleRegenerationCompleteCommand,
-  ThreadGoalEvaluationRecordCommand,
   ThreadImportCommand,
 ]);
 export type InternalOrchestrationCommand = typeof InternalOrchestrationCommand.Type;
@@ -1680,6 +1653,8 @@ export const ThreadInteractionModeSetPayload = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 
+// Compat: retained for historical event replay and transfer of existing goals.
+// Goal creation, evaluation, and automatic continuation are no longer supported.
 export const ThreadGoalSetPayload = Schema.Struct({
   threadId: ThreadId,
   goal: OrchestrationThreadGoal,

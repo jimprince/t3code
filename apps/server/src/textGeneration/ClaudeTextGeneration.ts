@@ -22,7 +22,6 @@ import * as TextGeneration from "./TextGeneration.ts";
 import {
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
-  buildGoalEvaluationPrompt,
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
@@ -94,8 +93,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle"
-      | "evaluateGoal",
+      | "generateThreadTitle",
     value: unknown,
     detail: string,
   ): Effect.Effect<string, TextGenerationError> =>
@@ -125,8 +123,7 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle"
-      | "evaluateGoal";
+      | "generateThreadTitle";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -383,33 +380,10 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       };
     });
 
-  const evaluateGoal: TextGeneration.TextGeneration["Service"]["evaluateGoal"] = Effect.fn(
-    "ClaudeTextGeneration.evaluateGoal",
-  )(function* (input) {
-    const { prompt, outputSchema } = buildGoalEvaluationPrompt({
-      goal: input.goal,
-      transcript: input.transcript,
-    });
-
-    const generated = yield* runClaudeJson({
-      operation: "evaluateGoal",
-      cwd: input.cwd,
-      prompt,
-      outputSchemaJson: outputSchema,
-      modelSelection: input.modelSelection,
-    });
-
-    return {
-      achieved: generated.achieved,
-      reason: generated.reason.trim(),
-    };
-  });
-
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
-    evaluateGoal,
   } satisfies TextGeneration.TextGeneration["Service"];
 });

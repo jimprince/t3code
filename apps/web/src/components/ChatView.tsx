@@ -92,7 +92,6 @@ import { useDiffPanelStore } from "../diffPanelStore";
 import {
   collapseExpandedComposerCursor,
   type ComposerSubmissionIntent,
-  parseComposerGoalSlashCommand,
   parseStandaloneComposerSlashCommand,
 } from "../composer-logic";
 import {
@@ -636,23 +635,6 @@ function formatOutgoingPrompt(params: {
   return applyClaudePromptEffortPrefix(params.text, promptEffort);
 }
 
-function formatGoalInitialPrompt(goal: string): string {
-  return [
-    `Active T3 goal: ${goal}`,
-    "",
-    "Work toward this goal until it is satisfied. When you believe it is satisfied, state the concrete transcript-visible evidence and any verification performed.",
-  ].join("\n");
-}
-
-function formatGoalStatus(goal: Thread["goal"]): { title: string; description: string } {
-  if (!goal) {
-    return { title: "No active goal", description: "Use /goal <condition> to start one." };
-  }
-  return {
-    title: goal.status === "achieved" ? "Goal achieved" : "Active goal",
-    description: goal.lastReason ? `${goal.goal}\n${goal.lastReason}` : goal.goal,
-  };
-}
 const SCRIPT_TERMINAL_COLS = 120;
 const SCRIPT_TERMINAL_ROWS = 30;
 
@@ -1420,8 +1402,6 @@ export default function ChatView(props: ChatViewProps) {
   const setThreadInteractionMode = useAtomCommand(threadEnvironment.setInteractionMode, {
     reportFailure: false,
   });
-  const setThreadGoal = useAtomCommand(threadEnvironment.setGoal, { reportFailure: false });
-  const clearThreadGoal = useAtomCommand(threadEnvironment.clearGoal, { reportFailure: false });
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const createAttachmentAssetUrl = useAtomQueryRunner(assetEnvironment.createUrl, {
     reportFailure: false,
@@ -6503,10 +6483,6 @@ export default function ChatView(props: ChatViewProps) {
       composerReviewComments.length === 0
         ? parseStandaloneComposerSlashCommand(trimmed)
         : null;
-    const goalSlashCommand =
-      composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
-        ? parseComposerGoalSlashCommand(trimmed)
-        : null;
     if (standaloneSlashCommand) {
       handleInteractionModeChange(standaloneSlashCommand);
       promptRef.current = "";
@@ -6514,39 +6490,6 @@ export default function ChatView(props: ChatViewProps) {
       composerRef.current?.resetCursorState();
       return;
     }
-    if (goalSlashCommand?.type === "status") {
-      const status = formatGoalStatus(activeThread.goal);
-      toastManager.add(stackedThreadToast({ type: "info", ...status }));
-      promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget);
-      composerRef.current?.resetCursorState();
-      return;
-    }
-    if (goalSlashCommand?.type === "clear") {
-      const result = await clearThreadGoal({
-        environmentId,
-        input: {
-          threadId: activeThread.id,
-          createdAt: new Date().toISOString(),
-        },
-      });
-      if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
-        const error = squashAtomCommandFailure(result);
-        setThreadError(
-          activeThread.id,
-          error instanceof Error ? error.message : "Failed to clear goal.",
-        );
-        return;
-      }
-      toastManager.add(
-        stackedThreadToast({ type: "success", title: "Goal cleared", description: "" }),
-      );
-      promptRef.current = "";
-      clearComposerDraftContent(composerDraftTarget);
-      composerRef.current?.resetCursorState();
-      return;
-    }
-    const goalToSet = goalSlashCommand?.type === "set" ? goalSlashCommand.goal : null;
     if (!hasSendableContent) {
       if (expiredTerminalContextCount > 0) {
         const toastCopy = buildExpiredTerminalContextToastCopy(
@@ -6597,10 +6540,7 @@ export default function ChatView(props: ChatViewProps) {
     const composerPreviewAnnotationsSnapshot = [...composerPreviewAnnotations];
     const composerReviewCommentsSnapshot: ReviewCommentContext[] = [...composerReviewComments];
     const messageTextWithContexts = appendElementContextsToPrompt(
-      appendTerminalContextsToPrompt(
-        goalToSet ? formatGoalInitialPrompt(goalToSet) : promptForSend,
-        composerTerminalContextsSnapshot,
-      ),
+      appendTerminalContextsToPrompt(promptForSend, composerTerminalContextsSnapshot),
       composerElementContextsSnapshot,
     );
     const messageTextWithPreviewAnnotations = composerPreviewAnnotationsSnapshot.reduce(
@@ -6823,7 +6763,7 @@ export default function ChatView(props: ChatViewProps) {
         firstComposerImageName = firstComposerImage.name;
       }
     }
-    let titleSeed = goalToSet ?? assistantCitationsToPlainText(trimmed);
+    let titleSeed = assistantCitationsToPlainText(trimmed);
     if (!titleSeed) {
       if (firstComposerImageName) {
         titleSeed = `Image: ${firstComposerImageName}`;
@@ -6927,19 +6867,6 @@ export default function ChatView(props: ChatViewProps) {
                 : {}),
             }
           : undefined;
-      if (goalToSet && isServerThread) {
-        const goalResult = await setThreadGoal({
-          environmentId,
-          input: {
-            threadId: threadIdForSend,
-            goal: goalToSet,
-            createdAt: messageCreatedAt,
-          },
-        });
-        if (goalResult._tag === "Failure") {
-          failure = goalResult;
-        }
-      }
 
       if (failure === null) {
         const backgroundThreadRef =

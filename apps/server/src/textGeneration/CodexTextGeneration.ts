@@ -22,7 +22,6 @@ import { expandHomePath } from "../pathExpansion.ts";
 import { codexExecLaunchArgs, resolveCodexLaunchArgs } from "../provider/Layers/codexLaunchArgs.ts";
 import * as TextGeneration from "./TextGeneration.ts";
 import {
-  buildGoalEvaluationPrompt,
   buildBranchNamePrompt,
   buildCommitMessagePrompt,
   buildPrContentPrompt,
@@ -102,8 +101,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle"
-      | "evaluateGoal",
+      | "generateThreadTitle",
     value: unknown,
   ): Effect.Effect<string, TextGenerationError> =>
     encodeJsonString(value).pipe(
@@ -122,8 +120,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle"
-      | "evaluateGoal",
+      | "generateThreadTitle",
     attachments: TextGeneration.BranchNameGenerationInput["attachments"],
   ): Effect.fn.Return<MaterializedImageAttachments, TextGenerationError> {
     if (!attachments || attachments.length === 0) {
@@ -165,8 +162,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle"
-      | "evaluateGoal";
+      | "generateThreadTitle";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -409,33 +405,10 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
-  const evaluateGoal: TextGeneration.TextGeneration["Service"]["evaluateGoal"] = Effect.fn(
-    "CodexTextGeneration.evaluateGoal",
-  )(function* (input) {
-    const { prompt, outputSchema } = buildGoalEvaluationPrompt({
-      goal: input.goal,
-      transcript: input.transcript,
-    });
-
-    const generated = yield* runCodexJson({
-      operation: "evaluateGoal",
-      cwd: input.cwd,
-      prompt,
-      outputSchemaJson: outputSchema,
-      modelSelection: input.modelSelection,
-    });
-
-    return {
-      achieved: generated.achieved,
-      reason: generated.reason.trim(),
-    };
-  });
-
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
-    evaluateGoal,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
