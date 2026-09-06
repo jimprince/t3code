@@ -44,9 +44,26 @@
       // Worktree setup invokes this directly from t3.json.
       "entry": ["scripts/warm-dep-cache.ts"],
     },
+    "apps/t3-thread": {
+      // Keep the vendored contract snapshot complete.
+      "ignoreIssues": { "src/vendor/t3contracts/{index,ipc}.ts": ["files"] },
+    },
+    "oxlint-plugin-t3code": {
+      "includeEntryExports": true,
+    },
+    "scripts": {
+      // These TypeScript entry points are launched by sibling shell wrappers.
+      "entry": [
+        "ci/check-stgit-candidate.ts",
+        "ci/check-stgit-stack.ts",
+        "ci/create-stgit-candidate-manifest.ts",
+        "ci/deploy-stgit-concern.ts",
+        "ci/prepare-stgit-agent-worktree.ts",
+      ],
+    },
     "apps/mobile": {
       // Expo loads local config plugins by string; Metro handles platform variants.
-      "entry": ["index.ts!", "plugins/*.cjs"],
+      "entry": ["index.ts!", "plugins/*.cjs", "fingerprint.config.cjs"],
       // Fonts are configured as asset paths; Expo autolinks the native packages.
       "ignoreDependencies": [
         "@expo-google-fonts/dm-sans",
