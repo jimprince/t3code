@@ -13,6 +13,7 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 
@@ -35,6 +36,13 @@ function turnStartCommand(input: {
     | { readonly dataUrl: string; readonly sizeBytes: number; readonly id?: string }
   >;
   readonly context?: OrchestrationMessageContext;
+  readonly fileAttachments?: ReadonlyArray<{
+    readonly type: "file";
+    readonly name: string;
+    readonly mimeType: string;
+    readonly sizeBytes: number;
+    readonly dataUrl: string;
+  }>;
 }): ClientOrchestrationCommand {
   return {
     type: "thread.turn.start",
@@ -51,6 +59,7 @@ function turnStartCommand(input: {
         ...attachment,
       })),
       ...(input.context !== undefined ? { context: input.context } : {}),
+      ...(input.fileAttachments !== undefined ? { fileAttachments: input.fileAttachments } : {}),
     },
     runtimeMode: "full-access",
     interactionMode: "default",
@@ -284,7 +293,7 @@ describe("normalizeDispatchCommand attachments", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
-  it.effect("removes failed attachment claims without deleting their pending uploads", () =>
+  it.effect("removes failed attachment writes without deleting pending uploads", () =>
     Effect.gen(function* () {
       const config = yield* ServerConfig.ServerConfig;
       const pendingPath = NodePath.join(config.attachmentsDir, `pending-${attachmentUuid}.png`);
@@ -312,7 +321,7 @@ describe("normalizeDispatchCommand attachments", () => {
 
       expect(NodeFS.existsSync(pendingPath)).toBe(true);
       expect(NodeFS.existsSync(claimedPath)).toBe(false);
-      expect(NodeFS.existsSync(inlinePath)).toBe(true);
+      expect(NodeFS.existsSync(inlinePath)).toBe(false);
     }).pipe(Effect.provide(testLayer)),
   );
 
@@ -397,6 +406,147 @@ describe("normalizeDispatchCommand attachments", () => {
 
       expect(failure.message).toContain("not found");
       expect(NodeFS.readdirSync(config.attachmentsDir)).toEqual([`${pendingId}.png`]);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("removes image claims when a file attachment cannot be normalized", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const pendingId = `pending-${attachmentUuid}`;
+      NodeFS.writeFileSync(
+        NodePath.join(config.attachmentsDir, `${pendingId}.png`),
+        Buffer.from("pixels"),
+      );
+
+      const failure = yield* normalizeDispatchCommand(
+        turnStartCommand({
+          attachments: [{ id: pendingId, sizeBytes: 6 }],
+          fileAttachments: [
+            {
+              type: "file",
+              name: "broken.pdf",
+              mimeType: "application/pdf",
+              sizeBytes: 6,
+              dataUrl: "not-a-data-url",
+            },
+          ],
+        }),
+      ).pipe(Effect.flip);
+
+      expect(failure.message).toContain("Invalid file attachment payload");
+      expect(NodeFS.readdirSync(config.attachmentsDir)).toEqual([`${pendingId}.png`]);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("stores legacy file uploads in durable native storage with binary bytes", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const bytes = Uint8Array.from([0x00, 0xff, 0x25, 0x50, 0x44, 0x46, 0xc3, 0x28]);
+      const normalized = yield* normalizeDispatchCommand(
+        turnStartCommand({
+          attachments: [],
+          fileAttachments: [
+            {
+              type: "file",
+              name: "report.pdf",
+              mimeType: "APPLICATION/PDF",
+              sizeBytes: bytes.byteLength,
+              dataUrl: `data:application/pdf;base64,${Buffer.from(bytes).toString("base64")}`,
+            },
+          ],
+        }),
+      );
+      if (normalized.type !== "thread.turn.start") {
+        throw new Error("Expected a thread.turn.start command.");
+      }
+
+      expect(normalized.message.attachments).toEqual([]);
+      const attachment = normalized.message.fileAttachments?.[0];
+      expect(attachment).toMatchObject({
+        type: "file",
+        name: "report.pdf",
+        mimeType: "application/pdf",
+        sizeBytes: bytes.byteLength,
+      });
+      expect(attachment?.id).toMatch(/^thread-1-.*-pdf$/);
+      expect(attachment?.path).toBe(NodePath.join(config.attachmentsDir, `${attachment!.id}.pdf`));
+      expect(NodeFS.readFileSync(attachment!.path)).toEqual(Buffer.from(bytes));
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("rolls back earlier durable legacy files when a later upload is invalid", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const failure = yield* normalizeDispatchCommand(
+        turnStartCommand({
+          attachments: [],
+          fileAttachments: [
+            {
+              type: "file",
+              name: "valid.txt",
+              mimeType: "text/plain",
+              sizeBytes: 5,
+              dataUrl: "data:text/plain;base64,aGVsbG8=",
+            },
+            {
+              type: "file",
+              name: "broken.txt",
+              mimeType: "text/plain",
+              sizeBytes: 1,
+              dataUrl: "not-a-data-url",
+            },
+          ],
+        }),
+      ).pipe(Effect.flip);
+
+      expect(failure.message).toContain("Invalid file attachment payload");
+      expect(NodeFS.readdirSync(config.attachmentsDir)).toEqual([]);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("removes a partially written durable legacy file", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const missingPath = NodePath.join(config.attachmentsDir, "force-write-failure");
+      const partialWriteFileSystem = FileSystem.FileSystem.of({
+        ...fileSystem,
+        open: (filePath, options) =>
+          fileSystem.open(filePath, options).pipe(
+            Effect.map(
+              (file) =>
+                new Proxy(file, {
+                  get(target, key, receiver) {
+                    if (key === "writeAll") {
+                      return (bytes: Uint8Array) =>
+                        target
+                          .writeAll(bytes.subarray(0, 1))
+                          .pipe(Effect.andThen(fileSystem.readFile(missingPath)), Effect.asVoid);
+                    }
+                    return Reflect.get(target, key, receiver);
+                  },
+                }),
+            ),
+          ),
+      });
+
+      const failure = yield* normalizeDispatchCommand(
+        turnStartCommand({
+          attachments: [],
+          fileAttachments: [
+            {
+              type: "file",
+              name: "partial.bin",
+              mimeType: "application/octet-stream",
+              sizeBytes: 4,
+              dataUrl: "data:application/octet-stream;base64,AAECAw==",
+            },
+          ],
+        }),
+      ).pipe(Effect.provideService(FileSystem.FileSystem, partialWriteFileSystem), Effect.flip);
+
+      expect(failure.message).toContain("Failed to persist file attachment");
+      expect(NodeFS.readdirSync(config.attachmentsDir)).toEqual([]);
     }).pipe(Effect.provide(testLayer)),
   );
 

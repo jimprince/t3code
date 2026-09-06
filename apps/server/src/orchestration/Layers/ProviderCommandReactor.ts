@@ -66,6 +66,8 @@ import {
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { ServerConfig } from "../../config.ts";
+import { resolveAttachmentPath } from "../../attachmentStore.ts";
 import {
   buildTransferredThreadProviderInput,
   findPendingTransferredThreadHandoff,
@@ -240,6 +242,7 @@ const make = Effect.gen(function* () {
   const gitWorkflow = yield* GitWorkflowService;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
+  const serverConfig = yield* ServerConfig;
   const vcsStatusBroadcaster = yield* VcsStatusBroadcaster;
   const textGeneration = yield* TextGeneration;
   const serverSettingsService = yield* ServerSettingsService;
@@ -1356,7 +1359,8 @@ const make = Effect.gen(function* () {
       const handled = yield* providerAuthService.tryHandlePromptCommand({
         instanceId,
         text: message.text,
-        hasAttachments: (message.attachments?.length ?? 0) > 0,
+        hasAttachments:
+          (message.attachments?.length ?? 0) + (message.fileAttachments?.length ?? 0) > 0,
       });
       if (!handled) {
         return false;
@@ -1574,20 +1578,77 @@ const make = Effect.gen(function* () {
       text: message.text,
       records: message.context?.records ?? [],
     });
-    const providerMessageText = appendFileAttachmentPromptLines(
+    const providerMessageText =
       transferredContextHandoff === undefined
         ? currentRequest
         : buildTransferredThreadProviderInput({
             historyMessages: transferredContextHandoff.historyMessages,
             currentRequest,
-          }),
-      message.fileAttachments,
+          });
+    const nativeAttachmentIds = new Set(
+      (message.attachments ?? []).map((attachment) => attachment.id),
     );
+    const legacyFileAttachments = yield* Effect.forEach(
+      (message.fileAttachments ?? []).filter(
+        (attachment) => !nativeAttachmentIds.has(attachment.id),
+      ),
+      (attachment) =>
+        Effect.gen(function* () {
+          const { path: sourcePath, ...nativeAttachment } = attachment;
+          const durablePath = resolveAttachmentPath({
+            attachmentsDir: serverConfig.attachmentsDir,
+            attachment: nativeAttachment,
+          });
+          if (!durablePath) {
+            return yield* new ProviderAdapterRequestError({
+              provider: "attachment",
+              method: "thread.turn.start",
+              detail: `Could not resolve attachment '${attachment.name}'.`,
+            });
+          }
+          if (!(yield* fileSystem.exists(durablePath))) {
+            if (!(yield* fileSystem.exists(sourcePath))) {
+              return yield* new ProviderAdapterRequestError({
+                provider: "attachment",
+                method: "thread.turn.start",
+                detail: `Attachment '${attachment.name}' is no longer available. Attach it again.`,
+              });
+            }
+            const sourceInfo = yield* fileSystem.stat(sourcePath);
+            if (Number(sourceInfo.size) !== attachment.sizeBytes) {
+              return yield* new ProviderAdapterRequestError({
+                provider: "attachment",
+                method: "thread.turn.start",
+                detail: `Attachment '${attachment.name}' has changed since it was uploaded. Attach it again.`,
+              });
+            }
+            yield* fileSystem.makeDirectory(path.dirname(durablePath), { recursive: true });
+            yield* fileSystem.copyFile(sourcePath, durablePath);
+          }
+          const info = yield* fileSystem.stat(durablePath);
+          if (Number(info.size) !== attachment.sizeBytes) {
+            return yield* new ProviderAdapterRequestError({
+              provider: "attachment",
+              method: "thread.turn.start",
+              detail: `Attachment '${attachment.name}' has changed since it was uploaded. Attach it again.`,
+            });
+          }
+          return nativeAttachment;
+        }),
+      { concurrency: 1 },
+    ).pipe(
+      Effect.map(Option.some),
+      Effect.catchCause((cause) => handleTurnStartFailure(cause).pipe(Effect.as(Option.none()))),
+    );
+    if (Option.isNone(legacyFileAttachments)) {
+      return;
+    }
+    const providerAttachments = [...(message.attachments ?? []), ...legacyFileAttachments.value];
 
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
       messageText: providerMessageText,
-      ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
+      ...(providerAttachments.length > 0 ? { attachments: providerAttachments } : {}),
       ...(event.payload.modelSelection !== undefined
         ? { modelSelection: event.payload.modelSelection }
         : {}),
