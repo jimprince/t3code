@@ -87,3 +87,19 @@ id = "upstream9902-file-highlight-test-budget"
 date = "2026-09-17"
 decided = "adapt"
 rationale = "Keep upstream's 7,000-line real-worker stale-highlight regression intact, but give its two CPU-bound edit cases 30 seconds so they do not fail at the 15-second default while the complete repository gate saturates the host."
+
+[[patch]]
+name = "fork-worker-operations"
+subject = "feat(fork): operate worker threads from the t3-thread CLI"
+class = "product"
+purpose = "Provide the additive t3-thread operator CLI with pairing, persistent worker identity injected into provider processes, creation, continuation, results, and monitoring."
+retire_when = "Upstream or maintained shared tooling provides an equivalent scriptable worker interface, or the fork intentionally stops requiring this concern."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "The standalone CLI bundles shared contract subpaths and keeps only a narrow adapter for legacy model selections and sparse provider config. Opaque activity, context, metadata and provider-option payloads pass through unchanged. env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
+
+[[patch.decision]]
+id = "upstream-acp-stderr-enrichment"
+date = "2026-09-20"
+decided = "adapt"
+rationale = "Upstream now enriches ACP process exits with a bounded stderr tail. Preserve that diagnostic path and keep the fork's independent T3 thread-identity environment injection in the same runtime."
