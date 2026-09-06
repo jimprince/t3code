@@ -694,6 +694,7 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
             attachments,
           },
           hasOtherUserMessages: false,
+          hasTransferredHistory: false,
         }),
       );
       assert.equal(
