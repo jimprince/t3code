@@ -1,0 +1,4 @@
+id = "worker-notification-delivery-recovery"
+category = "fix"
+functionality = "worker operations"
+text = "Worker notifications now retry transient failures, explain expired pairing, and survive watcher handoffs without losing pending work."
