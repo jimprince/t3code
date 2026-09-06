@@ -42,6 +42,19 @@ function versionCore(version: string): string {
   return version.replace(/[-+].*$/, "");
 }
 
+export function compareT3Versions(left: string, right: string): number {
+  return compareSemverVersions(left, right);
+}
+
+export function isClientVersionNewerThanServer(serverVersion: string | null | undefined): boolean {
+  const normalizedClientVersion = normalizeVersion(APP_VERSION);
+  const normalizedServerVersion = normalizeVersion(serverVersion);
+  if (!normalizedClientVersion || !normalizedServerVersion) {
+    return false;
+  }
+  return compareT3Versions(normalizedClientVersion, normalizedServerVersion) > 0;
+}
+
 /**
  * The skew a user can act on: the connected server runs an older T3 Code than
  * this client, so the server is the side that needs updating.
