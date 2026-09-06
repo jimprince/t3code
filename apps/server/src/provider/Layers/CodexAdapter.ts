@@ -12,6 +12,7 @@ import {
   type CanonicalItemType,
   type CanonicalRequestType,
   type CodexSettings,
+  type EnvironmentId,
   ProviderDriverKind,
   type ProviderEvent,
   ProviderInstanceId,
@@ -89,6 +90,10 @@ const PROVIDER = ProviderDriverKind.make("codex");
 
 export interface CodexAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
+  readonly t3Environment?: {
+    readonly id: EnvironmentId;
+    readonly name: string;
+  };
   readonly environment?: NodeJS.ProcessEnv;
   /** The provider's model list; supplies model display names for runtime info. */
   readonly models?: Effect.Effect<ReadonlyArray<ServerProviderModel>>;
@@ -2277,6 +2282,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
         const runtimeInput: CodexSessionRuntimeOptions = {
           threadId: input.threadId,
+          ...(options?.t3Environment ? { t3Environment: options.t3Environment } : {}),
           providerInstanceId: boundInstanceId,
           cwd: input.cwd ?? process.cwd(),
           binaryPath: codexConfig.binaryPath,
