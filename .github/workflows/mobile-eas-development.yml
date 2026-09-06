@@ -1,0 +1,258 @@
+name: Mobile EAS Development (Manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-eas-development-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish-development-update:
+    name: Verify and publish iOS development update
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      APP_VARIANT: development
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_NO_GIT_STATUS: "1"
+      MOBILE_VERSION_POLICY: fingerprint
+      NODE_OPTIONS: --max-old-space-size=8192
+    steps:
+      - name: Require Expo token
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN repository secret is required to publish EAS updates." >&2
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: true
+
+      - name: Expose pnpm
+        run: |
+          pnpm_version="$(node --print "require('./package.json').packageManager.split('@').pop()")"
+          vp_pnpm_bin="$HOME/.vite-plus/package_manager/pnpm/$pnpm_version/pnpm/bin"
+          echo "$vp_pnpm_bin" >> "$GITHUB_PATH"
+          "$vp_pnpm_bin/pnpm" --version
+
+      - name: Setup EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+          # npm, not pnpm: this only installs eas-cli into the action's own
+          # tool dir, and pnpm 11 hard-fails that install on dtrace-provider's
+          # ignored build script (no allowBuilds config outside the repo).
+          packager: npm
+
+      - name: Build oxlint plugin
+        run: vp run --filter @t3tools/oxlint-plugin-t3code build
+
+      - name: Check
+        run: vp check
+
+      - name: Typecheck
+        run: vp run typecheck
+
+      - name: Mobile test suite
+        run: vp run --filter @t3tools/mobile test
+
+      # iOS signing credentials are managed manually: the repo's ASC API key
+      # lacks permission to create ad hoc provisioning profiles (Apple 403),
+      # so CI never contacts Apple. When the native fingerprint changes, run
+      # one interactive build locally to mint/refresh credentials on EAS:
+      #   cd apps/mobile && APP_VARIANT=development eas build --profile development --platform ios
+      - name: Deploy with fingerprint check
+        working-directory: apps/mobile
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          fingerprint_json="$RUNNER_TEMP/mobile-ios-fingerprint.json"
+          builds_json="$RUNNER_TEMP/mobile-ios-builds.json"
+          build_json="$RUNNER_TEMP/mobile-ios-build.json"
+          update_json="$RUNNER_TEMP/mobile-ios-update.json"
+          poll_json="$RUNNER_TEMP/mobile-ios-build-poll.json"
+          build_wait_timeout_seconds="${BUILD_WAIT_TIMEOUT_SECONDS:-5400}"
+          build_poll_interval_seconds="${BUILD_POLL_INTERVAL_SECONDS:-30}"
+
+          find_matching_build() {
+            local statuses_json="$1"
+            node -e '
+              const fs = require("fs");
+              const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const statuses = new Set(JSON.parse(process.argv[2]));
+              const build = builds.find((item) => statuses.has(item.status));
+              if (build) {
+                process.stdout.write(JSON.stringify({
+                  id: build.id,
+                  status: build.status,
+                  url: build.buildDetailsPageUrl ?? build.buildUrl ?? "",
+                }));
+              }
+            ' "$builds_json" "$statuses_json"
+          }
+
+          read_build_id() {
+            node -e '
+              const fs = require("fs");
+              const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              process.stdout.write(builds[0]?.id ?? "");
+            ' "$build_json"
+          }
+
+          poll_build_status() {
+            local build_id="$1"
+
+            eas build:list \
+              --platform ios \
+              --buildProfile development \
+              --runtimeVersion "$fingerprint_hash" \
+              --limit 10 \
+              --json \
+              --non-interactive > "$poll_json"
+
+            node -e '
+              const fs = require("fs");
+              const builds = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+              const build = builds.find((item) => item.id === process.argv[2]);
+              if (!build) process.exit(2);
+              process.stdout.write(JSON.stringify({
+                status: build.status,
+                url: build.buildDetailsPageUrl ?? build.buildUrl ?? "",
+              }));
+            ' "$poll_json" "$build_id"
+          }
+
+          wait_for_finished_build() {
+            local build_id="$1"
+            local deadline=$((SECONDS + build_wait_timeout_seconds))
+
+            while true; do
+              local status_json
+              if ! status_json="$(poll_build_status "$build_id")"; then
+                echo "::error::Could not find iOS EAS build $build_id while polling for completion." >&2
+                exit 1
+              fi
+
+              local status
+              local url
+              status="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.status ?? "");' "$status_json")"
+              url="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.url ?? "");' "$status_json")"
+              echo "iOS EAS build $build_id status: $status"
+
+              case "$status" in
+                FINISHED)
+                  build_url="$url"
+                  return 0
+                  ;;
+                NEW|IN_QUEUE|IN_PROGRESS)
+                  if [ "$SECONDS" -ge "$deadline" ]; then
+                    echo "::error::Timed out waiting for iOS EAS build $build_id to finish after ${build_wait_timeout_seconds}s." >&2
+                    [ -n "$url" ] && echo "::error::Build logs: $url" >&2
+                    exit 1
+                  fi
+                  sleep "$build_poll_interval_seconds"
+                  ;;
+                ERRORED|CANCELED)
+                  echo "::error::iOS EAS build $build_id ended with status $status. No EAS update will be published for fingerprint $fingerprint_hash." >&2
+                  [ -n "$url" ] && echo "::error::Build logs: $url" >&2
+                  exit 1
+                  ;;
+                *)
+                  echo "::error::iOS EAS build $build_id returned unexpected status '$status'." >&2
+                  [ -n "$url" ] && echo "::error::Build logs: $url" >&2
+                  exit 1
+                  ;;
+              esac
+            done
+          }
+
+          eas env:exec --non-interactive development \
+            "pnpm exec expo-updates fingerprint:generate --platform ios" > "$fingerprint_json"
+          fingerprint_hash="$(node -e 'const fs = require("fs"); const data = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); if (!data.hash) process.exit(1); console.log(data.hash);' "$fingerprint_json")"
+          echo "iOS fingerprint: $fingerprint_hash"
+
+          eas build:list \
+            --platform ios \
+            --buildProfile development \
+            --runtimeVersion "$fingerprint_hash" \
+            --limit 10 \
+            --json \
+            --non-interactive > "$builds_json"
+
+          build_id=""
+          build_status=""
+          build_url=""
+          matching_build="$(find_matching_build '["FINISHED"]')"
+
+          if [ -n "$matching_build" ]; then
+            build_id="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.id);' "$matching_build")"
+            build_status="FINISHED"
+            build_url="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.url ?? "");' "$matching_build")"
+            echo "Existing FINISHED iOS build found with matching fingerprint: $build_id"
+          else
+            matching_build="$(find_matching_build '["NEW","IN_QUEUE","IN_PROGRESS"]')"
+            if [ -n "$matching_build" ]; then
+              build_id="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.id);' "$matching_build")"
+              build_status="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.status);' "$matching_build")"
+              build_url="$(node -e 'const data = JSON.parse(process.argv[1]); process.stdout.write(data.url ?? "");' "$matching_build")"
+              echo "Existing iOS build found with matching fingerprint: $build_id ($build_status); waiting for FINISHED."
+            else
+              echo "No existing FINISHED or active iOS build found for fingerprint, starting a new build..."
+              if ! eas build \
+                --profile development \
+                --platform ios \
+                --non-interactive \
+                --json \
+                --no-wait > "$build_json"; then
+                echo "::error::Non-interactive iOS build failed. If credentials are missing or expired, run one interactive build locally to refresh them: cd apps/mobile && APP_VARIANT=development eas build --profile development --platform ios" >&2
+                exit 1
+              fi
+              build_id="$(read_build_id)"
+              echo "Started iOS EAS build: $build_id"
+            fi
+          fi
+
+          if [ -z "$build_id" ]; then
+            echo "EAS did not return an iOS build id." >&2
+            exit 1
+          fi
+
+          if [ "$build_status" != "FINISHED" ]; then
+            wait_for_finished_build "$build_id"
+          fi
+
+          eas update \
+            --branch development \
+            --platform ios \
+            --message "main ${GITHUB_SHA::7}" \
+            --non-interactive \
+            --json \
+            --environment development > "$update_json"
+
+          update_id="$(node -e 'const fs = require("fs"); const updates = JSON.parse(fs.readFileSync(process.argv[1], "utf8")); const update = Array.isArray(updates) ? updates.find((item) => item.platform === "ios") : undefined; process.stdout.write(update?.id ?? "");' "$update_json")"
+          if [ -z "$update_id" ]; then
+            echo "EAS did not return an iOS update id." >&2
+            exit 1
+          fi
+
+          {
+            echo "### Mobile EAS development deploy"
+            echo "- iOS fingerprint: \`$fingerprint_hash\`"
+            echo "- iOS build: \`$build_id\`"
+            [ -n "$build_url" ] && echo "- iOS build logs: $build_url"
+            echo "- iOS update: \`$update_id\`"
+          } >> "$GITHUB_STEP_SUMMARY"
