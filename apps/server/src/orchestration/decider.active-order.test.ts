@@ -24,7 +24,18 @@ const THREAD_ID = ThreadId.make("thread-1");
 function makeReadModel(overrides: Partial<OrchestrationThread> = {}): OrchestrationReadModel {
   return {
     snapshotSequence: 0,
-    projects: [],
+    projects: [
+      {
+        id: ProjectId.make("project-1"),
+        title: "Project",
+        workspaceRoot: "/tmp/project-1",
+        defaultModelSelection: null,
+        scripts: [],
+        createdAt: NOW,
+        updatedAt: NOW,
+        deletedAt: null,
+      },
+    ],
     threads: [
       {
         id: THREAD_ID,
