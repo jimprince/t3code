@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "9310f7e08bd828779193a132c32da35ddd1bf560",
+  "prev": "3dad1ff67002bdab39835c2f8c2025a2b4493e30",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -11,7 +11,7 @@
     "old-fork-thread-client-recovery",
     "old-fork-general-chat",
     "old-fork-conversation-fork",
-    "fork-thread-transfer",
+    "old-fork-thread-transfer",
     "fork-thread-goals-temporary",
     "fork-project-selection",
     "fork-manual-thread-order",
@@ -86,9 +86,6 @@
     "fork-thread-goals-temporary": {
       "oid": "746d9d5a4941af0cd90fc0a134c647bde4170b24"
     },
-    "fork-thread-transfer": {
-      "oid": "60d84f355a4718ae495ac9e49bb7cb0040295cd4"
-    },
     "fork-unsupported-pr-hosts": {
       "oid": "e2e1073f4b96c2b6afb38497f6455340af441146"
     },
@@ -115,6 +112,9 @@
     },
     "old-fork-thread-client-recovery": {
       "oid": "4d0ca5f783c4f6375941ca994515cbec4f260654"
+    },
+    "old-fork-thread-transfer": {
+      "oid": "60d84f355a4718ae495ac9e49bb7cb0040295cd4"
     },
     "old-fork-worker-operations": {
       "oid": "8ebdba69a299c9f14b3291b2e601923faf8ce591"
