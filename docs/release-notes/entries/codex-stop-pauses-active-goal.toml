@@ -1,0 +1,4 @@
+id = "codex-stop-pauses-active-goal"
+category = "fix"
+functionality = "Codex turns"
+text = "Stopping a Codex turn now pauses its active goal before interrupting the turn."

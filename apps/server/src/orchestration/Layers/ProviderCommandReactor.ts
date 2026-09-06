@@ -46,6 +46,7 @@ import { TextGeneration } from "../../textGeneration/TextGeneration.ts";
 import { ProviderAuthService } from "../../provider/Services/ProviderAuthService.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProviderRegistry } from "../../provider/Services/ProviderRegistry.ts";
+import { ProviderSessionDirectory } from "../../provider/Services/ProviderSessionDirectory.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
@@ -215,6 +216,7 @@ const make = Effect.gen(function* () {
   const projectionSnapshotQuery = yield* ProjectionSnapshotQuery;
   const providerAuthService = yield* ProviderAuthService;
   const providerService = yield* ProviderService;
+  const providerSessionDirectory = yield* ProviderSessionDirectory;
   const providerRegistry = yield* ProviderRegistry;
   const gitWorkflow = yield* GitWorkflowService;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -414,6 +416,17 @@ const make = Effect.gen(function* () {
       return;
     }
     const session = thread.session;
+    if (session?.status === "running" && session.activeTurnId !== null) {
+      const binding = yield* providerSessionDirectory.getBinding(input.threadId);
+      // A rejected follow-up does not own the turn still running in the provider.
+      if (
+        Option.isSome(binding) &&
+        binding.value.status === "running" &&
+        binding.value.activeTurnId === session.activeTurnId
+      ) {
+        return;
+      }
+    }
     yield* setThreadSession({
       threadId: input.threadId,
       session: {
@@ -1700,7 +1713,9 @@ const make = Effect.gen(function* () {
   const processSessionStopRequested = Effect.fn("processSessionStopRequested")(function* (
     event: Extract<ProviderIntentEvent, { type: "thread.session-stop-requested" }>,
   ) {
-    const thread = yield* resolveThreadShell(event.payload.threadId);
+    const thread = yield* projectionSnapshotQuery
+      .getThreadShellByIdIncludingArchived(event.payload.threadId)
+      .pipe(Effect.map(Option.getOrUndefined));
     if (!thread) {
       return;
     }
