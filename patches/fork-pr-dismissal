@@ -1,0 +1,6 @@
+Bottom: 3b6000dc25535d12fe9e6bf8ec7d22ca31e1875c
+Top:    3b6000dc25535d12fe9e6bf8ec7d22ca31e1875c
+Author: User <user@example.com>
+Date:   2026-09-05 20:57:47 -0600
+
+feat(web): dismiss pull requests in bulk
