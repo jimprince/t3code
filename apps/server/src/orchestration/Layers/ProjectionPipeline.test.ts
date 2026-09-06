@@ -1470,9 +1470,8 @@ it.layer(
       const { attachmentsDir } = yield* ServerConfig;
       const now = "2026-01-01T00:00:00.000Z";
       const threadId = ThreadId.make("Thread Revert.Files");
-      const keepAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000001";
       const keepFileAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000004-pdf";
-      const removeAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000002";
+      const removeFileAttachmentId = "thread-revert-files-00000000-0000-4000-8000-000000000002-pdf";
       const otherThreadAttachmentId =
         "thread-revert-files-extra-00000000-0000-4000-8000-000000000003";
 
@@ -1565,20 +1564,14 @@ it.layer(
           messageId: MessageId.make("message-keep"),
           role: "assistant",
           text: "Keep",
-          attachments: [
-            {
-              type: "image",
-              id: keepAttachmentId,
-              name: "keep.png",
-              mimeType: "image/png",
-              sizeBytes: 5,
-            },
+          fileAttachments: [
             {
               type: "file",
               id: keepFileAttachmentId,
               name: "keep.pdf",
               mimeType: "application/pdf",
               sizeBytes: 5,
+              path: path.join(attachmentsDir, `${keepFileAttachmentId}.pdf`),
             },
           ],
           turnId: TurnId.make("turn-keep"),
@@ -1625,13 +1618,14 @@ it.layer(
           messageId: MessageId.make("message-remove"),
           role: "assistant",
           text: "Remove",
-          attachments: [
+          fileAttachments: [
             {
-              type: "image",
-              id: removeAttachmentId,
-              name: "remove.png",
-              mimeType: "image/png",
+              type: "file",
+              id: removeFileAttachmentId,
+              name: "remove.pdf",
+              mimeType: "application/pdf",
               sizeBytes: 5,
+              path: path.join(attachmentsDir, `${removeFileAttachmentId}.pdf`),
             },
           ],
           turnId: TurnId.make("turn-remove"),
@@ -1679,21 +1673,19 @@ it.layer(
           },
         });
       }
-      const keepPath = path.join(attachmentsDir, `${keepAttachmentId}.png`);
       const keepFilePath = path.join(attachmentsDir, `${keepFileAttachmentId}.pdf`);
-      const removePath = path.join(attachmentsDir, `${removeAttachmentId}.png`);
+      const removePath = path.join(attachmentsDir, `${removeFileAttachmentId}.pdf`);
       yield* fileSystem.makeDirectory(attachmentsDir, { recursive: true });
       yield* fileSystem.writeFileString(path.join(attachmentsDir, `${answerKeepId}.txt`), "answer");
       yield* fileSystem.writeFileString(
         path.join(attachmentsDir, `${answerRemoveId}.txt`),
         "answer",
       );
-      yield* fileSystem.writeFileString(keepPath, "keep");
       yield* fileSystem.writeFileString(keepFilePath, "keep");
       yield* fileSystem.writeFileString(removePath, "remove");
       const otherThreadPath = path.join(attachmentsDir, `${otherThreadAttachmentId}.png`);
       yield* fileSystem.writeFileString(otherThreadPath, "other");
-      assert.isTrue(yield* exists(keepPath));
+      assert.isTrue(yield* exists(keepFilePath));
       assert.isTrue(yield* exists(removePath));
       assert.isTrue(yield* exists(otherThreadPath));
 
@@ -1778,7 +1770,6 @@ it.layer(
       assert.isTrue(yield* exists(removePath));
       yield* cleanup;
 
-      assert.isTrue(yield* exists(keepPath));
       assert.isTrue(yield* exists(keepFilePath));
       assert.isTrue(yield* exists(path.join(attachmentsDir, `${answerKeepId}.txt`)));
       assert.isFalse(yield* exists(path.join(attachmentsDir, `${answerRemoveId}.txt`)));
@@ -1802,7 +1793,7 @@ it.layer(
       assert.isTrue(yield* exists(removePath));
       yield* sql`DROP TRIGGER fail_bootstrap_thread`;
       yield* projectionPipeline.bootstrap;
-      assert.isTrue(yield* exists(keepPath));
+      assert.isTrue(yield* exists(keepFilePath));
       assert.isTrue(yield* exists(laterPath));
       assert.isTrue(yield* exists(path.join(attachmentsDir, `${answerKeepId}.txt`)));
       assert.isFalse(yield* exists(removePath));
