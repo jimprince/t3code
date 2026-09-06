@@ -31,6 +31,10 @@ disconnect an otherwise healthy conversation.
 
 ## Pair over a LAN or private network
 
+For LAN/private hosts, including Tailscale `100.64.0.0/10` addresses, the app
+treats a bare host such as `192.168.x.y` or `100.64.x.y` as the local T3
+backend at `http://<host>:3773`.
+
 Use direct pairing when the other device can reach the host's network address.
 
 On a desktop host, open **Settings → Connections**, enable **Network access**,
@@ -163,6 +167,13 @@ your login; `t3 connect logout` also clears that login. Background-service
 
 Treat pairing URLs and authorization codes as passwords. Do not include them in
 screenshots, logs, or bug reports.
+
+## Private server addresses
+
+A bare local, LAN, or tailnet hostname without a port connects over HTTP on port 3773.
+An explicit address such as `https://server.local` keeps its protocol and port,
+including the standard HTTPS port. Enter the full address when your private server
+uses HTTPS or a custom port.
 
 ## T3 Connect troubleshooting
 
