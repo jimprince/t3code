@@ -1117,6 +1117,9 @@ export function createServerEnvironmentAtoms<R, E>(
       label: "environment-data:server:execute-recovery",
       tag: WS_METHODS.serverExecuteRecovery,
     }),
+    requestHeadlessUpdateCheck: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:request-headless-update-check",
+      tag: WS_METHODS.serverRequestHeadlessUpdateCheck,
       concurrency: {
         mode: "singleFlight",
         key: ({ environmentId }) => environmentId,
