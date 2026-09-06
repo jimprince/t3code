@@ -2,6 +2,7 @@ import {
   ApprovalRequestId,
   DEFAULT_MODEL,
   EventId,
+  type EnvironmentId,
   ProviderDriverKind,
   ProviderItemId,
   type ProviderInstanceId,
@@ -169,6 +170,10 @@ type CodexThreadItem =
 
 export interface CodexSessionRuntimeOptions {
   readonly threadId: ThreadId;
+  readonly t3Environment?: {
+    readonly id: EnvironmentId;
+    readonly name: string;
+  };
   readonly providerInstanceId?: ProviderInstanceId;
   readonly binaryPath: string;
   readonly homePath?: string;
@@ -702,6 +707,23 @@ const CodexThreadResumeMetadata = Schema.Struct({
   thread: Schema.Struct({ id: Schema.String }),
 });
 const decodeCodexThreadResumeMetadata = Schema.decodeUnknownEffect(CodexThreadResumeMetadata);
+
+export function buildCodexChildEnv(input: {
+  readonly threadId: ThreadId;
+  readonly environmentId?: EnvironmentId;
+  readonly environmentName?: string;
+  readonly environment?: NodeJS.ProcessEnv;
+  readonly homePath?: string;
+}): NodeJS.ProcessEnv {
+  return {
+    ...withT3ThreadIdentityEnv(input.environment ?? process.env, {
+      threadId: input.threadId,
+      ...(input.environmentId ? { environmentId: input.environmentId } : {}),
+      ...(input.environmentName ? { environmentName: input.environmentName } : {}),
+    }),
+    ...(input.homePath ? { CODEX_HOME: input.homePath } : {}),
+  };
+}
 
 interface CodexThreadOpenClient {
   readonly raw: {
@@ -1315,10 +1337,17 @@ export const makeCodexSessionRuntime = (
     // `child_process.spawn`; `expandHomePath` lets a configured
     // `CODEX_HOME=~/.codex_work` reach codex as an absolute path.
     const resolvedHomePath = options.homePath ? expandHomePath(options.homePath) : undefined;
-    const env = {
-      ...options.environment,
-      ...(resolvedHomePath ? { CODEX_HOME: resolvedHomePath } : {}),
-    };
+    const env = buildCodexChildEnv({
+      threadId: options.threadId,
+      ...(options.t3Environment
+        ? {
+            environmentId: options.t3Environment.id,
+            environmentName: options.t3Environment.name,
+          }
+        : {}),
+      ...(options.environment ? { environment: options.environment } : {}),
+      ...(resolvedHomePath ? { homePath: resolvedHomePath } : {}),
+    });
     const extendEnv = options.environment === undefined;
     const appServerArgs = codexSessionAppServerArgs(options.appServerArgs, options.launchArgs);
     const spawnCommand = yield* resolveSpawnCommand(options.binaryPath, appServerArgs, {
@@ -2573,6 +2602,22 @@ export const makeCodexSessionRuntime = (
           yield* settlePendingApprovals("cancel");
           // Pending user-input prompts block the same way; settle them too.
           yield* settlePendingUserInputs({});
+          // An interrupted goal turn must not leave its persisted goal active,
+          // or Codex can schedule another continuation immediately after Stop.
+          // Keep this best-effort and bounded so goal-control failures cannot
+          // prevent the turn and its child fleet from being interrupted.
+          yield* Effect.gen(function* () {
+            const { goal } = yield* client.request("thread/goal/get", {
+              threadId: providerThreadId,
+            });
+            if (goal?.status !== "active") {
+              return;
+            }
+            yield* client.request("thread/goal/set", {
+              threadId: providerThreadId,
+              status: "paused",
+            });
+          }).pipe(Effect.timeoutOption("1 second"), Effect.ignore);
           // Stop-everything: children are full threads with their own turns;
           // interrupting only the parent leaves the fleet running. Interrupt
           // each live child turn first, best-effort per child, BOUNDED: the
