@@ -33,6 +33,7 @@ import * as Stream from "effect/Stream";
 import { makeDrainableWorker } from "@t3tools/shared/DrainableWorker";
 import { formatTokens } from "@t3tools/shared/usageFormat";
 
+import { openCodeAssistantSegmentIsTerminal } from "../../provider/openCodeAssistantSegment.ts";
 import { ProviderService } from "../../provider/Services/ProviderService.ts";
 import { ProjectionTurnRepository } from "../../persistence/Services/ProjectionTurns.ts";
 import { ProjectionTurnRepositoryLive } from "../../persistence/Layers/ProjectionTurns.ts";
@@ -129,6 +130,17 @@ type TurnStartRequestedDomainEvent = Extract<
 
 type ProviderDiffEvent = Extract<ProviderRuntimeEvent, { type: "turn.diff.updated" }>;
 
+type RepositoryProbeInput =
+  | {
+      source: "provider-diff";
+      event: ProviderDiffEvent;
+    }
+  | {
+      source: "opencode-assistant-completion";
+      event: ProviderRuntimeEvent;
+      assistantMessageId: MessageId;
+    };
+
 type RuntimeIngestionInput =
   | {
       source: "runtime";
@@ -142,6 +154,12 @@ type RuntimeIngestionInput =
       /** A diff whose workspace the diff worker confirmed is a Git repository. */
       source: "diff";
       event: ProviderDiffEvent;
+    }
+  | {
+      /** An OpenCode terminal assistant completion confirmed to be in a Git repository. */
+      source: "opencode-assistant-completion";
+      event: ProviderRuntimeEvent;
+      assistantMessageId: MessageId;
     };
 
 function toTurnId(value: TurnId | string | undefined): TurnId | undefined {
@@ -1123,6 +1141,12 @@ const make = Effect.gen(function* () {
     );
   });
 
+  const resolveThreadShell = Effect.fn("resolveThreadShell")(function* (threadId: ThreadId) {
+    return yield* projectionSnapshotQuery
+      .getThreadShellById(threadId)
+      .pipe(Effect.map(Option.getOrUndefined));
+  });
+
   const rememberAssistantMessageId = (threadId: ThreadId, turnId: TurnId, messageId: MessageId) =>
     Cache.getOption(turnMessageIdsByTurnKey, providerTurnKey(threadId, turnId)).pipe(
       Effect.flatMap((existingIds) =>
@@ -1755,6 +1779,12 @@ const make = Effect.gen(function* () {
     },
   );
 
+  // Assigned after both workers are constructed. Runtime event processing
+  // starts only after make() returns, so this breaks the worker type cycle
+  // without exposing the queue itself.
+  let enqueueRepositoryProbe: (input: RepositoryProbeInput) => Effect.Effect<void> = () =>
+    Effect.void;
+
   const processRuntimeEvent = (event: ProviderRuntimeEvent) =>
     Effect.gen(function* () {
       if (
@@ -1793,6 +1823,20 @@ const make = Effect.gen(function* () {
       const conflictsWithActiveTurn =
         activeTurnId !== null && eventTurnId !== undefined && !sameId(activeTurnId, eventTurnId);
       const missingTurnForActiveTurn = activeTurnId !== null && eventTurnId === undefined;
+      // Provider runtime state is authoritative when a persisted projection is
+      // stuck on an older active turn from a missed completion event.
+      const expectedProviderTurnId =
+        conflictsWithActiveTurn &&
+        (event.type === "turn.started" || event.type === "turn.completed")
+          ? yield* getExpectedProviderTurnIdForThread(thread.id)
+          : undefined;
+      const matchesCurrentProviderTurn = sameId(expectedProviderTurnId, eventTurnId);
+      const providerHasNoCurrentTurn = expectedProviderTurnId === undefined;
+      // A queued turn.started can be processed after the provider has already
+      // completed and gone idle; in that case the event itself is the ordered
+      // evidence needed to advance a stale projected active turn.
+      const eventIsNotOlderThanProjectedSession =
+        thread.session?.updatedAt === undefined || event.createdAt >= thread.session.updatedAt;
 
       // A turn.started that conflicts with the active turn is legitimate when
       // the server itself has a turn start pending for this thread AND the
@@ -1817,15 +1861,23 @@ const make = Effect.gen(function* () {
           case "thread.started":
             return true;
           case "turn.started":
-            return !conflictsWithActiveTurn || conflictingTurnStartIsPendingTurnStart;
+            return (
+              !conflictsWithActiveTurn ||
+              conflictingTurnStartIsPendingTurnStart ||
+              matchesCurrentProviderTurn ||
+              (providerHasNoCurrentTurn && eventIsNotOlderThanProjectedSession)
+            );
           case "turn.completed":
           case "turn.aborted":
-            if (conflictsWithActiveTurn || missingTurnForActiveTurn) {
+            if (
+              (conflictsWithActiveTurn && !matchesCurrentProviderTurn) ||
+              missingTurnForActiveTurn
+            ) {
               return false;
             }
             // Only the active turn may close the lifecycle state.
             if (activeTurnId !== null && eventTurnId !== undefined) {
-              return sameId(activeTurnId, eventTurnId);
+              return sameId(activeTurnId, eventTurnId) || matchesCurrentProviderTurn;
             }
             // A named completion can recover a lost turn.started event.
             // An abort needs an active turn so a delayed stop cannot replace
@@ -2232,6 +2284,12 @@ const make = Effect.gen(function* () {
                 `assistant:${event.itemId ?? event.turnId ?? event.eventId}`,
               ),
               fallbackText: event.payload.detail,
+              // OpenCode completes an assistant text segment whenever the part
+              // ends, including the narration that precedes a tool call. Only a
+              // segment whose message reached a terminal finish ends the turn.
+              // An unmarked event keeps the previous behaviour, so a provider
+              // that settles without a terminal lifecycle event still recovers.
+              endsTurn: openCodeAssistantSegmentIsTerminal(event.payload.data) !== false,
             }
           : undefined;
       const proposedPlanCompletion =
@@ -2305,6 +2363,56 @@ const make = Effect.gen(function* () {
           if (turnId) {
             yield* forgetAssistantMessageId(thread.id, turnId, assistantMessageId);
           }
+        }
+
+        if (event.provider === "opencode" && turnId && assistantCompletion.endsTurn) {
+          const refreshedThread = yield* resolveThreadShell(thread.id);
+          const refreshedSession = refreshedThread?.session ?? null;
+          if (
+            refreshedThread !== undefined &&
+            refreshedSession?.status === "running" &&
+            !refreshedThread.hasPendingApprovals &&
+            !refreshedThread.hasPendingUserInput
+          ) {
+            // OpenCode can omit turn.started after steering. Re-key the
+            // projected running turn before settling so the completed assistant
+            // turn, rather than a stale predecessor, becomes latest.
+            if (!sameId(refreshedSession.activeTurnId, turnId)) {
+              yield* orchestrationEngine.dispatch({
+                type: "thread.session.set",
+                commandId: yield* providerCommandId(event, "opencode-assistant-turn-set"),
+                threadId: thread.id,
+                session: {
+                  ...refreshedSession,
+                  activeTurnId: turnId,
+                  updatedAt: now,
+                },
+                createdAt: now,
+              });
+            }
+            yield* orchestrationEngine.dispatch({
+              type: "thread.session.set",
+              commandId: yield* providerCommandId(event, "opencode-assistant-session-set"),
+              threadId: thread.id,
+              session: {
+                ...refreshedSession,
+                status: "ready",
+                activeTurnId: null,
+                lastError: null,
+                updatedAt: now,
+              },
+              createdAt: now,
+            });
+          }
+
+          // Repository detection uses VCS subprocesses and must not delay the
+          // lifecycle settlement above. The diff worker hands a confirmed Git
+          // workspace back to the ordered lifecycle worker.
+          yield* enqueueRepositoryProbe({
+            source: "opencode-assistant-completion",
+            event,
+            assistantMessageId,
+          });
         }
 
         if (turnId) {
@@ -2633,6 +2741,35 @@ const make = Effect.gen(function* () {
     });
   });
 
+  const recordOpenCodeAssistantCompletion = Effect.fn("recordOpenCodeAssistantCompletion")(
+    function* (input: { event: ProviderRuntimeEvent; assistantMessageId: MessageId }) {
+      const turnId = toTurnId(input.event.turnId);
+      if (!turnId) return;
+      const thread = yield* resolveThreadShell(input.event.threadId);
+      // The VCS probe may return after another turn starts. Never let its
+      // placeholder checkpoint move the latest-turn pointer backwards.
+      if (!thread || !sameId(thread.latestTurn?.turnId, turnId)) return;
+      const checkpointContext = yield* projectionSnapshotQuery
+        .getThreadCheckpointContext(thread.id)
+        .pipe(Effect.map(Option.getOrUndefined));
+      if (!checkpointContext || hasCheckpointForTurn(checkpointContext.checkpoints, turnId)) return;
+      const now = input.event.createdAt;
+      yield* orchestrationEngine.dispatch({
+        type: "thread.turn.diff.complete",
+        commandId: yield* providerCommandId(input.event, "opencode-assistant-turn-diff-complete"),
+        threadId: thread.id,
+        turnId,
+        completedAt: now,
+        checkpointRef: CheckpointRef.make(`provider-diff:${input.event.eventId}`),
+        status: "missing",
+        files: [],
+        assistantMessageId: input.assistantMessageId,
+        checkpointTurnCount: maxCheckpointTurnCount(checkpointContext.checkpoints) + 1,
+        createdAt: now,
+      });
+    },
+  );
+
   const processInput = (input: RuntimeIngestionInput) => {
     switch (input.source) {
       case "runtime":
@@ -2641,6 +2778,8 @@ const make = Effect.gen(function* () {
         return processDomainEvent(input.event);
       case "diff":
         return recordProviderDiff(input.event);
+      case "opencode-assistant-completion":
+        return recordOpenCodeAssistantCompletion(input);
     }
   };
 
@@ -2665,30 +2804,38 @@ const make = Effect.gen(function* () {
     processInput(input).pipe(logIngestionFailure(input.source, input.event)),
   );
 
-  // Repository detection for a diff goes through VCS subprocesses, which can
-  // stall behind slow or hung git. It runs on its own worker so a stuck diff
-  // never delays the lifecycle worker; confirmed diffs are handed back to it.
-  const detectProviderDiffRepository = Effect.fn("detectProviderDiffRepository")(function* (
-    event: ProviderDiffEvent,
-  ) {
+  // Repository detection goes through VCS subprocesses, which can stall behind
+  // slow or hung git. It runs on its own worker so a stuck probe never delays
+  // lifecycle processing; confirmed work is handed back to that ordered worker.
+  const detectRepository = Effect.fn("detectRepository")(function* (input: RepositoryProbeInput) {
+    const event = input.event;
     if (!toTurnId(event.turnId)) return;
     const checkpointContext = yield* projectionSnapshotQuery
       .getThreadCheckpointContext(event.threadId)
       .pipe(Effect.map(Option.getOrUndefined));
     const workspaceCwd = checkpointContext?.worktreePath ?? checkpointContext?.workspaceRoot;
     if (!workspaceCwd || !(yield* checkpointStore.isGitRepository(workspaceCwd))) return;
-    yield* worker.enqueue({ source: "diff", event });
+    if (input.source === "provider-diff") {
+      yield* worker.enqueue({ source: "diff", event: input.event });
+      return;
+    }
+    yield* worker.enqueue({
+      source: "opencode-assistant-completion",
+      event: input.event,
+      assistantMessageId: input.assistantMessageId,
+    });
   });
-  const diffWorker = yield* makeDrainableWorker((event: ProviderDiffEvent) =>
-    detectProviderDiffRepository(event).pipe(logIngestionFailure("diff", event)),
+  const diffWorker = yield* makeDrainableWorker((input: RepositoryProbeInput) =>
+    detectRepository(input).pipe(logIngestionFailure(input.source, input.event)),
   );
+  enqueueRepositoryProbe = diffWorker.enqueue;
 
   const start: ProviderRuntimeIngestionShape["start"] = () =>
     Effect.gen(function* () {
       yield* forkParked(
         Stream.runForEach(providerService.streamEvents, (event) =>
           event.type === "turn.diff.updated"
-            ? diffWorker.enqueue(event)
+            ? diffWorker.enqueue({ source: "provider-diff", event })
             : worker.enqueue({ source: "runtime", event }),
         ),
       );
@@ -2704,8 +2851,9 @@ const make = Effect.gen(function* () {
 
   return {
     start,
-    // The diff worker feeds the lifecycle worker, so drain it first.
-    drain: diffWorker.drain.pipe(Effect.andThen(worker.drain)),
+    // Runtime processing can enqueue OpenCode repository probes, and every
+    // confirmed probe feeds the lifecycle worker back, so drain in that order.
+    drain: worker.drain.pipe(Effect.andThen(diffWorker.drain), Effect.andThen(worker.drain)),
   } satisfies ProviderRuntimeIngestionShape;
 });
 
