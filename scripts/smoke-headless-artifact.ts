@@ -10,6 +10,7 @@ import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeStream from "node:stream";
+import { smokeThreadHistory } from "./smoke-thread-history.ts";
 
 interface CliArgs {
   readonly artifact: string;
@@ -264,6 +265,7 @@ async function main() {
 
     if (!args.skipServe) {
       await smokeServe(artifactRoot, entrypoint);
+      await smokeThreadHistory([entrypoint], artifactRoot);
     }
 
     console.log(`Headless artifact smoke passed for ${NodePath.basename(args.artifact)}.`);
