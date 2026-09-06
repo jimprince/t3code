@@ -10,6 +10,7 @@ import {
   pullRequestCheckStatusLabel,
   summarizePullRequestChecks,
 } from "./pullRequestPresentation";
+import { Checkbox } from "../ui/checkbox";
 
 function check(
   status: PullRequestCheck["status"],
@@ -88,15 +89,52 @@ function entry(overrides: Partial<EnvironmentPullRequestEntry>): EnvironmentPull
   } as EnvironmentPullRequestEntry;
 }
 
-function row(overrides: Partial<EnvironmentPullRequestEntry>): ReactNode {
+function row(
+  overrides: Partial<EnvironmentPullRequestEntry>,
+  checked = false,
+  onCheckedChange: (entry: EnvironmentPullRequestEntry) => void = () => {},
+): ReactNode {
   return PullRequestRow.type({
     entry: entry(overrides),
     selected: false,
+    checked,
     showProjectTitle: false,
     showProvider: false,
     onSelect: () => {},
+    onCheckedChange,
   });
 }
+
+describe("PullRequestRow selection", () => {
+  it("renders selection beside the primary row action and reports the selected entry", () => {
+    let selectedNumber: number | undefined;
+    const rendered = row({}, true, (selected) => {
+      selectedNumber = selected.number;
+    });
+    expect(isValidElement(rendered)).toBe(true);
+    if (!isValidElement<{ readonly children?: ReactNode }>(rendered)) return;
+    const children = Children.toArray(rendered.props.children);
+    expect(children.map((child) => (isValidElement(child) ? child.type : null))).toEqual([
+      Checkbox,
+      "button",
+    ]);
+
+    const checkbox = children[0];
+    expect(isValidElement(checkbox)).toBe(true);
+    if (
+      !isValidElement<{
+        readonly checked: boolean;
+        readonly onCheckedChange: () => void;
+        readonly "aria-label": string;
+      }>(checkbox)
+    )
+      return;
+    expect(checkbox.props.checked).toBe(true);
+    expect(checkbox.props["aria-label"]).toBe("Select pull request #1: Add the pull requests page");
+    checkbox.props.onCheckedChange();
+    expect(selectedNumber).toBe(1);
+  });
+});
 
 describe("PullRequestRow checks indicator", () => {
   function indicators(node: ReactNode): number {
