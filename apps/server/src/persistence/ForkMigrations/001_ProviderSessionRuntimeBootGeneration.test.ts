@@ -72,6 +72,7 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
         assert.deepStrictEqual(forkMigrations, [
           { migration_id: 1, name: "ProviderSessionRuntimeBootGeneration" },
           { migration_id: 2, name: "ProviderSessionRuntimeActiveTurn" },
+          { migration_id: 4, name: "ProjectionThreadsSidebarOrderKey" },
         ]);
 
         const upstreamCollision = yield* sql<{ readonly name: string }>`
