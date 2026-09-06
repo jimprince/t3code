@@ -1518,10 +1518,11 @@ export const make = Effect.gen(function* () {
     function* (cwd: string, branch: string, remoteNameOverride?: string) {
       const remoteName =
         remoteNameOverride ?? (yield* readConfigValueNullable(cwd, `branch.${branch}.remote`));
-      const [headRemote, targetRemote] = yield* Effect.all(
-        [resolveRemoteRepositoryContext(cwd, remoteName), resolvePrTargetRepository(cwd)],
-        { concurrency: "unbounded" },
-      );
+      const targetRemote = yield* resolvePrTargetRepository(cwd);
+      const headRemote =
+        remoteName === targetRemote.remoteName
+          ? targetRemote
+          : yield* resolveRemoteRepositoryContext(cwd, remoteName);
       return {
         remoteName,
         headRemoteUrlKey:
@@ -1545,10 +1546,11 @@ export const make = Effect.gen(function* () {
     const shouldProbeLocalBranchSelector =
       headBranchFromUpstream.length === 0 || headBranch === details.branch;
 
-    const [remoteRepository, targetRepository] = yield* Effect.all(
-      [resolveRemoteRepositoryContext(cwd, remoteName), resolvePrTargetRepository(cwd)],
-      { concurrency: "unbounded" },
-    );
+    const targetRepository = yield* resolvePrTargetRepository(cwd);
+    const remoteRepository =
+      remoteName === targetRepository.remoteName
+        ? targetRepository
+        : yield* resolveRemoteRepositoryContext(cwd, remoteName);
 
     const isCrossRepository =
       remoteRepository.repositoryNameWithOwner !== null &&
