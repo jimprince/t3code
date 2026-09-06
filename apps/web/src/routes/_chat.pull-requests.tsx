@@ -1313,7 +1313,10 @@ function PullRequestsRouteView() {
             matchesPullRequestFilters(entry, localFilters, pullRequestEntryViewer(entry, viewers)),
           )
         : rows;
-      return filterRemovedPullRequests(locallyNarrowed, removedPullRequestKeys);
+      return filterExcludedProjectPullRequests(
+        filterRemovedPullRequests(locallyNarrowed, removedPullRequestKeys),
+        excludedProjectKeys,
+      );
     };
     const authored = narrow(
       partitionsWanted ? (authoredQuery.data?.entries ?? held?.authored) : undefined,
