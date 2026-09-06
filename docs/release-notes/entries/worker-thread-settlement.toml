@@ -1,0 +1,4 @@
+id = "worker-thread-settlement"
+category = "feature"
+functionality = "t3-thread lifecycle"
+text = "Settle and reactivate threads from the operator CLI, with server-state readback and an explicit guard against settling your own thread before its final response."
