@@ -99,6 +99,7 @@ const adapter = {
 interface HarnessOptions {
   readonly managedFolders?: Layer.Layer<ManagedProjectFolders.ManagedProjectFolders>;
   readonly createWorktree?: GitWorkflow.GitWorkflowService["Service"]["createWorktree"];
+  readonly resolveRemoteWorktreeBase?: GitWorkflow.GitWorkflowService["Service"]["resolveRemoteWorktreeBase"];
   readonly fetchRemote?: GitWorkflow.GitWorkflowService["Service"]["fetchRemote"];
   readonly hasCommit?: GitWorkflow.GitWorkflowService["Service"]["hasCommit"];
   readonly renameBranch?: GitWorkflow.GitWorkflowService["Service"]["renameBranch"];
@@ -170,6 +171,9 @@ function makeHarness(options: HarnessOptions = {}) {
       renameBranch,
       fetchRemote: options.fetchRemote ?? (() => Effect.void),
       hasCommit: options.hasCommit ?? (() => Effect.succeed(false)),
+      resolveRemoteWorktreeBase:
+        options.resolveRemoteWorktreeBase ??
+        (({ baseBranch }) => Effect.succeed({ remoteName: "origin", refName: baseBranch })),
       remoteExists: () => Effect.succeed(true),
       remoteBranchExists: () => Effect.succeed(true),
       removeWorktree,
@@ -2269,3 +2273,84 @@ it.effect.each([0, 1])("releases an async setup before its completion with exit 
     }).pipe(Effect.provide(harness.layer));
   }),
 );
+
+// Native launch owns first-send persistence and all preparation receipts.
+it.effect("remote base absence fails the prepared run without creating a local worktree", () => {
+  const harness = makeHarness({ resolveRemoteWorktreeBase: () => Effect.succeed(null) });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const threads = yield* ThreadManagement.ThreadManagementService;
+    const launched = yield* launches.launch(
+      launchInput({
+        command: "fork:missing:command",
+        thread: "fork:missing:thread",
+        message: "Remote only",
+        workspace: { type: "worktree", baseRef: "main", startFromOrigin: true },
+      }),
+    );
+    yield* threads.streamStoredEventsFrom({ threadId: launched.threadId }).pipe(
+      Stream.filter(
+        (stored) => stored.event.type === "run.updated" && stored.event.payload.status === "failed",
+      ),
+      Stream.runHead,
+    );
+    const projection = yield* threads.getThreadProjection(launched.threadId);
+    assert.equal(projection.thread.worktreePath, null);
+    assert.equal(projection.messages[0]?.text, "Remote only");
+    assert.include(
+      projection.turnItems.find((item) => item.type === "error")?.failure.message ?? "",
+      "Cannot resolve a remote base",
+    );
+    assert.equal(harness.createWorktree.mock.calls.length, 0);
+  }).pipe(Effect.provide(harness.layer));
+});
+it.effect("native launch fetches the selected remote and creates from its exact commit", () => {
+  const fetch = vi.fn<GitWorkflow.GitWorkflowService["Service"]["fetchRemote"]>(() => Effect.void);
+  const harness = makeHarness({
+    resolveRemoteWorktreeBase: () =>
+      Effect.succeed({ remoteName: "team/upstream", refName: "team/upstream/main" }),
+    fetchRemote: fetch,
+  });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const tracker = yield* WorktreeSetupTracker.WorktreeSetupTracker;
+    const launched = yield* launches.launch(
+      launchInput({
+        command: "fork:remote:command",
+        thread: "fork:remote:thread",
+        message: "Remote base",
+        workspace: { type: "worktree", baseRef: "team/upstream/main", startFromOrigin: true },
+      }),
+    );
+    yield* tracker.stream(launched.threadId).pipe(
+      Stream.filter((snapshot) => snapshot?.phase === "done"),
+      Stream.runHead,
+    );
+    assert.deepStrictEqual(fetch.mock.calls[0], [
+      { cwd: "/repo", remoteName: "team/upstream", refName: "team/upstream/main" },
+    ]);
+    assert.equal(harness.createWorktree.mock.calls[0]?.[0].refName, "remote-main-sha");
+  }).pipe(Effect.provide(harness.layer));
+});
+it.effect("explicit local launch skips remote policy and preserves the local base", () => {
+  const selected = vi.fn(() => Effect.die("local launch must not resolve a remote"));
+  const harness = makeHarness({ resolveRemoteWorktreeBase: selected });
+  return Effect.gen(function* () {
+    const launches = yield* ThreadLaunch.ThreadLaunchService;
+    const tracker = yield* WorktreeSetupTracker.WorktreeSetupTracker;
+    const launched = yield* launches.launch(
+      launchInput({
+        command: "fork:local:command",
+        thread: "fork:local:thread",
+        message: "Local base",
+        workspace: { type: "worktree", baseRef: "topic", startFromOrigin: false },
+      }),
+    );
+    yield* tracker.stream(launched.threadId).pipe(
+      Stream.filter((snapshot) => snapshot?.phase === "done"),
+      Stream.runHead,
+    );
+    assert.equal(selected.mock.calls.length, 0);
+    assert.equal(harness.createWorktree.mock.calls[0]?.[0].refName, "topic");
+  }).pipe(Effect.provide(harness.layer));
+});
