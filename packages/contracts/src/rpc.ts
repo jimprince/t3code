@@ -209,6 +209,9 @@ import {
   ServerProcessResourceHistoryResult,
   ServerSignalProcessInput,
   ServerSignalProcessResult,
+  ServerRecoveryExecuteInput,
+  ServerRecoveryExecuteResult,
+  ServerRecoveryPreviewResult,
   ServerUpsertKeybindingInput,
   ServerUpsertKeybindingResult,
 } from "./server.ts";
@@ -338,6 +341,8 @@ export const WS_METHODS = {
   serverGetUsageSummary: "server.getUsageSummary",
   serverRefreshUsageRates: "server.refreshUsageRates",
 
+  serverPreviewRecovery: "server.previewRecovery",
+  serverExecuteRecovery: "server.executeRecovery",
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -589,6 +594,18 @@ const WsServerRefreshUsageRatesRpc = Rpc.make(WS_METHODS.serverRefreshUsageRates
 const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsServerPreviewRecoveryRpc = Rpc.make(WS_METHODS.serverPreviewRecovery, {
+  payload: Schema.Struct({}),
+  success: ServerRecoveryPreviewResult,
+  error: EnvironmentAuthorizationError,
+});
+
+const WsServerExecuteRecoveryRpc = Rpc.make(WS_METHODS.serverExecuteRecovery, {
+  payload: ServerRecoveryExecuteInput,
+  success: ServerRecoveryExecuteResult,
   error: EnvironmentAuthorizationError,
 });
 
@@ -1236,6 +1253,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
+
+  WsServerPreviewRecoveryRpc,
+  WsServerExecuteRecoveryRpc,
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsPullRequestsListRpc,
