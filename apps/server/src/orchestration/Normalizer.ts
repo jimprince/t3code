@@ -19,6 +19,7 @@ import {
   parseThreadSegmentFromAttachmentId,
   resolveAttachmentPath,
 } from "../attachmentStore.ts";
+import { normalizeUploadFileAttachments } from "./fileAttachmentStore.ts";
 import { ServerConfig } from "../config.ts";
 import { parseBase64DataUrl } from "../imageMime.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
@@ -296,13 +297,39 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
         ...(attachments.length > 0 ? { attachmentsByQuestionId } : {}),
       };
     }
-    return {
-      ...canonicalCommand,
-      message: {
-        ...canonicalCommand.message,
-        attachments: normalizedAttachments,
-      },
-    } satisfies OrchestrationCommand;
+    return yield* Effect.gen(function* () {
+      const uploadFileAttachments = canonicalCommand.message.fileAttachments;
+      if (
+        uploadFileAttachments !== undefined &&
+        normalizedAttachments.length + uploadFileAttachments.length >
+          PROVIDER_SEND_TURN_MAX_ATTACHMENTS
+      ) {
+        return yield* new OrchestrationDispatchCommandError({
+          message: `A message can carry at most ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} attachments.`,
+        });
+      }
+      const normalizedFileAttachments =
+        uploadFileAttachments === undefined
+          ? undefined
+          : yield* normalizeUploadFileAttachments({
+              threadId: canonicalCommand.threadId,
+              fileAttachments: uploadFileAttachments,
+            });
+
+      // Strip the client upload shape so only normalized (path-bearing) file
+      // attachments survive into the orchestration command.
+      const { fileAttachments: _uploadShape, ...clientMessage } = canonicalCommand.message;
+      return {
+        ...canonicalCommand,
+        message: {
+          ...clientMessage,
+          attachments: normalizedAttachments,
+          ...(normalizedFileAttachments !== undefined
+            ? { fileAttachments: normalizedFileAttachments }
+            : {}),
+        },
+      } satisfies OrchestrationCommand;
+    }).pipe(Effect.tapError(() => removeClaimedAttachmentPaths(claimedAttachmentPaths)));
   });
 
 export const cleanupFailedUploadedAttachments = Effect.fn(
