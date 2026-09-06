@@ -1,0 +1,6 @@
+Bottom: 0bc1d239e9a116859aea145226f5d63d3c0087f2
+Top:    0bc1d239e9a116859aea145226f5d63d3c0087f2
+Author: User <user@example.com>
+Date:   2026-09-05 21:01:24 -0600
+
+fix(threads): recover thread and client state after disruptions
