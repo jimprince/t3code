@@ -436,3 +436,33 @@ id = "upstream-t3-thread-rpc-surface"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Retain guarded local worktree retirement and add its archived-snapshot request to the vendored contract alongside upstream's expanded orchestration RPC surface."
+
+[[patch]]
+name = "fork-gitea-connections"
+subject = "feat(source-control): configure Gitea instances and branch PR badges"
+class = "upstream-bound"
+purpose = "Configure environment-local Gitea hosts and protected tokens, resolve SSH aliases and ports to explicit web/API origins, and show repository-safe branch pull-request badges."
+retire_when = "Upstream supports configured Gitea instances, secret-store tokens, and equivalent branch and repository identity filtering for PR badges."
+depends_on = ["fork-unsupported-pr-hosts"]
+roles = []
+note = "Complete no-PR scans are cached for five minutes per instance, credentials, repository, branch, state and tip SHA; incomplete/error scans never become absence. Reorganized 2026-09-06 from fork-gitea-instance-pr-badges. [fork-gitea-instance-pr-badges] PR lookup and unsupported-host cache keys include non-secret Gitea routing configuration, so adding or removing a configured host takes effect without waiting out the negative cache. Tokens never enter these keys. PR head identity is compared with the hosting provider’s selected target remote, including repositories whose sole remote is named gitea; a remote alias alone does not imply a cross-repository PR. Terminal Gitea PRs whose deleted head becomes refs/pull/N/head retain branch identity through head.label, with repository checks preserved."
+[[patch.decision]]
+id = "upstream-forgejo-provider"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Keep upstream's native Forgejo provider, discovery, icons and terminology alongside the fork's explicitly configured Gitea provider. Configured Gitea routes take precedence; unconfigured Forgejo and Gitea hosts retain upstream CLI discovery."
+[[patch.decision]]
+id = "gitea-provider-test-harness"
+date = "2026-09-16"
+decided = "relocate"
+rationale = "Move the Gitea provider test harness setup and two truncated assertions from the later PR-actions patch into this provider-owning patch, so branch lookup and credential isolation are independently executable."
+[[patch.decision]]
+id = "gitea-get-request-construction"
+date = "2026-09-16"
+decided = "relocate"
+rationale = "Move baseline authenticated GET request construction from the later PR-actions patch into this provider-owning patch. The connection and branch-badge path must execute independently; the later patch owns only POST bodies and pull-request actions."
+[[patch.decision]]
+id = "upstream-source-control-provider-contract"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Implement explicit unavailable stubs for Gitea operations this patch does not yet own, and provide environment settings to the title-evaluation registry layer, satisfying upstream's complete provider service contract without stealing later PR-action behavior."
