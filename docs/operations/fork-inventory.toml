@@ -589,3 +589,29 @@ date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Resolve exact download assets through native V2 thread/project workspace routing and signed containment guards; retain environment-qualified browser-native downloads and local editor/preview behavior with failure action isolated from markdown."
 
+
+[[patch]]
+name = "fork-fresh-remote-worktrees"
+subject = "feat(worktrees): base new worktrees on a freshly fetched remote"
+class = "product"
+purpose = "Create T3 worktrees from a freshly fetched selected remote branch, honoring explicit choices and local branch tracking before preferring gitea over origin, with a local opt-out."
+retire_when = "Upstream ships equivalent remote-selection, freshness, and no-local-fallback semantics."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "Fetches any explicitly selected configured remote, including custom and nested names. Local branches use their configured upstream remote and branch; untracked branches prefer gitea then origin. Failed fetches and absent defaults never silently fall back locally."
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Inject the remote base resolver into native V2 launch before worktree creation: refresh selected/tracking/preferred remote and resolve an exact commit; reject missing/failing remote bases without local fallback. Preserve native preparation/retry/cancellation/submodule pipeline and explicit local opt-out. CLI intent mapping integrates with the CLI V2 adapter lane."
+
+[[patch.decision]]
+id = "missing-remote-base-guidance"
+date = "2026-09-09"
+decided = "adapt"
+rationale = "Brad clarified that Socrates uses Gitea while T3Fork uses GitHub. Honor each selected branch's configured upstream before default remote preference, preserve explicit remote choices, and name unresolved remote refs with recovery guidance. No persisted or wire-schema changes."
+[[patch.decision]]
+id = "upstream-worktree-setup-progress"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Relocate remote-base selection into upstream's tracked first-send bootstrap preflight. Preserve upstream scoped fetches, early user-message and starting-session projection, progress activities, cancellation, and project-checkout fallback for non-repositories while retaining the fork's no-local-fallback rule for requested remote creation."
