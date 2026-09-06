@@ -2806,7 +2806,7 @@ describe("session activity performance", () => {
     expect(appendedEntries[1]).toBe(initialEntries[1]);
   });
 
-  it("reuses entries when appending to 20,000 ordered tool activities", () => {
+  it("reuses entries when appending to a large ordered activity history", () => {
     const activities = Array.from({ length: 20_000 }, (_, index) =>
       makeActivity({
         id: `benchmark-tool-${index}`,
