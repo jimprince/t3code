@@ -1,0 +1,4 @@
+id = "headless-cron-node-path"
+category = "fix"
+functionality = "headless updates"
+text = "Scheduled Linux server upgrades now find a user-local Node installation without requiring a manual login-shell run."
