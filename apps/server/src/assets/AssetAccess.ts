@@ -103,6 +103,14 @@ const AssetClaimsSchema = Schema.Union([
   }),
   Schema.Struct({
     version: Schema.Literal(1),
+    kind: Schema.Literal("workspace-file-download"),
+    workspaceRoot: Schema.String,
+    relativePath: Schema.String,
+    downloadName: Schema.String,
+    expiresAt: Schema.Number,
+  }),
+  Schema.Struct({
+    version: Schema.Literal(1),
     kind: Schema.Literal("attachment"),
     attachmentId: Schema.String,
     /** Decided at mint time. Absent tokens (from before this field) serve
@@ -336,6 +344,7 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
       fileName = path.basename(canonicalFile);
       break;
     }
+    case "workspace-file-download":
     case "workspace-file": {
       if (!input.workspaceRoot) {
         return yield* new AssetWorkspaceContextNotFoundError({
@@ -365,7 +374,10 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
               }),
           ),
         );
-      if (!isWorkspacePreviewEntryPath(resolved.relativePath)) {
+      if (
+        input.resource._tag === "workspace-file" &&
+        !isWorkspacePreviewEntryPath(resolved.relativePath)
+      ) {
         return yield* new AssetPreviewTypeValidationError({
           resource: input.resource,
         });
@@ -399,21 +411,31 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
       if (HEADER_IMAGE_EXTENSIONS.has(path.extname(resolved.relativePath).toLowerCase())) {
         imageDimensions = yield* readImageDimensionsFromHeader(canonicalFile);
       }
-      claims = isWorkspaceImagePreviewPath(resolved.relativePath)
-        ? {
-            version: 1,
-            kind: "workspace-file-exact",
-            workspaceRoot: canonicalWorkspaceRoot,
-            relativePath: resolved.relativePath,
-            expiresAt,
-          }
-        : {
-            version: 1,
-            kind: "workspace-file",
-            workspaceRoot: canonicalWorkspaceRoot,
-            baseRelativePath: path.dirname(resolved.relativePath),
-            expiresAt,
-          };
+      claims =
+        input.resource._tag === "workspace-file-download"
+          ? {
+              version: 1,
+              kind: "workspace-file-download",
+              workspaceRoot: canonicalWorkspaceRoot,
+              relativePath: resolved.relativePath,
+              downloadName: path.basename(resolved.relativePath),
+              expiresAt,
+            }
+          : isWorkspaceImagePreviewPath(resolved.relativePath)
+            ? {
+                version: 1,
+                kind: "workspace-file-exact",
+                workspaceRoot: canonicalWorkspaceRoot,
+                relativePath: resolved.relativePath,
+                expiresAt,
+              }
+            : {
+                version: 1,
+                kind: "workspace-file",
+                workspaceRoot: canonicalWorkspaceRoot,
+                baseRelativePath: path.dirname(resolved.relativePath),
+                expiresAt,
+              };
       fileName = path.basename(resolved.relativePath);
       break;
     }
@@ -708,6 +730,21 @@ export const resolveAsset = Effect.fn("AssetAccess.resolveAsset")(function* (
     );
     return file
       ? ({ kind: "file", path: canonicalFile, mimeType, file } satisfies ResolvedAsset)
+      : null;
+  }
+  if (claims.kind === "workspace-file-download") {
+    if (decodedPath !== claims.downloadName) return null;
+    const exactWorkspaceFile = yield* resolveCanonicalWorkspaceFileForRequest({
+      workspaceRoot: claims.workspaceRoot,
+      relativePath: claims.relativePath,
+    });
+    return exactWorkspaceFile
+      ? ({
+          kind: "file",
+          path: exactWorkspaceFile,
+          download: true,
+          fileName: claims.downloadName,
+        } satisfies ResolvedAsset)
       : null;
   }
   if (claims.kind === "workspace-file-exact") {
