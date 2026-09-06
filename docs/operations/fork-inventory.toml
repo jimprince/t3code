@@ -286,3 +286,13 @@ retire_when = "Upstream ships equivalent multi-select dismissal and restoration 
 depends_on = []
 roles = []
 note = "Reorganized 2026-09-06 from fork-web-pr-multiselect."
+
+[[patch]]
+name = "fork-unsupported-pr-hosts"
+subject = "fix(server): skip PR status lookups for unsupported hosts"
+class = "upstream-bound"
+purpose = "Stop pull request status polling from repeatedly asking, and repeatedly warning about, a remote whose host has no implemented provider."
+retire_when = "Upstream skips change request lookups for remotes with no registered provider instead of retrying the guaranteed failure."
+depends_on = []
+roles = []
+note = "Reorganized 2026-09-06 from fork-pr-status-unsupported-hosts."
