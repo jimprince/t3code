@@ -5,6 +5,7 @@ import type {
   ChatUnknownAttachment as ContractChatUnknownAttachment,
   OrchestrationCheckpointFile,
   OrchestrationCheckpointSummary,
+  OrchestrationLatestTurn,
   OrchestrationMessage,
   OrchestrationProposedPlan,
   OrchestrationSession,
@@ -82,7 +83,10 @@ export type TurnDiffFileChange = OrchestrationCheckpointFile;
 export type TurnDiffSummary = OrchestrationCheckpointSummary;
 
 export type Project = EnvironmentProject;
-export type Thread = EnvironmentThread;
+export type Thread = EnvironmentThread & {
+  readonly pendingSourceProposedPlan?: OrchestrationLatestTurn["sourceProposedPlan"];
+  readonly turnDiffSummaries?: ReadonlyArray<TurnDiffSummary>;
+};
 export type ThreadShell = EnvironmentThreadShell;
 
 export type SidebarThreadSummary = EnvironmentThreadShell;
