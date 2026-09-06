@@ -246,3 +246,10 @@ Use the row checkboxes or **Select all visible pull requests** to select several
 choose **Remove from list** to hide them without closing or changing them on the Git host.
 Removed reviews stay hidden for that environment in this browser. Choose **Restore removed**
 above the list to bring them back.
+
+## Hide projects from pull requests
+
+Open **Hidden projects** in the pull request selection toolbar and select projects to exclude
+from the combined list and Git host queries. The choice persists per environment in this browser.
+Use **Show all projects** to restore them. Selecting a named project in **Filters → Project**
+still shows it even when hidden from the combined list.
