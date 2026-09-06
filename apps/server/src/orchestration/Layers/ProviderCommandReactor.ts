@@ -598,7 +598,7 @@ const make = Effect.gen(function* () {
 
   const resolveThreadDetail = Effect.fnUntraced(function* (threadId: ThreadId) {
     return yield* projectionSnapshotQuery
-      .getThreadDetailById(threadId, { activityKinds: [] })
+      .getThreadDetailById(threadId, { activityKinds: [THREAD_TRANSFER_IMPORTED_ACTIVITY_KIND] })
       .pipe(Effect.map(Option.getOrUndefined));
   });
 
@@ -1481,6 +1481,35 @@ const make = Effect.gen(function* () {
         "Wait for context compaction to finish before sending another message.",
       );
     }
+    const providerBinding = yield* providerSessionDirectory.getBinding(event.payload.threadId).pipe(
+      Effect.map(Option.getOrUndefined),
+      Effect.catchCause((cause) =>
+        Effect.logWarning(
+          "provider command reactor could not read transferred context handoff state",
+          {
+            threadId: event.payload.threadId,
+            cause: Cause.pretty(cause),
+          },
+        ).pipe(Effect.as(undefined)),
+      ),
+    );
+    const transferredContextHandoff = findPendingTransferredThreadHandoff({
+      thread,
+      currentMessageId: message.id,
+      consumedExportedAt: readConsumedThreadTransferContextExportedAt(
+        providerBinding?.runtimePayload,
+      ),
+    });
+    const providerMessageText = appendFileAttachmentPromptLines(
+      transferredContextHandoff === undefined
+        ? message.text
+        : buildTransferredThreadProviderInput({
+            historyMessages: transferredContextHandoff.historyMessages,
+            currentRequest: message.text,
+          }),
+      message.fileAttachments,
+    );
+
     const sendTurnRequest = yield* buildSendTurnRequestForThread({
       threadId: event.payload.threadId,
       messageText: message.text,
@@ -1499,9 +1528,44 @@ const make = Effect.gen(function* () {
       return;
     }
 
-    yield* providerService
-      .sendTurn(sendTurnRequest.value)
-      .pipe(Effect.asVoid, Effect.catchCause(recoverTurnStartFailure), Effect.forkScoped);
+    const markTransferredContextConsumed =
+      transferredContextHandoff === undefined
+        ? Effect.void
+        : providerSessionDirectory.getBinding(event.payload.threadId).pipe(
+            Effect.flatMap(
+              Option.match({
+                onNone: () =>
+                  Effect.logWarning(
+                    "provider command reactor could not persist transferred context handoff consumption because the provider binding is missing",
+                    { threadId: event.payload.threadId },
+                  ),
+                onSome: (binding) =>
+                  providerSessionDirectory.upsert({
+                    ...binding,
+                    runtimePayload: markThreadTransferContextHandoffConsumed(
+                      binding.runtimePayload,
+                      transferredContextHandoff.exportedAt,
+                    ),
+                  }),
+              }),
+            ),
+            Effect.catchCause((cause) =>
+              Effect.logWarning(
+                "provider command reactor could not persist transferred context handoff consumption",
+                {
+                  threadId: event.payload.threadId,
+                  cause: Cause.pretty(cause),
+                },
+              ),
+            ),
+          );
+
+    yield* providerService.sendTurn(sendTurnRequest.value).pipe(
+      Effect.tap(() => markTransferredContextConsumed),
+      Effect.asVoid,
+      Effect.catchCause(recoverTurnStartFailure),
+      Effect.forkScoped,
+    );
   });
 
   const processTurnInterruptRequested = Effect.fn("processTurnInterruptRequested")(function* (

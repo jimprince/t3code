@@ -1468,6 +1468,74 @@ describe("ProviderCommandReactor", () => {
     }),
   );
 
+  effectIt.effect(
+    "sends imported visible history to a fresh provider once without duplicating UI messages",
+    () =>
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() => createHarness({ importedHistory: true }));
+        const now = "2026-01-01T00:00:01.000Z";
+
+        yield* harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-imported-turn-start-1"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId("post-import-user-1"),
+            role: "user",
+            text: "Continue on this machine.",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        });
+
+        yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 1));
+        yield* Effect.promise(() =>
+          waitFor(() => {
+            const payload = harness.readProviderBinding()?.runtimePayload;
+            return (
+              typeof payload === "object" &&
+              payload !== null &&
+              "threadTransferContextHandoff" in payload
+            );
+          }),
+        );
+        const firstProviderInput = harness.sendTurn.mock.calls[0]?.[0].input ?? "";
+        expect(firstProviderInput).toContain("Investigate the original failure.");
+        expect(firstProviderInput).toContain("The failure is in the reconnect path.");
+        expect(firstProviderInput.match(/Continue on this machine\./g)).toHaveLength(1);
+
+        const firstSnapshot = yield* Effect.promise(() => harness.readModel());
+        const firstThread = firstSnapshot.threads.find(
+          (entry) => entry.id === ThreadId.make("thread-1"),
+        );
+        expect(firstThread?.messages.map((entry) => entry.text)).toEqual([
+          "Investigate the original failure.",
+          "The failure is in the reconnect path.",
+          "Continue on this machine.",
+        ]);
+
+        yield* harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("cmd-imported-turn-start-2"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId("post-import-user-2"),
+            role: "user",
+            text: "Second request.",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: "2026-01-01T00:00:02.000Z",
+        });
+
+        yield* Effect.promise(() => waitFor(() => harness.sendTurn.mock.calls.length === 2));
+        expect(harness.sendTurn.mock.calls[1]?.[0].input).toBe("Second request.");
+      }),
+  );
+
   it("retries thread title generation after a transient failure", async () => {
     const harness = await createHarness();
     const now = "2026-01-01T00:00:00.000Z";
