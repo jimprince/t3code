@@ -13,8 +13,11 @@ layer("041_AuthSessionClientConnection", (it) => {
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      yield* runMigrations({ toMigrationInclusive: 40 });
-      yield* runMigrations({ toMigrationInclusive: 41 });
+      // The fork registers this upstream migration as id 46: ids 33-37 were
+      // already applied on live fork databases before upstream published its
+      // own 33-41, so upstream 33-41 run as 38-46 here (see Migrations.ts).
+      yield* runMigrations({ toMigrationInclusive: 45 });
+      yield* runMigrations({ toMigrationInclusive: 46 });
 
       const columns = yield* sql<{ readonly name: string; readonly notnull: number }>`
         PRAGMA table_info(auth_sessions)
