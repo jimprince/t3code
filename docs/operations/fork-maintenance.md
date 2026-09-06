@@ -363,3 +363,17 @@ obsolete remote patch refs, and creates a new recovery snapshot pair. Never
 force-push just main. Source rollback does not roll back an installed app or a
 migrated database; use the release runbook to publish a new monotonic version
 when an application rollback is required.
+
+## One candidate verification contract
+
+`scripts/ci/verify-stgit-replay` is the host bot and upstream replay gate. It
+installs frozen dependencies, validates the complete stack, documentation and
+release notes, invokes `scripts/ci/verify-source`, and rejects source mutation.
+The shared source gate owns Knip, lint/format, typechecks and tests. GitHub CI
+uses its `check`, `test-other` and sharded `test-server` phases; the bot runs
+the same commands without sharding. Platform build and artifact smoke checks
+remain in CI/release jobs. Do not copy the source command list into bot config.
+
+Batch completed concerns before one leased publication. The nightly push gate
+already compares packaged-source trees; metadata-only maintenance should not
+create a desktop release. Never renew a lease to force a queued writer through.

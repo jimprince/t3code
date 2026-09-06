@@ -9,10 +9,14 @@ import { createFixtureRepo } from "./lib/git-fixture.ts";
 const script = NodeURL.fileURLToPath(new URL("./verify-stgit-replay", import.meta.url));
 
 describe("verify-stgit-replay", () => {
-  for (const mode of ["pass", "fail", "mutate"] as const) {
+  for (const mode of ["pass", "fail", "knip-fail", "mutate"] as const) {
     it(`handles ${mode} without approving a failing or changed candidate`, () => {
       const repo = createFixtureRepo();
       try {
+        repo.writeFile(
+          "scripts/ci/verify-source",
+          NodeFS.readFileSync(new URL("./verify-source", import.meta.url), "utf8"),
+        );
         repo.writeFile("scripts/ci/check-stgit-stack", "#!/usr/bin/env bash\nexit 0\n");
         repo.writeFile("scripts/ci/check-fork-docs.ts", "process.exit(0);\n");
         repo.writeFile("scripts/ci/check-fork-release-notes.ts", "process.exit(0);\n");
@@ -22,11 +26,12 @@ describe("verify-stgit-replay", () => {
 set -euo pipefail
 printf '%s\\n' "$*" >> "$CALL_LOG"
 if [[ "$*" == 'run typecheck' && "$GATE_MODE" == fail ]]; then exit 42; fi
-if [[ "$*" == 'run test' && "$GATE_MODE" == mutate ]]; then echo changed > tracked.txt; fi
+if [[ "$*" == 'run knip:check' && "$GATE_MODE" == knip-fail ]]; then exit 43; fi
+if [[ "$*" == 'run --filter t3 test' && "$GATE_MODE" == mutate ]]; then echo changed > tracked.txt; fi
 `,
         );
         repo.writeFile("tracked.txt", "original\n");
-        for (const file of ["scripts/ci/check-stgit-stack", "bin/vp"])
+        for (const file of ["scripts/ci/check-stgit-stack", "bin/vp", "scripts/ci/verify-source"])
           NodeFS.chmodSync(NodePath.join(repo.dir, file), 0o755);
         repo.commitAll("test: gate fixture");
         const head = repo.git("rev-parse", "HEAD");
@@ -43,13 +48,16 @@ if [[ "$*" == 'run test' && "$GATE_MODE" == mutate ]]; then echo changed > track
         });
         assert.strictEqual(repo.git("rev-parse", "HEAD"), head);
         const calls = NodeFS.readFileSync(log, "utf8");
-        assert.include(calls, "run typecheck\n");
+        if (mode !== "knip-fail") assert.include(calls, "run typecheck\n");
         if (mode === "pass") {
           assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
-          assert.include(calls, "run test\n");
+          assert.include(calls, "run --filter t3 test\n");
+        } else if (mode === "knip-fail") {
+          assert.strictEqual(result.status, 43);
+          assert.notInclude(calls, "run typecheck\n");
         } else if (mode === "fail") {
           assert.strictEqual(result.status, 42);
-          assert.notInclude(calls, "run test\n");
+          assert.notInclude(calls, "run --filter t3 test\n");
         } else {
           assert.notStrictEqual(result.status, 0);
           assert.include(result.stderr, "Verification changed the candidate");

@@ -411,7 +411,7 @@ purpose = "Route maintainers and agents through the StGit policy, validate and p
 retire_when = "Upstream or maintained shared tooling provides equivalent maintained-fork automation, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-release-publication", "fork-build-ci-compat"]
 roles = ["agent-docs-owner"]
-note = "Requires authored release entries for user-visible changes and validates them before publication. Removed unused subject-based metadata reconstruction and obsolete maintenance plans; leased publication remains authoritative."
+note = "Requires authored release entries for user-visible changes and validates them before publication. CI and automatic repair share verify-source checks including Knip; verify-stgit-replay adds installation and immutable stack validation. Removed unused subject-based metadata reconstruction and obsolete maintenance plans; leased publication remains authoritative."
 [[patch.decision]]
 id = "queued-main-writer-start-binding"
 date = "2026-07-30"

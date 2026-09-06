@@ -42,20 +42,8 @@ jobs:
           cache: true
           run-install: true
 
-      - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
-
-      # Files/dependencies are repo-wide; export checks cover clean workspaces only.
-      - name: Check unused code
-        run: vp run knip:check
-      - name: Build oxlint plugin
-        run: vp run --filter @t3tools/oxlint-plugin-t3code build
-
-      - name: Check
-        run: vp check
-
-      - name: Typecheck
-        run: vp run typecheck
+      - name: Check source
+        run: scripts/ci/verify-source check
 
       - uses: ./.github/actions/setup-apt-mirrors
 
@@ -100,9 +88,6 @@ jobs:
         with:
           bun-version: 1.3.11
 
-      - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
-
       - uses: ./.github/actions/setup-apt-mirrors
 
       - name: Install browser secret helper build libraries
@@ -111,7 +96,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
 
       - name: Test
-        run: vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' test
+        run: scripts/ci/verify-source test-other
 
   # apps/server sets `fileParallelism: false`, so its 239 files run strictly
   # one at a time. Sharding spreads them over separate runners instead of
@@ -148,7 +133,7 @@ jobs:
         env:
           T3CODE_TRANSFER_BUDGET_REPORT_PATH: ${{ runner.temp }}/t3code-transfer-budget.md
           T3CODE_TRANSFER_BUDGET_RESULT_PATH: ${{ runner.temp }}/thread-transfer-result.json
-        run: vp run --filter t3 test --shard ${{ matrix.shard }}/${{ strategy.job-total }}
+        run: scripts/ci/verify-source test-server --shard ${{ matrix.shard }}/${{ strategy.job-total }}
 
       # src/server.test.ts writes the budget report, so exactly one shard
       # produces these files. Gating the upload on their presence keeps a
