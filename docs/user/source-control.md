@@ -127,3 +127,10 @@ the scope and merge strategy. GitHub rebases the remaining stack after merging.
 It can rewrite history and restart checks. If a layer fails, earlier updates remain; resolve that
 layer before retrying. GitHub may require manual conflict resolution after a lower layer is amended,
 even when its changes look independent. Stack actions require an environment that supports them.
+
+## Hide selected pull requests
+
+Use the row checkboxes or **Select all visible pull requests** to select several reviews, then
+choose **Remove from list** to hide them without closing or changing them on the Git host.
+Removed reviews stay hidden for that environment in this browser. Choose **Restore removed**
+above the list to bring them back.
