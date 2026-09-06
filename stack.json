@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "3ce8632523b7f34b364f3101fe6d0c532d065036",
+  "prev": "07042bc97be3ab95a6dcbe23b4486bc70c3cb06f",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -29,7 +29,7 @@
     "old-fork-pr-project-exclusions",
     "old-fork-headless-delivery",
     "old-fork-desktop-delivery",
-    "fork-mobile-delivery",
+    "old-fork-mobile-delivery",
     "fork-release-publication",
     "fork-maintenance-automation"
   ],
@@ -37,9 +37,6 @@
   "patches": {
     "fork-maintenance-automation": {
       "oid": "1a080ced56f93b1250eac765f3f4c88e782fb5c6"
-    },
-    "fork-mobile-delivery": {
-      "oid": "5e51478887de3a4bcb1f455700412a4b10255448"
     },
     "fork-release-publication": {
       "oid": "d8a4c9cbc4e53810bd62f1421be46d62267150cd"
@@ -76,6 +73,9 @@
     },
     "old-fork-manual-thread-order": {
       "oid": "b4d4214be94351243ddd2e41984857294d5dade8"
+    },
+    "old-fork-mobile-delivery": {
+      "oid": "5e51478887de3a4bcb1f455700412a4b10255448"
     },
     "old-fork-pr-dismissal": {
       "oid": "a7f781c064d5779a29177919f52f895c215d7cea"
