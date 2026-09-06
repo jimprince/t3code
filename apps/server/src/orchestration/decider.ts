@@ -1204,6 +1204,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           ...key,
+          url: command.url,
           snapshot: command.snapshot,
           stack: command.stack,
           updatedAt: occurredAt,

@@ -309,7 +309,12 @@ export function applyThreadDetailEvent(
         thread,
         thread.pullRequests.map((existing) =>
           threadPullRequestKeysEqual(existing, event.payload)
-            ? { ...existing, snapshot: event.payload.snapshot, stack: event.payload.stack }
+            ? {
+                ...existing,
+                ...(event.payload.url === undefined ? {} : { url: event.payload.url }),
+                snapshot: event.payload.snapshot,
+                stack: event.payload.stack,
+              }
             : existing,
         ),
         event.payload.updatedAt,
