@@ -147,6 +147,10 @@ const PR_LOOKUP_CACHE_TTL = Duration.seconds(60);
 const PR_LOOKUP_FAILURE_BASE_TTL = Duration.seconds(20);
 const PR_LOOKUP_FAILURE_MAX_TTL = Duration.minutes(15);
 const PR_LOOKUP_CACHE_CAPACITY = 2_048;
+// How long a repository whose remote belongs to no implemented host stays
+// skipped. Long enough that background polling never re-probes the host, short
+// enough that repointing the remote at GitHub or GitLab recovers on its own.
+const UNSUPPORTED_PR_HOST_CACHE_TTL = Duration.minutes(10);
 const isSourceControlProviderError = Schema.is(SourceControlProviderError);
 
 /**
@@ -1085,7 +1089,14 @@ export const make = Effect.gen(function* () {
       return Effect.gen(function* () {
         const { headContext, lookup } = yield* resolveLookupHeadContext(cwd, details);
         if (!lookup) {
-          return { latest: null, headContext };
+          return { latest: null, headContext, unsupportedHost: false };
+        }
+        const provider = yield* sourceControlProvider(cwd);
+        if (provider.kind === "unknown") {
+          yield* Effect.logWarning(
+            "No hosting provider handles this remote; skipping PR lookup.",
+          ).pipe(Effect.annotateLogs({ operation: "prHostSupport", cwd }));
+          return { latest: null, headContext, unsupportedHost: true };
         }
         // Only skip when the branch is untracked as well: anything carrying an
         // upstream keeps the old behaviour.
@@ -1094,10 +1105,10 @@ export const make = Effect.gen(function* () {
           details.upstreamRef === null &&
           (yield* isUnpublishedBranch(cwd, headContext))
         ) {
-          return { latest: null, headContext };
+          return { latest: null, headContext, unsupportedHost: false };
         }
-        const latest = yield* findLatestPrForHeadContext(cwd, headContext);
-        return { latest, headContext };
+        const latest = yield* findLatestPrForHeadContext(cwd, headContext, provider);
+        return { latest, headContext, unsupportedHost: false };
       });
     },
     {
@@ -1105,7 +1116,7 @@ export const make = Effect.gen(function* () {
       timeToLive: (exit, key) => {
         if (Exit.isSuccess(exit)) {
           prLookupFailureStreakByKey.delete(key);
-          return PR_LOOKUP_CACHE_TTL;
+          return exit.value.unsupportedHost ? UNSUPPORTED_PR_HOST_CACHE_TTL : PR_LOOKUP_CACHE_TTL;
         }
         return nextPrLookupFailureTtl(key);
       },
@@ -1187,7 +1198,7 @@ export const make = Effect.gen(function* () {
       const cached = yield* Cache.getOption(prLookupCache, cacheKey).pipe(
         Effect.orElseSucceed(() => Option.none()),
       );
-      if (Option.isSome(cached) && cached.value.latest === null) {
+      if (Option.isSome(cached) && cached.value.latest === null && !cached.value.unsupportedHost) {
         yield* Cache.invalidate(prLookupCache, cacheKey);
       }
     }
@@ -1623,11 +1634,12 @@ export const make = Effect.gen(function* () {
   const findLatestPrForHeadContext = Effect.fn("findLatestPrForHeadContext")(function* (
     cwd: string,
     headContext: BranchHeadContext,
+    provider: Effect.Success<ReturnType<typeof sourceControlProvider>>,
   ) {
     const parsedByNumber = new Map<number, PullRequestInfo>();
 
     for (const headSelector of headContext.headSelectors) {
-      const pullRequests = yield* (yield* sourceControlProvider(cwd)).listChangeRequests({
+      const pullRequests = yield* provider.listChangeRequests({
         cwd,
         headSelector,
         state: "all",
