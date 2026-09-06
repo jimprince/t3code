@@ -2,6 +2,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+const PNPM_STORE_NODE_MODULES_PATTERN = /((?:\.\.\/)+node_modules)\/\.pnpm\/[^/]+\/node_modules\//g;
+
 // Expo's fingerprint ignores the app version, so binaries of different majors
 // share a runtime version whenever native code is unchanged, and a production
 // OTA from main would reach every older store binary. Hashing the major
@@ -16,5 +18,21 @@ if (!majorVersion) {
 module.exports = {
   // Hash the pinned Screens fork's native source, rather than only its version.
   nativeModuleSourceType: "files",
+  /**
+   * @param {{ type: "file", filePath: string } | { type: "contents", id: string }} source
+   * @param {Buffer | string | null} chunk
+   * @param {boolean} isEndOfFile
+   */
+  fileHookTransform(source, chunk, isEndOfFile) {
+    if (!isEndOfFile || source.type !== "contents" || typeof chunk !== "string") {
+      return chunk;
+    }
+
+    if (!source.id.includes("AutolinkingConfig")) {
+      return chunk;
+    }
+
+    return chunk.replace(PNPM_STORE_NODE_MODULES_PATTERN, "$1/");
+  },
   extraSources: [{ type: "contents", id: "appMajorVersion", contents: majorVersion }],
 };
