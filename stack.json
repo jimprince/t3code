@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "15e21f802ce78409acbc5c0b18999ee8433c9215",
+  "prev": "bb17605a8f9b1d2522708f7756943690d55b13d4",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -18,7 +18,7 @@
     "old-fork-private-connection-defaults",
     "old-fork-resource-recovery",
     "old-fork-workspace-file-uploads",
-    "fork-chat-file-attachments-temporary",
+    "old-fork-chat-file-attachments-temporary",
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
@@ -35,9 +35,6 @@
   ],
   "hidden": [],
   "patches": {
-    "fork-chat-file-attachments-temporary": {
-      "oid": "78d689098e6377dd60c74729803bda81b3bdbff7"
-    },
     "fork-desktop-delivery": {
       "oid": "d1ec9c475b0aadbc176ae038d9dd60388877e0a0"
     },
@@ -82,6 +79,9 @@
     },
     "old-fork-build-ci-compat": {
       "oid": "b0a008cfe2f49150998ad46b3d31cba3aa6291e8"
+    },
+    "old-fork-chat-file-attachments-temporary": {
+      "oid": "78d689098e6377dd60c74729803bda81b3bdbff7"
     },
     "old-fork-conversation-fork": {
       "oid": "bc69dd1ef58f297c8c96cf7ea9afb989e6ff20c1"
