@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "11d59dfc48f47b9cb945a7bbb7e9731bf36c7f8f",
+  "prev": "c92dc6f354b21e664916146df02522e3bb070a28",
   "head": "42ead5386028896fa2fa40aaa916ddb54de86884",
   "applied": [
     "fork-build-ci-compat",
@@ -40,7 +40,7 @@
     "old-fork-chat-file-attachments",
     "old-fork-remote-file-downloads",
     "old-fork-remote-worktree-base",
-    "fork-web-pr-multiselect",
+    "old-fork-web-pr-multiselect",
     "fork-sidebar-thread-order",
     "fork-pr-status-unsupported-hosts",
     "fork-worktree-gc",
@@ -82,9 +82,6 @@
     },
     "fork-thread-client-recovery": {
       "oid": "b418790c25250c3291e08fa842819b9b90ea35eb"
-    },
-    "fork-web-pr-multiselect": {
-      "oid": "bab3ab1da90c9d0819b8137ea63234226dd0340e"
     },
     "fork-worker-operations": {
       "oid": "d87becff846f25551d46fa80b68ac5fa76d81924"
@@ -172,6 +169,9 @@
     },
     "old-fork-web-image-timeout": {
       "oid": "7e5c6cbe61630049f4a13d6bbc9f1b847acebf8d"
+    },
+    "old-fork-web-pr-multiselect": {
+      "oid": "bab3ab1da90c9d0819b8137ea63234226dd0340e"
     },
     "old-fork-web-project-scope": {
       "oid": "c88a152b090334ddd6722836f8471604d19b23ee"
