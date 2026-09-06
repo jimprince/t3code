@@ -547,6 +547,7 @@ export function makeCursorAdapter(
           const mcpSession = McpProviderSession.readMcpProviderSession(input.threadId);
           const acp = yield* makeCursorAcpRuntime({
             cursorSettings: effectiveCursorSettings,
+            t3ThreadId: input.threadId,
             ...(options?.environment || mcpSession?.agentDeviceEnvironment
               ? {
                   environment: McpProviderSession.withAgentDeviceEnvironment(
