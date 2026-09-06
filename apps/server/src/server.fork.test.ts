@@ -632,14 +632,13 @@ const buildAppUnderTest = (options?: {
         })
       : VcsStatusBroadcaster.layer.pipe(Layer.provide(gitWorkflowLayer));
     const resourceTelemetryLayer = ResourceTelemetry.layer.pipe(
-      Layer.provide([
-        HostResources.layer,
+      Layer.provide(
         Layer.mergeAll(
           NativeTelemetryClient.layerTest(options?.layers?.nativeTelemetryClient),
           DesktopTelemetryReceiver.layerTest(options?.layers?.desktopTelemetryReceiver),
           ResourceAttribution.layer,
         ),
-      ]),
+      ),
     );
     const serviceLauncherClientLayer = ServiceLauncherClient.layer.pipe(
       Layer.provide(Layer.succeed(HostProcessEnvironment, {})),
@@ -752,7 +751,8 @@ const buildAppUnderTest = (options?: {
             }),
         }),
       ),
-      Layer.provide(
+      Layer.provide([
+        HostResources.layer,
         Layer.mergeAll(
           Layer.mock(ProcessResourceMonitor.ProcessResourceMonitor)({
             readHistory: (input) =>
@@ -786,7 +786,7 @@ const buildAppUnderTest = (options?: {
             ...options?.layers?.systemRecovery,
           }),
         ),
-      ),
+      ]),
       Layer.provide(
         Layer.mock(TraceDiagnostics.TraceDiagnostics)({
           read: () =>
