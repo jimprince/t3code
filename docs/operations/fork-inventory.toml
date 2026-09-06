@@ -397,3 +397,13 @@ id = "upstream-pr-asset-github-cli-test-runtime"
 date = "2026-09-17"
 decided = "adapt"
 rationale = "Provide the upstream GitHub CLI layer in the fork-only attachment server harness over its existing VCS process layer, matching upstream's harness after pull-request asset downloads gained the same runtime dependency."
+
+[[patch]]
+name = "fork-remote-file-downloads"
+subject = "feat(remote): download linked workspace files"
+class = "product"
+purpose = "Let web and desktop operators securely download files linked from a thread when those files remain inside that thread's project or active worktree."
+retire_when = "Upstream ships equivalent authenticated linked-file downloads with canonical project/worktree containment across local and remote environments."
+depends_on = []
+roles = []
+note = "Reorganized 2026-09-06 from fork-remote-file-downloads."
