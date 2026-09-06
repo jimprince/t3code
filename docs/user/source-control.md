@@ -103,3 +103,11 @@ Repositories on hosts without a configured source-control provider are skipped d
 status checks, so their branches show no pull request badge.
 
 For Gitea hosts, see [configured instances and pull-request support](./gitea.md).
+
+## Hide projects from pull requests
+
+Choose **Filters → Hidden projects** to keep whole projects out of the list. Select as many as
+you like; other projects remain visible. Hidden projects are excluded from Git host queries.
+The choice persists per environment in this browser and counts toward the **Filters** badge.
+Use **Show all projects** to restore them. Selecting one project under **Filters → Project**
+still shows it, even if it is hidden from the combined list.
