@@ -5169,6 +5169,48 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     },
   );
 
+  const forkThread: NonNullable<ClaudeAdapterShape["forkThread"]> = Effect.fn("forkThread")(
+    function* (threadId, input) {
+      const context = yield* requireSession(threadId);
+      const sourceTurnCount = currentTurnCount(context);
+      if (input.retainedTurnCount > sourceTurnCount) {
+        return null;
+      }
+
+      const targetSessionId = yield* randomUUIDv4;
+      if (input.retainedTurnCount === 0) {
+        return {
+          resumeCursor: {
+            sessionId: targetSessionId,
+            createSession: true,
+            turnCount: 0,
+          },
+          turnCount: 0,
+        };
+      }
+
+      const sourceSessionId = context.resumeSessionId;
+      const retainedBoundary = Array.from(context.turnBoundaries.values()).find(
+        (boundary) => boundary.turnId === input.retainedTurnId,
+      );
+      if (!sourceSessionId || !retainedBoundary) {
+        return null;
+      }
+
+      return {
+        resumeCursor: {
+          resume: sourceSessionId,
+          sessionId: targetSessionId,
+          forkSession: true,
+          resumeSessionAt: retainedBoundary.assistantUuid,
+          turnCount: input.retainedTurnCount,
+          turnBoundaries: retainedTurnBoundaries(context, input.retainedTurnCount),
+        },
+        turnCount: input.retainedTurnCount,
+      };
+    },
+  );
+
   const respondToRequest: ClaudeAdapterShape["respondToRequest"] = Effect.fn("respondToRequest")(
     function* (threadId, requestId, decision) {
       const context = yield* requireSession(threadId);
@@ -5259,6 +5301,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     interruptTurn,
     readThread,
     rollbackThread,
+    forkThread,
     respondToRequest,
     respondToUserInput,
     stopSession,
