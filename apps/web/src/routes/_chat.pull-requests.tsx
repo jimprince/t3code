@@ -622,7 +622,7 @@ function PullRequestsRouteView() {
     [menuFilters, typedParsed.filters],
   );
   const hasLocalFilters = Object.keys(localFilters).length > 0;
-  const localVisibility = useLocalPrVisibility(environmentIds);
+  const localVisibility = useLocalPrVisibility(environmentIds, scopedProjectId);
   // Scoping to a project scopes to the server that owns it, saving every other server a read
   // that could only answer with nothing. Where an id is ambiguous — two servers holding the
   // same project id, with no server named — only the servers that actually hold that id are
@@ -648,7 +648,7 @@ function PullRequestsRouteView() {
    * Left alone while the projects are still arriving, and while the scope is a single project:
    * that path deliberately asks both servers holding an ambiguous id.
    */
-  const environmentQueries = useMemo((): ReadonlyArray<{
+  const assignedEnvironmentQueries = useMemo((): ReadonlyArray<{
     readonly environmentId: EnvironmentId;
     readonly projectIds?: ReadonlyArray<ProjectId>;
   }> => {
@@ -672,6 +672,11 @@ function PullRequestsRouteView() {
       return [{ environmentId, projectIds }];
     });
   }, [projects, projectsKnown, queryEnvironmentIds, scopedProjectId]);
+  const { filterQueries } = localVisibility;
+  const environmentQueries = useMemo(
+    () => filterQueries(assignedEnvironmentQueries, projects, projectsKnown),
+    [assignedEnvironmentQueries, projects, projectsKnown, filterQueries],
+  );
   // Part of the scope, since a different split is a different question and its answers must not
   // be filed under the same page state.
   const assignmentKey = useMemo(
@@ -1885,6 +1890,7 @@ function PullRequestsRouteView() {
         <PullRequestSelectionToolbar
           entries={displayGroups.flatMap((group) => group.entries)}
           visibility={localVisibility}
+          projects={projects}
         />
       ) : null}
       {!capabilityKnown ? (
