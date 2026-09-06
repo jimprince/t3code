@@ -2,16 +2,18 @@ import type { ReactNode } from "react";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { pullRequestEntryKey, type EnvironmentPullRequestEntry } from "./pullRequestList.logic";
-import type { useLocalPrVisibility } from "./localPrVisibility";
+import type { LocalPrProject, useLocalPrVisibility } from "./localPrVisibility";
 
 type Visibility = ReturnType<typeof useLocalPrVisibility>;
 
 export function PullRequestSelectionToolbar({
   entries,
   visibility,
+  projects,
 }: {
   entries: ReadonlyArray<EnvironmentPullRequestEntry>;
   visibility: Visibility;
+  projects: ReadonlyArray<LocalPrProject & { readonly title: string }>;
 }) {
   const keys = entries.map(pullRequestEntryKey);
   const count = keys.filter((key) => visibility.selected.has(key)).length;
@@ -31,6 +33,30 @@ export function PullRequestSelectionToolbar({
       />
       <span className="text-xs">{count > 0 ? `${count} selected` : `${keys.length} visible`}</span>
       <span className="flex-1" />
+      <details>
+        <summary className="cursor-pointer text-xs">
+          Hidden projects ({visibility.excludedCount})
+        </summary>
+        <div className="flex flex-col gap-2">
+          {projects.map((project) => (
+            <label
+              key={JSON.stringify([project.environmentId, project.id])}
+              className="flex items-center gap-2 text-xs"
+            >
+              <Checkbox
+                checked={visibility.isProjectExcluded(project)}
+                onCheckedChange={(checked) => visibility.excludeProject(project, checked)}
+              />
+              {project.title} ({project.environmentId})
+            </label>
+          ))}
+        </div>
+      </details>
+      {visibility.excludedCount > 0 ? (
+        <Button size="xs" variant="ghost" onClick={visibility.restoreProjects}>
+          Show all projects
+        </Button>
+      ) : null}
       {visibility.removedCount > 0 ? (
         <Button size="xs" variant="ghost" onClick={visibility.restore}>
           Restore removed ({visibility.removedCount})
