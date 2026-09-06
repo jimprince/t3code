@@ -499,6 +499,7 @@ agent
   .option("--branch <name>", "git branch for T3's native worktree bootstrap")
   .option("--worktree <path>", "deprecated; T3 chooses/manages worktree paths")
   .option("--base-branch <name>", "base branch for T3's native worktree bootstrap", "main")
+  .option("--local-base", "create from the local base branch instead of the selected remote")
   .option("--runtime-mode <mode>", "thread runtime mode")
   .option("--interaction-mode <mode>", "thread interaction mode")
   .requiredOption(
@@ -537,6 +538,7 @@ agent
       model: options.model,
       branch: options.branch,
       baseBranch: options.baseBranch,
+      startFromOrigin: !options.localBase,
       runtimeMode: options.runtimeMode,
       interactionMode: options.interactionMode,
       initialMessage,
