@@ -289,6 +289,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
       yield* projects.upsert({
         projectId: ProjectId.make("project-null-options"),
         title: "Null options project",
+        kind: "chat",
         workspaceRoot: "/tmp/project-null-options",
         defaultModelSelection: {
           instanceId: ProviderInstanceId.make("codex"),
@@ -330,6 +331,7 @@ projectionRepositoriesLayer("Projection repositories", (it) => {
         instanceId: ProviderInstanceId.make("codex"),
         model: "gpt-5.4",
       });
+      assert.strictEqual(Option.getOrNull(persisted)?.kind, "chat");
     }),
   );
 
