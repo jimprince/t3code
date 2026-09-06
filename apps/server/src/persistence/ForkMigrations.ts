@@ -5,12 +5,14 @@ import * as Migrator from "effect/unstable/sql/Migrator";
 
 import Migration0001 from "./ForkMigrations/001_ProviderSessionRuntimeBootGeneration.ts";
 import Migration0002 from "./ForkMigrations/002_ProviderSessionRuntimeActiveTurn.ts";
+import Migration0004 from "./ForkMigrations/004_ProjectionThreadsSidebarOrderKey.ts";
 
 export const FORK_MIGRATIONS_TABLE = "effect_sql_fork_migrations";
 
 export const forkMigrationEntries = [
   [1, "ProviderSessionRuntimeBootGeneration", Migration0001],
   [2, "ProviderSessionRuntimeActiveTurn", Migration0002],
+  [4, "ProjectionThreadsSidebarOrderKey", Migration0004],
 ] as const;
 
 export const makeForkMigrationLoader = (throughId?: number) =>
