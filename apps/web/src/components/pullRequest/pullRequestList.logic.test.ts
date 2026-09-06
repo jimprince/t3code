@@ -1806,3 +1806,57 @@ import {
   setVisiblePullRequestsSelected,
   writeRemovedPullRequestKeys,
 } from "./localPrVisibility";
+
+import {
+  filterExcludedProjectQueries,
+  readExcludedProjectIds,
+  writeExcludedProjectIds,
+} from "./localPrVisibility";
+
+describe("environment-local project exclusion storage and queries", () => {
+  it("preserves old project IDs per environment and tolerates corrupt or denied storage", () => {
+    const values = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => values.get(key) ?? null,
+      setItem: (key: string, value: string) => {
+        values.set(key, value);
+      },
+    };
+    writeExcludedProjectIds(storage, "env-1", new Set(["project-1"]));
+    expect(readExcludedProjectIds(storage, "env-1")).toEqual(new Set(["project-1"]));
+    expect(readExcludedProjectIds(storage, "env-2")).toEqual(new Set());
+    for (const raw of ["{", "null", '[1,"project-1"]', "{}"]) {
+      storage.setItem("t3.pullRequests.excludedProjects:env-1", raw);
+      expect(readExcludedProjectIds(storage, "env-1")).toEqual(new Set());
+    }
+    const denied = {
+      getItem: () => {
+        throw new Error("denied");
+      },
+      setItem: () => {
+        throw new Error("denied");
+      },
+    };
+    expect(readExcludedProjectIds(denied, "env-1")).toEqual(new Set());
+    expect(() => writeExcludedProjectIds(denied, "env-1", new Set())).not.toThrow();
+  });
+  it("narrows an implicit all-project query and removes an environment with no visible projects", () => {
+    const environmentId = "env-1" as EnvironmentId;
+    const id = "project-1" as ProjectId;
+    const excluded = new Map([[environmentId, new Set([id])]]);
+    const second = "project-2" as ProjectId;
+    expect(
+      filterExcludedProjectQueries(
+        [{ environmentId }],
+        [
+          { environmentId, id },
+          { environmentId, id: second },
+        ],
+        excluded,
+      ),
+    ).toEqual([{ environmentId, projectIds: [second] }]);
+    expect(
+      filterExcludedProjectQueries([{ environmentId }], [{ environmentId, id }], excluded),
+    ).toEqual([]);
+  });
+});
