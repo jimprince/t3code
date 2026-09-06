@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "28d579a2df26a95d9db77a6a4bc9a9251abf7e39",
-  "head": "4d2f43393c6c5ba3bf671f909f831b6c182b8b6d",
+  "prev": "ba504185e0ae4e6755142fe2665689076dc0195c",
+  "head": "d4ca54295534e6b250e8ef7e593babee9e6166f7",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -15,7 +15,8 @@
     "fork-project-selection",
     "fork-manual-thread-order",
     "fork-private-connection-defaults",
-    "fork-resource-recovery"
+    "fork-resource-recovery",
+    "fork-workspace-file-uploads"
   ],
   "unapplied": [
     "old-fork-stgit-stack-policy",
@@ -94,6 +95,9 @@
     },
     "fork-worker-operations": {
       "oid": "d87becff846f25551d46fa80b68ac5fa76d81924"
+    },
+    "fork-workspace-file-uploads": {
+      "oid": "d4ca54295534e6b250e8ef7e593babee9e6166f7"
     },
     "old-fork-build-workspace-tooling": {
       "oid": "7815125679bea1ca1d8556a7c197d81e65fc0343"
