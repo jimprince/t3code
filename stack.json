@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7e0f96a35ffdf78cf6e7ca99610213a90d5c3ada",
-  "head": "4d4477fff030d3a3c4b246b3b7fce409015f1a7c",
+  "prev": "c58944b05a0b10ccc444c9d68637f2c3754b0dc1",
+  "head": "b65eab25eace69f75362b986e07d15312250dde8",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -22,7 +22,8 @@
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
     "fork-unsupported-pr-hosts",
-    "fork-worktree-cleanup"
+    "fork-worktree-cleanup",
+    "fork-gitea-connections"
   ],
   "unapplied": [
     "old-fork-stgit-stack-policy",
@@ -80,6 +81,9 @@
     },
     "fork-general-chat": {
       "oid": "8ad2d3dd49c7aa1f8f206075fb89ff438600bb5a"
+    },
+    "fork-gitea-connections": {
+      "oid": "b65eab25eace69f75362b986e07d15312250dde8"
     },
     "fork-manual-thread-order": {
       "oid": "a13dd31e4050c8abfcdf488887118a5def98aa87"
