@@ -1354,13 +1354,25 @@ const makeWsRpcLayer = (
             { "rpc.aggregate": "orchestration" },
           ),
         [ORCHESTRATION_WS_METHODS.exportThread]: (input) =>
+          observeRpcEffect(
             ORCHESTRATION_WS_METHODS.exportThread,
             threadTransfer.exportThread(input),
+            {
+              "rpc.aggregate": "orchestration",
+            },
+          ),
         [ORCHESTRATION_WS_METHODS.importThread]: (input) =>
+          observeRpcEffect(
             ORCHESTRATION_WS_METHODS.importThread,
             threadTransfer.importThread(input),
+            {
+              "rpc.aggregate": "orchestration",
+            },
+          ),
         [ORCHESTRATION_WS_METHODS.forkThread]: (input) =>
           observeRpcEffect(ORCHESTRATION_WS_METHODS.forkThread, threadTransfer.forkThread(input), {
+            "rpc.aggregate": "orchestration",
+          }),
         [ORCHESTRATION_WS_METHODS.subscribeShell]: (input) =>
           observeRpcStreamEffect(
             ORCHESTRATION_WS_METHODS.subscribeShell,
@@ -2029,6 +2041,17 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
           }),
+
+            "rpc.aggregate": "server",
+          }),
+            "rpc.aggregate": "server",
+          }),
+          observeRpcEffect(
+            {
+              "rpc.aggregate": "server",
+            },
+          ),
+
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
             "rpc.aggregate": "cloud",
