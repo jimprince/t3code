@@ -1,3 +1,4 @@
+import * as GiteaHost from "../sourceControl/GiteaHost.testkit.ts";
 import * as GitHubSourceControlProvider from "@t3tools/source-control-github/server/GitHubSourceControlProvider";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
@@ -73,6 +74,8 @@ import * as SqlitePersistence from "../persistence/Sqlite.ts";
 import * as ProjectSetupScriptRunner from "../project/ProjectSetupScriptRunner.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as GiteaSourceControlProvider from "../sourceControl/GiteaSourceControlProvider.ts";
+import { HttpClient, HttpClientResponse } from "effect/http";
 import * as GitManager from "./GitManager.ts";
 
 const encodeCliJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
@@ -787,6 +790,11 @@ function createDetectingSourceControlRegistry(input: {
           Layer.mock(GitLabCli.GitLabCli)(
             input.listMergeRequests ? { listMergeRequests: input.listMergeRequests } : {},
           ),
+          ServerSettings.layerTest(),
+          Layer.succeed(
+            HttpClient.HttpClient,
+            HttpClient.make(() => Effect.die("Unexpected HTTP request")),
+          ),
           ServerConfig.layerTest(process.cwd(), {
             prefix: "t3-git-manager-registry-test-",
           }).pipe(Layer.provide(NodeServices.layer)),
@@ -799,6 +807,7 @@ function createDetectingSourceControlRegistry(input: {
 }
 
 function makeManager(input?: {
+  sourceControl?: SourceControlProvider["Service"];
   ghScenario?: FakeGhScenario;
   sourceControlProvider?: SourceControlProvider["Service"];
   sourceControlRegistryLayer?: ReturnType<typeof createDetectingSourceControlRegistry>["layer"];
@@ -821,7 +830,7 @@ function makeManager(input?: {
     prefix: "t3-git-manager-test-",
   });
 
-  const layerServerSettings = ServerSettings.ServerSettingsService.layerTest(input?.serverSettings);
+  const layerServerSettings = ServerSettings.layerTest(input?.serverSettings);
 
   const layerVcsDriver = input?.gitConfigReads
     ? Layer.effect(
@@ -852,10 +861,10 @@ function makeManager(input?: {
     Layer.effect(
       SourceControlProviderRegistry.SourceControlProviderRegistry,
       Effect.gen(function* () {
-        // GitHub reads its PR template with git, which the fake gh cannot answer; give the fake
-        // the package's real reader over the test repository's git.
+        // Read the package's real PR template over the test repository's git.
         const git = yield* GitVcsDriver.GitVcsDriver;
         return (
+          input?.sourceControl ??
           input?.sourceControlProvider ?? {
             ...fakeGitHubProvider,
             readChangeRequestTemplate: ({ cwd, treeish }: { cwd: string; treeish: string }) =>
@@ -902,11 +911,15 @@ function makeManager(input?: {
     if (input?.seed !== undefined) {
       yield* input.seed.pipe(Effect.provideContext(stores), Effect.orDie);
     }
+    const dependencies = yield* Layer.build(layerManager);
     const manager = yield* GitManager.make.pipe(
-      Effect.provide(layerManager),
+      Effect.provideContext(dependencies),
       Effect.provideContext(stores),
     );
-    return { manager, ghCalls };
+    const settings = yield* ServerSettings.ServerSettingsService.pipe(
+      Effect.provideContext(dependencies),
+    );
+    return { manager, ghCalls, settings };
   });
 }
 
@@ -1030,6 +1043,167 @@ it.layer(layerGitManagerTest)("GitManager", (it) => {
       yield* TestClock.adjust("1 minute");
       expect(remoteReads).toBe(1);
       yield* Scope.close(passiveScope, Exit.void);
+    }),
+  );
+
+  it.effect.each(["origin", "gitea"])(
+    "shows a Gitea branch badge through %s and excludes same-owner fork collisions",
+    (remoteName) =>
+      Effect.gen(function* () {
+        const repoDir = yield* makeTempDir("t3code-gitea-manager-");
+        yield* initRepo(repoDir);
+        const remoteDir = yield* createBareRemote();
+        yield* runGit(repoDir, ["remote", "add", remoteName, remoteDir]);
+        yield* runGit(repoDir, ["push", "-u", remoteName, "main"]);
+        yield* runGit(repoDir, ["checkout", "-b", "feature/slash"]);
+        yield* runGit(repoDir, ["push", "-u", remoteName, "feature/slash"]);
+        const remoteUrl = "ssh://git@git.home:2222/brad/repo.git";
+        yield* runGit(repoDir, ["remote", "set-url", remoteName, remoteUrl]);
+        const instance = {
+          id: "home",
+          host: "git.home",
+          sshAliases: ["alias"],
+          sshPorts: [2222],
+          webOrigin: "http://git.home:3000",
+          apiOrigin: "http://git.home:3000",
+          token: "fake-token",
+        };
+        const pr = {
+          number: 91,
+          title: "Gitea PR",
+          html_url: "http://git.home:3000/brad/repo/pulls/91",
+          state: "closed",
+          merged: true,
+          updated_at: "2026-09-04T12:00:00Z",
+          base: { ref: "main", repo: { id: 1, full_name: "brad/repo" } },
+          head: { ref: "feature/slash", repo: { id: 1, full_name: "brad/repo" } },
+        };
+        const { provider } = yield* GiteaSourceControlProvider.make.pipe(
+          Effect.provide(
+            GiteaHost.layer.pipe(
+              Layer.provideMerge(ServerSettings.layerTest({ giteaInstances: [instance] })),
+            ),
+          ),
+          Effect.provideService(
+            HttpClient.HttpClient,
+            HttpClient.make((request) =>
+              Effect.succeed(
+                HttpClientResponse.fromWeb(
+                  request,
+                  new Response(
+                    JSON.stringify(
+                      request.url.includes("page=1&")
+                        ? [
+                            {
+                              ...pr,
+                              number: 90,
+                              head: { ...pr.head, repo: { id: 2, full_name: "brad/other-fork" } },
+                            },
+                            pr,
+                          ]
+                        : [],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        let configured = false;
+        const { manager, settings } = yield* makeManager({
+          serverSettings: { giteaInstances: [] },
+          sourceControl: {
+            ...provider,
+            get kind() {
+              return configured ? "gitea" : "unknown";
+            },
+            listChangeRequests: (input) =>
+              provider.listChangeRequests({
+                ...input,
+                context: {
+                  provider: { kind: "gitea", name: "Gitea", baseUrl: instance.webOrigin },
+                  remoteName,
+                  remoteUrl,
+                },
+              }),
+          },
+        });
+        expect(
+          (yield* manager.remoteStatus({ cwd: repoDir }, { refreshUpstream: false }))?.pr,
+        ).toBeNull();
+        yield* settings.updateSettings({ giteaInstances: [instance] });
+        configured = true;
+        const local = yield* manager.localStatus({ cwd: repoDir });
+        expect(local.sourceControlProvider).toEqual({
+          kind: "gitea",
+          name: "Gitea",
+          baseUrl: instance.webOrigin,
+        });
+        const remote = yield* manager.remoteStatus(
+          { cwd: repoDir },
+          { refreshUpstream: false, refreshMissingPullRequest: true },
+        );
+        expect(remote?.pr).toMatchObject({
+          number: 91,
+          state: "merged",
+          url: pr.html_url,
+          updatedAt: "2026-09-04T12:00:00.000Z",
+        });
+      }),
+  );
+
+  it.effect("refreshes an unsupported badge when a custom GitHub host gains a saved token", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-github-routing-");
+      yield* initRepo(repoDir);
+      const remoteDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "main"]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/token"]);
+      yield* runGit(repoDir, ["push", "-u", "origin", "feature/token"]);
+      yield* configureVisibleRemoteUrlWithLocalRewrite(
+        repoDir,
+        "origin",
+        "git@code.example.test:team/repo.git",
+        remoteDir,
+      );
+      const { service, ghCalls } = createGitHubProviderWithFakeGh({
+        prListSequence: [
+          JSON.stringify([
+            {
+              number: 32,
+              title: "Enterprise PR",
+              url: "https://code.example.test/team/repo/pull/32",
+              baseRefName: "main",
+              headRefName: "feature/token",
+              state: "OPEN",
+              isDraft: false,
+            },
+          ]),
+        ],
+      });
+      let configured = false;
+      const { manager, settings } = yield* makeManager({
+        sourceControl: {
+          ...service,
+          get kind() {
+            return configured ? "github" : "unknown";
+          },
+        },
+      });
+      const options = { refreshUpstream: false, refreshMissingPullRequest: true };
+      expect((yield* manager.remoteStatus({ cwd: repoDir }, options))?.pr).toBeNull();
+      expect((yield* manager.remoteStatus({ cwd: repoDir }, options))?.pr).toBeNull();
+      expect(ghCalls).toEqual([]);
+      yield* settings.updateSettings({
+        github: { tokens: { "code.example.test": "new-secret-token" } },
+      });
+      configured = true;
+      yield* TestClock.adjust("6 seconds");
+      expect((yield* manager.remoteStatus({ cwd: repoDir }, options))?.pr).toMatchObject({
+        number: 32,
+      });
+      expect(ghCalls.filter((call) => call.startsWith("pr list"))).toHaveLength(1);
     }),
   );
 
