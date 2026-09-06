@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "c3137a932425afbd70f185f149a4aea687f61834",
+  "prev": "38529e0d97c3832870438a0fd41686863debcf24",
   "head": "42ead5386028896fa2fa40aaa916ddb54de86884",
   "applied": [
     "fork-build-ci-compat",
@@ -18,7 +18,7 @@
     "old-fork-provider-turn-reservation",
     "old-fork-provider-runtime-recovery",
     "old-fork-provider-observability",
-    "fork-thread-lifecycle-recovery",
+    "old-fork-thread-lifecycle-recovery",
     "fork-thread-goals",
     "fork-thread-transfer",
     "fork-thread-fork",
@@ -131,9 +131,6 @@
     "fork-thread-goals": {
       "oid": "dca6703e1add75b87d704c40158964107c2ac359"
     },
-    "fork-thread-lifecycle-recovery": {
-      "oid": "4f31efcf94301d425bd43379d3cc36adca551c49"
-    },
     "fork-thread-transfer": {
       "oid": "f4949dd1649a03cd89212b38041b37aefaf56643"
     },
@@ -175,6 +172,9 @@
     },
     "old-fork-t3-thread-operator-cli": {
       "oid": "02bc8c7e090525b487e58837ab1926ba52ed7042"
+    },
+    "old-fork-thread-lifecycle-recovery": {
+      "oid": "4f31efcf94301d425bd43379d3cc36adca551c49"
     }
   }
 }
