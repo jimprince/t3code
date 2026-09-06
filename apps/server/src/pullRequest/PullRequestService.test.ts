@@ -1911,6 +1911,62 @@ it.effect("routes a hosted reference to another repository through a project on 
   }),
 );
 
+it.effect("routes a linked Gitea PR through its target project instead of the thread project", () =>
+  Effect.gen(function* () {
+    const seen: Array<{ cwd: string; repository: string; host: string }> = [];
+    const service = yield* makeService({
+      projects: [
+        project({ id: "thread", title: "T3", workspaceRoot: "/t3", repository: "t3tools/t3code" }),
+        project({
+          id: "target",
+          title: "CI repair bot",
+          workspaceRoot: "/ci-repair-bot",
+          repository: "brad/ci-repair-bot",
+          provider: "gitea",
+          host: "git.bradleyprince.com",
+        }),
+      ],
+      providers: [
+        fakeProvider("github"),
+        fakeProvider("gitea", {
+          getChangeRequestSummary: (input) =>
+            Effect.sync(() => {
+              seen.push({ cwd: input.cwd, repository: input.repository, host: input.host });
+              return {
+                ...changeRequest(75, "2026-09-19T12:00:00Z"),
+                url: "https://git.bradleyprince.com/brad/ci-repair-bot/pulls/75",
+                state: "merged" as const,
+                mergedAt: "2026-09-19T12:00:00Z",
+              };
+            }),
+        }),
+      ],
+    });
+
+    const summary = yield* service.summary(
+      {
+        projectId: "thread" as ProjectId,
+        host: "git.bradleyprince.com",
+        repository: "brad/ci-repair-bot",
+        number: 75,
+      },
+      { recoverTransientFailure: false },
+    );
+
+    assert.deepStrictEqual(seen, [
+      {
+        cwd: "/ci-repair-bot",
+        repository: "brad/ci-repair-bot",
+        host: "git.bradleyprince.com",
+      },
+    ]);
+    assert.strictEqual(summary.provider, "gitea");
+    assert.strictEqual(summary.projectId, "target");
+    assert.strictEqual(summary.url, "https://git.bradleyprince.com/brad/ci-repair-bot/pulls/75");
+    assert.strictEqual(summary.state, "merged");
+  }),
+);
+
 it.effect("routes Azure reads and writes through the requested organization's checkout", () =>
   Effect.gen(function* () {
     const seen: string[] = [];
