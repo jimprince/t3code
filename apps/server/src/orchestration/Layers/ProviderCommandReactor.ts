@@ -57,6 +57,7 @@ import {
 } from "../../serverSettings.ts";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { appendFileAttachmentPromptLines } from "../fileAttachmentPrompt.ts";
 import {
   buildTransferredThreadProviderInput,
   findPendingTransferredThreadHandoff,
