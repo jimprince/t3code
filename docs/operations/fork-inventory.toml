@@ -732,3 +732,18 @@ id = "upstream-source-control-provider-contract"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Implement explicit unavailable stubs for Gitea operations this patch does not yet own, and provide environment settings to the title-evaluation registry layer, satisfying upstream's complete provider service contract without stealing later PR-action behavior."
+
+[[patch]]
+name = "fork-gitea-pr-actions"
+subject = "feat(source-control): create and check out Gitea pull requests"
+class = "upstream-bound"
+purpose = "Create and resolve Gitea pull requests, check out retained PR heads, retrieve fork clone URLs and default branches, and recognize Gitea templates and pasted URLs."
+retire_when = "Upstream supports equivalent configured-instance Gitea create and checkout flows."
+depends_on = ["fork-gitea-connections"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-gitea-pr-actions. Numeric linked-PR targets require a known provider on the thread project host; cross-host or unknown-provider targets require a canonical URL instead of inventing a GitHub route."
+[[patch.decision]]
+id = "upstream-forgejo-reference-parser"
+date = "2026-09-16"
+decided = "retire"
+rationale = "Retire the duplicate Gitea URL regex because upstream's generalized Forgejo pulls URL parser already accepts configured Gitea hosts and nested repository paths. Retain Gitea action tests against the shared parser."
