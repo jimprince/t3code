@@ -79,6 +79,11 @@ export interface OrchestrationEngineShape {
    * Stream persisted domain events in dispatch order.
    *
    * This is a hot runtime stream (new events only), not a historical replay.
+   *
+   * Subscription is lazy: it registers when the returned stream is *run*. For
+   * the snapshot→live handoff use {@link subscribeDomainEvents} instead, which
+   * registers the subscription eagerly so no event is lost between reading a
+   * snapshot and attaching to the live feed.
    */
   readonly streamDomainEvents: Stream.Stream<OrchestrationEvent>;
 

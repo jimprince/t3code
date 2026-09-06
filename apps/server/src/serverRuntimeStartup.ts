@@ -3,6 +3,7 @@ import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER_INTERACTION_MODE,
   DEFAULT_SERVER_SETTINGS,
+  type ExecutionEnvironmentDescriptor,
   type ModelSelection,
   type OrchestrationProjectShell,
   ProjectId,
@@ -22,6 +23,8 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
+import * as NodeOS from "node:os";
+import * as NodeCrypto from "node:crypto";
 import * as Queue from "effect/Queue";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
@@ -44,6 +47,7 @@ import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReape
 import { forkParked } from "./serverActivation.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
+import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import {
   formatHeadlessServeOutput,
   formatHostForUrl,
@@ -82,6 +86,14 @@ export class ServerRuntimeStartup extends Context.Service<
     ) => Effect.Effect<A, E | ServerRuntimeStartupError>;
   }
 >()("t3/serverRuntimeStartup") {}
+
+export function applyT3EnvironmentMetadataToProcessEnv(
+  environment: ExecutionEnvironmentDescriptor,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  env.T3_ENVIRONMENT_ID = String(environment.environmentId);
+  env.T3_ENVIRONMENT_NAME = environment.label;
+}
 
 interface QueuedCommand {
   readonly run: Effect.Effect<void, never>;
@@ -881,6 +893,7 @@ export const make = (options?: StartupOptions) =>
 
       const welcomeBase = yield* resolveWelcomeBase;
       const environment = yield* serverEnvironment.getDescriptor;
+      applyT3EnvironmentMetadataToProcessEnv(environment);
       yield* Effect.logDebug("startup phase: preparing welcome payload");
 
       if (serverConfig.autoBootstrapProjectFromCwd) {
