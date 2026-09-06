@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Shared by CI, release fallback, and complete-stack verification. Install and
+# platform build prerequisites belong to the caller; failures are never waived.
+phase="${1:-all}"
+if [[ $# -gt 0 ]]; then shift; fi
+case "$phase" in
+  check)
+    vp run --filter @t3tools/desktop ensure:electron
+    vp run knip:check
+    vp run --filter @t3tools/oxlint-plugin-t3code build
+    vp check
+    vp run typecheck
+    ;;
+  test-other)
+    vp run --filter @t3tools/desktop ensure:electron
+    vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' test
+    ;;
+  test-server)
+    vp run --filter t3 test "$@"
+    ;;
+  test)
+    "$0" test-other
+    "$0" test-server
+    ;;
+  all)
+    "$0" check
+    "$0" test
+    ;;
+  *) echo "Unknown verification phase: $phase" >&2; exit 2 ;;
+esac
