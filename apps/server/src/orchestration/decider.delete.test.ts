@@ -137,6 +137,124 @@ function normalizeDeleteEvent(event: PlannedEvent | ReadonlyArray<PlannedEvent>)
 }
 
 it.layer(NodeServices.layer)("decider deletion flows", (it) => {
+  it.effect("rejects deletion and workspace-root mutation for a chat project", () =>
+    Effect.gen(function* () {
+      const readModel = yield* seedReadModel;
+      const chatReadModel = {
+        ...readModel,
+        projects: readModel.projects.map((project) => ({ ...project, kind: "chat" as const })),
+      };
+
+      const deleteError = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: {
+            type: "project.delete",
+            commandId: asCommandId("cmd-chat-delete"),
+            projectId: asProjectId("project-delete"),
+            force: true,
+          },
+          readModel: chatReadModel,
+        }),
+      );
+      expect(deleteError.message).toContain("server-owned and cannot be deleted");
+
+      const workspaceMutationError = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: {
+            type: "project.meta.update",
+            commandId: asCommandId("cmd-chat-workspace-mutation"),
+            projectId: asProjectId("project-delete"),
+            workspaceRoot: "/tmp/attacker-controlled-workspace",
+          },
+          readModel: chatReadModel,
+        }),
+      );
+      expect(workspaceMutationError.message).toContain("server-owned metadata");
+
+      const titleMutationError = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: {
+            type: "project.meta.update",
+            commandId: asCommandId("cmd-chat-title-mutation"),
+            projectId: asProjectId("project-delete"),
+            title: "Not Chat",
+          },
+          readModel: chatReadModel,
+        }),
+      );
+      expect(titleMutationError.message).toContain("server-owned metadata");
+
+      const modelMutationError = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: {
+            type: "project.meta.update",
+            commandId: asCommandId("cmd-chat-model-mutation"),
+            projectId: asProjectId("project-delete"),
+            defaultModelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5.6-terra",
+            },
+          },
+          readModel: chatReadModel,
+        }),
+      );
+      expect(modelMutationError.message).toContain("server-owned metadata");
+
+      const importError = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: {
+            type: "thread.import",
+            commandId: asCommandId("cmd-chat-import"),
+            projectId: asProjectId("project-delete"),
+            threadId: asThreadId("thread-chat-import"),
+            thread: {} as never,
+            branch: null,
+            worktreePath: null,
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+          readModel: chatReadModel,
+        }),
+      );
+      expect(importError.message).toContain("cannot be imported into chat project");
+
+      const createWorktreeError = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: {
+            type: "thread.create",
+            commandId: asCommandId("cmd-chat-thread-create-worktree"),
+            projectId: asProjectId("project-delete"),
+            threadId: asThreadId("thread-chat-worktree"),
+            title: "Unsafe chat thread",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5.6-terra",
+            },
+            interactionMode: "default",
+            runtimeMode: "full-access",
+            branch: null,
+            worktreePath: "/tmp/untrusted",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          },
+          readModel: chatReadModel,
+        }),
+      );
+      expect(createWorktreeError.message).toContain("cannot override its server workspace");
+
+      const updateWorktreeError = yield* Effect.flip(
+        decideOrchestrationCommand({
+          command: {
+            type: "thread.meta.update",
+            commandId: asCommandId("cmd-chat-thread-update-worktree"),
+            threadId: asThreadId("thread-delete-1"),
+            worktreePath: "/tmp/untrusted",
+          },
+          readModel: chatReadModel,
+        }),
+      );
+      expect(updateWorktreeError.message).toContain("cannot override its server workspace");
+    }),
+  );
+
   it.effect("rejects deleting a non-empty project without force", () =>
     Effect.gen(function* () {
       const readModel = yield* seedReadModel;
