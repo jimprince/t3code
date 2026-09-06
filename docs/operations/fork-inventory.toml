@@ -321,3 +321,84 @@ retire_when = "Upstream supports configured Gitea instances, secret-store tokens
 depends_on = ["fork-unsupported-pr-hosts"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-gitea-instance-pr-badges. [fork-gitea-instance-pr-badges] PR lookup and unsupported-host cache keys include non-secret Gitea routing configuration, so adding or removing a configured host takes effect without waiting out the negative cache. Tokens never enter these keys. PR head identity is compared with the hosting provider’s selected target remote, including repositories whose sole remote is named gitea; a remote alias alone does not imply a cross-repository PR. Terminal Gitea PRs whose deleted head becomes refs/pull/N/head retain branch identity through head.label, with repository checks preserved."
+
+[[patch]]
+name = "fork-gitea-pr-actions"
+subject = "feat(source-control): create and check out Gitea pull requests"
+class = "upstream-bound"
+purpose = "Create and resolve Gitea pull requests, check out retained PR heads, retrieve fork clone URLs and default branches, and recognize Gitea templates and pasted URLs."
+retire_when = "Upstream supports equivalent configured-instance Gitea create and checkout flows."
+depends_on = ["fork-gitea-connections"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-gitea-pr-actions."
+
+[[patch]]
+name = "fork-pr-project-exclusions"
+subject = "feat(web): hide projects from the pull request list"
+class = "product"
+purpose = "Let operators keep whole projects out of the aggregated Pull Requests view, persistently and per environment, without giving up the single-project scope or any other filter."
+retire_when = "Upstream ships equivalent multi-project exclusion in the Pull Requests view, with per-environment project identity and query-level narrowing."
+depends_on = ["fork-pr-dismissal"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-pr-project-exclusions. [fork-pr-project-exclusions] Hidden projects are keyed by pullRequestProjectKey (environment plus project id) and stored under t3.pullRequests.excludedProjects:<environmentId>, so one server's id can never hide another server's project. The exclusion is applied AFTER assignProjectsToEnvironments has settled which server lists each repository: dropping a hidden project before that decision would hand the repository to another server holding a copy and the rows would come straight back. Rows are also filtered locally, because an answer already in flight, or a hiding made before the workspace reported its projects, still arrives. A single-project scope wins over hiding, so a project asked for by name is answered whole."
+
+[[patch]]
+name = "fork-headless-delivery"
+subject = "feat(server): deliver and update the headless Linux server"
+class = "product"
+purpose = "Build the Linux headless artifact and provide service-managed update discovery, installation, health checks, restart, and rollback with an authenticated immediate update check."
+retire_when = "Upstream or maintained shared tooling provides an equivalent headless artifact and update workflow."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-headless-updates."
+
+[[patch]]
+name = "fork-desktop-delivery"
+subject = "feat(desktop): deliver the fork desktop app with its own identity and updates"
+class = "product"
+purpose = "Ship fork desktop identity, flavors, code signing, isolated app data, updater channels, packaging, and desktop lifecycle integrations such as deep links."
+retire_when = "Upstream or maintained shared tooling provides equivalent fork identity, signing, and update-channel handling."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-desktop-distribution."
+
+[[patch]]
+name = "fork-mobile-delivery"
+subject = "feat(mobile): add EAS delivery lanes"
+class = "product"
+purpose = "Maintain fork mobile identity, EAS routing, widget identifiers, runtime policy, and delivery documentation."
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Removed the retired mobile-track controller, resolver and service template after caller checks (including no installed controller or container on the dev VM). Mobile project grouping/sorting is owned by project selection."
+
+[[patch]]
+name = "fork-release-publication"
+subject = "ci: publish fork releases with version stamping and notes"
+class = "product"
+purpose = "Build and publish the fork's desktop, headless, updater, and mobile release lanes with tag-only version stamping, bounded CI evidence reuse, and rendered release notes."
+retire_when = "Upstream or maintained shared tooling provides equivalent release publication for the fork."
+depends_on = [
+  "fork-desktop-delivery",
+  "fork-mobile-delivery",
+  "fork-headless-delivery",
+  "fork-build-ci-compat",
+]
+roles = ["release-workflow-owner"]
+note = "Release notes compare stable authored change IDs between actual released tags, list fork features/fixes/removals before upstream changes, and preserve popup order. Published entries remain history; later fixes get new IDs. Bun and strict entry validation are configured in publication; Knip recognizes the shell-launched renderer entry point."
+[[patch.decision]]
+id = "release-version-stamps"
+date = "2026-07-28"
+decided = "narrow"
+rationale = "Committed package versions are redundant because release automation derives them from the tag. Always take upstream versions during replay and keep generated stamps out of main."
+[[patch.decision]]
+id = "stamp-free-release-tags"
+date = "2026-07-30"
+decided = "tag-stamped-child-main-unstamped-parent"
+rationale = "Both automatic release writers call prepare-release-tag, tag its prepared child, and keep main at the exact unstamped stack tip. Release consumes that bound tag and never finalizes versions onto main."
+standing_policy = "Generated version stamps and release lockfile changes are tag-only."
+[[patch.decision]]
+id = "reuse-exact-source-ci-tests"
+date = "2026-09-05"
+decided = "narrow"
+rationale = "Reuse successful main-push CI tests only for the exact release commit or its verified version-only direct parent. Require all test shards, check and release smoke jobs from that attempt; bound waiting and fall back to full release tests without trustworthy evidence. Reuse formatting, lint, Knip, types and tests only under that same exact-source evidence. Always verify packaged artifacts; missing evidence runs the complete shared source gate."
