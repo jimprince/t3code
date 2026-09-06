@@ -2566,6 +2566,24 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     );
   };
 
+  const forkThread: NonNullable<CodexAdapterShape["forkThread"]> = (threadId, input) =>
+    requireSession(threadId).pipe(
+      Effect.flatMap((session) => session.runtime.forkThread(input)),
+      Effect.mapError((cause) =>
+        cause._tag === "ProviderAdapterSessionNotFoundError"
+          ? cause
+          : mapCodexRuntimeError(threadId, "thread/fork", cause),
+      ),
+      Effect.map((forked) =>
+        forked === null
+          ? null
+          : {
+              resumeCursor: { threadId: forked.threadId },
+              turnCount: forked.turnCount,
+            },
+      ),
+    );
+
   const uploadFeedback: CodexAdapterShape["uploadFeedback"] = (input) =>
     requireSession(input.threadId).pipe(
       Effect.flatMap((session) => session.runtime.uploadFeedback(input.reason)),
@@ -2666,6 +2684,7 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
     interruptTurn,
     readThread,
     rollbackThread,
+    forkThread,
     uploadFeedback,
     respondToRequest,
     respondToUserInput,
