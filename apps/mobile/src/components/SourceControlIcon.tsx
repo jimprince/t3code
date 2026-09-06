@@ -3,7 +3,13 @@ import { withUniwind } from "uniwind";
 
 const ThemedSvg = withUniwind(Svg);
 
-export type SourceControlIconKind = "github" | "gitlab" | "forgejo" | "bitbucket" | "azure-devops";
+export type SourceControlIconKind =
+  | "github"
+  | "gitlab"
+  | "forgejo"
+  | "gitea"
+  | "bitbucket"
+  | "azure-devops";
 
 export function SourceControlIcon(props: {
   readonly kind: SourceControlIconKind;
@@ -25,6 +31,19 @@ export function SourceControlIcon(props: {
             <Circle cx={142} cy={88} r={18} stroke="#d40000" strokeWidth={15} />
             <Circle cx={58} cy={180} r={18} stroke="#d40000" strokeWidth={15} />
           </G>
+        </Svg>
+      );
+    case "gitea":
+      return (
+        <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+          <Path d="M5 5h15v8a7 7 0 0 1-7 7h-1a7 7 0 0 1-7-7V5Z" fill="#609926" />
+          <Path d="M5 7H3a2 2 0 0 0-2 2v2a4 4 0 0 0 4 4" stroke="#609926" strokeWidth="2" />
+          <Path
+            d="m11 8 5 5-4 4-5-5 4-4Zm0 0v5h3"
+            stroke="white"
+            strokeWidth="1.5"
+            strokeLinejoin="round"
+          />
         </Svg>
       );
     case "github":
