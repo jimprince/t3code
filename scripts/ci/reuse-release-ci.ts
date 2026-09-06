@@ -70,7 +70,7 @@ export async function reuseReleaseCI(options: {
     const source = releaseCISource(options.ref, options.version, options.cwd);
     const query = options.query ?? github;
     const sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
-    const deadline = Date.now() + (options.maxWaitMs ?? 300_000);
+    const deadline = Date.now() + (options.maxWaitMs ?? 900_000);
     for (;;) {
       const response = query(
         `repos/${options.repository}/actions/workflows/ci.yml/runs?head_sha=${source}&event=push&branch=main&per_page=1`,
