@@ -4,6 +4,7 @@ import {
   type AssetCreateUrlResult,
   type ChatFileAttachment,
   type EnvironmentId,
+  type ChatAttachment,
   isProviderDriverKind,
   ProjectId,
   type MessageId,
@@ -641,11 +642,65 @@ export function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
+export async function hydrateForkedMessageAttachments(input: {
+  readonly attachments: ReadonlyArray<ChatAttachment>;
+  readonly assetUrlById: ReadonlyMap<string, string>;
+  readonly resolveAssetUrl?: (url: string) => string;
+  readonly fetchAsset?: (url: string) => Promise<{ readonly ok: boolean; blob(): Promise<Blob> }>;
+  readonly createObjectUrl?: (blob: Blob) => string;
+}): Promise<{
+  readonly images: ComposerImageAttachment[];
+  readonly unavailableCount: number;
+}> {
+  const fetchAsset = input.fetchAsset ?? fetch;
+  const resolveAssetUrl = input.resolveAssetUrl ?? ((url: string) => url);
+  const createObjectUrl = input.createObjectUrl ?? URL.createObjectURL;
+  const images: ComposerImageAttachment[] = [];
+  let unavailableCount = 0;
+
+  for (const attachment of input.attachments) {
+    const assetUrl = input.assetUrlById.get(attachment.id);
+    if (!assetUrl) {
+      unavailableCount += 1;
+      continue;
+    }
+    try {
+      const response = await fetchAsset(resolveAssetUrl(assetUrl));
+      if (!response.ok) {
+        unavailableCount += 1;
+        continue;
+      }
+      const blob = await response.blob();
+      const file = new File([blob], attachment.name, { type: attachment.mimeType });
+      images.push({
+        type: "image",
+        id: attachment.id,
+        name: attachment.name,
+        mimeType: attachment.mimeType,
+        sizeBytes: attachment.sizeBytes,
+        previewUrl: createObjectUrl(blob),
+        file,
+      });
+    } catch {
+      unavailableCount += 1;
+    }
+  }
+
+  return { images, unavailableCount };
+}
+
 export function resolveSendEnvMode(input: {
   requestedEnvMode: DraftThreadEnvMode;
   isGitRepo: boolean;
+  hasWorktreeBaseRef: boolean;
 }): DraftThreadEnvMode {
-  return input.isGitRepo ? input.requestedEnvMode : "local";
+  if (!input.isGitRepo) {
+    return "local";
+  }
+  if (input.requestedEnvMode === "worktree" && !input.hasWorktreeBaseRef) {
+    return "local";
+  }
+  return input.requestedEnvMode;
 }
 
 export function resolveBackgroundDraftWorkspaceOptions(input: {
