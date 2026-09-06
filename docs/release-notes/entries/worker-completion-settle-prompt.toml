@@ -1,0 +1,4 @@
+id = "worker-completion-settle-prompt"
+category = "feature"
+functionality = "t3-thread notifications"
+text = "When a worker thread completes, its supervising thread is asked to decide whether the worker is finished and given the exact command to settle it."
