@@ -31,6 +31,10 @@ disconnect an otherwise healthy conversation.
 
 ## Pair over a LAN or private network
 
+For LAN/private hosts, including Tailscale `100.64.0.0/10` addresses, the app
+treats a bare host such as `192.168.x.y` or `100.64.x.y` as the local T3
+backend at `http://<host>:3773`.
+
 Use direct pairing when the other device can reach the host's network address.
 
 On a desktop host, open **Settings → Connections**, enable **Network access**,
