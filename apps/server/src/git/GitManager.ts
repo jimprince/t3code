@@ -135,6 +135,10 @@ const PR_LOOKUP_CACHE_TTL = Duration.seconds(60);
 const PR_LOOKUP_FAILURE_BASE_TTL = Duration.seconds(20);
 const PR_LOOKUP_FAILURE_MAX_TTL = Duration.minutes(15);
 const PR_LOOKUP_CACHE_CAPACITY = 2_048;
+// How long a repository whose remote belongs to no implemented host stays
+// skipped. Long enough that background polling never re-probes the host, short
+// enough that repointing the remote at GitHub or GitLab recovers on its own.
+const UNSUPPORTED_PR_HOST_CACHE_TTL = Duration.minutes(10);
 const isSourceControlProviderError = Schema.is(SourceControlProviderError);
 
 /**
@@ -974,15 +978,56 @@ export const make = Effect.gen(function* () {
       remoteName?: string | null;
     },
   ) =>
-    [
-      cwd,
-      details.branch,
-      details.upstreamRef ?? "",
-      details.defaultBranch ?? "",
-      details.localBranchExists === false ? "0" : "1",
-      details.remoteName ?? "",
-      String(prLookupEpoch(cwd)),
-    ].join("\u0000");
+    giteaRoutingKey.pipe(
+      Effect.map((routingKey) =>
+        [
+          cwd,
+          details.branch,
+          details.upstreamRef ?? "",
+          details.defaultBranch ?? "",
+          details.localBranchExists === false ? "0" : "1",
+          details.remoteName ?? "",
+          String(prLookupEpoch(cwd)),
+          routingKey,
+        ].join("\u0000"),
+      ),
+    );
+  // A remote on a host no provider implements (an unconfigured host, a bare SSH remote) can
+  // never answer a change request lookup, and asking costs a provider probe
+  // plus a guaranteed-failing API call whose failure the poller then retries.
+  // Detect it once and remember the verdict per repository, so an unsupported
+  // remote costs one probe and one diagnostic per window rather than one per
+  // poll. The epoch is part of the key, so the same explicit refresh that
+  // bypasses the PR lookup cache also re-checks the host.
+  const unsupportedPrHostCacheKey = (cwd: string) =>
+    giteaRoutingKey.pipe(
+      Effect.map((routingKey) => [cwd, String(prLookupEpoch(cwd)), routingKey].join("\u0000")),
+    );
+  const unsupportedPrHostCache = yield* Cache.makeWith(
+    (key: string) => {
+      const [cwd = ""] = key.split("\u0000");
+      return sourceControlProvider(cwd).pipe(
+        Effect.flatMap((provider) =>
+          provider.kind !== "unknown"
+            ? Effect.succeed(false)
+            : Effect.logWarning(
+                "No hosting provider handles this remote; skipping PR lookup.",
+              ).pipe(Effect.annotateLogs({ operation: "prHostSupport", cwd }), Effect.as(true)),
+        ),
+      );
+    },
+    {
+      capacity: PR_LOOKUP_CACHE_CAPACITY,
+      timeToLive: (exit) => (Exit.isSuccess(exit) ? UNSUPPORTED_PR_HOST_CACHE_TTL : Duration.zero),
+    },
+  );
+  // A probe that could not answer reads as "supported": the lookup goes ahead
+  // and fails the way it does today rather than silently dropping the badge.
+  const isUnsupportedPrHost = (cwd: string) =>
+    unsupportedPrHostCacheKey(cwd).pipe(
+      Effect.flatMap((key) => Cache.get(unsupportedPrHostCache, key)),
+      Effect.orElseSucceed(() => false),
+    );
   // Consecutive failures per cache key, so a branch that keeps failing waits
   // longer before the next attempt. Cleared as soon as a lookup succeeds.
   const prLookupFailureStreakByKey = new Map<string, number>();
@@ -1020,6 +1065,12 @@ export const make = Effect.gen(function* () {
       return Effect.gen(function* () {
         const { headContext, lookup } = yield* resolveLookupHeadContext(cwd, details);
         if (!lookup) {
+          return { latest: null, headContext };
+        }
+        // No implemented host means no change request to find, so skip before
+        // the guaranteed-failing API call. Cached for longer than this entry,
+        // so a poll that re-enters here does not re-probe the host.
+        if (yield* isUnsupportedPrHost(cwd)) {
           return { latest: null, headContext };
         }
         // Only skip when the branch is untracked as well: anything carrying an
