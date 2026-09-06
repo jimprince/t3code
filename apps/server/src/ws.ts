@@ -1298,70 +1298,10 @@ const makeWsRpcLayer = (
             ORCHESTRATION_WS_METHODS.dispatchCommand,
             Effect.gen(function* () {
               const normalizedCommand = yield* normalizeDispatchCommand(command);
-              // Archive removes the thread from the client, so this transport
-              // closes its session and terminals after the command lands.
-              // Settlement cleanup is driven by thread.settled events in the
-              // provider reactor, including settlements that have no client.
-              const archiveCommand =
-                normalizedCommand.type === "thread.archive" ? normalizedCommand : undefined;
-              // Best-effort on purpose: the user's archive must not
-              // fail because this cleanup read blipped, so a failed read
-              // logs and skips the stop instead of propagating.
-              const shouldStopSessionAfterCommand = archiveCommand
-                ? yield* projectionSnapshotQuery.getThreadShellById(archiveCommand.threadId).pipe(
-                    Effect.map(
-                      Option.match({
-                        onNone: () => false,
-                        onSome: (thread) =>
-                          thread.session !== null && thread.session.status !== "stopped",
-                      }),
-                    ),
-                    Effect.catchCause((cause) =>
-                      Effect.logWarning(
-                        "failed to read thread session state before session-stop check",
-                        { threadId: archiveCommand.threadId, cause },
-                      ).pipe(Effect.as(false)),
-                    ),
-                  )
-                : false;
               const result = yield* dispatchNormalizedCommand(normalizedCommand).pipe(
                 Effect.tapError(() => cleanupFailedUploadedAttachments(command, normalizedCommand)),
               );
               yield* recordClientCommandAnalytics(normalizedCommand);
-              if (archiveCommand) {
-                if (shouldStopSessionAfterCommand) {
-                  yield* Effect.gen(function* () {
-                    const stopCommand = yield* normalizeDispatchCommand({
-                      type: "thread.session.stop",
-                      commandId: CommandId.make(
-                        `session-stop-for-archive:${archiveCommand.commandId}`,
-                      ),
-                      threadId: archiveCommand.threadId,
-                      createdAt: yield* nowIso,
-                    });
-
-                    yield* dispatchNormalizedCommand(stopCommand);
-                  }).pipe(
-                    Effect.catchCause((cause) =>
-                      Effect.logWarning("failed to stop provider session during archive", {
-                        threadId: archiveCommand.threadId,
-                        cause,
-                      }),
-                    ),
-                  );
-                }
-
-                // Archive removes the thread from view, so its user-opened
-                // terminal panes close with it.
-                yield* terminalManager.close({ threadId: archiveCommand.threadId }).pipe(
-                  Effect.catch((error) =>
-                    Effect.logWarning("failed to close thread terminals after archive", {
-                      threadId: archiveCommand.threadId,
-                      error: error.message,
-                    }),
-                  ),
-                );
-              }
               return result;
             }).pipe(
               Effect.mapError((cause) =>
@@ -1605,14 +1545,19 @@ const makeWsRpcLayer = (
                 event.aggregateId === input.threadId &&
                 isThreadDetailEvent(event);
 
-              const liveStream = orchestrationEngine.streamDomainEvents.pipe(
+              // Establish the PubSub subscription before either the replay or
+              // snapshot read. This is deliberately eager: streamDomainEvents
+              // subscribes only when the stream starts running, which leaves a
+              // race where a committed event can fall between the read and the
+              // live subscription.
+              const liveEvents = yield* orchestrationEngine.subscribeDomainEvents;
+              const liveStream = liveEvents.pipe(
                 Stream.filter(isThisThreadDetailEvent),
                 Stream.map((event) => ({
                   kind: "event" as const,
                   event,
                 })),
               );
-
               // Attach live delivery before reading either replay or snapshot state.
               // Otherwise an event published while the snapshot is loading is lost.
               const liveBuffer = yield* makeThreadLiveEventCoalescer();
@@ -1707,7 +1652,7 @@ const makeWsRpcLayer = (
                 // Oversized replays and invalid cursors also use the snapshot path.
               }
 
-              const snapshot = yield* projectionSnapshotQuery
+              const threadDetailSnapshot = yield* projectionSnapshotQuery
                 .getThreadDetailSnapshot(
                   input.threadId,
                   // Windowing the fallback snapshot is opt-in per subscription:
@@ -1726,7 +1671,7 @@ const makeWsRpcLayer = (
                   ),
                 );
 
-              if (Option.isNone(snapshot)) {
+              if (Option.isNone(threadDetailSnapshot)) {
                 // The recreated thread can already be deleted. Preserve the
                 // bounded replay and shell removal instead of retrying a
                 // snapshot that cannot exist. Oversized ranges still fail.
@@ -1739,18 +1684,28 @@ const makeWsRpcLayer = (
                 });
               }
 
+              const { snapshotSequence } = threadDetailSnapshot.value;
+              // Events at or below the atomic snapshot's sequence are already
+              // reflected in the snapshot. Dropping them is required because
+              // streaming text deltas are not idempotent.
+              const bufferedAfterSnapshot = bufferedLiveStream.pipe(
+                Stream.filter(
+                  (item) => item.kind !== "event" || item.event.sequence > snapshotSequence,
+                ),
+              );
+
               const afterSnapshot =
                 input.requestCompletionMarker === true
                   ? Stream.unwrap(
                       liveBuffer
                         .offer({ kind: "synchronized" as const })
-                        .pipe(Effect.as(bufferedLiveStream)),
+                        .pipe(Effect.as(bufferedAfterSnapshot)),
                     )
-                  : bufferedLiveStream;
+                  : bufferedAfterSnapshot;
               return Stream.concat(
                 Stream.make({
                   kind: "snapshot" as const,
-                  snapshot: projectThreadDetailSnapshot(snapshot.value),
+                  snapshot: projectThreadDetailSnapshot(threadDetailSnapshot.value),
                 }),
                 afterSnapshot,
               );
