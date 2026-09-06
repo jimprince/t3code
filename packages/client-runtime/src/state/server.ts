@@ -1037,6 +1037,9 @@ export function createServerEnvironmentAtoms<R, E>(
       refreshTrigger: ({ environmentId }) => usagePricesAtom(environmentId),
     }),
 
+    recoveryPreview: createEnvironmentRpcQueryAtomFamily(runtime, {
+      label: "environment-data:server:recovery-preview",
+      tag: WS_METHODS.serverPreviewRecovery,
     }),
 
     configProjection,
@@ -1108,6 +1111,11 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         key: ({ environmentId }) => environmentId,
       },
+    }),
+
+    executeRecovery: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:execute-recovery",
+      tag: WS_METHODS.serverExecuteRecovery,
     }),
   };
 }
