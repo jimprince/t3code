@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7740062e94c7e9abb7f8313ec4c4299c03867239",
-  "head": "23398a5ce59d8bf49d92c0de7622e08ec94ce3d9",
+  "prev": "9139d4481d7ca1d56d2f94235c98a9ec727df397",
+  "head": "5afa9642cf5086ee005212e64bd95edae2c11bcf",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -26,7 +26,8 @@
     "fork-gitea-connections",
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
-    "fork-headless-delivery"
+    "fork-headless-delivery",
+    "fork-desktop-delivery"
   ],
   "unapplied": [
     "old-fork-stgit-stack-policy",
@@ -78,6 +79,9 @@
     },
     "fork-conversation-fork": {
       "oid": "42ead5386028896fa2fa40aaa916ddb54de86884"
+    },
+    "fork-desktop-delivery": {
+      "oid": "5afa9642cf5086ee005212e64bd95edae2c11bcf"
     },
     "fork-fresh-remote-worktrees": {
       "oid": "282730bf3a3255985c55db3730cde34701521113"
