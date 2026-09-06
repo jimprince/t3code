@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "565d11058d362d65f5bb751c3a2e7c8fe5e50f24",
+  "prev": "541647dc02f038a7fb588a575d0ef8bc63873730",
   "head": "42ead5386028896fa2fa40aaa916ddb54de86884",
   "applied": [
     "fork-build-ci-compat",
@@ -27,7 +27,7 @@
     "old-fork-performance-recovery",
     "old-fork-headless-updates",
     "old-fork-text-generation",
-    "fork-web-client-resilience",
+    "old-fork-web-client-resilience",
     "fork-web-project-scope",
     "fork-web-image-timeout",
     "fork-desktop-distribution",
@@ -110,9 +110,6 @@
     "fork-thread-client-recovery": {
       "oid": "b418790c25250c3291e08fa842819b9b90ea35eb"
     },
-    "fork-web-client-resilience": {
-      "oid": "26bdd55b64813c473be94616ec2afe3423338fb0"
-    },
     "fork-web-files-upload": {
       "oid": "7c7d66013a98edfd88230fb8ebdd3873d6dff7a2"
     },
@@ -175,6 +172,9 @@
     },
     "old-fork-thread-transfer": {
       "oid": "f4949dd1649a03cd89212b38041b37aefaf56643"
+    },
+    "old-fork-web-client-resilience": {
+      "oid": "26bdd55b64813c473be94616ec2afe3423338fb0"
     }
   }
 }
