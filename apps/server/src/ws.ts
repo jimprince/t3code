@@ -95,6 +95,7 @@ import {
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
+import { ThreadTransfer } from "./orchestration/Services/ThreadTransfer.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -514,6 +515,7 @@ const makeWsRpcLayer = (
       const externalLauncher = yield* ExternalLauncher.ExternalLauncher;
       const remoteOpenTargets = yield* RemoteOpenTargets.RemoteOpenTargets;
       const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
+      const threadTransfer = yield* ThreadTransfer;
       const review = yield* ReviewService.ReviewService;
       const vcsProvisioning = yield* VcsProvisioningService.VcsProvisioningService;
       const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
@@ -1365,6 +1367,22 @@ const makeWsRpcLayer = (
               ),
             ),
             { "rpc.aggregate": "orchestration" },
+          ),
+        [ORCHESTRATION_WS_METHODS.exportThread]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.exportThread,
+            threadTransfer.exportThread(input),
+            {
+              "rpc.aggregate": "orchestration",
+            },
+          ),
+        [ORCHESTRATION_WS_METHODS.importThread]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.importThread,
+            threadTransfer.importThread(input),
+            {
+              "rpc.aggregate": "orchestration",
+            },
           ),
         [ORCHESTRATION_WS_METHODS.forkThread]: (input) =>
           observeRpcEffect(ORCHESTRATION_WS_METHODS.forkThread, threadTransfer.forkThread(input), {
