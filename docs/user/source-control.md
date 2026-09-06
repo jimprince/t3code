@@ -3,6 +3,9 @@
 T3 Code integrates with GitHub, GitLab, Forgejo, Gitea, Bitbucket, and Azure DevOps to clone and publish
 repositories, create pull requests, and review changes.
 
+Pull request lookup on an unrecognized Git host is skipped and cached for ten minutes.
+Refresh manually or update the environment connection to retry sooner.
+
 ## Connect an account
 
 Install Git and configure authentication on the machine running your T3 Code server. For a remote
