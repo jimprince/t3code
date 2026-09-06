@@ -64,7 +64,10 @@ recorded decision relevant to the files being changed.
   dropped without dropping another feature. Patch count is not capped.
 - Treat file overlap as normal. It is not a reason to combine concerns.
 - Keep implementation, tests, applicable documentation, and the inventory
-  stanza in the same patch.
+  stanza in the same patch. Add a new [release-note entry](../../../docs/release-notes/entries/README.md)
+  for a user-visible change, including a fix to existing functionality. Do not
+  re-announce a feature just because its patch was refreshed or renamed.
+  Preserve published entries as release history when retiring implementation.
 - Never append a plain repair commit beside the stack.
 - Keep generated release stamps in the tagged child only; never refresh them
   into a patch.

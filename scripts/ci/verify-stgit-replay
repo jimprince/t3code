@@ -7,6 +7,7 @@ head="$(git rev-parse HEAD)"
 tree="$(git rev-parse 'HEAD^{tree}')"
 scripts/ci/check-stgit-stack
 bun scripts/ci/check-fork-docs.ts
+bun scripts/ci/check-fork-release-notes.ts
 vp install --frozen-lockfile
 vp run --filter @t3tools/desktop ensure:electron
 vp run --filter @t3tools/oxlint-plugin-t3code build

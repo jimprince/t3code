@@ -377,3 +377,6 @@ jobs:
 
       - name: Check fork documentation
         run: bun scripts/ci/check-fork-docs.ts
+
+      - name: Check release-note entries
+        run: bun scripts/ci/check-fork-release-notes.ts

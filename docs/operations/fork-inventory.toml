@@ -401,7 +401,7 @@ purpose = "Route maintainers and agents through the StGit policy, validate and p
 retire_when = "Upstream or maintained shared tooling provides equivalent maintained-fork automation, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-release-publication", "fork-build-ci-compat"]
 roles = ["agent-docs-owner"]
-note = "Reorganized 2026-09-06 from fork-stgit-stack-policy, fork-ci-upstream-sync, fork-ci-stgit-metadata. [fork-stgit-stack-policy] Upstream1286 reorganized the docs index; retain its navigation and provider guides while adding only fork feature and maintenance links. [fork-ci-upstream-sync] Sync runs on hosted Linux; removed the unused rerere variable and selector for an unregistered runner."
+note = "Requires authored release entries for user-visible changes and validates them before publication. Removed unused subject-based metadata reconstruction and obsolete maintenance plans; leased publication remains authoritative."
 [[patch.decision]]
 id = "queued-main-writer-start-binding"
 date = "2026-07-30"

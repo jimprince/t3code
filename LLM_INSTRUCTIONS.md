@@ -65,6 +65,12 @@ tests, applicable docs, and the inventory stanza together. Never append a plain
 repair commit beside the stack. Generated release stamps remain tag-only and
 never enter a patch.
 
+For every user-visible feature, fix, performance change, or removal, add a new
+[release-note entry](./docs/release-notes/entries/README.md) in the same owning
+concern. Describe functionality, not packages or patch mechanics. A later fix
+gets a new stable entry ID; a pure upstream replay or structural patch rewrite
+gets none. Preserve published entries when retiring their implementation.
+
 Before editing a freshly fetched stack, run
 `scripts/ci/prepare-stgit-publication` to capture immutable preparation-time
 main and metadata leases. Use `scripts/ci/publish-stgit-stack --check|--push`
