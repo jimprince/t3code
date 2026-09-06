@@ -1,0 +1,4 @@
+id = "desktop-update-full-changelog"
+category = "feature"
+functionality = "desktop updates"
+text = "The update popup shows the full changelog for every new release instead of a shortened list, and no longer lists the \"Full Changelog\" link as a change."
