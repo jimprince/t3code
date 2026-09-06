@@ -1,6 +1,0 @@
-Bottom: 2781d40794515224b6740392e45f41b9154b2faf
-Top:    8d3b30c1f099b422658771407b1149af65dfc726
-Author: brad <bradprin@live.com>
-Date:   2026-09-05 16:32:32 -0600
-
-fix(server): reserve active provider turns

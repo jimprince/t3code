@@ -1,6 +1,0 @@
-Bottom: 57d20515d8a813dc77bcf89873bd9729b9db87a2
-Top:    cdc633eb816df3ff0203b058418991197c5349f5
-Author: brad <bradprin@live.com>
-Date:   2026-09-05 16:32:43 -0600
-
-feat(goals): persist thread goals
