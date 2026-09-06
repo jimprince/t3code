@@ -91,3 +91,10 @@ reopening a declined pull request.
   remotes can require separate setup from the hosting provider's API access.
 - **A review cannot load:** open it on the host website while resolving connectivity, permissions,
   or rate limits.
+
+## Hide selected pull requests
+
+Use the row checkboxes or **Select all visible pull requests** to select several reviews, then
+choose **Remove from list** to hide them without closing or changing them on the Git host.
+Removed reviews stay hidden for that environment in this browser. Choose **Restore removed**
+above the list to bring them back.
