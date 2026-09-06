@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "2790559a2c6ee2264bc3848ac9f1035c4628318a",
-  "head": "e632d5945cbf019625e9aa3ea06630bc4ca82dbe",
+  "prev": "1102cbacaf89b1b8aeb370f44a14449f84536d33",
+  "head": "0cf739c7f26d47c9ca3f3bf136d9249af7b13711",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -23,7 +23,8 @@
     "fork-pr-dismissal",
     "fork-unsupported-pr-hosts",
     "fork-worktree-cleanup",
-    "fork-gitea-connections"
+    "fork-gitea-connections",
+    "refresh-temp"
   ],
   "unapplied": [
     "old-fork-build-ci-compat",
@@ -203,6 +204,9 @@
     },
     "old-fork-worktree-cleanup": {
       "oid": "e92cecec0ad413ab5c58b4ceae3a0f4260f96d8c"
+    },
+    "refresh-temp": {
+      "oid": "0cf739c7f26d47c9ca3f3bf136d9249af7b13711"
     }
   }
 }
