@@ -48,7 +48,7 @@ export const PullRequestTargetInput = Schema.Struct({
   host: Schema.optional(
     TrimmedNonEmptyString.annotate({
       description:
-        "Host the repository lives on, for example github.com. Defaults to the host of this thread's project.",
+        "Host the repository lives on, for example github.com. Defaults to this thread's project host; pass url for another host.",
     }),
   ),
 });
@@ -59,7 +59,7 @@ export class PullRequestUrlInvalidError extends Schema.TaggedError<PullRequestUr
   {},
 ) {
   override get message(): string {
-    return "This is not a recognised pull request URL. Pass repository and number instead.";
+    return "Pass a recognised pull request URL, or repository and number for this thread's host.";
   }
 }
 
