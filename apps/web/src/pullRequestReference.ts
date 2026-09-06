@@ -1,3 +1,5 @@
+const GITEA_PULL_REQUEST_URL_PATTERN =
+  /^https?:\/\/[^/\s]+\/[^/\s]+\/[^/\s]+\/pulls\/(\d+)(?:[/?#].*)?$/i;
 const GITHUB_PULL_REQUEST_URL_PATTERN =
   /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+\/pull\/(\d+)(?:[/?#].*)?$/i;
 const GITLAB_MERGE_REQUEST_URL_PATTERN =
@@ -44,6 +46,7 @@ export function parsePullRequestReference(input: string): string | null {
 
   const urlMatch =
     GITHUB_PULL_REQUEST_URL_PATTERN.exec(normalizedInput) ??
+    GITEA_PULL_REQUEST_URL_PATTERN.exec(normalizedInput) ??
     GITLAB_MERGE_REQUEST_URL_PATTERN.exec(normalizedInput) ??
     AZURE_DEVOPS_PULL_REQUEST_URL_PATTERN.exec(normalizedInput);
   if (urlMatch?.[1]) {
