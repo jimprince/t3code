@@ -293,6 +293,7 @@ describe("ProviderSessionReaper", () => {
             ).pipe(Effect.tap(() => input.onThreadInspected?.(threadId) ?? Effect.void)),
           getThreadDetailById: () => Effect.die("unused"),
           searchThreads: () => Effect.succeed({ matches: [] }),
+          getThreadDetailSnapshot: () => Effect.die("unused"),
         }),
       ),
       Layer.provideMerge(NodeServices.layer),
