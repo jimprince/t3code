@@ -24,7 +24,7 @@ const requiredJobs = [
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-/** A stamped child may inherit tests only when its sole change is package versions. */
+/** A stamped child may inherit source verification only when its sole change is package versions. */
 export function releaseCISource(ref: string, version: string, cwd = process.cwd()): string {
   const git = (...args: string[]) =>
     NodeChildProcess.execFileSync("git", args, { cwd, encoding: "utf8" }).trim();
@@ -56,7 +56,7 @@ const github = (endpoint: string): unknown =>
     }),
   );
 
-/** Reuse a completed, successful main-push CI attempt, otherwise run release tests. */
+/** Reuse a completed, successful main-push CI attempt, otherwise run release verification. */
 export async function reuseReleaseCI(options: {
   repository: string;
   ref: string;
@@ -96,17 +96,23 @@ export async function reuseReleaseCI(options: {
       ) {
         return {
           reused: false,
-          reason: "No matching main-push CI evidence; running release tests.",
+          reason: "No matching main-push CI evidence; running release verification.",
         };
       }
       if (run.status === "completed") {
         if (run.conclusion !== "success")
-          return { reused: false, reason: "Matching CI did not succeed; running release tests." };
+          return {
+            reused: false,
+            reason: "Matching CI did not succeed; running release verification.",
+          };
         const jobs = query(
           `repos/${options.repository}/actions/runs/${run.id}/attempts/${run.run_attempt}/jobs?per_page=100`,
         );
         if (!record(jobs) || !Array.isArray(jobs.jobs))
-          return { reused: false, reason: "CI job evidence unavailable; running release tests." };
+          return {
+            reused: false,
+            reason: "CI job evidence unavailable; running release verification.",
+          };
         const completed = new Set(
           jobs.jobs
             .filter(
@@ -117,11 +123,11 @@ export async function reuseReleaseCI(options: {
         if (!requiredJobs.every((name) => completed.has(name)))
           return {
             reused: false,
-            reason: "Required CI jobs did not all succeed; running release tests.",
+            reason: "Required CI jobs did not all succeed; running release verification.",
           };
         return {
           reused: true,
-          reason: `Reusing successful CI tests for ${source}.`,
+          reason: `Reusing successful CI source verification for ${source}.`,
           runUrl: `https://github.com/${options.repository}/actions/runs/${run.id}`,
         };
       }
@@ -129,14 +135,14 @@ export async function reuseReleaseCI(options: {
         !["queued", "in_progress", "waiting", "pending"].includes(String(run.status)) ||
         Date.now() >= deadline
       ) {
-        return { reused: false, reason: "Matching CI is not ready; running release tests." };
+        return { reused: false, reason: "Matching CI is not ready; running release verification." };
       }
       await sleep(Math.min(15_000, Math.max(0, deadline - Date.now())));
     }
   } catch {
     return {
       reused: false,
-      reason: "Could not establish matching CI evidence; running release tests.",
+      reason: "Could not establish matching CI evidence; running release verification.",
     };
   }
 }

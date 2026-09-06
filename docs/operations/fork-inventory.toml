@@ -401,4 +401,4 @@ standing_policy = "Generated version stamps and release lockfile changes are tag
 id = "reuse-exact-source-ci-tests"
 date = "2026-09-05"
 decided = "narrow"
-rationale = "Reuse successful main-push CI tests only for the exact release commit or its verified version-only direct parent. Require all test shards, check and release smoke jobs from that attempt; bound waiting and fall back to full release tests without trustworthy evidence. Always check the resolved release source, formatting, types and packaged artifacts."
+rationale = "Reuse successful main-push CI tests only for the exact release commit or its verified version-only direct parent. Require all test shards, check and release smoke jobs from that attempt; bound waiting and fall back to full release tests without trustworthy evidence. Reuse formatting, lint, Knip, types and tests only under that same exact-source evidence. Always verify packaged artifacts; missing evidence runs the complete shared source gate."

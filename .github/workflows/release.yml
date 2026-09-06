@@ -192,34 +192,26 @@ jobs:
         with:
           bun-version: 1.3.11
 
-      - name: Ensure Electron runtime is installed
-        run: vp run --filter @t3tools/desktop ensure:electron
-
-      - name: Build oxlint plugin
-        run: vp run --filter @t3tools/oxlint-plugin-t3code build
-
-      - name: Check
-        run: vp check
-
-      - name: Typecheck
-        run: vp run typecheck
-
-      - uses: ./.github/actions/setup-apt-mirrors
-
-      - name: Install browser secret helper build libraries
-        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
-
       - id: verified_ci
-        name: Reuse successful CI tests
+        name: Reuse successful CI source verification
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_REF: ${{ steps.release_meta.outputs.ref }}
           RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
         run: bun "$RUNNER_TEMP/reuse-release-ci.ts"
 
+      - name: Check source
+        if: steps.verified_ci.outputs.reused != 'true'
+        run: scripts/ci/verify-source check
+
+      - uses: ./.github/actions/setup-apt-mirrors
+
+      - name: Install browser secret helper build libraries
+        run: sudo apt-get update && sudo apt-get install -y libsecret-1-dev pkg-config
+
       - name: Test
         if: steps.verified_ci.outputs.reused != 'true'
-        run: vp run test
+        run: scripts/ci/verify-source test
 
       - id: previous_tag
         name: Resolve previous release tag
