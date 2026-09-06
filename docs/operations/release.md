@@ -6,7 +6,7 @@ file is the concise runbook.
 
 ## Release Model
 
-- `sync-upstream.yml` checks the latest upstream nightly once daily at 09:00 UTC and can also be dispatched
+- `sync-upstream.yml` checks the latest upstream nightly once daily at 09:17 UTC and can also be dispatched
   manually.
 - `release.yml` builds only after a release tag is pushed, or when manually
   dispatched with an explicit version.
@@ -40,7 +40,9 @@ It reuses source checks and tests only from a successful
 release child changes only the four package version fields to the release version.
 Lockfile, dependency, source, workflow, or file-mode changes disqualify parent reuse.
 The required CI check, test shards and release smoke jobs must all succeed in the
-same run attempt. Preflight waits up to five minutes for matching CI already in
+same run attempt. If main reused an upstream-sync candidate, preflight also
+verifies the candidate's actual source steps and runner profile; a green main
+evidence job alone is insufficient. Preflight waits up to fifteen minutes for matching CI already in
 progress; missing, failed, incomplete or unavailable evidence runs the full release
 source checks and tests instead. The job summary links any reused CI run. Desktop
 packaging and headless artifact smoke checks always run.
@@ -58,7 +60,7 @@ app/runtime output: `apps/**`, `packages/**`, `assets/**`, root package/build
 files, and desktop artifact build inputs.
 
 A lightweight job compares the exact push-before and push-after trees before
-installing replay tools. GitHub's coarse path filter can include replayed
+installing publication tools. GitHub's coarse path filter can include replayed
 commits after a StGit force push; the tree comparison skips maintenance-only
 rewrites. Missing history conservatively follows the normal release path,
 and manual dispatch bypasses this filter. Main and prepared tags publish
@@ -68,32 +70,32 @@ Docs, workflow maintenance, release helper scripts, and other repo plumbing
 should not create push nightlies. Use manual `release.yml` dispatch if a
 maintenance-only commit genuinely needs to ship as a desktop update.
 
-Before pushing `${upstream_nightly_tag}-fork.N`, the workflow fetches the latest
-upstream nightly tag, replays the net fork patch onto that tag, stamps the releasable
-package versions and lockfile in a prepared child, then tags that child while
-force-pushing `main` at its unstamped parent. That package stamp is required
-because the headless `t3` server reports its version from
-`apps/server/package.json`. The `main` rewrite binds its lease to the exact
-checked-out starting HEAD and requires live `origin/main` to still equal it
-before replay. A stale queued checkout therefore fails before preparation or
-tag publication.
+Before pushing `${upstream_nightly_tag}-fork.N`,
+`resolve-fork-push-tag` validates the checked-out StGit context and obtains its
+exact integrated upstream base. It inspects upstream tag refs and requires one
+nightly tag to point at that exact commit. A newer available upstream nightly is
+irrelevant: feature publication never fetches it as a source, replays onto it,
+or dispatches upstream repair. No or multiple matching nightly tags fail closed.
+When the integrated base is a stable upstream tag, the nightly feature lane
+skips with an explicit message instead of inventing a nightly source.
 
-Before replay, `prepare-stgit-publication` records the exact main, stack and
-complete patch-ref set. StGit itself updates metadata during replay. The fixed
-`verify-stgit-replay` gate runs on the unstamped candidate before release-tag preparation.
-After stamping, the checkout returns to that verified stack tip and both
-automatic workflows call `publish-stgit-stack --push`. This one helper publishes
-main, metadata, patch refs, obsolete-ref deletions, immutable snapshots and the
-prepared release tag in one leased atomic transaction. A metadata mismatch or
-failed gate stops publication. Metadata is not reconstructed by commit subject.
-The next upstream stable sync replays the fork patch onto the stable tag and
-publishes the integrated stable release.
+The selector allocates the next `-fork.N` for that integrated nightly. A tag on
+the exact `main` source or its prepared child skips a duplicate run. Before
+version stamping, the workflow requires the completed successful `CI` push run
+for the exact unstamped `main` commit, including all required jobs from the same
+attempt. Missing, failed, incomplete, or unavailable evidence blocks feature
+publication; it is never substituted with evidence for another source.
 
-If the push-nightly replay conflicts, it restores the starting checkout,
-dispatches the nightly `Sync Upstream` workflow, and fails visibly. Both
-workflows share the main-writer lock, so the dispatched run starts only after
-the detector exits; that eligible run emits the normal repair handoff for the
-CI Repair Bot instead of leaving the conflict idle until the daily schedule.
+`prepare-stgit-publication` records the exact main, stack, and complete patch-ref
+set before selection. `prepare-release-tag` stamps releasable package versions
+in a direct child because the headless `t3` server reports its version from
+`apps/server/package.json`. The checkout returns to the verified unstamped tip,
+then `publish-stgit-stack --push` atomically publishes unchanged `main`, stack
+metadata, patch refs, obsolete-ref deletions, immutable snapshots, and the
+prepared release tag under the captured leases. A stale checkout, ancestry
+failure, metadata mismatch, or lost lease stops publication. Daily upstream
+synchronization remains a separate lane; the next stable sync replays the stack
+onto the selected upstream stable tag.
 
 ## Normal Commands
 
@@ -127,15 +129,15 @@ resolve those conflicts by hand when you deliberately ask for a stable sync.
 
 For both channels, `sync-upstream.yml` replays the ordered StGit series onto the
 selected upstream tag and stamps package versions to the derived release
-version via `scripts/ci/prepare-release-tag`. The release tag points at that
-stamped child while `main` stays at the exact pre-stamp stack tip. Fork Push
-Nightly uses the same helper and ref split. Both workflows share the
-`t3code-writes-main` lock, preserve immutable publication snapshots, and use exact pinned
-leases bound to their checked-out starting HEAD; live `origin/main` must match
-before replay. The unstamped `main`, stack metadata, current patch refs,
-obsolete-ref deletions, and the stamped tag are published in one atomic
-transaction. `release.yml` is tag-triggered and performs no `main` write or
-post-release finalization.
+version via `scripts/ci/prepare-release-tag`. Fork Push Nightly does not replay;
+it stamps the already integrated source using the nightly tag that exactly
+matches the stack base. In both cases the release tag points at the stamped
+child while `main` stays at the exact pre-stamp stack tip. The workflows share
+the `t3code-writes-main` lock, preserve immutable publication snapshots, and
+use exact pinned leases bound to their checked-out starting HEAD. The unstamped
+`main`, stack metadata, current patch refs, obsolete-ref deletions, and stamped
+tag publish in one atomic transaction. `release.yml` is tag-triggered and
+performs no `main` write or post-release finalization.
 
 The replay driver stops on conflicts. The external repair bot performs semantic
 repair and must pass its verification gate; it does not make a clean textual
