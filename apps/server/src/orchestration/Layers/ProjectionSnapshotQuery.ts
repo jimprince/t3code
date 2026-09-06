@@ -60,6 +60,7 @@ import {
   decodeThreadDetailPageCursor,
   encodeThreadDetailPageCursor,
 } from "../threadDetailCursor.ts";
+import { THREAD_TRANSFER_IMPORTED_ACTIVITY_KIND } from "../threadTransferContextHandoff.ts";
 import { projectActivityPayload } from "../ActivityPayloadProjection.ts";
 import * as RepositoryIdentityResolver from "../../project/RepositoryIdentityResolver.ts";
 import { ORCHESTRATION_PROJECTOR_NAMES } from "./ProjectionPipeline.ts";
@@ -109,7 +110,7 @@ const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
   }),
 );
 const ProjectionTurnStartMessageDbRowSchema = ProjectionThreadMessageDbRowSchema.mapFields(
-  Struct.assign({ hasOtherUserMessages: Schema.Number }),
+  Struct.assign({ hasOtherUserMessages: Schema.Number, hasTransferredHistory: Schema.Number }),
 );
 const ProjectionThreadProposedPlanDbRowSchema = ProjectionThreadProposedPlan;
 const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
@@ -1171,7 +1172,11 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
               LOWER(TRIM(other.text, ${MESSAGE_TRIM_WHITESPACE})) != '/compact'
               OR COALESCE(json_array_length(other.attachments_json), 0) > 0
             )
-        ) AS "hasOtherUserMessages"
+        ) AS "hasOtherUserMessages",
+        EXISTS (
+          SELECT 1 FROM projection_thread_activities
+          WHERE thread_id = ${threadId} AND kind = ${THREAD_TRANSFER_IMPORTED_ACTIVITY_KIND}
+        ) AS "hasTransferredHistory"
       FROM projection_thread_messages
       WHERE thread_id = ${threadId} AND message_id = ${messageId}
       LIMIT 1
@@ -3047,6 +3052,7 @@ pending_approval_requests AS (
         ...(row.attachments !== null ? { attachments: row.attachments } : {}),
       },
       hasOtherUserMessages: row.hasOtherUserMessages === 1,
+      hasTransferredHistory: row.hasTransferredHistory === 1,
     }));
   });
 
