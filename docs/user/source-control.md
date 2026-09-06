@@ -101,3 +101,5 @@ above the list to bring them back.
 
 Repositories on hosts without a configured source-control provider are skipped during pull request
 status checks, so their branches show no pull request badge.
+
+For Gitea hosts, see [configured instances and pull-request support](./gitea.md).
