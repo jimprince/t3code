@@ -3488,7 +3488,9 @@ export default function Sidebar() {
             if (thread.session?.status === "running") {
               confirmLines.push("The active turn will be interrupted before the move.");
             }
-            const confirmed = await settlePromise(() => api.dialogs.confirm(confirmLines.join("\n")));
+            const confirmed = await settlePromise(() =>
+              api.dialogs.confirm(confirmLines.join("\n")),
+            );
             if (confirmed._tag === "Failure" || !confirmed.value) return;
 
             const progressToastId = toastManager.add({

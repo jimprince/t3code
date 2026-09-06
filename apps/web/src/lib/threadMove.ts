@@ -118,7 +118,7 @@ export function buildThreadMoveFailureReport(input: {
 
 /** The import refused because the thread's branch already exists on the
  * target with different history or is checked out there. */
-export function isThreadMoveBranchConflict(error: unknown): boolean {
+function isThreadMoveBranchConflict(error: unknown): boolean {
   return (
     typeof error === "object" &&
     error !== null &&
