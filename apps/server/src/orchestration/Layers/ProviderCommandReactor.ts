@@ -65,6 +65,7 @@ import {
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import { VcsStatusBroadcaster } from "../../vcs/VcsStatusBroadcaster.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
+import { appendFileAttachmentPromptLines } from "../fileAttachmentPrompt.ts";
 import {
   buildTransferredThreadProviderInput,
   findPendingTransferredThreadHandoff,
