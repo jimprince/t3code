@@ -1,3 +1,8 @@
+import {
+  giteaTokenSecretName,
+  redactGiteaInstances,
+  materializeGiteaTokens,
+} from "./sourceControl/giteaSettings.ts";
 /**
  * ServerSettings - Server-authoritative settings service.
  *
@@ -15,6 +20,7 @@ import {
   DEFAULT_TEXT_GENERATION_MODEL_BY_PROVIDER,
   DEFAULT_MODEL_BY_PROVIDER,
   DEFAULT_SERVER_SETTINGS,
+  GITEA_TOKEN_REDACTED,
   ModelSelection,
   ProjectScript,
   type ProjectSettingsOverrides,
@@ -186,7 +192,12 @@ export function redactServerSettingsForClient(settings: ServerSettings): ServerS
       },
     ]),
   );
-  return { ...settings, providerInstances, usageLimitSources };
+  return {
+    ...settings,
+    providerInstances,
+    usageLimitSources,
+    giteaInstances: redactGiteaInstances(settings.giteaInstances),
+  };
 }
 
 export class ServerSettingsService extends Context.Service<
@@ -711,6 +722,11 @@ const make = Effect.gen(function* () {
       }
       return {
         ...settings,
+        giteaInstances: yield* materializeGiteaTokens(settings.giteaInstances, secretStore).pipe(
+          Effect.mapError(
+            (cause) => new ServerSettingsError({ settingsPath, operation: "read-secret", cause }),
+          ),
+        ),
         providerInstances: providerInstances as ServerSettings["providerInstances"],
         usageLimitSources: usageLimitSources as ServerSettings["usageLimitSources"],
       };
@@ -854,9 +870,34 @@ const make = Effect.gen(function* () {
         });
       }
 
+      const giteaInstances = next.giteaInstances.map((instance) => {
+        if (instance.token === GITEA_TOKEN_REDACTED) return instance;
+        const secretName = giteaTokenSecretName(instance.id);
+        if (instance.token.length > 0) {
+          changes.push({
+            kind: "write",
+            secretName,
+            value: textEncoder.encode(instance.token),
+          });
+          return { ...instance, token: GITEA_TOKEN_REDACTED };
+        }
+        changes.push({ kind: "remove", secretName, operation: "remove-secret" });
+        return instance;
+      });
+      const nextGiteaIds = new Set(next.giteaInstances.map((instance) => instance.id));
+      for (const instance of current.giteaInstances) {
+        if (nextGiteaIds.has(instance.id)) continue;
+        changes.push({
+          kind: "remove",
+          secretName: giteaTokenSecretName(instance.id),
+          operation: "remove-stale-secret",
+        });
+      }
+
       return {
         settings: {
           ...next,
+          giteaInstances,
           providerInstances: providerInstances as ServerSettings["providerInstances"],
           usageLimitSources: usageLimitSources as ServerSettings["usageLimitSources"],
         },
