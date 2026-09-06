@@ -145,3 +145,13 @@ retire_when = "Upstream ships equivalent end-to-end conversation forking."
 depends_on = ["fork-provider-turn-safety", "fork-thread-client-recovery"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-thread-fork."
+
+[[patch]]
+name = "fork-thread-transfer"
+subject = "feat(threads): transfer threads between environments"
+class = "product"
+purpose = "Move a thread and its workspace context between environments: export/import bundles, provider context handoff, RPC registration, and coordinated web and desktop flows."
+retire_when = "Upstream ships equivalent cross-environment thread moves."
+depends_on = ["fork-thread-client-recovery", "fork-conversation-fork"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-thread-transfer."

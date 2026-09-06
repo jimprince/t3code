@@ -1533,8 +1533,163 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+        return [];
+      }
+        return [];
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        })),
+        payload: {
+          threadId: command.threadId,
+          turnId: command.turnId,
+          achieved: command.achieved,
+          reason: command.reason,
+          continuationRequested: command.continuationRequested,
+          evaluatedAt: command.createdAt,
+          updatedAt: command.createdAt,
+        },
+      };
+    }
+
+    case "thread.import": {
+      // Thread-move import: expand a PortableThread into the existing event
+      // vocabulary so projections, reactors, and clients need no
+      // import-specific handling. All events commit in one transaction.
+      const project = yield* requireProject({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
       if (isChatProject(project)) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
           detail: `Threads cannot be imported into chat project '${command.projectId}'.`,
+        });
+      }
+      yield* requireThreadAbsent({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+
+      const portable = command.thread;
+      const plannedEvents: PlannedOrchestrationEvent[] = [];
+      const eventBase = () =>
+        withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: command.createdAt,
+          commandId: command.commandId,
+        });
+
+      plannedEvents.push({
+        ...(yield* eventBase()),
+        type: "thread.created",
+        payload: {
+          threadId: command.threadId,
+          projectId: command.projectId,
+          title: portable.title,
+          modelSelection: portable.modelSelection,
+          runtimeMode: portable.runtimeMode,
+          interactionMode: portable.interactionMode,
+          branch: command.branch,
+          worktreePath: command.worktreePath,
+          createdAt: portable.createdAt,
+          updatedAt: portable.updatedAt,
+        },
+      });
+
+      for (const message of portable.messages) {
+        plannedEvents.push({
+          ...(yield* eventBase()),
+          type: "thread.message-sent",
+          payload: {
+            threadId: command.threadId,
+            messageId: message.id,
+            role: message.role,
+            text: message.text,
+            ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
+              : {}),
+            turnId: message.turnId,
+            streaming: false,
+            createdAt: message.createdAt,
+            updatedAt: message.updatedAt,
+          },
+        });
+      }
+
+      for (const proposedPlan of portable.proposedPlans) {
+        plannedEvents.push({
+          ...(yield* eventBase()),
+          type: "thread.proposed-plan-upserted",
+          payload: {
+            threadId: command.threadId,
+            proposedPlan,
+          },
+        });
+      }
+
+      const orderedCheckpoints = portable.checkpoints.toSorted(
+        (left, right) => left.checkpointTurnCount - right.checkpointTurnCount,
+      );
+      for (const checkpoint of orderedCheckpoints) {
+        plannedEvents.push({
+          ...(yield* eventBase()),
+          type: "thread.turn-diff-completed",
+          payload: {
+            threadId: command.threadId,
+            turnId: checkpoint.turnId,
+            checkpointTurnCount: checkpoint.checkpointTurnCount,
+            checkpointRef: checkpoint.checkpointRef,
+            status: checkpoint.status,
+            files: checkpoint.files,
+            assistantMessageId: checkpoint.assistantMessageId,
+            completedAt: checkpoint.completedAt,
+          },
+        });
+      }
+
+      for (const activity of portable.activities) {
+        // Drop the source environment's event-log sequence: target sequences
+        // restart lower, and a stale imported sequence would break activity
+        // ordering against activities appended after the move.
+        const { sequence: _sourceSequence, ...portableActivity } = activity;
+        plannedEvents.push({
+          ...(yield* eventBase()),
+          type: "thread.activity-appended",
+          payload: {
+            threadId: command.threadId,
+            activity: portableActivity,
+          },
+        });
+      }
+
+        plannedEvents.push({
+          ...(yield* eventBase()),
+          payload: {
+            threadId: command.threadId,
+              // Mark the final imported turn as already evaluated so the
+              // GoalReactor does not fire an evaluation (and possibly an
+              // auto-continuation turn) right after the move lands.
+              lastTurnId: lastImportedTurnId,
+            },
+          },
+        });
+      }
+
+      return plannedEvents;
+    }
+
     case "thread.activity.append": {
       const thread = yield* requireThread({
         readModel,

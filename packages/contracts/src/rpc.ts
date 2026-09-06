@@ -83,6 +83,7 @@ import {
   ClientOrchestrationCommand,
   ORCHESTRATION_WS_METHODS,
   OrchestrationDispatchCommandError,
+  OrchestrationExportThreadError,
   OrchestrationForkThreadError,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetFullThreadDiffInput,
@@ -91,6 +92,7 @@ import {
   OrchestrationSearchThreadsInput,
   OrchestrationGetTurnDiffError,
   OrchestrationGetTurnDiffInput,
+  OrchestrationImportThreadError,
   OrchestrationRpcSchemas,
   OrchestrationGetWorkflowScriptError,
 } from "./orchestration.ts";
@@ -1143,6 +1145,18 @@ export const WsOrchestrationSubscribeThreadRpc = Rpc.make(
   },
 );
 
+export const WsOrchestrationExportThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.exportThread, {
+  payload: OrchestrationRpcSchemas.exportThread.input,
+  success: OrchestrationRpcSchemas.exportThread.output,
+  error: Schema.Union([OrchestrationExportThreadError, EnvironmentAuthorizationError]),
+});
+
+export const WsOrchestrationImportThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.importThread, {
+  payload: OrchestrationRpcSchemas.importThread.input,
+  success: OrchestrationRpcSchemas.importThread.output,
+  error: Schema.Union([OrchestrationImportThreadError, EnvironmentAuthorizationError]),
+});
+
 export const WsOrchestrationForkThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.forkThread, {
   payload: OrchestrationRpcSchemas.forkThread.input,
   success: OrchestrationRpcSchemas.forkThread.output,
@@ -1330,5 +1344,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationGetArchivedShellSnapshotRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
+  WsOrchestrationExportThreadRpc,
+  WsOrchestrationImportThreadRpc,
   WsOrchestrationForkThreadRpc,
 );
