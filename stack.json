@@ -1,14 +1,15 @@
 {
   "version": 5,
-  "prev": "9aa19a464a7234c1bf25703edb85db4e82627192",
-  "head": "24ba2f8e9e587512039a7f0e288124b4b52ba8b5",
+  "prev": "3cddf85adf7c86568839d18b71140e17acd3472c",
+  "head": "b6f1d346c6d2eed61d8245ae302565a387563a47",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
-    "fork-general-chat"
+    "fork-general-chat",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-stgit-stack-policy",
@@ -171,6 +172,9 @@
     },
     "fork-worktree-gc": {
       "oid": "3c3a041670be6bf472942d47ba71b4bdf5f9dd06"
+    },
+    "refresh-temp": {
+      "oid": "b6f1d346c6d2eed61d8245ae302565a387563a47"
     }
   }
 }
