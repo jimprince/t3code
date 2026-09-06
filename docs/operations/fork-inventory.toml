@@ -237,7 +237,6 @@ id = "provider-session-reconciliation"
 date = "2026-08-21"
 decided = "retire+narrow"
 rationale = "Upstream #7719 now reconciles orphaned provider sessions and running turns while also preserving live sessions, repairing provider-directory bindings, covering archived and stale-active-turn cases, and bounding per-thread failures. Retire the fork's earlier startup reconciler and its duplicate tests so it cannot settle sessions before upstream's stronger reconciliation runs; keep the remaining lifecycle and bounded snapshot behavior in this patch."
-
 [[patch.decision]]
 id = "upstream11338-checkpoint-rewind"
 date = "2026-09-16"
@@ -249,21 +248,45 @@ id = "upstream-follow-up-queue"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Upstream client-side follow-up queues must remain queued while a pending user-input prompt is open. Preserve the fork's submit-intent guard, but treat queued messages like direct annotations so neither is submitted as the prompt answer."
-
 [[patch.decision]]
 id = "upstream-title-state-archived-shell"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Select upstream's persisted title state in the fork's archived-thread shell query so the shared thread-row decoder receives the same fields as the active-thread query."
-
 [[patch.decision]]
 id = "upstream-reasoning-stream-test"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Route upstream's reasoning-compatibility live-event fixture through the fork's eager subscribeDomainEvents seam. Overriding only the lazy streamDomainEvents path bypasses the race-free snapshot handoff and drops the fixture events."
-
 [[patch.decision]]
 id = "upstream-worktree-storage-cleanup"
 date = "2026-09-17"
 decided = "adapt"
 rationale = "Keep upstream's policy-driven StorageCleanup reactor alongside the fork's archive/settle reactor: the former removes eligible worktrees, while the latter stops provider sessions and closes archived terminals. Exercise archived-inclusive lookup before upstream's test converts that archived row into a deletion tombstone."
+
+[[patch]]
+name = "fork-general-chat"
+subject = "feat(projects): add repository-independent General Chat projects"
+class = "product"
+purpose = "Provide server-owned General Chat projects: the project kind contract and migrations, startup creation, decider guards, projection handling, sidebar grouping, and default compose behavior."
+retire_when = "Upstream ships an equivalent repository-independent chat project kind."
+depends_on = ["fork-thread-client-recovery"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-general-chat-projects. Upstream ordering fixtures include the owning project required by General Chat metadata guards."
+
+[[patch.decision]]
+id = "upstream-project-repository-list-removal"
+date = "2026-09-20"
+decided = "narrow"
+rationale = "Upstream removed the project repository's listAll and deleteById queries. Retire the fork's kind-column edit to the removed list query while retaining General Chat kind persistence in the surviving upsert and getById paths."
+
+[[patch.decision]]
+id = "chat-enrichment-guard-951"
+date = "2026-07-29"
+decided = "retire"
+rationale = "Upstream adopted isChatProjectRow filtering in ProjectionSnapshotQuery enrichment, covering the fork guard. Retire the duplicate ws.ts enrichment and the related obsolete IPC, local API, and server stubs."
+[[patch.decision]]
+id = "sidebar-project-header-styling"
+date = "2026-07-28"
+decided = "adapt"
+rationale = "The fork owns the General Chat structure (hideProjectHeader wrapper and chat affordance); upstream owns the design system. Preserve the structural additions while taking upstream styling."
