@@ -1,0 +1,4 @@
+id = "headless-artifact-pnpm-patches"
+category = "fix"
+functionality = "headless server"
+text = "Headless Linux releases build again: the packaged runtime now carries the workspace's dependency patches, so the server's file search library loads under Node."
