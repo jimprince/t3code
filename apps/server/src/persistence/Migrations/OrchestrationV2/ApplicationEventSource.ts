@@ -1,3 +1,7 @@
+import {
+  prepareGeneralChatV2Cutover,
+  finishGeneralChatV2Cutover,
+} from "../../../forkProjects/GeneralChatCutover.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
@@ -33,6 +37,7 @@ const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 // Event-store setup and V1 project baseline composed by migration 055.
 export default Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  yield* prepareGeneralChatV2Cutover(sql);
 
   yield* sql`
     ALTER TABLE orchestration_events
@@ -279,4 +284,5 @@ export default Effect.gen(function* () {
     WHERE TRUE
     ON CONFLICT(command_id) DO NOTHING
   `;
+  yield* finishGeneralChatV2Cutover(sql);
 });
