@@ -834,6 +834,7 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-pull
             host: "github.com",
             repository: "pingdotgg/t3code",
             number: 42,
+            url: "https://github.com/pingdotgg/t3code/pull/42?canonical=1",
             snapshot,
             stack: null,
             updatedAt: "2026-01-01T00:00:03.000Z",
@@ -859,6 +860,14 @@ it.layer(Layer.fresh(makeProjectionPipelinePrefixedTestLayer("t3-projection-pull
         assert.equal(synced[0]?.snapshotJson, null);
         // @effect-diagnostics-next-line preferSchemaOverJson:off
         assert.deepEqual(JSON.parse(synced[1]?.snapshotJson ?? "null"), snapshot);
+        assert.deepEqual(
+          yield* sql<{ readonly url: string }>`
+            SELECT url
+            FROM projection_thread_pull_requests
+            WHERE thread_id = ${threadId} AND number = 42
+          `,
+          [{ url: "https://github.com/pingdotgg/t3code/pull/42?canonical=1" }],
+        );
         assert.deepEqual(yield* readThreadUpdatedAt(), [{ updatedAt: "2026-01-01T00:00:03.000Z" }]);
 
         // A legacy null clears only the manual row; created/agent/stack rows stay.
