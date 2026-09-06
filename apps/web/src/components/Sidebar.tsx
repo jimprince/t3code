@@ -55,6 +55,7 @@ import {
   FolderIcon,
   GitBranchIcon,
   MessageCircleQuestionIcon,
+  MinusIcon,
   PinIcon,
   PinOffIcon,
   PlusIcon,
@@ -116,7 +117,9 @@ import {
 } from "../sidebarPendingFileDropStore";
 import { getProjectOrderKey, selectProjectGroupingSettings } from "../logicalProject";
 import {
+  buildGeneralChatSidebarSnapshot,
   buildSidebarProjectSnapshots,
+  GENERAL_CHAT_PROJECT_KEY,
   projectGroupsSpanEnvironments,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
@@ -134,7 +137,7 @@ import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
 import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
-import { useClientSettings } from "../hooks/useSettings";
+import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import { useNowMinute } from "../hooks/useNowMinute";
@@ -260,6 +263,15 @@ import {
   type ComposerThreadDraftState,
   type DraftSessionState,
 } from "../composerDraftStore";
+import {
+  isolateProjectKey,
+  pruneHiddenProjectKeys,
+  resolveAllProjectsCheckboxState,
+  resolveIsolatedProjectKey,
+  resolveVisibleProjectRefKeys,
+  toggleAllHiddenProjectKeys,
+  toggleHiddenProjectKey,
+} from "./sidebarProjectScope.ts";
 
 // Settled-tail paging: recent history is the common lookup; the deep tail
 // stays behind an explicit Show more.
@@ -2154,15 +2166,17 @@ const SidebarSearchResultRow = memo(function SidebarSearchResultRow(props: {
   );
 });
 
+interface ProjectScopeItem {
+  readonly value: string;
+  readonly label: string;
+}
+const NO_PROJECT_SCOPE_ITEM: ProjectScopeItem | null = null;
+
 export default function Sidebar() {
   const projects = useProjects();
   const { chatProjects, workspaceProjects } = useMemo(
     () => partitionProjectsByKind(projects),
     [projects],
-  );
-  const chatProjectRefKeys = useMemo(
-    () => new Set(chatProjects.map((project) => `${project.environmentId}:${project.id}`)),
-    [chatProjects],
   );
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const threads = useThreadShells();
@@ -2389,24 +2403,31 @@ export default function Sidebar() {
   // fresh clock whenever it recomputes.
   const [snoozeWakeTick, bumpSnoozeWakeTick] = useState(0);
 
-  // Project scope: one menu above the list. Scoping filters the list without
-  // making the header width depend on the number or length of project names.
-  // The selection lives in the persisted UI store next to the other sidebar
-  // project preferences, so routes that unmount the sidebar (Settings) and
-  // app restarts keep it.
-  const projectScopeKey = useUiStateStore((store) => store.sidebarProjectScopeKey);
-  const setProjectScopeKey = useUiStateStore((store) => store.setSidebarProjectScopeKey);
+  // General chat filters like any project and heads the filter list.
+  const projectFilterGroups = useMemo(() => {
+    const generalChat = buildGeneralChatSidebarSnapshot({
+      projects: chatProjects,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: (environmentId) => environmentLabelById.get(environmentId) ?? null,
+    });
+    return generalChat ? [generalChat, ...projectGroups] : projectGroups;
+  }, [chatProjects, environmentLabelById, primaryEnvironmentId, projectGroups]);
+  const projectFilterGroupsRef = useRef(projectFilterGroups);
+  projectFilterGroupsRef.current = projectFilterGroups;
+
+  // Project filter: one menu above the list. The persisted hidden set is its
+  // only state: checkboxes toggle a project, and clicking a row leaves just
+  // that project visible. Filtering never makes the header width depend on
+  // the number or length of project names.
   // {value, label} items let Base UI drive the combobox selection contract
   // while the popup search filters the same collection.
   const projectScopeItems = useMemo(
-    () => [
-      { value: "all", label: "All projects" },
-      ...projectGroups.map((project) => ({
+    () =>
+      projectFilterGroups.map((project): ProjectScopeItem => ({
         value: project.projectKey,
         label: project.displayName,
       })),
-    ],
-    [projectGroups],
+    [projectFilterGroups],
   );
   // Same-named projects on two machines are only told apart by where they
   // live, so rows on another machine carry its icon once the catalog spans
@@ -2416,14 +2437,8 @@ export default function Sidebar() {
     [projectGroups],
   );
   const projectGroupByScopeKey = useMemo(
-    () => new Map(projectGroups.map((project) => [project.projectKey, project] as const)),
-    [projectGroups],
-  );
-  const selectedProjectScopeItem = useMemo(
-    () =>
-      projectScopeItems.find((item) => item.value === (projectScopeKey ?? "all")) ??
-      projectScopeItems[0]!,
-    [projectScopeItems, projectScopeKey],
+    () => new Map(projectFilterGroups.map((project) => [project.projectKey, project] as const)),
+    [projectFilterGroups],
   );
   const [projectScopeMenuState, dispatchProjectScopeMenu] = useReducer(
     reduceSidebarProjectScopeMenuState,
@@ -2432,10 +2447,7 @@ export default function Sidebar() {
   const projectScopeFilter = useComboboxFilter();
   // Filtering derives from the same React state that controls the input, so
   // the visible query and the visible list can never desync — the peer wiring
-  // in DiffPanel and BranchToolbarBranchSelector. "All projects" is the default
-  // row, not a searchable entry: it heads the list while the query is empty and
-  // drops out while filtering, so it can't outrank a project match under
-  // autoHighlight and no-hit queries reach the empty state.
+  // in DiffPanel and BranchToolbarBranchSelector.
   const filteredProjectScopeItems = useMemo(
     () =>
       filterSidebarProjectScopeItems({
@@ -2446,33 +2458,69 @@ export default function Sidebar() {
       }),
     [projectScopeFilter, projectScopeItems, projectScopeMenuState.query],
   );
-  const scopedProjectGroup = useMemo(
-    () =>
-      projectScopeKey === null
-        ? null
-        : (projectGroups.find((project) => project.projectKey === projectScopeKey) ?? null),
-    [projectGroups, projectScopeKey],
+  const updateSettings = useUpdateClientSettings();
+  const hiddenProjectKeys = useClientSettings((settings) => settings.sidebarHiddenProjectKeys);
+  const allProjectsCheckboxState = useMemo(
+    () => resolveAllProjectsCheckboxState(hiddenProjectKeys, projectFilterGroups),
+    [hiddenProjectKeys, projectFilterGroups],
   );
-  const scopedProjectKeys = useMemo(
-    () =>
-      scopedProjectGroup === null
-        ? null
-        : new Set(
-            scopedProjectGroup.memberProjectRefs.map(
-              (projectRef) => `${projectRef.environmentId}:${projectRef.projectId}`,
-            ),
-          ),
-    [scopedProjectGroup],
-  );
-  // A persisted scope whose project is gone falls back to all projects, but
-  // only after every catalog environment has a live project snapshot. Cached
-  // or disconnected environments cannot establish that the project is gone.
   const allProjectSnapshotsReady = useAllEnvironmentProjectSnapshotsReady();
+  const visibleProjectGroups = useMemo(
+    () => projectFilterGroups.filter((project) => !hiddenProjectKeys.includes(project.projectKey)),
+    [hiddenProjectKeys, projectFilterGroups],
+  );
+  const isolatedProjectKey = useMemo(
+    () => resolveIsolatedProjectKey(hiddenProjectKeys, projectFilterGroups),
+    [hiddenProjectKeys, projectFilterGroups],
+  );
+  const scopedProjectGroup =
+    isolatedProjectKey === null ? null : (projectGroupByScopeKey.get(isolatedProjectKey) ?? null);
+  const scopedProjectKeys = useMemo(
+    () => resolveVisibleProjectRefKeys(hiddenProjectKeys, projectFilterGroups),
+    [hiddenProjectKeys, projectFilterGroups],
+  );
+  const projectScopeTriggerLabel =
+    scopedProjectGroup?.displayName ??
+    (allProjectsCheckboxState === "all"
+      ? "All projects"
+      : allProjectsCheckboxState === "none"
+        ? "No projects"
+        : `${visibleProjectGroups.length} projects`);
+  // Any filter change drops the selection: rows selected under the old filter
+  // may be hidden now, and bulk actions must never count or touch invisible rows.
+  const settledResetKey = [...hiddenProjectKeys].sort().join(",");
+  const setHiddenProjectKeys = useCallback(
+    (nextHiddenProjectKeys: readonly string[]) => {
+      updateSettings({ sidebarHiddenProjectKeys: [...nextHiddenProjectKeys] });
+    },
+    [updateSettings],
+  );
   useEffect(() => {
-    if (projectScopeKey !== null && allProjectSnapshotsReady && scopedProjectGroup === null) {
-      setProjectScopeKey(null);
+    const pruned = pruneHiddenProjectKeys(hiddenProjectKeys, projectFilterGroups);
+    if (pruned !== hiddenProjectKeys) setHiddenProjectKeys(pruned);
+  }, [hiddenProjectKeys, projectFilterGroups, setHiddenProjectKeys]);
+  // Earlier builds kept a separate single-project scope (upstream's UI-store
+  // key) that overrode the checkboxes. Fold it into the hidden set once its
+  // project is known, or drop it once every environment has reported and the
+  // project is gone. Cached or disconnected environments cannot establish that.
+  const legacyProjectScopeKey = useUiStateStore((store) => store.sidebarProjectScopeKey);
+  const setLegacyProjectScopeKey = useUiStateStore((store) => store.setSidebarProjectScopeKey);
+  useEffect(() => {
+    if (legacyProjectScopeKey === null) return;
+    if (projectGroupByScopeKey.has(legacyProjectScopeKey)) {
+      setHiddenProjectKeys(isolateProjectKey([], projectFilterGroups, legacyProjectScopeKey));
+      setLegacyProjectScopeKey(null);
+    } else if (allProjectSnapshotsReady) {
+      setLegacyProjectScopeKey(null);
     }
-  }, [allProjectSnapshotsReady, projectScopeKey, scopedProjectGroup, setProjectScopeKey]);
+  }, [
+    allProjectSnapshotsReady,
+    legacyProjectScopeKey,
+    projectFilterGroups,
+    projectGroupByScopeKey,
+    setHiddenProjectKeys,
+    setLegacyProjectScopeKey,
+  ]);
   // Count-only subscription: the parent needs "are there draft rows" for the
   // empty state, while SidebarDraftBlock owns the per-keystroke content
   // subscription. Selecting a number keeps typing in a draft composer from
@@ -2503,7 +2551,7 @@ export default function Sidebar() {
   // hidden now, and bulk actions must never count or touch invisible rows.
   useEffect(() => {
     clearSelection();
-  }, [clearSelection, projectScopeKey]);
+  }, [clearSelection, settledResetKey]);
 
   const openProjectSettings = useCallback(
     (projectGroup: SidebarProjectSnapshot) => {
@@ -2528,6 +2576,8 @@ export default function Sidebar() {
       event: ReactMouseEvent<HTMLElement> | ReactKeyboardEvent<HTMLInputElement>,
       projectGroup: SidebarProjectSnapshot,
     ) => {
+      // General chat is a filter entry, not a project with settings.
+      if (projectGroup.projectKey === GENERAL_CHAT_PROJECT_KEY) return;
       event.preventDefault();
       event.stopPropagation();
       suppressNextScopeChangeRef.current = true;
@@ -2573,9 +2623,7 @@ export default function Sidebar() {
       const projectRefKey = `${thread.environmentId}:${thread.projectId}`;
       return (
         thread.archivedAt === null &&
-        (scopedProjectKeys === null ||
-          chatProjectRefKeys.has(projectRefKey) ||
-          scopedProjectKeys.has(projectRefKey))
+        (scopedProjectKeys === null || scopedProjectKeys.has(projectRefKey))
       );
     });
     const pinned: EnvironmentThreadShell[] = [];
@@ -2662,15 +2710,7 @@ export default function Sidebar() {
       settledThreads: sortSettledThreadsForSidebar(settled),
       snoozeNow: preciseNow,
     };
-  }, [
-    chatProjectRefKeys,
-    nowMinute,
-    optimisticDrop,
-    scopedProjectKeys,
-    serverConfigs,
-    snoozeWakeTick,
-    threads,
-  ]);
+  }, [nowMinute, optimisticDrop, scopedProjectKeys, serverConfigs, snoozeWakeTick, threads]);
 
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
@@ -2741,7 +2781,6 @@ export default function Sidebar() {
   // filter context changes so a scope/search flip never inherits a deep
   // page state.
   const [settledVisibleCount, setSettledVisibleCount] = useState(SETTLED_TAIL_INITIAL_COUNT);
-  const settledResetKey = projectScopeKey ?? "all";
   const lastSettledResetKeyRef = useRef(settledResetKey);
   if (lastSettledResetKeyRef.current !== settledResetKey) {
     lastSettledResetKeyRef.current = settledResetKey;
@@ -4091,6 +4130,16 @@ export default function Sidebar() {
                 projectRef.projectId === thread.projectId,
             ),
           ) ?? null;
+        // Filter groups add General chat, which has no project settings or
+        // machine moves but can still be filtered to.
+        const threadFilterGroup =
+          projectFilterGroupsRef.current.find((project) =>
+            project.memberProjectRefs.some(
+              (projectRef) =>
+                projectRef.environmentId === thread.environmentId &&
+                projectRef.projectId === thread.projectId,
+            ),
+          ) ?? null;
         const moveTargets =
           threadProjectGroup?.memberProjects.filter(
             (member) => member.environmentId !== thread.environmentId,
@@ -4099,10 +4148,10 @@ export default function Sidebar() {
           api.contextMenu.show(
             buildThreadActionMenuItems({
               branch: thread.branch ?? null,
-              projectFilter: threadProjectGroup
+              projectFilter: threadFilterGroup
                 ? {
-                    label: threadProjectGroup.displayName,
-                    isActive: projectScopeKey === threadProjectGroup.projectKey,
+                    label: threadFilterGroup.displayName,
+                    isActive: isolatedProjectKey === threadFilterGroup.projectKey,
                   }
                 : null,
               isPinned,
@@ -4137,13 +4186,15 @@ export default function Sidebar() {
         }
         switch (clicked.value) {
           case "filter-by-project":
-            // This item is the only scope control here, so picking the
-            // already-scoped project again is the way back to all projects.
-            if (threadProjectGroup) {
-              setProjectScopeKey(
-                projectScopeKey === threadProjectGroup.projectKey
-                  ? null
-                  : threadProjectGroup.projectKey,
+            // This item is the only filter control here, so picking the
+            // already-isolated project again is the way back to all projects.
+            if (threadFilterGroup) {
+              setHiddenProjectKeys(
+                isolateProjectKey(
+                  hiddenProjectKeys,
+                  projectFilterGroupsRef.current,
+                  threadFilterGroup.projectKey,
+                ),
               );
             }
             return;
@@ -4457,13 +4508,14 @@ export default function Sidebar() {
       deleteThread,
       exportThreadForMove,
       handleMultiSelectContextMenu,
+      hiddenProjectKeys,
       importThreadForMove,
+      isolatedProjectKey,
       markThreadUnread,
       openProjectSettings,
-      projectScopeKey,
       projectByKey,
       serverConfigs,
-      setProjectScopeKey,
+      setHiddenProjectKeys,
       setThreadAutoSettle,
       startThreadRename,
       updateThreadMetadata,
@@ -4715,24 +4767,24 @@ export default function Sidebar() {
                   onItemHighlighted={(item) => {
                     highlightedProjectScopeKeyRef.current = item?.value ?? null;
                   }}
-                  value={selectedProjectScopeItem}
+                  // Rows act on click rather than holding a selection, so a
+                  // second click on the isolated project can bring all back.
+                  value={NO_PROJECT_SCOPE_ITEM}
                   onValueChange={(item) => {
                     if (suppressNextScopeChangeRef.current) {
                       suppressNextScopeChangeRef.current = false;
                       return;
                     }
                     if (!item) return;
-                    setProjectScopeKey(item.value === "all" ? null : item.value);
+                    setHiddenProjectKeys(
+                      isolateProjectKey(hiddenProjectKeys, projectFilterGroups, item.value),
+                    );
                   }}
                 >
                   <ComboboxTrigger
                     render={
                       <SidebarHeaderIconButton
-                        label={
-                          scopedProjectGroup
-                            ? `Filter threads by project: ${scopedProjectGroup.displayName}`
-                            : "Filter threads by project"
-                        }
+                        label={`Filter threads by project: ${projectScopeTriggerLabel}`}
                       />
                     }
                   >
@@ -4783,10 +4835,43 @@ export default function Sidebar() {
                         })
                       }
                     />
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={
+                        allProjectsCheckboxState === "all"
+                          ? true
+                          : allProjectsCheckboxState === "none"
+                            ? false
+                            : "mixed"
+                      }
+                      className="grid h-8 w-full cursor-pointer grid-cols-[1rem_1fr] items-center gap-2 px-3 text-left text-sm font-medium hover:bg-accent"
+                      onClick={() => {
+                        setHiddenProjectKeys(
+                          toggleAllHiddenProjectKeys(hiddenProjectKeys, projectFilterGroups),
+                        );
+                      }}
+                    >
+                      <span className="flex size-4 items-center justify-center">
+                        {allProjectsCheckboxState === "all" ? (
+                          <CheckIcon className="size-3.5" />
+                        ) : allProjectsCheckboxState === "partial" ? (
+                          <MinusIcon className="size-3.5" />
+                        ) : null}
+                      </span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <FolderIcon className="size-4 shrink-0" />
+                        <span className="min-w-0 truncate">All projects</span>
+                      </span>
+                    </button>
+                    <div className="mx-2 h-px bg-border" />
                     <ComboboxEmpty>No matching projects.</ComboboxEmpty>
                     <ComboboxList>
                       {(item: (typeof projectScopeItems)[number]) => {
                         const project = projectGroupByScopeKey.get(item.value) ?? null;
+                        const projectHidden =
+                          project !== null && hiddenProjectKeys.includes(project.projectKey);
+                        const isGeneralChat = item.value === GENERAL_CHAT_PROJECT_KEY;
                         return (
                           <ComboboxItem
                             key={item.value}
@@ -4797,19 +4882,43 @@ export default function Sidebar() {
                             }}
                           >
                             {project ? (
-                              <ProjectFavicon project={project} className="size-4 shrink-0" />
+                              <>
+                                <button
+                                  type="button"
+                                  aria-label={
+                                    projectHidden
+                                      ? `Show ${project.displayName}`
+                                      : `Hide ${project.displayName}`
+                                  }
+                                  aria-pressed={!projectHidden}
+                                  className="flex size-5 shrink-0 cursor-pointer items-center justify-center rounded hover:bg-accent"
+                                  onPointerDown={(event) => {
+                                    event.stopPropagation();
+                                    event.preventDefault();
+                                  }}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setHiddenProjectKeys(
+                                      toggleHiddenProjectKey(hiddenProjectKeys, project.projectKey),
+                                    );
+                                  }}
+                                >
+                                  {!projectHidden ? <CheckIcon className="size-3.5" /> : null}
+                                </button>
+                                <ProjectFavicon project={project} className="size-4 shrink-0" />
+                              </>
                             ) : (
                               <FolderIcon className="size-4 shrink-0" />
                             )}
                             <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
-                            {project && showProjectEnvironments ? (
+                            {project && !isGeneralChat && showProjectEnvironments ? (
                               <ProjectEnvironmentBadge
                                 group={project}
                                 primaryEnvironmentId={primaryEnvironmentId}
                                 machineByEnvironmentId={environmentMachineById}
                               />
                             ) : null}
-                            {project ? (
+                            {project && !isGeneralChat ? (
                               <Button
                                 size="icon-xs"
                                 variant="ghost-muted"
@@ -5238,6 +5347,19 @@ export default function Sidebar() {
                 </>
               ) : scopedProjectGroup ? (
                 `No threads in ${scopedProjectGroup.displayName} yet`
+              ) : allProjectsCheckboxState === "none" ? (
+                <>
+                  <span>No projects selected</span>
+                  <button
+                    type="button"
+                    onClick={() => setHiddenProjectKeys([])}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border px-2.5 py-1 text-2xs font-medium text-sidebar-muted-foreground transition-colors hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
+                  >
+                    Select all
+                  </button>
+                </>
+              ) : allProjectsCheckboxState === "partial" ? (
+                `No threads in the ${visibleProjectGroups.length} selected projects yet`
               ) : (
                 "No threads yet"
               )}
