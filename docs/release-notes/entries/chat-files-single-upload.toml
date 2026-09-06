@@ -1,0 +1,4 @@
+id = "chat-files-single-upload"
+category = "fix"
+functionality = "chat attachments"
+text = "Chat files now use a single upload and attachment display instead of being sent and shown twice."
