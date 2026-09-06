@@ -702,3 +702,18 @@ id = "upstream-pr-dismissal-toolbar"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Share upstream-adapted local-storage decoding with project exclusions, apply both row filters in one memo, and extend the existing dismissal toolbar with hidden-project restoration without changing its selection behavior."
+
+[[patch]]
+name = "fork-headless-delivery"
+subject = "feat(server): deliver and update the headless Linux server"
+class = "product"
+purpose = "Build the Linux headless artifact and provide service-managed update discovery, installation, health checks, restart, and rollback with an authenticated immediate update check."
+retire_when = "Upstream or maintained shared tooling provides an equivalent headless artifact and update workflow."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "The fork adapter delegates SEA and native dependency staging to upstream build-cli-archive, preserving the published asset name and bin/t3 service path. New archives need no host Node; the updater checks a transitional Node-based current release before promotion so rollback remains executable. Automatic upgrades check active and queued work before download and before promotion, defer with a retry marker, and require explicit manual --force to bypass activity checks or escalate SIGKILL. Health checks verify the selected release version and rollback verifies the previous version. Release smoke runs the unpacked launcher without PATH and verifies frozen historical migration, replay and restart. 2026-09-20: the adapter derives the node_modules it requires from upstream's runtime-external dependency list instead of a fixed set, after upstream 2005 dropped msgpackr-extract."
+[[patch.decision]]
+id = "upstream-headless-delivery"
+date = "2026-09-16"
+decided = "retain"
+rationale = "Upstream does not provide the fork's service-managed headless Linux artifact, authenticated update check, idle-aware promotion and rollback workflow, or historical-database release smoke coverage."
