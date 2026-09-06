@@ -1,0 +1,6 @@
+Bottom: 762602e48aa894a87912a26dc2983f636e2ed2ae
+Top:    762602e48aa894a87912a26dc2983f636e2ed2ae
+Author: User <user@example.com>
+Date:   2026-09-05 21:01:29 -0600
+
+feat(recovery): diagnose resource pressure and recover bounded resources
