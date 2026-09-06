@@ -241,3 +241,18 @@ retire_when = "Upstream ships a binary-capable workspace upload RPC with drag-an
 depends_on = ["fork-build-ci-compat"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-web-files-upload."
+
+[[patch]]
+name = "fork-chat-file-attachments-temporary"
+subject = "feat(chat): carry tmp file attachment handoff pending removal"
+class = "product"
+purpose = "TEMPORARY structural holder for the duplicate non-image chat attachment path (base64 send, tmp-dir store, prompt injection, parallel fileAttachments field). Upstream file uploads already provide readable server paths; this concern isolates the duplicate so the follow-up removal drops it in one step while keeping historical messages decodable."
+retire_when = "Scheduled: remove after the structural reorganization lands, retaining historical-message and older-client compatibility."
+depends_on = ["fork-provider-turn-safety", "fork-thread-transfer", "fork-resource-recovery", "fork-workspace-file-uploads"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-chat-file-attachments. [fork-chat-file-attachments] fileAttachments remains a parallel optional message field carrying fork-only ChatFileHandoffAttachment values with server paths. Upstream now also has a distinct pathless ChatFileAttachment member in ChatAttachment; do not merge the two wire shapes."
+[[patch.decision]]
+id = "upstream-chat-file-attachment-name"
+date = "2026-08-28"
+decided = "adapt"
+rationale = "Upstream added a pathless ChatFileAttachment member to ChatAttachment. Rename the fork's parallel path-bearing schema to ChatFileHandoffAttachment so both contracts coexist without changing the fork's fileAttachments wire field or /tmp handoff behavior."
