@@ -517,6 +517,7 @@ describe("applyThreadDetailEvent", () => {
         payload: {
           threadId: ThreadId.make("thread-1"),
           ...key,
+          url: "https://github.com/pingdotgg/t3code/pull/42?canonical=1",
           snapshot,
           stack: null,
           updatedAt: "2026-04-02T00:01:00.000Z",
@@ -524,6 +525,9 @@ describe("applyThreadDetailEvent", () => {
       });
       if (synced.kind !== "updated") throw new Error("expected update");
       expect(synced.thread.pullRequests[0]?.snapshot).toEqual(snapshot);
+      expect(synced.thread.pullRequests[0]?.url).toBe(
+        "https://github.com/pingdotgg/t3code/pull/42?canonical=1",
+      );
 
       const unknown = applyThreadDetailEvent(synced.thread, {
         ...baseEventFields,
