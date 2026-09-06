@@ -51,7 +51,7 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
   const path = yield* Path.Path;
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const serverConfig = yield* Effect.service(ServerConfig.ServerConfig);
-  const resolvedEnvironment = environment ?? process.env;
+  const resolvedEnvironment = { ...process.env, ...environment };
 
   type MaterializedImageAttachments = {
     readonly imagePaths: ReadonlyArray<string>;
