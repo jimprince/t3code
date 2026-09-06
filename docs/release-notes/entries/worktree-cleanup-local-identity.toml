@@ -1,0 +1,4 @@
+id = "worktree-cleanup-local-identity"
+category = "fix"
+functionality = "worktree cleanup"
+text = "Worktree cleanup now requires --local-state-dir to verify the environment and rechecks thread state before each removal."
