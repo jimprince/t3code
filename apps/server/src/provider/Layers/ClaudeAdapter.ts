@@ -5511,6 +5511,56 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     },
   );
 
+  const forkThread: NonNullable<ClaudeAdapterShape["forkThread"]> = Effect.fn("forkThread")(
+    function* (threadId, input) {
+      const context = yield* requireSession(threadId);
+      const sourceTurnCount = context.turnStartMessageIds.length;
+      if (input.retainedTurnCount > sourceTurnCount) {
+        return null;
+      }
+
+      const targetSessionId = yield* randomUUIDv4;
+      if (input.retainedTurnCount === 0) {
+        return {
+          resumeCursor: {
+            sessionId: targetSessionId,
+            createSession: true,
+            turnCount: 0,
+          },
+          turnCount: 0,
+        };
+      }
+
+      const sourceSessionId = context.resumeSessionId;
+      const retainedBoundary = context.turnStartMessageIds[input.retainedTurnCount - 1];
+      // Upstream now persists native turn-start ids instead of the fork's
+      // assistant-boundary map. The current tip still has an exact assistant
+      // anchor; older selections deliberately use orchestration's transcript
+      // fallback rather than guessing across compaction or interrupted turns.
+      if (
+        !sourceSessionId ||
+        input.retainedTurnCount !== sourceTurnCount ||
+        retainedBoundary === null ||
+        retainedBoundary !== input.retainedTurnId ||
+        !context.lastAssistantUuid
+      ) {
+        return null;
+      }
+
+      return {
+        resumeCursor: {
+          resume: sourceSessionId,
+          sessionId: targetSessionId,
+          forkSession: true,
+          resumeSessionAt: context.lastAssistantUuid,
+          turnCount: input.retainedTurnCount,
+          turnStartMessageIds: context.turnStartMessageIds.slice(0, input.retainedTurnCount),
+        },
+        turnCount: input.retainedTurnCount,
+      };
+    },
+  );
+
   const respondToRequest: ClaudeAdapterShape["respondToRequest"] = Effect.fn("respondToRequest")(
     function* (threadId, requestId, decision) {
       const context = yield* requireSession(threadId);
@@ -5602,6 +5652,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     interruptTurn,
     readThread,
     rollbackThread,
+    forkThread,
     respondToRequest,
     respondToUserInput,
     stopSession,
