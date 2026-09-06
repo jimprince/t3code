@@ -1533,34 +1533,6 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
-      const thread = yield* requireThread({
-        readModel,
-        command,
-        threadId: command.threadId,
-      });
-        return [];
-      }
-        return [];
-      }
-      return {
-        ...(yield* withEventBase({
-          aggregateKind: "thread",
-          aggregateId: command.threadId,
-          occurredAt: command.createdAt,
-          commandId: command.commandId,
-        })),
-        payload: {
-          threadId: command.threadId,
-          turnId: command.turnId,
-          achieved: command.achieved,
-          reason: command.reason,
-          continuationRequested: command.continuationRequested,
-          evaluatedAt: command.createdAt,
-          updatedAt: command.createdAt,
-        },
-      };
-    }
-
     case "thread.import": {
       // Thread-move import: expand a PortableThread into the existing event
       // vocabulary so projections, reactors, and clients need no
@@ -1674,13 +1646,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         });
       }
 
+      if (portable.goal !== null) {
+        // Compat: a source thread may still carry a goal from before goal
+        // continuation was removed. Preserve it losslessly, but stamp the
+        // final imported turn as its last-seen turn so the historical record
+        // doesn't point at a stale turn from the source environment.
+        const lastImportedTurnId = orderedCheckpoints.at(-1)?.turnId ?? portable.goal.lastTurnId;
         plannedEvents.push({
           ...(yield* eventBase()),
+          type: "thread.goal-set",
           payload: {
             threadId: command.threadId,
-              // Mark the final imported turn as already evaluated so the
-              // GoalReactor does not fire an evaluation (and possibly an
-              // auto-continuation turn) right after the move lands.
+            goal: {
+              ...portable.goal,
               lastTurnId: lastImportedTurnId,
             },
           },
