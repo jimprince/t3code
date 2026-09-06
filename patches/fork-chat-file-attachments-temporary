@@ -1,0 +1,6 @@
+Bottom: cad3c979efd114f605dc0488f7a385c80955c816
+Top:    cad3c979efd114f605dc0488f7a385c80955c816
+Author: User <user@example.com>
+Date:   2026-09-05 21:03:50 -0600
+
+feat(chat): carry tmp file attachment handoff pending removal
