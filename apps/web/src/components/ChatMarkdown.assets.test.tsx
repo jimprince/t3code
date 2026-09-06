@@ -35,7 +35,10 @@ vi.mock("../state/session", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../state/session")>()),
   readEnvironmentScope: () => false,
   useEnvironmentScope: () => false,
-  usePreparedConnection: () => ({ _tag: "Some", value: { httpBaseUrl: "https://host.test" } }),
+  usePreparedConnection: () => ({
+    _tag: "Some",
+    value: { httpBaseUrl: "https://host.test", target: { _tag: "PrimaryConnectionTarget" } },
+  }),
 }));
 vi.mock("../state/entities", () => ({
   readEnvironmentSupportsServerBrowser: () => false,
