@@ -696,3 +696,18 @@ id = "upstream-effect-cli-literals"
 date = "2026-09-20"
 decided = "adapt"
 rationale = "Use upstream's Effect CLI Literals constructor for both upstream build selectors and the fork desktop flavor selector."
+
+[[patch]]
+name = "fork-mobile-delivery"
+subject = "feat(mobile): add EAS delivery lanes"
+class = "product"
+purpose = "Maintain fork mobile identity, EAS routing, widget identifiers, runtime policy, and delivery documentation."
+retire_when = "Upstream or maintained shared tooling provides equivalent capabilities, or the fork intentionally stops requiring this concern."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Removed the retired mobile-track controller, resolver and service template after caller checks (including no installed controller or container on the dev VM). Mobile project grouping/sorting is owned by project selection."
+[[patch.decision]]
+id = "upstream-mobile-production-delivery"
+date = "2026-09-16"
+decided = "retire"
+rationale = "Retire this patch's older production EAS workflow because upstream now preserves version overrides and preview profiles, auto-submits store builds, reconciles per-platform builds on push, and fingerprint-gates OTA publication. Retain the fork-specific identity, development lanes, runtime policy, tests, and deployment documentation."
