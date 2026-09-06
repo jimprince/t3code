@@ -1,6 +1,6 @@
 Bottom: 8568e013abf3e0dd4e7f15c5ebf601bb73c22102
 Top:    c20ac38ea0a5263afa546f8ff0c012097cce0c7a
 Author: User <user@example.com>
-Date:   2026-09-05 21:20:47 -0600
+Date:   2026-09-05 21:21:27 -0600
 
-feat(chat): carry tmp file attachment handoff pending removal
+fix(chat): preserve legacy attachment history and older clients
