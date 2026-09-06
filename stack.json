@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "0e1026c43d67afd2842ff856b7925f86183119cf",
+  "prev": "eaa3dbbb09b3649b1986b3d023f903a1fb9aa343",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -13,7 +13,7 @@
     "old-fork-conversation-fork",
     "old-fork-thread-transfer",
     "old-fork-thread-goals-temporary",
-    "fork-project-selection",
+    "old-fork-project-selection",
     "fork-manual-thread-order",
     "fork-private-connection-defaults",
     "fork-resource-recovery",
@@ -71,9 +71,6 @@
     "fork-private-connection-defaults": {
       "oid": "197ef36575a835184039393bfc82e2686cf00192"
     },
-    "fork-project-selection": {
-      "oid": "8061c71dde0277995982bc98ccb21fb81b6e2056"
-    },
     "fork-release-publication": {
       "oid": "d2fb60db45bdcaec68f0b6e5966409baab5eb65f"
     },
@@ -103,6 +100,9 @@
     },
     "old-fork-general-chat": {
       "oid": "1b87e8e0814fc958616cb77b1f611ed11e998ce6"
+    },
+    "old-fork-project-selection": {
+      "oid": "8061c71dde0277995982bc98ccb21fb81b6e2056"
     },
     "old-fork-provider-turn-safety": {
       "oid": "43581acce678aaa1af26f1ae8f0fa107c6793b86"
