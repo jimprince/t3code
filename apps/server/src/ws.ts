@@ -2,6 +2,8 @@ import {
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
 } from "@t3tools/shared/usageLimits";
+import { listThreadSubscriptions, updateThreadSubscriptions } from "./threadSubscriptions.ts";
+import { ThreadSubscriptionsError } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -181,6 +183,7 @@ import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
+const isThreadSubscriptionsError = Schema.is(ThreadSubscriptionsError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -1874,6 +1877,30 @@ const makeWsRpcLayer = (
           .refreshStatus(cwd)
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
+      const withSubscriptionThread = <A>(threadId: ThreadId, action: () => Promise<A>) =>
+        Effect.gen(function* () {
+          const thread = yield* projectionSnapshotQuery.getThreadShellById(threadId);
+          if (Option.isNone(thread))
+            return yield* Effect.fail(
+              new ThreadSubscriptionsError({
+                message: "Thread does not exist in this environment.",
+              }),
+            );
+          return yield* Effect.tryPromise({
+            try: action,
+            catch: (error) =>
+              new ThreadSubscriptionsError({
+                message: error instanceof Error ? error.message : "Cannot manage subscriptions.",
+              }),
+          });
+        }).pipe(
+          Effect.mapError((error) =>
+            isThreadSubscriptionsError(error)
+              ? error
+              : new ThreadSubscriptionsError({ message: "Cannot read selected thread." }),
+          ),
+        );
+
       return WsRpcGroup.of({
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
@@ -2727,6 +2754,11 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
           }),
+
+        [WS_METHODS.serverThreadSubscriptions]: (input) =>
+          withSubscriptionThread(input.threadId, () => listThreadSubscriptions(input.threadId)),
+        [WS_METHODS.serverUpdateThreadSubscriptions]: (input) =>
+          withSubscriptionThread(input.threadId, () => updateThreadSubscriptions(input)),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
             "rpc.aggregate": "cloud",

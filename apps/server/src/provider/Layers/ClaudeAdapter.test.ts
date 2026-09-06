@@ -2683,6 +2683,10 @@ describe("ClaudeAdapterLive", () => {
       const errors = events.filter((event) => event.type === "runtime.error");
       assert.equal(errors.length, 1);
       assert.equal(errors[0]?.payload.message, expected);
+      assert.equal(
+        errors[0]?.payload.code,
+        expected === usageLimitMessage ? "usage_limit" : undefined,
+      );
       assert.equal(completedTurn(events).state, "failed");
       assert.equal(completedTurn(events).errorMessage, expected);
     }).pipe(

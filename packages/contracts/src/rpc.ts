@@ -5,6 +5,12 @@ import {
   ChatGptHandoffInput,
   ChatGptHandoffState,
 } from "./providerSetup.ts";
+import {
+  ThreadSubscriptionsInput,
+  ThreadSubscriptionsResult,
+  UpdateThreadSubscriptionsInput,
+  ThreadSubscriptionsError,
+} from "./threadSubscriptions.ts";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
@@ -399,6 +405,9 @@ export const WS_METHODS = {
   serverGetUsageSummary: "server.getUsageSummary",
   serverRefreshUsageRates: "server.refreshUsageRates",
 
+  serverThreadSubscriptions: "server.threadSubscriptions",
+  serverUpdateThreadSubscriptions: "server.updateThreadSubscriptions",
+
   // Cloud environment methods
   cloudGetRelayClientStatus: "cloud.getRelayClientStatus",
   cloudInstallRelayClient: "cloud.installRelayClient",
@@ -695,6 +704,17 @@ const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
   error: EnvironmentAuthorizationError,
+});
+
+const WsServerThreadSubscriptionsRpc = Rpc.make(WS_METHODS.serverThreadSubscriptions, {
+  payload: ThreadSubscriptionsInput,
+  success: ThreadSubscriptionsResult,
+  error: Schema.Union([EnvironmentAuthorizationError, ThreadSubscriptionsError]),
+});
+const WsServerUpdateThreadSubscriptionsRpc = Rpc.make(WS_METHODS.serverUpdateThreadSubscriptions, {
+  payload: UpdateThreadSubscriptionsInput,
+  success: ThreadSubscriptionsResult,
+  error: Schema.Union([EnvironmentAuthorizationError, ThreadSubscriptionsError]),
 });
 
 const WsCloudGetRelayClientStatusRpc = Rpc.make(WS_METHODS.cloudGetRelayClientStatus, {
@@ -1467,6 +1487,9 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
+  WsServerThreadSubscriptionsRpc,
+  WsServerUpdateThreadSubscriptionsRpc,
+
   WsCloudGetRelayClientStatusRpc,
   WsCloudInstallRelayClientRpc,
   WsPullRequestsListRpc,
