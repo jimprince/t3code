@@ -33,7 +33,13 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       label: "environment-data:orchestration:archived-shell-snapshot",
       tag: ORCHESTRATION_WS_METHODS.getArchivedShellSnapshot,
     }),
+    exportThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:export-thread",
+      tag: ORCHESTRATION_WS_METHODS.exportThread,
     }),
+    importThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:import-thread",
+      tag: ORCHESTRATION_WS_METHODS.importThread,
     }),
     forkThread: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:orchestration:fork-thread",
