@@ -406,6 +406,51 @@ export function orderItemsByPreferredIds<TItem, TId>(input: {
   return [...ordered, ...remaining];
 }
 
+/**
+ * The two orders one drop inside a draggable thread block (the pinned block,
+ * or the fork's inbox) produces.
+ *
+ * `renderedKeys` is EVERY row the block rendered, drag-capable or not, in
+ * display order — the same list handed to dnd-kit's SortableContext. Rows on
+ * servers without the reorder capability still occupy space and still act as
+ * drop targets, so the move is computed against the full list: index
+ * arithmetic over only the capable rows commits a different placement than
+ * the drag previewed, and rendering only the capable rows in their new order
+ * yanks every incapable row to the bottom of the block on drop.
+ *
+ * Returns `renderedOrder` (what the block should render, matching the drag
+ * preview row for row) and `reorderedKeys` (the capable rows alone, which is
+ * what an order-key plan operates on). Null when the drop changes nothing:
+ * dropped on itself, unknown row, the dragged row cannot be reordered, or
+ * the capable rows end up in the order they started in — which is what
+ * dropping across a neighbouring incapable row looks like.
+ */
+export function planThreadBlockDrop(input: {
+  readonly renderedKeys: readonly string[];
+  readonly reorderableKeys: ReadonlySet<string>;
+  readonly activeKey: string;
+  readonly overKey: string | null;
+}): {
+  readonly renderedOrder: readonly string[];
+  readonly reorderedKeys: readonly string[];
+} | null {
+  const { activeKey, overKey, renderedKeys, reorderableKeys } = input;
+  if (overKey === null || overKey === activeKey) return null;
+  if (!reorderableKeys.has(activeKey)) return null;
+  const fromIndex = renderedKeys.indexOf(activeKey);
+  const toIndex = renderedKeys.indexOf(overKey);
+  if (fromIndex === -1 || toIndex === -1) return null;
+  // Same splice pair as @dnd-kit/sortable's arrayMove, which is what the
+  // sorting strategy previewed the move with.
+  const renderedOrder = [...renderedKeys];
+  renderedOrder.splice(fromIndex, 1);
+  renderedOrder.splice(toIndex, 0, activeKey);
+  const reorderedKeys = renderedOrder.filter((key) => reorderableKeys.has(key));
+  const currentKeys = renderedKeys.filter((key) => reorderableKeys.has(key));
+  if (reorderedKeys.every((key, index) => key === currentKeys[index])) return null;
+  return { renderedOrder, reorderedKeys };
+}
+
 export function getSidebarThreadIdsToPrewarm<TThreadId>(
   visibleThreadIds: readonly TThreadId[],
   limit = SIDEBAR_THREAD_PREWARM_LIMIT,
@@ -595,6 +640,11 @@ export function sortThreadsForSidebar<
 // (state/thread-sort) so web and mobile compute identical pinned orders.
 export { pinOrderKeyBetween, planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
 export { sortPinnedThreadsByOrderKey as sortPinnedThreadsForSidebar } from "@t3tools/client-runtime/state/thread-sort";
+// Fork: the inbox's manual order shares the same key math. The sort takes an
+// already-default-ordered list, so callers apply it on top of
+// sortThreadsForSidebar rather than instead of it.
+export { planSidebarReorder } from "@t3tools/client-runtime/state/thread-sort";
+export { sortThreadsByManualOrderKey as applyManualSidebarOrder } from "@t3tools/client-runtime/state/thread-sort";
 
 /**
  * Search the already-ordered sidebar thread collection by title only.
