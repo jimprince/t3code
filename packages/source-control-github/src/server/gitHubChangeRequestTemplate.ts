@@ -29,8 +29,6 @@ const TEMPLATE_DIRECTORIES = [
   "docs/PULL_REQUEST_TEMPLATE",
 ] as const;
 
-const TREE_PATHS = [...TEMPLATE_PATHS, ...TEMPLATE_DIRECTORIES] as const;
-
 type ExecuteGit = SourceControlHost.SourceControlHost["Service"]["git"]["execute"];
 
 interface TemplateTreeEntry {
@@ -135,14 +133,29 @@ export const detect = Effect.fn("gitHubChangeRequestTemplate.detect")(function* 
   cwd: string,
   treeish: string,
   executeGit: ExecuteGit,
+  convention?: {
+    readonly paths: ReadonlyArray<string>;
+    readonly directories: ReadonlyArray<string>;
+  },
 ) {
+  const templatePaths = convention?.paths ?? TEMPLATE_PATHS;
+  const templateDirectories = convention?.directories ?? TEMPLATE_DIRECTORIES;
   return yield* Effect.gen(function* () {
     // Worktree paths can be replaced between validation and open. Read regular blobs from the
     // committed base tree so repository-controlled symlinks and path races never reach the host filesystem.
     const result = yield* executeGit({
       operation: "gitHubChangeRequestTemplate.listTemplates",
       cwd,
-      args: ["ls-tree", "-r", "-z", "--full-tree", treeish, "--", ...TREE_PATHS],
+      args: [
+        "ls-tree",
+        "-r",
+        "-z",
+        "--full-tree",
+        treeish,
+        "--",
+        ...templatePaths,
+        ...templateDirectories,
+      ],
       maxOutputBytes: TREE_LIST_MAX_BYTES,
       appendTruncationMarker: true,
     });
@@ -152,7 +165,7 @@ export const detect = Effect.fn("gitHubChangeRequestTemplate.detect")(function* 
 
     const entries = parseTemplateTreeEntries(result.stdout);
     const entriesByPath = new Map(entries.map((entry) => [entry.path, entry]));
-    for (const templatePath of TEMPLATE_PATHS) {
+    for (const templatePath of templatePaths) {
       const entry = entriesByPath.get(templatePath);
       if (!entry) {
         continue;
@@ -163,7 +176,7 @@ export const detect = Effect.fn("gitHubChangeRequestTemplate.detect")(function* 
       }
     }
 
-    for (const directory of TEMPLATE_DIRECTORIES) {
+    for (const directory of templateDirectories) {
       const directoryTemplate = yield* readTemplateDirectory({
         cwd,
         executeGit,
