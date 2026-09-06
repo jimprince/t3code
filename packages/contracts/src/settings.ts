@@ -1,3 +1,7 @@
+import {
+  forkProjectSelectionClientSettings,
+  forkProjectSelectionClientSettingsPatch,
+} from "./forkProjectSelectionSettings.ts";
 import { SshDeviceHostConfigs } from "./device.ts";
 import {
   AuthSettingsWriteScope,
@@ -298,6 +302,7 @@ export const ChatWidth = Schema.Literals(["comfortable", "wide", "full"]);
 export type ChatWidth = typeof ChatWidth.Type;
 
 export const ClientSettingsSchema = Schema.Struct({
+  ...forkProjectSelectionClientSettings,
   notificationMode: NotificationMode.pipe(
     Schema.withDecodingDefault(Effect.succeed("off" as const)),
   ),
@@ -1546,6 +1551,7 @@ export function requiredScopesForServerSettingsPatch(
 }
 
 export const ClientSettingsPatch = Schema.Struct({
+  ...forkProjectSelectionClientSettingsPatch,
   notificationMode: Schema.optionalKey(NotificationMode),
   inAppNotificationsEnabled: Schema.optionalKey(Schema.Boolean),
   diffColorScheme: Schema.optionalKey(DiffColorScheme),
