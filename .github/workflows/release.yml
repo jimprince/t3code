@@ -193,6 +193,16 @@ jobs:
         with:
           bun-version: 1.3.11
 
+      - name: Report nightly delivery source
+        if: steps.release_meta.outputs.release_channel == 'nightly'
+        env:
+          RELEASE_REF: ${{ steps.release_meta.outputs.ref }}
+          RELEASE_VERSION: ${{ steps.release_meta.outputs.version }}
+          RELEASE_TAG: ${{ steps.release_meta.outputs.tag }}
+        run: |
+          source_sha="$(bun -e 'import { releaseCISource } from "./scripts/ci/reuse-release-ci.ts"; console.log(releaseCISource(process.env.RELEASE_REF, process.env.RELEASE_VERSION));')"
+          scripts/ci/report-nightly-delivery "" "$source_sha" "${RELEASE_TAG%-fork.*}" "$RELEASE_TAG"
+
       - id: verified_ci
         name: Reuse successful CI source verification
         env:
