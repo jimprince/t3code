@@ -1,0 +1,4 @@
+id = "remote-worktree-missing-base-message"
+category = "fix"
+functionality = "worktrees"
+text = "Create worktrees from the selected branch’s configured remote and show recovery guidance when the remote branch is missing."
