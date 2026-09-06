@@ -122,3 +122,10 @@ requires a terminal finish or an error, or on idle reconciliation after `session
 the OpenCode session is idle. Ingestion's assistant-completion recovery only settles the projected
 session for a segment marked terminal, so the provider runtime and the projected session cannot
 disagree while a turn is still running.
+
+## Stale provider responses
+
+An approval or user-input response whose provider callback is gone records a stale-response
+failure and clears the session's active turn. Missing persisted bindings or resume state follow
+the same recovery path. Other provider errors remain visible without clearing a recoverable
+turn, and a failed response never fabricates an approval or user-input resolution.

@@ -423,6 +423,7 @@ import {
   timelineHasEphemeralPreviewUrls,
   observeProactivePanelUserChoice,
   resolveProactiveTurnDiffAction,
+  resolveComposerSubmitIntent,
   resolveThreadMetadataUpdateForNextTurn,
   resolveSendEnvMode,
   revokeBlobPreviewUrl,
@@ -3276,6 +3277,20 @@ export default function ChatView(props: ChatViewProps) {
     attachDraftHeroComposerAnchorRef,
     captureDraftHeroComposerRect,
   ] = useDraftHeroLayoutTransition(isDraftHeroState);
+  const activeThreadForkState = activeThread as Thread | null | undefined;
+  const isThreadDetailLoading = Boolean(
+    isServerThread &&
+    activeThread &&
+    timelineEntries.length === 0 &&
+    activeThread.messages.length === 0 &&
+    activeThread.activities.length === 0 &&
+    activeThread.proposedPlans.length === 0 &&
+    (activeThreadForkState?.turnDiffSummaries?.length ?? 0) === 0 &&
+    (activeThread.latestTurn !== null ||
+      activeThread.session !== null ||
+      activeThread.goal !== null ||
+      activeThreadForkState?.pendingSourceProposedPlan !== undefined),
+  );
 
   const gitCwd = activeProject
     ? projectScriptCwd({
@@ -6640,6 +6655,15 @@ export default function ChatView(props: ChatViewProps) {
         }),
       );
     };
+    const submitIntent = resolveComposerSubmitIntent({
+      hasActiveThread: Boolean(activeThread),
+      environmentUnavailable: activeEnvironmentUnavailable,
+      hasPendingUserInput: activePendingProgress !== null,
+      pendingUserInputResponding: activePendingIsResponding,
+      isSendBusy,
+      isConnecting,
+      sendInFlight: sendInFlightRef.current,
+    });
     if (
       !activeThread ||
       isSendBusy ||
@@ -6678,7 +6702,13 @@ export default function ChatView(props: ChatViewProps) {
       });
       return;
     }
-    if (activePendingProgress) {
+    // The remaining "blocked" case is the fork's: a pending user-input prompt
+    // already being responded to must not also accept a new message.
+    if (submitIntent === "blocked") {
+      notifyDirectAnnotationAttached();
+      return;
+    }
+    if (submitIntent === "respond-to-user-input") {
       if (directAnnotation) {
         notifyDirectAnnotationAttached();
         return;
@@ -8506,6 +8536,7 @@ export default function ChatView(props: ChatViewProps) {
                 isWorking={!paintOnlyDisplayedTimeline && isWorking}
                 isPreparingWorktree={!paintOnlyDisplayedTimeline && isPreparingWorktree}
                 isCompacting={!paintOnlyDisplayedTimeline && isCompacting}
+                isThreadDetailLoading={!paintOnlyDisplayedTimeline && isThreadDetailLoading}
                 activeTurnStartedAt={paintOnlyDisplayedTimeline ? null : activeWorkStartedAt}
                 listRef={legendListRef}
                 timelineEntries={displayedTimeline.entries}
@@ -8732,7 +8763,6 @@ export default function ChatView(props: ChatViewProps) {
                             onSelectActivePendingUserInputOption={
                               onSelectActivePendingUserInputOption
                             }
-                            onAdvanceActivePendingUserInput={onAdvanceActivePendingUserInput}
                             onDismissActivePendingUserInput={onDismissUserInput}
                             onPreviousActivePendingUserInputQuestion={
                               onPreviousActivePendingUserInputQuestion
