@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Layer from "effect/Layer";
+import * as FileSystem from "effect/FileSystem";
 import { ServerConfig } from "../config.ts";
 import * as GitVcsDriver from "../vcs/GitVcsDriver.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
@@ -302,5 +303,114 @@ describe("Gitea branch pull requests", () => {
       });
       expect(h.requests[0]?.url).toBe("http://api.home:3000/api/v1/user");
     }),
+  );
+});
+
+describe("Gitea pull request actions", () => {
+  it.effect.each(["42", "#42", pr.html_url])("resolves %s with fork identity", (reference) =>
+    Effect.gen(function* () {
+      const h = harness([
+        { ...pr, head: { ...pr.head, repo: { id: 2, full_name: "alice/fork" } } },
+      ]);
+      expect(
+        yield* h.run(({ provider }) =>
+          provider.getChangeRequest({ cwd: "/repo", context, reference }),
+        ),
+      ).toMatchObject({
+        number: 42,
+        url: pr.html_url,
+        headRefName: "feature/slash",
+        isCrossRepository: true,
+        headRepositoryNameWithOwner: "alice/fork",
+      });
+      expect(h.requests[0]?.url).toBe("http://api.home:3000/api/v1/repos/brad/repo/pulls/42");
+    }),
+  );
+
+  it.effect.each([
+    "http://evil.home:3000/brad/repo/pulls/42",
+    "http://git.home:3000/brad/other/pulls/42",
+  ])("rejects a URL outside the selected repository: %s", (reference) =>
+    Effect.gen(function* () {
+      const h = harness([pr]);
+      yield* h.run(({ provider }) =>
+        Effect.flip(provider.getChangeRequest({ cwd: "/repo", context, reference })),
+      );
+      expect(h.requests).toHaveLength(0);
+    }),
+  );
+
+  it.effect("creates a PR with the requested body, fork and target branch", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const dir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-gitea-body-" });
+        const bodyFile = `${dir}/body.md`;
+        yield* fs.writeFileString(bodyFile, "Description\n\n- exact body");
+        const h = harness([pr], 201);
+        yield* h.run(({ provider }) =>
+          provider.createChangeRequest({
+            cwd: dir,
+            context,
+            title: "Feature",
+            bodyFile,
+            source: { refName: "feature/slash", repository: "alice/renamed-fork" },
+            headSelector: "feature/slash",
+            baseRefName: "main",
+          }),
+        );
+        const sent = h.requests[0];
+        expect(sent?.method).toBe("POST");
+        expect(sent?.url).toBe("http://api.home:3000/api/v1/repos/brad/repo/pulls");
+        expect(sent?.body).toMatchObject({ _tag: "Uint8Array" });
+        const body = sent?.body as { body: Uint8Array };
+        expect(
+          yield* Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(
+            new TextDecoder().decode(body.body),
+          ),
+        ).toEqual({
+          title: "Feature",
+          body: "Description\n\n- exact body",
+          head: "alice/renamed-fork:feature/slash",
+          base: "main",
+        });
+      }),
+    ).pipe(Effect.provide(runtimeLayer)),
+  );
+
+  it.effect("checks out a retained PR ref after its source branch was deleted", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const git = yield* GitVcsDriver.GitVcsDriver;
+        const cwd = yield* fs.makeTempDirectoryScoped({ prefix: "t3-gitea-checkout-" });
+        const run = (args: ReadonlyArray<string>) => git.execute({ cwd, operation: "test", args });
+        yield* run(["init", "--initial-branch=main"]);
+        yield* run(["config", "user.name", "Test"]);
+        yield* run(["config", "user.email", "test@example.com"]);
+        yield* run(["commit", "--allow-empty", "-m", "base"]);
+        yield* run(["checkout", "-b", "feature/slash"]);
+        yield* fs.writeFileString(`${cwd}/feature.txt`, "pull request content");
+        yield* run(["add", "feature.txt"]);
+        yield* run(["commit", "-m", "feature"]);
+        yield* run(["update-ref", "refs/pull/42/head", "HEAD"]);
+        yield* run(["checkout", "main"]);
+        yield* run(["branch", "-D", "feature/slash"]);
+        yield* run(["config", `url.${cwd}.insteadOf`, context.remoteUrl]);
+        const h = harness([
+          {
+            ...pr,
+            state: "closed",
+            merged: true,
+            head: { ...pr.head, ref: "refs/pull/42/head", label: "feature/slash" },
+          },
+        ]);
+        yield* h.run(({ provider }) =>
+          provider.checkoutChangeRequest({ cwd, context, reference: "42", force: true }),
+        );
+        expect(yield* fs.readFileString(`${cwd}/feature.txt`)).toBe("pull request content");
+        expect((yield* run(["branch", "--show-current"])).stdout.trim()).toBe("feature/slash");
+      }),
+    ).pipe(Effect.provide(runtimeLayer)),
   );
 });
