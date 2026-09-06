@@ -1,13 +1,14 @@
 {
   "version": 5,
-  "prev": "3493ad88a8c10344c0d56b142a8d886a26b6608b",
-  "head": "edb5c3b484a25630d86a87c3dfbfaec79942eee2",
+  "prev": "eb3767155156cb136f5db85018d2702bc22edaef",
+  "head": "c68020e3cb37b08cd15df9c4a99e430baf4f6730",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
-    "fork-thread-client-recovery"
+    "fork-thread-client-recovery",
+    "fork-general-chat"
   ],
   "unapplied": [
     "old-fork-build-ci-compat",
@@ -46,6 +47,9 @@
     },
     "fork-build-ci-compat": {
       "oid": "cd59e1f8ee85d8cbe394904af8ede12d2de03b6c"
+    },
+    "fork-general-chat": {
+      "oid": "c68020e3cb37b08cd15df9c4a99e430baf4f6730"
     },
     "fork-provider-turn-safety": {
       "oid": "43581acce678aaa1af26f1ae8f0fa107c6793b86"
