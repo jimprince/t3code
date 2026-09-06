@@ -7,7 +7,9 @@ import * as Path from "effect/Path";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 import { createModelSelection } from "@t3tools/shared/model";
-import { expect } from "vite-plus/test";
+import { afterEach, expect, vi } from "vite-plus/test";
+
+afterEach(() => vi.unstubAllEnvs());
 
 import { CodexSettings, ProviderInstanceId, TextGenerationError } from "@t3tools/contracts";
 
@@ -247,6 +249,25 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
         }),
     ),
   );
+
+  it.effect("inherits launch arguments when environment overrides only one variable", () => {
+    vi.stubEnv("T3CODE_CODEX_LAUNCH_ARGS", "--strict-config");
+    return withFakeCodexEnv(
+      {
+        output: JSON.stringify({ subject: "Preserve inherited environment", body: "" }),
+        environment: { T3CODE_TEST_OVERRIDE: "present" },
+        requireArg: "--strict-config",
+      },
+      (textGeneration) =>
+        textGeneration.generateCommitMessage({
+          cwd: process.cwd(),
+          branch: "feature/environment",
+          stagedSummary: "M README.md",
+          stagedPatch: "diff --git a/README.md b/README.md",
+          modelSelection: DEFAULT_TEST_MODEL_SELECTION,
+        }),
+    );
+  });
 
   it.effect("defaults git text generation codex effort to low", () =>
     withFakeCodexEnv(
