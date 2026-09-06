@@ -185,3 +185,10 @@ so this explicit download is also available when that server is on another machi
 Generated downloadable artifacts must live inside the thread's project or active worktree. Files
 written elsewhere, including screenshot-style temporary or evidence paths, cannot be downloaded
 from a chat link; move or copy them into the thread workspace first.
+
+## Private server addresses
+
+A bare local, LAN, or tailnet hostname without a port connects over HTTP on port 3773.
+An explicit address such as `https://server.local` keeps its protocol and port,
+including the standard HTTPS port. Enter the full address when your private server
+uses HTTPS or a custom port.

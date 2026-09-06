@@ -116,7 +116,8 @@ const normalizeRemoteBaseUrl = (
   }
 
   const withoutLeadingSlashes = trimmed.replace(/^\/+/, "");
-  const normalizedInput = /^[a-zA-Z][a-zA-Z\d+-]*:\/\//.test(withoutLeadingSlashes)
+  const hasExplicitProtocol = /^[a-zA-Z][a-zA-Z\d+-]*:\/\//.test(withoutLeadingSlashes);
+  const normalizedInput = hasExplicitProtocol
     ? withoutLeadingSlashes
     : `https://${withoutLeadingSlashes}`;
   let url: URL;
@@ -131,7 +132,7 @@ const normalizeRemoteBaseUrl = (
       protocol: url.protocol,
     });
   }
-  if (isLocalRemoteHost(url.hostname) && url.port === "") {
+  if (!hasExplicitProtocol && isLocalRemoteHost(url.hostname) && url.port === "") {
     url.protocol = "http:";
     url.port = DEFAULT_LOCAL_T3_BACKEND_PORT;
   }
