@@ -32,3 +32,13 @@ id = "stashimagecompression-timeout"
 date = "2026-07-29"
 decided = "adapt"
 rationale = "The too-large boundary test repeatedly exceeded the default timeout under parallel hosted CI while passing in isolation. Accept the one-line upstream-file edit until the test becomes reliably faster."
+
+[[patch]]
+name = "fork-worker-operations"
+subject = "feat(fork): operate worker threads from the t3-thread CLI"
+class = "product"
+purpose = "Provide the additive t3-thread operator CLI with pairing, persistent worker identity injected into provider processes, creation, continuation, results, and monitoring."
+retire_when = "Upstream or maintained shared tooling provides an equivalent scriptable worker interface, or the fork intentionally stops requiring this concern."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-t3-thread-operator-cli. [fork-t3-thread-operator-cli] CLI sends still require an explicit allowWhileRunning path; this is distinct from server adapter steering. Focused send-while-running tests document the rejection and the separate durable queue gap (Gitea PR25/issue27)."
