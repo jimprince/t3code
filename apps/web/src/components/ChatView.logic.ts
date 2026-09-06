@@ -789,6 +789,60 @@ export function isBranchMismatchDismissedForSession(key: string | null): boolean
   return key !== null && sessionDismissedBranchMismatchKeys.has(key);
 }
 
+export type EnvironmentUnavailableConnectionState = "connecting" | "disconnected" | "error";
+
+function sentence(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return /[.!?]$/u.test(trimmed) ? trimmed : `${trimmed}.`;
+}
+
+function formatRemoteBackendEndpoint(endpoint: string | null | undefined): string | null {
+  const trimmed = endpoint?.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+export function buildEnvironmentUnavailableDescription(input: {
+  readonly connectionState: EnvironmentUnavailableConnectionState;
+  readonly endpoint?: string | null;
+  readonly lastError?: string | null;
+}): string {
+  const lead =
+    input.connectionState === "connecting"
+      ? "Waiting for this environment to finish connecting before sending messages or running actions."
+      : "Reconnect this environment before sending messages or running actions.";
+  const details: string[] = [lead];
+  const lastError = input.lastError?.trim();
+  const endpoint = formatRemoteBackendEndpoint(input.endpoint);
+
+  if (lastError) {
+    details.push(sentence(`Last error: ${lastError}`));
+  } else if (input.connectionState === "disconnected") {
+    details.push("The saved remote backend connection is not active.");
+  }
+
+  if (endpoint) {
+    details.push(sentence(`Remote backend: ${endpoint}`));
+  }
+
+  return details.join(" ");
+}
+
 export function threadHasStarted(thread: Thread | null | undefined): boolean {
   return Boolean(
     thread && (thread.latestTurn !== null || thread.messages.length > 0 || thread.session !== null),
@@ -906,6 +960,29 @@ export async function waitForStartedServerThread(
       finish(false);
     }, timeoutMs);
   });
+}
+
+export type ComposerSubmitIntent = "blocked" | "respond-to-user-input" | "send-message";
+
+export function resolveComposerSubmitIntent(input: {
+  hasActiveThread: boolean;
+  environmentUnavailable: boolean;
+  hasPendingUserInput: boolean;
+  pendingUserInputResponding: boolean;
+  isSendBusy: boolean;
+  isConnecting: boolean;
+  sendInFlight: boolean;
+}): ComposerSubmitIntent {
+  if (!input.hasActiveThread || input.environmentUnavailable) {
+    return "blocked";
+  }
+  if (input.hasPendingUserInput) {
+    return input.pendingUserInputResponding ? "blocked" : "respond-to-user-input";
+  }
+  if (input.isSendBusy || input.isConnecting || input.sendInFlight) {
+    return "blocked";
+  }
+  return "send-message";
 }
 
 export interface LocalDispatchSnapshot {
