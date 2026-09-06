@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "69df42b83b3e990eaa13802123b3669ae8e85fb5",
+  "prev": "f2b1e8ff0a879f8dc2208609d37791fdb2fd0762",
   "head": "09aac71563c66a4f65f6fbe701aa9596cb677767",
   "applied": [],
   "unapplied": [
@@ -30,16 +30,13 @@
     "old-fork-headless-delivery",
     "old-fork-desktop-delivery",
     "old-fork-mobile-delivery",
-    "fork-release-publication",
+    "old-fork-release-publication",
     "fork-maintenance-automation"
   ],
   "hidden": [],
   "patches": {
     "fork-maintenance-automation": {
       "oid": "f57800d67d632b722168a8e8dd71ffbdb2517beb"
-    },
-    "fork-release-publication": {
-      "oid": "580c0088af109a910fb6f17f1aaff8dc749c7b84"
     },
     "old-fork-bounded-diagnostics": {
       "oid": "8e04870a2377ceddef5177300e1c150d4ba0c1ac"
@@ -91,6 +88,9 @@
     },
     "old-fork-provider-turn-safety": {
       "oid": "bce590f4b1376f8b79fd9a75ed0db925852f4c5d"
+    },
+    "old-fork-release-publication": {
+      "oid": "580c0088af109a910fb6f17f1aaff8dc749c7b84"
     },
     "old-fork-remote-file-downloads": {
       "oid": "b54022b3d88c81ffccb2bfac012b80cd22304769"
