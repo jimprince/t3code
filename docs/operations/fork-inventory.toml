@@ -135,3 +135,13 @@ id = "sidebar-project-header-styling"
 date = "2026-07-28"
 decided = "adapt"
 rationale = "The fork owns the General Chat structure (hideProjectHeader wrapper and chat affordance); upstream owns the design system. Preserve the structural additions while taking upstream styling."
+
+[[patch]]
+name = "fork-conversation-fork"
+subject = "feat(threads): fork a conversation from a selected message"
+class = "product"
+purpose = "Branch a conversation from a selected message with retained checkpoints: the boundary logic, orchestration command and RPC, provider-native fork support, and the web message menu."
+retire_when = "Upstream ships equivalent end-to-end conversation forking."
+depends_on = ["fork-provider-turn-safety", "fork-thread-client-recovery"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-thread-fork."
