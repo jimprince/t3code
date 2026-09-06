@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Shared by CI, release fallback, and complete-stack verification. Install and
+# platform build prerequisites belong to the caller; failures are never waived.
+phase="${1:-all}"
+if [[ $# -gt 0 ]]; then shift; fi
+failure=0
+
+# Report independent failures together so one repair can address them all.
+# Keep the first failing status; collecting diagnostics never permits promotion.
+run_check() {
+  local code
+  if "$@"; then
+    return 0
+  else
+    code=$?
+    if [[ "$failure" == 0 ]]; then failure="$code"; fi
+    printf 'Verification command failed (exit %s): %s\n' "$code" "$*" >&2
+  fi
+}
+
+# One phase per CI job, each self-contained so a job needs no setup step of its
+# own, plus the aggregates a local complete-tip run and the release fallback use.
+case "$phase" in
+  lint)
+    vp run --filter @t3tools/desktop ensure:electron
+    vp run --filter @t3tools/oxlint-plugin-t3code build
+    run_check vp run knip:check
+    run_check vp check
+    ;;
+  typecheck)
+    vp run --filter @t3tools/desktop ensure:electron
+    run_check vp run typecheck
+    ;;
+  check)
+    run_check "$0" lint
+    run_check "$0" typecheck
+    ;;
+  test-other)
+    vp run --filter @t3tools/desktop ensure:electron
+    vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' --filter '!@t3tools/web' test
+    ;;
+  test-web)
+    vp run --filter @t3tools/web test
+    ;;
+  test-server)
+    vp run --filter t3 test --bail=1 "$@"
+    ;;
+  test)
+    run_check "$0" test-other
+    run_check "$0" test-web
+    run_check "$0" test-server
+    ;;
+  all)
+    run_check "$0" check
+    run_check "$0" test
+    ;;
+  *) echo "Unknown verification phase: $phase" >&2; exit 2 ;;
+esac
+exit "$failure"
