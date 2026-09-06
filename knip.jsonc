@@ -59,6 +59,7 @@
         "ci/create-stgit-candidate-manifest.ts",
         "ci/deploy-stgit-concern.ts",
         "ci/prepare-stgit-agent-worktree.ts",
+        "ci/render-fork-release-notes.ts",
       ],
     },
     "apps/mobile": {

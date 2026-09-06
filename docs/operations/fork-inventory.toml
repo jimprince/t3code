@@ -385,7 +385,7 @@ depends_on = [
   "fork-build-ci-compat",
 ]
 roles = ["release-workflow-owner"]
-note = "Release notes compare stable authored change IDs between actual released tags, list fork features/fixes/removals before upstream changes, and preserve popup order. Published entries remain history; later fixes get new IDs. Bun and strict entry validation are configured in publication."
+note = "Release notes compare stable authored change IDs between actual released tags, list fork features/fixes/removals before upstream changes, and preserve popup order. Published entries remain history; later fixes get new IDs. Bun and strict entry validation are configured in publication; Knip recognizes the shell-launched renderer entry point."
 [[patch.decision]]
 id = "release-version-stamps"
 date = "2026-07-28"
