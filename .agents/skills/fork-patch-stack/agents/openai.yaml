@@ -1,0 +1,4 @@
+interface:
+  display_name: "Fork Patch Stack"
+  short_description: "Maintain and publish the fork StGit stack"
+  default_prompt: "Use $fork-patch-stack to update or rebase this fork safely."
