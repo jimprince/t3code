@@ -22,6 +22,7 @@ import type * as EffectAcpSchema from "effect-acp/schema";
 import type * as EffectAcpProtocol from "effect-acp/protocol";
 import { resolveSpawnCommand } from "@t3tools/shared/shell";
 
+import { withT3ThreadIdentityEnv } from "../t3ThreadIdentityEnv.ts";
 import {
   collectSessionConfigOptionValues,
   decideToolCallUpdateEmission,
@@ -80,6 +81,13 @@ export interface AcpSpawnInput {
 export interface AcpSessionRuntimeOptions {
   readonly spawn: AcpSpawnInput;
   readonly cwd: string;
+  /**
+   * Stamps `T3_THREAD_ID` (and the T3 environment metadata) onto the agent
+   * process so `t3-thread` inside the session resolves its own thread. Chat
+   * sessions set it; probe, setup and text-generation runtimes leave it unset
+   * because they are not a thread.
+   */
+  readonly t3ThreadId?: ThreadId;
   readonly resumeSessionId?: string;
   readonly resumeMethod?: "load" | "resume";
   readonly sessionLoadTimeout?: Duration.Input;

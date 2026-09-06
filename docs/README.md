@@ -31,6 +31,7 @@ source alone does not explain. Most code changes do not need an internal documen
 [documentation rules](../AGENTS.md#documentation) before adding one.
 
 - [Architecture overview](./internals/overview.md)
+- [`t3-thread` operator CLI](./architecture/t3-thread.md)
 - [Glossary](./internals/glossary.md)
 - [Connection runtime](./internals/connection-runtime.md)
 - [Providers](./internals/providers.md)
