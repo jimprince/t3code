@@ -700,6 +700,26 @@ export const ThreadPullRequestLink = Schema.Struct({
 });
 export type ThreadPullRequestLink = typeof ThreadPullRequestLink.Type;
 
+// Compat: thread goals (set/clear/evaluate, auto-continuation) were removed.
+// This type and the `goal` field below remain only so pre-removal threads and
+// event history still decode and replay; there is no way to create a new
+// goal, and nothing evaluates or continues one.
+export const OrchestrationThreadGoalStatus = Schema.Literals(["active", "achieved"]);
+export type OrchestrationThreadGoalStatus = typeof OrchestrationThreadGoalStatus.Type;
+
+export const OrchestrationThreadGoal = Schema.Struct({
+  goal: TrimmedNonEmptyString.check(Schema.isMaxLength(8_000)),
+  status: OrchestrationThreadGoalStatus,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+  achievedAt: Schema.NullOr(IsoDateTime),
+  lastEvaluatedAt: Schema.NullOr(IsoDateTime),
+  lastReason: Schema.NullOr(Schema.String),
+  lastTurnId: Schema.NullOr(TurnId),
+  continuationCount: NonNegativeInt,
+});
+export type OrchestrationThreadGoal = typeof OrchestrationThreadGoal.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
@@ -718,6 +738,7 @@ export const OrchestrationThread = Schema.Struct({
   ),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
+  goal: Schema.optionalKey(Schema.NullOr(OrchestrationThreadGoal)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -804,6 +825,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   ),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
+  goal: Schema.optionalKey(Schema.NullOr(OrchestrationThreadGoal)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   archivedAt: Schema.NullOr(IsoDateTime).pipe(Schema.withDecodingDefault(Effect.succeed(null))),
@@ -1008,6 +1030,7 @@ export const PortableThread = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   branch: Schema.NullOr(TrimmedNonEmptyString),
+  goal: Schema.NullOr(OrchestrationThreadGoal),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   messages: Schema.Array(OrchestrationMessage),
@@ -1706,6 +1729,9 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.pull-request-synced",
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
+  "thread.goal-set",
+  "thread.goal-cleared",
+  "thread.goal-evaluated",
   "thread.message-sent",
   "thread.turn-start-requested",
   "thread.turn-interrupt-requested",
@@ -1896,6 +1922,29 @@ export const ThreadInteractionModeSetPayload = Schema.Struct({
   interactionMode: ProviderInteractionMode.pipe(
     Schema.withDecodingDefault(Effect.succeed(DEFAULT_PROVIDER_INTERACTION_MODE)),
   ),
+  updatedAt: IsoDateTime,
+});
+
+// Compat: retained for historical event replay and transfer of existing goals.
+// Goal creation, evaluation, and automatic continuation are no longer supported.
+export const ThreadGoalSetPayload = Schema.Struct({
+  threadId: ThreadId,
+  goal: OrchestrationThreadGoal,
+});
+
+export const ThreadGoalClearedPayload = Schema.Struct({
+  threadId: ThreadId,
+  clearedAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+
+export const ThreadGoalEvaluatedPayload = Schema.Struct({
+  threadId: ThreadId,
+  turnId: TurnId,
+  achieved: Schema.Boolean,
+  reason: Schema.String,
+  continuationRequested: Schema.Boolean,
+  evaluatedAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
 
@@ -2122,6 +2171,21 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.interaction-mode-set"),
     payload: ThreadInteractionModeSetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.goal-set"),
+    payload: ThreadGoalSetPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.goal-cleared"),
+    payload: ThreadGoalClearedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.goal-evaluated"),
+    payload: ThreadGoalEvaluatedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,
