@@ -299,6 +299,39 @@ describe("pull request toolkit handlers", () => {
     }),
   );
 
+  it.effect("requires a canonical URL when an external numeric target's provider is unknown", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      const error = yield* harness
+        .call("link_pull_request", {
+          host: "git.bradleyprince.com",
+          repository: "brad/ci-repair-bot",
+          number: 75,
+        })
+        .pipe(Effect.flip);
+      expect(error.message).toMatch(/URL/iu);
+      expect(yield* Ref.get(harness.commands)).toEqual([]);
+    }),
+  );
+
+  it.effect("links a canonical Gitea URL from a GitHub project", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness();
+      const url = "https://git.bradleyprince.com/brad/ci-repair-bot/pulls/75";
+      const result = yield* harness.call("link_pull_request", { url });
+      expect(result).toEqual({
+        host: "git.bradleyprince.com",
+        repository: "brad/ci-repair-bot",
+        number: 75,
+        url,
+        alreadyLinked: false,
+      });
+      expect(yield* Ref.get(harness.commands)).toMatchObject([
+        { type: "thread.pull-request.link", url, number: 75 },
+      ]);
+    }),
+  );
+
   it.effect("rejects a target that names neither a URL nor repository and number", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
