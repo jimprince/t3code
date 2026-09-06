@@ -537,6 +537,7 @@ it.layer(NodeServices.layer)("pull request link decider", (it) => {
           host: "github.com",
           repository: "t3tools/t3code",
           number: 42,
+          url: "https://github.com/t3tools/t3code/pull/42",
           snapshot,
           stack: null,
         },
@@ -556,6 +557,7 @@ it.layer(NodeServices.layer)("pull request link decider", (it) => {
           host: "GitHub.com",
           repository: "t3tools/t3code",
           number: 42,
+          url: "https://github.com/t3tools/t3code/pull/42",
           snapshot,
           stack: null,
         },
@@ -567,6 +569,7 @@ it.layer(NodeServices.layer)("pull request link decider", (it) => {
         host: "github.com",
         repository: "t3tools/t3code",
         number: 42,
+        url: "https://github.com/t3tools/t3code/pull/42",
         snapshot,
         stack: null,
       });
