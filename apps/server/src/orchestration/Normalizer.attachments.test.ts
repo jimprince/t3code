@@ -35,6 +35,13 @@ function turnStartCommand(input: {
     | { readonly dataUrl: string; readonly sizeBytes: number; readonly id?: string }
   >;
   readonly context?: OrchestrationMessageContext;
+  readonly fileAttachments?: ReadonlyArray<{
+    readonly type: "file";
+    readonly name: string;
+    readonly mimeType: string;
+    readonly sizeBytes: number;
+    readonly dataUrl: string;
+  }>;
 }): ClientOrchestrationCommand {
   return {
     type: "thread.turn.start",
@@ -51,6 +58,7 @@ function turnStartCommand(input: {
         ...attachment,
       })),
       ...(input.context !== undefined ? { context: input.context } : {}),
+      ...(input.fileAttachments !== undefined ? { fileAttachments: input.fileAttachments } : {}),
     },
     runtimeMode: "full-access",
     interactionMode: "default",
@@ -396,6 +404,35 @@ describe("normalizeDispatchCommand attachments", () => {
       ).pipe(Effect.flip);
 
       expect(failure.message).toContain("not found");
+      expect(NodeFS.readdirSync(config.attachmentsDir)).toEqual([`${pendingId}.png`]);
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("removes image claims when a file attachment cannot be normalized", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const pendingId = `pending-${attachmentUuid}`;
+      NodeFS.writeFileSync(
+        NodePath.join(config.attachmentsDir, `${pendingId}.png`),
+        Buffer.from("pixels"),
+      );
+
+      const failure = yield* normalizeDispatchCommand(
+        turnStartCommand({
+          attachments: [{ id: pendingId, sizeBytes: 6 }],
+          fileAttachments: [
+            {
+              type: "file",
+              name: "broken.pdf",
+              mimeType: "application/pdf",
+              sizeBytes: 6,
+              dataUrl: "not-a-data-url",
+            },
+          ],
+        }),
+      ).pipe(Effect.flip);
+
+      expect(failure.message).toContain("Invalid file attachment payload");
       expect(NodeFS.readdirSync(config.attachmentsDir)).toEqual([`${pendingId}.png`]);
     }).pipe(Effect.provide(testLayer)),
   );

@@ -367,3 +367,33 @@ id = "upstream-directory-entry-refresh"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Keep the upload RPC and drop overlay alongside upstream's incremental FileTree rendering, and refresh the new directory-entry and path-search data sources after a successful upload instead of the retired project entries query."
+
+[[patch]]
+name = "fork-attachment-compatibility"
+subject = "fix(chat): preserve legacy attachment history and older clients"
+class = "divergence"
+purpose = "Read historical file handoff records and accept legacy fork clients while current clients use upstream attachment uploads and display once."
+retire_when = "Support for legacy file handoff clients and their persisted message metadata has explicitly ended or been losslessly migrated."
+depends_on = [
+  "fork-provider-turn-safety",
+  "fork-thread-transfer",
+  "fork-resource-recovery",
+  "fork-workspace-file-uploads",
+]
+roles = []
+note = "The duplicate current-client base64 send and composer display are removed. Legacy server decoding, file retention and historical-message rendering remain deliberately for compatibility. The narrow turn-start query also selects and preserves legacy file handoffs."
+[[patch.decision]]
+id = "upstream-chat-file-attachment-name"
+date = "2026-08-28"
+decided = "adapt"
+rationale = "Upstream added a pathless ChatFileAttachment member to ChatAttachment. Rename the fork's parallel path-bearing schema to ChatFileHandoffAttachment so both contracts coexist without changing the fork's fileAttachments wire field or /tmp handoff behavior."
+[[patch.decision]]
+id = "upstream-composer-context-persistence"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Preserve upstream structured message context alongside legacy file handoffs in event projection, SQL snapshots and client reducers. Keep legacy handoff chips separate from upstream attachment rendering so historical records display once."
+[[patch.decision]]
+id = "upstream-pr-asset-github-cli-test-runtime"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Provide the upstream GitHub CLI layer in the fork-only attachment server harness over its existing VCS process layer, matching upstream's harness after pull-request asset downloads gained the same runtime dependency."
