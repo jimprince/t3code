@@ -179,7 +179,7 @@ purpose = "Provide multi-select, partial-state, and isolation controls for sideb
 retire_when = "Upstream ships equivalent multi-project selection and isolation."
 depends_on = ["fork-general-chat"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-web-project-scope."
+note = "Owns multi-project selection and mobile project activity grouping; obsolete implementation plans removed."
 [[patch.decision]]
 id = "sidebarv2-project-scope"
 date = "2026-07-28"
