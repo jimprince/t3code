@@ -1,0 +1,4 @@
+id = "private-address-explicit-protocol"
+category = "fix"
+functionality = "remote connections"
+text = "Private server addresses now preserve an explicitly selected HTTPS protocol and port."
