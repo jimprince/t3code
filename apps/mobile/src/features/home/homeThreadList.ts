@@ -48,6 +48,22 @@ function getProjectSortTimestamp(
         Number.NEGATIVE_INFINITY);
 }
 
+function getProjectThreadSortTimestamp(
+  thread: EnvironmentThreadShell,
+  sortOrder: HomeProjectSortOrder,
+): number {
+  if (sortOrder === "created_at") {
+    return getThreadSortTimestamp(thread, sortOrder);
+  }
+
+  return (
+    toSortableTimestamp(thread.latestUserMessageAt ?? undefined) ??
+    toSortableTimestamp(thread.createdAt) ??
+    toSortableTimestamp(thread.updatedAt) ??
+    Number.NEGATIVE_INFINITY
+  );
+}
+
 export function buildHomeProjectScopes(input: {
   readonly projects: ReadonlyArray<EnvironmentProject>;
   readonly environmentId: EnvironmentId | null;
@@ -100,7 +116,7 @@ export function sortHomeProjectScopes(input: {
     if (thread.archivedAt !== null) continue;
     recordActivity(
       scopeKeyByProjectRef.get(scopedProjectKey(thread.environmentId, thread.projectId)),
-      getThreadSortTimestamp(thread, input.projectSortOrder),
+      getProjectThreadSortTimestamp(thread, input.projectSortOrder),
     );
   }
   for (const pendingTask of input.pendingTasks) {
@@ -173,7 +189,7 @@ interface MutableHomeThreadGroup {
 
 function groupSortTimestamp(group: HomeThreadGroup, sortOrder: HomeProjectSortOrder): number {
   const latestThread = group.threads.reduce(
-    (latest, thread) => Math.max(latest, getThreadSortTimestamp(thread, sortOrder)),
+    (latest, thread) => Math.max(latest, getProjectThreadSortTimestamp(thread, sortOrder)),
     Number.NEGATIVE_INFINITY,
   );
   return group.pendingTasks.reduce((latest, pendingTask) => {
