@@ -332,6 +332,7 @@ export function projectEvent(
           const nextProject = {
             id: payload.projectId,
             title: payload.title,
+            kind: payload.kind ?? "workspace",
             workspaceRoot: payload.workspaceRoot,
             defaultModelSelection: payload.defaultModelSelection,
             defaultThreadEnvMode: null,
