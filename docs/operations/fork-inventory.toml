@@ -347,3 +347,13 @@ depends_on = ["fork-build-ci-compat"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-headless-updates."
 
+[[patch]]
+name = "fork-desktop-delivery"
+subject = "feat(desktop): deliver the fork desktop app with its own identity and updates"
+class = "product"
+purpose = "Ship fork desktop identity, flavors, code signing, isolated app data, updater channels, packaging, and desktop lifecycle integrations such as deep links."
+retire_when = "Upstream or maintained shared tooling provides equivalent fork identity, signing, and update-channel handling."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-desktop-distribution."
+
