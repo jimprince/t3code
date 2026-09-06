@@ -86,6 +86,14 @@ clear mismatch error instead of silently bypassing that mapping.
 
 Do not pass a worktree path and do not manually create a git worktree first.
 
+Worktree creation uses the latest matching remote branch by default: `gitea`
+when present, otherwise `origin`. An explicit qualified base such as
+`--base-branch upstream/main` selects that configured remote, including custom
+remote names. Use
+`--local-base` to intentionally create from the local branch; without a configured qualified remote or either
+default remote, creation fails with an actionable error rather than silently
+using a stale local branch.
+
 ## Common Commands
 
 ```bash
