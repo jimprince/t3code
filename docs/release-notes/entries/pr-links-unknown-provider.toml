@@ -1,0 +1,4 @@
+id = "pr-links-unknown-provider"
+category = "fix"
+functionality = "pull requests"
+text = "Pull request links no longer use an incorrect URL when the hosting provider is unknown."
