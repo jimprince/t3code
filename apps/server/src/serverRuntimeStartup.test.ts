@@ -151,6 +151,88 @@ it.effect("resolveWelcomeBase derives cwd and project name from server config", 
   }),
 );
 
+it.effect("creates one deterministic chat project outside server state and the process cwd", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const stateDir = yield* fs.makeTempDirectoryScoped({ prefix: "t3-chat-project-state-" });
+    const environmentId = EnvironmentId.make("environment-chat-test");
+    const dispatched = yield* Ref.make<ReadonlyArray<Record<string, unknown>>>([]);
+
+    const projectId = yield* ServerRuntimeStartup.ensureChatProject.pipe(
+      Effect.provideService(ServerConfig.ServerConfig, {
+        stateDir,
+        cwd: "/unrelated/user/repository",
+        mode: "web",
+        host: undefined,
+        port: 3773,
+      } as never),
+      Effect.provideService(ServerEnvironment.ServerEnvironment, {
+        getEnvironmentId: Effect.succeed(environmentId),
+        getDescriptor: Effect.die("unused"),
+      }),
+      Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
+        getProjectShellById: () =>
+          Ref.get(dispatched).pipe(
+            Effect.map((commands) =>
+              commands.length === 0
+                ? Option.none()
+                : Option.some({
+                    id: ServerRuntimeStartup.getChatProjectId(String(environmentId)),
+                    title: "Chat",
+                    kind: "chat",
+                    workspaceRoot: path.join(
+                      NodeOS.tmpdir(),
+                      "t3code-chat-workspaces",
+                      ServerRuntimeStartup.getChatProjectStorageKey(String(environmentId)),
+                    ),
+                  } as never),
+            ),
+          ),
+        getActiveProjectByWorkspaceRoot: () => Effect.succeed(Option.none()),
+      } as never),
+      Effect.provideService(OrchestrationEngine.OrchestrationEngineService, {
+        dispatch: (command: unknown) =>
+          Ref.update(dispatched, (commands) => [
+            ...commands,
+            command as unknown as Record<string, unknown>,
+          ]).pipe(Effect.as({ sequence: 1 })),
+      } as never),
+      Effect.provide(WorkspacePaths.layer),
+    );
+
+    assert.equal(projectId, ServerRuntimeStartup.getChatProjectId(String(environmentId)));
+    const command = (yield* Ref.get(dispatched))[0];
+    const expectedWorkspaceRoot = path.join(
+      NodeOS.tmpdir(),
+      "t3code-chat-workspaces",
+      ServerRuntimeStartup.getChatProjectStorageKey(String(environmentId)),
+    );
+    assert.deepStrictEqual(
+      command && {
+        projectId: command.projectId,
+        title: command.title,
+        kind: command.kind,
+        workspaceRoot: command.workspaceRoot,
+        createWorkspaceRootIfMissing: command.createWorkspaceRootIfMissing,
+      },
+      {
+        projectId: ServerRuntimeStartup.getChatProjectId(String(environmentId)),
+        title: "Chat",
+        kind: "chat",
+        workspaceRoot: expectedWorkspaceRoot,
+        createWorkspaceRootIfMissing: true,
+      },
+    );
+    assert.equal((yield* fs.stat(expectedWorkspaceRoot)).type, "Directory");
+    assert.equal(expectedWorkspaceRoot.startsWith(stateDir), false);
+    assert.match(
+      ServerRuntimeStartup.getChatProjectStorageKey("../server-state"),
+      /^env-[a-f0-9]{32}$/,
+    );
+  }).pipe(Effect.provide(NodeServices.layer)),
+);
+
 it.effect("resolveAutoBootstrapWelcomeTargets returns existing project and thread ids", () => {
   const bootstrapProjectId = ProjectId.make("project-startup-bootstrap");
   const bootstrapThreadId = ThreadId.make("thread-startup-bootstrap");
