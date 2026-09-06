@@ -392,3 +392,18 @@ id = "upstream-worktree-setup-progress"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Relocate remote-base selection into upstream's tracked first-send bootstrap preflight. Preserve upstream scoped fetches, early user-message and starting-session projection, progress activities, cancellation, and project-checkout fallback for non-repositories while retaining the fork's no-local-fallback rule for requested remote creation."
+
+[[patch]]
+name = "fork-pr-dismissal"
+subject = "feat(web): dismiss pull requests in bulk"
+class = "product"
+purpose = "Let operators select visible pull requests in bulk, persistently remove them from the local environment view without mutating provider state, and restore removed entries."
+retire_when = "Upstream ships equivalent multi-select dismissal and restoration in the Pull Requests view."
+depends_on = []
+roles = []
+note = "Reorganized 2026-09-06 from fork-web-pr-multiselect."
+[[patch.decision]]
+id = "upstream-pr-conflict-glyph"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Keep bulk-selection checkboxes outside the clickable PR row while preserving upstream's separate lifecycle and conflict glyphs, responsive metadata, and row visibility containment."
