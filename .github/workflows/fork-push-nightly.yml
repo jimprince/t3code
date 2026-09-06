@@ -1,0 +1,148 @@
+name: Fork Push Nightly
+
+# Creates updater-visible nightly fork releases for Brad-authored changes.
+# Normal pushes to main should ship through the nightly feed only. The next
+# upstream stable sync still replays this fork patch onto the upstream stable
+# tag and publishes the integrated stable release.
+
+on:
+  push:
+    branches:
+      - main
+    # Keep this allowlist narrow. Helper-script/docs/workflow maintenance should
+    # not publish an updater-visible desktop release.
+    paths:
+      - "apps/desktop/**"
+      - "apps/server/**"
+      - "apps/web/**"
+      - "assets/**"
+      - "packages/**"
+      - "scripts/build-desktop-artifact.ts"
+      - "scripts/build-headless-artifact.ts"
+      - "scripts/lib/brand-assets.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  # One lock for every Actions writer of main (C2 race fix, 2026-07-29:
+  # sync and nightly raced; the loser was saved only by its lease).
+  group: t3code-writes-main
+  cancel-in-progress: false
+
+jobs:
+  changes:
+    name: Check packaged-source changes
+    runs-on: ubuntu-24.04
+    outputs:
+      needed: ${{ steps.changes.outputs.needed }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: changes
+        env:
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.sha }}
+        run: scripts/ci/check-nightly-push
+
+  tag:
+    needs: changes
+    if: needs.changes.outputs.needed == 'true'
+    name: Tag fork push nightly
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          # Publication may update workflow-bearing stack metadata.
+          token: ${{ secrets.GH_PAT || github.token }}
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: package.json
+          cache: true
+          run-install: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+
+      - name: Install StGit
+        run: scripts/ci/install-stgit
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Record main lease
+        id: pre
+        run: |
+          scripts/ci/record-main-lease
+          git fetch origin \
+            '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
+            '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
+          scripts/ci/prepare-stgit-publication
+          git switch --force-create stgit/adopt HEAD
+
+      - name: Resolve next fork tag
+        id: resolve
+        run: |
+          git fetch --tags origin
+          scripts/ci/resolve-fork-push-tag
+
+      - name: Reuse exact-source CI verification
+        if: steps.resolve.outputs.needed == 'true'
+        id: source_ci
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          RELEASE_REF: HEAD
+          RELEASE_VERSION: ${{ steps.resolve.outputs.tag }}
+        run: bun scripts/ci/reuse-release-ci.ts
+
+      - name: Require exact-source CI verification
+        if: steps.resolve.outputs.needed == 'true' && steps.source_ci.outputs.reused != 'true'
+        run: |
+          echo "::error::Fork push release requires successful CI evidence for this exact main source."
+          exit 1
+
+      - name: Prepare release tag
+        if: steps.resolve.outputs.needed == 'true'
+        id: prepare
+        env:
+          RELEASE_TAG: ${{ steps.resolve.outputs.tag }}
+        run: scripts/ci/prepare-release-tag
+
+      - name: Publish verified stack and release tag
+        if: steps.resolve.outputs.needed == 'true'
+        env:
+          STGIT_EXPECTED_REMOTE_MAIN: ${{ steps.pre.outputs.main_sha }}
+          MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
+          PREP_SHA: ${{ steps.prepare.outputs.prep_sha }}
+          NEW_TAG: ${{ steps.prepare.outputs.tag }}
+          STGIT_BACKUP_NAMESPACE: bot
+        run: |
+          set -euo pipefail
+          tag_sha="$(git rev-parse "${NEW_TAG}^{commit}")"
+          if [[ "$tag_sha" != "$PREP_SHA" ]]; then
+            echo "::error::Prepared tag changed before publication."
+            exit 1
+          fi
+          if [[ "$PREP_SHA" != "$MAIN_SHA" ]] && [[ "$(git rev-parse "${PREP_SHA}^")" != "$MAIN_SHA" ]]; then
+            echo "::error::Release preparation must be a direct child of the verified stack."
+            exit 1
+          fi
+          # Restore the verified unstamped tip; the prepared child remains tagged.
+          git reset --hard "$MAIN_SHA"
+          STGIT_RELEASE_TAG="$NEW_TAG" STGIT_RELEASE_TAG_SHA="$PREP_SHA" \
+            scripts/ci/publish-stgit-stack --push
