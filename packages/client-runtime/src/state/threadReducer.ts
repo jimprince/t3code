@@ -395,6 +395,9 @@ export function applyThreadDetailEvent(
           ? { attachments: event.payload.attachments }
           : {}),
         ...(event.payload.context !== undefined ? { context: event.payload.context } : {}),
+        ...(event.payload.fileAttachments !== undefined
+          ? { fileAttachments: event.payload.fileAttachments }
+          : {}),
         turnId: event.payload.turnId,
         streaming: event.payload.streaming,
         createdAt: event.payload.createdAt,
@@ -417,6 +420,9 @@ export function applyThreadDetailEvent(
           ...(message.streaming ? {} : { updatedAt: message.updatedAt }),
           ...(message.attachments !== undefined ? { attachments: message.attachments } : {}),
           ...(message.context !== undefined ? { context: message.context } : {}),
+          ...(message.fileAttachments !== undefined
+            ? { fileAttachments: message.fileAttachments }
+            : {}),
         };
       });
       if (!found) messages.push(message);
