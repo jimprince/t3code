@@ -89,6 +89,7 @@ describe("orchestration projector", () => {
         pullRequests: [],
         branchPullRequest: null,
         latestTurn: null,
+        goal: null,
         createdAt: now,
         updatedAt: now,
         archivedAt: null,
