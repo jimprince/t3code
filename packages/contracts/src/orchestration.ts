@@ -458,9 +458,13 @@ export const ProjectIconOverride = Schema.Union([
 ]);
 export type ProjectIconOverride = typeof ProjectIconOverride.Type;
 
+export const ProjectKind = Schema.Literals(["workspace", "chat"]);
+export type ProjectKind = typeof ProjectKind.Type;
+
 export const OrchestrationProject = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(ProjectKind),
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
@@ -765,6 +769,7 @@ export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
 export const OrchestrationProjectShell = Schema.Struct({
   id: ProjectId,
   title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(ProjectKind),
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
@@ -980,6 +985,22 @@ export const ProjectCreateCommand = Schema.Struct({
   commandId: CommandId,
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(ProjectKind),
+  workspaceRoot: TrimmedNonEmptyString,
+  createWorkspaceRootIfMissing: Schema.optional(Schema.Boolean),
+  defaultModelSelection: Schema.optional(Schema.NullOr(ModelSelection)),
+  createdAt: IsoDateTime,
+});
+
+// Chat projects are server-owned infrastructure. Network clients may omit
+// `kind` for backwards compatibility or explicitly create a workspace project,
+// but cannot mint protected chat projects.
+const ClientProjectCreateCommand = Schema.Struct({
+  type: Schema.Literal("project.create"),
+  commandId: CommandId,
+  projectId: ProjectId,
+  title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(Schema.Literal("workspace")),
   workspaceRoot: TrimmedNonEmptyString,
   createWorkspaceRootIfMissing: Schema.optional(Schema.Boolean),
   // Retained for older clients that sent an automatic create-time seed. The
@@ -1333,7 +1354,7 @@ export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
 
 export const ClientOrchestrationCommand = Schema.Union([
-  ProjectCreateCommand,
+  ClientProjectCreateCommand,
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
   ThreadCreateCommand,
@@ -1543,6 +1564,7 @@ export const OrchestrationActorKind = Schema.Literals(["client", "server", "prov
 export const ProjectCreatedPayload = Schema.Struct({
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
+  kind: Schema.optionalKey(ProjectKind),
   workspaceRoot: TrimmedNonEmptyString,
   repositoryIdentity: Schema.optional(Schema.NullOr(RepositoryIdentity)),
   defaultModelSelection: Schema.NullOr(ModelSelection),
