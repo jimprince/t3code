@@ -1,6 +1,6 @@
 import * as Schema from "effect/Schema";
-import { useMemo, useState } from "react";
-import type { EnvironmentId } from "@t3tools/contracts";
+import { useCallback, useMemo, useState } from "react";
+import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { pullRequestEntryKey, type EnvironmentPullRequestEntry } from "./pullRequestList.logic";
 
 /** A locally removed row is hidden by its environment-qualified identity, never changed upstream. */
@@ -79,7 +79,23 @@ function browserStorage(): RemovedPullRequestsStorage | undefined {
   }
 }
 
-export function useLocalPrVisibility(environmentIds: ReadonlyArray<EnvironmentId>) {
+export function useLocalPrVisibility(
+  environmentIds: ReadonlyArray<EnvironmentId>,
+  scopedProjectId?: ProjectId,
+) {
+  const [excludedStored, setExcludedStored] = useState<ReadonlyMap<string, ReadonlySet<string>>>(
+    () => new Map(),
+  );
+  const excluded = useMemo(
+    () =>
+      new Map(
+        environmentIds.map(
+          (id) =>
+            [id, excludedStored.get(id) ?? readExcludedProjectIds(browserStorage(), id)] as const,
+        ),
+      ),
+    [environmentIds, excludedStored],
+  );
   const [stored, setStored] = useState<ReadonlyMap<string, ReadonlySet<string>>>(() => new Map());
   const removed = useMemo(
     () =>
@@ -91,15 +107,60 @@ export function useLocalPrVisibility(environmentIds: ReadonlyArray<EnvironmentId
     [environmentIds, stored],
   );
   const [selected, setSelected] = useState<ReadonlySet<string>>(() => new Set());
+  const filterQueries = useCallback(
+    (
+      queries: ReadonlyArray<LocalPrQuery>,
+      projects: ReadonlyArray<LocalPrProject>,
+      projectsKnown: boolean,
+    ) => {
+      return scopedProjectId !== undefined || !projectsKnown
+        ? queries
+        : filterExcludedProjectQueries(queries, projects, excluded);
+    },
+    [scopedProjectId, excluded],
+  );
   return {
     selected,
+    excluded,
+    excludedCount: [...excluded.values()].reduce((count, ids) => count + ids.size, 0),
+    isProjectExcluded(project: { environmentId: EnvironmentId; id: ProjectId }) {
+      return excluded.get(project.environmentId)?.has(project.id) ?? false;
+    },
+    filterQueries,
+    excludeProject(project: LocalPrProject, hidden: boolean) {
+      setExcludedStored((current) => {
+        const next = new Map(current);
+        const ids = new Set(
+          current.get(project.environmentId) ?? excluded.get(project.environmentId),
+        );
+        if (hidden) ids.add(project.id);
+        else ids.delete(project.id);
+        writeExcludedProjectIds(browserStorage(), project.environmentId, ids);
+        next.set(project.environmentId, ids);
+        return next;
+      });
+    },
+    restoreProjects() {
+      const next = new Map(excludedStored);
+      for (const id of environmentIds) {
+        const empty = new Set<string>();
+        writeExcludedProjectIds(browserStorage(), id, empty);
+        next.set(id, empty);
+      }
+      setExcludedStored(next);
+    },
     removedCount: [...removed.values()].reduce((count, keys) => count + keys.size, 0),
     filter<Entry extends EnvironmentPullRequestEntry>(
       entries: ReadonlyArray<Entry>,
     ): ReadonlyArray<Entry> {
       return entries.filter((entry) => {
         const keys = removed.get(entry.environmentId);
-        return !keys?.has(localPullRequestKey(entry)) && !keys?.has(pullRequestEntryKey(entry));
+        return (
+          (scopedProjectId !== undefined ||
+            !excluded.get(entry.environmentId)?.has(entry.projectId)) &&
+          !keys?.has(localPullRequestKey(entry)) &&
+          !keys?.has(pullRequestEntryKey(entry))
+        );
       });
     },
     select(keys: ReadonlyArray<string>, checked: boolean) {
@@ -131,4 +192,58 @@ export function useLocalPrVisibility(environmentIds: ReadonlyArray<EnvironmentId
       setStored(next);
     },
   };
+}
+
+export interface LocalPrProject {
+  readonly environmentId: EnvironmentId;
+  readonly id: ProjectId;
+}
+export interface LocalPrQuery {
+  readonly environmentId: EnvironmentId;
+  readonly projectIds?: ReadonlyArray<ProjectId>;
+}
+
+export function readExcludedProjectIds(
+  storage: RemovedPullRequestsStorage | undefined,
+  environmentId: string,
+): ReadonlySet<string> {
+  try {
+    const raw = storage?.getItem(`t3.pullRequests.excludedProjects:${environmentId}`);
+    if (!raw) return new Set();
+    const decoded = decodeRemovedPullRequestKeys(JSON.parse(raw));
+    return decoded._tag === "Some" ? new Set(decoded.value) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+export function writeExcludedProjectIds(
+  storage: RemovedPullRequestsStorage | undefined,
+  environmentId: string,
+  ids: ReadonlySet<string>,
+): void {
+  try {
+    storage?.setItem(`t3.pullRequests.excludedProjects:${environmentId}`, JSON.stringify([...ids]));
+  } catch {
+    /* Apply in memory when browser storage is unavailable. */
+  }
+}
+
+/** Narrow the native ownership assignment, never reassign a hidden repository to another server. */
+export function filterExcludedProjectQueries(
+  queries: ReadonlyArray<LocalPrQuery>,
+  projects: ReadonlyArray<LocalPrProject>,
+  excluded: ReadonlyMap<string, ReadonlySet<string>>,
+): ReadonlyArray<LocalPrQuery> {
+  return queries.flatMap((query) => {
+    const hidden = excluded.get(query.environmentId);
+    if (!hidden?.size) return [query];
+    const assigned =
+      query.projectIds ??
+      projects
+        .filter((project) => project.environmentId === query.environmentId)
+        .map((project) => project.id);
+    const projectIds = assigned.filter((id) => !hidden.has(id));
+    return projectIds.length === 0 ? [] : [{ ...query, projectIds }];
+  });
 }
