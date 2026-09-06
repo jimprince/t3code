@@ -273,6 +273,9 @@ const make = Effect.fn("makeWithDatabase")(function* (
     acquirer,
     compiler,
     transactionAcquirer,
+    // Serialize writers before they take a WAL read snapshot. This keeps the
+    // receipt re-check and command validation authoritative across processes.
+    beginTransaction: "BEGIN IMMEDIATE",
     spanAttributes: [
       ...(options.spanAttributes ? Object.entries(options.spanAttributes) : []),
       [ATTR_DB_SYSTEM_NAME, "sqlite"],
