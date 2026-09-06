@@ -1,3 +1,4 @@
+import { configuredGiteaIdentity } from "./sourceControl/ForkGiteaLinkAdapter.ts";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
 import * as Clock from "effect/Clock";
 import * as Random from "effect/Random";
@@ -291,6 +292,8 @@ const RepositoryIdentityResolverLayerLive = Layer.effect(
     const registry = yield* SourceControlProviderRegistry.SourceControlProviderRegistry;
     return yield* RepositoryIdentityResolver.make({
       refine: Effect.fn(function* (identity: RepositoryIdentity) {
+        const gitea = yield* configuredGiteaIdentity(registry, identity);
+        if (gitea !== null) return gitea;
         const remote = ForgejoCli.parseForgejoRemote(identity.locator.remoteUrl);
         if (
           !remote ||
