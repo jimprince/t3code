@@ -543,7 +543,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
   });
 
   describe("thread.import command", () => {
-    it.effect("replays a portable thread into existing events and guards the goal reactor", () =>
+    it.effect("replays a portable thread into existing events and preserves goal history", () =>
       Effect.gen(function* () {
         const worktreesRoot = yield* makeScopedTempDirectory("t3-import-wt-");
         const system = yield* buildTransferSystem({
@@ -581,7 +581,8 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
             lastEvaluatedAt: null,
             lastReason: null,
             // Stale value from the source environment; import must override it
-            // with the final imported turn so GoalReactor does not auto-fire.
+            // with the final imported turn so the historical record doesn't
+            // reference a turn from before the move.
             lastTurnId: TurnId.make("turn-1"),
             continuationCount: 0,
           },
@@ -672,8 +673,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
         expect(activity).toBeDefined();
         expect(activity!.sequence).toBeUndefined();
         // REGRESSION: an active imported goal must point at the final imported
-        // turn, otherwise GoalReactor evaluates (and may auto-continue) the
-        // thread immediately after the move lands.
+        // turn, not a stale turn from the source environment.
         expect(thread!.goal?.lastTurnId).toBe(lastTurnId);
 
         const duplicate = yield* Effect.exit(
