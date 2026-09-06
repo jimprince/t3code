@@ -1,0 +1,4 @@
+id = "gitea-absent-branch-cache"
+category = "performance"
+functionality = "pull requests"
+text = "Avoid repeatedly scanning Gitea pull-request history for unchanged branches with no PR."
