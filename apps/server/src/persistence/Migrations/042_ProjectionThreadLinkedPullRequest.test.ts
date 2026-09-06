@@ -13,8 +13,11 @@ layer("042_ProjectionThreadLinkedPullRequest", (it) => {
     Effect.gen(function* () {
       const sql = yield* SqlClient.SqlClient;
 
-      yield* runMigrations({ toMigrationInclusive: 41 });
-      yield* runMigrations({ toMigrationInclusive: 42 });
+      // The fork registers this upstream migration as id 47: ids 33-37 were
+      // already applied on live fork databases before upstream published its
+      // own 33-42, so upstream 33-42 run as 38-47 here (see Migrations.ts).
+      yield* runMigrations({ toMigrationInclusive: 46 });
+      yield* runMigrations({ toMigrationInclusive: 47 });
 
       const columns = yield* sql<{ readonly name: string }>`
         PRAGMA table_info(projection_threads)
