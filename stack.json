@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": null,
-  "head": "e15608d0cb8a9a8233daa9c619fe4ce3b39794cd",
+  "prev": "9c45e79c790b377f47f78005425dcd747eba151b",
+  "head": "1640e3d066ae5912632d120bf57e8f59a911bed0",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -29,10 +29,10 @@
     "fork-headless-delivery",
     "fork-desktop-delivery",
     "fork-mobile-delivery",
-    "fork-release-publication",
-    "refresh-temp"
+    "fork-release-publication"
   ],
   "unapplied": [
+    "refresh-temp",
     "fork-maintenance-automation"
   ],
   "hidden": [],
