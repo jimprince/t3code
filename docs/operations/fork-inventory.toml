@@ -144,7 +144,7 @@ purpose = "Provide the additive t3-thread operator CLI with pairing, persistent 
 retire_when = "Upstream or maintained shared tooling provides an equivalent scriptable worker interface, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-build-ci-compat"]
 roles = []
-note = "The standalone CLI bundles shared contract subpaths and keeps only a narrow adapter for legacy model selections and sparse provider config. Opaque activity, context, metadata and provider-option payloads pass through unchanged. env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). Worker bootstrap and inter-thread messages include identity and reply headers. Notifications to an explicitly settled subscriber are held (not keeping the watcher awake, since each pass snapshots every saved agent), superseded down to the newest per route, re-checked each minute while a watcher runs, and released immediately by t3-thread unsettle; settle lists the subscriber's routes and unsubscribe accepts --subscriber and raw routed thread ids. order/move write the server's shared pinned or active sibling order, and order --reset restores automatic placement. The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
+note = "The standalone CLI bundles shared contract subpaths and keeps only a narrow adapter for legacy model selections and sparse provider config. Opaque activity, context, metadata and provider-option payloads pass through unchanged. env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). Notifications to an explicitly settled subscriber are held (not keeping the watcher awake, since each pass snapshots every saved agent), superseded down to the newest per route, re-checked each minute while a watcher runs, and released immediately by t3-thread unsettle; settle lists the subscriber's routes and unsubscribe accepts --subscriber and raw routed thread ids. order/move write the server's shared pinned or active sibling order, and order --reset restores automatic placement. The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
 
 [[patch]]
 name = "fork-provider-turn-safety"
@@ -470,9 +470,42 @@ id = "upstream-worktree-and-queue-state"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Treat conversation forking as one additional working state alongside upstream's persisted worktree setup state, and retain upstream's queued-message restoration before the fork action callback."
-
 [[patch.decision]]
 id = "claude-upstream-turn-start-boundaries"
 date = "2026-09-16"
 decided = "narrow"
 rationale = "Upstream replaced the fork's bounded assistant-boundary map with durable native turn-start ids. Keep exact native Claude forks at the current retained tip, use those upstream ids in the resume cursor, and fall back to transcript handoff for older selected turns rather than guessing an assistant anchor across compaction or interrupted turns."
+
+[[patch]]
+name = "fork-thread-transfer"
+subject = "feat(threads): transfer threads between environments"
+class = "product"
+purpose = "Move a thread and its workspace context between environments: export/import bundles, provider context handoff, RPC registration, and coordinated web and desktop flows."
+retire_when = "Upstream ships equivalent cross-environment thread moves."
+depends_on = ["fork-thread-client-recovery", "fork-conversation-fork", "fork-general-chat"]
+roles = []
+note = "Version-2 move bundles carry bounded native and legacy attachment bytes, preserve metadata identity, rewrite target storage paths, and clean only newly created objects on failure. Version-1 metadata-only bundles remain readable; old importers reject version 2. Reorganized 2026-09-06 from fork-thread-transfer. Turn starts inspect the import marker without hydrating ordinary thread history; transferred threads retain context handoff."
+
+[[patch.decision]]
+id = "upstream9917-environment-api-removal"
+date = "2026-09-20"
+decided = "relocate"
+rationale = "Upstream removed the obsolete EnvironmentApi facade from ipc.ts. Retire the transfer methods and type imports from that deleted surface; keep transfer export/import on the client-runtime environment RPC commands and server orchestration contracts."
+
+[[patch.decision]]
+id = "upstream1895-thread-menu-project-group"
+date = "2026-09-18"
+decided = "adapt"
+rationale = "Reuse upstream's project-group lookup and project-filter action when deriving cross-environment move targets, so filtering, project settings, and transfer all address the same grouped project."
+
+[[patch.decision]]
+id = "upstream-composer-context-records"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Project the current request's structured composer context before wrapping it with transferred visible history, preserve context records on imported messages, then append file-attachment prompt lines once. This keeps upstream context without duplicating the imported request or UI history."
+
+[[patch.decision]]
+id = "upstream-pr-asset-github-cli-runtime"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Retain upstream's shared GitHub CLI layer for pull-request asset downloads alongside the fork's independent thread-transfer runtime. Upstream still has no cross-environment thread transfer, and both services use the same unchanged runtime integration seam."
