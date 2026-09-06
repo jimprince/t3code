@@ -19,6 +19,7 @@ import {
   parseThreadSegmentFromAttachmentId,
   resolveAttachmentPath,
 } from "../attachmentStore.ts";
+import { normalizeUploadFileAttachments } from "./fileAttachmentStore.ts";
 import { ServerConfig } from "../config.ts";
 import { parseBase64DataUrl } from "../imageMime.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
@@ -314,30 +315,56 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
         ...(attachments.length > 0 ? { attachmentsByQuestionId } : {}),
       };
     }
-    const context = canonicalCommand.message.context;
-    const normalizedContext =
-      context === undefined
-        ? undefined
-        : {
-            ...context,
-            records: context.records.map((record) =>
-              (record.kind === "image" || record.kind === "file") && "attachmentId" in record
-                ? {
-                    ...record,
-                    attachmentId:
-                      finalAttachmentIdByClientId.get(record.attachmentId) ?? record.attachmentId,
-                  }
-                : record,
-            ),
-          };
-    return {
-      ...canonicalCommand,
-      message: {
-        ...canonicalCommand.message,
-        attachments: normalizedAttachments,
-        ...(normalizedContext !== undefined ? { context: normalizedContext } : {}),
-      },
-    } satisfies OrchestrationCommand;
+    return yield* Effect.gen(function* () {
+      const uploadFileAttachments = canonicalCommand.message.fileAttachments;
+      if (
+        uploadFileAttachments !== undefined &&
+        normalizedAttachments.length + uploadFileAttachments.length >
+          PROVIDER_SEND_TURN_MAX_ATTACHMENTS
+      ) {
+        return yield* new OrchestrationDispatchCommandError({
+          message: `A message can carry at most ${PROVIDER_SEND_TURN_MAX_ATTACHMENTS} attachments.`,
+        });
+      }
+      const normalizedFileAttachments =
+        uploadFileAttachments === undefined
+          ? undefined
+          : yield* normalizeUploadFileAttachments({
+              threadId: canonicalCommand.threadId,
+              fileAttachments: uploadFileAttachments,
+            });
+      const context = canonicalCommand.message.context;
+      const normalizedContext =
+        context === undefined
+          ? undefined
+          : {
+              ...context,
+              records: context.records.map((record) =>
+                (record.kind === "image" || record.kind === "file") && "attachmentId" in record
+                  ? {
+                      ...record,
+                      attachmentId:
+                        finalAttachmentIdByClientId.get(record.attachmentId) ?? record.attachmentId,
+                    }
+                  : record,
+              ),
+            };
+
+      // Strip the client upload shape so only normalized (path-bearing) file
+      // attachments survive into the orchestration command.
+      const { fileAttachments: _uploadShape, ...clientMessage } = canonicalCommand.message;
+      return {
+        ...canonicalCommand,
+        message: {
+          ...clientMessage,
+          attachments: normalizedAttachments,
+          ...(normalizedContext !== undefined ? { context: normalizedContext } : {}),
+          ...(normalizedFileAttachments !== undefined
+            ? { fileAttachments: normalizedFileAttachments }
+            : {}),
+        },
+      } satisfies OrchestrationCommand;
+    }).pipe(Effect.tapError(() => removeClaimedAttachmentPaths(claimedAttachmentPaths)));
   });
 
 export const cleanupFailedUploadedAttachments = Effect.fn(
