@@ -34,6 +34,7 @@ import {
   type ScopedThreadRef,
   type ThreadId,
   type ThreadLinkedPullRequest,
+  type ThreadForkWorkspaceMode,
   type TurnId,
   type KeybindingCommand,
   OrchestrationThreadActivity,
@@ -118,6 +119,7 @@ import * as Cause from "effect/Cause";
 import * as Schema from "effect/Schema";
 import { AsyncResult } from "effect/unstable/reactivity";
 import { isElectron } from "../env";
+import { resolvePrimaryEnvironmentHttpUrl } from "../environments/primary";
 import { readLocalApi } from "../localApi";
 import { useDiffPanelStore } from "../diffPanelStore";
 import {
@@ -350,6 +352,7 @@ import {
   threadHasOlderTurns,
 } from "@t3tools/client-runtime/state/threads";
 import { resolveProviderSkillsForCwd } from "@t3tools/client-runtime/providerSkills";
+import { orchestrationEnvironment } from "../state/orchestration";
 import { vcsEnvironment } from "../state/vcs";
 import { sourceControlEnvironment } from "../state/sourceControl";
 import { useProjectClone } from "../state/projectClones";
@@ -439,6 +442,7 @@ import {
   shouldOpenProactiveTurnDiff,
   shouldRenderPreviewMiniPlayer,
   getStartedThreadModelChangeBlockReason,
+  hydrateForkedMessageAttachments,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
   type LocalDispatchSnapshot,
@@ -1449,6 +1453,7 @@ const EMPTY_HELD_TURN_DIFF_SUMMARIES: readonly never[] = [];
 const noopHeldTurnDiff = (_turnId: TurnId, _filePath?: string) => {};
 const noopHeldRevert = (_targetTurnCount: number) => {};
 const noopHeldAttachment = (_attachment: ChatFileAttachment) => {};
+const noopHeldFork = (_messageId: MessageId, _workspaceMode: ThreadForkWorkspaceMode) => {};
 
 /**
  * Drops the send-time anchored end space. That space is what holds a sent
@@ -1532,6 +1537,9 @@ export default function ChatView(props: ChatViewProps) {
     reportFailure: false,
   });
   const revertThreadCheckpoint = useAtomCommand(threadEnvironment.revertCheckpoint, {
+    reportFailure: false,
+  });
+  const forkThread = useAtomCommand(orchestrationEnvironment.forkThread, {
     reportFailure: false,
   });
   const openPreview = useAtomCommand(previewEnvironment.open, { reportFailure: false });
@@ -1724,6 +1732,7 @@ export default function ChatView(props: ChatViewProps) {
   const isRevertingCheckpoint = useComposerDraftStore((store) =>
     store.rewindingThreadKeys.has(routeThreadKey),
   );
+  const [isForkingThread, setIsForkingThread] = useState(false);
   const [maximizedRightPanelThreadKey, setMaximizedRightPanelThreadKey] = useState<string | null>(
     null,
   );
@@ -3259,6 +3268,7 @@ export default function ChatView(props: ChatViewProps) {
     isConnecting ||
     isRevertingCheckpoint ||
     isCompacting ||
+    isForkingThread ||
     awaitingBootstrapTurn;
   const isPreparingWorktree = isLocallyPreparingWorktree || awaitingBootstrapTurn;
   const activeWorkStartedAt = deriveActiveWorkStartedAt(
@@ -5882,6 +5892,7 @@ export default function ChatView(props: ChatViewProps) {
   const sendEnvMode = resolveSendEnvMode({
     requestedEnvMode: envMode,
     isGitRepo,
+    hasWorktreeBaseRef: activeThreadBranch !== null || activeThreadWorktreePath !== null,
   });
   const localCheckoutBranchMismatch = useMemo(
     () =>
@@ -7314,6 +7325,102 @@ export default function ChatView(props: ChatViewProps) {
     });
   };
 
+  const onForkMessage = useCallback(
+    async (messageId: MessageId, workspaceMode: ThreadForkWorkspaceMode) => {
+      if (!activeThread || !isServerThread || isWorking) return;
+
+      setIsForkingThread(true);
+      try {
+        const result = await forkThread({
+          environmentId: activeThread.environmentId,
+          input: {
+            sourceThreadId: activeThread.id,
+            messageId,
+            workspaceMode,
+          },
+        });
+        if (result._tag === "Failure") {
+          if (!isAtomCommandInterrupted(result)) {
+            const error = squashAtomCommandFailure(result);
+            toastManager.add(
+              stackedThreadToast({
+                type: "error",
+                title: "Could not fork thread",
+                description:
+                  error instanceof Error ? error.message : "An unexpected error occurred.",
+              }),
+            );
+          }
+          return;
+        }
+
+        const targetThreadRef = scopeThreadRef(activeThread.environmentId, result.value.threadId);
+        if (result.value.prefilledPrompt !== null) {
+          setComposerDraftPrompt(targetThreadRef, result.value.prefilledPrompt);
+        }
+        const warnings = [...result.value.warnings];
+        if (result.value.prefilledAttachments.length > 0) {
+          const hydratedAttachments = await hydrateForkedMessageAttachments({
+            attachments: result.value.prefilledAttachments,
+            assetUrlById: serverAttachmentUrlById,
+            ...(activeThread.environmentId === primaryEnvironmentId
+              ? {
+                  resolveAssetUrl: (assetUrl: string) => {
+                    const sourceUrl = new URL(assetUrl);
+                    const proxyUrl = new URL(resolvePrimaryEnvironmentHttpUrl(sourceUrl.pathname));
+                    proxyUrl.search = sourceUrl.search;
+                    return proxyUrl.toString();
+                  },
+                }
+              : {}),
+          });
+          addComposerDraftImages(targetThreadRef, hydratedAttachments.images);
+          if (hydratedAttachments.unavailableCount > 0) {
+            warnings.push(
+              `${hydratedAttachments.unavailableCount} selected-message attachment${hydratedAttachments.unavailableCount === 1 ? " was" : "s were"} unavailable and could not be copied into the fork draft.`,
+            );
+          }
+        }
+        if (warnings.length > 0) {
+          toastManager.add(
+            stackedThreadToast({
+              type: "info",
+              title: "Thread forked",
+              description: warnings.join(" "),
+            }),
+          );
+        }
+        await navigate({
+          to: "/$environmentId/$threadId",
+          params: {
+            environmentId: activeThread.environmentId,
+            threadId: result.value.threadId,
+          },
+        });
+      } catch (error) {
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: "Could not open forked thread",
+            description: error instanceof Error ? error.message : "An unexpected error occurred.",
+          }),
+        );
+      } finally {
+        setIsForkingThread(false);
+      }
+    },
+    [
+      activeThread,
+      addComposerDraftImages,
+      forkThread,
+      isServerThread,
+      isWorking,
+      navigate,
+      primaryEnvironmentId,
+      serverAttachmentUrlById,
+      setComposerDraftPrompt,
+    ],
+  );
   const onSend = async (
     e?: { preventDefault: () => void },
     submissionIntent: ComposerSubmissionIntent = "foreground",
@@ -9982,6 +10089,20 @@ export default function ChatView(props: ChatViewProps) {
                 onRevertToTurnCount={
                   paintOnlyDisplayedTimeline ? noopHeldRevert : onRevertTimelineTurn
                 }
+                onForkMessage={paintOnlyDisplayedTimeline ? noopHeldFork : onForkMessage}
+                canForkThread={Boolean(
+                  !paintOnlyDisplayedTimeline &&
+                  isServerThread &&
+                  activeProject &&
+                  activeProject.kind !== "chat",
+                )}
+                canForkToNewWorktree={Boolean(
+                  !paintOnlyDisplayedTimeline &&
+                  isServerThread &&
+                  activeProject &&
+                  activeProject.kind !== "chat" &&
+                  isGitRepo,
+                )}
                 isRevertingCheckpoint={!paintOnlyDisplayedTimeline && isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 onFileOpen={paintOnlyDisplayedTimeline ? noopHeldAttachment : openFileAttachment}
