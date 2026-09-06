@@ -1082,6 +1082,16 @@ export function createServerEnvironmentAtoms<R, E>(
       staleTimeMs: 60_000,
       refreshTrigger: ({ environmentId }) => usageScanSettingsAtom(environmentId),
     }),
+
+    threadSubscriptions: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:thread-subscriptions",
+      tag: WS_METHODS.serverThreadSubscriptions,
+    }),
+    updateThreadSubscriptions: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:update-thread-subscriptions",
+      tag: WS_METHODS.serverUpdateThreadSubscriptions,
+    }),
+
     configProjection,
     welcome,
     consumeResetCredit: createEnvironmentRpcCommand(runtime, {
