@@ -399,9 +399,30 @@ id = "upstream-composer-context-records"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Project the current request's structured composer context before wrapping it with transferred visible history, preserve context records on imported messages, then append file-attachment prompt lines once. This keeps upstream context without duplicating the imported request or UI history."
-
 [[patch.decision]]
 id = "upstream-pr-asset-github-cli-runtime"
 date = "2026-09-17"
 decided = "adapt"
 rationale = "Retain upstream's shared GitHub CLI layer for pull-request asset downloads alongside the fork's independent thread-transfer runtime. Upstream still has no cross-environment thread transfer, and both services use the same unchanged runtime integration seam."
+
+[[patch]]
+name = "fork-thread-history-compatibility"
+subject = "fix(threads): preserve historical goal data without goal automation"
+class = "divergence"
+purpose = "Keep existing thread snapshots, event replay and transferred history readable after retiring fork features; migrate legacy sidebar ordering events once to upstream metadata events. No goal creation, evaluation or automatic continuation remains."
+retire_when = "Support for databases and transferred histories containing legacy goal records has explicitly ended or those records have been losslessly migrated."
+depends_on = ["fork-thread-client-recovery", "fork-thread-transfer"]
+roles = []
+note = "Brad approved removing goals on 2026-09-05. Retain historical goal schema, projection and import compatibility; numbered migrations remain in the migration ledger. Migration 5 converts sidebar-reordered/orderKey to meta-updated/activeOrderKey transactionally without changing event identity or sequence. ID 4 remains reserved for the previously shipped sidebar-order column migration. Thread transfer bundles contain snapshots, not raw ordering events. Packaged upgrade fixtures freeze released 1293 and 1400 schemas with synthetic sidebar, goal and legacy attachment events; verify replay, preserved IDs and migration ledgers, projections and restart before release. Recent retirement review: sidebar data now migrates through 5; goals keep historical schemas and projection support; file handoffs retain compatibility under their own concern."
+
+[[patch.decision]]
+id = "upstream-thread-repository-list-removal"
+date = "2026-09-20"
+decided = "narrow"
+rationale = "Upstream removed the thread repository's listByProjectId and deleteById queries. Retire historical goal decoding from the deleted list query while preserving goal compatibility in the surviving upsert and getById paths."
+
+[[patch.decision]]
+id = "gitmanager-faketextgeneration"
+date = "2026-07-28"
+decided = "retire"
+rationale = "Upstream replaced the duplicate hand-written interface with TextGeneration['Service']; keep the upstream type alias and do not restore the redundant interface."
