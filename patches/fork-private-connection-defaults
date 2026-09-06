@@ -1,0 +1,6 @@
+Bottom: 203f7786e7834db07a3241422035f2c1ef03b029
+Top:    203f7786e7834db07a3241422035f2c1ef03b029
+Author: User <user@example.com>
+Date:   2026-09-05 21:03:49 -0600
+
+fix(remote): default bare private hosts to plain HTTP pairing
