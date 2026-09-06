@@ -1,0 +1,4 @@
+id = "worktrees-selected-remote-freshness"
+category = "fix"
+functionality = "worktrees"
+text = "New remote-based worktrees now fetch the selected remote, including custom remote names."
