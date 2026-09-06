@@ -1,6 +1,6 @@
-Bottom: 66cdfe95db0cc8b38f8be38da17acaa8661ccc2e
-Top:    1847aa4fead6bbd1c331ba31f0984fe7309bd6ce
+Bottom: bc2528d0baed43673f4b047b26a3b728c952e511
+Top:    4f7eb69c25d3929b238f84b1344ba92ef6a73555
 Author: User <user@example.com>
-Date:   2026-09-05 21:16:34 -0600
+Date:   2026-09-05 21:16:37 -0600
 
 feat(sidebar): arrange inbox threads by hand
