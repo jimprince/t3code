@@ -11,11 +11,13 @@ import {
 } from "./timelineMinimapItems";
 import {
   type AssistantCitation,
+  type ContextMenuItem,
   type EnvironmentId,
   type MessageId,
   type ScopedThreadRef,
   type ServerProviderSkill,
   type ToolActivityIcon,
+  type ThreadForkWorkspaceMode,
   type TurnId,
 } from "@t3tools/contracts";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
@@ -188,6 +190,8 @@ import { cn } from "~/lib/utils";
 import { useUiStateStore } from "~/uiStateStore";
 import { type TimestampFormat } from "@t3tools/contracts/settings";
 import { formatChatTimestampTooltip, formatDayAwareTimestamp } from "../../timestampFormat";
+import { readLocalApi } from "../../localApi";
+
 import {
   buildInlineTerminalContextText,
   formatInlineTerminalContextLabel,
@@ -223,6 +227,9 @@ interface TimelineRowSharedState {
   activeThreadEnvironmentId: EnvironmentId;
   onRevertToTurnCount: (targetTurnCount: number) => void;
   onUseArtifactTemplate: (template: CodexArtifactTemplate) => void;
+  onForkMessage: (messageId: MessageId, workspaceMode: ThreadForkWorkspaceMode) => void;
+  canForkThread: boolean;
+  canForkToNewWorktree: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen: (attachment: ChatFileAttachment) => void;
   onFileDownload: (attachment: ChatFileAttachment) => void;
@@ -342,6 +349,9 @@ interface MessagesTimelineProps {
   supportsConversationRollback: boolean;
   onRevertToTurnCount: (targetTurnCount: number) => void;
   onUseArtifactTemplate?: (template: CodexArtifactTemplate) => void;
+  onForkMessage: (messageId: MessageId, workspaceMode: ThreadForkWorkspaceMode) => void;
+  canForkThread: boolean;
+  canForkToNewWorktree: boolean;
   isRevertingCheckpoint: boolean;
   onImageExpand: (preview: ExpandedImagePreview) => void;
   onFileOpen?: (attachment: ChatFileAttachment) => void;
@@ -402,6 +412,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   supportsConversationRollback,
   onRevertToTurnCount,
   onUseArtifactTemplate = NOOP_USE_ARTIFACT_TEMPLATE,
+  onForkMessage,
+  canForkThread,
+  canForkToNewWorktree,
   isRevertingCheckpoint,
   onImageExpand,
   onFileOpen = NOOP_OPEN_ATTACHMENT,
@@ -783,6 +796,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertToTurnCount,
       onUseArtifactTemplate,
+      onForkMessage,
+      canForkThread,
+      canForkToNewWorktree,
       onImageExpand,
       onFileOpen,
       onFileDownload,
@@ -807,6 +823,9 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       activeThreadEnvironmentId,
       onRevertToTurnCount,
       onUseArtifactTemplate,
+      onForkMessage,
+      canForkThread,
+      canForkToNewWorktree,
       onImageExpand,
       onFileOpen,
       onFileDownload,
@@ -1274,10 +1293,67 @@ function TimelineMinimapNavigationButton({
 type TimelineWorkEntry = Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"][number];
 type TimelineRow = MessagesTimelineRow;
 
+type MessageForkContextMenuAction = "fork" | "fork-current" | "fork-new-worktree";
+
+export function buildMessageForkContextMenuItems(input: {
+  readonly disabled: boolean;
+  readonly canForkToNewWorktree: boolean;
+}): ReadonlyArray<ContextMenuItem<MessageForkContextMenuAction>> {
+  return [
+    {
+      id: "fork",
+      label: "Fork thread from here",
+      disabled: input.disabled,
+      children: [
+        {
+          id: "fork-current",
+          label: "Use current worktree",
+          disabled: input.disabled,
+        },
+        {
+          id: "fork-new-worktree",
+          label: "Create new worktree from here",
+          disabled: input.disabled || !input.canForkToNewWorktree,
+        },
+      ],
+    },
+  ];
+}
+
+export function shouldClaimMessageForkContextMenu(api: unknown | undefined): boolean {
+  return api !== undefined;
+}
+
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
   const isExpandedToolGroup = row.kind === "work" && row.isExpandedToolGroup;
   const isExpandedToolGroupHeader =
     (row.kind === "work-toggle" && row.expanded) || (row.kind === "work-live" && row.expanded);
+  const ctx = use(TimelineRowCtx);
+  const activity = use(TimelineRowActivityCtx);
+  const handleContextMenu = useCallback(
+    async (event: MouseEvent<HTMLDivElement>) => {
+      if (row.kind !== "message") return;
+      const api = readLocalApi();
+      if (!shouldClaimMessageForkContextMenu(api)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (!api) return;
+      const disabled = !ctx.canForkThread || activity.isWorking || row.message.streaming;
+      const clicked = await api.contextMenu.show(
+        buildMessageForkContextMenuItems({
+          disabled,
+          canForkToNewWorktree: ctx.canForkToNewWorktree,
+        }),
+        { x: event.clientX, y: event.clientY },
+      );
+      if (clicked === "fork-current") {
+        ctx.onForkMessage(row.message.id, "current");
+      } else if (clicked === "fork-new-worktree") {
+        ctx.onForkMessage(row.message.id, "new-worktree");
+      }
+    },
+    [activity.isWorking, ctx, row],
+  );
 
   return (
     <div
@@ -1310,6 +1386,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
         row.kind === "message" || row.kind === "assistant-meta" ? row.message.id : undefined
       }
       data-message-role={row.kind === "message" ? row.message.role : undefined}
+      onContextMenu={row.kind === "message" ? handleContextMenu : undefined}
     >
       {row.kind === "work" ? (
         <WorkGroupSection
