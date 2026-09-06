@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "06942560f6fcb65da07f7297abaffebca86e18e8",
-  "head": "38ab934b2553721b84c915d429912617b0b46783",
+  "prev": "51632086ba39424bcb0441b84a7a3091d124d116",
+  "head": "a78d05acbad0722f587cc95cfd63bb338c81117a",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -10,7 +10,9 @@
     "fork-thread-client-recovery",
     "fork-general-chat",
     "fork-conversation-fork",
-    "fork-thread-transfer",
+    "fork-thread-transfer"
+  ],
+  "unapplied": [
     "fork-thread-history-compatibility",
     "fork-project-selection",
     "fork-manual-thread-order",
@@ -32,7 +34,6 @@
     "fork-release-publication",
     "fork-maintenance-automation"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
