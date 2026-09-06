@@ -88,6 +88,7 @@ function makeBinding(
     provider: driverKind,
     providerInstanceId,
     status,
+    bootGenerationId: null,
     lastSeenAt: now,
   };
 }
