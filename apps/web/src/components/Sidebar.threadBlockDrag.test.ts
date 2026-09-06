@@ -1,33 +1,15 @@
 import { describe, expect, it } from "vite-plus/test";
-import { arrayMove } from "@dnd-kit/sortable";
-import {
-  orderItemsByPreferredIds,
-  planThreadBlockDrop,
-  SIDEBAR_THREAD_ROW_HEIGHT_PX,
-  SIDEBAR_THREAD_ROW_IDLE_CLASS,
-  SIDEBAR_THREAD_ROW_SORTING_CLASS,
-} from "./Sidebar.logic";
+import { arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { orderItemsByPreferredIds, planThreadBlockDrop } from "./Sidebar.logic";
 
-// ── A dnd-kit stand-in ─────────────────────────────────────────────────
-// The sidebar's draggable blocks (pinned, and the fork's inbox) are plain
-// stacks of fixed-height <li> rows driven by closestCenter +
-// verticalListSortingStrategy. Both are pure geometry, so they can be run
-// here against a modelled stack and used as the oracle for "what did the
-// user see mid-drag" — which is the only way to pin the class of bug this
-// file guards: a drop that commits somewhere other than where the preview
-// opened its slot.
-//
-// Ported from @dnd-kit/sortable 10.0.0 (getItemGap, verticalListSortingStrategy)
-// and @dnd-kit/core (closestCenter). Kept literal on purpose: a paraphrase
-// would stop being an oracle.
+// Modelled row geometry exercises the production drop planner against
+// dnd-kit's real sorting strategy. This verifies preview/commit ordering,
+// not browser layout, paint invalidation, or post-drop compositing.
 
 interface SimRow {
   readonly key: string;
   /** What the row occupies on screen right now. */
   readonly height: number;
-  /** What dnd-kit measured when the drag began. Differs from `height` when
-      the row was still a content-visibility placeholder at measure time. */
-  readonly measuredHeight?: number;
   readonly reorderable: boolean;
 }
 
@@ -44,46 +26,6 @@ function stack(rows: readonly SimRow[], pick: (row: SimRow) => number): SimRect[
     top += rect.height;
     return rect;
   });
-}
-
-function itemGap(rects: readonly SimRect[], index: number, activeIndex: number): number {
-  const current = rects[index];
-  const previous = rects[index - 1];
-  const next = rects[index + 1];
-  if (!current) return 0;
-  if (activeIndex < index) {
-    return previous
-      ? current.top - (previous.top + previous.height)
-      : next
-        ? next.top - (current.top + current.height)
-        : 0;
-  }
-  return next
-    ? next.top - (current.top + current.height)
-    : previous
-      ? current.top - (previous.top + previous.height)
-      : 0;
-}
-
-function verticalListTransformY(
-  rects: readonly SimRect[],
-  activeIndex: number,
-  overIndex: number,
-  index: number,
-): number {
-  const activeRect = rects[activeIndex];
-  if (!activeRect) return 0;
-  if (index === activeIndex) {
-    const overRect = rects[overIndex];
-    if (!overRect) return 0;
-    return activeIndex < overIndex
-      ? overRect.top + overRect.height - (activeRect.top + activeRect.height)
-      : overRect.top - activeRect.top;
-  }
-  const gap = itemGap(rects, index, activeIndex);
-  if (index > activeIndex && index <= overIndex) return -activeRect.height - gap;
-  if (index < activeIndex && index >= overIndex) return activeRect.height + gap;
-  return 0;
 }
 
 /** closestCenter over the droppables dnd-kit knows about — which is exactly
@@ -118,13 +60,13 @@ function previewDrag(input: {
 }): { readonly overKey: string | null; readonly order: readonly string[] } {
   const { activeKey, contextKeys, pointerDeltaY, rows } = input;
   const renderedByKey = new Map(stack(rows, (row) => row.height).map((rect) => [rect.key, rect]));
-  const measuredByKey = new Map(
-    stack(rows, (row) => row.measuredHeight ?? row.height).map((rect) => [rect.key, rect]),
-  );
   // dnd-kit collides the dragged row's live rect against the rects it
   // measured when the drag began.
   const draggedRendered = renderedByKey.get(activeKey)!;
-  const contextRects = contextKeys.map((key) => measuredByKey.get(key)!);
+  const contextRects = contextKeys.map((key) => {
+    const rect = renderedByKey.get(key)!;
+    return { ...rect, bottom: rect.top + rect.height, left: 0, right: 300, width: 300 };
+  });
   const overKey = closestCenter(
     contextRects,
     draggedRendered.top + draggedRendered.height / 2 + pointerDeltaY,
@@ -135,7 +77,15 @@ function previewDrag(input: {
     const rendered = renderedByKey.get(row.key)!;
     const index = contextKeys.indexOf(row.key);
     const y =
-      index === -1 ? 0 : verticalListTransformY(contextRects, activeIndex, overIndex, index);
+      index === -1
+        ? 0
+        : (verticalListSortingStrategy({
+            rects: contextRects,
+            activeNodeRect: contextRects[activeIndex] ?? null,
+            activeIndex,
+            overIndex,
+            index,
+          })?.y ?? 0);
     return { key: row.key, top: rendered.top + y, height: rendered.height };
   });
   return {
@@ -144,10 +94,8 @@ function previewDrag(input: {
   };
 }
 
-const ROW = SIDEBAR_THREAD_ROW_HEIGHT_PX;
-/** contain-intrinsic-size on a row that has never painted. Equal to ROW
-    after this fix; the stale value shipped 14px taller. */
-const STALE_PLACEHOLDER = 96;
+// Full card height (4.875rem) plus 2px padding above and below.
+const ROW = 82;
 
 function row(key: string, reorderable: boolean, overrides: Partial<SimRow> = {}): SimRow {
   return { key, height: ROW, reorderable, ...overrides };
@@ -284,61 +232,29 @@ describe("thread block drag preview matches what the drop commits", () => {
   });
 });
 
-describe("thread block drag against stale row measurements", () => {
-  // A full-height inbox: every row renders at ROW, but only the first two
-  // have ever painted. The rest were still content-visibility placeholders
-  // when dnd-kit measured the block, so it believes each of them is
-  // STALE_PLACEHOLDER tall and every rect below them is too low.
-  const keys = Array.from({ length: 12 }, (_, index) => `r${index}`);
-  const staleRows = keys.map((key, index) =>
-    row(key, true, index < 2 ? {} : { measuredHeight: STALE_PLACEHOLDER }),
-  );
-  const freshRows = keys.map((key) => row(key, true));
-  // Pointer holds the top row over the eighth row's slot.
-  const pointerDeltaY = 7 * ROW;
-
-  it("drops on the row the pointer is over when the placeholder height is right", () => {
+describe("long thread block drags", () => {
+  it.each([
+    [0, 7],
+    [7, 0],
+    [2, 11],
+    [11, 2],
+  ])("previews and commits a move from %i to %i", (from, to) => {
+    const rows = Array.from({ length: 12 }, (_, index) => row(`r${index}`, true));
+    const keys = rows.map((item) => item.key);
     const preview = previewDrag({
-      rows: freshRows,
+      rows,
       contextKeys: keys,
-      activeKey: "r0",
-      pointerDeltaY,
+      activeKey: keys[from]!,
+      pointerDeltaY: (to - from) * ROW,
     });
-    expect(preview.overKey).toBe("r7");
     const plan = planThreadBlockDrop({
       renderedKeys: keys,
       reorderableKeys: new Set(keys),
-      activeKey: "r0",
+      activeKey: keys[from]!,
       overKey: preview.overKey,
     });
-    expect(plan?.renderedOrder).toEqual(preview.order);
-  });
-
-  it("drops on a different row when the placeholder height is wrong", () => {
-    const preview = previewDrag({
-      rows: staleRows,
-      contextKeys: keys,
-      activeKey: "r0",
-      pointerDeltaY,
-    });
-    // 14px of drift per never-painted row above the pointer is enough to
-    // hand the drop to the row above the one under the cursor.
-    expect(preview.overKey).toBe("r6");
-    expect(preview.order).not.toEqual(
-      previewDrag({ rows: freshRows, contextKeys: keys, activeKey: "r0", pointerDeltaY }).order,
-    );
-  });
-});
-
-describe("sidebar thread row placeholder", () => {
-  // The preceding suite shows what a wrong placeholder height costs. These
-  // keep the numbers the rows actually ship honest.
-  it("claims the same height it renders", () => {
-    expect(ROW).toBe(82);
-    expect(SIDEBAR_THREAD_ROW_IDLE_CLASS).toContain(`contain-intrinsic-size:auto_${ROW}px`);
-  });
-
-  it("stops skipping rows while a drag is in flight", () => {
-    expect(SIDEBAR_THREAD_ROW_SORTING_CLASS).toBe("[content-visibility:visible]");
+    expect(preview.overKey).toBe(keys[to]);
+    expect(preview.order).toEqual(arrayMove(keys, from, to));
+    expect(committedOrder(rows, plan!.renderedOrder)).toEqual(preview.order);
   });
 });

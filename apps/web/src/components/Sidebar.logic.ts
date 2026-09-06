@@ -82,18 +82,6 @@ export function useRetainedValue<T>(key: string | null, value: T | null): T | nu
 export const animatePinnedLayoutChanges: AnimateLayoutChanges = (args) =>
   args.isSorting ? defaultAnimateLayoutChanges(args) : false;
 
-// A full sidebar thread card is a fixed box: py-0.5 around a 4.875rem card.
-// Rows below the fold are skipped with content-visibility, so the
-// placeholder they claim while skipped has to be that exact box — a row that
-// measures one height and renders another moves the ground under an
-// in-flight drag, and the drop lands on a different row than the one the
-// pointer was over. While the block is sorting nothing is skipped at all, so
-// no row can resize itself mid-drag by painting for the first time.
-export const SIDEBAR_THREAD_ROW_HEIGHT_PX = 4.875 * 16 + 2 + 2;
-export const SIDEBAR_THREAD_ROW_IDLE_CLASS =
-  "[content-visibility:auto] [contain-intrinsic-size:auto_82px]";
-export const SIDEBAR_THREAD_ROW_SORTING_CLASS = "[content-visibility:visible]";
-
 type SidebarProject = {
   id: string;
   title: string;
