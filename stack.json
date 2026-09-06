@@ -1,14 +1,13 @@
 {
   "version": 5,
-  "prev": "d51c34cd427ca237ed9ffa6f7778239f3c9bb742",
-  "head": "022a0751310d3f794eeb586302ef0c5bd5be00d2",
+  "prev": "f6ecb91807146ca66cf58c29f0acc0b00f407af1",
+  "head": "b418790c25250c3291e08fa842819b9b90ea35eb",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
-    "fork-thread-client-recovery",
-    "refresh-temp"
+    "fork-thread-client-recovery"
   ],
   "unapplied": [
     "fork-stgit-stack-policy",
@@ -134,7 +133,7 @@
       "oid": "e1f5d137610a611001bf120ca6725ca8901b1ed5"
     },
     "fork-thread-client-recovery": {
-      "oid": "a4c827f6ac71362ba194b95ef5714f1d0e16eb1b"
+      "oid": "b418790c25250c3291e08fa842819b9b90ea35eb"
     },
     "fork-thread-fork": {
       "oid": "4d6acac2548d47ce9df974b42905421cc3f9b69a"
@@ -168,9 +167,6 @@
     },
     "fork-worktree-gc": {
       "oid": "3c3a041670be6bf472942d47ba71b4bdf5f9dd06"
-    },
-    "refresh-temp": {
-      "oid": "022a0751310d3f794eeb586302ef0c5bd5be00d2"
     }
   }
 }
