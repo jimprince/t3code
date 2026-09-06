@@ -1,3 +1,4 @@
+import { synchronizedLegacyPullRequest } from "../sourceControl/forkPullRequestUrl.ts";
 import {
   latestExecutedRun,
   latestRootProviderFailure,
@@ -2957,25 +2958,23 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
             if (!existing) return thread;
             pullRequests = links.map((link) =>
               link === existing
-                ? { ...link, snapshot: command.snapshot, stack: command.stack }
+                ? {
+                    ...link,
+                    url: command.url ?? link.url,
+                    snapshot: command.snapshot,
+                    stack: command.stack,
+                  }
                 : link,
             );
           }
           return {
             ...thread,
             pullRequests,
-            linkedPullRequest:
-              thread.linkedPullRequest &&
-              pullRequests.some(
-                (link) =>
-                  link.source !== "stack-dismissed" &&
-                  threadPullRequestKeysEqual(
-                    link,
-                    legacyThreadPullRequestKey(thread.linkedPullRequest!),
-                  ),
-              )
-                ? thread.linkedPullRequest
-                : null,
+            linkedPullRequest: synchronizedLegacyPullRequest(
+              thread.linkedPullRequest,
+              pullRequests,
+              links,
+            ),
             updatedAt: command.type === "thread.pull-request-link.sync" ? thread.updatedAt : now,
           };
         }
