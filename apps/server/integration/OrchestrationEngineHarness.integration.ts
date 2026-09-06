@@ -38,6 +38,7 @@ import { makeAdapterRegistryMock } from "../src/provider/testUtils/providerAdapt
 import { ProviderAdapterRegistry } from "../src/provider/Services/ProviderAdapterRegistry.ts";
 import { makeProviderRegistryLayer } from "../src/provider/testUtils/providerRegistryMock.ts";
 import { ProviderSessionDirectoryLive } from "../src/provider/Layers/ProviderSessionDirectory.ts";
+import { makeServerBootGenerationLayer } from "../src/provider/Layers/ServerBootGeneration.ts";
 import { ServerSettingsService } from "../src/serverSettings.ts";
 import { makeProviderServiceLive } from "../src/provider/Layers/ProviderService.ts";
 import { makeCodexAdapter } from "../src/provider/Layers/CodexAdapter.ts";
@@ -65,6 +66,7 @@ import {
   OrchestrationEngineService,
   type OrchestrationEngineShape,
 } from "../src/orchestration/Services/OrchestrationEngine.ts";
+import { ThreadArchiveCleanupReactor } from "../src/orchestration/Services/ThreadArchiveCleanupReactor.ts";
 import { ThreadDeletionReactor } from "../src/orchestration/Services/ThreadDeletionReactor.ts";
 import * as ThreadSettlementReactor from "../src/orchestration/ThreadSettlementReactor.ts";
 import { OrchestrationReactor } from "../src/orchestration/Services/OrchestrationReactor.ts";
@@ -277,6 +279,7 @@ export const makeOrchestrationIntegrationHarness = (
     );
     const providerSessionDirectoryLayer = ProviderSessionDirectoryLive.pipe(
       Layer.provide(ProviderSessionRuntime.layer),
+      Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
     );
     const realCodexRegistry = Layer.effect(
       ProviderAdapterRegistry,
@@ -345,6 +348,7 @@ export const makeOrchestrationIntegrationHarness = (
         }),
       ),
       Layer.provideMerge(runtimeServicesLayer),
+      Layer.provideMerge(providerSessionDirectoryLayer),
       Layer.provideMerge(gitWorkflowLayer),
       Layer.provideMerge(textGenerationLayer),
       Layer.provideMerge(serverSettingsLayer),
@@ -388,6 +392,12 @@ export const makeOrchestrationIntegrationHarness = (
       Layer.provideMerge(runtimeIngestionLayer),
       Layer.provideMerge(providerCommandReactorLayer),
       Layer.provideMerge(checkpointReactorLayer),
+      Layer.provideMerge(
+        Layer.succeed(ThreadArchiveCleanupReactor, {
+          start: () => Effect.void,
+          drain: Effect.void,
+        }),
+      ),
       Layer.provideMerge(
         Layer.succeed(ThreadDeletionReactor, {
           start: () => Effect.void,
