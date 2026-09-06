@@ -543,3 +543,18 @@ id = "upstream-pr-dismissal-toolbar"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Share upstream-adapted local-storage decoding with project exclusions, apply both row filters in one memo, and extend the existing dismissal toolbar with hidden-project restoration without changing its selection behavior."
+
+[[patch]]
+name = "fork-headless-delivery"
+subject = "feat(server): deliver and update the headless Linux server"
+class = "product"
+purpose = "Build the Linux headless artifact and provide service-managed update discovery, installation, health checks, restart, and rollback with an authenticated immediate update check."
+retire_when = "Upstream or maintained shared tooling provides an equivalent headless artifact and update workflow."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Automatic upgrades check active and queued work before download and before promotion, defer with a retry marker, and require explicit manual --force to bypass activity checks or escalate SIGKILL. Reorganized 2026-09-06 from fork-headless-updates. The unattended updater preserves an explicit PATH runtime and falls back to ~/.local/node/bin under cron; fail before downloading when Node is unavailable (Gitea29). Release smoke now starts the unpacked server against frozen historical databases and verifies migrated state plus restart, in addition to empty-data startup. 2026-09-17: the staged install carries the workspace pnpm patches for packages it installs (mirroring upstream's archive builder) because upstream now loads @ff-labs/fff-node through require, which resolves only with the patched require export condition."
+[[patch.decision]]
+id = "upstream-headless-delivery"
+date = "2026-09-16"
+decided = "retain"
+rationale = "Upstream does not provide the fork's service-managed headless Linux artifact, authenticated update check, idle-aware promotion and rollback workflow, or historical-database release smoke coverage."
