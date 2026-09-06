@@ -5,6 +5,7 @@ import * as NodePath from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
+  runWorktreeGc,
   inspectWorktree,
   planWorktreeGc,
   removeWorktree,
@@ -303,5 +304,84 @@ describe("worktree gc snapshot integration", () => {
     expect(plan.removable.map(({ path }) => path)).toEqual(["/worktrees/old"]);
     expect(plan.retained.map(({ reason }) => reason)).toEqual(["unarchived-thread"]);
     expect(request).toHaveBeenCalledWith("getArchivedShellSnapshot", {});
+  });
+});
+
+describe("worktree gc execution", () => {
+  async function localState(run: (stateDir: string) => Promise<void>) {
+    const stateDir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-gc-identity-"));
+    try {
+      await NodeFSP.writeFile(NodePath.join(stateDir, "environment-id"), "local-environment\n");
+      await run(stateDir);
+    } finally {
+      await NodeFSP.rm(stateDir, { recursive: true, force: true });
+    }
+  }
+
+  it("rejects another environment before inspecting local worktrees", async () => {
+    await localState(async (localStateDir) => {
+      const inspect = vi.fn(alwaysClean);
+      const listThreads = vi.fn(async () => [thread({ id: "a" })]);
+      const remove = vi.fn(async (path: string) => ({ path, removed: true }));
+      await expect(
+        runWorktreeGc({
+          localStateDir,
+          environmentId: "remote-environment",
+          listThreads,
+          inspect,
+          remove,
+          execute: true,
+          now: NOW,
+        }),
+      ).rejects.toThrow("does not match");
+      expect(inspect).not.toHaveBeenCalled();
+      expect(listThreads).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
+    });
+  });
+
+  it("rechecks lifecycle before each removal and keeps a newly reopened thread", async () => {
+    await localState(async (localStateDir) => {
+      const archived = [thread({ id: "a" }), thread({ id: "b" })];
+      let reads = 0;
+      const listThreads = async () =>
+        ++reads < 3 ? archived : [archived[0]!, thread({ id: "b", archivedAt: null })];
+      const removed: string[] = [];
+      const result = await runWorktreeGc({
+        localStateDir,
+        environmentId: "local-environment",
+        listThreads,
+        inspect: alwaysClean,
+        remove: async (path) => {
+          removed.push(path);
+          return { path, removed: true };
+        },
+        execute: true,
+        now: NOW,
+      });
+      expect(removed).toEqual(["/worktrees/a"]);
+      expect(result.removals[1]).toMatchObject({ path: "/worktrees/b", removed: false });
+      expect(reads).toBe(3);
+    });
+  });
+
+  it("keeps dry-run useful without removing or rereading candidates", async () => {
+    await localState(async (localStateDir) => {
+      const listThreads = vi.fn(async () => [thread({ id: "a" })]);
+      const remove = vi.fn(async (path: string) => ({ path, removed: true }));
+      const result = await runWorktreeGc({
+        localStateDir,
+        environmentId: "local-environment",
+        listThreads,
+        inspect: alwaysClean,
+        remove,
+        execute: false,
+        now: NOW,
+      });
+      expect(result.removable).toHaveLength(1);
+      expect(result.removals).toEqual([]);
+      expect(listThreads).toHaveBeenCalledTimes(1);
+      expect(remove).not.toHaveBeenCalled();
+    });
   });
 });

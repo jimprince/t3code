@@ -305,4 +305,5 @@ purpose = "Plan and execute retirement of the per-worker git worktrees T3 create
 retire_when = "Upstream or the t3-thread CLI host binding provides equivalent guarded worktree reclamation, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-worker-operations"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-worktree-gc. [fork-worktree-gc] Removal never passes --force to `git worktree remove`, so git independently refuses a dirty checkout and the branch ref plus its commits survive. Retention checks run before inspection so a checkout with a live thread is never touched. Detached HEAD worktrees are retained because their commits may lack a protecting branch. Fetch archived and active snapshots explicitly: the normal CLI thread listing excludes archived threads."
+note = "Requires an explicit local state directory whose environment ID matches the selected server before local inspection. Execution rereads lifecycle and Git state before each non-forced removal; the dry run remains non-mutating."
+
