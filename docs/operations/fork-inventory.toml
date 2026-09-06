@@ -288,3 +288,13 @@ id = "missing-remote-base-guidance"
 date = "2026-09-09"
 decided = "adapt"
 rationale = "Brad clarified that Socrates uses Gitea while T3Fork uses GitHub. Honor each selected branch's configured upstream before default remote preference, preserve explicit remote choices, and name unresolved remote refs with recovery guidance. No persisted or wire-schema changes."
+
+[[patch]]
+name = "fork-pr-dismissal"
+subject = "feat(web): dismiss pull requests in bulk"
+class = "product"
+purpose = "Let operators select visible pull requests in bulk, persistently remove them from the local environment view without mutating provider state, and restore removed entries."
+retire_when = "Upstream ships equivalent multi-select dismissal and restoration in the Pull Requests view."
+depends_on = []
+roles = []
+note = "Reorganized 2026-09-06 from fork-web-pr-multiselect."
