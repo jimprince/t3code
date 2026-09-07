@@ -201,8 +201,3 @@ retire_when = "Upstream ships manual ordering for the unpinned thread list, at w
 depends_on = ["fork-provider-turn-safety"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-sidebar-thread-order. [fork-sidebar-thread-order] sidebarOrderKey is a SEPARATE column from upstream's pin_order_key on purpose: thread.unpinned clears pin_order_key, so sharing the field would silently destroy an inbox placement on every pin/unpin cycle. The fork schema change lands in ForkMigrations, not upstream's Migrations sequence. dnd-kit alone owns sidebar card movement; do not attach outer list auto-animation or toggle card content-visibility at drop, which combines competing transforms with paint-containment changes."
-[[patch.decision]]
-id = "upstream-active-order"
-date = "2026-09-07"
-decided = "retire"
-rationale = "Upstream now provides persisted activeOrderKey ordering, cross-section drag and menu/mobile move controls, capability gating, tests, and user documentation. Remove the duplicate sidebarOrderKey implementation; retain this inventory-only patch until a separate structural stack change is authorized, because this replay must preserve all 29 patch names and subjects."
