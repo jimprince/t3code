@@ -2,10 +2,13 @@ import { describe, expect } from "vite-plus/test";
 import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import * as Schema from "effect/Schema";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { SourceControlProviderRegistry } from "../sourceControl/SourceControlProviderRegistry.ts";
 import { make } from "./GiteaPullRequestProvider.ts";
+
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 const instance = {
   id: "home",
@@ -279,7 +282,7 @@ describe("Gitea pull request browser", () => {
       expect(error.reason).toBe(
         status === 401 ? "unauthenticated" : status === 429 ? "rate-limited" : "failed",
       );
-      expect(JSON.stringify(error)).not.toContain("secret-one");
+      expect(encodeJson(error)).not.toContain("secret-one");
     }),
   );
 });
