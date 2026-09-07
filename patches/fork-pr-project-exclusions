@@ -1,6 +1,6 @@
-Bottom: 28caa439a09c47e7cf9f18f011f1c701a5b72619
-Top:    5cbfb5a14076d2307372dc1054413aaa0f2635ad
+Bottom: e8bb77f0896fc8a88e9eff77f404474da0dfe1d4
+Top:    6c5f213d5a0261c4ce5d5a57b768dd7a7bd2c894
 Author: User <user@example.com>
-Date:   2026-09-07 01:27:25 -0600
+Date:   2026-09-07 01:29:42 -0600
 
 feat(web): hide projects from the pull request list
