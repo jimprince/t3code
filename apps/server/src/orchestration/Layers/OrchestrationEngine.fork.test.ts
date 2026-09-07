@@ -144,6 +144,7 @@ describe("OrchestrationEngine (fork)", () => {
           getThreadCheckpointContext: () => Effect.succeed(Option.none()),
           getFullThreadDiffContext: () => Effect.succeed(Option.none()),
           getUserInputActivity: () => Effect.die("unused"),
+          getTurnStartMessage: () => Effect.succeed(Option.none()),
           getThreadShellById: () => Effect.succeed(Option.none()),
           getThreadRuntimeContext: () => Effect.succeed(Option.none()),
           getThreadShellByIdIncludingArchived: () => Effect.succeed(Option.none()),
