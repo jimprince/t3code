@@ -3026,7 +3026,7 @@ pending_approval_requests AS (
         threadId,
         getNonDeletedThreadRowById,
         "getThreadShellByIdIncludingArchived",
-       );
+      );
 
   // Contiguous turn range bounding a windowed detail read; undefined loads the
   // full thread. Resolved from a window request inside the snapshot
