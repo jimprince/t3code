@@ -1,3 +1,6 @@
+import * as VcsProcess from "../vcs/VcsProcess.ts";
+import { createHash } from "node:crypto";
+import * as Clock from "effect/Clock";
 import {
   SourceControlProviderError,
   type ChangeRequest,
@@ -40,6 +43,8 @@ const PullRequest = Schema.Struct({
 
 export const make = Effect.gen(function* () {
   const settings = yield* ServerSettingsService;
+  const process = yield* VcsProcess.VcsProcess;
+  const absentBranches = new Map<string, number>();
   const client = yield* HttpClient.HttpClient;
   const request = Effect.fn("Gitea.request")(function* <S extends Schema.Top>(
     instance: GiteaInstanceConfig,
@@ -47,22 +52,19 @@ export const make = Effect.gen(function* () {
     schema: S,
     cwd: string,
   ) {
-    const response = yield* client
-      .execute(
-      )
-      .pipe(
-        Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
-        Effect.timeout("10 seconds"),
-        Effect.mapError(
-          () =>
-            new SourceControlProviderError({
-              provider: "gitea",
-              operation: "request",
-              cwd,
-              detail: "Could not reach the configured Gitea API.",
-            }),
-        ),
-      );
+    const response = yield* client.execute().pipe(
+      Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
+      Effect.timeout("10 seconds"),
+      Effect.mapError(
+        () =>
+          new SourceControlProviderError({
+            provider: "gitea",
+            operation: "request",
+            cwd,
+            detail: "Could not reach the configured Gitea API.",
+          }),
+      ),
+    );
     if (response.status < 200 || response.status >= 300)
       return yield* new SourceControlProviderError({
         provider: "gitea",
@@ -109,6 +111,37 @@ export const make = Effect.gen(function* () {
       const results: ChangeRequest[] = [];
       const limit = Math.max(0, input.limit ?? 20);
       if (!limit) return results;
+      const tip = yield* process
+        .run({
+          command: "git",
+          args: ["rev-parse", "--verify", "--end-of-options", `${branch}^{commit}`],
+          cwd: input.cwd,
+          operation: "Gitea.branchTip",
+          timeoutMs: 5_000,
+          maxOutputBytes: 256,
+        })
+        .pipe(
+          Effect.map((result) => result.stdout.trim()),
+          Effect.orElseSucceed(() => null),
+        );
+      const key =
+        tip && /^[a-f0-9]{40,64}$/i.test(tip)
+          ? JSON.stringify([
+              remote.instance.id,
+              remote.instance.apiOrigin,
+              remote.instance.webOrigin,
+              createHash("sha256")
+                .update(remote.instance.token ?? "")
+                .digest("hex"),
+              remote.repository.toLowerCase(),
+              expectedRepository.toLowerCase(),
+              branch,
+              input.state,
+              tip,
+            ])
+          : null;
+      const now = yield* Clock.currentTimeMillis;
+      if (key !== null && (absentBranches.get(key) ?? 0) > now) return results;
       // Do not apply the result limit before filtering: pages can contain other branches and forks.
       for (let page = 1; page <= 1000; page++) {
         const items = yield* request(
@@ -117,7 +150,17 @@ export const make = Effect.gen(function* () {
           Schema.Array(PullRequest),
           input.cwd,
         );
-        if (items.length === 0) return results;
+        if (items.length === 0) {
+          if (key !== null && results.length === 0) {
+            for (const [cachedKey, expiresAt] of absentBranches) {
+              if (expiresAt <= now) absentBranches.delete(cachedKey);
+            }
+            if (absentBranches.size >= 256)
+              absentBranches.delete(absentBranches.keys().next().value!);
+            absentBranches.set(key, now + 5 * 60_000);
+          }
+          return results;
+        }
         for (const pr of items) {
           const state = pr.merged ? "merged" : pr.state;
           // Gitea retains the original branch in label after replacing a deleted head.

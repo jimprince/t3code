@@ -1,4 +1,3 @@
-
 In **Settings → Source Control → Gitea instances**, choose **Add Gitea instance**.
 Configuration belongs to the selected primary server environment. Every client
 connected to that environment uses the same configuration.
@@ -30,7 +29,10 @@ source-control provider uses `origin` when present. Configuration changes are
 picked up without restarting; a cached branch badge may wait for its normal
 refresh interval.
 
-
 Branch badges also work when the repository remote is named `gitea` or another alias instead of `origin`. The branch and repository must match the pull request.
 
 Merged and closed PR badges remain associated with their original branch when Gitea replaces a deleted source branch with an internal pull-request reference.
+
+Branches with no pull request reuse that lookup for up to five minutes. A new
+commit checks again immediately; a newly opened PR on an unchanged branch may
+take up to five minutes to appear in its badge.

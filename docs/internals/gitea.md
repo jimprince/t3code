@@ -26,7 +26,13 @@ The adapter uses the documented [Gitea 1.25 list pull requests endpoint](https:/
 `GET /api/v1/repos/{owner}/{repo}/pulls?state=all&sort=recentupdate&page=N&limit=50`.
 It filters exact branch refs and full head/base repository identities before
 applying the caller's limit. Pagination continues to an empty page to accommodate
-instances that clamp page size; 1000 pages is an explicit error ceiling. Merged
+instances that clamp page size; 1000 pages is an explicit error ceiling. Complete
+negative scans are cached for five minutes, keyed by instance endpoints, credential
+digest, full repository identities, branch, requested state and local tip SHA. The
+cache holds at most 256 entries. Changed tips or tokens bypass cached absence; errors
+and incomplete scans are never cached. A branch whose tip cannot be resolved is
+read directly. This bounds repeated absent-branch polling without a page cutoff
+that would silently lose older PRs. Merged
 is determined from `merged`, independently of `state=closed`. `html_url` and
 `updated_at` are preserved. Authentication discovery uses `GET /api/v1/user`.
 No undocumented head-filter endpoint, CLI, or redirect following is required.
