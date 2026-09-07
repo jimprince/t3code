@@ -39,8 +39,13 @@ start working on it. Fork repositories are supported; local checkout fetches the
 retained pull-request reference, including after the source branch is deleted.
 Git fetches use your existing Git credentials, separately from the API token.
 
-Open a badge link to review the pull request in Gitea. The in-app pull-request
-browser and repository creation are not supported for Gitea yet. Clone a Gitea
+The **Pull Requests** view includes configured Gitea repositories. Open a pull
+request to read its description, changed code, conversation, reviews, commits
+and CI checks. Missing checks stay unknown. Review comments are shown in the
+conversation with their file path. Use **Open in Gitea** to comment, approve,
+merge or change reviewers; these write actions are not offered in the browser.
+
+Repository creation is not supported for Gitea yet. Clone a Gitea
 repository using its Git URL. Unconfigured hosts retain their existing
 unknown-host behavior.
 
