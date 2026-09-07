@@ -1495,13 +1495,16 @@ const make = Effect.gen(function* () {
         ).pipe(Effect.as(undefined)),
       ),
     );
-    const transferredContextHandoff = findPendingTransferredThreadHandoff({
-      thread,
-      currentMessageId: message.id,
-      consumedExportedAt: readConsumedThreadTransferContextExportedAt(
-        providerBinding?.runtimePayload,
-      ),
-    });
+    const threadDetail = yield* resolveThreadDetail(event.payload.threadId);
+    const transferredContextHandoff = threadDetail
+      ? findPendingTransferredThreadHandoff({
+          thread: threadDetail,
+          currentMessageId: message.id,
+          consumedExportedAt: readConsumedThreadTransferContextExportedAt(
+            providerBinding?.runtimePayload,
+          ),
+        })
+      : undefined;
     const providerMessageText = appendFileAttachmentPromptLines(
       transferredContextHandoff === undefined
         ? message.text
