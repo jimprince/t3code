@@ -151,10 +151,14 @@ function nextPerThread(
   nowMs: number,
 ): SavedQueuedSend[] {
   const heads = new Map<string, SavedQueuedSend>();
+  const seen = new Set<string>();
   for (const queued of listQueuedSends(state, { env, openOnly: true })) {
-    if (heads.has(queued.threadId)) continue;
+    const key = JSON.stringify([queued.environment, queued.threadId]);
+    if (seen.has(key)) continue;
+    // A live head claim blocks the rest of its queue, even in another watcher.
+    seen.add(key);
     if (queued.status === "dispatching" && !isClaimStale(queued, nowMs)) continue;
-    heads.set(queued.threadId, queued);
+    heads.set(key, queued);
   }
   return [...heads.values()];
 }

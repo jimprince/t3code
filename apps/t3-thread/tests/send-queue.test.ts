@@ -182,6 +182,40 @@ describe("send queue drain", () => {
     });
   });
 
+  it("does not overtake a claimed head when another watcher drains", async () => {
+    await withTempState(async () => {
+      await queue("first");
+      await queue("second");
+      let release!: () => void;
+      let entered!: () => void;
+      const sending = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const finish = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const { clientFactory, sent } = createClientFactory({
+        onSend: async ({ text }) => {
+          if (text === "first") {
+            entered();
+            await finish;
+          }
+        },
+      });
+      const firstPass = drainQueuedSends({ clientFactory });
+      await sending;
+      try {
+        const secondPass = await drainQueuedSends({ clientFactory });
+        expect(secondPass).toEqual([]);
+        expect(sent).toEqual([]);
+      } finally {
+        release();
+        await firstPass;
+      }
+      expect(sent.map((message) => message.text)).toEqual(["first"]);
+    });
+  });
+
   it("never delivers to an archived thread and drops the whole queue for it", async () => {
     await withTempState(async () => {
       await queue("first");
