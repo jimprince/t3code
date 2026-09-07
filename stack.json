@@ -1,14 +1,16 @@
 {
   "version": 5,
-  "prev": "eeb639deb259765dedc5c2542d777ad38b1230d8",
-  "head": "c344e8443801261d4c4066fd39eca715a96fa78d",
+  "prev": "6106a8f19e6f3fb9caaa39916cb23c33285a1b51",
+  "head": "b28f704cd78707bfe7909abdbc2f178fcf474b37",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
-    "fork-general-chat",
+    "fork-general-chat"
+  ],
+  "unapplied": [
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
@@ -33,7 +35,6 @@
     "fork-maintenance-automation",
     "fork-gitea-pr-browser"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
