@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "cb8cc36be81d43d50b6a569bf59336ae391f14d1",
-  "head": "cb243c7729999c8409f851a3bdded4ad24ba9244",
+  "prev": "c9494d6ef5c190a2fd424732eb5fe8bad434fdbb",
+  "head": "a856a0b55eb6e78c80cabe7461b8d100f2ae70b0",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -13,12 +13,12 @@
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
     "fork-project-selection",
-    "fork-manual-thread-order",
-    "fork-private-connection-defaults",
-    "fork-resource-recovery",
-    "fork-workspace-file-uploads"
+    "fork-manual-thread-order"
   ],
   "unapplied": [
+    "fork-private-connection-defaults",
+    "fork-resource-recovery",
+    "fork-workspace-file-uploads",
     "fork-attachment-compatibility",
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
