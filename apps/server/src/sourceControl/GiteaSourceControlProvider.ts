@@ -12,12 +12,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as FileSystem from "effect/FileSystem";
-import {
-  FetchHttpClient,
-  HttpClient,
-  HttpClientRequest,
-  HttpClientResponse,
-} from "effect/unstable/http";
+import * as GiteaApi from "./GiteaApi.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import * as SourceControlProvider from "./SourceControlProvider.ts";
 import {
@@ -41,14 +36,15 @@ const PullRequest = Schema.Struct({
   head: Ref,
   base: Ref,
 });
+const encodeCacheKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 export const make = Effect.gen(function* () {
   const settings = yield* ServerSettingsService;
+  const fs = yield* FileSystem.FileSystem;
   const process = yield* VcsProcess.VcsProcess;
   const absentBranches = new Map<string, number>();
-  const client = yield* HttpClient.HttpClient;
-  const fs = yield* FileSystem.FileSystem;
-  const request = Effect.fn("Gitea.request")(function* <S extends Schema.Top>(
+  const api = yield* GiteaApi.make;
+  const request = <S extends Schema.Top>(
     instance: GiteaInstanceConfig,
     path: string,
     schema: S,
@@ -59,51 +55,18 @@ export const make = Effect.gen(function* () {
       readonly head: string;
       readonly base: string;
     },
-  ) {
-    const response = yield* client
-      .execute(
-        HttpClientRequest.make(body ? "POST" : "GET")(
-          `${instance.apiOrigin.replace(/\/$/, "")}/api/v1${path}`,
-          {
-            headers: instance.token
-              ? { authorization: `token ${instance.token}`, accept: "application/json" }
-              : { accept: "application/json" },
-          },
-        ).pipe((req) => (body ? HttpClientRequest.bodyJsonUnsafe(req, body) : req)),
-      )
-      .pipe(
-        Effect.provideService(FetchHttpClient.RequestInit, { redirect: "manual" }),
-        Effect.timeout("10 seconds"),
-        Effect.mapError(
-          () =>
-            new SourceControlProviderError({
-              provider: "gitea",
-              operation: "request",
-              cwd,
-              detail: "Could not reach the configured Gitea API.",
-            }),
-        ),
-      );
-    if (response.status < 200 || response.status >= 300)
-      return yield* new SourceControlProviderError({
-        provider: "gitea",
-        operation: "request",
-        cwd,
-        detail: `Gitea API returned HTTP ${response.status}.`,
-      });
-    return yield* HttpClientResponse.schemaBodyJson(schema)(response).pipe(
-      Effect.timeout("10 seconds"),
+  ) =>
+    api.request(instance, path, schema, body).pipe(
       Effect.mapError(
-        () =>
+        (error) =>
           new SourceControlProviderError({
             provider: "gitea",
             operation: "request",
             cwd,
-            detail: "Invalid Gitea API response.",
+            detail: error.detail,
           }),
       ),
     );
-  });
   const unavailable = (operation: string, cwd: string) =>
     new SourceControlProviderError({
       provider: "gitea",
@@ -210,7 +173,7 @@ export const make = Effect.gen(function* () {
         );
       const key =
         tip && /^[a-f0-9]{40,64}$/i.test(tip)
-          ? JSON.stringify([
+          ? encodeCacheKey([
               remote.instance.id,
               remote.instance.apiOrigin,
               remote.instance.webOrigin,
