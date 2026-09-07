@@ -207,6 +207,7 @@ export function buildGeneralChatSidebarSnapshot(input: {
     .flatMap((member) => (member.environmentLabel ? [member.environmentLabel] : []))
     .filter((label, index, labels) => labels.indexOf(label) === index);
   const isDesktopLocal = input.isDesktopLocalEnvironment ?? (() => false);
+  const isWsl = input.isWslEnvironment ?? (() => false);
 
   return {
     ...representative,
@@ -217,6 +218,8 @@ export function buildGeneralChatSidebarSnapshot(input: {
     allRemoteMembersAreDesktopLocal:
       remoteMembers.length > 0 &&
       remoteMembers.every((member) => isDesktopLocal(member.environmentId)),
+    allRemoteMembersAreWsl:
+      remoteMembers.length > 0 && remoteMembers.every((member) => isWsl(member.environmentId)),
     memberProjects,
     memberProjectRefs: memberProjects.map((member) =>
       scopeProjectRef(member.environmentId, member.id),
