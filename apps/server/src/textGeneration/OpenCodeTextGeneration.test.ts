@@ -66,6 +66,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
       });
       return {
         url,
+        processId: 4_300 + index,
         ...(effectiveServerPassword !== undefined
           ? { serverPassword: effectiveServerPassword }
           : {}),
@@ -85,6 +86,7 @@ const OpenCodeRuntimeTestDouble: OpenCodeRuntime.OpenCodeRuntimeShape = {
         )
       : Effect.succeed({
           url: serverUrl ?? "http://127.0.0.1:4301",
+          processId: null,
           ...(serverPassword ? { serverPassword } : {}),
           version: "1.14.19",
           exitCode: null,
