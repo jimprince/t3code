@@ -60,22 +60,24 @@ function harness(respond: (url: URL) => unknown, status = 200, instances = [inst
         }),
       ),
       Effect.provide(
-        Layer.mock(SourceControlProviderRegistry)({
-          resolveHandle: ({ cwd }) =>
-            Effect.succeed({
-              context: {
-                remoteName: "gitea",
-                remoteUrl:
-                  cwd === "/other"
-                    ? "ssh://git@other.home:2222/brad/repo.git"
-                    : "ssh://git@gitea:2222/brad/repo.git",
-                provider: { kind: "gitea", name: "Gitea", baseUrl: instance.webOrigin },
-              },
-              provider: {} as never,
-            }),
-        }),
+        Layer.mergeAll(
+          Layer.mock(SourceControlProviderRegistry)({
+            resolveHandle: ({ cwd }) =>
+              Effect.succeed({
+                context: {
+                  remoteName: "gitea",
+                  remoteUrl:
+                    cwd === "/other"
+                      ? "ssh://git@other.home:2222/brad/repo.git"
+                      : "ssh://git@gitea:2222/brad/repo.git",
+                  provider: { kind: "gitea", name: "Gitea", baseUrl: instance.webOrigin },
+                },
+                provider: {} as never,
+              }),
+          }),
+          ServerSettingsService.layerTest({ giteaInstances: instances }),
+        ),
       ),
-      Effect.provide(ServerSettingsService.layerTest({ giteaInstances: instances })),
     );
   return { requests, run };
 }
