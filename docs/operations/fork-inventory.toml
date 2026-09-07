@@ -979,3 +979,19 @@ id = "candidate-evidence-publication-remote"
 date = "2026-09-21"
 decided = "adapt"
 rationale = "Outside Actions the gate resolved GITHUB_REPOSITORY from a bare `gh repo view`, which prefers the `upstream` remote the replay driver adds, so host-side verification looked for the candidate in upstream's repository and reported no candidate CI run. Resolve it from the staging remote instead, matching the documented rule that evidence lookup uses the publication remote."
+
+[[patch]]
+name = "fork-gitea-pr-browser"
+subject = "feat(pull-requests): browse Gitea reviews and CI checks"
+class = "upstream-bound"
+purpose = "Browse configured Gitea pull requests, descriptions, changed code, conversations, reviews, commits and CI checks through the shared pull-request browser."
+retire_when = "Upstream supports equivalent configured-instance Gitea browsing with truthful CI status and capability-gated actions."
+depends_on = ["fork-gitea-connections", "fork-gitea-pr-actions"]
+roles = []
+note = "Read-only browser; create and checkout remain in the source-control concern. Reuses the configured HTTP transport without redirects or credential-bearing errors. No checks is unknown, never success. Test services are provided together to preserve their shared lifecycle."
+
+[[patch.decision]]
+id = "upstream-forgejo-pr-provider"
+date = "2026-09-16"
+decided = "retain"
+rationale = "Upstream's native Forgejo provider is CLI-backed and does not replace browsing pull requests on configured Gitea instances through the fork's token-aware HTTP transport. Keep Gitea as a separate registry provider alongside Forgejo."
