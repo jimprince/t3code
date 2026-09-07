@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# The same local configuration is used by cron, systemd and manual checks.
+config_file="${T3CODE_HEADLESS_CONFIG:-$HOME/.config/t3code/headless-upgrade.env}"
+if [ -f "$config_file" ]; then
+  # shellcheck source=/dev/null
+  source "$config_file"
+fi
+
 repo="${T3CODE_HEADLESS_REPO:-jimprince/t3code}"
 channel="${T3CODE_HEADLESS_CHANNEL:-stable}"
 root="${T3CODE_HEADLESS_ROOT:-$HOME/.local/share/t3code-server}"
@@ -15,6 +22,84 @@ die() {
   log "ERROR: $*"
   exit 1
 }
+
+pending_file="$root/update-pending"
+force=0
+check_only=0
+case "${1:-}" in
+  "") ;;
+  --force) force=1 ;;
+  --check-idle) check_only=1 ;;
+  --retry-pending) [ -f "$pending_file" ] || exit 0 ;;
+  --help)
+    printf 'Usage: t3code-headless-upgrade [--check-idle | --retry-pending | --force]\nAutomatic updates defer while work is active. --force explicitly permits interruption.\n'
+    exit 0 ;;
+  *) die "unknown argument '$1'; use --help" ;;
+esac
+[ "$#" -le 1 ] || die "too many arguments"
+
+# Read the live database strictly read-only, including its WAL. Missing or unfamiliar
+# state is an error, never evidence that it is safe to interrupt the server.
+check_idle() {
+  python3 - "${T3CODE_HEADLESS_STATE_DB:-${T3CODE_HOME:-$HOME/.t3}/userdata/state.sqlite}" \
+    "${T3CODE_HEADLESS_QUEUE_STATE:-$HOME/.config/t3-remote-agents/state.json}" <<'PYIDLE'
+import json
+import pathlib
+import sqlite3
+import sys
+
+try:
+    path = pathlib.Path(sys.argv[1]).expanduser().resolve(strict=True)
+    with sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=5) as db:
+        db.execute('PRAGMA query_only = ON')
+        db.execute('BEGIN')
+        busy = set()
+        for query in (
+            "SELECT thread_id FROM projection_thread_sessions WHERE active_turn_id IS NOT NULL OR status IN ('starting', 'running')",
+            "SELECT thread_id FROM provider_session_runtime WHERE active_turn_id IS NOT NULL AND status != 'stopped'",
+            "SELECT t.thread_id FROM projection_turns t JOIN projection_threads p ON p.thread_id = t.thread_id AND p.latest_turn_id = t.turn_id WHERE t.state IN ('pending', 'running') OR t.checkpoint_status = 'pending'",
+            "SELECT thread_id FROM projection_threads WHERE pending_user_input_count > 0",
+            "SELECT thread_id FROM projection_pending_approvals WHERE status = 'pending'",
+        ):
+            busy.update(row[0] for row in db.execute(query))
+    queue_path = pathlib.Path(sys.argv[2]).expanduser()
+    if queue_path.exists():
+        queue = json.loads(queue_path.read_text())
+        busy.update(item['threadId'] for item in queue.get('queuedSends', [])
+                    if item.get('status') in ('queued', 'dispatching'))
+    if busy:
+        print('active or queued threads: ' + ', '.join(sorted(busy)), file=sys.stderr)
+        sys.exit(75)
+    print('idle: no active turns, transitions, checkpoints, approvals or queued sends', file=sys.stderr)
+except (OSError, sqlite3.Error, ValueError, KeyError, TypeError) as error:
+    print('cannot establish that the server is idle: ' + str(error), file=sys.stderr)
+    sys.exit(1)
+PYIDLE
+}
+
+require_idle() {
+  if [ "$force" = 1 ]; then
+    log "manual --force requested; active work may be interrupted"
+    return
+  fi
+  local idle_result=0
+  check_idle || idle_result=$?
+  case "$idle_result" in
+    0) ;;
+    75)
+      mkdir -p "$root"
+      : > "$pending_file"
+      log "update deferred until threads finish; use --force only to explicitly interrupt them"
+      exit 0 ;;
+    *) die "update deferred because activity could not be checked; configure T3CODE_HEADLESS_STATE_DB or use manual --force" ;;
+  esac
+}
+
+if [ "$check_only" = 1 ]; then
+  check_idle
+  exit $?
+fi
+require_idle
 
 # Cron does not load the login shell that exposes a user-local Node install.
 # Keep an explicitly configured runtime first; use the service's standard fallback.
@@ -115,6 +200,7 @@ if [ -e "$current_link" ] || [ -L "$current_link" ]; then
 fi
 
 if [ "$previous_target" = "$release_dir" ]; then
+  rm -f "$pending_file"
   log "already on $version"
   exit 0
 fi
@@ -157,6 +243,10 @@ else
   rm -rf "$stage_dir"
 fi
 
+# A turn may have started while the asset was downloading or being validated.
+# Recheck immediately before changing current or signaling the live service.
+require_idle
+
 tmp_link="$root/current.next.$$"
 ln -s "$release_dir" "$tmp_link"
 mv -Tf "$tmp_link" "$current_link"
@@ -188,6 +278,10 @@ restart_service() {
       sleep 1
     done
 
+    if [ "$force" != 1 ]; then
+      log "$service_name did not stop gracefully; refusing automatic SIGKILL (manual --force required)"
+      return 1
+    fi
     log "$service_name main PID $pid ignored SIGTERM; forcing restart"
     kill -KILL "$pid" 2>/dev/null || true
     for _ in $(seq 1 30); do
@@ -230,9 +324,8 @@ PY
 }
 
 base_url="$(resolve_base_url)"
-restart_service
-
-if check_health "$base_url"; then
+if restart_service && check_health "$base_url"; then
+  rm -f "$pending_file"
   log "updated $service_name to $version"
 else
   log "health check failed after updating to $version"
