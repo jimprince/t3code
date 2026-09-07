@@ -1167,6 +1167,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
         role,
         text,
         attachments_json AS "attachments",
+        file_attachments_json AS "fileAttachments",
         is_streaming AS "isStreaming",
         created_at AS "createdAt",
         updated_at AS "updatedAt",
@@ -3061,6 +3062,7 @@ pending_approval_requests AS (
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
         ...(row.attachments !== null ? { attachments: row.attachments } : {}),
+        ...(row.fileAttachments !== null ? { fileAttachments: row.fileAttachments } : {}),
       },
       hasOtherUserMessages: row.hasOtherUserMessages === 1,
     }));

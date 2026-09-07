@@ -254,7 +254,7 @@ depends_on = [
   "fork-workspace-file-uploads",
 ]
 roles = []
-note = "The duplicate current-client base64 send and composer display are removed. Legacy server decoding, file retention and historical-message rendering remain deliberately for compatibility."
+note = "The duplicate current-client base64 send and composer display are removed. Legacy server decoding, file retention and historical-message rendering remain deliberately for compatibility. The narrow turn-start query also selects and preserves legacy file handoffs."
 [[patch.decision]]
 id = "upstream-chat-file-attachment-name"
 date = "2026-08-28"
