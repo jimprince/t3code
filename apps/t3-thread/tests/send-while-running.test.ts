@@ -1,6 +1,10 @@
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import { RemoteEnvironmentClient } from "../src/client.js";
+import { loadState } from "../src/state.js";
 import type { OrchestrationThread, SavedEnvironment } from "../src/types.js";
 
 const environment: SavedEnvironment = {
@@ -67,35 +71,92 @@ function makeHarness(thread: OrchestrationThread) {
   };
 }
 
-describe("RemoteEnvironmentClient.sendMessage while a turn is running", () => {
-  it("rejects the send instead of dispatching a concurrent turn", async () => {
-    const harness = makeHarness(makeRunningThread());
+async function withTempState(test: () => Promise<void>): Promise<void> {
+  const tempDir = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-thread-send-test-"));
+  const previousStateFile = process.env.T3_AGENT_STATE_FILE;
+  process.env.T3_AGENT_STATE_FILE = NodePath.join(tempDir, "state.json");
+  try {
+    await test();
+  } finally {
+    if (previousStateFile === undefined) delete process.env.T3_AGENT_STATE_FILE;
+    else process.env.T3_AGENT_STATE_FILE = previousStateFile;
+    await NodeFSP.rm(tempDir, { recursive: true, force: true });
+  }
+}
 
-    await expect(
-      harness.client.sendMessage({ threadId: "thread-1", text: "status?" }),
-    ).rejects.toThrow(/is still running/);
-    expect(harness.commands).toHaveLength(0);
+describe("RemoteEnvironmentClient.sendMessage while a turn is running", () => {
+  it("queues the message and dispatches it at the next turn boundary", async () => {
+    await withTempState(async () => {
+      const harness = makeHarness(makeRunningThread());
+
+      const result = await harness.client.sendMessage({ threadId: "thread-1", text: "status?" });
+
+      expect(result).toMatchObject({ queued: true, dispatched: false });
+      expect(harness.commands).toHaveLength(0);
+
+      // Accepted durably before `send` returns, so the CLI can exit immediately.
+      const state = await loadState();
+      expect(state.queuedSends).toHaveLength(1);
+      expect(state.queuedSends[0]).toMatchObject({
+        threadId: "thread-1",
+        environment: "local-mbp",
+        text: "status?",
+        status: "queued",
+        queuedDuringTurnId: "turn-1",
+      });
+    });
   });
 
-  // Desired behaviour, not yet implemented. `t3-thread send` is the only way an
-  // overseer can reach a worker mid-run, and today it fails outright: the
-  // overseer must either interrupt the worker (losing the turn) or busy-wait
-  // for the turn to end. Neither is acceptable for routine supervision, so a
-  // send to a running thread should be accepted and held, then dispatched as a
-  // single follow-up turn at the next turn boundary — with `send` reporting
-  // that the message was queued rather than dispatched, so the caller is not
-  // misled into thinking the worker already saw it.
-  //
-  // Deliberately not implemented here: the queue needs a durable home (the
-  // server, not the CLI process, which exits immediately after `send`) and a
-  // decision about ordering and coalescing when several sends land during one
-  // turn. Tracked as follow-up work.
-  it.skip("queues the message and dispatches it at the next turn boundary", async () => {
-    const harness = makeHarness(makeRunningThread());
+  it("rejects instead of queueing when the caller opts out", async () => {
+    // `--no-queue` keeps the historical contract available for callers that need a
+    // mid-turn send to fail loudly rather than be held.
+    await withTempState(async () => {
+      const harness = makeHarness(makeRunningThread());
 
-    const result = await harness.client.sendMessage({ threadId: "thread-1", text: "status?" });
+      await expect(
+        harness.client.sendMessage({
+          threadId: "thread-1",
+          text: "status?",
+          queueWhileRunning: false,
+        }),
+      ).rejects.toThrow(/is still running/);
+      expect(harness.commands).toHaveLength(0);
+      expect((await loadState()).queuedSends).toHaveLength(0);
+    });
+  });
 
-    expect(result).toMatchObject({ queued: true });
-    expect(harness.commands).toHaveLength(0);
+  it("dispatches immediately when the thread is idle", async () => {
+    await withTempState(async () => {
+      const idle = makeRunningThread();
+      const harness = makeHarness({
+        ...idle,
+        latestTurn: {
+          ...idle.latestTurn!,
+          state: "completed",
+          completedAt: "2026-09-04T00:01:00.000Z",
+        },
+        session: null,
+      });
+
+      const result = await harness.client.sendMessage({ threadId: "thread-1", text: "status?" });
+
+      expect(result).toMatchObject({ dispatched: true, queued: false });
+      expect(harness.commands).toHaveLength(1);
+      expect((await loadState()).queuedSends).toHaveLength(0);
+    });
+  });
+
+  it("refuses to send to an archived thread instead of queueing forever", async () => {
+    await withTempState(async () => {
+      const harness = makeHarness({
+        ...makeRunningThread(),
+        archivedAt: "2026-09-04T00:02:00.000Z",
+      });
+
+      await expect(
+        harness.client.sendMessage({ threadId: "thread-1", text: "status?" }),
+      ).rejects.toThrow(/archived/);
+      expect((await loadState()).queuedSends).toHaveLength(0);
+    });
   });
 });

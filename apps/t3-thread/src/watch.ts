@@ -5,10 +5,14 @@ import { buildAgentOverview, needsAttention } from "./monitor.js";
 import {
   buildNotificationMessage,
   buildNotificationRecord,
+  MAX_DELIVERY_ATTEMPTS,
   mergeDetectedNotification,
+  nextAttemptAt,
+  TERMINAL_NOTIFICATION_STATUSES,
 } from "./notifications.js";
 import { loadState, requireEnvironment, updateState, upsertNotification } from "./state.js";
 import { classifyThread } from "./status.js";
+import { isProcessRunning } from "./watcher-process.js";
 import type {
   OrchestrationThread,
   SavedEnvironment,
@@ -18,9 +22,19 @@ import type {
 
 const DELIVERY_CLAIM_TIMEOUT_MS = 60_000;
 
+/** How long to wait before re-offering a notification to a recipient that is mid-turn. */
+const BUSY_RECIPIENT_RETRY_MS = 30_000;
+
+/**
+ * When this process started. A claim stamped before that cannot be ours, even if
+ * it records our pid, because the kernel recycles pids across watcher restarts.
+ */
+const PROCESS_STARTED_AT_MS = Date.now();
+
 export interface WatchClient {
   findThread(threadId: string): Promise<OrchestrationThread>;
-  sendMessage(input: { threadId: string; text: string }): Promise<void>;
+  /** Result is unused here; `RemoteEnvironmentClient.sendMessage` reports dispatch vs queue. */
+  sendMessage(input: { threadId: string; text: string }): Promise<unknown>;
 }
 
 export type WatchClientFactory = (environment: SavedEnvironment) => WatchClient;
@@ -37,7 +51,23 @@ function matchesEnvFilter(notification: SavedNotification, env?: string): boolea
   return !env || notification.sourceEnvironment === env;
 }
 
-function isClaimStale(notification: SavedNotification, nowMs: number, timeoutMs: number): boolean {
+/**
+ * Whether a claimed notification may be taken over.
+ *
+ * Ownership, not elapsed time, is the primary signal. A wall-clock timeout alone
+ * makes the watcher steal its own in-flight claim after the machine sleeps, and
+ * the message is then delivered twice. A claim held by a live process is only
+ * reclaimed when that process is not this watcher and has also gone quiet past
+ * the timeout, which covers a wedged watcher or a pid reused after a reboot.
+ */
+function isClaimStale(
+  notification: SavedNotification,
+  nowMs: number,
+  timeoutMs: number,
+  isAlive: (pid: number) => boolean = isProcessRunning,
+  selfPid: number = process.pid,
+  startedAtMs: number = PROCESS_STARTED_AT_MS,
+): boolean {
   if (notification.status !== "delivering") {
     return false;
   }
@@ -47,7 +77,38 @@ function isClaimStale(notification: SavedNotification, nowMs: number, timeoutMs:
   if (Number.isNaN(claimedAtMs)) {
     return true;
   }
+
+  const owner = notification.deliveryClaimPid ?? null;
+  if (owner !== null) {
+    if (owner === selfPid && claimedAtMs >= startedAtMs) {
+      return false;
+    }
+    if (owner !== selfPid && !isAlive(owner)) {
+      return true;
+    }
+    if (owner === selfPid) {
+      // Our pid, but stamped before we started: a recycled pid from a dead watcher.
+      return true;
+    }
+  }
+
   return nowMs - claimedAtMs >= timeoutMs;
+}
+
+function isAttemptDue(notification: SavedNotification, nowMs: number): boolean {
+  if (!notification.nextAttemptAt) {
+    return true;
+  }
+  const dueMs = Date.parse(notification.nextAttemptAt);
+  return Number.isNaN(dueMs) || dueMs <= nowMs;
+}
+
+function credentialExpiry(environment: SavedEnvironment, nowMs: number): string | null {
+  const expiresAtMs = Date.parse(environment.expiresAt);
+  if (Number.isNaN(expiresAtMs) || expiresAtMs > nowMs) {
+    return null;
+  }
+  return environment.expiresAt;
 }
 
 export async function scanAttentionNotifications(
@@ -217,30 +278,48 @@ export async function claimPendingNotifications(
 
   return updateState(async (state) => {
     const claimed: SavedNotification[] = [];
-    const notifications = state.notifications.map((notification) => {
-      if (!matchesEnvFilter(notification, options.env)) {
-        return notification;
-      }
+    // Oldest event first, and at most one per recipient: delivering a
+    // notification starts a turn on the recipient, so a second one in the same
+    // pass would only find it busy. Ordering is by creation, then event key, so
+    // two watcher passes over the same state make the same choice.
+    const claimable = [...state.notifications]
+      .filter((notification) => matchesEnvFilter(notification, options.env))
+      .filter((notification) => {
+        if (TERMINAL_NOTIFICATION_STATUSES.has(notification.status)) {
+          return false;
+        }
+        if (notification.status === "delivering") {
+          return isClaimStale(notification, claimedAtMs, claimTimeoutMs);
+        }
+        return isAttemptDue(notification, claimedAtMs);
+      })
+      .sort(
+        (left, right) =>
+          left.createdAt.localeCompare(right.createdAt) ||
+          left.eventKey.localeCompare(right.eventKey),
+      );
 
-      const retryable =
-        notification.status === "pending" ||
-        notification.status === "delivery-failed" ||
-        isClaimStale(notification, claimedAtMs, claimTimeoutMs);
-      if (!retryable) {
-        return notification;
+    const claimedSubscribers = new Set<string>();
+    for (const notification of claimable) {
+      if (claimedSubscribers.has(notification.subscriberThreadId)) {
+        continue;
       }
-
-      const next: SavedNotification = {
+      claimedSubscribers.add(notification.subscriberThreadId);
+      claimed.push({
         ...notification,
         status: "delivering",
         updatedAt: claimedAt,
         lastAttemptedAt: claimedAt,
         lastError: null,
         deliveryClaimId: NodeCrypto.randomUUID(),
-      };
-      claimed.push(next);
-      return next;
-    });
+        deliveryClaimPid: process.pid,
+      });
+    }
+
+    let notifications = state.notifications;
+    for (const notification of claimed) {
+      notifications = upsertNotification(notifications, notification);
+    }
 
     return {
       state: {
@@ -270,6 +349,7 @@ async function finalizeNotificationAttempt(input: {
     const finalized: SavedNotification = {
       ...input.notification,
       deliveryClaimId: null,
+      deliveryClaimPid: null,
     };
 
     return {
@@ -288,16 +368,29 @@ export async function deliverPendingNotifications(
     clientFactory?: WatchClientFactory;
     now?: () => string;
     claimTimeoutMs?: number;
+    maxAttempts?: number;
   } = {},
 ): Promise<SavedNotification[]> {
   const clientFactory = options.clientFactory ?? createWatchClient;
   const now = options.now ?? nowIso;
+  const maxAttempts = options.maxAttempts ?? MAX_DELIVERY_ATTEMPTS;
   const claimed = await claimPendingNotifications(options);
   const delivered: SavedNotification[] = [];
 
   for (const notification of claimed) {
     const attemptedAt = now();
+    const attemptedAtMs = Date.parse(attemptedAt);
     let result: SavedNotification;
+
+    /** A route that can never succeed again. Stops retrying and releases the watcher. */
+    const terminal = (reason: string): SavedNotification => ({
+      ...notification,
+      status: "undeliverable",
+      updatedAt: attemptedAt,
+      lastAttemptedAt: attemptedAt,
+      lastError: reason,
+      nextAttemptAt: null,
+    });
 
     try {
       const state = await loadState();
@@ -307,27 +400,49 @@ export async function deliverPendingNotifications(
           subscription.sourceThreadId === notification.sourceThreadId
         );
       });
+
+      const subscriberEnvironment = subscriptionStillExists
+        ? (state.environments.find(
+            (environment) => environment.name === notification.subscriberEnvironment,
+          ) ?? null)
+        : null;
+
       if (!subscriptionStillExists) {
+        result = terminal("Subscription no longer exists.");
+      } else if (!subscriberEnvironment) {
+        // The environment was forgotten; nothing can route this notification again.
+        result = terminal(`Unknown environment '${notification.subscriberEnvironment}'.`);
+      } else if (credentialExpiry(subscriberEnvironment, attemptedAtMs)) {
+        // Nothing the watcher can retry into: the pairing has to be renewed by a
+        // human. Park the notification instead of burning its attempt budget, and
+        // say exactly what unblocks it. `t3-thread pair` releases these again.
         result = {
           ...notification,
-          status: "delivery-failed",
+          status: "blocked",
           updatedAt: attemptedAt,
           lastAttemptedAt: attemptedAt,
-          lastError: "Subscription no longer exists.",
+          nextAttemptAt: null,
+          lastError: `Credentials for environment '${subscriberEnvironment.name}' expired at ${subscriberEnvironment.expiresAt}. Re-pair with \`t3-thread pair --name ${subscriberEnvironment.name} ...\` to resume delivery.`,
         };
       } else {
-        const subscriberEnvironment = requireEnvironment(state, notification.subscriberEnvironment);
         const subscriberClient = clientFactory(subscriberEnvironment);
         const subscriberThread = await subscriberClient.findThread(notification.subscriberThreadId);
         const subscriberStatus = classifyThread(subscriberThread);
 
-        if (subscriberStatus.state === "running") {
+        if (subscriberThread.archivedAt || subscriberThread.deletedAt) {
+          result = terminal(
+            `Subscriber thread '${notification.subscriberThreadId}' is archived and can no longer be notified.`,
+          );
+        } else if (subscriberStatus.state === "running") {
+          // Expected, not a failure: hold the event and re-offer it shortly.
+          // The attempt budget is reserved for real delivery errors.
           result = {
             ...notification,
             status: "pending",
             updatedAt: attemptedAt,
             lastAttemptedAt: attemptedAt,
             lastError: "Subscriber thread is still running.",
+            nextAttemptAt: new Date(attemptedAtMs + BUSY_RECIPIENT_RETRY_MS).toISOString(),
           };
         } else {
           await subscriberClient.sendMessage({
@@ -341,17 +456,28 @@ export async function deliverPendingNotifications(
             deliveredAt: attemptedAt,
             lastAttemptedAt: attemptedAt,
             lastError: null,
+            nextAttemptAt: null,
           };
         }
       }
     } catch (error) {
-      result = {
-        ...notification,
-        status: "delivery-failed",
-        updatedAt: attemptedAt,
-        lastAttemptedAt: attemptedAt,
-        lastError: error instanceof Error ? error.message : String(error),
-      };
+      const attempts = (notification.attempts ?? 0) + 1;
+      const message = error instanceof Error ? error.message : String(error);
+      result =
+        attempts >= maxAttempts
+          ? {
+              ...terminal(`${message} (gave up after ${attempts} attempts)`),
+              attempts,
+            }
+          : {
+              ...notification,
+              status: "delivery-failed",
+              attempts,
+              updatedAt: attemptedAt,
+              lastAttemptedAt: attemptedAt,
+              lastError: message,
+              nextAttemptAt: nextAttemptAt(attemptedAt, attempts),
+            };
     }
 
     const persisted = await finalizeNotificationAttempt({
@@ -366,44 +492,72 @@ export async function deliverPendingNotifications(
   return delivered;
 }
 
-export async function hasWatcherWork(
-  options: {
-    env?: string;
-    clientFactory?: WatchClientFactory;
-  } = {},
-): Promise<boolean> {
-  const clientFactory = options.clientFactory ?? createWatchClient;
-  const state = await loadState();
+/**
+ * Return notifications parked on expired credentials to the retry queue.
+ *
+ * Called after a successful `pair`, which is the only thing that can unblock them.
+ */
+export async function unblockNotificationsForEnvironment(
+  environmentName: string,
+  options: { now?: () => string } = {},
+): Promise<SavedNotification[]> {
+  const now = (options.now ?? nowIso)();
 
-  if (
-    state.notifications.some((notification) => {
-      if (!matchesEnvFilter(notification, options.env)) {
-        return false;
+  return updateState(async (state) => {
+    const released: SavedNotification[] = [];
+    let notifications = state.notifications;
+
+    for (const notification of state.notifications) {
+      if (notification.status !== "blocked") {
+        continue;
       }
-      return notification.status !== "delivered";
-    })
-  ) {
-    return true;
-  }
+      if (notification.subscriberEnvironment !== environmentName) {
+        continue;
+      }
+      const next: SavedNotification = {
+        ...notification,
+        status: "pending",
+        updatedAt: now,
+        lastError: null,
+        nextAttemptAt: null,
+      };
+      notifications = upsertNotification(notifications, next);
+      released.push(next);
+    }
 
-  const subscriptions = state.subscriptions.filter((subscription) => {
-    return !options.env || subscription.sourceEnvironment === options.env;
+    return {
+      state: {
+        ...state,
+        notifications,
+      },
+      result: released,
+    };
   });
-  const seenSources = new Set<string>();
+}
 
-  for (const subscription of subscriptions) {
-    if (seenSources.has(subscription.sourceThreadId)) {
-      continue;
-    }
-    seenSources.add(subscription.sourceThreadId);
+export type WatcherExitDecision =
+  | { exit: false }
+  | { exit: true; reason: "idle" | "max-lifetime"; handoff: boolean };
 
-    const sourceEnvironment = requireEnvironment(state, subscription.sourceEnvironment);
-    const sourceClient = clientFactory(sourceEnvironment);
-    const sourceThread = await sourceClient.findThread(subscription.sourceThreadId);
-    if (classifyThread(sourceThread).state === "running") {
-      return true;
-    }
+/**
+ * Whether the watcher loop should stop, and whether a replacement must be spawned.
+ *
+ * The watcher never idle-exits with work outstanding. The max-lifetime backstop
+ * still stops a long-lived process, but when work remains that stop hands off to
+ * a fresh watcher instead of dropping undelivered notifications on the floor.
+ */
+export function decideWatcherExit(input: {
+  elapsedMs: number;
+  idleMs: number;
+  idleExitMs: number;
+  maxLifetimeMs: number;
+  workRemaining: boolean;
+}): WatcherExitDecision {
+  if (input.maxLifetimeMs > 0 && input.elapsedMs >= input.maxLifetimeMs) {
+    return { exit: true, reason: "max-lifetime", handoff: input.workRemaining };
   }
-
-  return false;
+  if (!input.workRemaining && input.idleExitMs > 0 && input.idleMs >= input.idleExitMs) {
+    return { exit: true, reason: "idle", handoff: false };
+  }
+  return { exit: false };
 }

@@ -28,7 +28,9 @@ function makeEnvironment(overrides: Partial<SavedEnvironment> = {}): SavedEnviro
     label: "Dev VM",
     serverVersion: "0.0.19",
     bearerToken: "token",
-    expiresAt: "2026-04-18T00:00:00.000Z",
+    // Must stay in the future: delivery now parks on an expired pairing instead
+    // of attempting a send that cannot authenticate.
+    expiresAt: "2099-01-01T00:00:00.000Z",
     pairedAt: "2026-04-17T00:00:00.000Z",
     ...overrides,
   };
@@ -241,7 +243,14 @@ describe("watch flows", () => {
       expect(state.notifications[0]?.lastError).toContain("subscriber unreachable");
 
       failDelivery = false;
-      const retried = await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+      // A failed delivery now backs off, so the retry is due later rather than on
+      // the very next scan.
+      expect(await deliverPendingNotifications({ env: "dev-vm", clientFactory })).toEqual([]);
+      const retried = await deliverPendingNotifications({
+        env: "dev-vm",
+        clientFactory,
+        now: () => new Date(Date.now() + 3_600_000).toISOString(),
+      });
       state = await loadState();
       expect(retried).toHaveLength(1);
       expect(sentMessages).toHaveLength(1);

@@ -41,4 +41,4 @@ purpose = "Provide the additive t3-thread operator CLI with pairing, persistent 
 retire_when = "Upstream or maintained shared tooling provides an equivalent scriptable worker interface, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-build-ci-compat"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-t3-thread-operator-cli. [fork-t3-thread-operator-cli] CLI sends still require an explicit allowWhileRunning path; this is distinct from server adapter steering. Focused send-while-running tests document the rejection and the separate durable queue gap (Gitea PR25/issue27)."
+note = "Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39). The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."

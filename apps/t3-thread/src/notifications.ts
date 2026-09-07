@@ -5,8 +5,37 @@ import type {
   OrchestrationThread,
   SavedAgent,
   SavedNotification,
+  SavedNotificationStatus,
   SavedSubscription,
 } from "./types.js";
+
+/** Failed delivery attempts before a notification is given up on. */
+export const MAX_DELIVERY_ATTEMPTS = 6;
+
+/** Statuses the watcher can no longer act on by itself. */
+export const TERMINAL_NOTIFICATION_STATUSES = new Set<SavedNotificationStatus>([
+  "delivered",
+  "undeliverable",
+  "blocked",
+]);
+
+const RETRY_BASE_MS = 15_000;
+const RETRY_CEILING_MS = 10 * 60_000;
+
+/**
+ * Exponential backoff for a failed delivery. Without it a permanently failing
+ * route is retried on every 5s watcher scan, which both hammers the environment
+ * and hides the failure in a wall of identical log lines.
+ */
+export function retryDelayMs(attempts: number): number {
+  const exponent = Math.max(0, attempts - 1);
+  return Math.min(RETRY_CEILING_MS, RETRY_BASE_MS * 2 ** exponent);
+}
+
+/** Absolute time the next attempt becomes claimable. */
+export function nextAttemptAt(now: string, attempts: number): string {
+  return new Date(Date.parse(now) + retryDelayMs(attempts)).toISOString();
+}
 
 export function buildNotificationEventKey(input: {
   subscriberThreadId: string;
@@ -60,6 +89,9 @@ export function buildNotificationRecord(input: {
     lastAttemptedAt: input.existing?.lastAttemptedAt ?? null,
     lastError: input.existing?.lastError ?? null,
     deliveryClaimId: input.existing?.deliveryClaimId ?? null,
+    deliveryClaimPid: input.existing?.deliveryClaimPid ?? null,
+    attempts: input.existing?.attempts ?? 0,
+    nextAttemptAt: input.existing?.nextAttemptAt ?? null,
   };
 }
 
@@ -71,6 +103,8 @@ export function mergeDetectedNotification(
     return detected;
   }
 
+  // Re-detection refreshes the event's description, never its delivery progress:
+  // a record that already reached a terminal status must not become pending again.
   return {
     ...detected,
     id: existing.id,
@@ -80,6 +114,9 @@ export function mergeDetectedNotification(
     lastAttemptedAt: existing.lastAttemptedAt ?? null,
     lastError: existing.lastError ?? null,
     deliveryClaimId: existing.deliveryClaimId ?? null,
+    deliveryClaimPid: existing.deliveryClaimPid ?? null,
+    attempts: existing.attempts ?? 0,
+    nextAttemptAt: existing.nextAttemptAt ?? null,
   };
 }
 

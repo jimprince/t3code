@@ -120,6 +120,32 @@ t3-thread forget worker-a
 Supported direct-UUID lifecycle commands: `status`, `result`, `worklog`, `implement`, `send`,
 `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe --watch`.
 
+### Sending to a thread that is still running
+
+`send` (and `clarify` / `revise` / `complete`) to a thread whose turn is still
+running is **accepted and queued**, not rejected. The message is written to
+`state.json` before the command returns and the watcher dispatches it as a normal
+follow-up turn at the next turn boundary. The command output says which happened:
+
+```json
+{ "threadId": "...", "dispatched": false, "queued": true, "queuedSendId": "...", "sequence": 3 }
+```
+
+- Ordering is FIFO per thread, one dispatched message per turn boundary. Messages
+  are never merged: two sends stay two turns, in arrival order.
+- `send --no-queue` restores the old behavior and fails instead of holding.
+- A queued send survives the CLI exiting, the watcher exiting, sleep, and reboot.
+  It only dispatches while a watcher runs on this machine; `send` ensures one.
+- An `interrupt` does not drop the queue; the held message dispatches at the
+  boundary the interrupt creates. Use `dequeue` to drop it.
+- Archiving the target thread drops its queue as `undeliverable`.
+
+```bash
+t3-thread queue                # every queued send
+t3-thread queue worker-a --open  # only what is still waiting
+t3-thread dequeue <queued-send-id>
+```
+
 `attach` is still available when you want a persistent local alias. `result --mark-seen`
 still requires a saved agent name because read state is stored locally.
 
@@ -186,12 +212,27 @@ threads directly from that environment metadata and maps it to the saved environ
 
 `create` (with a notify subscription) and `subscribe` auto-spawn a detached background watcher if none is running — best-effort, never blocks the command. It is a singleton (pidfile `~/.config/t3-remote-agents/watch.pid`) and self-exits when idle:
 
-- `--idle-exit <seconds>` (default 900): exit after this long with nothing in flight. It stays alive while any subscribed source thread is still running or any notification is undelivered, so completions are never missed. `0` disables.
-- `--max-lifetime <seconds>` (default 21600): hard runtime backstop.
+- `--idle-exit <seconds>` (default 900): exit after this long with nothing in flight. It stays alive while any subscribed source thread is still running, any notification is undelivered, or any send is still queued. `0` disables.
+- `--max-lifetime <seconds>` (default 21600): runtime backstop. If work is still outstanding, the watcher hands off to a fresh watcher.
 - `t3-thread watch --ensure`: spawn one if absent, else no-op (then exit).
 - `t3-thread watch --once`: single throwaway scan (no pidfile/idle logic).
 
 The launchd agent `~/Library/LaunchAgents/network.homenetwork.t3-watcher.plist` is **not** auto-loaded; load it manually only if you want a persistent 24/7 watcher.
+
+### Notification delivery status
+
+`t3-thread notifications` shows each routed event's delivery status:
+
+| Status            | Meaning                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------ |
+| `pending`         | waiting for its next attempt                                                                                 |
+| `delivering`      | claimed by a watcher process                                                                                 |
+| `delivered`       | sent into the recipient thread                                                                               |
+| `delivery-failed` | attempt failed, retrying after a backoff                                                                     |
+| `blocked`         | the recipient environment's pairing expired; `lastError` names the `t3-thread pair` command that releases it |
+| `undeliverable`   | terminal; recipient archived, subscription or environment gone, or the attempt cap was reached               |
+
+Delivery is oldest-first with at most one notification per recipient per pass, failures back off (15s doubling to 10 min, 6 attempts), and a recipient that is mid-turn is re-offered without spending the attempt budget. Claims are owned by the watcher process that took them, so sleeping mid-delivery does not cause a duplicate send on wake.
 
 ## Docs
 

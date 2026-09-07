@@ -183,7 +183,22 @@ export interface SavedSubscription {
   updatedAt: string;
 }
 
-export type SavedNotificationStatus = "pending" | "delivering" | "delivered" | "delivery-failed";
+/**
+ * Delivery lifecycle of a routed notification.
+ *
+ * `pending` and `delivery-failed` are retryable, `delivering` is claimed by one
+ * watcher, and the rest are terminal for the watcher: `delivered` succeeded,
+ * `undeliverable` can never succeed (recipient gone, attempts exhausted), and
+ * `blocked` needs an operator action first (expired environment credentials).
+ * Only retryable and claimed records keep the watcher awake.
+ */
+export type SavedNotificationStatus =
+  | "pending"
+  | "delivering"
+  | "delivered"
+  | "delivery-failed"
+  | "blocked"
+  | "undeliverable";
 
 export interface SavedNotification {
   id: string;
@@ -206,6 +221,51 @@ export interface SavedNotification {
   lastAttemptedAt?: string | null;
   lastError?: string | null;
   deliveryClaimId?: string | null;
+  /** Watcher process that owns `deliveryClaimId`, so a slept-through claim is not stolen. */
+  deliveryClaimPid?: number | null;
+  /** Failed delivery attempts. Waiting on a busy or blocked recipient does not count. */
+  attempts?: number;
+  /** Earliest time the next attempt may be claimed. Null means immediately. */
+  nextAttemptAt?: string | null;
+}
+
+/**
+ * Lifecycle of a send that arrived while the target thread was mid-turn.
+ *
+ * `queued` -> `dispatching` (claimed by one drain pass) -> `dispatched`.
+ * `cancelled` is operator-initiated; `undeliverable` is terminal and set when the
+ * target can never accept the message (archived thread, exhausted attempts).
+ */
+export type QueuedSendStatus =
+  | "queued"
+  | "dispatching"
+  | "dispatched"
+  | "cancelled"
+  | "undeliverable";
+
+/**
+ * A send held locally because the target thread was still running. The record is
+ * durable state, not process state: the CLI exits right after `send`, and the
+ * watcher drains the queue at the next turn boundary.
+ */
+export interface SavedQueuedSend {
+  id: string;
+  /** Monotonic per state file. Defines FIFO dispatch order within a thread. */
+  sequence: number;
+  threadId: string;
+  agentName: string | null;
+  environment: string;
+  text: string;
+  status: QueuedSendStatus;
+  /** Turn that was running when the send was accepted, for operator diagnostics. */
+  queuedDuringTurnId: string | null;
+  attempts: number;
+  queuedAt: string;
+  updatedAt: string;
+  dispatchedAt: string | null;
+  lastAttemptedAt: string | null;
+  lastError: string | null;
+  dispatchClaimId: string | null;
 }
 
 export interface StateFile {
@@ -214,6 +274,7 @@ export interface StateFile {
   agents: SavedAgent[];
   subscriptions: SavedSubscription[];
   notifications: SavedNotification[];
+  queuedSends: SavedQueuedSend[];
 }
 
 export type AgentState =

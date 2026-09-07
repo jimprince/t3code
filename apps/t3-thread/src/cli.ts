@@ -40,11 +40,18 @@ import {
   upsertSubscription,
   upsertEnvironment,
 } from "./state.js";
+import { cancelQueuedSend, drainQueuedSends, hasQueuedWork, listQueuedSends } from "./sendQueue.js";
 import { wrapWithPreamble } from "./thread-preamble.js";
 import { claimWatcherLease, ensureWatcherProcess } from "./watcher-process.js";
-import { deliverPendingNotifications, detectAttentionEvents, hasWatcherWork } from "./watch.js";
+import {
+  decideWatcherExit,
+  deliverPendingNotifications,
+  detectAttentionEvents,
+  hasActiveWork,
+  unblockNotificationsForEnvironment,
+} from "./watch.js";
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
-import type { SavedAgent } from "./types.js";
+import type { SavedAgent, SavedNotification, SavedQueuedSend } from "./types.js";
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -222,6 +229,8 @@ const AGENT_COMMAND_ALIASES = new Set([
   "inbox",
   "implement",
   "send",
+  "queue",
+  "dequeue",
   "clarify",
   "revise",
   "complete",
@@ -292,12 +301,19 @@ program
       },
       result: null,
     }));
+    // Re-pairing is the only thing that clears deliveries blocked on expired
+    // credentials, so release them here rather than waiting for a new event.
+    const released = await unblockNotificationsForEnvironment(paired.name);
+    if (released.length > 0) {
+      await ensureNotificationWatcher({ env: paired.name });
+    }
     printJson({
       name: paired.name,
       environmentId: paired.environmentId,
       label: paired.label,
       httpBaseUrl: paired.httpBaseUrl,
       expiresAt: paired.expiresAt,
+      unblockedNotifications: released.length,
     });
   });
 
@@ -875,27 +891,43 @@ agent
 
     const startedAt = Date.now();
     let idleSince = 0;
+    let handoff = false;
 
     try {
       for (;;) {
-        const detectedNotifications = await detectAttentionEvents({
-          env: options.env,
-        });
-        const deliveryResults = options.deliver
-          ? await deliverPendingNotifications({
-              env: options.env,
-            })
-          : [];
-        const workRemaining = await hasWatcherWork({
-          env: options.env,
-        });
+        let detectedNotifications: SavedNotification[] = [];
+        let deliveryResults: SavedNotification[] = [];
+        let queuedSendResults: SavedQueuedSend[] = [];
+        let scanError: string | null = null;
+
+        try {
+          detectedNotifications = await detectAttentionEvents({ env: options.env });
+          deliveryResults = options.deliver
+            ? await deliverPendingNotifications({ env: options.env })
+            : [];
+          queuedSendResults = options.deliver
+            ? await drainQueuedSends({
+                clientFactory: (environment) => new RemoteEnvironmentClient(environment),
+                env: options.env,
+              })
+            : [];
+        } catch (error) {
+          // One bad route must not end the watcher; the next scan retries.
+          scanError = formatCliError(error);
+        }
+
+        const workRemaining =
+          (await hasActiveWork({ env: options.env })) ||
+          hasQueuedWork(await loadState(), { env: options.env });
         printJson({
           scannedAt: nowIso(),
           env: options.env ?? null,
           deliver: options.deliver,
           detectedNotifications,
           deliveryResults,
+          queuedSendResults,
           workRemaining,
+          scanError,
         });
 
         if (options.once) {
@@ -903,23 +935,36 @@ agent
         }
 
         const nowMs = Date.now();
-        if (maxLifetimeMs > 0 && nowMs - startedAt >= maxLifetimeMs) {
-          break;
-        }
-
         if (workRemaining) {
           idleSince = 0;
-        } else if (idleExitMs > 0) {
+        } else {
           idleSince ||= nowMs;
-          if (nowMs - idleSince >= idleExitMs) {
-            break;
-          }
+        }
+
+        const decision = decideWatcherExit({
+          elapsedMs: nowMs - startedAt,
+          idleMs: idleSince === 0 ? 0 : nowMs - idleSince,
+          idleExitMs,
+          maxLifetimeMs,
+          workRemaining,
+        });
+        if (decision.exit) {
+          handoff = decision.handoff;
+          break;
         }
 
         await sleep(intervalMs);
       }
     } finally {
       await releaseLease?.();
+      if (handoff) {
+        // Stopped by the lifetime backstop with events still undelivered: replace
+        // ourselves instead of leaving them until some later CLI command runs.
+        await ensureNotificationWatcher({
+          ...(options.env ? { env: options.env } : {}),
+          deliver: options.deliver,
+        });
+      }
     }
   });
 
@@ -1024,18 +1069,50 @@ agent
   .command("send")
   .argument("<name>", "agent name or raw thread UUID")
   .argument("<message...>", "message text")
-  .action(async (name, messageParts: string[]) => {
+  .option("--no-queue", "fail instead of queueing when the target thread is still running")
+  .action(async (name, messageParts: string[], options: { queue: boolean }) => {
     const { agent: savedAgent, client, saved } = await withAgent(name);
-    await client.sendMessage({
+    const outcome = await client.sendMessage({
       threadId: savedAgent.threadId,
       text: messageParts.join(" ").trim(),
+      queueWhileRunning: options.queue,
+      agentName: saved ? savedAgent.name : null,
     });
+    if (outcome.queued) {
+      await ensureNotificationWatcher();
+    }
     printJson({
       agent: saved ? savedAgent.name : null,
       threadId: savedAgent.threadId,
       environment: savedAgent.environment,
-      dispatched: true,
+      ...outcome,
     });
+  });
+
+agent
+  .command("queue")
+  .description("List sends held for threads that were still running")
+  .argument("[name]", "agent name or raw thread UUID")
+  .option("--env <name>", "optional saved environment filter")
+  .option("--open", "only sends that are still waiting to dispatch")
+  .action(async (name: string | undefined, options: { env?: string; open?: boolean }) => {
+    const threadId = name ? (await withAgent(name)).agent.threadId : undefined;
+    const state = await loadState();
+    printJson(
+      listQueuedSends(state, {
+        ...(options.env ? { env: options.env } : {}),
+        ...(threadId ? { threadId } : {}),
+        ...(options.open ? { openOnly: true } : {}),
+      }),
+    );
+  });
+
+agent
+  .command("dequeue")
+  .description("Cancel a queued send before it reaches the thread")
+  .argument("<id>", "queued send id from `t3-thread queue`")
+  .action(async (id: string) => {
+    printJson(await cancelQueuedSend(id));
   });
 
 for (const kind of ["clarify", "revise", "complete"] as const) {
@@ -1045,15 +1122,20 @@ for (const kind of ["clarify", "revise", "complete"] as const) {
     .argument("[message...]", "optional follow-up text")
     .action(async (name, messageParts: string[]) => {
       const { agent: savedAgent, client, saved } = await withAgent(name);
-      await client.sendMessage({
+      const outcome = await client.sendMessage({
         threadId: savedAgent.threadId,
         text: buildFollowUpMessage(kind, messageParts.join(" ")),
+        agentName: saved ? savedAgent.name : null,
       });
+      if (outcome.queued) {
+        await ensureNotificationWatcher();
+      }
       printJson({
         agent: saved ? savedAgent.name : null,
         threadId: savedAgent.threadId,
         environment: savedAgent.environment,
-        dispatched: kind,
+        ...outcome,
+        dispatched: outcome.queued ? false : kind,
       });
     });
 }

@@ -18,6 +18,7 @@ import {
   resolveWebSocketUrl,
 } from "./http.js";
 import { T3RpcClient } from "./rpc.js";
+import { enqueueSend } from "./sendQueue.js";
 import { classifyThread } from "./status.js";
 import type {
   ExecutionEnvironmentDescriptor,
@@ -42,6 +43,11 @@ type RemoteRpcClient = Pick<
 >;
 
 type RpcFactory = (wsUrl: string) => RemoteRpcClient;
+
+/** Result of `RemoteEnvironmentClient.sendMessage`. Exactly one of the two shapes. */
+export type SendMessageOutcome =
+  | { dispatched: true; queued: false }
+  | { dispatched: false; queued: true; queuedSendId: string; sequence: number };
 
 function buildPlanImplementationPrompt(planMarkdown: string): string {
   return `PLEASE IMPLEMENT THIS PLAN:\n${planMarkdown.trim()}`;
@@ -491,17 +497,51 @@ export class RemoteEnvironmentClient {
     };
   }
 
+  /**
+   * Send a follow-up message to a thread.
+   *
+   * A send to a thread whose turn is still running is *accepted and queued* rather
+   * than rejected: it is held in durable local state and dispatched by the watcher
+   * at the next turn boundary (see `sendQueue.ts`). The caller is told which
+   * happened so it is never misled into thinking the worker has already seen it.
+   *
+   * - `allowWhileRunning` forces a concurrent dispatch (steering); it never queues.
+   * - `queueWhileRunning: false` restores the historical hard rejection for callers
+   *   that need a mid-turn send to fail loudly instead of being held.
+   */
   async sendMessage(input: {
     threadId: string;
     text: string;
     allowWhileRunning?: boolean;
-  }): Promise<void> {
+    queueWhileRunning?: boolean;
+    agentName?: string | null;
+  }): Promise<SendMessageOutcome> {
     const thread = await this.findThread(input.threadId);
+    if (thread.archivedAt || thread.deletedAt) {
+      throw new Error(`Thread '${thread.id}' is archived and cannot receive messages.`);
+    }
+
     const status = classifyThread(thread);
     if (status.state === "running" && !input.allowWhileRunning) {
-      throw new Error(
-        `Thread '${thread.id}' is still running. Use interrupt first or pass a force path in code if you really want concurrent sends.`,
-      );
+      if (input.queueWhileRunning === false) {
+        throw new Error(
+          `Thread '${thread.id}' is still running. Use interrupt first or pass a force path in code if you really want concurrent sends.`,
+        );
+      }
+
+      const queued = await enqueueSend({
+        threadId: thread.id,
+        agentName: input.agentName ?? null,
+        environment: this.environment.name,
+        text: input.text,
+        queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
+      });
+      return {
+        dispatched: false,
+        queued: true,
+        queuedSendId: queued.id,
+        sequence: queued.sequence,
+      };
     }
 
     const rpc = await this.openRpc();
@@ -523,6 +563,8 @@ export class RemoteEnvironmentClient {
     } finally {
       await rpc.dispose();
     }
+
+    return { dispatched: true, queued: false };
   }
 
   async implementPlan(input: {

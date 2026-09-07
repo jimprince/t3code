@@ -7,6 +7,7 @@ import type {
   SavedAgent,
   SavedEnvironment,
   SavedNotification,
+  SavedQueuedSend,
   SavedSubscription,
   StateFile,
 } from "./types.js";
@@ -38,6 +39,7 @@ const EMPTY_STATE: StateFile = {
   agents: [],
   subscriptions: [],
   notifications: [],
+  queuedSends: [],
 };
 
 export function resolveStateFile(): string {
@@ -55,6 +57,8 @@ function normalizeState(parsed: Partial<StateFile>): StateFile {
     agents: Array.isArray(parsed.agents) ? parsed.agents : [],
     subscriptions: Array.isArray(parsed.subscriptions) ? parsed.subscriptions : [],
     notifications: Array.isArray(parsed.notifications) ? parsed.notifications : [],
+    // State files written before the send queue existed have no `queuedSends`.
+    queuedSends: Array.isArray(parsed.queuedSends) ? parsed.queuedSends : [],
   };
 }
 
@@ -190,6 +194,22 @@ export function upsertNotification(
 ): SavedNotification[] {
   const remaining = notifications.filter((notification) => notification.eventKey !== next.eventKey);
   return [...remaining, next].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+}
+
+export function upsertQueuedSend(
+  queuedSends: SavedQueuedSend[],
+  next: SavedQueuedSend,
+): SavedQueuedSend[] {
+  const remaining = queuedSends.filter((queued) => queued.id !== next.id);
+  return [...remaining, next].sort((a, b) => a.sequence - b.sequence);
+}
+
+/**
+ * Next FIFO position. Sequence numbers are global to the state file rather than
+ * per thread so a single ordering exists even when the queue is inspected as a whole.
+ */
+export function nextQueuedSendSequence(queuedSends: SavedQueuedSend[]): number {
+  return queuedSends.reduce((highest, queued) => Math.max(highest, queued.sequence), 0) + 1;
 }
 
 export function findAgentByThreadId(state: StateFile, threadId: string): SavedAgent | null {

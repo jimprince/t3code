@@ -258,6 +258,31 @@ t3-thread complete <agent>
 t3-thread complete <thread-id>
 ```
 
+A follow-up sent while the target thread is still running is **queued, not
+rejected**. It is persisted before the command returns and dispatched by the
+watcher as a normal follow-up turn at the next turn boundary, so an overseer no
+longer has to interrupt the worker or busy-wait. Read the command output:
+`"queued": true` means the worker has not seen it yet.
+
+```bash
+t3-thread queue                     # inspect held sends
+t3-thread queue <agent> --open      # only what is still waiting
+t3-thread dequeue <queued-send-id>  # drop one before it lands
+t3-thread send <agent> --no-queue "..."   # fail instead of holding
+```
+
+Queue rules:
+
+- FIFO per thread, one dispatched message per turn boundary. Sends are never
+  merged into one prompt.
+- The queue lives in `~/.config/t3-remote-agents/state.json`, so it survives the
+  CLI exiting, the watcher exiting, machine sleep, and reboot. It drains only
+  while a watcher is running on this machine; `send` ensures one.
+- `interrupt` does not drop the queue: the held message dispatches at the
+  boundary the interrupt creates. Use `dequeue` to drop it.
+- A queued send is never delivered to an archived thread; archiving the target
+  retires its queue as `undeliverable`.
+
 Wait for a state transition:
 
 ```bash
@@ -392,8 +417,13 @@ Current scope note:
 
 - `subscribe` / `unsubscribe` manage local routing state.
 - `subscribe` rejects self-subscriptions so a coordinator thread cannot watch itself.
-- `watch` polls the current snapshot-backed deployment in two phases: detection persists deduplicated notification events, then delivery claims pending events and attempts routed sends.
-- Normal deployment: `create` with notification routing and `subscribe` best-effort ensure a singleton detached watcher is running. The watcher uses `~/.config/t3-remote-agents/watch.pid`, exits after its idle window when no subscribed source is in flight and no notification is undelivered, and has a max-lifetime backstop.
+- `watch` polls the current snapshot-backed deployment in two phases: detection persists deduplicated notification events, then delivery claims pending events and attempts routed sends. The same pass drains queued sends at their next turn boundary.
+- Delivery order is oldest event first, and at most one notification per recipient per pass, because delivering one starts a turn on the recipient.
+- A failed delivery backs off (15s doubling to 10 min) and gives up after 6 attempts. A recipient that is mid-turn is re-offered ~30s later and does not spend the attempt budget.
+- Terminal outcomes stop retrying and let the watcher idle out: `undeliverable` (recipient archived, subscription or environment gone, attempts exhausted) and `blocked` (the environment pairing expired). `blocked` records name the exact `t3-thread pair` command that releases them, and a successful `pair` returns them to `pending` and ensures a watcher.
+- A claim is owned by the watcher process that took it, so a machine that sleeps mid-delivery does not re-claim and re-send its own message on wake. A claim is only stolen from a process that is gone, or from a foreign process that has been quiet past the claim timeout.
+- Normal deployment: `create` with notification routing, `subscribe`, and queued `send` best-effort ensure a singleton detached watcher is running. The watcher uses `~/.config/t3-remote-agents/watch.pid`, exits after its idle window when no subscribed source is in flight and no notification is undelivered and no send is queued, and has a max-lifetime backstop. It never idle-exits with work outstanding, and when the max-lifetime backstop fires with work still outstanding it spawns a replacement watcher instead of dropping it.
+- A scan that fails (unreachable environment, transient RPC error) is reported as `scanError` in the watcher's output and retried on the next scan; it no longer terminates the watcher.
 - The launchd user agent `network.homenetwork.t3-watcher` is optional/manual only. Use it only if you intentionally want a persistent 24/7 watcher.
 
 Run one watcher scan:
