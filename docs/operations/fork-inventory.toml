@@ -421,3 +421,13 @@ id = "nightly-net-source-change"
 date = "2026-09-05"
 decided = "narrow"
 rationale = "Gate fork-only nightlies on the exact push-before and push-after packaged-source trees, not replayed commit history. Unknown history and manual dispatch retain the release path. Atomic main/tag publication removes the old 30-second visibility delay."
+
+[[patch]]
+name = "fork-gitea-pr-browser"
+subject = "feat(pull-requests): browse Gitea reviews and CI checks"
+class = "upstream-bound"
+purpose = "Browse configured Gitea pull requests, descriptions, changed code, conversations, reviews, commits and CI checks through the shared pull-request browser."
+retire_when = "Upstream supports equivalent configured-instance Gitea browsing with truthful CI status and capability-gated actions."
+depends_on = ["fork-gitea-connections", "fork-gitea-pr-actions"]
+roles = []
+note = "Read-only browser; create and checkout remain in the source-control concern. Reuses the configured HTTP transport without redirects or credential-bearing errors. No checks is unknown, never success. Test services are provided together to preserve their shared lifecycle."
