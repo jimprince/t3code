@@ -144,7 +144,7 @@ purpose = "Provide the additive t3-thread operator CLI with pairing, persistent 
 retire_when = "Upstream or maintained shared tooling provides an equivalent scriptable worker interface, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-build-ci-compat"]
 roles = []
-note = "env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). Worker bootstrap and inter-thread messages include identity and reply headers. Notifications to an explicitly settled subscriber are held (not keeping the watcher awake, since each pass snapshots every saved agent), superseded down to the newest per route, re-checked each minute while a watcher runs, and released immediately by t3-thread unsettle; settle lists the subscriber's routes and unsubscribe accepts --subscriber and raw routed thread ids. order/move write the server's shared pinned or active sibling order, and order --reset restores automatic placement. The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
+note = "env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). Notifications to an explicitly settled subscriber are held (not keeping the watcher awake, since each pass snapshots every saved agent), superseded down to the newest per route, re-checked each minute while a watcher runs, and released immediately by t3-thread unsettle; settle lists the subscriber's routes and unsubscribe accepts --subscriber and raw routed thread ids. order/move write the server's shared pinned or active sibling order, and order --reset restores automatic placement. The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
 
 [[patch]]
 name = "fork-provider-turn-safety"
@@ -1089,3 +1089,19 @@ id = "candidate-evidence-publication-remote"
 date = "2026-09-21"
 decided = "adapt"
 rationale = "Outside Actions the gate resolved GITHUB_REPOSITORY from a bare `gh repo view`, which prefers the `upstream` remote the replay driver adds, so host-side verification looked for the candidate in upstream's repository and reported no candidate CI run. Resolve it from the staging remote instead, matching the documented rule that evidence lookup uses the publication remote."
+
+[[patch]]
+name = "fork-gitea-pr-browser"
+subject = "feat(pull-requests): browse Gitea reviews and CI checks"
+class = "upstream-bound"
+purpose = "Browse configured Gitea pull requests, descriptions, changed code, conversations, reviews, commits and CI checks through the shared pull-request browser."
+retire_when = "Upstream supports equivalent configured-instance Gitea browsing with truthful CI status and capability-gated actions."
+depends_on = ["fork-gitea-connections", "fork-gitea-pr-actions"]
+roles = []
+note = "Read-only browser; create and checkout remain in the source-control concern. Reuses the configured HTTP transport without redirects or credential-bearing errors. No checks is unknown, never success. Test services are provided together to preserve their shared lifecycle."
+
+[[patch.decision]]
+id = "upstream-forgejo-pr-provider"
+date = "2026-09-16"
+decided = "retain"
+rationale = "Upstream's native Forgejo provider is CLI-backed and does not replace browsing pull requests on configured Gitea instances through the fork's token-aware HTTP transport. Keep Gitea as a separate registry provider alongside Forgejo."
