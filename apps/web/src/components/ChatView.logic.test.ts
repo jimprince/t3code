@@ -32,7 +32,6 @@ import {
   branchMismatchKey,
   buildExpiredTerminalContextToastCopy,
   buildLoadingThreadFromShell,
-  buildRevertTurnCountByUserMessageId,
   buildEnvironmentUnavailableDescription,
   buildThreadTurnInterruptInput,
   createLocalDispatchSnapshot,
