@@ -1,3 +1,4 @@
+import * as GiteaPullRequestProvider from "./GiteaPullRequestProvider.ts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -44,6 +45,7 @@ export function fromProviders(
  */
 export const make = Effect.map(
   Effect.all([
+    GiteaPullRequestProvider.make,
     GitHubPullRequestProvider.make,
     GitLabPullRequestProvider.make,
     BitbucketPullRequestProvider.make,
