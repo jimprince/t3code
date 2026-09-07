@@ -188,6 +188,9 @@ function buildProps() {
     onOpenTurnDiff: () => {},
     supportsConversationRollback: false,
     onRevertToTurnCount: () => {},
+    onForkMessage: () => {},
+    canForkThread: true,
+    canForkToNewWorktree: true,
     isRevertingCheckpoint: false,
     onImageExpand: () => {},
     activeThreadEnvironmentId: ACTIVE_THREAD_ENVIRONMENT_ID,
@@ -764,7 +767,8 @@ describe("MessagesTimeline", () => {
     ).not.toContain('data-maintain-scroll-at-end="enabled"');
   });
 
-  it("renders collapse controls for long user messages", () => {
+  it("renders collapse controls for long user messages", async () => {
+    const { MessagesTimeline } = await import("./MessagesTimeline");
     const markup = renderToStaticMarkup(
       <MessagesTimeline
         {...buildProps()}
