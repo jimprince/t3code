@@ -102,7 +102,7 @@ class CronUpgradeTest(unittest.TestCase):
             commands.mkdir()
             # Deliberately expose system utilities without any system Node.
             for name in ("bash", "python3", "mktemp", "rm", "mkdir", "tar", "mv",
-                         "ln", "readlink", "find", "sort", "awk", "seq", "gzip"):
+                         "ln", "readlink", "find", "sort", "awk", "seq", "gzip", "flock"):
                 (commands / name).symlink_to(shutil.which(name))
             node = home / ".local/node/bin/node"
             node.parent.mkdir(parents=True)

@@ -101,6 +101,14 @@ if [ "$check_only" = 1 ]; then
 fi
 require_idle
 
+# A deferred retry and the regular timer must never promote different releases together.
+mkdir -p "$root"
+exec 9>"$root/update.lock"
+if ! flock -n 9; then
+  log "another update check owns the install lock"
+  exit 0
+fi
+
 # Cron does not load the login shell that exposes a user-local Node install.
 # Keep an explicitly configured runtime first; use the service's standard fallback.
 export PATH="${PATH:-/usr/bin:/bin}:$HOME/.local/node/bin"
