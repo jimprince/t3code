@@ -1,5 +1,5 @@
 import * as VcsProcess from "../vcs/VcsProcess.ts";
-import { createHash } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 import * as Clock from "effect/Clock";
 import {
   SourceControlProviderError,
@@ -176,7 +176,7 @@ export const make = Effect.gen(function* () {
               remote.instance.id,
               remote.instance.apiOrigin,
               remote.instance.webOrigin,
-              createHash("sha256")
+              NodeCrypto.createHash("sha256")
                 .update(remote.instance.token ?? "")
                 .digest("hex"),
               remote.repository.toLowerCase(),
