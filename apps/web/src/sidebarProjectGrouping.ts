@@ -175,6 +175,7 @@ export function buildGeneralChatSidebarSnapshot(input: {
   primaryEnvironmentId: EnvironmentId | null;
   resolveEnvironmentLabel: (environmentId: EnvironmentId) => string | null;
   isDesktopLocalEnvironment?: (environmentId: EnvironmentId) => boolean;
+  isWslEnvironment?: (environmentId: EnvironmentId) => boolean;
 }): SidebarProjectSnapshot | null {
   const representativeProjects = selectCanonicalChatProjectsByEnvironment(input.projects);
   const representative =
