@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7ffd73becb87b02b351367b732007f6e29379e50",
-  "head": "c5f8d6ae22c6cec6d0424612d21dacb75d689361",
+  "prev": "47c57335a28f0746a6f18c4a55486e0551053fe5",
+  "head": "8a3a804b8783cd67b566d7fe9374e315e9c46dd5",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -17,7 +17,9 @@
     "fork-private-connection-defaults",
     "fork-resource-recovery",
     "fork-workspace-file-uploads",
-    "fork-attachment-compatibility",
+    "fork-attachment-compatibility"
+  ],
+  "unapplied": [
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
@@ -33,7 +35,6 @@
     "fork-maintenance-automation",
     "fork-gitea-pr-browser"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
