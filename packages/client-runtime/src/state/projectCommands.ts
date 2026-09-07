@@ -102,5 +102,16 @@ export function createProjectEnvironmentAtoms<R, E>(
           JSON.stringify([environmentId, input.cwd, input.relativePath]),
       },
     }),
+    uploadFile: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:projects:upload-file",
+      tag: WS_METHODS.projectsUploadFile,
+      scheduler: fileScheduler,
+      concurrency: {
+        // Keyed by cwd (not file name) so multi-file drops into one workspace
+        // serialize, keeping auto-renames deterministic and memory bounded.
+        mode: "serial",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.cwd]),
+      },
+    }),
   };
 }
