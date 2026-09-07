@@ -479,6 +479,28 @@ nightly host. The updater preserves an explicit `PATH` and falls back to
 fails before downloading if Node cannot be found. Verify this path on Linux
 with `python3 scripts/headless-auto-upgrade.test.py`.
 
+Automatic checks defer while the live database reports active or pending turns,
+session transitions, checkpoints, approvals or input requests, or while the local
+worker CLI has queued sends. Configure the real database in
+`~/.config/t3code/headless-upgrade.env`, used by cron and systemd:
+
+```sh
+T3CODE_HEADLESS_STATE_DB="$HOME/.local/share/t3code-dev/userdata/state.sqlite"
+```
+
+The default is `$T3CODE_HOME/userdata/state.sqlite`, or `~/.t3/userdata/state.sqlite`.
+Missing or unreadable state refuses the update. `--check-idle` exits 0 for idle,
+75 for busy, and 1 for an unknown state. Checks run before download and immediately
+before changing `current`. Deferred checks leave an `update-pending` marker. A
+five-minute cron entry can retry that marker without other network checks:
+
+```cron
+*/5 * * * * T3CODE_HEADLESS_CHANNEL=nightly /home/brad/.local/bin/t3code-headless-upgrade --retry-pending 2>&1 | /usr/bin/logger -t t3code-headless-upgrade
+```
+
+Only an explicit manual `t3code-headless-upgrade --force` bypasses the activity
+checks and permits SIGKILL escalation. Never put `--force` in cron or a timer.
+
 Recommended user timer:
 
 ```ini
@@ -538,13 +560,13 @@ client/server version-mismatch banner. It asks for confirmation before making
 the RPC request and reports queued, already-requested, unsupported, and failed
 outcomes. Loading a newer client by itself does not start an upgrade check.
 
-If the timer runs while `t3code.service` is active, it downloads and validates
-the new release first. Downtime is limited to the final restart. The updater
+Busy threads defer an update. Once idle, the updater downloads and validates
+the release, then rechecks activity before changing the install. Downtime is limited to the final restart. The updater
 keeps the previous release for rollback and prunes older releases after a
 successful update. When an unprivileged `systemctl restart` is unavailable, the
 fallback verifies that systemd actually replaces the old `MainPID`; it allows a
-10-second graceful `SIGTERM` window and then forces down only that stuck main
-process so `Restart=always` can start the selected release. This prevents the
+10-second graceful `SIGTERM` window. Only a manual `--force` invocation may
+then force down that same stuck main process; automatic attempts refuse escalation. This prevents the
 upgrade and rollback checks from querying an old process after merely delivering
 a signal.
 
