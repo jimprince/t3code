@@ -41,9 +41,14 @@ HTTP errors include only the status, not headers or response bodies.
 Web and Electron share the settings form and provider presentation. Mobile
 consumes the same badge contracts and has a Gitea icon; configure instances from
 web/desktop. Add-project and publish pickers continue to list only providers
-with those operations implemented. The separate rich pull-request registry has
-no Gitea adapter in this slice. Gitea badge URLs therefore open externally using
-the existing unknown-link path.
+with those operations implemented. The rich pull-request registry also registers `GiteaPullRequestProvider`, carried
+as `fork-gitea-pr-browser`. It resolves the selected checkout remote through the
+source-control registry, then reuses `GiteaApi` with that instance’s token. It reads
+PRs, issue comments, submitted reviews and their inline comments, commits, unified
+diffs, and paginated combined commit statuses. Empty checks remain empty; incomplete
+CI pagination fails explicitly. Mutations are disabled by both capabilities and
+viewer permissions. Conversations have bounded pagination and report truncation.
+Listings stop once the requested slice and a following row are known.
 
 The concern is carried as `fork-gitea-connections`. Retire it when upstream
 provides configured Gitea instances, protected token storage, and equivalent
