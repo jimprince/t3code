@@ -474,7 +474,10 @@ The canonical updater script is `scripts/headless-auto-upgrade.sh`. Install it
 on the VM as `~/.local/bin/t3code-headless-upgrade` and run it from a systemd
 timer. By default it tracks the latest stable GitHub release from
 `jimprince/t3code`; set `T3CODE_HEADLESS_CHANNEL=nightly` only for an explicit
-nightly host.
+nightly host. The updater preserves an explicit `PATH` and falls back to
+`~/.local/node/bin` when run from cron or systemd without a login shell. It
+fails before downloading if Node cannot be found. Verify this path on Linux
+with `python3 scripts/headless-auto-upgrade.test.py`.
 
 Recommended user timer:
 
