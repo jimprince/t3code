@@ -124,7 +124,7 @@ purpose = "Provide server-owned General Chat projects: the project kind contract
 retire_when = "Upstream ships an equivalent repository-independent chat project kind."
 depends_on = ["fork-thread-client-recovery"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-general-chat-projects."
+note = "Reorganized 2026-09-06 from fork-general-chat-projects. Upstream ordering fixtures include the owning project required by General Chat metadata guards."
 [[patch.decision]]
 id = "chat-enrichment-guard-951"
 date = "2026-07-29"
