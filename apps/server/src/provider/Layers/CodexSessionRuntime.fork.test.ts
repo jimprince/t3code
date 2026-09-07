@@ -615,9 +615,7 @@ describe("openCodexThread", () => {
           },
         },
         request: (_method: "thread/start") => {
-          return Effect.succeed(
-            makeThreadOpenResponse("fresh-thread"),
-          );
+          return Effect.succeed(makeThreadOpenResponse("fresh-thread"));
         },
       };
 
