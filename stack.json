@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f6bca20cfe4b340dae3df32daa87de85e243ce16",
-  "head": "37ebb98031cce4d410bf4a5b6372bb358ccd8f5c",
+  "prev": "c6ef1311f1a8ef7f502ecf329bd038c0deaa1511",
+  "head": "9916e0b51c0482368219a96a7423fb1f54d8ccda",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -31,8 +31,7 @@
     "fork-mobile-delivery",
     "fork-release-publication",
     "fork-maintenance-automation",
-    "fork-gitea-pr-browser",
-    "refresh-temp"
+    "fork-gitea-pr-browser"
   ],
   "unapplied": [],
   "hidden": [],
@@ -50,7 +49,7 @@
       "oid": "bd6c817f7a528f4175e155fdd476d907b4a3f182"
     },
     "fork-desktop-delivery": {
-      "oid": "2ae99def71ac52408433ee5bb8eacef6afdca0ab"
+      "oid": "1f373f6f6c930064247ef5e8dfd4e27ce475d1e9"
     },
     "fork-fresh-remote-worktrees": {
       "oid": "ef905bd9a65ca195c94cfb877a06cc9b0774f0f9"
@@ -65,19 +64,19 @@
       "oid": "0f8d17435725b8dfec627830f604c2f270ed9bc2"
     },
     "fork-gitea-pr-browser": {
-      "oid": "90297e7ee04d9ecbbb5bf414c3e8cca64b6e3334"
+      "oid": "9916e0b51c0482368219a96a7423fb1f54d8ccda"
     },
     "fork-headless-delivery": {
-      "oid": "d0a9f888d8bb5cf2994ec300247249f87014c026"
+      "oid": "c4c73a49e01c0c31acc87c0cde5e9edd5c0a2e7a"
     },
     "fork-maintenance-automation": {
-      "oid": "fa1b8f36fbac42347453082784ce15d8bd39310b"
+      "oid": "13dd3c2c19067be5656b99db9bba6e68f042dc23"
     },
     "fork-manual-thread-order": {
       "oid": "83125f8078dd3068582fa6788bbb3bc06c230d6f"
     },
     "fork-mobile-delivery": {
-      "oid": "5687ad726dbc8e1c0e387257e18d96d3aaf85259"
+      "oid": "06aa90317edb705064e57b1e6be987e72311b28a"
     },
     "fork-pr-dismissal": {
       "oid": "9dcf8952c2c3b8d0ea57dc58774b6ec8e527533d"
@@ -95,7 +94,7 @@
       "oid": "a9f725d1a0dce7173986da1c846611bc36482c36"
     },
     "fork-release-publication": {
-      "oid": "1c654381aba32dfdf52a704036145579cd6619eb"
+      "oid": "25ee7c6c95a5e7df1c5ae5bb805a682fe6fecfc4"
     },
     "fork-remote-file-downloads": {
       "oid": "4598183579c66ffc84339f9975a1e1939488c85f"
@@ -123,9 +122,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "fc78cbb94b5bdb49f42234a24f43c72f96af9936"
-    },
-    "refresh-temp": {
-      "oid": "37ebb98031cce4d410bf4a5b6372bb358ccd8f5c"
     }
   }
 }
