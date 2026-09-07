@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3f80c86a2bc404918bba6f1e988ec916a5f6d479",
-  "head": "0efd7b24abb7b42ece9f01ae55992d3270bac97f",
+  "prev": "0827539bd2f4bc9c8a3d6cfa975426eb300a6cd1",
+  "head": "596128a0ec142ce9e882717db7448dd24ac5ad78",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -26,13 +26,14 @@
     "fork-gitea-connections",
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
-    "fork-headless-delivery",
+    "fork-headless-delivery"
+  ],
+  "unapplied": [
     "fork-desktop-delivery",
     "fork-mobile-delivery",
     "fork-release-publication",
     "fork-maintenance-automation"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
