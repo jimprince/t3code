@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "73320f0c1ba220d7779ebca2b653c559982eee1a",
-  "head": "056d496e271074b51b7203a7ebf3fe6e5f5db8a4",
+  "prev": "9a4bc12d1088249bbddfc4f7b1f41030200adde7",
+  "head": "b68a7994b5692a71900e4f5794dbc4b3edcfc545",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -17,13 +17,13 @@
     "fork-private-connection-defaults",
     "fork-resource-recovery",
     "fork-workspace-file-uploads",
-    "fork-attachment-compatibility"
-  ],
-  "unapplied": [
+    "fork-attachment-compatibility",
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
-    "fork-unsupported-pr-hosts",
+    "fork-unsupported-pr-hosts"
+  ],
+  "unapplied": [
     "fork-worktree-cleanup",
     "fork-gitea-connections",
     "fork-gitea-pr-actions",
@@ -53,7 +53,7 @@
       "oid": "1f373f6f6c930064247ef5e8dfd4e27ce475d1e9"
     },
     "fork-fresh-remote-worktrees": {
-      "oid": "ef905bd9a65ca195c94cfb877a06cc9b0774f0f9"
+      "oid": "a4a5e4efbac2dc3d7cec6c177ea93ed97cb656be"
     },
     "fork-general-chat": {
       "oid": "40dc1f8c2866790b6d7f6f2dac4287a07db064a1"
@@ -80,7 +80,7 @@
       "oid": "06aa90317edb705064e57b1e6be987e72311b28a"
     },
     "fork-pr-dismissal": {
-      "oid": "9dcf8952c2c3b8d0ea57dc58774b6ec8e527533d"
+      "oid": "0db5ead3dcdc4f650cd4206bfa7992ba474a57ec"
     },
     "fork-pr-project-exclusions": {
       "oid": "dabe34397b9b2b4c6421fa15568239440d0cd143"
@@ -98,7 +98,7 @@
       "oid": "25ee7c6c95a5e7df1c5ae5bb805a682fe6fecfc4"
     },
     "fork-remote-file-downloads": {
-      "oid": "4598183579c66ffc84339f9975a1e1939488c85f"
+      "oid": "1444ca3cf98143fa807874aec9e57ab7a2db6cea"
     },
     "fork-resource-recovery": {
       "oid": "4297dd82a5f4d277482a1c9b7f8db9fe903b67bd"
@@ -113,7 +113,7 @@
       "oid": "c3175ac33bd5671d5e07759d2aec5505f5b140b7"
     },
     "fork-unsupported-pr-hosts": {
-      "oid": "5fad83cc1ead9a9e214d28ebb2cad73f551f4676"
+      "oid": "b68a7994b5692a71900e4f5794dbc4b3edcfc545"
     },
     "fork-worker-operations": {
       "oid": "274a7b4f33d6a09c41bc44abc5783b28d7e10ac2"
