@@ -16,6 +16,11 @@ die() {
   exit 1
 }
 
+# Cron does not load the login shell that exposes a user-local Node install.
+# Keep an explicitly configured runtime first; use the service's standard fallback.
+export PATH="${PATH:-/usr/bin:/bin}:$HOME/.local/node/bin"
+command -v node >/dev/null 2>&1 || die "node not found; install Node in ~/.local/node/bin or include it in PATH"
+
 resolve_base_url() {
   if [ -n "${T3CODE_HEADLESS_BASE_URL:-}" ]; then
     printf '%s\n' "$T3CODE_HEADLESS_BASE_URL"
