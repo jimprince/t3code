@@ -1494,7 +1494,9 @@ const make = Effect.gen(function* () {
         ).pipe(Effect.as(undefined)),
       ),
     );
-    const threadDetail = yield* resolveThreadDetail(event.payload.threadId);
+    const threadDetail = turnStart.value.hasTransferredHistory
+      ? yield* resolveThreadDetail(event.payload.threadId)
+      : undefined;
     const transferredContextHandoff = threadDetail
       ? findPendingTransferredThreadHandoff({
           thread: threadDetail,

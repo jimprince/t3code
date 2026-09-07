@@ -154,4 +154,4 @@ purpose = "Move a thread and its workspace context between environments: export/
 retire_when = "Upstream ships equivalent cross-environment thread moves."
 depends_on = ["fork-thread-client-recovery", "fork-conversation-fork", "fork-general-chat"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-thread-transfer."
+note = "Reorganized 2026-09-06 from fork-thread-transfer. Turn starts inspect the import marker without hydrating ordinary thread history; transferred threads retain context handoff."
