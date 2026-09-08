@@ -373,7 +373,7 @@ The shared source gate owns Knip, lint/format, typechecks and tests. GitHub CI
 uses its `check`, `test-other` and sharded `test-server` phases; the bot runs
 the same commands without sharding. Server tests use `--bail=1` so a failing
 run stops scheduling further tests; already running tests still finish. A green
-gate still requires every test, and repair attempts rerun the complete gate.
+gate still requires every test, and repair attempts rerun the complete gate. Independent source checks and test phases collect failures before returning the first failing status, so one corrective attempt can address errors from several stages. Dependency installation and phase prerequisites still stop dependent work on failure.
 Platform build and artifact smoke checks
 remain in CI/release jobs. Do not copy the source command list into bot config.
 

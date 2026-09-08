@@ -5,13 +5,28 @@ set -euo pipefail
 # platform build prerequisites belong to the caller; failures are never waived.
 phase="${1:-all}"
 if [[ $# -gt 0 ]]; then shift; fi
+failure=0
+
+# Report independent failures together so one repair can address them all.
+# Keep the first failing status; collecting diagnostics never permits promotion.
+run_check() {
+  local code
+  if "$@"; then
+    return 0
+  else
+    code=$?
+    if [[ "$failure" == 0 ]]; then failure="$code"; fi
+    printf 'Verification command failed (exit %s): %s\n' "$code" "$*" >&2
+  fi
+}
+
 case "$phase" in
   check)
     vp run --filter @t3tools/desktop ensure:electron
-    vp run knip:check
     vp run --filter @t3tools/oxlint-plugin-t3code build
-    vp check
-    vp run typecheck
+    run_check vp run knip:check
+    run_check vp check
+    run_check vp run typecheck
     ;;
   test-other)
     vp run --filter @t3tools/desktop ensure:electron
@@ -21,12 +36,13 @@ case "$phase" in
     vp run --filter t3 test --bail=1 "$@"
     ;;
   test)
-    "$0" test-other
-    "$0" test-server
+    run_check "$0" test-other
+    run_check "$0" test-server
     ;;
   all)
-    "$0" check
-    "$0" test
+    run_check "$0" check
+    run_check "$0" test
     ;;
   *) echo "Unknown verification phase: $phase" >&2; exit 2 ;;
 esac
+exit "$failure"

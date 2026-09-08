@@ -9,7 +9,14 @@ import { createFixtureRepo } from "./lib/git-fixture.ts";
 const script = NodeURL.fileURLToPath(new URL("./verify-stgit-replay", import.meta.url));
 
 describe("verify-stgit-replay", () => {
-  for (const mode of ["pass", "fail", "knip-fail", "mutate"] as const) {
+  for (const mode of [
+    "pass",
+    "fail",
+    "knip-fail",
+    "multiple-failures",
+    "install-fail",
+    "mutate",
+  ] as const) {
     it(`handles ${mode} without approving a failing or changed candidate`, () => {
       const repo = createFixtureRepo();
       try {
@@ -25,8 +32,10 @@ describe("verify-stgit-replay", () => {
           `#!/usr/bin/env bash
 set -euo pipefail
 printf '%s\\n' "$*" >> "$CALL_LOG"
-if [[ "$*" == 'run typecheck' && "$GATE_MODE" == fail ]]; then exit 42; fi
-if [[ "$*" == 'run knip:check' && "$GATE_MODE" == knip-fail ]]; then exit 43; fi
+if [[ "$*" == 'install --frozen-lockfile' && "$GATE_MODE" == install-fail ]]; then exit 45; fi
+if [[ "$*" == 'run typecheck' && ( "$GATE_MODE" == fail || "$GATE_MODE" == multiple-failures ) ]]; then exit 42; fi
+if [[ "$*" == 'run knip:check' && ( "$GATE_MODE" == knip-fail || "$GATE_MODE" == multiple-failures ) ]]; then exit 43; fi
+if [[ "$*" == *'--parallel'* && "$GATE_MODE" == multiple-failures ]]; then exit 44; fi
 if [[ "$*" == 'run --filter t3 test --bail=1' && "$GATE_MODE" == mutate ]]; then echo changed > tracked.txt; fi
 `,
         );
@@ -48,15 +57,25 @@ if [[ "$*" == 'run --filter t3 test --bail=1' && "$GATE_MODE" == mutate ]]; then
         });
         assert.strictEqual(repo.git("rev-parse", "HEAD"), head);
         const calls = NodeFS.readFileSync(log, "utf8");
-        if (mode !== "knip-fail") assert.include(calls, "run typecheck\n");
+        if (mode !== "install-fail") assert.include(calls, "run typecheck\n");
         if (mode === "pass") {
           assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
           assert.include(calls, "run --filter t3 test --bail=1\n");
         } else if (mode === "knip-fail") {
           assert.strictEqual(result.status, 43);
-          assert.notInclude(calls, "run typecheck\n");
+          assert.include(calls, "run --filter t3 test --bail=1\n");
         } else if (mode === "fail") {
           assert.strictEqual(result.status, 42);
+          assert.include(calls, "run --filter t3 test --bail=1\n");
+        } else if (mode === "multiple-failures") {
+          assert.strictEqual(result.status, 43);
+          assert.include(calls, "run --filter t3 test --bail=1\n");
+          for (const code of [42, 43, 44]) {
+            assert.include(result.stderr, `Verification command failed (exit ${code})`);
+          }
+        } else if (mode === "install-fail") {
+          assert.strictEqual(result.status, 45);
+          assert.notInclude(calls, "run typecheck\n");
           assert.notInclude(calls, "run --filter t3 test --bail=1\n");
         } else {
           assert.notStrictEqual(result.status, 0);
