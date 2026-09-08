@@ -1,10 +1,12 @@
 {
   "version": 5,
-  "prev": "421f51c988d7268ea940e97e56b14f2af694a080",
-  "head": "2b7f1813c0dbc3d081be2e8373283f2aae52c532",
+  "prev": "bc1319961ea48e180a7303de67ac5d8e5985945d",
+  "head": "3e5de9167338e82c3d379040edd4c3d682e76624",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations",
+    "fork-worker-operations"
+  ],
+  "unapplied": [
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
@@ -32,7 +34,6 @@
     "fork-maintenance-automation",
     "fork-gitea-pr-browser"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
