@@ -10,7 +10,7 @@ import * as Schedule from "effect/Schedule";
 
 import { ServerConfig } from "../config.ts";
 
-export const DEFAULT_LOG_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024;
+const DEFAULT_LOG_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024;
 export const DEFAULT_LOG_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1_000;
 const DEFAULT_LOG_RETENTION_SWEEP_INTERVAL_MS = 60 * 60 * 1_000;
 const SPOTLIGHT_EXCLUSION_FILE = ".metadata_never_index";
