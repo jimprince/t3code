@@ -172,9 +172,6 @@ import * as Data from "effect/Data";
 
 import { makeOrchestrationIntegrationHarness } from "../integration/OrchestrationEngineHarness.integration.ts";
 import {
-  countingWsRpcProtocolLayer,
-  makeCountingWsRpcClient,
-  makeWebSocketTransferRecorder,
   measureHttpGet,
   transferDelta,
 } from "../integration/NetworkTransferMeasurement.integration.ts";
