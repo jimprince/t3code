@@ -21,8 +21,8 @@ export function parseDesktopThreadDeepLink(rawUrl: string): DesktopThreadDeepLin
   try {
     const url = new URL(rawUrl);
     if (
-      (url.protocol !== `${ElectronProtocol.DESKTOP_PRODUCTION_SCHEME}:` &&
-        url.protocol !== `${ElectronProtocol.DESKTOP_DEVELOPMENT_SCHEME}:`) ||
+      (url.protocol !== `${ElectronProtocol.getDesktopScheme(false)}:` &&
+        url.protocol !== `${ElectronProtocol.getDesktopScheme(true)}:`) ||
       url.hostname !== "threads" ||
       url.port !== "" ||
       url.search !== "" ||
@@ -82,8 +82,8 @@ const make = Effect.gen(function* () {
       // Register both public schemes independently of Clerk. Clerk still owns
       // OAuth callbacks; its matcher accepts only the renderer root, while
       // thread links use the distinct `threads` host.
-      yield* electronApp.setAsDefaultProtocolClient(ElectronProtocol.DESKTOP_PRODUCTION_SCHEME);
-      yield* electronApp.setAsDefaultProtocolClient(ElectronProtocol.DESKTOP_DEVELOPMENT_SCHEME);
+      yield* electronApp.setAsDefaultProtocolClient(ElectronProtocol.getDesktopScheme(false));
+      yield* electronApp.setAsDefaultProtocolClient(ElectronProtocol.getDesktopScheme(true));
 
       const initialLink = findDesktopThreadDeepLink(process.argv);
       if (initialLink !== null) {
