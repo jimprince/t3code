@@ -38,14 +38,14 @@ interface HeadlessUpdateCheckDeps {
   readonly cooldownMs?: number;
 }
 
-export function resolveHeadlessUpdateServicePath(env: NodeJS.ProcessEnv = process.env): string {
+function resolveHeadlessUpdateServicePath(env: NodeJS.ProcessEnv = process.env): string {
   return (
     env.T3CODE_HEADLESS_UPDATE_SERVICE_FILE ??
     NodePath.join(NodeOS.homedir(), ".config/systemd/user", resolveHeadlessUpdateServiceName(env))
   );
 }
 
-export function resolveHeadlessUpdateServiceName(env: NodeJS.ProcessEnv = process.env): string {
+function resolveHeadlessUpdateServiceName(env: NodeJS.ProcessEnv = process.env): string {
   return env.T3CODE_HEADLESS_UPDATE_SERVICE ?? DEFAULT_SERVICE_NAME;
 }
 
