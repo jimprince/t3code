@@ -8,7 +8,7 @@ import {
   forkMigrationEntries,
   runForkMigrations,
 } from "../ForkMigrations.ts";
-import { migrationEntries, runMigrations } from "../Migrations.ts";
+import { migrationManifest, runMigrations } from "../Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import Migration0001 from "./001_ProviderSessionRuntimeBootGeneration.ts";
 
@@ -87,7 +87,7 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
     assert.equal(new Set(forkIds).size, forkIds.length);
     assert.notEqual(FORK_MIGRATIONS_TABLE, "effect_sql_migrations");
     assert.equal(
-      migrationEntries.some(([, name]) => String(name) === "ProviderSessionRuntimeBootGeneration"),
+      migrationManifest.some(([, name]) => String(name) === "ProviderSessionRuntimeBootGeneration"),
       false,
     );
   });
