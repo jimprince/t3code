@@ -137,7 +137,7 @@ export class SystemRecovery extends Context.Service<
   }
 >()("t3/diagnostics/SystemRecovery") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const crypto = yield* Crypto.Crypto;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const directory = yield* ProviderSessionDirectory;
