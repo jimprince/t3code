@@ -320,7 +320,7 @@ export const ProjectUploadFileResult = Schema.Struct({
 });
 export type ProjectUploadFileResult = typeof ProjectUploadFileResult.Type;
 
-export class ProjectUploadFileError extends Schema.TaggedErrorClass<ProjectUploadFileError>()(
+export class ProjectUploadFileError extends Schema.TaggedError<ProjectUploadFileError>()(
   "ProjectUploadFileError",
   {
     cwd: Schema.optional(TrimmedNonEmptyString),
