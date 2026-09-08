@@ -56,7 +56,7 @@ export class DesktopDeepLink extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopDeepLink") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const electronApp = yield* ElectronApp.ElectronApp;
   const desktopWindow = yield* DesktopWindow.DesktopWindow;
   const ready = yield* Ref.make(false);
