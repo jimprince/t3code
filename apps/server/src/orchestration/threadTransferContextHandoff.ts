@@ -5,8 +5,8 @@ import type {
 } from "@t3tools/contracts";
 
 export const THREAD_TRANSFER_IMPORTED_ACTIVITY_KIND = "thread.imported";
-export const THREAD_TRANSFER_CONTEXT_HANDOFF_RUNTIME_KEY = "threadTransferContextHandoff";
-export const DEFAULT_TRANSFERRED_HISTORY_MAX_CHARS = 64 * 1024;
+const THREAD_TRANSFER_CONTEXT_HANDOFF_RUNTIME_KEY = "threadTransferContextHandoff";
+const DEFAULT_TRANSFERRED_HISTORY_MAX_CHARS = 64 * 1024;
 
 interface ThreadTransferImportedActivityPayload {
   readonly exportedAt: string;
