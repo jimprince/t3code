@@ -53,7 +53,7 @@ import * as Path from "effect/Path";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
-import { checkpointRefForThreadTurn, CHECKPOINT_REFS_PREFIX } from "../../checkpointing/Utils.ts";
+import { checkpointRefForThreadTurn } from "../../checkpointing/Utils.ts";
 import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { VcsProcess } from "../../vcs/VcsProcess.ts";
@@ -482,7 +482,8 @@ const make = Effect.gen(function* () {
       const branchTipSha = branchTip.stdout.trim();
 
       // Checkpoint refs that actually exist in the repository.
-      const refPrefix = `${CHECKPOINT_REFS_PREFIX}/${Encoding.encodeBase64Url(thread.id)}`;
+      const baselineRef = checkpointRefForThreadTurn(thread.id, 0);
+      const refPrefix = baselineRef.slice(0, -"/turn/0".length);
       const refsListed = yield* git({
         operation: "ThreadTransfer.export.listCheckpointRefs",
         cwd,
@@ -507,7 +508,6 @@ const make = Effect.gen(function* () {
       const checkpointRefs = transferableCheckpoints.map((checkpoint) => checkpoint.checkpointRef);
       // Carry the pre-turn baseline ref too when present so revert-to-start
       // keeps working on the target machine.
-      const baselineRef = checkpointRefForThreadTurn(thread.id, 0);
       if (existingRefs.has(baselineRef) && !checkpointRefs.includes(baselineRef)) {
         checkpointRefs.push(baselineRef);
       }
