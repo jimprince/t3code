@@ -27,7 +27,7 @@ set -euo pipefail
 printf '%s\\n' "$*" >> "$CALL_LOG"
 if [[ "$*" == 'run typecheck' && "$GATE_MODE" == fail ]]; then exit 42; fi
 if [[ "$*" == 'run knip:check' && "$GATE_MODE" == knip-fail ]]; then exit 43; fi
-if [[ "$*" == 'run --filter t3 test' && "$GATE_MODE" == mutate ]]; then echo changed > tracked.txt; fi
+if [[ "$*" == 'run --filter t3 test --bail=1' && "$GATE_MODE" == mutate ]]; then echo changed > tracked.txt; fi
 `,
         );
         repo.writeFile("tracked.txt", "original\n");
@@ -51,13 +51,13 @@ if [[ "$*" == 'run --filter t3 test' && "$GATE_MODE" == mutate ]]; then echo cha
         if (mode !== "knip-fail") assert.include(calls, "run typecheck\n");
         if (mode === "pass") {
           assert.strictEqual(result.status, 0, `${result.stdout}\n${result.stderr}`);
-          assert.include(calls, "run --filter t3 test\n");
+          assert.include(calls, "run --filter t3 test --bail=1\n");
         } else if (mode === "knip-fail") {
           assert.strictEqual(result.status, 43);
           assert.notInclude(calls, "run typecheck\n");
         } else if (mode === "fail") {
           assert.strictEqual(result.status, 42);
-          assert.notInclude(calls, "run --filter t3 test\n");
+          assert.notInclude(calls, "run --filter t3 test --bail=1\n");
         } else {
           assert.notStrictEqual(result.status, 0);
           assert.include(result.stderr, "Verification changed the candidate");

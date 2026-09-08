@@ -371,7 +371,10 @@ installs frozen dependencies, validates the complete stack, documentation and
 release notes, invokes `scripts/ci/verify-source`, and rejects source mutation.
 The shared source gate owns Knip, lint/format, typechecks and tests. GitHub CI
 uses its `check`, `test-other` and sharded `test-server` phases; the bot runs
-the same commands without sharding. Platform build and artifact smoke checks
+the same commands without sharding. Server tests use `--bail=1` so a failing
+run stops scheduling further tests; already running tests still finish. A green
+gate still requires every test, and repair attempts rerun the complete gate.
+Platform build and artifact smoke checks
 remain in CI/release jobs. Do not copy the source command list into bot config.
 
 Batch completed concerns before one leased publication. The nightly push gate

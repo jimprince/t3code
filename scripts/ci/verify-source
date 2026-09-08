@@ -18,7 +18,7 @@ case "$phase" in
     vp run --parallel --concurrency-limit 4 --filter '!t3' --filter '!@t3tools/monorepo' test
     ;;
   test-server)
-    vp run --filter t3 test "$@"
+    vp run --filter t3 test --bail=1 "$@"
     ;;
   test)
     "$0" test-other
