@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ecff602b1bde13b64c496a53988cd8409a74c315",
-  "head": "a98710f5573a9b6fdc116e1b3b3db3847ba5da15",
+  "prev": "e1a6bc62e1b32c4439f77ab173c10f7b6dc1524e",
+  "head": "ada6dc116f41461a5b5b2b9a08b10714ef977d77",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -12,11 +12,11 @@
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
-    "fork-project-selection"
+    "fork-project-selection",
+    "fork-private-connection-defaults",
+    "fork-resource-recovery"
   ],
   "unapplied": [
-    "fork-private-connection-defaults",
-    "fork-resource-recovery",
     "fork-workspace-file-uploads",
     "fork-attachment-compatibility",
     "fork-remote-file-downloads",
@@ -82,7 +82,7 @@
       "oid": "e02cb00f335ec6faaec541ea63c3d2313a7a967d"
     },
     "fork-private-connection-defaults": {
-      "oid": "1ccbb1f01a41da0872cf18fe2cc9f0cf6c6e4d1e"
+      "oid": "a08df7c0a916ae97c083b786617a3b2d01006320"
     },
     "fork-project-selection": {
       "oid": "a98710f5573a9b6fdc116e1b3b3db3847ba5da15"
@@ -97,7 +97,7 @@
       "oid": "23f786288c3c1731a600d3a0ad478f56dff4cf23"
     },
     "fork-resource-recovery": {
-      "oid": "f547e1ea3ea428c9ffa4fe273ac8544ee7d1fc52"
+      "oid": "ada6dc116f41461a5b5b2b9a08b10714ef977d77"
     },
     "fork-thread-client-recovery": {
       "oid": "f74dc1f0582914f85237a5eee1ec554cb800d051"
