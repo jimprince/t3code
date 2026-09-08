@@ -9,7 +9,7 @@ import * as Effect from "effect/Effect";
 
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
 import { makeComponentLogger } from "./DesktopObservability.ts";
-import { getDesktopOrigin } from "../electron/ElectronProtocol.ts";
+import * as ElectronProtocol from "../electron/ElectronProtocol.ts";
 
 const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 const { logInfo, logWarning } = makeComponentLogger("system-pressure-monitor");
@@ -139,7 +139,10 @@ export const install = Effect.gen(function* () {
         executablePath,
         settingsPath: environment.serverSettingsPath,
         statePath: NodePath.join(environment.stateDir, "system-pressure.json"),
-        recoveryUrl: `${getDesktopOrigin(environment.isDevelopment)}/settings/diagnostics?recovery=1`,
+        recoveryUrl: new URL(
+          "settings/diagnostics?recovery=1",
+          ElectronProtocol.getDesktopUrl(environment.isDevelopment),
+        ).toString(),
       });
       NodeFS.mkdirSync(launchAgentsDir, { recursive: true });
       const tempPath = `${plistPath}.${process.pid}.tmp`;
