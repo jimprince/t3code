@@ -26,7 +26,7 @@ const PROCESS_QUERY_TIMEOUT_MS = 1_000;
 const POSIX_PROCESS_QUERY_COMMAND = "pid=,ppid=,pgid=,stat=,pcpu=,rss=,etime=,command=";
 const PROCESS_QUERY_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
 
-class ProcessDiagnosticsQueryTimeoutError extends Schema.TaggedErrorClass<ProcessDiagnosticsQueryTimeoutError>()(
+class ProcessDiagnosticsQueryTimeoutError extends Schema.TaggedError<ProcessDiagnosticsQueryTimeoutError>()(
   "ProcessDiagnosticsQueryTimeoutError",
   {
     command: Schema.String,
@@ -40,7 +40,7 @@ class ProcessDiagnosticsQueryTimeoutError extends Schema.TaggedErrorClass<Proces
   }
 }
 
-class ProcessDiagnosticsQueryFailedError extends Schema.TaggedErrorClass<ProcessDiagnosticsQueryFailedError>()(
+class ProcessDiagnosticsQueryFailedError extends Schema.TaggedError<ProcessDiagnosticsQueryFailedError>()(
   "ProcessDiagnosticsQueryFailedError",
   {
     command: Schema.String,
