@@ -105,16 +105,7 @@ jobs:
           # Fetch once; no visibility delay is needed.
           git fetch --tags origin
 
-          head_sha="$(git rev-parse HEAD)"
-          existing_release_tags="$(
-            while IFS= read -r tag; do
-              tag_sha="$(git rev-parse "${tag}^{commit}")"
-              tag_parent="$(git rev-parse "${tag}^{commit}^" 2>/dev/null || true)"
-              if [[ "$tag_sha" == "$head_sha" || "$tag_parent" == "$head_sha" ]]; then
-                echo "$tag"
-              fi
-            done < <(git tag --list 'v*')
-          )"
+          existing_release_tags="$(scripts/ci/list-release-tags-at-head)"
           if [[ -n "$existing_release_tags" ]]; then
             echo "Main already has release tag(s) at HEAD or its prepared child:"
             echo "$existing_release_tags" | sed 's/^/  /'

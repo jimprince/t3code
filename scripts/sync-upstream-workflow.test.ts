@@ -278,9 +278,11 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
         path.join(repoRoot, ".github/workflows/fork-push-nightly.yml"),
       );
 
+      // The scan itself, including the first-parent rule, is covered by
+      // scripts/ci/list-release-tags-at-head.test.ts.
       assert.include(
         workflow,
-        '"${tag}^{commit}^"',
+        "scripts/ci/list-release-tags-at-head",
         "REGRESSION: a Sync tag now points to main's stamped child, so checking only tags at HEAD double-publishes the same main rewrite",
       );
     }),
