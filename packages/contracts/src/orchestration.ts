@@ -2127,7 +2127,7 @@ export class OrchestrationSearchThreadsError extends Schema.TaggedError<Orchestr
     cause: Schema.optional(Schema.Defect()),
   },
 ) {}
-export class OrchestrationForkThreadError extends Schema.TaggedErrorClass<OrchestrationForkThreadError>()(
+export class OrchestrationForkThreadError extends Schema.TaggedError<OrchestrationForkThreadError>()(
   "OrchestrationForkThreadError",
   {
     message: TrimmedNonEmptyString,
