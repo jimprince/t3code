@@ -9,7 +9,7 @@ import {
 } from "effect/unstable/http";
 
 /** Only sanitized diagnostics cross the adapter boundary; tokens and response bodies never do. */
-class GiteaApiError extends Schema.TaggedErrorClass<GiteaApiError>()("GiteaApiError", {
+class GiteaApiError extends Schema.TaggedError<GiteaApiError>()("GiteaApiError", {
   detail: Schema.String,
   status: Schema.optional(Schema.Number),
 }) {}
