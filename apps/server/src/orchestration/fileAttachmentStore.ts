@@ -33,10 +33,10 @@ import * as FileSystem from "effect/FileSystem";
 import { createAttachmentId } from "../attachmentStore.ts";
 import { parseBase64DataUrl } from "../imageMime.ts";
 
-export const FILE_ATTACHMENTS_TMP_DIR_NAME = "t3-file-attachments";
-export const FILE_ATTACHMENT_SWEEP_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
+const FILE_ATTACHMENTS_TMP_DIR_NAME = "t3-file-attachments";
+const FILE_ATTACHMENT_SWEEP_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
-export function fileAttachmentsTmpRoot(): string {
+function fileAttachmentsTmpRoot(): string {
   return NodePath.join(NodeOS.tmpdir(), FILE_ATTACHMENTS_TMP_DIR_NAME);
 }
 
