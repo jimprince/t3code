@@ -153,14 +153,11 @@ export const TerminalEvent = Schema.Union([
 ]);
 export type TerminalEvent = typeof TerminalEvent.Type;
 
-export class TerminalCwdError extends Schema.TaggedError<TerminalCwdError>()(
-  "TerminalCwdError",
-  {
-    cwd: Schema.String,
-    reason: Schema.Literals(["notFound", "notDirectory", "statFailed"]),
-    cause: Schema.optional(Schema.Defect()),
-  },
-) {
+export class TerminalCwdError extends Schema.TaggedError<TerminalCwdError>()("TerminalCwdError", {
+  cwd: Schema.String,
+  reason: Schema.Literals(["notFound", "notDirectory", "statFailed"]),
+  cause: Schema.optional(Schema.Defect()),
+}) {
   override get message() {
     if (this.reason === "notDirectory") {
       return `Terminal cwd is not a directory: ${this.cwd}`;
