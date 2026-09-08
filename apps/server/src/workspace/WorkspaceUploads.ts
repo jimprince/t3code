@@ -68,7 +68,7 @@ export class WorkspaceUploads extends Context.Service<
   }
 >()("t3/workspace/WorkspaceUploads") {}
 
-export const make = Effect.gen(function* () {
+const make = Effect.gen(function* () {
   const workspacePaths = yield* WorkspacePaths.WorkspacePaths;
   const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
 
