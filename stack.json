@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "8186e1283e38d7df36ad36cd606caa4637f5d1be",
-  "head": "0260b49c32969faa93ea8a223802f1953c952d48",
+  "prev": "2a0c6bb94b15bfdcb66244a93edb90fe779c7159",
+  "head": "95262433c9390ba95f5fd0eeb3dfd081e227299d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -29,10 +29,11 @@
     "fork-desktop-delivery",
     "fork-mobile-delivery",
     "fork-release-publication",
-    "fork-maintenance-automation",
+    "fork-maintenance-automation"
+  ],
+  "unapplied": [
     "fork-gitea-pr-browser"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
