@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "607a95201cc91896499a4f284a411ccacc8f51c6",
-  "head": "35018f17d77e992470cb54d0fe9e18f0c84cc066",
+  "prev": "7bad5d9b9b4fade488268c622157e60a56935193",
+  "head": "34a89b34ca4f61298a18c02c1498c405cd3be6a9",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -16,8 +16,7 @@
     "fork-private-connection-defaults",
     "fork-resource-recovery",
     "fork-workspace-file-uploads",
-    "fork-attachment-compatibility",
-    "refresh-temp"
+    "fork-attachment-compatibility"
   ],
   "unapplied": [
     "fork-remote-file-downloads",
@@ -38,7 +37,7 @@
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
-      "oid": "f8954e54c03dbd210b9c42c26783ae6cf8c2ed77"
+      "oid": "34a89b34ca4f61298a18c02c1498c405cd3be6a9"
     },
     "fork-bounded-diagnostics": {
       "oid": "80732b0177dd921f4a9dfa85efee1ce9cb684e03"
@@ -120,9 +119,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "6cd3c1cd4cd81f0a375eb7bd6abb45c8e842e752"
-    },
-    "refresh-temp": {
-      "oid": "35018f17d77e992470cb54d0fe9e18f0c84cc066"
     }
   }
 }
