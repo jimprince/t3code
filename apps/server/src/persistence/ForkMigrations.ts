@@ -1,6 +1,5 @@
 /** Fork-owned migrations, tracked separately from upstream's migration sequence. */
 import * as Effect from "effect/Effect";
-import * as Layer from "effect/Layer";
 import * as Migrator from "effect/unstable/sql/Migrator";
 
 import Migration0001 from "./ForkMigrations/001_ProviderSessionRuntimeBootGeneration.ts";
@@ -13,7 +12,7 @@ export const forkMigrationEntries = [
   [2, "ProviderSessionRuntimeActiveTurn", Migration0002],
 ] as const;
 
-export const makeForkMigrationLoader = (throughId?: number) =>
+const makeForkMigrationLoader = (throughId?: number) =>
   Migrator.fromRecord(
     Object.fromEntries(
       forkMigrationEntries
@@ -41,5 +40,3 @@ export const runForkMigrations = Effect.fn("runForkMigrations")(function* ({
     : Effect.log("Fork migrations ran successfully").pipe(Effect.annotateLogs({ migrations }));
   return executedMigrations;
 });
-
-export const ForkMigrationsLive = Layer.effectDiscard(runForkMigrations());
