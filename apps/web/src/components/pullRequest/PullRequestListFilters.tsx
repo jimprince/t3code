@@ -438,14 +438,7 @@ function PullRequestHiddenProjectsFilter({
                 }
               >
                 <span className="flex min-w-0 items-center gap-2">
-                  <ProjectFavicon
-                    environmentId={project.environmentId}
-                    cwd={project.workspaceRoot}
-                    projectName={project.title}
-                    faviconPath={project.faviconPath ?? null}
-                    projectIcon={project.projectIcon ?? null}
-                    className="size-3.5"
-                  />
+                  <ProjectFavicon project={project} className="size-3.5" />
                   <span className="min-w-0 flex-1 truncate">
                     {project.title}
                     {hasDuplicateTitle ? ` (${serverLabel ?? project.environmentId})` : ""}
