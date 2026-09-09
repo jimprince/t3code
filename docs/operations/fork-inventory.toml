@@ -289,8 +289,6 @@ date = "2026-09-09"
 decided = "adapt"
 rationale = "Brad clarified that Socrates uses Gitea while T3Fork uses GitHub. Honor each selected branch's configured upstream before default remote preference, preserve explicit remote choices, and name unresolved remote refs with recovery guidance. No persisted or wire-schema changes."
 
-note = "Fetches any explicitly selected configured remote, including custom and nested names. Bare branch names prefer gitea then origin; failed fetches and absent defaults never silently fall back locally."
-
 [[patch]]
 name = "fork-pr-dismissal"
 subject = "feat(web): dismiss pull requests in bulk"
