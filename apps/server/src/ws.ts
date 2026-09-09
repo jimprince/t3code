@@ -128,7 +128,6 @@ import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import * as VcsStatusBroadcaster from "./vcs/VcsStatusBroadcaster.ts";
 import * as VcsProvisioningService from "./vcs/VcsProvisioningService.ts";
 import * as GitWorkflowService from "./git/GitWorkflowService.ts";
-import { selectRemoteWorktreeBase } from "./git/remoteWorktreeBase.ts";
 import * as ReviewService from "./review/ReviewService.ts";
 import * as ProjectSetupScriptRunner from "./project/ProjectSetupScriptRunner.ts";
 import * as AgentSessionScanner from "./project/AgentSessionScanner.ts";
@@ -1131,19 +1130,14 @@ const makeWsRpcLayer = (
 
             if (bootstrap?.prepareWorktree) {
               let worktreeBaseRef = bootstrap.prepareWorktree.baseBranch;
-              // Keep the persisted startFromOrigin key for compatibility, but
-              // make it mean "start from the selected remote". An explicitly
-              // qualified configured remote wins; otherwise gitea is preferred
-              // over origin so repos never need to rename their remotes.
+              // Preserve the persisted key while respecting explicit remote
+              // selections and the selected local branch's tracking configuration.
               if (bootstrap.prepareWorktree.startFromOrigin === true) {
-                const remoteNames = yield* gitWorkflow.listRemoteNames(
-                  bootstrap.prepareWorktree.projectCwd,
-                );
-                const remoteName = selectRemoteWorktreeBase({
+                const remoteBase = yield* gitWorkflow.resolveRemoteWorktreeBase({
+                  cwd: bootstrap.prepareWorktree.projectCwd,
                   baseBranch: bootstrap.prepareWorktree.baseBranch,
-                  remoteNames,
                 });
-                if (!remoteName) {
+                if (!remoteBase) {
                   return yield* new GitCommandError({
                     operation: "worktree bootstrap",
                     command: "git remote get-url gitea|origin",
@@ -1154,12 +1148,12 @@ const makeWsRpcLayer = (
                 }
                 yield* gitWorkflow.fetchRemote({
                   cwd: bootstrap.prepareWorktree.projectCwd,
-                  remoteName,
+                  remoteName: remoteBase.remoteName,
                 });
                 const resolvedRemoteBase = yield* gitWorkflow.resolveRemoteTrackingCommit({
                   cwd: bootstrap.prepareWorktree.projectCwd,
-                  refName: bootstrap.prepareWorktree.baseBranch,
-                  fallbackRemoteName: remoteName,
+                  refName: remoteBase.refName,
+                  fallbackRemoteName: remoteBase.remoteName,
                 });
                 worktreeBaseRef = resolvedRemoteBase.commitSha;
               }

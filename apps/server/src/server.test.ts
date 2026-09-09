@@ -10591,10 +10591,20 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
-  for (const baseBranch of ["main", "upstream/main"]) {
-    const selectedRemote = baseBranch === "main" ? "gitea" : "upstream";
+  for (const [baseBranch, trackingRemote, selectedRemote, remoteBranch] of [
+    ["main", null, "gitea", "main"],
+    ["upstream/main", "origin", "upstream", "main"],
+    [
+      "fix/thread-transfer-context-handoff",
+      "origin",
+      "origin",
+      "fix/thread-transfer-context-handoff",
+    ],
+    ["socrates-feature", "gitea", "gitea", "socrates-feature"],
+    ["local-alias", "origin", "origin", "main"],
+  ] as const) {
     it.effect(
-      `bootstraps first-send worktree turns from freshly fetched ${selectedRemote} before dispatching turn start`,
+      `bootstraps first-send worktree turns from freshly fetched ${selectedRemote} for ${baseBranch} before dispatching turn start`,
       () =>
         Effect.gen(function* () {
           const dispatchedCommands: Array<OrchestrationCommand> = [];
@@ -10638,7 +10648,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
                 bootstrapGitOperations.push("resolve-remote-commit");
                 return {
                   commitSha: fetchedGiteaCommit,
-                  remoteRefName: `${selectedRemote}/main`,
+                  remoteRefName: `${selectedRemote}/${remoteBranch}`,
                 };
               }),
           );
@@ -10673,6 +10683,14 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             layers: {
               gitVcsDriver: {
                 listRemoteNames,
+                readConfigValue: (_cwd, key) =>
+                  Effect.succeed(
+                    key === `branch.${baseBranch}.remote`
+                      ? trackingRemote
+                      : key === `branch.${baseBranch}.merge` && trackingRemote
+                        ? `refs/heads/${remoteBranch}`
+                        : null,
+                  ),
                 fetchRemote,
                 resolveRemoteTrackingCommit,
                 createWorktree,
@@ -10759,7 +10777,10 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           });
           assert.deepEqual(resolveRemoteTrackingCommit.mock.calls[0]?.[0], {
             cwd: "/tmp/project",
-            refName: baseBranch,
+            refName:
+              trackingRemote && !baseBranch.startsWith("upstream/")
+                ? `${trackingRemote}/${remoteBranch}`
+                : baseBranch,
             fallbackRemoteName: selectedRemote,
           });
           assert.deepEqual(bootstrapGitOperations, [
@@ -10825,6 +10846,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
           layers: {
             gitVcsDriver: {
               listRemoteNames,
+              readConfigValue: () => Effect.succeed(null),
               fetchRemote,
               resolveRemoteTrackingCommit,
               createWorktree,
