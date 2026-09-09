@@ -184,6 +184,7 @@ describe("ProviderCommandReactor", () => {
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly stopSessionEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly importedHistory?: boolean;
+    readonly onTurnStartFailure?: () => Effect.Effect<void>;
     readonly sendTurnEffect?: ProviderServiceShape["sendTurn"];
     readonly startSessionEffect?: (
       session: ProviderSession,
@@ -502,7 +503,15 @@ describe("ProviderCommandReactor", () => {
               command.type === "thread.session.set" && command.session.status === "ready"
                 ? (input?.beforeReadySessionDispatch?.() ?? Effect.void)
                 : Effect.void
-            ).pipe(Effect.andThen(engine.dispatch(command)));
+            ).pipe(
+              Effect.andThen(engine.dispatch(command)),
+              Effect.tap(() =>
+                command.type === "thread.activity.append" &&
+                command.activity.kind === "provider.turn.start.failed"
+                  ? (input?.onTurnStartFailure?.() ?? Effect.void)
+                  : Effect.void,
+              ),
+            );
           },
           get streamDomainEvents() {
             return engine.streamDomainEvents;
@@ -847,14 +856,18 @@ describe("ProviderCommandReactor", () => {
   effectIt.effect("preserves an active turn when a concurrent follow-up is rejected", () =>
     Effect.gen(function* () {
       const rejected = yield* Deferred.make<void>();
+      const started = yield* Deferred.make<void>();
       let attempts = 0;
       const harness = yield* Effect.promise(() =>
         createHarness({
+          onTurnStartFailure: () => Deferred.succeed(rejected, undefined).pipe(Effect.asVoid),
           sendTurnEffect: (input) => {
             attempts += 1;
             return attempts === 1
-              ? Effect.succeed({ threadId: input.threadId, turnId: asTurnId("turn-1") })
-              : Deferred.succeed(rejected, undefined).pipe(
+              ? Deferred.succeed(started, undefined).pipe(
+                  Effect.as({ threadId: input.threadId, turnId: asTurnId("turn-1") }),
+                )
+              : Effect.void.pipe(
                   Effect.andThen(
                     Effect.fail(
                       new ProviderAdapterRequestError({
@@ -880,6 +893,7 @@ describe("ProviderCommandReactor", () => {
           createdAt: "2026-01-01T00:00:00.000Z",
         });
       yield* dispatchTurn("original");
+      yield* Deferred.await(started);
       yield* Effect.promise(() => harness.drain());
       const binding = harness.readProviderBinding();
       expect(binding).toBeDefined();
