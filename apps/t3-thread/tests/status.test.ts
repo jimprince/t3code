@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import { buildFollowUpMessage } from "../src/agentPrompts.js";
-import { classifyThread } from "../src/status.js";
+import { classifyThread, subscriptionBaselineTurnId } from "../src/status.js";
 import type { OrchestrationThread, OrchestrationThreadShell } from "../src/types.js";
 
 function makeThread(overrides: Partial<OrchestrationThread> = {}): OrchestrationThread {
@@ -202,5 +202,53 @@ describe("buildFollowUpMessage", () => {
 
   it("provides a default completion prompt", () => {
     expect(buildFollowUpMessage("complete")).toContain("Completion request:");
+  });
+});
+
+describe("subscriptionBaselineTurnId", () => {
+  // t3code-fork#49: subscribing to an idle source must not replay its old state,
+  // but subscribing mid-turn must still route that turn's completion.
+  const turn = {
+    turnId: "turn-1",
+    requestedAt: "2026-04-15T00:00:00.000Z",
+    startedAt: "2026-04-15T00:00:01.000Z",
+    completedAt: null,
+    assistantMessageId: null,
+  };
+
+  it("baselines a completed or errored source on its latest turn", () => {
+    expect(
+      subscriptionBaselineTurnId(
+        makeThread({
+          latestTurn: { ...turn, state: "completed", completedAt: "2026-04-15T00:00:02.000Z" },
+        }),
+      ),
+    ).toBe("turn-1");
+    expect(
+      subscriptionBaselineTurnId(makeThread({ latestTurn: { ...turn, state: "error" } })),
+    ).toBe("turn-1");
+  });
+
+  it("keeps no baseline for a source that is still mid-turn or has no turn", () => {
+    expect(
+      subscriptionBaselineTurnId(makeThread({ latestTurn: { ...turn, state: "running" } })),
+    ).toBeNull();
+    expect(
+      subscriptionBaselineTurnId(
+        makeThread({
+          latestTurn: { ...turn, state: "completed", completedAt: "2026-04-15T00:00:02.000Z" },
+          session: {
+            threadId: "thread-1",
+            status: "running",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: "turn-1",
+            lastError: null,
+            updatedAt: "2026-04-15T00:00:02.000Z",
+          },
+        }),
+      ),
+    ).toBeNull();
+    expect(subscriptionBaselineTurnId(makeThread({ latestTurn: null }))).toBeNull();
   });
 });

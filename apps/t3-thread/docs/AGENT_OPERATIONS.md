@@ -417,7 +417,7 @@ Current scope note:
 
 - `subscribe` / `unsubscribe` manage local routing state.
 - `subscribe` rejects self-subscriptions so a coordinator thread cannot watch itself.
-- `subscribe` records the source's current turn as a baseline. Attention for that turn is never routed, so subscribing to a thread that already completed or errored does not replay that old state; only turns started after the subscription count.
+- `subscribe` records the source's current turn as a baseline when the source is already idle, completed, or errored. Attention for that turn is never routed, so subscribing does not replay old state; only turns started after the subscription count. Subscribing to a source that is still mid-turn keeps no baseline, so that turn's completion still routes.
 - When the source moves on before an event is delivered, the older undelivered events on that route become `superseded` (terminal) and only the newest is delivered. A completed-turn backlog therefore costs the recipient one turn, not one per stale event.
 - `watch` polls the current snapshot-backed deployment in two phases: detection persists deduplicated notification events, then delivery claims pending events and attempts routed sends. The same pass drains queued sends at their next turn boundary.
 - Delivery order is oldest event first, and at most one notification per recipient per pass, because delivering one starts a turn on the recipient.

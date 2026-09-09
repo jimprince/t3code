@@ -22,7 +22,7 @@ import {
   needsAttention,
   summarizeMessageText,
 } from "./monitor.js";
-import { classifyThread, formatThreadLine } from "./status.js";
+import { classifyThread, formatThreadLine, subscriptionBaselineTurnId } from "./status.js";
 import {
   assertNotSelfSubscription,
   buildSubscriptionRecord,
@@ -773,14 +773,15 @@ agent
         subscription.subscriberThreadId === caller.threadId &&
         subscription.sourceThreadId === source.threadId,
     );
-    // Whatever state the source is in right now predates this subscription and
-    // must not be routed as a new event. Only turns started afterwards count.
+    // A source that is already idle when the subscription is created must not
+    // have that old state routed as a new event; a source still mid-turn keeps
+    // no baseline so the subscriber hears how that turn ends.
     let baselineTurnId: string | null = null;
     try {
       const sourceThread = await new RemoteEnvironmentClient(
         requireEnvironment(state, source.environment),
       ).findThread(source.threadId);
-      baselineTurnId = sourceThread.latestTurn?.turnId ?? null;
+      baselineTurnId = subscriptionBaselineTurnId(sourceThread);
     } catch {
       // Unreachable source: subscribe anyway without a baseline.
     }
