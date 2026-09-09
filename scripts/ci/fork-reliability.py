@@ -346,6 +346,10 @@ def target(r, s):
     return m[0] if m else None
 
 
+annotation_path = O / "classifications.json"
+reviewed_classes = (
+    json.loads(annotation_path.read_text()) if annotation_path.exists() else {}
+)
 runs = []
 targets = collections.defaultdict(list)
 for w in ["sync-upstream.yml", "fork-push-nightly.yml", "release.yml", "ci.yml"]:
@@ -359,6 +363,15 @@ for w in ["sync-upstream.yml", "fork-push-nightly.yml", "release.yml", "ci.yml"]
         r["target"] = (
             read("ci-targets.json").get(str(r["id"])) if w == "ci.yml" else target(r, s)
         )
+        r["target_evidence"] = (
+            "CI ancestry" if w == "ci.yml" else "workflow log or release ref"
+        )
+        if not r["target"]:
+            classification = reviewed_classes.get(
+                f"{r['id']}:{r['run_attempt']}", reviewed_classes.get(str(r["id"]), {})
+            )
+            r["target"] = classification.get("target")
+            r["target_evidence"] = "reviewed annotation" if r["target"] else "unknown"
         r["workflow_file"] = w
         r["patches"] = sorted(set(re.findall(r"failing patch: (fork-[\w-]+)", s)))
         files = []
