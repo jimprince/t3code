@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect } from "vite-plus/test";
+import { it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import { resolveRemoteWorktreeBase, selectRemoteWorktreeBase } from "./remoteWorktreeBase.ts";
 
@@ -20,7 +21,7 @@ describe("selectRemoteWorktreeBase", () => {
 });
 
 describe("resolveRemoteWorktreeBase", () => {
-  it.each([
+  it.effect.each([
     [
       "feature",
       "origin",
@@ -39,17 +40,17 @@ describe("resolveRemoteWorktreeBase", () => {
     ["feature", null, null, { remoteName: "gitea", refName: "feature" }],
     ["feature", ".", "refs/heads/main", { remoteName: "gitea", refName: "feature" }],
     ["feature", "removed", "refs/heads/feature", null],
-  ])("resolves %s tracking %s %s", async (baseBranch, remote, merge, expected) => {
-    const result = await Effect.runPromise(
-      resolveRemoteWorktreeBase(
+  ] as const)("resolves %s tracking %s %s", ([baseBranch, remote, merge, expected]) =>
+    Effect.gen(function* () {
+      const result = yield* resolveRemoteWorktreeBase(
         {
           listRemoteNames: () => Effect.succeed(["gitea", "origin", "team", "team/upstream"]),
           readConfigValue: (_cwd, key) =>
             Effect.succeed(key === `branch.${baseBranch}.remote` ? remote : merge),
         },
         { cwd: "/workspace", baseBranch },
-      ),
-    );
-    expect(result).toEqual(expected);
-  });
+      );
+      expect(result).toEqual(expected);
+    }),
+  );
 });
