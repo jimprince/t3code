@@ -1,6 +1,7 @@
 import {
   type AgentSessionImportSource,
   ChatAttachment,
+  ChatFileHandoffAttachment,
   CheckpointRef,
   EventId,
   MessageId,
@@ -699,6 +700,22 @@ projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
           hasTransferredHistory: false,
         }),
       );
+      const fileAttachments = [{ ...attachments[0]!, path: "/tmp/notes.txt" }];
+      const fileAttachmentsJson = yield* Schema.encodeEffect(
+        Schema.fromJsonString(Schema.Array(ChatFileHandoffAttachment)),
+      )(fileAttachments);
+      yield* sql`
+        UPDATE projection_thread_messages
+        SET file_attachments_json = ${fileAttachmentsJson}
+        WHERE message_id = ${messageId}
+      `;
+      const legacyContext = yield* query.getTurnStartMessage({ threadId, messageId });
+      assert.equal(legacyContext._tag, "Some");
+      if (legacyContext._tag === "Some") {
+        assert.deepEqual(legacyContext.value.message.fileAttachments, fileAttachments);
+        assert.deepEqual(legacyContext.value.message.attachments, attachments);
+      }
+
       assert.equal(
         (yield* query.getTurnStartMessage({
           threadId: ThreadId.make("thread-turn-start-unrelated"),
