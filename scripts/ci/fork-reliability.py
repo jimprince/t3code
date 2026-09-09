@@ -30,6 +30,16 @@ parser.add_argument(
         "~/Programming/ci-repair-bot/state/ci-repair-bot.sqlite3"
     ),
 )
+parser.add_argument(
+    "--gitea",
+    action="store_true",
+    help="Collect reviewed issues using GITEA_API_URL and GITEA_TOKEN",
+)
+parser.add_argument(
+    "--memory-dir",
+    type=pathlib.Path,
+    default=pathlib.Path.home() / ".shared/memories/projects/t3code-fork",
+)
 args = parser.parse_args()
 if args.from_date > args.to_date:
     parser.error("from-date must not be after to-date")
@@ -56,6 +66,48 @@ if args.collect:
 
     ROOT = args.output / "evidence"
     ROOT.mkdir(exist_ok=True)
+
+    # Preserve contextual evidence separately from measured run outcomes. These notes
+    # never silently turn an unknown intervention or failure cause into a known one.
+    import shutil
+
+    if args.memory_dir.is_dir():
+        context = ROOT / "project-memory"
+        context.mkdir(exist_ok=True)
+        for note in args.memory_dir.glob("*.md"):
+            shutil.copyfile(note, context / note.name)
+    if args.gitea:
+        import urllib.request
+
+        api = os.environ["GITEA_API_URL"].rstrip("/")
+        token = os.environ["GITEA_TOKEN"]
+        for repo, issues in {
+            "ci-repair-bot": [5, 6, 47, 54],
+            "t3code-fork": [1, 6, 40],
+        }.items():
+            for issue in issues:
+                path = f"{api}/repos/brad/{repo}/issues/{issue}"
+                request = urllib.request.Request(
+                    path, headers={"Authorization": "token " + token}
+                )
+                with urllib.request.urlopen(request) as response:
+                    (ROOT / f"{repo}-{issue}.json").write_bytes(response.read())
+                comments = []
+                page = 1
+                while True:
+                    request = urllib.request.Request(
+                        f"{path}/comments?limit=50&page={page}",
+                        headers={"Authorization": "token " + token},
+                    )
+                    with urllib.request.urlopen(request) as response:
+                        batch = json.load(response)
+                    comments.extend(batch)
+                    if len(batch) < 50:
+                        break
+                    page += 1
+                (ROOT / f"{repo}-{issue}-comments.json").write_text(
+                    json.dumps(comments, indent=2)
+                )
 
     def gh(path):
         p = subprocess.run(
@@ -297,7 +349,12 @@ def target(r, s):
 runs = []
 targets = collections.defaultdict(list)
 for w in ["sync-upstream.yml", "fork-push-nightly.yml", "release.yml", "ci.yml"]:
-    for r in read(w + ".json"):
+    attempts = read(w + ".json") + [
+        r for r in read("previous-attempts.json") if r.get("workflow_file") == w
+    ]
+    for r in sorted(
+        attempts, key=lambda r: (r["created_at"], r["id"], r["run_attempt"])
+    ):
         s = log(r)
         r["target"] = (
             read("ci-targets.json").get(str(r["id"])) if w == "ci.yml" else target(r, s)
@@ -365,6 +422,7 @@ for tag, rs in sorted(targets.items()):
     row = {
         "target": tag,
         "sync_runs": [r["id"] for r in sync],
+        "sync_attempts": [f"{r['id']}:{r['run_attempt']}" for r in sync],
         "sync_outcomes": [
             r["conclusion"] + (" (no-op)" if r["noop"] else "") for r in sync
         ],
@@ -394,7 +452,7 @@ for tag, rs in sorted(targets.items()):
 (O / "updates.json").write_text(json.dumps(rows, indent=2))
 (O / "runs.json").write_text(json.dumps(runs, indent=2))
 with (O / "updates.csv").open("w", newline="") as f:
-    wr = csv.DictWriter(f, fieldnames=list(rows[0]))
+    wr = csv.DictWriter(f, fieldnames=list(rows[0]) if rows else ["target"])
     wr.writeheader()
     wr.writerows(
         {k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in r.items()}
@@ -449,6 +507,12 @@ snap = read("evidence/stack-publications.json")
 classes = read("classifications.json")
 botclasses = read("bot-classifications.json")
 runs = read("runs.json")
+run_ids = {str(r["id"]) for r in runs}
+classes = {k: v for k, v in classes.items() if k.split(":")[0] in run_ids}
+bot_ids = {
+    r["run_id"] for r in bot if args.from_date <= r["created_at"][:10] <= args.to_date
+}
+botclasses = {k: v for k, v in botclasses.items() if k in bot_ids}
 
 
 def dt(v):
@@ -523,7 +587,7 @@ for r in rows:
         r["human_intervention"] = "not applicable"
 (p / "updates.json").write_text(json.dumps(rows, indent=2))
 with (p / "updates.csv").open("w") as f:
-    w = csv.DictWriter(f, fieldnames=list(rows[0]))
+    w = csv.DictWriter(f, fieldnames=list(rows[0]) if rows else ["target"])
     w.writeheader()
     w.writerows(
         {k: json.dumps(v) if isinstance(v, (list, dict)) else v for k, v in r.items()}
@@ -545,8 +609,8 @@ bot_ids = {
 }
 botclasses = {k: v for k, v in botclasses.items() if k in bot_ids}
 summary = {
-    "workflow_attempts": len(runs) + len(read("evidence/previous-attempts.json")),
-    "workflow_runs": len(runs),
+    "workflow_attempts": len(runs),
+    "workflow_runs": len({r["id"] for r in runs}),
     "upstream_nightlies": len(rows),
     "selection_counts": dict(collections.Counter(r["selection"] for r in rows)),
     "human_intervention_counts": dict(
@@ -561,7 +625,9 @@ summary = {
     "unknown_failure_classification_runs": [
         r["id"]
         for r in runs
-        if r["conclusion"] == "failure" and str(r["id"]) not in classes
+        if r["conclusion"] == "failure"
+        and str(r["id"]) not in classes
+        and f"{r['id']}:{r['run_attempt']}" not in classes
     ],
     "timing_coverage": sum(r["elapsed_minutes_to_main"] is not None for r in rows),
 }

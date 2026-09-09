@@ -93,6 +93,23 @@ class ReportTest(unittest.TestCase):
                 log.read_text().replace("Z Fork already", 'Z echo "Fork already')
             )
             self.assertEqual(report()["sync_outcomes"], ["success"])
+            previous = {
+                **run,
+                "run_attempt": 1,
+                "conclusion": "failure",
+                "workflow_file": "sync-upstream.yml",
+            }
+            (evidence / "previous-attempts.json").write_text(json.dumps([previous]))
+            (evidence / "sync-upstream.yml.json").write_text(
+                json.dumps([{**run, "run_attempt": 2}])
+            )
+            (evidence / "logs/1-2.txt").write_text(log.read_text())
+            row = report()
+            self.assertEqual(row["sync_outcomes"], ["failure", "success"])
+            self.assertEqual(row["sync_attempts"], ["1:1", "1:2"])
+            summary = json.loads((root / "summary.json").read_text())
+            self.assertEqual(summary["workflow_runs"], 1)
+            self.assertEqual(summary["workflow_attempts"], 2)
 
 
 if __name__ == "__main__":

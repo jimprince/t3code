@@ -422,7 +422,12 @@ python3 scripts/ci/fork-reliability.py \
 
 `--collect` reads GitHub histories/logs (including earlier attempts), the bot's
 SQLite database read-only, retained artifact filenames and immutable stack-history
-snapshots. Override `--bot-db` on another machine. Without `--collect`, the same
+snapshots, and a copy of project chronology (`--memory-dir` selects its folder).
+Add `--gitea` after loading the shared Gitea environment to collect the reviewed
+issues and all their comments through `GITEA_API_URL` / `GITEA_TOKEN`. Credentials
+are never written to outputs. Issue and memory snapshots remain contextual
+sources; reviewed annotations determine classifications and human intervention.
+Override `--bot-db` on another machine. Without `--collect`, the same
 command rebuilds outputs from cached evidence without network access. `--surface`
 compares every patch's upstream-file edits with upstream commits in the window.
 It requires a fully applied stack.
