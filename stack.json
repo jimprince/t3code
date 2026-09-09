@@ -1,11 +1,10 @@
 {
   "version": 5,
-  "prev": "feef878ee2e67d4c045893704705e49b724df716",
-  "head": "828dd04642beac8397cba37b329bef6eaf88ba08",
+  "prev": "a89e320b2418f1da54c1a2fb8e5cc54fdb1a5952",
+  "head": "35fe188e85ed75dc60131da0c19c98b2cb2be4c0",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations",
-    "refresh-temp"
+    "fork-worker-operations"
   ],
   "unapplied": [
     "fork-provider-turn-safety",
@@ -113,16 +112,13 @@
       "oid": "f741f95201385fe7d4b9add4ea03a48efec64c07"
     },
     "fork-worker-operations": {
-      "oid": "8f0ef4e3729743e461e83ec74e4f3a735ba2f769"
+      "oid": "35fe188e85ed75dc60131da0c19c98b2cb2be4c0"
     },
     "fork-workspace-file-uploads": {
       "oid": "a93c97f8e031e455a09c7b66478cd66603ca2fd1"
     },
     "fork-worktree-cleanup": {
       "oid": "d898a2edc5cea28fd6a8d556427101ef04e349f0"
-    },
-    "refresh-temp": {
-      "oid": "828dd04642beac8397cba37b329bef6eaf88ba08"
     }
   }
 }
