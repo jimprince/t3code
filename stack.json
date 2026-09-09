@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "5b42885ba2a6c946aa94e4cacbb2d06f262f342a",
-  "head": "7e9243e38496ea3c9fbd9a7a350dec4d026dc70d",
+  "prev": "a45464f542083b849c39fed7362d2c811d48b71b",
+  "head": "dbdedcadd8914152a8f4cd650ff23fe733abc266",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -25,12 +25,12 @@
     "fork-gitea-connections",
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
-    "fork-headless-delivery"
-  ],
-  "unapplied": [
+    "fork-headless-delivery",
     "fork-desktop-delivery",
     "fork-mobile-delivery",
-    "fork-release-publication",
+    "fork-release-publication"
+  ],
+  "unapplied": [
     "fork-maintenance-automation",
     "fork-gitea-pr-browser"
   ],
@@ -49,7 +49,7 @@
       "oid": "a53487c650012686d5febecf33aa24101e5eeae0"
     },
     "fork-desktop-delivery": {
-      "oid": "24e6ff094037c90fbd62dc3d6be452ef44845481"
+      "oid": "9feeaec224d4a20410fb40302729111118066853"
     },
     "fork-fresh-remote-worktrees": {
       "oid": "937bf6ac8b7511ef6d20bb82cce0761f7411fd82"
@@ -73,7 +73,7 @@
       "oid": "6c40bc615de7fbd4818684c4e2bf16673fc8432e"
     },
     "fork-mobile-delivery": {
-      "oid": "0f3c25406f0c7b3c1d906a5bf81cc2e251cac956"
+      "oid": "c3b96d49f4733bb037fd6c0e45f67b6eefeff163"
     },
     "fork-pr-dismissal": {
       "oid": "82bb242f5fac2f62c8e79ab18cc3b9cb805e6690"
@@ -91,7 +91,7 @@
       "oid": "a5e092f4bda0f25333ab15f745007eb84a31261c"
     },
     "fork-release-publication": {
-      "oid": "570ecd1dd02e3acd731babfca500db478860c1a6"
+      "oid": "dbdedcadd8914152a8f4cd650ff23fe733abc266"
     },
     "fork-remote-file-downloads": {
       "oid": "23ef024817879e5aeefa19153cc0baab967a2dca"
