@@ -164,7 +164,7 @@ purpose = "Keep existing thread snapshots, event replay and transferred history 
 retire_when = "Support for databases and transferred histories containing legacy goal records has explicitly ended or those records have been losslessly migrated."
 depends_on = ["fork-thread-client-recovery", "fork-thread-transfer"]
 roles = []
-note = "Brad approved removing goals on 2026-09-05. Retain historical goal schema, projection and import compatibility; numbered migrations remain in the migration ledger. Migration 5 converts sidebar-reordered/orderKey to meta-updated/activeOrderKey transactionally without changing event identity or sequence. ID 4 remains reserved for the previously shipped sidebar-order column migration. Thread transfer bundles contain snapshots, not raw ordering events."
+note = "Brad approved removing goals on 2026-09-05. Retain historical goal schema, projection and import compatibility; numbered migrations remain in the migration ledger. Migration 5 converts sidebar-reordered/orderKey to meta-updated/activeOrderKey transactionally without changing event identity or sequence. ID 4 remains reserved for the previously shipped sidebar-order column migration. Thread transfer bundles contain snapshots, not raw ordering events. Packaged upgrade fixtures freeze released 1293 and 1400 schemas with synthetic sidebar, goal and legacy attachment events; verify replay, preserved IDs and migration ledgers, projections and restart before release. Recent retirement review: sidebar data now migrates through 5; goals keep historical schemas and projection support; file handoffs retain compatibility under their own concern."
 [[patch.decision]]
 id = "gitmanager-faketextgeneration"
 date = "2026-07-28"
