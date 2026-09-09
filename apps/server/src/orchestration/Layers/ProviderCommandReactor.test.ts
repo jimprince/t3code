@@ -927,6 +927,7 @@ describe("ProviderCommandReactor", () => {
         activeTurnId: asTurnId("turn-1"),
         lastError: null,
       });
+      expect(thread?.latestTurn).toMatchObject({ turnId: asTurnId("turn-1"), state: "running" });
       expect(thread?.activities).toContainEqual(
         expect.objectContaining({ kind: "provider.turn.start.failed", tone: "error" }),
       );
@@ -941,6 +942,10 @@ describe("ProviderCommandReactor", () => {
       const completed = (yield* Effect.promise(() => harness.readModel())).threads.find(
         (t) => t.id === threadId,
       );
+      expect(completed?.latestTurn).toMatchObject({
+        turnId: asTurnId("turn-1"),
+        state: "completed",
+      });
       expect(completed?.session).toMatchObject({
         status: "ready",
         activeTurnId: null,
