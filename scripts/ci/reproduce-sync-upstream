@@ -15,6 +15,9 @@ CONFLICT_MODE="${CI_REPAIR_BOT_CONFLICT_MODE:-fail}"
 GIT_BIN="${CI_REPAIR_BOT_GIT_BIN:-$(command -v git)}"
 STG_BIN="${CI_REPAIR_BOT_STG_BIN:-$(command -v stg || true)}"
 
+# Refresh operations must not invoke staged-file hooks on a partial stack.
+export HUSKY=0 VITE_GIT_HOOKS=0
+
 if [[ ! -x "$GIT_BIN" ]]; then
   echo "git executable is unavailable: $GIT_BIN" >&2
   exit 2
@@ -143,8 +146,24 @@ git_cmd fetch --no-tags "$UPSTREAM_REMOTE" \
 START_STACK="$(git_cmd rev-parse "$STACK_REF")"
 saved_top="$(stg_cmd top)"
 echo "Rebasing the ordered StGit series through $saved_top onto $CI_REPAIR_BOT_UPSTREAM_TARGET..."
+# Treat the lockfile as generated output, never as a three-way merge input.
+# Keep the final generated file in its owner so published main remains frozen-installable.
+lockfile_owner="$(bun -e '
+  const inventory = Bun.TOML.parse(await Bun.file("docs/operations/fork-inventory.toml").text());
+  const owners = inventory.patch.filter(p => (p.roles ?? []).includes("lockfile-owner"));
+  if (owners.length !== 1) throw new Error("exactly one lockfile-owner is required");
+  console.log(owners[0].name);
+')"
+stack_base="$(stg_cmd id '{base}')"
 REPLAY_STARTED=1
+if git_cmd cat-file -e "${stack_base}:pnpm-lock.yaml" 2>/dev/null; then
+  git_cmd show "${stack_base}:pnpm-lock.yaml" > pnpm-lock.yaml
+  stg_cmd refresh -p "$lockfile_owner" -- pnpm-lock.yaml
+fi
 if stg_cmd rebase --merged "$CI_REPAIR_BOT_UPSTREAM_TARGET"; then
+  # Later patches add workspaces. Generate only after every concern has replayed.
+  corepack pnpm install --lockfile-only --ignore-scripts
+  stg_cmd refresh -p "$lockfile_owner" -- pnpm-lock.yaml
   emit_status clean ""
   REPLAY_COMPLETE=1
   exit 0

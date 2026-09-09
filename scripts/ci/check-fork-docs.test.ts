@@ -42,7 +42,7 @@ const createValidDocs = (): string => {
   );
   write(
     root,
-    "docs/README.md",
+    "docs/fork.md",
     [
       "[Rebase the fork or resolve a patch conflict](./operations/fork-maintenance.md#rebase-the-stack).",
       "[Add or change a fork feature](../.agents/skills/fork-patch-stack/SKILL.md#new-concern-workflow).",
@@ -50,6 +50,7 @@ const createValidDocs = (): string => {
       "[Publish the StGit stack safely](./operations/fork-maintenance.md#publish-the-stack).",
     ].join("\n"),
   );
+  write(root, "docs/README.md", "[Fork](./fork.md)\n");
   write(root, "docs/operations/fork-maintenance.md", "# Fork maintenance\n");
   write(root, "docs/operations/fork-inventory.toml", "schema = 2\n");
   for (const tool of [

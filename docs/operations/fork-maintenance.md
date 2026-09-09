@@ -408,3 +408,58 @@ remain in CI/release jobs. Do not copy the source command list into bot config.
 Batch completed concerns before one leased publication. The nightly push gate
 already compares packaged-source trees; metadata-only maintenance should not
 create a desktop release. Never renew a lease to force a queued writer through.
+
+## Measure update reliability
+
+Run the same evidence report for each review window, using a disposable checkout
+with fetched upstream tags and stack-history refs. It writes outside the checkout:
+
+```bash
+python3 scripts/ci/fork-reliability.py \
+  --checkout "$PWD" --output /tmp/fork-reliability \
+  --from-date 2026-08-10 --to-date 2026-09-09 --collect --surface
+```
+
+`--collect` reads GitHub histories/logs (including earlier attempts), the bot's
+SQLite database read-only, retained artifact filenames and immutable stack-history
+snapshots. Override `--bot-db` on another machine. Without `--collect`, the same
+command rebuilds outputs from cached evidence without network access. `--surface`
+compares every patch's upstream-file edits with upstream commits in the window.
+It requires a fully applied stack.
+
+`updates.csv` / `updates.json` contain one row per upstream nightly: selection,
+sync/no-op outcome, conflicts, observed bot attempts (a lower bound), publication
+time, human intervention, released installers and incidents. `summary.json` gives
+coverage and counts; `conflict-surface.json` is the per-patch exposure ledger.
+Intermediate nightlies deliberately not selected are not failed updates.
+
+Pass `--annotations <directory>` to include reviewed `classifications.json`,
+`bot-classifications.json` and `human-interventions.json`. These source-linked
+annotations capture issue/chronology evidence that workflow metadata cannot
+establish. Classification keys are run IDs (or `run:attempt` for earlier attempts),
+with `category`1–5, `target`, `reason` and `evidence`. Human annotations are keyed by
+upstream tag with `human_intervention`, `unattended`, `what` and `evidence`.
+Record operator intervention when it happens; lack of a note is **unknown**, not
+unattended success. Preserve cached evidence and annotations in canonical project
+memory or an external evidence archive, never generated reports in this source tree.
+A resolved incident's reset attempt counter is not historical evidence of zero
+attempts. Auto-landed main and a verified installer are separate milestones.
+
+The historical September9 review and annotations live in canonical project memory
+under `projects/t3code-fork/2026-09-09-patch-stack-retrospective.md`.
+
+## Generated lockfile replay
+
+The shared replay driver removes the generated lockfile delta from the replay
+input, applies every concern to upstream, then regenerates the lockfile at the
+complete tip and refreshes the existing `lockfile-owner`. Both automatic workflows
+use this driver. Main still contains a consistent lockfile for frozen installs;
+the generated old lockfile never needs semantic conflict repair. Other manifest
+or product conflicts still stop normally. Generation failure restores the original
+rendered stack and fails the operation. No verification or publication gate is
+bypassed.
+
+Run the real Git/StGit regression with `python3 scripts/ci/test-replay-lockfile.py`
+(Git, StGit and Bun required). It covers a conflicting generated file, a workspace
+added by a later patch, failed generation and a genuine semantic conflict. Run
+`python3 scripts/ci/test-fork-reliability.py` for report/no-op/unknown coverage.

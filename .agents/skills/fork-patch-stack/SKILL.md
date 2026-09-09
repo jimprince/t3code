@@ -179,22 +179,14 @@ focused checks there (the automatic CI gate is `scripts/ci/verify-stgit-replay`)
 then carry each fix back into its owning patch with
 `stg goto <patch>` and `stg refresh`.
 
-Generated files must be regenerated at the tip, not at their owning patch.
-Regenerating `pnpm-lock.yaml` while only the first patches are applied silently
-omits workspaces that later patches add (for example `apps/t3-thread`), and the
-lockfile then fails `--frozen-lockfile` in CI. Regenerate at the tip, save the
-file, then `stg goto fork-build-ci-compat`, copy it in, and refresh.
-
-## Retiring persisted functionality
-
-Before removing a feature, follow the runbook
-[historical-data transition procedure](../../../docs/operations/fork-maintenance.md#retiring-persisted-functionality).
-Inventory emitted events, database columns, migration IDs, snapshots and
-transfer formats. Upstream feature parity does not migrate downstream data.
-Keep shipped migration IDs reserved; preserve compatibility or add a lossless
-one-time migration in the owning history concern. Extend frozen upgrade
-fixtures and run the packaged startup check, including a restart. Do not
-regenerate historical fixtures from the current contracts.
+Generated files must be regenerated at the complete tip, where all fork
+workspaces exist. For a manual dependency edit, regenerate there and refresh the
+inventory's `lockfile-owner` with `stg refresh -p <owner> -- pnpm-lock.yaml`.
+Automatic replay uses `scripts/ci/reproduce-sync-upstream`: it strips the old
+generated lockfile delta before replay and regenerates at the complete tip before
+refreshing that owner. Manifest or product conflicts still require semantic repair.
+See the runbook's reliability measurement command before assessing unattended
+success; a successful no-op or reset incident counter is not delivery evidence.
 
 ## Structural stack changes
 

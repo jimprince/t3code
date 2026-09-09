@@ -10,6 +10,7 @@ const requiredFiles = [
   "LLM_INSTRUCTIONS.md",
   ".agents/skills/fork-patch-stack/SKILL.md",
   "docs/README.md",
+  "docs/fork.md",
   "docs/operations/fork-maintenance.md",
   "docs/operations/fork-inventory.toml",
 ] as const;
@@ -106,15 +107,16 @@ export const checkForkDocs = (root = process.cwd()): string[] => {
     if (!llmLinks.includes(target)) errors.push(`LLM_INSTRUCTIONS.md must link to ${target}`);
   }
 
-  const docsReadme = read(absoluteRoot, "docs/README.md");
+  const forkIndex = read(absoluteRoot, "docs/fork.md");
+  if (!resolvedLinks(absoluteRoot, "docs/README.md").includes("docs/fork.md"))
+    errors.push("docs/README.md must link to docs/fork.md");
   for (const route of [
     "Rebase the fork or resolve a patch conflict",
     "Add or change a fork feature",
     "Deploy a reviewed new concern safely",
     "Publish the StGit stack safely",
   ]) {
-    if (!docsReadme.includes(route))
-      errors.push(`docs/README.md must link the task route: ${route}`);
+    if (!forkIndex.includes(route)) errors.push(`docs/fork.md must link the task route: ${route}`);
   }
 
   const skill = read(absoluteRoot, ".agents/skills/fork-patch-stack/SKILL.md");

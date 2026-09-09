@@ -77,6 +77,9 @@ migration IDs and test old event replay, migration ledgers, and restart before
 removing schemas. See the [retirement procedure](./docs/operations/fork-maintenance.md#retiring-persisted-functionality)
 and [packaged upgrade fixtures](./scripts/fixtures/thread-history/README.md).
 
+Use the [fork documentation index](./docs/fork.md) for fork-specific routes and
+[reliability measurement](./docs/operations/fork-maintenance.md#measure-update-reliability).
+
 Before editing a freshly fetched stack, run
 `scripts/ci/prepare-stgit-publication` to capture immutable preparation-time
 main and metadata leases. Use `scripts/ci/publish-stgit-stack --check|--push`

@@ -432,3 +432,9 @@ id = "nightly-net-source-change"
 date = "2026-09-05"
 decided = "narrow"
 rationale = "Gate fork-only nightlies on the exact push-before and push-after packaged-source trees, not replayed commit history. Unknown history and manual dispatch retain the release path. Atomic main/tag publication removes the old 30-second visibility delay."
+
+[[patch.decision]]
+id = "mechanical-replay-and-reliability-measurement"
+date = "2026-09-09"
+decided = "narrow"
+rationale = "Remove generated lockfile content from replay input and regenerate at the full tip; move fork task routes into an additive index. Measure per-target delivery, intervention and conflict exposure from retained evidence instead of inferring success from healthy polling."
