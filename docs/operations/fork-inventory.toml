@@ -32,3 +32,9 @@ id = "stashimagecompression-timeout"
 date = "2026-07-29"
 decided = "adapt"
 rationale = "The too-large boundary test repeatedly exceeded the default timeout under parallel hosted CI while passing in isolation. Accept the one-line upstream-file edit until the test becomes reliably faster."
+
+[[patch.decision]]
+id = "editor-worker-test-animation-cleanup"
+date = "2026-09-09"
+decided = "adapt"
+rationale = "Upstream1439 language-readiness tests can leave a worker state broadcast queued after animation globals are removed. Track and cancel remaining callbacks after worker/highlighter teardown; retire this edit when upstream owns equivalent cleanup."
