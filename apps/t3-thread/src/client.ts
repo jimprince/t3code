@@ -20,6 +20,7 @@ import {
 import { T3RpcClient } from "./rpc.js";
 import { enqueueSend } from "./sendQueue.js";
 import { classifyThread } from "./status.js";
+import { resolveCallerThreadId } from "./state.js";
 import type {
   ExecutionEnvironmentDescriptor,
   ModelSelection,
@@ -659,6 +660,42 @@ export class RemoteEnvironmentClient {
     } finally {
       await rpc.dispose();
     }
+  }
+
+  async settleThread(threadId: string, options: { self?: boolean } = {}) {
+    if (threadId === resolveCallerThreadId() && !options.self) {
+      throw new Error(
+        "Refusing to settle the calling thread. Let its final response land, then settle it externally; use --self only to explicitly override this guard.",
+      );
+    }
+    return this.setThreadSettlement(threadId, "thread.settle");
+  }
+
+  async unsettleThread(threadId: string) {
+    return this.setThreadSettlement(threadId, "thread.unsettle");
+  }
+
+  private async setThreadSettlement(threadId: string, type: "thread.settle" | "thread.unsettle") {
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type,
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+        ...(type === "thread.unsettle" ? { reason: "user" } : {}),
+      });
+    } finally {
+      await rpc.dispose();
+    }
+    // Dispatch completes after projection; read the server's resulting state.
+    const thread = await this.findThread(threadId);
+    return {
+      threadId: thread.id,
+      environment: this.environment.name,
+      settledOverride: thread.settledOverride ?? null,
+      settledAt: thread.settledAt ?? null,
+      unsettledAt: thread.unsettledAt ?? null,
+    };
   }
 
   async archiveThread(threadId: string): Promise<boolean> {

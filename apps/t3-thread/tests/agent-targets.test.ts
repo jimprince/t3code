@@ -197,6 +197,46 @@ describe("agent target resolution", () => {
   });
 });
 
+describe.each([false, true])(
+  "lookup resilience (unique search: %s)",
+  (requireUniqueRemoteMatch) => {
+    it.each([
+      new TypeError("fetch failed"),
+      new Error("Remote request failed (401): expired credential"),
+    ])("continues past an unavailable environment: %s", async (failure) => {
+      const target = await resolveAgentTarget(makeState(), "22222222-2222-4222-8222-222222222222", {
+        requireUniqueRemoteMatch,
+        clientFactory: (name) => ({
+          listThreads: async () => {
+            if (name === "local-mbp") throw failure;
+            return [makeThread()];
+          },
+        }),
+      });
+      expect(target.environment).toBe("dev-vm");
+      expect(target.checkedEnvironments).toEqual(["local-mbp", "dev-vm"]);
+      expect(target.unreachableEnvironments).toEqual(["local-mbp"]);
+      expect(toThreadSearchResult(target).unreachableEnvironments).toEqual(["local-mbp"]);
+    });
+
+    it("reports all attempted and unavailable environments when no match can be found", async () => {
+      await expect(
+        resolveAgentTarget(makeState(), "22222222-2222-4222-8222-222222222222", {
+          requireUniqueRemoteMatch,
+          clientFactory: (name) => ({
+            listThreads: async () => {
+              if (name === "local-mbp") throw new TypeError("fetch failed");
+              return [];
+            },
+          }),
+        }),
+      ).rejects.toThrow(
+        "Checked paired environments: local-mbp, dev-vm. Unreachable environments: local-mbp. Their contents could not be checked.",
+      );
+    });
+  },
+);
+
 describe("thread UUID search", () => {
   it("returns the saved mapping without remote scanning", async () => {
     const clientFactory = vi.fn(() => ({
@@ -215,6 +255,8 @@ describe("thread UUID search", () => {
       saved: true,
       savedName: "worker-a",
       title: "Worker A",
+      checkedEnvironments: ["local-mbp"],
+      unreachableEnvironments: [],
     });
     expect(clientFactory).not.toHaveBeenCalled();
   });
@@ -234,6 +276,8 @@ describe("thread UUID search", () => {
       saved: false,
       savedName: null,
       title: "Unsaved Worker",
+      checkedEnvironments: ["local-mbp", "dev-vm"],
+      unreachableEnvironments: [],
     });
   });
 

@@ -11,6 +11,7 @@ export type ResolvedAgentTarget = {
   title: string;
   savedAgent: SavedAgent | null;
   checkedEnvironments: string[];
+  unreachableEnvironments: string[];
 };
 
 export type ThreadShellClient = Pick<RemoteEnvironmentClient, "listThreads">;
@@ -22,6 +23,8 @@ export type ThreadSearchResult = {
   saved: boolean;
   savedName: string | null;
   title: string;
+  checkedEnvironments: string[];
+  unreachableEnvironments: string[];
 };
 
 type ResolveAgentTargetOptions = {
@@ -73,7 +76,7 @@ export function resolveSavedAgentTarget(
   state: StateFile,
   input: string,
 ):
-  | (Omit<ResolvedAgentTarget, "checkedEnvironments" | "savedAgent"> & {
+  | (Omit<ResolvedAgentTarget, "checkedEnvironments" | "unreachableEnvironments" | "savedAgent"> & {
       savedAgent: SavedAgent;
     })
   | null {
@@ -123,6 +126,7 @@ export async function resolveAgentTarget(
     return {
       ...local,
       checkedEnvironments: [local.environment],
+      unreachableEnvironments: [],
     };
   }
 
@@ -131,12 +135,19 @@ export async function resolveAgentTarget(
   }
 
   const checkedEnvironments: string[] = [];
+  const unreachableEnvironments: string[] = [];
   const matches: ResolvedAgentTarget[] = [];
   for (const environmentName of orderedEnvironmentNames(state, options)) {
     checkedEnvironments.push(environmentName);
     requireEnvironment(state, environmentName);
-    const client = options.clientFactory(environmentName);
-    const thread = (await client.listThreads()).find((candidate) => candidate.id === input);
+    let threads: OrchestrationThreadShell[];
+    try {
+      threads = await options.clientFactory(environmentName).listThreads();
+    } catch {
+      unreachableEnvironments.push(environmentName);
+      continue;
+    }
+    const thread = threads.find((candidate) => candidate.id === input);
     if (thread) {
       const match = {
         input,
@@ -146,6 +157,7 @@ export async function resolveAgentTarget(
         title: thread.title,
         savedAgent: null,
         checkedEnvironments,
+        unreachableEnvironments,
       };
       if (!options.requireUniqueRemoteMatch) {
         return match;
@@ -165,7 +177,13 @@ export async function resolveAgentTarget(
   }
 
   const checked = checkedEnvironments.length > 0 ? checkedEnvironments.join(", ") : "(none)";
-  throw new Error(`Unknown thread '${input}'. Checked paired environments: ${checked}.`);
+  const unavailable =
+    unreachableEnvironments.length > 0
+      ? ` Unreachable environments: ${unreachableEnvironments.join(", ")}. Their contents could not be checked.`
+      : "";
+  throw new Error(
+    `Unknown thread '${input}'. Checked paired environments: ${checked}.${unavailable}`,
+  );
 }
 
 export function toThreadSearchResult(target: ResolvedAgentTarget): ThreadSearchResult {
@@ -176,6 +194,8 @@ export function toThreadSearchResult(target: ResolvedAgentTarget): ThreadSearchR
     saved: target.savedAgent !== null,
     savedName: target.savedAgent?.name ?? null,
     title: target.title,
+    checkedEnvironments: target.checkedEnvironments,
+    unreachableEnvironments: target.unreachableEnvironments,
   };
 }
 

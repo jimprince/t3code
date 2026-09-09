@@ -38,11 +38,18 @@ Common lifecycle commands also accept a raw T3 `threadId` directly when you do
 not want to create a saved alias first:
 
 ```bash
+t3-thread settle 22222222-2222-4222-8222-222222222222
+t3-thread unsettle 22222222-2222-4222-8222-222222222222
 t3-thread status 22222222-2222-4222-8222-222222222222
 t3-thread result 22222222-2222-4222-8222-222222222222 --final-message
 t3-thread implement 22222222-2222-4222-8222-222222222222
 t3-thread send 22222222-2222-4222-8222-222222222222 "Continue from the last checkpoint."
 ```
+
+Settlement uses the server lifecycle and reads back its state. Settling your own
+`T3_THREAD_ID` requires `--self`, including when using a saved alias. Let the final
+response land before another thread settles yours. Unsettle returns a thread to
+the active list without starting a turn.
 
 When a worker reaches **Plan Ready**, use `t3-thread implement <agent-or-thread-id>`
 to perform the same-thread equivalent of the UI's **Implement** button. The CLI
@@ -56,7 +63,8 @@ Resolution order for a raw UUID:
 
 - prefer an existing saved mapping if that thread is already attached locally
 - otherwise scan paired environments and infer environment/project metadata from the remote thread shell
-- if not found, report the paired environments checked
+- skip unavailable environments and report attempted/unreachable names in search and status JSON
+- if not found, report the paired environments checked and any unreachable environments
 
 ## Find a Thread by UUID
 

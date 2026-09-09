@@ -217,6 +217,8 @@ const AGENT_COMMAND_ALIASES = new Set([
   "attach",
   "list",
   "archive",
+  "settle",
+  "unsettle",
   "forget",
   "caller",
   "subscriptions",
@@ -705,6 +707,25 @@ program
   });
 
 agent
+  .command("settle")
+  .argument("<name>", "agent name or raw thread UUID")
+  .option("--self", "Explicitly allow settling the calling T3_THREAD_ID")
+  .description("Settle a thread through the server lifecycle without archiving it")
+  .action(async (name, options) => {
+    const { agent: savedAgent, client } = await withAgent(name);
+    printJson(await client.settleThread(savedAgent.threadId, { self: options.self }));
+  });
+
+agent
+  .command("unsettle")
+  .argument("<name>", "agent name or raw thread UUID")
+  .description("Return a settled thread to the active list without starting a turn")
+  .action(async (name) => {
+    const { agent: savedAgent, client } = await withAgent(name);
+    printJson(await client.unsettleThread(savedAgent.threadId));
+  });
+
+agent
   .command("archive")
   .argument("<name>", "agent name")
   .description("Archive the remote thread for a saved agent via T3 RPC")
@@ -1044,7 +1065,7 @@ agent
       return;
     }
 
-    const { agent: savedAgent, client, saved } = await withAgent(name);
+    const { agent: savedAgent, client, saved, target } = await withAgent(name);
     const thread = await client.findThread(savedAgent.threadId);
     const status = classifyThread(thread);
     const latestAssistant = getLatestAssistantMessage(thread);
@@ -1055,6 +1076,11 @@ agent
       title: savedAgent.title,
       projectId: savedAgent.projectId,
       saved,
+      checkedEnvironments: target.checkedEnvironments,
+      unreachableEnvironments: target.unreachableEnvironments,
+      settledOverride: thread.settledOverride ?? null,
+      settledAt: thread.settledAt ?? null,
+      unsettledAt: thread.unsettledAt ?? null,
       state: status.state,
       reason: status.reason,
       latestTurn: thread.latestTurn,

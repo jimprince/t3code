@@ -29,6 +29,13 @@ edits to the selected checkout's `src/` are picked up without rebuilding.
 5. Review and acknowledge output:
    - `t3-thread result <agent> --assistant-only --tail 1 --mark-seen`
 
+Unscoped UUID lookup skips paired environments whose connection or authentication
+fails and continues searching. `search` and single-thread `status` JSON include
+`checkedEnvironments` (attempted names) and `unreachableEnvironments` (names whose
+contents could not be read). A miss reports both lists; it does not imply the
+thread is absent from an unreachable environment. Existing saved mappings remain
+preferred, and `search --env <name>` still restricts lookup to that environment.
+
 ## Environments
 
 List paired environments:
@@ -68,6 +75,26 @@ refuses without changing state and reports their counts. `--force` removes those
 references too, including notification routes in either direction and queued
 messages. An already dispatched remote action cannot be recalled. Pair again to
 restore access; forgotten local records are not restored by pairing.
+
+## Thread Settlement
+
+```bash
+t3-thread settle <agent-or-uuid>
+t3-thread unsettle <agent-or-uuid>
+# The same commands are available under `t3-thread agent`.
+```
+
+These call the server's existing lifecycle commands. Settle removes quiet work
+from the active queue; unsettle returns it without starting a turn. They do not
+archive or interrupt a thread. The server enforces eligibility, including its
+active-work guard. Both commands read back JSON containing `threadId`,
+`environment`, `settledOverride`, `settledAt`, and `unsettledAt`; `status` also
+shows these lifecycle fields.
+
+Settling the calling `T3_THREAD_ID`, even through a saved alias, requires an
+explicit `--self`. A thread should let its final response land before another
+thread or the operator settles it. `--self` only overrides this CLI guard; it
+does not bypass the server's eligibility checks.
 
 ## Project Discovery
 
@@ -340,7 +367,7 @@ Cleanup timing:
 
 - Keep a thread attached when it is a standing overseer/coordinator, owns an active roadmap slice, or is likely to receive near-term follow-up that benefits from preserved identity.
 - Retire a thread when the work is completed and merged, superseded by a replacement thread, launched on the wrong branch and replaced, or abandoned after the investigation is no longer worth continuing.
-- Use the supported order: `t3-thread archive` first for the remote thread, then `t3-thread forget` for the local mapping.
+- Use the supported order: `t3-thread settle` for quiet work, then `t3-thread archive` for the remote thread, then `t3-thread forget` for the local mapping.
 - Remove related branches or worktrees only after confirming no retained artifact, comparison page, or follow-up task still depends on them.
 
 When cleaning up the current T3 thread's own checkout:
@@ -355,7 +382,7 @@ When cleaning up the current T3 thread's own checkout:
    - `git worktree list --porcelain`
    - `git branch --list <worker-branch>`
 
-Do not archive the current T3 thread before sending the final response from that same thread. Leave it unarchived long enough for the response to land cleanly; archive/forget it later from another controlling thread if needed.
+Do not settle or archive the current T3 thread before sending the final response from that same thread. Leave it unarchived long enough for the response to land cleanly; archive/forget it later from another controlling thread if needed.
 
 Resolve the current caller from `T3_THREAD_ID` and T3 environment metadata:
 

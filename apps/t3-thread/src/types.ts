@@ -98,6 +98,9 @@ export interface OrchestrationThread {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  settledOverride?: "settled" | "active" | null;
+  settledAt?: string | null;
+  unsettledAt?: string | null;
   deletedAt?: string | null;
   messages: OrchestrationMessage[];
   proposedPlans: OrchestrationProposedPlan[];
@@ -126,6 +129,9 @@ export interface OrchestrationThreadShell {
   createdAt: string;
   updatedAt: string;
   archivedAt: string | null;
+  settledOverride?: "settled" | "active" | null;
+  settledAt?: string | null;
+  unsettledAt?: string | null;
   session: OrchestrationSession | null;
   latestUserMessageAt: string | null;
   hasPendingApprovals: boolean;
