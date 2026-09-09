@@ -59,6 +59,12 @@ depends_on = []
 roles = []
 note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
 [[patch.decision]]
+id = "release-writer-before-instance-handoff"
+date = "2026-09-09"
+decided = "adapt"
+rationale = "Compatible Codex instances share conversation storage. Stop the old instance before resuming on the replacement and propagate stop failures; preserve upstream binding and resume-cursor structures without adding schemas or migrations."
+
+[[patch.decision]]
 id = "providerservice-mcp-touch"
 date = "2026-07-28"
 decided = "adapt"

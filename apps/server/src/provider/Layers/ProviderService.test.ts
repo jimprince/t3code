@@ -2685,7 +2685,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
     }),
   );
 
-  it.effect("stops stale sessions in other providers after a successful replacement start", () =>
+  it.effect("stops stale sessions in other providers before replacement start", () =>
     Effect.gen(function* () {
       const provider = yield* ProviderService.ProviderService;
       const threadId = asThreadId("thread-provider-replacement");
@@ -3590,6 +3590,116 @@ citations.layer("ProviderServiceLive assistant citations", (it) => {
       );
       yield* provider.stopSession({ threadId });
     }),
+  );
+});
+
+const handoffInstanceId = ProviderInstanceId.make("codex_handoff");
+const handoffPrimary = makeFakeCodexAdapter();
+const handoffReplacement = makeFakeCodexAdapter();
+const handoffRegistry = makeStaticInstanceRegistry([
+  [codexInstanceId, handoffPrimary.adapter],
+  [handoffInstanceId, handoffReplacement.adapter],
+]);
+const handoff = makeProviderServiceLayer({
+  registry: {
+    ...handoffRegistry,
+    getInstanceInfo: (instanceId) =>
+      handoffRegistry.getInstanceInfo(instanceId).pipe(
+        Effect.map((info) => ({
+          ...info,
+          continuationIdentity: {
+            ...info.continuationIdentity,
+            continuationKey: "shared-codex-home",
+          },
+        })),
+      ),
+  },
+});
+
+handoff.layer("ProviderServiceLive instance handoff", (it) => {
+  it.effect(
+    "releases the existing writer before resuming on another instance in either direction",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+        const threadId = asThreadId("thread-writer-handoff");
+        const initial = yield* provider.startSession(threadId, {
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+        });
+        for (const [previous, next, instanceId] of [
+          [handoffPrimary, handoffReplacement, handoffInstanceId],
+          [handoffReplacement, handoffPrimary, codexInstanceId],
+        ] as const) {
+          const start = next.startSession.getMockImplementation()!;
+          next.startSession.mockImplementationOnce((input) =>
+            Effect.gen(function* () {
+              assert.equal(
+                yield* previous.hasSession(threadId),
+                false,
+                "previous Codex writer must release the conversation before resume",
+              );
+              return yield* start(input);
+            }),
+          );
+          const resumed = yield* provider.startSession(threadId, {
+            providerInstanceId: instanceId,
+            threadId,
+            runtimeMode: "full-access",
+            resumeCursor: initial.resumeCursor,
+          });
+          assert.deepEqual(resumed.resumeCursor, initial.resumeCursor);
+          const binding = Option.getOrThrow(yield* directory.getBinding(threadId));
+          assert.equal(binding.providerInstanceId, instanceId);
+          assert.deepEqual(binding.resumeCursor, initial.resumeCursor);
+          const turn = yield* provider.sendTurn({ threadId, input: "continue" });
+          assert.equal(turn.threadId, threadId);
+          assert.equal(
+            yield* directory.markTurnTerminal({ threadId, expectedTurnId: turn.turnId }),
+            true,
+          );
+        }
+        yield* provider.stopSession({ threadId });
+      }),
+  );
+
+  it.effect(
+    "does not start a replacement or overwrite the binding when releasing the writer fails",
+    () =>
+      Effect.gen(function* () {
+        const provider = yield* ProviderService.ProviderService;
+        const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
+        const threadId = asThreadId("thread-writer-stop-failure");
+        const initial = yield* provider.startSession(threadId, {
+          providerInstanceId: codexInstanceId,
+          threadId,
+          runtimeMode: "full-access",
+        });
+        const stopError = new ProviderAdapterRequestError({
+          provider: CODEX_DRIVER,
+          method: "stopSession",
+          detail: "writer still held",
+        });
+        handoffPrimary.stopSession.mockImplementationOnce(() => Effect.fail(stopError));
+        handoffReplacement.startSession.mockClear();
+        const failure = yield* provider
+          .startSession(threadId, {
+            providerInstanceId: handoffInstanceId,
+            threadId,
+            runtimeMode: "full-access",
+            resumeCursor: initial.resumeCursor,
+          })
+          .pipe(Effect.flip);
+        assert.equal(failure, stopError);
+        assert.equal(handoffReplacement.startSession.mock.calls.length, 0);
+        assert.equal(yield* handoffPrimary.hasSession(threadId), true);
+        const binding = Option.getOrThrow(yield* directory.getBinding(threadId));
+        assert.equal(binding.providerInstanceId, codexInstanceId);
+        assert.deepEqual(binding.resumeCursor, initial.resumeCursor);
+        yield* provider.stopSession({ threadId });
+      }),
   );
 });
 
