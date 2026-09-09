@@ -71,6 +71,12 @@ concern. Describe functionality, not packages or patch mechanics. A later fix
 gets a new stable entry ID; a pure upstream replay or structural patch rewrite
 gets none. Preserve published entries when retiring their implementation.
 
+Retiring or replacing persisted functionality requires a historical-data
+transition, even when upstream supplies the replacement. Preserve shipped
+migration IDs and test old event replay, migration ledgers, and restart before
+removing schemas. See the [retirement procedure](./docs/operations/fork-maintenance.md#retiring-persisted-functionality)
+and [packaged upgrade fixtures](./scripts/fixtures/thread-history/README.md).
+
 Before editing a freshly fetched stack, run
 `scripts/ci/prepare-stgit-publication` to capture immutable preparation-time
 main and metadata leases. Use `scripts/ci/publish-stgit-stack --check|--push`

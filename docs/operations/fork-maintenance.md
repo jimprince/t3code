@@ -216,6 +216,33 @@ Use this patch-retirement ladder:
 Do not retire a patch solely because upstream changed the same file. Prove the
 purpose is covered.
 
+## Retiring persisted functionality
+
+Upstream feature parity is only the behavior check. Before removing a fork
+feature, inspect what its shipped versions persisted: event types and payloads,
+projection columns, migration ledgers, settings, snapshots and transfer bundles.
+Choose an explicit transition for every remaining record. Keep historical
+read support or add a one-time, lossless migration under the owning history
+concern; do not merely delete a decoder because the new UI no longer writes it.
+
+Never renumber or reuse a shipped migration ID. Retired IDs remain reserved,
+including fork ID 4 (`ProjectionThreadsSidebarOrderKey`). Check upgrades from
+ledgers that already contain those IDs, preserve event identities, sequence,
+timestamps and metadata, and verify a second startup is idempotent. Snapshot
+transfer and raw event replay are different formats; exercise the actual format.
+
+The [frozen packaged-upgrade fixtures](../../scripts/fixtures/thread-history/README.md)
+cover pre-retirement sidebar ordering and historical goal records. Extend this
+set when retiring other persisted behavior. Fixtures must represent old state
+independently of current schemas; a database created entirely by the candidate
+cannot establish upgrade compatibility. Use only synthetic records in committed
+fixtures and disposable copies for local historical-data checks.
+
+The release's macOS and Linux packaged-server checks must pass before assets
+are published. A clean rebase, source tests and empty-database startup do not
+replace this gate. Keep compatibility migrations and published release notes
+when removing an implementation patch.
+
 ## Validated stack context
 
 Repository automation must obtain stack policy from the checked-out tree, not
@@ -318,7 +345,8 @@ Before a split, combination, rename, retirement, or reorder, record the base,
 ordered names, patch object IDs, and rendered tree. Maintain an explicit
 path/hunk staging ledger and verify the final tree. For an intentional feature
 removal, verify implementation, tests, documentation, inventory stanza, and
-obsolete publication ref disappear together.
+obsolete publication ref disappear together, while required historical-data
+compatibility, migrations and published release notes remain.
 
 The official [StGit tutorial](https://stacked-git.github.io/guides/tutorial/)
 and [rebase manual](https://stacked-git.github.io/man/stg-rebase/) define the

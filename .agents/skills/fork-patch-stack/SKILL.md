@@ -185,6 +185,17 @@ omits workspaces that later patches add (for example `apps/t3-thread`), and the
 lockfile then fails `--frozen-lockfile` in CI. Regenerate at the tip, save the
 file, then `stg goto fork-build-ci-compat`, copy it in, and refresh.
 
+## Retiring persisted functionality
+
+Before removing a feature, follow the runbook
+[historical-data transition procedure](../../../docs/operations/fork-maintenance.md#retiring-persisted-functionality).
+Inventory emitted events, database columns, migration IDs, snapshots and
+transfer formats. Upstream feature parity does not migrate downstream data.
+Keep shipped migration IDs reserved; preserve compatibility or add a lossless
+one-time migration in the owning history concern. Extend frozen upgrade
+fixtures and run the packaged startup check, including a restart. Do not
+regenerate historical fixtures from the current contracts.
+
 ## Structural stack changes
 
 For a split, combine, rename, retirement, or reorder:
