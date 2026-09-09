@@ -260,7 +260,25 @@ describe("state helpers", () => {
       sourceEnvironment: "dev-vm",
       createdAt: "2026-04-18T19:00:00.000Z",
       updatedAt: "2026-04-18T19:00:00.000Z",
+      baselineTurnId: null,
     });
+  });
+
+  it("keeps a subscription's baseline turn across re-subscribes unless a new one is supplied", () => {
+    const caller = { threadId: "thread-a", name: "a", environment: "dev-vm" };
+    const source = { threadId: "thread-b", name: "b", environment: "dev-vm" };
+    const first = buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z", null, {
+      baselineTurnId: "turn-1",
+    });
+    expect(first.baselineTurnId).toBe("turn-1");
+    expect(
+      buildSubscriptionRecord(caller, source, "2026-04-18T19:05:00.000Z", first).baselineTurnId,
+    ).toBe("turn-1");
+    expect(
+      buildSubscriptionRecord(caller, source, "2026-04-18T19:10:00.000Z", first, {
+        baselineTurnId: "turn-2",
+      }).baselineTurnId,
+    ).toBe("turn-2");
   });
 
   it("supports subscription records for raw subscriber threads with no saved agent name", () => {
@@ -284,6 +302,7 @@ describe("state helpers", () => {
       sourceEnvironment: "dev-vm",
       createdAt: "2026-04-18T19:00:00.000Z",
       updatedAt: "2026-04-18T19:00:00.000Z",
+      baselineTurnId: null,
     });
   });
 

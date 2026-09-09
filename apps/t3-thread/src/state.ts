@@ -329,6 +329,7 @@ export function buildSubscriptionRecord(
   source: SubscriptionEndpoint,
   now: string,
   existing?: SavedSubscription | null,
+  options: { baselineTurnId?: string | null } = {},
 ): SavedSubscription {
   return {
     subscriberThreadId: caller.threadId,
@@ -339,6 +340,8 @@ export function buildSubscriptionRecord(
     sourceEnvironment: source.environment,
     createdAt: existing?.createdAt ?? now,
     updatedAt: now,
+    // Re-subscribing keeps the original baseline unless a new one is supplied.
+    baselineTurnId: options.baselineTurnId ?? existing?.baselineTurnId ?? null,
   };
 }
 

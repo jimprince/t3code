@@ -773,7 +773,18 @@ agent
         subscription.subscriberThreadId === caller.threadId &&
         subscription.sourceThreadId === source.threadId,
     );
-    const next = buildSubscriptionRecord(caller, source, now, existing);
+    // Whatever state the source is in right now predates this subscription and
+    // must not be routed as a new event. Only turns started afterwards count.
+    let baselineTurnId: string | null = null;
+    try {
+      const sourceThread = await new RemoteEnvironmentClient(
+        requireEnvironment(state, source.environment),
+      ).findThread(source.threadId);
+      baselineTurnId = sourceThread.latestTurn?.turnId ?? null;
+    } catch {
+      // Unreachable source: subscribe anyway without a baseline.
+    }
+    const next = buildSubscriptionRecord(caller, source, now, existing, { baselineTurnId });
     await updateState(async (currentState) => ({
       state: {
         ...currentState,

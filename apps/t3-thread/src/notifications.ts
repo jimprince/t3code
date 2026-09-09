@@ -17,6 +17,7 @@ export const TERMINAL_NOTIFICATION_STATUSES = new Set<SavedNotificationStatus>([
   "delivered",
   "undeliverable",
   "blocked",
+  "superseded",
 ]);
 
 const RETRY_BASE_MS = 15_000;

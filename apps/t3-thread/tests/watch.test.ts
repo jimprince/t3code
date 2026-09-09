@@ -285,6 +285,111 @@ describe("watch flows", () => {
     });
   });
 
+  it("does not route attention that predates the subscription", async () => {
+    // REGRESSION (t3code-fork#49): subscribing to a source that had already
+    // completed or errored fired that stale state at the subscriber immediately.
+    await withTempState(async () => {
+      await saveState({
+        ...makeState(),
+        subscriptions: [makeSubscription({ baselineTurnId: "turn-1" })],
+      });
+      const { clientFactory } = createClientFactory({});
+
+      expect(await detectAttentionEvents({ env: "dev-vm", clientFactory })).toEqual([]);
+      expect((await loadState()).notifications).toEqual([]);
+
+      const laterTurn = createClientFactory({
+        sourceThread: makeThread({
+          latestTurn: {
+            turnId: "turn-2",
+            state: "completed",
+            requestedAt: "2026-04-17T00:01:00.000Z",
+            startedAt: "2026-04-17T00:01:01.000Z",
+            completedAt: "2026-04-17T00:01:02.000Z",
+            assistantMessageId: "assistant-2",
+          },
+          messages: [
+            {
+              id: "assistant-2",
+              role: "assistant",
+              text: "Second turn finished.",
+              turnId: "turn-2",
+              streaming: false,
+              createdAt: "2026-04-17T00:01:02.000Z",
+              updatedAt: "2026-04-17T00:01:02.000Z",
+            },
+          ],
+        }),
+      });
+      const detected = await detectAttentionEvents({
+        env: "dev-vm",
+        clientFactory: laterTurn.clientFactory,
+      });
+      expect(detected).toHaveLength(1);
+      expect(detected[0]?.latestTurnId).toBe("turn-2");
+    });
+  });
+
+  it("supersedes undelivered events when the source moves on before delivery", async () => {
+    // REGRESSION (t3code-fork#49): a source that completed several short turns
+    // in a row produced one pending event per turn, and the backlog was then
+    // delivered one recipient turn at a time, re-announcing stale states.
+    await withTempState(async () => {
+      const { clientFactory } = createClientFactory({});
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      expect((await loadState()).notifications.map((n) => n.status)).toEqual(["pending"]);
+
+      const laterTurn = createClientFactory({
+        sourceThread: makeThread({
+          latestTurn: {
+            turnId: "turn-2",
+            state: "completed",
+            requestedAt: "2026-04-17T00:01:00.000Z",
+            startedAt: "2026-04-17T00:01:01.000Z",
+            completedAt: "2026-04-17T00:01:02.000Z",
+            assistantMessageId: "assistant-2",
+          },
+          messages: [
+            {
+              id: "assistant-2",
+              role: "assistant",
+              text: "Second turn finished.",
+              turnId: "turn-2",
+              streaming: false,
+              createdAt: "2026-04-17T00:01:02.000Z",
+              updatedAt: "2026-04-17T00:01:02.000Z",
+            },
+          ],
+        }),
+      });
+      await detectAttentionEvents({ env: "dev-vm", clientFactory: laterTurn.clientFactory });
+      let state = await loadState();
+      const byMessage = Object.fromEntries(
+        state.notifications.map((n) => [n.latestAssistantMessageId, n.status]),
+      );
+      expect(byMessage).toEqual({ "assistant-1": "superseded", "assistant-2": "pending" });
+
+      // Re-detecting the same current event must not disturb anything.
+      await detectAttentionEvents({ env: "dev-vm", clientFactory: laterTurn.clientFactory });
+      expect((await loadState()).notifications).toHaveLength(2);
+
+      const delivered = await deliverPendingNotifications({
+        env: "dev-vm",
+        clientFactory: laterTurn.clientFactory,
+      });
+      state = await loadState();
+      expect(delivered).toHaveLength(1);
+      expect(laterTurn.sentMessages).toHaveLength(1);
+      expect(laterTurn.sentMessages[0]?.text).toContain("Second turn finished");
+      expect(
+        state.notifications.find((n) => n.latestAssistantMessageId === "assistant-1")?.status,
+      ).toBe("superseded");
+      expect(await hasActiveWork({ env: "dev-vm", clientFactory: laterTurn.clientFactory })).toBe(
+        false,
+      );
+    });
+  });
+
   it("skips subscribed source agents whose remote thread no longer exists", async () => {
     // REGRESSION: stale saved agents/subscriptions should not make
     // `watch --once --no-deliver` fail for every other route.

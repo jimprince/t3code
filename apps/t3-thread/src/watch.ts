@@ -150,6 +150,14 @@ export async function scanAttentionNotifications(
     }
 
     for (const subscription of subscriptions) {
+      // Attention for the turn that was already current when the subscriber
+      // signed up is old news to it; only a later turn is a new transition.
+      if (
+        subscription.baselineTurnId &&
+        (sourceThread.latestTurn?.turnId ?? null) === subscription.baselineTurnId
+      ) {
+        continue;
+      }
       const existing =
         state.notifications.find((notification) => {
           return (
@@ -179,6 +187,42 @@ export async function scanAttentionNotifications(
 
 const UNDELIVERED_STATUSES = new Set(["pending", "delivering", "delivery-failed"]);
 const IN_FLIGHT_SOURCE_STATES = new Set(["running", "starting", "ready"]);
+
+/** Undelivered statuses that a newer event on the same route may overtake. */
+const SUPERSEDABLE_STATUSES = new Set(["pending", "delivery-failed"]);
+
+/**
+ * Retire every undelivered event on `latest`'s route that `latest` has overtaken.
+ *
+ * The source moved on before the earlier event reached the subscriber, so the
+ * earlier event no longer describes anything the subscriber can act on. Each
+ * delivery starts a turn on the recipient; draining a backlog one event per
+ * pass would spend several turns re-announcing states that are already stale.
+ * A claimed (`delivering`) event is left alone: its watcher owns it.
+ */
+function supersedeOvertakenNotifications(
+  notifications: SavedNotification[],
+  latest: SavedNotification,
+  now: string,
+): SavedNotification[] {
+  return notifications.map((candidate) => {
+    if (
+      candidate.eventKey === latest.eventKey ||
+      candidate.subscriberThreadId !== latest.subscriberThreadId ||
+      candidate.sourceThreadId !== latest.sourceThreadId ||
+      !SUPERSEDABLE_STATUSES.has(candidate.status)
+    ) {
+      return candidate;
+    }
+    return {
+      ...candidate,
+      status: "superseded",
+      updatedAt: now,
+      lastError: `Superseded by newer event ${latest.eventKey}.`,
+      nextAttemptAt: null,
+    };
+  });
+}
 
 /**
  * True when the watcher still has something to do: any undelivered notification, or any
@@ -251,6 +295,9 @@ export async function detectAttentionEvents(
         notifications.find((candidate) => candidate.eventKey === notification.eventKey) ?? null;
       const merged = mergeDetectedNotification(existing, notification);
       notifications = upsertNotification(notifications, merged);
+      if (!existing) {
+        notifications = supersedeOvertakenNotifications(notifications, merged, merged.updatedAt);
+      }
       persisted.push(merged);
     }
 

@@ -181,6 +181,13 @@ export interface SavedSubscription {
   sourceEnvironment: string;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The source's latest turn when the subscription was created. Attention for
+   * that turn predates the subscriber's interest and is never routed, so
+   * subscribing to a thread that already completed or errored does not replay
+   * that old state as a fresh event. Null or absent means no baseline.
+   */
+  baselineTurnId?: string | null;
 }
 
 /**
@@ -189,8 +196,9 @@ export interface SavedSubscription {
  * `pending` and `delivery-failed` are retryable, `delivering` is claimed by one
  * watcher, and the rest are terminal for the watcher: `delivered` succeeded,
  * `undeliverable` can never succeed (recipient gone, attempts exhausted), and
- * `blocked` needs an operator action first (expired environment credentials).
- * Only retryable and claimed records keep the watcher awake.
+ * `blocked` needs an operator action first (expired environment credentials),
+ * and `superseded` was overtaken by a newer event for the same route before it
+ * was delivered. Only retryable and claimed records keep the watcher awake.
  */
 export type SavedNotificationStatus =
   | "pending"
@@ -198,7 +206,8 @@ export type SavedNotificationStatus =
   | "delivered"
   | "delivery-failed"
   | "blocked"
-  | "undeliverable";
+  | "undeliverable"
+  | "superseded";
 
 export interface SavedNotification {
   id: string;
