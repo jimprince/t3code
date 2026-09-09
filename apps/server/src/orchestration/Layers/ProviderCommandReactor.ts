@@ -431,6 +431,17 @@ const make = Effect.gen(function* () {
       return;
     }
     const session = thread.session;
+    if (session?.status === "running" && session.activeTurnId !== null) {
+      const binding = yield* providerSessionDirectory.getBinding(input.threadId);
+      // A rejected follow-up does not own the turn still running in the provider.
+      if (
+        Option.isSome(binding) &&
+        binding.value.status === "running" &&
+        binding.value.activeTurnId === session.activeTurnId
+      ) {
+        return;
+      }
+    }
     yield* setThreadSession({
       threadId: input.threadId,
       session: {

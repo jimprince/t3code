@@ -184,6 +184,7 @@ describe("ProviderCommandReactor", () => {
     readonly interruptTurnEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly stopSessionEffect?: () => Effect.Effect<void, ProviderAdapterRequestError>;
     readonly importedHistory?: boolean;
+    readonly sendTurnEffect?: ProviderServiceShape["sendTurn"];
     readonly startSessionEffect?: (
       session: ProviderSession,
     ) => Effect.Effect<ProviderSession, ProviderServiceError>;
@@ -277,11 +278,13 @@ describe("ProviderCommandReactor", () => {
         ),
       );
     });
-    const sendTurn = vi.fn((_: ProviderSendTurnInput) =>
-      Effect.succeed({
-        threadId: ThreadId.make("thread-1"),
-        turnId: asTurnId("turn-1"),
-      }),
+    const sendTurn = vi.fn(
+      (turnInput: ProviderSendTurnInput) =>
+        input?.sendTurnEffect?.(turnInput) ??
+        Effect.succeed({
+          threadId: ThreadId.make("thread-1"),
+          turnId: asTurnId("turn-1"),
+        }),
     );
     const compactThread = vi.fn((_: ThreadId) => input?.compactThreadEffect?.() ?? Effect.void);
     const interruptTurn = vi.fn((_: unknown) => input?.interruptTurnEffect?.() ?? Effect.void);
@@ -837,6 +840,97 @@ describe("ProviderCommandReactor", () => {
         expect(harness.startSession).not.toHaveBeenCalled();
         expect(harness.sendTurn).not.toHaveBeenCalled();
       }),
+  );
+
+  effectIt.effect("preserves an active turn when a concurrent follow-up is rejected", () =>
+    Effect.gen(function* () {
+      const rejected = yield* Deferred.make<void>();
+      let attempts = 0;
+      const harness = yield* Effect.promise(() =>
+        createHarness({
+          sendTurnEffect: (input) => {
+            attempts += 1;
+            return attempts === 1
+              ? Effect.succeed({ threadId: input.threadId, turnId: asTurnId("turn-1") })
+              : Deferred.succeed(rejected, undefined).pipe(
+                  Effect.andThen(
+                    Effect.fail(
+                      new ProviderAdapterRequestError({
+                        provider: "codex",
+                        method: "sendTurn",
+                        detail: "another turn or session transition is in progress",
+                      }),
+                    ),
+                  ),
+                );
+          },
+        }),
+      );
+      const threadId = ThreadId.make("thread-1");
+      const dispatchTurn = (id: string) =>
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make(`cmd-${id}`),
+          threadId,
+          message: { messageId: MessageId.make(id), role: "user", text: id, attachments: [] },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: "2026-01-01T00:00:00.000Z",
+        });
+      yield* dispatchTurn("original");
+      yield* Effect.promise(() => harness.drain());
+      const binding = harness.readProviderBinding();
+      expect(binding).toBeDefined();
+      if (binding) Object.assign(binding, { status: "running", activeTurnId: asTurnId("turn-1") });
+      const runningSession = {
+        threadId,
+        status: "running" as const,
+        providerName: "codex" as const,
+        providerInstanceId: ProviderInstanceId.make("codex"),
+        runtimeMode: "approval-required" as const,
+        activeTurnId: asTurnId("turn-1"),
+        lastError: null,
+        updatedAt: "2026-01-01T00:00:01.000Z",
+      };
+      yield* harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-original-running"),
+        threadId,
+        session: runningSession,
+        createdAt: runningSession.updatedAt,
+      });
+      yield* dispatchTurn("follow-up");
+      yield* Deferred.await(rejected);
+      yield* Effect.promise(() => harness.drain());
+      const thread = (yield* Effect.promise(() => harness.readModel())).threads.find(
+        (t) => t.id === threadId,
+      );
+      expect(harness.sendTurn).toHaveBeenCalledTimes(2);
+      expect(thread?.session).toMatchObject({
+        status: "running",
+        activeTurnId: asTurnId("turn-1"),
+        lastError: null,
+      });
+      expect(thread?.activities).toContainEqual(
+        expect.objectContaining({ kind: "provider.turn.start.failed", tone: "error" }),
+      );
+      expect(yield* Effect.promise(() => harness.readPendingTurnStarts())).toEqual([]);
+      yield* harness.engine.dispatch({
+        type: "thread.session.set",
+        commandId: CommandId.make("cmd-original-completed"),
+        threadId,
+        session: { ...runningSession, status: "ready", activeTurnId: null },
+        createdAt: "2026-01-01T00:00:02.000Z",
+      });
+      const completed = (yield* Effect.promise(() => harness.readModel())).threads.find(
+        (t) => t.id === threadId,
+      );
+      expect(completed?.session).toMatchObject({
+        status: "ready",
+        activeTurnId: null,
+        lastError: null,
+      });
+    }),
   );
 
   effectIt.effect("clears a failed sign-out request without sending it as a prompt", () =>
