@@ -22,12 +22,8 @@ import {
   needsAttention,
   summarizeMessageText,
 } from "./monitor.js";
-<<<<<<< current
 import { classifyThread, formatThreadLine, subscriptionBaselineTurnId } from "./status.js";
-=======
-import { classifyThread, formatThreadLine } from "./status.js";
 import { DEFAULT_RECOVERY_WINDOW_DAYS, runWorktreeGc } from "./worktreeGc.js";
->>>>>>> patched
 import {
   assertNotSelfSubscription,
   buildSubscriptionRecord,
