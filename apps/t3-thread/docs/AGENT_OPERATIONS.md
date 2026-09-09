@@ -53,6 +53,22 @@ The runtime state is stored in `~/.config/t3-remote-agents/state.json` and is
 managed by `t3-thread`. Do not hand-edit it, including its authentication
 fields; use the first-class pairing and lifecycle commands below.
 
+Forget a saved pairing, including an expired or unreachable environment:
+
+```bash
+t3-thread env forget <name>
+t3-thread env forget <name> --force
+```
+
+This is local-only and works offline. It removes the named pairing and its stored
+credential, without revoking server credentials or changing remote projects or
+threads. Other aliases of the same server remain paired. If local agents,
+subscriptions, notifications, or queued sends reference the name, the command
+refuses without changing state and reports their counts. `--force` removes those
+references too, including notification routes in either direction and queued
+messages. An already dispatched remote action cannot be recalled. Pair again to
+restore access; forgotten local records are not restored by pairing.
+
 ## Project Discovery
 
 Before creating a delegated thread, discover the correct project id on the target environment:

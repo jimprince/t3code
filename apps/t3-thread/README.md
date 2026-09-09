@@ -15,6 +15,7 @@ server-internal API or combine it with the unrelated `subagents` tool.
 
 ```bash
 t3-thread envs
+t3-thread env forget <name>        # local-only; works for unreachable environments
 t3-thread projects --env local-mbp
 t3-thread models --env local-mbp
 t3-thread project list --env local-mbp

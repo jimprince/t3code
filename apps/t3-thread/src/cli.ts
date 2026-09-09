@@ -357,6 +357,52 @@ program
     printJson(await client.listModels());
   });
 
+const environmentCommands = program.command("env").description("Manage saved environments");
+
+environmentCommands
+  .command("forget")
+  .argument("<name>", "saved environment name")
+  .option("--force", "Also remove local agents, subscriptions, notifications, and queued sends")
+  .description("Forget a local pairing without contacting or deleting anything on the server")
+  .action(async (name: string, options: { force?: boolean }) => {
+    const result = await updateState((state) => {
+      requireEnvironment(state, name);
+      const agents = state.agents.filter((record) => record.environment !== name);
+      const subscriptions = state.subscriptions.filter(
+        (record) => record.sourceEnvironment !== name && record.subscriberEnvironment !== name,
+      );
+      const notifications = state.notifications.filter(
+        (record) => record.sourceEnvironment !== name && record.subscriberEnvironment !== name,
+      );
+      const queuedSends = state.queuedSends.filter((record) => record.environment !== name);
+      const removed = {
+        agents: state.agents.length - agents.length,
+        subscriptions: state.subscriptions.length - subscriptions.length,
+        notifications: state.notifications.length - notifications.length,
+        queuedSends: state.queuedSends.length - queuedSends.length,
+      };
+      if (!options.force && Object.values(removed).some((count) => count > 0)) {
+        throw new Error(
+          `Environment '${name}' still has local references (${removed.agents} agents, ` +
+            `${removed.subscriptions} subscriptions, ${removed.notifications} notifications, ` +
+            `${removed.queuedSends} queued sends). Use --force to remove them too.`,
+        );
+      }
+      return {
+        state: {
+          ...state,
+          environments: state.environments.filter((record) => record.name !== name),
+          agents,
+          subscriptions,
+          notifications,
+          queuedSends,
+        },
+        result: { environment: name, forgotten: true, removed },
+      };
+    });
+    printJson(result);
+  });
+
 program
   .command("projects")
   .requiredOption("--env <name>", "saved environment name")
