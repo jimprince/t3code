@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "206a61bab52ede2a8f09daabd09a43271c2dba57",
-  "head": "4183ce7f2c88220a1fdb4b0b463c43bf38ea520f",
+  "prev": "90444b9255350a17ad4086959eca6d35492a45b3",
+  "head": "6365bbe48a004e2c59093e6abe8b9f1dc2738989",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -21,7 +21,9 @@
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
     "fork-unsupported-pr-hosts",
-    "fork-worktree-cleanup",
+    "fork-worktree-cleanup"
+  ],
+  "unapplied": [
     "fork-gitea-connections",
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
@@ -32,7 +34,6 @@
     "fork-maintenance-automation",
     "fork-gitea-pr-browser"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
