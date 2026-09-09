@@ -1,6 +1,6 @@
-Bottom: d15fd72c353c151993e96d321ddb18524c076e06
-Top:    6ef5414f79f64fabcdc4556e83fe1c403fbeffd4
+Bottom: 718d513b5cabfdb451e1949d5db1414786805833
+Top:    2ece40fb749b2ed6b5d03826a048008c6bd98b85
 Author: User <user@example.com>
-Date:   2026-09-09 15:14:14 -0600
+Date:   2026-09-09 15:16:59 -0600
 
 fix(remote): default bare private hosts to plain HTTP pairing
