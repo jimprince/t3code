@@ -83,26 +83,40 @@ const convertCommitsToStack = (repo: FixtureRepo, count: number): readonly strin
     cwd: repo.dir,
     stdio: "ignore",
   });
-  return NodeChildProcess.execFileSync(stgBin!, ["series", "--noprefix"], {
+  const names = NodeChildProcess.execFileSync(stgBin!, ["series", "--noprefix"], {
     cwd: repo.dir,
     encoding: "utf8",
   })
     .trim()
     .split("\n")
     .filter(Boolean);
+  repo.writeFile(
+    "docs/operations/fork-inventory.toml",
+    `[[patch]]\nname="${names[0]}"\nroles=["lockfile-owner"]\n`,
+  );
+  repo.git("add", "docs/operations/fork-inventory.toml");
+  NodeChildProcess.execFileSync(stgBin!, ["refresh", "-p", names[0]!, "--index"], {
+    cwd: repo.dir,
+    stdio: "ignore",
+  });
+  return names;
 };
 
 const runDriver = (repo: FixtureRepo, conflictMode = "fail"): DriverResult => {
   const outputDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-sync-output-"));
   const githubOutput = NodePath.join(outputDir, "github_output");
   NodeFS.writeFileSync(githubOutput, "");
+  const corepack = NodePath.join(outputDir, "corepack");
+  NodeFS.writeFileSync(corepack, "#!/bin/sh\nprintf 'fixture lockfile\\n' > pnpm-lock.yaml\n", {
+    mode: 0o755,
+  });
   try {
     const result = NodeChildProcess.spawnSync(script, [], {
       cwd: repo.dir,
       encoding: "utf8",
       env: {
         ...process.env,
-        PATH: `/usr/bin:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH ?? ""}`,
+        PATH: `${outputDir}:/usr/bin:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH ?? ""}`,
         CI_REPAIR_BOT_UPSTREAM_TARGET: syncTargetRef,
         CI_REPAIR_BOT_UPSTREAM_SOURCE_REF: releaseTargetRef,
         CI_REPAIR_BOT_UPSTREAM_REMOTE: "upstream",
