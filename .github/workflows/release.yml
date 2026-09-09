@@ -427,6 +427,15 @@ jobs:
             sleep 15
           done
 
+      - name: Verify historical startup in packaged macOS server
+        if: matrix.platform == 'mac'
+        shell: bash
+        run: |
+          set -euo pipefail
+          archives=(release/*-arm64.zip)
+          [[ ${#archives[@]} -eq 1 && -f "${archives[0]}" ]]
+          node scripts/smoke-desktop-history.ts "${archives[0]}"
+
       - name: Collect release assets
         shell: bash
         run: |

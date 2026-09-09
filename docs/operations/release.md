@@ -696,3 +696,28 @@ Windows builds are not part of the fork release matrix.
   `t3code-mac-runner start 7200`, verify the `t3code-mac-arm64` label, and make
   sure `T3CODE_RUNNER_STATE_TOKEN` or `GH_PAT` can list repository
   self-hosted runners.
+
+## Historical-data startup gate
+
+Both release artifacts must start with the frozen historical databases in
+`scripts/fixtures/thread-history/` before publication. The Linux headless smoke
+runs this after its empty-data check; the macOS job unpacks the built zip and
+runs its bundled backend using Electron's Node mode. It does not open the GUI.
+
+Each case verifies HTTP readiness, event migration and identity preservation,
+thread/message/goal/order projections, the previously shipped migration ledger,
+and a second startup of the same database. The fixtures include the pre-1346
+sidebar events that broke startup in 1400-fork.1 and the pre-migration-5 ledger.
+Failure blocks the release; never use `--skip-serve` in a release job. Keep
+source/fixture failures separate from signing or artifact acquisition failures.
+
+Local checks against an already packaged server:
+
+```bash
+node scripts/smoke-thread-history.ts /path/to/node /path/to/apps/server/dist/bin.mjs
+node scripts/smoke-desktop-history.ts /path/to/T3-Code-Fork-arm64.zip
+```
+
+Only temporary homes and synthetic data are used. No provider turn is started.
+The existing migration-5 tests cover detailed SQL behavior; this gate verifies
+that the migration and replay are actually wired into the shipped backend.
