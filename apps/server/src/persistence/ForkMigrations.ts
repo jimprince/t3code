@@ -6,12 +6,16 @@ import Migration0001 from "./ForkMigrations/001_ProviderSessionRuntimeBootGenera
 import Migration0002 from "./ForkMigrations/002_ProviderSessionRuntimeActiveTurn.ts";
 import Migration0003 from "./ForkMigrations/003_ProjectionThreadMessageFileAttachments.ts";
 
+import Migration0005 from "./ForkMigrations/005_MigrateSidebarOrderEvents.ts";
+
 export const FORK_MIGRATIONS_TABLE = "effect_sql_fork_migrations";
 
 export const forkMigrationEntries = [
   [1, "ProviderSessionRuntimeBootGeneration", Migration0001],
   [2, "ProviderSessionRuntimeActiveTurn", Migration0002],
   [3, "ProjectionThreadMessageFileAttachments", Migration0003],
+  // ID 4 was published as ProjectionThreadsSidebarOrderKey; do not reuse it.
+  [5, "MigrateSidebarOrderEvents", Migration0005],
 ] as const;
 
 const makeForkMigrationLoader = (throughId?: number) =>
