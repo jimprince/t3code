@@ -41,6 +41,7 @@ const PullRequest = Schema.Struct({
   head: Ref,
   base: Ref,
 });
+const encodeCacheKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 export const make = Effect.gen(function* () {
   const settings = yield* ServerSettingsService;
@@ -210,7 +211,7 @@ export const make = Effect.gen(function* () {
         );
       const key =
         tip && /^[a-f0-9]{40,64}$/i.test(tip)
-          ? JSON.stringify([
+          ? encodeCacheKey([
               remote.instance.id,
               remote.instance.apiOrigin,
               remote.instance.webOrigin,
