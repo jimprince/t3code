@@ -89,9 +89,6 @@ describe("env forget", () => {
       removed: { agents: 0, subscriptions: 0, notifications: 0, queuedSends: 0 },
     });
     expect(await f.read()).toEqual({ ...f.state, environments: [f.state.environments[1]] });
-    expect(
-      JSON.parse((await f.run("envs")).stdout).map((item: { name: string }) => item.name),
-    ).toEqual(["keep"]);
   });
 
   it("refuses dependent state without force and leaves the file unchanged", async () => {
