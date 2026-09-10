@@ -14,40 +14,44 @@ describe("settlement command registration and caller identity", () => {
   it.each([
     ["settle", threadId],
     ["agent", "settle", "self-alias"],
-  ])("blocks the calling thread through %j", async (...args) => {
-    const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-cli-settle-"));
-    const stateFile = NodePath.join(directory, "state.json");
-    try {
-      await NodeFSP.writeFile(
-        stateFile,
-        JSON.stringify({
-          version: 1,
-          environments: [{ name: "offline", httpBaseUrl: "http://127.0.0.1:1" }],
-          agents: [
-            {
-              name: "self-alias",
-              threadId,
-              environment: "offline",
-              projectId: "project",
-              title: "Self",
-            },
-          ],
-          subscriptions: [],
-          notifications: [],
-          queuedSends: [],
-        }),
-      );
-      await expect(
-        execFile(NodePath.join(workspace, "node_modules/.bin/tsx"), ["src/cli.ts", ...args], {
-          cwd: workspace,
-          env: { ...process.env, T3_THREAD_ID: threadId, T3_AGENT_STATE_FILE: stateFile },
-        }),
-      ).rejects.toMatchObject({
-        code: 1,
-        stderr: expect.stringContaining("Refusing to settle the calling thread"),
-      });
-    } finally {
-      await NodeFSP.rm(directory, { recursive: true, force: true });
-    }
-  }, 15_000);
+  ])(
+    "blocks the calling thread through %j",
+    async (...args) => {
+      const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-cli-settle-"));
+      const stateFile = NodePath.join(directory, "state.json");
+      try {
+        await NodeFSP.writeFile(
+          stateFile,
+          JSON.stringify({
+            version: 1,
+            environments: [{ name: "offline", httpBaseUrl: "http://127.0.0.1:1" }],
+            agents: [
+              {
+                name: "self-alias",
+                threadId,
+                environment: "offline",
+                projectId: "project",
+                title: "Self",
+              },
+            ],
+            subscriptions: [],
+            notifications: [],
+            queuedSends: [],
+          }),
+        );
+        await expect(
+          execFile(NodePath.join(workspace, "node_modules/.bin/tsx"), ["src/cli.ts", ...args], {
+            cwd: workspace,
+            env: { ...process.env, T3_THREAD_ID: threadId, T3_AGENT_STATE_FILE: stateFile },
+          }),
+        ).rejects.toMatchObject({
+          code: 1,
+          stderr: expect.stringContaining("Refusing to settle the calling thread"),
+        });
+      } finally {
+        await NodeFSP.rm(directory, { recursive: true, force: true });
+      }
+    },
+    15_000,
+  );
 });
