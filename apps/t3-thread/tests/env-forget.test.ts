@@ -79,7 +79,8 @@ afterEach(async () => {
   );
 });
 
-describe("env forget", () => {
+// These tests boot the real CLI; allow for cold process startup on shared CI runners.
+describe("env forget", { timeout: 15_000 }, () => {
   it("forgets an expired offline pairing and preserves another alias of the same server", async () => {
     const f = await fixture();
     const result = await f.run("env", "forget", "stale");

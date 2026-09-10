@@ -49,5 +49,5 @@ describe("settlement command registration and caller identity", () => {
     } finally {
       await NodeFSP.rm(directory, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 });
