@@ -47,9 +47,14 @@ t3-thread send 22222222-2222-4222-8222-222222222222 "Continue from the last chec
 ```
 
 Settlement uses the server lifecycle and reads back its state. Settling your own
-`T3_THREAD_ID` requires `--self`, including when using a saved alias. Let the final
-response land before another thread settles yours. Unsettle returns a thread to
-the active list without starting a turn.
+`T3_THREAD_ID` requires `--self`, including when using a saved alias. During a
+turn, `t3-thread settle "$T3_THREAD_ID" --self` returns `deferred: true` and a
+background process waits for that turn's final response before settling. It
+returns a `logPath` for the eventual result; `deferred` is acceptance, not proof
+of settlement. Unsettle cancels the pending request and returns the thread to
+the active list without starting a turn. A new turn also cancels the request.
+The helper expires after 24 hours and does not survive reboot; retry after a
+reboot if still needed.
 
 When a worker reaches **Plan Ready**, use `t3-thread implement <agent-or-thread-id>`
 to perform the same-thread equivalent of the UI's **Implement** button. The CLI
@@ -126,7 +131,7 @@ t3-thread archive 22222222-2222-4222-8222-222222222222
 t3-thread forget worker-a
 ```
 
-Supported direct-UUID lifecycle commands: `status`, `result`, `worklog`, `implement`, `send`,
+Supported direct-UUID lifecycle commands: `settle`, `unsettle`, `status`, `result`, `worklog`, `implement`, `send`,
 `clarify`, `revise`, `complete`, `wait`, `archive`, and `subscribe --watch`.
 
 ### Sending to a thread that is still running

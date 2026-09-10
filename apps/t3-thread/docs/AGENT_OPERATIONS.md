@@ -92,9 +92,25 @@ active-work guard. Both commands read back JSON containing `threadId`,
 shows these lifecycle fields.
 
 Settling the calling `T3_THREAD_ID`, even through a saved alias, requires an
-explicit `--self`. A thread should let its final response land before another
-thread or the operator settles it. `--self` only overrides this CLI guard; it
-does not bypass the server's eligibility checks.
+explicit `--self`. When the user asks a running thread to settle itself, use:
+
+```bash
+t3-thread settle "$T3_THREAD_ID" --self
+```
+
+This returns `deferred: true`, the captured `turnId`, a background helper `pid`,
+and a private `logPath`. Finish the response normally. The helper waits for that
+same turn to complete and its assistant message to stop streaming, then calls
+the existing server lifecycle and records the readback in the log. Never claim
+settlement from `deferred: true` alone. It does not interrupt the provider or
+bypass the server's active-work and pending-request guards.
+
+A new turn, `unsettle`, archive, deletion, failure, interruption, or actionable
+plan cancels the pending settlement. Connection failures and raced server guards
+are retried with fresh state. The helper expires after 24 hours, records failure
+in the log, and does not survive machine reboot. After reboot, inspect `status`
+and retry if needed. It runs independently of the notification watcher, so
+older watcher processes need no restart.
 
 ## Project Discovery
 
@@ -382,7 +398,7 @@ When cleaning up the current T3 thread's own checkout:
    - `git worktree list --porcelain`
    - `git branch --list <worker-branch>`
 
-Do not settle or archive the current T3 thread before sending the final response from that same thread. Leave it unarchived long enough for the response to land cleanly; archive/forget it later from another controlling thread if needed.
+To settle the current thread on request, use `settle "$T3_THREAD_ID" --self` and finish the final response normally; deferred settlement waits for it to land. Do not archive the current thread before its final response. Archive/forget it later from another controlling thread if needed.
 
 Resolve the current caller from `T3_THREAD_ID` and T3 environment metadata:
 

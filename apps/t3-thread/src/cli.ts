@@ -10,6 +10,12 @@ import {
 } from "./agent-targets.js";
 import { buildFollowUpMessage } from "./agentPrompts.js";
 import { RemoteEnvironmentClient } from "./client.js";
+import {
+  cancelDeferredSettlement,
+  parseSettlementRequest,
+  runDeferredSettlement,
+  startDeferredSettlement,
+} from "./deferredSettlement.js";
 import { formatCliError } from "./errorOutput.js";
 import { resolvePairingTarget } from "./http.js";
 import {
@@ -706,13 +712,41 @@ program
     printJson(toThreadSearchResult(target));
   });
 
+program
+  .command("settle-after-turn", { hidden: true })
+  .argument("<request>")
+  .action(async (json: string) => {
+    const request = parseSettlementRequest(json);
+    const environment = requireEnvironment(await loadState(), request.environment);
+    await runDeferredSettlement(request, new RemoteEnvironmentClient(environment));
+  });
+
 agent
   .command("settle")
   .argument("<name>", "agent name or raw thread UUID")
-  .option("--self", "Explicitly allow settling the calling T3_THREAD_ID")
+  .option("--self", "Settle the calling thread after its current response finishes")
   .description("Settle a thread through the server lifecycle without archiving it")
   .action(async (name, options) => {
     const { agent: savedAgent, client } = await withAgent(name);
+    if (options.self && savedAgent.threadId === resolveCallerThreadId()) {
+      const thread = await client.findThread(savedAgent.threadId);
+      if (
+        thread.latestTurn &&
+        (thread.latestTurn.state === "running" ||
+          thread.session?.status === "running" ||
+          thread.session?.status === "starting")
+      ) {
+        printJson(
+          await startDeferredSettlement({
+            threadId: thread.id,
+            environment: savedAgent.environment,
+            turnId: thread.latestTurn.turnId,
+            unsettledAt: thread.unsettledAt ?? null,
+          }),
+        );
+        return;
+      }
+    }
     printJson(await client.settleThread(savedAgent.threadId, { self: options.self }));
   });
 
@@ -722,6 +756,7 @@ agent
   .description("Return a settled thread to the active list without starting a turn")
   .action(async (name) => {
     const { agent: savedAgent, client } = await withAgent(name);
+    await cancelDeferredSettlement(savedAgent.environment, savedAgent.threadId);
     printJson(await client.unsettleThread(savedAgent.threadId));
   });
 

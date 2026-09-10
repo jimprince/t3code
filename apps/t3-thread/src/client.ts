@@ -665,7 +665,7 @@ export class RemoteEnvironmentClient {
   async settleThread(threadId: string, options: { self?: boolean } = {}) {
     if (threadId === resolveCallerThreadId() && !options.self) {
       throw new Error(
-        "Refusing to settle the calling thread. Let its final response land, then settle it externally; use --self only to explicitly override this guard.",
+        "Refusing to settle the calling thread. Use --self to request settlement after its current response finishes.",
       );
     }
     return this.setThreadSettlement(threadId, "thread.settle");
