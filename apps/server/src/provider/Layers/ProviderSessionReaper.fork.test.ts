@@ -110,6 +110,7 @@ function makeReadModel(
       runtimeMode: "full-access" as const,
       branch: null,
       worktreePath: null,
+      pullRequests: [],
       createdAt: now,
       updatedAt: now,
       settledOverride: null,
