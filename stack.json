@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "0f348f78601871ad02efc96d3d6e218a334b0762",
-  "head": "b84c31ca24488bdcd9a59d968330e59184b8ef47",
+  "prev": "dfb364ef5b027bba46afc9fd85798127f2d45043",
+  "head": "cf338dae706018d1a33c903a841073f387c58c1b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -25,15 +25,14 @@
     "fork-gitea-connections",
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
-    "fork-headless-delivery"
-  ],
-  "unapplied": [
+    "fork-headless-delivery",
     "fork-desktop-delivery",
     "fork-mobile-delivery",
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-gitea-pr-browser"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
@@ -49,7 +48,7 @@
       "oid": "0892ed3df275c8bc937dca6d2edba198594c4409"
     },
     "fork-desktop-delivery": {
-      "oid": "df873da53f64c3262e615e21a51af5ae447e719b"
+      "oid": "bc7b6c43af59dcc43c224e39be50ae1d8c90c79e"
     },
     "fork-fresh-remote-worktrees": {
       "oid": "872785c7610d544d372f4e54f2c2aca09b2f4837"
@@ -64,16 +63,16 @@
       "oid": "d171911915add642cfbd554d59f5744051044dab"
     },
     "fork-gitea-pr-browser": {
-      "oid": "5af11c15f9399c8d55beb649bcf29a093f763f10"
+      "oid": "cf338dae706018d1a33c903a841073f387c58c1b"
     },
     "fork-headless-delivery": {
       "oid": "b84c31ca24488bdcd9a59d968330e59184b8ef47"
     },
     "fork-maintenance-automation": {
-      "oid": "6d8c363f6b6a1c6f40c83da8910208178bdd9250"
+      "oid": "9d494ffef4642c268608d72a7c89959d280b5b39"
     },
     "fork-mobile-delivery": {
-      "oid": "e1623238d82ebc7602624f89ca3c3bcd9e69b6bb"
+      "oid": "829407282822cc5cfd74e899c684ae58724e527a"
     },
     "fork-pr-dismissal": {
       "oid": "f96e80e8dcb1ac49f5dac593258fde100d606169"
@@ -91,7 +90,7 @@
       "oid": "794b35dc4ea873439c2c186e89cd698286930051"
     },
     "fork-release-publication": {
-      "oid": "0a77ea35dc873375f980c20f6850ccb95d08dde3"
+      "oid": "db05c8d7eec07fea8bd1e547f82d0fb8b77556ba"
     },
     "fork-remote-file-downloads": {
       "oid": "07607060e1a0e48f5c133c6f05590950792ef8eb"
