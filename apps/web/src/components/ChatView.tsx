@@ -1395,6 +1395,7 @@ const EMPTY_HELD_TURN_DIFF_SUMMARIES: readonly never[] = [];
 const noopHeldTurnDiff = (_turnId: TurnId, _filePath?: string) => {};
 const noopHeldRevert = (_targetTurnCount: number) => {};
 const noopHeldAttachment = (_attachment: ChatFileAttachment) => {};
+const noopHeldFork = (_messageId: MessageId, _workspaceMode: ThreadForkWorkspaceMode) => {};
 
 /**
  * Drops the send-time anchored end space. That space is what holds a sent
@@ -8643,16 +8644,6 @@ export default function ChatView(props: ChatViewProps) {
                       agentPanelModel,
                       onOpenAgents: addAgentsSurface,
                       onUseArtifactTemplate: useArtifactTemplate,
-                      onForkMessage,
-                      canForkThread: Boolean(
-                        isServerThread && activeProject && activeProject.kind !== "chat",
-                      ),
-                      canForkToNewWorktree: Boolean(
-                        isServerThread &&
-                        activeProject &&
-                        activeProject.kind !== "chat" &&
-                        isGitRepo,
-                      ),
                     }
                   : {})}
                 isWorking={!paintOnlyDisplayedTimeline && isWorking}
@@ -8681,6 +8672,20 @@ export default function ChatView(props: ChatViewProps) {
                 onRevertToTurnCount={
                   paintOnlyDisplayedTimeline ? noopHeldRevert : onRevertTimelineTurn
                 }
+                onForkMessage={paintOnlyDisplayedTimeline ? noopHeldFork : onForkMessage}
+                canForkThread={Boolean(
+                  !paintOnlyDisplayedTimeline &&
+                  isServerThread &&
+                  activeProject &&
+                  activeProject.kind !== "chat",
+                )}
+                canForkToNewWorktree={Boolean(
+                  !paintOnlyDisplayedTimeline &&
+                  isServerThread &&
+                  activeProject &&
+                  activeProject.kind !== "chat" &&
+                  isGitRepo,
+                )}
                 isRevertingCheckpoint={!paintOnlyDisplayedTimeline && isRevertingCheckpoint}
                 onImageExpand={onExpandTimelineImage}
                 onFileOpen={paintOnlyDisplayedTimeline ? noopHeldAttachment : openFileAttachment}
