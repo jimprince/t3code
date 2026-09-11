@@ -91,6 +91,12 @@ class CronUpgradeTest(unittest.TestCase):
     def test_only_explicit_force_can_upgrade_while_busy(self):
         self.run_upgrade("force")
 
+    def test_orphaned_staging_is_swept_without_touching_live_owner(self):
+        self.run_upgrade("orphan-sweep")
+
+    def test_failed_staging_is_removed_by_exit_cleanup(self):
+        self.run_upgrade("invalid-staged-version")
+
     def run_upgrade(self, mode):
         with tempfile.TemporaryDirectory() as directory:
             home = Path(directory)
@@ -106,7 +112,8 @@ class CronUpgradeTest(unittest.TestCase):
                 (commands / name).symlink_to(shutil.which(name))
             node = home / ".local/node/bin/node"
             node.parent.mkdir(parents=True)
-            node.write_text(f'#!/bin/sh\necho "T3 Code {VERSION}"\n')
+            reported_version = "invalid" if mode == "invalid-staged-version" else VERSION
+            node.write_text(f'#!/bin/sh\necho "T3 Code {reported_version}"\n')
             node.chmod(0o755)
             release = home / "artifact/bin"
             release.mkdir(parents=True)
@@ -141,15 +148,32 @@ else:
                    "T3CODE_HEADLESS_BASE_URL": "https://fixture.invalid", "FIXTURE_VERSION": VERSION,
                    "T3CODE_HEADLESS_STATE_DB": str(home / "state.sqlite"),
                    "FIXTURE_BUSY": "1" if mode == "busy-during-download" else "0"}
+            root = home / ".local/share/t3code-server"
+            if mode == "orphan-sweep":
+                staging = root / ".staging"
+                dead_process = subprocess.Popen(["/bin/true"])
+                dead_process.wait(timeout=5)
+                dead_stage = staging / f"old.{dead_process.pid}"
+                live_stage = staging / f"old.{os.getpid()}"
+                dead_stage.mkdir(parents=True)
+                live_stage.mkdir()
             result = subprocess.run(["/bin/bash", str(SCRIPT), *(["--force"] if mode == "force" else [])], env=env,
                                     text=True, capture_output=True, timeout=15)
+            if mode == "invalid-staged-version":
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(list((root / ".staging").iterdir()), [])
+                self.assertFalse((root / "current").exists())
+                return
             self.assertEqual(result.returncode, 0, result.stderr)
-            root = home / ".local/share/t3code-server"
             if mode == "busy-during-download":
                 self.assertFalse((root / "current").exists())
                 self.assertTrue((root / "update-pending").exists())
                 self.assertIn("update deferred until threads finish", result.stderr)
                 return
+            if mode == "orphan-sweep":
+                self.assertFalse(dead_stage.exists())
+                self.assertTrue(live_stage.exists())
+                self.assertIn(f"removed orphaned staging directory {dead_stage}", result.stderr)
             self.assertEqual((root / "current").resolve(), root / "releases" / VERSION)
             self.assertTrue((root / "current/bin/t3").is_file())
             self.assertIn(f"updated t3code.service to {VERSION}", result.stderr)

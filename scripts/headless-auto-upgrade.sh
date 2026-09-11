@@ -134,8 +134,11 @@ resolve_base_url() {
 
 release_json_path="$(mktemp)"
 tmp_dir="$(mktemp -d)"
+# Set once a release is staged. The promote below moves the directory away, so
+# cleaning it here only affects runs that failed before getting that far.
+stage_dir=""
 cleanup() {
-  rm -rf "$tmp_dir" "$release_json_path"
+  rm -rf "$tmp_dir" "$release_json_path" ${stage_dir:+"$stage_dir"}
 }
 trap cleanup EXIT
 
@@ -232,6 +235,23 @@ if [ -n "$asset_digest" ]; then
 else
   log "release asset has no digest; continuing without checksum verification"
 fi
+
+# Staging is scratch, named with the owning pid. A run killed outright (reboot,
+# timer timeout) never reaches the cleanup trap, so drop leftovers whose process
+# is gone before staging a new one. Without this, 63 extracted releases piled up
+# over two months, ~570M each.
+mkdir -p "$root/.staging"
+for leftover in "$root"/.staging/*; do
+  [ -d "$leftover" ] || continue
+  leftover_pid="${leftover##*.}"
+  case "$leftover_pid" in
+    ''|*[!0-9]*) continue ;;
+  esac
+  if ! kill -0 "$leftover_pid" 2>/dev/null; then
+    rm -rf "$leftover"
+    log "removed orphaned staging directory $leftover"
+  fi
+done
 
 stage_dir="$root/.staging/$version.$$"
 rm -rf "$stage_dir"
