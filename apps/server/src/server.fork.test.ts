@@ -7,6 +7,7 @@ import * as NodeCrypto from "node:crypto";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
 
 import {
+  type DeviceServiceState,
   AuthAccessTokenType,
   AuthEnvironmentBootstrapTokenType,
   AuthTokenExchangeGrantType,
@@ -103,6 +104,7 @@ const collectQueueUntil = Effect.fn("TransferBudget.collectQueueUntil")(function
 
 import * as BackgroundPolicy from "./background/BackgroundPolicy.ts";
 import * as ServerConfig from "./config.ts";
+import * as DeviceService from "./device/DeviceService.ts";
 import { makeRoutesLayer } from "./server.ts";
 import { isThreadDetailEvent, resolveAvailableEditorsForConfig } from "./ws.ts";
 import * as CheckpointDiffQuery from "./checkpointing/CheckpointDiffQuery.ts";
@@ -212,6 +214,18 @@ const testEnvironmentDescriptor = {
   capabilities: {
     repositoryIdentity: true,
   },
+};
+
+const EMPTY_DEVICE_STATE: DeviceServiceState = {
+  hosts: [],
+  hostStatus: "disabled",
+  hostStatuses: {},
+  devices: [],
+  sessions: [],
+  onboardingCompleted: false,
+  agentAccessEnabled: false,
+  hubBasePath: DeviceService.DEVICE_HUB_ROUTE_PREFIX,
+  revision: 0,
 };
 const makeDefaultOrchestrationReadModel = () => {
   const now = "2026-01-01T00:00:00.000Z";
@@ -691,6 +705,11 @@ const buildAppUnderTest = (options?: {
             getBinding: () => Effect.succeed(Option.none()),
             listThreadIds: () => Effect.succeed([]),
             listBindings: () => Effect.succeed([]),
+          }),
+          Layer.mock(DeviceService.DeviceService)({
+            state: Effect.succeed(EMPTY_DEVICE_STATE),
+            currentReadiness: () => Effect.succeed(null),
+            sessionsForThread: () => Effect.succeed([]),
           }),
           Layer.mock(ProviderService.ProviderService)({
             uploadFeedback: () => Effect.die("Provider feedback is not stubbed in this test"),
