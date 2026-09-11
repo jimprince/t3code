@@ -8649,9 +8649,9 @@ export default function ChatView(props: ChatViewProps) {
                       ),
                       canForkToNewWorktree: Boolean(
                         isServerThread &&
-                          activeProject &&
-                          activeProject.kind !== "chat" &&
-                          isGitRepo,
+                        activeProject &&
+                        activeProject.kind !== "chat" &&
+                        isGitRepo,
                       ),
                     }
                   : {})}
