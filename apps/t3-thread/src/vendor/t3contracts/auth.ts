@@ -102,6 +102,20 @@ export const ServerAuthDescriptor = Schema.Struct({
 });
 export type ServerAuthDescriptor = typeof ServerAuthDescriptor.Type;
 
+export const AuthAccessTokenType = "urn:ietf:params:oauth:token-type:access_token" as const;
+
+export const AuthSessionRefreshRequest = Schema.Struct({});
+export type AuthSessionRefreshRequest = typeof AuthSessionRefreshRequest.Type;
+
+export const AuthSessionRefreshResult = Schema.Struct({
+  access_token: TrimmedNonEmptyString,
+  issued_token_type: Schema.Literal(AuthAccessTokenType),
+  token_type: Schema.Literals(["Bearer", "DPoP"]),
+  expires_in: Schema.Number,
+  scope: TrimmedNonEmptyString,
+});
+export type AuthSessionRefreshResult = typeof AuthSessionRefreshResult.Type;
+
 export const AuthBootstrapInput = Schema.Struct({
   credential: TrimmedNonEmptyString,
 });
