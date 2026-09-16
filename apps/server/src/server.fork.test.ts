@@ -1,5 +1,3 @@
-/* oxlint-disable t3code/no-manual-effect-runtime-in-tests */
-
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeServices from "@effect/platform-node/NodeServices";
