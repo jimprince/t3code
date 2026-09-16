@@ -223,4 +223,4 @@ note = "Reorganized 2026-09-06 from fork-thread-transfer. Turn starts inspect th
 id = "upstream-composer-context-records"
 date = "2026-09-16"
 decided = "adapt"
-rationale = "Project the current request's structured composer context before wrapping it with transferred visible history, then append file-attachment prompt lines once. This preserves upstream context records without duplicating the imported request or UI history."
+rationale = "Project the current request's structured composer context before wrapping it with transferred visible history, preserve context records on imported messages, then append file-attachment prompt lines once. This keeps upstream context without duplicating the imported request or UI history."
