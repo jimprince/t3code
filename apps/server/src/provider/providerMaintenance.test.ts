@@ -253,6 +253,7 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
           "@example",
           "package-tool",
         ]);
+        const canonicalTempDir = NodeFS.realpathSync(tempDir);
 
         const capabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(
           packageToolUpdate,
@@ -266,17 +267,17 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
           provider: driver("packageTool"),
           packageName: "@example/package-tool",
           update: {
-            command: `npm install -g --prefix ${tempDir} --allow-scripts=@example/package-tool @example/package-tool@latest`,
+            command: `npm install -g --prefix ${canonicalTempDir} --allow-scripts=@example/package-tool @example/package-tool@latest`,
             executable: "npm",
             args: [
               "install",
               "-g",
               "--prefix",
-              tempDir,
+              canonicalTempDir,
               "--allow-scripts=@example/package-tool",
               "@example/package-tool@latest",
             ],
-            lockKey: `npm-global:${normalizeCommandPath(tempDir)}`,
+            lockKey: `npm-global:${normalizeCommandPath(canonicalTempDir)}`,
           },
         });
       }),
