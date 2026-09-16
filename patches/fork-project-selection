@@ -1,6 +1,6 @@
-Bottom: 2b652d8990fc4b0219f90991be326e80bf10d612
-Top:    a39685dcf70218eb808c888bddf1f07e175409d3
+Bottom: cb0dbbb4c6cce6d843d4b15601fba57e4b4a86b9
+Top:    b73c6060f8e201b42089bf96b9afbdef3f4b9b4c
 Author: User <user@example.com>
-Date:   2026-09-16 16:12:43 -0600
+Date:   2026-09-16 16:14:18 -0600
 
 feat(web): select multiple projects in the sidebar
