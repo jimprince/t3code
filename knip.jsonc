@@ -13,8 +13,16 @@
       "vitest": { "entry": [".github/**/*.test.cjs"] },
     },
     "scripts": {
-      // Knip loads its preprocessor through a CLI option; native verification runs directly.
-      "entry": ["knip-schemas.ts", "mobile-native-client.ts"],
+      // Knip loads its preprocessor by CLI option; native and shell entrypoints run directly.
+      "entry": [
+        "knip-schemas.ts",
+        "mobile-native-client.ts",
+        "ci/check-stgit-candidate.ts",
+        "ci/check-stgit-stack.ts",
+        "ci/create-stgit-candidate-manifest.ts",
+        "ci/deploy-stgit-concern.ts",
+        "ci/prepare-stgit-agent-worktree.ts",
+      ],
     },
     "apps/server": {
       // Vite+ pack entries and the launcher used by installed background services.
@@ -56,9 +64,16 @@
       // reports an entire component module when nothing imports it.
       "ignoreIssues": { "src/components/ui/*.tsx": ["exports", "nsExports", "duplicates"] },
     },
+    "apps/t3-thread": {
+      // Keep the vendored contract snapshot complete.
+      "ignoreIssues": { "src/vendor/t3contracts/{index,ipc}.ts": ["files"] },
+    },
+    "oxlint-plugin-t3code": {
+      "includeEntryExports": true,
+    },
     "apps/mobile": {
       // Expo loads local config plugins by string; Metro handles platform variants.
-      "entry": ["index.ts!", "plugins/*.cjs"],
+      "entry": ["index.ts!", "plugins/*.cjs", "fingerprint.config.cjs"],
       // Fonts are configured as asset paths; Expo autolinks the native packages.
       "ignoreDependencies": [
         "@expo-google-fonts/dm-sans",
