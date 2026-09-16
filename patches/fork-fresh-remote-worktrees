@@ -1,0 +1,6 @@
+Bottom: 95ae6d3176e53cf82b8c1aafac154d58d71628f6
+Top:    8fa9328e869c662085f7d12e638ef9180f0bb2bd
+Author: User <user@example.com>
+Date:   2026-09-16 14:06:58 -0600
+
+feat(worktrees): base new worktrees on a freshly fetched remote

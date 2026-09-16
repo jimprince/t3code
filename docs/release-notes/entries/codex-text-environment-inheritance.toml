@@ -1,4 +1,0 @@
-id = "codex-text-environment-inheritance"
-category = "fix"
-functionality = "Codex"
-text = "Codex-generated titles and commit messages preserve inherited settings when a provider supplies partial environment overrides."
