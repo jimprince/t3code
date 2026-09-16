@@ -1,13 +1,13 @@
 {
   "version": 5,
-  "prev": "109b821692ceabf19e8ee17771bf74a890472984",
-  "head": "fb971ed1dcd11866b2ee08c0daecaddab215f6c1",
+  "prev": "d0934084c2d765784b0976c1b45bab712a864497",
+  "head": "7ed7ba7656d784379034659566d3b4cfb9919ab6",
   "applied": [
     "fork-build-ci-compat",
-    "refresh-temp",
-    "fork-worker-operations"
+    "refresh-temp"
   ],
   "unapplied": [
+    "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
