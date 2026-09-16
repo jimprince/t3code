@@ -236,7 +236,7 @@ suite("reproduce-sync-upstream StGit replay", () => {
       );
       NodeFS.chmodSync(wrapper, 0o755);
 
-      if (process.platform === "darwin") {
+      if (NodeOS.platform() === "darwin") {
         const version = NodeChildProcess.execFileSync(
           bashBin,
           ["-c", 'printf "%s.%s" "$BASH_VERSINFO" "${BASH_VERSINFO[1]}"'],
