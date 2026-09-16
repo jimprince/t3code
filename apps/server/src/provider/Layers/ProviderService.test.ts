@@ -2257,6 +2257,7 @@ routing.layer("ProviderServiceLive routing", (it) => {
       const fileOnlyInput = routing.codex.sendTurn.mock.calls[0]?.[0] as ProviderSendTurnInput;
       assert.include(fileOnlyInput.input ?? "", '[Attached file "report.pdf" is saved at: ');
       assert.deepEqual(fileOnlyInput.attachments, [fileAttachment]);
+      yield* restartSession();
 
       const pastedTextAttachment = {
         type: "file" as const,
