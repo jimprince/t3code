@@ -236,6 +236,10 @@ describe("UsageService", () => {
             claudeLine(4, 1000),
           );
         });
+        const canonicalConfigured = yield* Effect.promise(() => NodeFSP.realpath(configured));
+        const canonicalEnvironmentHome = yield* Effect.promise(() =>
+          NodeFSP.realpath(environmentHome),
+        );
         yield* Effect.gen(function* () {
           const settingsService = yield* ServerSettings.ServerSettingsService;
           const service = yield* UsageService.make;
@@ -243,7 +247,7 @@ describe("UsageService", () => {
           assert.strictEqual(totalOutputTokens(first), 7);
           assert.include(
             first.sources.map((source) => source.fingerprint.resolvedHomePath),
-            NodePath.join(configured, "projects"),
+            NodePath.join(canonicalConfigured, "projects"),
           );
           yield* settingsService.updateSettings({
             providerInstances: {
@@ -260,7 +264,7 @@ describe("UsageService", () => {
           assert.strictEqual(totalOutputTokens(second), 8);
           assert.include(
             second.sources.map((source) => source.fingerprint.resolvedHomePath),
-            NodePath.join(environmentHome, "projects"),
+            NodePath.join(canonicalEnvironmentHome, "projects"),
           );
         }).pipe(
           Effect.provide(
