@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "de4a3574e1e9683484e5c10f8baf7dda886e1adc",
-  "head": "4a943b289f4f79342742d1b6f6b4c2041a568a07",
+  "prev": "ca3d0a3464fc1625c121953cb8296060322ccf33",
+  "head": "dde37b165a5ba119ee7c327d5062992ace1d782c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -9,14 +9,14 @@
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
     "fork-general-chat",
-    "fork-conversation-fork"
-  ],
-  "unapplied": [
+    "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
     "fork-project-selection",
     "fork-private-connection-defaults",
-    "fork-resource-recovery",
+    "fork-resource-recovery"
+  ],
+  "unapplied": [
     "fork-workspace-file-uploads",
     "fork-attachment-compatibility",
     "fork-remote-file-downloads",
@@ -86,10 +86,10 @@
       "oid": "283cd2f483a570ef98cd4e2002701239ee04603a"
     },
     "fork-private-connection-defaults": {
-      "oid": "f45b47283c6e9c93c6e3cc6f416403c6ec68dda7"
+      "oid": "9e23d979deb72138db7d4e14e76752d6d8e8b053"
     },
     "fork-project-selection": {
-      "oid": "695c1679f3646336b761dad0b9d505bf9fd68cc6"
+      "oid": "fb2f78e2b303087043651f1d3f859228c4367378"
     },
     "fork-provider-turn-safety": {
       "oid": "6328f588831eaf734c2fc5961d33b95020708e0c"
@@ -101,16 +101,16 @@
       "oid": "9f0addcad3946733b802673f544df219a865c2d9"
     },
     "fork-resource-recovery": {
-      "oid": "3e35b6074fe7d71bfc998862b1ef1c904f6c4aca"
+      "oid": "dde37b165a5ba119ee7c327d5062992ace1d782c"
     },
     "fork-thread-client-recovery": {
       "oid": "51daf84f24c332682253462e519a8fe8d5cb12ca"
     },
     "fork-thread-history-compatibility": {
-      "oid": "f3a993668762b67f8d531ec4afce58a5e5e52879"
+      "oid": "506524a2032b0f7ce2f98c881ebd09fe2f02cef7"
     },
     "fork-thread-transfer": {
-      "oid": "0cb8e0c1eed40777a08b28137253918568d470e9"
+      "oid": "2d4134735e87d53503a59db9dea21117f348c5c1"
     },
     "fork-unsupported-pr-hosts": {
       "oid": "af6211cd82e1e0061d1646037afd4b38435d39aa"
