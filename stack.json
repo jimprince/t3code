@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "2db0ed84f5323455b70d3809892445684d44b0af",
-  "head": "542f254fe384891ce0c548d2ef694f9df01691c8",
+  "prev": "6c415d7955ea3bc56de23f943cf7ab61a322537c",
+  "head": "fd05b5ff453affbde5f0756bef0f6395b50631fc",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -26,11 +26,11 @@
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
     "fork-headless-delivery",
-    "fork-desktop-delivery",
-    "fork-mobile-delivery",
-    "fork-release-publication"
+    "fork-desktop-delivery"
   ],
   "unapplied": [
+    "fork-mobile-delivery",
+    "fork-release-publication",
     "fork-maintenance-automation",
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh"
