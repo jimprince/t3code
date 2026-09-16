@@ -135,7 +135,9 @@ export function failEnvironmentScopeRequired(requiredScope: AuthEnvironmentScope
   );
 }
 
-function failEnvironmentOperationForbidden(reason: "current_session_revoke_not_allowed") {
+function failEnvironmentOperationForbidden(
+  reason: "current_session_revoke_not_allowed" | "session_refresh_requires_bearer_access_token",
+) {
   return currentEnvironmentTraceId.pipe(
     Effect.flatMap((traceId) =>
       Effect.fail(
@@ -380,6 +382,28 @@ export const authHttpApiLayer = HttpApiBuilder.group(
           ),
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
             failEnvironmentInternal("access_token_issuance_failed", error),
+          ),
+        ),
+      )
+      .handle(
+        "sessionRefresh",
+        Effect.fn("environment.auth.sessionRefresh")(
+          function* (args) {
+            yield* annotateEnvironmentRequest(args.endpoint.name);
+            const session = yield* EnvironmentAuthenticatedPrincipal;
+            if (session.method !== "bearer-access-token") {
+              return yield* failEnvironmentOperationForbidden(
+                "session_refresh_requires_bearer_access_token",
+              );
+            }
+            yield* appendCredentialResponseHeaders;
+            return yield* serverAuth.refreshSession({
+              ...session,
+              scopes: [...session.scopes],
+            });
+          },
+          Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
+            failEnvironmentInternal("session_refresh_failed", error),
           ),
         ),
       )
