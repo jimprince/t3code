@@ -1,15 +1,13 @@
 {
   "version": 5,
-  "prev": "e27b07ece22134d7127c5ac438673063f11615b7",
-  "head": "a56b32e2364b31eee327bdbad3d2729840dace32",
+  "prev": "3b5c35ff0925c7f2c6b7302291a37581c1f36d0d",
+  "head": "eba26126e04dad325340f554e9cce3be8105b293",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
-    "fork-thread-client-recovery"
-  ],
-  "unapplied": [
+    "fork-thread-client-recovery",
     "fork-general-chat",
     "fork-conversation-fork",
     "fork-thread-transfer",
@@ -18,7 +16,9 @@
     "fork-private-connection-defaults",
     "fork-resource-recovery",
     "fork-workspace-file-uploads",
-    "fork-attachment-compatibility",
+    "fork-attachment-compatibility"
+  ],
+  "unapplied": [
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
