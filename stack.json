@@ -1,0 +1,132 @@
+{
+  "version": 5,
+  "prev": null,
+  "head": "594e0982610136030f83c9027fa33fab7bf07fe3",
+  "applied": [
+    "fork-build-ci-compat",
+    "fork-worker-operations",
+    "fork-provider-turn-safety",
+    "fork-bounded-diagnostics",
+    "fork-thread-client-recovery",
+    "refresh-temp"
+  ],
+  "unapplied": [
+    "fork-general-chat",
+    "fork-conversation-fork",
+    "fork-thread-transfer",
+    "fork-thread-history-compatibility",
+    "fork-project-selection",
+    "fork-private-connection-defaults",
+    "fork-resource-recovery",
+    "fork-workspace-file-uploads",
+    "fork-attachment-compatibility",
+    "fork-remote-file-downloads",
+    "fork-fresh-remote-worktrees",
+    "fork-pr-dismissal",
+    "fork-unsupported-pr-hosts",
+    "fork-worktree-cleanup",
+    "fork-gitea-connections",
+    "fork-gitea-pr-actions",
+    "fork-pr-project-exclusions",
+    "fork-headless-delivery",
+    "fork-desktop-delivery",
+    "fork-mobile-delivery",
+    "fork-release-publication",
+    "fork-maintenance-automation",
+    "fork-gitea-pr-browser",
+    "fork-auth-session-refresh"
+  ],
+  "hidden": [],
+  "patches": {
+    "fork-attachment-compatibility": {
+      "oid": "eba26126e04dad325340f554e9cce3be8105b293"
+    },
+    "fork-auth-session-refresh": {
+      "oid": "17440da704de4634786da4f05aaf61b3b92de828"
+    },
+    "fork-bounded-diagnostics": {
+      "oid": "acfdebd8d5e2919fa760f7a04bdb268d8d9d3ea9"
+    },
+    "fork-build-ci-compat": {
+      "oid": "c290e60c96a56ded6a259d687d4d484a9f689251"
+    },
+    "fork-conversation-fork": {
+      "oid": "8b1501b4902a316bcedf363dfe0a3f9d6fd0f0af"
+    },
+    "fork-desktop-delivery": {
+      "oid": "b00ced25e83e2919af61e287198417899e76d72a"
+    },
+    "fork-fresh-remote-worktrees": {
+      "oid": "bdb475d364c60d98f39f3a3e4f9787e01b934f4c"
+    },
+    "fork-general-chat": {
+      "oid": "f5c76c703d4883559bcd72880746cf4ed6dd8650"
+    },
+    "fork-gitea-connections": {
+      "oid": "a5f94771bcb94d8e4846c4c92672824aa7a13e8f"
+    },
+    "fork-gitea-pr-actions": {
+      "oid": "4a7cad5cfb6040b0db70ee05bd9544e8eef6e1e5"
+    },
+    "fork-gitea-pr-browser": {
+      "oid": "b595d07d3efadb92c8fefd353b5b5fec91deaf14"
+    },
+    "fork-headless-delivery": {
+      "oid": "d550ef35452bda186f36e0fc171e6ff98af820e4"
+    },
+    "fork-maintenance-automation": {
+      "oid": "da421f7c0f43bc3e56d618e5ae737ff3e4c7997e"
+    },
+    "fork-mobile-delivery": {
+      "oid": "e43efe845f8bcb6075ceb40b70d1a984e3157d4b"
+    },
+    "fork-pr-dismissal": {
+      "oid": "4ac6273c1ef72317c61e80b29160b9d2d4ee44c3"
+    },
+    "fork-pr-project-exclusions": {
+      "oid": "c535a6e6a1eb87034af61a4b381f39401ccce5f1"
+    },
+    "fork-private-connection-defaults": {
+      "oid": "105e690137e03b474d7b162f57262becf330b0d7"
+    },
+    "fork-project-selection": {
+      "oid": "1f46f21f56dd7b3d88c752b17f135ce52104246b"
+    },
+    "fork-provider-turn-safety": {
+      "oid": "0b5fafcb19361a17447608bc236b72c6c6b88344"
+    },
+    "fork-release-publication": {
+      "oid": "586a9f05758ec57e1f1a0ef02c2496d998817772"
+    },
+    "fork-remote-file-downloads": {
+      "oid": "6d06282f3992b1d4744b7ddd338d3f60b6a54f7a"
+    },
+    "fork-resource-recovery": {
+      "oid": "e1659a9f0164adc0c9152c7848fa765f3c1979f9"
+    },
+    "fork-thread-client-recovery": {
+      "oid": "a56b32e2364b31eee327bdbad3d2729840dace32"
+    },
+    "fork-thread-history-compatibility": {
+      "oid": "fcb93c14a9565c2d25980deee27befd447f65d35"
+    },
+    "fork-thread-transfer": {
+      "oid": "dd5d287fa4d85440ebe653c1aa3bea98fe5e189b"
+    },
+    "fork-unsupported-pr-hosts": {
+      "oid": "01d4836440caf4a6a7e235b4fa6aa2d8f4e81d70"
+    },
+    "fork-worker-operations": {
+      "oid": "43769081802d8f3ad7d31d4f2a4c5ed283d7a5a8"
+    },
+    "fork-workspace-file-uploads": {
+      "oid": "e2a881fdf54729d1bd26f5534840f5a5b093de8f"
+    },
+    "fork-worktree-cleanup": {
+      "oid": "93c5ee86da36ae0e4877c17bd9b6b2c20e7b4632"
+    },
+    "refresh-temp": {
+      "oid": "594e0982610136030f83c9027fa33fab7bf07fe3"
+    }
+  }
+}

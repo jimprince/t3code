@@ -1,0 +1,6 @@
+Bottom: d414214d9c88edbee34012366abd4859ac30f3d4
+Top:    8293ace8524212249ab1943285b7f036e435e10d
+Author: User <user@example.com>
+Date:   2026-09-16 14:22:55 -0600
+
+fix(server): bound diagnostics, log retention, and trace volume
