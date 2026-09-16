@@ -5,6 +5,7 @@ import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeCrypto from "node:crypto";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import { otlpSerializationLayer } from "@t3tools/shared/observability";
 
 import {
   type DeviceServiceState,
@@ -54,7 +55,6 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Fiber from "effect/Fiber";
 import * as Layer from "effect/Layer";
-import * as ManagedRuntime from "effect/ManagedRuntime";
 import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 import * as PubSub from "effect/PubSub";
@@ -388,7 +388,9 @@ const makeBrowserOtlpPayload = (spanName: string) =>
       ({ close }) => Effect.promise(close),
     );
 
-    const runtime = ManagedRuntime.make(
+    // The exporter's batch fiber is forked while the layer builds and ticks on
+    // a wall-clock interval, so the whole tracer runs on the live clock.
+    yield* Layer.build(
       OtlpTracer.layer({
         url: collector.url,
         exportInterval: "10 millis",
@@ -401,13 +403,12 @@ const makeBrowserOtlpPayload = (spanName: string) =>
           },
         },
       }).pipe(Layer.provide(browserOtlpTracingLayer)),
+    ).pipe(
+      Effect.flatMap((tracing) =>
+        Effect.void.pipe(Effect.withSpan(spanName), Effect.provideContext(tracing)),
+      ),
+      TestClock.withLive,
     );
-
-    try {
-      yield* Effect.promise(() => runtime.runPromise(Effect.void.pipe(Effect.withSpan(spanName))));
-    } finally {
-      yield* Effect.promise(() => runtime.dispose());
-    }
 
     const request = yield* Effect.raceFirst(
       Effect.promise(() => collector.firstRequest).pipe(Effect.orDie),
@@ -485,6 +486,8 @@ const buildAppUnderTest = (options?: {
       otlpMetricsUrl: undefined,
       otlpExportIntervalMs: 10_000,
       otlpServiceName: "t3-server",
+      otlpHeaders: undefined,
+      otlpProtocol: "http/json",
       mode: "desktop",
       port: 0,
       host: "127.0.0.1",
@@ -986,6 +989,7 @@ const buildAppUnderTest = (options?: {
           ...options?.layers?.browserTraceCollector,
         }),
       ),
+      Layer.provide(otlpSerializationLayer(config.otlpProtocol)),
       Layer.provide(
         Layer.mock(ServerLifecycleEvents.ServerLifecycleEvents)({
           publish: (event) => Effect.succeed({ ...(event as any), sequence: 1 }),
