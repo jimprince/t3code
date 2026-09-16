@@ -499,7 +499,12 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
           assert.strictEqual(status.status, "error");
           assert.strictEqual(status.installed, false);
           assert.strictEqual(status.auth.status, "unknown");
-          assert.strictEqual(status.message, "Codex CLI (`codex`) was not found on PATH.");
+          assert.include(status.message, "Could not start Codex CLI (`codex`)");
+          assert.include(
+            status.message,
+            "Settings → Providers → Codex → Binary path on the server",
+          );
+          assert.include(status.message, "Installing ChatGPT or Codex desktop");
         }),
       );
 
@@ -1632,9 +1637,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               "Real Codex probe against a missing binary should surface as 'error' in the aggregator",
             );
             assert.strictEqual(codexPersonal?.installed, false);
-            assert.strictEqual(
+            assert.include(codexPersonal?.message, "Could not start Codex CLI (`codex`)");
+            assert.include(
               codexPersonal?.message,
-              "Codex CLI (`codex`) was not found on PATH.",
+              "Settings → Providers → Codex → Binary path on the server",
             );
           }).pipe(Effect.provide(runtimeServices));
         }),

@@ -113,4 +113,10 @@ date = "2026-09-16"
 decided = "adapt"
 rationale = "The fork has already shipped migration IDs 33-37, so upstream migrations 33-50 remain mapped to 38-55. Extend that compatibility ledger by mapping new upstream migrations 51 and 52 to fork IDs 56 and 57."
 
+[[patch.decision]]
+id = "upstream-codex-binary-diagnostic"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Keep the fork's registry recovery coverage aligned with upstream's more actionable Codex spawn diagnostic: identify the configured server-side binary-path setting and explain that desktop app installation does not imply a CLI on PATH."
+
 # Cache-removal tests await refresh completion and persisted update events, avoiding fixed clock-poll loops.
