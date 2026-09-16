@@ -1,9 +1,12 @@
 {
   "version": 5,
-  "prev": "86579067a1c5f0222cd3fbbad53ed741df0b305d",
-  "head": "886f6955bf7a067576b66915fc94fb9c6ec3baf3",
+  "prev": "8bb99c6af7ea412f4f37511ae60ffff118962006",
+  "head": "f69b4fb1feb3c6da6b2f7c96e6b2f5fb65aadbc2",
   "applied": [
     "fork-build-ci-compat",
+    "refresh-temp"
+  ],
+  "unapplied": [
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
@@ -31,10 +34,8 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-gitea-pr-browser",
-    "fork-auth-session-refresh",
-    "refresh-temp"
+    "fork-auth-session-refresh"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
@@ -125,7 +126,7 @@
       "oid": "44a45da9026902e201a94dc0db574496e9b63ad0"
     },
     "refresh-temp": {
-      "oid": "886f6955bf7a067576b66915fc94fb9c6ec3baf3"
+      "oid": "f69b4fb1feb3c6da6b2f7c96e6b2f5fb65aadbc2"
     }
   }
 }
