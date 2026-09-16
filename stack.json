@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "bea487b61d3bcbc06c619fcf8d20c10f78fa24e7",
-  "head": "3262046ca85427769390c3c0d73e3c5038fd3fc8",
+  "prev": "07f09c28392fa9cf063519cc941f6aba40bf9a22",
+  "head": "109a5163e1f061aa65eb2362f8fe61b7c5ada46d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -9,7 +9,8 @@
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
     "fork-general-chat",
-    "fork-conversation-fork"
+    "fork-conversation-fork",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-thread-transfer",
@@ -123,6 +124,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "5ca77a18f4b4dbb41aae8af4ac043ddb103b4f6a"
+    },
+    "refresh-temp": {
+      "oid": "109a5163e1f061aa65eb2362f8fe61b7c5ada46d"
     }
   }
 }
