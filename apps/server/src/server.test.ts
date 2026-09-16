@@ -2450,6 +2450,49 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("refreshes an unexpired bearer token and revokes the old token", () =>
+    Effect.gen(function* () {
+      yield* buildAppUnderTest();
+      const issued = yield* exchangeAccessToken(defaultDesktopBootstrapToken, {
+        clientMetadata: { label: "t3-thread:local-mbp", deviceType: "bot", os: "macOS" },
+      });
+      const refreshUrl = yield* getHttpServerUrl("/api/auth/session/refresh");
+      const refreshedResponse = yield* fetchEffect(refreshUrl, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${issued.body.access_token ?? ""}`,
+          "content-type": "application/json",
+        },
+        body: jsonRequestBody({}),
+      });
+      const refreshed = yield* responseJsonEffect<{
+        readonly access_token?: string;
+        readonly token_type?: string;
+        readonly scope?: string;
+      }>(refreshedResponse);
+      const oldTokenResponse = yield* fetchEffect(refreshUrl, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${issued.body.access_token ?? ""}`,
+          "content-type": "application/json",
+        },
+        body: jsonRequestBody({}),
+      });
+      const oldTokenBody = yield* responseJsonEffect<{
+        readonly code?: string;
+        readonly reason?: string;
+      }>(oldTokenResponse);
+
+      assert.equal(refreshedResponse.status, 200);
+      assert.equal(refreshed.token_type, "Bearer");
+      assert.equal(refreshed.scope, issued.body.scope);
+      assert.equal(typeof refreshed.access_token, "string");
+      assert.equal(oldTokenResponse.status, 401);
+      assert.equal(oldTokenBody.code, "auth_invalid");
+      assert.equal(oldTokenBody.reason, "invalid_credential");
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("replaces the local desktop credential on repeated bootstrap exchanges", () =>
     Effect.gen(function* () {
       yield* buildAppUnderTest();
