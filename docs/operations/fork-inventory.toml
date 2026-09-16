@@ -1014,9 +1014,24 @@ retire_when = "Upstream supports equivalent configured-instance Gitea browsing w
 depends_on = ["fork-gitea-connections", "fork-gitea-pr-actions"]
 roles = []
 note = "Read-only browser; create and checkout remain in the source-control concern. Reuses the configured HTTP transport without redirects or credential-bearing errors. No checks is unknown, never success. Test services are provided together to preserve their shared lifecycle."
-
 [[patch.decision]]
 id = "upstream-forgejo-pr-provider"
 date = "2026-09-16"
 decided = "retain"
 rationale = "Upstream's native Forgejo provider is CLI-backed and does not replace browsing pull requests on configured Gitea instances through the fork's token-aware HTTP transport. Keep Gitea as a separate registry provider alongside Forgejo."
+
+[[patch]]
+name = "fork-auth-session-refresh"
+subject = "feat(auth): refresh operator sessions"
+class = "product"
+purpose = "Rotate valid bearer operator sessions before expiry so unattended t3-thread commands and notification delivery do not require monthly re-pairing."
+retire_when = "Upstream provides equivalent authenticated session rotation and t3-thread renewal behavior."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "Refresh is limited to unexpired bearer access tokens. Older servers and transient failures warn once and continue with the existing token; expired credentials still require pairing."
+
+[[patch.decision]]
+id = "upstream-environment-capability-expansion"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Preserve upstream's projectCloneTracking capability alongside the fork's independent sessionRefresh capability. Upstream still lacks authenticated bearer-session rotation and t3-thread renewal behavior."
