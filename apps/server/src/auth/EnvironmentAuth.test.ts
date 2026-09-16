@@ -2,6 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { AuthAdministrativeScopes } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Duration from "effect/Duration";
 import * as Layer from "effect/Layer";
 
 import * as ServerConfig from "../config.ts";
@@ -135,6 +136,44 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
 
       expect(verified.sessionId).toBe(bearer.sessionId);
     }).pipe(Effect.provide(makeEnvironmentAuthLayer({ mode: "web", host: "192.168.1.50" }))),
+  );
+
+  it.effect("refreshes a bearer session and revokes the presented token", () =>
+    Effect.gen(function* () {
+      const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const issued = yield* serverAuth.issueSession({
+        subject: "t3-thread",
+        scopes: ["orchestration:read"],
+        label: "t3-thread:local-mbp",
+      });
+      const presented = yield* serverAuth.authenticateHttpRequest(makeBearerRequest(issued.token));
+      const refreshed = yield* serverAuth.refreshSession(presented);
+      const oldTokenError = yield* serverAuth
+        .authenticateHttpRequest(makeBearerRequest(issued.token))
+        .pipe(Effect.flip);
+      const replacement = yield* serverAuth.authenticateHttpRequest(
+        makeBearerRequest(refreshed.access_token),
+      );
+
+      expect(oldTokenError._tag).toBe("ServerAuthInvalidCredentialError");
+      expect(replacement.subject).toBe(presented.subject);
+      expect(replacement.scopes).toEqual(presented.scopes);
+      expect(replacement.method).toBe(presented.method);
+      expect(replacement.client.label).toBe("t3-thread:local-mbp");
+      expect(refreshed.token_type).toBe("Bearer");
+    }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
+  );
+
+  it.effect("does not authenticate an expired token for refresh", () =>
+    Effect.gen(function* () {
+      const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const expired = yield* serverAuth.issueSession({ ttl: Duration.zero });
+      const error = yield* serverAuth
+        .authenticateHttpRequest(makeBearerRequest(expired.token))
+        .pipe(Effect.flip);
+
+      expect(error._tag).toBe("ServerAuthInvalidCredentialError");
+    }).pipe(Effect.provide(makeEnvironmentAuthLayer())),
   );
 
   it.effect("does not exchange ordinary pairing grants for administrative access tokens", () =>
