@@ -306,3 +306,9 @@ id = "upstream-scoped-diagnostics-settings"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Run diagnostics and recovery RPCs against the environment selected by the upstream Settings scope, while retaining the fork's primary desktop pressure-notification preference. Keep upstream's effect-based environment/process refs so asynchronous actions cannot target a selection after it unmounts."
+
+[[patch.decision]]
+id = "upstream-server-owned-sidebar-settlement"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Upstream now treats sidebar settlement preferences as environment- and project-scoped server settings. Preserve the fork's legacy client-schema fields for stored-setting compatibility, but give server keys precedence when a key exists in both schemas so scoped writes do not also persist a conflicting client value."
