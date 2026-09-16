@@ -11,6 +11,7 @@ import {
   type AuthEnvironmentScope,
   type AuthPairingLink,
   type AuthPairingCredentialResult,
+  type AuthSessionRefreshResult,
   type AuthSessionId,
   type AuthSessionState,
   type ServerAuthDescriptor,
@@ -66,6 +67,7 @@ export interface AuthenticatedSession {
   readonly subject: string;
   readonly method: ServerAuthSessionMethod;
   readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
+  readonly client: AuthClientMetadata;
   readonly proofKeyThumbprint?: string;
   readonly expiresAt?: DateTime.DateTime;
 }
@@ -441,6 +443,9 @@ export class EnvironmentAuth extends Context.Service<
       AuthAccessTokenResult,
       ServerAuthInvalidCredentialError | ServerAuthInvalidRequestError | ServerAuthInternalError
     >;
+    readonly refreshSession: (
+      session: AuthenticatedSession,
+    ) => Effect.Effect<AuthSessionRefreshResult, ServerAuthInternalError>;
     readonly createPairingLink: (input?: {
       readonly ttl?: Duration.Duration;
       readonly label?: string;
@@ -621,6 +626,7 @@ export const make = Effect.gen(function* () {
         subject: session.subject,
         method: session.method,
         scopes: session.scopes,
+        client: session.client,
         ...(session.proofKeyThumbprint ? { proofKeyThumbprint: session.proofKeyThumbprint } : {}),
         ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
       })),
@@ -787,6 +793,34 @@ export const make = Effect.gen(function* () {
         ),
         Effect.withSpan("EnvironmentAuth.exchangeBootstrapCredentialForAccessToken"),
       );
+
+  const refreshSession: EnvironmentAuth["Service"]["refreshSession"] = (session) =>
+    Effect.gen(function* () {
+      const replacement = yield* sessions
+        .issue({
+          method: session.method,
+          subject: session.subject,
+          scopes: session.scopes,
+          client: session.client,
+        })
+        .pipe(
+          Effect.mapError((cause) => new ServerAuthAuthenticatedAccessTokenIssueError({ cause })),
+        );
+      yield* sessions
+        .revoke(session.sessionId)
+        .pipe(Effect.mapError((cause) => new ServerAuthSessionRevocationError({ cause })));
+      const now = yield* DateTime.now;
+      return {
+        access_token: replacement.token,
+        issued_token_type: AuthAccessTokenType,
+        token_type: "Bearer",
+        expires_in: Math.max(
+          0,
+          Math.floor((replacement.expiresAt.epochMilliseconds - now.epochMilliseconds) / 1000),
+        ),
+        scope: encodeOAuthScope(replacement.scopes),
+      } satisfies AuthSessionRefreshResult;
+    }).pipe(Effect.withSpan("EnvironmentAuth.refreshSession"));
 
   const issuePairingCredentialForSubject = (input: {
     readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
@@ -993,6 +1027,7 @@ export const make = Effect.gen(function* () {
               subject: session.subject,
               method: session.method,
               scopes: session.scopes,
+              client: session.client,
               ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
             })),
             mapSessionVerificationErrors,
@@ -1009,6 +1044,7 @@ export const make = Effect.gen(function* () {
     getSessionState,
     createBrowserSession,
     exchangeBootstrapCredentialForAccessToken,
+    refreshSession,
     createPairingLink,
     issuePairingCredential,
     issueStartupPairingCredential,
