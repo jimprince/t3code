@@ -38,3 +38,9 @@ id = "editor-worker-test-animation-cleanup"
 date = "2026-09-09"
 decided = "adapt"
 rationale = "Upstream1439 language-readiness tests can leave a worker state broadcast queued after animation globals are removed. Track and cancel remaining callbacks after worker/highlighter teardown; retire this edit when upstream owns equivalent cleanup."
+
+[[patch.decision]]
+id = "expo-audio-patched-version-pin"
+date = "2026-09-16"
+decided = "narrow"
+rationale = "expo-audio 57.0.5 satisfies ~57.0.4 but does not contain the recorder failure-state fix carried by the exact 57.0.4 patch. Pin the dependency to 57.0.4 so fresh lockfile generation keeps the required patch applied."
