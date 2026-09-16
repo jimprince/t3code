@@ -4389,7 +4389,7 @@ export default function Sidebar() {
   // environments the desktop shell provides a compact environment picker;
   // browsers fall back to the primary environment.
   const handleNewThreadClick = useCallback(
-    (event: ReactMouseEvent<HTMLButtonElement>) => {
+    (event: ReactMouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
       const defaultChatProject = chatEnvironmentProjects[0];
