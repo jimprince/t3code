@@ -10,6 +10,11 @@ Start the target runtime once before seeding so all migrations have run. Use an 
 
 ## Use the helper
 
+If the helper fails with `ERR_MODULE_NOT_FOUND` for a workspace dependency in
+a fresh worktree, run `vp install --ignore-scripts --frozen-lockfile` from the
+repository root, then retry it. The helper imports workspace packages and
+cannot run before dependencies are linked.
+
 List tables:
 
 ```bash
