@@ -56,6 +56,7 @@ const authenticatedAuth: Context.Service.Shape<typeof EnvironmentAuthenticatedAu
       subject: "test-client",
       method: "browser-session-cookie",
       scopes: new Set<AuthEnvironmentScope>(),
+      client: { deviceType: "unknown" },
       expiresAt: DateTime.makeUnsafe("2026-05-01T12:00:00.000Z"),
     }),
   );
@@ -100,6 +101,7 @@ export async function installEnvironmentHttpTest(scenario: EnvironmentHttpTestSc
               }),
             )
             .handle("token", () => unexpectedEndpoint("auth.token"))
+            .handle("sessionRefresh", () => unexpectedEndpoint("auth.sessionRefresh"))
             .handle("webSocketTicket", () => unexpectedEndpoint("auth.webSocketTicket"))
             .handle(
               "pairingCredential",
