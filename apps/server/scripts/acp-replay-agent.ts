@@ -186,9 +186,14 @@ function materializeInbound(value: unknown): unknown {
 
 function emitInbound(recorded: LogicalFrame): void {
   const frame = materializeInbound(recorded) as LogicalFrame;
+  // Persist consumption before replying: the last reply may immediately close the session.
+  const sendInbound = (message: JsonRpcMessage) => {
+    advance();
+    send(message);
+  };
   switch (frame.kind) {
     case "notification":
-      send({
+      sendInbound({
         jsonrpc: "2.0",
         method: frame.method,
         ...(frame.params === undefined ? {} : { params: frame.params }),
@@ -198,7 +203,7 @@ function emitInbound(recorded: LogicalFrame): void {
       const id = nextAgentRequestId;
       nextAgentRequestId += 1;
       pendingAgentRequestMethods.set(String(id), frame.method);
-      send({
+      sendInbound({
         jsonrpc: "2.0",
         id,
         method: frame.method,
@@ -214,7 +219,7 @@ function emitInbound(recorded: LogicalFrame): void {
         return;
       }
       pendingClientRequestIds.delete(frame.method);
-      send({
+      sendInbound({
         jsonrpc: "2.0",
         id,
         ...(frame.result === undefined ? {} : { result: frame.result }),
@@ -248,7 +253,6 @@ function flushInbound(): void {
     }
     emitInbound(frame);
     if (stopped) return;
-    advance();
   }
 }
 
