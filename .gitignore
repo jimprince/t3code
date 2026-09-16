@@ -28,6 +28,7 @@ squashfs-root/
 .gstack/
 .plans/
 /audits/
+.worktrees/
 dist-electron/
 .electron-runtime/
 .showcase/
@@ -45,3 +46,8 @@ node_modules/
 
 # pnpm content-addressable store; never belongs in the repo.
 .pnpm-store/
+
+oxlint-plugin-t3code/dist/
+
+# superpowers brainstorming mockups
+.superpowers/
