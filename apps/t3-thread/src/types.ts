@@ -22,6 +22,8 @@ export interface AuthAccessTokenResult {
   scope?: string;
 }
 
+export type AuthSessionRefreshResult = AuthAccessTokenResult;
+
 export interface AuthWebSocketTicketResult {
   ticket: string;
   expiresAt: string;
@@ -40,6 +42,7 @@ export interface ExecutionEnvironmentDescriptor {
     threadPinReorder?: boolean;
     threadActiveReorder?: boolean;
     threadOrderReset?: boolean;
+    sessionRefresh?: boolean;
   };
 }
 
