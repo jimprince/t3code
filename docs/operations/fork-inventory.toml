@@ -162,3 +162,9 @@ id = "upstream-follow-up-queue"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Upstream client-side follow-up queues must remain queued while a pending user-input prompt is open. Preserve the fork's submit-intent guard, but treat queued messages like direct annotations so neither is submitted as the prompt answer."
+
+[[patch.decision]]
+id = "upstream-title-state-archived-shell"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Select upstream's persisted title state in the fork's archived-thread shell query so the shared thread-row decoder receives the same fields as the active-thread query."
