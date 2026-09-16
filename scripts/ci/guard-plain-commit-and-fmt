@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Staged-files hook entry (see vite.config.ts `staged`). Two jobs:
+#  1. Teach: a plain `git commit` on the stack branch can never land — StGit
+#     creates its commits through plumbing (hooks don't fire), so this hook
+#     running on stgit/adopt at all means someone is committing beside the
+#     stack. Fail with directions instead of letting hours of work become
+#     unlandable at publish time.
+#  2. Format the staged files (the previous behavior).
+set -euo pipefail
+
+branch="$(git symbolic-ref --quiet --short HEAD || true)"
+# StGit commits are the intended way to change the stack. Git exports
+# GIT_EXEC_PATH (and GIT_INDEX_FILE) to every hook it runs, while StGit runs
+# hooks itself with a bare environment, so a plain `git commit` is the case
+# where GIT_EXEC_PATH is present. StGit refreshes therefore pass straight
+# through to formatting without needing HUSKY=0 or T3_ALLOW_PLAIN_COMMIT.
+plain_git_commit=0
+if [[ -n "${GIT_EXEC_PATH:-}" || -n "${GIT_INDEX_FILE:-}" ]]; then
+  plain_git_commit=1
+fi
+if [[ "$branch" == "stgit/adopt" && "$plain_git_commit" == 1 && -z "${T3_ALLOW_PLAIN_COMMIT:-}" ]]; then
+  cat >&2 <<'MSG'
+✗ Plain git commit on the StGit stack branch (stgit/adopt).
+
+  This repository is a maintained fork kept as an StGit patch stack. A commit
+  created here with plain git cannot be published: the landing gate
+  (scripts/ci/publish-stgit-stack) requires HEAD to equal the stack metadata.
+
+  What to do instead (LLM_INSTRUCTIONS.md → "Route B"):
+    - Changing existing fork functionality:  stg refresh -p <owning-patch>
+    - Genuinely new concern:                 stg new <patch-name>  + an entry in
+                                             docs/operations/fork-inventory.toml
+  Verify with:  corepack pnpm exec vp check && corepack pnpm exec vp run test
+
+  Operator override (rare, intentional):  T3_ALLOW_PLAIN_COMMIT=1 git commit ...
+MSG
+  exit 1
+fi
+
+exec vp fmt "$@"

@@ -7,6 +7,26 @@ import {
   highlightSourceFile,
 } from "./shikiReviewHighlighter";
 
+vi.mock("@shikijs/core", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@shikijs/core")>();
+  return {
+    ...original,
+    createHighlighterCore: async (...args: Parameters<typeof original.createHighlighterCore>) => {
+      const highlighter = await original.createHighlighterCore(...args);
+      return {
+        ...highlighter,
+        codeToTokensBase: (...input: Parameters<typeof highlighter.codeToTokensBase>) =>
+          highlighter.codeToTokensBase(input[0], {
+            ...input[1],
+            // Cold-initialization assertions must not depend on Shiki's
+            // wall-clock cutoff when the complete repository gate is busy.
+            tokenizeTimeLimit: 0,
+          }),
+      };
+    },
+  };
+});
+
 describe("highlightSourceFile", () => {
   it("preserves one highlighted token row per source line without trailing newlines", async () => {
     const lines = [
