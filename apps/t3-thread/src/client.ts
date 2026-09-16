@@ -1,4 +1,3 @@
-import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
 import type { ProjectAutomation } from "@t3tools/contracts";
 import * as NodeCrypto from "node:crypto";
 
@@ -23,6 +22,7 @@ import { T3RpcClient } from "./rpc.js";
 import { enqueueSend } from "./sendQueue.js";
 import { classifyThread } from "./status.js";
 import { resolveCallerThreadId } from "./state.js";
+import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import type {
   ExecutionEnvironmentDescriptor,
   ModelSelection,
@@ -139,12 +139,16 @@ function providerInventoryFromConfig(config: ServerConfig): ProviderModelInvento
 }
 
 export class RemoteEnvironmentClient {
-  readonly environment: SavedEnvironment;
+  private currentEnvironment: SavedEnvironment;
   private readonly rpcFactory: RpcFactory | null;
 
   constructor(environment: SavedEnvironment, options: { rpcFactory?: RpcFactory } = {}) {
-    this.environment = environment;
+    this.currentEnvironment = environment;
     this.rpcFactory = options.rpcFactory ?? null;
+  }
+
+  get environment(): SavedEnvironment {
+    return this.currentEnvironment;
   }
 
   static async pair(input: {
@@ -187,6 +191,7 @@ export class RemoteEnvironmentClient {
   }
 
   async describe(): Promise<ExecutionEnvironmentDescriptor> {
+    await this.refreshEnvironment();
     return fetchEnvironmentDescriptor(this.environment.httpBaseUrl);
   }
 
@@ -461,7 +466,6 @@ export class RemoteEnvironmentClient {
     baseBranch?: string;
     startFromOrigin?: boolean;
     initialMessage?: string;
-    workerContext?: WorkerContext;
     pin?: boolean;
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
     const snapshot = await this.getShellSnapshot();
@@ -499,18 +503,7 @@ export class RemoteEnvironmentClient {
         message: {
           messageId: NodeCrypto.randomUUID(),
           role: "user",
-          text: input.workerContext
-            ? wrapWithPreamble(initialMessage, {
-                ...input.workerContext,
-                threadId,
-                environment: this.environment.name,
-                projectId: project.id,
-                projectTitle: project.title,
-                branch: input.branch ?? null,
-                worktreePath: input.branch ? null : project.workspaceRoot,
-                createdAt,
-              })
-            : initialMessage,
+          text: initialMessage,
           attachments: [],
         },
         modelSelection,
@@ -878,6 +871,7 @@ export class RemoteEnvironmentClient {
   }
 
   private async openRpc(): Promise<RemoteRpcClient> {
+    await this.refreshEnvironment();
     if (this.rpcFactory) {
       return this.rpcFactory(this.environment.wsBaseUrl);
     }
@@ -887,5 +881,12 @@ export class RemoteEnvironmentClient {
       bearerToken: this.environment.bearerToken,
     });
     return new T3RpcClient(wsUrl);
+  }
+
+  private async refreshEnvironment(): Promise<void> {
+    if (this.rpcFactory) {
+      return;
+    }
+    this.currentEnvironment = await refreshSavedEnvironmentSession(this.currentEnvironment);
   }
 }
