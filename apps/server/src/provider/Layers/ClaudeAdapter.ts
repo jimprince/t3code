@@ -5526,7 +5526,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
   const forkThread: NonNullable<ClaudeAdapterShape["forkThread"]> = Effect.fn("forkThread")(
     function* (threadId, input) {
       const context = yield* requireSession(threadId);
-      const sourceTurnCount = currentTurnCount(context);
+      const sourceTurnCount = context.turnStartMessageIds.length;
       if (input.retainedTurnCount > sourceTurnCount) {
         return null;
       }
@@ -5544,10 +5544,18 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       }
 
       const sourceSessionId = context.resumeSessionId;
-      const retainedBoundary = Array.from(context.turnBoundaries.values()).find(
-        (boundary) => boundary.turnId === input.retainedTurnId,
-      );
-      if (!sourceSessionId || !retainedBoundary) {
+      const retainedBoundary = context.turnStartMessageIds[input.retainedTurnCount - 1];
+      // Upstream now persists native turn-start ids instead of the fork's
+      // assistant-boundary map. The current tip still has an exact assistant
+      // anchor; older selections deliberately use orchestration's transcript
+      // fallback rather than guessing across compaction or interrupted turns.
+      if (
+        !sourceSessionId ||
+        input.retainedTurnCount !== sourceTurnCount ||
+        retainedBoundary === null ||
+        retainedBoundary !== input.retainedTurnId ||
+        !context.lastAssistantUuid
+      ) {
         return null;
       }
 
@@ -5556,9 +5564,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
           resume: sourceSessionId,
           sessionId: targetSessionId,
           forkSession: true,
-          resumeSessionAt: retainedBoundary.assistantUuid,
+          resumeSessionAt: context.lastAssistantUuid,
           turnCount: input.retainedTurnCount,
-          turnBoundaries: retainedTurnBoundaries(context, input.retainedTurnCount),
+          turnStartMessageIds: context.turnStartMessageIds.slice(0, input.retainedTurnCount),
         },
         turnCount: input.retainedTurnCount,
       };
