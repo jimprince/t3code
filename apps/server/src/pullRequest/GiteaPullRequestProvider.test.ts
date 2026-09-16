@@ -62,6 +62,7 @@ function harness(respond: (url: URL) => unknown, status = 200, instances = [inst
       Effect.provide(
         Layer.mergeAll(
           Layer.mock(SourceControlProviderRegistry)({
+            resolveLink: () => undefined,
             resolveHandle: ({ cwd }) =>
               Effect.succeed({
                 context: {
