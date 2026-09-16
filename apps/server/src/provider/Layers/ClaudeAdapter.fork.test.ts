@@ -3728,9 +3728,7 @@ describe("ClaudeAdapterLive", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
-      const turnStartMessageIds = Array.from({ length: 300 }, (_, index) =>
-        `turn-${index + 1}`,
-      );
+      const turnStartMessageIds = Array.from({ length: 300 }, (_, index) => `turn-${index + 1}`);
       const session = yield* adapter.startSession({
         threadId: RESUME_THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
