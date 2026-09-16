@@ -204,6 +204,12 @@ export const AuthAccessTokenResult = Schema.Struct({
 });
 export type AuthAccessTokenResult = typeof AuthAccessTokenResult.Type;
 
+export const AuthSessionRefreshRequest = Schema.Struct({});
+export type AuthSessionRefreshRequest = typeof AuthSessionRefreshRequest.Type;
+
+export const AuthSessionRefreshResult = AuthAccessTokenResult;
+export type AuthSessionRefreshResult = typeof AuthSessionRefreshResult.Type;
+
 export const AuthWebSocketTicketResult = Schema.Struct({
   ticket: TrimmedNonEmptyString,
   expiresAt: Schema.DateTimeUtc,
