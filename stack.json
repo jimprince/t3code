@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "865c1efaef49e1b55ec065e0b88c1fc2f8463c01",
-  "head": "086a12ddedcb96003c3b160ebc06191bd25dfc22",
+  "prev": "f768c4de90ee542a706752084241acf36a442e8b",
+  "head": "b5c88f152678b628965075843c175cc53c99840c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -27,7 +27,8 @@
     "fork-pr-project-exclusions",
     "fork-headless-delivery",
     "fork-desktop-delivery",
-    "fork-mobile-delivery"
+    "fork-mobile-delivery",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-release-publication",
@@ -123,6 +124,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b76c701cd757d88030bfcd729b9deb6573d9d5bd"
+    },
+    "refresh-temp": {
+      "oid": "b5c88f152678b628965075843c175cc53c99840c"
     }
   }
 }
