@@ -50,3 +50,9 @@ id = "upstream-windows-probe-env-inheritance"
 date = "2026-09-16"
 decided = "narrow"
 rationale = "Upstream's cross-architecture Windows probe test inspected every child environment, so a T3 worker's ambient ELECTRON_RUN_AS_NODE value made the unrelated Node self-containment probe look like the skipped packaged-app probe. Scope the assertion to the packaged Windows executable while retaining the independent self-containment assertion."
+
+[[patch.decision]]
+id = "macos-worktree-realpath-exclusion"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Canonicalize the configured data and worktree roots before comparing them with transcript cwd realpaths. macOS can spell the same temporary directory through /var and /private/var, which otherwise lets a symlinked managed worktree appear as an importable project under the Node 24 CI runtime."
