@@ -1,12 +1,12 @@
 {
   "version": 5,
-  "prev": "ef48da70a1fe62bc687ea40383ed516a941a9764",
-  "head": "e6f325154e3622d094ca93f924eaca2a8e91697f",
+  "prev": "ac180ae84c2708fe24a77b28025f61f3de409daa",
+  "head": "9ee5e557e4d00417596c9eba7625d70da3670338",
   "applied": [
-    "fork-build-ci-compat",
-    "fork-worker-operations"
+    "fork-build-ci-compat"
   ],
   "unapplied": [
+    "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
