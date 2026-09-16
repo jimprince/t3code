@@ -343,6 +343,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       );
 
       const previewChannel = yield* createBuildConfig(
+        "stable",
         "mac",
         "dmg",
         "0.0.41-preview.20260912.1589",
