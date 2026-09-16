@@ -1,15 +1,15 @@
 {
   "version": 5,
-  "prev": "166f95ce32a7201158cc5d357463cb1b587cb366",
-  "head": "8e5c2a99bdf1d247d809cdb6876610b658d0288f",
+  "prev": "4bc3aaefe47e4e6652e6289f8a0b88e3a4e4ba09",
+  "head": "8c0d13a3e202c1415ae15d8439e5090c7aa56ba0",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
-    "fork-provider-turn-safety"
+    "fork-provider-turn-safety",
+    "fork-bounded-diagnostics",
+    "fork-thread-client-recovery"
   ],
   "unapplied": [
-    "fork-bounded-diagnostics",
-    "fork-thread-client-recovery",
     "fork-general-chat",
     "fork-conversation-fork",
     "fork-thread-transfer",
@@ -44,7 +44,7 @@
       "oid": "b76e04868a78aafb53035ab5e9f91b63a612f2e0"
     },
     "fork-bounded-diagnostics": {
-      "oid": "acfdebd8d5e2919fa760f7a04bdb268d8d9d3ea9"
+      "oid": "65b7ae3abd8313f7304848960b772758685cd2aa"
     },
     "fork-build-ci-compat": {
       "oid": "c290e60c96a56ded6a259d687d4d484a9f689251"
@@ -104,7 +104,7 @@
       "oid": "e132b811066dcf435caa5a101bed37e1ef07a160"
     },
     "fork-thread-client-recovery": {
-      "oid": "9f67da1723e4f9cd4df35bb8f413c27595ea2274"
+      "oid": "8c0d13a3e202c1415ae15d8439e5090c7aa56ba0"
     },
     "fork-thread-history-compatibility": {
       "oid": "9aab8803a8337d2613a111b4d1899b873f5ff7fe"
