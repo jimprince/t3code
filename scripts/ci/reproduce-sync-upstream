@@ -49,6 +49,8 @@ STACK_BRANCH="stgit/adopt"
 STACK_REF="refs/stacks/stgit/adopt"
 REPLAY_COMPLETE=0
 REPLAY_STARTED=0
+REPLAY_FAILURE=0
+ALLOW_CONFLICT_OUTPUT=0
 START_STACK=""
 
 emit_status() {
@@ -63,7 +65,7 @@ emit_status() {
   fi
   if [[ ${#files[@]} -gt 0 ]]; then
     echo "conflicting files:"
-    printf '  %s\n' "${files[@]}"
+    printf '  %s\n' ${files[@]+"${files[@]}"}
   fi
 
   if [[ "$status" == "conflict" ]]; then
@@ -84,7 +86,7 @@ EOF
     {
       echo "files<<EOF"
       if [[ ${#files[@]} -gt 0 ]]; then
-        printf '%s\n' "${files[@]}"
+        printf '%s\n' ${files[@]+"${files[@]}"}
       fi
       echo "EOF"
     } >> "$GITHUB_OUTPUT"
@@ -109,6 +111,10 @@ restore_start() {
 
 restore_interrupted_replay() {
   local exit_code=$?
+  if [[ $exit_code -eq 0 && $REPLAY_FAILURE -ne 0 && $ALLOW_CONFLICT_OUTPUT -eq 0 ]]; then
+    echo "Replay recorded failure status $REPLAY_FAILURE; refusing a zero exit." >&2
+    exit_code=$REPLAY_FAILURE
+  fi
   if [[ $REPLAY_COMPLETE -eq 0 ]]; then
     restore_start
   fi
@@ -164,9 +170,16 @@ if stg_cmd rebase --merged "$CI_REPAIR_BOT_UPSTREAM_TARGET"; then
   # Later patches add workspaces. Generate only after every concern has replayed.
   corepack pnpm install --lockfile-only --ignore-scripts
   stg_cmd refresh -p "$lockfile_owner" -- pnpm-lock.yaml
+  if ! git_cmd merge-base --is-ancestor "$CI_REPAIR_BOT_UPSTREAM_TARGET" HEAD; then
+    echo "StGit replay reported success, but HEAD does not contain $CI_REPAIR_BOT_UPSTREAM_TARGET." >&2
+    exit 1
+  fi
   emit_status clean ""
   REPLAY_COMPLETE=1
   exit 0
+else
+  rebase_exit=$?
+  REPLAY_FAILURE=$rebase_exit
 fi
 
 failing_patch="$(stg_cmd top 2>/dev/null || true)"
@@ -175,10 +188,12 @@ while IFS= read -r file; do
   [[ -n "$file" ]] && conflicted+=("$file")
 done < <(git_cmd diff --name-only --diff-filter=U | sort -u)
 
+echo "StGit replay failed with exit $rebase_exit; restoring the starting stack." >&2
 restore_start
 REPLAY_COMPLETE=1
-emit_status conflict "$failing_patch" "${conflicted[@]}"
+emit_status conflict "$failing_patch" ${conflicted[@]+"${conflicted[@]}"}
 if [[ "$CONFLICT_MODE" == "output" ]]; then
+  ALLOW_CONFLICT_OUTPUT=1
   exit 0
 fi
-exit 1
+exit "$rebase_exit"

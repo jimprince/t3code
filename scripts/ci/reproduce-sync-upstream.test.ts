@@ -12,6 +12,7 @@ const repoRoot = NodePath.resolve(
   "../..",
 );
 const script = NodePath.join(repoRoot, "scripts/ci/reproduce-sync-upstream");
+const bashBin = "/bin/bash";
 const syncTargetRef = "refs/heads/sync-target";
 const releaseTargetRef = "refs/heads/release-target";
 
@@ -102,7 +103,11 @@ const convertCommitsToStack = (repo: FixtureRepo, count: number): readonly strin
   return names;
 };
 
-const runDriver = (repo: FixtureRepo, conflictMode = "fail"): DriverResult => {
+const runDriver = (
+  repo: FixtureRepo,
+  conflictMode = "fail",
+  gitPathPrefix?: string,
+): DriverResult => {
   const outputDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-sync-output-"));
   const githubOutput = NodePath.join(outputDir, "github_output");
   NodeFS.writeFileSync(githubOutput, "");
@@ -111,12 +116,12 @@ const runDriver = (repo: FixtureRepo, conflictMode = "fail"): DriverResult => {
     mode: 0o755,
   });
   try {
-    const result = NodeChildProcess.spawnSync(script, [], {
+    const result = NodeChildProcess.spawnSync(bashBin, [script], {
       cwd: repo.dir,
       encoding: "utf8",
       env: {
         ...process.env,
-        PATH: `${outputDir}:/usr/bin:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH ?? ""}`,
+        PATH: `${outputDir}:${gitPathPrefix ? `${gitPathPrefix}:` : ""}/usr/bin:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH ?? ""}`,
         CI_REPAIR_BOT_UPSTREAM_TARGET: syncTargetRef,
         CI_REPAIR_BOT_UPSTREAM_SOURCE_REF: releaseTargetRef,
         CI_REPAIR_BOT_UPSTREAM_REMOTE: "upstream",
@@ -207,6 +212,49 @@ suite("reproduce-sync-upstream StGit replay", () => {
       assert.deepStrictEqual(afterState, beforeState);
     } finally {
       repo.cleanup();
+      if (remote) NodeFS.rmSync(remote, { recursive: true, force: true });
+    }
+  });
+
+  it("fails loudly under macOS Bash 3.2 when StGit leaves no conflict files", () => {
+    const repo = createFixtureRepo();
+    const wrapperDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-git-wrapper-"));
+    let remote: string | undefined;
+    try {
+      repo.writeFile("shared/base.ts", "export const base = 0;\n");
+      repo.commitAll("upstream: shared base");
+      remote = createUpstreamRemote(repo, "upstream/new.ts", "export const next = true;\n");
+      repo.writeFile("topics/a.ts", "export const a = 1;\n");
+      repo.commitAll("feat: topic one");
+      convertCommitsToStack(repo, 1);
+      repo.git("remote", "add", "upstream", remote);
+      const startingHead = repo.git("rev-parse", "HEAD");
+      const wrapper = NodePath.join(wrapperDir, "git");
+      NodeFS.writeFileSync(
+        wrapper,
+        '#!/bin/sh\nif [ "$1" = reset ] && [ "$2" = --hard ]; then\n  echo "BLOCKED: git reset --hard" >&2\n  exit 1\nfi\nexec /usr/bin/git "$@"\n',
+      );
+      NodeFS.chmodSync(wrapper, 0o755);
+
+      if (process.platform === "darwin") {
+        const version = NodeChildProcess.execFileSync(
+          bashBin,
+          ["-c", 'printf "%s.%s" "$BASH_VERSINFO" "${BASH_VERSINFO[1]}"'],
+          { encoding: "utf8" },
+        );
+        assert.strictEqual(version, "3.2", "regression must exercise Apple's Bash 3.2");
+      }
+
+      const result = runDriver(repo, "fail", wrapperDir);
+
+      assert.strictEqual(result.status, 2, result.output);
+      assert.include(result.output, "BLOCKED: git reset --hard");
+      assert.include(result.output, "StGit replay failed with exit 2");
+      assert.strictEqual(repo.git("rev-parse", "HEAD"), startingHead);
+      assert.strictEqual(repo.git("status", "--porcelain"), "");
+    } finally {
+      repo.cleanup();
+      NodeFS.rmSync(wrapperDir, { recursive: true, force: true });
       if (remote) NodeFS.rmSync(remote, { recursive: true, force: true });
     }
   });
