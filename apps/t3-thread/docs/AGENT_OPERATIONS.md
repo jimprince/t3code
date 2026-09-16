@@ -659,12 +659,18 @@ a WebSocket, the client obtains a short-lived ticket from
 `POST /api/auth/websocket-ticket` and connects to `/ws?wsTicket=<ticket>`.
 Operators should not mint, copy, or store WebSocket tickets themselves.
 
-The CLI does not automatically refresh an expired access token. If a saved
-environment expires or authentication fails, obtain a fresh pairing URL or
-credential through T3 Code's first-class pairing flow, then run
-`t3-thread pair` again with the same environment name. Do not replace tokens or
-edit any other authentication state by hand. For generating pairing credentials
-on a local or remote T3 Code service, follow
+Before a command connects to a saved environment, including each notification
+watcher pass, the CLI rotates an unexpired access token when fewer than seven
+days remain. The replacement is written atomically to `state.json`. A network,
+authentication, or unsupported-endpoint failure prints one warning and the
+command continues with the existing token; an already-expired token is never
+sent to the refresh endpoint. `t3-thread envs` shows each saved `expiresAt`.
+
+If a saved environment has already expired or authentication fails, obtain a
+fresh pairing URL or credential through T3 Code's first-class pairing flow,
+then run `t3-thread pair` again with the same environment name. Do not replace
+tokens or edit any other authentication state by hand. For generating pairing
+credentials on a local or remote T3 Code service, follow
 [`REMOTE_T3CODE_UPDATE.md`](./REMOTE_T3CODE_UPDATE.md) and the
 `t3code-remote-ops` skill.
 
