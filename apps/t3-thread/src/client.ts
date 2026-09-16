@@ -21,6 +21,7 @@ import { T3RpcClient } from "./rpc.js";
 import { enqueueSend } from "./sendQueue.js";
 import { classifyThread } from "./status.js";
 import { resolveCallerThreadId } from "./state.js";
+import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import type {
   ExecutionEnvironmentDescriptor,
   ModelSelection,
@@ -137,12 +138,16 @@ function providerInventoryFromConfig(config: ServerConfig): ProviderModelInvento
 }
 
 export class RemoteEnvironmentClient {
-  readonly environment: SavedEnvironment;
+  private currentEnvironment: SavedEnvironment;
   private readonly rpcFactory: RpcFactory | null;
 
   constructor(environment: SavedEnvironment, options: { rpcFactory?: RpcFactory } = {}) {
-    this.environment = environment;
+    this.currentEnvironment = environment;
     this.rpcFactory = options.rpcFactory ?? null;
+  }
+
+  get environment(): SavedEnvironment {
+    return this.currentEnvironment;
   }
 
   static async pair(input: {
@@ -185,6 +190,7 @@ export class RemoteEnvironmentClient {
   }
 
   async describe(): Promise<ExecutionEnvironmentDescriptor> {
+    await this.refreshEnvironment();
     return fetchEnvironmentDescriptor(this.environment.httpBaseUrl);
   }
 
@@ -766,6 +772,7 @@ export class RemoteEnvironmentClient {
   }
 
   private async openRpc(): Promise<RemoteRpcClient> {
+    await this.refreshEnvironment();
     if (this.rpcFactory) {
       return this.rpcFactory(this.environment.wsBaseUrl);
     }
@@ -775,5 +782,12 @@ export class RemoteEnvironmentClient {
       bearerToken: this.environment.bearerToken,
     });
     return new T3RpcClient(wsUrl);
+  }
+
+  private async refreshEnvironment(): Promise<void> {
+    if (this.rpcFactory) {
+      return;
+    }
+    this.currentEnvironment = await refreshSavedEnvironmentSession(this.currentEnvironment);
   }
 }
