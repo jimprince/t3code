@@ -727,6 +727,7 @@ it.layer(NodeServices.layer)("Antigravity installation", (it) => {
         yield* fs.makeDirectory(externalDirectory);
         yield* fs.writeFileString(externalExecutable, "external server", { mode: 0o755 });
         yield* fs.writeFileString(externalHarness, "external harness", { mode: 0o755 });
+        const realExternalExecutable = yield* fs.realPath(externalExecutable);
         const { installation } = yield* makeHarness({
           baseDir,
           path: externalDirectory,
@@ -738,7 +739,7 @@ it.layer(NodeServices.layer)("Antigravity installation", (it) => {
           version: previousVersion,
         });
         expect(yield* installation.resolve(externalExecutable)).toMatchObject({
-          executablePath: externalExecutable,
+          executablePath: realExternalExecutable,
           source: "override",
           managedVersionDirectory: null,
         });
@@ -759,7 +760,7 @@ it.layer(NodeServices.layer)("Antigravity installation", (it) => {
         yield* installation.remove();
         expect(yield* installation.resolve()).toMatchObject({
           source: "path",
-          executablePath: externalExecutable,
+          executablePath: realExternalExecutable,
         });
         const isolated = yield* makeHarness({ baseDir });
         expect(yield* isolated.installation.resolve().pipe(Effect.flip)).toMatchObject({
@@ -769,11 +770,11 @@ it.layer(NodeServices.layer)("Antigravity installation", (it) => {
           yield* isolated.installation.resolve(undefined, { PATH: externalDirectory }),
         ).toMatchObject({
           source: "path",
-          executablePath: externalExecutable,
+          executablePath: realExternalExecutable,
         });
         expect(
           yield* isolated.installation.resolve(executableName, { PATH: externalDirectory }),
-        ).toMatchObject({ source: "override", executablePath: externalExecutable });
+        ).toMatchObject({ source: "override", executablePath: realExternalExecutable });
       }),
   );
 
