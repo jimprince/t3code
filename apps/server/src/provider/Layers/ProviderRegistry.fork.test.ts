@@ -1637,7 +1637,10 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               "Real Codex probe against a missing binary should surface as 'error' in the aggregator",
             );
             assert.strictEqual(codexPersonal?.installed, false);
-            assert.include(codexPersonal?.message, "Could not start Codex CLI (`codex`)");
+            assert.include(
+              codexPersonal?.message,
+              `Could not start Codex CLI (\`${missingBinary}\`)`,
+            );
             assert.include(
               codexPersonal?.message,
               "Settings → Providers → Codex → Binary path on the server",
