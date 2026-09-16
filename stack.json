@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "8b9e7ef55cb037a0517b89f9ab8917efecc8455e",
-  "head": "0aba1559d97ce8cae2c957f2a1ed404ab487f199",
+  "prev": "1a8fbc00f7273f7580a66e9dcff0c8cdcc29e63d",
+  "head": "b1037090d6a3b7d0de2b7b4d4b0d747d8f0c8a04",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -15,9 +15,7 @@
     "fork-project-selection",
     "fork-private-connection-defaults",
     "fork-resource-recovery",
-    "fork-workspace-file-uploads"
-  ],
-  "unapplied": [
+    "fork-workspace-file-uploads",
     "fork-attachment-compatibility",
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
@@ -35,13 +33,14 @@
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
-      "oid": "778e8a31976b1a063afd8d27349797540c897cff"
+      "oid": "0557ad9dc73c9f08077c6a587cc36304171866c5"
     },
     "fork-auth-session-refresh": {
-      "oid": "e0c08ff29131166cae44ae0b75b10335d9d617c0"
+      "oid": "b1037090d6a3b7d0de2b7b4d4b0d747d8f0c8a04"
     },
     "fork-bounded-diagnostics": {
       "oid": "e9724bb917cc5ba7a602d1f63cbb620330c51b0e"
@@ -53,37 +52,37 @@
       "oid": "4a943b289f4f79342742d1b6f6b4c2041a568a07"
     },
     "fork-desktop-delivery": {
-      "oid": "ba87123d18b2d3e42552cf7e25fa0726ef471d3e"
+      "oid": "752747c9f5ca319be411ac46a490b7b961c9dc35"
     },
     "fork-fresh-remote-worktrees": {
-      "oid": "c58d8012403147fbcc8e07e8810187362b37fe37"
+      "oid": "68d2286b16a46792093e26684113d12b1159176a"
     },
     "fork-general-chat": {
       "oid": "21489b810997603ea00cb2b859fb94742776b540"
     },
     "fork-gitea-connections": {
-      "oid": "eb00e623588128fc2bc5c072c559203b56fcb6a7"
+      "oid": "dc2da193aa80c16fe2bcc956d20bf2844ca44adb"
     },
     "fork-gitea-pr-actions": {
-      "oid": "f2af7a8c1cb8920f17bece4ceb0435e5e59b2f62"
+      "oid": "9ba0ddaa3721abb1a42665d35c788fc183c87af1"
     },
     "fork-gitea-pr-browser": {
-      "oid": "1180021aa918a168eb3c5ecf6e7b2523ce0467c5"
+      "oid": "57400310d7bea9cbfdeae73db9f9c5a562178d79"
     },
     "fork-headless-delivery": {
-      "oid": "81e3bac0d50c954da4a8e6413d7486a6c236d53e"
+      "oid": "efaa8c2e4d6fea76b29ffcf4b111a9920664a3ab"
     },
     "fork-maintenance-automation": {
-      "oid": "2367c8aee46d2528c7a159c87a8455eea5dcee42"
+      "oid": "dc595e354912decd70da22186c44de49bd0ccb5d"
     },
     "fork-mobile-delivery": {
-      "oid": "b8558c42ea540e7bbc0244a5fb982a650442d695"
+      "oid": "97261b0ab5b0430f06ce22880bfe2b4c8abc6b34"
     },
     "fork-pr-dismissal": {
-      "oid": "6e8baa9bd87dfab8b1977c6856dfd006ccdb268f"
+      "oid": "f2c445bf5119b8241ba42261694212f7d669378c"
     },
     "fork-pr-project-exclusions": {
-      "oid": "283cd2f483a570ef98cd4e2002701239ee04603a"
+      "oid": "b16a442c6d9aa7cc2f5fd9aaf54f5d742a6e4ad4"
     },
     "fork-private-connection-defaults": {
       "oid": "9e23d979deb72138db7d4e14e76752d6d8e8b053"
@@ -95,10 +94,10 @@
       "oid": "6328f588831eaf734c2fc5961d33b95020708e0c"
     },
     "fork-release-publication": {
-      "oid": "fc24e40c93dafc613c1acdd70153a1cd2168e8b3"
+      "oid": "5a42222f0230aac17dfe1b482c8bc15965676faa"
     },
     "fork-remote-file-downloads": {
-      "oid": "9f0addcad3946733b802673f544df219a865c2d9"
+      "oid": "eb0d150c13927907a532f4285864ca512949b60d"
     },
     "fork-resource-recovery": {
       "oid": "06942e4ef9e78a4a1d5612921cd406518bd5d984"
@@ -113,7 +112,7 @@
       "oid": "2d4134735e87d53503a59db9dea21117f348c5c1"
     },
     "fork-unsupported-pr-hosts": {
-      "oid": "af6211cd82e1e0061d1646037afd4b38435d39aa"
+      "oid": "f9ab601a28d950999e528d9d140ef2730dea2753"
     },
     "fork-worker-operations": {
       "oid": "b97003bbee45367e8ae5f09311240c9d652e03a1"
@@ -122,7 +121,7 @@
       "oid": "0aba1559d97ce8cae2c957f2a1ed404ab487f199"
     },
     "fork-worktree-cleanup": {
-      "oid": "52e181f79e0421b62116ae325bc3e1bf2150abe5"
+      "oid": "40343705b4e36943616c745bb3a361c2fbb91503"
     }
   }
 }
