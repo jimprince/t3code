@@ -1,16 +1,16 @@
 {
   "version": 5,
-  "prev": "4f76e3671f80254f93d1a1fe9a1451e72c66fd04",
-  "head": "9f67da1723e4f9cd4df35bb8f413c27595ea2274",
+  "prev": "1ce1e763772cff1351172d2031533d5709bff302",
+  "head": "dfcf1b2c7e915c8b0fec523c4a2f78ae1bbcb1a9",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
-    "fork-thread-client-recovery"
+    "fork-thread-client-recovery",
+    "fork-general-chat"
   ],
   "unapplied": [
-    "fork-general-chat",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
@@ -59,7 +59,7 @@
       "oid": "bdb475d364c60d98f39f3a3e4f9787e01b934f4c"
     },
     "fork-general-chat": {
-      "oid": "49e8ca0a203426dcef4062f69a966cc33ee03d1d"
+      "oid": "dfcf1b2c7e915c8b0fec523c4a2f78ae1bbcb1a9"
     },
     "fork-gitea-connections": {
       "oid": "a5f94771bcb94d8e4846c4c92672824aa7a13e8f"
