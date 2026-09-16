@@ -5,6 +5,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import { assert, describe, it } from "@effect/vitest";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { createFixtureRepo, type FixtureRepo } from "./lib/git-fixture.ts";
 
 const repoRoot = NodePath.resolve(
@@ -236,7 +237,7 @@ suite("reproduce-sync-upstream StGit replay", () => {
       );
       NodeFS.chmodSync(wrapper, 0o755);
 
-      if (NodeOS.platform() === "darwin") {
+      if (HostProcessPlatform.defaultValue() === "darwin") {
         const version = NodeChildProcess.execFileSync(
           bashBin,
           ["-c", 'printf "%s.%s" "$BASH_VERSINFO" "${BASH_VERSINFO[1]}"'],
