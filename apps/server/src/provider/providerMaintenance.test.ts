@@ -529,6 +529,7 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
         const link = NodePath.join(tempDir, "bin", "package-tool");
         NodeFS.mkdirSync(NodePath.dirname(link), { recursive: true });
         NodeFS.symlinkSync(target, link);
+        const canonicalKeg = NodeFS.realpathSync(keg);
 
         const capabilities = yield* resolveProviderMaintenanceCapabilitiesEffect(
           packageToolUpdate,
@@ -540,8 +541,8 @@ it.layer(NodeServices.layer)("providerMaintenance", (it) => {
 
         expect(capabilities.update).toMatchObject({
           executable: "npm",
-          args: expect.arrayContaining(["--prefix", keg]),
-          lockKey: `npm-global:${normalizeCommandPath(keg)}`,
+          args: expect.arrayContaining(["--prefix", canonicalKeg]),
+          lockKey: `npm-global:${normalizeCommandPath(canonicalKeg)}`,
         });
       }),
   );
