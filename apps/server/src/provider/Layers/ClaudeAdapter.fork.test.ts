@@ -3460,7 +3460,7 @@ describe("ClaudeAdapterLive", () => {
           forkSession: true,
           resumeSessionAt: retainedAssistantUuid,
           turnCount: 2,
-          turnBoundaries: [{ turnCount: 2, assistantUuid: retainedAssistantUuid }],
+          turnStartMessageIds: ["turn-1", "turn-2"],
         },
         runtimeMode: "full-access",
       });
@@ -3476,7 +3476,7 @@ describe("ClaudeAdapterLive", () => {
         resume: targetSessionId,
         resumeSessionAt: retainedAssistantUuid,
         turnCount: 2,
-        turnBoundaries: [{ turnCount: 2, assistantUuid: retainedAssistantUuid }],
+        turnStartMessageIds: ["turn-1", "turn-2"],
       });
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
@@ -3625,7 +3625,7 @@ describe("ClaudeAdapterLive", () => {
 
       const forked = yield* adapter.forkThread!(session.threadId, {
         cwd: "/tmp/claude-identity-fork",
-        retainedTurnCount: 3,
+        retainedTurnCount: 4,
         retainedTurnId: fourthTurn.turnId,
       });
 
@@ -3724,18 +3724,13 @@ describe("ClaudeAdapterLive", () => {
     );
   });
 
-  it.effect("bounds persisted Claude turn boundaries and falls back for pruned history", () => {
+  it.effect("preserves upstream Claude turn-start ids and falls back for older history", () => {
     const harness = makeHarness();
     return Effect.gen(function* () {
       const adapter = yield* ClaudeAdapter;
-      const turnBoundaries = Array.from({ length: 300 }, (_, index) => {
-        const turnCount = index + 1;
-        return {
-          turnCount,
-          turnId: `turn-${turnCount}`,
-          assistantUuid: `assistant-${turnCount}`,
-        };
-      });
+      const turnStartMessageIds = Array.from({ length: 300 }, (_, index) =>
+        `turn-${index + 1}`,
+      );
       const session = yield* adapter.startSession({
         threadId: RESUME_THREAD_ID,
         provider: ProviderDriverKind.make("claudeAgent"),
@@ -3743,19 +3738,19 @@ describe("ClaudeAdapterLive", () => {
           resume: "550e8400-e29b-41d4-a716-446655440000",
           resumeSessionAt: "assistant-300",
           turnCount: 300,
-          turnBoundaries,
+          turnStartMessageIds,
         },
         runtimeMode: "full-access",
       });
 
       const persistedBoundaries = (
         session.resumeCursor as {
-          turnBoundaries?: ReadonlyArray<{ turnCount: number }>;
+          turnStartMessageIds?: ReadonlyArray<string | null>;
         }
-      ).turnBoundaries;
-      assert.equal(persistedBoundaries?.length, 256);
-      assert.equal(persistedBoundaries?.[0]?.turnCount, 45);
-      assert.equal(persistedBoundaries?.at(-1)?.turnCount, 300);
+      ).turnStartMessageIds;
+      assert.equal(persistedBoundaries?.length, 300);
+      assert.equal(persistedBoundaries?.[0], "turn-1");
+      assert.equal(persistedBoundaries?.at(-1), "turn-300");
 
       const prunedFork = yield* adapter.forkThread!(session.threadId, {
         cwd: "/tmp/claude-pruned-boundary-fork",
