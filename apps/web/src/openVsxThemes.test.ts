@@ -431,6 +431,10 @@ describe("Open VSX themes", () => {
     expect(themeColorToHex(paired.colors.searchMatchBackground)).toBe("#bbddff");
     expect(themeColorToHex(paired.colors.searchMatchForeground)).toBe("#112233");
 
+    // The large unused directory was exercised above; later variants only
+    // need the theme payload and manifest.
+    zip.remove("extension/node_modules");
+
     packagedManifest.contributes.themes[0]!.label = "Renamed Dark";
     packagedManifest.contributes.themes[1]!.label = "Renamed Light";
     packagedManifest.contributes.themes[2]!.label = "Renamed Solo";
