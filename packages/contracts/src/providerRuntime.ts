@@ -16,6 +16,7 @@ import {
 import { ProviderInstanceId, ProviderDriverKind } from "./providerInstance.ts";
 import { ProviderUsageLimitsUpdate } from "./providerUsageLimits.ts";
 import { ProviderApprovalOption } from "./orchestration.ts";
+import { CodexNativeGoalSummary } from "./codexNativeGoal.ts";
 
 const TrimmedNonEmptyStringSchema = TrimmedNonEmptyString;
 const UnknownRecordSchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -157,6 +158,8 @@ const ThreadStartedType = Schema.Literal("thread.started");
 const ThreadStateChangedType = Schema.Literal("thread.state.changed");
 const ThreadMetadataUpdatedType = Schema.Literal("thread.metadata.updated");
 const ThreadTokenUsageUpdatedType = Schema.Literal("thread.token-usage.updated");
+const ThreadCodexNativeGoalUpdatedType = Schema.Literal("thread.codex-native-goal.updated");
+const ThreadCodexNativeGoalClearedType = Schema.Literal("thread.codex-native-goal.cleared");
 const ThreadRealtimeStartedType = Schema.Literal("thread.realtime.started");
 const ThreadRealtimeItemAddedType = Schema.Literal("thread.realtime.item-added");
 const ThreadRealtimeAudioDeltaType = Schema.Literal("thread.realtime.audio.delta");
@@ -284,6 +287,14 @@ const ThreadTokenUsageUpdatedPayload = Schema.Struct({
   usage: ThreadTokenUsageSnapshot,
 });
 export type ThreadTokenUsageUpdatedPayload = typeof ThreadTokenUsageUpdatedPayload.Type;
+
+const ThreadCodexNativeGoalUpdatedPayload = Schema.Struct({
+  goal: CodexNativeGoalSummary,
+});
+export type ThreadCodexNativeGoalUpdatedPayload = typeof ThreadCodexNativeGoalUpdatedPayload.Type;
+
+const ThreadCodexNativeGoalClearedPayload = Schema.Struct({});
+export type ThreadCodexNativeGoalClearedPayload = typeof ThreadCodexNativeGoalClearedPayload.Type;
 
 const ThreadRealtimeStartedPayload = Schema.Struct({
   realtimeSessionId: Schema.optional(TrimmedNonEmptyStringSchema),
@@ -875,6 +886,22 @@ const ProviderRuntimeThreadTokenUsageUpdatedEvent = Schema.Struct({
 export type ProviderRuntimeThreadTokenUsageUpdatedEvent =
   typeof ProviderRuntimeThreadTokenUsageUpdatedEvent.Type;
 
+const ProviderRuntimeThreadCodexNativeGoalUpdatedEvent = Schema.Struct({
+  ...ProviderRuntimeEventBase.fields,
+  type: ThreadCodexNativeGoalUpdatedType,
+  payload: ThreadCodexNativeGoalUpdatedPayload,
+});
+export type ProviderRuntimeThreadCodexNativeGoalUpdatedEvent =
+  typeof ProviderRuntimeThreadCodexNativeGoalUpdatedEvent.Type;
+
+const ProviderRuntimeThreadCodexNativeGoalClearedEvent = Schema.Struct({
+  ...ProviderRuntimeEventBase.fields,
+  type: ThreadCodexNativeGoalClearedType,
+  payload: ThreadCodexNativeGoalClearedPayload,
+});
+export type ProviderRuntimeThreadCodexNativeGoalClearedEvent =
+  typeof ProviderRuntimeThreadCodexNativeGoalClearedEvent.Type;
+
 const ProviderRuntimeThreadRealtimeStartedEvent = Schema.Struct({
   ...ProviderRuntimeEventBase.fields,
   type: ThreadRealtimeStartedType,
@@ -1183,6 +1210,8 @@ export const ProviderRuntimeEventV2 = Schema.Union([
   ProviderRuntimeThreadStateChangedEvent,
   ProviderRuntimeThreadMetadataUpdatedEvent,
   ProviderRuntimeThreadTokenUsageUpdatedEvent,
+  ProviderRuntimeThreadCodexNativeGoalUpdatedEvent,
+  ProviderRuntimeThreadCodexNativeGoalClearedEvent,
   ProviderRuntimeThreadRealtimeStartedEvent,
   ProviderRuntimeThreadRealtimeItemAddedEvent,
   ProviderRuntimeThreadRealtimeAudioDeltaEvent,
