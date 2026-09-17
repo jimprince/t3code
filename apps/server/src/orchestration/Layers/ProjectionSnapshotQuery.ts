@@ -2830,6 +2830,9 @@ pending_approval_requests AS (
                         backgroundLiveness: threadBackgroundLiveness.getThreadBackgroundLiveness(
                           row.threadId,
                         ),
+                        codexNativeGoal: threadBackgroundLiveness.getThreadCodexNativeGoal(
+                          row.threadId,
+                        ),
                         planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
                       } satisfies OrchestrationThreadShell)
                     : Result.failVoid,
@@ -2994,6 +2997,7 @@ pending_approval_requests AS (
                   backgroundLiveness: threadBackgroundLiveness.getThreadBackgroundLiveness(
                     row.threadId,
                   ),
+                  codexNativeGoal: threadBackgroundLiveness.getThreadCodexNativeGoal(row.threadId),
                   planProgress: threadPlanProgress.getThreadPlanProgress(row.threadId),
                 })),
                 updatedAt: updatedAt ?? "1970-01-01T00:00:00.000Z",
@@ -3371,6 +3375,9 @@ pending_approval_requests AS (
         hasPendingUserInput: threadRow.value.pendingUserInputCount > 0,
         hasActionableProposedPlan: threadRow.value.hasActionableProposedPlan > 0,
         backgroundLiveness: threadBackgroundLiveness.getThreadBackgroundLiveness(
+          threadRow.value.threadId,
+        ),
+        codexNativeGoal: threadBackgroundLiveness.getThreadCodexNativeGoal(
           threadRow.value.threadId,
         ),
         planProgress: threadPlanProgress.getThreadPlanProgress(threadRow.value.threadId),
