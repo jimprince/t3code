@@ -8,11 +8,12 @@
  * @module CodexAdapterLive
  */
 import {
-  EventId,
   type CanonicalItemType,
   type CanonicalRequestType,
+  type CodexNativeGoalSummary,
   type CodexSettings,
   type EnvironmentId,
+  EventId,
   ProviderDriverKind,
   type ProviderEvent,
   ProviderInstanceId,
@@ -86,6 +87,36 @@ const isCodexSessionRuntimeThreadIdMissingError = Schema.is(
 const isCodexResumeCursorSchema = Schema.is(CodexResumeCursorSchema);
 
 const PROVIDER = ProviderDriverKind.make("codex");
+
+function toCodexNativeGoalSummary(goal: {
+  readonly objective: string;
+  readonly status: string;
+  readonly tokensUsed?: number;
+  readonly tokenBudget?: number | null;
+}): CodexNativeGoalSummary | undefined {
+  const objective = goal.objective.trim();
+  if (objective.length === 0) {
+    return undefined;
+  }
+  const status: CodexNativeGoalSummary["status"] =
+    goal.status === "complete"
+      ? "completed"
+      : goal.status === "usageLimited" || goal.status === "budgetLimited"
+        ? "blocked"
+        : goal.status === "active" || goal.status === "paused" || goal.status === "blocked"
+          ? goal.status
+          : "blocked";
+  const nonNegativeInteger = (value: number | null | undefined) =>
+    typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : undefined;
+  const tokensUsed = nonNegativeInteger(goal.tokensUsed);
+  const tokenBudget = nonNegativeInteger(goal.tokenBudget);
+  return {
+    objective,
+    status,
+    ...(tokensUsed !== undefined ? { tokensUsed } : {}),
+    ...(tokenBudget !== undefined ? { tokenBudget } : {}),
+  };
+}
 
 export interface CodexAdapterLiveOptions {
   readonly instanceId?: ProviderInstanceId;
@@ -1578,6 +1609,35 @@ function mapToRuntimeEvents(
         payload: {
           usage: normalizedUsage,
         },
+      },
+    ];
+  }
+
+  if (event.method === "thread/goal/updated") {
+    const payload = readPayload(EffectCodexSchema.V2ThreadGoalUpdatedNotification, event.payload);
+    const goal = payload ? toCodexNativeGoalSummary(payload.goal) : undefined;
+    if (!goal) {
+      return [];
+    }
+    return [
+      {
+        type: "thread.codex-native-goal.updated",
+        ...runtimeEventBase(event, canonicalThreadId),
+        payload: { goal },
+      },
+    ];
+  }
+
+  if (event.method === "thread/goal/cleared") {
+    const payload = readPayload(EffectCodexSchema.V2ThreadGoalClearedNotification, event.payload);
+    if (!payload) {
+      return [];
+    }
+    return [
+      {
+        type: "thread.codex-native-goal.cleared",
+        ...runtimeEventBase(event, canonicalThreadId),
+        payload: {},
       },
     ];
   }
