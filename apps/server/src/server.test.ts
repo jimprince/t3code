@@ -11350,6 +11350,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
             },
             gitVcsDriver: {
               listRemoteNames: () => Effect.succeed(["origin"]),
+              readConfigValue: () => Effect.succeed(null),
               execute: () =>
                 Effect.succeed({
                   ...SUCCESSFUL_GIT_EXECUTION,
