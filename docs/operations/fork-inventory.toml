@@ -63,6 +63,12 @@ date = "2026-09-17"
 decided = "adapt"
 rationale = "Make upstream's large-diff fixture rewrite change byte length so Git must report the tracked edit even when the commit and rewrite share one filesystem timestamp; keep the complete branch and working-tree statistics assertions unchanged."
 
+[[patch.decision]]
+id = "upstream4029-highlighter-test-time-limit"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Disable Shiki's wall-clock tokenization cutoff only in the native review highlighter test wrapper so the grammar-isolation assertions cannot return partial tokens when parallel repository verification saturates the host; production tokenization keeps its safety cutoff."
+
 [[patch]]
 name = "fork-worker-operations"
 subject = "feat(fork): operate worker threads from the t3-thread CLI"
