@@ -2,6 +2,28 @@ import { describe, expect, it } from "vite-plus/test";
 import * as ThreadBackgroundLiveness from "./ThreadBackgroundLiveness.ts";
 
 describe("ThreadBackgroundLiveness", () => {
+  it("projects native goals and treats only an active goal as working", () => {
+    const liveness = ThreadBackgroundLiveness.make();
+    const threadId = "t-native-goal";
+    const activeGoal = {
+      objective: "Finish the migration",
+      status: "active" as const,
+      tokensUsed: 500,
+      tokenBudget: 2_000,
+    };
+
+    liveness.recordCodexNativeGoal(threadId, activeGoal);
+    expect(liveness.getThreadCodexNativeGoal(threadId)).toEqual(activeGoal);
+    expect(liveness.getThreadBackgroundLiveness(threadId)).toBe("working");
+
+    liveness.recordCodexNativeGoal(threadId, { ...activeGoal, status: "paused" });
+    expect(liveness.getThreadBackgroundLiveness(threadId)).toBeNull();
+    expect(liveness.getThreadCodexNativeGoal(threadId)?.status).toBe("paused");
+
+    liveness.recordCodexNativeGoal(threadId, null);
+    expect(liveness.getThreadCodexNativeGoal(threadId)).toBeNull();
+  });
+
   it("does not let status-free progress or metadata restart an idle task", () => {
     const liveness = ThreadBackgroundLiveness.make();
     liveness.recordTaskLiveness({
