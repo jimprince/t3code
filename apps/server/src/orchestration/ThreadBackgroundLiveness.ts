@@ -1,13 +1,13 @@
 /**
  * ThreadBackgroundLivenessService - in-memory per-thread background liveness
- * for the sidebar status pill.
+ * and read-only native Codex goal projection for thread status surfaces.
  *
  * The turn can settle while native background work runs on (subagent fleets,
  * workflow runs, Monitor watch loops); the shell previously showed nothing.
  * Ingestion records task lifecycle transitions and the shell query reads the
  * derived state at mapping time — no persistence, no migration. After a
- * server restart the registry is empty until new task events arrive, which
- * matches reality: orphaned background work is not live.
+ * server restart the registry is empty until new task events arrive or Codex
+ * reconnect hydration restores its native goal.
  *
  * "monitoring" is reserved for watch loops (monitor tasks and background
  * shells) when they are the ONLY live work; any agent work presents as
@@ -15,7 +15,11 @@
  *
  * @module ThreadBackgroundLivenessService
  */
-import { INERT_TASK_TYPES, MONITOR_TASK_TYPES } from "@t3tools/contracts";
+import {
+  type CodexNativeGoalSummary,
+  INERT_TASK_TYPES,
+  MONITOR_TASK_TYPES,
+} from "@t3tools/contracts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -25,6 +29,7 @@ export type ThreadBackgroundLiveness = "working" | "monitoring" | null;
 interface ThreadLivenessState {
   readonly agents: Set<string>;
   readonly monitors: Set<string>;
+  codexNativeGoal: CodexNativeGoalSummary | null;
 }
 
 // Classification sets are the shared contracts copies (MONITOR_TASK_TYPES:
@@ -61,6 +66,11 @@ export class ThreadBackgroundLivenessService extends Context.Service<
       readonly agentId?: string | undefined;
     }) => void;
 
+    /** Replace the read-only native Codex goal projection for a thread. */
+    readonly recordCodexNativeGoal: (threadId: string, goal: CodexNativeGoalSummary | null) => void;
+
+    readonly getThreadCodexNativeGoal: (threadId: string) => CodexNativeGoalSummary | null;
+
     /** Session death orphans all of a thread's background work. */
     readonly clearThreadLiveness: (threadId: string) => void;
 
@@ -80,7 +90,11 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
     if (existing) {
       return existing;
     }
-    const created: ThreadLivenessState = { agents: new Set(), monitors: new Set() };
+    const created: ThreadLivenessState = {
+      agents: new Set(),
+      monitors: new Set(),
+      codexNativeGoal: null,
+    };
     stateByThreadId.set(threadId, created);
     return created;
   };
@@ -96,7 +110,7 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
     }
     state.agents.delete(taskId);
     state.monitors.delete(taskId);
-    if (state.agents.size === 0 && state.monitors.size === 0) {
+    if (state.agents.size === 0 && state.monitors.size === 0 && state.codexNativeGoal === null) {
       stateByThreadId.delete(threadId);
     }
   };
@@ -149,6 +163,23 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
       bucket.add(input.taskId);
     },
 
+    recordCodexNativeGoal: (threadId, goal) => {
+      if (goal === null) {
+        const state = stateByThreadId.get(threadId);
+        if (!state) {
+          return;
+        }
+        state.codexNativeGoal = null;
+        if (state.agents.size === 0 && state.monitors.size === 0) {
+          stateByThreadId.delete(threadId);
+        }
+        return;
+      }
+      stateFor(threadId).codexNativeGoal = goal;
+    },
+
+    getThreadCodexNativeGoal: (threadId) => stateByThreadId.get(threadId)?.codexNativeGoal ?? null,
+
     clearThreadLiveness: (threadId) => {
       stateByThreadId.delete(threadId);
     },
@@ -159,6 +190,9 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
         return null;
       }
       if (state.agents.size > 0) {
+        return "working";
+      }
+      if (state.codexNativeGoal?.status === "active") {
         return "working";
       }
       if (state.monitors.size > 0) {
