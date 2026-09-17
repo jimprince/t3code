@@ -3119,6 +3119,16 @@ describe("ProviderRuntimeIngestion", () => {
     const now = "2026-01-01T00:00:00.000Z";
 
     harness.emit({
+      type: "turn.started",
+      eventId: asEventId("evt-p1-turn-started"),
+      provider: ProviderDriverKind.make("codex"),
+      createdAt: now,
+      threadId: asThreadId("thread-1"),
+      turnId: asTurnId("turn-p1"),
+    });
+    await harness.drain();
+
+    harness.emit({
       type: "thread.metadata.updated",
       eventId: asEventId("evt-thread-metadata-updated"),
       provider: ProviderDriverKind.make("codex"),
