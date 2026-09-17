@@ -992,3 +992,18 @@ id = "upstream-environment-capability-expansion"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Preserve upstream's projectCloneTracking capability alongside the fork's independent sessionRefresh capability. Upstream still lacks authenticated bearer-session rotation and t3-thread renewal behavior."
+
+[[patch]]
+name = "fork-codex-goal-visibility"
+subject = "feat(codex): surface active goals in thread status"
+class = "upstream-bound"
+purpose = "Project Codex app-server native goal notifications into thread activity, reconnect-hydrated status, sidebar liveness, and a compact composer line without taking ownership of the goal lifecycle."
+retire_when = "Upstream surfaces equivalent read-only native Codex goal status and liveness without the retired fork-owned goal compatibility schema."
+depends_on = ["fork-provider-turn-safety"]
+roles = []
+note = "Read-only integration. Codex remains the sole owner of goal creation, editing, pausing, resuming, clearing, and continuation. Uses codexNativeGoal and thread.codex-native-goal.* identifiers to remain distinct from retired goal_json and thread.goal-set compatibility."
+[[patch.decision]]
+id = "upstream-provider-event-type-removal"
+date = "2026-09-20"
+decided = "narrow"
+rationale = "Keep upstream's removal of the redundant ProviderRuntimeEventType literal list; model Codex goal events only in their concrete schemas and the canonical ProviderRuntimeEventV2 union."
