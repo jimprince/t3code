@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ce1bff0b5789d37b9ad8d0b784041410b2fc33f3",
-  "head": "f352ee751b74310763fc680e451b120e55600d29",
+  "prev": "2cbb93c0b00c6838e903c085896a72d015b31a08",
+  "head": "009aa90f1c600ab6aaff7db5183c7a691bb5a2ae",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -18,7 +18,9 @@
     "fork-workspace-file-uploads",
     "fork-attachment-compatibility",
     "fork-remote-file-downloads",
-    "fork-fresh-remote-worktrees",
+    "fork-fresh-remote-worktrees"
+  ],
+  "unapplied": [
     "fork-pr-dismissal",
     "fork-unsupported-pr-hosts",
     "fork-worktree-cleanup",
@@ -33,7 +35,6 @@
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
