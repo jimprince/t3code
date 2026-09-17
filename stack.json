@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "6307872a2fe5896e6d23a2871bdc784263c9e54e",
-  "head": "73bb8432e3c3d48e68c8e0f7747a8031a0d2e6d7",
+  "prev": "fc16c9e875c935b9e3671a4dd867e209a792e058",
+  "head": "70a71a48595543ba34a0777970a6f30e24200621",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -17,6 +17,9 @@
     "fork-resource-recovery",
     "fork-workspace-file-uploads",
     "fork-attachment-compatibility",
+    "refresh-temp"
+  ],
+  "unapplied": [
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
@@ -31,10 +34,8 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-gitea-pr-browser",
-    "fork-auth-session-refresh",
-    "refresh-temp"
+    "fork-auth-session-refresh"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
@@ -125,7 +126,7 @@
       "oid": "ae8d0c8e1b6c04f93be8649ceab99c169cb73efe"
     },
     "refresh-temp": {
-      "oid": "73bb8432e3c3d48e68c8e0f7747a8031a0d2e6d7"
+      "oid": "70a71a48595543ba34a0777970a6f30e24200621"
     }
   }
 }
