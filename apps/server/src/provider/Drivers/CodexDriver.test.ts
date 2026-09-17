@@ -363,11 +363,7 @@ it.layer(testLayer)("CodexDriver", (it) => {
         if (fixture.nodeFirst) {
           expect(capabilities.update).toMatchObject({
             executable: "npm",
-            args: expect.arrayContaining([
-              "--prefix",
-              canonicalNpmPrefix,
-              "@openai/codex@latest",
-            ]),
+            args: expect.arrayContaining(["--prefix", canonicalNpmPrefix, "@openai/codex@latest"]),
           });
         } else {
           expect(capabilities.update).toBeNull();
