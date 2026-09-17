@@ -5,11 +5,17 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import { ActivityIndicator, Platform, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
-import { EnvironmentId, type ProjectReadFileResult, ThreadId } from "@t3tools/contracts";
+import {
+  type AssetResource,
+  EnvironmentId,
+  type ProjectReadFileResult,
+  ThreadId,
+} from "@t3tools/contracts";
 import { videoMimeType } from "@t3tools/shared/video";
 import {
   isWorkspaceBrowserPreviewPath,
   isWorkspaceImagePreviewPath,
+  isWorkspaceModelPreviewPath,
   mediaMimeTypeFromExtension,
 } from "@t3tools/shared/filePreview";
 import { mediaFileReference } from "@t3tools/client-runtime/media-reference";
@@ -67,6 +73,7 @@ import {
   isMarkdownPreviewFile,
   isSvgImagePreviewFile,
   isVideoPreviewFile,
+  resolveWorkspaceFilePath,
 } from "./filePath";
 import { useWorkspaceFileAssetUrlState } from "./workspaceFileAssetUrl";
 
@@ -100,6 +107,7 @@ function defaultViewMode(path: string | null): FileViewMode {
   return path !== null &&
     (isWorkspaceBrowserPreviewPath(path) ||
       isWorkspaceImagePreviewPath(path) ||
+      isWorkspaceModelPreviewPath(path) ||
       isVideoPreviewFile(path) ||
       isAudioPreviewFile(path))
     ? "preview"
@@ -115,6 +123,8 @@ function FileContent(props: {
   readonly onRetryPreview: () => void;
   readonly videoSource: MediaVideoPreviewSource | null;
   readonly mediaSource?: MediaActionsSource;
+  readonly modelSource: FilePreviewSource | null;
+  readonly onOpenModel: () => void;
   readonly resolveVideoUri: () => Promise<string | null>;
   readonly fileContents: string | null;
   readonly fileError: string | null;
@@ -131,6 +141,7 @@ function FileContent(props: {
   const isImageFile = isWorkspaceImagePreviewPath(props.relativePath);
   const isVideoFile = isVideoPreviewFile(props.relativePath);
   const isAudioFile = isAudioPreviewFile(props.relativePath);
+  const isModelFile = isWorkspaceModelPreviewPath(props.relativePath);
   // Only the surfaces that wait on a signed asset URL can be blocked by one.
   const needsAssetUrl =
     isVideoFile ||
@@ -167,6 +178,20 @@ function FileContent(props: {
       </View>
     ) : (
       <AudioFilePreview uri={props.previewUri} onRetry={props.onRetryPreview} />
+    );
+  }
+
+  if (isModelFile) {
+    return (
+      <View className="flex-1 items-center justify-center bg-sheet px-6">
+        <EmptyState
+          title="3D preview unavailable"
+          detail="T3 Code Mobile does not render GLB or STL files yet. Open the file in another app instead."
+          {...(props.modelSource
+            ? { actionLabel: "Open in file viewer", onAction: props.onOpenModel }
+            : {})}
+        />
+      </View>
     );
   }
 
@@ -576,19 +601,21 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     relativePath !== null && !isVideoFile && isWorkspaceBrowserPreviewPath(relativePath);
   const isImageFile =
     relativePath !== null && !isVideoFile && isWorkspaceImagePreviewPath(relativePath);
+  const isModelFile = relativePath !== null && isWorkspaceModelPreviewPath(relativePath);
   const canPreview =
     relativePath !== null &&
     (isMarkdownPreviewFile(relativePath) ||
       isBrowserFile ||
       isImageFile ||
       isVideoFile ||
-      isAudioFile);
+      isAudioFile ||
+      isModelFile);
   const activeMode =
     relativePath !== null && modeOverride?.path === relativePath
       ? modeOverride.mode
       : defaultViewMode(relativePath);
   const resolvedActiveMode =
-    isVideoFile || isAudioFile ? "preview" : canPreview ? activeMode : "source";
+    isVideoFile || isAudioFile || isModelFile ? "preview" : canPreview ? activeMode : "source";
   const assetPreviewPath =
     isBrowserFile || isImageFile || isVideoFile || isAudioFile ? relativePath : null;
   const assetPreview = useWorkspaceFileAssetUrlState({
@@ -600,6 +627,29 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     draftCwd: threadId === null ? cwd : null,
   });
   const assetPreviewUri = assetPreview._tag === "Success" ? assetPreview.url : null;
+  const modelResource = useMemo<AssetResource | null>(() => {
+    if (!isModelFile || cwd === null || relativePath === null || threadId === null) return null;
+    return {
+      _tag: "workspace-file-download",
+      threadId,
+      path: resolveWorkspaceFilePath(cwd, relativePath),
+    };
+  }, [cwd, isModelFile, relativePath, threadId]);
+  const modelSource = useMemo<FilePreviewSource | null>(
+    () =>
+      environmentId !== null && modelResource !== null && relativePath !== null
+        ? {
+            kind: "document",
+            environmentId,
+            resource: modelResource,
+            name: basename(relativePath),
+            mimeType: relativePath.toLowerCase().endsWith(".glb")
+              ? "model/gltf-binary"
+              : "model/stl",
+          }
+        : null,
+    [environmentId, modelResource, relativePath],
+  );
   const mediaSource = useMemo<MediaActionsSource | undefined>(
     () =>
       environmentId !== null &&
@@ -651,6 +701,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     relativePath !== null &&
     !isVideoFile &&
     !isAudioFile &&
+    !isModelFile &&
     (resolvedActiveMode === "source" || isMarkdownPreviewFile(relativePath));
   const fileQuery = useEnvironmentQuery(
     environmentId !== null && cwd !== null && relativePath !== null && needsFileContents
@@ -715,7 +766,8 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
 
   const fileMenuActions = useMemo(() => {
     if (relativePath === null) return [];
-    const canToggleMode = canPreview && !isImageFile && !isVideoFile && !isAudioFile;
+    const canToggleMode =
+      canPreview && !isImageFile && !isVideoFile && !isAudioFile && !isModelFile;
     return [
       canToggleMode
         ? ({
@@ -823,6 +875,7 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
     isAudioFile,
     isBrowserFile,
     isImageFile,
+    isModelFile,
     isVideoFile,
     relativePath,
     resolvedActiveMode,
@@ -996,6 +1049,10 @@ export function ThreadFileScreen(props: ThreadFileRouteScreenProps) {
           onRetryPreview={handleRetryPreview}
           videoSource={videoSource}
           mediaSource={mediaSource}
+          modelSource={modelSource}
+          onOpenModel={() => {
+            if (modelSource) setFullScreenPreview(modelSource);
+          }}
           resolveVideoUri={assetPreview.refresh}
           fileContents={fileData?.contents ?? null}
           fileError={fileQuery.error}
