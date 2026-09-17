@@ -879,6 +879,8 @@ function readNotificationThreadId(notification: CodexServerNotification): string
     case "thread/name/updated":
     case "thread/settings/updated":
     case "thread/tokenUsage/updated":
+    case "thread/goal/updated":
+    case "thread/goal/cleared":
     case "model/rerouted":
     case "turn/started":
     case "hook/started":
@@ -1148,6 +1150,8 @@ function shouldSuppressChildConversationNotification(
     method === "thread/name/updated" ||
     method === "thread/settings/updated" ||
     method === "thread/tokenUsage/updated" ||
+    method === "thread/goal/updated" ||
+    method === "thread/goal/cleared" ||
     method === "model/rerouted" ||
     method === "turn/started" ||
     method === "turn/completed" ||
@@ -1199,6 +1203,8 @@ const CHILD_CHATTER_METHODS: ReadonlySet<string> = new Set([
   "turn/plan/updated",
   "turn/diff/updated",
   "thread/name/updated",
+  "thread/goal/updated",
+  "thread/goal/cleared",
   "rawResponseItem/completed",
   // Child-owned thread lifecycle: the parent adapter maps these onto the
   // PARENT thread (archived/compacted state), so a child compacting would
@@ -2494,6 +2500,22 @@ export const makeCodexSessionRuntime = (
       } satisfies ProviderSession;
       yield* Ref.set(sessionRef, session);
       yield* emitSessionEvent("session/ready", "Codex App Server session ready.");
+      // Goal state is app-server-owned and may predate this process. Hydrate
+      // it after every open/resume; older app-servers can reject the method,
+      // which must not prevent the session from becoming usable.
+      yield* client.request("thread/goal/get", { threadId: providerThreadId }).pipe(
+        Effect.flatMap(({ goal }) =>
+          goal
+            ? emitEvent({
+                kind: "notification",
+                threadId: options.threadId,
+                method: "thread/goal/updated",
+                payload: { threadId: providerThreadId, goal },
+              })
+            : Effect.void,
+        ),
+        Effect.ignore,
+      );
       return session;
     });
 
