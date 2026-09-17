@@ -3,6 +3,7 @@ import type { EnvironmentId } from "@t3tools/contracts";
 import {
   isWorkspaceBrowserPreviewPath,
   isWorkspaceImagePreviewPath,
+  isWorkspaceModelPreviewPath,
 } from "@t3tools/shared/filePreview";
 
 import { appAtomRegistry } from "../../state/atom-registry";
@@ -32,6 +33,7 @@ export function preloadWorkspaceFileContents(input: {
   if (
     isWorkspaceBrowserPreviewPath(input.relativePath) ||
     isWorkspaceImagePreviewPath(input.relativePath) ||
+    isWorkspaceModelPreviewPath(input.relativePath) ||
     isVideoPreviewFile(input.relativePath)
   ) {
     return;
