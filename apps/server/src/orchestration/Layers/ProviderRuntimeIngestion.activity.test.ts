@@ -15,6 +15,45 @@ const base = {
   threadId: ThreadId.make("thread-1"),
 };
 
+describe("runtimeEventToActivities native Codex goals", () => {
+  it("projects goal updates and clears into distinct thread activities", () => {
+    const updated = {
+      ...base,
+      type: "thread.codex-native-goal.updated",
+      eventId: EventId.make("evt-goal-updated"),
+      payload: {
+        goal: {
+          objective: "Ship goal visibility",
+          status: "active",
+          tokensUsed: 1_200,
+          tokenBudget: 4_000,
+        },
+      },
+    } satisfies ProviderRuntimeEvent;
+    const cleared = {
+      ...base,
+      type: "thread.codex-native-goal.cleared",
+      eventId: EventId.make("evt-goal-cleared"),
+      payload: {},
+    } satisfies ProviderRuntimeEvent;
+
+    expect(runtimeEventToActivities(updated)).toMatchObject([
+      {
+        kind: "thread.codex-native-goal.updated",
+        summary: "Goal active",
+        payload: { goal: updated.payload.goal },
+      },
+    ]);
+    expect(runtimeEventToActivities(cleared)).toMatchObject([
+      {
+        kind: "thread.codex-native-goal.cleared",
+        summary: "Goal cleared",
+        payload: {},
+      },
+    ]);
+  });
+});
+
 describe("runtimeEventToActivities task progress", () => {
   it("persists usage independently from replaceable activity", () => {
     const taskId = RuntimeTaskId.make("agent-1");
