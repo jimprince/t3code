@@ -166,6 +166,7 @@ describe("ThreadArchiveCleanupReactor", () => {
             getSnapshot: () => unsupported(),
             getShellSnapshot: () => unsupported(),
             getArchivedShellSnapshot: () => unsupported(),
+            getDeletedWorktreeThreads: () => unsupported(),
             searchThreads: () => unsupported(),
             getSnapshotSequence: () => unsupported(),
             getCounts: () => unsupported(),
