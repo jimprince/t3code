@@ -691,6 +691,72 @@ function codexTurnEvent(method: "turn/started" | "turn/completed", turnId: strin
 }
 
 lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
+  it.effect("ingests native Codex goal updated and cleared notifications", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const eventsFiber = yield* adapter.streamEvents.pipe(
+        Stream.filter(
+          (event) =>
+            event.type === "thread.codex-native-goal.updated" ||
+            event.type === "thread.codex-native-goal.cleared",
+        ),
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkChild,
+      );
+
+      yield* runtime.emit({
+        id: asEventId("evt-goal-updated"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "thread/goal/updated",
+        payload: {
+          threadId: "provider-thread-1",
+          goal: {
+            createdAt: 1,
+            objective: "Ship goal visibility",
+            status: "budgetLimited",
+            threadId: "provider-thread-1",
+            timeUsedSeconds: 12,
+            tokenBudget: 4_000,
+            tokensUsed: 1_200,
+            updatedAt: 2,
+          },
+        },
+      });
+      yield* runtime.emit({
+        id: asEventId("evt-goal-cleared"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        threadId: asThreadId("thread-1"),
+        createdAt: "2026-01-01T00:00:01.000Z",
+        method: "thread/goal/cleared",
+        payload: { threadId: "provider-thread-1" },
+      });
+
+      const events = Array.from(yield* Fiber.join(eventsFiber));
+      NodeAssert.deepStrictEqual(
+        events.map((event) => ({ type: event.type, payload: event.payload })),
+        [
+          {
+            type: "thread.codex-native-goal.updated",
+            payload: {
+              goal: {
+                objective: "Ship goal visibility",
+                status: "blocked",
+                tokensUsed: 1_200,
+                tokenBudget: 4_000,
+              },
+            },
+          },
+          { type: "thread.codex-native-goal.cleared", payload: {} },
+        ],
+      );
+    }),
+  );
+
   it.effect("calculates one Codex turn total from cumulative counters", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();
