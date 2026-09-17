@@ -628,6 +628,36 @@ export function runtimeEventToActivities(
       ];
     }
 
+    case "thread.codex-native-goal.updated": {
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "thread.codex-native-goal.updated",
+          summary: `Goal ${event.payload.goal.status}`,
+          payload: { goal: event.payload.goal },
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
+    case "thread.codex-native-goal.cleared": {
+      return [
+        {
+          id: event.eventId,
+          createdAt: event.createdAt,
+          tone: "info",
+          kind: "thread.codex-native-goal.cleared",
+          summary: "Goal cleared",
+          payload: {},
+          turnId: toTurnId(event.turnId) ?? null,
+          ...maybeSequence,
+        },
+      ];
+    }
+
     case "user-input.requested": {
       return [
         {
@@ -2575,6 +2605,12 @@ const make = Effect.gen(function* () {
       // Sidebar background liveness: fed from the same lifecycle stream,
       // read by the shell query at mapping time (no persistence).
       switch (event.type) {
+        case "thread.codex-native-goal.updated":
+          threadBackgroundLiveness.recordCodexNativeGoal(thread.id, event.payload.goal);
+          break;
+        case "thread.codex-native-goal.cleared":
+          threadBackgroundLiveness.recordCodexNativeGoal(thread.id, null);
+          break;
         case "task.started":
         case "task.progress":
         case "task.updated":
