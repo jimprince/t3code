@@ -1,6 +1,6 @@
-Bottom: 6e943467b1f7a77c17c29306202c215d5cbb1ea0
-Top:    c213d9bfeab2c1ecbac81fd3d3719604d931b25e
+Bottom: 071543b8cc5ccec7acfbea249de69006ef7bc6b6
+Top:    af7135741feaf5b88315674be1bf3bd35d7ee9f1
 Author: User <user@example.com>
-Date:   2026-09-16 23:02:54 -0600
+Date:   2026-09-17 05:51:06 +0000
 
 fix(threads): recover thread and client state after disruptions
