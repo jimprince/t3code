@@ -56,6 +56,7 @@ id = "macos-worktree-realpath-exclusion"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Canonicalize the configured data and worktree roots before comparing them with transcript cwd realpaths. macOS can spell the same temporary directory through /var and /private/var, which otherwise lets a symlinked managed worktree appear as an importable project under the Node 24 CI runtime; symlink-boundary tests likewise compare canonical workspace paths."
+
 [[patch.decision]]
 id = "git-racy-clean-large-diff-fixture"
 date = "2026-09-17"
