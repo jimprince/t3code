@@ -5,6 +5,7 @@ import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/ho
 import rootPackageJson from "../package.json" with { type: "json" };
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
 
+import { createStagePatchedDependencies } from "./build-desktop-artifact.ts";
 import { validateBundledClientAssets } from "./lib/client-assets.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
 
@@ -27,6 +28,7 @@ const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknow
 const HeadlessWorkspaceConfig = Schema.Struct({
   catalog: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   overrides: Schema.optional(Schema.Record(Schema.String, Schema.String)),
+  patchedDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
 });
 export type HeadlessWorkspaceConfig = typeof HeadlessWorkspaceConfig.Type;
 const decodeHeadlessWorkspaceConfig = Schema.decodeEffect(fromYaml(HeadlessWorkspaceConfig));
@@ -124,6 +126,21 @@ export function resolveHeadlessRuntimeDependencies(
     serverPackageJson.dependencies,
     workspaceConfig.catalog ?? {},
     "apps/server",
+  );
+}
+
+/**
+ * pnpm patches that apply to packages the headless runtime installs. The staged
+ * install must carry them: the server loads `@ff-labs/fff-node` through
+ * `require`, which only resolves because the workspace patch adds a `require`
+ * export condition to that ESM-only package.
+ */
+export function resolveHeadlessPatchedDependencies(
+  workspaceConfig: HeadlessWorkspaceConfig,
+): Record<string, string> {
+  return createStagePatchedDependencies(
+    workspaceConfig.patchedDependencies ?? {},
+    resolveHeadlessRuntimeDependencies(workspaceConfig),
   );
 }
 
@@ -243,12 +260,30 @@ const buildHeadlessArtifact = Effect.fn("buildHeadlessArtifact")(function* (
     path.join(artifactRoot, "package.json"),
     `${yield* encodeJsonString(packageJson)}\n`,
   );
-  // pnpm 11 reads build approvals from pnpm-workspace.yaml, not package.json.
-  // The staged runtime needs both native dependencies to build during install.
+  // pnpm 11 reads build approvals and patches from pnpm-workspace.yaml, not
+  // package.json. The staged runtime needs both native dependencies to build
+  // during install, and every workspace patch for a package it installs.
+  const patchedDependencies = resolveHeadlessPatchedDependencies(workspaceConfig);
   yield* fs.writeFileString(
     path.join(artifactRoot, "pnpm-workspace.yaml"),
-    ["allowBuilds:", "  msgpackr-extract: true", "  node-pty: true", ""].join("\n"),
+    [
+      "allowBuilds:",
+      "  msgpackr-extract: true",
+      "  node-pty: true",
+      ...(Object.keys(patchedDependencies).length > 0
+        ? [
+            "patchedDependencies:",
+            ...Object.entries(patchedDependencies).map(
+              ([patchKey, patchPath]) => `  ${JSON.stringify(patchKey)}: ${patchPath}`,
+            ),
+          ]
+        : []),
+      "",
+    ].join("\n"),
   );
+  if (Object.keys(patchedDependencies).length > 0) {
+    yield* fs.copy(path.join(repoRoot, "patches"), path.join(artifactRoot, "patches"));
+  }
 
   yield* Effect.log("[headless-artifact] Installing staged production dependencies...");
   yield* runCommand(

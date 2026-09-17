@@ -7,6 +7,7 @@ import {
   type HeadlessWorkspaceConfig,
   readHeadlessWorkspaceConfig,
   resolveHeadlessArtifactName,
+  resolveHeadlessPatchedDependencies,
   resolveHeadlessRuntimeDependencies,
 } from "./build-headless-artifact.ts";
 import { collectClientAssetReferences } from "./lib/client-assets.ts";
@@ -34,6 +35,20 @@ describe("build-headless-artifact", () => {
     expect(dependencies["node-pty"]).toBeDefined();
     expect(dependencies["@anthropic-ai/claude-agent-sdk"]).toBeDefined();
     expect(dependencies["@opencode-ai/sdk"]).toBeDefined();
+  });
+
+  it("stages only the workspace patches for packages the runtime installs", () => {
+    const patched = resolveHeadlessPatchedDependencies(workspaceConfig);
+    const runtime = resolveHeadlessRuntimeDependencies(workspaceConfig);
+
+    // The server requires fff-node, which resolves only with the patched
+    // `require` export condition.
+    const fffPatch = Object.entries(patched).find(([key]) => key.startsWith("@ff-labs/fff-node@"));
+    expect(fffPatch?.[1]).toBe("patches/@ff-labs__fff-node@0.9.4.patch");
+    for (const patchKey of Object.keys(patched)) {
+      expect(runtime[patchKey.slice(0, patchKey.lastIndexOf("@"))]).toBeDefined();
+    }
+    expect(Object.keys(patched).some((key) => key.startsWith("@clerk/expo@"))).toBe(false);
   });
 
   it("creates a production package that documents the Node runtime requirement", () => {
