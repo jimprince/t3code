@@ -369,3 +369,8 @@ id = "upstream-composer-context-persistence"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Preserve upstream structured message context alongside legacy file handoffs in event projection, SQL snapshots and client reducers. Keep legacy handoff chips separate from upstream attachment rendering so historical records display once."
+[[patch.decision]]
+id = "upstream-pr-asset-github-cli-test-runtime"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Provide the upstream GitHub CLI layer in the fork-only attachment server harness over its existing VCS process layer, matching upstream's harness after pull-request asset downloads gained the same runtime dependency."
