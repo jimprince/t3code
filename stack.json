@@ -1,11 +1,13 @@
 {
   "version": 5,
-  "prev": "f571d6fa92412a4d630b1a9b73c0e9b016a45dca",
-  "head": "f8ff16b7a43443fb2ad4dbe06936f8059055b1e6",
+  "prev": "4801372270f816623716b54bb1aaafd501accf29",
+  "head": "59e1b107e225325e2070658d5198b73d0a4a3a7d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
-    "fork-provider-turn-safety",
+    "fork-provider-turn-safety"
+  ],
+  "unapplied": [
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
     "fork-general-chat",
@@ -33,7 +35,6 @@
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-attachment-compatibility": {
