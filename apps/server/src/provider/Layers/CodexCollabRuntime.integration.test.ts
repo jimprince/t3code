@@ -166,6 +166,50 @@ const peerPath = NodePath.join(
 );
 
 describe("CodexSessionRuntime collab integration", () => {
+  it.effect("hydrates an existing native goal when the app-server session reconnects", () =>
+    Effect.gen(function* () {
+      const script = {
+        rootThreadId: ROOT,
+        goalStatus: "active",
+        notifications: [],
+      };
+      // @effect-diagnostics-next-line preferSchemaOverJson:off
+      NodeFS.writeFileSync(scriptPath, JSON.stringify(script), "utf8");
+      yield* Effect.addFinalizer(() =>
+        Effect.sync(() => {
+          NodeFS.rmSync(scriptPath, { force: true });
+        }),
+      );
+
+      const runtime = yield* makeCodexSessionRuntime({
+        threadId: ThreadId.make("thread-codex-goal-hydrate"),
+        binaryPath: peerPath,
+        cwd: NodeOS.tmpdir(),
+        runtimeMode: "full-access",
+        environment: { ...process.env, T3_CODEX_COLLAB_SCRIPT: scriptPath },
+      });
+      const goalFiber = yield* runtime.events.pipe(
+        Stream.filter((event) => event.method === "thread/goal/updated"),
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.forkScoped,
+      );
+
+      yield* runtime.start();
+      const goalEvents = Array.from(yield* Fiber.join(goalFiber));
+      assert.equal(goalEvents.length, 1);
+      const goal = (
+        goalEvents[0]?.payload as {
+          goal?: { objective?: string; status?: string; tokensUsed?: number };
+        }
+      ).goal;
+      assert.equal(goal?.objective, "Keep working");
+      assert.equal(goal?.status, "active");
+      assert.equal(goal?.tokensUsed, 0);
+      yield* runtime.close;
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("looks up child model metadata once after activity registration", () =>
     Effect.gen(function* () {
       const script = {

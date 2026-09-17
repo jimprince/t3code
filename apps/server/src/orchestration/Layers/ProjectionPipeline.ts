@@ -152,6 +152,8 @@ function shouldRefreshThreadShellSummary(event: OrchestrationEvent): boolean {
     case "user-input.requested":
     case "user-input.resolved":
     case "provider.user-input.respond.failed":
+    case "thread.codex-native-goal.updated":
+    case "thread.codex-native-goal.cleared":
       return true;
     default:
       return false;
