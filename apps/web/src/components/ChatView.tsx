@@ -401,6 +401,7 @@ import {
   ThreadErrorBanner,
 } from "./chat/ThreadErrorBanner";
 import type { ComposerBannerStackItem } from "./chat/ComposerBannerStack";
+import { CodexNativeGoalLine } from "./chat/CodexNativeGoalLine";
 import { ComposerSurface } from "./chat/ComposerSurface";
 import {
   hasAvailableCompactionProvider,
@@ -6258,6 +6259,7 @@ export default function ChatView(props: ChatViewProps) {
   // interrupting, and works by session, so no active turn is needed.
   const activeBackgroundLiveness =
     !isWorking && activeThread ? (activeThreadShell?.backgroundLiveness ?? null) : null;
+  const activeCodexNativeGoal = activeThread ? (activeThreadShell?.codexNativeGoal ?? null) : null;
   const [isStoppingBackgroundWork, setIsStoppingBackgroundWork] = useState(false);
   useEffect(() => {
     // "Stopping..." holds until the liveness clears; the interrupt command
@@ -6293,7 +6295,7 @@ export default function ChatView(props: ChatViewProps) {
     }
   }, [activeThread, environmentId, interruptThreadTurn, setThreadError]);
   const backgroundLivenessBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
-    if (activeBackgroundLiveness === null || !activeThread) {
+    if ((activeBackgroundLiveness === null && activeCodexNativeGoal === null) || !activeThread) {
       return null;
     }
     const working = activeBackgroundLiveness === "working";
@@ -6302,30 +6304,37 @@ export default function ChatView(props: ChatViewProps) {
       id: `background-liveness:${activeThread.id}`,
       variant: "default",
       priority: "activity",
-      icon: (
-        <span
-          className={cn("size-1.5 rounded-full bg-foreground", working && "animate-status-pulse")}
-          aria-hidden="true"
-        />
-      ),
-      title: working
-        ? liveCount > 0
-          ? `${liveCount} ${liveCount === 1 ? "agent" : "agents"} working`
-          : "Background work"
-        : "Monitoring",
-      actions: (
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={isStoppingBackgroundWork}
-          onClick={() => void handleStopBackgroundWork()}
-        >
-          {isStoppingBackgroundWork ? "Stopping..." : "Stop"}
-        </Button>
-      ),
+      icon: <span className="size-1.5 rounded-full bg-foreground" aria-hidden="true" />,
+      title:
+        activeCodexNativeGoal !== null ? (
+          <CodexNativeGoalLine goal={activeCodexNativeGoal} />
+        ) : working ? (
+          liveCount > 0 ? (
+            `${liveCount} ${liveCount === 1 ? "agent" : "agents"} working`
+          ) : (
+            "Background work"
+          )
+        ) : (
+          "Monitoring"
+        ),
+      ...(activeBackgroundLiveness !== null
+        ? {
+            actions: (
+              <Button
+                size="xs"
+                variant="ghost"
+                disabled={isStoppingBackgroundWork}
+                onClick={() => void handleStopBackgroundWork()}
+              >
+                {isStoppingBackgroundWork ? "Stopping..." : "Stop"}
+              </Button>
+            ),
+          }
+        : {}),
     };
   }, [
     activeBackgroundLiveness,
+    activeCodexNativeGoal,
     activeThread,
     agentPanelModel.liveCount,
     handleStopBackgroundWork,
