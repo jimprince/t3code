@@ -11349,6 +11349,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
               isInsideWorkTree: () => Effect.succeed(isRepository),
             },
             gitVcsDriver: {
+              listRemoteNames: () => Effect.succeed(["origin"]),
               execute: () =>
                 Effect.succeed({
                   ...SUCCESSFUL_GIT_EXECUTION,
