@@ -22,6 +22,9 @@ vi.mock("../assets/assetUrls", () => ({
     };
   },
 }));
+vi.mock("./model/ModelPreview", () => ({
+  ModelPreview: ({ name }: { name: string }) => <div data-model-preview={name} />,
+}));
 vi.mock("../hooks/useTheme", () => ({ useTheme: () => ({ resolvedTheme: "dark" }) }));
 vi.mock("../state/use-atom-query-runner", () => ({ useAtomQueryRunner: () => vi.fn() }));
 vi.mock("../state/use-atom-command", () => ({ useAtomCommand: () => vi.fn() }));
@@ -403,5 +406,31 @@ describe("ChatMarkdown workspace images", () => {
     expect(html).toContain('src="https://example.com/image.png"');
     expect(html).toContain("max-w-[min(100%,30rem)]");
     expect(html).not.toContain("Image unavailable");
+  });
+});
+
+describe("ChatMarkdown workspace models", () => {
+  beforeEach(() => {
+    testState.resources = [];
+    testState.assetState = "success";
+  });
+
+  it("embeds a standalone worktree model link with an exact workspace asset", () => {
+    const html = render("[Generated model](models/widget.glb)");
+    expect(html).toContain('data-model-preview="widget.glb"');
+    expect(testState.resources).toEqual([
+      {
+        _tag: "workspace-file",
+        threadId: threadRef.threadId,
+        path: "C:\\Users\\shawn\\project\\models\\widget.glb",
+      },
+    ]);
+  });
+
+  it("keeps an inline model link as the normal file-panel chip", () => {
+    const html = render("Open [this model](models/widget.glb) when ready.");
+    expect(html).not.toContain("data-model-preview");
+    expect(html).toContain("chat-markdown-file-link");
+    expect(testState.resources).toEqual([]);
   });
 });
