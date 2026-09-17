@@ -6,6 +6,7 @@ import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 
 import { runMigrations } from "../Migrations.ts";
+import { runForkMigrations } from "../ForkMigrations.ts";
 import { ServerConfig } from "../../config.ts";
 
 const setup = Layer.effectDiscard(
@@ -14,8 +15,10 @@ const setup = Layer.effectDiscard(
     // CLI and server write from separate processes; wait rather than fail with SQLITE_BUSY.
     yield* sql`PRAGMA busy_timeout = 5000;`;
     yield* sql`PRAGMA foreign_keys = ON;`;
+    yield* sql`PRAGMA busy_timeout = 5000;`;
     yield* sql`PRAGMA journal_mode = WAL;`;
     yield* runMigrations();
+    yield* runForkMigrations();
   }),
 );
 
