@@ -68,3 +68,9 @@ id = "upstream4029-highlighter-test-time-limit"
 date = "2026-09-17"
 decided = "adapt"
 rationale = "Disable Shiki's wall-clock tokenization cutoff only in the native review highlighter test wrapper so the grammar-isolation assertions cannot return partial tokens when parallel repository verification saturates the host; production tokenization keeps its safety cutoff."
+
+[[patch.decision]]
+id = "upstream9902-file-highlight-test-budget"
+date = "2026-09-17"
+decided = "adapt"
+rationale = "Keep upstream's 7,000-line real-worker stale-highlight regression intact, but give its two CPU-bound edit cases 30 seconds so they do not fail at the 15-second default while the complete repository gate saturates the host."
