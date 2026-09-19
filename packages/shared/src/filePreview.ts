@@ -30,7 +30,9 @@ export function filePreviewKind(file: {
     mime === "model/gltf-binary" ||
     mime === "model/stl" ||
     mime === "application/sla" ||
-    mime === "model/3mf"
+    mime === "model/3mf" ||
+    mime === "model/step" ||
+    mime === "application/step"
   )
     return "model";
   if (generic) {
@@ -71,6 +73,8 @@ const MODEL_MIME_TYPE_BY_EXTENSION = new Map([
   [".glb", "model/gltf-binary"],
   [".stl", "model/stl"],
   [".3mf", "model/3mf"],
+  [".step", "model/step"],
+  [".stp", "model/step"],
 ]);
 
 export function modelMimeTypeFromExtension(extension: string): string | null {
@@ -79,7 +83,7 @@ export function modelMimeTypeFromExtension(extension: string): string | null {
 }
 
 export function isWorkspaceModelPreviewPath(path: string): boolean {
-  return hasPreviewExtension(path, [".glb", ".stl", ".3mf"]);
+  return hasPreviewExtension(path, [".glb", ".stl", ".3mf", ".step", ".stp"]);
 }
 
 /** Reject binary data rather than displaying replacement characters as a document. */
