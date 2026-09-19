@@ -36,7 +36,7 @@ The historical `fileAttachments` field is a separate path-bearing compatibility 
 | `.gltf` | Deferred.                                                                                    | Companion buffers/textures require a multi-file authorization model; export as GLB instead.                                          |
 | OBJ     | Deferred.                                                                                    | Useful loader exists, but MTL, texture, and multi-file resolution expand the capability surface.                                     |
 | 3MF     | Render directly with `ThreeMFLoader` after bounded package validation.                       | Preserves core assemblies and basic material/color groups without server conversion; applies the declared model unit in millimeters. |
-| STEP    | Deferred to optional conversion.                                                             | Browser display requires CAD tessellation in WASM or a service.                                                                      |
+| STEP    | Tessellate in a lazy browser worker with `occt-import-js`.                                   | Measured below the bundle-size and load-time gates, avoiding server conversion and cache state.                                      |
 
 Official loader references: [GLTFLoader](https://threejs.org/docs/pages/GLTFLoader.html), [STLLoader](https://threejs.org/docs/pages/STLLoader.html), [OBJLoader](https://threejs.org/docs/pages/OBJLoader.html), and [ThreeMFLoader](https://threejs.org/docs/pages/ThreeMFLoader.html).
 
@@ -117,9 +117,16 @@ The final focused suite passed 209 tests across 11 files; shared, contracts, web
 
 Independent headless Chromium verification rendered a GLB triangle and both binary and named ASCII STL fixtures through the production component. Orbit and reset triggered draws; each settled fixture and the post-interaction interval recorded zero idle draw calls. At a device DPR of 2, the 940 × 320 CSS canvas used a stable 1410 × 480 drawing buffer, confirming the 1.5 cap. Forced WebGL context loss recovered through Retry. This is real component rendering, not authenticated end-to-end upload/timeline verification. Packaged Electron, embedded-texture CSP behavior, native-device actions, and prolonged GPU-memory behavior remain unverified. The two-context queue is covered by focused tests.
 
+### STEP inventory decision
+
+`occt-import-js` 0.0.23 is loaded only inside a module worker. The production build emitted a 7,604,031-byte OpenCascade WASM asset measuring 3,091,498 bytes with gzip -9 and a 59,884-byte worker measuring 21,109 bytes gzip. On the development VM, direct WASM initialization took 112 ms. The package's 441,968-byte AP214 assembly fixture tessellated to 18 meshes / 5,040 triangles in 1,828 ms. The same valid assembly carried in a 2 MiB STEP transfer form tessellated in 2,048 ms. These results clear the approximately 12 MB gzip and few-second gates, so STEP remains a browser-only path.
+
+The worker normalizes output to millimeters, uses fixed deflection parameters, transfers typed mesh buffers back without a server round trip, and is terminated on completion, abort, failure, or a 20-second timeout. The existing 50 MiB source limit applies before worker creation; output is validated for finite coordinates, in-range indices, and the shared 2-million-triangle cap before Three.js allocation. STEP color metadata is retained when OpenCascade supplies it. The signed asset remains exact-file scoped and never leaves the browser.
+
+A real headless Chromium run with SwiftShader rendered the colored inch-unit 3MF fixture at a verified 25.4 scale and tessellated/rendered the committed STEP cube to 12 triangles in 495 ms. Each canvas drew once and recorded zero idle draws during the following 750 ms observation window.
+
 ## Follow-ups
 
 1. Improved native external handoff once platform behavior is consistent across iOS and Android.
 2. Explicit provider artifact registration so generated files can appear without relying on a standalone Markdown link.
-3. Optional STEP tessellation through a separately reviewed CAD/WASM or conversion-service boundary.
-4. Revisit upstream retirement if the draft/closed Android work becomes a complete cross-surface implementation.
+3. Revisit upstream retirement if the draft/closed Android work becomes a complete cross-surface implementation.
