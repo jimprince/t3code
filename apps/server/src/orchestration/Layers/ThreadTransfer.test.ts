@@ -158,7 +158,7 @@ interface TransferSystemInput {
   readonly prefix: string;
   readonly worktreesRoot: string;
   readonly forkConversation?: ProviderServiceShape["forkConversation"];
-  readonly fileSystem?: FileSystem.FileSystem["Service"];
+  readonly fileSystem?: FileSystem.FileSystem;
 }
 
 const makeTransferSystemLayer = (input: TransferSystemInput) => {
