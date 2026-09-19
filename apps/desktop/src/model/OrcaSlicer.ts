@@ -39,26 +39,32 @@ export function nodeOrcaSlicerHandoffDependencies(
   };
 }
 
-export function safeStlFileName(rawName: string): string | null {
-  if (!rawName.toLowerCase().endsWith(".stl")) return null;
-  const basename = rawName.split(/[\\/]/).at(-1)?.slice(0, -4).trim() ?? "";
+export function safeModelFileName(rawName: string): string | null {
+  const extension = /\.(stl|3mf)$/i.exec(rawName)?.[1]?.toLowerCase();
+  if (!extension) return null;
+  const basename =
+    rawName
+      .split(/[\\/]/)
+      .at(-1)
+      ?.slice(0, -(extension.length + 1))
+      .trim() ?? "";
   const stem = basename
     .replace(/[^\p{L}\p{N}._ -]+/gu, "_")
     .slice(0, 120)
     .trim();
-  return `${stem || "model"}.stl`;
+  return `${stem || "model"}.${extension}`;
 }
 
-export async function openStlInOrcaSlicer(
+export async function openModelInOrcaSlicer(
   input: { readonly name: string; readonly bytes: Uint8Array },
   dependencies: OrcaSlicerHandoffDependencies,
 ): Promise<DesktopOpenModelInOrcaSlicerResult> {
-  const fileName = safeStlFileName(input.name);
+  const fileName = safeModelFileName(input.name);
   if (fileName === null) {
-    return { opened: false, error: "OrcaSlicer handoff supports STL files only." };
+    return { opened: false, error: "OrcaSlicer handoff supports STL and 3MF files only." };
   }
   if (input.bytes.byteLength === 0 || input.bytes.byteLength > DESKTOP_MODEL_HANDOFF_MAX_BYTES) {
-    return { opened: false, error: "The STL file is empty or exceeds the 50 MB handoff limit." };
+    return { opened: false, error: "The model file is empty or exceeds the 50 MB handoff limit." };
   }
   if (dependencies.platform !== "darwin") {
     return {
@@ -79,7 +85,7 @@ export async function openStlInOrcaSlicer(
     if (stagingDirectory !== undefined) {
       await dependencies.removeDirectory(stagingDirectory).catch(() => undefined);
     }
-    return { opened: false, error: "The STL file could not be prepared for OrcaSlicer." };
+    return { opened: false, error: "The model file could not be prepared for OrcaSlicer." };
   }
 
   try {
