@@ -30,6 +30,11 @@ link, login suggestion, or passing URL-helper test does not establish that a
 stale status now refreshes. Follow the affected production path and verify
 each outcome; report any remaining symptom explicitly.
 
+Before claiming completion, name the production-path test for each symptom
+and required boundary. Existing green suites do not replace a missing
+reproduction. Separate behavior already present at entry from changes made
+in this task, and do not claim an untested case is fixed.
+
 Trace linked-PR creation from the [link tools](./apps/server/src/mcp/toolkits/pullRequests/handlers.ts)
 and persisted status from the [sync reactor](./apps/server/src/orchestration/PullRequestSyncReactor.ts).
 The target repository and host can differ from the
