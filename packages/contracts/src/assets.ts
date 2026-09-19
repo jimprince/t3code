@@ -194,8 +194,17 @@ export class AssetPreviewTypeValidationError extends Schema.TaggedError<AssetPre
     // Draft resources serve absolute paths through the same host-media
     // validation as media files, so they share its message.
     return this.resource._tag === "media-file" || this.resource._tag === "draft-workspace-file"
-      ? "Only images, videos, audio, HTML, and PDF files can be previewed."
-      : "Only browser documents and images can be previewed.";
+      ? "Only images, videos, audio, HTML, PDF, and supported 3D model files can be previewed."
+      : "Only browser documents, images, and supported 3D models can be previewed.";
+  }
+}
+
+export class AssetPreviewSizeValidationError extends Schema.TaggedError<AssetPreviewSizeValidationError>()(
+  "AssetPreviewSizeValidationError",
+  { resource: AssetResource },
+) {
+  override get message(): string {
+    return "3D model previews are limited to 50 MB. Download the file to open it elsewhere.";
   }
 }
 
@@ -311,6 +320,7 @@ export const AssetAccessError = Schema.Union([
   AssetWorkspaceRootNormalizationError,
   AssetWorkspacePathValidationError,
   AssetPreviewTypeValidationError,
+  AssetPreviewSizeValidationError,
   AssetWorkspaceAssetInspectionError,
   AssetWorkspaceAssetNotFoundError,
   AssetWorkspaceResolutionError,
