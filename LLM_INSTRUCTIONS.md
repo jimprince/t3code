@@ -31,9 +31,10 @@ stale status now refreshes. Follow the affected production path and verify
 each outcome; report any remaining symptom explicitly.
 
 For linked pull requests, the target repository and host can differ from the
-thread's project. Cover that boundary as well as the same-project case, and
-use the target provider's identity and web origin rather than guessing from
-the thread's project. Include already-saved incorrect links and stale
+thread's project. Cover both new link creation and status refresh across that
+boundary as well as the same-project case. Use the target provider's identity
+and web origin; if a numeric reference's provider cannot be resolved, require
+its canonical URL instead of inventing a GitHub URL. Include already-saved incorrect links and stale
 snapshots in the regression scenario, not only newly created links. Exercise
 the normal refresh path through persistence to the client-facing result;
 do not repair live user data to make the test pass.
