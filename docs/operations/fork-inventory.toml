@@ -146,6 +146,12 @@ decided = "adapt"
 rationale = "Keep the fork's registry recovery coverage aligned with upstream's more actionable Codex spawn diagnostic: identify the configured server-side binary-path setting and explain that desktop app installation does not imply a CLI on PATH."
 
 [[patch.decision]]
+id = "upstream1895-codex-local-image-input"
+date = "2026-09-18"
+decided = "adapt"
+rationale = "Update the fork's turn-parameter diagnostic and collaboration-mode cases to upstream's path-based localImage input, preserving the fork assertions without restoring oversized data-URL requests."
+
+[[patch.decision]]
 id = "upstream11970-nonblocking-vcs-probe"
 date = "2026-09-17"
 decided = "narrow"
