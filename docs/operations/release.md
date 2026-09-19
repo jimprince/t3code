@@ -34,16 +34,21 @@ file is the concise runbook.
 
 ## Release Verification
 
-Preflight checks out the resolved release source before installing dependencies
-and running formatting/lint and typechecks. It reuses tests only from a successful
+Preflight checks out the resolved release source before installing dependencies.
+It reuses source checks and tests only from a successful
 `CI` push run on `main` for that exact commit, or its direct parent when the
 release child changes only the four package version fields to the release version.
 Lockfile, dependency, source, workflow, or file-mode changes disqualify parent reuse.
 The required CI check, test shards and release smoke jobs must all succeed in the
 same run attempt. Preflight waits up to five minutes for matching CI already in
 progress; missing, failed, incomplete or unavailable evidence runs the full release
-tests instead. The job summary links any reused CI run. Desktop packaging and
-headless artifact smoke checks always run.
+source checks and tests instead. The job summary links any reused CI run. Desktop
+packaging and headless artifact smoke checks always run.
+
+Tag preparation uses frozen installs before and after version stamping, preserving
+the verified source lockfile for CI reuse. A stale lockfile fails preparation;
+dependency resolution belongs before source verification, including the
+complete-stack regeneration in upstream replay.
 
 ## Push Nightly Trigger
 
