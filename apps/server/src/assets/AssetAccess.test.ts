@@ -540,6 +540,38 @@ describe("AssetAccess", () => {
       });
       expect(yield* resolveAsset(token, "private.stl")).toBeNull();
 
+      for (const [name, mimeType] of [
+        ["project.3mf", "model/3mf"],
+        ["bracket.step", "model/step"],
+        ["gear.stp", "model/step"],
+      ] as const) {
+        const formatPath = path.join(root, name);
+        yield* fileSystem.writeFile(formatPath, new Uint8Array([1, 2, 3]));
+        const formatAsset = yield* issueAssetUrl({
+          resource: {
+            _tag: "workspace-file",
+            threadId: ThreadId.make("thread-1"),
+            path: formatPath,
+          },
+          workspaceRoot: root,
+        });
+        const formatSuffix = formatAsset.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+        const formatSeparator = formatSuffix.indexOf("/");
+        expect(
+          yield* resolveAsset(
+            formatSuffix.slice(0, formatSeparator),
+            formatSuffix.slice(formatSeparator + 1),
+          ),
+        ).toMatchObject({
+          kind: "file",
+          path: yield* fileSystem.realPath(formatPath),
+          mimeType,
+        });
+        expect(
+          yield* resolveAsset(formatSuffix.slice(0, formatSeparator), "private.stl"),
+        ).toBeNull();
+      }
+
       yield* Effect.promise(() => NodeFSP.truncate(modelPath, MODEL_PREVIEW_MAX_BYTES + 1));
       expect(yield* resolveAsset(token, "scene.glb")).toBeNull();
       const error = yield* issueAssetUrl({
