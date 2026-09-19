@@ -40,6 +40,7 @@ import type {
   RuntimeSubagent,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
+import { filePreviewKind } from "@t3tools/shared/filePreview";
 import {
   emptyAgentPanelModel,
   formatSubagentModelLabel,
@@ -141,6 +142,7 @@ import { Button } from "../ui/button";
 import type { QueuedComposerMessage } from "../../queuedMessageStore";
 import { useAssetUrlRefresh, useAssetUrls, useAssetUrlState } from "../../assets/assetUrls";
 import { MediaVideoPlayer } from "../media/MediaVideoPlayer";
+import { AttachmentModelPreview } from "../model/ModelAssetPreviews";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import {
   buildAttachmentVideoAsset,
@@ -2023,6 +2025,17 @@ function UserVideoAttachment({ file }: { readonly file: ChatFileAttachment }) {
   );
 }
 
+function UserModelAttachment({ file }: { readonly file: ChatFileAttachment }) {
+  const ctx = use(TimelineRowCtx);
+  return (
+    <AttachmentModelPreview
+      file={file}
+      environmentId={ctx.activeThreadEnvironmentId}
+      onDownload={() => ctx.onFileDownload(file)}
+    />
+  );
+}
+
 // Screen readers skim a transcript by heading, so every message announces its
 // author as one. The thread title in ChatHeader is an <h2>; headings written
 // inside a message are exposed below this level. Visually hidden and excluded
@@ -2068,7 +2081,10 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     [row.message.attachments],
   );
   const userVideos = userFiles.filter(isVideoAttachment);
-  const otherUserFiles = userFiles.filter((file) => !isVideoAttachment(file));
+  const userModels = userFiles.filter((file) => filePreviewKind(file) === "model");
+  const otherUserFiles = userFiles.filter(
+    (file) => !isVideoAttachment(file) && filePreviewKind(file) !== "model",
+  );
   const unknownAttachments = (row.message.attachments ?? []).filter(
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
@@ -2263,6 +2279,13 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             ))}
           </div>
         )}
+        {userModels.length > 0 ? (
+          <div className="mb-2 flex w-[min(34rem,75vw)] max-w-full flex-col gap-2">
+            {userModels.map((file) => (
+              <UserModelAttachment key={file.id} file={file} />
+            ))}
+          </div>
+        ) : null}
         {unchippedFiles.length > 0 || unknownAttachments.length > 0 ? (
           <div className="mb-2 flex flex-col gap-1">
             {unchippedFiles.map((file) => {
