@@ -1,5 +1,37 @@
 # Agent Requirements
 
+## Current Task Snapshot — Share T3 Contracts Without A Vendored Tree (2026-09-19)
+
+### Active Requirements
+
+- Import current wire schemas from `@t3tools/contracts` at build time and keep
+  the standalone CLI bundle free of runtime workspace dependencies.
+- Retain only small compatibility decoders for older paired servers and the
+  CLI's stable model-selection view.
+- Preserve old and current snapshots, custom provider instance ids, historical
+  goals and file attachments, lifecycle defaults, event decoding, and remote
+  operation behavior.
+
+### Status
+
+- Implemented and verified locally; parent stack integration and lockfile
+  regeneration remain outside this package-owned working-tree change.
+
+### Validation
+
+- Removed the 6,599-line `src/vendor/t3contracts` copy and replaced it with the
+  focused `src/contracts.ts` adapter over shared schemas.
+- Added old/current payload fixtures covering model selections, providers,
+  goals, current and legacy file attachments, lifecycle defaults, and shell and
+  thread events.
+- Model-selection compatibility only visits declared model-selection fields;
+  opaque activity, context, tool, metadata, and provider payloads round-trip
+  unchanged.
+- Narrow shared-contract subpaths keep the bundle smaller and startup faster
+  than the former vendored-contract build.
+- Package tests, scoped typecheck/lint/format, the standalone build, and bundled
+  `--help` all pass under Node 24.13.1.
+
 ## Current Task Snapshot — Land And Cut Over The Integrated CLI (2026-07-10)
 
 ### Active Requirements

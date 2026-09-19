@@ -3,17 +3,21 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { RemoteEnvironmentClient } from "../src/client.js";
 import {
-  ClientOrchestrationCommand,
-  OrchestrationThread,
-  OrchestrationThreadShell,
-} from "../src/vendor/t3contracts/orchestration.js";
+  decodeThreadShell,
+  decodeThreadSnapshotItem,
+  encodeClientOrchestrationCommand,
+} from "../src/contracts.js";
 import { ClientOrchestrationCommand as ServerCommand } from "../../../packages/contracts/src/orchestration.js";
 import type { SavedEnvironment } from "../src/types.js";
 
-const encodeCommand = Schema.encodeUnknownSync(ClientOrchestrationCommand);
 const decodeServerCommand = Schema.decodeUnknownSync(ServerCommand);
-const decodeThread = Schema.decodeUnknownSync(OrchestrationThread);
-const decodeShell = Schema.decodeUnknownSync(OrchestrationThreadShell);
+const encodeCommand = encodeClientOrchestrationCommand;
+const decodeThread = (input: unknown) =>
+  decodeThreadSnapshotItem({
+    kind: "snapshot",
+    snapshot: { snapshotSequence: 0, thread: input },
+  }).snapshot.thread;
+const decodeShell = decodeThreadShell;
 
 const threadId = "22222222-2222-4222-8222-222222222222";
 const timestamp = "2026-09-09T12:00:00.000Z";
