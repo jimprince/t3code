@@ -4,6 +4,7 @@ export type FilePreviewKind =
   | "image"
   | "video"
   | "audio"
+  | "model"
   | "pdf"
   | "html"
   | "markdown"
@@ -25,6 +26,8 @@ export function filePreviewKind(file: {
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("video/")) return "video";
   if (mime.startsWith("audio/")) return "audio";
+  if (mime === "model/gltf-binary" || mime === "model/stl" || mime === "application/sla")
+    return "model";
   if (generic) {
     if (extension === ".pdf") return "pdf";
     if (/^\.html?$/.test(extension)) return "html";
@@ -33,6 +36,7 @@ export function filePreviewKind(file: {
     if (media?.startsWith("image/")) return "image";
     if (media?.startsWith("video/")) return "video";
     if (audioMimeTypeFromExtension(extension) !== null) return "audio";
+    if (modelMimeTypeFromExtension(extension) !== null) return "model";
     if (
       /^\.(txt|log|json|jsonc|jsonl|ndjson|yaml|yml|toml|ini|conf|config|env|csv|tsv|xml|css|scss|sass|less|js|jsx|mjs|cjs|ts|tsx|mts|cts|py|pyi|rb|go|rs|swift|kt|kts|java|c|h|cc|cpp|hpp|cs|php|sh|bash|zsh|fish|sql|graphql|gql|vue|svelte|r|lua|ex|exs|erl|hs|clj|dart|diff|patch|lock|properties|gradle)$/.test(
         extension,
@@ -54,6 +58,23 @@ export function filePreviewKind(file: {
 }
 
 export const FILE_TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
+export const MODEL_PREVIEW_MAX_BYTES = 50 * 1024 * 1024;
+export const MODEL_PREVIEW_MAX_TRIANGLES = 2_000_000;
+export const MODEL_PREVIEW_MAX_TEXTURE_PIXELS = 64 * 1024 * 1024;
+
+const MODEL_MIME_TYPE_BY_EXTENSION = new Map([
+  [".glb", "model/gltf-binary"],
+  [".stl", "model/stl"],
+]);
+
+export function modelMimeTypeFromExtension(extension: string): string | null {
+  if (!/^\.[a-z0-9]+$/i.test(extension)) return null;
+  return MODEL_MIME_TYPE_BY_EXTENSION.get(extension.toLowerCase()) ?? null;
+}
+
+export function isWorkspaceModelPreviewPath(path: string): boolean {
+  return hasPreviewExtension(path, [".glb", ".stl"]);
+}
 
 /** Reject binary data rather than displaying replacement characters as a document. */
 export function decodeFilePreviewText(bytes: Uint8Array, truncated = false) {
@@ -194,5 +215,9 @@ export function isWorkspaceAudioPreviewPath(path: string): boolean {
 }
 
 export function isWorkspacePreviewEntryPath(path: string): boolean {
-  return isWorkspaceBrowserPreviewPath(path) || isWorkspaceImagePreviewPath(path);
+  return (
+    isWorkspaceBrowserPreviewPath(path) ||
+    isWorkspaceImagePreviewPath(path) ||
+    isWorkspaceModelPreviewPath(path)
+  );
 }
