@@ -42,7 +42,10 @@ import * as MacPermissions from "../../permissions/MacPermissions.ts";
 import { safariPermissionCheck } from "../../preview/BrowserImport/SafariPermission.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
-import { nodeOrcaSlicerHandoffDependencies, openStlInOrcaSlicer } from "../../model/OrcaSlicer.ts";
+import {
+  nodeOrcaSlicerHandoffDependencies,
+  openModelInOrcaSlicer as handOffModelToOrcaSlicer,
+} from "../../model/OrcaSlicer.ts";
 import {
   extractDistroFromUncPath,
   resolveWslPickFolderDefaultPath,
@@ -329,7 +332,7 @@ export const openModelInOrcaSlicer = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.window.openModelInOrcaSlicer")(function* (input) {
     const environment = yield* DesktopEnvironment.DesktopEnvironment;
     return yield* Effect.promise(() =>
-      openStlInOrcaSlicer(input, nodeOrcaSlicerHandoffDependencies(environment.platform)),
+      handOffModelToOrcaSlicer(input, nodeOrcaSlicerHandoffDependencies(environment.platform)),
     );
   }),
 });

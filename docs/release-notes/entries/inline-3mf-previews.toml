@@ -1,0 +1,4 @@
+id = "inline-3mf-previews"
+category = "feature"
+functionality = "3D model previews"
+text = "Preview bounded 3MF models inline with their declared scale and basic colors, and open them in OrcaSlicer from the macOS desktop app."
