@@ -79,7 +79,7 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
         ["CI Fork patch policy", policyJob, "scripts/ci/check-stgit-stack"],
         ["Release Preflight", releasePreflight, "scripts/ci/verify-source test"],
         ["Sync Upstream", stackWriters[0]!, "scripts/ci/reproduce-sync-upstream"],
-        ["Fork Push Nightly", stackWriters[1]!, "scripts/ci/reproduce-sync-upstream"],
+        ["Fork Push Nightly", stackWriters[1]!, "scripts/ci/resolve-fork-push-tag"],
       ] as const) {
         assert.include(
           workflow,
@@ -237,7 +237,7 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       assert.include(nightlyWorkflow, "STGIT_BACKUP_NAMESPACE: bot");
       assert.include(syncWorkflow, 'new_tag="${UPSTREAM_TAG}-fork.${next_n}"');
       assert.include(syncWorkflow, 'new_tag="$UPSTREAM_TAG"');
-      assert.include(nightlyWorkflow, 'new_tag="${upstream_tag}-fork.${next_n}"');
+      assert.include(nightlyWorkflow, "scripts/ci/resolve-fork-push-tag");
       assert.include(syncWorkflow, "scripts/ci/publish-stgit-stack --push");
       assert.include(syncWorkflow, 'STGIT_RELEASE_TAG="$NEW_TAG"');
       assert.include(nightlyWorkflow, "scripts/ci/publish-stgit-stack --push");
@@ -246,23 +246,33 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
     }),
   );
 
-  it.effect("validates the unstamped candidate before either automatic publication", () =>
+  it.effect("validates upstream replays and requires exact-source CI for fork pushes", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
       const repoRoot = yield* path.fromFileUrl(new URL("..", import.meta.url));
-      for (const name of ["sync-upstream.yml", "fork-push-nightly.yml"]) {
-        const workflow = yield* fs.readFileString(path.join(repoRoot, ".github/workflows", name));
-        const prepare = workflow.indexOf("scripts/ci/prepare-stgit-publication");
-        const replay = workflow.indexOf("run: scripts/ci/reproduce-sync-upstream");
-        const gate = workflow.indexOf("scripts/ci/verify-stgit-replay");
-        const stamp = workflow.indexOf("scripts/ci/prepare-release-tag");
-        const publish = workflow.indexOf("scripts/ci/publish-stgit-stack --push");
-        assert.isAtLeast(prepare, 0);
-        assert.isBelow(prepare, replay);
-        assert.isBelow(replay, gate);
-        assert.isBelow(gate, stamp);
-        assert.isBelow(stamp, publish);
+      const sync = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/sync-upstream.yml"),
+      );
+      const nightly = yield* fs.readFileString(
+        path.join(repoRoot, ".github/workflows/fork-push-nightly.yml"),
+      );
+      const syncReplay = sync.indexOf("run: scripts/ci/reproduce-sync-upstream");
+      const syncGate = sync.indexOf("scripts/ci/verify-stgit-replay");
+      assert.isBelow(syncReplay, syncGate);
+
+      const resolve = nightly.indexOf("scripts/ci/resolve-fork-push-tag");
+      const evidence = nightly.indexOf("bun scripts/ci/reuse-release-ci.ts");
+      const requireEvidence = nightly.indexOf("Require exact-source CI verification");
+      const stamp = nightly.indexOf("scripts/ci/prepare-release-tag");
+      const publish = nightly.indexOf("scripts/ci/publish-stgit-stack --push");
+      assert.isBelow(resolve, evidence);
+      assert.isBelow(evidence, requireEvidence);
+      assert.isBelow(requireEvidence, stamp);
+      assert.isBelow(stamp, publish);
+      assert.notInclude(nightly, "scripts/ci/reproduce-sync-upstream");
+      assert.notInclude(nightly, "gh workflow run sync-upstream.yml");
+      for (const workflow of [sync, nightly]) {
         assert.notInclude(workflow, "scripts/ci/refresh-stgit-metadata");
         assert.notInclude(workflow, "git push --atomic");
       }
@@ -282,7 +292,7 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
       // scripts/ci/list-release-tags-at-head.test.ts.
       assert.include(
         workflow,
-        "scripts/ci/list-release-tags-at-head",
+        "scripts/ci/resolve-fork-push-tag",
         "REGRESSION: a Sync tag now points to main's stamped child, so checking only tags at HEAD double-publishes the same main rewrite",
       );
     }),
@@ -349,7 +359,7 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
     }),
   );
 
-  it.effect("routes fork push conflicts through the eligible repair workflow", () =>
+  it.effect("keeps upstream migration and repair out of the fork-push lane", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const path = yield* Path.Path;
@@ -358,16 +368,11 @@ it.layer(NodeServices.layer)("sync-upstream workflow", (it) => {
         path.join(repoRoot, ".github/workflows/fork-push-nightly.yml"),
       );
 
-      assert.include(workflow, "CI_REPAIR_BOT_CONFLICT_MODE: output");
-      assert.include(workflow, "steps.replay.outputs.status == 'conflict'");
-      assert.include(workflow, "gh workflow run sync-upstream.yml");
-      assert.include(workflow, "--ref main");
-      assert.include(workflow, "-f channel=nightly");
-      assert.isBelow(
-        workflow.indexOf("scripts/ci/reproduce-sync-upstream"),
-        workflow.indexOf("gh workflow run sync-upstream.yml"),
-        "the push-nightly replay must detect a conflict before dispatching repair",
-      );
+      assert.notInclude(workflow, "CI_REPAIR_BOT_CONFLICT_MODE");
+      assert.notInclude(workflow, "steps.replay.outputs");
+      assert.notInclude(workflow, "gh workflow run sync-upstream.yml");
+      assert.notInclude(workflow, "scripts/ci/reproduce-sync-upstream");
+      assert.include(workflow, "scripts/ci/resolve-fork-push-tag");
     }),
   );
 });

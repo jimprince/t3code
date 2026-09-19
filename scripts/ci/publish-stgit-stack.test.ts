@@ -177,6 +177,61 @@ const racingGit = (): { readonly bin: string; readonly marker: string; readonly 
 };
 
 describe("publish-stgit-stack", () => {
+  it("prepares a fork-push checkout for publication without replaying the source", () => {
+    const fixture = seedPublication();
+    try {
+      const workflow = NodeFS.readFileSync(
+        NodePath.join(repoRoot, ".github/workflows/fork-push-nightly.yml"),
+        "utf8",
+      );
+      const recordStep = workflow
+        .split("      - name: Record main lease\n")[1]!
+        .split("\n      - name:")[0]!;
+      const commands = recordStep
+        .split("        run: |\n")[1]!
+        .split("\n")
+        .map((line) => line.replace(/^          /, ""))
+        .join("\n");
+      for (const name of ["record-main-lease", "prepare-stgit-publication"])
+        NodeFS.copyFileSync(
+          NodePath.join(repoRoot, "scripts/ci", name),
+          NodePath.join(fixture.repo.dir, "scripts/ci", name),
+        );
+      fixture.repo.writeFile(
+        "scripts/ci/check-stgit-stack",
+        '#!/usr/bin/env bash\nprintf \'{"head":"%s","patches":[]}\\n\' "$(git rev-parse HEAD)"\n',
+      );
+      // These are fixture policy tools, not changes to the rendered source.
+      fixture.repo.git("update-index", "--assume-unchanged", "scripts/ci/check-stgit-stack");
+      NodeFS.appendFileSync(
+        NodePath.join(fixture.repo.dir, ".git/info/exclude"),
+        "\nscripts/ci/record-main-lease\nscripts/ci/prepare-stgit-publication\n",
+      );
+      gitAt(fixture.remote, "update-ref", "refs/heads/main", fixture.head);
+      fixture.repo.git("config", "test.leaseMain", fixture.head);
+      fixture.repo.git("checkout", "--detach", fixture.head);
+      const before = gitAt(fixture.remote, "show-ref");
+      const result = NodeChildProcess.spawnSync("bash", ["-euc", commands], {
+        cwd: fixture.repo.dir,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `/usr/bin:/bin:${process.env.PATH}`,
+          SYNC_GIT_BIN: "/usr/bin/git",
+          GITHUB_OUTPUT: NodePath.join(fixture.repo.dir, ".git/step-output"),
+        },
+      });
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(fixture.repo.git("rev-parse", "HEAD"), fixture.head);
+      const publication = run(fixture.repo, "--check");
+      assert.equal(publication.status, 0, publication.stderr);
+      assert.equal(gitAt(fixture.remote, "show-ref"), before);
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
   it("rejects publication without preparation-time leases", () => {
     const fixture = seedPublication();
     try {

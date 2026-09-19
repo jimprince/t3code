@@ -457,12 +457,13 @@ under `projects/t3code-fork/2026-09-09-patch-stack-retrospective.md`.
 
 The shared replay driver removes the generated lockfile delta from the replay
 input, applies every concern to upstream, then regenerates the lockfile at the
-complete tip and refreshes the existing `lockfile-owner`. Both automatic workflows
-use this driver. Main still contains a consistent lockfile for frozen installs;
-the generated old lockfile never needs semantic conflict repair. Other manifest
-or product conflicts still stop normally. Generation failure restores the original
-rendered stack and fails the operation. No verification or publication gate is
-bypassed.
+complete tip and refreshes the existing `lockfile-owner`. Upstream synchronization
+uses this driver; fork-feature push releases publish the already integrated
+stack base and never replay. Main still contains a consistent lockfile for
+frozen installs; the generated old lockfile never needs semantic conflict
+repair. Other manifest or product conflicts still stop normally. Generation
+failure restores the original rendered stack and fails the operation. No
+verification or publication gate is bypassed.
 
 Run the real Git/StGit regression with `python3 scripts/ci/test-replay-lockfile.py`
 (Git, StGit and Bun required). It covers a conflicting generated file, a workspace

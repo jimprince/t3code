@@ -208,12 +208,17 @@ describe("release tags at HEAD", () => {
     }
   });
 
-  it("is the only release-tag scan the nightly workflow performs", () => {
+  it("is the only existing-source release scan used by the nightly selector", () => {
     const workflow = NodeFS.readFileSync(
       NodePath.join(repoRoot, ".github/workflows/fork-push-nightly.yml"),
       "utf8",
     );
-    assert.include(workflow, 'existing_release_tags="$(scripts/ci/list-release-tags-at-head)"');
+    const selector = NodeFS.readFileSync(
+      NodePath.join(repoRoot, "scripts/ci/resolve-fork-push-tag"),
+      "utf8",
+    );
+    assert.include(workflow, "scripts/ci/resolve-fork-push-tag");
+    assert.include(selector, "$script_dir/list-release-tags-at-head");
     assert.notInclude(workflow, "git tag --list 'v*'");
   });
 });

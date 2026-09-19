@@ -26,7 +26,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  actions: write
+  actions: read
   contents: write
 
 concurrency:
@@ -62,7 +62,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          # Fork nightly replays can include upstream workflow changes.
+          # Publication may update workflow-bearing stack metadata.
           token: ${{ secrets.GH_PAT || github.token }}
 
       - name: Setup Vite+
@@ -93,82 +93,28 @@ jobs:
             '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
             '+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*'
           scripts/ci/prepare-stgit-publication
+          git switch --force-create stgit/adopt HEAD
 
       - name: Resolve next fork tag
         id: resolve
-        env:
-          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
         run: |
-          set -euo pipefail
-
-          # Main and its prepared release tag are published atomically.
-          # Fetch once; no visibility delay is needed.
           git fetch --tags origin
+          scripts/ci/resolve-fork-push-tag
 
-          existing_release_tags="$(scripts/ci/list-release-tags-at-head)"
-          if [[ -n "$existing_release_tags" ]]; then
-            echo "Main already has release tag(s) at HEAD or its prepared child:"
-            echo "$existing_release_tags" | sed 's/^/  /'
-            echo "needed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          upstream_tag=$(gh release list --repo pingdotgg/t3code --limit 50 \
-            --json tagName,isPrerelease,publishedAt \
-            --jq '[.[] | select(.isPrerelease and (.tagName | test("(^|-)v[0-9]+\\.[0-9]+\\.[0-9]+-nightly\\.")))] | sort_by(.publishedAt) | reverse | .[0].tagName')
-          if [[ -z "$upstream_tag" || "$upstream_tag" == "null" ]]; then
-            echo "::error::No nightly release found on upstream."
-            exit 1
-          fi
-          echo "Latest upstream nightly release: $upstream_tag"
-
-          mapfile -t existing_numbers < <(git tag --list "${upstream_tag}-fork.*" \
-            | awk -F '-fork\\.' 'NF==2 && $2 ~ /^[0-9]+$/ { print $2 }' \
-            | sort -n)
-
-          if [[ ${#existing_numbers[@]} -eq 0 ]]; then
-            next_n=1
-          else
-            last="${existing_numbers[-1]}"
-            next_n=$((last + 1))
-          fi
-
-          new_tag="${upstream_tag}-fork.${next_n}"
-          echo "needed=true" >> "$GITHUB_OUTPUT"
-          echo "tag=$new_tag" >> "$GITHUB_OUTPUT"
-          echo "upstream_tag=$upstream_tag" >> "$GITHUB_OUTPUT"
-
-      - name: Replay fork onto latest upstream nightly
+      - name: Reuse exact-source CI verification
         if: steps.resolve.outputs.needed == 'true'
-        id: replay
-        env:
-          CI_REPAIR_BOT_UPSTREAM_TARGET: refs/tags/upstream/${{ steps.resolve.outputs.upstream_tag }}
-          CI_REPAIR_BOT_UPSTREAM_SOURCE_REF: refs/tags/${{ steps.resolve.outputs.upstream_tag }}
-          CI_REPAIR_BOT_CONFLICT_MODE: output
-        run: scripts/ci/reproduce-sync-upstream
-
-      - name: Route replay conflict to autonomous repair
-        if: steps.resolve.outputs.needed == 'true' && steps.replay.outputs.status == 'conflict'
+        id: source_ci
         env:
           GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
-          FAILING_PATCH: ${{ steps.replay.outputs.patch }}
-          CONFLICT_FILES: ${{ steps.replay.outputs.files }}
-        run: |
-          set -euo pipefail
-          gh workflow run sync-upstream.yml \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref main \
-            -f channel=nightly
-          echo "::error::Fork push replay conflicted in $FAILING_PATCH; dispatched eligible Sync Upstream repair."
-          echo "$CONFLICT_FILES" | sed 's/^/::error::  /'
-          exit 1
+          RELEASE_REF: HEAD
+          RELEASE_VERSION: ${{ steps.resolve.outputs.tag }}
+        run: bun scripts/ci/reuse-release-ci.ts
 
-      - name: Verify replay before publication
-        if: steps.resolve.outputs.needed == 'true' && steps.replay.outputs.status == 'clean'
+      - name: Require exact-source CI verification
+        if: steps.resolve.outputs.needed == 'true' && steps.source_ci.outputs.reused != 'true'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libsecret-1-dev pkg-config
-          scripts/ci/verify-stgit-replay
+          echo "::error::Fork push release requires successful CI evidence for this exact main source."
+          exit 1
 
       - name: Prepare release tag
         if: steps.resolve.outputs.needed == 'true'
@@ -178,7 +124,7 @@ jobs:
         run: scripts/ci/prepare-release-tag
 
       - name: Publish verified stack and release tag
-        if: steps.resolve.outputs.needed == 'true' && steps.replay.outputs.status == 'clean'
+        if: steps.resolve.outputs.needed == 'true'
         env:
           STGIT_EXPECTED_REMOTE_MAIN: ${{ steps.pre.outputs.main_sha }}
           MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
