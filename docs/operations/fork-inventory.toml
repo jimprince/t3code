@@ -67,7 +67,7 @@ rationale = "Make upstream's large-diff fixture rewrite change byte length so Gi
 id = "upstream4029-highlighter-test-time-limit"
 date = "2026-09-17"
 decided = "adapt"
-rationale = "Disable Shiki's wall-clock tokenization cutoff only in the native review highlighter test wrapper so the grammar-isolation assertions cannot return partial tokens when parallel repository verification saturates the host; production tokenization keeps its safety cutoff."
+rationale = "Disable Shiki's wall-clock tokenization cutoff only in the native review and source/snippet highlighter test wrappers so grammar-isolation and cold-initialization assertions cannot return partial tokens when parallel repository verification saturates the host; production tokenization keeps its safety cutoff."
 
 [[patch.decision]]
 id = "upstream9902-file-highlight-test-budget"
