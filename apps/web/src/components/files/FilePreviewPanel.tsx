@@ -31,7 +31,7 @@ import { useAssetUrlRefresh, useAssetUrlState } from "~/assets/assetUrls";
 import { OpenInPicker } from "~/components/chat/OpenInPicker";
 import { MediaVideoPlayer } from "~/components/media/MediaVideoPlayer";
 import { MediaActions, type MediaActionSource } from "~/components/media/MediaActions";
-import { ModelPreview } from "~/components/model/ModelPreview";
+import { WorkspaceModelPreview } from "~/components/model/ModelAssetPreviews";
 import { useRemoteOpenState } from "~/remoteOpen";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { useTheme } from "~/hooks/useTheme";
@@ -173,73 +173,6 @@ function WorkspaceImagePreview(props: {
     <div className="flex min-h-0 flex-1 items-center justify-center text-muted-foreground">
       <Spinner className="size-5" />
     </div>
-  );
-}
-
-function WorkspaceModelPreview(props: {
-  readonly environmentId: EnvironmentId;
-  readonly threadRef: ScopedThreadRef;
-  readonly absolutePath: string;
-  readonly name: string;
-  readonly workspaceMutationId: string | null;
-}) {
-  const resource = useMemo(
-    () => ({
-      _tag: "workspace-file" as const,
-      threadId: props.threadRef.threadId,
-      path: props.absolutePath,
-    }),
-    [props.absolutePath, props.threadRef.threadId],
-  );
-  const downloadResource = useMemo(
-    () => ({
-      _tag: "workspace-file-download" as const,
-      threadId: props.threadRef.threadId,
-      path: props.absolutePath,
-    }),
-    [props.absolutePath, props.threadRef.threadId],
-  );
-  const assetUrl = useAssetUrlState(props.environmentId, resource);
-  const refresh = useAssetUrlRefresh(props.environmentId, resource);
-  const prepareDownload = useAssetUrlRefresh(props.environmentId, downloadResource);
-  useWorkspaceMutationRefresh({
-    mutationId: props.workspaceMutationId,
-    resourceKey: JSON.stringify([props.environmentId, resource]),
-    refresh: () => void refresh().catch(() => undefined),
-  });
-  const download = () => {
-    void prepareDownload().then((url) => {
-      if (!url) return;
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = props.name;
-      anchor.click();
-    });
-  };
-  if (assetUrl._tag === "Failure") {
-    return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 px-6 text-center text-xs">
-        <p className="text-destructive">Unable to preview this 3D model.</p>
-        <div className="flex gap-2">
-          <button type="button" className="underline" onClick={() => void refresh()}>
-            Try again
-          </button>
-          <button type="button" className="underline" onClick={download}>
-            Download file
-          </button>
-        </div>
-      </div>
-    );
-  }
-  if (assetUrl._tag !== "Success") return <FileSurfaceLoading />;
-  return (
-    <ModelPreview
-      url={assetUrl.url}
-      name={props.name}
-      className="min-h-0 flex-1"
-      onRetry={refresh}
-      onDownload={download}
-    />
   );
 }
 
