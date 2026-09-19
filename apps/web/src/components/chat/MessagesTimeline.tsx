@@ -40,7 +40,7 @@ import type {
   RuntimeSubagent,
 } from "@t3tools/client-runtime/state/subagentRuntime";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
-import { filePreviewKind, MODEL_PREVIEW_MAX_BYTES } from "@t3tools/shared/filePreview";
+import { filePreviewKind } from "@t3tools/shared/filePreview";
 import {
   emptyAgentPanelModel,
   formatSubagentModelLabel,
@@ -142,7 +142,7 @@ import { Button } from "../ui/button";
 import type { QueuedComposerMessage } from "../../queuedMessageStore";
 import { useAssetUrlRefresh, useAssetUrls, useAssetUrlState } from "../../assets/assetUrls";
 import { MediaVideoPlayer } from "../media/MediaVideoPlayer";
-import { ModelPreview } from "../model/ModelPreview";
+import { AttachmentModelPreview } from "../model/ModelAssetPreviews";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import {
   buildAttachmentVideoAsset,
@@ -2027,59 +2027,10 @@ function UserVideoAttachment({ file }: { readonly file: ChatFileAttachment }) {
 
 function UserModelAttachment({ file }: { readonly file: ChatFileAttachment }) {
   const ctx = use(TimelineRowCtx);
-  const modelTooLarge = file.sizeBytes > MODEL_PREVIEW_MAX_BYTES;
-  const resource = useMemo(
-    () =>
-      modelTooLarge
-        ? null
-        : {
-            _tag: "attachment" as const,
-            attachmentId: file.id,
-            fileName: file.name,
-            mimeType: file.mimeType,
-            disposition: "inline" as const,
-          },
-    [file.id, file.mimeType, file.name, modelTooLarge],
-  );
-  const assetUrl = useAssetUrlState(ctx.activeThreadEnvironmentId, resource);
-  const refresh = useAssetUrlRefresh(ctx.activeThreadEnvironmentId, resource);
-  if (modelTooLarge) {
-    return (
-      <ModelPreview
-        url=""
-        name={file.name}
-        sizeBytes={file.sizeBytes}
-        className="h-72 rounded-lg border border-border/80"
-        onDownload={() => ctx.onFileDownload(file)}
-      />
-    );
-  }
-  if (assetUrl._tag === "Failure") {
-    return (
-      <div className="flex min-h-56 flex-col items-center justify-center gap-2 rounded-lg bg-black px-4 text-center text-xs text-white/75">
-        <button type="button" className="underline" onClick={() => void refresh()}>
-          Model unavailable. Retry
-        </button>
-        <button type="button" className="underline" onClick={() => ctx.onFileDownload(file)}>
-          Download file
-        </button>
-      </div>
-    );
-  }
-  if (assetUrl._tag !== "Success") {
-    return (
-      <div className="flex min-h-56 items-center justify-center rounded-lg bg-black text-xs text-white/75">
-        Loading 3D model…
-      </div>
-    );
-  }
   return (
-    <ModelPreview
-      url={assetUrl.url}
-      name={file.name}
-      sizeBytes={file.sizeBytes}
-      className="h-72 rounded-lg border border-border/80"
-      onRetry={refresh}
+    <AttachmentModelPreview
+      file={file}
+      environmentId={ctx.activeThreadEnvironmentId}
       onDownload={() => ctx.onFileDownload(file)}
     />
   );

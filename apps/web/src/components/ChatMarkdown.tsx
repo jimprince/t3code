@@ -109,7 +109,7 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { markdownImageGallery, markdownImageItems } from "./chat/markdownImageGallery";
 import { MediaVideoPlayer } from "./media/MediaVideoPlayer";
 import { MediaActions, type MediaActionSource } from "./media/MediaActions";
-import { ModelPreview } from "./model/ModelPreview";
+import { ChatMarkdownAssetModel } from "./model/ModelAssetPreviews";
 import { resolveProtocolRelativeMediaUrl } from "./media/mediaContent";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
@@ -1710,65 +1710,6 @@ export const ChatMarkdownAssetImage = memo(function ChatMarkdownAssetImage(props
     />
   );
 });
-
-function ChatMarkdownAssetModel(props: {
-  readonly threadRef: ScopedThreadRef;
-  readonly path: string;
-  readonly name: string;
-}) {
-  const resource = useMemo(
-    () => ({
-      _tag: "workspace-file" as const,
-      threadId: props.threadRef.threadId,
-      path: props.path,
-    }),
-    [props.path, props.threadRef.threadId],
-  );
-  const downloadResource = useMemo(
-    () => ({
-      _tag: "workspace-file-download" as const,
-      threadId: props.threadRef.threadId,
-      path: props.path,
-    }),
-    [props.path, props.threadRef.threadId],
-  );
-  const assetUrl = useAssetUrlState(props.threadRef.environmentId, resource);
-  const refresh = useAssetUrlRefresh(props.threadRef.environmentId, resource);
-  const prepareDownload = useAssetUrlRefresh(props.threadRef.environmentId, downloadResource);
-  const download = () => {
-    void prepareDownload().then((url) => {
-      if (url) startBrowserDownload(url);
-    });
-  };
-  if (assetUrl._tag === "Failure") {
-    return (
-      <div className="my-2 flex min-h-56 flex-col items-center justify-center gap-2 rounded-lg bg-black text-xs text-white/75">
-        <button type="button" className="underline" onClick={() => void refresh()}>
-          Model unavailable. Retry
-        </button>
-        <button type="button" className="underline" onClick={download}>
-          Download file
-        </button>
-      </div>
-    );
-  }
-  if (assetUrl._tag !== "Success") {
-    return (
-      <div className="my-2 flex min-h-56 items-center justify-center rounded-lg bg-black text-xs text-white/75">
-        Loading 3D model…
-      </div>
-    );
-  }
-  return (
-    <ModelPreview
-      url={assetUrl.url}
-      name={props.name}
-      className="my-2 h-80 w-full rounded-lg border border-border/80"
-      onRetry={refresh}
-      onDownload={download}
-    />
-  );
-}
 
 function leadingExternalLinkTextLength(text: string): number {
   const protocol = /^(?:https?:\/\/)/i.exec(text)?.[0];
