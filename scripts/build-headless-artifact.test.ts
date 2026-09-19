@@ -1,75 +1,103 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Effect from "effect/Effect";
-import { beforeAll, describe, expect, it } from "vite-plus/test";
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
+import { describe, expect, it } from "vite-plus/test";
 
+import { cliArchiveStem } from "./build-cli-archive.ts";
 import {
-  createHeadlessPackageJson,
-  type HeadlessWorkspaceConfig,
-  readHeadlessWorkspaceConfig,
+  adaptCliArchive,
+  HEADLESS_ENTRYPOINT,
   resolveHeadlessArtifactName,
-  resolveHeadlessPatchedDependencies,
-  resolveHeadlessRuntimeDependencies,
 } from "./build-headless-artifact.ts";
-import { collectClientAssetReferences } from "./lib/client-assets.ts";
 
-let workspaceConfig: HeadlessWorkspaceConfig;
-
-beforeAll(async () => {
-  workspaceConfig = await Effect.runPromise(
-    readHeadlessWorkspaceConfig().pipe(Effect.provide(NodeServices.layer)),
-  );
-});
+const VERSION = "0.0.23-nightly.20260506.217-fork.1";
 
 describe("build-headless-artifact", () => {
-  it("names linux-x64 artifacts with version and platform", () => {
-    expect(resolveHeadlessArtifactName("0.0.23-nightly.20260506.217-fork.1", "linux", "x64")).toBe(
-      "t3-headless-0.0.23-nightly.20260506.217-fork.1-linux-x64.tar.gz",
-    );
+  it("preserves the published Linux x64 asset name", () => {
+    expect(resolveHeadlessArtifactName(VERSION)).toBe(`t3-headless-${VERSION}-linux-x64.tar.gz`);
   });
 
-  it("resolves server runtime dependencies without catalog placeholders", () => {
-    const dependencies = resolveHeadlessRuntimeDependencies(workspaceConfig);
-
-    expect(dependencies.effect).not.toBe("catalog:");
-    expect(dependencies["@effect/platform-node"]).not.toBe("catalog:");
-    expect(dependencies["node-pty"]).toBeDefined();
-    expect(dependencies["@anthropic-ai/claude-agent-sdk"]).toBeDefined();
-    expect(dependencies["@opencode-ai/sdk"]).toBeDefined();
+  it("uses a Node-free compatibility entrypoint", () => {
+    expect(HEADLESS_ENTRYPOINT).toContain('exec "$script_dir/../t3" "$@"');
+    expect(HEADLESS_ENTRYPOINT).not.toMatch(/\bnode\b/);
   });
 
-  it("stages only the workspace patches for packages the runtime installs", () => {
-    const patched = resolveHeadlessPatchedDependencies(workspaceConfig);
-    const runtime = resolveHeadlessRuntimeDependencies(workspaceConfig);
+  it("adapts the upstream archive and runs bin/t3 without Node on PATH", async () => {
+    const scratch = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "headless-adapter-test-"));
+    try {
+      const upstreamRoot = NodePath.join(scratch, cliArchiveStem(VERSION, "linux", "x64"));
+      await NodeFSP.mkdir(NodePath.join(upstreamRoot, "client"), { recursive: true });
+      await NodeFSP.mkdir(NodePath.join(upstreamRoot, "resource-monitor/linux-x64"), {
+        recursive: true,
+      });
+      for (const dependency of ["node-pty", "@ff-labs/fff-node", "msgpackr-extract"]) {
+        await NodeFSP.mkdir(NodePath.join(upstreamRoot, "node_modules", dependency), {
+          recursive: true,
+        });
+      }
+      await NodeFSP.writeFile(
+        NodePath.join(upstreamRoot, "t3"),
+        `#!/bin/sh
+case "\${1:-}" in
+  --version) printf 'T3 Code ${VERSION}\\n' ;;
+  --help) printf 'USAGE: t3 [command]\\n' ;;
+esac
+`,
+        { mode: 0o755 },
+      );
+      await NodeFSP.writeFile(NodePath.join(upstreamRoot, "client/index.html"), "<main>T3</main>");
+      await NodeFSP.writeFile(
+        NodePath.join(upstreamRoot, "resource-monitor/linux-x64/t3-resource-monitor"),
+        "monitor",
+      );
+      const upstreamArchive = NodePath.join(scratch, "upstream.tar.gz");
+      NodeChildProcess.execFileSync("tar", [
+        "-czf",
+        upstreamArchive,
+        "-C",
+        scratch,
+        NodePath.basename(upstreamRoot),
+      ]);
 
-    // The server requires fff-node, which resolves only with the patched
-    // `require` export condition.
-    const fffPatch = Object.entries(patched).find(([key]) => key.startsWith("@ff-labs/fff-node@"));
-    expect(fffPatch?.[1]).toBe("patches/@ff-labs__fff-node@0.9.4.patch");
-    for (const patchKey of Object.keys(patched)) {
-      expect(runtime[patchKey.slice(0, patchKey.lastIndexOf("@"))]).toBeDefined();
+      const outputDir = NodePath.join(scratch, "output");
+      const artifact = await adaptCliArchive({
+        archive: upstreamArchive,
+        outputDir,
+        version: VERSION,
+      });
+      const smoke = NodeChildProcess.spawnSync(
+        process.execPath,
+        [
+          NodePath.join(import.meta.dirname, "smoke-headless-artifact.ts"),
+          "--artifact",
+          artifact,
+          "--version",
+          VERSION,
+          "--skip-serve",
+        ],
+        { encoding: "utf8" },
+      );
+      const extractDir = NodePath.join(scratch, "extract");
+      await NodeFSP.mkdir(extractDir);
+      NodeChildProcess.execFileSync("tar", ["-xzf", artifact, "-C", extractDir]);
+      const root = NodePath.join(extractDir, `t3-headless-${VERSION}-linux-x64`);
+      const result = NodeChildProcess.spawnSync(NodePath.join(root, "bin/t3"), ["--version"], {
+        cwd: root,
+        env: { PATH: "" },
+        encoding: "utf8",
+      });
+
+      expect(smoke.status, smoke.stderr).toBe(0);
+      expect(result.status).toBe(0);
+      expect(result.stdout).toContain(VERSION);
+      expect((await NodeFSP.lstat(NodePath.join(root, "t3"))).isSymbolicLink()).toBe(false);
+      await expect(NodeFSP.stat(NodePath.join(root, "client/index.html"))).resolves.toBeDefined();
+      await expect(
+        NodeFSP.stat(NodePath.join(root, "node_modules/node-pty")),
+      ).resolves.toBeDefined();
+    } finally {
+      await NodeFSP.rm(scratch, { recursive: true, force: true });
     }
-    expect(Object.keys(patched).some((key) => key.startsWith("@clerk/expo@"))).toBe(false);
-  });
-
-  it("creates a production package that documents the Node runtime requirement", () => {
-    const packageJson = createHeadlessPackageJson("0.0.23-test.1", workspaceConfig);
-
-    expect(packageJson.version).toBe("0.0.23-test.1");
-    expect(packageJson.engines.node).toContain("^22.16");
-    expect(packageJson.packageManager).toBe("pnpm@11.10.0");
-    expect(packageJson.dependencies["node-pty"]).toBeDefined();
-  });
-});
-
-describe("client asset validation helpers", () => {
-  it("collects local script and stylesheet references only", () => {
-    const refs = collectClientAssetReferences(`
-      <link href="/assets/index.css?hash=1" rel="stylesheet">
-      <script src="/assets/index.js"></script>
-      <img src="data:image/png;base64,abc">
-      <a href="https://example.com">external</a>
-    `);
-
-    expect(refs).toEqual(["/assets/index.css?hash=1", "/assets/index.js"]);
   });
 });
