@@ -1,6 +1,6 @@
-Bottom: 4c50fc39a785633fbc08c91ff39402e2d290ae64
-Top:    5c19bf3ccbd1436833b0d0b24839abe37eec978d
+Bottom: 367fb5c178bd1bdb3cabb01a1c5349a86e9c035e
+Top:    19e0b5e750c6ff8aa16f08d19557fe376e90fc89
 Author: User <user@example.com>
-Date:   2026-09-19 15:09:42 -0600
+Date:   2026-09-19 15:14:27 -0600
 
 fix(server): skip PR status lookups for unsupported hosts
