@@ -66,8 +66,6 @@
       // reports an entire component module when nothing imports it.
       "ignoreIssues": { "src/components/ui/*.tsx": ["exports", "nsExports", "duplicates"] },
     },
-    "apps/t3-thread": {
-    },
     "oxlint-plugin-t3code": {
       "includeEntryExports": true,
     },
