@@ -939,3 +939,19 @@ id = "upstream12449-workspace-root-preview-path"
 date = "2026-09-30"
 decided = "adapt"
 rationale = "Upstream commit 55ec55b1f resolves a workspace-root link to a null relativePath and gates the project-file read on relativePath !== null. That guard and this patch's !isModel guard suppress the read for different reasons, so both belong in the same condition; isModel already requires a non-null path, so reading the resolved path keeps model previews working for workspace links."
+
+[[patch]]
+name = "fork-orcaslicer-handoff"
+subject = "feat(desktop): open model previews in OrcaSlicer"
+class = "product"
+purpose = "Hand validated STL preview bytes from local or remote environments to OrcaSlicer on the macOS client without exposing signed asset URLs or initiating slicing or printing."
+retire_when = "Upstream provides an equivalent secure, client-local, user-initiated OrcaSlicer handoff for STL previews."
+depends_on = ["fork-inline-3d-objects"]
+roles = []
+note = "The desktop stages private temporary STL files and invokes the named macOS application with fixed argument boundaries. GLB and non-desktop surfaces retain their existing download or local-open behavior."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "keep-on-top"
+rationale = "Retain validated original bytes and client-local macOS IPC handoff with fixed argv and cleanup, reusing the native V2 desktop bridge without opening signed URLs."
