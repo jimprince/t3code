@@ -2,7 +2,11 @@ import { filePreviewDelimiter } from "@t3tools/shared/delimitedPreview";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { formatAttachmentSize } from "@t3tools/client-runtime/state/attachments";
 import { readFilePreviewResponse } from "@t3tools/client-runtime/file-preview";
-import { filePreviewKind, FILE_TEXT_PREVIEW_MAX_BYTES } from "@t3tools/shared/filePreview";
+import {
+  filePreviewKind,
+  FILE_TEXT_PREVIEW_MAX_BYTES,
+  MODEL_PREVIEW_MAX_BYTES,
+} from "@t3tools/shared/filePreview";
 import {
   CheckIcon,
   ChevronRightIcon,
@@ -28,6 +32,7 @@ import { cn } from "~/lib/utils";
 import { AudioPreview } from "./AudioPreview";
 import { BrowserDocumentFrame } from "./BrowserDocumentFrame";
 import { DelimitedTablePreview } from "./DelimitedTablePreview";
+import { ModelPreview } from "../model/ModelPreview";
 import {
   FILE_SURFACE_SUBHEADER_CLASS,
   FileSurfaceAction,
@@ -73,6 +78,7 @@ export function AttachmentFilePreview(props: {
   onClose?: () => void;
 }) {
   const kind = filePreviewKind(props);
+  const modelTooLarge = kind === "model" && props.sizeBytes > MODEL_PREVIEW_MAX_BYTES;
   const delimiter = filePreviewDelimiter(props);
   const renderedMode =
     kind === "markdown" ? "markdown" : kind === "html" ? "html" : delimiter ? "table" : null;
@@ -120,6 +126,7 @@ export function AttachmentFilePreview(props: {
   }, [props.file]);
   useEffect(() => {
     if (props.file) return;
+    if (modelTooLarge) return;
     let cancelled = false;
     // Await a fresh signed URL: cached links can expire while the client is suspended.
     // oxlint-disable-next-line react/set-state-in-effect -- A new preview request clears its previous URL and error.
@@ -140,7 +147,7 @@ export function AttachmentFilePreview(props: {
       cancelled = true;
     };
     // oxlint-disable-next-line react/exhaustive-effect-dependencies -- Retry must reauthorize the remote file.
-  }, [props.file, refresh, revision]);
+  }, [modelTooLarge, props.file, refresh, revision]);
   const url = props.file ? localUrl : remoteUrl;
   const needsText = kind === "text" || kind === "markdown" || (kind === "html" && !rendered);
   useEffect(() => {
@@ -228,7 +235,15 @@ export function AttachmentFilePreview(props: {
     })();
   };
 
-  const body = failure ? (
+  const body = modelTooLarge ? (
+    <ModelPreview
+      url=""
+      name={props.name}
+      sizeBytes={props.sizeBytes}
+      className="min-h-0 flex-1"
+      onDownload={save}
+    />
+  ) : failure ? (
     <FileSurfaceFailure
       message={failure}
       onRetry={() => {
@@ -274,6 +289,15 @@ export function AttachmentFilePreview(props: {
         onError={() => setError("Unable to load image.")}
       />
     </div>
+  ) : kind === "model" ? (
+    <ModelPreview
+      url={url}
+      name={props.name}
+      sizeBytes={props.sizeBytes}
+      className="min-h-0 flex-1"
+      onDownload={save}
+      {...(props.file ? {} : { onRetry: refresh })}
+    />
   ) : (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-1 px-6 text-center">
       <p className="text-sm font-medium">No preview for this file</p>

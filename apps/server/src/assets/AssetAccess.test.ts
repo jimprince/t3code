@@ -2,7 +2,13 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeHttpPlatform from "@effect/platform-node/NodeHttpPlatform";
 import * as NodeFSP from "node:fs/promises";
-import { AssetAccessError, AssetPreviewTypeValidationError, ThreadId } from "@t3tools/contracts";
+import {
+  AssetAccessError,
+  AssetPreviewSizeValidationError,
+  AssetPreviewTypeValidationError,
+  ThreadId,
+} from "@t3tools/contracts";
+import { MODEL_PREVIEW_MAX_BYTES } from "@t3tools/shared/filePreview";
 import { PROJECT_FAVICON_FALLBACK_MARKER } from "@t3tools/shared/projectFavicon";
 import { describe, expect, it } from "@effect/vitest";
 import * as Crypto from "effect/Crypto";
@@ -511,6 +517,61 @@ describe("AssetAccess", () => {
     }).pipe(Effect.provide(testLayer)),
   );
 
+  it.effect("uses exact, size-bounded workspace tokens for model previews", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const root = yield* fileSystem.makeTempDirectoryScoped({ prefix: "t3-asset-model-" });
+      const modelPath = path.join(root, "scene.glb");
+      const siblingPath = path.join(root, "private.stl");
+      yield* fileSystem.writeFile(modelPath, new Uint8Array([1, 2, 3]));
+      yield* fileSystem.writeFile(siblingPath, new Uint8Array([4, 5, 6]));
+      const result = yield* issueAssetUrl({
+        resource: { _tag: "workspace-file", threadId: ThreadId.make("thread-1"), path: modelPath },
+        workspaceRoot: root,
+      });
+      const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const separator = suffix.indexOf("/");
+      const token = suffix.slice(0, separator);
+      expect(yield* resolveAsset(token, "scene.glb")).toMatchObject({
+        kind: "file",
+        path: yield* fileSystem.realPath(modelPath),
+        mimeType: "model/gltf-binary",
+      });
+      expect(yield* resolveAsset(token, "private.stl")).toBeNull();
+
+      yield* Effect.promise(() => NodeFSP.truncate(modelPath, MODEL_PREVIEW_MAX_BYTES + 1));
+      expect(yield* resolveAsset(token, "scene.glb")).toBeNull();
+      const error = yield* issueAssetUrl({
+        resource: { _tag: "workspace-file", threadId: ThreadId.make("thread-1"), path: modelPath },
+        workspaceRoot: root,
+      }).pipe(Effect.flip);
+      expect(error).toBeInstanceOf(AssetPreviewSizeValidationError);
+
+      const download = yield* issueAssetUrl({
+        resource: {
+          _tag: "workspace-file-download",
+          threadId: ThreadId.make("thread-1"),
+          path: modelPath,
+        },
+        workspaceRoot: root,
+      });
+      expect(download.relativeUrl).toContain("scene.glb");
+      const downloadSuffix = download.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const downloadSeparator = downloadSuffix.indexOf("/");
+      expect(
+        yield* resolveAsset(
+          downloadSuffix.slice(0, downloadSeparator),
+          downloadSuffix.slice(downloadSeparator + 1),
+        ),
+      ).toMatchObject({
+        kind: "file",
+        path: yield* fileSystem.realPath(modelPath),
+        download: true,
+      });
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("rejects workspace files outside the authorized root", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
@@ -878,6 +939,56 @@ describe("AssetAccess", () => {
         fileName: "report.pdf",
         mimeType: "application/pdf",
       });
+    }).pipe(Effect.provide(testLayer)),
+  );
+
+  it.effect("size-bounds model attachment grants and serving without blocking downloads", () =>
+    Effect.gen(function* () {
+      const config = yield* ServerConfig.ServerConfig;
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const attachmentId = "thread-1-00000000-0000-4000-8000-000000000004-glb";
+      const attachmentPath = path.join(config.attachmentsDir, `${attachmentId}.glb`);
+      yield* fileSystem.makeDirectory(config.attachmentsDir, { recursive: true });
+      yield* fileSystem.writeFile(attachmentPath, new Uint8Array([1, 2, 3]));
+      const resource = {
+        _tag: "attachment" as const,
+        attachmentId,
+        fileName: "scene.glb",
+        mimeType: "application/octet-stream",
+        disposition: "inline" as const,
+      };
+
+      const result = yield* issueAssetUrl({ resource });
+      const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const separatorIndex = suffix.indexOf("/");
+      expect(
+        yield* resolveAsset(suffix.slice(0, separatorIndex), suffix.slice(separatorIndex + 1)),
+      ).toMatchObject({ kind: "file", path: attachmentPath, mimeType: "model/gltf-binary" });
+
+      yield* Effect.promise(() => NodeFSP.truncate(attachmentPath, MODEL_PREVIEW_MAX_BYTES + 1));
+      expect(
+        yield* resolveAsset(suffix.slice(0, separatorIndex), suffix.slice(separatorIndex + 1)),
+      ).toBeNull();
+      expect(yield* issueAssetUrl({ resource }).pipe(Effect.flip)).toBeInstanceOf(
+        AssetPreviewSizeValidationError,
+      );
+      expect(
+        (yield* issueAssetUrl({
+          resource: { ...resource, disposition: "attachment" },
+        })).relativeUrl,
+      ).toContain("scene.glb");
+      const download = yield* issueAssetUrl({
+        resource: { ...resource, disposition: "attachment" },
+      });
+      const downloadSuffix = download.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const downloadSeparator = downloadSuffix.indexOf("/");
+      expect(
+        yield* resolveAsset(
+          downloadSuffix.slice(0, downloadSeparator),
+          downloadSuffix.slice(downloadSeparator + 1),
+        ),
+      ).toMatchObject({ kind: "file", path: attachmentPath, download: true });
     }).pipe(Effect.provide(testLayer)),
   );
 
