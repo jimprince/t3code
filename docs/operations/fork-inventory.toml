@@ -17,7 +17,7 @@ fork = "jimprince/t3code"
 upstream = "pingdotgg/t3code"
 
 [[patch]]
-# Upstream1286 Knip: declare shell/Expo entries and complete vendored CLI contracts.
+# Upstream1286 Knip: declare shell/Expo entries and CLI workspace dependencies.
 # Remove the obsolete Electron installer and redundant plugin-local Effect TSGo dependency.
 name = "fork-build-ci-compat"
 subject = "build(fork): support fork workspace, runners, and CI budgets"
