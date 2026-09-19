@@ -109,10 +109,9 @@ if ! flock -n 9; then
   exit 0
 fi
 
-# Cron does not load the login shell that exposes a user-local Node install.
-# Keep an explicitly configured runtime first; use the service's standard fallback.
+# Older installed releases used a Node-based bin/t3 wrapper. Keep the standard
+# fallback on PATH only so one of those releases remains usable for rollback.
 export PATH="${PATH:-/usr/bin:/bin}:$HOME/.local/node/bin"
-command -v node >/dev/null 2>&1 || die "node not found; install Node in ~/.local/node/bin or include it in PATH"
 
 resolve_base_url() {
   if [ -n "${T3CODE_HEADLESS_BASE_URL:-}" ]; then
@@ -214,6 +213,20 @@ if [ "$previous_target" = "$release_dir" ]; then
   rm -f "$pending_file"
   log "already on $version"
   exit 0
+fi
+
+# The new archive is self-contained, but the release being replaced may be the
+# old Node-based layout. Do not give up a known-good rollback target during the
+# one transitional upgrade: prove its existing launcher still runs first.
+previous_version=""
+if [ -n "$previous_target" ] && [ -d "$previous_target" ]; then
+  previous_version="${previous_target##*/}"
+  previous_reported_version="$("$previous_target/bin/t3" --version)" || \
+    die "existing rollback release $previous_version cannot start; restore its runtime before upgrading"
+  case "$previous_reported_version" in
+    *" $previous_version"|*" v$previous_version") ;;
+    *) die "existing rollback release reported '$previous_reported_version', expected version $previous_version" ;;
+  esac
 fi
 
 mkdir -p "$releases_dir"
@@ -326,10 +339,11 @@ restart_service() {
 
 check_health() {
   local base_url="${1%/}"
+  local expected_version="$2"
   local endpoint="$base_url/.well-known/t3/environment"
-  for _ in $(seq 1 45); do
+  for _ in $(seq 1 "${T3CODE_HEADLESS_HEALTH_ATTEMPTS:-45}"); do
     if curl --max-time 3 -fsS "$endpoint" > "$tmp_dir/environment.json"; then
-      python3 - "$tmp_dir/environment.json" "$version" <<'PY'
+      if python3 - "$tmp_dir/environment.json" "$expected_version" <<'PY'
 import json
 import sys
 
@@ -344,7 +358,9 @@ print(
 )
 sys.exit(1)
 PY
-      return 0
+      then
+        return 0
+      fi
     fi
     sleep 1
   done
@@ -352,7 +368,7 @@ PY
 }
 
 base_url="$(resolve_base_url)"
-if restart_service && check_health "$base_url"; then
+if restart_service && check_health "$base_url" "$version"; then
   rm -f "$pending_file"
   log "updated $service_name to $version"
 else
@@ -363,7 +379,7 @@ else
     mv -Tf "$rollback_link" "$current_link"
     log "rolled back current to $previous_target"
     restart_service
-    check_health "$base_url" || die "rollback health check failed"
+    check_health "$base_url" "$previous_version" || die "rollback health check failed"
   fi
   exit 1
 fi
