@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "8768034866161ed1659b7cd120904eac6aa514ed",
-  "head": "a5752a51531dfb08232b386c51e816e14efb66ad",
+  "prev": "e8c132fc5183f5cc73017186a8c5bbd2a6c77607",
+  "head": "ad2c9f739fab012f6822673c2879a9627e25aa16",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -16,14 +16,14 @@
     "fork-private-connection-defaults",
     "fork-resource-recovery",
     "fork-workspace-file-uploads",
-    "fork-attachment-compatibility"
-  ],
-  "unapplied": [
+    "fork-attachment-compatibility",
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
     "fork-unsupported-pr-hosts",
-    "fork-worktree-cleanup",
+    "fork-worktree-cleanup"
+  ],
+  "unapplied": [
     "fork-gitea-connections",
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
@@ -67,7 +67,7 @@
       "oid": "92a88944516dd840d70c37f80abcc10f28ae9a76"
     },
     "fork-fresh-remote-worktrees": {
-      "oid": "e749e63c5dcab9f70432a8e249fa30697e6d4ad9"
+      "oid": "3a0ca3ca7aa19dcd4244e077c16d33e6916d0088"
     },
     "fork-general-chat": {
       "oid": "51aafa58c558fdb7bfc691d526931402c1b86a43"
@@ -97,7 +97,7 @@
       "oid": "26fcb606ddffc3af2a8b5e239d8401e1f1d06ecd"
     },
     "fork-pr-dismissal": {
-      "oid": "8f2fa854e1a4c8af50debe5e48396c9c3ff88c42"
+      "oid": "d39dab06b030bf4e7a379900c221c0e2e341235a"
     },
     "fork-pr-project-exclusions": {
       "oid": "abad16bf1c95e3c2da248befed8c25f0463f6952"
@@ -115,7 +115,7 @@
       "oid": "4d37c6206b60b2b7ace8360e0f35a02139eba10d"
     },
     "fork-remote-file-downloads": {
-      "oid": "e3d556a4e845da2720ba514aad05d102ad832ec5"
+      "oid": "a03c24937b0e7a81c2d31d50ada14209f2263acc"
     },
     "fork-resource-recovery": {
       "oid": "9c6d91538c377526531ab711179d15811b1def52"
@@ -133,7 +133,7 @@
       "oid": "20ef49967666c60abb9b7e9a926919a2a0b84cef"
     },
     "fork-unsupported-pr-hosts": {
-      "oid": "7562b6ad970aa1b9e66248b59b9b08ef7d37d5d5"
+      "oid": "4054141d5ff5ec2db88f5d709e630c03fef774cd"
     },
     "fork-worker-operations": {
       "oid": "cb9ff36ffe4a8695e39e86b51d1431070b72eb48"
@@ -142,7 +142,7 @@
       "oid": "1f9c49bfa1cd353e8763c40e6be54d8263fde7d3"
     },
     "fork-worktree-cleanup": {
-      "oid": "09cd24f9446d7f9fee97d9743712ec3b05abc90f"
+      "oid": "ad2c9f739fab012f6822673c2879a9627e25aa16"
     }
   }
 }
