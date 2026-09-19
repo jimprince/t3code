@@ -1,7 +1,7 @@
-Bottom: 0ced037db93fc0b0f5f12df3a1ea6b815b78701e
-Top:    d79c55b496ed10ac7ced33fb659a6d62a96a839f
+Bottom: 7f47338f43c49ec1e405b32a769346720eefd6e5
+Top:    aa3cb7155e3fa557dd7fcee751802d5e181960a9
 Author: brad <bradprin@live.com>
-Date:   2026-09-19 15:14:27 -0600
+Date:   2026-09-19 15:14:56 -0600
 
 feat(models): preview 3MF files inline
 
