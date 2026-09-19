@@ -1,0 +1,4 @@
+id = "inline-step-previews"
+category = "feature"
+functionality = "3D model previews"
+text = "Preview STEP and STP CAD models inline through bounded local browser tessellation, and open them in OrcaSlicer from the macOS desktop app."
