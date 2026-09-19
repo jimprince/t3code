@@ -26,7 +26,12 @@ export function filePreviewKind(file: {
   if (mime.startsWith("image/")) return "image";
   if (mime.startsWith("video/")) return "video";
   if (mime.startsWith("audio/")) return "audio";
-  if (mime === "model/gltf-binary" || mime === "model/stl" || mime === "application/sla")
+  if (
+    mime === "model/gltf-binary" ||
+    mime === "model/stl" ||
+    mime === "application/sla" ||
+    mime === "model/3mf"
+  )
     return "model";
   if (generic) {
     if (extension === ".pdf") return "pdf";
@@ -65,6 +70,7 @@ export const MODEL_PREVIEW_MAX_TEXTURE_PIXELS = 64 * 1024 * 1024;
 const MODEL_MIME_TYPE_BY_EXTENSION = new Map([
   [".glb", "model/gltf-binary"],
   [".stl", "model/stl"],
+  [".3mf", "model/3mf"],
 ]);
 
 export function modelMimeTypeFromExtension(extension: string): string | null {
@@ -73,7 +79,7 @@ export function modelMimeTypeFromExtension(extension: string): string | null {
 }
 
 export function isWorkspaceModelPreviewPath(path: string): boolean {
-  return hasPreviewExtension(path, [".glb", ".stl"]);
+  return hasPreviewExtension(path, [".glb", ".stl", ".3mf"]);
 }
 
 /** Reject binary data rather than displaying replacement characters as a document. */
