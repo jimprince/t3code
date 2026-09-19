@@ -44,12 +44,13 @@ describe("OrcaSlicer handoff", () => {
   it("removes traversal and rejects unsupported and oversized payloads before filesystem access", async () => {
     expect(safeModelFileName("../../nested\\part.stl")).toBe("part.stl");
     expect(safeModelFileName("../../nested\\project.3MF")).toBe("project.3mf");
+    expect(safeModelFileName("../../nested\\bracket.STEP")).toBe("bracket.step");
     const deps = dependencies();
     await expect(
       openModelInOrcaSlicer({ name: "part.glb", bytes: new Uint8Array([1]) }, deps),
     ).resolves.toMatchObject({
       opened: false,
-      error: expect.stringContaining("STL and 3MF files only"),
+      error: expect.stringContaining("STL, 3MF, and STEP files only"),
     });
     await expect(
       openModelInOrcaSlicer(
