@@ -18,6 +18,8 @@ import * as NodeOS from "node:os";
 
 import {
   CheckpointRef,
+  type ChatAttachment,
+  type ChatFileHandoffAttachment,
   CommandId,
   EventId,
   OrchestrationExportThreadError,
@@ -34,10 +36,12 @@ import {
   type OrchestrationThreadActivity,
   type PortableThread,
   type ThreadMoveBundle,
+  type ThreadMoveAttachment,
   type ThreadMoveBranchConflictResolution,
   type ThreadMoveGitState,
   type ThreadMoveProviderSession,
   type ThreadMoveUntrackedFile,
+  UserInputAttachmentAnswerPayload,
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import * as Cause from "effect/Cause";
@@ -54,6 +58,7 @@ import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
 import { checkpointRefForThreadTurn } from "../../checkpointing/Utils.ts";
+import { attachmentRelativePath, resolveAttachmentPath } from "../../attachmentStore.ts";
 import { ProviderSessionRuntimeRepository } from "../../persistence/ProviderSessionRuntime.ts";
 import { GitWorkflowService } from "../../git/GitWorkflowService.ts";
 import { VcsProcess } from "../../vcs/VcsProcess.ts";
@@ -76,12 +81,71 @@ const MAX_DIRTY_DIFF_BYTES = 64 * 1024 * 1024;
 const MAX_UNTRACKED_FILE_BYTES = 16 * 1024 * 1024;
 const MAX_UNTRACKED_TOTAL_BYTES = 64 * 1024 * 1024;
 const MAX_PROVIDER_SESSION_FILE_BYTES = 64 * 1024 * 1024;
+const MAX_TRANSFER_ATTACHMENT_FILE_BYTES = 50 * 1024 * 1024;
+const MAX_TRANSFER_ATTACHMENT_TOTAL_BYTES = 64 * 1024 * 1024;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CLAUDE_PROVIDER_NAME = "claude";
 const PROVIDER_CONTEXT_FALLBACK =
   "the first target turn receives a bounded provider-only handoff of the visible message history instead";
+const decodeQuestionAttachmentAnswer = Schema.decodeUnknownOption(UserInputAttachmentAnswerPayload);
+
+interface PortableAttachmentReference {
+  readonly attachment: ChatAttachment;
+  readonly relativePath: string;
+  readonly legacyPaths: ReadonlyArray<string>;
+}
+
+function collectPortableAttachmentReferences(
+  portable: PortableThread,
+): Map<string, PortableAttachmentReference> {
+  const references = new Map<string, PortableAttachmentReference>();
+  const add = (attachment: ChatAttachment, legacyPath?: string) => {
+    const relativePath = attachmentRelativePath(attachment);
+    if (relativePath === null) return;
+    const existing = references.get(attachment.id);
+    if (existing !== undefined) {
+      if (
+        existing.relativePath !== relativePath ||
+        existing.attachment.type !== attachment.type ||
+        existing.attachment.name !== attachment.name ||
+        existing.attachment.mimeType !== attachment.mimeType ||
+        existing.attachment.sizeBytes !== attachment.sizeBytes
+      ) {
+        throw new Error(`Attachment '${attachment.id}' has conflicting metadata.`);
+      }
+      if (legacyPath !== undefined && !existing.legacyPaths.includes(legacyPath)) {
+        references.set(attachment.id, {
+          ...existing,
+          legacyPaths: [...existing.legacyPaths, legacyPath],
+        });
+      }
+      return;
+    }
+    references.set(attachment.id, {
+      attachment,
+      relativePath,
+      legacyPaths: legacyPath === undefined ? [] : [legacyPath],
+    });
+  };
+
+  for (const message of portable.messages) {
+    for (const attachment of message.attachments ?? []) add(attachment);
+    for (const attachment of message.fileAttachments ?? []) {
+      add(attachment, attachment.path);
+    }
+  }
+  for (const activity of portable.activities) {
+    if (activity.kind !== "user-input.answer-submitted") continue;
+    const payload = decodeQuestionAttachmentAnswer(activity.payload);
+    if (Option.isNone(payload)) continue;
+    for (const attachment of Object.values(payload.value.attachmentsByQuestionId).flat()) {
+      add(attachment);
+    }
+  }
+  return references;
+}
 
 /**
  * Claude Code stores session transcripts under
@@ -647,6 +711,92 @@ const make = Effect.gen(function* () {
       } satisfies ThreadMoveProviderSession;
     });
 
+  const exportAttachments = (portable: PortableThread, warnings: string[]) =>
+    Effect.gen(function* () {
+      const references = yield* Effect.try({
+        try: () => collectPortableAttachmentReferences(portable),
+        catch: (cause) =>
+          new OrchestrationExportThreadError({
+            message: toMessage(cause, "Failed to validate thread attachment references."),
+            cause,
+          }),
+      });
+      const attachments: ThreadMoveAttachment[] = [];
+      let totalBytes = 0;
+
+      for (const reference of references.values()) {
+        const durablePath = resolveAttachmentPath({
+          attachmentsDir: serverConfig.attachmentsDir,
+          attachment: reference.attachment,
+        });
+        const candidates = [durablePath, ...reference.legacyPaths].filter(
+          (candidate, index, all): candidate is string =>
+            candidate !== null && all.indexOf(candidate) === index,
+        );
+        let sourcePath: string | undefined;
+        let sourceSize: number | undefined;
+        for (const candidate of candidates) {
+          const stat = yield* fs.stat(candidate).pipe(
+            Effect.map(Option.some),
+            Effect.orElseSucceed(() => Option.none()),
+          );
+          if (Option.isSome(stat) && stat.value.type === "File") {
+            sourcePath = candidate;
+            sourceSize = Number(stat.value.size);
+            break;
+          }
+        }
+        if (sourcePath === undefined) {
+          warnings.push(
+            `Attachment '${reference.attachment.name}' (${reference.attachment.id}) was not found on the source machine and its history will be unavailable after the move.`,
+          );
+          attachments.push({ id: reference.attachment.id, contentBase64: null });
+          continue;
+        }
+        if (
+          sourceSize === undefined ||
+          sourceSize <= 0 ||
+          sourceSize > MAX_TRANSFER_ATTACHMENT_FILE_BYTES
+        ) {
+          return yield* new OrchestrationExportThreadError({
+            message: `Attachment '${reference.attachment.name}' is empty or exceeds the ${MAX_TRANSFER_ATTACHMENT_FILE_BYTES}-byte move limit.`,
+          });
+        }
+        if (sourceSize !== reference.attachment.sizeBytes) {
+          return yield* new OrchestrationExportThreadError({
+            message: `Attachment '${reference.attachment.name}' size does not match its metadata.`,
+          });
+        }
+        if (totalBytes + sourceSize > MAX_TRANSFER_ATTACHMENT_TOTAL_BYTES) {
+          return yield* new OrchestrationExportThreadError({
+            message: `Thread attachments exceed the ${MAX_TRANSFER_ATTACHMENT_TOTAL_BYTES}-byte combined move limit.`,
+          });
+        }
+        const bytes = yield* fs.readFile(sourcePath);
+        if (bytes.byteLength <= 0 || bytes.byteLength > MAX_TRANSFER_ATTACHMENT_FILE_BYTES) {
+          return yield* new OrchestrationExportThreadError({
+            message: `Attachment '${reference.attachment.name}' is empty or exceeds the ${MAX_TRANSFER_ATTACHMENT_FILE_BYTES}-byte move limit.`,
+          });
+        }
+        if (bytes.byteLength !== reference.attachment.sizeBytes) {
+          return yield* new OrchestrationExportThreadError({
+            message: `Attachment '${reference.attachment.name}' size does not match its metadata.`,
+          });
+        }
+        if (totalBytes + bytes.byteLength > MAX_TRANSFER_ATTACHMENT_TOTAL_BYTES) {
+          return yield* new OrchestrationExportThreadError({
+            message: `Thread attachments exceed the ${MAX_TRANSFER_ATTACHMENT_TOTAL_BYTES}-byte combined move limit.`,
+          });
+        }
+        totalBytes += bytes.byteLength;
+        attachments.push({
+          id: reference.attachment.id,
+          contentBase64: Encoding.encodeBase64(bytes),
+        });
+      }
+      return attachments;
+    });
+
   const exportThread: ThreadTransferShape["exportThread"] = (input) =>
     Effect.gen(function* () {
       const warnings: string[] = [];
@@ -708,6 +858,7 @@ const make = Effect.gen(function* () {
         activities: thread.activities.map(({ sequence: _sequence, ...activity }) => activity),
         checkpoints: gitExport.checkpoints,
       };
+      const attachments = yield* exportAttachments(portable, warnings);
 
       const bundle: ThreadMoveBundle = {
         version: THREAD_MOVE_BUNDLE_VERSION,
@@ -719,6 +870,7 @@ const make = Effect.gen(function* () {
         git: gitExport.git,
         providerSession,
         warnings,
+        attachments,
       };
 
       return { bundle };
@@ -1050,10 +1202,179 @@ const make = Effect.gen(function* () {
       ),
     );
 
+  const prepareAttachmentImport = (bundle: ThreadMoveBundle) =>
+    Effect.gen(function* () {
+      if (bundle.version === 1) {
+        return {
+          portable: bundle.thread,
+          writes: [] as ReadonlyArray<{ readonly path: string; readonly bytes: Uint8Array }>,
+          unavailableAttachmentIds: [] as ReadonlyArray<string>,
+        };
+      }
+
+      const references = yield* Effect.try({
+        try: () => collectPortableAttachmentReferences(bundle.thread),
+        catch: (cause) =>
+          new OrchestrationImportThreadError({
+            message: toMessage(cause, "Failed to validate thread attachment references."),
+            cause,
+          }),
+      });
+      const payloads = new Map<string, ThreadMoveAttachment>();
+      for (const payload of bundle.attachments) {
+        if (payloads.has(payload.id)) {
+          return yield* new OrchestrationImportThreadError({
+            message: `Move bundle contains duplicate attachment '${payload.id}'.`,
+          });
+        }
+        if (!references.has(payload.id)) {
+          return yield* new OrchestrationImportThreadError({
+            message: `Move bundle contains unreferenced attachment '${payload.id}'.`,
+          });
+        }
+        payloads.set(payload.id, payload);
+      }
+      for (const id of references.keys()) {
+        if (!payloads.has(id)) {
+          return yield* new OrchestrationImportThreadError({
+            message: `Move bundle is missing referenced attachment '${id}'.`,
+          });
+        }
+      }
+
+      const targetPaths = new Map<string, string>();
+      const writes: Array<{ readonly path: string; readonly bytes: Uint8Array }> = [];
+      const unavailableAttachmentIds: string[] = [];
+      let totalBytes = 0;
+      const claimedTargetPaths = new Set<string>();
+      for (const [id, reference] of references) {
+        const targetPath = resolveAttachmentPath({
+          attachmentsDir: serverConfig.attachmentsDir,
+          attachment: reference.attachment,
+        });
+        if (targetPath === null) {
+          return yield* new OrchestrationImportThreadError({
+            message: `Move bundle attachment '${id}' has an unsafe target path.`,
+          });
+        }
+        if (claimedTargetPaths.has(targetPath)) {
+          return yield* new OrchestrationImportThreadError({
+            message: `Move bundle attachments resolve to the same target '${reference.relativePath}'.`,
+          });
+        }
+        claimedTargetPaths.add(targetPath);
+        const targetOrPartExists = (yield* Effect.forEach(
+          [targetPath, `${targetPath}.part`],
+          (candidate) =>
+            fs.stat(candidate).pipe(
+              Effect.as(true),
+              Effect.orElseSucceed(() => false),
+            ),
+        )).some(Boolean);
+        if (targetOrPartExists) {
+          return yield* new OrchestrationImportThreadError({
+            message: `Attachment target '${reference.relativePath}' already exists.`,
+          });
+        }
+        targetPaths.set(id, targetPath);
+        const contentBase64 = payloads.get(id)?.contentBase64;
+        if (contentBase64 === null || contentBase64 === undefined) {
+          unavailableAttachmentIds.push(id);
+          continue;
+        }
+        const bytes = yield* Effect.fromResult(Encoding.decodeBase64(contentBase64)).pipe(
+          Effect.mapError(
+            (cause) =>
+              new OrchestrationImportThreadError({
+                message: `Move bundle attachment '${id}' has invalid base64 content.`,
+                cause,
+              }),
+          ),
+        );
+        if (bytes.byteLength <= 0 || bytes.byteLength > MAX_TRANSFER_ATTACHMENT_FILE_BYTES) {
+          return yield* new OrchestrationImportThreadError({
+            message: `Move bundle attachment '${id}' is empty or exceeds the per-file limit.`,
+          });
+        }
+        if (bytes.byteLength !== reference.attachment.sizeBytes) {
+          return yield* new OrchestrationImportThreadError({
+            message: `Move bundle attachment '${id}' size does not match its metadata.`,
+          });
+        }
+        totalBytes += bytes.byteLength;
+        if (totalBytes > MAX_TRANSFER_ATTACHMENT_TOTAL_BYTES) {
+          return yield* new OrchestrationImportThreadError({
+            message: "Move bundle attachments exceed the combined size limit.",
+          });
+        }
+        writes.push({ path: targetPath, bytes });
+      }
+
+      const portable: PortableThread = {
+        ...bundle.thread,
+        messages: bundle.thread.messages.map((message) => ({
+          ...message,
+          ...(message.fileAttachments === undefined
+            ? {}
+            : {
+                fileAttachments: message.fileAttachments.map(
+                  (attachment): ChatFileHandoffAttachment => ({
+                    ...attachment,
+                    path: targetPaths.get(attachment.id)!,
+                  }),
+                ),
+              }),
+        })),
+      };
+      return { portable, writes, unavailableAttachmentIds };
+    });
+
+  const materializeImportedAttachments = (
+    writes: ReadonlyArray<{ readonly path: string; readonly bytes: Uint8Array }>,
+  ) =>
+    Effect.gen(function* () {
+      const createdPaths: string[] = [];
+      const writeAll = Effect.gen(function* () {
+        for (const write of writes) {
+          yield* fs.makeDirectory(path.dirname(write.path), { recursive: true });
+          yield* Effect.scoped(
+            Effect.gen(function* () {
+              const file = yield* fs.open(write.path, { flag: "wx" });
+              createdPaths.push(write.path);
+              yield* file.writeAll(write.bytes);
+            }),
+          );
+        }
+      });
+      yield* writeAll.pipe(
+        Effect.catch((cause) =>
+          Effect.forEach(createdPaths, (createdPath) =>
+            fs.remove(createdPath, { force: true }).pipe(Effect.ignore),
+          ).pipe(
+            Effect.flatMap(() =>
+              Effect.fail(
+                new OrchestrationImportThreadError({
+                  message: toMessage(cause, "Failed to restore thread attachments."),
+                  cause,
+                }),
+              ),
+            ),
+          ),
+        ),
+      );
+      return createdPaths;
+    });
+
   const importThread: ThreadTransferShape["importThread"] = (input) =>
     Effect.gen(function* () {
       const warnings: string[] = [...input.bundle.warnings];
-      const portable = input.bundle.thread;
+      const attachmentImport = yield* prepareAttachmentImport(input.bundle);
+      const portable = attachmentImport.portable;
+      for (const id of attachmentImport.unavailableAttachmentIds) {
+        if (!warnings.some((warning) => warning.includes(id))) {
+          warnings.push(`Attachment '${id}' is unavailable because its source object was missing.`);
+        }
+      }
 
       const project = yield* snapshotQuery
         .getProjectShellById(input.projectId)
@@ -1102,6 +1423,21 @@ const make = Effect.gen(function* () {
         );
       }
 
+      const cleanupWorktree =
+        worktreePath === null
+          ? Effect.void
+          : gitWorkflow
+              .removeWorktree({ cwd: project.workspaceRoot, path: worktreePath, force: true })
+              .pipe(Effect.ignoreCause({ log: true }));
+      const importedAttachmentPaths = yield* materializeImportedAttachments(
+        attachmentImport.writes,
+      ).pipe(
+        Effect.catch((error) => cleanupWorktree.pipe(Effect.flatMap(() => Effect.fail(error)))),
+      );
+      const cleanupAttachments = Effect.forEach(importedAttachmentPaths, (attachmentPath) =>
+        fs.remove(attachmentPath, { force: true }).pipe(Effect.ignore),
+      ).pipe(Effect.asVoid);
+
       const createdAt = yield* nowIso;
       const importMarker: OrchestrationThreadActivity = {
         id: EventId.make(yield* crypto.randomUUIDv4),
@@ -1143,14 +1479,9 @@ const make = Effect.gen(function* () {
 
       yield* dispatchImport.pipe(
         Effect.catch((error) =>
-          worktreePath === null
-            ? Effect.fail(error)
-            : gitWorkflow
-                .removeWorktree({ cwd: project.workspaceRoot, path: worktreePath, force: true })
-                .pipe(
-                  Effect.ignoreCause({ log: true }),
-                  Effect.flatMap(() => Effect.fail(error)),
-                ),
+          Effect.all([cleanupAttachments, cleanupWorktree], { concurrency: 1 }).pipe(
+            Effect.flatMap(() => Effect.fail(error)),
+          ),
         ),
       );
 

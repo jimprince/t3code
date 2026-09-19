@@ -1128,7 +1128,7 @@ export type OrchestrationThreadDetailSnapshot = typeof OrchestrationThreadDetail
  * The bundle is versioned: importers only accept the version they understand,
  * so a newer source server cannot silently corrupt an older target.
  */
-export const THREAD_MOVE_BUNDLE_VERSION = 1;
+export const THREAD_MOVE_BUNDLE_VERSION = 2;
 
 /**
  * Portable thread state — everything the orchestration read model needs to
@@ -1195,8 +1195,15 @@ export const ThreadMoveProviderSession = Schema.Struct({
 });
 export type ThreadMoveProviderSession = typeof ThreadMoveProviderSession.Type;
 
-export const ThreadMoveBundle = Schema.Struct({
-  version: Schema.Literal(THREAD_MOVE_BUNDLE_VERSION),
+/** One attachment identity referenced by the portable message history. A null
+ * payload records that the source object was already unavailable. */
+export const ThreadMoveAttachment = Schema.Struct({
+  id: ChatAttachmentId,
+  contentBase64: Schema.NullOr(Schema.String.check(Schema.isMaxLength(70_000_000))),
+});
+export type ThreadMoveAttachment = typeof ThreadMoveAttachment.Type;
+
+const ThreadMoveBundleFields = {
   exportedAt: IsoDateTime,
   sourceProjectId: ProjectId,
   sourceWorkspaceRoot: TrimmedNonEmptyString,
@@ -1205,7 +1212,23 @@ export const ThreadMoveBundle = Schema.Struct({
   git: Schema.NullOr(ThreadMoveGitState),
   providerSession: Schema.NullOr(ThreadMoveProviderSession),
   warnings: Schema.Array(Schema.String),
+};
+
+/** Compatibility shape emitted before attachment bytes were portable. */
+export const ThreadMoveBundleV1 = Schema.Struct({
+  version: Schema.Literal(1),
+  ...ThreadMoveBundleFields,
 });
+export type ThreadMoveBundleV1 = typeof ThreadMoveBundleV1.Type;
+
+export const ThreadMoveBundleV2 = Schema.Struct({
+  version: Schema.Literal(THREAD_MOVE_BUNDLE_VERSION),
+  ...ThreadMoveBundleFields,
+  attachments: Schema.Array(ThreadMoveAttachment),
+});
+export type ThreadMoveBundleV2 = typeof ThreadMoveBundleV2.Type;
+
+export const ThreadMoveBundle = Schema.Union([ThreadMoveBundleV1, ThreadMoveBundleV2]);
 export type ThreadMoveBundle = typeof ThreadMoveBundle.Type;
 
 export const OrchestrationExportThreadInput = Schema.Struct({
