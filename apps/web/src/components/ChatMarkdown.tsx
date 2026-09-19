@@ -51,7 +51,11 @@ import {
 } from "@t3tools/client-runtime/markdown-images";
 import { inlineCodeFilePathCandidate } from "@t3tools/client-runtime/markdown-links";
 import { mediaFileReference, mediaUrlReference } from "@t3tools/client-runtime/media-reference";
-import { mediaKindFromPath, mediaMimeTypeFromExtension } from "@t3tools/shared/filePreview";
+import {
+  isWorkspaceModelPreviewPath,
+  mediaKindFromPath,
+  mediaMimeTypeFromExtension,
+} from "@t3tools/shared/filePreview";
 import * as Cause from "effect/Cause";
 import { sourceControlRepositorySelector } from "@t3tools/shared/sourceControl";
 import { AsyncResult } from "effect/unstable/reactivity";
@@ -105,6 +109,7 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { markdownImageGallery, markdownImageItems } from "./chat/markdownImageGallery";
 import { MediaVideoPlayer } from "./media/MediaVideoPlayer";
 import { MediaActions, type MediaActionSource } from "./media/MediaActions";
+import { ChatMarkdownAssetModel } from "./model/ModelAssetPreviews";
 import { resolveProtocolRelativeMediaUrl } from "./media/mediaContent";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
@@ -440,6 +445,9 @@ function markStandaloneImages(node: MarkdownImageHastNode) {
   if (node.type === "root" || (node.tagName && STANDALONE_IMAGE_BLOCKS.has(node.tagName))) {
     const image = soleImageDescendant(node);
     if (image) image.properties = { ...image.properties, dataStandalone: true };
+    const children = meaningfulHastChildren(node);
+    const link = children.length === 1 && children[0]?.tagName === "a" ? children[0] : undefined;
+    if (link) link.properties = { ...link.properties, dataStandalone: true };
   }
   node.children?.forEach((child) => {
     if (child.type === "element") markStandaloneImages(child);
@@ -475,7 +483,7 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
     code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta", "dataInlineCode"],
     blockquote: [...(defaultSchema.attributes?.blockquote ?? []), "dataAlert"],
     div: [...(defaultSchema.attributes?.div ?? []), ...CODEX_ARTIFACT_TEMPLATE_HAST_PROPERTIES],
-    a: [...(defaultSchema.attributes?.a ?? []), "dataPullRequestAutolink"],
+    a: [...(defaultSchema.attributes?.a ?? []), "dataPullRequestAutolink", "dataStandalone"],
     img: [
       ...(defaultSchema.attributes?.img ?? []),
       "dataLocalSrc",
@@ -2953,6 +2961,21 @@ const CHAT_MARKDOWN_COMPONENTS = {
       ? (markdownFileLinkMetaByHref.get(normalizedHref) ??
         resolveMarkdownFileLinkMeta(normalizedHref, cwd, imageBaseDir ?? cwd))
       : null;
+    if (
+      fileLinkMeta &&
+      node?.properties?.dataStandalone === true &&
+      threadRef &&
+      fileLinkMeta.workspaceRelativePath !== null &&
+      isWorkspaceModelPreviewPath(fileLinkMeta.basename)
+    ) {
+      return (
+        <ChatMarkdownAssetModel
+          threadRef={threadRef}
+          path={fileLinkMeta.filePath}
+          name={fileLinkMeta.basename}
+        />
+      );
+    }
     if (!fileLinkMeta) {
       const faviconHost = resolveExternalWebLinkHost(href);
       const pullRequestAutolink = String(
