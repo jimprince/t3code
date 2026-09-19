@@ -1,13 +1,8 @@
-import { Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { OrchestrationShellStreamItem } from "../src/vendor/t3contracts/orchestration.js";
-import { ServerProvider } from "../src/vendor/t3contracts/server.js";
+import { decodeServerProvider, decodeShellSnapshotItem } from "../src/contracts.js";
 
 const CUSTOM_INSTANCE_ID = "claudeAgent_ucalgary";
-
-const decodeShellStreamItem = Schema.decodeUnknownPromise(OrchestrationShellStreamItem);
-const decodeServerProvider = Schema.decodeUnknownPromise(ServerProvider);
 
 function shellThread(instanceId: string) {
   return {
@@ -33,7 +28,7 @@ function shellThread(instanceId: string) {
 // and must not be rejected by the operator CLI's snapshot contracts.
 describe("custom provider instance ids", () => {
   it("decodes a shell snapshot thread selecting a custom provider instance", async () => {
-    const item = await decodeShellStreamItem({
+    const item = decodeShellSnapshotItem({
       kind: "snapshot",
       snapshot: {
         snapshotSequence: 0,
@@ -51,7 +46,7 @@ describe("custom provider instance ids", () => {
   });
 
   it("decodes a server provider advertising a custom instance id", async () => {
-    const provider = await decodeServerProvider({
+    const provider = decodeServerProvider({
       provider: "claudeAgent",
       instanceId: CUSTOM_INSTANCE_ID,
       driver: "claudeAgent",

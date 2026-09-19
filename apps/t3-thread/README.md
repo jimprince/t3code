@@ -284,3 +284,10 @@ builds it on install, so package-style installs always get a bundle matching
 `src/`. It used to be committed with a freshness test guarding it, but the
 bundle inlines upstream code, so every upstream sync made it stale and blocked
 the rebase; building it removes that failure class entirely.
+
+The CLI imports wire schemas through narrow `@t3tools/contracts` subpaths at
+build time and bundles them into `dist/cli.cjs`, so installed commands have no
+runtime monorepo dependency or root-barrel startup cost. `src/contracts.ts`
+contains only the wider decoding needed for old paired servers and the CLI's
+stable model-selection view; do not copy the main contract tree back into this
+package.

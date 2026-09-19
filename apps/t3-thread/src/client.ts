@@ -32,7 +32,7 @@ import type {
   OrchestrationThreadShell,
   SavedEnvironment,
 } from "./types.js";
-import type { ServerConfig, ServerProvider } from "./vendor/t3contracts/server.js";
+import type { ServerConfig, ServerProvider } from "./contracts.js";
 
 const DEFAULT_MODEL_SELECTION: ModelSelection = {
   provider: "codex",

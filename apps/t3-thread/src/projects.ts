@@ -1,15 +1,57 @@
 import * as NodePath from "node:path";
 
 import {
-  DEFAULT_MODEL,
-  DEFAULT_MODEL_BY_PROVIDER,
-  MODEL_SLUG_ALIASES_BY_PROVIDER,
-} from "./vendor/t3contracts/model.js";
+  DEFAULT_MODEL_BY_PROVIDER as SHARED_DEFAULT_MODEL_BY_PROVIDER,
+  MODEL_SLUG_ALIASES_BY_PROVIDER as SHARED_MODEL_SLUG_ALIASES_BY_PROVIDER,
+} from "@t3tools/contracts/model";
 import type {
   ModelSelection,
   OrchestrationProjectShell,
   OrchestrationThreadShell,
 } from "./types.js";
+
+// Keep offline fallback behavior stable across server generations. Live model
+// inventory always wins; these values only apply when an older paired server
+// cannot publish its provider/model roster.
+const DEFAULT_MODEL = "gpt-5.4";
+const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
+  ...(SHARED_DEFAULT_MODEL_BY_PROVIDER as Record<string, string>),
+  codex: DEFAULT_MODEL,
+  claudeAgent: "claude-sonnet-4-6",
+  cursor: "auto",
+  grok: "grok-build",
+  opencode: "google/antigravity-gemini-3.5-flash-high",
+};
+
+const MODEL_SLUG_ALIASES_BY_PROVIDER: Record<string, Record<string, string>> = {
+  ...(SHARED_MODEL_SLUG_ALIASES_BY_PROVIDER as Record<string, Record<string, string>>),
+  claudeAgent: {
+    opus: "claude-opus-4-8",
+    "opus-4.8": "claude-opus-4-8",
+    "claude-opus-4.8": "claude-opus-4-8",
+    "opus-4.7": "claude-opus-4-7",
+    "claude-opus-4.7": "claude-opus-4-7",
+    "opus-4.6": "claude-opus-4-6",
+    "claude-opus-4.6": "claude-opus-4-6",
+    "claude-opus-4-6-20251117": "claude-opus-4-6",
+    sonnet: "claude-sonnet-4-6",
+    "sonnet-4.6": "claude-sonnet-4-6",
+    "claude-sonnet-4.6": "claude-sonnet-4-6",
+    "claude-sonnet-4-6-20251117": "claude-sonnet-4-6",
+    haiku: "claude-haiku-4-5",
+    "haiku-4.5": "claude-haiku-4-5",
+    "claude-haiku-4.5": "claude-haiku-4-5",
+    "claude-haiku-4-5-20251001": "claude-haiku-4-5",
+  },
+  opencode: {
+    "antigravity-gemini-3.5-flash-high": "google/antigravity-gemini-3.5-flash-high",
+    "antigravity-gemini-3.5-flash-low": "google/antigravity-gemini-3.5-flash-low",
+    "gemini-3.5-flash-high": "google/antigravity-gemini-3.5-flash-high",
+    "gemini-3.5-flash-low": "google/antigravity-gemini-3.5-flash-low",
+    "3.5-flash-high": "google/antigravity-gemini-3.5-flash-high",
+    "3.5-flash-low": "google/antigravity-gemini-3.5-flash-low",
+  },
+};
 
 export type ProviderModelInfo = {
   slug: string;
