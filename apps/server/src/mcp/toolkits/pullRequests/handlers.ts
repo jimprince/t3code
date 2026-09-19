@@ -82,11 +82,16 @@ const resolveTarget = Effect.fn("PullRequestsToolkit.resolveTarget")(function* (
   if (host === undefined) {
     return yield* new PullRequestHostRequiredError({});
   }
+  // The project provider only defines the URL shape for its own host. A bare
+  // numeric reference to another host could be GitHub, Gitea, or another
+  // provider with a different route, so require the host's canonical URL.
+  if (host !== projectHost.host) {
+    return yield* new PullRequestUrlInvalidError({});
+  }
   const repository = input.repository.toLowerCase();
   const url =
     changeRequestUrlFor(
-      // The project's kind only describes its own host; another host gets no URL guess.
-      host === projectHost.host ? projectHost.kind : null,
+      projectHost.kind,
       host,
       repository,
       input.number,

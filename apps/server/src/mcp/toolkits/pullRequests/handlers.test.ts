@@ -265,6 +265,33 @@ describe("pull request toolkit handlers", () => {
     }),
   );
 
+  it.effect("builds a numeric Gitea reference with the configured project's pulls route", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({
+        project: makeProject({
+          canonicalKey: "git.bradleyprince.com/brad/ci-repair-bot",
+          locator: {
+            source: "git-remote",
+            remoteName: "origin",
+            remoteUrl: "https://git.bradleyprince.com/brad/ci-repair-bot.git",
+          },
+          provider: "gitea",
+          displayName: "brad/ci-repair-bot",
+        }),
+      });
+      const result = yield* harness.call("link_pull_request", {
+        repository: "brad/ci-repair-bot",
+        number: 75,
+      });
+      expect(result).toMatchObject({
+        host: "git.bradleyprince.com",
+        repository: "brad/ci-repair-bot",
+        number: 75,
+        url: "https://git.bradleyprince.com/brad/ci-repair-bot/pulls/75",
+      });
+    }),
+  );
+
   it.effect("links a numeric Forgejo reference with its remote's web origin and mount path", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness({
@@ -290,12 +317,14 @@ describe("pull request toolkit handlers", () => {
         url: "http://forge.example:3000/git/owner/repo/pulls/42",
         alreadyLinked: false,
       });
-      const other = yield* harness.call("link_pull_request", {
-        host: "other.example",
-        repository: "owner/repo",
-        number: 42,
-      });
-      expect(other.url).toBe("https://other.example/owner/repo/pull/42");
+      const other = yield* harness
+        .call("link_pull_request", {
+          host: "other.example",
+          repository: "owner/repo",
+          number: 42,
+        })
+        .pipe(Effect.flip);
+      expect(other).toMatchObject({ _tag: "PullRequestUrlInvalidError" });
     }),
   );
 
@@ -309,6 +338,7 @@ describe("pull request toolkit handlers", () => {
           number: 75,
         })
         .pipe(Effect.flip);
+      expect(error).toMatchObject({ _tag: "PullRequestUrlInvalidError" });
       expect(error.message).toMatch(/URL/iu);
       expect(yield* Ref.get(harness.commands)).toEqual([]);
     }),
