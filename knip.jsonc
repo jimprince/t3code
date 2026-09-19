@@ -67,8 +67,6 @@
       "ignoreIssues": { "src/components/ui/*.tsx": ["exports", "nsExports", "duplicates"] },
     },
     "apps/t3-thread": {
-      // Keep the vendored contract snapshot complete.
-      "ignoreIssues": { "src/vendor/t3contracts/{index,ipc}.ts": ["files"] },
     },
     "oxlint-plugin-t3code": {
       "includeEntryExports": true,
