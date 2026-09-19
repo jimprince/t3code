@@ -11,11 +11,17 @@ target server. If a turn is running, it is interrupted and the provider
 session is stopped before export. The source thread is archived only after
 the target confirms the import, so a failed move never loses the thread.
 
+Attachment transfers require an updated target server. An older target rejects
+the move; update it and try again.
+
 ## What moves
 
 - **Visible history** — messages, activities, proposed plans, and checkpoint
   summaries are replayed into the target server's event log under the same
   thread id.
+- **Attachments** — available images and files are copied to the target, up to
+  50 MiB per file and 64 MiB in total. Missing historical files are reported as
+  warnings, with their names retained in the conversation.
 - **Git state** — the thread branch and its `refs/t3/checkpoints/*` refs
   travel as a thin git bundle; a new worktree is created in the target clone,
   and uncommitted tracked changes plus untracked files are restored into it.
@@ -43,7 +49,6 @@ the target confirms the import, so a failed move never loses the thread.
 
 - Live terminal sessions.
 - An in-flight turn — the move quiesces the thread first.
-- Image attachment blobs (message text and attachment names are kept).
 - Checkpoints whose git refs no longer exist on the source (reported as a
   warning).
 
