@@ -545,6 +545,11 @@ date = "2026-09-16"
 decided = "relocate"
 rationale = "Move baseline authenticated GET request construction from the later PR-actions patch into this provider-owning patch. The connection and branch-badge path must execute independently; the later patch owns only POST bodies and pull-request actions."
 [[patch.decision]]
+id = "gitea-linked-pr-canonical-refresh"
+date = "2026-09-19"
+decided = "adapt"
+rationale = "Generate configured Gitea links with /pulls/ and let the normal linked-PR sync persist the provider's canonical URL together with current state, repairing previously saved /pull/ links and stale open snapshots."
+[[patch.decision]]
 id = "upstream-source-control-provider-contract"
 date = "2026-09-16"
 decided = "adapt"
