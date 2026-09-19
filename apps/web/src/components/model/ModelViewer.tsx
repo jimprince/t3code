@@ -8,6 +8,7 @@ import { cn } from "~/lib/utils";
 
 import { readBoundedModelResponse, validateModelBytes } from "./modelValidation";
 import { requestModelRenderSlot } from "./modelRenderSlots";
+import { buildStepObject, tessellateStep, validateStepHeader } from "./stepTessellation";
 import {
   applyThreeMfUnit,
   assertRenderedTriangleLimit,
@@ -82,7 +83,7 @@ export async function refreshModelPreviewUrl(
 export function canOpenModelInOrcaSlicer(name: string): boolean {
   return (
     typeof window !== "undefined" &&
-    /\.(?:stl|3mf)$/i.test(name) &&
+    /\.(?:stl|3mf|step|stp)$/i.test(name) &&
     window.desktopBridge?.getClientPlatform?.() === "darwin" &&
     window.desktopBridge.openModelInOrcaSlicer !== undefined
   );
@@ -95,9 +96,9 @@ export async function openModelInOrcaSlicer(input: {
   readonly fetchModel?: typeof fetch;
 }) {
   const bridge = window.desktopBridge?.openModelInOrcaSlicer;
-  if (!bridge || !/\.(?:stl|3mf)$/i.test(input.name)) {
+  if (!bridge || !/\.(?:stl|3mf|step|stp)$/i.test(input.name)) {
     throw new Error(
-      "Open in OrcaSlicer is available for STL and 3MF files in T3 Code Desktop on macOS.",
+      "Open in OrcaSlicer is available for STL, 3MF, and STEP files in T3 Code Desktop on macOS.",
     );
   }
   const controller = new AbortController();
@@ -108,8 +109,9 @@ export async function openModelInOrcaSlicer(input: {
       controller.signal,
     ));
   if (/\.3mf$/i.test(input.name)) await validateThreeMfBytes(bytes);
+  else if (/\.(?:step|stp)$/i.test(input.name)) validateStepHeader(bytes);
   else if (validateModelBytes(bytes, input.name).format !== "stl") {
-    throw new Error("OrcaSlicer handoff supports STL and 3MF files only.");
+    throw new Error("OrcaSlicer handoff supports STL, 3MF, and STEP files only.");
   }
   const result = await bridge({ name: input.name, bytes });
   if (!result.opened) throw new Error(result.error ?? "OrcaSlicer could not be opened.");
@@ -121,27 +123,32 @@ async function createRuntime(input: {
   name: string;
   signal: AbortSignal;
 }): Promise<Runtime> {
-  const validated = /\.3mf$/i.test(input.name)
-    ? await validateThreeMfBytes(input.bytes)
-    : validateModelBytes(input.bytes, input.name);
+  const isStep = /\.(?:step|stp)$/i.test(input.name);
+  const validated = isStep
+    ? null
+    : /\.3mf$/i.test(input.name)
+      ? await validateThreeMfBytes(input.bytes)
+      : validateModelBytes(input.bytes, input.name);
   const [three, { OrbitControls }] = await Promise.all([
     import("three"),
     import("three/examples/jsm/controls/OrbitControls.js"),
   ]);
   if (input.signal.aborted) throw input.signal.reason;
   let root: THREE.Object3D;
-  if (validated.format === "glb") {
+  if (isStep) {
+    root = buildStepObject(three, await tessellateStep(input.bytes, input.signal));
+  } else if (validated!.format === "glb") {
     const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
     const manager = new three.LoadingManager();
     manager.setURLModifier(allowEmbeddedModelUrl);
     const loader = new GLTFLoader(manager);
     const gltf = await new Promise<import("three/examples/jsm/loaders/GLTFLoader.js").GLTF>(
-      (resolve, reject) => loader.parse(validated.bytes, "", resolve, reject),
+      (resolve, reject) => loader.parse(validated!.bytes, "", resolve, reject),
     );
     root = gltf.scene;
-  } else if (validated.format === "stl") {
+  } else if (validated!.format === "stl") {
     const { STLLoader } = await import("three/examples/jsm/loaders/STLLoader.js");
-    const geometry = new STLLoader().parse(validated.bytes);
+    const geometry = new STLLoader().parse(validated!.bytes);
     geometry.computeVertexNormals();
     root = new three.Mesh(
       geometry,
@@ -151,8 +158,9 @@ async function createRuntime(input: {
     const { ThreeMFLoader } = await import("three/examples/jsm/loaders/3MFLoader.js");
     const manager = new three.LoadingManager();
     manager.setURLModifier(allowEmbeddedModelUrl);
-    root = new ThreeMFLoader(manager).parse(validated.bytes);
-    applyThreeMfUnit(root, validated.unitScale);
+    const threeMf = validated as Awaited<ReturnType<typeof validateThreeMfBytes>>;
+    root = new ThreeMFLoader(manager).parse(threeMf.bytes);
+    applyThreeMfUnit(root, threeMf.unitScale);
     assertRenderedTriangleLimit(root);
   }
   if (input.signal.aborted) {
