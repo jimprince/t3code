@@ -50,10 +50,13 @@ describe("workspace file previews", () => {
     expect(hostPreviewMimeTypeFromExtension(".txt")).toBeNull();
   });
 
-  it.each(["scene.glb", "part.STL?download=1"])("recognizes model preview path %s", (path) => {
-    expect(isWorkspaceModelPreviewPath(path)).toBe(true);
-    expect(isWorkspacePreviewEntryPath(path)).toBe(true);
-  });
+  it.each(["scene.glb", "part.STL?download=1", "project.3mf", "bracket.step", "gear.STP"])(
+    "recognizes model preview path %s",
+    (path) => {
+      expect(isWorkspaceModelPreviewPath(path)).toBe(true);
+      expect(isWorkspacePreviewEntryPath(path)).toBe(true);
+    },
+  );
 });
 
 describe("media path parsing", () => {
@@ -91,6 +94,9 @@ describe("attachment preview classification", () => {
     ["recording.mp3", "", "audio"],
     ["scene.glb", "application/octet-stream", "model"],
     ["part.stl", "model/stl", "model"],
+    ["project.3mf", "model/3mf", "model"],
+    ["bracket.step", "model/step", "model"],
+    ["gear.stp", "application/octet-stream", "model"],
     ["payload", "application/problem+json", "text"],
     ["archive.zip", "application/zip", "unsupported"],
     ["misleading.json", "application/pdf", "pdf"],
