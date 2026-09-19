@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "0cead8822f33de5029fc95c5cdf83ed3078ef368",
-  "head": "6e80717618aec5f4ad4292156291daef7804d20a",
+  "prev": "881d9cc54a5be815f48296f1217d93f7a2842ec5",
+  "head": "4f59ab9155d0cb8790985eff972cb0af0b6afe7d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -34,11 +34,15 @@
     "fork-auth-session-refresh",
     "fork-codex-goal-visibility",
     "fork-inline-3d-objects",
-    "fork-orcaslicer-handoff"
+    "fork-orcaslicer-handoff",
+    "fork-3mf-preview"
   ],
   "unapplied": [],
   "hidden": [],
   "patches": {
+    "fork-3mf-preview": {
+      "oid": "4f59ab9155d0cb8790985eff972cb0af0b6afe7d"
+    },
     "fork-attachment-compatibility": {
       "oid": "36022d323d15a6685a297044db2ea21f42c05bd5"
     },
