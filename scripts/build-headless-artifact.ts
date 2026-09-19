@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// @effect-diagnostics nodeBuiltinImport:off - This archive adapter uses Node filesystem and subprocess APIs at the build boundary.
 
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
@@ -14,8 +15,8 @@ const ARCH = "x64" as const;
 interface CliArgs {
   readonly version: string;
   readonly outputDir: string;
-  readonly resourceMonitorDir?: string;
-  readonly upstreamArchive?: string;
+  readonly resourceMonitorDir: string | undefined;
+  readonly upstreamArchive: string | undefined;
 }
 
 export function resolveHeadlessArtifactBaseName(version: string): string {

@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - Exercises real archive files and launcher subprocesses.
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
