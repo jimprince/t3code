@@ -1,0 +1,4 @@
+id = "orcaslicer-model-handoff"
+category = "feature"
+functionality = "3D model preview"
+text = "Open STL previews directly in OrcaSlicer from the macOS desktop app."
