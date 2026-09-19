@@ -660,7 +660,7 @@ id = "stamp-free-release-tags"
 date = "2026-07-30"
 decided = "tag-stamped-child-main-unstamped-parent"
 rationale = "Both automatic release writers call prepare-release-tag, tag its prepared child, and keep main at the exact unstamped stack tip. Release consumes that bound tag and never finalizes versions onto main."
-standing_policy = "Generated version stamps and release lockfile changes are tag-only."
+standing_policy = "Generated version stamps are tag-only. Tag preparation preserves the verified source lockfile with frozen installs; dependency resolution belongs before source verification."
 [[patch.decision]]
 id = "reuse-exact-source-ci-tests"
 date = "2026-09-05"
