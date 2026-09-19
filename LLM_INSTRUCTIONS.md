@@ -23,6 +23,21 @@ typecheck — and run `vp fmt` on every file you touched before finishing. New
 fork functionality is not just a commit — it must land as an StGit patch with
 an inventory entry; see Route B below before you start.
 
+### Fixing reported product bugs
+
+Treat each reported symptom as an acceptance criterion. A corrected browser
+link, login suggestion, or passing URL-helper test does not establish that a
+stale status now refreshes. Follow the affected production path and verify
+each outcome; report any remaining symptom explicitly.
+
+For linked pull requests, the target repository and host can differ from the
+thread's project. Cover that boundary as well as the same-project case, and
+use the target provider's identity and web origin rather than guessing from
+the thread's project. Include already-saved incorrect links and stale
+snapshots in the regression scenario, not only newly created links. Exercise
+the normal refresh path through persistence to the client-facing result;
+do not repair live user data to make the test pass.
+
 ## Sandboxed candidate agents
 
 If you are an agent working in a sandboxed clone (typical signs: no network
