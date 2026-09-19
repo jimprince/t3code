@@ -1,4 +1,5 @@
 import { EnvironmentId } from "@t3tools/contracts";
+import { MODEL_PREVIEW_MAX_BYTES } from "@t3tools/shared/filePreview";
 import { act, type ReactNode } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
@@ -13,6 +14,11 @@ vi.mock("~/hooks/useCopyToClipboard", () => ({
 }));
 vi.mock("~/components/ui/toast", () => ({ toastManager: { add: vi.fn() } }));
 vi.mock("~/components/ChatMarkdown", () => ({ default: () => null }));
+vi.mock("../model/ModelPreview", () => ({
+  ModelPreview: ({ name, sizeBytes }: { name: string; sizeBytes?: number }) => (
+    <div data-model-preview={name} data-model-size={sizeBytes} />
+  ),
+}));
 vi.mock("~/components/ui/scroll-area", () => ({
   ScrollArea: ({ children }: { children: ReactNode }) => children,
 }));
@@ -129,5 +135,52 @@ describe("attachment HTML preview recovery", () => {
     await toggleMode("Show rendered page");
     expect(renderer.root.findAllByProps({ role: "alert" })).toHaveLength(0);
     expect(renderer.root.findByType("iframe").props.title).toBe("document.html");
+  });
+});
+
+describe("attachment model preview", () => {
+  afterEach(async () => {
+    vi.unstubAllGlobals();
+  });
+
+  it("renders the shared model viewer for a captured GLB", async () => {
+    refresh.mockReset().mockResolvedValue("https://environment.test/model.glb");
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <AttachmentFilePreview
+          name="model.glb"
+          mimeType="model/gltf-binary"
+          sizeBytes={120}
+          asset={{
+            environmentId: EnvironmentId.make("test-environment"),
+            attachmentId: "model-glb",
+          }}
+        />,
+      );
+    });
+    expect(renderer!.root.findByProps({ "data-model-preview": "model.glb" })).toBeDefined();
+    await act(() => renderer!.unmount());
+  });
+
+  it("offers the bounded model fallback before requesting an oversized attachment preview", async () => {
+    refresh.mockReset().mockResolvedValue("https://environment.test/model.glb");
+    let renderer: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(
+        <AttachmentFilePreview
+          name="large.glb"
+          mimeType="model/gltf-binary"
+          sizeBytes={MODEL_PREVIEW_MAX_BYTES + 1}
+          asset={{
+            environmentId: EnvironmentId.make("test-environment"),
+            attachmentId: "large-glb",
+          }}
+        />,
+      );
+    });
+    expect(renderer!.root.findByProps({ "data-model-preview": "large.glb" })).toBeDefined();
+    expect(refresh).not.toHaveBeenCalled();
+    await act(() => renderer!.unmount());
   });
 });
