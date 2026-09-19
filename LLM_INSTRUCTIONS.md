@@ -11,7 +11,9 @@ in the linked skill and runbooks.
   not run repo-wide checks locally unless requested; CI owns the broad gates.
 - Tests import from `"vite-plus/test"`, not `"vitest"`. Prefer precise edits
   over bulk regex rewrites, and run `vp fmt` on touched files.
-  If `vp` is absent from PATH, use `corepack pnpm exec vp`.
+  Match Node to `package.json` engines. If `vp` is absent from PATH, use
+  the installed `./node_modules/.bin/vp`; a package-manager fallback can
+  trigger dependency installation even for a read-only check.
 - Treat every reported product symptom and boundary as an acceptance
   criterion. Name the production-path test for each before claiming it fixed;
   an adjacent green unit test is not evidence for an unexercised outcome.
