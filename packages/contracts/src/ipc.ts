@@ -1117,6 +1117,23 @@ export const DesktopPreviewAutomationWaitForInputSchema = Schema.Struct({
 export const SystemSettingsPaneSchema = Schema.Literals(["full-disk-access"]);
 export type SystemSettingsPane = typeof SystemSettingsPaneSchema.Type;
 
+export const DESKTOP_MODEL_HANDOFF_MAX_BYTES = 50 * 1024 * 1024;
+export const DesktopOpenModelInOrcaSlicerInputSchema = Schema.Struct({
+  name: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(255)),
+  bytes: Schema.Uint8Array.check(
+    Schema.isMinLength(1),
+    Schema.isMaxLength(DESKTOP_MODEL_HANDOFF_MAX_BYTES),
+  ),
+});
+export type DesktopOpenModelInOrcaSlicerInput = typeof DesktopOpenModelInOrcaSlicerInputSchema.Type;
+
+export const DesktopOpenModelInOrcaSlicerResultSchema = Schema.Struct({
+  opened: Schema.Boolean,
+  error: Schema.optionalKey(Schema.String),
+});
+export type DesktopOpenModelInOrcaSlicerResult =
+  typeof DesktopOpenModelInOrcaSlicerResultSchema.Type;
+
 export interface DesktopBridge {
   getAppBranding: () => DesktopAppBranding | null;
   /** Absolute path of a dropped or picked file; absent on desktop builds predating it. */
@@ -1208,6 +1225,10 @@ export interface DesktopBridge {
     position?: { x: number; y: number },
   ) => Promise<T | null>;
   openExternal: (url: string) => Promise<boolean>;
+  /** Stages validated STL bytes locally and opens them in OrcaSlicer on this machine. */
+  openModelInOrcaSlicer?: (
+    input: DesktopOpenModelInOrcaSlicerInput,
+  ) => Promise<DesktopOpenModelInOrcaSlicerResult>;
   /**
    * Open a System Settings pane by identifier. Optional: older desktop builds
    * lack it, and callers no-op when it is missing.
