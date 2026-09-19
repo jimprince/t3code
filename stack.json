@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "233805c46400bf15f6954f6d4fb1cadd1863713f",
-  "head": "a67a91ec6a312f2a6d0bd071b33088cf4f470689",
+  "prev": "4ff2cfbb7552a8041d4bf9cd48dcdb4b7d3c8754",
+  "head": "7f3754f52a90edf3fc442f5d61fa0264d28c08c6",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -11,6 +11,9 @@
     "fork-general-chat",
     "fork-conversation-fork",
     "fork-thread-transfer",
+    "refresh-temp"
+  ],
+  "unapplied": [
     "fork-thread-history-compatibility",
     "fork-project-selection",
     "fork-private-connection-defaults",
@@ -36,10 +39,8 @@
     "fork-inline-3d-objects",
     "fork-orcaslicer-handoff",
     "fork-3mf-preview",
-    "fork-step-preview",
-    "refresh-temp"
+    "fork-step-preview"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -145,7 +146,7 @@
       "oid": "cb910e81bf44ac2c82c1c1fd4fb05ce11a7064fd"
     },
     "refresh-temp": {
-      "oid": "a67a91ec6a312f2a6d0bd071b33088cf4f470689"
+      "oid": "7f3754f52a90edf3fc442f5d61fa0264d28c08c6"
     }
   }
 }
