@@ -16,6 +16,7 @@ import * as PlatformError from "effect/PlatformError";
 import * as References from "effect/References";
 import * as Schema from "effect/Schema";
 import * as Scope from "effect/Scope";
+import * as TestClock from "effect/testing/TestClock";
 import { ChildProcessSpawner } from "effect/unstable/process";
 import { expect } from "vite-plus/test";
 import type {
@@ -1347,6 +1348,7 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         ))?.pr?.number,
       ).toBe(214);
       expect(ghCalls.filter((call) => call.startsWith("pr list "))).toHaveLength(2);
+      expect(registry.resolveCalls).toHaveLength(2);
     }),
   );
 
@@ -1446,6 +1448,24 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       );
       expect(diagnostics).toHaveLength(1);
       expect(diagnostics[0]?.annotations).toMatchObject({ operation: "prHostSupport" });
+
+      yield* TestClock.adjust("61 seconds");
+      expect(
+        (yield* manager.remoteStatus(
+          { cwd: repoDir },
+          { refreshUpstream: false, refreshMissingPullRequest: true },
+        ))?.pr,
+      ).toBeNull();
+      expect(registry.resolveCalls).toHaveLength(1);
+
+      yield* TestClock.adjust("9 minutes");
+      yield* manager.remoteStatus({ cwd: repoDir }, { refreshUpstream: false });
+      expect(registry.resolveCalls).toHaveLength(2);
+      expect(ghCalls).toHaveLength(0);
+
+      yield* manager.invalidateStatus(repoDir);
+      yield* manager.remoteStatus({ cwd: repoDir }, { refreshUpstream: false });
+      expect(registry.resolveCalls).toHaveLength(3);
     }),
   );
 

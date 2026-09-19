@@ -487,7 +487,7 @@ purpose = "Stop pull request status polling from repeatedly asking, and repeated
 retire_when = "Upstream skips change request lookups for remotes with no registered provider instead of retrying the guaranteed failure."
 depends_on = []
 roles = []
-note = "Reorganized 2026-09-06 from fork-pr-status-unsupported-hosts."
+note = "Unsupported provider results share the ordinary PR cache with a ten-minute TTL. Explicit status refresh and configured-provider routing changes invalidate the result; missing-PR refreshes do not repeat unsupported probes. Provider resolution occurs once per lookup. Reorganized 2026-09-06 from fork-pr-status-unsupported-hosts."
 [[patch.decision]]
 id = "upstream-provider-link-resolution"
 date = "2026-09-16"

@@ -1086,42 +1086,6 @@ export const make = Effect.gen(function* () {
         ].join("\u0000"),
       ),
     );
-  // A remote on a host no provider implements (an unconfigured host, a bare SSH remote) can
-  // never answer a change request lookup, and asking costs a provider probe
-  // plus a guaranteed-failing API call whose failure the poller then retries.
-  // Detect it once and remember the verdict per repository, so an unsupported
-  // remote costs one probe and one diagnostic per window rather than one per
-  // poll. The epoch is part of the key, so the same explicit refresh that
-  // bypasses the PR lookup cache also re-checks the host.
-  const unsupportedPrHostCacheKey = (cwd: string) =>
-    giteaRoutingKey.pipe(
-      Effect.map((routingKey) => [cwd, String(prLookupEpoch(cwd)), routingKey].join("\u0000")),
-    );
-  const unsupportedPrHostCache = yield* Cache.makeWith(
-    (key: string) => {
-      const [cwd = ""] = key.split("\u0000");
-      return sourceControlProvider(cwd).pipe(
-        Effect.flatMap((provider) =>
-          provider.kind !== "unknown"
-            ? Effect.succeed(false)
-            : Effect.logWarning(
-                "No hosting provider handles this remote; skipping PR lookup.",
-              ).pipe(Effect.annotateLogs({ operation: "prHostSupport", cwd }), Effect.as(true)),
-        ),
-      );
-    },
-    {
-      capacity: PR_LOOKUP_CACHE_CAPACITY,
-      timeToLive: (exit) => (Exit.isSuccess(exit) ? UNSUPPORTED_PR_HOST_CACHE_TTL : Duration.zero),
-    },
-  );
-  // A probe that could not answer reads as "supported": the lookup goes ahead
-  // and fails the way it does today rather than silently dropping the badge.
-  const isUnsupportedPrHost = (cwd: string) =>
-    unsupportedPrHostCacheKey(cwd).pipe(
-      Effect.flatMap((key) => Cache.get(unsupportedPrHostCache, key)),
-      Effect.orElseSucceed(() => false),
-    );
   // Consecutive failures per cache key, so a branch that keeps failing waits
   // longer before the next attempt. Cleared as soon as a lookup succeeds.
   const prLookupFailureStreakByKey = new Map<string, number>();
@@ -1159,13 +1123,14 @@ export const make = Effect.gen(function* () {
       return Effect.gen(function* () {
         const { headContext, lookup } = yield* resolveLookupHeadContext(cwd, details);
         if (!lookup) {
-          return { latest: null, headContext };
+          return { latest: null, headContext, unsupportedHost: false };
         }
-        // No implemented host means no change request to find, so skip before
-        // the guaranteed-failing API call. Cached for longer than this entry,
-        // so a poll that re-enters here does not re-probe the host.
-        if (yield* isUnsupportedPrHost(cwd)) {
-          return { latest: null, headContext };
+        const provider = yield* sourceControlProvider(cwd);
+        if (provider.kind === "unknown") {
+          yield* Effect.logWarning(
+            "No hosting provider handles this remote; skipping PR lookup.",
+          ).pipe(Effect.annotateLogs({ operation: "prHostSupport", cwd }));
+          return { latest: null, headContext, unsupportedHost: true };
         }
         // Only skip when the branch is untracked as well: anything carrying an
         // upstream keeps the old behaviour.
@@ -1174,10 +1139,10 @@ export const make = Effect.gen(function* () {
           details.upstreamRef === null &&
           (yield* isUnpublishedBranch(cwd, headContext))
         ) {
-          return { latest: null, headContext };
+          return { latest: null, headContext, unsupportedHost: false };
         }
-        const latest = yield* findLatestPrForHeadContext(cwd, headContext);
-        return { latest, headContext };
+        const latest = yield* findLatestPrForHeadContext(cwd, headContext, provider);
+        return { latest, headContext, unsupportedHost: false };
       });
     },
     {
@@ -1185,7 +1150,7 @@ export const make = Effect.gen(function* () {
       timeToLive: (exit, key) => {
         if (Exit.isSuccess(exit)) {
           prLookupFailureStreakByKey.delete(key);
-          return PR_LOOKUP_CACHE_TTL;
+          return exit.value.unsupportedHost ? UNSUPPORTED_PR_HOST_CACHE_TTL : PR_LOOKUP_CACHE_TTL;
         }
         return nextPrLookupFailureTtl(key);
       },
@@ -1267,7 +1232,7 @@ export const make = Effect.gen(function* () {
       const cached = yield* Cache.getOption(prLookupCache, cacheKey).pipe(
         Effect.orElseSucceed(() => Option.none()),
       );
-      if (Option.isSome(cached) && cached.value.latest === null) {
+      if (Option.isSome(cached) && cached.value.latest === null && !cached.value.unsupportedHost) {
         yield* Cache.invalidate(prLookupCache, cacheKey);
       }
     }
@@ -1726,11 +1691,11 @@ export const make = Effect.gen(function* () {
   const findLatestPrForHeadContext = Effect.fn("findLatestPrForHeadContext")(function* (
     cwd: string,
     headContext: BranchHeadContext,
+    provider: Effect.Success<ReturnType<typeof sourceControlProvider>>,
   ) {
     const parsedByNumber = new Map<number, PullRequestInfo>();
 
     for (const headSelector of headContext.headSelectors) {
-      const provider = yield* sourceControlProvider(cwd);
       const pullRequests = yield* provider.listChangeRequests({
         cwd,
         headSelector,
