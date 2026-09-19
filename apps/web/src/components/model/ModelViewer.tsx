@@ -1,8 +1,9 @@
-import { DownloadIcon, RotateCcwIcon } from "lucide-react";
+import { DownloadIcon, ExternalLinkIcon, RotateCcwIcon } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type * as THREE from "three";
 
 import { Button } from "~/components/ui/button";
+import { toastManager } from "~/components/ui/toast";
 import { cn } from "~/lib/utils";
 
 import { readBoundedModelResponse, validateModelBytes } from "./modelValidation";
@@ -71,6 +72,38 @@ export async function refreshModelPreviewUrl(
   const refreshed = await refresh();
   if (refreshed === null) throw new Error("Reconnect to the environment and try again.");
   return typeof refreshed === "string" && refreshed.length > 0 ? refreshed : currentUrl;
+}
+
+export function canOpenModelInOrcaSlicer(name: string): boolean {
+  return (
+    typeof window !== "undefined" &&
+    name.toLowerCase().endsWith(".stl") &&
+    window.desktopBridge?.getClientPlatform?.() === "darwin" &&
+    window.desktopBridge.openModelInOrcaSlicer !== undefined
+  );
+}
+
+export async function openModelInOrcaSlicer(input: {
+  readonly url: string;
+  readonly name: string;
+  readonly bytes?: Uint8Array;
+  readonly fetchModel?: typeof fetch;
+}) {
+  const bridge = window.desktopBridge?.openModelInOrcaSlicer;
+  if (!bridge || !input.name.toLowerCase().endsWith(".stl")) {
+    throw new Error("Open in OrcaSlicer is available for STL files in T3 Code Desktop on macOS.");
+  }
+  const controller = new AbortController();
+  const bytes =
+    input.bytes ??
+    (await readBoundedModelResponse(
+      await (input.fetchModel ?? fetch)(input.url, { signal: controller.signal }),
+      controller.signal,
+    ));
+  const validated = validateModelBytes(bytes, input.name);
+  if (validated.format !== "stl") throw new Error("OrcaSlicer handoff supports STL files only.");
+  const result = await bridge({ name: input.name, bytes });
+  if (!result.opened) throw new Error(result.error ?? "OrcaSlicer could not be opened.");
 }
 
 async function createRuntime(input: {
@@ -184,6 +217,9 @@ export default function ModelViewer(props: {
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const runtimeRef = useRef<Runtime | null>(null);
+  const modelBytesRef = useRef<Uint8Array | null>(null);
+  const handoffPendingRef = useRef(false);
+  const [handoffPending, setHandoffPending] = useState(false);
   const [visible, setVisible] = useState(false);
   const [hasSlot, setHasSlot] = useState(false);
   const [slotEpoch, setSlotEpoch] = useState(0);
@@ -232,6 +268,7 @@ export default function ModelViewer(props: {
     const controller = new AbortController();
     let runtime: Runtime | null = null;
     let observer: ResizeObserver | null = null;
+    modelBytesRef.current = null;
     setStatus("loading");
     setError(null);
     void (async () => {
@@ -246,6 +283,7 @@ export default function ModelViewer(props: {
         name: props.name,
         signal: controller.signal,
       });
+      modelBytesRef.current = bytes;
       runtimeRef.current = runtime;
       const resize = () => {
         if (!runtime) return;
@@ -275,11 +313,14 @@ export default function ModelViewer(props: {
     canvas.addEventListener("webglcontextlost", contextLost);
     return () => {
       controller.abort();
+      modelBytesRef.current = null;
       observer?.disconnect();
       canvas.removeEventListener("webglcontextlost", contextLost);
       if (runtimeRef.current === runtime) runtimeRef.current = null;
       runtime?.dispose();
     };
+    // A new slot epoch remounts the keyed canvas, so it must also recreate the runtime.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies
   }, [activeUrl, hasSlot, props.name, revision, slotEpoch, visible]);
 
   const retry = useCallback(() => {
@@ -296,6 +337,27 @@ export default function ModelViewer(props: {
       }
     })();
   }, [onRetry, props.url]);
+  const openInOrcaSlicer = useCallback(() => {
+    if (handoffPendingRef.current) return;
+    handoffPendingRef.current = true;
+    setHandoffPending(true);
+    void openModelInOrcaSlicer({
+      url: activeUrl,
+      name: props.name,
+      ...(modelBytesRef.current === null ? {} : { bytes: modelBytesRef.current }),
+    })
+      .catch((cause: unknown) => {
+        toastManager.add({
+          type: "error",
+          title: "Could not open OrcaSlicer",
+          description: cause instanceof Error ? cause.message : "Please try again.",
+        });
+      })
+      .finally(() => {
+        handoffPendingRef.current = false;
+        setHandoffPending(false);
+      });
+  }, [activeUrl, props.name]);
   return (
     <div
       ref={hostRef}
@@ -337,6 +399,18 @@ export default function ModelViewer(props: {
             onClick={props.onDownload}
           >
             <DownloadIcon />
+          </Button>
+        ) : null}
+        {canOpenModelInOrcaSlicer(props.name) ? (
+          <Button
+            size="compact"
+            variant="secondary"
+            aria-label={`Open ${props.name} in OrcaSlicer`}
+            disabled={handoffPending}
+            onClick={openInOrcaSlicer}
+          >
+            <ExternalLinkIcon />
+            {handoffPending ? "Opening…" : "Open in OrcaSlicer"}
           </Button>
         ) : null}
       </div>
