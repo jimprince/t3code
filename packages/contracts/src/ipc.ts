@@ -1249,7 +1249,7 @@ export interface DesktopBridge {
   receiveProviderAuthCallback?: (authorizationUrl: string) => Promise<string>;
   cancelProviderAuthCallback?: (authorizationUrl: string) => Promise<void>;
   openExternal: (url: string) => Promise<boolean>;
-  /** Stages validated STL bytes locally and opens them in OrcaSlicer on this machine. */
+  /** Stages validated printable-model bytes locally and opens them in OrcaSlicer on this machine. */
   openModelInOrcaSlicer?: (
     input: DesktopOpenModelInOrcaSlicerInput,
   ) => Promise<DesktopOpenModelInOrcaSlicerResult>;
