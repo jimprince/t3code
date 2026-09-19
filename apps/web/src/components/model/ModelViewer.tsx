@@ -8,6 +8,11 @@ import { cn } from "~/lib/utils";
 
 import { readBoundedModelResponse, validateModelBytes } from "./modelValidation";
 import { requestModelRenderSlot } from "./modelRenderSlots";
+import {
+  applyThreeMfUnit,
+  assertRenderedTriangleLimit,
+  validateThreeMfBytes,
+} from "./threeMfValidation";
 
 type Runtime = {
   readonly renderer: THREE.WebGLRenderer;
@@ -77,7 +82,7 @@ export async function refreshModelPreviewUrl(
 export function canOpenModelInOrcaSlicer(name: string): boolean {
   return (
     typeof window !== "undefined" &&
-    name.toLowerCase().endsWith(".stl") &&
+    /\.(?:stl|3mf)$/i.test(name) &&
     window.desktopBridge?.getClientPlatform?.() === "darwin" &&
     window.desktopBridge.openModelInOrcaSlicer !== undefined
   );
@@ -90,8 +95,10 @@ export async function openModelInOrcaSlicer(input: {
   readonly fetchModel?: typeof fetch;
 }) {
   const bridge = window.desktopBridge?.openModelInOrcaSlicer;
-  if (!bridge || !input.name.toLowerCase().endsWith(".stl")) {
-    throw new Error("Open in OrcaSlicer is available for STL files in T3 Code Desktop on macOS.");
+  if (!bridge || !/\.(?:stl|3mf)$/i.test(input.name)) {
+    throw new Error(
+      "Open in OrcaSlicer is available for STL and 3MF files in T3 Code Desktop on macOS.",
+    );
   }
   const controller = new AbortController();
   const bytes =
@@ -100,8 +107,10 @@ export async function openModelInOrcaSlicer(input: {
       await (input.fetchModel ?? fetch)(input.url, { signal: controller.signal }),
       controller.signal,
     ));
-  const validated = validateModelBytes(bytes, input.name);
-  if (validated.format !== "stl") throw new Error("OrcaSlicer handoff supports STL files only.");
+  if (/\.3mf$/i.test(input.name)) await validateThreeMfBytes(bytes);
+  else if (validateModelBytes(bytes, input.name).format !== "stl") {
+    throw new Error("OrcaSlicer handoff supports STL and 3MF files only.");
+  }
   const result = await bridge({ name: input.name, bytes });
   if (!result.opened) throw new Error(result.error ?? "OrcaSlicer could not be opened.");
 }
@@ -112,16 +121,17 @@ async function createRuntime(input: {
   name: string;
   signal: AbortSignal;
 }): Promise<Runtime> {
-  const validated = validateModelBytes(input.bytes, input.name);
-  const [three, { GLTFLoader }, { STLLoader }, { OrbitControls }] = await Promise.all([
+  const validated = /\.3mf$/i.test(input.name)
+    ? await validateThreeMfBytes(input.bytes)
+    : validateModelBytes(input.bytes, input.name);
+  const [three, { OrbitControls }] = await Promise.all([
     import("three"),
-    import("three/examples/jsm/loaders/GLTFLoader.js"),
-    import("three/examples/jsm/loaders/STLLoader.js"),
     import("three/examples/jsm/controls/OrbitControls.js"),
   ]);
   if (input.signal.aborted) throw input.signal.reason;
   let root: THREE.Object3D;
   if (validated.format === "glb") {
+    const { GLTFLoader } = await import("three/examples/jsm/loaders/GLTFLoader.js");
     const manager = new three.LoadingManager();
     manager.setURLModifier(allowEmbeddedModelUrl);
     const loader = new GLTFLoader(manager);
@@ -129,13 +139,21 @@ async function createRuntime(input: {
       (resolve, reject) => loader.parse(validated.bytes, "", resolve, reject),
     );
     root = gltf.scene;
-  } else {
+  } else if (validated.format === "stl") {
+    const { STLLoader } = await import("three/examples/jsm/loaders/STLLoader.js");
     const geometry = new STLLoader().parse(validated.bytes);
     geometry.computeVertexNormals();
     root = new three.Mesh(
       geometry,
       new three.MeshStandardMaterial({ color: 0xb9bcc2, roughness: 0.72, metalness: 0.08 }),
     );
+  } else {
+    const { ThreeMFLoader } = await import("three/examples/jsm/loaders/3MFLoader.js");
+    const manager = new three.LoadingManager();
+    manager.setURLModifier(allowEmbeddedModelUrl);
+    root = new ThreeMFLoader(manager).parse(validated.bytes);
+    applyThreeMfUnit(root, validated.unitScale);
+    assertRenderedTriangleLimit(root);
   }
   if (input.signal.aborted) {
     disposeModelObject(root);
