@@ -30,7 +30,9 @@ link, login suggestion, or passing URL-helper test does not establish that a
 stale status now refreshes. Follow the affected production path and verify
 each outcome; report any remaining symptom explicitly.
 
-For linked pull requests, the target repository and host can differ from the
+Trace linked-PR creation from the [link tools](./apps/server/src/mcp/toolkits/pullRequests/handlers.ts)
+and persisted status from the [sync reactor](./apps/server/src/orchestration/PullRequestSyncReactor.ts).
+The target repository and host can differ from the
 thread's project. Cover both new link creation and status refresh across that
 boundary as well as the same-project case. Use the target provider's identity
 and web origin; if a numeric reference's provider cannot be resolved, require
