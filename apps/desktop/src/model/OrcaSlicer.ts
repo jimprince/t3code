@@ -40,7 +40,7 @@ export function nodeOrcaSlicerHandoffDependencies(
 }
 
 export function safeModelFileName(rawName: string): string | null {
-  const extension = /\.(stl|3mf)$/i.exec(rawName)?.[1]?.toLowerCase();
+  const extension = /\.(stl|3mf|step|stp)$/i.exec(rawName)?.[1]?.toLowerCase();
   if (!extension) return null;
   const basename =
     rawName
@@ -61,7 +61,10 @@ export async function openModelInOrcaSlicer(
 ): Promise<DesktopOpenModelInOrcaSlicerResult> {
   const fileName = safeModelFileName(input.name);
   if (fileName === null) {
-    return { opened: false, error: "OrcaSlicer handoff supports STL and 3MF files only." };
+    return {
+      opened: false,
+      error: "OrcaSlicer handoff supports STL, 3MF, and STEP files only.",
+    };
   }
   if (input.bytes.byteLength === 0 || input.bytes.byteLength > DESKTOP_MODEL_HANDOFF_MAX_BYTES) {
     return { opened: false, error: "The model file is empty or exceeds the 50 MB handoff limit." };
