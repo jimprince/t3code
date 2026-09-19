@@ -44,6 +44,7 @@ import {
   getSystemLocale,
   getWindowFullscreenState,
   openExternal,
+  openModelInOrcaSlicer,
   openSystemSettings,
   checkSystemPermission,
   pasteAsText,
@@ -134,6 +135,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(openExternal);
   yield* ipc.handle(receiveProviderAuthCallback);
   yield* ipc.handle(cancelProviderAuthCallback);
+  yield* ipc.handle(openModelInOrcaSlicer);
   yield* ipc.handle(openSystemSettings);
   yield* ipc.handle(checkSystemPermission);
   yield* ipc.handle(pasteAsText);
