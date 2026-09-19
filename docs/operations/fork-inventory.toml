@@ -293,7 +293,7 @@ purpose = "Move a thread and its workspace context between environments: export/
 retire_when = "Upstream ships equivalent cross-environment thread moves."
 depends_on = ["fork-thread-client-recovery", "fork-conversation-fork", "fork-general-chat"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-thread-transfer. Turn starts inspect the import marker without hydrating ordinary thread history; transferred threads retain context handoff."
+note = "Version-2 move bundles carry bounded native and legacy attachment bytes, preserve metadata identity, rewrite target storage paths, and clean only newly created objects on failure. Version-1 metadata-only bundles remain readable; old importers reject version 2. Reorganized 2026-09-06 from fork-thread-transfer. Turn starts inspect the import marker without hydrating ordinary thread history; transferred threads retain context handoff."
 
 [[patch.decision]]
 id = "upstream1895-thread-menu-project-group"

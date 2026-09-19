@@ -18,6 +18,7 @@ import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Scope from "effect/Scope";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { describe, expect, it as plainIt } from "vite-plus/test";
 
 import { checkpointRefForThreadTurn } from "../../checkpointing/Utils.ts";
@@ -39,6 +40,7 @@ import * as VcsProcess from "../../vcs/VcsProcess.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
+import { OrchestrationProjectionPipeline } from "../Services/ProjectionPipeline.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ThreadTransfer } from "../Services/ThreadTransfer.ts";
 import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
@@ -156,6 +158,7 @@ interface TransferSystemInput {
   readonly prefix: string;
   readonly worktreesRoot: string;
   readonly forkConversation?: ProviderServiceShape["forkConversation"];
+  readonly fileSystem?: FileSystem.FileSystem["Service"];
 }
 
 const makeTransferSystemLayer = (input: TransferSystemInput) => {
@@ -165,30 +168,39 @@ const makeTransferSystemLayer = (input: TransferSystemInput) => {
       Layer.provide(OrchestrationProjectionSnapshotQueryLive),
       Layer.provide(OrchestrationProjectionPipelineLive),
     ),
+    OrchestrationProjectionPipelineLive,
     OrchestrationProjectionSnapshotQueryLive,
     ProviderSessionRuntimeRepositoryLive,
   );
-  return ThreadTransferLive.pipe(
-    Layer.provide(VcsProcessTestLayer),
-    Layer.provide(
-      gitWorkflowTestLayer(input.worktreesRoot).pipe(Layer.provide(VcsProcessTestLayer)),
-    ),
-    Layer.provideMerge(orchestrationLayer),
-    Layer.provide(
-      Layer.mock(ProviderService)({
-        forkConversation: input.forkConversation ?? (() => Effect.succeed({ native: false })),
-      }),
-    ),
-  ).pipe(
-    Layer.provide(ThreadBackgroundLiveness.layer),
-    Layer.provide(ThreadPlanProgress.layer),
-    Layer.provide(OrchestrationEventStoreLive),
-    Layer.provide(OrchestrationCommandReceiptRepositoryLive),
-    Layer.provide(RepositoryIdentityResolverLive),
-    Layer.provide(SqlitePersistenceMemory),
-    Layer.provideMerge(ServerConfigLayer),
-    Layer.provideMerge(NodeServices.layer),
-  );
+  const threadTransferLayer =
+    input.fileSystem === undefined
+      ? ThreadTransferLive
+      : ThreadTransferLive.pipe(
+          Layer.provide(Layer.succeed(FileSystem.FileSystem, input.fileSystem)),
+        );
+  return threadTransferLayer
+    .pipe(
+      Layer.provide(VcsProcessTestLayer),
+      Layer.provide(
+        gitWorkflowTestLayer(input.worktreesRoot).pipe(Layer.provide(VcsProcessTestLayer)),
+      ),
+      Layer.provideMerge(orchestrationLayer),
+      Layer.provide(
+        Layer.mock(ProviderService)({
+          forkConversation: input.forkConversation ?? (() => Effect.succeed({ native: false })),
+        }),
+      ),
+    )
+    .pipe(
+      Layer.provide(ThreadBackgroundLiveness.layer),
+      Layer.provide(ThreadPlanProgress.layer),
+      Layer.provide(OrchestrationEventStoreLive),
+      Layer.provide(OrchestrationCommandReceiptRepositoryLive),
+      Layer.provide(RepositoryIdentityResolverLive),
+      Layer.provideMerge(SqlitePersistenceMemory),
+      Layer.provideMerge(ServerConfigLayer),
+      Layer.provideMerge(NodeServices.layer),
+    );
 };
 
 // Each system gets its own MemoMap: the suite-level memo map would otherwise
@@ -200,8 +212,11 @@ const buildTransferSystem = (input: TransferSystemInput) =>
     yield* Effect.addFinalizer(() => Scope.close(scope, Exit.void));
     const context = yield* Layer.buildWithMemoMap(makeTransferSystemLayer(input), memoMap, scope);
     return {
+      config: Context.get(context, ServerConfig),
       engine: Context.get(context, OrchestrationEngineService),
+      projectionPipeline: Context.get(context, OrchestrationProjectionPipeline),
       snapshotQuery: Context.get(context, ProjectionSnapshotQuery),
+      sql: Context.get(context, SqlClient.SqlClient),
       transfer: Context.get(context, ThreadTransfer),
       providerRuntime: Context.get(context, ProviderSessionRuntimeRepository),
     };
@@ -694,6 +709,370 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
   });
 
   describe("round trip", () => {
+    it.effect("moves native and legacy attachment bytes into the target durable store", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* makeScopedTempDirectory("t3-thread-move-attachments-");
+        const sourceWorkspace = joinPath(root, "source-workspace");
+        const targetWorkspace = joinPath(root, "target-workspace");
+        const historicalRoot = joinPath(root, "historical-tmp");
+        for (const directory of [sourceWorkspace, targetWorkspace, historicalRoot]) {
+          yield* makeDirectory(directory);
+        }
+        const threadId = ThreadId.make("aaaa1111-2222-4333-8444-555566667777");
+        const sourceProjectId = ProjectId.make("project-attachment-source");
+        const targetProjectId = ProjectId.make("project-attachment-target");
+        const nativeId = `${threadId}-00000000-0000-4000-8000-000000000001-png`;
+        const legacyId = `${threadId}-00000000-0000-4000-8000-000000000002-bin`;
+        const missingId = `${threadId}-00000000-0000-4000-8000-000000000003-txt`;
+        let reportOversizedNativeStat = false;
+        let readOversizedNative = false;
+        const sourceFileSystem = FileSystem.FileSystem.of({
+          ...fs,
+          stat: (filePath) =>
+            fs.stat(filePath).pipe(
+              Effect.map((info) =>
+                reportOversizedNativeStat && String(filePath).endsWith(`${nativeId}.png`)
+                  ? {
+                      ...info,
+                      size: FileSystem.Size(50 * 1024 * 1024 + 1),
+                    }
+                  : info,
+              ),
+            ),
+          readFile: (filePath) => {
+            if (reportOversizedNativeStat && String(filePath).endsWith(`${nativeId}.png`)) {
+              readOversizedNative = true;
+            }
+            return fs.readFile(filePath);
+          },
+        });
+        const source = yield* buildTransferSystem({
+          prefix: "t3-thread-move-attachments-source-",
+          worktreesRoot: joinPath(root, "source-worktrees"),
+          fileSystem: sourceFileSystem,
+        });
+        const target = yield* buildTransferSystem({
+          prefix: "t3-thread-move-attachments-target-",
+          worktreesRoot: joinPath(root, "target-worktrees"),
+        });
+        const nativeBytes = Uint8Array.from([0, 255, 1, 128, 42]);
+        const legacyBytes = Uint8Array.from([222, 173, 0, 190, 239]);
+        const sourceNativePath = joinPath(source.config.attachmentsDir, `${nativeId}.png`);
+        const historicalLegacyPath = joinPath(historicalRoot, "legacy.bin");
+        yield* makeDirectory(source.config.attachmentsDir);
+        yield* fs.writeFile(sourceNativePath, nativeBytes);
+        yield* fs.writeFile(historicalLegacyPath, legacyBytes);
+
+        for (const [system, projectId, workspaceRoot] of [
+          [source, sourceProjectId, sourceWorkspace],
+          [target, targetProjectId, targetWorkspace],
+        ] as const) {
+          yield* system.engine.dispatch({
+            type: "project.create",
+            commandId: CommandId.make(`cmd-${projectId}`),
+            projectId,
+            title: String(projectId),
+            workspaceRoot,
+            createdAt: now(),
+          });
+        }
+        const portable: PortableThread = {
+          id: threadId,
+          title: "Attachments",
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5-codex" },
+          runtimeMode: "full-access",
+          interactionMode: "default",
+          branch: null,
+          goal: null,
+          createdAt: now(),
+          updatedAt: now(),
+          messages: [
+            {
+              id: MessageId.make("message-attachments"),
+              role: "user",
+              text: "binary files",
+              attachments: [
+                {
+                  type: "image",
+                  id: nativeId,
+                  name: "pixels.png",
+                  mimeType: "image/png",
+                  sizeBytes: nativeBytes.byteLength,
+                },
+              ],
+              fileAttachments: [
+                {
+                  type: "file",
+                  id: legacyId,
+                  name: "legacy.bin",
+                  mimeType: "application/octet-stream",
+                  sizeBytes: legacyBytes.byteLength,
+                  path: historicalLegacyPath,
+                },
+                {
+                  type: "file",
+                  id: missingId,
+                  name: "missing.txt",
+                  mimeType: "text/plain",
+                  sizeBytes: 7,
+                  path: joinPath(historicalRoot, "missing.txt"),
+                },
+              ],
+              turnId: null,
+              streaming: false,
+              createdAt: now(),
+              updatedAt: now(),
+            },
+          ],
+          proposedPlans: [],
+          activities: [],
+          checkpoints: [],
+        };
+        yield* source.engine.dispatch({
+          type: "thread.import",
+          commandId: CommandId.make("cmd-attachment-source-thread"),
+          threadId,
+          projectId: sourceProjectId,
+          thread: portable,
+          branch: null,
+          worktreePath: null,
+          createdAt: now(),
+        });
+
+        const exported = yield* source.transfer.exportThread({ threadId });
+        expect(exported.bundle.version).toBe(2);
+        if (exported.bundle.version !== 2) return;
+        expect(exported.bundle.attachments).toHaveLength(3);
+        expect(exported.bundle.attachments.find((entry) => entry.id === missingId)).toEqual({
+          id: missingId,
+          contentBase64: null,
+        });
+        expect(exported.bundle.warnings.some((warning) => warning.includes(missingId))).toBe(true);
+
+        const v1Target = yield* buildTransferSystem({
+          prefix: "t3-thread-move-attachments-v1-target-",
+          worktreesRoot: joinPath(root, "v1-target-worktrees"),
+        });
+        const v1ProjectId = ProjectId.make("project-attachment-v1-target");
+        yield* v1Target.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-attachment-v1-target"),
+          projectId: v1ProjectId,
+          title: "V1 target",
+          workspaceRoot: joinPath(root, "v1-target-workspace"),
+          createdAt: now(),
+        });
+        const { attachments: _attachments, ...v2WithoutAttachments } = exported.bundle;
+        const v1Bundle = { ...v2WithoutAttachments, version: 1 as const };
+        yield* v1Target.transfer.importThread({ projectId: v1ProjectId, bundle: v1Bundle });
+        const v1Moved = yield* v1Target.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(v1Moved?.messages[0]?.fileAttachments?.[0]?.path).toBe(historicalLegacyPath);
+
+        yield* target.transfer.importThread({
+          projectId: targetProjectId,
+          bundle: exported.bundle,
+        });
+        const targetNativePath = joinPath(target.config.attachmentsDir, `${nativeId}.png`);
+        const targetLegacyPath = joinPath(target.config.attachmentsDir, `${legacyId}.bin`);
+        const targetMissingPath = joinPath(target.config.attachmentsDir, `${missingId}.txt`);
+        expect(Array.from(yield* fs.readFile(targetNativePath))).toEqual(Array.from(nativeBytes));
+        expect(Array.from(yield* fs.readFile(targetLegacyPath))).toEqual(Array.from(legacyBytes));
+        expect(yield* fs.exists(targetMissingPath)).toBe(false);
+
+        const moved = yield* target.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(moved?.messages[0]?.fileAttachments?.map((attachment) => attachment.path)).toEqual([
+          targetLegacyPath,
+          targetMissingPath,
+        ]);
+        expect(moved?.messages[0]?.fileAttachments?.[0]?.path).not.toBe(historicalLegacyPath);
+
+        // Rebuild the message projection from the imported events, as on restart.
+        yield* target.sql`DELETE FROM projection_thread_messages WHERE thread_id = ${threadId}`;
+        yield* target.sql`UPDATE projection_state SET last_applied_sequence = 0
+          WHERE projector = 'projection.thread-messages'`;
+        yield* target.projectionPipeline.bootstrap;
+        const replayed = yield* target.snapshotQuery
+          .getThreadDetailById(threadId)
+          .pipe(Effect.map(Option.getOrUndefined));
+        expect(replayed?.messages[0]?.fileAttachments?.[0]?.path).toBe(targetLegacyPath);
+        expect(Array.from(yield* fs.readFile(targetLegacyPath))).toEqual(Array.from(legacyBytes));
+
+        reportOversizedNativeStat = true;
+        const oversized = yield* Effect.exit(source.transfer.exportThread({ threadId }));
+        expect(Exit.isFailure(oversized)).toBe(true);
+        expect(readOversizedNative).toBe(false);
+      }).pipe(Effect.scoped),
+    );
+
+    it.effect("owns exclusive imports and removes partial or rolled-back attachment writes", () =>
+      Effect.gen(function* () {
+        const fs = yield* FileSystem.FileSystem;
+        const root = yield* makeScopedTempDirectory("t3-thread-move-attachment-rollback-");
+        const targetWorkspace = joinPath(root, "target-workspace");
+        const projectId = ProjectId.make("project-attachment-rollback");
+        const threadId = ThreadId.make("bbbb1111-2222-4333-8444-555566667777");
+        const attachmentId = `${threadId}-00000000-0000-4000-8000-000000000001-bin`;
+        let createPostPrecheckCollision = false;
+        let failAfterPartialWrite = false;
+        const missingPath = joinPath(root, "force-write-failure");
+        const faultingFileSystem = FileSystem.FileSystem.of({
+          ...fs,
+          open: (filePath, options) =>
+            Effect.gen(function* () {
+              const isAttachment = String(filePath).endsWith(`${attachmentId}.bin`);
+              if (isAttachment && createPostPrecheckCollision) {
+                createPostPrecheckCollision = false;
+                yield* fs.writeFileString(filePath, "foreign-race-winner");
+              }
+              const file = yield* fs.open(filePath, options);
+              if (!isAttachment || !failAfterPartialWrite) return file;
+              return new Proxy(file, {
+                get(target, key, receiver) {
+                  if (key === "writeAll") {
+                    return (bytes: Uint8Array) =>
+                      target
+                        .writeAll(bytes.subarray(0, 1))
+                        .pipe(Effect.andThen(fs.readFile(missingPath)), Effect.asVoid);
+                  }
+                  return Reflect.get(target, key, receiver);
+                },
+              });
+            }),
+        });
+        yield* makeDirectory(targetWorkspace);
+        const target = yield* buildTransferSystem({
+          prefix: "t3-thread-move-attachment-rollback-target-",
+          worktreesRoot: joinPath(root, "target-worktrees"),
+          fileSystem: faultingFileSystem,
+        });
+        const targetPath = joinPath(target.config.attachmentsDir, `${attachmentId}.bin`);
+        yield* target.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cmd-attachment-rollback-project"),
+          projectId,
+          title: "Rollback target",
+          workspaceRoot: targetWorkspace,
+          createdAt: now(),
+        });
+        yield* target.sql`CREATE TRIGGER fail_imported_attachment_message
+          BEFORE INSERT ON projection_thread_messages
+          BEGIN SELECT RAISE(ABORT, 'forced attachment import failure'); END`;
+        const bundle = {
+          version: 2 as const,
+          exportedAt: now(),
+          sourceProjectId: ProjectId.make("source-project"),
+          sourceWorkspaceRoot: "/source",
+          repositoryIdentity: null,
+          thread: {
+            id: threadId,
+            title: "Rollback attachment import",
+            modelSelection: {
+              instanceId: ProviderInstanceId.make("codex"),
+              model: "gpt-5-codex",
+            },
+            runtimeMode: "full-access" as const,
+            interactionMode: "default" as const,
+            branch: null,
+            goal: null,
+            createdAt: now(),
+            updatedAt: now(),
+            messages: [
+              {
+                id: MessageId.make("message-rollback-attachment"),
+                role: "user" as const,
+                text: "rollback",
+                attachments: [
+                  {
+                    type: "file" as const,
+                    id: attachmentId,
+                    name: "rollback.bin",
+                    mimeType: "application/octet-stream",
+                    sizeBytes: 4,
+                  },
+                ],
+                turnId: null,
+                streaming: false,
+                createdAt: now(),
+                updatedAt: now(),
+              },
+            ],
+            proposedPlans: [],
+            activities: [],
+            checkpoints: [],
+          },
+          git: null,
+          providerSession: null,
+          warnings: [],
+          attachments: [{ id: attachmentId, contentBase64: "AP8B/g==" }],
+        };
+        const extra = yield* Effect.exit(
+          target.transfer.importThread({
+            projectId,
+            bundle: {
+              ...bundle,
+              attachments: [
+                ...bundle.attachments,
+                { id: "unreferenced-attachment", contentBase64: "AA==" },
+              ],
+            },
+          }),
+        );
+        expect(Exit.isFailure(extra)).toBe(true);
+        const duplicate = yield* Effect.exit(
+          target.transfer.importThread({
+            projectId,
+            bundle: {
+              ...bundle,
+              attachments: [...bundle.attachments, { id: attachmentId, contentBase64: "AQIDBA==" }],
+            },
+          }),
+        );
+        expect(Exit.isFailure(duplicate)).toBe(true);
+        const wrongSize = yield* Effect.exit(
+          target.transfer.importThread({
+            projectId,
+            bundle: {
+              ...bundle,
+              attachments: [{ id: attachmentId, contentBase64: "AA==" }],
+            },
+          }),
+        );
+        expect(Exit.isFailure(wrongSize)).toBe(true);
+
+        yield* makeDirectory(target.config.attachmentsDir);
+        yield* fs.writeFileString(targetPath, "unrelated");
+        const collision = yield* Effect.exit(target.transfer.importThread({ projectId, bundle }));
+        expect(Exit.isFailure(collision)).toBe(true);
+        expect(yield* fs.readFileString(targetPath)).toBe("unrelated");
+        yield* fs.remove(targetPath);
+
+        createPostPrecheckCollision = true;
+        const raced = yield* Effect.exit(target.transfer.importThread({ projectId, bundle }));
+        expect(Exit.isFailure(raced)).toBe(true);
+        expect(yield* fs.readFileString(targetPath)).toBe("foreign-race-winner");
+        yield* fs.remove(targetPath);
+
+        failAfterPartialWrite = true;
+        const partial = yield* Effect.exit(target.transfer.importThread({ projectId, bundle }));
+        expect(Exit.isFailure(partial)).toBe(true);
+        expect(yield* fs.exists(targetPath)).toBe(false);
+        failAfterPartialWrite = false;
+
+        const imported = yield* Effect.exit(target.transfer.importThread({ projectId, bundle }));
+        expect(Exit.isFailure(imported)).toBe(true);
+        expect(yield* fs.exists(targetPath)).toBe(false);
+        expect(yield* fs.exists(`${targetPath}.part`)).toBe(false);
+        expect(
+          yield* target.snapshotQuery.getThreadDetailById(threadId).pipe(Effect.map(Option.isNone)),
+        ).toBe(true);
+      }).pipe(Effect.scoped),
+    );
+
     it.effect("clears a non-Claude resume cursor so transferred history remains pending", () =>
       Effect.gen(function* () {
         const root = yield* makeScopedTempDirectory("t3-thread-move-context-fallback-");
