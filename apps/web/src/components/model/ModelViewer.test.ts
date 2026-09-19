@@ -39,6 +39,7 @@ it("hands validated STL bytes to the local desktop bridge without exposing its U
   const fetchModel = vi.fn(async () => new Response(bytes));
 
   expect(canOpenModelInOrcaSlicer("part.stl")).toBe(true);
+  expect(canOpenModelInOrcaSlicer("part.3mf")).toBe(true);
   expect(canOpenModelInOrcaSlicer("part.glb")).toBe(false);
   await openModelInOrcaSlicer({
     url: "https://remote.example/signed-secret-model-url",
