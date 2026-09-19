@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ffbf6834e8329e74cd4647a17660a5fa3244c5c6",
-  "head": "d4e4bc109fd55a51945c91b5aba98f0059839a3a",
+  "prev": "d8900ea528138df5fd369fc5f83a28fa71f043ea",
+  "head": "25a16fa88235822b66037fb7ce6ef49abe0f6a89",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -33,10 +33,10 @@
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh",
     "fork-codex-goal-visibility",
-    "fork-inline-3d-objects"
+    "fork-inline-3d-objects",
+    "fork-orcaslicer-handoff"
   ],
   "unapplied": [
-    "fork-orcaslicer-handoff",
     "fork-3mf-preview",
     "fork-step-preview"
   ],
@@ -94,7 +94,7 @@
       "oid": "dfa502c6e545d0d28abbb24c56ab7618f5d6c7ac"
     },
     "fork-orcaslicer-handoff": {
-      "oid": "107d22fd6a11c307562add1981fc275aa5055177"
+      "oid": "25a16fa88235822b66037fb7ce6ef49abe0f6a89"
     },
     "fork-pr-dismissal": {
       "oid": "8f2fa854e1a4c8af50debe5e48396c9c3ff88c42"
