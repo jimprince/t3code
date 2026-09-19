@@ -1,6 +1,6 @@
 Bottom: d01fb21c2e8b71c6c721af6b4633894769a9cb6f
-Top:    ffd9e3fb23464904b2040f256cebeb53d4d66675
-Author: brad <bradprin@live.com>
-Date:   2026-09-19 14:48:24 -0600
+Top:    fc47f4022775d6d448ff3b26754cad5de72b0f01
+Author: User <user@example.com>
+Date:   2026-09-19 14:53:30 -0600
 
 feat(web): preview GLB and STL models inline
