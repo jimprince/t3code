@@ -1017,3 +1017,13 @@ retire_when = "Upstream provides equivalent secure, demand-rendered inline GLB a
 depends_on = ["fork-attachment-compatibility", "fork-remote-file-downloads"]
 roles = []
 note = "Shared model asset wrappers keep signed-URL, refresh, and download handling out of the markdown, timeline, and file-panel integration points. Reuses modern durable attachments and exact signed workspace-file assets. Model previews are limited to 50 MiB, 2 million triangles, 64 megapixels of embedded PNG/JPEG textures, two visible WebGL contexts, and no external resources, compression decoders, scripts, HTML, or animation playback. The lockfile delta is intentionally left for lockfile-owner to absorb."
+
+[[patch]]
+name = "fork-orcaslicer-handoff"
+subject = "feat(desktop): open model previews in OrcaSlicer"
+class = "product"
+purpose = "Hand validated STL preview bytes from local or remote environments to OrcaSlicer on the macOS client without exposing signed asset URLs or initiating slicing or printing."
+retire_when = "Upstream provides an equivalent secure, client-local, user-initiated OrcaSlicer handoff for STL previews."
+depends_on = ["fork-inline-3d-objects"]
+roles = []
+note = "The desktop stages private temporary STL files and invokes the named macOS application with fixed argument boundaries. GLB and non-desktop surfaces retain their existing download or local-open behavior."
