@@ -491,6 +491,11 @@ jobs:
           cache: true
           run-install: false
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
       - name: Install dependencies
         shell: bash
         run: |
@@ -503,12 +508,31 @@ jobs:
       - name: Align package versions to release version
         run: node scripts/update-release-package-versions.ts "${{ needs.preflight.outputs.version }}"
 
+      - name: Build web and server
+        run: vp run --filter t3 build
+
+      - name: Build CLI single-executable
+        env:
+          # Match upstream's Vite+ runtime selection and SEA_NODE_VERSION.
+          VP_NODE_VERSION: "26.8.2"
+        run: node apps/server/scripts/cli.ts build-exe --verbose
+
+      - name: Build resource monitor
+        run: |
+          cargo build --locked --release \
+            --manifest-path native/resource-monitor/Cargo.toml \
+            --target x86_64-unknown-linux-gnu
+          mkdir -p "$RUNNER_TEMP/headless-resource-monitor/linux-x64"
+          cp native/resource-monitor/target/x86_64-unknown-linux-gnu/release/t3-resource-monitor \
+            "$RUNNER_TEMP/headless-resource-monitor/linux-x64/t3-resource-monitor"
+
       - name: Build headless artifact
         run: |
           vp run dist:headless:artifact \
             --platform linux \
             --arch x64 \
-            --build-version "${{ needs.preflight.outputs.version }}"
+            --build-version "${{ needs.preflight.outputs.version }}" \
+            --resource-monitor-dir "$RUNNER_TEMP/headless-resource-monitor"
 
       - name: Smoke test headless artifact
         run: |

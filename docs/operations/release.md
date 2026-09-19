@@ -405,15 +405,21 @@ repository self-hosted runner list. GitHub documents the required fine-grained
 token permission for that API as repository `Administration` read access. The
 workflow also tries the existing `GH_PAT` secret as a compatibility fallback.
 
-Nightly preflight and headless Linux installs skip dependency lifecycle scripts
-so native dependency hangs do not block macOS updater releases.
+Nightly preflight skips dependency lifecycle scripts. The headless Linux build
+still performs the upstream CLI archive's isolated production install so its
+native runtime externals are present in the published artifact.
 
 The headless Linux x64 tarball is required for both stable and nightly
-releases. It is built in a separate Ubuntu job, includes `bin/t3`,
-`apps/server/dist/bin.mjs`, `apps/server/dist/client/**`, and production
-`node_modules`, and is smoke-tested after a clean unpack before publication.
-The target VM must have Node.js 22.16 or newer; the current release workflow
-uses the repo `package.json` Node version.
+releases. A separate Ubuntu job builds the upstream self-contained CLI archive,
+including its SEA executable, web client, resource monitor, and native runtime
+externals. A small adapter preserves the published
+`t3-headless-<version>-linux-x64.tar.gz` name and adds the installed `bin/t3`
+launcher; the executable and its sibling resources otherwise retain the
+upstream layout. Release smoke runs the launcher with an empty `PATH`, starts
+the unpacked server, and checks frozen historical data before publication. The
+target VM does not need Node.js, npm, pnpm, or a compiler. Minimal Debian
+installations need the `libatomic1` runtime library (`sudo apt-get install
+libatomic1`).
 
 ## Headless Server Install / Update
 
@@ -422,7 +428,7 @@ Linux daemon: an external updater stages release tarballs into versioned
 directories, flips a `current` symlink only after validation, then restarts
 `t3code.service`.
 
-This is safe while the app is running. The running Node process keeps using the
+This is safe while the app is running. The running server process keeps using the
 files it already opened; the updater never overwrites that active release
 directory. Existing browser clients may disconnect during the final service
 restart, then reconnect to the new version. If the new release fails its health
@@ -480,10 +486,12 @@ The canonical updater script is `scripts/headless-auto-upgrade.sh`. Install it
 on the VM as `~/.local/bin/t3code-headless-upgrade` and run it from a systemd
 timer. By default it tracks the latest stable GitHub release from
 `jimprince/t3code`; set `T3CODE_HEADLESS_CHANNEL=nightly` only for an explicit
-nightly host. The updater preserves an explicit `PATH` and falls back to
-`~/.local/node/bin` when run from cron or systemd without a login shell. It
-fails before downloading if Node cannot be found. Verify this path on Linux
-with `python3 scripts/headless-auto-upgrade.test.py`.
+nightly host. New archives are self-contained. During the first upgrade from
+the old Node-based archive, the updater keeps `~/.local/node/bin` on `PATH` and
+verifies that the current launcher still runs before promotion, because that
+one release may be needed for rollback. Later upgrades have no host-Node
+requirement. Verify upgrade, no-op, rollback, and the compatibility transition
+on Linux with `python3 scripts/headless-auto-upgrade.test.py`.
 
 Automatic checks defer while the live database reports active or pending turns,
 session transitions, checkpoints, approvals or input requests, or while the local
