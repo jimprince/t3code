@@ -29,14 +29,14 @@ The historical `fileAttachments` field is a separate path-bearing compatibility 
 
 ## Format and renderer decision
 
-| Format  | V1 decision                                                                                  | Reason                                                                                                                            |
-| ------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| GLB     | Render directly with `GLTFLoader`; embedded resources only.                                  | One-file transport and no server conversion.                                                                                      |
-| STL     | Render binary and a strict, realistic ASCII subset with `STLLoader`; use a neutral material. | Common printable geometry and no companion resources.                                                                             |
-| `.gltf` | Deferred.                                                                                    | Companion buffers/textures require a multi-file authorization model; export as GLB instead.                                       |
-| OBJ     | Deferred.                                                                                    | Useful loader exists, but MTL, texture, and multi-file resolution expand the capability surface.                                  |
-| 3MF     | Recommended next format.                                                                     | Important to OrcaSlicer workflows, but ZIP limits, units, assemblies, colors, and extension fidelity require separate validation. |
-| STEP    | Deferred to optional conversion.                                                             | Browser display requires CAD tessellation in WASM or a service.                                                                   |
+| Format  | V1 decision                                                                                  | Reason                                                                                                                               |
+| ------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| GLB     | Render directly with `GLTFLoader`; embedded resources only.                                  | One-file transport and no server conversion.                                                                                         |
+| STL     | Render binary and a strict, realistic ASCII subset with `STLLoader`; use a neutral material. | Common printable geometry and no companion resources.                                                                                |
+| `.gltf` | Deferred.                                                                                    | Companion buffers/textures require a multi-file authorization model; export as GLB instead.                                          |
+| OBJ     | Deferred.                                                                                    | Useful loader exists, but MTL, texture, and multi-file resolution expand the capability surface.                                     |
+| 3MF     | Render directly with `ThreeMFLoader` after bounded package validation.                       | Preserves core assemblies and basic material/color groups without server conversion; applies the declared model unit in millimeters. |
+| STEP    | Deferred to optional conversion.                                                             | Browser display requires CAD tessellation in WASM or a service.                                                                      |
 
 Official loader references: [GLTFLoader](https://threejs.org/docs/pages/GLTFLoader.html), [STLLoader](https://threejs.org/docs/pages/STLLoader.html), [OBJLoader](https://threejs.org/docs/pages/OBJLoader.html), and [ThreeMFLoader](https://threejs.org/docs/pages/ThreeMFLoader.html).
 
@@ -119,8 +119,7 @@ Independent headless Chromium verification rendered a GLB triangle and both bina
 
 ## Follow-ups
 
-1. `fork-3mf-preview`, with bounded ZIP parsing and explicit unit/assembly/color/extension policy.
-2. Improved native external handoff once platform behavior is consistent across iOS and Android.
-3. Explicit provider artifact registration so generated files can appear without relying on a standalone Markdown link.
-4. Optional STEP tessellation through a separately reviewed CAD/WASM or conversion-service boundary.
-5. Revisit upstream retirement if the draft/closed Android work becomes a complete cross-surface implementation.
+1. Improved native external handoff once platform behavior is consistent across iOS and Android.
+2. Explicit provider artifact registration so generated files can appear without relying on a standalone Markdown link.
+3. Optional STEP tessellation through a separately reviewed CAD/WASM or conversion-service boundary.
+4. Revisit upstream retirement if the draft/closed Android work becomes a complete cross-surface implementation.
