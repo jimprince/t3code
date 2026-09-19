@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ceb1ca433d1c1c480d896b7b33afbbbef7b7a449",
-  "head": "6766b84560b423cb0ee864e7bd219d7443276d91",
+  "prev": "9aab746211657b10bf0fe5c70946f6bd694ff561",
+  "head": "bc80b2143657f21104139c00d6fb5a60ca3fa8fd",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -23,15 +23,15 @@
     "fork-unsupported-pr-hosts",
     "fork-worktree-cleanup",
     "fork-gitea-connections",
-    "fork-gitea-pr-actions"
-  ],
-  "unapplied": [
+    "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
     "fork-headless-delivery",
     "fork-desktop-delivery",
     "fork-mobile-delivery",
     "fork-release-publication",
-    "fork-maintenance-automation",
+    "fork-maintenance-automation"
+  ],
+  "unapplied": [
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh",
     "fork-codex-goal-visibility",
@@ -64,7 +64,7 @@
       "oid": "9df2edd6d6579d906b29c8f5e0ffd43b98e49f9a"
     },
     "fork-desktop-delivery": {
-      "oid": "74ab3e1e8b47a6e2ba130e6392751552ccc89851"
+      "oid": "8664c1aad3055aef37ac6a9e6e8aa5cfb631fd09"
     },
     "fork-fresh-remote-worktrees": {
       "oid": "e749e63c5dcab9f70432a8e249fa30697e6d4ad9"
@@ -82,16 +82,16 @@
       "oid": "2d1149f4e388968c4af795249c509a540bfe016f"
     },
     "fork-headless-delivery": {
-      "oid": "fd9fafa1cc205495f35d5f44ae5fe27aabaea912"
+      "oid": "4d547714c29498a0a9d5ba200162a15ad9f53eb6"
     },
     "fork-inline-3d-objects": {
       "oid": "318bde4a6490e9a092d4f5575ff7d095376e97f4"
     },
     "fork-maintenance-automation": {
-      "oid": "ef369df68b511707ca60451a2cc02955e33889ca"
+      "oid": "bc80b2143657f21104139c00d6fb5a60ca3fa8fd"
     },
     "fork-mobile-delivery": {
-      "oid": "661ae7245e0315e5c3c05b6e6bbf9bec89f918b2"
+      "oid": "be146a81a81c0ff4571e33bbf1e4c245555ed270"
     },
     "fork-orcaslicer-handoff": {
       "oid": "64156ee1691c1831df659e0996326dfc751d2fbc"
@@ -100,7 +100,7 @@
       "oid": "8f2fa854e1a4c8af50debe5e48396c9c3ff88c42"
     },
     "fork-pr-project-exclusions": {
-      "oid": "2bb289fb4410b6c7e9b022eca02377d4a8b2f014"
+      "oid": "d802cb36c000b4b7ee32acdc7d4face659015db1"
     },
     "fork-private-connection-defaults": {
       "oid": "203a4cb6358836d1f66af7273ef2e1e5a03924cd"
@@ -112,7 +112,7 @@
       "oid": "0c6d64709adee61150a27496cbd10c3d81a7b7e7"
     },
     "fork-release-publication": {
-      "oid": "c513ee2bc6693222b7e61b1fb958a33dd00a689a"
+      "oid": "bbae821c8e50d19dec15ed62b9f72d5bd4cc5800"
     },
     "fork-remote-file-downloads": {
       "oid": "e3d556a4e845da2720ba514aad05d102ad832ec5"
