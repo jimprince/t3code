@@ -1128,6 +1128,106 @@ describe("ProviderCommandReactor", () => {
     expect(thread?.session?.runtimeMode).toBe("approval-required");
   });
 
+  it("sends legacy file metadata through native provider attachments and imports old tmp bytes", async () => {
+    const harness = await createHarness();
+    const attachmentsDir = NodePath.join(harness.stateDir, "attachments");
+    const id = "thread-1-00000000-0000-4000-8000-0000000000ab-txt";
+    const oldTmpDir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-old-file-"));
+    const oldTmpPath = NodePath.join(oldTmpDir, "notes.txt");
+    NodeFS.writeFileSync(oldTmpPath, Buffer.from([0x00, 0xff, 0x41]));
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-legacy-file"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-legacy-file"),
+          role: "user",
+          text: "inspect this file",
+          attachments: [],
+          fileAttachments: [
+            {
+              type: "file",
+              id,
+              name: "notes.txt",
+              mimeType: "text/plain",
+              sizeBytes: 3,
+              path: oldTmpPath,
+            },
+          ],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+    await harness.drain();
+
+    expect(harness.sendTurn).toHaveBeenCalledWith({
+      threadId: ThreadId.make("thread-1"),
+      input: "inspect this file",
+      attachments: [
+        {
+          type: "file",
+          id,
+          name: "notes.txt",
+          mimeType: "text/plain",
+          sizeBytes: 3,
+        },
+      ],
+      interactionMode: "default",
+    });
+    expect(NodeFS.readFileSync(NodePath.join(attachmentsDir, `${id}.txt`))).toEqual(
+      Buffer.from([0x00, 0xff, 0x41]),
+    );
+    const message = (await harness.readModel()).threads[0]?.messages.find(
+      (entry) => entry.id === asMessageId("user-message-legacy-file"),
+    );
+    expect(message?.attachments).toEqual([]);
+    expect(message?.fileAttachments).toEqual([expect.objectContaining({ id, path: oldTmpPath })]);
+    NodeFS.rmSync(oldTmpDir, { recursive: true, force: true });
+  });
+
+  it("reuses a durable legacy file after restart when its historical tmp path is gone", async () => {
+    const harness = await createHarness();
+    const id = "thread-1-00000000-0000-4000-8000-0000000000ac-txt";
+    NodeFS.writeFileSync(NodePath.join(harness.stateDir, "attachments", `${id}.txt`), "kept");
+
+    await Effect.runPromise(
+      harness.engine.dispatch({
+        type: "thread.turn.start",
+        commandId: CommandId.make("cmd-turn-start-durable-legacy-file"),
+        threadId: ThreadId.make("thread-1"),
+        message: {
+          messageId: asMessageId("user-message-durable-legacy-file"),
+          role: "user",
+          text: "inspect the retained file",
+          attachments: [],
+          fileAttachments: [
+            {
+              type: "file",
+              id,
+              name: "notes.txt",
+              mimeType: "text/plain",
+              sizeBytes: 4,
+              path: NodePath.join(NodeOS.tmpdir(), "t3-file-attachments-gone", "notes.txt"),
+            },
+          ],
+        },
+        interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+        runtimeMode: "approval-required",
+        createdAt: "2026-01-01T00:00:00.000Z",
+      }),
+    );
+    await waitFor(() => harness.sendTurn.mock.calls.length === 1);
+
+    expect(harness.sendTurn.mock.calls[0]?.[0].attachments).toEqual([
+      expect.objectContaining({ id, name: "notes.txt" }),
+    ]);
+  });
+
   effectIt.effect("projects inline context before sending the provider turn", () =>
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() => createHarness());

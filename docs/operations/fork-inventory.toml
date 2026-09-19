@@ -417,7 +417,7 @@ depends_on = [
   "fork-workspace-file-uploads",
 ]
 roles = []
-note = "The duplicate current-client base64 send and composer display are removed. Legacy server decoding, file retention and historical-message rendering remain deliberately for compatibility. The narrow turn-start query also selects and preserves legacy file handoffs."
+note = "Legacy uploads use native durable storage, retention and provider file input while keeping the parallel path-bearing field for old clients and historical messages. Available historical temporary objects materialize lazily into durable storage; no old metadata or migration IDs are removed. Partial upload/dispatch failures clean newly created files, and revert preserves referenced legacy objects. Current clients retain one upload and one display entry. The narrow turn-start query preserves legacy file handoffs."
 [[patch.decision]]
 id = "upstream-chat-file-attachment-name"
 date = "2026-08-28"

@@ -1558,7 +1558,7 @@ const NodeHttpServerTestWithWsDeflate = HttpServer.layerTestClient.pipe(
 );
 
 it.layer(NodeServices.layer)("server router seam", (it) => {
-  it.effect("normalizes chat file attachments into tmp paths during turn dispatch", () =>
+  it.effect("normalizes legacy chat file uploads into durable paths during turn dispatch", () =>
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const dispatchedCommands: Array<OrchestrationCommand> = [];
@@ -1622,10 +1622,7 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
       assertTrue(attachment.path.startsWith("/"));
       const persisted = yield* fs.readFile(attachment.path);
       assert.isTrue(Buffer.from(persisted).equals(Buffer.from(payload)));
-      // Best-effort cleanup of the tmp attachment dir this test created.
-      yield* fs
-        .remove(attachment.path.slice(0, attachment.path.lastIndexOf("/")), { recursive: true })
-        .pipe(Effect.ignore);
+      yield* fs.remove(attachment.path).pipe(Effect.ignore);
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 });
