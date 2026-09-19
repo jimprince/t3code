@@ -2,6 +2,8 @@ import {
   ContextMenuItemSchema,
   DesktopAppBrandingSchema,
   DesktopEnvironmentBootstrapSchema,
+  DesktopOpenModelInOrcaSlicerInputSchema,
+  DesktopOpenModelInOrcaSlicerResultSchema,
   DesktopThemeSchema,
   EDITORS,
   EditorId,
@@ -39,6 +41,7 @@ import * as MacPermissions from "../../permissions/MacPermissions.ts";
 import { safariPermissionCheck } from "../../preview/BrowserImport/SafariPermission.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
+import { nodeOrcaSlicerHandoffDependencies, openStlInOrcaSlicer } from "../../model/OrcaSlicer.ts";
 import {
   extractDistroFromUncPath,
   resolveWslPickFolderDefaultPath,
@@ -307,6 +310,18 @@ export const openExternal = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.window.openExternal")(function* (url) {
     const shell = yield* ElectronShell.ElectronShell;
     return yield* shell.openExternal(url);
+  }),
+});
+
+export const openModelInOrcaSlicer = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.OPEN_MODEL_IN_ORCASLICER_CHANNEL,
+  payload: DesktopOpenModelInOrcaSlicerInputSchema,
+  result: DesktopOpenModelInOrcaSlicerResultSchema,
+  handler: Effect.fn("desktop.ipc.window.openModelInOrcaSlicer")(function* (input) {
+    const environment = yield* DesktopEnvironment.DesktopEnvironment;
+    return yield* Effect.promise(() =>
+      openStlInOrcaSlicer(input, nodeOrcaSlicerHandoffDependencies(environment.platform)),
+    );
   }),
 });
 
