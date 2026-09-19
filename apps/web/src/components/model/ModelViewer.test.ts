@@ -3,10 +3,12 @@ import { expect, it, vi } from "vite-plus/test";
 
 import {
   allowEmbeddedModelUrl,
+  canOpenModelInOrcaSlicer,
   disposeModelObject,
   modelCanvasKey,
   modelViewportSize,
   refreshModelPreviewUrl,
+  openModelInOrcaSlicer,
 } from "./ModelViewer";
 
 it("disposes model geometry, materials, and textures", () => {
@@ -25,6 +27,62 @@ it("disposes model geometry, materials, and textures", () => {
   expect(texture.dispose).toHaveBeenCalledOnce();
   expect(close).toHaveBeenCalledOnce();
   expect(material.dispose).toHaveBeenCalledOnce();
+});
+
+it("hands validated STL bytes to the local desktop bridge without exposing its URL", async () => {
+  const handoff = vi.fn(async () => ({ opened: true }));
+  vi.stubGlobal("window", {
+    desktopBridge: { getClientPlatform: () => "darwin", openModelInOrcaSlicer: handoff },
+  });
+  const bytes = new Uint8Array(84);
+  new DataView(bytes.buffer).setUint32(80, 0, true);
+  const fetchModel = vi.fn(async () => new Response(bytes));
+
+  expect(canOpenModelInOrcaSlicer("part.stl")).toBe(true);
+  expect(canOpenModelInOrcaSlicer("part.glb")).toBe(false);
+  await openModelInOrcaSlicer({
+    url: "https://remote.example/signed-secret-model-url",
+    name: "part.stl",
+    fetchModel,
+  });
+
+  expect(handoff).toHaveBeenCalledWith({ name: "part.stl", bytes });
+  expect(JSON.stringify(handoff.mock.calls)).not.toContain("signed-secret-model-url");
+});
+
+it("reuses already validated preview bytes without another signed URL request", async () => {
+  const handoff = vi.fn(async () => ({ opened: true }));
+  vi.stubGlobal("window", { desktopBridge: { openModelInOrcaSlicer: handoff } });
+  const bytes = new Uint8Array(84);
+  new DataView(bytes.buffer).setUint32(80, 0, true);
+  const fetchModel = vi.fn();
+
+  await openModelInOrcaSlicer({
+    url: "https://remote.example/expired",
+    name: "part.stl",
+    bytes,
+    fetchModel,
+  });
+
+  expect(fetchModel).not.toHaveBeenCalled();
+  expect(handoff).toHaveBeenCalledWith({ name: "part.stl", bytes });
+});
+
+it("surfaces the desktop's missing-OrcaSlicer error", async () => {
+  vi.stubGlobal("window", {
+    desktopBridge: {
+      openModelInOrcaSlicer: vi.fn(async () => ({
+        opened: false,
+        error: "OrcaSlicer could not be opened. Install OrcaSlicer in Applications and try again.",
+      })),
+    },
+  });
+  const bytes = new Uint8Array(84);
+  new DataView(bytes.buffer).setUint32(80, 0, true);
+
+  await expect(openModelInOrcaSlicer({ url: "unused", name: "part.stl", bytes })).rejects.toThrow(
+    "Install OrcaSlicer in Applications",
+  );
 });
 
 it("allows only embedded PNG and JPEG loader URLs", () => {
