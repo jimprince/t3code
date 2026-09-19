@@ -1,6 +1,6 @@
-Bottom: 4da8655c2f1169b628bb2e35ae231fc772f76761
-Top:    99a5e748866d672c18f8b5376e1e835867f456ab
+Bottom: 6db69faf5ae1b87861024fb54c9f0b3f9b95d810
+Top:    6c893c75448165368c76cfc9b4aa92429f832d08
 Author: brad <bradprin@live.com>
-Date:   2026-09-19 03:59:33 +0000
+Date:   2026-09-19 04:00:21 +0000
 
 feat(web): preview GLB and STL models inline
