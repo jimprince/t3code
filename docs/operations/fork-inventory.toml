@@ -1007,3 +1007,13 @@ retire_when = "Upstream provides equivalent secure, demand-rendered 3MF previews
 depends_on = ["fork-inline-3d-objects", "fork-orcaslicer-handoff"]
 roles = []
 note = "Performs a central-directory-only ZIP preflight before inflation: at most 256 entries, 64 MiB per entry, 128 MiB total uncompressed, model/relationship/texture parts only, no nested archives or external relationships. Uses ThreeMFLoader lazily, retains the existing 50 MiB source, 2 million rendered-triangle, 64 megapixel texture, two-context, and demand-render limits, and normalizes the declared 3MF unit to millimeters before framing."
+
+[[patch]]
+name = "fork-step-preview"
+subject = "feat(models): preview STEP files inline"
+class = "product"
+purpose = "Preview STEP and STP files across the existing model surfaces by tessellating locally in a lazy OpenCascade browser worker, and hand validated source bytes to OrcaSlicer on macOS."
+retire_when = "Upstream provides equivalent bounded, demand-rendered STEP previews and client-local OrcaSlicer handoff across the same surfaces."
+depends_on = ["fork-inline-3d-objects", "fork-orcaslicer-handoff", "fork-3mf-preview"]
+roles = []
+note = "Selected occt-import-js 0.0.23 after the production build measured its WASM at 3,091,498 bytes gzip -9 and its worker at 21,109 bytes gzip, with tessellation at 1,828 ms for a 442 KiB assembly and 2,048 ms for a 2 MiB transfer form. It loads only in a disposable browser worker with a 20-second timeout, fixed millimeter output and deflection, finite/index validation, and the shared 50 MiB source and 2-million-triangle limits. No server conversion, cache, or broader asset grant is introduced."
