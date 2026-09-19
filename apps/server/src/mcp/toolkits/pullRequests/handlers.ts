@@ -89,14 +89,16 @@ const resolveTarget = Effect.fn("PullRequestsToolkit.resolveTarget")(function* (
     return yield* new PullRequestUrlInvalidError({});
   }
   const repository = input.repository.toLowerCase();
-  const url =
-    changeRequestUrlFor(
-      projectHost.kind,
-      host,
-      repository,
-      input.number,
-      project?.repositoryIdentity?.locator.remoteUrl,
-    ) ?? `https://${host}/${repository}/pull/${input.number}`;
+  const url = changeRequestUrlFor(
+    projectHost.kind,
+    host,
+    repository,
+    input.number,
+    project?.repositoryIdentity?.locator.remoteUrl,
+  );
+  if (url === null) {
+    return yield* new PullRequestUrlInvalidError({});
+  }
   return {
     ...normalizeThreadPullRequestKey({ host, repository, number: input.number, url }),
     url,

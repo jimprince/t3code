@@ -59,7 +59,7 @@ export class PullRequestUrlInvalidError extends Schema.TaggedError<PullRequestUr
   {},
 ) {
   override get message(): string {
-    return "Pass a recognised pull request URL, or repository and number for this thread's host.";
+    return "Pass a recognised pull request URL, or repository and number for a known provider on this thread's host.";
   }
 }
 

@@ -563,7 +563,7 @@ purpose = "Create and resolve Gitea pull requests, check out retained PR heads, 
 retire_when = "Upstream supports equivalent configured-instance Gitea create and checkout flows."
 depends_on = ["fork-gitea-connections"]
 roles = []
-note = "Reorganized 2026-09-06 from fork-gitea-pr-actions."
+note = "Reorganized 2026-09-06 from fork-gitea-pr-actions. Numeric linked-PR targets require a known provider on the thread project host; cross-host or unknown-provider targets require a canonical URL instead of inventing a GitHub route."
 [[patch.decision]]
 id = "upstream-forgejo-reference-parser"
 date = "2026-09-16"

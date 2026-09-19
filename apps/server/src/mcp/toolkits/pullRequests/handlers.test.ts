@@ -362,6 +362,28 @@ describe("pull request toolkit handlers", () => {
     }),
   );
 
+  it.effect("requires a canonical URL when its own project provider is unknown", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({
+        project: makeProject({
+          canonicalKey: "code.example/acme/widgets",
+          locator: {
+            source: "git-remote",
+            remoteName: "origin",
+            remoteUrl: "https://code.example/acme/widgets.git",
+          },
+          provider: "unknown",
+          displayName: "acme/widgets",
+        }),
+      });
+      const error = yield* harness
+        .call("link_pull_request", { repository: "acme/widgets", number: 75 })
+        .pipe(Effect.flip);
+      expect(error.message).toMatch(/URL/iu);
+      expect(yield* Ref.get(harness.commands)).toEqual([]);
+    }),
+  );
+
   it.effect("rejects a target that names neither a URL nor repository and number", () =>
     Effect.gen(function* () {
       const harness = yield* makeHarness();
