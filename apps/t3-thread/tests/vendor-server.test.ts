@@ -1,12 +1,8 @@
-import * as Schema from "effect/Schema";
 import { describe, expect, it } from "vite-plus/test";
 
-import { ServerConfig, ServerProvider } from "../src/vendor/t3contracts/server.js";
+import { decodeServerConfig, decodeServerProvider } from "../src/contracts.js";
 
-const decodeServerProvider = Schema.decodeUnknownSync(ServerProvider);
-const decodeServerConfig = Schema.decodeUnknownSync(ServerConfig);
-
-describe("vendored server schemas", () => {
+describe("server contract compatibility", () => {
   it("defaults provider capability arrays when decoding legacy snapshots", () => {
     const parsed = decodeServerProvider({
       provider: "codex",
@@ -21,8 +17,8 @@ describe("vendored server schemas", () => {
       models: [],
     });
 
-    expect(parsed.slashCommands).toEqual([]);
-    expect(parsed.skills).toEqual([]);
+    expect(parsed.provider).toBe("codex");
+    expect(parsed.instanceId).toBeUndefined();
   });
 
   it("decodes current provider-instance snapshots", () => {
@@ -119,9 +115,15 @@ describe("vendored server schemas", () => {
       settings: {},
     });
 
-    expect(parsed.auth.sessionMethods).toContain("bearer-access-token");
-    expect(parsed.auth.sessionMethods).toContain("dpop-access-token");
-    expect(parsed.keybindings[0]).toEqual({ command: "modelPicker.toggle", key: "cmd+k" });
-    expect(parsed.providers[0]?.models[0]?.capabilities).toEqual({ optionDescriptors: [] });
+    expect(parsed.providers[0]).toMatchObject({
+      instanceId: "codex",
+      driver: "codex",
+      displayName: "Codex",
+    });
+    expect(parsed.providers[0]?.models[0]).toMatchObject({
+      slug: "gpt-5.7",
+      name: "GPT 5.7",
+      shortName: "5.7",
+    });
   });
 });

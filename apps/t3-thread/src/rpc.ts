@@ -1,13 +1,13 @@
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
+import { ORCHESTRATION_WS_METHODS } from "@t3tools/contracts/orchestration";
 import { Effect, Exit, Layer, ManagedRuntime, Option, Scope, Stream } from "effect";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as Socket from "effect/unstable/socket/Socket";
 
-import { ORCHESTRATION_WS_METHODS } from "./vendor/t3contracts/orchestration.js";
-import { WS_METHODS, WsRpcGroup } from "./vendor/t3contracts/rpc.js";
+import { WS_SERVER_GET_CONFIG_METHOD, WsRpcGroup } from "./contracts.js";
 
 const RPC_METHODS = {
-  serverGetConfig: WS_METHODS.serverGetConfig,
+  serverGetConfig: WS_SERVER_GET_CONFIG_METHOD,
   dispatchCommand: ORCHESTRATION_WS_METHODS.dispatchCommand,
   getTurnDiff: ORCHESTRATION_WS_METHODS.getTurnDiff,
   getFullThreadDiff: ORCHESTRATION_WS_METHODS.getFullThreadDiff,
