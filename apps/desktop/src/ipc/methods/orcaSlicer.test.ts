@@ -4,8 +4,8 @@ import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import { vi } from "vite-plus/test";
 
-const { openStlInOrcaSlicer } = vi.hoisted(() => ({
-  openStlInOrcaSlicer: vi.fn(async () => ({ opened: true as const })),
+const { nativeHandoff } = vi.hoisted(() => ({
+  nativeHandoff: vi.fn(async () => ({ opened: true as const })),
 }));
 
 vi.mock("electron", () => ({
@@ -15,11 +15,11 @@ vi.mock("electron", () => ({
 
 vi.mock("../../model/OrcaSlicer.ts", () => ({
   nodeOrcaSlicerHandoffDependencies: (platform: NodeJS.Platform) => ({ platform }),
-  openStlInOrcaSlicer,
+  openModelInOrcaSlicer: nativeHandoff,
 }));
 
 import * as DesktopEnvironment from "../../app/DesktopEnvironment.ts";
-import { openModelInOrcaSlicer } from "./window.ts";
+import { openModelInOrcaSlicer as ipcOpenModelInOrcaSlicer } from "./window.ts";
 
 const environmentLayer = Layer.mock(DesktopEnvironment.DesktopEnvironment)({
   platform: "darwin",
@@ -29,9 +29,9 @@ describe("openModelInOrcaSlicer IPC", () => {
   it.effect("decodes a bounded byte payload and routes it to the client platform handoff", () =>
     Effect.gen(function* () {
       const bytes = new Uint8Array([1, 2, 3]);
-      const result = yield* openModelInOrcaSlicer.handler({ name: "part.stl", bytes });
+      const result = yield* ipcOpenModelInOrcaSlicer.handler({ name: "part.stl", bytes });
       assert.deepEqual(result, { opened: true });
-      assert.deepEqual(openStlInOrcaSlicer.mock.calls, [
+      assert.deepEqual(nativeHandoff.mock.calls, [
         [{ name: "part.stl", bytes }, { platform: "darwin" }],
       ]);
     }).pipe(Effect.provide(environmentLayer)),
@@ -39,16 +39,16 @@ describe("openModelInOrcaSlicer IPC", () => {
 
   it.effect("rejects empty and malformed payloads before the native handoff", () =>
     Effect.gen(function* () {
-      openStlInOrcaSlicer.mockClear();
+      nativeHandoff.mockClear();
       const empty = yield* Effect.exit(
-        openModelInOrcaSlicer.handler({ name: "part.stl", bytes: new Uint8Array() }),
+        ipcOpenModelInOrcaSlicer.handler({ name: "part.stl", bytes: new Uint8Array() }),
       );
       const malformed = yield* Effect.exit(
-        openModelInOrcaSlicer.handler({ name: "../part.stl", bytes: "not bytes" }),
+        ipcOpenModelInOrcaSlicer.handler({ name: "../part.stl", bytes: "not bytes" }),
       );
       assert.isTrue(Exit.isFailure(empty));
       assert.isTrue(Exit.isFailure(malformed));
-      assert.equal(openStlInOrcaSlicer.mock.calls.length, 0);
+      assert.equal(nativeHandoff.mock.calls.length, 0);
     }).pipe(Effect.provide(environmentLayer)),
   );
 });
