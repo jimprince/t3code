@@ -2,17 +2,12 @@
 
 set -euo pipefail
 
-# Creates the release-preparation commit (version stamps + refreshed lockfile),
-# tags it, and reports the SHA that `main` must be pushed at.
+# Creates a version-only release-preparation commit, tags it, and reports the
+# unchanged source SHA that `main` must be pushed at.
 #
-# The prep commit is deliberately NOT on main. `release.yml` derives the version
-# from the tag name (line 153) and re-stamps at build time (lines 266, 440), so
-# main carries no generated release metadata. Keeping it off main removes one
-# replayed commit per sync from the rebase stack — historically 16 of them, each
-# conflicting on the four manifests plus pnpm-lock.yaml.
-#
-# The commit still exists and is still tagged, because release.yml installs with
-# --frozen-lockfile and needs a consistent lockfile at the tagged commit.
+# Keep generated versions off main and preserve its verified lockfile so the
+# tagged child can reuse exact-source CI. Dependency resolution belongs before
+# source verification, including after upstream replay, never during tagging.
 #
 # Required env:
 #   RELEASE_TAG          e.g. v0.0.29-nightly.20260725.860-fork.1
@@ -55,9 +50,6 @@ main_sha="$(git_cmd rev-parse HEAD)"
 version="${RELEASE_TAG#v}"
 
 if [[ "${SYNC_SKIP_INSTALL:-0}" != "1" ]]; then
-  # A freshly rebased upstream may change manifests before the fork stamp, so
-  # refresh the lockfile before the install that runs the stamping script.
-  vp install --lockfile-only --ignore-scripts
   vp install --frozen-lockfile --ignore-scripts
 fi
 
@@ -65,14 +57,14 @@ node "$REPO_ROOT/scripts/update-release-package-versions.ts" "$version"
 
 if [[ "${SYNC_SKIP_INSTALL:-0}" != "1" ]]; then
   vp fmt "${MANIFESTS[@]}"
-  vp install --lockfile-only --ignore-scripts
+  vp install --frozen-lockfile --ignore-scripts
 fi
 
-if git_cmd diff --quiet -- "${MANIFESTS[@]}" pnpm-lock.yaml; then
+if git_cmd diff --quiet -- "${MANIFESTS[@]}"; then
   echo "Package versions already match $version; tagging main head."
   prep_sha="$main_sha"
 else
-  git_cmd add -- "${MANIFESTS[@]}" pnpm-lock.yaml
+  git_cmd add -- "${MANIFESTS[@]}"
   # This plain commit is sanctioned: it lives off the stack (tag-only, never
   # pushed to main), so the stgit/adopt plain-commit guard must let it through.
   T3_ALLOW_PLAIN_COMMIT=1 git_cmd commit -m "chore(release): prepare $RELEASE_TAG"

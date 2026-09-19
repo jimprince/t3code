@@ -4,8 +4,9 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, it } from "vite-plus/test";
 import { createFixtureRepo, type FixtureRepo } from "./lib/git-fixture.ts";
+import { releaseCISource } from "./reuse-release-ci.ts";
 
 const repoRoot = NodePath.resolve(
   NodePath.dirname(NodeURL.fileURLToPath(import.meta.url)),
@@ -22,7 +23,11 @@ const seedForkRepo = (repo: FixtureRepo): void => {
   repo.commitAll("fork: seed manifests");
 };
 
-const runPrepare = (repo: FixtureRepo, tag: string): string => {
+const runPrepare = (
+  repo: FixtureRepo,
+  tag: string,
+  options: { readonly vp?: string; readonly skipInstall?: boolean } = {},
+): string => {
   const outputFile = NodePath.join(repo.dir, "gh-output");
   NodeChildProcess.execFileSync(script, [], {
     cwd: repo.dir,
@@ -30,12 +35,29 @@ const runPrepare = (repo: FixtureRepo, tag: string): string => {
     env: {
       ...process.env,
       RELEASE_TAG: tag,
-      SYNC_SKIP_INSTALL: "1",
+      SYNC_SKIP_INSTALL: options.skipInstall === false ? "0" : "1",
       GITHUB_OUTPUT: outputFile,
       SYNC_GIT_BIN: "/usr/bin/git",
+      ...(options.vp ? { PATH: `${NodePath.dirname(options.vp)}:${process.env.PATH ?? ""}` } : {}),
     },
   });
   return NodeChildProcess.execFileSync("/bin/cat", [outputFile], { encoding: "utf8" });
+};
+
+const createVpDouble = (repo: FixtureRepo): string => {
+  const binDir = NodePath.join(repo.dir, ".git", "test-bin");
+  NodeFS.mkdirSync(binDir);
+  const vp = NodePath.join(binDir, "vp");
+  NodeFS.writeFileSync(
+    vp,
+    "#!/bin/sh\n" +
+      'case "$*" in\n' +
+      '  *--lockfile-only*) printf "rewritten-by-lockfile-only\\n" > pnpm-lock.yaml ;;\n' +
+      "  *--frozen-lockfile*) if grep -q stale pnpm-lock.yaml; then exit 1; fi ;;\n" +
+      "esac\n",
+  );
+  NodeFS.chmodSync(vp, 0o755);
+  return vp;
 };
 
 const outputValue = (output: string, key: string): string => {
@@ -193,6 +215,51 @@ describe("prepare-release-tag", () => {
 
       const manifest = repo.git("show", `${prepSha}:apps/server/package.json`);
       assert.include(manifest, '"version": "1.2.3-fork.1"');
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it("REGRESSION: installed preparation preserves the lockfile and is a version-only CI child", () => {
+    const repo = createFixtureRepo();
+    try {
+      seedForkRepo(repo);
+      const lockfile = repo.git("show", "HEAD:pnpm-lock.yaml");
+      const vp = createVpDouble(repo);
+      const output = runPrepare(repo, "v1.2.3-fork.1", { skipInstall: false, vp });
+      const mainSha = outputValue(output, "main_sha");
+      const prepSha = outputValue(output, "prep_sha");
+
+      assert.strictEqual(repo.git("show", `${prepSha}:pnpm-lock.yaml`), lockfile);
+      assert.strictEqual(repo.git("diff", "HEAD", "--", "pnpm-lock.yaml"), "");
+      assert.strictEqual(
+        releaseCISource(prepSha, "1.2.3-fork.1", repo.dir),
+        mainSha,
+        "an unchanged lockfile must leave the stamped child eligible for parent CI reuse",
+      );
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it("REGRESSION: stale dependency lockfile rejects before tagging or creating a prep commit", () => {
+    const repo = createFixtureRepo();
+    try {
+      seedForkRepo(repo);
+      repo.writeFile("pnpm-lock.yaml", "stale dependency resolution\n");
+      repo.commitAll("test: stale lockfile");
+      const headBefore = repo.git("rev-parse", "HEAD");
+      const vp = createVpDouble(repo);
+
+      assert.throws(() => runPrepare(repo, "v1.2.3-fork.1", { skipInstall: false, vp }));
+      assert.strictEqual(repo.git("rev-parse", "HEAD"), headBefore);
+      assert.strictEqual(repo.git("status", "--short"), "");
+      assert.throws(() => repo.git("rev-parse", "v1.2.3-fork.1^{commit}"));
+      assert.strictEqual(
+        NodeFS.readFileSync(NodePath.join(repo.dir, "pnpm-lock.yaml"), "utf8"),
+        "stale dependency resolution\n",
+        "frozen validation must not rewrite a stale lockfile before rejecting it",
+      );
     } finally {
       repo.cleanup();
     }

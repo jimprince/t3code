@@ -34,16 +34,16 @@ file is the concise runbook.
 
 ## Release Verification
 
-Preflight checks out the resolved release source before installing dependencies
-and running formatting/lint and typechecks. It reuses tests only from a successful
+Preflight checks out the resolved release source before installing dependencies.
+It reuses source checks and tests only from a successful
 `CI` push run on `main` for that exact commit, or its direct parent when the
 release child changes only the four package version fields to the release version.
 Lockfile, dependency, source, workflow, or file-mode changes disqualify parent reuse.
 The required CI check, test shards and release smoke jobs must all succeed in the
 same run attempt. Preflight waits up to fifteen minutes for matching CI already in
 progress; missing, failed, incomplete or unavailable evidence runs the full release
-tests instead. The job summary links any reused CI run. Desktop packaging and
-headless artifact smoke checks always run.
+source checks and tests instead. The job summary links any reused CI run. Desktop
+packaging and headless artifact smoke checks always run.
 
 ## Push Nightly Trigger
 
@@ -82,9 +82,12 @@ publication; it is never substituted with evidence for another source.
 `prepare-stgit-publication` records the exact main, stack, and complete patch-ref
 set before selection. `prepare-release-tag` stamps releasable package versions
 in a direct child because the headless `t3` server reports its version from
-`apps/server/package.json`. The checkout returns to the verified unstamped tip,
-then `publish-stgit-stack --push` atomically publishes unchanged `main`, stack
-metadata, patch refs, obsolete-ref deletions, immutable snapshots, and the
+`apps/server/package.json`. Tag preparation uses frozen installs before and after
+stamping, preserving the source lockfile for CI reuse. A stale lockfile fails
+preparation; dependency resolution belongs before source verification, including
+the complete-stack regeneration in upstream replay. The checkout returns to the
+verified unstamped tip, then `publish-stgit-stack --push` atomically publishes
+unchanged `main`, stack metadata, patch refs, obsolete-ref deletions, immutable snapshots, and the
 prepared release tag under the captured leases. A stale checkout, ancestry
 failure, metadata mismatch, or lost lease stops publication. Daily upstream
 synchronization remains a separate lane; the next stable sync replays the stack
