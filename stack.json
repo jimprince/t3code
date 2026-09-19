@@ -1,18 +1,18 @@
 {
   "version": 5,
-  "prev": "f8d5c93c84aeea417352b6cb66b3dc16f8e709f4",
-  "head": "b33bfe7bef0082a113305b067079a9ba2adef0e8",
+  "prev": "a2ab9f05e1e48792de61b396b9d943ad164b9d60",
+  "head": "47de920e15f9ea631f143afbc7c1b796878f252d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
-    "fork-thread-client-recovery"
-  ],
-  "unapplied": [
+    "fork-thread-client-recovery",
     "fork-general-chat",
     "fork-conversation-fork",
-    "fork-thread-transfer",
+    "fork-thread-transfer"
+  ],
+  "unapplied": [
     "fork-thread-history-compatibility",
     "fork-project-selection",
     "fork-private-connection-defaults",
@@ -56,7 +56,7 @@
       "oid": "de44cdd515948807df90639eb4f770d16e762541"
     },
     "fork-conversation-fork": {
-      "oid": "0eb8d729672d3eb1807a17b1c0b25aeaac3b1a1d"
+      "oid": "f45d8d749f11ddfc9838998b2e7f7308547e6db9"
     },
     "fork-desktop-delivery": {
       "oid": "efaf32262281c5f8e84968a0f68120e255ef4e48"
@@ -65,7 +65,7 @@
       "oid": "e0f7976daa4e22bd7f02ff3da87694e7d490635d"
     },
     "fork-general-chat": {
-      "oid": "97a3091366b0be989cfaa915eadd576a6879fcc3"
+      "oid": "98e22aef43a76398bc6df999a9df1929d7df9b46"
     },
     "fork-gitea-connections": {
       "oid": "d6c1973453d94cca1760d4baf963dee84b69995c"
@@ -122,7 +122,7 @@
       "oid": "726fb181c533cde10bf9ba81b0845c33f5fc59fb"
     },
     "fork-thread-transfer": {
-      "oid": "57574c0bd267eff8b381b55c33bef8b3f6aad9b7"
+      "oid": "47de920e15f9ea631f143afbc7c1b796878f252d"
     },
     "fork-unsupported-pr-hosts": {
       "oid": "13d9e31ffac4c2d841f37e082a691f14aa178425"
