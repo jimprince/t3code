@@ -782,3 +782,13 @@ retire_when = "Upstream provides an equivalent secure, client-local, user-initia
 depends_on = ["fork-inline-3d-objects"]
 roles = []
 note = "The desktop stages private temporary STL files and invokes the named macOS application with fixed argument boundaries. GLB and non-desktop surfaces retain their existing download or local-open behavior."
+
+[[patch]]
+name = "fork-3mf-preview"
+subject = "feat(models): preview 3MF files inline"
+class = "product"
+purpose = "Preview bounded 3MF packages inline across the existing model surfaces, preserve core materials and colors, apply declared units, and hand validated 3MF bytes to OrcaSlicer on macOS."
+retire_when = "Upstream provides equivalent secure, demand-rendered 3MF previews and client-local OrcaSlicer handoff across the same surfaces."
+depends_on = ["fork-inline-3d-objects", "fork-orcaslicer-handoff"]
+roles = []
+note = "Performs a central-directory-only ZIP preflight before inflation: at most 256 entries, 64 MiB per entry, 128 MiB total uncompressed, model/relationship/texture parts only, no nested archives or external relationships. Uses ThreeMFLoader lazily, retains the existing 50 MiB source, 2 million rendered-triangle, 64 megapixel texture, two-context, and demand-render limits, and normalizes the declared 3MF unit to millimeters before framing."
