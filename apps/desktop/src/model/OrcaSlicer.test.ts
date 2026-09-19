@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import {
-  openStlInOrcaSlicer,
-  safeStlFileName,
+  openModelInOrcaSlicer,
+  safeModelFileName,
   type OrcaSlicerHandoffDependencies,
 } from "./OrcaSlicer.ts";
 
@@ -26,7 +26,7 @@ describe("OrcaSlicer handoff", () => {
     const bytes = new Uint8Array([1, 2, 3]);
 
     await expect(
-      openStlInOrcaSlicer({ name: "gear;$(touch owned).stl", bytes }, deps),
+      openModelInOrcaSlicer({ name: "gear;$(touch owned).stl", bytes }, deps),
     ).resolves.toEqual({ opened: true });
 
     expect(deps.writeFile).toHaveBeenCalledWith(
@@ -41,17 +41,21 @@ describe("OrcaSlicer handoff", () => {
     ]);
   });
 
-  it("removes traversal and rejects non-STL and oversized payloads before filesystem access", async () => {
-    expect(safeStlFileName("../../nested\\part.stl")).toBe("part.stl");
+  it("removes traversal and rejects unsupported and oversized payloads before filesystem access", async () => {
+    expect(safeModelFileName("../../nested\\part.stl")).toBe("part.stl");
+    expect(safeModelFileName("../../nested\\project.3MF")).toBe("project.3mf");
     const deps = dependencies();
     await expect(
-      openStlInOrcaSlicer({ name: "part.glb", bytes: new Uint8Array([1]) }, deps),
+      openModelInOrcaSlicer({ name: "part.glb", bytes: new Uint8Array([1]) }, deps),
     ).resolves.toMatchObject({
       opened: false,
-      error: expect.stringContaining("STL files only"),
+      error: expect.stringContaining("STL and 3MF files only"),
     });
     await expect(
-      openStlInOrcaSlicer({ name: "part.stl", bytes: new Uint8Array(50 * 1024 * 1024 + 1) }, deps),
+      openModelInOrcaSlicer(
+        { name: "part.stl", bytes: new Uint8Array(50 * 1024 * 1024 + 1) },
+        deps,
+      ),
     ).resolves.toMatchObject({ opened: false, error: expect.stringContaining("50 MB") });
     expect(deps.makeTempDirectory).not.toHaveBeenCalled();
   });
@@ -61,7 +65,7 @@ describe("OrcaSlicer handoff", () => {
       launch: vi.fn(async () => Promise.reject(new Error("not found"))),
     });
     await expect(
-      openStlInOrcaSlicer({ name: "part.stl", bytes: new Uint8Array([1]) }, deps),
+      openModelInOrcaSlicer({ name: "part.stl", bytes: new Uint8Array([1]) }, deps),
     ).resolves.toEqual({
       opened: false,
       error: "OrcaSlicer could not be opened. Install OrcaSlicer in Applications and try again.",
