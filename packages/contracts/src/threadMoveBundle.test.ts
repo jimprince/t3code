@@ -5,6 +5,9 @@ import * as Schema from "effect/Schema";
 
 import { ThreadMoveBundle, ThreadMoveBundleV1 } from "./orchestration.ts";
 
+const decodeCurrent = Schema.decodeUnknownEffect(ThreadMoveBundle);
+const decodeLegacy = Schema.decodeUnknownEffect(ThreadMoveBundleV1);
+
 const threadMoveBundleBase = {
   exportedAt: "2026-01-01T00:00:00.000Z",
   sourceProjectId: "project-1",
@@ -32,7 +35,6 @@ const threadMoveBundleBase = {
 
 it.effect("ThreadMoveBundle accepts v1 and v2 while a strict v1 target rejects v2", () =>
   Effect.gen(function* () {
-    const decodeCurrent = Schema.decodeUnknownEffect(ThreadMoveBundle);
     const v1 = { version: 1, ...threadMoveBundleBase } as const;
     const v2 = {
       version: 2,
@@ -42,8 +44,6 @@ it.effect("ThreadMoveBundle accepts v1 and v2 while a strict v1 target rejects v
 
     assert.strictEqual((yield* decodeCurrent(v1)).version, 1);
     assert.strictEqual((yield* decodeCurrent(v2)).version, 2);
-    assert.isTrue(
-      Exit.isFailure(yield* Effect.exit(Schema.decodeUnknownEffect(ThreadMoveBundleV1)(v2))),
-    );
+    assert.isTrue(Exit.isFailure(yield* Effect.exit(decodeLegacy(v2))));
   }),
 );
