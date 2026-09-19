@@ -1323,7 +1323,7 @@ export interface DesktopBridge {
     position?: { x: number; y: number },
   ) => Promise<T | null>;
   openExternal: (url: string) => Promise<boolean>;
-  /** Stages validated STL bytes locally and opens them in OrcaSlicer on this machine. */
+  /** Stages validated printable-model bytes locally and opens them in OrcaSlicer on this machine. */
   openModelInOrcaSlicer?: (
     input: DesktopOpenModelInOrcaSlicerInput,
   ) => Promise<DesktopOpenModelInOrcaSlicerResult>;
