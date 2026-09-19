@@ -1,0 +1,4 @@
+id = "release-draft-recovery"
+category = "fix"
+functionality = "updates"
+text = "Finish publishing interrupted updates so completed downloads become available to the updater."

@@ -599,6 +599,12 @@ gh workflow run release.yml --repo jimprince/t3code \
 
 ## Updater Requirements
 
+Publication uploads assets before publishing a draft, then verifies the public
+release state and every expected asset. If publishing fails after packaging,
+rerun only the failed publication job to reuse the successful build artifacts.
+An existing draft is finalized by the same path; a green upload alone does not
+prove the release is available to clients.
+
 - Runtime updater: `electron-updater` in `apps/desktop/src/main.ts`.
 - Packaged update provider: GitHub Releases.
 - Repository source: `T3CODE_DESKTOP_UPDATE_REPOSITORY`, otherwise

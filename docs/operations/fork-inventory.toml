@@ -639,6 +639,12 @@ depends_on = [
 ]
 roles = ["release-workflow-owner"]
 note = "Release notes compare stable authored change IDs between actual released tags, list fork features/fixes/removals before upstream changes, and preserve popup order. Published entries remain history; later fixes get new IDs. Bun and strict entry validation are configured in publication; Knip recognizes the shell-launched renderer entry point. Both macOS and Linux release jobs require packaged historical-data startup before publication. macOS uses the built zip backend in Electron Node mode; source-only or empty-data checks cannot substitute."
+
+[[patch.decision]]
+id = "release-draft-recovery"
+date = "2026-09-19"
+decided = "adapt"
+rationale = "Upload assets before publishing both new and retried release drafts, then require public release metadata and all expected assets; an upload success alone left a green workflow with an unpublished draft."
 [[patch.decision]]
 id = "release-version-stamps"
 date = "2026-07-28"

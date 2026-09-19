@@ -657,9 +657,9 @@ jobs:
           create_args=(
             --repo "$RELEASE_REPO"
             --verify-tag
+            --draft
             --target "$RELEASE_TARGET"
             --title "$RELEASE_NAME"
-            "--latest=$RELEASE_MAKE_LATEST"
           )
           if [[ "$release_notes_generated" == "true" ]]; then
             create_args+=(--notes-file "$release_notes_file")
@@ -693,25 +693,39 @@ jobs:
             fi
 
             if GH_TOKEN="$token" gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
-              edit_args=(--repo "$RELEASE_REPO" --target "$RELEASE_TARGET" --title "$RELEASE_NAME")
-              if [[ "$release_notes_generated" == "true" ]]; then
-                edit_args+=(--notes-file "$release_notes_file")
+              if ! GH_TOKEN="$token" gh release upload "$RELEASE_TAG" "${release_files[@]}" --repo "$RELEASE_REPO" --clobber >"$last_error" 2>&1; then
+                echo "::warning::$token_name failed to upload release assets; trying next token."
+                continue
               fi
-              if [[ "$RELEASE_PRERELEASE" == "true" ]]; then
-                edit_args+=(--prerelease)
-              fi
-              if [[ "$RELEASE_MAKE_LATEST" == "true" ]]; then
-                edit_args+=(--latest)
-              fi
+            elif ! GH_TOKEN="$token" gh release create "$RELEASE_TAG" "${release_files[@]}" "${create_args[@]}" >"$last_error" 2>&1; then
+              echo "::warning::$token_name failed to create release draft; trying next token."
+              continue
+            fi
 
-              if GH_TOKEN="$token" gh release edit "$RELEASE_TAG" "${edit_args[@]}" >"$last_error" 2>&1 &&
-                GH_TOKEN="$token" gh release upload "$RELEASE_TAG" "${release_files[@]}" --repo "$RELEASE_REPO" --clobber >"$last_error" 2>&1; then
-                echo "Updated GitHub release $RELEASE_TAG with $token_name."
+            # Publish only after uploads finish, including recovery of an existing draft.
+            edit_args=(
+              --repo "$RELEASE_REPO" --target "$RELEASE_TARGET" --title "$RELEASE_NAME"
+              --draft=false "--prerelease=$RELEASE_PRERELEASE" "--latest=$RELEASE_MAKE_LATEST"
+            )
+            if [[ "$release_notes_generated" == "true" ]]; then
+              edit_args+=(--notes-file "$release_notes_file")
+            fi
+            if GH_TOKEN="$token" gh release edit "$RELEASE_TAG" "${edit_args[@]}" >"$last_error" 2>&1; then
+              expected_assets="$(printf '%s\n' "${release_files[@]##*/}" | jq -R . | jq -s .)"
+              release_state="$RUNNER_TEMP/release-published.json"
+              if GH_TOKEN="$token" gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+                --json tagName,isDraft,isPrerelease,publishedAt,assets >"$release_state" 2>"$last_error" &&
+                jq -e --arg tag "$RELEASE_TAG" --argjson prerelease "$RELEASE_PRERELEASE" \
+                  --argjson expected "$expected_assets" '
+                    .tagName == $tag and .isDraft == false and
+                    (.publishedAt | type == "string" and length > 0) and
+                    .isPrerelease == $prerelease and
+                    (($expected - [.assets[] | select(.state == "uploaded" and .size > 0) | .name]) | length == 0)
+                  ' "$release_state" >/dev/null 2>>"$last_error"; then
+                echo "Published and verified GitHub release $RELEASE_TAG with $token_name."
                 exit 0
               fi
-            elif GH_TOKEN="$token" gh release create "$RELEASE_TAG" "${release_files[@]}" "${create_args[@]}" >"$last_error" 2>&1; then
-              echo "Created GitHub release $RELEASE_TAG with $token_name."
-              exit 0
+              echo "Release readback did not confirm public state and all expected assets." >>"$last_error"
             fi
 
             echo "::warning::$token_name failed to publish release $RELEASE_TAG; trying next token."
