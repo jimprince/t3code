@@ -40,6 +40,8 @@ it("hands validated STL bytes to the local desktop bridge without exposing its U
 
   expect(canOpenModelInOrcaSlicer("part.stl")).toBe(true);
   expect(canOpenModelInOrcaSlicer("part.3mf")).toBe(true);
+  expect(canOpenModelInOrcaSlicer("part.step")).toBe(true);
+  expect(canOpenModelInOrcaSlicer("part.stp")).toBe(true);
   expect(canOpenModelInOrcaSlicer("part.glb")).toBe(false);
   await openModelInOrcaSlicer({
     url: "https://remote.example/signed-secret-model-url",
