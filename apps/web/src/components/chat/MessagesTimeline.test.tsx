@@ -808,6 +808,32 @@ describe("MessagesTimeline", () => {
     expect(markup).not.toContain("Expand demo.mp4");
   });
 
+  it("dispatches model attachments to the bounded inline model surface", () => {
+    const entry = {
+      ...buildUserTimelineEntry("Inspect the model."),
+      message: {
+        ...buildUserTimelineEntry("Inspect the model.").message,
+        attachments: [
+          {
+            type: "file" as const,
+            id: "attachment-model-glb",
+            name: "widget.glb",
+            mimeType: "model/gltf-binary",
+            sizeBytes: 50 * 1024 * 1024 + 1,
+          },
+        ],
+      },
+    };
+
+    const markup = renderToStaticMarkup(
+      <MessagesTimeline {...buildProps()} timelineEntries={[entry]} />,
+    );
+
+    expect(markup).toContain("This model is larger than the 50 MB preview limit.");
+    expect(markup).toContain('aria-label="Download widget.glb"');
+    expect(markup).not.toContain('aria-label="Preview widget.glb"');
+  });
+
   it("shows the filename while an optimistic video is unavailable", () => {
     const entry = {
       ...buildUserTimelineEntry("Uploading the demo."),
