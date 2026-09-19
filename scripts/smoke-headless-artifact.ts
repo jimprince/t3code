@@ -66,6 +66,7 @@ function runCommand(
   command: string,
   args: ReadonlyArray<string>,
   cwd?: string,
+  isolatedRuntime = false,
 ): Promise<CommandResult> {
   return new Promise((resolve, reject) => {
     NodeChildProcess.execFile(
@@ -76,6 +77,7 @@ function runCommand(
         timeout: 20_000,
         env: {
           ...process.env,
+          ...(isolatedRuntime ? { PATH: "" } : {}),
           T3CODE_LOG_LEVEL: "Error",
         },
       },
@@ -217,6 +219,7 @@ async function smokeServe(artifactRoot: string, entrypoint: string): Promise<voi
       cwd: artifactRoot,
       env: {
         ...process.env,
+        PATH: "",
         T3CODE_LOG_LEVEL: "Error",
       },
       stdio: ["ignore", "pipe", "pipe"],
@@ -251,14 +254,14 @@ async function main() {
     const artifactRoot = await findExtractedRoot(extractDir);
     const entrypoint = NodePath.join(artifactRoot, "bin/t3");
 
-    const versionResult = await runCommand(entrypoint, ["--version"], artifactRoot);
+    const versionResult = await runCommand(entrypoint, ["--version"], artifactRoot, true);
     if (!versionResult.stdout.includes(args.version)) {
       throw new Error(
         `Expected --version output to include '${args.version}', got:\n${versionResult.stdout}`,
       );
     }
 
-    const helpResult = await runCommand(entrypoint, ["--help"], artifactRoot);
+    const helpResult = await runCommand(entrypoint, ["--help"], artifactRoot, true);
     if (!helpResult.stdout.includes("USAGE")) {
       throw new Error(`Expected --help output to include USAGE, got:\n${helpResult.stdout}`);
     }

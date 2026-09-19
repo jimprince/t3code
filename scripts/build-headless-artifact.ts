@@ -1,391 +1,192 @@
 #!/usr/bin/env node
 
-import { fromYaml } from "@t3tools/shared/schemaYaml";
-import { HostProcessArchitecture, HostProcessPlatform } from "@t3tools/shared/hostProcess";
-import rootPackageJson from "../package.json" with { type: "json" };
+import * as NodeChildProcess from "node:child_process";
+import * as NodeFSP from "node:fs/promises";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
 
-import { createStagePatchedDependencies } from "./build-desktop-artifact.ts";
-import { validateBundledClientAssets } from "./lib/client-assets.ts";
-import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
+import { cliArchiveFileName, cliArchiveStem } from "./build-cli-archive.ts";
 
-import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as Data from "effect/Data";
-import * as Effect from "effect/Effect";
-import * as FileSystem from "effect/FileSystem";
-import * as Layer from "effect/Layer";
-import * as Logger from "effect/Logger";
-import * as Option from "effect/Option";
-import * as Path from "effect/Path";
-import * as Schema from "effect/Schema";
-import { Command, Flag } from "effect/unstable/cli";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+const PLATFORM = "linux" as const;
+const ARCH = "x64" as const;
 
-const HeadlessPlatform = Schema.Literals(["linux"]);
-const HeadlessArch = Schema.Literals(["x64"]);
-const encodeJsonString = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
-const HeadlessWorkspaceConfig = Schema.Struct({
-  catalog: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-  overrides: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-  patchedDependencies: Schema.optional(Schema.Record(Schema.String, Schema.String)),
-});
-export type HeadlessWorkspaceConfig = typeof HeadlessWorkspaceConfig.Type;
-const decodeHeadlessWorkspaceConfig = Schema.decodeEffect(fromYaml(HeadlessWorkspaceConfig));
-
-interface BuildCliInput {
-  readonly platform: Option.Option<typeof HeadlessPlatform.Type>;
-  readonly arch: Option.Option<typeof HeadlessArch.Type>;
-  readonly buildVersion: Option.Option<string>;
-  readonly outputDir: Option.Option<string>;
-  readonly skipBuild: Option.Option<boolean>;
-  readonly keepStage: Option.Option<boolean>;
-  readonly verbose: Option.Option<boolean>;
-}
-
-interface ResolvedBuildOptions {
-  readonly platform: typeof HeadlessPlatform.Type;
-  readonly arch: typeof HeadlessArch.Type;
+interface CliArgs {
   readonly version: string;
   readonly outputDir: string;
-  readonly skipBuild: boolean;
-  readonly keepStage: boolean;
-  readonly verbose: boolean;
+  readonly resourceMonitorDir?: string;
+  readonly upstreamArchive?: string;
 }
 
-interface HeadlessPackageJson {
-  readonly name: string;
+export function resolveHeadlessArtifactBaseName(version: string): string {
+  return `t3-headless-${version}-${PLATFORM}-${ARCH}`;
+}
+
+export function resolveHeadlessArtifactName(version: string): string {
+  return `${resolveHeadlessArtifactBaseName(version)}.tar.gz`;
+}
+
+export const HEADLESS_ENTRYPOINT = `#!/bin/sh
+set -eu
+case "$0" in
+  */*) script_dir=\${0%/*} ;;
+  *) script_dir=. ;;
+esac
+script_dir=$(CDPATH= cd -- "$script_dir" && pwd)
+exec "$script_dir/../t3" "$@"
+`;
+
+function run(command: string, args: ReadonlyArray<string>, cwd?: string): void {
+  const result = NodeChildProcess.spawnSync(command, args, {
+    cwd,
+    stdio: "inherit",
+    env: process.env,
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${command} ${args.join(" ")} exited with ${String(result.status)}.`);
+  }
+}
+
+async function requirePath(path: string): Promise<void> {
+  try {
+    await NodeFSP.access(path);
+  } catch (cause) {
+    throw new Error(`Upstream CLI archive is missing ${path}.`, { cause });
+  }
+}
+
+async function requireOneOf(root: string, candidates: ReadonlyArray<string>): Promise<void> {
+  for (const candidate of candidates) {
+    try {
+      await NodeFSP.access(NodePath.join(root, candidate));
+      return;
+    } catch {
+      // Try the next supported upstream layout.
+    }
+  }
+  throw new Error(`Upstream CLI archive is missing ${candidates.join(" or ")}.`);
+}
+
+/** Adds only the fork's stable asset name and installed bin/t3 path. */
+export async function adaptCliArchive(input: {
+  readonly archive: string;
+  readonly outputDir: string;
   readonly version: string;
-  readonly private: true;
-  readonly description: string;
-  readonly type: string;
-  readonly engines: Record<string, string>;
-  readonly packageManager: string;
-  readonly dependencies: Record<string, string>;
-  readonly overrides: Record<string, string>;
+}): Promise<string> {
+  const stageRoot = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-headless-adapter-"));
+  try {
+    run("tar", ["-xzf", input.archive, "-C", stageRoot]);
+    const upstreamRoot = NodePath.join(stageRoot, cliArchiveStem(input.version, PLATFORM, ARCH));
+    for (const required of [
+      "t3",
+      "client/index.html",
+      "node_modules/node-pty",
+      "node_modules/@ff-labs/fff-node",
+      "node_modules/msgpackr-extract",
+    ]) {
+      await requirePath(NodePath.join(upstreamRoot, required));
+    }
+    await requireOneOf(upstreamRoot, [
+      "resource-monitor/linux-x64/t3-resource-monitor",
+      "resource-monitor/t3-resource-monitor",
+    ]);
+
+    const binDir = NodePath.join(upstreamRoot, "bin");
+    await NodeFSP.mkdir(binDir, { recursive: true });
+    const entrypoint = NodePath.join(binDir, "t3");
+    await NodeFSP.writeFile(entrypoint, HEADLESS_ENTRYPOINT, { mode: 0o755 });
+
+    const artifactRoot = NodePath.join(stageRoot, resolveHeadlessArtifactBaseName(input.version));
+    await NodeFSP.rename(upstreamRoot, artifactRoot);
+    await NodeFSP.mkdir(input.outputDir, { recursive: true });
+    const artifact = NodePath.join(input.outputDir, resolveHeadlessArtifactName(input.version));
+    await NodeFSP.rm(artifact, { force: true });
+    run("tar", ["-czf", artifact, "-C", stageRoot, NodePath.basename(artifactRoot)]);
+    return artifact;
+  } finally {
+    await NodeFSP.rm(stageRoot, { recursive: true, force: true });
+  }
 }
 
-class HeadlessBuildError extends Data.TaggedError("HeadlessBuildError")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+function parseArgs(argv: ReadonlyArray<string>): CliArgs {
+  let version = serverPackageJson.version;
+  let outputDir = "release";
+  let resourceMonitorDir: string | undefined;
+  let upstreamArchive: string | undefined;
 
-const RepoRoot = Effect.service(Path.Path).pipe(
-  Effect.flatMap((path) => path.fromFileUrl(new URL("..", import.meta.url))),
-);
+  for (let index = 0; index < argv.length; index += 1) {
+    const flag = argv[index];
+    const value = argv[index + 1];
+    if (
+      flag === "--build-version" ||
+      flag === "--output-dir" ||
+      flag === "--resource-monitor-dir" ||
+      flag === "--upstream-archive"
+    ) {
+      if (!value) throw new Error(`Missing value for ${flag}.`);
+      if (flag === "--build-version") version = value;
+      if (flag === "--output-dir") outputDir = value;
+      if (flag === "--resource-monitor-dir") resourceMonitorDir = value;
+      if (flag === "--upstream-archive") upstreamArchive = value;
+      index += 1;
+      continue;
+    }
+    if (flag === "--platform" && value === PLATFORM) {
+      index += 1;
+      continue;
+    }
+    if (flag === "--arch" && value === ARCH) {
+      index += 1;
+      continue;
+    }
+    throw new Error(`Unsupported headless build argument: ${flag ?? ""}`);
+  }
+  return { version, outputDir, resourceMonitorDir, upstreamArchive };
+}
 
-export const readHeadlessWorkspaceConfig = Effect.fn("readHeadlessWorkspaceConfig")(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const repoRoot = yield* RepoRoot;
-  const workspaceYaml = yield* fs.readFileString(path.join(repoRoot, "pnpm-workspace.yaml"));
-  return yield* decodeHeadlessWorkspaceConfig(workspaceYaml);
-});
-
-const commandOutputOptions = (verbose: boolean) =>
-  ({
-    stdout: verbose ? "inherit" : "ignore",
-    stderr: "inherit",
-  }) as const;
-
-const runCommand = Effect.fn("runCommand")(function* (command: ChildProcess.Command) {
-  const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  const child = yield* commandSpawner.spawn(command);
-  const exitCode = yield* child.exitCode;
-
-  if (exitCode !== 0) {
-    return yield* new HeadlessBuildError({
-      message: `Command exited with non-zero exit code (${exitCode})`,
+async function main(): Promise<void> {
+  const args = parseArgs(process.argv.slice(2));
+  const repoRoot = NodePath.resolve(import.meta.dirname, "..");
+  const outputDir = NodePath.resolve(repoRoot, args.outputDir);
+  const upstreamOutput = args.upstreamArchive
+    ? undefined
+    : await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-cli-archive-output-"));
+  try {
+    const upstreamArchive = args.upstreamArchive
+      ? NodePath.resolve(args.upstreamArchive)
+      : NodePath.join(upstreamOutput!, cliArchiveFileName(args.version, PLATFORM, ARCH));
+    if (!args.upstreamArchive) {
+      const buildArgs = [
+        "scripts/build-cli-archive.ts",
+        "--platform",
+        PLATFORM,
+        "--arch",
+        ARCH,
+        "--version",
+        args.version,
+        "--output-dir",
+        upstreamOutput!,
+      ];
+      if (args.resourceMonitorDir) {
+        buildArgs.push("--resource-monitor-dir", args.resourceMonitorDir);
+      }
+      run(process.execPath, buildArgs, repoRoot);
+    }
+    const artifact = await adaptCliArchive({
+      archive: upstreamArchive,
+      outputDir,
+      version: args.version,
     });
+    process.stdout.write(`[headless-artifact] Wrote ${artifact}\n`);
+  } finally {
+    if (upstreamOutput) await NodeFSP.rm(upstreamOutput, { recursive: true, force: true });
   }
-});
-
-const resolveOption = <A>(value: Option.Option<A>, defaultValue: A): A =>
-  Option.getOrElse(value, () => defaultValue);
-
-export function resolveHeadlessArtifactBaseName(
-  version: string,
-  platform: typeof HeadlessPlatform.Type,
-  arch: typeof HeadlessArch.Type,
-): string {
-  return `t3-headless-${version}-${platform}-${arch}`;
 }
-
-export function resolveHeadlessArtifactName(
-  version: string,
-  platform: typeof HeadlessPlatform.Type,
-  arch: typeof HeadlessArch.Type,
-): string {
-  return `${resolveHeadlessArtifactBaseName(version, platform, arch)}.tar.gz`;
-}
-
-export function resolveHeadlessRuntimeDependencies(
-  workspaceConfig: HeadlessWorkspaceConfig,
-): Record<string, string> {
-  return resolveCatalogDependencies(
-    serverPackageJson.dependencies,
-    workspaceConfig.catalog ?? {},
-    "apps/server",
-  );
-}
-
-/**
- * pnpm patches that apply to packages the headless runtime installs. The staged
- * install must carry them: the server loads `@ff-labs/fff-node` through
- * `require`, which only resolves because the workspace patch adds a `require`
- * export condition to that ESM-only package.
- */
-export function resolveHeadlessPatchedDependencies(
-  workspaceConfig: HeadlessWorkspaceConfig,
-): Record<string, string> {
-  return createStagePatchedDependencies(
-    workspaceConfig.patchedDependencies ?? {},
-    resolveHeadlessRuntimeDependencies(workspaceConfig),
-  );
-}
-
-export function createHeadlessPackageJson(
-  version: string,
-  workspaceConfig: HeadlessWorkspaceConfig,
-): HeadlessPackageJson {
-  return {
-    name: "t3-code-headless",
-    version,
-    private: true,
-    description: "T3 Code headless server runtime",
-    type: "module",
-    engines: serverPackageJson.engines,
-    packageManager: rootPackageJson.packageManager,
-    dependencies: resolveHeadlessRuntimeDependencies(workspaceConfig),
-    overrides: resolveCatalogDependencies(
-      workspaceConfig.overrides ?? {},
-      workspaceConfig.catalog ?? {},
-      "apps/server",
-    ),
-  };
-}
-
-const resolveBuildOptions = Effect.fn("resolveBuildOptions")(function* (input: BuildCliInput) {
-  const path = yield* Path.Path;
-  const repoRoot = yield* RepoRoot;
-
-  return {
-    platform: resolveOption(input.platform, "linux"),
-    arch: resolveOption(input.arch, "x64"),
-    version: resolveOption(input.buildVersion, serverPackageJson.version),
-    outputDir: path.resolve(repoRoot, resolveOption(input.outputDir, "release")),
-    skipBuild: resolveOption(input.skipBuild, false),
-    keepStage: resolveOption(input.keepStage, false),
-    verbose: resolveOption(input.verbose, false),
-  } satisfies ResolvedBuildOptions;
-});
-
-const writeEntrypoint = Effect.fn("writeEntrypoint")(function* (binDir: string) {
-  const fs = yield* FileSystem.FileSystem;
-  const path = yield* Path.Path;
-  const entrypointPath = path.join(binDir, "t3");
-  yield* fs.writeFileString(
-    entrypointPath,
-    [
-      "#!/usr/bin/env sh",
-      'SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)',
-      'exec node "$SCRIPT_DIR/../apps/server/dist/bin.mjs" "$@"',
-      "",
-    ].join("\n"),
-  );
-  yield* fs.chmod(entrypointPath, 0o755);
-});
-
-const buildHeadlessArtifact = Effect.fn("buildHeadlessArtifact")(function* (
-  options: ResolvedBuildOptions,
-) {
-  const repoRoot = yield* RepoRoot;
-  const path = yield* Path.Path;
-  const fs = yield* FileSystem.FileSystem;
-  const hostPlatform = yield* HostProcessPlatform;
-  const hostArch = yield* HostProcessArchitecture;
-  const workspaceConfig = yield* readHeadlessWorkspaceConfig();
-  const serverDist = path.join(repoRoot, "apps/server/dist");
-  const bundledClientEntry = path.join(serverDist, "client/index.html");
-
-  if (!options.skipBuild) {
-    yield* Effect.log("[headless-artifact] Building web and server artifacts...");
-    yield* runCommand(
-      ChildProcess.make({
-        cwd: repoRoot,
-        ...commandOutputOptions(options.verbose),
-        shell: hostPlatform === "win32",
-      })`vp run --filter @t3tools/web --filter t3 build`,
-    );
-  }
-
-  for (const assetPath of [path.join(serverDist, "bin.mjs"), bundledClientEntry]) {
-    if (!(yield* fs.exists(assetPath))) {
-      return yield* new HeadlessBuildError({
-        message: `Missing headless build asset: ${assetPath}. Run the build first.`,
-      });
-    }
-  }
-
-  yield* validateBundledClientAssets(path.dirname(bundledClientEntry));
-
-  const mkdir = options.keepStage ? fs.makeTempDirectory : fs.makeTempDirectoryScoped;
-  const stageRoot = yield* mkdir({
-    prefix: `t3code-headless-${options.platform}-${options.arch}-stage-`,
-  });
-  const artifactBaseName = resolveHeadlessArtifactBaseName(
-    options.version,
-    options.platform,
-    options.arch,
-  );
-  const artifactName = resolveHeadlessArtifactName(options.version, options.platform, options.arch);
-  const artifactRoot = path.join(stageRoot, artifactBaseName);
-  const stageServerDir = path.join(artifactRoot, "apps/server");
-  const stageBinDir = path.join(artifactRoot, "bin");
-
-  yield* Effect.log("[headless-artifact] Staging server runtime...");
-  yield* fs.makeDirectory(stageServerDir, { recursive: true });
-  yield* fs.makeDirectory(stageBinDir, { recursive: true });
-  yield* fs.copy(serverDist, path.join(stageServerDir, "dist"));
-  yield* writeEntrypoint(stageBinDir);
-  const packageJson = yield* Effect.try({
-    try: () => createHeadlessPackageJson(options.version, workspaceConfig),
-    catch: (cause) =>
-      new HeadlessBuildError({
-        message: "Could not resolve headless runtime package.json.",
-        cause,
-      }),
-  });
-  yield* fs.writeFileString(
-    path.join(artifactRoot, "package.json"),
-    `${yield* encodeJsonString(packageJson)}\n`,
-  );
-  // pnpm 11 reads build approvals and patches from pnpm-workspace.yaml, not
-  // package.json. The staged runtime needs both native dependencies to build
-  // during install, and every workspace patch for a package it installs.
-  const patchedDependencies = resolveHeadlessPatchedDependencies(workspaceConfig);
-  yield* fs.writeFileString(
-    path.join(artifactRoot, "pnpm-workspace.yaml"),
-    [
-      "allowBuilds:",
-      "  msgpackr-extract: true",
-      "  node-pty: true",
-      ...(Object.keys(patchedDependencies).length > 0
-        ? [
-            "patchedDependencies:",
-            ...Object.entries(patchedDependencies).map(
-              ([patchKey, patchPath]) => `  ${JSON.stringify(patchKey)}: ${patchPath}`,
-            ),
-          ]
-        : []),
-      "",
-    ].join("\n"),
-  );
-  if (Object.keys(patchedDependencies).length > 0) {
-    yield* fs.copy(path.join(repoRoot, "patches"), path.join(artifactRoot, "patches"));
-  }
-
-  yield* Effect.log("[headless-artifact] Installing staged production dependencies...");
-  yield* runCommand(
-    ChildProcess.make({
-      cwd: artifactRoot,
-      // Dependency installation failures are otherwise hidden in release CI,
-      // which makes native-module packaging failures impossible to diagnose.
-      stdout: "inherit",
-      stderr: "inherit",
-      shell: hostPlatform === "win32",
-    })`vp install --prod`,
-  );
-
-  const nodePtyNativeModuleCandidates = [
-    path.join(artifactRoot, "node_modules/node-pty/build/Release/pty.node"),
-    path.join(artifactRoot, "node_modules/node-pty/build/Debug/pty.node"),
-    path.join(
-      artifactRoot,
-      "node_modules/node-pty/prebuilds",
-      `${hostPlatform}-${hostArch}`,
-      "pty.node",
-    ),
-  ];
-  let hasNodePtyNativeModule = false;
-  for (const candidate of nodePtyNativeModuleCandidates) {
-    if (yield* fs.exists(candidate)) {
-      hasNodePtyNativeModule = true;
-      break;
-    }
-  }
-  if (!hasNodePtyNativeModule) {
-    return yield* new HeadlessBuildError({
-      message: `Missing node-pty native module. Checked: ${nodePtyNativeModuleCandidates.join(", ")}`,
-    });
-  }
-
-  for (const requiredPath of [
-    path.join(artifactRoot, "bin/t3"),
-    path.join(artifactRoot, "apps/server/dist/bin.mjs"),
-    path.join(artifactRoot, "apps/server/dist/client/index.html"),
-    path.join(artifactRoot, "node_modules/effect"),
-    path.join(artifactRoot, "node_modules/node-pty"),
-  ]) {
-    if (!(yield* fs.exists(requiredPath))) {
-      return yield* new HeadlessBuildError({
-        message: `Missing staged runtime path: ${requiredPath}`,
-      });
-    }
-  }
-
-  yield* fs.makeDirectory(options.outputDir, { recursive: true });
-  const artifactPath = path.join(options.outputDir, artifactName);
-  yield* Effect.log(`[headless-artifact] Creating ${artifactPath}...`);
-  yield* runCommand(
-    ChildProcess.make("tar", ["-czf", artifactPath, "-C", stageRoot, artifactBaseName], {
-      ...commandOutputOptions(options.verbose),
-    }),
-  );
-
-  yield* Effect.log(`[headless-artifact] Done. Artifact: ${artifactPath}`);
-});
-
-const buildHeadlessArtifactCli = Command.make("build-headless-artifact", {
-  platform: Flag.choice("platform", HeadlessPlatform.literals).pipe(
-    Flag.withDescription("Build platform. Currently only linux is supported."),
-    Flag.optional,
-  ),
-  arch: Flag.choice("arch", HeadlessArch.literals).pipe(
-    Flag.withDescription("Build arch. Currently only x64 is supported."),
-    Flag.optional,
-  ),
-  buildVersion: Flag.string("build-version").pipe(
-    Flag.withDescription("Artifact version metadata."),
-    Flag.optional,
-  ),
-  outputDir: Flag.string("output-dir").pipe(
-    Flag.withDescription("Output directory for artifacts."),
-    Flag.optional,
-  ),
-  skipBuild: Flag.boolean("skip-build").pipe(
-    Flag.withDescription("Skip build and use existing apps/server/dist assets."),
-    Flag.optional,
-  ),
-  keepStage: Flag.boolean("keep-stage").pipe(
-    Flag.withDescription("Keep temporary staging files."),
-    Flag.optional,
-  ),
-  verbose: Flag.boolean("verbose").pipe(
-    Flag.withDescription("Stream subprocess stdout."),
-    Flag.optional,
-  ),
-}).pipe(
-  Command.withDescription("Build a linux-x64 headless server artifact for T3 Code."),
-  Command.withHandler((input) => Effect.flatMap(resolveBuildOptions(input), buildHeadlessArtifact)),
-);
-
-const cliRuntimeLayer = Layer.mergeAll(Logger.layer([Logger.consolePretty()]), NodeServices.layer);
 
 if (import.meta.main) {
-  Command.run(buildHeadlessArtifactCli, { version: "0.0.0" }).pipe(
-    Effect.scoped,
-    Effect.provide(cliRuntimeLayer),
-    NodeRuntime.runMain,
-  );
+  main().catch((error: unknown) => {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 1;
+  });
 }

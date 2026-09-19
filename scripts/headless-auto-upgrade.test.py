@@ -5,7 +5,6 @@ from pathlib import Path
 import shutil
 import sqlite3
 import subprocess
-import sys
 import tarfile
 import tempfile
 import unittest
@@ -36,7 +35,7 @@ class ActivityGuardTest(unittest.TestCase):
 
     def test_completed_and_idle_threads_allow_update(self):
         with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
+            home = Path(directory).resolve()
             seed_idle(home / 'state.sqlite')
             self.assertEqual(self.check(home, '--check-idle').returncode, 0)
 
@@ -80,10 +79,18 @@ class ActivityGuardTest(unittest.TestCase):
             self.assertEqual(self.check(home, '--check-idle').returncode, 1)
 
 
-@unittest.skipUnless(sys.platform == "linux", "Linux release installer")
 class CronUpgradeTest(unittest.TestCase):
-    def test_cron_installs_release_using_user_local_node(self):
+    def test_cron_installs_self_contained_release_without_node(self):
         self.run_upgrade("idle")
+
+    def test_existing_version_is_a_no_op(self):
+        self.run_upgrade("no-op")
+
+    def test_failed_health_check_rolls_back(self):
+        self.run_upgrade("rollback")
+
+    def test_node_based_current_release_remains_a_valid_rollback_target(self):
+        self.run_upgrade("legacy-current")
 
     def test_work_started_during_download_defers_without_changing_current(self):
         self.run_upgrade("busy-during-download")
@@ -99,30 +106,58 @@ class CronUpgradeTest(unittest.TestCase):
 
     def run_upgrade(self, mode):
         with tempfile.TemporaryDirectory() as directory:
-            home = Path(directory)
+            home = Path(directory).resolve()
             seed_idle(home / "state.sqlite")
             if mode == "force":
                 with sqlite3.connect(home / "state.sqlite") as db:
                     db.execute("UPDATE projection_turns SET state='running'")
             commands = home / "commands"
             commands.mkdir()
-            # Deliberately expose system utilities without any system Node.
-            for name in ("bash", "python3", "mktemp", "rm", "mkdir", "tar", "mv",
-                         "ln", "readlink", "find", "sort", "awk", "seq", "gzip", "flock"):
-                (commands / name).symlink_to(shutil.which(name))
-            node = home / ".local/node/bin/node"
-            node.parent.mkdir(parents=True)
+            # Deliberately expose system utilities without Node. New releases
+            # must run from their embedded runtime.
+            for name in ("bash", "python3", "mktemp", "rm", "mkdir", "tar",
+                         "ln", "readlink", "sort", "awk", "seq", "gzip"):
+                (commands / name).symlink_to(
+                    shutil.which(name, path="/usr/bin:/bin:/usr/sbin:/sbin")
+                )
+            # macOS lacks the three GNU/Linux operations used by the installer.
+            # Model their exact call shapes so the updater workflow itself can
+            # run locally; release CI still exercises the native utilities.
+            flock = commands / "flock"
+            flock.write_text("#!/bin/sh\nexit 0\n")
+            flock.chmod(0o755)
+            mv = commands / "mv"
+            mv.write_text('''#!/usr/bin/env python3
+import os, shutil, sys
+args = sys.argv[1:]
+if args[0] == '-Tf':
+    os.replace(args[1], args[2])
+else:
+    shutil.move(args[0], args[1])
+''')
+            mv.chmod(0o755)
+            find = commands / "find"
+            find.write_text('''#!/usr/bin/env python3
+import pathlib, sys
+root = pathlib.Path(sys.argv[1])
+if root.exists():
+    for path in root.iterdir():
+        if path.is_dir():
+            print(f'{path.stat().st_mtime} {path}')
+''')
+            find.chmod(0o755)
             reported_version = "invalid" if mode == "invalid-staged-version" else VERSION
-            node.write_text(f'#!/bin/sh\necho "T3 Code {reported_version}"\n')
-            node.chmod(0o755)
-            release = home / "artifact/bin"
-            release.mkdir(parents=True)
-            launcher = release / "t3"
-            launcher.write_text('#!/bin/sh\nexec node "$@"\n')
+            release = home / "artifact"
+            (release / "bin").mkdir(parents=True)
+            executable = release / "t3"
+            executable.write_text(f'#!/bin/sh\necho "T3 Code {reported_version}"\n')
+            executable.chmod(0o755)
+            launcher = release / "bin/t3"
+            launcher.write_text('#!/bin/sh\nscript_dir=${0%/*}\nexec "$script_dir/../t3" "$@"\n')
             launcher.chmod(0o755)
             archive = home / "release.tar.gz"
             with tarfile.open(archive, "w:gz") as tar:
-                tar.add(release.parent, arcname="headless")
+                tar.add(release, arcname="headless")
             metadata = home / "release.json"
             metadata.write_text(json.dumps([{
                 "tag_name": "v" + VERSION, "prerelease": True,
@@ -134,7 +169,10 @@ class CronUpgradeTest(unittest.TestCase):
 import json, os, pathlib, shutil, sqlite3, sys
 args = sys.argv[1:]
 if args[-1].endswith('/.well-known/t3/environment'):
-    print(json.dumps({'serverVersion': os.environ['FIXTURE_VERSION']}))
+    root = pathlib.Path(os.environ['HOME']) / '.local/share/t3code-server'
+    current = (root / 'current').resolve().name
+    version = 'failed-new-release' if os.environ.get('FIXTURE_FAIL_NEW') == '1' and current == os.environ['FIXTURE_VERSION'] else current
+    print(json.dumps({'serverVersion': version}))
 else:
     source = 'release.tar.gz' if args[-1].endswith('/artifact') else 'release.json'
     shutil.copyfile(pathlib.Path(os.environ['HOME']) / source, args[args.index('-o') + 1])
@@ -147,11 +185,38 @@ else:
                    "T3CODE_HEADLESS_CHANNEL": "nightly", "T3CODE_HEADLESS_NO_RESTART": "1",
                    "T3CODE_HEADLESS_BASE_URL": "https://fixture.invalid", "FIXTURE_VERSION": VERSION,
                    "T3CODE_HEADLESS_STATE_DB": str(home / "state.sqlite"),
-                   "FIXTURE_BUSY": "1" if mode == "busy-during-download" else "0"}
+                   "T3CODE_HEADLESS_HEALTH_ATTEMPTS": "1",
+                   "FIXTURE_BUSY": "1" if mode == "busy-during-download" else "0",
+                   "FIXTURE_FAIL_NEW": "1" if mode == "rollback" else "0"}
             root = home / ".local/share/t3code-server"
+            previous_version = "0.0.38-nightly.20260905.1200-fork.1"
+            if mode in ("rollback", "legacy-current"):
+                previous = root / "releases" / previous_version
+                (previous / "bin").mkdir(parents=True)
+                previous_launcher = previous / "bin/t3"
+                if mode == "legacy-current":
+                    node = home / ".local/node/bin/node"
+                    node.parent.mkdir(parents=True)
+                    node.write_text(f'#!/bin/sh\necho "T3 Code {previous_version}"\n')
+                    node.chmod(0o755)
+                    previous_launcher.write_text('#!/bin/sh\nexec node "$@"\n')
+                else:
+                    previous_launcher.write_text(
+                        f'#!/bin/sh\necho "T3 Code {previous_version}"\n'
+                    )
+                previous_launcher.chmod(0o755)
+                root.mkdir(parents=True, exist_ok=True)
+                (root / "current").symlink_to(previous)
+            elif mode == "no-op":
+                installed = root / "releases" / VERSION
+                (installed / "bin").mkdir(parents=True)
+                root.mkdir(parents=True, exist_ok=True)
+                (root / "current").symlink_to(installed)
             if mode == "orphan-sweep":
                 staging = root / ".staging"
-                dead_process = subprocess.Popen(["/bin/true"])
+                dead_process = subprocess.Popen(
+                    [shutil.which("true", path="/usr/bin:/bin")]
+                )
                 dead_process.wait(timeout=5)
                 dead_stage = staging / f"old.{dead_process.pid}"
                 live_stage = staging / f"old.{os.getpid()}"
@@ -159,6 +224,19 @@ else:
                 live_stage.mkdir()
             result = subprocess.run(["/bin/bash", str(SCRIPT), *(["--force"] if mode == "force" else [])], env=env,
                                     text=True, capture_output=True, timeout=15)
+            if mode == "no-op":
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"already on {VERSION}", result.stderr)
+                return
+            if mode == "rollback":
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual(
+                    (root / "current").resolve(),
+                    (root / "releases" / previous_version).resolve(),
+                )
+                self.assertIn("rolled back current", result.stderr)
+                self.assertNotIn("rollback health check failed", result.stderr)
+                return
             if mode == "invalid-staged-version":
                 self.assertEqual(result.returncode, 1, result.stderr)
                 self.assertEqual(list((root / ".staging").iterdir()), [])
@@ -174,7 +252,9 @@ else:
                 self.assertFalse(dead_stage.exists())
                 self.assertTrue(live_stage.exists())
                 self.assertIn(f"removed orphaned staging directory {dead_stage}", result.stderr)
-            self.assertEqual((root / "current").resolve(), root / "releases" / VERSION)
+            self.assertEqual(
+                (root / "current").resolve(), (root / "releases" / VERSION).resolve()
+            )
             self.assertTrue((root / "current/bin/t3").is_file())
             self.assertIn(f"updated t3code.service to {VERSION}", result.stderr)
 
