@@ -15,4 +15,3 @@
       Effect.provide(harness.layer),
     );
   });
-
