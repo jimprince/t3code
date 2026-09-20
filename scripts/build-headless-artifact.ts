@@ -92,11 +92,7 @@ export async function adaptCliArchive(input: {
   try {
     run("tar", ["-xzf", input.archive, "-C", stageRoot]);
     const upstreamRoot = NodePath.join(stageRoot, cliArchiveStem(input.version, PLATFORM, ARCH));
-    for (const required of [
-      "t3",
-      "client/index.html",
-      ...headlessRuntimeExternalPaths(),
-    ]) {
+    for (const required of ["t3", "client/index.html", ...headlessRuntimeExternalPaths()]) {
       await requirePath(NodePath.join(upstreamRoot, required));
     }
     await requireOneOf(upstreamRoot, [
