@@ -23,7 +23,9 @@ const decodeLegacy = Schema.decodeUnknownSync(
 );
 
 const layer = it.layer(
-  OrchestrationEventStoreLive.pipe(Layer.provideMerge(NodeSqliteClient.layerMemory())),
+  OrchestrationEventStoreLive.pipe(
+    Layer.provideMerge(NodeSqliteClient.layer({ filename: ":memory:" })),
+  ),
 );
 layer("legacy sidebar ordering migration", (it) => {
   it.effect("migrates the released ledger losslessly, once, and replays both ranges", () =>
