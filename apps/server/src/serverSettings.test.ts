@@ -1427,10 +1427,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             ?.value,
           "sk-kept",
         );
-        assert.equal(
-          (yield* serverSettings.getSettings).giteaInstances[0]?.token,
-          "gitea-kept",
-        );
+        assert.equal((yield* serverSettings.getSettings).giteaInstances[0]?.token, "gitea-kept");
 
         const failed = yield* serverSettings
           .updateSettings({ giteaInstances: [], providerInstances: {} })
@@ -1441,10 +1438,7 @@ it.layer(NodeServices.layer)("server settings", (it) => {
             ?.value,
           "sk-kept",
         );
-        assert.equal(
-          (yield* serverSettings.getSettings).giteaInstances[0]?.token,
-          "gitea-kept",
-        );
+        assert.equal((yield* serverSettings.getSettings).giteaInstances[0]?.token, "gitea-kept");
       }).pipe(Effect.provide(settingsLayer));
     }),
   );
