@@ -1,8 +1,9 @@
 {
   "version": 5,
-  "prev": "9ef321eaf27518ed151c1118463fc01af09b5eec",
-  "head": "bfb4d0c8d6fbb953e86ff04f59f004282f85527c",
-  "applied": [
+  "prev": "99e5f08db55b71a7f383cfa691d5d02999846df5",
+  "head": "994654198d5820b6fab9ee09063646a8b6fd8e22",
+  "applied": [],
+  "unapplied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
@@ -38,7 +39,6 @@
     "fork-3mf-preview",
     "fork-step-preview"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
