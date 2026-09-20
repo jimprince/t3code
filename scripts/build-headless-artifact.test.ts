@@ -9,6 +9,7 @@ import { cliArchiveStem } from "./build-cli-archive.ts";
 import {
   adaptCliArchive,
   HEADLESS_ENTRYPOINT,
+  headlessRuntimeExternalPaths,
   resolveHeadlessArtifactName,
 } from "./build-headless-artifact.ts";
 
@@ -32,10 +33,8 @@ describe("build-headless-artifact", () => {
       await NodeFSP.mkdir(NodePath.join(upstreamRoot, "resource-monitor/linux-x64"), {
         recursive: true,
       });
-      for (const dependency of ["node-pty", "@ff-labs/fff-node", "msgpackr-extract"]) {
-        await NodeFSP.mkdir(NodePath.join(upstreamRoot, "node_modules", dependency), {
-          recursive: true,
-        });
+      for (const required of headlessRuntimeExternalPaths()) {
+        await NodeFSP.mkdir(NodePath.join(upstreamRoot, required), { recursive: true });
       }
       await NodeFSP.writeFile(
         NodePath.join(upstreamRoot, "t3"),
@@ -100,5 +99,14 @@ esac
     } finally {
       await NodeFSP.rm(scratch, { recursive: true, force: true });
     }
+  });
+});
+
+describe("headlessRuntimeExternalPaths", () => {
+  it("follows the server's runtime-external dependencies, not a fixed list", () => {
+    const paths = headlessRuntimeExternalPaths();
+    expect(paths).toContain("node_modules/node-pty");
+    expect(paths).toContain("node_modules/@ff-labs/fff-node");
+    expect(paths).not.toContain("node_modules/msgpackr-extract");
   });
 });

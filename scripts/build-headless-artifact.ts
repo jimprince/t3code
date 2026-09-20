@@ -8,9 +8,22 @@ import * as NodePath from "node:path";
 import serverPackageJson from "../apps/server/package.json" with { type: "json" };
 
 import { cliArchiveFileName, cliArchiveStem } from "./build-cli-archive.ts";
+import { selectCliRuntimeExternalDependencies } from "./lib/cli-external-packages.ts";
 
 const PLATFORM = "linux" as const;
 const ARCH = "x64" as const;
+
+/**
+ * node_modules the upstream CLI archive must carry: the server dependencies
+ * upstream keeps external to its single-executable bundle. Derived from the
+ * same list upstream stages from, so the check follows upstream when a native
+ * package is added or dropped (msgpackr-extract left in 2005).
+ */
+export function headlessRuntimeExternalPaths(): string[] {
+  return Object.keys(selectCliRuntimeExternalDependencies(serverPackageJson.dependencies))
+    .sort()
+    .map((name) => `node_modules/${name}`);
+}
 
 interface CliArgs {
   readonly version: string;
@@ -82,9 +95,7 @@ export async function adaptCliArchive(input: {
     for (const required of [
       "t3",
       "client/index.html",
-      "node_modules/node-pty",
-      "node_modules/@ff-labs/fff-node",
-      "node_modules/msgpackr-extract",
+      ...headlessRuntimeExternalPaths(),
     ]) {
       await requirePath(NodePath.join(upstreamRoot, required));
     }
