@@ -18,7 +18,7 @@ import * as Stream from "effect/Stream";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { TerminalManager } from "../../terminal/Manager.ts";
-import { OrchestrationListenerCallbackError } from "../Errors.ts";
+import { OrchestrationCommandInvariantError, type OrchestrationDispatchError } from "../Errors.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import { ThreadArchiveCleanupReactor } from "../Services/ThreadArchiveCleanupReactor.ts";
@@ -120,7 +120,7 @@ describe("ThreadArchiveCleanupReactor", () => {
     readonly event?: OrchestrationEvent;
     readonly dispatchImplementation?: (
       command: OrchestrationCommand,
-    ) => Effect.Effect<{ readonly sequence: number }, OrchestrationListenerCallbackError>;
+    ) => Effect.Effect<{ readonly sequence: number }, OrchestrationDispatchError>;
     readonly closeImplementation?: TerminalManagerShape["close"];
   }) {
     const effects: string[] = [];
@@ -285,8 +285,8 @@ describe("ThreadArchiveCleanupReactor", () => {
       dispatchImplementation: (command) => {
         void command;
         return Effect.fail(
-          new OrchestrationListenerCallbackError({
-            listener: "domain-event",
+          new OrchestrationCommandInvariantError({
+            commandType: command.type,
             detail: "simulated archive stop failure",
           }),
         );
