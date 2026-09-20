@@ -8,7 +8,7 @@ import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import Migration0001 from "./001_ProviderSessionRuntimeBootGeneration.ts";
 import Migration0002 from "./002_ProviderSessionRuntimeActiveTurn.ts";
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("002_ProviderSessionRuntimeActiveTurn", (it) => {
   it.effect("adds and backfills the active turn column idempotently", () =>

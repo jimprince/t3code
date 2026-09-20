@@ -12,7 +12,7 @@ import { migrationManifest, runMigrations } from "../Migrations.ts";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import Migration0001 from "./001_ProviderSessionRuntimeBootGeneration.ts";
 
-const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layerMemory()));
+const layer = it.layer(Layer.mergeAll(NodeSqliteClient.layer({ filename: ":memory:" })));
 
 layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
   it.effect(
