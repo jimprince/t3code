@@ -281,6 +281,12 @@ decided = "narrow"
 rationale = "Upstream removed the project repository's listAll and deleteById queries. Retire the fork's kind-column edit to the removed list query while retaining General Chat kind persistence in the surviving upsert and getById paths."
 
 [[patch.decision]]
+id = "upstream-web-type-import-cleanup"
+date = "2026-09-20"
+decided = "adapt"
+rationale = "Retain the General Chat thread extension while explicitly importing its surviving OrchestrationLatestTurn contract after upstream removed obsolete web type imports."
+
+[[patch.decision]]
 id = "chat-enrichment-guard-951"
 date = "2026-07-29"
 decided = "retire"

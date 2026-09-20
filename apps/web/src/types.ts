@@ -5,6 +5,7 @@ import type {
   ChatUnknownAttachment as ContractChatUnknownAttachment,
   OrchestrationCheckpointFile,
   OrchestrationCheckpointSummary,
+  OrchestrationLatestTurn,
   OrchestrationMessage,
   OrchestrationProposedPlan,
   OrchestrationSession,
