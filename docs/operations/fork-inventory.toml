@@ -27,6 +27,19 @@ retire_when = "Upstream or maintained shared tooling provides equivalent workspa
 depends_on = []
 roles = ["lockfile-owner"]
 note = "Keep upstream and fork script entry points in one Knip workspace stanza. Removed the unrelated wall-clock assertion from activity-reuse coverage; the observable identity-reuse test and justified compression-test headroom remain. The replay driver removes the old generated lockfile delta before rebase and regenerates at the complete tip, then refreshes this owner. Published main retains a consistent frozen-install lockfile; mid-stack generation omits later workspaces. Pin dependencies with exact-version patches to that version; expo-audio 57.0.5 satisfies ~57.0.4 but still lacks the recorder failure-state fix in the 57.0.4 patch."
+
+[[patch.decision]]
+id = "upstream12414-test-skill-browser-panel"
+date = "2026-09-20"
+decided = "relocate"
+rationale = "Upstream replaced the broad web-testing skill with Browser-panel guidance and moved direct SQLite instructions into a focused reference. Keep the fork's fresh-worktree dependency-linking recovery, but relocate it into that SQLite reference instead of restoring the obsolete troubleshooting section."
+
+[[patch.decision]]
+id = "upstream-device-stream-knip-entries"
+date = "2026-09-20"
+decided = "narrow+adapt"
+rationale = "Keep upstream's new PR-measurement and mobile device-stream Knip entries, retain only the fork's CI helper, Expo fingerprint, and oxlint-plugin declarations, and combine them in the upstream workspace stanzas."
+
 [[patch.decision]]
 id = "stashimagecompression-timeout"
 date = "2026-07-29"
@@ -74,15 +87,3 @@ id = "upstream9902-file-highlight-test-budget"
 date = "2026-09-17"
 decided = "adapt"
 rationale = "Keep upstream's 7,000-line real-worker stale-highlight regression intact, but give its two CPU-bound edit cases 30 seconds so they do not fail at the 15-second default while the complete repository gate saturates the host."
-
-[[patch.decision]]
-id = "upstream12414-test-skill-browser-panel"
-date = "2026-09-20"
-decided = "relocate"
-rationale = "Upstream replaced the broad web-testing skill with Browser-panel guidance and moved direct SQLite instructions into a focused reference. Keep the fork's fresh-worktree dependency-linking recovery, but relocate it into that SQLite reference instead of restoring the obsolete troubleshooting section."
-
-[[patch.decision]]
-id = "upstream-device-stream-knip-entries"
-date = "2026-09-20"
-decided = "narrow+adapt"
-rationale = "Keep upstream's new PR-measurement and mobile device-stream Knip entries, retain only the fork's CI helper, Expo fingerprint, and oxlint-plugin declarations, and combine them in the upstream workspace stanzas."
