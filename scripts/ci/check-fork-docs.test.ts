@@ -2,7 +2,7 @@
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, it } from "vite-plus/test";
 import { checkForkDocs } from "./check-fork-docs.ts";
 
 const write = (root: string, path: string, contents: string): void => {
@@ -56,6 +56,7 @@ const createValidDocs = (): string => {
   for (const tool of [
     "prepare-stgit-publication",
     "verify-stgit-replay",
+    "stage-ci-candidate",
     "publish-stgit-stack",
     "check-stgit-candidate",
     "create-stgit-candidate-manifest",

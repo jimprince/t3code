@@ -18,6 +18,7 @@ const requiredFiles = [
 const requiredForkTools = [
   "scripts/ci/prepare-stgit-publication",
   "scripts/ci/verify-stgit-replay",
+  "scripts/ci/stage-ci-candidate",
   "scripts/ci/publish-stgit-stack",
   "scripts/ci/check-stgit-candidate",
   "scripts/ci/create-stgit-candidate-manifest",

@@ -75,7 +75,7 @@ export async function reuseCandidateCI(options: {
     const branch = `ci-candidate/${options.source}`;
     for (;;) {
       const response = query(
-        `repos/${options.repository}/actions/workflows/ci.yml/runs?head_sha=${options.source}&event=push&branch=${encodeURIComponent(branch)}&per_page=1`,
+        `repos/${options.repository}/actions/workflows/ci.yml/runs?head_sha=${options.source}&branch=${encodeURIComponent(branch)}&per_page=1`,
       );
       if (!record(response) || !Array.isArray(response.workflow_runs))
         return fallback("Candidate CI run evidence unavailable.");
@@ -89,7 +89,7 @@ export async function reuseCandidateCI(options: {
         if (
           !record(run) ||
           run.head_sha !== options.source ||
-          run.event !== "push" ||
+          !["push", "workflow_dispatch"].includes(String(run.event)) ||
           run.head_branch !== branch ||
           run.path !== ".github/workflows/ci.yml" ||
           !record(run.repository) ||

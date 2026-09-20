@@ -1,5 +1,6 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
+import * as NodeFS from "node:fs";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import { assert, describe, it } from "vite-plus/test";
@@ -51,7 +52,7 @@ describe("candidate CI evidence", () => {
       source,
       query: (endpoint) => {
         if (endpoint.includes("/workflows/")) {
-          assert.include(endpoint, `head_sha=${source}&event=push&branch=ci-candidate%2F${source}`);
+          assert.include(endpoint, `head_sha=${source}&branch=ci-candidate%2F${source}`);
           return { workflow_runs: [runFor()] };
         }
         assert.equal(endpoint, `repos/${repository}/actions/runs/123/attempts/2/jobs?per_page=100`);
@@ -142,6 +143,17 @@ describe("candidate CI evidence", () => {
     assert.equal(phase, 2);
   });
 
+  it("recovers a retained candidate with no push run through an exact manual dispatch", async () => {
+    let dispatched = false;
+    const query = (endpoint: string) =>
+      endpoint.includes("/workflows/")
+        ? { workflow_runs: dispatched ? [{ ...runFor(), event: "workflow_dispatch" }] : [] }
+        : jobs();
+    assert.isFalse((await reuseCandidateCI({ repository, source, query })).reused);
+    dispatched = true;
+    assert.isTrue((await reuseCandidateCI({ repository, source, query })).reused);
+  });
+
   it("dereferences candidate evidence for a stamped release whose main jobs were reused", async () => {
     const repo = createFixtureRepo();
     try {
@@ -187,7 +199,30 @@ describe("candidate CI evidence", () => {
 });
 
 const stage = NodeURL.fileURLToPath(new URL("./stage-ci-candidate", import.meta.url));
+const workflowStep = (workflow: string, name: string): string => {
+  const source = NodeFS.readFileSync(
+    new URL(`../../.github/workflows/${workflow}`, import.meta.url),
+    "utf8",
+  );
+  const step = source.split(`      - name: ${name}\n`)[1]!.split("\n      - ")[0]!;
+  return step
+    .split("        run: |\n")[1]!
+    .split("\n")
+    .map((line) => line.slice(10))
+    .join("\n");
+};
 describe("candidate staging", () => {
+  it("rejects missing workflow-triggering credentials before checkout or candidate staging", () => {
+    const command = workflowStep("sync-upstream.yml", "Require workflow-triggering credentials");
+    for (const token of ["", "fixture-pat"]) {
+      const result = NodeChildProcess.spawnSync("bash", ["-e", "-c", command], {
+        encoding: "utf8",
+        env: { ...process.env, GH_TOKEN: token },
+      });
+      assert.equal(result.status, token ? 0 : 1);
+    }
+  });
+
   it("atomically stages immutable source/metadata inputs without publishing main or tags", () => {
     const repo = createFixtureRepo();
     const remote = createFixtureRepo();
@@ -198,8 +233,32 @@ describe("candidate staging", () => {
       repo.git("remote", "add", "origin", remotePath);
       repo.git("push", "origin", `${main}:refs/heads/main`);
       repo.writeFile("source.ts", "new candidate\n");
-      const head = repo.commitAll("candidate");
-      repo.writeFile("stack.json", JSON.stringify({ head }));
+      repo.writeFile(
+        "docs/operations/fork-inventory.toml",
+        `schema = 2
+[[patch]]
+name = "candidate"
+subject = "test: candidate"
+class = "product"
+purpose = "Verify candidate metadata transport."
+retire_when = "Fixture ends."
+depends_on = []
+roles = ["lockfile-owner", "release-workflow-owner", "agent-docs-owner"]
+`,
+      );
+      const head = repo.commitAll("test: candidate");
+      repo.writeFile(
+        "stack.json",
+        JSON.stringify({
+          version: 5,
+          prev: main,
+          head,
+          applied: ["candidate"],
+          unapplied: [],
+          hidden: [],
+          patches: { candidate: { oid: head } },
+        }),
+      );
       const metadata = repo.commitAll("metadata fixture");
       repo.git("update-ref", "refs/stacks/stgit/adopt", metadata);
       repo.git("reset", "--hard", head);
@@ -226,6 +285,30 @@ describe("candidate staging", () => {
         `${metadata}\trefs/ci-stacks/${head}`,
       );
       assert.equal(run().status, 0, "an identical retained candidate can be reused");
+
+      // Execute CI's real metadata-fetch step in a clean checkout, then the
+      // production checker, so a green fixture proves transport plus policy.
+      const checkout = NodePath.join(remote.dir, "checkout");
+      remote.git("clone", "--no-checkout", remotePath, checkout);
+      remote.git("-C", checkout, "checkout", head);
+      const env = {
+        ...process.env,
+        PATH: `/usr/bin:/bin:${process.env.PATH ?? ""}`,
+        GITHUB_SHA: head,
+        GITHUB_REF: `refs/heads/ci-candidate/${head}`,
+      };
+      NodeChildProcess.execFileSync(
+        "bash",
+        ["-e", "-o", "pipefail", "-c", workflowStep("ci.yml", "Fetch StGit metadata")],
+        { cwd: checkout, env, stdio: "pipe" },
+      );
+      const checked = NodeChildProcess.execFileSync(
+        NodeURL.fileURLToPath(new URL("./check-stgit-stack", import.meta.url)),
+        [],
+        { cwd: checkout, env, encoding: "utf8" },
+      );
+      assert.include(checked, "1 applied patches");
+
       repo.git("push", "--force", "origin", `${main}:refs/heads/ci-candidate/${head}`);
       assert.notEqual(run().status, 0, "staging must not replace a mismatched remote candidate");
       assert.equal(

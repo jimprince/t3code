@@ -88,6 +88,16 @@ jobs:
           echo "selected=$selected" >> "$GITHUB_OUTPUT"
           echo "Resolved channel: $channel (selected=$selected)"
 
+      - name: Require workflow-triggering credentials
+        if: steps.channel.outputs.selected == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [[ -z "$GH_TOKEN" ]]; then
+            echo "::error::GH_PAT is required: GITHUB_TOKEN pushes do not trigger candidate CI."
+            exit 1
+          fi
+
       - name: Get latest upstream release tag
         if: steps.channel.outputs.selected == 'true'
         id: upstream
@@ -118,7 +128,7 @@ jobs:
           fetch-depth: 0
           # Upstream may change workflow files; a PAT with workflow scope is
           # required to push those changes back to the fork.
-          token: ${{ secrets.GH_PAT || github.token }}
+          token: ${{ secrets.GH_PAT }}
 
       - name: Setup Vite+
         if: steps.channel.outputs.selected == 'true'
@@ -246,7 +256,7 @@ jobs:
       - name: Verify replay before publication
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
         env:
-          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
         run: scripts/ci/verify-stgit-replay
 
       - name: Prepare release tag

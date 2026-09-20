@@ -412,6 +412,11 @@ Fix source failures in their owning patches and verify the resulting new SHA.
 An unchanged candidate can reuse its retained run; a transient CI failure can
 be rerun in GitHub, but neither candidate ref may be overwritten. Retained
 candidate refs are diagnostic inputs, not releases or publication leases.
+If a candidate has no CI run, dispatch the same immutable source with
+`gh workflow run ci.yml --ref ci-candidate/<sha>`, then rerun the verification
+gate. Sync requires `GH_PAT` before any staging, because `GITHUB_TOKEN` pushes
+cannot trigger the initial run. Manually dispatched candidate evidence is
+subject to the same source, workflow, attempt and runner checks.
 
 After promotion, main CI checks the published stack and dereferences the
 candidate's exact repository, SHA, workflow, attempt, executed source steps and
@@ -422,6 +427,16 @@ CI. Release preflight requires successful main CI and follows reused evidence
 back to the actual candidate jobs. Version-only release children may inherit
 that source evidence; packaged historical startup, signing and public asset
 verification still run. Do not copy the source command list into bot config.
+
+For changes to this contract, run the focused candidate, replay, release-reuse,
+tag-preparation and workflow fixtures:
+
+```bash
+./node_modules/.bin/vp test run scripts/ci/candidate-ci.test.ts \
+  scripts/ci/verify-stgit-replay.test.ts scripts/ci/reuse-release-ci.test.ts \
+  scripts/ci/prepare-release-tag.test.ts scripts/sync-upstream-workflow.test.ts \
+  scripts/ci/check-fork-docs.test.ts
+```
 
 Batch completed concerns before one leased publication. The nightly push gate
 already compares packaged-source trees; metadata-only maintenance should not
