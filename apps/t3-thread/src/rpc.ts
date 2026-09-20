@@ -20,14 +20,10 @@ type RpcProtocolClient =
   typeof makeT3RpcClient extends Effect.Effect<infer Client, any, any> ? Client : never;
 
 function wsRpcProtocolLayer(wsUrl: string) {
-  const webSocketConstructorLayer = Layer.succeed(
-    Socket.WebSocketConstructor,
-    (socketUrl, protocols) =>
-      new NodeSocket.NodeWS.WebSocket(socketUrl, protocols) as unknown as globalThis.WebSocket,
-  );
-
   return RpcClient.layerProtocolSocket().pipe(
-    Layer.provide(Socket.layerWebSocket(wsUrl).pipe(Layer.provide(webSocketConstructorLayer))),
+    Layer.provide(
+      Socket.layerWebSocket(wsUrl).pipe(Layer.provide(NodeSocket.layerWebSocketConstructorWS)),
+    ),
     Layer.provide(RpcSerialization.layerJson),
   );
 }

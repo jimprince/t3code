@@ -196,7 +196,7 @@ function compatibleOrchestrationCodec(schema: SharedCodec, mapper: Mapper): Shar
   return Schema.Unknown.pipe(
     Schema.decodeTo(
       Schema.Unknown,
-      SchemaTransformation.transformOrFail({
+      SchemaTransformation.transformEffect({
         decode: (raw) =>
           Schema.decodeUnknownEffect(schema)(raw).pipe(
             Effect.map((decoded) => mapper(decoded, "cli")),
