@@ -21,12 +21,12 @@ name: Sync Upstream
 
 on:
   schedule:
-    # Once nightly (03:00 MDT / 09:00 UTC). Each scheduled sync is an
+    # Once nightly (09:17 UTC), away from the busiest start-of-hour queue. Each scheduled sync is an
     # agent-driven rebase of the whole patch stack, and every rebase is a
     # chance of a bad conflict resolution being folded into a patch by
     # auto_land. One sync a day bounds that exposure while still shipping a
     # daily fork nightly; use workflow_dispatch for an off-cycle sync.
-    - cron: "0 9 * * *"
+    - cron: "17 9 * * *"
   workflow_dispatch:
     inputs:
       channel:
@@ -245,10 +245,9 @@ jobs:
 
       - name: Verify replay before publication
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libsecret-1-dev pkg-config
-          scripts/ci/verify-stgit-replay
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
+        run: scripts/ci/verify-stgit-replay
 
       - name: Prepare release tag
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'

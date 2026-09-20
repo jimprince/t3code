@@ -3,7 +3,7 @@
 - `.github/workflows/ci.yml` runs Vite+ install, `vp check`,
   `vp run typecheck`, desktop build verification, repo tests, browser tests,
   mobile native static analysis, and release-smoke checks on pull requests and
-  pushes to `main`.
+  pushes to `main` or immutable `ci-candidate/<sha>` branches.
 - `.github/workflows/release.yml` publishes the fork release artifacts from
   release tags: macOS arm64 desktop DMG/zip/updater manifest plus the Linux x64
   headless tarball.
@@ -28,7 +28,7 @@
   nightly only and stable runs solely on an explicit `channel=stable`
   dispatch: a stable replay conflicts by construction whenever the stack sits
   on a nightly base referencing upstream files the stable tag lacks (such as a
-  migration added after the last stable release), so scheduled runs select nightly only. The daily schedule is 09:00 UTC.
+  migration added after the last stable release), so scheduled runs select nightly only. The daily schedule is 09:17 UTC.
 - The external CI Repair Bot is the repairer. It should claim an eligible
   handoff within 20 minutes, check out the exact leased `main` and canonical
   StGit metadata, and obtain ordered policy from
@@ -53,7 +53,11 @@
   EAS model.
 
 Clean automatic replays pass `scripts/ci/verify-stgit-replay` before main or a
-release tag changes. The gate includes all workspace typechecks and tests.
+release tag changes. The gate stages an exact candidate and waits for the normal
+GitHub CI workflow, including all workspace typechecks and tests. Main CI reuses
+that successful source run while checking the published stack; release preflight
+follows the evidence to its actual run attempt. See the
+[candidate verification contract](./fork-maintenance.md#one-candidate-verification-contract).
 All writers publish through `publish-stgit-stack`, using preparation-time main
 and metadata leases and immutable snapshots in the same transaction. A gate
 failure leaves the published stack intact; subsequent release preflight protects

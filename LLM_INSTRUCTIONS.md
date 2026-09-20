@@ -90,7 +90,7 @@ upgrades, verification, and troubleshooting.
 - Preserve the fork's app identity and installation isolation. Builder and
   runtime branding, not upstream package metadata alone, determine the name.
 - `sync-upstream.yml` automatically selects the latest upstream nightly once
-  daily at 09:00 UTC. Stable and combined syncs are explicit dispatches. Keep
+  daily at 09:17 UTC. Stable and combined syncs are explicit dispatches. Keep
   this upstream-migration lane enabled and separate from feature releases.
 - `fork-push-nightly.yml` handles qualifying packaged-source pushes to `main`.
   It must release the next `-fork.N` suffix for the one upstream nightly tag

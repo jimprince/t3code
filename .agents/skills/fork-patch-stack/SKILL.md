@@ -177,7 +177,10 @@ failing patch's own tests may not even import cleanly at its stack position.
 Treat the stack tip as the real gate — after the last patch applies, run
 focused checks there (the automatic CI gate is `scripts/ci/verify-stgit-replay`),
 then carry each fix back into its owning patch with
-`stg goto <patch>` and `stg refresh`.
+`stg goto <patch>` and `stg refresh`. The automatic gate stages immutable candidate
+refs and waits for GitHub CI before canonical publication. It requires GitHub
+push/API credentials; see the runbook's candidate verification contract. Local
+host logs do not substitute for that exact CI evidence.
 
 Generated files must be regenerated at the complete tip, where all fork
 workspaces exist. For a manual dependency edit, regenerate there and refresh the

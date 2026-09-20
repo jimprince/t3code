@@ -6,7 +6,7 @@ file is the concise runbook.
 
 ## Release Model
 
-- `sync-upstream.yml` checks the latest upstream nightly once daily at 09:00 UTC and can also be dispatched
+- `sync-upstream.yml` checks the latest upstream nightly once daily at 09:17 UTC and can also be dispatched
   manually.
 - `release.yml` builds only after a release tag is pushed, or when manually
   dispatched with an explicit version.
@@ -40,7 +40,9 @@ It reuses source checks and tests only from a successful
 release child changes only the four package version fields to the release version.
 Lockfile, dependency, source, workflow, or file-mode changes disqualify parent reuse.
 The required CI check, test shards and release smoke jobs must all succeed in the
-same run attempt. Preflight waits up to fifteen minutes for matching CI already in
+same run attempt. If main reused an upstream-sync candidate, preflight also
+verifies the candidate's actual source steps and runner profile; a green main
+evidence job alone is insufficient. Preflight waits up to fifteen minutes for matching CI already in
 progress; missing, failed, incomplete or unavailable evidence runs the full release
 source checks and tests instead. The job summary links any reused CI run. Desktop
 packaging and headless artifact smoke checks always run.

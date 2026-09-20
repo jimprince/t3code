@@ -305,8 +305,9 @@ refs scheduled for deletion.
 ## Verification and maintenance review
 
 Automatic replay runs `scripts/ci/verify-stgit-replay` before version stamping
-or publication. The gate installs the frozen candidate, runs stack/docs checks,
-lint, all workspace typechecks and tests, and rejects changes to the candidate.
+or publication. The gate validates the stack/docs locally, stages an immutable
+candidate for GitHub CI, waits for its complete source checks and tests, and
+rejects changes to the candidate.
 A failure keeps remote main and the release tag unchanged. Do not add a blanket
 package exemption for an upstream failure; compare the exact failing check at
 pure upstream and repair or explicitly review a narrowly scoped exception.
@@ -395,15 +396,32 @@ when an application rollback is required.
 ## One candidate verification contract
 
 `scripts/ci/verify-stgit-replay` is the host bot and upstream replay gate. It
-installs frozen dependencies, validates the complete stack, documentation and
-release notes, invokes `scripts/ci/verify-source`, and rejects source mutation.
-The shared source gate owns Knip, lint/format, typechecks and tests. GitHub CI
-uses its `check`, `test-other` and sharded `test-server` phases; the bot runs
-the same commands without sharding. Server tests use `--bail=1` so a failing
-run stops scheduling further tests; already running tests still finish. A green
-gate still requires every test, and repair attempts rerun the complete gate. Independent source checks and test phases collect failures before returning the first failing status, so one corrective attempt can address errors from several stages. Dependency installation and phase prerequisites still stop dependent work on failure.
-Platform build and artifact smoke checks
-remain in CI/release jobs. Do not copy the source command list into bot config.
+validates the complete local stack, documentation and release notes, then stages
+the exact unstamped source under `ci-candidate/<sha>` with its metadata under
+`refs/ci-stacks/<sha>`. These immutable inputs trigger the existing `ci.yml`;
+no canonical main, stack or release ref changes at this stage. The candidate
+runs frozen installation, Knip, lint/format, typechecks, all test shards and the
+normal CI build/smoke gates on the same runners used for main. Source jobs also
+reject tracked or untracked source mutation. The bot waits for GitHub instead
+of repeating the suite on its Mac host.
+
+The gate waits up to 25 minutes for a successful exact candidate run. A push
+must use credentials that trigger Actions (`GH_PAT` in Sync Upstream); no run
+within two minutes, failed checks or unverifiable evidence stops promotion.
+Fix source failures in their owning patches and verify the resulting new SHA.
+An unchanged candidate can reuse its retained run; a transient CI failure can
+be rerun in GitHub, but neither candidate ref may be overwritten. Retained
+candidate refs are diagnostic inputs, not releases or publication leases.
+
+After promotion, main CI checks the published stack and dereferences the
+candidate's exact repository, SHA, workflow, attempt, executed source steps and
+Ubuntu runner profile. The same commit fixes the workflow, gate scripts and
+Node/package-manager pins. It preserves the candidate's transfer-report
+artifact for PR baselines; missing evidence or an expired artifact runs normal
+CI. Release preflight requires successful main CI and follows reused evidence
+back to the actual candidate jobs. Version-only release children may inherit
+that source evidence; packaged historical startup, signing and public asset
+verification still run. Do not copy the source command list into bot config.
 
 Batch completed concerns before one leased publication. The nightly push gate
 already compares packaged-source trees; metadata-only maintenance should not
