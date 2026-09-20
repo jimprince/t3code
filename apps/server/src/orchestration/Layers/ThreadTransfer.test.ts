@@ -10,6 +10,7 @@ import {
 } from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it } from "@effect/vitest";
+import * as ByteSize from "effect/ByteSize";
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
@@ -735,7 +736,7 @@ it.layer(TestLayer, { timeout: 120_000 })("ThreadTransfer", (it) => {
                 reportOversizedNativeStat && String(filePath).endsWith(`${nativeId}.png`)
                   ? {
                       ...info,
-                      size: FileSystem.Size(50 * 1024 * 1024 + 1),
+                      size: ByteSize.bytes(50 * 1024 * 1024 + 1),
                     }
                   : info,
               ),
