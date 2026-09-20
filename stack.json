@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "8288cb07d11a200fc7bcb58691428872c2a2a259",
-  "head": "37b9c7536883c5c8c04eb6e3ba217721c91355c2",
+  "prev": "838968e45d4bcbbfbc682d7275fc0a70856230f5",
+  "head": "7e37d264216a3b90bbf1498f0a087bad8073bb1e",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -36,7 +36,8 @@
     "fork-inline-3d-objects",
     "fork-orcaslicer-handoff",
     "fork-3mf-preview",
-    "fork-step-preview"
+    "fork-step-preview",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -142,6 +143,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "0bb1a8c73252d4c8363d193c476b81c05c1f4ba8"
+    },
+    "refresh-temp": {
+      "oid": "7e37d264216a3b90bbf1498f0a087bad8073bb1e"
     }
   }
 }
