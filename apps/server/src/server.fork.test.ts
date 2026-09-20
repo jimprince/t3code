@@ -72,6 +72,7 @@ import {
 } from "effect/unstable/http";
 import { OtlpSerialization, OtlpTracer } from "effect/unstable/observability";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
+import * as NetAddress from "effect/unstable/net/NetAddress";
 import * as Socket from "effect/unstable/socket/Socket";
 import { vi } from "vite-plus/test";
 
@@ -113,7 +114,6 @@ import * as RemoteOpenTargets from "./environment/RemoteOpenTargets.ts";
 import * as EnvironmentTheme from "./environmentTheme.ts";
 import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as OrchestrationEngine from "./orchestration/Services/OrchestrationEngine.ts";
-import { OrchestrationListenerCallbackError } from "./orchestration/Errors.ts";
 import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSnapshotQuery.ts";
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import * as PullRequestSyncReactor from "./orchestration/PullRequestSyncReactor.ts";
@@ -483,6 +483,7 @@ const buildAppUnderTest = (options?: {
       traceMaxFiles: 10,
       otlpTracesUrl: undefined,
       otlpMetricsUrl: undefined,
+      otlpLogsUrl: undefined,
       otlpExportIntervalMs: 10_000,
       otlpServiceName: "t3-server",
       otlpHeaders: undefined,
@@ -1135,7 +1136,7 @@ const wsRpcProtocolLayer = (wsUrl: string) => {
     (socketUrl, protocols) =>
       new NodeSocket.NodeWS.WebSocket(
         socketUrl,
-        protocols,
+        protocols as string | string[] | undefined,
         cookie ? { headers: { cookie } } : undefined,
       ) as unknown as globalThis.WebSocket,
   );
@@ -1165,7 +1166,7 @@ const appendSessionCookieToWsUrl = (url: string, sessionCookieHeader: string) =>
 const getHttpServerUrl = (pathname = "") =>
   Effect.gen(function* () {
     const server = yield* HttpServer.HttpServer;
-    const address = server.address as HttpServer.TcpAddress;
+    const address = server.address as NetAddress.InetAddress;
     return `http://127.0.0.1:${address.port}${pathname}`;
   });
 
@@ -1524,7 +1525,7 @@ const getWsServerUrl = (
 ) =>
   Effect.gen(function* () {
     const server = yield* HttpServer.HttpServer;
-    const address = server.address as HttpServer.TcpAddress;
+    const address = server.address as NetAddress.InetAddress;
     const baseUrl = `ws://127.0.0.1:${address.port}${pathname}`;
     if (options?.authenticated === false) {
       return baseUrl;
