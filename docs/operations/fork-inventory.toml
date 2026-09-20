@@ -671,6 +671,11 @@ id = "upstream-headless-delivery"
 date = "2026-09-16"
 decided = "retain"
 rationale = "Upstream does not provide the fork's service-managed headless Linux artifact, authenticated update check, idle-aware promotion and rollback workflow, or historical-database release smoke coverage."
+[[patch.decision]]
+id = "upstream-observability-log-flag"
+date = "2026-09-20"
+decided = "adapt"
+rationale = "Keep the headless update fixture aligned with upstream's required OTLP log capability flag while preserving the fork update-check behavior."
 
 [[patch]]
 name = "fork-desktop-delivery"
