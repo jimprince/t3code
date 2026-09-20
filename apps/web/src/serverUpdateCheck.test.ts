@@ -46,6 +46,7 @@ function makeServerConfig(input: {
       localTracingEnabled: true,
       otlpTracesEnabled: false,
       otlpMetricsEnabled: false,
+      otlpLogsEnabled: false,
     },
     settings: DEFAULT_SERVER_SETTINGS,
   };
