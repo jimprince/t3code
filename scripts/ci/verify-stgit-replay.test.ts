@@ -266,7 +266,11 @@ esac
           })),
         }),
       );
-      const env = { ...process.env, PATH: `${repo.dir}/bin:/usr/bin:${process.env.PATH}` };
+      const env: Record<string, string | undefined> = {
+        ...process.env,
+        PATH: `${repo.dir}/bin:/usr/bin:${process.env.PATH}`,
+      };
+      // Actions sets this for its own runs; the fallback is what is under test.
       delete env.GITHUB_REPOSITORY;
       const result = NodeChildProcess.spawnSync(
         NodeURL.fileURLToPath(new URL("./verify-stgit-replay", import.meta.url)),
