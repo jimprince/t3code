@@ -10,7 +10,10 @@ bun scripts/ci/check-fork-docs.ts
 bun scripts/ci/check-fork-release-notes.ts
 scripts/ci/stage-ci-candidate
 export CI_CANDIDATE_SHA="$head"
-export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
+# Resolve evidence against the remote the candidate was staged on. A bare
+# `gh repo view` prefers an `upstream` remote, which the replay driver adds, so
+# a host-side gate would otherwise look for the candidate in upstream's repo.
+export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view "$(git remote get-url "${STGIT_REMOTE:-origin}")" --json nameWithOwner --jq .nameWithOwner)}"
 bun scripts/ci/reuse-release-ci.ts --candidate --wait
 if [[ "$(git rev-parse HEAD)" != "$head" || "$(git write-tree)" != "$tree" || -n "$(git status --porcelain)" ]]; then
   echo 'Verification changed the candidate; fold changes into their owning patches and reverify.' >&2

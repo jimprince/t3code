@@ -179,3 +179,106 @@ esac
     });
   }
 });
+
+describe("verify-stgit-replay candidate evidence repository", () => {
+  it("reads evidence from the staging remote, not a bare gh repo lookup", () => {
+    const repo = createFixtureRepo();
+    try {
+      repo.git("remote", "add", "origin", "https://github.com/owner/fork.git");
+      // The replay driver adds this remote, and a bare `gh repo view` prefers it.
+      repo.git("remote", "add", "upstream", "https://github.com/other/upstream.git");
+      repo.writeFile("scripts/ci/check-stgit-stack", "#!/bin/sh\nexit 0\n");
+      repo.writeFile("scripts/ci/check-fork-docs.ts", "process.exit(0);\n");
+      repo.writeFile("scripts/ci/check-fork-release-notes.ts", "process.exit(0);\n");
+      repo.writeFile("scripts/ci/stage-ci-candidate", "#!/bin/sh\nexit 0\n");
+      repo.writeFile(
+        "scripts/ci/reuse-release-ci.ts",
+        NodeFS.readFileSync(new URL("./reuse-release-ci.ts", import.meta.url), "utf8"),
+      );
+      repo.writeFile(
+        "bin/gh",
+        `#!/bin/sh
+case "$1" in
+  repo)
+    case "$3" in
+      *owner/fork*) echo owner/fork ;;
+      *) echo other/upstream ;;
+    esac
+    ;;
+  *)
+    printf '%s\\n' "$2" >> .git/gh-api
+    case "$2" in
+      */jobs*) cat .git/jobs.json ;;
+      *) cat .git/run.json ;;
+    esac
+    ;;
+esac
+`,
+      );
+      for (const path of [
+        "scripts/ci/check-stgit-stack",
+        "scripts/ci/stage-ci-candidate",
+        "bin/gh",
+      ])
+        NodeFS.chmodSync(NodePath.join(repo.dir, path), 0o755);
+      const head = repo.commitAll("gate fixture");
+      NodeFS.writeFileSync(
+        NodePath.join(repo.dir, ".git/run.json"),
+        JSON.stringify({
+          workflow_runs: [
+            {
+              id: 42,
+              run_attempt: 1,
+              head_sha: head,
+              head_branch: `ci-candidate/${head}`,
+              event: "push",
+              path: ".github/workflows/ci.yml",
+              repository: { full_name: "owner/fork" },
+              status: "completed",
+              conclusion: "success",
+            },
+          ],
+        }),
+      );
+      const names = [
+        "Check",
+        "Test",
+        "Test Server 1",
+        "Test Server 2",
+        "Test Server 3",
+        "Release Smoke",
+        "Rust",
+        "Fork patch policy",
+      ];
+      NodeFS.writeFileSync(
+        NodePath.join(repo.dir, ".git/jobs.json"),
+        JSON.stringify({
+          total_count: names.length,
+          jobs: names.map((name) => ({
+            name,
+            status: "completed",
+            conclusion: "success",
+            labels: ["ubuntu-24.04"],
+            steps: [
+              name === "Check" ? "Check source" : "Test",
+              "Check verified source unchanged",
+            ].map((name) => ({ name, status: "completed", conclusion: "success" })),
+          })),
+        }),
+      );
+      const env = { ...process.env, PATH: `${repo.dir}/bin:/usr/bin:${process.env.PATH}` };
+      delete env.GITHUB_REPOSITORY;
+      const result = NodeChildProcess.spawnSync(
+        NodeURL.fileURLToPath(new URL("./verify-stgit-replay", import.meta.url)),
+        [],
+        { cwd: repo.dir, encoding: "utf8", env },
+      );
+      assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+      const queried = NodeFS.readFileSync(NodePath.join(repo.dir, ".git/gh-api"), "utf8");
+      assert.include(queried, "repos/owner/fork/");
+      assert.notInclude(queried, "other/upstream");
+    } finally {
+      repo.cleanup();
+    }
+  });
+});

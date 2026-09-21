@@ -813,3 +813,9 @@ id = "stgit-conflict-exit-status"
 date = "2026-09-16"
 decided = "adapt"
 rationale = "Normalize replay failures that leave unmerged files to the driver's stable semantic-conflict status while preserving StGit's raw status for non-conflict failures; StGit 2.6.1 reports merge conflicts with exit 3 rather than the earlier exit 1."
+
+[[patch.decision]]
+id = "candidate-evidence-publication-remote"
+date = "2026-09-21"
+decided = "adapt"
+rationale = "Outside Actions the gate resolved GITHUB_REPOSITORY from a bare `gh repo view`, which prefers the `upstream` remote the replay driver adds, so host-side verification looked for the candidate in upstream's repository and reported no candidate CI run. Resolve it from the staging remote instead, matching the documented rule that evidence lookup uses the publication remote."
