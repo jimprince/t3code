@@ -401,6 +401,12 @@ when an application rollback is required.
 
 ## Pinned controller dispatch
 
+After the always-on repair controller is verified, set the repository variable
+`NIGHTLY_CONTROLLER_ENABLED=true` to disable GitHub's scheduled job while
+preserving controller/manual dispatch. The controller owns the daily due-once
+selection. For rollback, stop that controller before clearing the variable;
+never enable two repair daemons against independent state copies.
+
 The repair controller selects one public upstream nightly and dispatches
 `sync-upstream.yml` with `channel=nightly`, `target=<bare upstream tag>` and
 `target_sha=<full commit>`. Both pins are required together; the workflow

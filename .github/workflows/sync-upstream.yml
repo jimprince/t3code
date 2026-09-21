@@ -59,6 +59,9 @@ permissions:
 
 jobs:
   sync:
+    # The VM controller takes over the daily clock after its deployment is verified.
+    # Keep explicit dispatch available, and retain a one-variable rollback to cron.
+    if: github.event_name != 'schedule' || vars.NIGHTLY_CONTROLLER_ENABLED != 'true'
     name: Sync ${{ matrix.channel }} with upstream
     runs-on: ubuntu-24.04
     timeout-minutes: 60
