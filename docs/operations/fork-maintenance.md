@@ -266,12 +266,17 @@ The only supported manual landing route for a changed stack is:
 ```bash
 # In a fresh, fully fetched checkout, BEFORE editing or replay:
 scripts/ci/prepare-stgit-publication
-# After completing and verifying the changed stack:
+# After completing the changed stack and focused local checks:
+scripts/ci/verify-stgit-replay
 scripts/ci/publish-stgit-stack --check
 scripts/ci/publish-stgit-stack --push
 ```
 
-Check mode is non-mutating. Push mode requires `stgit/adopt`, a clean tree, all
+Check mode is non-mutating and checks publication policy and leases only.
+Push mode reads fresh GitHub evidence and rejects changed source without
+successful exact candidate CI. Tagging an unchanged main may reuse its main CI.
+The evidence lookup uses the publication remote; no local success marker bypasses it.
+Push mode requires `stgit/adopt`, a clean tree, all
 patches applied, and `stack.json.head == HEAD`. It requires the preparation-time main, stack and complete patch-ref leases,
 compares them with remote state, and atomically publishes:
 
@@ -304,7 +309,8 @@ refs scheduled for deletion.
 
 ## Verification and maintenance review
 
-Automatic replay runs `scripts/ci/verify-stgit-replay` before version stamping
+Every changed-source publication, including manual repairs, runs
+`scripts/ci/verify-stgit-replay` before version stamping
 or publication. The gate validates the stack/docs locally, stages an immutable
 candidate for GitHub CI, waits for its complete source checks and tests, and
 rejects changes to the candidate.
@@ -392,6 +398,22 @@ obsolete remote patch refs, and creates a new recovery snapshot pair. Never
 force-push just main. Source rollback does not roll back an installed app or a
 migrated database; use the release runbook to publish a new monotonic version
 when an application rollback is required.
+
+## Pinned controller dispatch
+
+The repair controller selects one public upstream nightly and dispatches
+`sync-upstream.yml` with `channel=nightly`, `target=<bare upstream tag>` and
+`target_sha=<full commit>`. Both pins are required together; the workflow
+verifies the public release and fetched commit before replay. Omitting them
+retains the manual latest-release behavior.
+
+After source repair and CI, the controller can dispatch
+`fork-push-nightly.yml` with `expected_main=<verified SHA>` and
+`upstream_tag=<bare upstream tag>`. It rejects a stale source or a different
+integrated base before publication. The existing stamped-child tag and Release
+workflow remain the packaging path. Recovery of an existing stamped tag uses
+`release.yml` with `version=<tag>` and `target_ref=<tag>`; do not substitute an
+unstamped candidate archive.
 
 ## One candidate verification contract
 

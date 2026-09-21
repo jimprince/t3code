@@ -208,6 +208,7 @@ For a split, combine, rename, retirement, or reorder:
 Use the repository helper as the only supported manual landing route:
 
 ```bash
+scripts/ci/verify-stgit-replay
 scripts/ci/publish-stgit-stack --check
 scripts/ci/publish-stgit-stack --push
 ```
@@ -216,7 +217,9 @@ Capture leases with `scripts/ci/prepare-stgit-publication` in the fresh checkout
 before making changes. Both modes require those preparation-time main, stack
 and complete patch-ref leases; they never infer permission from newly observed
 remote state. After lease loss, review the new state in a fresh checkout.
-Check mode is non-mutating. Push mode backs up remote `main`, then atomically
+Check mode is non-mutating and does not establish CI evidence. Push mode
+requires successful exact candidate CI for changed source; unchanged main may
+reuse its successful main CI when tagging. It backs up remote `main`, then atomically
 publishes `main`, the stack ref, every patch named by `stack.json.applied`, and
 leased deletions for obsolete patch refs. Stop on any lease failure.
 

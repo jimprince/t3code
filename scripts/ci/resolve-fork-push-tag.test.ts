@@ -8,7 +8,7 @@ import { createFixtureRepo, type FixtureRepo } from "./lib/git-fixture.ts";
 
 const script = NodePath.resolve(import.meta.dirname, "resolve-fork-push-tag");
 
-function run(repo: FixtureRepo, stackBase?: string, upstreamUrl = repo.dir) {
+function run(repo: FixtureRepo, stackBase?: string, upstreamUrl = repo.dir, expectedTag = "") {
   const output = NodePath.join(
     NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-fork-tag-output-")),
     "output",
@@ -20,6 +20,7 @@ function run(repo: FixtureRepo, stackBase?: string, upstreamUrl = repo.dir) {
     env: {
       ...process.env,
       GITHUB_OUTPUT: output,
+      EXPECTED_UPSTREAM_TAG: expectedTag,
       PATH: `/usr/bin:/bin:${process.env.PATH}`,
     },
   });
@@ -42,6 +43,25 @@ function addCommit(repo: FixtureRepo, value: string): string {
 }
 
 describe("fork-push release tag selection", () => {
+  it("rejects a pinned target mismatch and accepts the exact integrated target", () => {
+    const repo = createFixtureRepo();
+    try {
+      const base = repo.git("rev-parse", "HEAD");
+      const tag = "v1.2.3-nightly.20260920.2005";
+      repo.git("tag", tag, base);
+      addCommit(repo, "fork repair");
+      const bad = run(repo, base, repo.dir, "v1.2.3-nightly.20260919.1895");
+      assert.notEqual(bad.status, 0);
+      assert.include(bad.stderr, "does not match the pinned upstream target");
+      assert.deepEqual(bad.values, {});
+      const good = run(repo, base, repo.dir, tag);
+      assert.equal(good.status, 0, good.stderr);
+      assert.equal(good.values.tag, `${tag}-fork.1`);
+    } finally {
+      repo.cleanup();
+    }
+  });
+
   it("keeps the integrated nightly when a newer upstream nightly exists and increments its suffix", () => {
     const repo = createFixtureRepo();
     try {

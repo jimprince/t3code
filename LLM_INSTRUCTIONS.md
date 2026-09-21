@@ -56,7 +56,8 @@ entries in the [ordered inventory](./docs/operations/fork-inventory.toml).
 - Before editing a freshly fetched stack, capture immutable leases with
   `scripts/ci/prepare-stgit-publication`. Publish only through
   `scripts/ci/publish-stgit-stack --check|--push`; generated release stamps
-  remain tag-only.
+  remain tag-only. Changed source must pass `verify-stgit-replay` first; push
+  mode enforces exact candidate CI, while check mode only inspects policy/leases.
 - Preserve preparation-time main, stack, and complete patch-ref leases. Never
   refresh a rejected lease against newly observed state.
 

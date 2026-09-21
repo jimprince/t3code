@@ -321,3 +321,133 @@ roles = ["lockfile-owner", "release-workflow-owner", "agent-docs-owner"]
     }
   });
 });
+
+describe("publication CI requirement", () => {
+  for (const state of ["green", "red", "missing", "main-only", "unchanged"] as const) {
+    it(`requires exact candidate evidence for changed source (${state})`, () => {
+      const repo = createFixtureRepo();
+      try {
+        repo.git("remote", "add", "origin", "https://github.com/owner/fork.git");
+        repo.writeFile("source.ts", "repair\n");
+        const head = repo.commitAll("fix: candidate");
+        NodeFS.mkdirSync(NodePath.join(repo.dir, "scripts/ci"), { recursive: true });
+        NodeFS.copyFileSync(
+          NodePath.resolve(import.meta.dirname, "reuse-release-ci.ts"),
+          NodePath.join(repo.dir, "scripts/ci/reuse-release-ci.ts"),
+        );
+        const bin = NodePath.join(repo.dir, ".git/bin");
+        NodeFS.mkdirSync(bin);
+        const evidence = {
+          workflow_runs:
+            state === "missing" || state === "main-only"
+              ? []
+              : [{ ...runFor(head), conclusion: state === "red" ? "failure" : "success" }],
+        };
+        NodeFS.writeFileSync(NodePath.join(bin, "runs.json"), JSON.stringify(evidence));
+        NodeFS.writeFileSync(NodePath.join(bin, "jobs.json"), JSON.stringify(jobs()));
+        NodeFS.writeFileSync(
+          NodePath.join(bin, "main.json"),
+          JSON.stringify({ workflow_runs: [{ ...runFor(head), head_branch: "main" }] }),
+        );
+        NodeFS.writeFileSync(
+          NodePath.join(bin, "gh"),
+          `#!/usr/bin/env bash
+if [[ "$1" == repo ]]; then echo owner/fork
+elif [[ "$2" == *'branch=main'* ]]; then cat '${bin}/main.json'
+elif [[ "$2" == *'/jobs?'* ]]; then cat '${bin}/jobs.json'
+else cat '${bin}/runs.json'
+fi
+`,
+          { mode: 0o755 },
+        );
+        const result = NodeChildProcess.spawnSync(
+          NodePath.resolve(import.meta.dirname, "require-publication-ci"),
+          [head, state === "unchanged" ? head : "b".repeat(40)],
+          {
+            cwd: repo.dir,
+            encoding: "utf8",
+            env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+          },
+        );
+        assert.equal(
+          result.status,
+          state === "green" || state === "unchanged" ? 0 : 1,
+          result.stdout + result.stderr,
+        );
+        if (state !== "green" && state !== "unchanged")
+          assert.include(result.stderr, "Publication requires successful CI");
+      } finally {
+        repo.cleanup();
+      }
+    });
+  }
+});
+
+describe("pinned nightly dispatch", () => {
+  it("selects the requested public nightly and rejects incomplete or invalid pins", () => {
+    const repo = createFixtureRepo();
+    try {
+      const bin = NodePath.join(repo.dir, ".git/bin");
+      NodeFS.mkdirSync(bin);
+      const tag = "v0.0.43-nightly.20260920.2005";
+      NodeFS.writeFileSync(
+        NodePath.join(bin, "gh"),
+        `#!/usr/bin/env bash
+printf '%s\\n' '{"tagName":"${tag}","isDraft":false,"isPrerelease":true}'
+`,
+        { mode: 0o755 },
+      );
+      const output = NodePath.join(repo.dir, ".git/output");
+      const command = workflowStep("sync-upstream.yml", "Select upstream release tag").replaceAll(
+        "${{ steps.channel.outputs.channel }}",
+        "nightly",
+      );
+      for (const [target, sha, good] of [
+        [tag, source, true],
+        [tag, "", false],
+        ["main", source, false],
+        [tag, "not-a-sha", false],
+        ["v0.0.43-nightly.20260919.1895", source, false],
+      ] as const) {
+        NodeFS.writeFileSync(output, "");
+        const result = NodeChildProcess.spawnSync("bash", ["-euo", "pipefail", "-c", command], {
+          cwd: repo.dir,
+          encoding: "utf8",
+          env: {
+            ...process.env,
+            PATH: `${bin}:${process.env.PATH}`,
+            CHANNEL: "nightly",
+            REQUESTED_TARGET: target,
+            REQUESTED_TARGET_SHA: sha,
+            GITHUB_OUTPUT: output,
+          },
+        });
+        assert.equal(result.status === 0, good, result.stdout + result.stderr);
+        assert.equal(NodeFS.readFileSync(output, "utf8"), good ? `tag=${tag}\n` : "");
+      }
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it("rejects a stale nightly source before recording publication leases", () => {
+    const repo = createFixtureRepo();
+    try {
+      const command = workflowStep("fork-push-nightly.yml", "Record main lease");
+      const result = NodeChildProcess.spawnSync("bash", ["-euc", command], {
+        cwd: repo.dir,
+        encoding: "utf8",
+        env: { ...process.env, EXPECTED_MAIN: "b".repeat(40) },
+      });
+      assert.equal(result.status, 1);
+      assert.include(result.stdout, "Nightly dispatch source changed");
+      assert.notInclude(
+        result.stderr,
+        "No such file",
+        "must reject before calling the lease helper",
+      );
+    } finally {
+      repo.cleanup();
+    }
+  });
+});

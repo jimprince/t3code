@@ -453,7 +453,10 @@ jobs:
           fi
 
       - name: Check fork patch stack
-        run: scripts/ci/check-stgit-stack
+        run: |
+          context="$(scripts/ci/check-stgit-stack --format=json)"
+          printf '%s\n' "$context"
+          scripts/ci/report-nightly-delivery "$(jq -r .base <<< "$context")" "$(jq -r .head <<< "$context")"
 
       - name: Check fork documentation
         run: bun scripts/ci/check-fork-docs.ts

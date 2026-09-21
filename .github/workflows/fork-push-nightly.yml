@@ -24,6 +24,15 @@ on:
       - "pnpm-lock.yaml"
       - "pnpm-workspace.yaml"
   workflow_dispatch:
+    inputs:
+      expected_main:
+        description: "Optional exact verified source commit; rejects stale dispatches."
+        required: false
+        type: string
+      upstream_tag:
+        description: "Optional pinned upstream nightly tag for this source."
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -87,7 +96,13 @@ jobs:
 
       - name: Record main lease
         id: pre
+        env:
+          EXPECTED_MAIN: ${{ inputs.expected_main }}
         run: |
+          if [[ -n "${EXPECTED_MAIN:-}" && (! "$EXPECTED_MAIN" =~ ^[0-9a-f]{40}$ || "$(git rev-parse HEAD)" != "$EXPECTED_MAIN") ]]; then
+            echo "::error::Nightly dispatch source changed; refusing to publish another source."
+            exit 1
+          fi
           scripts/ci/record-main-lease
           git fetch origin \
             '+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt' \
@@ -97,9 +112,19 @@ jobs:
 
       - name: Resolve next fork tag
         id: resolve
+        env:
+          EXPECTED_UPSTREAM_TAG: ${{ inputs.upstream_tag }}
         run: |
           git fetch --tags origin
           scripts/ci/resolve-fork-push-tag
+
+      - name: Report nightly delivery source
+        if: steps.resolve.outputs.needed == 'true'
+        env:
+          TARGET: ${{ steps.resolve.outputs.upstream_tag }}
+          TARGET_SHA: ${{ steps.resolve.outputs.stack_base }}
+          SOURCE_SHA: ${{ steps.pre.outputs.main_sha }}
+        run: scripts/ci/report-nightly-delivery "$TARGET_SHA" "$SOURCE_SHA" "$TARGET"
 
       - name: Reuse exact-source CI verification
         if: steps.resolve.outputs.needed == 'true'
@@ -126,6 +151,7 @@ jobs:
       - name: Publish verified stack and release tag
         if: steps.resolve.outputs.needed == 'true'
         env:
+          GH_TOKEN: ${{ secrets.GH_PAT || github.token }}
           STGIT_EXPECTED_REMOTE_MAIN: ${{ steps.pre.outputs.main_sha }}
           MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
           PREP_SHA: ${{ steps.prepare.outputs.prep_sha }}

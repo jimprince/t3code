@@ -38,6 +38,14 @@ on:
           - stable
           - nightly
         default: nightly
+      target:
+        description: "Optional exact public upstream tag; requires target_sha."
+        required: false
+        type: string
+      target_sha:
+        description: "Expected commit for target; rejects a moved upstream tag."
+        required: false
+        type: string
 
 concurrency:
   # One lock for every Actions writer of main (C2 race fix, 2026-07-29:
@@ -98,13 +106,25 @@ jobs:
             exit 1
           fi
 
-      - name: Get latest upstream release tag
+      - name: Select upstream release tag
         if: steps.channel.outputs.selected == 'true'
         id: upstream
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REQUESTED_TARGET: ${{ inputs.target }}
+          REQUESTED_TARGET_SHA: ${{ inputs.target_sha }}
+          CHANNEL: ${{ steps.channel.outputs.channel }}
         run: |
-          if [[ "${{ steps.channel.outputs.channel }}" == "nightly" ]]; then
+          if [[ -n "$REQUESTED_TARGET" || -n "$REQUESTED_TARGET_SHA" ]]; then
+            if [[ "$CHANNEL" != nightly || ! "$REQUESTED_TARGET" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly\.[0-9]{8}\.[0-9]+$ || ! "$REQUESTED_TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::Pinned sync requires a nightly tag and its exact commit."
+              exit 1
+            fi
+            gh release view "$REQUESTED_TARGET" --repo pingdotgg/t3code --json tagName,isDraft,isPrerelease |
+              jq -e --arg tag "$REQUESTED_TARGET" '.tagName == $tag and .isDraft == false and .isPrerelease == true' >/dev/null
+            tag="$REQUESTED_TARGET"
+            echo "Pinned upstream nightly release: $tag ($REQUESTED_TARGET_SHA)"
+          elif [[ "${{ steps.channel.outputs.channel }}" == "nightly" ]]; then
             # First upstream release whose tag matches a nightly pattern.
             # Upstream has used two tag schemes: v<ver>-nightly.* and nightly-v<ver>-nightly.*
             tag=$(gh release list --repo pingdotgg/t3code --limit 50 \
@@ -169,6 +189,7 @@ jobs:
         id: check
         env:
           CHANNEL: ${{ steps.channel.outputs.channel }}
+          REQUESTED_TARGET_SHA: ${{ inputs.target_sha }}
         run: |
           set -euo pipefail
           upstream_tag="${{ steps.upstream.outputs.tag }}"
@@ -190,6 +211,14 @@ jobs:
           # Git auto-follows reachable upstream tags into refs/tags/*, which can
           # make a missing fork stable tag look already synced.
           git fetch --no-tags upstream "+refs/tags/${upstream_tag}:${upstream_ref}"
+          if [[ -n "$REQUESTED_TARGET_SHA" && "$(git rev-parse "${upstream_ref}^{commit}")" != "$REQUESTED_TARGET_SHA" ]]; then
+            echo "::error::Pinned upstream tag no longer names the expected commit."
+            exit 1
+          fi
+
+          if [[ "$CHANNEL" == "nightly" ]]; then
+            scripts/ci/report-nightly-delivery "$(git rev-parse "${upstream_ref}^{commit}")" "$(git rev-parse HEAD)" "$upstream_tag"
+          fi
 
           if [[ "$CHANNEL" == "nightly" ]]; then
             # Nightly: the fork publishes tags of the form
@@ -294,6 +323,7 @@ jobs:
       - name: Publish verified stack and release tag
         if: steps.check.outputs.needed == 'true' && steps.rebase.outputs.status == 'clean'
         env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
           STGIT_EXPECTED_REMOTE_MAIN: ${{ steps.pre.outputs.main_sha }}
           MAIN_SHA: ${{ steps.prepare.outputs.main_sha }}
           PREP_SHA: ${{ steps.prepare.outputs.prep_sha }}

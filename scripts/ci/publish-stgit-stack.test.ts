@@ -4,7 +4,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
-import { assert, describe, it } from "@effect/vitest";
+import { assert, describe, it } from "vite-plus/test";
 import { createFixtureRepo, type FixtureRepo } from "./lib/git-fixture.ts";
 
 const repoRoot = NodePath.resolve(
@@ -33,7 +33,17 @@ const seedPublication = (): {
   repo.writeFile("scripts/ci/check-stgit-stack", "#!/usr/bin/env bash\nexit 0\n");
   repo.writeFile("scripts/ci/check-fork-docs.ts", "process.exit(0);\n");
   NodeFS.chmodSync(NodePath.join(repo.dir, "scripts/ci/check-stgit-stack"), 0o755);
-  repo.git("add", "scripts/ci/check-stgit-stack", "scripts/ci/check-fork-docs.ts");
+  repo.writeFile(
+    "scripts/ci/require-publication-ci",
+    '#!/usr/bin/env bash\nexit "${TEST_CANDIDATE_EXIT:-0}"\n',
+  );
+  NodeFS.chmodSync(NodePath.join(repo.dir, "scripts/ci/require-publication-ci"), 0o755);
+  repo.git(
+    "add",
+    "scripts/ci/check-stgit-stack",
+    "scripts/ci/check-fork-docs.ts",
+    "scripts/ci/require-publication-ci",
+  );
   repo.git("update-index", "--chmod=+x", "scripts/ci/check-stgit-stack");
   repo.git("commit", "-m", "test: add policy stubs");
   const remoteBase = repo.git("rev-parse", "HEAD");
@@ -177,6 +187,22 @@ const racingGit = (): { readonly bin: string; readonly marker: string; readonly 
 };
 
 describe("publish-stgit-stack", () => {
+  it("keeps canonical refs unchanged when candidate CI rejects a repair, then publishes the verified replacement", () => {
+    const fixture = seedPublication();
+    try {
+      const before = gitAt(fixture.remote, "show-ref");
+      const rejected = run(fixture.repo, "--push", { TEST_CANDIDATE_EXIT: "1" });
+      assert.notEqual(rejected.status, 0, "a red candidate must stop the publisher");
+      assert.equal(gitAt(fixture.remote, "show-ref"), before);
+      const accepted = run(fixture.repo, "--push");
+      assert.equal(accepted.status, 0, accepted.stderr);
+      assert.equal(gitAt(fixture.remote, "rev-parse", "refs/heads/main"), fixture.head);
+    } finally {
+      fixture.repo.cleanup();
+      NodeFS.rmSync(fixture.remote, { recursive: true, force: true });
+    }
+  });
+
   it("prepares a fork-push checkout for publication without replaying the source", () => {
     const fixture = seedPublication();
     try {

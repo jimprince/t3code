@@ -236,9 +236,11 @@ if [[ -n "$release_ref" ]]; then
 fi
 
 if [[ "$mode" == "--check" ]]; then
-  echo "Check mode only; remote state was not changed. Re-run with --push to publish this stack."
+  echo "Check mode only; remote state was not changed. Push mode also requires exact-source CI evidence."
   exit 0
 fi
+
+scripts/ci/require-publication-ci "$head" "$remote_main"
 
 backup_ref="refs/heads/backup/${backup_namespace}/stgit-$(date -u +%Y%m%dT%H%M%SZ)"
 if [[ -n "$(git_cmd ls-remote --refs "$remote" "$backup_ref")" ]]; then

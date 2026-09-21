@@ -32,6 +32,10 @@ emit() {
 # already released. Stop before querying upstream so rerunning is harmless.
 existing_release_tags="$($script_dir/list-release-tags-at-head)"
 if [[ -n "$existing_release_tags" ]]; then
+  if [[ -n "${EXPECTED_UPSTREAM_TAG:-}" ]] && ! printf '%s\n' "$existing_release_tags" | awk -v prefix="${EXPECTED_UPSTREAM_TAG}-fork." 'index($0, prefix) == 1 { found = 1 } END { exit !found }'; then
+    echo "::error::Existing release does not match the pinned upstream target." >&2
+    exit 1
+  fi
   echo "Main already has release tag(s) at HEAD or its prepared child:"
   sed 's/^/  /' <<<"$existing_release_tags"
   emit needed false
@@ -99,6 +103,10 @@ if [[ "$nightly_count" -ne 1 ]]; then
 fi
 
 upstream_tag="$nightly_tags"
+if [[ -n "${EXPECTED_UPSTREAM_TAG:-}" && "$upstream_tag" != "$EXPECTED_UPSTREAM_TAG" ]]; then
+  echo "::error::Integrated base does not match the pinned upstream target." >&2
+  exit 1
+fi
 last_number="$(
   git tag --list "${upstream_tag}-fork.*" |
     awk -F '-fork\\.' 'NF == 2 && $2 ~ /^[0-9]+$/ { print $2 }' |
