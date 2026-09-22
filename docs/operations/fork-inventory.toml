@@ -785,6 +785,12 @@ depends_on = ["fork-release-publication", "fork-build-ci-compat"]
 roles = ["agent-docs-owner"]
 note = "Requires authored release entries for user-visible changes and validates them before publication. CI owns the shared verify-source checks including Knip; verify-stgit-replay stages immutable source/metadata inputs and waits for exact candidate CI. Main and release dereference that evidence instead of rerunning source verification, retaining published-stack policy, transfer-report baselines and artifact checks. Server verification stops scheduling tests after the first failure; passing candidates still run the full suite. Independent verification stages collect failures in one pass without weakening the publication gate. Nightly release-tag discovery uses a constant number of Git processes and aborts on lookup failure. Removed unused subject-based metadata reconstruction and obsolete maintenance plans; leased publication remains authoritative. Retiring persisted functionality requires an explicit data transition, immutable shipped migration IDs and frozen historical upgrade coverage. Product-bug instructions require evidence for each reported symptom, including cross-project PR routing and existing saved links/snapshots. Review also checked snapshot plumbing, diagnostics and obsolete mobile controller removals: these did not remove persisted orchestration event types. Retry limits remain unchanged pending genuine unattended observations."
 [[patch.decision]]
+id = "upstream-restyle-ceiling-check"
+date = "2026-09-22"
+decided = "adapt"
+rationale = "Upstream added a lint:restyle-ceiling step to the CI check block this patch replaces with one verify-source call. Fold the new check into the shared check phase so verify-source keeps mirroring upstream instead of silently dropping a gate; the fork tip sits at upstream's ceiling of 1207 findings."
+
+[[patch.decision]]
 id = "nightly-delivery-candidate-enforcement"
 date = "2026-09-20"
 decided = "adapt"
