@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "b5b6869b66638b6cee6af1acdfcc78531cd181f8",
-  "head": "ee580c3ad00def6788dc6805be2e5ee37a0edc00",
+  "prev": "ed333134bc724cf2d13b8e1ec6beeb4dd2dd2e13",
+  "head": "a8ab89fc1f1148564b69b9f067160206a0e50d4b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -19,7 +19,9 @@
     "fork-attachment-compatibility",
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
-    "fork-pr-dismissal",
+    "fork-pr-dismissal"
+  ],
+  "unapplied": [
     "fork-unsupported-pr-hosts",
     "fork-worktree-cleanup",
     "fork-gitea-connections",
@@ -38,7 +40,6 @@
     "fork-3mf-preview",
     "fork-step-preview"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
