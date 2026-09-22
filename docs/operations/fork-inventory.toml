@@ -543,6 +543,12 @@ roles = []
 note = "Reorganized 2026-09-06 from fork-web-pr-multiselect. Selection wraps upstream's shared page row instead of restyling it, so upstream row-layout changes replay cleanly."
 
 [[patch.decision]]
+id = "upstream-shown-count-empty-state"
+date = "2026-09-22"
+decided = "narrow"
+rationale = "Upstream added shownCount, the rows actually on screen once pending row overrides are applied. Dismissed pull requests are already out of those groups, so shownCount answers the fork's question too: use it for the empty and carried-to-nothing states instead of the fork's visiblePullRequestKeys check, which would leave an empty list body when an override emptied the rows. The selection toolbar keeps visiblePullRequestKeys for its own counts."
+
+[[patch.decision]]
 id = "upstream-pr-blocked-sort-and-glyph-offset"
 date = "2026-09-20"
 decided = "adapt"
