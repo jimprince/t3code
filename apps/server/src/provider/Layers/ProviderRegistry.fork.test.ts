@@ -891,6 +891,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   prefix: "t3-provider-registry-background-refresh-",
                 }),
               ),
+              Layer.provideMerge(ModelManifest.layerTest),
               Layer.provideMerge(NodeServices.layer),
             ),
           ).pipe(Scope.provide(scope));
@@ -1048,6 +1049,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 }),
               ),
               Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
+              Layer.provideMerge(ModelManifest.layerTest),
               Layer.provideMerge(NodeServices.layer),
             ),
           ).pipe(Scope.provide(scope));
@@ -1178,6 +1180,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                     prefix: "t3-provider-registry-opencode-authoritative-persist-",
                   }),
                 ),
+                Layer.provideMerge(ModelManifest.layerTest),
                 Layer.provideMerge(NodeServices.layer),
               ),
             ).pipe(Scope.provide(scope));
@@ -1282,6 +1285,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 }),
               ),
               Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
+              Layer.provideMerge(ModelManifest.layerTest),
               Layer.provideMerge(NodeServices.layer),
             ),
           ).pipe(Scope.provide(scope));
@@ -1378,6 +1382,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   prefix: "t3-provider-registry-nonblocking-refresh-",
                 }),
               ),
+              Layer.provideMerge(ModelManifest.layerTest),
               Layer.provideMerge(NodeServices.layer),
             ),
           ).pipe(Scope.provide(scope), Effect.timeoutOption("100 millis"));
@@ -1504,6 +1509,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 }),
               ),
               Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
+              Layer.provideMerge(ModelManifest.layerTest),
               Layer.provideMerge(NodeServices.layer),
             ),
           ).pipe(Scope.provide(scope));
