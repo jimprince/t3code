@@ -1,14 +1,15 @@
 {
   "version": 5,
-  "prev": "e0636a7f903fec6c974e4f2fd99598aea1ea75df",
-  "head": "aca3c87cdbfb59ea5ed52fe2df82df508d57eb31",
-  "applied": [],
-  "unapplied": [
+  "prev": "e181c684db329afae73bee77fd2abfe7dcb75adb",
+  "head": "f236dff7ccf5aa76a226c376638dea80bcfbf599",
+  "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
-    "fork-thread-client-recovery",
+    "fork-thread-client-recovery"
+  ],
+  "unapplied": [
     "fork-general-chat",
     "fork-conversation-fork",
     "fork-thread-transfer",
@@ -51,10 +52,10 @@
       "oid": "0fff0f82b6307337931d6507b8db498d1488d137"
     },
     "fork-bounded-diagnostics": {
-      "oid": "fb4e489da17b36842e19d195916357f078739953"
+      "oid": "cb350e1a2ace82ac6d7eeda578a93507e896b7e0"
     },
     "fork-build-ci-compat": {
-      "oid": "5b43cbe7ae62ea54732d2632d44264b310eaef66"
+      "oid": "c209c0e9e80d71adfbe44e66e5c34b75d567638c"
     },
     "fork-codex-goal-visibility": {
       "oid": "ca764cfebdd51b0d5e4d3d15dc65d12cc9e0acba"
@@ -108,7 +109,7 @@
       "oid": "a40342ce3d8a00d01ea1a190b6502f89ca2781f8"
     },
     "fork-provider-turn-safety": {
-      "oid": "d48428ba7f4463a6b539cf46366684d4a613d5ac"
+      "oid": "4a46711a5f0dcab1cf9dc952895288e84f09ae74"
     },
     "fork-release-publication": {
       "oid": "e9534f1f0a4ff3db965d53a2712061d3887eee05"
@@ -123,7 +124,7 @@
       "oid": "7dbcbc9c378504139de1e21367cf581e14868dd7"
     },
     "fork-thread-client-recovery": {
-      "oid": "c5cf701bc24d1b1055e286031a522edddfd1df5a"
+      "oid": "f236dff7ccf5aa76a226c376638dea80bcfbf599"
     },
     "fork-thread-history-compatibility": {
       "oid": "8862cfde217757048e6c6df8ba9dcd6d1f768289"
@@ -135,7 +136,7 @@
       "oid": "6fe735ef1ffdc5891f444e099636766b9358341b"
     },
     "fork-worker-operations": {
-      "oid": "e9b38f81270b5c1b8ea8325835dbd96dce1eb8c2"
+      "oid": "78b425f2645ab9accf354fcf2779c8115dfb6fb8"
     },
     "fork-workspace-file-uploads": {
       "oid": "e5a21839ffc28a0393c2e1e154da1c526e4e7ee0"
