@@ -109,6 +109,12 @@ roles = []
 note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
 
 [[patch.decision]]
+id = "upstream-provider-registry-model-manifest"
+date = "2026-09-23"
+decided = "adapt"
+rationale = "ProviderRegistryLive now requires the ModelManifest service, so this concern's fork tests build it with Layer.provideMerge(ModelManifest.layerTest) the way upstream's own ProviderRegistry tests do. The replay is textually clean, so only the typecheck catches it."
+
+[[patch.decision]]
 id = "upstream-sqlite-layer-configuration"
 date = "2026-09-20"
 decided = "adapt"
@@ -488,6 +494,12 @@ depends_on = [
 ]
 roles = []
 note = "Legacy uploads use native durable storage, retention and provider file input while keeping the parallel path-bearing field for old clients and historical messages. Available historical temporary objects materialize lazily into durable storage; no old metadata or migration IDs are removed. Partial upload/dispatch failures clean newly created files, and revert preserves referenced legacy objects. Current clients retain one upload and one display entry. The narrow turn-start query preserves legacy file handoffs. Legacy handoffs join the provider attachment list on dispatch, so they are budgeted with upstream's shared attachment-limit helper against decoded bytes rather than a fork-local cap."
+
+[[patch.decision]]
+id = "upstream-server-harness-model-manifest"
+date = "2026-09-23"
+decided = "adapt"
+rationale = "This concern keeps a trimmed copy of upstream's buildAppUnderTest, so a new served-route dependency does not reach it through a textual conflict. Mock ModelManifest with BUNDLED_MODEL_MANIFEST as upstream does; re-check the trimmed harness against upstream's service graph whenever the server typecheck reports a missing Effect context."
 [[patch.decision]]
 id = "upstream-chat-file-attachment-name"
 date = "2026-08-28"
