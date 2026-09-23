@@ -109,6 +109,12 @@ roles = []
 note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
 
 [[patch.decision]]
+id = "upstream-provider-registry-model-manifest"
+date = "2026-09-23"
+decided = "adapt"
+rationale = "ProviderRegistryLive now requires the ModelManifest service, so this concern's fork tests build it with Layer.provideMerge(ModelManifest.layerTest) the way upstream's own ProviderRegistry tests do. The replay stays textually clean, so only the server typecheck catches this drift."
+
+[[patch.decision]]
 id = "upstream-sqlite-layer-configuration"
 date = "2026-09-20"
 decided = "adapt"
