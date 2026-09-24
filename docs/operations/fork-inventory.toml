@@ -767,3 +767,8 @@ id = "upstream-effect-cli-literals"
 date = "2026-09-20"
 decided = "adapt"
 rationale = "Use upstream's Effect CLI Literals constructor for both upstream build selectors and the fork desktop flavor selector."
+[[patch.decision]]
+id = "desktop-entry-name-unexport"
+date = "2026-09-24"
+decided = "adapt"
+rationale = "This patch removes DesktopEnvironment's import of resolveLinuxDesktopEntryName, leaving DesktopEarlyElectronStartup as its only user, so the patch also un-exports it to keep Knip clean. Relocated here from fork-build-ci-compat."
