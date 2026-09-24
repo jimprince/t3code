@@ -1065,3 +1065,13 @@ retire_when = "Upstream provides equivalent bounded, demand-rendered STEP previe
 depends_on = ["fork-inline-3d-objects", "fork-orcaslicer-handoff", "fork-3mf-preview"]
 roles = []
 note = "Selected occt-import-js 0.0.23 after the production build measured its WASM at 3,091,498 bytes gzip -9 and its worker at 21,109 bytes gzip, with tessellation at 1,828 ms for a 442 KiB assembly and 2,048 ms for a 2 MiB transfer form. It loads only in a disposable browser worker with a 20-second timeout, fixed millimeter output and deflection, finite/index validation, and the shared 50 MiB source and 2-million-triangle limits. No server conversion, cache, or broader asset grant is introduced."
+
+[[patch]]
+name = "fork-enter-sends-queued"
+subject = "feat(web): send the next queued message with Enter"
+class = "product"
+purpose = "Let Enter on an empty composer send the oldest queued message now through the existing Send now path, so Enter once queues and Enter again sends."
+retire_when = "Upstream sends the next queued message from an empty-composer Enter, or the fork stops wanting that shortcut."
+depends_on = []
+roles = []
+note = "Send now delivers the message into the running turn (steer); it does not stop the turn. A hard stop-then-send was deferred because Stop deliberately returns the queue to the composer. The decision lives in the additive apps/web/src/queuedMessageEnter.ts; ChatView keeps only the call in onSend's empty-draft branch."
