@@ -37,6 +37,19 @@ To deliberately interrupt active work, run this command on the Linux host:
 Normal scheduled checks never use that override. To inspect readiness without
 installing anything, use `~/.local/bin/t3code-headless-upgrade --check-idle`.
 
+## Restart the desktop app when agents finish
+
+When a desktop update is downloaded and agents on this computer are working,
+the restart button offers **Restart when agents finish**. T3 Code then waits
+until no local agent is working, monitoring, or holding queued messages, stays
+idle for 15 seconds, and restarts to install the update. Hover the button to see
+how many agents it is waiting for; click it again to cancel.
+
+Unlike the Linux server updater, this does not wait for agents paused on an
+approval or a question: those prompts end with the restart, and you can reply
+in the thread afterwards. Agents on other machines keep running and never delay
+the restart.
+
 ## Update a connected server
 
 The offered action depends on how the server runs:
