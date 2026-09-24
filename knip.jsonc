@@ -13,7 +13,7 @@
       "vitest": { "entry": [".github/**/*.test.cjs"] },
     },
     "scripts": {
-      // Knip loads its preprocessor by CLI option; native and shell entrypoints run directly.
+      // Knip loads its preprocessor through a CLI option; native verification runs directly.
       "entry": [
         "knip-schemas.ts",
         "mobile-native-client.ts",

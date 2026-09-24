@@ -35,6 +35,24 @@ decided = "retire"
 rationale = "The explicit LegendList render-item annotations in ModelPickerContent and the AtomRegistry cast in PreviewAutomationHosts were typecheck workarounds this patch carried in two upstream files that change often. Upstream's current types infer both, so verify-source check passes without them; drop the edits and take upstream's files verbatim."
 
 [[patch.decision]]
+id = "desktop-artifact-client-asset-extraction"
+date = "2026-09-24"
+decided = "retire"
+rationale = "Moving upstream's validateBundledClientAssets into scripts/lib/client-assets.ts gave the fork no behavior; build-desktop-artifact.ts was its only consumer, and the in-place extraction conflicted in six sync attempts. Take upstream's build-desktop-artifact.ts verbatim and delete the fork module."
+
+[[patch.decision]]
+id = "desktop-entry-name-unexport"
+date = "2026-09-24"
+decided = "relocate"
+rationale = "resolveLinuxDesktopEntryName loses its only importer in fork-desktop-delivery, so its Knip-driven un-export belongs to that patch rather than to build tooling. This patch no longer edits upstream desktop source."
+
+[[patch.decision]]
+id = "knip-upstream-comment-verbatim"
+date = "2026-09-24"
+decided = "narrow"
+rationale = "Keep upstream's scripts-workspace Knip comment verbatim so the fork changes only the entry array; upstream rewrote that comment alongside its own entry additions in previous conflicts."
+
+[[patch.decision]]
 id = "upstream12414-test-skill-browser-panel"
 date = "2026-09-20"
 decided = "relocate"
