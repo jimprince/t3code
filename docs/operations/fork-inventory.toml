@@ -29,6 +29,12 @@ roles = ["lockfile-owner"]
 note = "Keep upstream and fork script entry points in one Knip workspace stanza. Removed the unrelated wall-clock assertion from activity-reuse coverage; the observable identity-reuse test and justified compression-test headroom remain. The replay driver removes the old generated lockfile delta before rebase and regenerates at the complete tip, then refreshes this owner. Published main retains a consistent frozen-install lockfile; mid-stack generation omits later workspaces. Pin dependencies with exact-version patches to that version; expo-audio 57.0.5 satisfies ~57.0.4 but still lacks the recorder failure-state fix in the 57.0.4 patch."
 
 [[patch.decision]]
+id = "web-typecheck-annotation-workarounds"
+date = "2026-09-24"
+decided = "retire"
+rationale = "The explicit LegendList render-item annotations in ModelPickerContent and the AtomRegistry cast in PreviewAutomationHosts were typecheck workarounds this patch carried in two upstream files that change often. Upstream's current types infer both, so verify-source check passes without them; drop the edits and take upstream's files verbatim."
+
+[[patch.decision]]
 id = "upstream12414-test-skill-browser-panel"
 date = "2026-09-20"
 decided = "relocate"
