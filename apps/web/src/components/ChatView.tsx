@@ -334,6 +334,7 @@ import {
   useQueuedMessageStore,
 } from "../queuedMessageStore";
 import { sendQueuedMessage } from "./chat/sendQueuedMessage";
+import { queuedMessageForEmptyEnter } from "../queuedMessageEnter";
 import { type ReviewCommentContext } from "../reviewCommentContext";
 import { environmentCatalog } from "../connection/catalog";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
@@ -7783,6 +7784,15 @@ export default function ChatView(props: ChatViewProps) {
       return;
     }
     if (!hasSendableContent) {
+      const queuedForEnter = queuedMessageForEmptyEnter({
+        queue: queuedMessages,
+        hasSendableContent,
+        expiredTerminalContextCount,
+      });
+      if (queuedForEnter) {
+        queuedMessageActionsRef.current.steer(queuedForEnter.id);
+        return;
+      }
       if (expiredTerminalContextCount > 0) {
         const toastCopy = buildExpiredTerminalContextToastCopy(
           expiredTerminalContextCount,
