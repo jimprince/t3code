@@ -30,6 +30,12 @@ import {
   shouldShowDesktopUpdateCheckIcon,
 } from "./DesktopUpdateStatusIcon";
 import { SidebarUpdateReleaseNotes } from "./SidebarUpdateReleaseNotes";
+import {
+  IdleRestartDialog,
+  useIdleRestartStore,
+  useLocalAgentsBlockingRestart,
+} from "./desktopIdleRestart";
+import { idleRestartTooltip } from "./desktopIdleRestart.logic";
 
 type SidebarUpdatePopoverChangeDetails = Parameters<
   NonNullable<ComponentProps<typeof Popover>["onOpenChange"]>
@@ -122,6 +128,9 @@ function SidebarUpdateControl() {
   const releaseNotesPopupRef = useRef<HTMLDivElement>(null);
   const releaseNotesTriggerId = useId();
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  const busyAgentCount = useLocalAgentsBlockingRestart();
+  const idleRestartScheduled = useIdleRestartStore((store) => store.scheduled);
+  const [idleRestartDialogOpen, setIdleRestartDialogOpen] = useState(false);
 
   useEffect(() => {
     if (prefersReducedMotion) {
@@ -143,13 +152,16 @@ function SidebarUpdateControl() {
     isDownloading,
     showCheckIcon,
   });
-  const tooltip = showUpdateDetails
-    ? state
-      ? getDesktopUpdateButtonTooltip(state)
-      : "Update available"
-    : showCheckIcon
-      ? "Checking for updates…"
-      : "Check for updates";
+  const tooltip =
+    action === "install" && idleRestartScheduled
+      ? idleRestartTooltip(busyAgentCount)
+      : showUpdateDetails
+        ? state
+          ? getDesktopUpdateButtonTooltip(state)
+          : "Update available"
+        : showCheckIcon
+          ? "Checking for updates…"
+          : "Check for updates";
   const disabled = showCheckIcon
     ? true
     : showUpdateDetails
@@ -208,6 +220,18 @@ function SidebarUpdateControl() {
           );
         })
         .finally(() => setIsActionPending(false));
+      return;
+    }
+
+    if (action === "install" && idleRestartScheduled) {
+      useIdleRestartStore.getState().cancel();
+      setIsActionPending(false);
+      toastManager.add(stackedThreadToast({ type: "info", title: "Scheduled restart cancelled" }));
+      return;
+    }
+    if (action === "install" && busyAgentCount > 0) {
+      setIdleRestartDialogOpen(true);
+      setIsActionPending(false);
       return;
     }
 
@@ -286,7 +310,14 @@ function SidebarUpdateControl() {
         );
       })
       .finally(() => setIsActionPending(false));
-  }, [action, isInteractionDisabled, prefersReducedMotion, state]);
+  }, [
+    action,
+    busyAgentCount,
+    idleRestartScheduled,
+    isInteractionDisabled,
+    prefersReducedMotion,
+    state,
+  ]);
 
   const handleCheckAnimationIteration = useCallback(() => {
     setIsCheckAnimationLatched(
@@ -414,6 +445,11 @@ function SidebarUpdateControl() {
           </PopoverPopup>
         ) : null}
       </Popover>
+      <IdleRestartDialog
+        open={idleRestartDialogOpen}
+        onOpenChange={setIdleRestartDialogOpen}
+        busyAgentCount={busyAgentCount}
+      />
     </SidebarMenuItem>
   );
 }
