@@ -1,0 +1,4 @@
+id = "enter-sends-queued-message"
+category = "feature"
+functionality = "web composer"
+text = "Press Enter in an empty composer to send the next queued message right away: Enter once queues, Enter again sends."
