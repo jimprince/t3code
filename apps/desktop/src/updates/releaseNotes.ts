@@ -16,8 +16,6 @@ function isElectronReleaseNoteInfo(value: unknown): value is ElectronReleaseNote
   );
 }
 
-const MAX_RELEASE_NOTE_GROUPS = 6;
-const MAX_RELEASE_NOTE_ITEMS_PER_GROUP = 8;
 const MAX_RELEASE_NOTE_ITEM_LENGTH = 220;
 
 const HTML_ENTITY_REPLACEMENTS: Readonly<Record<string, string>> = {
@@ -110,9 +108,8 @@ interface ExtractedReleaseNoteItems {
 
 // Release note bodies are authored most-important-first (both our own
 // render-release-notes script and the fork's own change-entry sections put
-// the highest-priority content at the top), so the first items encountered
-// are exactly the ones worth keeping under the per-group cap. Preserving
-// that order end-to-end is what the popup renders top to bottom.
+// the highest-priority content at the top). Every change is kept, in that
+// order, so the scrolling popup shows the full changelog top to bottom.
 function extractReleaseNoteItems(note: string | null | undefined): ExtractedReleaseNoteItems {
   if (!note) return { items: [], totalItems: 0 };
 
@@ -125,7 +122,9 @@ function extractReleaseNoteItems(note: string | null | undefined): ExtractedRele
       .replace(/^\d+[.)]\s+/, "")
       .replace(/\s+/g, " ");
     const normalized = normalizeReleaseNoteLine(withoutPrefix);
-    if (normalized === "new contributors" || normalized === "full changelog") break;
+    // GitHub renders the footer's compare URL as bare "v1...v2" link text, so
+    // the line arrives as "Full Changelog: v1...v2" with no "/compare/" left.
+    if (normalized === "new contributors" || normalized.startsWith("full changelog")) break;
     if (/^#{1,6}\s+/.test(withoutPrefix)) continue;
     // Checked before the link/bold syntax is stripped, so a compare/changelog
     // link's URL is still there to match against.
@@ -133,9 +132,7 @@ function extractReleaseNoteItems(note: string | null | undefined): ExtractedRele
     const item = stripInlineMarkup(withoutPrefix).trim().replace(/\s+/g, " ");
     if (!item) continue;
     totalItems += 1;
-    if (items.length < MAX_RELEASE_NOTE_ITEMS_PER_GROUP) {
-      items.push(truncateReleaseNoteItem(item));
-    }
+    items.push(truncateReleaseNoteItem(item));
   }
   return { items, totalItems };
 }
@@ -179,8 +176,5 @@ export function normalizeDesktopUpdateReleaseNotes(
     ];
   });
 
-  return {
-    releaseNotes: normalizedNotes.slice(0, MAX_RELEASE_NOTE_GROUPS),
-    omittedReleaseCount: Math.max(0, normalizedNotes.length - MAX_RELEASE_NOTE_GROUPS),
-  };
+  return { releaseNotes: normalizedNotes, omittedReleaseCount: 0 };
 }

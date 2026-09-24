@@ -845,3 +845,9 @@ id = "release-test-git-fixture"
 date = "2026-09-16"
 decided = "relocate"
 rationale = "Move the shared Git fixture from the later maintenance patch into release publication because release-tag, lease, CI-reuse, and release-note tests import it and must execute independently at this layer."
+
+[[patch.decision]]
+id = "desktop-update-full-changelog"
+date = "2026-09-24"
+decided = "adapt"
+rationale = "Show the full changelog in the desktop update popup: the release body lists every upstream subject instead of the newest 20, and the popup parser keeps every item and every release group (the popup already scrolls). The parser also stops at GitHub's rendered footer, where the compare URL has become 'Full Changelog: v1...v2' text and previously leaked in as a fake change."

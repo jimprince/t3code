@@ -72,7 +72,7 @@ const writeForkEntriesDir = (
 };
 
 describe("render-release-notes", () => {
-  it("front-loads the newest 20 upstream subjects and reports the overflow", () => {
+  it("lists every upstream subject, newest first", () => {
     const fixture = writeComparePayload(
       comparePayload(
         Array.from({ length: 22 }, (_, index) => `feat: upstream change ${index + 1}`),
@@ -88,8 +88,7 @@ describe("render-release-notes", () => {
       );
       assert.include(result.stdout, "- feat: upstream change 22");
       assert.include(result.stdout, "- feat: upstream change 3");
-      assert.notInclude(result.stdout, "- feat: upstream change 2\n");
-      assert.notInclude(result.stdout, "- feat: upstream change 1\n");
+      assert.include(result.stdout, "- feat: upstream change 1\n");
       assert.isBelow(
         result.stdout.indexOf("- feat: upstream change 22"),
         result.stdout.indexOf("- feat: upstream change 3"),
@@ -97,10 +96,10 @@ describe("render-release-notes", () => {
       );
       assert.strictEqual(
         result.stdout.match(/^- feat: upstream change \d+$/gm)?.length,
-        20,
-        "the subject list is capped at 20 items",
+        22,
+        "the full changelog lists every upstream subject",
       );
-      assert.include(result.stdout, "- +2 more upstream changes");
+      assert.notInclude(result.stdout, "more upstream changes");
       assert.notInclude(result.stdout, "\n\n- ");
       assert.include(
         result.stdout,

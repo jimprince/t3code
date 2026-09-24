@@ -24,7 +24,6 @@ if (( $# > 1 )); then
   exit 2
 fi
 
-readonly MAX_SUBJECTS=20
 readonly OUTPUT_PATH="${1:-}"
 readonly UPSTREAM_REPO="${UPSTREAM_REPO:-pingdotgg/t3code}"
 readonly RELEASE_REPO="${RELEASE_REPO:-${GITHUB_REPOSITORY:-$UPSTREAM_REPO}}"
@@ -167,21 +166,11 @@ if [[ -n "$fork_section" ]]; then
   body+="## Fork changes"$'\n\n'"$fork_section"$'\n\n'
 fi
 body+="## Compare: upstream $upstream_previous → $upstream_current"
-subject_count="${#subjects[@]}"
-display_count="$subject_count"
-if (( display_count > MAX_SUBJECTS )); then
-  display_count="$MAX_SUBJECTS"
-fi
-
-for (( index = 0; index < display_count; index += 1 )); do
+# Every upstream subject is listed so the desktop update popup shows the full changelog.
+for subject in ${subjects[@]+"${subjects[@]}"}; do
   body+=$'\n'
-  body+="- ${subjects[$index]}"
+  body+="- $subject"
 done
-
-if (( subject_count > MAX_SUBJECTS )); then
-  body+=$'\n'
-  body+="- +$((subject_count - MAX_SUBJECTS)) more upstream changes"
-fi
 
 body+=$'\n\n'
 body+="[Upstream compare](https://github.com/$UPSTREAM_REPO/compare/$upstream_previous...$upstream_current)"

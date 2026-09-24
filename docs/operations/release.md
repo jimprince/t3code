@@ -24,9 +24,9 @@ file is the concise runbook.
 - `scripts/ci/render-release-notes` builds the GitHub release body. It leads
   with the fork's own new-since-last-release feature/fix/performance/
   maintenance/removal notes (see `docs/release-notes/entries/README.md`),
-  then the upstream commits between the previous and current upstream base
-  tags, newest first, so desktop updater notes remain useful after `main` is
-  rebased. A fork-only rebuild of the same upstream base skips the upstream
+  then every upstream commit between the previous and current upstream base
+  tags, newest first, so the desktop update popup shows the full changelog
+  after `main` is rebased. A fork-only rebuild of the same upstream base skips the upstream
   section instead of showing an empty self-compare. Release reruns refresh
   the same body without re-announcing fork entries that already shipped;
   unavailable or malformed compare data degrades to compare links and never
