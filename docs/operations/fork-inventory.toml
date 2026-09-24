@@ -752,3 +752,61 @@ id = "upstream-mobile-production-delivery"
 date = "2026-09-16"
 decided = "retire"
 rationale = "Retire this patch's older production EAS workflow because upstream now preserves version overrides and preview profiles, auto-submits store builds, reconciles per-platform builds on push, and fingerprint-gates OTA publication. Retain the fork-specific identity, development lanes, runtime policy, tests, and deployment documentation."
+
+[[patch]]
+name = "fork-release-publication"
+subject = "ci: publish fork releases with version stamping and notes"
+class = "product"
+purpose = "Build and publish the fork's desktop, headless, updater, and mobile release lanes with tag-only version stamping, bounded CI evidence reuse, and rendered release notes."
+retire_when = "Upstream or maintained shared tooling provides equivalent release publication for the fork."
+depends_on = [
+  "fork-desktop-delivery",
+  "fork-mobile-delivery",
+  "fork-headless-delivery",
+  "fork-build-ci-compat",
+]
+roles = ["release-workflow-owner"]
+note = "Release notes compare stable authored change IDs between actual released tags, list fork features/fixes/removals before upstream changes, and preserve popup order. Published entries remain history; later fixes get new IDs. Bun and strict entry validation are configured in publication; Knip recognizes the shell-launched renderer entry point. Both macOS and Linux release jobs require packaged historical-data startup before publication. macOS uses the built zip backend in Electron Node mode; source-only or empty-data checks cannot substitute."
+
+[[patch.decision]]
+id = "upstream-release-test-job-split"
+date = "2026-09-24"
+decided = "narrow"
+rationale = "Upstream split its release test step into standalone test/test_server jobs gating its release job. The fork's preflight already runs the whole suite through scripts/ci/verify-source with bounded CI-evidence reuse, and it has no relay_public_config or per-platform desktop jobs, so those jobs and their gates do not apply; keep the fork's single preflight test step."
+
+[[patch.decision]]
+id = "release-draft-recovery"
+date = "2026-09-19"
+decided = "adapt"
+rationale = "Upload assets before publishing both new and retried release drafts, then require public release metadata and all expected assets; an upload success alone left a green workflow with an unpublished draft."
+[[patch.decision]]
+id = "release-version-stamps"
+date = "2026-07-28"
+decided = "narrow"
+rationale = "Committed package versions are redundant because release automation derives them from the tag. Always take upstream versions during replay and keep generated stamps out of main."
+[[patch.decision]]
+id = "stamp-free-release-tags"
+date = "2026-07-30"
+decided = "tag-stamped-child-main-unstamped-parent"
+rationale = "Both automatic release writers call prepare-release-tag, tag its prepared child, and keep main at the exact unstamped stack tip. Release consumes that bound tag and never finalizes versions onto main."
+standing_policy = "Generated version stamps are tag-only. Tag preparation preserves the verified source lockfile with frozen installs; dependency resolution belongs before source verification."
+[[patch.decision]]
+id = "reuse-exact-source-ci-tests"
+date = "2026-09-05"
+decided = "narrow"
+rationale = "Reuse successful main-push CI tests only for the exact release commit or its verified version-only direct parent. Require all test shards, check and release smoke jobs from that attempt; bound waiting and fall back to full release tests without trustworthy evidence. Reuse formatting, lint, Knip, types and tests only under that same exact-source evidence. Always verify packaged artifacts; missing evidence runs the complete shared source gate."
+[[patch.decision]]
+id = "upstream-release-publication-expansion"
+date = "2026-09-16"
+decided = "narrow"
+rationale = "Keep the fork's leased tag-stamped-child publication model and intentional macOS-arm64 plus Linux-headless matrix instead of upstream npm, AUR, hosted-web, Discord, preview, and six-platform publication. Preserve upstream preview-tag parsing and unrelated Knip entry points alongside fork-nightly ordering and fork release-note tooling."
+[[patch.decision]]
+id = "upstream-release-relay-state-read"
+date = "2026-09-20"
+decided = "retire"
+rationale = "Do not transplant upstream's production relay-state read into the fork's intentionally narrow release workflow; the fork release builds do not consume that removed relay-public-config job."
+[[patch.decision]]
+id = "release-test-git-fixture"
+date = "2026-09-16"
+decided = "relocate"
+rationale = "Move the shared Git fixture from the later maintenance patch into release publication because release-tag, lease, CI-reuse, and release-note tests import it and must execute independently at this layer."
