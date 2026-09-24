@@ -144,7 +144,7 @@ purpose = "Provide the additive t3-thread operator CLI with pairing, persistent 
 retire_when = "Upstream or maintained shared tooling provides an equivalent scriptable worker interface, or the fork intentionally stops requiring this concern."
 depends_on = ["fork-build-ci-compat"]
 roles = []
-note = "env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). Worker bootstrap and inter-thread messages include identity and reply headers. Notifications to an explicitly settled subscriber are held (not keeping the watcher awake, since each pass snapshots every saved agent), superseded down to the newest per route, re-checked each minute while a watcher runs, and released immediately by t3-thread unsettle; settle lists the subscriber's routes and unsubscribe accepts --subscriber and raw routed thread ids. order/move write the server's shared pinned or active sibling order, and order --reset restores automatic placement. The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
+note = "env forget removes local pairings offline, requiring --force to discard dependent routing and queued sends. Worker sends queue durably while a turn is running and drain FIFO at the next boundary. Routed notifications retain bounded retries, terminal outcomes, and watcher handoff/recovery (Gitea38/39); subscribe baselines and supersession keep routing to one event per new transition (Gitea49). Notifications to an explicitly settled subscriber are held (not keeping the watcher awake, since each pass snapshots every saved agent), superseded down to the newest per route, re-checked each minute while a watcher runs, and released immediately by t3-thread unsettle; settle lists the subscriber's routes and unsubscribe accepts --subscriber and raw routed thread ids. order/move write the server's shared pinned or active sibling order, and order --reset restores automatic placement. The CLI queue can migrate to server after-current delivery when upstream7240 ships; adapter steering remains separate."
 
 [[patch]]
 name = "fork-provider-turn-safety"
@@ -1187,3 +1187,19 @@ retire_when = "Upstream provides equivalent bounded, demand-rendered STEP previe
 depends_on = ["fork-inline-3d-objects", "fork-orcaslicer-handoff", "fork-3mf-preview"]
 roles = []
 note = "Selected occt-import-js 0.0.23 after the production build measured its WASM at 3,091,498 bytes gzip -9 and its worker at 21,109 bytes gzip, with tessellation at 1,828 ms for a 442 KiB assembly and 2,048 ms for a 2 MiB transfer form. It loads only in a disposable browser worker with a 20-second timeout, fixed millimeter output and deflection, finite/index validation, and the shared 50 MiB source and 2-million-triangle limits. No server conversion, cache, or broader asset grant is introduced."
+
+[[patch]]
+name = "fork-enter-sends-queued"
+subject = "feat(web): send the next queued message with Enter"
+class = "product"
+purpose = "Let Enter on an empty composer send the oldest queued message now through the existing Send now path, so Enter once queues and Enter again sends."
+retire_when = "Upstream sends the next queued message from an empty-composer Enter, or the fork stops wanting that shortcut."
+depends_on = []
+roles = []
+note = "Send now delivers the message into the running turn (steer); it does not stop the turn. A hard stop-then-send was deferred because Stop deliberately returns the queue to the composer. The decision lives in the additive apps/web/src/queuedMessageEnter.ts; ChatView keeps only the call in onSend's empty-draft branch."
+
+[[patch.decision]]
+id = "upstream13764-empty-enter-drops-the-queued-send-guard"
+date = "2026-09-27"
+decided = "narrow"
+rationale = "Upstream moved queued sending into QueuedMessageSender/sendQueuedMessage, so the composer submit handler no longer receives a queuedMessage and can never itself be a queued send. Drop the helper's sendingQueuedMessage input and its case rather than feeding it a constant false; the remaining guards are the composer's own content and expired terminal contexts."
