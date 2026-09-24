@@ -1,0 +1,4 @@
+id = "restart-when-agents-finish"
+category = "feature"
+functionality = "desktop updates"
+text = "Restart when agents finish: while agents on this computer are working, the update restart waits until they are done, then installs without interrupting them."
