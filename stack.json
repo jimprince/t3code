@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "8b3d48852835a6c1530d5241575a0111f77b2d44",
-  "head": "914b96f76e63ca5db91f809d6c31264f14c639cb",
+  "prev": "027533c58555692482e4ca1855606e74ce8d0279",
+  "head": "65a5d061b0ce113004e48e530ec531c1d1c29677",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -28,7 +28,9 @@
     "fork-headless-delivery",
     "fork-desktop-delivery",
     "fork-mobile-delivery",
-    "fork-release-publication",
+    "fork-release-publication"
+  ],
+  "unapplied": [
     "fork-maintenance-automation",
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh",
@@ -39,7 +41,6 @@
     "fork-step-preview",
     "fork-enter-sends-queued"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
