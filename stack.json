@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "dcf36e08f50dd46c554522b5d9f2b71a8a67e118",
-  "head": "20ef6b76e0efdd1a55c4c4403b8c75daf726949c",
+  "prev": "ac2df4ba56a53725173ebdc6cc7954fc4400b0a8",
+  "head": "009a6f8c916daab5a0d13ed46184af718aed081c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -26,10 +26,10 @@
     "fork-gitea-pr-actions",
     "fork-pr-project-exclusions",
     "fork-headless-delivery",
-    "fork-desktop-delivery"
+    "fork-desktop-delivery",
+    "fork-mobile-delivery"
   ],
   "unapplied": [
-    "fork-mobile-delivery",
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-gitea-pr-browser",
@@ -91,7 +91,7 @@
       "oid": "eebc8a07e497b0627e684008a5aaeadffff9d5fe"
     },
     "fork-mobile-delivery": {
-      "oid": "df058bf62e808c313c8bebd495081b0fe2a77c03"
+      "oid": "009a6f8c916daab5a0d13ed46184af718aed081c"
     },
     "fork-orcaslicer-handoff": {
       "oid": "31309089e13a3c0e13effc750f297f612b25d162"
