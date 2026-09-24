@@ -1106,3 +1106,13 @@ retire_when = "Upstream sends the next queued message from an empty-composer Ent
 depends_on = []
 roles = []
 note = "Send now delivers the message into the running turn (steer); it does not stop the turn. A hard stop-then-send was deferred because Stop deliberately returns the queue to the composer. The decision lives in the additive apps/web/src/queuedMessageEnter.ts; ChatView keeps only the call in onSend's empty-draft branch."
+
+[[patch]]
+name = "fork-restart-when-idle"
+subject = "feat(desktop): restart for updates when local agents finish"
+class = "product"
+purpose = "Let the desktop restart button wait until agents hosted by this desktop app finish, then restart into the downloaded update without interrupting their work."
+retire_when = "Upstream offers a deferred restart that waits for local agent work, or the fork stops wanting it."
+depends_on = []
+roles = []
+note = "Idle means no desktop-hosted thread (primary or desktop-local secondary) is running, starting, background-working, monitoring, or holding non-held queued messages, for 15 seconds. Pending approvals and questions deliberately do not block by owner decision: they can wait indefinitely, and the thread survives while the stale prompt is released. Remote environments are ignored because a desktop restart does not stop them. The schedule is in-memory and the watcher is mounted at AppRoot; the rules live in apps/web/src/components/sidebar/desktopIdleRestart.logic.ts."
