@@ -550,6 +550,12 @@ roles = []
 note = "Legacy uploads use native durable storage, retention and provider file input while keeping the parallel path-bearing field for old clients and historical messages. Available historical temporary objects materialize lazily into durable storage; no old metadata or migration IDs are removed. Partial upload/dispatch failures clean newly created files, and revert preserves referenced legacy objects. Current clients retain one upload and one display entry. The narrow turn-start query preserves legacy file handoffs. Legacy handoffs join the provider attachment list on dispatch, so they are budgeted with upstream's shared attachment-limit helper against decoded bytes rather than a fork-local cap."
 
 [[patch.decision]]
+id = "upstream2237-server-harness-otel-and-relay-recovery"
+date = "2026-09-25"
+decided = "adapt"
+rationale = "Upstream made ServerConfig carry an otelEnvironment and gave CloudManagedEndpointRuntime recovery requests plus a link-state lock. This concern keeps a trimmed copy of upstream's buildAppUnderTest that no merge touches, so give it upstream's own defaults (OtelEnvironment.none, an empty recovery stream, a no-op requestRecovery and an identity lock)."
+
+[[patch.decision]]
 id = "upstream-server-harness-model-manifest"
 date = "2026-09-23"
 decided = "adapt"
