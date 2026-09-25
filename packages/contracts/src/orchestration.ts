@@ -901,6 +901,10 @@ export const OrchestrationThread = Schema.Struct({
   // Survives manual settle, un-settle, and activity: only the user clears it.
   // Optional so payloads from older servers still decode.
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  // Orchestrating thread this one is nested under (one level, same project).
+  // Nested threads leave the sidebar and appear in the parent's Agents panel.
+  // Optional so payloads from pre-nesting servers still decode.
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   // Pending-only state. Optional so older servers remain compatible.
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
@@ -974,6 +978,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
   session: Schema.NullOr(OrchestrationSession),
@@ -1377,6 +1382,8 @@ const ThreadCreateCommand = Schema.Struct({
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
   historyImport: Schema.optional(Schema.Literal(true)),
+  /** Nest the new thread under this orchestrating thread. */
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
 });
 
 const ThreadDeleteCommand = Schema.Struct({
@@ -1450,6 +1457,18 @@ const ThreadPinCommand = Schema.Struct({
   // Optional: clients on pre-reorder servers omit it, and the pinned block
   // falls back to creation order for keyless threads.
   orderKey: Schema.optional(TrimmedNonEmptyString),
+});
+
+/**
+ * Nests a thread under an orchestrating thread, or with null returns it to the
+ * sidebar. Emitted as thread.meta-updated so older clients ignore it. Gated by
+ * the threadNesting capability.
+ */
+const ThreadParentSetCommand = Schema.Struct({
+  type: Schema.Literal("thread.parent.set"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  parentThreadId: Schema.NullOr(ThreadId),
 });
 
 const ThreadUnpinCommand = Schema.Struct({
@@ -1544,6 +1563,7 @@ const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
 });
 
 const ThreadTurnStartBootstrapPrepareWorktree = Schema.Struct({
@@ -1689,6 +1709,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadPinReorderCommand,
   ThreadAutoSettleSetCommand,
   ThreadActiveReorderCommand,
+  ThreadParentSetCommand,
   ThreadMetaUpdateCommand,
   ThreadPullRequestLinkCommand,
   ThreadPullRequestUnlinkCommand,
@@ -1723,6 +1744,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadPinReorderCommand,
   ThreadAutoSettleSetCommand,
   ThreadActiveReorderCommand,
+  ThreadParentSetCommand,
   ThreadMetaUpdateCommand,
   ThreadPullRequestLinkCommand,
   ThreadPullRequestUnlinkCommand,
@@ -2045,6 +2067,7 @@ export const ThreadCreatedPayload = Schema.Struct({
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
 });
 
 export const ThreadDeletedPayload = Schema.Struct({
@@ -2121,6 +2144,9 @@ export const ThreadAutoSettleSetPayload = Schema.Struct({
 
 export const ThreadMetaUpdatedPayload = Schema.Struct({
   threadId: ThreadId,
+  // Nesting rides this existing event so older clients ignore it. Null moves
+  // the thread back to the sidebar.
+  parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   // Order updates use this existing event so older clients can ignore the
   // new field while continuing to decode the event stream.
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),

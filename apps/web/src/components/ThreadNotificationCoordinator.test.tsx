@@ -17,6 +17,7 @@ const state = vi.hoisted(() => ({
   approval: false,
   sessionError: false,
   turnError: false,
+  parentThreadId: null as string | null,
   add: vi.fn(
     (_toast: { title: string; description: string; actionProps: { onClick: () => void } }) =>
       "toast-1",
@@ -34,9 +35,24 @@ vi.mock("@effect/atom-react", () => ({
     status: state.live ? "live" : "disconnected",
     snapshot: Option.some({
       threads: [
+        ...(state.parentThreadId === null
+          ? []
+          : [
+              {
+                id: state.parentThreadId,
+                title: "Orchestrator",
+                parentThreadId: null,
+                archivedAt: null,
+                hasPendingUserInput: false,
+                hasPendingApprovals: false,
+                session: null,
+                latestTurn: null,
+              },
+            ]),
         {
           id: "thread-1",
           title: "Fix the login form",
+          parentThreadId: state.parentThreadId,
           archivedAt: state.archivedAt,
           hasPendingUserInput: state.input,
           hasPendingApprovals: state.approval,
@@ -109,6 +125,7 @@ beforeEach(() => {
     approval: false,
     sessionError: false,
     turnError: false,
+    parentThreadId: null,
   });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("window", new EventTarget());
@@ -237,6 +254,26 @@ describe("thread notifications", () => {
     expect(state.sound).toHaveBeenCalledWith("completion", expect.any(Function));
     expect(state.add).toHaveBeenCalledTimes(1);
     expect(state.notification).not.toHaveBeenCalled();
+  });
+
+  it("keeps nested attention visible without playing a sound", async () => {
+    state.mode = "notifications-and-sound";
+    state.parentThreadId = "parent-1";
+    await render();
+    state.input = true;
+    await render();
+    expect(state.add).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Input needed", description: "Fix the login form" }),
+    );
+    expect(state.sound).not.toHaveBeenCalled();
+  });
+
+  it("does not play a completion sound for a nested thread", async () => {
+    state.mode = "notifications-and-sound";
+    state.parentThreadId = "parent-1";
+    await render();
+    await complete();
+    expect(state.sound).not.toHaveBeenCalled();
   });
 
   it("keeps system alerts when the app is in the background", async () => {
