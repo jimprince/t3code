@@ -2249,7 +2249,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
               <Tooltip key={file.id}>
                 <TooltipTrigger
                   render={
-                    <span className="inline-flex max-w-64 items-center gap-1.5 rounded-lg border border-border/80 bg-background/70 px-2 py-1 text-[11px] text-muted-foreground" />
+                    <span className="inline-flex max-w-64 items-center gap-1.5 rounded-lg border border-border/80 bg-background/70 px-2 py-1 text-2xs text-muted-foreground" />
                   }
                 >
                   <FileIcon className="size-3.5 shrink-0" />
