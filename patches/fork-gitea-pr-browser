@@ -1,6 +1,6 @@
-Bottom: 6572e6fe73c2a9f3e7d3213cfb02e8807da0a224
-Top:    43237da786b823b7b7e2258d53d1978c35ee9d9f
+Bottom: 3eaa4c01c1d1ccb7748fe4e402aaa7ceabaaf844
+Top:    72a5d15ad1115c273787b4f0b090f62e44fb9815
 Author: User <user@example.com>
-Date:   2026-09-25 10:01:25 +0000
+Date:   2026-09-25 10:22:45 +0000
 
 feat(pull-requests): browse Gitea reviews and CI checks
