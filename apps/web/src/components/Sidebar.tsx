@@ -138,6 +138,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
   readThreadShell,
+  readThreadShells,
   useAllEnvironmentProjectSnapshotsReady,
   useProjects,
   useThreadShells,
@@ -245,6 +246,12 @@ import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
+import { useThreadNestingActions } from "../hooks/useThreadNesting";
+import {
+  applySidebarThreadNesting,
+  isThreadNestingMenuId,
+  resolveThreadNestingMenuState,
+} from "../threadNesting.logic";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
 import {
@@ -2180,6 +2187,7 @@ export default function Sidebar() {
     archiveThread,
     deleteThread,
   } = useThreadActions();
+  const { runNestingMenuAction } = useThreadNestingActions();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -2593,7 +2601,7 @@ export default function Sidebar() {
     // memo exactly at the next wake boundary.
     void snoozeWakeTick;
     const preciseNow = new Date().toISOString();
-    const visible = threads.filter((thread) => {
+    const visible = applySidebarThreadNesting(threads).filter((thread) => {
       const projectRefKey = `${thread.environmentId}:${thread.projectId}`;
       return (
         thread.archivedAt === null &&
@@ -4115,6 +4123,11 @@ export default function Sidebar() {
           threadProjectGroup?.memberProjects.filter(
             (member) => member.environmentId !== thread.environmentId,
           ) ?? [];
+        const nesting = resolveThreadNestingMenuState(
+          thread,
+          readThreadShells(),
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadNesting === true,
+        );
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
             buildThreadActionMenuItems({
@@ -4140,11 +4153,16 @@ export default function Sidebar() {
                 titleRegeneration: supportsTitleRegeneration,
               },
               snoozePresets,
+              nesting,
             }),
             position,
           ),
         );
         if (clicked._tag === "Failure") return;
+        if (isThreadNestingMenuId(clicked.value)) {
+          await runNestingMenuAction(threadRef, clicked.value, nesting);
+          return;
+        }
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"
@@ -4462,6 +4480,7 @@ export default function Sidebar() {
       openProjectSettings,
       projectScopeKey,
       projectByKey,
+      runNestingMenuAction,
       serverConfigs,
       setProjectScopeKey,
       startThreadRename,

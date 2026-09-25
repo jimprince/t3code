@@ -442,6 +442,7 @@ export class RemoteEnvironmentClient {
     baseBranch?: string;
     startFromOrigin?: boolean;
     initialMessage?: string;
+    parentThreadId?: string | null;
   }): Promise<{ threadId: string; projectId: string; title: string }> {
     const snapshot = await this.getShellSnapshot();
     const project = snapshot.projects.find((candidate) => candidate.id === input.projectId);
@@ -495,6 +496,7 @@ export class RemoteEnvironmentClient {
             branch: null,
             worktreePath: null,
             createdAt,
+            ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
           },
           ...(input.branch
             ? {
@@ -666,6 +668,57 @@ export class RemoteEnvironmentClient {
       }
 
       return { threadId: thread.id, planId: plan.id, modeChanged };
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** Nests a thread under an orchestrating thread, or with null returns it to the sidebar. */
+  async setThreadParent(threadId: string, parentThreadId: string | null): Promise<void> {
+    await this.dispatchOnce({
+      type: "thread.parent.set",
+      commandId: NodeCrypto.randomUUID(),
+      threadId,
+      parentThreadId,
+    });
+  }
+
+  /** Answers a worker's pending question, the same as answering it in the app. */
+  async respondToUserInput(input: {
+    threadId: string;
+    requestId: string;
+    answers: Record<string, string>;
+  }): Promise<void> {
+    await this.dispatchOnce({
+      type: "thread.user-input.respond",
+      commandId: NodeCrypto.randomUUID(),
+      threadId: input.threadId,
+      requestId: input.requestId,
+      answers: input.answers,
+      createdAt: nowIso(),
+    });
+  }
+
+  /** Approves or declines a worker's pending approval, the same as in the app. */
+  async respondToApproval(input: {
+    threadId: string;
+    requestId: string;
+    decision: "accept" | "acceptForSession" | "decline";
+  }): Promise<void> {
+    await this.dispatchOnce({
+      type: "thread.approval.respond",
+      commandId: NodeCrypto.randomUUID(),
+      threadId: input.threadId,
+      requestId: input.requestId,
+      decision: input.decision,
+      createdAt: nowIso(),
+    });
+  }
+
+  private async dispatchOnce(command: Record<string, unknown>): Promise<void> {
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
     } finally {
       await rpc.dispose();
     }

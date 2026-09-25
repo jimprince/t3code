@@ -445,6 +445,7 @@ export function projectEvent(
             settledAt: null,
             unsettledAt: null,
             activeOrderKey: null,
+            parentThreadId: payload.parentThreadId ?? null,
             snoozedUntil: null,
             snoozedAt: null,
             deletedAt: null,
@@ -630,6 +631,9 @@ export function projectEvent(
               ...(payload.worktreePath !== undefined ? { worktreePath: payload.worktreePath } : {}),
               ...(payload.activeOrderKey !== undefined
                 ? { activeOrderKey: payload.activeOrderKey }
+                : {}),
+              ...(payload.parentThreadId !== undefined
+                ? { parentThreadId: payload.parentThreadId }
                 : {}),
               ...(payload.branchPullRequest !== undefined
                 ? { branchPullRequest: payload.branchPullRequest }
