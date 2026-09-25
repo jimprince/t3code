@@ -368,6 +368,12 @@ roles = []
 note = "Reorganized 2026-09-06 from fork-thread-fork."
 
 [[patch.decision]]
+id = "upstream2237-thread-revert-boundary"
+date = "2026-09-25"
+decided = "relocate"
+rationale = "Codex 0.156 removed the count-based thread/rollback endpoint; history is replaced at a turn boundary through thread/revert. The fork's provider fork already resolves the retained turn by id, so it now names the first turn to drop instead of a count, and keeps the retained count it computed rather than re-reading the trimmed thread."
+
+[[patch.decision]]
 id = "upstream-chat-route-layout"
 date = "2026-09-16"
 decided = "relocate"

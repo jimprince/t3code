@@ -77,8 +77,8 @@ describe("forkCodexThread", () => {
           payload: { threadId: "provider-source", cwd: "/tmp/fork-worktree" },
         },
         {
-          method: "thread/rollback",
-          payload: { threadId: "provider-fork", numTurns: 1 },
+          method: "thread/revert",
+          payload: { threadId: "provider-fork", beforeTurnId: "turn-3" },
         },
       ]);
       NodeAssert.notEqual(result, null);
@@ -88,7 +88,7 @@ describe("forkCodexThread", () => {
     }),
   );
 
-  it.effect("anchors rollback to the retained turn id when provider counts diverge", () =>
+  it.effect("anchors the revert on the retained turn id when provider counts diverge", () =>
     Effect.gen(function* () {
       const requests: Array<{ method: string; payload: unknown }> = [];
       const client = {
@@ -119,7 +119,7 @@ describe("forkCodexThread", () => {
       NodeAssert.deepStrictEqual(
         requests.map((request) => request.method),
         ["thread/fork"],
-        "REGRESSION: ordinal rollback dropped the retained turn after an interrupted provider turn",
+        "REGRESSION: an ordinal trim dropped the retained turn after an interrupted provider turn",
       );
       NodeAssert.equal(result?.threadId, "provider-fork");
       NodeAssert.equal(result?.turnCount, 4);
@@ -162,7 +162,7 @@ describe("forkCodexThread", () => {
     }),
   );
 
-  it.effect("archives a detached provider fork when rollback fails", () =>
+  it.effect("archives a detached provider fork when the revert fails", () =>
     Effect.gen(function* () {
       const requests: Array<{ method: string; payload: unknown }> = [];
       const client = {
@@ -176,8 +176,8 @@ describe("forkCodexThread", () => {
               },
             });
           }
-          if (method === "thread/rollback") {
-            return Effect.die(new Error("simulated rollback failure"));
+          if (method === "thread/revert") {
+            return Effect.die(new Error("simulated revert failure"));
           }
           return Effect.succeed({});
         },
@@ -194,7 +194,7 @@ describe("forkCodexThread", () => {
       NodeAssert.equal(result._tag, "Failure");
       NodeAssert.deepStrictEqual(
         requests.map(({ method }) => method),
-        ["thread/fork", "thread/rollback", "thread/archive"],
+        ["thread/fork", "thread/revert", "thread/archive"],
       );
     }),
   );

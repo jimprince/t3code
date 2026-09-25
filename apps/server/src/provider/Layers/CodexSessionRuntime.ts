@@ -763,7 +763,7 @@ interface CodexThreadOpenClient {
   >;
 }
 
-type CodexThreadForkMethod = "thread/fork" | "thread/rollback" | "thread/archive";
+type CodexThreadForkMethod = "thread/fork" | "thread/revert" | "thread/archive";
 
 interface CodexThreadForkClient {
   readonly request: <M extends CodexThreadForkMethod>(
@@ -804,19 +804,21 @@ export const forkCodexThread = Effect.fn("forkCodexThread")(function* (input: {
     yield* archiveForkedThread;
     return null;
   }
-  const turnsToDrop = forkedTurnCount - (retainedTurnIndex + 1);
+  const keptTurnCount = retainedTurnIndex + 1;
   return yield* Effect.gen(function* () {
-    const finalThread =
-      turnsToDrop === 0
-        ? forked.thread
-        : (yield* input.client.request("thread/rollback", {
-            threadId: providerThreadId,
-            numTurns: turnsToDrop,
-          })).thread;
+    // Codex dropped its count-based rollback endpoint; history is now replaced
+    // at a turn boundary, so name the first turn the fork must not keep.
+    const firstRemovedTurn = forked.thread.turns[keptTurnCount];
+    if (firstRemovedTurn !== undefined) {
+      yield* input.client.request("thread/revert", {
+        threadId: providerThreadId,
+        beforeTurnId: firstRemovedTurn.id,
+      });
+    }
 
     return {
       threadId: providerThreadId,
-      turnCount: finalThread.turns.length,
+      turnCount: keptTurnCount,
     };
   }).pipe(
     Effect.catchCause((cause) =>
