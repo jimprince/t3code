@@ -79,6 +79,11 @@ export class ThreadBackgroundLivenessService extends Context.Service<
      * "monitoring" only when watch loops are the ONLY live work.
      */
     readonly getThreadBackgroundLiveness: (threadId: string) => ThreadBackgroundLiveness;
+
+    /** The live tasks behind the thread's liveness, agents first. */
+    readonly getThreadBackgroundTasks: (
+      threadId: string,
+    ) => ReadonlyArray<{ readonly taskId: string; readonly kind: "agent" | "monitor" }>;
   }
 >()("t3/orchestration/ThreadBackgroundLiveness/ThreadBackgroundLivenessService") {}
 
@@ -199,6 +204,17 @@ export function make(): ThreadBackgroundLivenessService["Service"] {
         return "monitoring";
       }
       return null;
+    },
+
+    getThreadBackgroundTasks: (threadId) => {
+      const state = stateByThreadId.get(threadId);
+      if (!state) {
+        return [];
+      }
+      return [
+        ...Array.from(state.agents, (taskId) => ({ taskId, kind: "agent" as const })),
+        ...Array.from(state.monitors, (taskId) => ({ taskId, kind: "monitor" as const })),
+      ];
     },
   };
 }
