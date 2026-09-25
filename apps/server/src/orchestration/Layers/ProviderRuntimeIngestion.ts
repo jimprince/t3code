@@ -46,6 +46,7 @@ import { ProjectionThreadProposedPlanRepository } from "../../persistence/Servic
 import { ProjectionThreadProposedPlanRepositoryLive } from "../../persistence/Layers/ProjectionThreadProposedPlans.ts";
 import { OrchestrationEngineService } from "../Services/OrchestrationEngine.ts";
 import { ThreadBackgroundLivenessService } from "../ThreadBackgroundLiveness.ts";
+import { ThreadBackgroundWorkRecovery } from "../ThreadBackgroundWorkRecovery.ts";
 import { ThreadPlanProgressService } from "../ThreadPlanProgress.ts";
 import { ProjectionSnapshotQuery } from "../Services/ProjectionSnapshotQuery.ts";
 import {
@@ -1089,6 +1090,7 @@ export function runtimeEventToActivities(
 
 const make = Effect.gen(function* () {
   const threadBackgroundLiveness = yield* ThreadBackgroundLivenessService;
+  const threadBackgroundWorkRecovery = yield* Effect.serviceOption(ThreadBackgroundWorkRecovery);
   const threadPlanProgress = yield* ThreadPlanProgressService;
   const crypto = yield* Crypto.Crypto;
   const orchestrationEngine = yield* OrchestrationEngineService;
@@ -2671,6 +2673,19 @@ const make = Effect.gen(function* () {
           break;
         default:
           break;
+      }
+      // fork-resume-background-work: mirror the live set so a restart can resume it.
+      if (
+        Option.isSome(threadBackgroundWorkRecovery) &&
+        (event.type === "task.started" ||
+          event.type === "task.progress" ||
+          event.type === "task.updated" ||
+          event.type === "task.completed" ||
+          event.type === "session.exited")
+      ) {
+        yield* threadBackgroundWorkRecovery.value.sync(thread.id, (taskId) =>
+          lookupTaskDescription(thread.id, taskId),
+        );
       }
 
       let taskTitle: string | undefined;
