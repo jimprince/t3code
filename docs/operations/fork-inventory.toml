@@ -568,6 +568,12 @@ roles = []
 note = "Legacy uploads use native durable storage, retention and provider file input while keeping the parallel path-bearing field for old clients and historical messages. Available historical temporary objects materialize lazily into durable storage; no old metadata or migration IDs are removed. Partial upload/dispatch failures clean newly created files, and revert preserves referenced legacy objects. Current clients retain one upload and one display entry. The narrow turn-start query preserves legacy file handoffs. Legacy handoffs join the provider attachment list on dispatch, so they are budgeted with upstream's shared attachment-limit helper against decoded bytes rather than a fork-local cap."
 
 [[patch.decision]]
+id = "upstream2237-design-token-scale"
+date = "2026-09-25"
+decided = "adapt"
+rationale = "The legacy file-attachment chip used text-[11px], now an error under shadcn(no-arbitrary-values). Upstream's new --text-2xs token is the same value, so take it."
+
+[[patch.decision]]
 id = "upstream2237-server-harness-otel-and-relay-recovery"
 date = "2026-09-25"
 decided = "adapt"
