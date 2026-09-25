@@ -142,6 +142,27 @@ Expand a tool call in the conversation to see its full command and output.
 Summaries shorten shell wrappers and can still describe the latest call after it
 finishes; the call's own result shows its status.
 
+### Nest threads under an orchestrator
+
+A thread can live under another thread instead of in the sidebar. Nested threads
+appear in the parent's **Agents** panel under **Threads**, with their status;
+click one to open it. While a nested thread is open, it shows in the sidebar
+under its parent, and the header breadcrumb names the parent; click it to go
+back. Agents that start worker threads with `t3-thread` nest
+them under their own thread by default.
+
+To nest a thread yourself, open its menu in the sidebar and choose **Nest
+under…**. To bring one back, choose **Move to sidebar** from its row in the
+Agents panel or from the thread's own menu. **New thread under this one** in a
+thread's menu starts a thread that is nested from the start.
+
+Nesting is one level deep and stays within a project. When a nested thread is
+waiting on an approval or a question, its parent shows that state in the
+sidebar. An orchestrating agent is expected to answer its workers itself and ask
+you only when it cannot. If a parent is archived, its nested threads return to
+the sidebar. Nesting is not available in the mobile app yet; mobile lists every
+thread.
+
 ## Snooze until later
 
 Choose **Snooze → Custom…** from a thread's menu to pick a date and time in your
