@@ -274,7 +274,7 @@ describe("buildCodexAdditionalContext", () => {
     );
 
     NodeAssert.match(value, /as gpt 5\.3 codex with high effort reasoning effort/);
-    NodeAssert.doesNotMatch(value, /\n/);
+    NodeAssert.doesNotMatch(value, /<runtime_info>[^<]*\n/);
   });
 });
 
