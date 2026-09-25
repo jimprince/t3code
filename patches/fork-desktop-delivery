@@ -1,6 +1,6 @@
-Bottom: ae0459c29f968883919362744865963083a81f1c
-Top:    1886220d17924be6dc11c2d02c0043263480872c
+Bottom: 3cbf3826fa62cd3c2a676b4b3c56d9773c7a730c
+Top:    07ecb2ac567dfbdcab4f0dcb7e4b19b60f65fb9c
 Author: User <user@example.com>
-Date:   2026-09-25 10:49:11 +0000
+Date:   2026-09-25 10:49:52 +0000
 
 feat(desktop): deliver the fork desktop app with its own identity and updates
