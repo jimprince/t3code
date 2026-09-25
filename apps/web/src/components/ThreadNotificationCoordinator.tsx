@@ -20,6 +20,7 @@ import {
   setNotificationBadge,
   unlockNotificationAudio,
 } from "../threadNotifications";
+import { resolveNestedThreadIds } from "../threadNesting.logic";
 import { resolveSidebarThreadStatus } from "./Sidebar.logic";
 import { toastManager } from "./ui/toast";
 
@@ -113,6 +114,7 @@ function EnvironmentNotifications({
       return;
     }
     const next = new Map<ThreadId, { attention: string | null; completion: number | null }>();
+    const nestedThreadIds = resolveNestedThreadIds(shell.snapshot.value.threads);
     for (const thread of shell.snapshot.value.threads) {
       let status = resolveSidebarThreadStatus(thread);
       if (status === "ready" && thread.latestTurn?.state === "error") status = "failed";
@@ -137,6 +139,9 @@ function EnvironmentNotifications({
             ? "completion"
             : null;
       if (!kind) continue;
+      // A nested thread's completion goes to the agent that runs it; only its
+      // requests for the user still notify.
+      if (kind === "completion" && nestedThreadIds.has(thread.id)) continue;
       const title =
         kind === "completion"
           ? "Thread completed"
