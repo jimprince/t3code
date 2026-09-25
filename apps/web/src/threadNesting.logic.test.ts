@@ -1,4 +1,5 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -29,6 +30,8 @@ interface TestThread {
   readonly archivedAt: string | null;
   readonly hasPendingApprovals: boolean;
   readonly hasPendingUserInput: boolean;
+  readonly session?: EnvironmentThreadShell["session"];
+  readonly backgroundLiveness?: "working" | "monitoring" | null;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly title: string;
@@ -119,6 +122,42 @@ describe("applySidebarThreadNesting", () => {
       }),
     ]);
     expect(result[0]).toMatchObject({ id: parentId, hasPendingApprovals: false });
+  });
+
+  it("shows a working or monitoring sub-agent as the parent's background work", () => {
+    const running = { status: "running" } as EnvironmentThreadShell["session"];
+    const [idleParent] = applySidebarThreadNesting([
+      thread("parent"),
+      thread("worker", { parentThreadId: parentId, session: running }),
+      thread("watcher", { parentThreadId: parentId, backgroundLiveness: "monitoring" }),
+    ]);
+    expect(idleParent).toMatchObject({ backgroundLiveness: "working" });
+
+    const [monitoringParent] = applySidebarThreadNesting([
+      thread("parent"),
+      thread("watcher", { parentThreadId: parentId, backgroundLiveness: "monitoring" }),
+    ]);
+    expect(monitoringParent).toMatchObject({ backgroundLiveness: "monitoring" });
+
+    const busyParent = thread("parent", { backgroundLiveness: "working" });
+    const [unchanged] = applySidebarThreadNesting([
+      busyParent,
+      thread("watcher", { parentThreadId: parentId, backgroundLiveness: "monitoring" }),
+    ]);
+    expect(unchanged).toBe(busyParent);
+  });
+
+  it("does not show an idle or archived sub-agent as work", () => {
+    const [parent] = applySidebarThreadNesting([
+      thread("parent"),
+      thread("idle", { parentThreadId: parentId, session: { status: "ready" } as never }),
+      thread("archived", {
+        parentThreadId: parentId,
+        archivedAt: "2026-09-02T00:00:00.000Z",
+        backgroundLiveness: "working",
+      }),
+    ]);
+    expect(parent?.backgroundLiveness ?? null).toBeNull();
   });
 
   it("does not roll attention into a same-id thread in another environment", () => {

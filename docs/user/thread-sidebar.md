@@ -157,8 +157,8 @@ Agents panel or from the thread's own menu. **New thread under this one** in a
 thread's menu starts a thread that is nested from the start.
 
 Nesting is one level deep and stays within a project. When a nested thread is
-waiting on an approval or a question, its parent shows that state in the
-sidebar. An orchestrating agent is expected to answer its workers itself and ask
+working, monitoring, or waiting on an approval or a question, its parent shows
+that state in the sidebar. An orchestrating agent is expected to answer its workers itself and ask
 you only when it cannot. If a parent is archived, its nested threads return to
 the sidebar. Nesting is not available in the mobile app yet; mobile lists every
 thread.
