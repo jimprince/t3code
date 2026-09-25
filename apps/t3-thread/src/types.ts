@@ -39,6 +39,7 @@ export interface ExecutionEnvironmentDescriptor {
   capabilities: {
     repositoryIdentity?: boolean;
     sessionRefresh?: boolean;
+    threadNesting?: boolean;
   };
 }
 
