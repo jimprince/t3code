@@ -469,6 +469,12 @@ roles = []
 note = "Owns multi-project selection and mobile project activity grouping; obsolete implementation plans removed."
 
 [[patch.decision]]
+id = "single-filter-state"
+date = "2026-09-25"
+decided = "adapt"
+rationale = "Upstream's single-project scope overrode the hidden set, so checkboxes did nothing while a project was isolated, and General chat bypassed both. The hidden set is now the only filter state: a row click isolates its project, General chat is an ordinary entry, and a stored upstream scope migrates into the hidden set once. This supersedes layering the fork selection over upstream's persisted scope."
+
+[[patch.decision]]
 id = "upstream2237-design-token-scale"
 date = "2026-09-25"
 decided = "adapt"

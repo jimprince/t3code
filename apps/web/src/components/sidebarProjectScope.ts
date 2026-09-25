@@ -26,12 +26,38 @@ export function toggleAllHiddenProjectKeys(
   hiddenProjectKeys: readonly string[],
   projectGroups: readonly SidebarProjectSnapshot[],
 ): readonly string[] {
-  // Partial counts as "something is visible", so the first click always
-  // clears the list rather than needing two clicks from a partial state.
+  // "All projects" brings every project back. Only when everything is
+  // already visible does it clear the list, as a start for picking a few.
   const hidden = new Set(hiddenProjectKeys);
-  const allHidden =
-    projectGroups.length > 0 && projectGroups.every((project) => hidden.has(project.projectKey));
-  return allHidden ? [] : sortKeys(projectGroups.map((project) => project.projectKey));
+  const allVisible = projectGroups.every((project) => !hidden.has(project.projectKey));
+  return allVisible ? sortKeys(projectGroups.map((project) => project.projectKey)) : [];
+}
+
+// Clicking a project row shows only that project. Clicking the project that
+// is already shown alone brings every project back.
+export function isolateProjectKey(
+  hiddenProjectKeys: readonly string[],
+  projectGroups: readonly SidebarProjectSnapshot[],
+  projectKey: string,
+): readonly string[] {
+  if (resolveIsolatedProjectKey(hiddenProjectKeys, projectGroups) === projectKey) return [];
+  return sortKeys(
+    projectGroups
+      .map((project) => project.projectKey)
+      .filter((candidateKey) => candidateKey !== projectKey),
+  );
+}
+
+// The single project the filter leaves visible, or null when it leaves
+// several (or the catalog has only one project, so there is nothing to scope).
+export function resolveIsolatedProjectKey(
+  hiddenProjectKeys: readonly string[],
+  projectGroups: readonly SidebarProjectSnapshot[],
+): string | null {
+  if (projectGroups.length < 2) return null;
+  const hidden = new Set(hiddenProjectKeys);
+  const visible = projectGroups.filter((project) => !hidden.has(project.projectKey));
+  return visible.length === 1 ? visible[0]!.projectKey : null;
 }
 
 export function resolveAllProjectsCheckboxState(
@@ -44,6 +70,25 @@ export function resolveAllProjectsCheckboxState(
   if (hiddenCount === 0) return "all";
   if (hiddenCount === projectGroups.length) return "none";
   return "partial";
+}
+
+// "environmentId:projectId" keys of the projects whose threads the sidebar
+// lists, or null when nothing is hidden so callers can skip filtering.
+export function resolveVisibleProjectRefKeys(
+  hiddenProjectKeys: readonly string[],
+  projectGroups: readonly SidebarProjectSnapshot[],
+): ReadonlySet<string> | null {
+  if (hiddenProjectKeys.length === 0) return null;
+  const hidden = new Set(hiddenProjectKeys);
+  return new Set(
+    projectGroups
+      .filter((project) => !hidden.has(project.projectKey))
+      .flatMap((project) =>
+        project.memberProjectRefs.map(
+          (projectRef) => `${projectRef.environmentId}:${projectRef.projectId}`,
+        ),
+      ),
+  );
 }
 
 export function pruneHiddenProjectKeys(
