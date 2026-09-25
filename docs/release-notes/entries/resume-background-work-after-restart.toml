@@ -1,0 +1,4 @@
+id = "resume-background-work-after-restart"
+category = "feature"
+functionality = "threads"
+text = "With Continue threads after restarts on, agents are told which monitors and background agents a restart stopped so they can restart them, and Restart when agents finish no longer waits for agents that are only monitoring."
