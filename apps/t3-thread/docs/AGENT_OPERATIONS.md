@@ -232,6 +232,61 @@ Post-create reliability checklist:
 - persists the same subscription you would otherwise create manually with `agent subscribe --watch <new-agent>`
 - does not replace manual `subscribe`; it is the create-time ownership wiring path
 
+## Nested Workers And Escalation
+
+Three kinds of delegated work exist in T3 Code. Match the user's words:
+
+| The user asks for                                                      | Create                                           | Where the user sees it                                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------- |
+| a **thread** ("new thread", "start a thread")                          | `t3-thread create --top-level ...`               | the left sidebar                                                           |
+| a **sub-agent** ("sub-agent", "agent", "worker", "delegate", "helper") | `t3-thread create ...` (nests under your thread) | your thread's **Agents** panel, under **Threads**, on the right; clickable |
+| nothing (your own quick lookup)                                        | the harness's built-in subagent tool             | **Direct spawns** in the Agents panel; not clickable                       |
+
+Prefer nested T3 threads for sub-agents: the user can open them, answer them,
+and move them with `t3-thread nest` / `unnest`. Built-in subagents (Claude's
+Task/Agent tool, Codex native spawns) cannot be opened, promoted, or answered;
+use them only for brief read-only lookups inside your own turn that the user
+did not ask to see. Nesting needs the worker in your environment and project;
+otherwise, or on a server without nesting, the worker is top-level and the
+`nesting` field in the create output says why. Tell the user when that happens.
+
+- no flag: nests under the calling thread (`T3_THREAD_ID`), including when the
+  caller is itself nested. A caller in another project or environment gets a top-level
+  worker; the `nesting` field in the create output says why.
+- `--top-level`: put the worker in the sidebar, for work the user should
+  watch directly.
+- `--parent <agent-or-thread>`: nest under a specific thread in the same
+  environment and project.
+- Move a worker later with `t3-thread nest <agent> --parent <agent-or-thread>`
+  or `t3-thread unnest <agent>`.
+
+Nesting and notification ownership stay direct at every depth: a worker created
+by a nested caller is parented to that caller, and its completion or attention
+subscription targets that same caller (or the explicit `--notify` target), not
+the root of the tree. Parent settlement and archive never cascade to descendants.
+
+This CLI ships per operator machine rather than inside desktop releases. After
+the stack lands, each machine that runs `t3-thread` or a watcher must deploy the
+landed fork ref with `t3-thread-deploy --from <fork-checkout> --ref <landed-ref>`.
+The deploy helper builds and validates the pinned snapshot; restart any watcher
+that was already running so it loads the new snapshot.
+
+When a nested worker needs attention (its subscription notifies you), handle
+it yourself before involving the user:
+
+```bash
+t3-thread pending <agent>                       # open questions and approvals, as JSON
+t3-thread answer <agent> "Use the staging database"
+t3-thread answer <agent> --question color=blue --question size=large
+t3-thread approve <agent> [--session]
+t3-thread deny <agent>
+```
+
+Answer from what you know about the task. Only when you genuinely cannot
+decide, ask the user in your own thread, then relay their answer with
+`t3-thread answer`. Do not leave a nested worker waiting silently: the user
+does not see it in the sidebar.
+
 ## Common Lifecycle Tasks
 
 List saved agents:
