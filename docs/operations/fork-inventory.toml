@@ -1101,3 +1101,13 @@ id = "upstream2237-design-token-scale"
 date = "2026-09-25"
 decided = "adapt"
 rationale = "The nested-thread rows used text-[.7rem] and text-[.65rem], now errors under shadcn(no-arbitrary-values). Take the nearest new tokens: text-2xs (11px) for the row metadata and text-3xs (10px) for the section label."
+
+[[patch]]
+name = "fork-resume-background-work"
+subject = "feat(server): resume monitors and background agents after restarts"
+class = "product"
+purpose = "When Continue threads after restarts is on, tell each agent which monitors and background agents a server restart stopped so it can relaunch what it still needs, and stop monitoring-only threads from delaying the desktop's restart when agents finish."
+retire_when = "Upstream restores or re-arms provider background work across server restarts, or the fork stops wanting it."
+depends_on = ["fork-restart-when-idle"]
+roles = []
+note = "Runtime ingestion mirrors each thread's live background tasks (ThreadBackgroundLiveness agents and monitors, with descriptions) into fork_thread_background_work (fork migration 7) whenever the set changes, and deletes the row when the work ends or the session exits. Shutdown closes the reactor scope before ProviderService.stopAll, so a graceful restart keeps the rows and a crash keeps the last written state. reconcileProviderSessions takes every row once: mid-turn continuations get the notice appended to their prompt (and use it instead of promptless continuation), and idle threads with a resume cursor get the notice as a new turn, gated by the per-project continueThreadsAfterServerUpdate setting. Servers advertise backgroundWorkResume; the desktop idle restart lets monitoring-only threads through only where that capability and setting apply."
