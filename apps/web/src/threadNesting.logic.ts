@@ -110,6 +110,36 @@ export function applySidebarThreadNesting<T extends AttentionThread>(
   });
 }
 
+/**
+ * The open thread when it is nested, with its parent's scoped key. The sidebar
+ * shows it under that parent while it is open, so you can see where you are
+ * and get back. Null when nothing nested is open.
+ */
+export function resolveViewedNestedThread<T extends NestingThread>(
+  threads: ReadonlyArray<T>,
+  viewedThreadKey: string | null,
+): { readonly parentKey: string; readonly thread: T } | null {
+  if (viewedThreadKey === null) return null;
+  const viewed = threads.find((thread) => threadKey(thread) === viewedThreadKey);
+  if (viewed === undefined || viewed.parentThreadId == null || viewed.archivedAt !== null) {
+    return null;
+  }
+  if (!resolveNestedThreadKeys(threads).has(viewedThreadKey)) return null;
+  return {
+    parentKey: scopedThreadKey(scopeThreadRef(viewed.environmentId, viewed.parentThreadId)),
+    thread: viewed,
+  };
+}
+
+/** Whether `thread` is nested under `parent` right now (same rules as the sidebar). */
+export function isNestedUnder(thread: NestingThread, parent: NestingThread): boolean {
+  return (
+    thread.parentThreadId === parent.id &&
+    thread.environmentId === parent.environmentId &&
+    resolveNestedThreadIds([thread, parent]).has(thread.id)
+  );
+}
+
 /** Unarchived threads nested under `parent`, oldest first so rows keep their place. */
 export function listNestedThreads<
   T extends NestingThread & Pick<EnvironmentThreadShell, "createdAt">,

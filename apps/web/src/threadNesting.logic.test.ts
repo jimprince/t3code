@@ -1,14 +1,17 @@
+import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
   applySidebarThreadNesting,
+  isNestedUnder,
   isThreadNestingMenuId,
   listNestedThreads,
   nestUnderMenuTarget,
   resolveNestedDraftParent,
   resolveNestedThreadKeys,
   resolveThreadNestingMenuState,
+  resolveViewedNestedThread,
   selectNestParentCandidates,
   withThreadNestingMenuItems,
 } from "./threadNesting.logic";
@@ -256,5 +259,41 @@ describe("thread action menu nesting items", () => {
     expect(isThreadNestingMenuId("move-to-sidebar")).toBe(true);
     expect(isThreadNestingMenuId("nest-under:x")).toBe(true);
     expect(isThreadNestingMenuId("rename")).toBe(false);
+  });
+});
+
+describe("resolveViewedNestedThread", () => {
+  const key = (id: string) => scopedThreadKey(scopeThreadRef(envA, ThreadId.make(id)));
+  const nested = [thread("parent"), thread("child", { parentThreadId: parentId })];
+
+  it("returns the open nested thread with its parent's key, so the sidebar can show it there", () => {
+    const viewed = resolveViewedNestedThread(nested, key("child"));
+    expect(viewed?.thread.id).toBe(ThreadId.make("child"));
+    expect(viewed?.parentKey).toBe(key("parent"));
+  });
+
+  it("ignores top-level threads, nothing open, and threads whose parent is archived", () => {
+    const archivedParent = [
+      thread("parent", { archivedAt: "2026-09-02T00:00:00.000Z" }),
+      thread("child", { parentThreadId: parentId }),
+    ];
+    expect(resolveViewedNestedThread(archivedParent, key("child"))).toBeNull();
+    expect(resolveViewedNestedThread(nested, key("parent"))).toBeNull();
+    expect(resolveViewedNestedThread(nested, null)).toBeNull();
+  });
+});
+
+describe("isNestedUnder", () => {
+  it("matches only a live, top-level parent in the same environment and project", () => {
+    const child = thread("child", { parentThreadId: parentId });
+    expect(isNestedUnder(child, thread("parent"))).toBe(true);
+    expect(isNestedUnder(child, thread("parent", { environmentId: envB }))).toBe(false);
+    expect(isNestedUnder(child, thread("parent", { projectId: projectB }))).toBe(false);
+    expect(isNestedUnder(child, thread("parent", { archivedAt: "2026-09-02T00:00:00.000Z" }))).toBe(
+      false,
+    );
+    expect(isNestedUnder(child, thread("parent", { parentThreadId: ThreadId.make("top") }))).toBe(
+      false,
+    );
   });
 });

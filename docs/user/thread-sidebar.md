@@ -141,7 +141,9 @@ finishes; the call's own result shows its status.
 
 A thread can live under another thread instead of in the sidebar. Nested threads
 appear in the parent's **Agents** panel under **Threads**, with their status;
-click one to open it. Agents that start worker threads with `t3-thread` nest
+click one to open it. While a nested thread is open, it shows in the sidebar
+under its parent, and the header breadcrumb names the parent; click it to go
+back. Agents that start worker threads with `t3-thread` nest
 them under their own thread by default.
 
 To nest a thread yourself, open its menu in the sidebar and choose **Nest
