@@ -35,6 +35,7 @@ import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
 import * as ManagedRuntime from "effect/ManagedRuntime";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as PubSub from "effect/PubSub";
 import * as Scope from "effect/Scope";
 import * as Stream from "effect/Stream";
@@ -53,6 +54,7 @@ import { OrchestrationEngineLive } from "./OrchestrationEngine.ts";
 import { OrchestrationProjectionPipelineLive } from "./ProjectionPipeline.ts";
 import { OrchestrationProjectionSnapshotQueryLive } from "./ProjectionSnapshotQuery.ts";
 import * as ThreadBackgroundLiveness from "../ThreadBackgroundLiveness.ts";
+import * as ThreadBackgroundWorkRecovery from "../ThreadBackgroundWorkRecovery.ts";
 import * as ThreadPlanProgress from "../ThreadPlanProgress.ts";
 import { openCodeAssistantSegmentData } from "../../provider/openCodeAssistantSegment.ts";
 import { ProviderRuntimeIngestionLive } from "./ProviderRuntimeIngestion.ts";
@@ -236,6 +238,7 @@ describe("ProviderRuntimeIngestion", () => {
   async function createHarness(options?: {
     serverSettings?: Partial<ServerSettings>;
     isGitRepository?: CheckpointStore.CheckpointStore["Service"]["isGitRepository"];
+    recordBackgroundWork?: boolean;
   }) {
     const workspaceRoot = makeTempDir("t3-provider-project-");
     NodeChildProcess.execFileSync("git", ["init", "--quiet", workspaceRoot]);
@@ -255,6 +258,9 @@ describe("ProviderRuntimeIngestion", () => {
     const layer = ProviderRuntimeIngestionLive.pipe(
       Layer.provideMerge(orchestrationLayer),
       Layer.provideMerge(projectionSnapshotLayer),
+      options?.recordBackgroundWork
+        ? Layer.provideMerge(ThreadBackgroundWorkRecovery.layer)
+        : (self) => self,
       // Single shared liveness instance across ingestion (writer), the
       // engine, and the snapshot query (reader).
       Layer.provideMerge(ThreadBackgroundLiveness.layer),
@@ -340,6 +346,7 @@ describe("ProviderRuntimeIngestion", () => {
     return {
       engine,
       dispatch,
+      runtime,
       readModel: () => Effect.runPromise(snapshotQuery.getSnapshot()),
       emit: provider.emit,
       setProviderSession: provider.setSession,
@@ -4054,5 +4061,88 @@ describe("ProviderRuntimeIngestion", () => {
     expect(settled.latestTurn?.state).toBe("completed");
     expect(settled.session?.status).toBe("ready");
     expect(settled.session?.activeTurnId).toBeNull();
+  });
+  it("keeps a durable copy of live background work until it ends", async () => {
+    const harness = await createHarness({ recordBackgroundWork: true });
+    const liveRuntime = harness.runtime as unknown as ManagedRuntime.ManagedRuntime<
+      SqlClient.SqlClient | ThreadBackgroundWorkRecovery.ThreadBackgroundWorkRecovery,
+      unknown
+    >;
+    const storedTasks = () =>
+      liveRuntime.runPromise(
+        Effect.gen(function* () {
+          const sql = yield* SqlClient.SqlClient;
+          const rows = yield* sql<{ readonly tasksJson: string }>`
+            SELECT tasks_json AS "tasksJson" FROM fork_thread_background_work
+            WHERE thread_id = 'thread-1'
+          `;
+          return rows.map((row) => JSON.parse(row.tasksJson) as unknown);
+        }),
+      );
+    const task = (
+      eventId: string,
+      type: "task.started" | "task.completed",
+      payload: Record<string, unknown>,
+    ) =>
+      harness.emit({
+        type,
+        eventId: asEventId(eventId),
+        provider: ProviderDriverKind.make("claudeAgent"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        threadId: asThreadId("thread-1"),
+        payload,
+      } as never);
+
+    task("evt-monitor", "task.started", {
+      taskId: "monitor-1",
+      taskType: "local_bash",
+      description: "PR checks",
+    });
+    task("evt-agent", "task.started", {
+      taskId: "agent-1",
+      taskType: "local_agent",
+      description: "Refactor worker",
+    });
+    await harness.drain();
+    expect(await storedTasks()).toEqual([
+      [
+        { taskId: "agent-1", kind: "agent", description: "Refactor worker" },
+        { taskId: "monitor-1", kind: "monitor", description: "PR checks" },
+      ],
+    ]);
+
+    task("evt-monitor-done", "task.completed", { taskId: "monitor-1", status: "completed" });
+    await harness.drain();
+    expect(await storedTasks()).toEqual([
+      [{ taskId: "agent-1", kind: "agent", description: "Refactor worker" }],
+    ]);
+
+    // Startup takes the record once.
+    const taken = await liveRuntime.runPromise(
+      Effect.flatMap(
+        Effect.service(ThreadBackgroundWorkRecovery.ThreadBackgroundWorkRecovery),
+        (recovery) => recovery.takeAll,
+      ),
+    );
+    expect([...taken.keys()]).toEqual(["thread-1"]);
+    expect(await storedTasks()).toEqual([]);
+
+    // A session that exits while the server runs leaves nothing to resume.
+    task("evt-agent-again", "task.started", {
+      taskId: "agent-2",
+      taskType: "local_agent",
+      description: "Second worker",
+    });
+    await harness.drain();
+    expect(await storedTasks()).toHaveLength(1);
+    harness.emit({
+      type: "session.exited",
+      eventId: asEventId("evt-background-session-exited"),
+      provider: ProviderDriverKind.make("claudeAgent"),
+      threadId: asThreadId("thread-1"),
+      createdAt: "2026-01-01T00:00:01.000Z",
+    });
+    await harness.drain();
+    expect(await storedTasks()).toEqual([]);
   });
 });
