@@ -1095,3 +1095,9 @@ retire_when = "Upstream provides persistent parent/child thread placement with a
 depends_on = ["fork-worker-operations"]
 roles = []
 note = "parentThreadId is an optional thread field (fork migration 6, projection_threads.parent_thread_id) set at creation or by thread.parent.set, which emits thread.meta-updated so older clients ignore it; servers advertise threadNesting. Nesting is one level deep within one project; the decider rejects self, nested parents, parents with a nested caller, cross-project, and archived parents. Children of an archived or missing parent show in the sidebar. Desktop and web only; mobile lists every thread until a follow-up. t3-thread nests workers under the caller by default (a nested caller's workers join its parent), and pending/answer/approve/deny let the parent escalate instead of the user."
+
+[[patch.decision]]
+id = "upstream2237-design-token-scale"
+date = "2026-09-25"
+decided = "adapt"
+rationale = "The nested-thread rows used text-[.7rem] and text-[.65rem], now errors under shadcn(no-arbitrary-values). Take the nearest new tokens: text-2xs (11px) for the row metadata and text-3xs (10px) for the section label."
