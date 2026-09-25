@@ -46,6 +46,7 @@ import {
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
 import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
+import { threadNestingViolation } from "./threadNesting.ts";
 
 const monogramSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
@@ -413,6 +414,22 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const createParentThreadId = command.parentThreadId ?? null;
+      const createNestingViolation =
+        createParentThreadId === null
+          ? null
+          : threadNestingViolation({
+              threads: readModel.threads,
+              threadId: command.threadId,
+              projectId: command.projectId,
+              parentThreadId: createParentThreadId,
+            });
+      if (createNestingViolation !== null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: createNestingViolation,
+        });
+      }
       return {
         ...(yield* withEventBase({
           aggregateKind: "thread",
@@ -433,6 +450,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           worktreePath: command.worktreePath,
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
+          ...(createParentThreadId !== null ? { parentThreadId: createParentThreadId } : {}),
         },
       };
     }
@@ -945,6 +963,43 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           threadId: command.threadId,
           activeOrderKey: command.orderKey,
           // Arranging the list is not thread activity or a lifecycle transition.
+          updatedAt: thread.updatedAt,
+        },
+      };
+    }
+
+    case "thread.parent.set": {
+      const thread = yield* requireThread({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (command.parentThreadId !== null) {
+        const violation = threadNestingViolation({
+          threads: readModel.threads,
+          threadId: command.threadId,
+          projectId: thread.projectId,
+          parentThreadId: command.parentThreadId,
+        });
+        if (violation !== null) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: violation,
+          });
+        }
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: yield* nowIso,
+          commandId: command.commandId,
+        })),
+        type: "thread.meta-updated",
+        payload: {
+          threadId: command.threadId,
+          parentThreadId: command.parentThreadId,
+          // Moving a thread between the sidebar and a parent is not activity.
           updatedAt: thread.updatedAt,
         },
       };
