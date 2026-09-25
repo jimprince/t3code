@@ -168,6 +168,15 @@ t3-thread queue worker-a --open  # only what is still waiting
 t3-thread dequeue <queued-send-id>
 ```
 
+### Nested workers
+
+Workers created from inside a T3 thread nest under it by default, so they appear
+in that thread's Agents panel instead of the sidebar. Pass `--top-level` to keep
+a worker in the sidebar, or `--parent <agent-or-thread>` to pick the parent.
+`nest <agent> --parent <agent-or-thread>` and `unnest <agent>` move a worker
+later. The parent answers its workers with `pending`, `answer`, `approve`, and
+`deny`; see [Agent Operations](docs/AGENT_OPERATIONS.md#nested-workers-and-escalation).
+
 `attach` is still available when you want a persistent local alias. `result --mark-seen`
 still requires a saved agent name because read state is stored locally.
 
