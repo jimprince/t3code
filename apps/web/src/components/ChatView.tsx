@@ -219,6 +219,7 @@ import { PullRequestDetailGhost } from "./pullRequest/PullRequestGhosts";
 import { PullRequestsUnavailableState } from "./pullRequest/PullRequestsUnavailableState";
 import { RightPanelTabs } from "./RightPanelTabs";
 import { AgentsPanel } from "./AgentsPanel";
+import { nestedDraftCreateThreadFields, useNestedDraftBannerItem } from "../hooks/useThreadNesting";
 import { LinkPullRequestDialogHost } from "./pullRequest/LinkPullRequestDialog";
 import { ThreadPullRequestsPanel } from "./pullRequest/ThreadPullRequestsPanel";
 import { useDeviceState } from "~/state/device";
@@ -6531,6 +6532,12 @@ export default function ChatView(props: ChatViewProps) {
       }),
     [feedbackSubmissions, routeThreadKey],
   );
+  const nestedDraftBannerItem = useNestedDraftBannerItem(
+    isLocalDraftThread ? draftId : null,
+    activeProject
+      ? { environmentId: activeProject.environmentId, projectId: activeProject.id }
+      : null,
+  );
   const composerBannerItems = useMemo<ComposerBannerStackItem[]>(() => {
     const backgroundLivenessItems =
       backgroundLivenessBannerItem === null ? [] : [backgroundLivenessBannerItem];
@@ -6541,11 +6548,13 @@ export default function ChatView(props: ChatViewProps) {
     // The user asked for this one, so it leads the notice tier instead of trailing it.
     const usageLimitsItems = usageLimitsBanner === null ? [] : [usageLimitsBanner];
     const projectCloneItems = projectCloneBannerItem === null ? [] : [projectCloneBannerItem];
+    const nestedDraftItems = nestedDraftBannerItem === null ? [] : [nestedDraftBannerItem];
     if (!localCheckoutBranchMismatch || !showBranchMismatchBanner || !activeBranchMismatchKey) {
       return [
         ...feedbackBannerItems,
         ...usageLimitsItems,
         ...projectCloneItems,
+        ...nestedDraftItems,
         ...systemComposerBannerItems,
         ...backgroundLivenessItems,
         ...resumeCompactionItems,
@@ -6557,6 +6566,7 @@ export default function ChatView(props: ChatViewProps) {
       ...feedbackBannerItems,
       ...usageLimitsItems,
       ...projectCloneItems,
+      ...nestedDraftItems,
       ...systemComposerBannerItems,
       ...backgroundLivenessItems,
       ...resumeCompactionItems,
@@ -6608,6 +6618,7 @@ export default function ChatView(props: ChatViewProps) {
     handleRestoreThreadBranch,
     isRestoringThreadBranch,
     localCheckoutBranchMismatch,
+    nestedDraftBannerItem,
     parkedThreadBannerItem,
     projectCloneBannerItem,
     resumeCompactionBannerItem,
@@ -8190,6 +8201,10 @@ export default function ChatView(props: ChatViewProps) {
                       branch: activeThreadBranch,
                       worktreePath: null,
                       createdAt: messageCreatedAt,
+                      ...nestedDraftCreateThreadFields(draftId, {
+                        environmentId,
+                        projectId: activeProject.id,
+                      }),
                     },
                     prepareWorktree: {
                       projectCwd: activeProject.workspaceRoot,
@@ -8527,6 +8542,10 @@ export default function ChatView(props: ChatViewProps) {
                       branch: activeThreadBranch,
                       worktreePath: activeThread.worktreePath,
                       createdAt: activeThread.createdAt,
+                      ...nestedDraftCreateThreadFields(draftId, {
+                        environmentId,
+                        projectId: activeProject.id,
+                      }),
                     },
                   }
                 : {}),
