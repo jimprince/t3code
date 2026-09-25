@@ -69,12 +69,11 @@ layer("001_ProviderSessionRuntimeBootGeneration", (it) => {
           SELECT migration_id, name
           FROM effect_sql_fork_migrations
         `;
-        assert.deepStrictEqual(forkMigrations, [
-          { migration_id: 1, name: "ProviderSessionRuntimeBootGeneration" },
-          { migration_id: 2, name: "ProviderSessionRuntimeActiveTurn" },
-          { migration_id: 3, name: "ProjectionThreadMessageFileAttachments" },
-          { migration_id: 5, name: "MigrateSidebarOrderEvents" },
-        ]);
+        // Every fork migration lands in the fork ledger, in id order.
+        assert.deepStrictEqual(
+          forkMigrations,
+          forkMigrationEntries.map(([migration_id, name]) => ({ migration_id, name })),
+        );
 
         const upstreamCollision = yield* sql<{ readonly name: string }>`
           SELECT name FROM effect_sql_migrations
