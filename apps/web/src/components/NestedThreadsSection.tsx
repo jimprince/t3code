@@ -72,10 +72,10 @@ function NestedThreadRow({
         <span className="col-start-2 row-start-1 min-w-0 truncate text-sm font-medium">
           {thread.title}
         </span>
-        <span className="col-start-3 row-start-1 font-mono text-[.7rem] text-muted-foreground/80">
+        <span className="col-start-3 row-start-1 font-mono text-2xs text-muted-foreground/80">
           {formatRelativeTimeLabel(thread.latestUserMessageAt ?? thread.updatedAt)}
         </span>
-        <span className="col-start-2 col-end-4 row-start-2 truncate font-mono text-[.7rem] text-muted-foreground/70">
+        <span className="col-start-2 col-end-4 row-start-2 truncate font-mono text-2xs text-muted-foreground/70">
           {status.label} · {thread.modelSelection.model}
         </span>
       </button>
@@ -121,7 +121,7 @@ export function NestedThreadsSection({
   if (threads.length === 0) return null;
   return (
     <section>
-      <div className="px-1.5 pt-1 text-[.65rem] font-medium uppercase tracking-wider text-muted-foreground">
+      <div className="px-1.5 pt-1 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
         Threads
       </div>
       {threads.map((thread) => (
