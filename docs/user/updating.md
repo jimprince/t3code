@@ -18,6 +18,9 @@ different value, use **Apply to all** in Settings after it connects.
 T3 Code must start again on that machine;
 the setting does not enable automatic startup. Terminal commands may still be
 interrupted, and threads without saved provider resume state need a new message.
+A restart also stops agents' monitors and background agents. With this setting
+on, each affected agent is told what stopped and restarts what it still needs;
+anything they would have reported during the restart is missed.
 If you previously enabled continuation for updates, enable this setting once
 to allow recovery without a connected client.
 
@@ -42,7 +45,9 @@ installing anything, use `~/.local/bin/t3code-headless-upgrade --check-idle`.
 When a desktop update is downloaded and agents on this computer are working,
 the restart button offers **Restart when agents finish**. T3 Code then waits
 until no local agent is working, monitoring, or holding queued messages, stays
-idle for 15 seconds, and restarts to install the update. Hover the button to see
+idle for 15 seconds, and restarts to install the update. With **Continue threads
+after restarts** on, it does not wait for agents that are only monitoring,
+since they resume after the restart. Hover the button to see
 how many agents it is waiting for; click it again to cancel.
 
 Unlike the Linux server updater, this does not wait for agents paused on an
