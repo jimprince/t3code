@@ -514,6 +514,12 @@ retire_when = "Upstream telemetry and signaling cover the retained recovery acti
 depends_on = ["fork-bounded-diagnostics"]
 roles = []
 note = "Normal process telemetry and signaling use upstream. Removed the unused duplicate diagnostics service; retain the bounded on-demand host-wide query for orphaned workers/captures and the distinct opt-out pressure notifications."
+
+[[patch.decision]]
+id = "upstream2237-design-token-scale"
+date = "2026-09-25"
+decided = "adapt"
+rationale = "Upstream's new --text-2xs/--text-3xs tokens made shadcn(no-arbitrary-values) and no-raw-colors error on this panel's nine off-scale classes. Exact tokens replace text-[11px] and text-[10px]; the 13px heading takes text-sm to stay above its text-xs body; tracking-[0.08em] takes the nearer tracking-widest; and the amber warning text takes text-warning-foreground, which already resolves to amber-700 light and amber-400 dark."
 [[patch.decision]]
 id = "forkprocessrows-extraction-951"
 date = "2026-07-29"
