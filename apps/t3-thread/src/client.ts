@@ -673,8 +673,21 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  /** Whether this environment's server stores thread nesting (threadNesting capability). */
+  async supportsThreadNesting(): Promise<boolean> {
+    const config = (await this.getServerConfig()) as {
+      environment?: { capabilities?: { threadNesting?: boolean } };
+    };
+    return config.environment?.capabilities?.threadNesting === true;
+  }
+
   /** Nests a thread under an orchestrating thread, or with null returns it to the sidebar. */
   async setThreadParent(threadId: string, parentThreadId: string | null): Promise<void> {
+    if (!(await this.supportsThreadNesting())) {
+      throw new Error(
+        `'${this.environment.name}' runs a server without thread nesting. Update T3 Code there first.`,
+      );
+    }
     await this.dispatchOnce({
       type: "thread.parent.set",
       commandId: NodeCrypto.randomUUID(),

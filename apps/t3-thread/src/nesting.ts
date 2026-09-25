@@ -25,11 +25,19 @@ export type CreateParentDecision =
 export function resolveCreateParent(input: {
   readonly explicitParentThreadId: string | null;
   readonly topLevel: boolean;
+  /** False on servers that predate nesting; they would silently ignore a parent. */
+  readonly serverSupportsNesting: boolean;
   readonly callerThreadId: string | null;
   readonly projectId: string;
   readonly threads: ReadonlyArray<NestingThread>;
 }): CreateParentDecision {
   if (input.topLevel) return { parentThreadId: null, reason: "--top-level" };
+  if (!input.serverSupportsNesting) {
+    return {
+      parentThreadId: null,
+      reason: "this environment's server does not support nesting yet",
+    };
+  }
   if (input.explicitParentThreadId !== null) {
     return { parentThreadId: input.explicitParentThreadId, reason: "explicit" };
   }

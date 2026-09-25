@@ -15,6 +15,7 @@ const create = (overrides: Partial<Parameters<typeof resolveCreateParent>[0]> = 
   resolveCreateParent({
     explicitParentThreadId: null,
     topLevel: false,
+    serverSupportsNesting: true,
     callerThreadId: "orchestrator",
     projectId: "project-1",
     threads: [thread("orchestrator")],
@@ -29,6 +30,13 @@ describe("resolveCreateParent", () => {
   it("keeps a worker top-level when asked or when there is no caller", () => {
     expect(create({ topLevel: true }).parentThreadId).toBeNull();
     expect(create({ callerThreadId: null }).parentThreadId).toBeNull();
+  });
+
+  it("reports top-level instead of claiming a nest on servers without nesting", () => {
+    expect(create({ serverSupportsNesting: false })).toMatchObject({
+      parentThreadId: null,
+      reason: "this environment's server does not support nesting yet",
+    });
   });
 
   it("honors an explicit parent over the caller", () => {

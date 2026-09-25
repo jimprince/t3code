@@ -681,6 +681,7 @@ agent
         ? resolveParentThreadId(state, options.parent, options.env)
         : null,
       topLevel: options.topLevel === true,
+      serverSupportsNesting: await client.supportsThreadNesting(),
       callerThreadId: resolveCallerThreadId(),
       projectId: options.project,
       threads: (await client.getShellSnapshot()).threads,

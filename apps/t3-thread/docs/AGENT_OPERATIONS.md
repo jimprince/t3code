@@ -220,10 +220,21 @@ Post-create reliability checklist:
 
 ## Nested Workers And Escalation
 
-Workers you create nest under your thread by default: they leave the user's
-sidebar and appear in your thread's **Agents** panel under **Threads**. The
-user sees one thread (yours) instead of every worker, so you own your workers'
-attention.
+Three kinds of delegated work exist in T3 Code. Match the user's words:
+
+| The user asks for | Create | Where the user sees it |
+| --- | --- | --- |
+| a **thread** ("new thread", "start a thread") | `t3-thread create --top-level ...` | the left sidebar |
+| a **sub-agent** ("sub-agent", "agent", "worker", "delegate", "helper") | `t3-thread create ...` (nests under your thread) | your thread's **Agents** panel, under **Threads**, on the right; clickable |
+| nothing (your own quick lookup) | the harness's built-in subagent tool | **Direct spawns** in the Agents panel; not clickable |
+
+Prefer nested T3 threads for sub-agents: the user can open them, answer them,
+and move them with `t3-thread nest` / `unnest`. Built-in subagents (Claude's
+Task/Agent tool, Codex native spawns) cannot be opened, promoted, or answered;
+use them only for brief read-only lookups inside your own turn that the user
+did not ask to see. Nesting needs the worker in your environment and project;
+otherwise, or on a server without nesting, the worker is top-level and the
+`nesting` field in the create output says why. Tell the user when that happens.
 
 - no flag: nests under the calling thread (`T3_THREAD_ID`). If the caller is
   itself nested, the worker joins the caller's parent, because nesting is one
