@@ -674,11 +674,9 @@ export class RemoteEnvironmentClient {
   }
 
   /** Whether this environment's server stores thread nesting (threadNesting capability). */
+  /** Capabilities come from the environment descriptor; serverGetConfig does not carry them. */
   async supportsThreadNesting(): Promise<boolean> {
-    const config = (await this.getServerConfig()) as {
-      environment?: { capabilities?: { threadNesting?: boolean } };
-    };
-    return config.environment?.capabilities?.threadNesting === true;
+    return (await this.describe()).capabilities.threadNesting === true;
   }
 
   /** Nests a thread under an orchestrating thread, or with null returns it to the sidebar. */

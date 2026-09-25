@@ -1,6 +1,8 @@
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import { RemoteEnvironmentClient } from "../src/client.js";
 import { buildUserInputAnswers, findPendingRequests, resolveCreateParent } from "../src/nesting.js";
+import type { SavedEnvironment } from "../src/types.js";
 
 const thread = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
@@ -116,5 +118,57 @@ describe("buildUserInputAnswers", () => {
     expect(() =>
       buildUserInputAnswers({ questions: one, text: "", pairs: ["shape=round"] }),
     ).toThrow("Unknown question id");
+  });
+});
+
+describe("RemoteEnvironmentClient.supportsThreadNesting", () => {
+  const environment: SavedEnvironment = {
+    name: "test",
+    httpBaseUrl: "http://127.0.0.1:1",
+    wsBaseUrl: "ws://127.0.0.1:1",
+    environmentId: "test",
+    label: "test",
+    serverVersion: "test",
+    bearerToken: "test",
+    expiresAt: "2026-09-25T00:00:00.000Z",
+    pairedAt: "2026-09-25T00:00:00.000Z",
+  };
+  // Server config as the CLI reads it has no environment block; checking it
+  // kept every create top-level on servers that support nesting.
+  const rpcFactory = (): never => {
+    throw new Error("the capability check must not need an RPC");
+  };
+  const serveDescriptor = (capabilities: Record<string, boolean>) =>
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        expect(url).toBe("http://127.0.0.1:1/.well-known/t3/environment");
+        return new Response(
+          JSON.stringify({
+            environmentId: "test",
+            label: "test",
+            platform: { os: "darwin", arch: "arm64" },
+            serverVersion: "test",
+            capabilities,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("reads the capability from the environment descriptor", async () => {
+    serveDescriptor({ threadNesting: true });
+    const client = new RemoteEnvironmentClient(environment, { rpcFactory });
+    await expect(client.supportsThreadNesting()).resolves.toBe(true);
+  });
+
+  it("reports no nesting when the descriptor does not advertise it", async () => {
+    serveDescriptor({});
+    const client = new RemoteEnvironmentClient(environment, { rpcFactory });
+    await expect(client.supportsThreadNesting()).resolves.toBe(false);
   });
 });
