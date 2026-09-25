@@ -51,6 +51,7 @@ import {
   CircleCheckIcon,
   CircleDashedIcon,
   ClockIcon,
+  CornerDownRightIcon,
   EyeIcon,
   FolderIcon,
   GitBranchIcon,
@@ -253,6 +254,13 @@ import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } from "./ui/menu";
+import { useThreadNestingActions } from "../hooks/useThreadNesting";
+import {
+  applySidebarThreadNesting,
+  isThreadNestingMenuId,
+  resolveThreadNestingMenuState,
+  resolveViewedNestedThread,
+} from "../threadNesting.logic";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
 import {
@@ -1039,6 +1047,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
    * composer. Absent when the sidebar cannot open server threads.
    */
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
+  /** Open nested thread shown indented under its parent's row. */
+  nestedSubRow?: boolean;
 }) {
   const {
     isRenaming,
@@ -1760,8 +1770,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         // Matches the h-[4.875rem] content box; the py-0.5 padding is added on top.
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
         sortable?.isDragging && "relative z-20",
+        props.nestedSubRow && "relative pl-4",
       )}
     >
+      {props.nestedSubRow ? (
+        <CornerDownRightIcon
+          aria-hidden
+          className="absolute top-3 left-0.5 size-3 text-muted-foreground"
+        />
+      ) : null}
       <Tooltip disabled={snoozeMenuOpen || sortable?.isDragging}>
         <TooltipTrigger
           render={
@@ -2202,6 +2219,7 @@ export default function Sidebar() {
     archiveThread,
     deleteThread,
   } = useThreadActions();
+  const { runNestingMenuAction } = useThreadNestingActions();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -2297,6 +2315,11 @@ export default function Sidebar() {
     [routeDraftThread, routeTarget],
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
+  // An open nested thread shows under its parent so the way back stays visible.
+  const viewedNestedThread = useMemo(
+    () => resolveViewedNestedThread(threads, routeThreadKey),
+    [routeThreadKey, threads],
+  );
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
   // Post-settle navigation validates against the CURRENT route, not the one
@@ -2619,7 +2642,7 @@ export default function Sidebar() {
     // memo exactly at the next wake boundary.
     void snoozeWakeTick;
     const preciseNow = new Date().toISOString();
-    const visible = threads.filter((thread) => {
+    const visible = applySidebarThreadNesting(threads).filter((thread) => {
       const projectRefKey = `${thread.environmentId}:${thread.projectId}`;
       return (
         thread.archivedAt === null &&
@@ -4144,6 +4167,11 @@ export default function Sidebar() {
           threadProjectGroup?.memberProjects.filter(
             (member) => member.environmentId !== thread.environmentId,
           ) ?? [];
+        const nesting = resolveThreadNestingMenuState(
+          thread,
+          readThreadShells(),
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadNesting === true,
+        );
         const clicked = await settlePromise(() =>
           api.contextMenu.show(
             buildThreadActionMenuItems({
@@ -4171,11 +4199,16 @@ export default function Sidebar() {
                 titleRegeneration: supportsTitleRegeneration,
               },
               snoozePresets,
+              nesting,
             }),
             position,
           ),
         );
         if (clicked._tag === "Failure") return;
+        if (isThreadNestingMenuId(clicked.value)) {
+          await runNestingMenuAction(threadRef, clicked.value, nesting);
+          return;
+        }
         if (clicked.value?.startsWith("snooze:")) {
           const preset =
             clicked.value === "snooze:custom"
@@ -4514,6 +4547,7 @@ export default function Sidebar() {
       markThreadUnread,
       openProjectSettings,
       projectByKey,
+      runNestingMenuAction,
       serverConfigs,
       setHiddenProjectKeys,
       setThreadAutoSettle,
@@ -5066,6 +5100,7 @@ export default function Sidebar() {
                         thread: EnvironmentThreadShell,
                         section: SidebarSection,
                         sortable?: SortableThreadRowBag,
+                        nestedSubRow = false,
                       ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -5080,7 +5115,8 @@ export default function Sidebar() {
                           <SidebarThreadRow
                             // Fade between card and compact rows while the outer
                             // sortable wrapper keeps its identity during a drag.
-                            key={`${threadKey}:${rowVariant}`}
+                            key={`${threadKey}:${rowVariant}${nestedSubRow ? ":nested" : ""}`}
+                            nestedSubRow={nestedSubRow}
                             thread={thread}
                             variant={rowVariant}
                             // Snoozed rows wake, settled rows un-settle, and cards settle.
@@ -5205,6 +5241,17 @@ export default function Sidebar() {
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
+                          // Hidden during drags: it is not part of the sortable list.
+                          if (viewedNestedThread?.parentKey === item.key && dragState === null) {
+                            items.push(
+                              renderThreadRowInner(
+                                viewedNestedThread.thread,
+                                "active",
+                                undefined,
+                                true,
+                              ),
+                            );
+                          }
                           continue;
                         }
                         switch (item.marker) {
