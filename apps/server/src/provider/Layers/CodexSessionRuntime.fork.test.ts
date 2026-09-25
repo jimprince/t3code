@@ -10,7 +10,10 @@ import { DEFAULT_MODEL, EnvironmentId, ThreadId, TurnId } from "@t3tools/contrac
 import * as CodexErrors from "effect-codex-app-server/errors";
 import * as CodexRpc from "effect-codex-app-server/rpc";
 
-import { buildCodexDeveloperInstructions } from "../CodexDeveloperInstructions.ts";
+import {
+  buildCodexAdditionalContext,
+  buildCodexDeveloperInstructions,
+} from "../CodexDeveloperInstructions.ts";
 import { codexSessionAppServerArgs } from "./codexLaunchArgs.ts";
 import {
   buildCodexChildEnv,
@@ -98,12 +101,13 @@ describe("buildTurnStartParams", () => {
         settings: {
           model: "gpt-5.3-codex",
           reasoning_effort: "medium",
-          developer_instructions: buildCodexDeveloperInstructions("plan", {
-            model: "gpt-5.3-codex",
-            reasoningEffort: "medium",
-          }),
+          developer_instructions: buildCodexDeveloperInstructions("plan"),
         },
       },
+      additionalContext: buildCodexAdditionalContext({
+        model: "gpt-5.3-codex",
+        reasoningEffort: "medium",
+      }),
     });
   });
 
@@ -147,12 +151,13 @@ describe("buildTurnStartParams", () => {
         settings: {
           model: "gpt-5.3-codex",
           reasoning_effort: "medium",
-          developer_instructions: buildCodexDeveloperInstructions("default", {
-            model: "gpt-5.3-codex",
-            reasoningEffort: "medium",
-          }),
+          developer_instructions: buildCodexDeveloperInstructions("default"),
         },
       },
+      additionalContext: buildCodexAdditionalContext({
+        model: "gpt-5.3-codex",
+        reasoningEffort: "medium",
+      }),
     });
   });
 
@@ -169,7 +174,9 @@ describe("buildTurnStartParams", () => {
     const settings = params.collaborationMode?.settings;
     NodeAssert.equal(settings?.model, DEFAULT_MODEL);
     NodeAssert.equal(settings?.reasoning_effort, "medium");
-    NodeAssert.ok(settings?.developer_instructions?.includes(`as ${DEFAULT_MODEL} with medium`));
+    NodeAssert.ok(
+      params.additionalContext?.t3_code_runtime?.value.includes(`as ${DEFAULT_MODEL} with medium`),
+    );
   });
 
   it.effect("routes approvals to the auto reviewer in auto mode", () =>
@@ -223,67 +230,66 @@ describe("buildTurnStartParams", () => {
   });
 });
 
+const runtimeContextValue = (context: ReturnType<typeof buildCodexAdditionalContext>) =>
+  context.t3_code_runtime?.value ?? "";
+
 describe("buildCodexDeveloperInstructions", () => {
-  it("appends runtime info after the mode instructions", () => {
-    const instructions = buildCodexDeveloperInstructions("default", {
-      model: "gpt-5.3-codex",
-      reasoningEffort: "high",
-    });
+  it("describes the collaboration mode without turn runtime info", () => {
+    const instructions = buildCodexDeveloperInstructions("default");
 
     NodeAssert.match(instructions, /Collaboration Mode: Default/);
-    NodeAssert.match(instructions, /T3 Code/);
-    NodeAssert.match(instructions, /Codex harness/);
-    NodeAssert.match(instructions, /as gpt-5\.3-codex with high reasoning effort/);
+    NodeAssert.doesNotMatch(instructions, /reasoning effort/);
   });
 
-  it("includes runtime info alongside plan mode instructions", () => {
-    const instructions = buildCodexDeveloperInstructions("plan", {
-      model: "gpt-5.3-codex",
-      reasoningEffort: "medium",
-    });
+  it("describes plan mode", () => {
+    NodeAssert.match(buildCodexDeveloperInstructions("plan"), /Plan Mode/);
+  });
+});
 
-    NodeAssert.match(instructions, /Plan Mode/);
-    NodeAssert.match(instructions, /as gpt-5\.3-codex with medium reasoning effort/);
+describe("buildCodexAdditionalContext", () => {
+  it("carries the turn's runtime info", () => {
+    const value = runtimeContextValue(
+      buildCodexAdditionalContext({ model: "gpt-5.3-codex", reasoningEffort: "high" }),
+    );
+
+    NodeAssert.match(value, /T3 Code/);
+    NodeAssert.match(value, /Codex harness/);
+    NodeAssert.match(value, /as gpt-5\.3-codex with high reasoning effort/);
   });
 
   it("varies with the model and effort of each turn", () => {
-    const first = buildCodexDeveloperInstructions("default", {
-      model: "gpt-5.3-codex",
-      reasoningEffort: "medium",
-    });
-    const second = buildCodexDeveloperInstructions("default", {
-      model: "gpt-5.4",
-      reasoningEffort: "high",
-    });
-
-    NodeAssert.notEqual(first, second);
+    NodeAssert.notEqual(
+      runtimeContextValue(
+        buildCodexAdditionalContext({ model: "gpt-5.3-codex", reasoningEffort: "medium" }),
+      ),
+      runtimeContextValue(
+        buildCodexAdditionalContext({ model: "gpt-5.4", reasoningEffort: "high" }),
+      ),
+    );
   });
 
   it("flattens multiline metadata into single-line runtime info", () => {
-    const instructions = buildCodexDeveloperInstructions("default", {
-      model: "gpt\n5.3\ncodex",
-      reasoningEffort: " high\neffort ",
-    });
+    const value = runtimeContextValue(
+      buildCodexAdditionalContext({ model: "gpt\n5.3\ncodex", reasoningEffort: " high\neffort " }),
+    );
 
-    NodeAssert.match(instructions, /as gpt 5\.3 codex with high effort reasoning effort/);
-    NodeAssert.doesNotMatch(instructions, /<runtime_info>[^<]*\n/);
+    NodeAssert.match(value, /as gpt 5\.3 codex with high effort reasoning effort/);
+    NodeAssert.doesNotMatch(value, /\n/);
   });
 });
 
 describe("T3 browser developer instructions", () => {
   it("prefers the product-native preview tools in both collaboration modes", () => {
-    for (const instructions of [
-      buildCodexDeveloperInstructions(
-        "default",
-        { model: "gpt-5", reasoningEffort: "medium" },
-        true,
-      ),
-      buildCodexDeveloperInstructions("plan", { model: "gpt-5", reasoningEffort: "medium" }, true),
-    ]) {
-      NodeAssert.match(instructions, /t3-code/);
-      NodeAssert.match(instructions, /preview_status/);
-      NodeAssert.match(instructions, /preview_open/);
-      NodeAssert.match(instructions, /Do not switch to global browser skills/);
+    for (const mode of ["default", "plan"] as const) {
+      NodeAssert.match(buildCodexDeveloperInstructions(mode), /Collaboration Mode|Plan Mode/);
+      const tools =
+        buildCodexAdditionalContext({ model: "gpt-5", reasoningEffort: "medium" }, true)
+          .t3_code_tools?.value ?? "";
+
+      NodeAssert.match(tools, /t3-code/);
+      NodeAssert.match(tools, /preview_status/);
+      NodeAssert.match(tools, /preview_open/);
+      NodeAssert.match(tools, /Do not switch to global browser skills/);
     }
   });
 });

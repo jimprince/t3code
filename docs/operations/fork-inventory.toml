@@ -133,6 +133,18 @@ roles = []
 note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
 
 [[patch.decision]]
+id = "upstream2237-codex-turn-additional-context"
+date = "2026-09-25"
+decided = "adapt"
+rationale = "Upstream split Codex turn instructions: buildCodexDeveloperInstructions now takes only the collaboration mode and the runtime/tool blocks moved to buildCodexAdditionalContext on turn/start. This concern's fork harness duplicates that wiring and no merge touches it, so mirror upstream's split here instead of keeping the old three-argument call."
+
+[[patch.decision]]
+id = "upstream2237-reset-credit-coordinator-rename"
+date = "2026-09-25"
+decided = "relocate"
+rationale = "Upstream generalized codexResetCredit.ts to resetCreditCoordinator.ts for every provider that banks resets. The fork registry harness only needs the moved layerTest, so follow the module to its new name."
+
+[[patch.decision]]
 id = "upstream2237-migration-ledger-extension"
 date = "2026-09-25"
 decided = "adapt"
