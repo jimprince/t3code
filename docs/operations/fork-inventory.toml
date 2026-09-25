@@ -133,6 +133,12 @@ roles = []
 note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
 
 [[patch.decision]]
+id = "upstream2237-request-user-input-is-blocking"
+date = "2026-09-25"
+decided = "adapt"
+rationale = "Codex made requestUserInput carry a required isBlocking flag and deprecated autoResolutionMs. This concern's fork lifecycle harness emits that request itself, so the payload never conflicted; it decoded to nothing and the test hung waiting for events that were never mapped. Send isBlocking the way upstream's own adapter test now does."
+
+[[patch.decision]]
 id = "upstream2237-codex-turn-additional-context"
 date = "2026-09-25"
 decided = "adapt"
