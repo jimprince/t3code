@@ -1,3 +1,4 @@
+import { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 import {
   partitionProjectsByKind,
@@ -5,6 +6,7 @@ import {
   selectCanonicalChatProjectsByEnvironment,
   selectChatProjectForEnvironment,
   selectDefaultThreadProject,
+  selectRecentThreadProjectRef,
 } from "./projectKind";
 
 describe("partitionProjectsByKind", () => {
@@ -72,5 +74,53 @@ describe("partitionProjectsByKind", () => {
       canonical,
       remote,
     ]);
+  });
+});
+
+describe("selectRecentThreadProjectRef", () => {
+  const environmentId = EnvironmentId.make("env-1");
+  const project = (id: string) => ({ environmentId, id: ProjectId.make(id) });
+  const thread = (projectId: string, latestUserMessageAt: string | null, archivedAt = null) => ({
+    environmentId,
+    projectId: ProjectId.make(projectId),
+    latestUserMessageAt,
+    archivedAt,
+  });
+  const projects = [project("chat"), project("t3code"), project("job")];
+
+  it("REGRESSION: picks the project the user most recently messaged, not General Chat", () => {
+    // New threads always opened in General Chat, even right after working
+    // in a repository.
+    expect(
+      selectRecentThreadProjectRef(
+        [
+          thread("chat", "2026-09-25T10:00:00.000Z"),
+          thread("t3code", "2026-09-25T12:00:00.000Z"),
+          thread("job", "2026-09-25T11:00:00.000Z"),
+        ],
+        projects,
+      ),
+    ).toEqual({ environmentId, projectId: "t3code" });
+  });
+
+  it("skips archived threads, unmessaged threads, and projects that are not loaded", () => {
+    expect(
+      selectRecentThreadProjectRef(
+        [
+          thread("job", "2026-09-25T09:00:00.000Z"),
+          {
+            ...thread("t3code", "2026-09-25T12:00:00.000Z"),
+            archivedAt: "2026-09-25T13:00:00.000Z",
+          },
+          thread("chat", null),
+          thread("deleted", "2026-09-25T14:00:00.000Z"),
+        ],
+        projects,
+      ),
+    ).toEqual({ environmentId, projectId: "job" });
+  });
+
+  it("is null when there is no messaged thread", () => {
+    expect(selectRecentThreadProjectRef([], projects)).toBeNull();
   });
 });

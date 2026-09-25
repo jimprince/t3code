@@ -1767,7 +1767,6 @@ function OpenCommandPaletteDialog(props: {
       title: "New chat",
       description: "Start a project-independent conversation",
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-      shortcutCommand: "chat.new",
       run: async () => {
         await handleNewThread(
           scopeProjectRef(primaryChatProject.environmentId, primaryChatProject.id),

@@ -115,7 +115,11 @@ import {
   projectGroupsSpanEnvironments,
   type SidebarProjectSnapshot,
 } from "../sidebarProjectGrouping";
-import { partitionProjectsByKind, selectCanonicalChatProjectsByEnvironment } from "../projectKind";
+import {
+  partitionProjectsByKind,
+  selectCanonicalChatProjectsByEnvironment,
+  selectRecentThreadProjectRef,
+} from "../projectKind";
 import { legacyProjectCwdPreferenceKey, useUiStateStore } from "../uiStateStore";
 import {
   getThreadKeysToDeselectAfterDelete,
@@ -124,7 +128,7 @@ import {
 import { useThreadActions } from "../hooks/useThreadActions";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { isCommandPaletteOpen, openCommandPalette } from "../commandPaletteBus";
-import { startNewThreadFromContext } from "../lib/chatThreadActions";
+import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib/chatThreadActions";
 import { useClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
@@ -132,6 +136,7 @@ import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
   readThreadShell,
+  readThreadShells,
   useAllEnvironmentProjectSnapshotsReady,
   useProjects,
   useThreadShells,
@@ -4427,13 +4432,26 @@ export default function Sidebar() {
     [isMobile, setOpenMobile],
   );
 
-  // General Chat is the default compose target. With multiple connected
-  // environments the desktop shell provides a compact environment picker;
-  // browsers fall back to the primary environment.
+  // New threads start where the user was last working: the open thread's or
+  // draft's project, else the project they most recently messaged. General
+  // Chat is the fallback; with multiple connected environments the desktop
+  // shell then provides a compact environment picker, and browsers fall back
+  // to the primary environment.
   const handleNewThreadClick = useCallback(
     (event: ReactMouseEvent) => {
       event.preventDefault();
       event.stopPropagation();
+      const lastWorkedContext = {
+        activeDraftThread: newThreadContext.activeDraftThread,
+        activeThread: newThreadContext.activeThread ?? undefined,
+        defaultProjectRef: selectRecentThreadProjectRef(readThreadShells(), projects),
+        handleNewThread: newThreadContext.handleNewThread,
+      };
+      if (resolveThreadActionProjectRef(lastWorkedContext)) {
+        if (isMobile) setOpenMobile(false);
+        void startNewThreadFromContext(lastWorkedContext);
+        return;
+      }
       const defaultChatProject = chatEnvironmentProjects[0];
       if (defaultChatProject) {
         if (chatEnvironmentProjects.length === 1) {
@@ -4504,6 +4522,7 @@ export default function Sidebar() {
       newThreadContext,
       primaryEnvironmentId,
       projectGroups.length,
+      projects,
       setOpenMobile,
     ],
   );
@@ -4669,7 +4688,9 @@ export default function Sidebar() {
               newThreadDisabled={projects.length === 0}
               newThreadShortcutLabel={newThreadShortcutLabel}
               newThreadInProjectShortcutLabel={newThreadInProjectShortcutLabel}
-              showNewThreadInProjectHint={projectGroups.length > 1}
+              // The button already starts in the current project, so the
+              // Shift+click hint would advertise the same action twice.
+              showNewThreadInProjectHint={false}
               searchInputRef={threadSearchInputRef}
               searchQuery={threadSearchQuery}
               onSearchQueryChange={(value) => {

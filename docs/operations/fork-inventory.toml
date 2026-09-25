@@ -341,6 +341,13 @@ roles = []
 note = "Reorganized 2026-09-06 from fork-general-chat-projects. Upstream ordering fixtures include the owning project required by General Chat metadata guards."
 
 [[patch.decision]]
+id = "new-thread-last-worked-project"
+date = "2026-09-25"
+decided = "adapt"
+decided_by = "brad"
+rationale = "New threads from the sidebar button and chat.new start in the open thread's or draft's project, else the most recently messaged project. General Chat stays the fallback compose target, and the palette's New chat entry still creates one directly."
+
+[[patch.decision]]
 id = "upstream-project-repository-list-removal"
 date = "2026-09-20"
 decided = "narrow"
