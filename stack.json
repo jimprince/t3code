@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "5d8a9501f5654da70036480ae79bd41cff63cdac",
-  "head": "dead5ad88dfa33d73bc99a3ac2c910f2b969b554",
+  "prev": "8a52f9563d9eac7e40f7beb8c67a0391cbbff81f",
+  "head": "57f4dbbeb7a725edde522eda3b79ebcbd60aa31c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -12,7 +12,9 @@
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
-    "fork-project-selection",
+    "fork-project-selection"
+  ],
+  "unapplied": [
     "fork-private-connection-defaults",
     "fork-resource-recovery",
     "fork-workspace-file-uploads",
@@ -41,7 +43,6 @@
     "fork-restart-when-idle",
     "fork-nested-threads"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
