@@ -1085,3 +1085,13 @@ retire_when = "Upstream offers a deferred restart that waits for local agent wor
 depends_on = []
 roles = []
 note = "Idle means no desktop-hosted thread (primary or desktop-local secondary) is running, starting, background-working, monitoring, or holding non-held queued messages, for 15 seconds. Pending approvals and questions deliberately do not block by owner decision: they can wait indefinitely, and the thread survives while the stale prompt is released. Remote environments are ignored because a desktop restart does not stop them. The schedule is in-memory and the watcher is mounted at AppRoot; the rules live in apps/web/src/components/sidebar/desktopIdleRestart.logic.ts."
+
+[[patch]]
+name = "fork-nested-threads"
+subject = "feat(threads): nest threads under an orchestrating thread"
+class = "product"
+purpose = "Let a thread nest under an orchestrating thread so it leaves the sidebar and appears in the parent's Agents panel, move threads in and out of nesting, default t3-thread workers to nest under their caller, and let parents answer their workers' questions and approvals from the CLI."
+retire_when = "Upstream provides persistent parent/child thread placement with an equivalent Agents-panel view and CLI escalation, or the fork stops wanting orchestrator nesting."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "parentThreadId is an optional thread field (fork migration 6, projection_threads.parent_thread_id) set at creation or by thread.parent.set, which emits thread.meta-updated so older clients ignore it; servers advertise threadNesting. Nesting is one level deep within one project; the decider rejects self, nested parents, parents with a nested caller, cross-project, and archived parents. Children of an archived or missing parent show in the sidebar. Desktop and web only; mobile lists every thread until a follow-up. t3-thread nests workers under the caller by default (a nested caller's workers join its parent), and pending/answer/approve/deny let the parent escalate instead of the user."
