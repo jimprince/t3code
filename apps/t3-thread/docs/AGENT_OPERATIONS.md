@@ -222,11 +222,11 @@ Post-create reliability checklist:
 
 Three kinds of delegated work exist in T3 Code. Match the user's words:
 
-| The user asks for | Create | Where the user sees it |
-| --- | --- | --- |
-| a **thread** ("new thread", "start a thread") | `t3-thread create --top-level ...` | the left sidebar |
+| The user asks for                                                      | Create                                           | Where the user sees it                                                     |
+| ---------------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------- |
+| a **thread** ("new thread", "start a thread")                          | `t3-thread create --top-level ...`               | the left sidebar                                                           |
 | a **sub-agent** ("sub-agent", "agent", "worker", "delegate", "helper") | `t3-thread create ...` (nests under your thread) | your thread's **Agents** panel, under **Threads**, on the right; clickable |
-| nothing (your own quick lookup) | the harness's built-in subagent tool | **Direct spawns** in the Agents panel; not clickable |
+| nothing (your own quick lookup)                                        | the harness's built-in subagent tool             | **Direct spawns** in the Agents panel; not clickable                       |
 
 Prefer nested T3 threads for sub-agents: the user can open them, answer them,
 and move them with `t3-thread nest` / `unnest`. Built-in subagents (Claude's
