@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f6c23b913277ede1e488fdd78b12282ea4d1cb40",
-  "head": "f19c302fe7de256f04825a560817288935872655",
+  "prev": "a785c4201cfc0d0832d25aeb3ae0a3ee4b536462",
+  "head": "625903f0a529dbcbeb450313fb4fbd206ad15a3e",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -9,8 +9,7 @@
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
     "fork-general-chat",
-    "fork-conversation-fork",
-    "refresh-temp"
+    "fork-conversation-fork"
   ],
   "unapplied": [
     "fork-thread-transfer",
@@ -65,7 +64,7 @@
       "oid": "7bb3b6b506b68305bac71495227d04fe78d93bed"
     },
     "fork-conversation-fork": {
-      "oid": "a37d7858b09387acea0335b5fb59ca1eb956dea2"
+      "oid": "625903f0a529dbcbeb450313fb4fbd206ad15a3e"
     },
     "fork-desktop-delivery": {
       "oid": "853bb1c6870ba92ab82e4e714fa915698c81ae64"
@@ -156,9 +155,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "93e76f8a437e13830360ecf73681f34096463b5b"
-    },
-    "refresh-temp": {
-      "oid": "f19c302fe7de256f04825a560817288935872655"
     }
   }
 }
