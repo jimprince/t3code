@@ -1,6 +1,12 @@
 import type { ContextMenuItem } from "@t3tools/contracts";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 
+import {
+  type ThreadNestingMenuId,
+  type ThreadNestingMenuState,
+  withThreadNestingMenuItems,
+} from "../threadNesting.logic";
+
 /**
  * Ids for the per-thread action menu. Snooze presets are dispatched as
  * `snooze:<presetId>` so the union stays closed while the preset list
@@ -29,7 +35,8 @@ export type ThreadActionMenuId =
   | "copy-thread-id"
   | "move-to-machine"
   | "archive"
-  | "delete";
+  | "delete"
+  | ThreadNestingMenuId;
 
 export interface ThreadActionMenuState {
   readonly branch: string | null;
@@ -61,6 +68,8 @@ export interface ThreadActionMenuState {
     readonly titleRegeneration: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
+  /** Null or absent when the environment's server cannot nest threads. */
+  readonly nesting?: ThreadNestingMenuState | null;
 }
 
 /**
@@ -69,6 +78,12 @@ export interface ThreadActionMenuState {
  * Each surface supplies state for the actions it supports.
  */
 export function buildThreadActionMenuItems(
+  state: ThreadActionMenuState,
+): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
+  return withThreadNestingMenuItems(buildBaseThreadActionMenuItems(state), state.nesting ?? null);
+}
+
+function buildBaseThreadActionMenuItems(
   state: ThreadActionMenuState,
 ): ReadonlyArray<ContextMenuItem<ThreadActionMenuId>> {
   return [

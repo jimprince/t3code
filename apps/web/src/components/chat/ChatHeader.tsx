@@ -48,6 +48,7 @@ import {
   WorkspaceBreadcrumbSeparator,
   WorkspaceBreadcrumbText,
 } from "../WorkspaceBreadcrumb";
+import { NestedThreadParentCrumb } from "./NestedThreadParentCrumb";
 import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/hooks/useMediaQuery";
 import { Button } from "../ui/button";
@@ -434,6 +435,7 @@ export const ChatHeader = memo(function ChatHeader({
             </WorkspaceBreadcrumbSeparator>
           </>
         ) : null}
+        <NestedThreadParentCrumb threadRef={isServerThread ? activeThreadRef : null} />
         <WorkspaceBreadcrumbItem current className="min-w-10 flex-1">
           {renamingTitle !== null ? (
             <input

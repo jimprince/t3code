@@ -468,6 +468,7 @@ export class RemoteEnvironmentClient {
     startFromOrigin?: boolean;
     initialMessage?: string;
     workerContext?: WorkerContext;
+    parentThreadId?: string | null;
     pin?: boolean;
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
     const snapshot = await this.getShellSnapshot();
@@ -533,6 +534,7 @@ export class RemoteEnvironmentClient {
             branch: null,
             worktreePath: null,
             createdAt,
+            ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
           },
           ...(input.branch
             ? {
@@ -751,13 +753,70 @@ export class RemoteEnvironmentClient {
         `'${this.environment.name}' runs a server without automatic-order reset. Update T3 Code there first.`,
       );
     }
+    await this.dispatchOnce({
+      type: "thread.order.reset",
+      commandId: NodeCrypto.randomUUID(),
+      threadId,
+    });
+  }
+
+  /** Whether this environment's server stores thread nesting (threadNesting capability). */
+  /** Capabilities come from the environment descriptor; serverGetConfig does not carry them. */
+  async supportsThreadNesting(): Promise<boolean> {
+    return (await this.describe()).capabilities.threadNesting === true;
+  }
+
+  /** Nests a thread under an orchestrating thread, or with null returns it to the sidebar. */
+  async setThreadParent(threadId: string, parentThreadId: string | null): Promise<void> {
+    if (!(await this.supportsThreadNesting())) {
+      throw new Error(
+        `'${this.environment.name}' runs a server without thread nesting. Update T3 Code there first.`,
+      );
+    }
+    await this.dispatchOnce({
+      type: "thread.parent.set",
+      commandId: NodeCrypto.randomUUID(),
+      threadId,
+      parentThreadId,
+    });
+  }
+
+  /** Answers a worker's pending question, the same as answering it in the app. */
+  async respondToUserInput(input: {
+    threadId: string;
+    requestId: string;
+    answers: Record<string, string>;
+  }): Promise<void> {
+    await this.dispatchOnce({
+      type: "thread.user-input.respond",
+      commandId: NodeCrypto.randomUUID(),
+      threadId: input.threadId,
+      requestId: input.requestId,
+      answers: input.answers,
+      createdAt: nowIso(),
+    });
+  }
+
+  /** Approves or declines a worker's pending approval, the same as in the app. */
+  async respondToApproval(input: {
+    threadId: string;
+    requestId: string;
+    decision: "accept" | "acceptForSession" | "decline";
+  }): Promise<void> {
+    await this.dispatchOnce({
+      type: "thread.approval.respond",
+      commandId: NodeCrypto.randomUUID(),
+      threadId: input.threadId,
+      requestId: input.requestId,
+      decision: input.decision,
+      createdAt: nowIso(),
+    });
+  }
+
+  private async dispatchOnce(command: Record<string, unknown>): Promise<void> {
     const rpc = await this.openRpc();
     try {
-      await rpc.request("dispatchCommand", {
-        type: "thread.order.reset",
-        commandId: NodeCrypto.randomUUID(),
-        threadId,
-      });
+      await rpc.request("dispatchCommand", command);
     } finally {
       await rpc.dispose();
     }
