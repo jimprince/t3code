@@ -50,6 +50,11 @@ import * as ProviderService from "./provider/Services/ProviderService.ts";
 import * as ProviderSessionDirectory from "./provider/Services/ProviderSessionDirectory.ts";
 import * as ProviderSessionReaper from "./provider/Services/ProviderSessionReaper.ts";
 import { forkParked } from "./serverActivation.ts";
+import {
+  continuationPromptWithStoppedWork,
+  resumeStoppedBackgroundWork,
+  takeStoppedBackgroundWork,
+} from "./orchestration/ThreadBackgroundWorkRecovery.ts";
 import * as ServiceLauncherClient from "./cloud/serviceLauncherClient.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
@@ -611,6 +616,8 @@ export const reconcileProviderSessions = Effect.gen(function* () {
     (yield* providerService.listSessions()).map((session) => session.threadId),
   );
   const { threads } = yield* query.getCommandReadModel();
+  // fork-resume-background-work: background work the restart stopped, taken once.
+  const stoppedBackgroundWork = yield* takeStoppedBackgroundWork;
   // Provider startup can report ready before the continuation is submitted.
   // Find those markers in one read rather than querying every idle thread.
   const preparedThreadIds = new Set(
@@ -810,9 +817,15 @@ export const reconcileProviderSessions = Effect.gen(function* () {
             const capabilities = yield* providerService.getCapabilities(providerInstanceId);
             yield* providerService.sendTurn({
               threadId: thread.id,
-              ...(capabilities.promptlessTurnContinuation === true
+              ...(capabilities.promptlessTurnContinuation === true &&
+              !stoppedBackgroundWork.has(thread.id)
                 ? { continuation: true }
-                : { input: SERVER_UPDATE_CONTINUATION_PROMPT }),
+                : {
+                    input: continuationPromptWithStoppedWork(
+                      SERVER_UPDATE_CONTINUATION_PROMPT,
+                      stoppedBackgroundWork.get(thread.id),
+                    ),
+                  }),
               interactionMode: thread.interactionMode,
             });
           });
@@ -845,6 +858,14 @@ export const reconcileProviderSessions = Effect.gen(function* () {
 
     yield* settleAsError(ORPHANED_PROVIDER_SESSION_ERROR);
   }
+
+  yield* resumeStoppedBackgroundWork({
+    stoppedWork: stoppedBackgroundWork,
+    orphanedThreadIds: new Set(orphanedThreads.map((thread) => thread.id)),
+    liveThreadIds,
+    threads,
+    continueAfterRestartFor,
+  });
 }).pipe(
   Effect.catchCauseIf(
     (cause) => !Cause.hasInterrupts(cause),
