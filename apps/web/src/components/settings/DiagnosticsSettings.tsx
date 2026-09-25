@@ -1055,7 +1055,7 @@ export function DiagnosticsSettingsPanel() {
         <div className="border-t border-border/60 px-4 py-3 sm:px-5">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-[13px] font-semibold">Recovery preview</div>
+              <div className="text-sm font-semibold">Recovery preview</div>
               <p className="mt-1 text-xs text-muted-foreground/80">
                 Review and select only the cleanup actions you want. Nothing runs automatically.
               </p>
@@ -1071,7 +1071,7 @@ export function DiagnosticsSettingsPanel() {
             <div className="mt-3 text-xs text-destructive">{recoveryPreviewError}</div>
           ) : null}
           {recoveryPreview?.warnings.map((warning) => (
-            <div key={warning} className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+            <div key={warning} className="mt-3 text-xs text-warning-foreground">
               {warning}
             </div>
           ))}
@@ -1079,7 +1079,7 @@ export function DiagnosticsSettingsPanel() {
           <div className="mt-3 space-y-3">
             {[...recoveryCandidatesByGroup.entries()].map(([groupId, candidates]) => (
               <div key={groupId}>
-                <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground/70">
+                <div className="text-2xs font-medium uppercase tracking-widest text-muted-foreground/70">
                   {RECOVERY_GROUP_LABELS[groupId]}
                 </div>
                 {candidates.length === 0 ? (
@@ -1103,12 +1103,12 @@ export function DiagnosticsSettingsPanel() {
                           <span className="block text-xs font-medium text-foreground">
                             {candidate.label}
                             {candidate.recommended ? (
-                              <span className="ml-2 text-[10px] uppercase tracking-wide text-amber-600 dark:text-amber-400">
+                              <span className="ml-2 text-3xs uppercase tracking-wide text-warning-foreground">
                                 Recommended
                               </span>
                             ) : null}
                           </span>
-                          <span className="mt-0.5 block break-all font-mono text-[11px] text-muted-foreground/70">
+                          <span className="mt-0.5 block break-all font-mono text-2xs text-muted-foreground/70">
                             {candidate.detail}
                           </span>
                         </span>
