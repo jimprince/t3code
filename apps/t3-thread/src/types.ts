@@ -43,6 +43,7 @@ export interface ExecutionEnvironmentDescriptor {
     threadActiveReorder?: boolean;
     threadOrderReset?: boolean;
     sessionRefresh?: boolean;
+    threadNesting?: boolean;
   };
 }
 
