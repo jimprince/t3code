@@ -1,6 +1,6 @@
-Bottom: 93d32e1be391fa10e961830d8662c954159196ee
-Top:    2a97bb6e9b00ed450d2d39e7776af518aedf3ae5
+Bottom: ea53ed482dfd312ef342f5e7f80546c2c1f9c12f
+Top:    b6b73d8d0790154f3a3a986033bd3a3acdd32a84
 Author: User <user@example.com>
-Date:   2026-09-25 10:22:45 +0000
+Date:   2026-09-25 10:49:09 +0000
 
 feat(web): upload files into workspace via drag-and-drop
