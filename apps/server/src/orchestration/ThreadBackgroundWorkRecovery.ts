@@ -156,7 +156,8 @@ export function stoppedBackgroundWorkNotice(tasks: ReadonlyArray<StoppedBackgrou
           `- ${task.kind === "agent" ? "Background agent" : "Monitor"}: ${task.description?.slice(0, 200) ?? "(no description)"}`,
       ),
     ...(unlisted > 0 ? [`- and ${unlisted} more`] : []),
-    "Anything it would have reported during the restart was missed. Check the current state, then relaunch the monitors and agents that are still needed. Skip any that no longer matter.",
+    // Worded as an instruction: a softer notice left agents asking whether to relaunch.
+    "Relaunch each one now, the same way you started it, unless its job is done or no longer needed. Don't ask first. Anything it would have reported during the restart was missed, so check the current state as you relaunch.",
   ].join("\n");
 }
 
