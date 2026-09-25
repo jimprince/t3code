@@ -56,7 +56,9 @@ layer("legacy sidebar ordering migration", (it) => {
       ) VALUES ('unrelated', 'thread', 'thread-order', 3, 'thread.meta-updated',
         ${now}, 'client', ${encodeJson({ threadId: "thread-order", title: "Keep me", updatedAt: now })}, '{}')`;
       const before = yield* sql`SELECT * FROM orchestration_events ORDER BY sequence`;
-      assert.deepStrictEqual(yield* runForkMigrations(), [[5, "MigrateSidebarOrderEvents"]]);
+      assert.deepStrictEqual(yield* runForkMigrations({ toMigrationInclusive: 5 }), [
+        [5, "MigrateSidebarOrderEvents"],
+      ]);
       const after = yield* sql`SELECT * FROM orchestration_events ORDER BY sequence`;
       assert.equal(after.length, before.length);
       for (let index = 0; index < 2; index++) {
@@ -69,7 +71,7 @@ layer("legacy sidebar ordering migration", (it) => {
         });
       }
       assert.deepStrictEqual(after[2], before[2]);
-      assert.deepStrictEqual(yield* runForkMigrations(), []);
+      assert.deepStrictEqual(yield* runForkMigrations({ toMigrationInclusive: 5 }), []);
       assert.deepStrictEqual(
         yield* sql`SELECT * FROM orchestration_events ORDER BY sequence`,
         after,

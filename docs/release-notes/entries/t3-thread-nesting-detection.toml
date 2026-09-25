@@ -1,0 +1,4 @@
+id = "t3-thread-nesting-detection"
+category = "fix"
+functionality = "t3-thread"
+text = "t3-thread workers now nest under the thread that started them; they had stayed in the sidebar on every server."
