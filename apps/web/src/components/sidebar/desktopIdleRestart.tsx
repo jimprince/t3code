@@ -23,7 +23,11 @@ import {
 } from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { countAgentsBlockingIdleRestart, IDLE_RESTART_GRACE_MS } from "./desktopIdleRestart.logic";
+import {
+  countAgentsBlockingIdleRestart,
+  IDLE_RESTART_GRACE_MS,
+  makeResumesMonitoring,
+} from "./desktopIdleRestart.logic";
 
 function isLocalConnectionTarget(target: ConnectionCatalogEntry["target"]): boolean {
   return target._tag === "PrimaryConnectionTarget" || isDesktopLocalConnectionTarget(target);
@@ -34,18 +38,27 @@ export function useLocalAgentsBlockingRestart(): number {
   const threads = useThreadShells();
   const { environments } = useEnvironments();
   const queuesByThreadKey = useQueuedMessageStore((state) => state.queuesByThreadKey);
-  const localEnvironmentIds = useMemo(
-    () =>
-      new Set(
-        environments
-          .filter((environment) => isLocalConnectionTarget(environment.entry.target))
-          .map((environment) => environment.environmentId),
-      ),
+  const localEnvironments = useMemo(
+    () => environments.filter((environment) => isLocalConnectionTarget(environment.entry.target)),
     [environments],
   );
+  const localEnvironmentIds = useMemo(
+    () => new Set(localEnvironments.map((environment) => environment.environmentId)),
+    [localEnvironments],
+  );
+  const resumesMonitoring = useMemo(
+    () => makeResumesMonitoring(localEnvironments),
+    [localEnvironments],
+  );
   return useMemo(
-    () => countAgentsBlockingIdleRestart({ threads, localEnvironmentIds, queuesByThreadKey }),
-    [threads, localEnvironmentIds, queuesByThreadKey],
+    () =>
+      countAgentsBlockingIdleRestart({
+        threads,
+        localEnvironmentIds,
+        queuesByThreadKey,
+        resumesMonitoring,
+      }),
+    [threads, localEnvironmentIds, queuesByThreadKey, resumesMonitoring],
   );
 }
 
@@ -125,7 +138,7 @@ export function IdleRestartDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Restart when agents finish?</AlertDialogTitle>
           <AlertDialogDescription>
-            {`${agents} working on this computer. Restarting now interrupts them. Agents waiting on you and agents on other machines don't count.`}
+            {`${agents} working on this computer. Restarting now interrupts them. Agents waiting on you, monitors that resume after restarts, and agents on other machines don't count.`}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
