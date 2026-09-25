@@ -25,6 +25,7 @@ import {
   readEnvironmentSupportsSnooze,
   readEnvironmentSupportsTitleRegeneration,
   readThreadShell,
+  readThreadShells,
   useProjects,
 } from "../state/entities";
 import { usePrimaryEnvironmentId } from "../state/environments";
@@ -40,6 +41,8 @@ import { useCopyToClipboard } from "./useCopyToClipboard";
 import { useNewThreadHandler } from "./useHandleNewThread";
 import { useClientSettings } from "./useSettings";
 import { useThreadActions } from "./useThreadActions";
+import { readEnvironmentSupportsThreadNesting, useThreadNestingActions } from "./useThreadNesting";
+import { isThreadNestingMenuId, resolveThreadNestingMenuState } from "../threadNesting.logic";
 
 function failureToast(title: string, error: unknown) {
   toastManager.add(
@@ -91,6 +94,7 @@ export function useThreadActionMenu(input: {
     archiveThread,
     deleteThread,
   } = useThreadActions();
+  const { runNestingMenuAction } = useThreadNestingActions();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -138,6 +142,11 @@ export function useThreadActionMenu(input: {
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const snoozePresets = resolveSnoozePresets(now, timestampFormat);
+        const nesting = resolveThreadNestingMenuState(
+          thread,
+          readThreadShells(),
+          readEnvironmentSupportsThreadNesting(threadRef.environmentId),
+        );
         const items = buildThreadActionMenuItems({
           branch: thread.branch ?? null,
           // The chat header has no project-scoped thread list behind the
@@ -152,9 +161,14 @@ export function useThreadActionMenu(input: {
           canMoveToMachine: false,
           supports,
           snoozePresets,
+          nesting,
         });
         const clicked = await settlePromise(() => api.contextMenu.show(items, position));
         if (clicked._tag === "Failure" || clicked.value === null) return;
+        if (isThreadNestingMenuId(clicked.value)) {
+          await runNestingMenuAction(threadRef, clicked.value, nesting);
+          return;
+        }
         const action: ThreadActionMenuId = clicked.value;
         if (action.startsWith("snooze:")) {
           const preset =
@@ -334,6 +348,7 @@ export function useThreadActionMenu(input: {
       projectGroupingSettings,
       projects,
       router,
+      runNestingMenuAction,
       settleThread,
       snoozeThread,
       threadRef,
