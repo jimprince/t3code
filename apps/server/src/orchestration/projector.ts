@@ -445,7 +445,7 @@ export function projectEvent(
             settledAt: null,
             unsettledAt: null,
             activeOrderKey: null,
-            parentThreadId: payload.parentThreadId ?? null,
+            ...(payload.parentThreadId ? { parentThreadId: payload.parentThreadId } : {}),
             snoozedUntil: null,
             snoozedAt: null,
             deletedAt: null,

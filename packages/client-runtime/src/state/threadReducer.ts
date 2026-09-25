@@ -131,7 +131,9 @@ export function applyThreadDetailEvent(
           settledAt: null,
           unsettledAt: null,
           activeOrderKey: null,
-          parentThreadId: event.payload.parentThreadId ?? null,
+          ...(event.payload.parentThreadId
+            ? { parentThreadId: event.payload.parentThreadId }
+            : {}),
           snoozedUntil: null,
           snoozedAt: null,
           deletedAt: null,
