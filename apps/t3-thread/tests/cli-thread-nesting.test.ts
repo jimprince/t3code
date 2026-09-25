@@ -112,7 +112,7 @@ describe("CLI nesting readback", () => {
   it("lists parent ids and available titles with state, settlement and pins from shells", async () => {
     const { output, detail } = await run(["threads", "--env", "local"]);
     expect(output).toContain(
-      `${childId} [idle] Worker project settled=true pinned=true parent=${rootId} (Supervisor)`,
+      `${childId} [idle] Worker project settled=true pinned=true order=pinned:automatic parent=${rootId} (Supervisor)`,
     );
     expect(output).toContain(`parent=${childId} (Worker)`);
     expect(output).toContain("parent=none");
