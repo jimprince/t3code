@@ -218,6 +218,40 @@ Post-create reliability checklist:
 - persists the same subscription you would otherwise create manually with `agent subscribe --watch <new-agent>`
 - does not replace manual `subscribe`; it is the create-time ownership wiring path
 
+## Nested Workers And Escalation
+
+Workers you create nest under your thread by default: they leave the user's
+sidebar and appear in your thread's **Agents** panel under **Threads**. The
+user sees one thread (yours) instead of every worker, so you own your workers'
+attention.
+
+- no flag: nests under the calling thread (`T3_THREAD_ID`). If the caller is
+  itself nested, the worker joins the caller's parent, because nesting is one
+  level deep. A caller in another project or environment gets a top-level
+  worker; the `nesting` field in the create output says why.
+- `--top-level`: put the worker in the sidebar, for work the user should
+  watch directly.
+- `--parent <agent-or-thread>`: nest under a specific thread in the same
+  environment and project.
+- Move a worker later with `t3-thread nest <agent> --parent <agent-or-thread>`
+  or `t3-thread unnest <agent>`.
+
+When a nested worker needs attention (its subscription notifies you), handle
+it yourself before involving the user:
+
+```bash
+t3-thread pending <agent>                       # open questions and approvals, as JSON
+t3-thread answer <agent> "Use the staging database"
+t3-thread answer <agent> --question color=blue --question size=large
+t3-thread approve <agent> [--session]
+t3-thread deny <agent>
+```
+
+Answer from what you know about the task. Only when you genuinely cannot
+decide, ask the user in your own thread, then relay their answer with
+`t3-thread answer`. Do not leave a nested worker waiting silently: the user
+does not see it in the sidebar.
+
 ## Common Lifecycle Tasks
 
 List saved agents:
