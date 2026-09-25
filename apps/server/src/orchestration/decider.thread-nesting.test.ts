@@ -150,9 +150,9 @@ it.layer(NodeServices.layer)("thread nesting", (it) => {
         thread(WORKER, { parentThreadId: ORCHESTRATOR }),
         thread(ThreadId.make("other")),
       ]);
-      expect(yield* rejection(setParent(ORCHESTRATOR, ThreadId.make("other")), hasChildren)).toContain(
-        "nested threads of its own",
-      );
+      expect(
+        yield* rejection(setParent(ORCHESTRATOR, ThreadId.make("other")), hasChildren),
+      ).toContain("nested threads of its own");
 
       const self = readModel([thread(WORKER)]);
       expect(yield* rejection(setParent(WORKER, WORKER), self)).toContain("under itself");

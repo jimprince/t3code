@@ -17,6 +17,7 @@ import {
   startDeferredSettlement,
 } from "./deferredSettlement.js";
 import { formatCliError } from "./errorOutput.js";
+import { buildUserInputAnswers, findPendingRequests, resolveCreateParent } from "./nesting.js";
 import { resolvePairingTarget } from "./http.js";
 import {
   buildAgentOverview,
@@ -101,6 +102,25 @@ async function withAgent(agentName: string): Promise<{
     saved: agentTarget.savedAgent !== null,
     target: agentTarget,
   };
+}
+
+/**
+ * Resolves `--parent` to a thread id: a saved agent name (which must live in
+ * the same environment as the worker) or a raw thread id.
+ */
+function resolveParentThreadId(
+  state: Awaited<ReturnType<typeof loadState>>,
+  reference: string,
+  environment: string,
+): string {
+  const saved = state.agents.find((agent) => agent.name === reference);
+  if (!saved) return reference;
+  if (saved.environment !== environment) {
+    throw new Error(
+      `Agent '${reference}' is in '${saved.environment}', not '${environment}'. Threads nest only within one environment and project.`,
+    );
+  }
+  return saved.threadId;
 }
 
 function toSubscriptionEndpoint(agent: SavedAgent): SubscriptionEndpoint {
@@ -247,6 +267,12 @@ const AGENT_COMMAND_ALIASES = new Set([
   "wait",
   "result",
   "ack",
+  "nest",
+  "unnest",
+  "pending",
+  "answer",
+  "approve",
+  "deny",
 ]);
 
 if (AGENT_COMMAND_ALIASES.has(process.argv[2] ?? "")) {
@@ -632,6 +658,11 @@ agent
     "--no-notify",
     "disable automatic completion/attention notifications for the created worker",
   )
+  .option(
+    "--parent <agent-or-thread>",
+    "nest the worker under this saved agent or thread (default: the calling thread)",
+  )
+  .option("--top-level", "list the worker in the sidebar instead of nesting it")
   .action(async (options) => {
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
@@ -645,7 +676,17 @@ agent
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
     const initialMessage =
       options.preamble === false ? options.message : wrapWithPreamble(options.message);
+    const nesting = resolveCreateParent({
+      explicitParentThreadId: options.parent
+        ? resolveParentThreadId(state, options.parent, options.env)
+        : null,
+      topLevel: options.topLevel === true,
+      callerThreadId: resolveCallerThreadId(),
+      projectId: options.project,
+      threads: (await client.getShellSnapshot()).threads,
+    });
     const created = await client.createAgentThread({
+      parentThreadId: nesting.parentThreadId,
       projectId: options.project,
       title: options.title,
       provider: options.provider,
@@ -702,6 +743,8 @@ agent
       notifySubscribed: Boolean(notifyCaller),
       notifySubscriberAgentName: notifyCaller?.name ?? null,
       notifySubscriberThreadId: notifyCaller?.threadId ?? null,
+      nestedUnder: nesting.parentThreadId,
+      nesting: nesting.reason,
     });
   });
 
@@ -1302,6 +1345,102 @@ for (const kind of ["clarify", "revise", "complete"] as const) {
         ...outcome,
         dispatched: outcome.queued ? false : kind,
       });
+    });
+}
+
+agent
+  .command("nest")
+  .description("Nest a worker under an orchestrating thread so it leaves the sidebar")
+  .argument("<name>", "agent name or raw thread UUID")
+  .requiredOption("--parent <agent-or-thread>", "saved agent name or thread UUID to nest under")
+  .action(async (name, options) => {
+    const { state, agent: savedAgent, client } = await withAgent(name);
+    const parentThreadId = resolveParentThreadId(state, options.parent, savedAgent.environment);
+    await client.setThreadParent(savedAgent.threadId, parentThreadId);
+    printJson({ agent: savedAgent.name, threadId: savedAgent.threadId, parentThreadId });
+  });
+
+agent
+  .command("unnest")
+  .description("Move a nested worker back to the sidebar")
+  .argument("<name>", "agent name or raw thread UUID")
+  .action(async (name) => {
+    const { agent: savedAgent, client } = await withAgent(name);
+    await client.setThreadParent(savedAgent.threadId, null);
+    printJson({ agent: savedAgent.name, threadId: savedAgent.threadId, parentThreadId: null });
+  });
+
+agent
+  .command("pending")
+  .description("Show a worker's open questions and approvals")
+  .argument("<name>", "agent name or raw thread UUID")
+  .action(async (name) => {
+    const { agent: savedAgent, client } = await withAgent(name);
+    const thread = await client.findThread(savedAgent.threadId);
+    printJson({
+      agent: savedAgent.name,
+      threadId: savedAgent.threadId,
+      pending: findPendingRequests(thread.activities),
+    });
+  });
+
+agent
+  .command("answer")
+  .description("Answer a worker's oldest open question")
+  .argument("<name>", "agent name or raw thread UUID")
+  .argument("[text...]", "answer for a single question")
+  .option(
+    "--question <id=answer>",
+    "answer one question by id (repeat for each question)",
+    (value: string, previous: string[]) => [...previous, value],
+    [] as string[],
+  )
+  .action(async (name, textParts: string[], options) => {
+    const { agent: savedAgent, client } = await withAgent(name);
+    const thread = await client.findThread(savedAgent.threadId);
+    const request = findPendingRequests(thread.activities).find(
+      (pending) => pending.kind === "user-input",
+    );
+    if (!request || request.kind !== "user-input") {
+      throw new Error(`Agent '${savedAgent.name}' has no open question.`);
+    }
+    const answers = buildUserInputAnswers({
+      questions: request.questions,
+      text: textParts.join(" "),
+      pairs: options.question,
+    });
+    await client.respondToUserInput({
+      threadId: savedAgent.threadId,
+      requestId: request.requestId,
+      answers,
+    });
+    printJson({ agent: savedAgent.name, requestId: request.requestId, answered: answers });
+  });
+
+for (const [command, description] of [
+  ["approve", "Approve a worker's oldest open approval"],
+  ["deny", "Decline a worker's oldest open approval"],
+] as const) {
+  agent
+    .command(command)
+    .description(description)
+    .argument("<name>", "agent name or raw thread UUID")
+    .option("--session", "approve similar requests for the rest of the session")
+    .action(async (name, options) => {
+      const { agent: savedAgent, client } = await withAgent(name);
+      const thread = await client.findThread(savedAgent.threadId);
+      const request = findPendingRequests(thread.activities).find(
+        (pending) => pending.kind === "approval",
+      );
+      if (!request) throw new Error(`Agent '${savedAgent.name}' has no open approval.`);
+      const decision =
+        command === "deny" ? "decline" : options.session ? "acceptForSession" : "accept";
+      await client.respondToApproval({
+        threadId: savedAgent.threadId,
+        requestId: request.requestId,
+        decision,
+      });
+      printJson({ agent: savedAgent.name, requestId: request.requestId, decision });
     });
 }
 
