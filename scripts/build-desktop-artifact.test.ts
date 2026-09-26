@@ -22,6 +22,7 @@ import {
   createStageWorkspaceConfig,
   createStagePatchedDependencies,
   createBuildConfig,
+  DESKTOP_STABLE_PRODUCT_NAME,
   DESKTOP_ELECTRON_LANGUAGES,
   DESKTOP_FILE_EXCLUSIONS,
   DESKTOP_EXTRA_RESOURCES,
@@ -254,7 +255,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code (Alpha)");
+    assert.equal(resolveDesktopProductName("0.0.17"), DESKTOP_STABLE_PRODUCT_NAME);
     assert.equal(resolveDesktopProductName("0.0.17-nightly.20260413.42"), "T3 Code (Nightly)");
   });
 
@@ -321,6 +322,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("omits update feeds for pull request preview builds", () =>
     Effect.gen(function* () {
       const preview = yield* createBuildConfig(
+        "stable",
         "mac",
         "dmg",
         "0.0.33-pr.8182.1",
@@ -330,6 +332,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
       const release = yield* createBuildConfig(
+        "stable",
         "mac",
         "dmg",
         "0.0.33",
@@ -340,6 +343,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       );
 
       const previewChannel = yield* createBuildConfig(
+        "stable",
         "mac",
         "dmg",
         "0.0.41-preview.20260912.1589",
@@ -577,6 +581,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("applies platform-specific packaging to the build config", () =>
     Effect.gen(function* () {
       const mac = yield* createBuildConfig(
+        "stable",
         "mac",
         "dmg",
         "1.2.3",
@@ -586,6 +591,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
       const linux = yield* createBuildConfig(
+        "stable",
         "linux",
         "AppImage",
         "1.2.3",
@@ -595,6 +601,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         undefined,
       );
       const win = yield* createBuildConfig(
+        "stable",
         "win",
         "nsis",
         "1.2.3",
@@ -605,6 +612,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         true,
       );
       const winWithoutWslRuntime = yield* createBuildConfig(
+        "stable",
         "win",
         "nsis",
         "1.2.3",
@@ -664,7 +672,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
         "**/*.map",
       ]);
       assert.deepStrictEqual(mac.dmg, {
-        title: "T3 Code (Alpha) 1.2.3 Installer",
+        title: `${DESKTOP_STABLE_PRODUCT_NAME} 1.2.3 Installer`,
         background: "dmg/dmg-background-latest.png",
         window: { width: 640, height: 432 },
         contents: [
@@ -1760,14 +1768,17 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   );
 
   it("derives macOS passkey signing configuration from the Clerk publishable key", () => {
-    const configuration = resolveMacPasskeySigningConfiguration({
-      T3CODE_APPLE_TEAM_ID: "abc1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
-    });
+    const configuration = resolveMacPasskeySigningConfiguration(
+      {
+        T3CODE_APPLE_TEAM_ID: "abc1234567",
+        T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+        T3CODE_CLERK_PUBLISHABLE_KEY: `pk_test_${btoa("example.clerk.accounts.dev$")}`,
+      },
+      "com.t3tools.t3code.fork",
+    );
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.t3tools.t3code",
+      appId: "com.t3tools.t3code.fork",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -1775,19 +1786,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("normalizes explicit macOS passkey RP domains and renders required entitlements", () => {
-    const configuration = resolveMacPasskeySigningConfiguration({
-      T3CODE_APPLE_TEAM_ID: "ABC1234567",
-      T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-      T3CODE_CLERK_PASSKEY_RP_DOMAINS:
-        " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
-    });
+    const configuration = resolveMacPasskeySigningConfiguration(
+      {
+        T3CODE_APPLE_TEAM_ID: "ABC1234567",
+        T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+        T3CODE_CLERK_PASSKEY_RP_DOMAINS:
+          " Clerk.Example.com,example.clerk.accounts.dev,clerk.example.com ",
+      },
+      "com.t3tools.t3code.fork.dev",
+    );
     const entitlements = renderMacPasskeyEntitlements(configuration);
 
     assert.deepStrictEqual(configuration.rpDomains, [
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.t3tools.t3code.fork.dev</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -1796,7 +1810,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it("rejects incomplete macOS passkey signing configuration", () => {
     const captureError = (env: Readonly<Record<string, string | undefined>>) => {
       try {
-        resolveMacPasskeySigningConfiguration(env);
+        resolveMacPasskeySigningConfiguration(env, "com.t3tools.t3code.fork");
       } catch (error) {
         return error;
       }
@@ -1833,11 +1847,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     assert.notInclude(serializedInvalidDomainError, "query-secret");
     assert.throws(
       () =>
-        resolveMacPasskeySigningConfiguration({
-          T3CODE_APPLE_TEAM_ID: "ABC1234567",
-          T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
-          T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
-        }),
+        resolveMacPasskeySigningConfiguration(
+          {
+            T3CODE_APPLE_TEAM_ID: "ABC1234567",
+            T3CODE_MACOS_PROVISIONING_PROFILE: "/tmp/t3code.provisionprofile",
+            T3CODE_CLERK_PASSKEY_RP_DOMAINS: "example.clerk.accounts.dev:8443",
+          },
+          "com.t3tools.t3code.fork",
+        ),
       /Invalid passkey RP domain/u,
     );
     const invalidPublishableKeyError = captureError({
@@ -1876,13 +1893,22 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
   it.effect("adds passkey entitlements and both renderer protocols to signed macOS builds", () =>
     Effect.gen(function* () {
-      const config = yield* createBuildConfig("mac", "dmg", "1.2.3", true, false, undefined, {
-        entitlementsPath: "/tmp/entitlements.mac.plist",
-        provisioningProfilePath: "/tmp/t3code.provisionprofile",
-      });
+      const config = yield* createBuildConfig(
+        "stable",
+        "mac",
+        "dmg",
+        "1.2.3",
+        true,
+        false,
+        undefined,
+        {
+          entitlementsPath: "/tmp/entitlements.mac.plist",
+          provisioningProfilePath: "/tmp/t3code.provisionprofile",
+        },
+      );
 
       const mac = config.mac as Record<string, unknown>;
-      assert.equal(config.appId, "com.t3tools.t3code");
+      assert.equal(config.appId, "com.t3tools.t3code.fork");
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.match(String(mac.sign), /[\\/]scripts[\\/]sign-macos\.ts$/);
@@ -1902,6 +1928,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("uses the nightly DMG background for nightly macOS builds", () =>
     Effect.gen(function* () {
       const config = yield* createBuildConfig(
+        "stable",
         "mac",
         "dmg",
         "1.2.3-nightly.20260815.1",
@@ -1921,6 +1948,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("keeps executable resource editing enabled for unsigned Windows builds", () =>
     Effect.gen(function* () {
       const config = yield* createBuildConfig(
+        "stable",
         "win",
         "nsis",
         "1.2.3",
@@ -2127,6 +2155,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("resolves default platform and architecture from host references", () =>
     Effect.gen(function* () {
       const resolved = yield* resolveBuildOptions({
+        flavor: Option.none(),
         platform: Option.none(),
         target: Option.none(),
         arch: Option.none(),
@@ -2167,6 +2196,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       for (const platform of ["linux", "win"] as const) {
         const error = yield* Effect.flip(
           resolveBuildOptions({
+            flavor: Option.none(),
             platform: Option.some(platform),
             target: Option.none(),
             arch: Option.some("universal"),
@@ -2191,6 +2221,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   it.effect("preserves explicit false boolean flags over true env defaults", () =>
     Effect.gen(function* () {
       const resolved = yield* resolveBuildOptions({
+        flavor: Option.none(),
         platform: Option.some("mac"),
         target: Option.none(),
         arch: Option.some("arm64"),
