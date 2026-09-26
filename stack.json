@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "88d27b475df4295c12ac087fad1521bd755e62d5",
-  "head": "a000a124eab435061664ea3fe274e4ef7ef8ba79",
+  "prev": "e316eb8cf86e2f8d393aed5daec98a927aeef00a",
+  "head": "76c644e115382a11f2bab8ae0ecdfa25de4e2216",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -28,13 +28,13 @@
     "fork-headless-delivery",
     "fork-desktop-delivery",
     "fork-mobile-delivery",
-    "fork-release-publication"
-  ],
-  "unapplied": [
+    "fork-release-publication",
     "fork-maintenance-automation",
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh",
-    "fork-codex-goal-visibility",
+    "fork-codex-goal-visibility"
+  ],
+  "unapplied": [
     "fork-inline-3d-objects",
     "fork-orcaslicer-handoff",
     "fork-3mf-preview",
@@ -53,7 +53,7 @@
       "oid": "1a6709807fd721e38b3435a8d215d0ec12c4b279"
     },
     "fork-auth-session-refresh": {
-      "oid": "bd4f7151f951284e8a39bea90b853268f38e5fce"
+      "oid": "b13d5c84f0dc616b5dd1ea46c23997f17f89dcb9"
     },
     "fork-bounded-diagnostics": {
       "oid": "79b0d315fe47ee9c9f72ea884ebb60232a0e56e4"
@@ -62,7 +62,7 @@
       "oid": "f6d625c153ec57ada7e6e5f07867160cc6ed1ed8"
     },
     "fork-codex-goal-visibility": {
-      "oid": "167f17b4be1412d82b930f646a2f3c2593e9219d"
+      "oid": "76c644e115382a11f2bab8ae0ecdfa25de4e2216"
     },
     "fork-conversation-fork": {
       "oid": "1d6b41259f4edcbb466fe786384252324d785a71"
@@ -86,7 +86,7 @@
       "oid": "74c70183a236c9f16bfc868e3c9b60c44b41e519"
     },
     "fork-gitea-pr-browser": {
-      "oid": "bcb00058df4c3d851c2e1b31a9bdc827be699de4"
+      "oid": "183406d898b2a54aaa0e8832297faa05f9136409"
     },
     "fork-headless-delivery": {
       "oid": "86b0c5962cc6050a43f23579b6c14e63637fb63f"
@@ -95,7 +95,7 @@
       "oid": "07d32e8797995801e64973475dde399279370c7d"
     },
     "fork-maintenance-automation": {
-      "oid": "d642881f4d59cb345d95eeb1aec31edd043b8890"
+      "oid": "02a7a4e48be48c5060d63844702b15e22f7edf59"
     },
     "fork-mobile-delivery": {
       "oid": "ca354f539516ca693ff3681002fe4ef3426f435f"
