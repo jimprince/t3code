@@ -135,6 +135,7 @@ describe("OrchestrationEngine (fork)", () => {
           getShellSnapshot: () => Effect.succeed(projectionSnapshot),
           getArchivedShellSnapshot: () => Effect.succeed(projectionSnapshot),
           getDeletedWorktreeThreads: () => Effect.succeed([]),
+          listThreadsWithPullRequests: () => Effect.die("unused"),
           searchThreads: () => Effect.succeed({ matches: [] }),
           getSnapshotSequence: () => Effect.succeed({ snapshotSequence: 0 }),
           getCounts: () => Effect.succeed({ projectCount: 0, threadCount: 0 }),
