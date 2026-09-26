@@ -1,6 +1,6 @@
-Bottom: 4bf91d8e49e4eca9b6c849f1b3192298c310e53e
-Top:    7b61f900301ea87344a27539a70f0a6444c2f0ba
+Bottom: 74e0659d3a7178aceb25e9158d1dbf008b6ad000
+Top:    793efcc3f231a29c7964c71f44e4fd172bf51bcc
 Author: User <user@example.com>
-Date:   2026-09-26 09:29:40 +0000
+Date:   2026-09-26 09:35:07 +0000
 
 feat(server): resume monitors and background agents after restarts
