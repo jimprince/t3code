@@ -29,6 +29,12 @@ roles = ["lockfile-owner"]
 note = "Keep upstream and fork script entry points in one Knip workspace stanza. Removed the unrelated wall-clock assertion from activity-reuse coverage; the observable identity-reuse test and justified compression-test headroom remain. The replay driver removes the old generated lockfile delta before rebase and regenerates at the complete tip, then refreshes this owner. Published main retains a consistent frozen-install lockfile; mid-stack generation omits later workspaces. Pin dependencies with exact-version patches to that version; expo-audio 57.0.5 satisfies ~57.0.4 but still lacks the recorder failure-state fix in the 57.0.4 patch."
 
 [[patch.decision]]
+id = "upstream13767-shell-snapshot-sample-budget"
+date = "2026-09-27"
+decided = "adapt"
+rationale = "Upstream13767 added a client-runtime cache-encoding test that generates 2,000 schema samples, about 2 seconds of the 5-second default. It timed out in the fork's local test-other and in candidate CI while passing in isolation; a pure-upstream checkout of the same target takes the same 2 seconds, so the cost is upstream's and only the fork's larger parallel verification exposes it. Give that one case 60 seconds and keep its sample count and assertions unchanged."
+
+[[patch.decision]]
 id = "upstream10409-usage-transcript-realpath"
 date = "2026-09-26"
 decided = "narrow"
