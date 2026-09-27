@@ -55,6 +55,29 @@ approval or a question: those prompts end with the restart, and you can reply
 in the thread afterwards. Agents on other machines keep running and never delay
 the restart.
 
+## Automatic desktop updates
+
+Between 1 and 6 a.m. local time, the macOS app updates itself. It downloads a
+new release, then restarts into it once agents on this computer have finished
+(counted as for **Restart when agents finish**) and nobody has used the window
+for five minutes. T3 Code must be running with its window open, even in the
+background, and the Mac awake; otherwise the update waits for the next night or
+your own restart.
+
+Daytime updates are also enabled by default. After 15 minutes without keyboard
+or mouse activity, the app can download and install a release once agents on
+this computer have finished and the window is quiet. In **Settings → About**,
+turn off **Install updates when idle** to return to overnight-only updates, or
+change **Idle minutes**. A daytime install is attempted once per version;
+overnight failures retain their next-night retry.
+
+Before any update restart, T3 Code keeps a copy of the current app. If the new
+version's local server is not ready within ten minutes, the copy is restored
+and reopened, a notification says so, and that version is never installed
+automatically again. The next release installs as usual. Details are in
+`update-rollback.log` in the app's logs folder. Rollback restores the app, not
+data the new version already changed.
+
 ## Update a connected server
 
 The offered action depends on how the server runs:
