@@ -63,6 +63,7 @@ import {
   resolveEnvironmentIdentificationPillLabel,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
+import { useClientSettings, useUpdateClientSettings } from "../../hooks/useSettings";
 import { isElectron } from "../../env";
 import { buildHostedChannelSelectionUrl, type HostedAppChannel } from "../../hostedPairing";
 import { useCustomThemes } from "../../hooks/useCustomThemes";
@@ -277,6 +278,8 @@ function AboutVersionTitle() {
 }
 
 function AboutVersionSection() {
+  const clientSettings = useClientSettings();
+  const updateClientSettings = useUpdateClientSettings();
   const updateState = useDesktopUpdateState();
   const [isChangingUpdateChannel, setIsChangingUpdateChannel] = useState(false);
   const [isUpdateActionPending, setIsUpdateActionPending] = useState(false);
@@ -444,37 +447,79 @@ function AboutVersionSection() {
         }
       />
       {hasDesktopBridge ? (
-        <SettingsRow
-          title="Update track"
-          description="Use stable releases or nightly builds. Switch back anytime."
-          control={
-            <Select
-              value={selectedUpdateChannel}
-              onValueChange={(value) => {
-                handleUpdateChannelChange(value as DesktopUpdateChannel);
-              }}
-            >
-              <SelectTrigger
+        <>
+          <SettingsRow
+            title="Install updates when idle"
+            description="Install during the day when this computer and its agents are idle. Turning this off keeps overnight updates."
+            control={
+              <Switch
+                aria-label="Install updates when idle"
+                checked={clientSettings.installUpdatesWhenIdle}
+                onCheckedChange={(checked) => {
+                  void updateClientSettings({ installUpdatesWhenIdle: checked });
+                }}
+              />
+            }
+          />
+          <SettingsRow
+            title="Idle minutes"
+            description="Minutes without keyboard or mouse activity before installing."
+            control={
+              <NumberField
+                value={clientSettings.updateIdleMinutes}
+                min={1}
+                max={1440}
+                step={1}
                 size="sm"
-                className="w-full sm:w-40"
-                aria-label="Update track"
-                disabled={isChangingUpdateChannel}
+                disabled={!clientSettings.installUpdatesWhenIdle}
+                className="w-32"
+                onValueChange={(value) => {
+                  if (value !== null)
+                    void updateClientSettings({
+                      updateIdleMinutes: Math.max(1, Math.min(1440, Math.round(value))),
+                    });
+                }}
               >
-                <SelectValue>
-                  {selectedUpdateChannel === "nightly" ? "Nightly" : "Stable"}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectPopup align="end" alignItemWithTrigger={false}>
-                <SelectItem hideIndicator value="latest">
-                  Stable
-                </SelectItem>
-                <SelectItem hideIndicator value="nightly">
-                  Nightly
-                </SelectItem>
-              </SelectPopup>
-            </Select>
-          }
-        />
+                <NumberFieldGroup>
+                  <NumberFieldDecrement aria-label="Decrease update idle minutes" />
+                  <NumberFieldInput aria-label="Update idle minutes" />
+                  <NumberFieldIncrement aria-label="Increase update idle minutes" />
+                </NumberFieldGroup>
+              </NumberField>
+            }
+          />
+          <SettingsRow
+            title="Update track"
+            description="Use stable releases or nightly builds. Switch back anytime."
+            control={
+              <Select
+                value={selectedUpdateChannel}
+                onValueChange={(value) => {
+                  handleUpdateChannelChange(value as DesktopUpdateChannel);
+                }}
+              >
+                <SelectTrigger
+                  size="sm"
+                  className="w-full sm:w-40"
+                  aria-label="Update track"
+                  disabled={isChangingUpdateChannel}
+                >
+                  <SelectValue>
+                    {selectedUpdateChannel === "nightly" ? "Nightly" : "Stable"}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectPopup align="end" alignItemWithTrigger={false}>
+                  <SelectItem hideIndicator value="latest">
+                    Stable
+                  </SelectItem>
+                  <SelectItem hideIndicator value="nightly">
+                    Nightly
+                  </SelectItem>
+                </SelectPopup>
+              </Select>
+            }
+          />
+        </>
       ) : selectedHostedAppChannel ? (
         <SettingsRow
           title="Update track"
