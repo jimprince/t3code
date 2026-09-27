@@ -415,6 +415,7 @@ it.layer(makeDirectoryLayer(SqlitePersistenceMemory))("ProviderSessionDirectoryL
           threadId,
           providerName: "codex",
           providerInstanceId: ProviderInstanceId.make("codex"),
+          bootGenerationId: "boot-a",
           adapterKey: "codex",
           runtimeMode: "full-access",
           status,

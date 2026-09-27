@@ -663,6 +663,7 @@ it.effect("ProviderServiceLive shutdown leaves settled session rows untouched", 
     const persistence = yield* Layer.build(
       ProviderSessionDirectoryLive.pipe(
         Layer.provide(ProviderSessionRuntime.layer.pipe(Layer.provide(SqlitePersistenceMemory))),
+        Layer.provide(makeServerBootGenerationLayer("test-boot-generation")),
       ),
     );
     const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory.pipe(
