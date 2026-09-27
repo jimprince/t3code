@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off globalTimers:off -- The rollback test waits in real time for real state files under TestClock.
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, describe, it } from "@effect/vitest";
 import type { DesktopUpdateState } from "@t3tools/contracts";
@@ -5,6 +6,9 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as TestClock from "effect/testing/TestClock";
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 
 import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
@@ -34,6 +38,7 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
   const feedUrls: ElectronUpdater.ElectronUpdaterFeedUrl[] = [];
   const listeners = new Map<string, Set<(...args: readonly unknown[]) => void>>();
   const sentStates: DesktopUpdateState[] = [];
+  let backendReady = false;
 
   const addListener = (eventName: string, listener: (...args: readonly unknown[]) => void) => {
     const eventListeners = listeners.get(eventName) ?? new Set();
@@ -111,13 +116,13 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     start: Effect.void,
     stop: () => options.stopBackend ?? Effect.void,
     currentConfig: Effect.succeed(Option.none()),
-    snapshot: Effect.succeed({
+    snapshot: Effect.sync(() => ({
       desiredRunning: false,
-      ready: false,
+      ready: backendReady,
       activePid: Option.none(),
       restartAttempt: 0,
       restartScheduled: false,
-    }),
+    })),
     waitForReady: () => Effect.succeed(true),
   };
   const backendLayer = DesktopBackendPool.layerTest([stubBackendInstance]);
@@ -185,6 +190,9 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
 
   return {
     layer,
+    setBackendReady: (ready: boolean) => {
+      backendReady = ready;
+    },
     checkCount: () => checkCount,
     feedUrls: () => feedUrls,
     fullChangelog: () => fullChangelog,
@@ -222,4 +230,52 @@ describe("DesktopUpdates", () => {
       }),
     ).pipe(Effect.provide(Layer.merge(TestClock.layer(), harness.layer)));
   });
+
+  it.effect(
+    "never offers a rolled-back version and marks healthy once the backend is ready",
+    () => {
+      const home = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-update-rollback-"));
+      const rollbackDir = NodePath.join(home, "userdata", "update-rollback");
+      NodeFS.mkdirSync(rollbackDir, { recursive: true });
+      NodeFS.writeFileSync(
+        NodePath.join(rollbackDir, "rolled-back.json"),
+        '{"version":"1.2.4","previousVersion":"1.2.3","outcome":"rolled-back","notified":true}',
+      );
+      const harness = makeHarness({
+        env: { T3CODE_HOME: home },
+        environment: { resourcesPath: NodePath.join(home, "T3 Code.app", "Contents", "Resources") },
+      });
+      const healthFile = NodePath.join(rollbackDir, "healthy-version");
+
+      return Effect.scoped(
+        Effect.gen(function* () {
+          const updates = yield* DesktopUpdates.DesktopUpdates;
+          yield* updates.configure;
+
+          harness.emit("update-available", { version: "1.2.4" });
+          yield* Effect.yieldNow;
+          assert.equal((yield* updates.getState).status, "up-to-date");
+
+          harness.emit("update-available", { version: "1.2.5" });
+          yield* Effect.yieldNow;
+          assert.equal((yield* updates.getState).availableVersion, "1.2.5");
+
+          const settle = Effect.promise(() => new Promise((resolve) => setTimeout(resolve, 10)));
+          yield* TestClock.adjust("1 minute");
+          yield* settle;
+          assert.isFalse(NodeFS.existsSync(healthFile));
+
+          harness.setBackendReady(true);
+          yield* TestClock.adjust("1 second");
+          for (let attempt = 0; attempt < 100 && !NodeFS.existsSync(healthFile); attempt += 1) {
+            yield* settle;
+          }
+          assert.equal(NodeFS.readFileSync(healthFile, "utf8"), "1.2.3");
+        }),
+      ).pipe(
+        Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
+        Effect.ensuring(Effect.sync(() => NodeFS.rmSync(home, { recursive: true, force: true }))),
+      );
+    },
+  );
 });
