@@ -253,6 +253,9 @@ type PromptQueueItem =
 interface ClaudeResumeState {
   readonly threadId?: ThreadId;
   readonly resume?: string;
+  readonly sessionId?: string;
+  readonly forkSession?: boolean;
+  readonly createSession?: boolean;
   readonly resumeSessionAt?: string;
   readonly turnCount?: number;
   readonly turnStartMessageIds?: ReadonlyArray<string | null>;
@@ -975,6 +978,8 @@ function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undef
     threadId?: unknown;
     resume?: unknown;
     sessionId?: unknown;
+    forkSession?: unknown;
+    createSession?: unknown;
     resumeSessionAt?: unknown;
     turnCount?: unknown;
     turnStartMessageIds?: unknown;
@@ -985,13 +990,17 @@ function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undef
     threadIdCandidate && !isSyntheticClaudeThreadId(threadIdCandidate)
       ? ThreadId.make(threadIdCandidate)
       : undefined;
+  const forkSession = cursor.forkSession === true;
+  const createSession = cursor.createSession === true;
+  const rawSessionId = typeof cursor.sessionId === "string" ? cursor.sessionId : undefined;
   const resumeCandidate =
     typeof cursor.resume === "string"
       ? cursor.resume
-      : typeof cursor.sessionId === "string"
-        ? cursor.sessionId
+      : !forkSession && !createSession
+        ? rawSessionId
         : undefined;
   const resume = resumeCandidate && isUuid(resumeCandidate) ? resumeCandidate : undefined;
+  const sessionId = rawSessionId && isUuid(rawSessionId) ? rawSessionId : undefined;
   const resumeSessionAt =
     typeof cursor.resumeSessionAt === "string" ? cursor.resumeSessionAt : undefined;
   const turnCountValue = typeof cursor.turnCount === "number" ? cursor.turnCount : undefined;
@@ -1004,6 +1013,9 @@ function readClaudeResumeState(resumeCursor: unknown): ClaudeResumeState | undef
   return {
     ...(threadId ? { threadId } : {}),
     ...(resume ? { resume } : {}),
+    ...(sessionId ? { sessionId } : {}),
+    ...(forkSession ? { forkSession: true } : {}),
+    ...(createSession ? { createSession: true } : {}),
     ...(resumeSessionAt ? { resumeSessionAt } : {}),
     ...(turnStartMessageIds ? { turnStartMessageIds } : {}),
     ...(turnCountValue !== undefined && Number.isInteger(turnCountValue) && turnCountValue >= 0
@@ -4407,8 +4419,21 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       const resumeState = readClaudeResumeState(input.resumeCursor);
       const threadId = input.threadId;
       const existingResumeSessionId = resumeState?.resume;
-      const newSessionId = existingResumeSessionId === undefined ? yield* randomUUIDv4 : undefined;
-      const sessionId = existingResumeSessionId ?? newSessionId;
+      const shouldForkSession =
+        resumeState?.forkSession === true &&
+        existingResumeSessionId !== undefined &&
+        resumeState.sessionId !== undefined;
+      const requestedNewSessionId =
+        shouldForkSession || resumeState?.createSession === true
+          ? resumeState?.sessionId
+          : undefined;
+      const newSessionId =
+        shouldForkSession || existingResumeSessionId === undefined
+          ? (requestedNewSessionId ?? (yield* randomUUIDv4))
+          : undefined;
+      const sessionId = shouldForkSession
+        ? newSessionId
+        : (existingResumeSessionId ?? newSessionId);
 
       const runtimeContext = yield* Effect.context<never>();
       const runFork = Effect.runForkWith(runtimeContext);
@@ -4932,11 +4957,20 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         ...(Object.keys(settings).length > 0 ? { settings } : {}),
         ...(existingResumeSessionId ? { resume: existingResumeSessionId } : {}),
         ...(newSessionId ? { sessionId: newSessionId } : {}),
+        ...(shouldForkSession ? { forkSession: true } : {}),
+        ...(shouldForkSession && resumeState?.resumeSessionAt
+          ? { resumeSessionAt: resumeState.resumeSessionAt }
+          : {}),
         includePartialMessages: true,
         canUseTool,
         onUserDialog,
         supportedDialogKinds: ["resume_return"],
-        env: McpProviderSession.withAgentDeviceEnvironment(claudeEnvironment, mcpSession),
+        // Per turn, not per adapter: `claudeEnvironment` is built once for the
+        // provider instance, so the thread identity has to be overlaid here.
+        env: withT3ThreadIdentityEnv(
+          McpProviderSession.withAgentDeviceEnvironment(claudeEnvironment, mcpSession),
+          { threadId: input.threadId },
+        ),
         additionalDirectories,
         ...(Object.keys(extraArgs).length > 0 ? { extraArgs } : {}),
         ...(mcpSession
@@ -4971,6 +5005,9 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
         "claude.query.allow_dangerously_skip_permissions": permissionMode === "bypassPermissions",
         "claude.query.resume": existingResumeSessionId ?? "",
         "claude.query.session_id": newSessionId ?? "",
+        "claude.query.fork_session": shouldForkSession,
+        "claude.query.resume_session_at":
+          shouldForkSession && resumeState?.resumeSessionAt ? resumeState.resumeSessionAt : "",
         "claude.query.include_partial_messages": true,
         "claude.query.additional_directories": additionalDirectories,
         "claude.query.setting_sources": [...CLAUDE_SETTING_SOURCES],
