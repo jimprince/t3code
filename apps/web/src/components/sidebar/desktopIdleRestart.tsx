@@ -74,21 +74,25 @@ export const useIdleRestartStore = create<{
 }));
 
 /** Restarts into the downloaded update, reporting a failure as a toast. */
-function installDownloadedUpdate(): Promise<void> {
+export function installDownloadedUpdate(
+  options?: Parameters<NonNullable<Window["desktopBridge"]>["installUpdate"]>[0],
+): Promise<boolean> {
   const bridge = window.desktopBridge;
-  if (!bridge) return Promise.resolve();
+  if (!bridge) return Promise.resolve(false);
   const reportFailure = (description: string) =>
     toastManager.add(
       stackedThreadToast({ type: "error", title: "Could not install update", description }),
     );
   return bridge
-    .installUpdate()
+    .installUpdate(options)
     .then((result) => {
       const actionError = getDesktopUpdateActionError(result);
       if (actionError) reportFailure(actionError);
+      return result.accepted;
     })
     .catch((error: unknown) => {
       reportFailure(error instanceof Error ? error.message : "An unexpected error occurred.");
+      return false;
     });
 }
 
