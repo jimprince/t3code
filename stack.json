@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "13d2877bda2518f8b1944c6f17739a89f20df9ce",
-  "head": "b9c426827d46aea62b0897e82493c281d74b52fa",
+  "prev": "ddd84d4fb1f10221c05391b4cf0e386aaccb802f",
+  "head": "8a9dfc8d0c4aa495f11abf9d6d0d0c2b16f80f7d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -11,14 +11,14 @@
     "fork-general-chat",
     "fork-conversation-fork",
     "fork-thread-transfer",
-    "fork-thread-history-compatibility"
-  ],
-  "unapplied": [
+    "fork-thread-history-compatibility",
     "fork-project-selection",
     "fork-private-connection-defaults",
     "fork-resource-recovery",
     "fork-workspace-file-uploads",
-    "fork-attachment-compatibility",
+    "fork-attachment-compatibility"
+  ],
+  "unapplied": [
     "fork-remote-file-downloads",
     "fork-fresh-remote-worktrees",
     "fork-pr-dismissal",
@@ -51,7 +51,7 @@
       "oid": "894c203ca788bcc9432a4dc5ceeed04f79fd7794"
     },
     "fork-attachment-compatibility": {
-      "oid": "b9292ebf1ee778a3e8c9bb8f5fcb1cf6b716118d"
+      "oid": "8a9dfc8d0c4aa495f11abf9d6d0d0c2b16f80f7d"
     },
     "fork-auth-session-refresh": {
       "oid": "ce0e052124d4a341b4359c5a3f5552391b4f5dda"
@@ -117,10 +117,10 @@
       "oid": "989aebde873f38e961998a5cf699a889cebfcf32"
     },
     "fork-private-connection-defaults": {
-      "oid": "0ebd7a95adac85e876385469609518e743bd3701"
+      "oid": "58cbb9c5d3247bd7a5d50b45c75677c9b01fbe62"
     },
     "fork-project-selection": {
-      "oid": "6027a801f1f3147d6790b629c682ac7303420169"
+      "oid": "fafac2836ffd8b8ab7e2d708fec521a5c3497ed2"
     },
     "fork-provider-turn-safety": {
       "oid": "d937ba86c0bbd767d70350f24cfaaa78cb13557e"
@@ -132,7 +132,7 @@
       "oid": "48a31c90b5bcd74798cb9f3577928712888a11b2"
     },
     "fork-resource-recovery": {
-      "oid": "209251f2ae9d00fef3f93f0e6800a17f642e5d05"
+      "oid": "ca95dd25c438851a7c147a3871a9d2c31848e2b3"
     },
     "fork-restart-when-idle": {
       "oid": "5ab8f3069d042e1e993351d5a1538d8cbe2d13dc"
@@ -159,7 +159,7 @@
       "oid": "0fd720e3c8d7e27c89be6c04e677cbf1f09e4561"
     },
     "fork-workspace-file-uploads": {
-      "oid": "d6b84c305a98e5fdf1a13093a708c2e15012869c"
+      "oid": "606438e592b296eb523e9aa4da46d2903666c1db"
     },
     "fork-worktree-cleanup": {
       "oid": "631ccff225410cc4521a21517716234218806f19"
