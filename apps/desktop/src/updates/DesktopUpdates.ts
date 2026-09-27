@@ -32,6 +32,7 @@ import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import * as DesktopUpdateRollback from "./DesktopUpdateRollback.ts";
 import { normalizeDesktopUpdateReleaseNotes } from "./releaseNotes.ts";
 import { resolveDefaultDesktopUpdateChannel } from "./updateChannels.ts";
 import {
@@ -289,6 +290,10 @@ export const make = Effect.gen(function* () {
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
   const desktopSettings = yield* DesktopAppSettings.DesktopAppSettings;
+  const updateRollback = yield* DesktopUpdateRollback.make({
+    paths: DesktopUpdateRollback.resolveUpdateRollbackPaths(environment),
+    appVersion: environment.appVersion,
+  });
 
   const appUpdateYmlConfigRef = yield* Ref.make<Option.Option<AppUpdateYmlConfig>>(Option.none());
   const activeUpdateActionRef = yield* Ref.make<Option.Option<UpdateAction>>(Option.none());
@@ -549,6 +554,7 @@ export const make = Effect.gen(function* () {
       finishUpdateAction("install"),
       Ref.set(desktopState.quitting, false),
       removeUpdateRestartMarker,
+      updateRollback.disarm,
     ],
     { discard: true },
   );
@@ -565,6 +571,7 @@ export const make = Effect.gen(function* () {
 
     yield* Ref.set(desktopState.quitting, false);
     yield* removeUpdateRestartMarker;
+    yield* updateRollback.disarm;
     yield* Effect.gen(function* () {
       const instances = yield* pool.list;
       const restartExit = yield* Effect.forEach(instances, (instance) => instance.start, {
@@ -635,6 +642,8 @@ export const make = Effect.gen(function* () {
 
         return yield* Effect.gen(function* () {
           yield* writeUpdateRestartMarker;
+          const { downloadedVersion } = yield* Ref.get(updateStateRef);
+          if (downloadedVersion !== null) yield* updateRollback.arm(downloadedVersion);
           // Stop every backend in the pool, not just the primary. With
           // parallel WSL + Windows backends, leaving the WSL instance up
           // means quitAndInstall's app.quit() exits before the pool's
@@ -746,8 +755,14 @@ export const make = Effect.gen(function* () {
       Effect.flatMap(
         Effect.fn("desktop.updates.applyUpdateAvailable")(function* (info) {
           const state = yield* Ref.get(updateStateRef);
-          if (resolveDefaultDesktopUpdateChannel(info.version) !== state.channel) {
-            yield* logUpdaterInfo("ignoring update that does not match selected channel", {
+          const ignoredReason =
+            resolveDefaultDesktopUpdateChannel(info.version) !== state.channel
+              ? "ignoring update that does not match selected channel"
+              : info.version === (yield* updateRollback.quarantinedVersion)
+                ? "ignoring update that failed to start on this computer"
+                : null;
+          if (ignoredReason !== null) {
+            yield* logUpdaterInfo(ignoredReason, {
               version: info.version,
               channel: state.channel,
             });
@@ -933,6 +948,7 @@ export const make = Effect.gen(function* () {
       yield* setState(
         createBaseUpdateState(settings.updateChannel, enabled, environment, disabledReason),
       );
+      yield* updateRollback.start(pool, settings.localEnvironmentEnabled);
       if (!enabled) {
         return;
       }
