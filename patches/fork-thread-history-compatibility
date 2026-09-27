@@ -1,6 +1,6 @@
-Bottom: 5ac0883c00acecbe7887f36930294a2db29d4072
-Top:    dc028f1c14cf25dd6ce65f0527c8da65c6553b36
+Bottom: 8e968d9e9a5aadb1f004aa4d27a63afec5309c78
+Top:    221dc35903667433a2f4b02bdb028d6c8e3c872e
 Author: User <user@example.com>
-Date:   2026-09-27 09:36:08 +0000
+Date:   2026-09-27 09:40:28 +0000
 
 fix(threads): preserve historical goal data without goal automation
