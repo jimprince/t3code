@@ -6,6 +6,9 @@ import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 import { describe, expect, it } from "vite-plus/test";
 
+import { describeSubscriptionsOf } from "../src/state.js";
+import type { StateFile } from "../src/types.js";
+
 const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 const workspace = NodeURL.fileURLToPath(new URL("..", import.meta.url));
 const threadId = "22222222-2222-4222-8222-222222222222";
@@ -54,4 +57,51 @@ describe("settlement command registration and caller identity", () => {
     },
     15_000,
   );
+});
+
+describe("subscriptions listed by settle", () => {
+  it("prints an unsubscribe command that works from any thread", async () => {
+    const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-cli-unsub-"));
+    const stateFile = NodePath.join(directory, "state.json");
+    const route = (sourceThreadId: string, sourceAgentName: string | null) => ({
+      subscriberThreadId: threadId,
+      subscriberAgentName: "orchestrator",
+      subscriberEnvironment: "offline",
+      sourceThreadId,
+      sourceAgentName,
+      sourceEnvironment: "offline",
+      createdAt: "2026-09-25T00:00:00.000Z",
+      updatedAt: "2026-09-25T00:00:00.000Z",
+    });
+    const state: StateFile = {
+      version: 1,
+      environments: [],
+      agents: [],
+      // An unsaved source is named only by its thread id.
+      subscriptions: [route("source-unsaved", null), route("source-kept", "kept")],
+      notifications: [],
+      queuedSends: [],
+    };
+    try {
+      await NodeFSP.writeFile(stateFile, JSON.stringify(state));
+      const [listed] = describeSubscriptionsOf(state, threadId);
+      const [, ...args] = listed!.unsubscribe.split(" ");
+      const env: NodeJS.ProcessEnv = { ...process.env, T3_AGENT_STATE_FILE: stateFile };
+      delete env.T3_THREAD_ID;
+
+      const { stdout } = await execFile(
+        NodePath.join(workspace, "node_modules/.bin/tsx"),
+        ["src/cli.ts", ...args],
+        { cwd: workspace, env },
+      );
+
+      expect(JSON.parse(stdout)).toMatchObject({ removed: true, sourceThreadId: "source-unsaved" });
+      const saved = JSON.parse(await NodeFSP.readFile(stateFile, "utf8")) as StateFile;
+      expect(saved.subscriptions.map((subscription) => subscription.sourceThreadId)).toEqual([
+        "source-kept",
+      ]);
+    } finally {
+      await NodeFSP.rm(directory, { recursive: true, force: true });
+    }
+  }, 15_000);
 });

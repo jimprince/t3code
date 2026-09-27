@@ -17,6 +17,7 @@ import {
   deliverPendingNotifications,
   detectAttentionEvents,
   hasActiveWork,
+  releaseHeldNotifications,
   unblockNotificationsForEnvironment,
   type WatchClient,
   type WatchClientFactory,
@@ -421,6 +422,114 @@ describe("expired credentials", () => {
         expect(sent).toHaveLength(1);
       },
     );
+  });
+});
+
+describe("settled recipients", () => {
+  function settledCoordinator(): OrchestrationThread {
+    return makeCompletedThread({
+      id: "thread-coordinator-a",
+      latestTurn: null,
+      messages: [],
+      settledOverride: "settled",
+    });
+  }
+
+  function workerWithTurn(turn: number): OrchestrationThread {
+    const thread = makeCompletedThread();
+    return {
+      ...thread,
+      latestTurn: {
+        ...thread.latestTurn!,
+        turnId: `turn-worker-${turn}`,
+        assistantMessageId: `assistant-worker-${turn}`,
+      },
+      messages: [
+        {
+          ...thread.messages[0]!,
+          id: `assistant-worker-${turn}`,
+          turnId: `turn-worker-${turn}`,
+          text: `Worker turn ${turn} finished.`,
+        },
+      ],
+    };
+  }
+
+  it("holds events for a settled recipient and delivers only the newest once unsettled", async () => {
+    // REGRESSION: delivery sent a normal turn to a settled subscriber, and the
+    // server unsettles a thread on any turn, so settling never stuck.
+    await withState(makeState(), async () => {
+      const threads: Record<string, OrchestrationThread> = {
+        "thread-worker-a": workerWithTurn(1),
+        "thread-coordinator-a": settledCoordinator(),
+      };
+      const { clientFactory, sent } = createClientFactory({ threads });
+
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+      let state = await loadState();
+      expect(state.notifications.map((notification) => notification.status)).toEqual(["held"]);
+      expect(sent).toEqual([]);
+      // Waiting on the user must not pin the watcher open.
+      expect(await hasActiveWork({ env: "dev-vm", clientFactory })).toBe(false);
+
+      // The source moves on while the recipient is settled: the newer event
+      // replaces the held one instead of queueing behind it.
+      threads["thread-worker-a"] = workerWithTurn(2);
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+      state = await loadState();
+      expect(
+        state.notifications.map((notification) => [notification.latestTurnId, notification.status]),
+      ).toEqual([
+        ["turn-worker-1", "superseded"],
+        ["turn-worker-2", "held"],
+      ]);
+
+      // Still settled at the next re-check: stays held.
+      await deliverPendingNotifications({
+        env: "dev-vm",
+        clientFactory,
+        now: () => new Date(Date.now() + 120_000).toISOString(),
+      });
+      expect(sent).toEqual([]);
+
+      threads["thread-coordinator-a"] = { ...settledCoordinator(), settledOverride: null };
+      await deliverPendingNotifications({
+        env: "dev-vm",
+        clientFactory,
+        now: () => new Date(Date.now() + 240_000).toISOString(),
+      });
+      expect(sent).toHaveLength(1);
+      expect(sent[0]?.text).toContain("Worker turn 2 finished.");
+      state = await loadState();
+      expect(state.notifications.map((notification) => notification.status)).toEqual([
+        "superseded",
+        "delivered",
+      ]);
+    });
+  });
+
+  it("delivers without waiting for the re-check once released by unsettle", async () => {
+    await withState(makeState(), async () => {
+      const threads: Record<string, OrchestrationThread> = {
+        "thread-worker-a": workerWithTurn(1),
+        "thread-coordinator-a": settledCoordinator(),
+      };
+      const { clientFactory, sent } = createClientFactory({ threads });
+
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+      expect((await loadState()).notifications[0]?.status).toBe("held");
+
+      threads["thread-coordinator-a"] = { ...settledCoordinator(), settledOverride: null };
+      expect(await releaseHeldNotifications("thread-other")).toEqual([]);
+      expect(await releaseHeldNotifications("thread-coordinator-a")).toHaveLength(1);
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+
+      expect(sent).toHaveLength(1);
+      expect((await loadState()).notifications[0]?.status).toBe("delivered");
+    });
   });
 });
 

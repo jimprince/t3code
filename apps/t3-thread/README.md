@@ -56,6 +56,12 @@ the active list without starting a turn. A new turn also cancels the request.
 The helper expires after 24 hours and does not survive reboot; retry after a
 reboot if still needed.
 
+Notifications routed to a settled thread are held instead of waking it. `settle`
+lists the thread's subscriptions, each with the `unsubscribe` command that cuts
+it. On unsettle, the thread receives only the newest held notification from
+each source. `t3-thread unsettle` releases them at once; after unsettling in the
+app, they go out on the watcher's next pass while it is running.
+
 When a worker reaches **Plan Ready**, use `t3-thread implement <agent-or-thread-id>`
 to perform the same-thread equivalent of the UI's **Implement** button. The CLI
 selects the current unimplemented proposal, switches the thread from plan mode
@@ -237,14 +243,15 @@ The launchd agent `~/Library/LaunchAgents/network.homenetwork.t3-watcher.plist` 
 
 `t3-thread notifications` shows each routed event's delivery status:
 
-| Status            | Meaning                                                                                                      |
-| ----------------- | ------------------------------------------------------------------------------------------------------------ |
-| `pending`         | waiting for its next attempt                                                                                 |
-| `delivering`      | claimed by a watcher process                                                                                 |
-| `delivered`       | sent into the recipient thread                                                                               |
-| `delivery-failed` | attempt failed, retrying after a backoff                                                                     |
-| `blocked`         | the recipient environment's pairing expired; `lastError` names the `t3-thread pair` command that releases it |
-| `undeliverable`   | terminal; recipient archived, subscription or environment gone, or the attempt cap was reached               |
+| Status            | Meaning                                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------------------------- |
+| `pending`         | waiting for its next attempt                                                                                  |
+| `delivering`      | claimed by a watcher process                                                                                  |
+| `delivered`       | sent into the recipient thread                                                                                |
+| `delivery-failed` | attempt failed, retrying after a backoff                                                                      |
+| `held`            | the recipient is settled; only the newest per source is kept, and it goes out once the recipient is unsettled |
+| `blocked`         | the recipient environment's pairing expired; `lastError` names the `t3-thread pair` command that releases it  |
+| `undeliverable`   | terminal; recipient archived, subscription or environment gone, or the attempt cap was reached                |
 
 Delivery is oldest-first with at most one notification per recipient per pass, failures back off (15s doubling to 10 min, 6 attempts), and a recipient that is mid-turn is re-offered without spending the attempt budget. Claims are owned by the watcher process that took them, so sleeping mid-delivery does not cause a duplicate send on wake.
 

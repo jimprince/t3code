@@ -188,6 +188,38 @@ export function removeSubscription(
   );
 }
 
+/**
+ * Thread id for a subscription endpoint named by saved agent name or raw
+ * thread id. A raw id must appear in a saved subscription, so a typo still
+ * fails instead of silently matching nothing.
+ */
+export function resolveSubscriptionThreadId(state: StateFile, reference: string): string {
+  const agent = state.agents.find((candidate) => candidate.name === reference);
+  if (agent) {
+    return agent.threadId;
+  }
+  const routed = state.subscriptions.some(
+    (subscription) =>
+      subscription.subscriberThreadId === reference || subscription.sourceThreadId === reference,
+  );
+  if (routed) {
+    return reference;
+  }
+  throw new Error(`Unknown agent '${reference}'.`);
+}
+
+/** Subscriptions that notify `subscriberThreadId`, each with the command that removes it. */
+export function describeSubscriptionsOf(state: StateFile, subscriberThreadId: string) {
+  return state.subscriptions
+    .filter((subscription) => subscription.subscriberThreadId === subscriberThreadId)
+    .map((subscription) => ({
+      source: subscription.sourceAgentName ?? subscription.sourceThreadId,
+      sourceThreadId: subscription.sourceThreadId,
+      sourceEnvironment: subscription.sourceEnvironment,
+      unsubscribe: `t3-thread unsubscribe --subscriber ${subscription.subscriberThreadId} --watch ${subscription.sourceThreadId}`,
+    }));
+}
+
 export function upsertNotification(
   notifications: SavedNotification[],
   next: SavedNotification,

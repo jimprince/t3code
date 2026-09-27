@@ -91,6 +91,14 @@ active-work guard. Both commands read back JSON containing `threadId`,
 `environment`, `settledOverride`, `settledAt`, and `unsettledAt`; `status` also
 shows these lifecycle fields.
 
+The watcher holds notifications for a settled thread, because delivering one
+starts a turn and any turn unsettles the thread. When the thread still has
+subscriptions, `settle` adds a `subscriptions` list, each entry with the exact
+`unsubscribe` command that cuts it. `unsettle` adds `releasedNotifications`: the
+held events, at most the newest per source, go out on the next watcher pass.
+After an unsettle in the app, a running watcher finds them within a minute; if
+no watcher is running they wait for the next one.
+
 Settling the calling `T3_THREAD_ID`, even through a saved alias, requires an
 explicit `--self`. When the user asks a running thread to settle itself, use:
 
@@ -466,10 +474,12 @@ t3-thread subscriptions
 t3-thread subscriptions --subscriber <agent>
 ```
 
-Remove a saved subscription for the calling T3 thread:
+Remove a saved subscription for the calling T3 thread, or for another thread
+with `--subscriber`. Both flags take a saved agent name or a routed thread UUID:
 
 ```bash
 t3-thread unsubscribe --watch <agent>
+t3-thread unsubscribe --subscriber <agent-or-uuid> --watch <agent-or-uuid>
 ```
 
 Current scope note:
@@ -481,6 +491,7 @@ Current scope note:
 - `watch` polls the current snapshot-backed deployment in two phases: detection persists deduplicated notification events, then delivery claims pending events and attempts routed sends. The same pass drains queued sends at their next turn boundary.
 - Delivery order is oldest event first, and at most one notification per recipient per pass, because delivering one starts a turn on the recipient.
 - A failed delivery backs off (15s doubling to 10 min) and gives up after 6 attempts. A recipient that is mid-turn is re-offered ~30s later and does not spend the attempt budget.
+- A recipient the user explicitly settled gets `held` instead of a turn. Newer events on the route supersede a held one, the watcher re-checks it every minute while running, and it does not keep the watcher awake. See Thread Settlement.
 - Terminal outcomes stop retrying and let the watcher idle out: `undeliverable` (recipient archived, subscription or environment gone, attempts exhausted) and `blocked` (the environment pairing expired). `blocked` records name the exact `t3-thread pair` command that releases them, and a successful `pair` returns them to `pending` and ensures a watcher.
 - A claim is owned by the watcher process that took it, so a machine that sleeps mid-delivery does not re-claim and re-send its own message on wake. A claim is only stolen from a process that is gone, or from a foreign process that has been quiet past the claim timeout.
 - Normal deployment: `create` with notification routing, `subscribe`, and queued `send` best-effort ensure a singleton detached watcher is running. The watcher uses `~/.config/t3-remote-agents/watch.pid`, exits after its idle window when no subscribed source is in flight and no notification is undelivered and no send is queued, and has a max-lifetime backstop. It never idle-exits with work outstanding, and when the max-lifetime backstop fires with work still outstanding it spawns a replacement watcher instead of dropping it.

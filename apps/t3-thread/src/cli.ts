@@ -32,6 +32,7 @@ import { classifyThread, formatThreadLine, subscriptionBaselineTurnId } from "./
 import {
   assertNotSelfSubscription,
   buildSubscriptionRecord,
+  describeSubscriptionsOf,
   loadState,
   requireAgent,
   requireEnvironment,
@@ -41,6 +42,7 @@ import {
   resolveCallerEnvironmentMetadata,
   resolveCallerThreadId,
   resolveNotifyPreference,
+  resolveSubscriptionThreadId,
   updateState,
   upsertAgent,
   upsertSubscription,
@@ -54,6 +56,7 @@ import {
   deliverPendingNotifications,
   detectAttentionEvents,
   hasActiveWork,
+  releaseHeldNotifications,
   unblockNotificationsForEnvironment,
 } from "./watch.js";
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
@@ -727,7 +730,19 @@ agent
   .option("--self", "Settle the calling thread after its current response finishes")
   .description("Settle a thread through the server lifecycle without archiving it")
   .action(async (name, options) => {
-    const { agent: savedAgent, client } = await withAgent(name);
+    const { state, agent: savedAgent, client } = await withAgent(name);
+    // Notifications to a settled thread are held, not dropped; list what is
+    // still routed here so the caller can cut it instead.
+    const subscriptions = describeSubscriptionsOf(state, savedAgent.threadId);
+    const withSubscriptions = (result: object) =>
+      subscriptions.length === 0
+        ? result
+        : {
+            ...result,
+            subscriptions,
+            subscriptionsNote:
+              "Held while settled; the newest from each source arrives on unsettle. Unsubscribe to stop one.",
+          };
     if (options.self && savedAgent.threadId === resolveCallerThreadId()) {
       const thread = await client.findThread(savedAgent.threadId);
       if (
@@ -737,17 +752,21 @@ agent
           thread.session?.status === "starting")
       ) {
         printJson(
-          await startDeferredSettlement({
-            threadId: thread.id,
-            environment: savedAgent.environment,
-            turnId: thread.latestTurn.turnId,
-            unsettledAt: thread.unsettledAt ?? null,
-          }),
+          withSubscriptions(
+            await startDeferredSettlement({
+              threadId: thread.id,
+              environment: savedAgent.environment,
+              turnId: thread.latestTurn.turnId,
+              unsettledAt: thread.unsettledAt ?? null,
+            }),
+          ),
         );
         return;
       }
     }
-    printJson(await client.settleThread(savedAgent.threadId, { self: options.self }));
+    printJson(
+      withSubscriptions(await client.settleThread(savedAgent.threadId, { self: options.self })),
+    );
   });
 
 agent
@@ -757,7 +776,12 @@ agent
   .action(async (name) => {
     const { agent: savedAgent, client } = await withAgent(name);
     await cancelDeferredSettlement(savedAgent.environment, savedAgent.threadId);
-    printJson(await client.unsettleThread(savedAgent.threadId));
+    const result = await client.unsettleThread(savedAgent.threadId);
+    const released = await releaseHeldNotifications(savedAgent.threadId);
+    if (released.length > 0) {
+      await ensureNotificationWatcher();
+    }
+    printJson({ ...result, releasedNotifications: released.length });
   });
 
 agent
@@ -901,32 +925,46 @@ agent
 
 agent
   .command("unsubscribe")
-  .description("Remove an attention subscription for the calling T3 thread")
-  .requiredOption("--watch <name>", "saved source agent name to stop watching")
+  .description("Remove an attention subscription for the calling T3 thread or --subscriber")
+  .requiredOption("--watch <name>", "saved source agent name or raw thread UUID to stop watching")
+  .option(
+    "--subscriber <name>",
+    "saved agent name or raw thread UUID of the subscriber (default: the calling thread)",
+  )
   .action(async (options) => {
-    const { state, caller } = await withCallerFromEnv();
-    const source = requireAgent(state, options.watch);
-    const nextSubscriptions = removeSubscription(state.subscriptions, {
-      subscriberThreadId: caller.threadId,
-      sourceThreadId: source.threadId,
-    });
-    const removed = nextSubscriptions.length !== state.subscriptions.length;
+    let state: Awaited<ReturnType<typeof loadState>>;
+    let subscriberThreadId: string;
+    if (options.subscriber) {
+      state = await loadState();
+      subscriberThreadId = resolveSubscriptionThreadId(state, options.subscriber);
+    } else {
+      const fromEnv = await withCallerFromEnv();
+      state = fromEnv.state;
+      subscriberThreadId = fromEnv.caller.threadId;
+    }
+    const route = {
+      subscriberThreadId,
+      sourceThreadId: resolveSubscriptionThreadId(state, options.watch),
+    };
+    const existing = state.subscriptions.find(
+      (subscription) =>
+        subscription.subscriberThreadId === route.subscriberThreadId &&
+        subscription.sourceThreadId === route.sourceThreadId,
+    );
     await updateState(async (currentState) => ({
       state: {
         ...currentState,
-        subscriptions: removeSubscription(currentState.subscriptions, {
-          subscriberThreadId: caller.threadId,
-          sourceThreadId: source.threadId,
-        }),
+        subscriptions: removeSubscription(currentState.subscriptions, route),
       },
       result: null,
     }));
+    const agentName = (threadId: string) =>
+      state.agents.find((candidate) => candidate.threadId === threadId)?.name ?? null;
     printJson({
-      removed,
-      subscriberAgentName: caller.name,
-      sourceAgentName: source.name,
-      subscriberThreadId: caller.threadId,
-      sourceThreadId: source.threadId,
+      removed: existing !== undefined,
+      subscriberAgentName: existing?.subscriberAgentName ?? agentName(route.subscriberThreadId),
+      sourceAgentName: existing?.sourceAgentName ?? agentName(route.sourceThreadId),
+      ...route,
     });
   });
 

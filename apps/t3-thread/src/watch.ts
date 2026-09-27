@@ -25,6 +25,9 @@ const DELIVERY_CLAIM_TIMEOUT_MS = 60_000;
 /** How long to wait before re-offering a notification to a recipient that is mid-turn. */
 const BUSY_RECIPIENT_RETRY_MS = 30_000;
 
+/** How often a running watcher re-checks whether a settled recipient was unsettled. */
+const SETTLED_RECIPIENT_RECHECK_MS = 60_000;
+
 /**
  * When this process started. A claim stamped before that cannot be ours, even if
  * it records our pid, because the kernel recycles pids across watcher restarts.
@@ -185,11 +188,20 @@ export async function scanAttentionNotifications(
   return scanned;
 }
 
+/**
+ * Statuses that keep the watcher awake. `held` is left out: it waits on the
+ * user unsettling a thread, which can take days, and each watcher pass
+ * snapshots every saved agent.
+ */
 const UNDELIVERED_STATUSES = new Set(["pending", "delivering", "delivery-failed"]);
 const IN_FLIGHT_SOURCE_STATES = new Set(["running", "starting", "ready"]);
 
-/** Undelivered statuses that a newer event on the same route may overtake. */
-const SUPERSEDABLE_STATUSES = new Set(["pending", "delivery-failed"]);
+/**
+ * Undelivered statuses that a newer event on the same route may overtake.
+ * Including `held` means a settled recipient keeps only the newest event from
+ * each source, so unsettling it delivers current state rather than a backlog.
+ */
+const SUPERSEDABLE_STATUSES = new Set(["pending", "delivery-failed", "held"]);
 
 /**
  * Retire every undelivered event on `latest`'s route that `latest` has overtaken.
@@ -480,6 +492,17 @@ export async function deliverPendingNotifications(
           result = terminal(
             `Subscriber thread '${notification.subscriberThreadId}' is archived and can no longer be notified.`,
           );
+        } else if (subscriberThread.settledOverride === "settled") {
+          // Delivery starts a turn, and the server unsettles a thread on any
+          // turn. Hold the event until the user unsettles the recipient.
+          result = {
+            ...notification,
+            status: "held",
+            updatedAt: attemptedAt,
+            lastAttemptedAt: attemptedAt,
+            lastError: "Subscriber thread is settled; held until it is unsettled.",
+            nextAttemptAt: new Date(attemptedAtMs + SETTLED_RECIPIENT_RECHECK_MS).toISOString(),
+          };
         } else if (subscriberStatus.state === "running") {
           // Expected, not a failure: hold the event and re-offer it shortly.
           // The attempt budget is reserved for real delivery errors.
@@ -559,6 +582,51 @@ export async function unblockNotificationsForEnvironment(
         continue;
       }
       if (notification.subscriberEnvironment !== environmentName) {
+        continue;
+      }
+      const next: SavedNotification = {
+        ...notification,
+        status: "pending",
+        updatedAt: now,
+        lastError: null,
+        nextAttemptAt: null,
+      };
+      notifications = upsertNotification(notifications, next);
+      released.push(next);
+    }
+
+    return {
+      state: {
+        ...state,
+        notifications,
+      },
+      result: released,
+    };
+  });
+}
+
+/**
+ * Make notifications held for `subscriberThreadId` due immediately.
+ *
+ * Called by `t3-thread unsettle`. A running watcher would find the thread
+ * unsettled on its next re-check anyway; this skips the wait and lets the
+ * caller start a watcher when none is running.
+ */
+export async function releaseHeldNotifications(
+  subscriberThreadId: string,
+  options: { now?: () => string } = {},
+): Promise<SavedNotification[]> {
+  const now = (options.now ?? nowIso)();
+
+  return updateState(async (state) => {
+    const released: SavedNotification[] = [];
+    let notifications = state.notifications;
+
+    for (const notification of state.notifications) {
+      if (
+        notification.status !== "held" ||
+        notification.subscriberThreadId !== subscriberThreadId
+      ) {
         continue;
       }
       const next: SavedNotification = {

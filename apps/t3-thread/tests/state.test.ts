@@ -13,6 +13,7 @@ import {
   resolveCallerEnvironmentMetadata,
   resolveCallerThreadId,
   resolveNotifyPreference,
+  resolveSubscriptionThreadId,
   updateState,
   upsertSubscription,
 } from "../src/state.js";
@@ -363,5 +364,22 @@ describe("state helpers", () => {
       }
       await NodeFSP.rm(tempDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("resolveSubscriptionThreadId", () => {
+  const state = makeState({
+    subscriptions: [makeSubscription({ sourceThreadId: "thread-unsaved", sourceAgentName: null })],
+  });
+
+  it("accepts a saved agent name or a routed raw thread id", () => {
+    expect(resolveSubscriptionThreadId(state, "coordinator-a")).toBe("thread-coordinator-a");
+    expect(resolveSubscriptionThreadId(state, "thread-unsaved")).toBe("thread-unsaved");
+  });
+
+  it("rejects a reference that matches no agent or route", () => {
+    expect(() => resolveSubscriptionThreadId(state, "coordinater-a")).toThrow(
+      "Unknown agent 'coordinater-a'.",
+    );
   });
 });
