@@ -139,6 +139,12 @@ roles = []
 note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
 
 [[patch.decision]]
+id = "upstream13774-boot-generation-in-upstream-added-tests"
+date = "2026-09-27"
+decided = "adapt"
+rationale = "Upstream added a ProviderService shutdown test and a listBindings excludeStopped test that neither conflicted nor compiled: this concern makes ProviderSessionDirectoryLive require ServerBootGeneration and adds bootGenerationId to the runtime row. Provide makeServerBootGenerationLayer(\"test-boot-generation\") and set bootGenerationId the way this file's other fork-adapted cases do, rather than relaxing the fork contract."
+
+[[patch.decision]]
 id = "upstream13774-reaper-excludes-stopped-in-sql"
 date = "2026-09-27"
 decided = "narrow"
