@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f7f38fec1a1071c4c8256de66c406cbb1e606c48",
-  "head": "869e827c447cbedf2174c523a43e45643faa3ba1",
+  "prev": "52d38474a0a540c75e45923441e2a83dd8377b1f",
+  "head": "ae153b7a6e6a2d33278f2d7c5899f75b2d217837",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -38,7 +38,8 @@
     "fork-3mf-preview",
     "fork-step-preview",
     "fork-enter-sends-queued",
-    "fork-restart-when-idle"
+    "fork-restart-when-idle",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-nested-threads",
@@ -163,6 +164,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "e83b09de06693fe3fc185badda6d832439471233"
+    },
+    "refresh-temp": {
+      "oid": "ae153b7a6e6a2d33278f2d7c5899f75b2d217837"
     }
   }
 }
