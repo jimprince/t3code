@@ -74,7 +74,7 @@ export const useIdleRestartStore = create<{
 }));
 
 /** Restarts into the downloaded update, reporting a failure as a toast. */
-function installDownloadedUpdate(): Promise<void> {
+export function installDownloadedUpdate(): Promise<void> {
   const bridge = window.desktopBridge;
   if (!bridge) return Promise.resolve();
   const reportFailure = (description: string) =>
