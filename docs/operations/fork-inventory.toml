@@ -145,6 +145,12 @@ roles = []
 note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
 
 [[patch.decision]]
+id = "upstream2375-interrupt-grace-settles-live-tasks"
+date = "2026-09-28"
+decided = "retire"
+rationale = "Upstream gave interruptTurn a settleInterruptedTurn step that calls the SDK query's optional interrupt() and awaits completeTurn's deferred under a 3-second grace. Upstream's own FakeClaudeQuery leaves interrupt undefined by default, while this concern's fork double always exposed it, so the fork's duplicate \"settles every acknowledged live task before closing\" test awaited a grace the test clock never advanced and timed out. The live-task settling it asserted is upstream's own stopSessionInternal loop, already covered by upstream's \"interruptTurn settles live tasks and closes the provider session\", and the only fork-specific assertions were interruptCalls === 0, which upstream deliberately reversed, and stopTaskCalls, a method neither ClaudeQueryRuntime nor the adapter has. Retire the duplicate test and the interrupt/stopTask doubles instead of adapting them."
+
+[[patch.decision]]
 id = "upstream13774-boot-generation-in-upstream-added-tests"
 date = "2026-09-27"
 decided = "adapt"

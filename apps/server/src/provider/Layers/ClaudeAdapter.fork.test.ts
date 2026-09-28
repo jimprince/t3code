@@ -55,8 +55,6 @@ class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
   private done = false;
   private failure: unknown | undefined;
 
-  public readonly interruptCalls: Array<void> = [];
-  public readonly stopTaskCalls: Array<string> = [];
   public readonly setModelCalls: Array<string | undefined> = [];
   public readonly setPermissionModeCalls: Array<string> = [];
   public readonly setMaxThinkingTokensCalls: Array<number | null> = [];
@@ -95,14 +93,6 @@ class FakeClaudeQuery implements AsyncIterable<SDKMessage> {
       waiter.resolve({ done: true, value: undefined });
     }
   }
-
-  readonly interrupt = async (): Promise<void> => {
-    this.interruptCalls.push(undefined);
-  };
-
-  readonly stopTask = async (taskId: string): Promise<void> => {
-    this.stopTaskCalls.push(taskId);
-  };
 
   readonly setModel = async (model?: string): Promise<void> => {
     this.setModelCalls.push(model);
@@ -1604,93 +1594,6 @@ describe("ClaudeAdapterLive", () => {
         assert.equal(String(turnCompleted.turnId), String(turn.turnId));
         assert.equal(turnCompleted.payload.state, "interrupted");
         assert.equal(turnCompleted.payload.errorMessage, undefined);
-      }
-    }).pipe(
-      Effect.provideService(Random.Random, makeDeterministicRandomService()),
-      Effect.provide(harness.layer),
-    );
-  });
-
-  it.effect("interruptTurn settles every acknowledged live task before closing", () => {
-    const harness = makeHarness();
-    return Effect.gen(function* () {
-      const adapter = yield* ClaudeAdapter;
-
-      // Wait for the three task.* runtime events to prove the lifecycle
-      // handlers processed the emissions (no wall-clock sleeps under the
-      // test clock).
-      const taskEventsFiber = yield* adapter.streamEvents.pipe(
-        Stream.filter((event) => event.type.startsWith("task.")),
-        Stream.take(3),
-        Stream.runCollect,
-        Effect.forkChild,
-      );
-
-      const session = yield* adapter.startSession({
-        threadId: THREAD_ID,
-        provider: ProviderDriverKind.make("claudeAgent"),
-        runtimeMode: "full-access",
-      });
-      yield* adapter.sendTurn({
-        threadId: session.threadId,
-        input: "spawn agents",
-        attachments: [],
-      });
-
-      harness.query.emit({
-        type: "system",
-        subtype: "task_started",
-        task_id: "task-live",
-        description: "Agent A",
-        task_type: "local_agent",
-        uuid: "task-live-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "system",
-        subtype: "task_started",
-        task_id: "task-settled",
-        description: "Agent B",
-        task_type: "local_agent",
-        uuid: "task-settled-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
-      harness.query.emit({
-        type: "system",
-        subtype: "task_notification",
-        task_id: "task-settled",
-        status: "completed",
-        output_file: "/tmp/task-settled.jsonl",
-        summary: "done",
-        uuid: "task-settled-done-uuid",
-        session_id: "sdk-session",
-      } as unknown as SDKMessage);
-
-      yield* Fiber.join(taskEventsFiber);
-
-      const stoppedTaskEventFiber = yield* adapter.streamEvents.pipe(
-        Stream.filter((event) => event.type === "task.completed"),
-        Stream.take(1),
-        Stream.runCollect,
-        Effect.forkChild,
-      );
-      yield* adapter.interruptTurn(session.threadId);
-
-      // The hard session boundary settles the still-live task before closing
-      // the query, without relying on SDK task or turn interruption.
-      assert.deepEqual(harness.query.stopTaskCalls, []);
-      assert.equal(harness.query.interruptCalls.length, 0);
-      assert.equal(harness.query.closeCalls, 1);
-
-      const stoppedTaskEvents = Array.from(yield* Fiber.join(stoppedTaskEventFiber));
-      assert.equal(stoppedTaskEvents.length, 1);
-      const stoppedTaskEvent = stoppedTaskEvents[0];
-      assert.equal(stoppedTaskEvent?.type, "task.completed");
-      if (stoppedTaskEvent?.type === "task.completed") {
-        assert.equal(String(stoppedTaskEvent.payload.taskId), "task-live");
-        assert.equal(stoppedTaskEvent.payload.status, "stopped");
-        assert.equal(stoppedTaskEvent.payload.taskType, "local_agent");
-        assert.equal(stoppedTaskEvent.payload.title, "Agent A");
       }
     }).pipe(
       Effect.provideService(Random.Random, makeDeterministicRandomService()),
