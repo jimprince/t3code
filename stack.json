@@ -1,10 +1,12 @@
 {
   "version": 5,
-  "prev": "eb838690c99a11988e9b2fb3e09f2cb4f835eae1",
-  "head": "6b3d4d8d63ab943d8407f4f87b14bfde62dd21c6",
+  "prev": "a83fc8c929d00173d1b58834499aed04bbaa928c",
+  "head": "6ffe6ef20af8a49b4d06ec6178699b4439918824",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations",
+    "fork-worker-operations"
+  ],
+  "unapplied": [
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
@@ -43,7 +45,6 @@
     "fork-resume-background-work",
     "fork-overnight-updates"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
