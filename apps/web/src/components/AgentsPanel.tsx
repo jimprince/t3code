@@ -28,7 +28,7 @@ import { cn } from "~/lib/utils";
 import { orchestrationEnvironment } from "~/state/orchestration";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { Button } from "~/components/ui/button";
-import { NestedThreadsSection, useNestedThreads } from "./NestedThreadsSection";
+import { AgentsPanelEntries, useNestedThreads } from "./AgentsPanelEntries";
 
 /**
  * In-flight states all present as Working (one steady state, per the
@@ -549,25 +549,17 @@ export function AgentsPanel({
     <div className="flex h-full min-h-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-2 p-2">
-          <NestedThreadsSection threads={nestedThreads} />
-          {model.workflows.map((group) => (
-            <WorkflowSection
-              key={group.workflow.id}
-              group={group}
-              environmentId={environmentId}
-              threadId={threadId}
-            />
-          ))}
-          {model.directAgents.length > 0 ? (
-            <section>
-              <div className="px-1.5 pt-1 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
-                Direct spawns
-              </div>
-              {model.directAgents.map((agent) => (
-                <AgentRow key={agent.id} agent={agent} />
-              ))}
-            </section>
-          ) : null}
+          <AgentsPanelEntries
+            environmentId={environmentId}
+            threadId={threadId}
+            threads={nestedThreads}
+            workflows={model.workflows}
+            directAgents={model.directAgents}
+            renderWorkflow={(group) => (
+              <WorkflowSection group={group} environmentId={environmentId} threadId={threadId} />
+            )}
+            renderAgent={(agent) => <AgentRow agent={agent} />}
+          />
         </div>
       </ScrollArea>
       {model.hasAgents ? (
@@ -579,7 +571,6 @@ export function AgentsPanel({
               </span>
             ) : null}
             {model.idleCount > 0 ? <span>{model.idleCount} idle</span> : null}
-            {model.settledCount > 0 ? <span>{model.settledCount} settled</span> : null}
           </span>
           <span className="tabular-nums">Σ {formatSubagentTokenCount(model.totalTokens)} tok</span>
         </footer>

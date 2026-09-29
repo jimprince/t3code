@@ -1,10 +1,21 @@
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import type {
+  AgentPanelWorkflowGroup,
+  RuntimeSubagent,
+} from "@t3tools/client-runtime/state/subagentRuntime";
 import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
-import { PanelLeftIcon } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import * as Schema from "effect/Schema";
+import { ChevronDownIcon, PanelLeftIcon } from "lucide-react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 
+import {
+  type AgentsPanelEntry,
+  isAgentsPanelEntrySettled,
+  shelveAgentsPanelEntries,
+} from "~/agentsPanelShelf.logic";
+import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useThreadNestingActions } from "~/hooks/useThreadNesting";
 import { cn } from "~/lib/utils";
 import { useThreadShell, useThreadShellsForProjectRefs } from "~/state/entities";
@@ -98,11 +109,59 @@ function NestedThreadRow({
   );
 }
 
-/** "Threads" section of the Agents panel: the threads nested under this one. */
-export function NestedThreadsSection({
-  threads,
+const SETTLED_SHELF_EXPANDED_KEY = "t3code:agents-panel:settled-expanded";
+const NO_KEYS: ReadonlySet<string> = new Set();
+
+/** Mirrors the sidebar's Settled shelf header: label, hairline, chevron. */
+function SettledShelfHeader({
+  count,
+  expanded,
+  onToggle,
 }: {
+  count: number;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={expanded}
+      className="mt-1 flex h-7 w-full items-center gap-2 rounded-md px-1.5 text-left text-xs font-medium text-muted-foreground/60 hover:text-muted-foreground"
+    >
+      <span className="shrink-0">{expanded ? "Settled" : `Settled (${count})`}</span>
+      <span aria-hidden className="h-px min-w-2 flex-1 bg-border/60" />
+      <ChevronDownIcon
+        aria-hidden
+        className={cn("size-3 shrink-0 transition-transform", expanded && "rotate-180")}
+      />
+    </button>
+  );
+}
+
+/**
+ * The Agents panel list: nested threads, workflow runs, and direct spawns in
+ * one start-ordered list, with settled rows folded into a collapsed Settled
+ * shelf. Rows the viewer saw active stay in place when they settle, so work
+ * finishing never pulls rows out from under the reader; they shelve on the
+ * next mount. Upstream's workflow and agent rows render through callbacks.
+ */
+export function AgentsPanelEntries({
+  environmentId,
+  threadId,
+  threads,
+  workflows,
+  directAgents,
+  renderWorkflow,
+  renderAgent,
+}: {
+  environmentId: EnvironmentId | null;
+  threadId: ThreadId | null;
   threads: ReadonlyArray<EnvironmentThreadShell>;
+  workflows: ReadonlyArray<AgentPanelWorkflowGroup>;
+  directAgents: ReadonlyArray<RuntimeSubagent>;
+  renderWorkflow: (group: AgentPanelWorkflowGroup) => ReactNode;
+  renderAgent: (agent: RuntimeSubagent) => ReactNode;
 }) {
   const router = useRouter();
   const { setThreadParent } = useThreadNestingActions();
@@ -118,20 +177,67 @@ export function NestedThreadsSection({
     (threadRef: ScopedThreadRef) => void setThreadParent(threadRef, null),
     [setThreadParent],
   );
-  if (threads.length === 0) return null;
+  const [settledExpanded, setSettledExpanded] = useLocalStorage(
+    SETTLED_SHELF_EXPANDED_KEY,
+    false,
+    Schema.Boolean,
+  );
+
+  // Rows seen active while this panel shows this thread. Recorded during
+  // render (React's "information from previous renders" pattern), so a row
+  // that settles later is still kept in place; switching threads starts over.
+  const owner = environmentId === null || threadId === null ? null : `${environmentId}:${threadId}`;
+  const [seenActive, setSeenActive] = useState<{
+    readonly owner: string | null;
+    readonly keys: ReadonlySet<string>;
+  }>({ owner, keys: NO_KEYS });
+  const keepActiveKeys = seenActive.owner === owner ? seenActive.keys : NO_KEYS;
+  const { active, settled } = shelveAgentsPanelEntries({
+    threads,
+    workflows,
+    directAgents,
+    keepActiveKeys,
+  });
+  const newlySeen = active
+    .filter((entry) => !isAgentsPanelEntrySettled(entry) && !keepActiveKeys.has(entry.key))
+    .map((entry) => entry.key);
+  if (seenActive.owner !== owner || newlySeen.length > 0) {
+    setSeenActive({ owner, keys: new Set([...keepActiveKeys, ...newlySeen]) });
+  }
+
+  const renderEntry = (entry: AgentsPanelEntry) => {
+    switch (entry.kind) {
+      case "thread":
+        return (
+          <NestedThreadRow
+            key={entry.key}
+            thread={entry.thread}
+            onOpen={openThread}
+            onMoveToSidebar={moveToSidebar}
+          />
+        );
+      case "workflow":
+        return (
+          <div key={entry.key} className="py-1">
+            {renderWorkflow(entry.group)}
+          </div>
+        );
+      case "agent":
+        return <div key={entry.key}>{renderAgent(entry.agent)}</div>;
+    }
+  };
+
   return (
-    <section>
-      <div className="px-1.5 pt-1 text-3xs font-medium uppercase tracking-wider text-muted-foreground">
-        Threads
-      </div>
-      {threads.map((thread) => (
-        <NestedThreadRow
-          key={thread.id}
-          thread={thread}
-          onOpen={openThread}
-          onMoveToSidebar={moveToSidebar}
+    <div className="flex flex-col">
+      {active.map(renderEntry)}
+      {settled.length > 0 ? (
+        <SettledShelfHeader
+          count={settled.length}
+          expanded={settledExpanded}
+          onToggle={() => setSettledExpanded((value) => !value)}
         />
-      ))}
-    </section>
+      ) : null}
+      {settledExpanded ? settled.map(renderEntry) : null}
+    </div>
   );
 }
