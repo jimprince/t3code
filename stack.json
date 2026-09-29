@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "397deab2b72f7d9153e625d263724d4b8d2a6cf2",
-  "head": "28a9b2d2915ced2d848f6c2af5a82e36d6244aa7",
+  "prev": "8a0a1d897eb0a35e25cbd0028354a3b579f853ee",
+  "head": "00f199bb34de04ab18df8c30649aad2ab870740a",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -41,131 +41,127 @@
     "fork-restart-when-idle",
     "fork-nested-threads",
     "fork-resume-background-work",
-    "fork-overnight-updates",
-    "refresh-temp"
+    "fork-overnight-updates"
   ],
   "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
-      "oid": "80ea6e829d6203c6ba49c965db986564a15b60e2"
+      "oid": "7139af64e6863bbf09d259ecd96bec1f456951b8"
     },
     "fork-attachment-compatibility": {
-      "oid": "83cb8cb3f1622ce9d719eaf41e9beec36f4f909f"
+      "oid": "8478011a26b6d9d5dc62f73720c4fad28567f630"
     },
     "fork-auth-session-refresh": {
-      "oid": "49b37d83d5da931dc5d972c1d35f6575d091ce84"
+      "oid": "5005fe40dba77f97fb3dc2cd86bcbb2c3ec21628"
     },
     "fork-bounded-diagnostics": {
-      "oid": "0ed386e6c28f7f6173962a2cc927524cf40374a0"
+      "oid": "33d123f5e59299c10e3ee15d4b5df9a710912e16"
     },
     "fork-build-ci-compat": {
-      "oid": "893c708854b828209dfde0c2941c69e994456534"
+      "oid": "ef640cd6bd62099b00201688ba56ae1534dddd6c"
     },
     "fork-codex-goal-visibility": {
-      "oid": "84f945b78ceb3f9776dc09cdb9f7b19671304507"
+      "oid": "b75b5050e708b87860fb62169e43bc64d314abbc"
     },
     "fork-conversation-fork": {
-      "oid": "0c0aa316c1fba028f6b7edbc052ddd6d0fdecfe9"
+      "oid": "cd03d88574574f04f3e2fd3c48b819de6bf1d4c2"
     },
     "fork-desktop-delivery": {
-      "oid": "063824b915262d1030ec9e1ddf03e5ad86427542"
+      "oid": "eef0d4e2bd4f2834c0a621904d2059ccce81ad21"
     },
     "fork-enter-sends-queued": {
-      "oid": "bc501011ff19f91438853f770b2e5c74128bdabc"
+      "oid": "93d25364f31399651ca51bef44cc78caf66f4aa8"
     },
     "fork-fresh-remote-worktrees": {
-      "oid": "cdeafb27bb114fc207ef6bb316f0a0b103fda248"
+      "oid": "562370c1b4446ca90814c04d6f0c174daddbca15"
     },
     "fork-general-chat": {
-      "oid": "64996c45810d5435ee49724da5e201d58abd56ef"
+      "oid": "da158802df9258675fbe0518ad07c2516ec57ad4"
     },
     "fork-gitea-connections": {
-      "oid": "0d74a6b22fb12c18dafa0230e21293d0c34e0fa0"
+      "oid": "d0d2224d757796eecd4749fce0357308a11b5e7f"
     },
     "fork-gitea-pr-actions": {
-      "oid": "bb1164addd90079e787c34635673dc8620bd0860"
+      "oid": "00cbca1bf964bd5859839526ff650ae2ed03d8b6"
     },
     "fork-gitea-pr-browser": {
-      "oid": "8242c14bedd82ef89df3dabb6b3295ab0ddd0de8"
+      "oid": "3fff3437e728c761377ed6c54ccd7ff2b57c5ee0"
     },
     "fork-headless-delivery": {
-      "oid": "0dcc0a275e93fd8c9c64011cfe22c1d3a41846d5"
+      "oid": "3184c29a4ff829039d2febe74f9e8b7c16726a8f"
     },
     "fork-inline-3d-objects": {
-      "oid": "59304c955c4979bdc5cebdfa771de1d24233052d"
+      "oid": "0e04d81101a55ce302f5e7d98e53fd3c755434ba"
     },
     "fork-maintenance-automation": {
-      "oid": "fc696c50b3bce0b81b15ff180e15a8029d4d630c"
+      "oid": "79656b4893aea55e63081d7ba7eef98cb193ee23"
     },
     "fork-mobile-delivery": {
-      "oid": "08c6db5d0ecf77908f2eb3b599a04dbbf129f3b2"
+      "oid": "b1a567d01415f7c8ef6c31fd24e310827e6e01aa"
     },
     "fork-nested-threads": {
-      "oid": "74b2b364d8d9a05895cfc498408fd58dc6cb6318"
+      "oid": "1bebf47733212b1b1a4ded831cf876211b0e0859"
     },
     "fork-orcaslicer-handoff": {
-      "oid": "c97703a85c5044a3a2a0cd522234c80ba676caf4"
+      "oid": "b8a8b945988fa49c98f970ab3a194e42f1da7b66"
     },
     "fork-overnight-updates": {
-      "oid": "268ce6e2557475683e5e42c996b427f35e3c339d"
+      "oid": "00f199bb34de04ab18df8c30649aad2ab870740a"
     },
     "fork-pr-dismissal": {
-      "oid": "5f8b08b17f5c5f71720e914861e1b4d5ca9b6604"
+      "oid": "cfed6aed06bdee5d0de0cf2c7fde193f1dd3a54d"
     },
     "fork-pr-project-exclusions": {
-      "oid": "930bb9eb27b0b984dd51d868713c3b16aa6ce0f7"
+      "oid": "947e1a224815f8b041bbb52a4d50121aa9bc4021"
     },
     "fork-private-connection-defaults": {
-      "oid": "ba2be56db34ddfa051289d07ad4accf4e083a496"
+      "oid": "231c6d8369c72d9cae131f68a64266d056edf80e"
     },
     "fork-project-selection": {
-      "oid": "48e3a8f86b37de0b7989171f893533be920f689d"
+      "oid": "9849f157bc1693ace5bdc22206687f89ec0c0882"
     },
     "fork-provider-turn-safety": {
-      "oid": "362a14246259548dbbe95fed0adf3fe7e2f31d63"
+      "oid": "e68f70a3f16f992198830f1c684cc66e44e6849e"
     },
     "fork-release-publication": {
-      "oid": "a6bd6fc030ab31743986f7c2d905a94472e88330"
+      "oid": "bde7b81676cc6290d31b4b8b7994787192a22aa8"
     },
     "fork-remote-file-downloads": {
-      "oid": "6445380c9ab9d1ef3199898b719ecb4dc39cc662"
+      "oid": "18aaec54c8dbba05a4277b7e0768c159343fcd48"
     },
     "fork-resource-recovery": {
-      "oid": "59a5ce9115e74f2c2c98b952b49443c8ccd2ab27"
+      "oid": "6ce9f1af59290a12c0279c525117fa402357b971"
     },
     "fork-restart-when-idle": {
-      "oid": "105b53a513a2698994efbe3342c7fd3c89c39f2e"
+      "oid": "8569756e8a4d5305794f6a3eb76f04232d2cf883"
     },
     "fork-resume-background-work": {
-      "oid": "c511811441fe7f9be5d2f8ecad21c2eb89f06673"
+      "oid": "e14107a0c9c6403bbb846bd782396c62ba4007ef"
     },
     "fork-step-preview": {
-      "oid": "67ee85ca8fd91983f0031dabc8f4bd9c5051810f"
+      "oid": "8b4014ca9ef4b203482b76a542d3037383c05cc1"
     },
     "fork-thread-client-recovery": {
-      "oid": "9f8c29f838404f75ec6cce2f082c564402ead832"
+      "oid": "6f82f76759d1b51a3517914fd8a82b58a742bb5d"
     },
     "fork-thread-history-compatibility": {
-      "oid": "97b4a9bde98fad75325ca721509c623956aee1e9"
+      "oid": "5e0588985eea1f88cffc1b01330da25c1c254001"
     },
     "fork-thread-transfer": {
-      "oid": "756230455f596df7caed48ea7dc26667348c7de5"
+      "oid": "c49cd7c9d8a4bf195ae62bfba9fc5a016e294390"
     },
     "fork-unsupported-pr-hosts": {
-      "oid": "0d33654424dda9cd9c397de844b777f70c108269"
+      "oid": "c506bf1309be539997e25bd3948e70f0142b903c"
     },
     "fork-worker-operations": {
-      "oid": "ed52310734d14f9f939319b3d7df003aa6c09f52"
+      "oid": "68fb1ecc0eadc6910c52ee92d1dc67a3543a310f"
     },
     "fork-workspace-file-uploads": {
-      "oid": "96d0e7daa85ac0786694929d28fe4c3d8b0494f4"
+      "oid": "da2e5238ca1431680405aadf547caa8f0ae7ebee"
     },
     "fork-worktree-cleanup": {
-      "oid": "63e4f31e4cff91ede19e2b9295c39a27d5c94214"
-    },
-    "refresh-temp": {
-      "oid": "28a9b2d2915ced2d848f6c2af5a82e36d6244aa7"
+      "oid": "e2de3e20283bbc3ac948959ac2190cbda250950d"
     }
   }
 }
