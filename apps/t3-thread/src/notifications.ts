@@ -121,6 +121,11 @@ export function mergeDetectedNotification(
   };
 }
 
+/**
+ * Text delivered to the subscriber. A completed source also asks the
+ * supervisor to decide whether the worker is finished, because nothing else
+ * settles a quiet worker before automatic settlement days later.
+ */
 export function buildNotificationMessage(notification: SavedNotification): string {
   const sourceLabel = notification.sourceAgentName ?? notification.sourceThreadId;
   const preview = notification.preview ? summarizeMessageText(notification.preview, 120) : null;
@@ -129,6 +134,9 @@ export function buildNotificationMessage(notification: SavedNotification): strin
     `State: ${notification.sourceState}.`,
     `Reason: ${notification.reason}.`,
     preview ? `Latest output: ${preview}.` : null,
+    notification.sourceState === "completed"
+      ? `Decide whether ${sourceLabel} is finished: if so, settle it with \`t3-thread settle ${sourceLabel}\`; if not, send it the follow-up.`
+      : null,
   ]
     .filter(Boolean)
     .join(" ");

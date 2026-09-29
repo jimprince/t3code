@@ -99,6 +99,12 @@ held events, at most the newest per source, go out on the next watcher pass.
 After an unsettle in the app, a running watcher finds them within a minute; if
 no watcher is running they wait for the next one.
 
+A notification for a completed worker ends by asking the supervisor to decide
+whether that worker is finished, naming the exact `t3-thread settle <worker>`
+command. Settle a finished worker so it leaves the active list (and the parent's
+Agents panel) now instead of when automatic settlement reaches it days later;
+send an unfinished one its follow-up instead.
+
 Settling the calling `T3_THREAD_ID`, even through a saved alias, requires an
 explicit `--self`. When the user asks a running thread to settle itself, use:
 

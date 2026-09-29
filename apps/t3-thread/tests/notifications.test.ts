@@ -141,5 +141,33 @@ describe("notification helpers", () => {
     expect(message).toContain("worker-a needs attention");
     expect(message).toContain("State: completed.");
     expect(message).toContain("Reason: latest turn completed.");
+    expect(message).toContain(
+      "Decide whether worker-a is finished: if so, settle it with `t3-thread settle worker-a`",
+    );
+  });
+
+  it("asks for a settlement decision only when the source completed", () => {
+    const message = buildNotificationMessage(
+      buildNotificationRecord({
+        sourceAgent: makeAgent(),
+        subscription: makeSubscription(),
+        overview: {
+          name: "worker-a",
+          environment: "local-mbp",
+          threadId: "thread-worker-a",
+          title: "Worker A",
+          state: "needs-approval",
+          reason: "approval request is pending",
+          hasNewOutput: false,
+          latestAssistantMessageId: null,
+          latestAssistantPreview: null,
+        },
+        thread: makeThread(),
+        now: "2026-04-17T01:00:00.000Z",
+      }),
+    );
+
+    expect(message).toContain("State: needs-approval.");
+    expect(message).not.toContain("t3-thread settle");
   });
 });
