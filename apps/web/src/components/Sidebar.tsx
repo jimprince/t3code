@@ -4903,10 +4903,12 @@ export default function Sidebar() {
                         const projectHidden =
                           project !== null && hiddenProjectKeys.includes(project.projectKey);
                         const isGeneralChat = item.value === GENERAL_CHAT_PROJECT_KEY;
+                        const isIsolated = item.value === isolatedProjectKey;
                         return (
                           <ComboboxItem
                             key={item.value}
                             hideIndicator
+                            className="group"
                             value={item}
                             onContextMenu={(event) => {
                               if (project) handleProjectSettings(event, project);
@@ -4942,6 +4944,17 @@ export default function Sidebar() {
                               <FolderIcon className="size-4 shrink-0" />
                             )}
                             <span className="min-w-0 flex-1 truncate text-sm">{item.label}</span>
+                            {/* Names what a row click does. Hidden rows keep its space so
+                                hovering never re-truncates the name. */}
+                            <span
+                              aria-hidden="true"
+                              className={cn(
+                                "shrink-0 text-xs text-muted-foreground",
+                                !isIsolated && "invisible group-data-highlighted:visible",
+                              )}
+                            >
+                              {isIsolated ? "Show all" : "Only"}
+                            </span>
                             {project && !isGeneralChat && showProjectEnvironments ? (
                               <ProjectEnvironmentBadge
                                 group={project}
