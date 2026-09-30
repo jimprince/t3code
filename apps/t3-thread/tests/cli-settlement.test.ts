@@ -89,6 +89,26 @@ describe("subscriptions listed by settle", () => {
       const env: NodeJS.ProcessEnv = { ...process.env, T3_AGENT_STATE_FILE: stateFile };
       delete env.T3_THREAD_ID;
 
+      for (const [filters, expectedSources] of [
+        [
+          ["--subscriber", threadId],
+          ["source-unsaved", "source-kept"],
+        ],
+        [["--subscriber", "orchestrator", "--source", "source-unsaved"], ["source-unsaved"]],
+        [["--source", "kept"], ["source-kept"]],
+      ] as const) {
+        const listedRoutes = await execFile(
+          NodePath.join(workspace, "node_modules/.bin/tsx"),
+          ["src/cli.ts", "subscriptions", ...filters],
+          { cwd: workspace, env },
+        );
+        expect(
+          JSON.parse(listedRoutes.stdout).map(
+            (route: { sourceThreadId: string }) => route.sourceThreadId,
+          ),
+        ).toEqual(expectedSources);
+      }
+
       const { stdout } = await execFile(
         NodePath.join(workspace, "node_modules/.bin/tsx"),
         ["src/cli.ts", ...args],
