@@ -2,6 +2,8 @@ import {
   sameUsageLimitCommandCoverage,
   withUsageLimitsCommands,
 } from "@t3tools/shared/usageLimits";
+import { listThreadSubscriptions, updateThreadSubscriptions } from "./threadSubscriptions.ts";
+import { ThreadSubscriptionsError } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -1879,6 +1881,30 @@ const makeWsRpcLayer = (
           .refreshStatus(cwd)
           .pipe(Effect.ignoreCause({ log: true }), Effect.forkDetach, Effect.asVoid);
 
+      const withSubscriptionThread = <A>(threadId: ThreadId, action: () => Promise<A>) =>
+        Effect.gen(function* () {
+          const thread = yield* projectionSnapshotQuery.getThreadShellById(threadId);
+          if (Option.isNone(thread))
+            return yield* Effect.fail(
+              new ThreadSubscriptionsError({
+                message: "Thread does not exist in this environment.",
+              }),
+            );
+          return yield* Effect.tryPromise({
+            try: action,
+            catch: (error) =>
+              new ThreadSubscriptionsError({
+                message: error instanceof Error ? error.message : "Cannot manage subscriptions.",
+              }),
+          });
+        }).pipe(
+          Effect.mapError((error) =>
+            error instanceof ThreadSubscriptionsError
+              ? error
+              : new ThreadSubscriptionsError({ message: "Cannot read selected thread." }),
+          ),
+        );
+
       return WsRpcGroup.of({
         [ORCHESTRATION_WS_METHODS.dispatchCommand]: (command) =>
           observeRpcEffect(
@@ -2708,6 +2734,10 @@ const makeWsRpcLayer = (
             "rpc.aggregate": "server",
           }),
 
+        [WS_METHODS.serverThreadSubscriptions]: (input) =>
+          withSubscriptionThread(input.threadId, () => listThreadSubscriptions(input.threadId)),
+        [WS_METHODS.serverUpdateThreadSubscriptions]: (input) =>
+          withSubscriptionThread(input.threadId, () => updateThreadSubscriptions(input)),
         [WS_METHODS.serverPreviewRecovery]: (_input) =>
           observeRpcEffect(WS_METHODS.serverPreviewRecovery, systemRecovery.preview, {
             "rpc.aggregate": "server",

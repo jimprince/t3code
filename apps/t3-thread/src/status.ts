@@ -1,3 +1,4 @@
+import { findPendingRequests } from "./nesting.js";
 import type { AgentStatus, OrchestrationThread, OrchestrationThreadShell } from "./types.js";
 
 /**
@@ -37,14 +38,21 @@ export function classifyThread(
     };
   }
 
-  if ("hasPendingApprovals" in thread && thread.hasPendingApprovals) {
+  const pending = "activities" in thread ? findPendingRequests(thread.activities) : [];
+  if (
+    ("hasPendingApprovals" in thread && thread.hasPendingApprovals) ||
+    pending.some((request) => request.kind === "approval")
+  ) {
     return {
       state: "needs-approval",
       reason: "approval request is pending",
     };
   }
 
-  if ("hasPendingUserInput" in thread && thread.hasPendingUserInput) {
+  if (
+    ("hasPendingUserInput" in thread && thread.hasPendingUserInput) ||
+    pending.some((request) => request.kind === "user-input")
+  ) {
     return {
       state: "needs-input",
       reason: "user input is pending",

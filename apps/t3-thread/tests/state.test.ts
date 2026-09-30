@@ -253,6 +253,7 @@ describe("state helpers", () => {
     };
 
     expect(buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z")).toEqual({
+      events: "all",
       subscriberThreadId: "thread-coordinator-a",
       subscriberAgentName: "coordinator-a",
       subscriberEnvironment: "local-mbp",
@@ -295,6 +296,7 @@ describe("state helpers", () => {
     };
 
     expect(buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z")).toEqual({
+      events: "all",
       subscriberThreadId: "thread-unsaved-caller",
       subscriberAgentName: null,
       subscriberEnvironment: "local-mbp",
@@ -381,5 +383,19 @@ describe("resolveSubscriptionThreadId", () => {
     expect(() => resolveSubscriptionThreadId(state, "coordinater-a")).toThrow(
       "Unknown agent 'coordinater-a'.",
     );
+  });
+});
+
+describe("top-level notification intent", () => {
+  it("keeps nested caller notifications and requires explicit opt-in for top-level threads", () => {
+    const caller = { T3_THREAD_ID: "caller" };
+    expect(resolveNotifyPreference(undefined, caller, true)).toEqual({ kind: "none" });
+    expect(resolveNotifyPreference(undefined, caller, false)).toEqual({ kind: "caller" });
+    expect(resolveNotifyPreference(true, caller, true)).toEqual({ kind: "caller" });
+    expect(resolveNotifyPreference("supervisor", caller, true)).toEqual({
+      kind: "explicit",
+      subscriber: "supervisor",
+    });
+    expect(resolveNotifyPreference(false, caller, false)).toEqual({ kind: "none" });
   });
 });

@@ -456,3 +456,118 @@ describe("hasActiveWork (idle-exit guard)", () => {
     });
   });
 });
+
+describe("notification ownership and attention", () => {
+  it.each(["approval", "user-input"] as const)(
+    "delivers %s requests from full snapshots without assistant output",
+    async (kind) => {
+      await withTempState(async () => {
+        const source = makeThread({
+          messages: [],
+          latestTurn: { ...makeThread().latestTurn!, state: "running", assistantMessageId: null },
+          activities: [
+            {
+              kind: kind === "approval" ? "approval.requested" : "user-input.requested",
+              createdAt: "2026-04-17T00:00:03.000Z",
+              payload: {
+                requestId: "request-1",
+                questions: [{ id: "q", question: "Choose?", options: [] }],
+              },
+            },
+          ],
+        });
+        const { clientFactory, sentMessages } = createClientFactory({ sourceThread: source });
+        expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(1);
+        expect(sentMessages[0]!.text).toContain(
+          kind === "approval" ? "needs-approval" : "needs-input",
+        );
+        await detectAttentionEvents({ clientFactory });
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(1);
+      });
+    },
+  );
+
+  it("suppresses notification replies while preserving real completions and explicit attention", async () => {
+    await withTempState(async () => {
+      const source = makeThread();
+      source.messages.unshift({
+        ...source.messages[0]!,
+        id: "notification",
+        role: "user",
+        text: "HomeNetwork orchestrator notification: child completed a turn.",
+      });
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread: source });
+      expect(await detectAttentionEvents({ clientFactory })).toEqual([]);
+      source.activities.push({
+        kind: "approval.requested",
+        createdAt: "2026-04-17T00:00:03.000Z",
+        payload: { requestId: "request-1" },
+      });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(1);
+      source.activities.push({
+        kind: "approval.resolved",
+        createdAt: "2026-04-17T00:00:04.000Z",
+        payload: { requestId: "request-1" },
+      });
+      source.messages.push({
+        ...source.messages[0]!,
+        id: "real-instruction",
+        role: "user",
+        text: "Do the next task.",
+      });
+      expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(2);
+      expect(sentMessages[1]!.text).toContain("completed a turn");
+    });
+  });
+
+  it("lets multiple supervisors opt into attention without changing completion routes", async () => {
+    await withTempState(async () => {
+      const state = await loadState();
+      state.subscriptions.push(
+        makeSubscription({ subscriberThreadId: "attention-supervisor", events: "attention" }),
+      );
+      await saveState(state);
+      const source = makeThread();
+      const { clientFactory } = createClientFactory({ sourceThread: source });
+      expect(
+        (await detectAttentionEvents({ clientFactory })).map((event) => event.subscriberThreadId),
+      ).toEqual(["thread-coordinator-a"]);
+      source.activities.push({
+        kind: "approval.requested",
+        createdAt: "2026-04-17T00:00:03.000Z",
+        payload: { requestId: "approval" },
+      });
+      const attention = await detectAttentionEvents({ clientFactory });
+      expect(attention.map((event) => event.subscriberThreadId)).toEqual([
+        "thread-coordinator-a",
+        "attention-supervisor",
+      ]);
+      expect(new Set((await loadState()).notifications.map((event) => event.eventKey)).size).toBe(
+        3,
+      );
+    });
+  });
+
+  it("preserves delivered events with historical keys instead of replaying them", async () => {
+    await withTempState(async () => {
+      const { clientFactory, sentMessages } = createClientFactory({});
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      const state = await loadState();
+      state.notifications[0]!.eventKey =
+        "thread-coordinator-a:thread-worker-a:assistant:assistant-1";
+      await saveState(state);
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(1);
+      expect((await loadState()).notifications).toHaveLength(1);
+    });
+  });
+});

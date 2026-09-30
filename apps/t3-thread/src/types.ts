@@ -183,6 +183,7 @@ export interface SavedAgent {
 }
 
 export interface SavedSubscription {
+  events?: "all" | "attention";
   subscriberThreadId: string;
   subscriberAgentName: string | null;
   subscriberEnvironment: string;
