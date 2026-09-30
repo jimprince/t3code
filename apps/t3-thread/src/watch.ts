@@ -340,9 +340,7 @@ export async function detectAttentionEvents(
         notifications.find((candidate) => candidate.eventKey === notification.eventKey) ?? null;
       const merged = mergeDetectedNotification(existing, notification);
       notifications = upsertNotification(notifications, merged);
-      if (!existing) {
-        notifications = supersedeOvertakenNotifications(notifications, merged, merged.updatedAt);
-      }
+      notifications = supersedeOvertakenNotifications(notifications, merged, merged.updatedAt);
       persisted.push(merged);
     }
 

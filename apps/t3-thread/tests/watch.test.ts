@@ -206,6 +206,19 @@ describe("watch flows", () => {
       });
       const now = () => "2026-04-17T01:00:00.000Z";
       await detectAttentionEvents({ clientFactory, now });
+      const legacyState = await loadState();
+      legacyState.notifications.push({
+        ...legacyState.notifications[0]!,
+        id: "older-record",
+        eventKey: "older-event",
+        latestTurnId: "old-turn",
+      });
+      await saveState(legacyState);
+      // Re-detect the already persisted current event: old versions can leave a backlog.
+      await detectAttentionEvents({ clientFactory, now });
+      expect(
+        (await loadState()).notifications.find((event) => event.id === "older-record")?.status,
+      ).toBe("superseded");
       await deliverPendingNotifications({ clientFactory, now });
       source.latestTurn = { ...source.latestTurn!, turnId: "turn-2" };
       await detectAttentionEvents({ clientFactory, now });
@@ -214,6 +227,7 @@ describe("watch flows", () => {
       expect(sentMessages).toHaveLength(0);
       expect(state.notifications.map((event) => event.status).sort()).toEqual([
         "held",
+        "superseded",
         "superseded",
       ]);
       // Restart with persisted records, then an explicit user turn succeeds.
