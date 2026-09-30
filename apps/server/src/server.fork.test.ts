@@ -128,6 +128,7 @@ import * as ProviderService from "./provider/Services/ProviderService.ts";
 import { ProviderAuthService } from "./provider/Services/ProviderAuthService.ts";
 import { ProviderInstanceRegistry } from "./provider/Services/ProviderInstanceRegistry.ts";
 import { AntigravityInstallation } from "./provider/AntigravityInstallation.ts";
+import { CodexInstallation } from "./provider/CodexInstallation.ts";
 import { makeManualOnlyProviderMaintenanceCapabilities } from "./provider/providerMaintenance.ts";
 import * as ServerLifecycleEvents from "./serverLifecycleEvents.ts";
 import * as ServerRuntimeStartup from "./serverRuntimeStartup.ts";
@@ -733,6 +734,9 @@ const buildAppUnderTest = (options?: {
             getInstance: () => Effect.succeed(undefined),
             listInstances: Effect.succeed([]),
             ...options?.layers?.providerInstanceRegistry,
+          }),
+          Layer.mock(CodexInstallation)({
+            managedDirectory: "unused-test-codex-runtime",
           }),
           Layer.mock(AntigravityInstallation)({
             managedDirectory: "unused-test-antigravity-runtime",
