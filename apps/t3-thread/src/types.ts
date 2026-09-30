@@ -250,6 +250,8 @@ export interface SavedNotification {
   attempts?: number;
   /** Earliest time the next attempt may be claimed. Null means immediately. */
   nextAttemptAt?: string | null;
+  /** Known quota reset keeps a watcher alive for automatic recovery; absent on old records. */
+  quotaResetAt?: string | null;
 }
 
 /**

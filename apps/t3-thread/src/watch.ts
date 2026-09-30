@@ -12,6 +12,7 @@ import {
 } from "./notifications.js";
 import { loadState, requireEnvironment, updateState, upsertNotification } from "./state.js";
 import { classifyThread } from "./status.js";
+import { threadQuotaBlock } from "./quota.js";
 import { isProcessRunning } from "./watcher-process.js";
 import type {
   OrchestrationThread,
@@ -155,6 +156,13 @@ export async function scanAttentionNotifications(
     if (!needsAttention(overview)) {
       continue;
     }
+    if (
+      overview.state === "error" &&
+      isNotificationReply(sourceThread) &&
+      threadQuotaBlock(sourceThread)
+    ) {
+      continue;
+    }
 
     const subscriptions = state.subscriptions.filter(
       (subscription) => subscription.sourceThreadId === sourceAgent.threadId,
@@ -274,7 +282,9 @@ export async function hasActiveWork(
 
   const undelivered = state.notifications.some(
     (notification) =>
-      UNDELIVERED_STATUSES.has(notification.status) && matchesEnvFilter(notification, options.env),
+      (UNDELIVERED_STATUSES.has(notification.status) ||
+        (notification.status === "held" && Boolean(notification.quotaResetAt))) &&
+      matchesEnvFilter(notification, options.env),
   );
   if (undelivered) {
     return true;
@@ -510,6 +520,7 @@ export async function deliverPendingNotifications(
         const subscriberClient = clientFactory(subscriberEnvironment);
         const subscriberThread = await subscriberClient.findThread(notification.subscriberThreadId);
         const subscriberStatus = classifyThread(subscriberThread);
+        const quota = threadQuotaBlock(subscriberThread);
 
         if (subscriberThread.archivedAt || subscriberThread.deletedAt) {
           result = terminal(
@@ -524,6 +535,18 @@ export async function deliverPendingNotifications(
             updatedAt: attemptedAt,
             lastAttemptedAt: attemptedAt,
             lastError: "Subscriber thread is settled; held until it is unsettled.",
+            quotaResetAt: null,
+            nextAttemptAt: new Date(attemptedAtMs + SETTLED_RECIPIENT_RECHECK_MS).toISOString(),
+          };
+        } else if (quota && (quota.resetsAt === null || quota.resetsAt > attemptedAtMs)) {
+          result = {
+            ...notification,
+            status: "held",
+            updatedAt: attemptedAt,
+            lastAttemptedAt: attemptedAt,
+            lastError:
+              "Subscriber is quota-blocked; held until explicit retry or a reported reset.",
+            quotaResetAt: quota.resetsAt === null ? null : new Date(quota.resetsAt).toISOString(),
             nextAttemptAt: new Date(attemptedAtMs + SETTLED_RECIPIENT_RECHECK_MS).toISOString(),
           };
         } else if (subscriberStatus.state === "running") {

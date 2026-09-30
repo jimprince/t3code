@@ -812,3 +812,12 @@ If creation fails after a transport error, inspect remote threads by title,
 project, branch, and creation time before retrying. Every new invocation chooses
 a new identity, so retry can create a duplicate; attach an existing thread instead.
 Run the CLI under the Node version required by the fork.
+
+Automatic notifications are held when the recipient's current turn reports a
+usage limit. The newest event per source is retained without spending delivery
+attempts. A successful explicit retry releases delivery on the next watcher pass;
+a provider-reported future reset keeps the watcher alive for recovery. If the
+provider supplies no usable reset, retry explicitly (or restart `watch` after a
+retry from the app). Settlement still holds delivery, even after a quota reset.
+Quota failures replying to routed notifications do not emit further error
+notifications; genuine approvals, questions, and other errors still route.

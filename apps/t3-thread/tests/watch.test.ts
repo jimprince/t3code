@@ -184,6 +184,190 @@ async function withTempState(test: () => Promise<void>): Promise<void> {
 }
 
 describe("watch flows", () => {
+  it("holds and coalesces new notifications against a persisted quota failure, then recovers on explicit retry", async () => {
+    await withTempState(async () => {
+      const subscriber = makeThread({
+        id: "thread-coordinator-a",
+        latestTurn: { ...makeThread().latestTurn!, state: "error" },
+        session: {
+          threadId: "thread-coordinator-a",
+          status: "error",
+          providerName: "claudeAgent",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: "Claude usage limit reached. Send the message again once the limit resets.",
+          updatedAt: "2026-04-17T00:00:02.000Z",
+        },
+      });
+      const source = makeThread();
+      const { clientFactory, sentMessages } = createClientFactory({
+        sourceThread: source,
+        subscriberThread: subscriber,
+      });
+      const now = () => "2026-04-17T01:00:00.000Z";
+      await detectAttentionEvents({ clientFactory, now });
+      await deliverPendingNotifications({ clientFactory, now });
+      source.latestTurn = { ...source.latestTurn!, turnId: "turn-2" };
+      await detectAttentionEvents({ clientFactory, now });
+      await deliverPendingNotifications({ clientFactory, now });
+      const state = await loadState();
+      expect(sentMessages).toHaveLength(0);
+      expect(state.notifications.map((event) => event.status).sort()).toEqual([
+        "held",
+        "superseded",
+      ]);
+      // Restart with persisted records, then an explicit user turn succeeds.
+      await saveState(state);
+      subscriber.activities = [
+        {
+          kind: "runtime.error",
+          turnId: "turn-1",
+          payload: { message: subscriber.session!.lastError },
+        },
+      ];
+      subscriber.session = null;
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T01:02:00.000Z" });
+      expect(sentMessages).toHaveLength(0);
+      subscriber.latestTurn = {
+        ...subscriber.latestTurn!,
+        turnId: "explicit-retry",
+        state: "completed",
+      };
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T01:04:00.000Z" });
+      expect(sentMessages).toHaveLength(1);
+      expect(
+        (await loadState()).notifications.filter((event) => event.status === "delivered"),
+      ).toHaveLength(1);
+    });
+  });
+
+  it("releases quota holds at a structured reset, but never bypasses settlement or retries an already expired failed window", async () => {
+    await withTempState(async () => {
+      const subscriber = makeThread({
+        id: "thread-coordinator-a",
+        latestTurn: { ...makeThread().latestTurn!, state: "error" },
+        activities: [
+          {
+            kind: "runtime.warning",
+            turnId: "turn-1",
+            createdAt: "2026-04-17T00:00:01.000Z",
+            payload: {
+              detail: {
+                status: "rejected",
+                rateLimitType: "five_hour",
+                resetsAt: Date.parse("2026-04-17T02:00:00.000Z") / 1000,
+              },
+            },
+          },
+        ],
+      });
+      const { clientFactory, sentMessages } = createClientFactory({ subscriberThread: subscriber });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T01:00:00.000Z" });
+      expect(sentMessages).toHaveLength(0);
+      expect(await hasActiveWork({ clientFactory })).toBe(true);
+      subscriber.settledOverride = "settled";
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T02:01:00.000Z" });
+      expect(sentMessages).toHaveLength(0);
+      expect(await hasActiveWork({ clientFactory })).toBe(false);
+      subscriber.settledOverride = null;
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T02:03:00.000Z" });
+      expect(sentMessages).toHaveLength(1);
+      // A new failure after that same reset must await explicit retry.
+      subscriber.latestTurn = {
+        ...subscriber.latestTurn!,
+        turnId: "turn-2",
+        completedAt: "2026-04-17T02:03:01.000Z",
+      };
+      subscriber.activities[0]!.turnId = "turn-2";
+      const source = makeThread({
+        latestTurn: { ...makeThread().latestTurn!, turnId: "source-2" },
+      });
+      const again = createClientFactory({ sourceThread: source, subscriberThread: subscriber });
+      await detectAttentionEvents({ clientFactory: again.clientFactory });
+      await deliverPendingNotifications({
+        clientFactory: again.clientFactory,
+        now: () => "2026-04-17T02:05:00.000Z",
+      });
+      expect(again.sentMessages).toHaveLength(0);
+    });
+  });
+
+  it("delivers normally after provider recovery and when provisioned overage permits work", async () => {
+    for (const state of ["completed", "error"] as const) {
+      await withTempState(async () => {
+        const subscriber = makeThread({
+          id: "thread-coordinator-a",
+          latestTurn: { ...makeThread().latestTurn!, state },
+          activities: [
+            {
+              kind: "runtime.warning",
+              turnId: "turn-1",
+              createdAt: "2026-04-17T00:00:01.000Z",
+              payload: {
+                detail: {
+                  status: "rejected",
+                  rateLimitType: "five_hour",
+                  resetsAt: 9999999999,
+                  ...(state === "error" ? { isUsingOverage: true } : {}),
+                },
+              },
+            },
+          ],
+        });
+        const { clientFactory, sentMessages } = createClientFactory({
+          subscriberThread: subscriber,
+        });
+        await detectAttentionEvents({ clientFactory });
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(1);
+      });
+    }
+  });
+
+  it("suppresses routed quota-error cascades while preserving ordinary errors and pending requests", async () => {
+    await withTempState(async () => {
+      const source = makeThread({
+        latestTurn: { ...makeThread().latestTurn!, state: "error" },
+        messages: [
+          {
+            ...makeThread().messages[0]!,
+            role: "user",
+            text: "HomeNetwork orchestrator notification: Worker needs attention",
+          },
+        ],
+        activities: [{ kind: "runtime.error", turnId: "turn-1", payload: { code: "usage_limit" } }],
+      });
+      const { clientFactory } = createClientFactory({ sourceThread: source });
+      expect(await detectAttentionEvents({ clientFactory })).toHaveLength(0);
+      for (const request of [
+        { kind: "approval.requested", payload: { requestId: "approve-1" } },
+        {
+          kind: "user-input.requested",
+          payload: {
+            requestId: "input-1",
+            questions: [{ id: "q1", question: "Which host?", options: [] }],
+          },
+        },
+      ]) {
+        source.activities.push({
+          ...request,
+          turnId: "turn-1",
+          createdAt: "2026-04-17T00:00:03.000Z",
+        });
+        expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+        source.activities.pop();
+      }
+      source.activities = [];
+      expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+      source.activities = [
+        { kind: "runtime.error", turnId: "turn-1", payload: { code: "usage_limit" } },
+      ];
+      source.messages[0]!.text = "Please try again";
+      expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+    });
+  });
+
   it("deduplicates repeated detection passes and leaves notifications pending in no-deliver mode", async () => {
     await withTempState(async () => {
       const { clientFactory, sentMessages } = createClientFactory({});
