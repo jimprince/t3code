@@ -1894,7 +1894,7 @@ const makeWsRpcLayer = (
           });
         }).pipe(
           Effect.mapError((error) =>
-            error instanceof ThreadSubscriptionsError
+            Schema.is(ThreadSubscriptionsError)(error)
               ? error
               : new ThreadSubscriptionsError({ message: "Cannot read selected thread." }),
           ),

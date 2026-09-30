@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - exercises the real CLI JSON file and lock from Promise-based storage calls.
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";

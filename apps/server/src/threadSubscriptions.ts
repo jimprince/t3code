@@ -2,6 +2,7 @@ import { ThreadSubscription, type UpdateThreadSubscriptionsInput } from "@t3tool
 import { loadState, updateState } from "@t3tools/shared/threadRoutingState";
 import * as Schema from "effect/Schema";
 import * as Predicate from "effect/Predicate";
+import * as DateTime from "effect/DateTime";
 
 type RoutingState = Record<string, unknown>;
 const empty: RoutingState = {};
@@ -56,7 +57,7 @@ export async function updateThreadSubscriptions(input: typeof UpdateThreadSubscr
               ? {
                   ...notification,
                   status: "superseded",
-                  updatedAt: new Date().toISOString(),
+                  updatedAt: DateTime.formatIso(DateTime.nowUnsafe()),
                   nextAttemptAt: null,
                 }
               : notification,
