@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "62de46bc0f7d03b0715d59c91499fc334f7f34fc",
-  "head": "85d4c13aa5c2fcaf01eab83a6aaeba36539d5878",
+  "prev": "4d157f45faa75260232f567263b0ec0994375cf4",
+  "head": "f536874faf4abc3b90bba503dbfa99f02f3ca903",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -13,10 +13,10 @@
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
     "fork-project-selection",
-    "fork-private-connection-defaults"
+    "fork-private-connection-defaults",
+    "fork-resource-recovery"
   ],
   "unapplied": [
-    "fork-resource-recovery",
     "fork-workspace-file-uploads",
     "fork-attachment-compatibility",
     "fork-remote-file-downloads",
@@ -132,7 +132,7 @@
       "oid": "b11cf6c01ed5688280c3028ce04dbc1f8d3620c2"
     },
     "fork-resource-recovery": {
-      "oid": "3d823b44b0d62a1bfe4ef1dafb3118fb672c34f9"
+      "oid": "f536874faf4abc3b90bba503dbfa99f02f3ca903"
     },
     "fork-restart-when-idle": {
       "oid": "5d0e2931bfaf4cc29a6da35c1bb249b8400502f0"
