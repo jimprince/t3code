@@ -1365,7 +1365,8 @@ agent
       queueWhileRunning: options.queue,
       agentName: saved ? savedAgent.name : null,
     });
-    if (outcome.queued) {
+    const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
+    if (outcome.queued || released.length > 0) {
       await ensureNotificationWatcher();
     }
     printJson({

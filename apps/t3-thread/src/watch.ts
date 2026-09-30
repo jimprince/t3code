@@ -49,7 +49,11 @@ function isNotificationReply(thread: OrchestrationThread): boolean {
 export interface WatchClient {
   findThread(threadId: string): Promise<OrchestrationThread>;
   /** Result is unused here; `RemoteEnvironmentClient.sendMessage` reports dispatch vs queue. */
-  sendMessage(input: { threadId: string; text: string }): Promise<unknown>;
+  sendMessage(input: {
+    threadId: string;
+    text: string;
+    queueWhileRunning?: boolean;
+  }): Promise<unknown>;
 }
 
 export type WatchClientFactory = (environment: SavedEnvironment) => WatchClient;
@@ -575,6 +579,7 @@ export async function deliverPendingNotifications(
           await subscriberClient.sendMessage({
             threadId: notification.subscriberThreadId,
             text: buildNotificationMessage(notification),
+            queueWhileRunning: false,
           });
           result = {
             ...notification,

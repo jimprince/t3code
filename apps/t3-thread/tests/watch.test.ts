@@ -3,6 +3,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
+import { RemoteEnvironmentClient } from "../src/client.js";
 import { loadState, saveState } from "../src/state.js";
 import type {
   OrchestrationThread,
@@ -152,7 +153,7 @@ function createClientFactory(input: {
       },
       async sendMessage(message) {
         await input.onSend?.(message);
-        sentMessages.push(message);
+        sentMessages.push({ threadId: message.threadId, text: message.text });
       },
     };
     return client;
@@ -379,6 +380,29 @@ describe("watch flows", () => {
       ];
       source.messages[0]!.text = "Please try again";
       expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+    });
+  });
+
+  it("keeps a routed event recoverable when the real send client discovers a busy recipient", async () => {
+    await withTempState(async () => {
+      await detectAttentionEvents({ clientFactory: createClientFactory({}).clientFactory });
+      class BusyOnSend extends RemoteEnvironmentClient {
+        reads = 0;
+        override async findThread(threadId: string): Promise<OrchestrationThread> {
+          return makeThread({
+            id: threadId,
+            latestTurn: {
+              ...makeThread().latestTurn!,
+              state: this.reads++ === 0 ? "completed" : "running",
+            },
+          });
+        }
+      }
+      const client = new BusyOnSend(makeEnvironment());
+      const attempted = await deliverPendingNotifications({ clientFactory: () => client });
+      expect(attempted[0]?.status).toBe("delivery-failed");
+      expect((await loadState()).queuedSends).toEqual([]);
+      expect((await loadState()).notifications[0]?.status).toBe("delivery-failed");
     });
   });
 
