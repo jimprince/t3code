@@ -246,6 +246,16 @@ describe("DesktopUpdates", () => {
         environment: { resourcesPath: NodePath.join(home, "T3 Code.app", "Contents", "Resources") },
       });
       const healthFile = NodePath.join(rollbackDir, "healthy-version");
+      // writeFile creates the marker before its bytes land, so waiting on
+      // existsSync can read a truncated file on a loaded runner. The written
+      // version is the readiness signal.
+      const readHealthyVersion = () => {
+        try {
+          return NodeFS.readFileSync(healthFile, "utf8");
+        } catch {
+          return "";
+        }
+      };
 
       return Effect.scoped(
         Effect.gen(function* () {
@@ -267,10 +277,10 @@ describe("DesktopUpdates", () => {
 
           harness.setBackendReady(true);
           yield* TestClock.adjust("1 second");
-          for (let attempt = 0; attempt < 100 && !NodeFS.existsSync(healthFile); attempt += 1) {
+          for (let attempt = 0; attempt < 100 && readHealthyVersion() === ""; attempt += 1) {
             yield* settle;
           }
-          assert.equal(NodeFS.readFileSync(healthFile, "utf8"), "1.2.3");
+          assert.equal(readHealthyVersion(), "1.2.3");
         }),
       ).pipe(
         Effect.provide(Layer.merge(TestClock.layer(), harness.layer)),
