@@ -1,6 +1,6 @@
-Bottom: fda2129a1e538e789b5c18a8026c43b6010e7424
-Top:    1e4d37b0eb353ba39a48e2936286a998d3d4f835
+Bottom: 528e251aacd18c37ea492d13e54d26af8c6a39e0
+Top:    c58ab89cfd44d0d9256b7b1c4697c9435abeff66
 Author: User <user@example.com>
-Date:   2026-09-30 01:47:29 -0600
+Date:   2026-09-30 01:54:01 -0600
 
 feat(web): preview GLB and STL models inline
