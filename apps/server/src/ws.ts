@@ -191,6 +191,7 @@ import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { requestHeadlessUpdateCheck } from "./headlessUpdateCheck.ts";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
+const isThreadSubscriptionsError = Schema.is(ThreadSubscriptionsError);
 
 const nowIso = Effect.map(DateTime.now, DateTime.formatIso);
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
@@ -1899,7 +1900,7 @@ const makeWsRpcLayer = (
           });
         }).pipe(
           Effect.mapError((error) =>
-            Schema.is(ThreadSubscriptionsError)(error)
+            isThreadSubscriptionsError(error)
               ? error
               : new ThreadSubscriptionsError({ message: "Cannot read selected thread." }),
           ),
