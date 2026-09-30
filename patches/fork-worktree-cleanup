@@ -1,6 +1,6 @@
-Bottom: e25596cb5e819b40e050efd42bbc12599b209648
-Top:    438f5f2de46c34522aeffd11c86d3879bb59adaa
+Bottom: 28d7931ad7964f429064eb3f77c0600de95533ea
+Top:    577ec4b6b475e37c407276d0129ed9c1798a7527
 Author: User <user@example.com>
-Date:   2026-09-30 02:40:27 +0000
+Date:   2026-09-30 03:08:31 +0000
 
 feat(t3-thread): retire archived worker worktrees
