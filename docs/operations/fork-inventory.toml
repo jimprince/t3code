@@ -1225,3 +1225,9 @@ retire_when = "Upstream installs desktop updates unattended with automatic rollb
 depends_on = ["fork-desktop-delivery", "fork-restart-when-idle"]
 roles = []
 note = "The renderer watcher (desktopOvernightUpdate.tsx, mounted at AppRoot) downloads an available update at night and installs a downloaded one after five quiet minutes plus the idle-restart grace, using the idle-restart agent count; each step runs once per version per night. On a packaged macOS .app, DesktopUpdates arms DesktopUpdateRollback before every quitAndInstall, manual or automatic: ditto --clone copies the bundle to userdata/update-rollback/previous-app and a detached sh watchdog starts. Each launch writes healthy-version once the primary backend is ready (at once without a local environment). After 120 five-second waits without the expected version, the watchdog stops processes running from the bundle, restores the copy, reopens it, and writes rolled-back.json; that version is then ignored as an update and reported once by notification. A failed quitAndInstall disarms. Rollback restores the app only, not state the new version migrated. Linux servers already get the same behavior from scripts/headless-auto-upgrade.sh."
+
+[[patch.decision]]
+id = "health-marker-wait-reads-content"
+date = "2026-09-30"
+decided = "adapt"
+rationale = "The rollback coverage waited for the healthy-version marker with existsSync, but writeText is a plain writeFile that creates the file before its bytes land, so a loaded runner read an empty marker and the case failed with expected '' to equal '1.2.3' in candidate CI while passing locally. Wait for the written version instead. Production keeps the plain write: the watchdog already re-reads the marker with cat on every five-second attempt."
