@@ -209,9 +209,9 @@ export interface SavedSubscription {
  * `undeliverable` can never succeed (recipient gone, attempts exhausted), and
  * `blocked` needs an operator action first (expired environment credentials),
  * and `superseded` was overtaken by a newer event for the same route before it
- * was delivered. `held` waits for its explicitly settled subscriber to be
- * unsettled: the watcher re-checks it while running but does not stay awake
- * for it. Only retryable and claimed records keep the watcher awake.
+ * was delivered. `held` waits for settlement or a current-turn quota block
+ * to clear. It is rechecked while running; only a known quota reset keeps
+ * the watcher awake for automatic recovery.
  */
 export type SavedNotificationStatus =
   | "pending"

@@ -26,7 +26,7 @@ const DELIVERY_CLAIM_TIMEOUT_MS = 60_000;
 /** How long to wait before re-offering a notification to a recipient that is mid-turn. */
 const BUSY_RECIPIENT_RETRY_MS = 30_000;
 
-/** How often a running watcher re-checks whether a settled recipient was unsettled. */
+/** How often a running watcher rechecks settlement and quota holds. */
 const SETTLED_RECIPIENT_RECHECK_MS = 60_000;
 
 /**
@@ -213,9 +213,9 @@ export async function scanAttentionNotifications(
 }
 
 /**
- * Statuses that keep the watcher awake. `held` is left out: it waits on the
- * user unsettling a thread, which can take days, and each watcher pass
- * snapshots every saved agent.
+ * Statuses that always keep the watcher awake. Holds with a known quota reset
+ * also keep it awake; indefinite holds wait for operator activity, since each
+ * watcher pass snapshots every saved agent.
  */
 const UNDELIVERED_STATUSES = new Set(["pending", "delivering", "delivery-failed"]);
 const IN_FLIGHT_SOURCE_STATES = new Set([
