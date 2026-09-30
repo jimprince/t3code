@@ -636,6 +636,12 @@ roles = []
 note = "Legacy uploads use native durable storage, retention and provider file input while keeping the parallel path-bearing field for old clients and historical messages. Available historical temporary objects materialize lazily into durable storage; no old metadata or migration IDs are removed. Partial upload/dispatch failures clean newly created files, and revert preserves referenced legacy objects. Current clients retain one upload and one display entry. The narrow turn-start query preserves legacy file handoffs. Legacy handoffs join the provider attachment list on dispatch, so they are budgeted with upstream's shared attachment-limit helper against decoded bytes rather than a fork-local cap."
 
 [[patch.decision]]
+id = "upstream14290-codex-installation-in-fork-harness"
+date = "2026-09-30"
+decided = "adapt"
+rationale = "The server app now provides CodexInstallation, and upstream adapted its own server.test.ts harness. This concern keeps a trimmed copy of buildAppUnderTest, which no merge touches, so the drift only appeared as a missing-service typecheck error. Mirror upstream's Layer.mock placement; the trimmed copy takes no override option because no fork test needs one."
+
+[[patch.decision]]
 id = "upstream13774-agent-awareness-relay-in-fork-harness"
 date = "2026-09-27"
 decided = "adapt"
