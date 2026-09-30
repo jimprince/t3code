@@ -34,6 +34,17 @@ const SETTLED_RECIPIENT_RECHECK_MS = 60_000;
  */
 const PROCESS_STARTED_AT_MS = Date.now();
 
+/** A normal reply to a routed notification must not wake another supervisor. */
+function isNotificationReply(thread: OrchestrationThread): boolean {
+  for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
+    const message = thread.messages[index]!;
+    if (message.role === "user") {
+      return /^(?:HomeNetwork|T3) orchestrator notification:/.test(message.text);
+    }
+  }
+  return false;
+}
+
 export interface WatchClient {
   findThread(threadId: string): Promise<OrchestrationThread>;
   /** Result is unused here; `RemoteEnvironmentClient.sendMessage` reports dispatch vs queue. */
@@ -153,6 +164,11 @@ export async function scanAttentionNotifications(
     }
 
     for (const subscription of subscriptions) {
+      if (
+        (overview.state === "completed" || overview.state === "idle") &&
+        (subscription.events === "attention" || isNotificationReply(sourceThread))
+      )
+        continue;
       // Attention for the turn that was already current when the subscriber
       // signed up is old news to it; only a later turn is a new transition.
       if (
@@ -194,7 +210,14 @@ export async function scanAttentionNotifications(
  * snapshots every saved agent.
  */
 const UNDELIVERED_STATUSES = new Set(["pending", "delivering", "delivery-failed"]);
-const IN_FLIGHT_SOURCE_STATES = new Set(["running", "starting", "ready"]);
+const IN_FLIGHT_SOURCE_STATES = new Set([
+  "running",
+  "starting",
+  "ready",
+  "needs-approval",
+  "needs-input",
+  "needs-plan",
+]);
 
 /**
  * Undelivered statuses that a newer event on the same route may overtake.
@@ -398,7 +421,7 @@ async function finalizeNotificationAttempt(input: {
     const current =
       state.notifications.find((candidate) => candidate.eventKey === input.notification.eventKey) ??
       null;
-    if (!current || current.deliveryClaimId !== input.claimId) {
+    if (!current || current.status !== "delivering" || current.deliveryClaimId !== input.claimId) {
       return {
         state,
         result: null,
@@ -515,6 +538,19 @@ export async function deliverPendingNotifications(
             nextAttemptAt: new Date(attemptedAtMs + BUSY_RECIPIENT_RETRY_MS).toISOString(),
           };
         } else {
+          // Snapshot reads can be slow; an unsubscribe during that read wins.
+          const latest = await loadState();
+          if (
+            !latest.subscriptions.some(
+              (route) =>
+                route.subscriberThreadId === notification.subscriberThreadId &&
+                route.sourceThreadId === notification.sourceThreadId,
+            ) ||
+            latest.notifications.find((event) => event.id === notification.id)?.status !==
+              "delivering"
+          ) {
+            continue;
+          }
           await subscriberClient.sendMessage({
             threadId: notification.subscriberThreadId,
             text: buildNotificationMessage(notification),

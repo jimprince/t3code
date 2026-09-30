@@ -22,7 +22,7 @@ type RpcProtocolClient =
 function wsRpcProtocolLayer(wsUrl: string) {
   return RpcClient.layerProtocolSocket().pipe(
     Layer.provide(
-      Socket.layerWebSocket(wsUrl).pipe(Layer.provide(NodeSocket.layerWebSocketConstructorWS)),
+      Socket.layerWebSocket(wsUrl).pipe(Layer.provide(NodeSocket.layerWebSocketConstructor)),
     ),
     Layer.provide(RpcSerialization.layerJson),
   );

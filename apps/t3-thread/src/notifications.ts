@@ -50,7 +50,7 @@ export function buildNotificationEventKey(input: {
     : input.latestTurnId
       ? `turn:${input.latestTurnId}:${input.sourceState}`
       : `state:${input.sourceState}`;
-  return `${input.subscriberThreadId}:${input.sourceThreadId}:${marker}`;
+  return `${input.subscriberThreadId}:${input.sourceThreadId}:${input.latestTurnId ?? "none"}:${input.sourceState}:${marker}`;
 }
 
 export function buildNotificationRecord(input: {
@@ -61,13 +61,15 @@ export function buildNotificationRecord(input: {
   now: string;
   existing?: SavedNotification | null;
 }): SavedNotification {
-  const eventKey = buildNotificationEventKey({
-    subscriberThreadId: input.subscription.subscriberThreadId,
-    sourceThreadId: input.subscription.sourceThreadId,
-    latestAssistantMessageId: input.overview.latestAssistantMessageId,
-    latestTurnId: input.thread.latestTurn?.turnId ?? null,
-    sourceState: input.overview.state,
-  });
+  const eventKey =
+    input.existing?.eventKey ??
+    buildNotificationEventKey({
+      subscriberThreadId: input.subscription.subscriberThreadId,
+      sourceThreadId: input.subscription.sourceThreadId,
+      latestAssistantMessageId: input.overview.latestAssistantMessageId,
+      latestTurnId: input.thread.latestTurn?.turnId ?? null,
+      sourceState: input.overview.state,
+    });
 
   return {
     id: input.existing?.id ?? NodeCrypto.randomUUID(),
@@ -130,7 +132,7 @@ export function buildNotificationMessage(notification: SavedNotification): strin
   const sourceLabel = notification.sourceAgentName ?? notification.sourceThreadId;
   const preview = notification.preview ? summarizeMessageText(notification.preview, 120) : null;
   return [
-    `HomeNetwork orchestrator notification: ${sourceLabel} needs attention.`,
+    `T3 orchestrator notification: ${sourceLabel} ${notification.sourceState === "completed" ? "completed a turn" : "needs attention"}.`,
     `State: ${notification.sourceState}.`,
     `Reason: ${notification.reason}.`,
     preview ? `Latest output: ${preview}.` : null,

@@ -204,7 +204,7 @@ Recommended:
 - `--branch` should be the exact branch you expect the worker to use. The CLI passes it to T3's native `thread.turn.start` bootstrap flow.
 - T3 chooses and records the worktree path. Do not pass or manage a worktree path from this wrapper.
 - Reuse the same `--name` if you want to replace a failed or obsolete saved agent mapping.
-- When you invoke `t3-thread create` from inside a T3 caller thread, that caller is auto-subscribed to completion/attention events from the new worker by default.
+- When you invoke nested `t3-thread create` from inside a T3 caller thread, that caller is auto-subscribed to completion/attention events from the new worker by default. `--top-level` creates no subscription unless `--notify` is explicit.
 - Add `--no-notify` when you want to suppress that default subscription.
 - Add `--notify <subscriber>` when you want to subscribe a different saved agent by name or thread id at create time.
 
@@ -221,7 +221,7 @@ Post-create reliability checklist:
 
 `--notify` behavior:
 
-- no flag: if `T3_THREAD_ID` is set, the current caller thread is auto-subscribed by default
+- no flag: if `T3_THREAD_ID` is set, the current caller thread is auto-subscribed for nested creation; `--top-level` does not subscribe
 - no flag: if `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME` are also set, unsaved caller threads resolve directly from that metadata; the CLI maps environment id/name/label back to the saved environment key used for routing
 - no flag: if `T3_THREAD_ID` is not set, create still succeeds without a subscription
 - `--no-notify` disables the default caller subscription
@@ -682,3 +682,40 @@ When validating that a fresh agent can discover and use this repo:
 Important caveat:
 
 - Do **not** use the stripped-down `subagents --backend opencode ...` one-shot path for this validation. That harness is intentionally tool-stripped and may fail the test for reasons unrelated to the repo docs. Use a full agent backend instead.
+
+## Notification ownership and handoff
+
+Nested `create` subscribes its caller by default. `create --top-level` does not;
+use an explicit `--notify` or `--notify <subscriber>` to opt in. `--no-notify`
+disables either route. Always check `notifySubscribed` in the result.
+
+Completion notifications say that a turn completed; pending approvals, questions,
+plans, errors, and interruptions say that attention is needed. A reply to a routed
+notification does not emit another completion notification. It can still report
+an approval, question, plan, error, or interruption. To watch only those states:
+
+```bash
+t3-thread subscribe --watch <source> --events attention
+# Restore completion notifications on the same route:
+t3-thread subscribe --watch <source> --events all
+```
+
+Existing routes continue to include completions unless explicitly changed. Multiple
+supervisors may subscribe independently. Unsubscribe cancels queued notifications
+for that route; a message already accepted by the server cannot be recalled.
+
+For a supervisor handoff, subscribe the replacement to each retained source,
+verify its routes with `subscriptions --subscriber <replacement>`, then unsubscribe
+the retiring supervisor from those sources and verify its list is empty. Only then
+send the old supervisor its final handoff. Its own close-out uses
+`settle "$T3_THREAD_ID" --self`; a different thread uses `settle <old-supervisor>`.
+Never infer settlement from a deferred receipt; read its eventual log or status.
+
+Use `queue --open` for current queued work. Plain `queue` is history and includes
+terminal records; inspect `status`, `actionable`, `queuedAt`, `ageSeconds`, and
+`dispatchedAt` before treating an entry as an instruction.
+
+If creation fails after a transport error, inspect remote threads by title,
+project, branch, and creation time before retrying. Every new invocation chooses
+a new identity, so retry can create a duplicate; attach an existing thread instead.
+Run the CLI under the Node version required by the fork.
