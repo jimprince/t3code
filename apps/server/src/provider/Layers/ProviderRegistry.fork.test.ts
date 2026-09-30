@@ -19,6 +19,7 @@ import {
   ClaudeSettings,
   CodexSettings,
   DEFAULT_SERVER_SETTINGS,
+  EnvironmentId,
   ProviderDriverKind,
   ProviderInstanceId,
   ServerSettings,
@@ -37,6 +38,9 @@ import { checkCodexProviderStatus, type CodexAppServerProviderSnapshot } from ".
 import { checkClaudeProviderStatus } from "./ClaudeProvider.ts";
 import * as BackgroundPolicy from "../../background/BackgroundPolicy.ts";
 import { AntigravityInstallation } from "../AntigravityInstallation.ts";
+import { CodexInstallation } from "../CodexInstallation.ts";
+import { ServerSecretStore } from "../../auth/ServerSecretStore.ts";
+import { ServerEnvironmentIdentity } from "../../environment/ServerEnvironment.ts";
 import * as ModelManifest from "../ModelManifest.ts";
 import { applyProviderCompatibility } from "../providerCompatibility.ts";
 import * as OpenCodeRuntime from "../opencodeRuntime.ts";
@@ -349,7 +353,19 @@ function makeMutableServerSettingsService(
   });
 }
 
-it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), TestHttpClientLive))(
+// Mirrors upstream's ProviderRegistry test services: constructing a Codex
+// driver now resolves its managed installation, stored account credentials, and
+// environment identity, so every registry harness in this file provides them.
+const TestNodeServices = Layer.mergeAll(
+  NodeServices.layer,
+  Layer.mock(CodexInstallation)({ managedDirectory: "unused-managed-installation" }),
+  Layer.mock(ServerSecretStore)({}),
+  Layer.succeed(ServerEnvironmentIdentity, {
+    getEnvironmentId: Effect.succeed(EnvironmentId.make("00000000-0000-4000-8000-000000000001")),
+  }),
+);
+
+it.layer(Layer.mergeAll(TestNodeServices, ServerSettingsModule.layerTest(), TestHttpClientLive))(
   "ProviderRegistry",
   (it) => {
     describe("checkCodexProviderStatus", () => {
@@ -900,7 +916,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 }),
               ),
               Layer.provideMerge(ModelManifest.layerTest),
-              Layer.provideMerge(NodeServices.layer),
+              Layer.provideMerge(TestNodeServices),
             ),
           ).pipe(Scope.provide(scope));
           yield* Effect.gen(function* () {
@@ -1058,7 +1074,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
               Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
               Layer.provideMerge(ModelManifest.layerTest),
-              Layer.provideMerge(NodeServices.layer),
+              Layer.provideMerge(TestNodeServices),
             ),
           ).pipe(Scope.provide(scope));
 
@@ -1192,7 +1208,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                   }),
                 ),
                 Layer.provideMerge(ModelManifest.layerTest),
-                Layer.provideMerge(NodeServices.layer),
+                Layer.provideMerge(TestNodeServices),
               ),
             ).pipe(Scope.provide(scope));
 
@@ -1297,7 +1313,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
               Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
               Layer.provideMerge(ModelManifest.layerTest),
-              Layer.provideMerge(NodeServices.layer),
+              Layer.provideMerge(TestNodeServices),
             ),
           ).pipe(Scope.provide(scope));
 
@@ -1398,7 +1414,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 }),
               ),
               Layer.provideMerge(ModelManifest.layerTest),
-              Layer.provideMerge(NodeServices.layer),
+              Layer.provideMerge(TestNodeServices),
             ),
           ).pipe(Scope.provide(scope), Effect.timeoutOption("100 millis"));
 
@@ -1527,7 +1543,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
               ),
               Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
               Layer.provideMerge(ModelManifest.layerTest),
-              Layer.provideMerge(NodeServices.layer),
+              Layer.provideMerge(TestNodeServices),
             ),
           ).pipe(Scope.provide(scope));
 
@@ -1728,7 +1744,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
                 return spawner.spawn(command);
               }),
             ),
-            Layer.provideMerge(NodeServices.layer),
+            Layer.provideMerge(TestNodeServices),
             Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
             Layer.provideMerge(failingSpawnerLayer("spawn codex ENOENT")),
           );
@@ -1842,7 +1858,7 @@ it.layer(Layer.mergeAll(NodeServices.layer, ServerSettingsModule.layerTest(), Te
             Layer.provideMerge(ModelManifest.layerTest),
             Layer.provideMerge(ResetCreditCoordinator.layerTest),
             Layer.provideMerge(OpenCodeRuntime.OpenCodeRuntimeLive),
-            Layer.provideMerge(NodeServices.layer),
+            Layer.provideMerge(TestNodeServices),
             Layer.provideMerge(BackgroundPolicyAlwaysRunLayer),
           );
           const runtimeServices = yield* Layer.build(providerRegistryLayer).pipe(
