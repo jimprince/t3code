@@ -67,82 +67,12 @@ export function resolveNestedThreadKeys(threads: ReadonlyArray<NestingThread>): 
   return nested;
 }
 
-type AttentionThread = NestingThread &
-  Pick<EnvironmentThreadShell, "hasPendingApprovals" | "hasPendingUserInput"> &
-  Partial<Pick<EnvironmentThreadShell, "session" | "backgroundLiveness">>;
-
-type RolledUpLiveness = "working" | "monitoring" | null;
-
-/** A nested thread's live work as its parent's row shows it; its own turn counts as working. */
-function nestedThreadLiveness(thread: AttentionThread): RolledUpLiveness {
-  const status = thread.session?.status;
-  if (status === "running" || status === "starting" || thread.backgroundLiveness === "working") {
-    return "working";
-  }
-  return thread.backgroundLiveness === "monitoring" ? "monitoring" : null;
-}
-
-function strongerLiveness(a: RolledUpLiveness, b: RolledUpLiveness): RolledUpLiveness {
-  if (a === "working" || b === "working") return "working";
-  return a ?? b;
-}
-
-/**
- * Sidebar input: drops nested threads and folds their pending approvals, user
- * input, and live work into the parent row, so attention and a working
- * sub-agent never hide inside a parent. Live work shows as the parent's
- * background liveness, the same Working/Monitoring a built-in sub-agent gives.
- * Returns the input array itself when nothing is nested.
- */
-export function applySidebarThreadNesting<T extends AttentionThread>(
-  threads: ReadonlyArray<T>,
-): ReadonlyArray<T> {
+/** Sidebar placement preserves each parent's own state; child attention is displayed separately. */
+export function applySidebarThreadNesting<T extends NestingThread>(threads: ReadonlyArray<T>): T[] {
   const nested = resolveNestedThreadKeys(threads);
-  if (nested.size === 0) return threads;
-  const rollupByParentKey = new Map<
-    string,
-    {
-      hasPendingApprovals: boolean;
-      hasPendingUserInput: boolean;
-      liveness: RolledUpLiveness;
-    }
-  >();
-  for (const thread of threads) {
-    if (thread.parentThreadId == null || thread.archivedAt !== null) continue;
-    if (!nested.has(threadKey(thread))) continue;
-    const liveness = nestedThreadLiveness(thread);
-    if (!thread.hasPendingApprovals && !thread.hasPendingUserInput && liveness === null) continue;
-    const parentKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.parentThreadId));
-    const current = rollupByParentKey.get(parentKey);
-    rollupByParentKey.set(parentKey, {
-      hasPendingApprovals: (current?.hasPendingApprovals ?? false) || thread.hasPendingApprovals,
-      hasPendingUserInput: (current?.hasPendingUserInput ?? false) || thread.hasPendingUserInput,
-      liveness: strongerLiveness(current?.liveness ?? null, liveness),
-    });
-  }
-  return threads.flatMap((thread) => {
-    const key = threadKey(thread);
-    if (nested.has(key)) return [];
-    const rollup = rollupByParentKey.get(key);
-    if (rollup === undefined) return [thread];
-    const ownLiveness = thread.backgroundLiveness ?? null;
-    const backgroundLiveness = strongerLiveness(ownLiveness, rollup.liveness);
-    if (
-      (thread.hasPendingApprovals || !rollup.hasPendingApprovals) &&
-      (thread.hasPendingUserInput || !rollup.hasPendingUserInput) &&
-      backgroundLiveness === ownLiveness
-    ) {
-      return [thread];
-    }
-    return [
-      {
-        ...thread,
-        hasPendingApprovals: thread.hasPendingApprovals || rollup.hasPendingApprovals,
-        hasPendingUserInput: thread.hasPendingUserInput || rollup.hasPendingUserInput,
-        backgroundLiveness,
-      },
-    ];
-  });
+  return nested.size === 0
+    ? (threads as T[])
+    : threads.filter((thread) => !nested.has(threadKey(thread)));
 }
 
 /**
