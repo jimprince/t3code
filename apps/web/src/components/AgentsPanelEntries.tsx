@@ -18,7 +18,7 @@ import {
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useThreadNestingActions } from "~/hooks/useThreadNesting";
 import { cn } from "~/lib/utils";
-import { useThreadShell, useThreadShellsForProjectRefs } from "~/state/entities";
+import { useProject, useThreadShell, useThreadShells } from "~/state/entities";
 import { listNestedThreads } from "~/threadNesting.logic";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
@@ -34,19 +34,16 @@ export function useNestedThreads(
   const thread = useThreadShell(
     environmentId === null || threadId === null ? null : scopeThreadRef(environmentId, threadId),
   );
-  // Nesting stays inside one project, so the project's shells are enough.
-  const projectThreads = useThreadShellsForProjectRefs(
-    thread === null ? [] : [scopeProjectRef(thread.environmentId, thread.projectId)],
-  );
+  const threads = useThreadShells();
   return useMemo(
     () =>
       thread === null
         ? []
-        : listNestedThreads(projectThreads, {
+        : listNestedThreads(threads, {
             environmentId: thread.environmentId,
             threadId: thread.id,
           }),
-    [projectThreads, thread],
+    [threads, thread],
   );
 }
 
@@ -70,6 +67,7 @@ function NestedThreadRow({
 }) {
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
   const status = nestedThreadStatus(thread);
+  const project = useProject(scopeProjectRef(thread.environmentId, thread.projectId));
   return (
     <div className="flex items-center gap-1 rounded-md hover:bg-accent/40">
       <button
@@ -87,7 +85,7 @@ function NestedThreadRow({
           {formatRelativeTimeLabel(thread.latestUserMessageAt ?? thread.updatedAt)}
         </span>
         <span className="col-start-2 col-end-4 row-start-2 truncate font-mono text-2xs text-muted-foreground/70">
-          {status.label} · {thread.modelSelection.model}
+          {status.label} · {project?.title ?? thread.projectId} · {thread.modelSelection.model}
         </span>
       </button>
       <Tooltip>
