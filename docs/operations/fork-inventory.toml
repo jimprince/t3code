@@ -157,6 +157,12 @@ roles = []
 note = "Removed unused OpenCode server-pool scaffolding. Active upstream OpenCode server ownership, live steering, reservations and runtime recovery remain."
 
 [[patch.decision]]
+id = "upstream14540-subagent-model-refinement-test"
+date = "2026-10-01"
+decided = "retire"
+rationale = "This concern's harness carried upstream's own \"task.started carries model/effort; subagent snapshots refine the model\" case verbatim, differing only in using real model ids instead of upstream's synthetic test constants, and asserting no fork behavior. Upstream 7ab800a43 now pushes a task.updated correction as soon as a subagent snapshot refines the model and adapted its own case, so the duplicate failed on the extra event. Delete it; upstream owns that path and its coverage."
+
+[[patch.decision]]
 id = "upstream14290-codex-driver-test-services"
 date = "2026-09-30"
 decided = "adapt"
