@@ -11,6 +11,7 @@ import {
   resolveAgentTarget,
   toThreadSearchResult,
 } from "./agent-targets.js";
+import { parseInputReminderMinutes } from "./inputReminders.js";
 import { buildFollowUpMessage } from "./agentPrompts.js";
 import { sendDirectResult } from "./directResult.js";
 import { RemoteEnvironmentClient } from "./client.js";
@@ -714,6 +715,11 @@ agent
     parseNotificationLevel,
     "all",
   )
+  .option(
+    "--input-reminder-minutes <minutes>",
+    "unanswered child reminder interval; 0 disables reminders",
+    parseInputReminderMinutes,
+  )
   .option("--top-level", "list the worker in the sidebar instead of nesting it")
   .action(async (options) => {
     const state = await loadState();
@@ -780,6 +786,7 @@ agent
           currentState.subscriptions,
           buildSubscriptionRecord(notifyCaller, savedAgent, createdAt, existing, {
             level: options.notifyLevel,
+            inputReminderMinutes: options.inputReminderMinutes,
           }),
         );
       }
@@ -1141,6 +1148,11 @@ agent
   )
   .requiredOption("--watch <name>", "saved source agent name or raw thread UUID to watch")
   .option("--level <level>", "all, attention, or none", parseNotificationLevel)
+  .option(
+    "--input-reminder-minutes <minutes>",
+    "unanswered child reminder interval; 0 disables reminders",
+    parseInputReminderMinutes,
+  )
   .action(async (options) => {
     const { state, caller } = await withCallerFromEnv();
     const resolvedSource = await resolveAgentTarget(state, options.watch, {
@@ -1175,6 +1187,7 @@ agent
       const next = buildSubscriptionRecord(caller, source, now, existing, {
         baselineTurnId: existing ? existing.baselineTurnId : baselineTurnId,
         level: options.level,
+        inputReminderMinutes: options.inputReminderMinutes,
       });
       return {
         state: {
