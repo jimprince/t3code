@@ -1071,6 +1071,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   nestedDepth?: number;
   nestedChildCount?: number;
   nestedActiveCount?: number;
+  nestedInputCount?: number;
+  nestedInputChildId?: ThreadId | undefined;
+  onOpenNestedInput?: (parent: ScopedThreadRef, childId: ThreadId) => void;
   nestedChildrenExpanded?: boolean;
   onToggleNestedChildren?: (threadRef: ScopedThreadRef) => void;
 }) {
@@ -1652,6 +1655,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       <SidebarNestedThreadToggle
         count={props.nestedChildCount!}
         activeCount={props.nestedActiveCount ?? 0}
+        inputCount={props.nestedInputCount ?? 0}
+        onOpenInput={() => {
+          if (props.nestedInputChildId)
+            props.onOpenNestedInput?.(threadRef, props.nestedInputChildId);
+        }}
         expanded={props.nestedChildrenExpanded ?? false}
         onToggle={() => props.onToggleNestedChildren?.(threadRef)}
       />
@@ -3055,6 +3063,15 @@ export default function Sidebar() {
       });
     },
     [clearSelection, isMobile, router, setOpenMobile, setSelectionAnchor],
+  );
+
+  const openNestedInput = useCallback(
+    (parent: ScopedThreadRef, childId: ThreadId) => {
+      const key = scopedThreadKey(parent);
+      setExpandedParents((keys) => (keys.includes(key) ? keys : [...keys, key]));
+      void navigateToThread(scopeThreadRef(parent.environmentId, childId));
+    },
+    [navigateToThread, setExpandedParents],
   );
 
   // Dropping files on a row opens that thread and attaches the files there.
@@ -5226,6 +5243,13 @@ export default function Sidebar() {
                             nestedDepth={nestedDepth}
                             nestedChildCount={sidebarChildren.get(threadKey)?.children.length ?? 0}
                             nestedActiveCount={sidebarChildren.get(threadKey)?.activeCount ?? 0}
+                            nestedInputCount={
+                              sidebarChildren.get(threadKey)?.inputChildren.length ?? 0
+                            }
+                            nestedInputChildId={
+                              sidebarChildren.get(threadKey)?.inputChildren[0]?.id
+                            }
+                            onOpenNestedInput={openNestedInput}
                             nestedChildrenExpanded={expandedParentKeys.has(threadKey)}
                             onToggleNestedChildren={toggleParentChildren}
                             thread={thread}
