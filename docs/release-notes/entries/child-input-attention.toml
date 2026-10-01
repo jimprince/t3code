@@ -1,0 +1,4 @@
+id = "child-input-attention"
+category = "feature"
+functionality = "worker supervision"
+text = "Parent thread status now stays separate from waiting sub-agents. Open a waiting child from its input marker; subscribed parents receive configurable question reminders every 45 minutes."
