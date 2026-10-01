@@ -49,10 +49,10 @@ describe("resolveCreateParent", () => {
     });
   });
 
-  it("stays top-level when the caller is in another project or environment", () => {
+  it("nests across projects but stays top-level across environments", () => {
     expect(create({ projectId: "project-2" })).toMatchObject({
-      parentThreadId: null,
-      reason: "calling thread is in another project",
+      parentThreadId: "orchestrator",
+      reason: "caller",
     });
     expect(create({ threads: [] })).toMatchObject({
       parentThreadId: null,
