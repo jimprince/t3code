@@ -1,8 +1,9 @@
 {
   "version": 5,
-  "prev": "cc620e0d6f83e206c36747da0571604d6e628d7d",
-  "head": "4e370f1af36955e38b109f87d40c3cfa473c4c95",
-  "applied": [
+  "prev": "4e5f3e1d9a25e9f6a55cdc729cc52af031496922",
+  "head": "0fcd5f90611451cca842689faea53b5450c022da",
+  "applied": [],
+  "unapplied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
@@ -49,7 +50,6 @@
     "fork-notification-preferences",
     "fork-sidebar-agent-visibility"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
