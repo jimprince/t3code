@@ -112,6 +112,81 @@ const projectionSnapshotLayer = it.layer(
 );
 
 projectionSnapshotLayer("ProjectionSnapshotQuery", (it) => {
+  it.effect("returns bounded nested-worker summaries on snapshots and incremental shells", () =>
+    Effect.gen(function* () {
+      const query = yield* ProjectionSnapshotQuery;
+      const sql = yield* SqlClient.SqlClient;
+      yield* sql`INSERT INTO projection_projects
+        (project_id, title, workspace_root, scripts_json, created_at, updated_at)
+        VALUES ('agent-project', 'Agents', '/tmp/agents', '[]', '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z')`;
+      yield* sql`INSERT INTO projection_threads
+        (thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode,
+         parent_thread_id, latest_turn_id, created_at, updated_at)
+        VALUES
+        ('agent-parent', 'agent-project', 'Parent', '{"provider":"codex","model":"gpt-5"}', 'full-access', 'default', NULL, NULL, '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z'),
+        ('agent-child', 'agent-project', 'Child', '{"provider":"codex","model":"gpt-5"}', 'full-access', 'default', 'agent-parent', 'agent-turn', '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z')`;
+      const output = `Checking the gripper\n${"large output".repeat(1000)}`;
+      yield* sql`INSERT INTO projection_thread_messages
+        (message_id, thread_id, turn_id, role, text, is_streaming, created_at, updated_at)
+        VALUES ('agent-output', 'agent-child', 'agent-turn', 'assistant', ${output}, 0, '2026-10-01T00:01:00Z', '2026-10-01T00:01:00Z')`;
+      yield* sql`INSERT INTO projection_thread_activities
+        (activity_id, thread_id, turn_id, tone, kind, summary, payload_json, sequence, created_at)
+        VALUES
+        ('agent-tool-start', 'agent-child', 'agent-turn', 'tool', 'tool.started', 'Tool', '{"toolCallId":"one"}', 1, '2026-10-01T00:02:00Z'),
+        ('agent-tool-end', 'agent-child', 'agent-turn', 'tool', 'tool.completed', 'Tool', '{"toolCallId":"one"}', 2, '2026-10-01T00:03:00Z'),
+        ('agent-old-tool', 'agent-child', 'old-turn', 'tool', 'tool.completed', 'Tool', '{"toolCallId":"old"}', 3, '2026-10-01T00:03:00Z'),
+        ('agent-usage', 'agent-child', 'agent-turn', 'info', 'context-window.updated', 'Usage', '{"usedTokens":2000,"totalProcessedTokens":7500}', 4, '2026-10-01T00:04:00Z')`;
+      const expected = {
+        latestOutput: "Checking the gripper",
+        contextTokens: 2000,
+        processedTokens: 7500,
+        toolCalls: 1,
+        lastActivityAt: "2026-10-01T00:04:00Z",
+      };
+      const snapshot = yield* query.getShellSnapshot();
+      assert.deepEqual(
+        snapshot.threads.find((t) => t.id === "agent-child")?.agentPanelSummary,
+        expected,
+      );
+      assert.equal(
+        snapshot.threads.find((t) => t.id === "agent-parent")?.agentPanelSummary,
+        undefined,
+      );
+      const incremental = yield* query.getThreadShellById(ThreadId.make("agent-child"));
+      assert.deepEqual(Option.getOrThrow(incremental).agentPanelSummary, expected);
+      yield* sql`UPDATE projection_thread_messages SET text = ${"🦾".repeat(400)} WHERE message_id = 'agent-output'`;
+      assert.equal(
+        Option.getOrThrow(yield* query.getThreadShellById(ThreadId.make("agent-child")))
+          .agentPanelSummary?.latestOutput,
+        "🦾".repeat(320),
+      );
+      yield* sql`UPDATE projection_thread_messages SET text = ${output} WHERE message_id = 'agent-output'`;
+      yield* sql`UPDATE projection_threads SET archived_at = '2026-10-01T00:05:00Z' WHERE thread_id = 'agent-child'`;
+      assert.deepEqual(
+        (yield* query.getArchivedShellSnapshot()).threads.find((t) => t.id === "agent-child")
+          ?.agentPanelSummary,
+        expected,
+      );
+      assert.deepEqual(
+        Option.getOrThrow(
+          yield* query.getThreadShellByIdIncludingArchived(ThreadId.make("agent-child")),
+        ).agentPanelSummary,
+        expected,
+      );
+      yield* sql`UPDATE projection_threads SET parent_thread_id = NULL WHERE thread_id = 'agent-child'`;
+      assert.equal(
+        Option.getOrThrow(
+          yield* query.getThreadShellByIdIncludingArchived(ThreadId.make("agent-child")),
+        ).agentPanelSummary,
+        undefined,
+      );
+      yield* sql`DELETE FROM projection_thread_messages WHERE thread_id = 'agent-child'`;
+      yield* sql`DELETE FROM projection_thread_activities WHERE thread_id = 'agent-child'`;
+      yield* sql`DELETE FROM projection_threads WHERE project_id = 'agent-project'`;
+      yield* sql`DELETE FROM projection_projects WHERE project_id = 'agent-project'`;
+    }),
+  );
+
   it.effect("hydrates read model from projection tables and computes snapshot sequence", () =>
     Effect.gen(function* () {
       const snapshotQuery = yield* ProjectionSnapshotQuery;
