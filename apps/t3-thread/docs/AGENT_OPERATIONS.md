@@ -541,6 +541,44 @@ t3-thread create \
   --notify <subscriber-agent-name-or-thread-id>
 ```
 
+### Notification levels and quiet results
+
+The first delivered notice includes a short guide once per subscriber, across
+all workers. The receipt survives restarts and unsubscribe/resubscribe; failed
+or held deliveries do not consume it. See [Thread communication](THREAD_COMMUNICATION.md)
+for the full reply, approval and notification controls.
+
+New subscriptions default to `all`, preserving completion and attention notices.
+Existing subscriptions without a level also use `all`. Choose at creation with
+`create ... --notify-level attention`, or change an existing route with
+`subscribe --watch <worker> --level attention`. Re-subscribing preserves its
+baseline and direct-message receipt.
+
+- `all`: routine completions and interruptions, plus required escalations.
+- `attention`: input, approval, actionable plans, errors, and interruptions.
+- `none`: required input, approval, actionable plans, and errors only.
+
+Required escalations bypass every level and quiet result. `--no-notify` removes
+create-time routing entirely; use `none` when escalation must still reach you.
+A supervisor receiving direct result messages should normally choose `attention`.
+
+A worker can end its final response with the exact final line `T3_NOTIFY: quiet`
+to suppress its completion, or `T3_NOTIFY: attention` to request a completion
+notice at `attention`. Without a marker, completion keeps today's behavior.
+`none` does not deliver even explicitly marked completions. At `attention`, a
+successful `t3-thread send <subscriber> ...` during the same source turn suppresses
+that turn's completion notice; `all` explicitly keeps both. Accepted queued sends
+count as direct results, since they already await the subscriber's turn boundary.
+The receipt belongs to the route and turn, so other subscribers and later turns
+are unaffected. It does not infer delivery from assistant prose.
+
+Consecutive identical errors (same state and reason) share one notification.
+`notifications` exposes `occurrences`; repeated watcher scans do not increase it,
+but a distinct failing turn or assistant message does. Pending delivery includes
+the count; later occurrences update the record without waking the supervisor
+again. After the watcher observes a state or reason change, the next error can
+notify again. Counts and delivery state survive watcher restart.
+
 List saved subscriptions:
 
 ```bash
@@ -560,7 +598,7 @@ Current scope note:
 
 - `subscribe` / `unsubscribe` manage local routing state.
 - `subscribe` rejects self-subscriptions so a coordinator thread cannot watch itself.
-- `subscribe` records the source's current turn as a baseline when the source is already idle, completed, or errored. Attention for that turn is never routed, so subscribing does not replay old state; only turns started after the subscription count. Subscribing to a source that is still mid-turn keeps no baseline, so that turn's completion still routes.
+- `subscribe` records the source's current turn as a baseline when the source is already idle, completed, or errored. Routine completion for that turn is not replayed. Required input, approval, actionable plans, and errors still deliver once. Subscribing to a source that is still mid-turn keeps no baseline, so that turn's completion still routes.
 - When the source moves on before an event is delivered, the older undelivered events on that route become `superseded` (terminal) and only the newest is delivered. A completed-turn backlog therefore costs the recipient one turn, not one per stale event.
 - `watch` polls the current snapshot-backed deployment in two phases: detection persists deduplicated notification events, then delivery claims pending events and attempts routed sends. The same pass drains queued sends at their next turn boundary.
 - Delivery order is oldest event first, and at most one notification per recipient per pass, because delivering one starts a turn on the recipient.
@@ -843,12 +881,12 @@ disables either route. Always check `notifySubscribed` in the result.
 Completion notifications say that a turn completed; pending approvals, questions,
 plans, errors, and interruptions say that attention is needed. A reply to a routed
 notification does not emit another completion notification. It can still report
-an approval, question, plan, error, or interruption. To watch only those states:
+an approval, question, plan, error, or interruption. To reduce routine completion notices:
 
 ```bash
-t3-thread subscribe --watch <source> --events attention
+t3-thread subscribe --watch <source> --level attention
 # Restore completion notifications on the same route:
-t3-thread subscribe --watch <source> --events all
+t3-thread subscribe --watch <source> --level all
 ```
 
 Existing routes continue to include completions unless explicitly changed. Multiple
