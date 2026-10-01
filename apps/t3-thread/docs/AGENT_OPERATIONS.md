@@ -775,3 +775,11 @@ copied test state directory as proof of the production environment's identity.
 Execution rechecks thread lifecycle and Git state before each non-forced removal.
 This reduces the stale-plan window; it does not lock out concurrent external Git
 operations, so avoid starting work in archived checkouts during cleanup.
+
+### Operator launch and polling cost
+
+The default CLI entry point is prebuilt JavaScript. See
+[Prebuilt operator runtime](../README.md#prebuilt-operator-runtime) for explicit
+build/deploy commands, source development, and stale-build recovery. Watchers
+use the same entry point as their caller. Idle polls back off to one minute;
+missing and archived sources are flagged and parked for the watcher's lifetime.
