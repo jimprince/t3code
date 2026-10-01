@@ -50,6 +50,8 @@ const RefinementInput = Schema.fromJsonString(
     generation: Schema.String,
   }),
 );
+const encodeGeneration = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+const encodeRefinementInput = Schema.encodeSync(RefinementInput);
 const decodeRefinementInput = Schema.decodeSync(RefinementInput);
 /** A sweep retains each refinement until every link in that sweep has finished. */
 export const ProviderRefinementScope = Context.Reference<Map<string, Refinement> | undefined>(
@@ -341,10 +343,14 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
       const providerSettings = yield* getProviderSettings;
       const instances = providerSettings.giteaInstances;
       const environment = yield* HostProcessEnvironment;
-      const generation = JSON.stringify([providerSettings, environment.PATH, environment.PATHEXT]);
+      const generation = encodeGeneration([
+        providerSettings,
+        environment.PATH,
+        environment.PATHEXT,
+      ]);
       const explicitContext = configuredContext(input.context ?? null, instances);
       const refineExplicit = Effect.gen(function* () {
-        const key = JSON.stringify({ cwd: input.cwd, context: explicitContext, generation });
+        const key = encodeRefinementInput({ cwd: input.cwd, context: explicitContext, generation });
         const scope = yield* ProviderRefinementScope;
         if (scope === undefined) return yield* Cache.get(explicitContextCache, key);
         let refinement = scope.get(key);

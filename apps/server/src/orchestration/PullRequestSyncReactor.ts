@@ -23,6 +23,7 @@ import * as Layer from "effect/Layer";
 import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
 import * as Semaphore from "effect/Semaphore";
+import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
@@ -126,6 +127,8 @@ export class PullRequestSyncReactor extends Context.Service<
 >()("t3/orchestration/PullRequestSyncReactor") {}
 
 /** @public Service construction is part of the canonical Effect module API. */
+const encodeRepositoryKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
 export const make = Effect.gen(function* () {
   const engine = yield* OrchestrationEngine.OrchestrationEngineService;
   const snapshots = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
@@ -303,7 +306,7 @@ export const make = Effect.gen(function* () {
       if ((requestedKey !== undefined && requestedKey !== key) || !isDue(key, entries, nowMs))
         continue;
       const first = entries[0]!;
-      const repositoryKey = JSON.stringify([
+      const repositoryKey = encodeRepositoryKey([
         first.thread.projectId,
         normalizeThreadPullRequestKey(first.link).host,
         first.link.repository,

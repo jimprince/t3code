@@ -15,6 +15,8 @@ import { HostProcessPlatform, HostProcessEnvironment } from "@t3tools/shared/hos
 import { resolveSpawnCommand, SpawnExecutableResolution } from "@t3tools/shared/shell";
 import { recordProcessLaunch, processLaunchesLastMinute } from "./processLaunchDiagnostics.ts";
 
+const encodeExecutableCacheKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+
 /** Background callers opt in; interactive operations and checkpoints keep their own deadlines. */
 export const BackgroundProcessWork = Context.Reference<boolean>("t3/BackgroundProcessWork", {
   defaultValue: () => false,
@@ -437,7 +439,7 @@ export const make = Effect.fn("ProcessRunner.make")(function* () {
     Effect.gen(function* () {
       const env = input.env === undefined ? hostEnvironment : { ...hostEnvironment, ...input.env };
       const generation = yield* ExecutableCacheGeneration;
-      const key = JSON.stringify([
+      const key = encodeExecutableCacheKey([
         input.command,
         env.PATH,
         env.Path,
