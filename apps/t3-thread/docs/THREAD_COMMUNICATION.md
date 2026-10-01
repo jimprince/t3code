@@ -53,3 +53,15 @@ restarts and unsubscribe/resubscribe, and is retained when errors are recounted.
 Existing subscribers receive it on their next successful delivery after upgrading.
 Deleting the subscriber's local notification history resets this onboarding receipt.
 See [Agent operations](AGENT_OPERATIONS.md) for pairing, lookup and watcher recovery.
+
+## Waiting-child reminders
+
+A nested worker's unanswered question is sent again to its subscribed parent every
+45 minutes after the last confirmed delivery, with the question and choices.
+Change a route with `t3-thread subscribe --watch <name> --input-reminder-minutes 20`,
+or choose the interval at creation using `--input-reminder-minutes 20`.
+Zero disables reminders while preserving the initial input notification. All
+notification levels still deliver input escalations. The interval and delivery
+history survive watcher restart. Answering, settling, archiving or unnesting the
+worker stops reminders; unsubscribe also removes the route. A busy or settled
+parent retains the latest pending notice under the usual delivery rules.
