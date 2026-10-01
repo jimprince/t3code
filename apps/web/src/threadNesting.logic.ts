@@ -67,36 +67,6 @@ export function resolveNestedThreadKeys(threads: ReadonlyArray<NestingThread>): 
   return nested;
 }
 
-/** Visible cross-project children, indexed once for sidebar placement. Same-project
- * children retain their existing Agents-panel placement, except the open child.
- * Filter before resolving parents so hiding a project cannot strand a child.
- */
-export function sidebarNestedRows<T extends NestingThread>(
-  threads: ReadonlyArray<T>,
-  visibleProjectKeys: ReadonlySet<string> | null,
-  viewedThreadKey: string | null,
-): ReadonlyMap<string, ReadonlyArray<T>> {
-  const visible = threads.filter(
-    (thread) =>
-      thread.archivedAt === null &&
-      (visibleProjectKeys === null ||
-        visibleProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
-  );
-  const nested = resolveNestedThreadKeys(visible);
-  const byKey = new Map(visible.map((thread) => [threadKey(thread), thread]));
-  const rows = new Map<string, T[]>();
-  for (const child of visible) {
-    if (child.parentThreadId == null || !nested.has(threadKey(child))) continue;
-    const parentKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.parentThreadId));
-    const parent = byKey.get(parentKey)!;
-    if (child.projectId === parent.projectId && threadKey(child) !== viewedThreadKey) continue;
-    const siblings = rows.get(parentKey);
-    if (siblings) siblings.push(child);
-    else rows.set(parentKey, [child]);
-  }
-  return rows;
-}
-
 type AttentionThread = NestingThread &
   Pick<EnvironmentThreadShell, "hasPendingApprovals" | "hasPendingUserInput"> &
   Partial<Pick<EnvironmentThreadShell, "session" | "backgroundLiveness">>;
