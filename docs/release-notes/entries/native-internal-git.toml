@@ -1,0 +1,4 @@
+id = "native-internal-git"
+category = "performance"
+functionality = "source-control"
+text = "Reduce background process launches by running internal Git commands directly instead of through agent shell safety wrappers."
