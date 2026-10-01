@@ -1294,3 +1294,13 @@ purpose = "Show active nested workers on their parent's sidebar row and expand o
 retire_when = "Upstream provides active nested-worker counts and remembered expandable sidebar placement, or the fork stops showing nested workers."
 depends_on = ["fork-nested-threads"]
 roles = []
+
+[[patch]]
+name = "fork-child-input-attention"
+subject = "feat(threads): separate child input attention from parent status"
+class = "product"
+purpose = "Keep parent status independent, expose waiting child input, and remind subscribed parents while questions remain pending."
+retire_when = "Upstream provides independent parent status, child attention navigation and configurable unanswered-question reminders."
+depends_on = ["fork-notification-preferences", "fork-sidebar-agent-visibility"]
+roles = []
+note = "Replaces sidebar child-state rollup with separate child input markers. Reminders use existing parent subscriptions and confirmed-delivery history, with no new polling process."
