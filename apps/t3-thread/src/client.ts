@@ -1,4 +1,3 @@
-import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
 import type { ProjectAutomation } from "@t3tools/contracts";
 import * as NodeCrypto from "node:crypto";
 
@@ -467,7 +466,6 @@ export class RemoteEnvironmentClient {
     baseBranch?: string;
     startFromOrigin?: boolean;
     initialMessage?: string;
-    workerContext?: WorkerContext;
     parentThreadId?: string | null;
     pin?: boolean;
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
@@ -506,18 +504,7 @@ export class RemoteEnvironmentClient {
         message: {
           messageId: NodeCrypto.randomUUID(),
           role: "user",
-          text: input.workerContext
-            ? wrapWithPreamble(initialMessage, {
-                ...input.workerContext,
-                threadId,
-                environment: this.environment.name,
-                projectId: project.id,
-                projectTitle: project.title,
-                branch: input.branch ?? null,
-                worktreePath: input.branch ? null : project.workspaceRoot,
-                createdAt,
-              })
-            : initialMessage,
+          text: initialMessage,
           attachments: [],
         },
         modelSelection,
