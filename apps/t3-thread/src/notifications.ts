@@ -1,7 +1,13 @@
 import * as NodeCrypto from "node:crypto";
+import { findPendingRequests } from "./nesting.js";
 
-import { summarizeMessageText, type AgentOverview } from "./monitor.js";
+import {
+  getLatestTurnAssistantMessage,
+  summarizeMessageText,
+  type AgentOverview,
+} from "./monitor.js";
 import type {
+  NotificationLevel,
   OrchestrationThread,
   SavedAgent,
   SavedNotification,
@@ -61,15 +67,32 @@ export function buildNotificationRecord(input: {
   now: string;
   existing?: SavedNotification | null;
 }): SavedNotification {
-  const eventKey = buildNotificationEventKey({
+  const baseKey = buildNotificationEventKey({
     subscriberThreadId: input.subscription.subscriberThreadId,
     sourceThreadId: input.subscription.sourceThreadId,
     latestAssistantMessageId: input.overview.latestAssistantMessageId,
     latestTurnId: input.thread.latestTurn?.turnId ?? null,
     sourceState: input.overview.state,
   });
+  const requiresRequestKey = ["needs-approval", "needs-input", "needs-plan"].includes(
+    input.overview.state,
+  );
+  const pendingIds = requiresRequestKey
+    ? findPendingRequests(input.thread.activities)
+        .map((request) => `${request.kind}:${request.requestId}`)
+        .sort()
+    : [];
+  const eventKey = requiresRequestKey
+    ? `${baseKey}:${input.overview.state}:${JSON.stringify(pendingIds)}:${JSON.stringify(
+        input.thread.proposedPlans
+          .filter((plan) => !plan.implementedAt)
+          .map((plan) => plan.id)
+          .sort(),
+      )}`
+    : baseKey;
 
   return {
+    completionDisposition: turnResultDisposition(input.thread),
     id: input.existing?.id ?? NodeCrypto.randomUUID(),
     eventKey,
     subscriberThreadId: input.subscription.subscriberThreadId,
@@ -133,6 +156,7 @@ export function buildNotificationMessage(notification: SavedNotification): strin
     `HomeNetwork orchestrator notification: ${sourceLabel} needs attention.`,
     `State: ${notification.sourceState}.`,
     `Reason: ${notification.reason}.`,
+    (notification.occurrences ?? 1) > 1 ? `Occurrences: ${notification.occurrences}.` : null,
     preview ? `Latest output: ${preview}.` : null,
     notification.sourceState === "completed"
       ? `Decide whether ${sourceLabel} is finished: if so, settle it with \`t3-thread settle ${sourceLabel}\`; if not, send it the follow-up.`
@@ -140,4 +164,50 @@ export function buildNotificationMessage(notification: SavedNotification): strin
   ]
     .filter(Boolean)
     .join(" ");
+}
+
+/** Required escalation bypasses both subscription filtering and quiet completion. */
+export function shouldNotify(
+  subscription: SavedSubscription,
+  overview: AgentOverview,
+  thread: OrchestrationThread,
+): boolean {
+  return shouldDeliverNotification(subscription, {
+    sourceState: overview.state,
+    latestTurnId: thread.latestTurn?.turnId ?? null,
+    completionDisposition: turnResultDisposition(thread),
+  });
+}
+
+function turnResultDisposition(thread: OrchestrationThread): "quiet" | "attention" | null {
+  const text = getLatestTurnAssistantMessage(thread)?.text.trim() ?? "";
+  const disposition = text.match(/(?:^|\n)T3_NOTIFY: (quiet|attention)$/)?.[1];
+  return disposition === "quiet" || disposition === "attention" ? disposition : null;
+}
+
+export function shouldDeliverNotification(
+  subscription: SavedSubscription,
+  notification: Pick<SavedNotification, "sourceState" | "latestTurnId" | "completionDisposition">,
+): boolean {
+  if (["needs-input", "needs-approval", "needs-plan", "error"].includes(notification.sourceState))
+    return true;
+  const level = subscription.level ?? "all";
+  if (level === "none") return false;
+  if (notification.sourceState === "completed") {
+    const disposition = notification.completionDisposition;
+    if (disposition === "quiet") return false;
+    if (level === "all") return true;
+    if (
+      notification.latestTurnId != null &&
+      subscription.lastDirectMessageTurnId === notification.latestTurnId
+    )
+      return false;
+    return disposition === "attention";
+  }
+  return level === "all" || notification.sourceState === "interrupted";
+}
+
+export function parseNotificationLevel(value: string): NotificationLevel {
+  if (value === "all" || value === "attention" || value === "none") return value;
+  throw new Error("Notification level must be all, attention, or none.");
 }
