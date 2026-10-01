@@ -171,6 +171,24 @@ export const ResourceMonitorHelloEvent = Schema.Struct({
 });
 export type ResourceMonitorHelloEvent = typeof ResourceMonitorHelloEvent.Type;
 
+export const SyspolicydSample = Schema.Struct({
+  sampledAtUnixMs: NonNegativeInt,
+  pid: PositiveInt,
+  startTimeMs: NonNegativeInt,
+  residentBytes: NonNegativeInt,
+  cpuPercent: Schema.Number,
+});
+export type SyspolicydSample = typeof SyspolicydSample.Type;
+
+export const ProcessLaunchHealth = Schema.Struct({
+  sampledAtUnixMs: NonNegativeInt,
+  syspolicyd: Schema.NullOr(SyspolicydSample),
+  attemptsPerMinute: NonNegativeInt,
+  failuresPerMinute: NonNegativeInt,
+  warnings: Schema.Array(Schema.String),
+});
+export type ProcessLaunchHealth = typeof ProcessLaunchHealth.Type;
+
 export const ResourceMonitorSnapshotEvent = Schema.Struct({
   version: Schema.Literal(RESOURCE_MONITOR_PROTOCOL_VERSION),
   type: Schema.Literal("snapshot"),
@@ -183,6 +201,7 @@ export const ResourceMonitorSnapshotEvent = Schema.Struct({
   requestId: Schema.optionalKey(TrimmedNonEmptyString),
   externalProcesses: Schema.optionalKey(Schema.Array(ResourceMonitorExternalProcess)),
   processes: Schema.Array(ResourceMonitorProcessSample),
+  syspolicyd: Schema.optionalKey(Schema.NullOr(SyspolicydSample)),
 });
 export type ResourceMonitorSnapshotEvent = typeof ResourceMonitorSnapshotEvent.Type;
 
@@ -423,6 +442,7 @@ export const ResourceTelemetrySourceHealth = Schema.Struct({
 export type ResourceTelemetrySourceHealth = typeof ResourceTelemetrySourceHealth.Type;
 
 export const ResourceTelemetryHealth = Schema.Struct({
+  processLaunch: Schema.optionalKey(ProcessLaunchHealth),
   native: ResourceTelemetrySourceHealth,
   desktop: ResourceTelemetrySourceHealth,
   sidecarVersion: Schema.Option(TrimmedNonEmptyString),
