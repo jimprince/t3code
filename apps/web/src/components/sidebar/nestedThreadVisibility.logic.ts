@@ -64,16 +64,17 @@ export function groupSidebarChildren<T extends SidebarChild>(
           visibleProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
         );
   const nested = resolveNestedThreadKeys(eligible);
-  const groups = new Map<string, { children: T[]; activeCount: number }>();
+  const groups = new Map<string, { children: T[]; activeCount: number; inputChildren: T[] }>();
   for (const thread of eligible) {
     const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
     if (!nested.has(key) || thread.archivedAt !== null || thread.parentThreadId == null) continue;
     const parentKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.parentThreadId));
-    const group = groups.get(parentKey) ?? { children: [], activeCount: 0 };
+    const group = groups.get(parentKey) ?? { children: [], activeCount: 0, inputChildren: [] };
     group.children.push(thread);
     groups.set(parentKey, group);
   }
   const activeCountByParent = new Map<string, number>();
+  const inputChildrenByParent = new Map<string, T[]>();
   const countActiveDescendants = (parentKey: string, visiting: Set<string>): number => {
     const cached = activeCountByParent.get(parentKey);
     if (cached !== undefined) return cached;
@@ -90,8 +91,26 @@ export function groupSidebarChildren<T extends SidebarChild>(
     activeCountByParent.set(parentKey, count);
     return count;
   };
+  const collectInputDescendants = (parentKey: string, visiting: Set<string>): T[] => {
+    const cached = inputChildrenByParent.get(parentKey);
+    if (cached !== undefined) return cached;
+    if (visiting.has(parentKey)) return [];
+    visiting.add(parentKey);
+    const inputChildren =
+      groups.get(parentKey)?.children.flatMap((child) => {
+        const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
+        return [
+          ...(child.settledOverride !== "settled" && child.hasPendingUserInput ? [child] : []),
+          ...collectInputDescendants(childKey, visiting),
+        ];
+      }) ?? [];
+    visiting.delete(parentKey);
+    inputChildrenByParent.set(parentKey, inputChildren);
+    return inputChildren;
+  };
   for (const [parentKey, group] of groups) {
     group.activeCount = countActiveDescendants(parentKey, new Set());
+    group.inputChildren = collectInputDescendants(parentKey, new Set());
     group.children.sort((a, b) => {
       const pinnedDifference = Number(b.pinnedAt != null) - Number(a.pinnedAt != null);
       if (pinnedDifference !== 0) return pinnedDifference;
