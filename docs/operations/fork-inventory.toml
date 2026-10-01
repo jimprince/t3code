@@ -1265,3 +1265,12 @@ retire_when = "Upstream caches missing executables and explicit provider discove
 depends_on = ["fork-gitea-connections", "fork-unsupported-pr-hosts"]
 roles = []
 note = "The shared runner caches ENOENT only when executable resolution confirms absence, keyed by executable environment and provider settings generation. Successful PATH resolutions are reused. Explicit provider contexts include cwd, remote, requested authority, and settings/environment in a single-flight cache; each PR sweep retains refinements until all its repository groups complete. PR sweeps and periodic VCS refreshes opt into a shared five-attempts/second limit; interactive work keeps its own deadlines. Last-minute executable counters cover ProcessRunner's direct spawn calls, not vendor descendants or all host processes. The existing root resolver already caches null roots for one minute."
+
+[[patch]]
+name = "fork-t3-thread-prebuilt"
+subject = "perf(t3-thread): run prebuilt commands and back off idle watchers"
+class = "divergence"
+purpose = "Reduce operator CLI launches through explicit prebuilt JavaScript and reduce watcher reads through shared polling, parked stale sources, and idle backoff."
+retire_when = "The worker operator CLI supplies equivalent prebuilt launch and adaptive polling behavior."
+depends_on = ["fork-worker-operations"]
+roles = []
