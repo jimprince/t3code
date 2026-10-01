@@ -4,6 +4,7 @@ import * as NodePath from "node:path";
 import * as NodeCrypto from "node:crypto";
 
 import type {
+  NotificationLevel,
   SavedAgent,
   SavedEnvironment,
   SavedNotification,
@@ -361,9 +362,11 @@ export function buildSubscriptionRecord(
   source: SubscriptionEndpoint,
   now: string,
   existing?: SavedSubscription | null,
-  options: { baselineTurnId?: string | null } = {},
+  options: { baselineTurnId?: string | null; level?: NotificationLevel } = {},
 ): SavedSubscription {
   return {
+    ...existing,
+    level: options.level ?? existing?.level ?? "all",
     subscriberThreadId: caller.threadId,
     subscriberAgentName: caller.name,
     subscriberEnvironment: caller.environment,
