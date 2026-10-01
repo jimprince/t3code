@@ -1,5 +1,6 @@
 import {
   AgentSessionImportSource,
+  ThreadAgentPanelSummary,
   ApprovalRequestId,
   ChatAttachment,
   ChatFileHandoffAttachment,
@@ -137,6 +138,9 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
     linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
     branchPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
     goal: Schema.NullOr(Schema.fromJsonString(OrchestrationThreadGoal)),
+    agentPanelSummary: Schema.optionalKey(
+      Schema.NullOr(Schema.fromJsonString(ThreadAgentPanelSummary)),
+    ),
   }),
 );
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
@@ -573,12 +577,38 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       `,
   });
 
+  // SQLite returns at most 320 output characters and counters, never tool payloads.
+  // CASE skips history reads entirely for ordinary sidebar threads.
+  const agentPanelSummaryColumns = sql`
+    CASE WHEN threads.parent_thread_id IS NOT NULL THEN json_object(
+      'latestOutput', (SELECT substr(text, 1, min(320, CASE WHEN instr(text, char(10)) > 0 THEN instr(text, char(10)) - 1 ELSE length(text) END)) FROM projection_thread_messages
+        WHERE thread_id = threads.thread_id AND role = 'assistant' AND text <> ''
+        ORDER BY created_at DESC, message_id DESC LIMIT 1),
+      'processedTokens', (SELECT json_extract(payload_json, '$.totalProcessedTokens')
+        FROM projection_thread_activities WHERE thread_id = threads.thread_id
+        AND kind = 'context-window.updated' ORDER BY sequence DESC, created_at DESC LIMIT 1),
+      'contextTokens', (SELECT json_extract(payload_json, '$.usedTokens')
+        FROM projection_thread_activities WHERE thread_id = threads.thread_id
+        AND kind = 'context-window.updated' ORDER BY sequence DESC, created_at DESC LIMIT 1),
+      'toolCalls', (SELECT count(DISTINCT coalesce(json_extract(payload_json, '$.toolCallId'),
+        CASE WHEN kind = 'tool.completed' THEN activity_id END))
+        FROM projection_thread_activities WHERE thread_id = threads.thread_id
+        AND turn_id = threads.latest_turn_id AND kind IN ('tool.started', 'tool.completed')),
+      'lastActivityAt', max(
+        coalesce((SELECT max(updated_at) FROM projection_thread_messages
+          WHERE thread_id = threads.thread_id), threads.created_at),
+        coalesce((SELECT max(created_at) FROM projection_thread_activities
+          WHERE thread_id = threads.thread_id), threads.created_at))
+    ) ELSE NULL END AS "agentPanelSummary",
+  `;
+
   const listThreadRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionThreadDbRowSchema,
     execute: () =>
       sql`
         SELECT
+          ${agentPanelSummaryColumns}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -612,7 +642,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           goal_json AS "goal",
           deleted_at AS "deletedAt"
-        FROM projection_threads
+        FROM projection_threads threads
         ORDER BY created_at ASC, thread_id ASC
       `,
   });
@@ -629,6 +659,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: (request) =>
       sql`
         SELECT
+          ${agentPanelSummaryColumns}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -706,6 +737,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: () =>
       sql`
         SELECT
+          ${agentPanelSummaryColumns}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -739,7 +771,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           goal_json AS "goal",
           deleted_at AS "deletedAt"
-        FROM projection_threads
+        FROM projection_threads threads
         WHERE deleted_at IS NULL
           AND archived_at IS NOT NULL
         ORDER BY project_id ASC, archived_at DESC, thread_id DESC
@@ -1315,6 +1347,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: ({ threadId }) =>
       sql`
         SELECT
+          ${agentPanelSummaryColumns}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -1348,7 +1381,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           goal_json AS "goal",
           deleted_at AS "deletedAt"
-        FROM projection_threads
+        FROM projection_threads threads
         WHERE thread_id = ${threadId}
           AND deleted_at IS NULL
           AND archived_at IS NULL
@@ -1437,6 +1470,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     execute: ({ threadId }) =>
       sql`
         SELECT
+          ${agentPanelSummaryColumns}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -1469,7 +1503,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           has_actionable_proposed_plan AS "hasActionableProposedPlan",
           goal_json AS "goal",
           deleted_at AS "deletedAt"
-        FROM projection_threads
+        FROM projection_threads threads
         WHERE thread_id = ${threadId}
           AND deleted_at IS NULL
         LIMIT 1
@@ -2888,6 +2922,9 @@ pending_approval_requests AS (
                         titleRegeneration: mapTitleRegeneration(row),
                         titleState: row.titleState,
                         session: sessionByThread.get(row.threadId) ?? null,
+                        ...(row.agentPanelSummary
+                          ? { agentPanelSummary: row.agentPanelSummary }
+                          : {}),
                         latestUserMessageAt: row.latestUserMessageAt,
                         hasPendingApprovals: row.pendingApprovalCount > 0,
                         hasPendingUserInput: row.pendingUserInputCount > 0,
@@ -3079,6 +3116,7 @@ pending_approval_requests AS (
                   titleRegeneration: mapTitleRegeneration(row),
                   titleState: row.titleState,
                   session: sessionByThread.get(row.threadId) ?? null,
+                  ...(row.agentPanelSummary ? { agentPanelSummary: row.agentPanelSummary } : {}),
                   latestUserMessageAt: row.latestUserMessageAt,
                   hasPendingApprovals: row.pendingApprovalCount > 0,
                   hasPendingUserInput: row.pendingUserInputCount > 0,
@@ -3455,6 +3493,9 @@ pending_approval_requests AS (
         titleRegeneration: mapTitleRegeneration(threadRow.value),
         titleState: threadRow.value.titleState,
         session: Option.isSome(sessionRow) ? mapSessionRow(sessionRow.value) : null,
+        ...(threadRow.value.agentPanelSummary
+          ? { agentPanelSummary: threadRow.value.agentPanelSummary }
+          : {}),
         latestUserMessageAt: threadRow.value.latestUserMessageAt,
         hasPendingApprovals: threadRow.value.pendingApprovalCount > 0,
         hasPendingUserInput: threadRow.value.pendingUserInputCount > 0,
