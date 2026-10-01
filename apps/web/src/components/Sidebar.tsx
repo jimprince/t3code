@@ -144,6 +144,11 @@ import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
+import {
+  groupSidebarChildren,
+  visibleSidebarChildren,
+} from "./sidebar/nestedThreadVisibility.logic";
+import { SidebarNestedThreadToggle } from "./sidebar/SidebarNestedThreadToggle";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
@@ -262,7 +267,6 @@ import {
   applySidebarThreadNesting,
   isThreadNestingMenuId,
   resolveThreadNestingMenuState,
-  sidebarNestedRows,
 } from "../threadNesting.logic";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
@@ -290,6 +294,8 @@ const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 // Fresh keys deliberately reset both shelves to collapsed for existing users.
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
+const EXPANDED_PARENT_KEYS_SCHEMA = Schema.Array(Schema.String);
+const EMPTY_EXPANDED_PARENT_KEYS: string[] = [];
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
 
 function compactSidebarTimeLabel(label: string): string {
@@ -1061,8 +1067,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
    * composer. Absent when the sidebar cannot open server threads.
    */
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
-  /** Open nested thread shown indented under its parent's row. */
+  /** Nested thread shown indented under its parent's row. */
   nestedSubRow?: boolean;
+  nestedChildCount?: number;
+  nestedActiveCount?: number;
+  nestedChildrenExpanded?: boolean;
+  onToggleNestedChildren?: (threadRef: ScopedThreadRef) => void;
 }) {
   const {
     isRenaming,
@@ -1631,6 +1641,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     )
   ) : null;
 
+  const nestedChildrenToggle =
+    (props.nestedChildCount ?? 0) > 0 ? (
+      <SidebarNestedThreadToggle
+        count={props.nestedChildCount!}
+        activeCount={props.nestedActiveCount ?? 0}
+        expanded={props.nestedChildrenExpanded ?? false}
+        onToggle={() => props.onToggleNestedChildren?.(threadRef)}
+      />
+    ) : null;
+
   if (variant === "slim") {
     return (
       <li
@@ -1640,6 +1660,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         className={cn(
           // Matches the h-9 row so unrendered rows never shift the list when they paint.
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
+          props.nestedSubRow && "pl-4",
           sortable?.isDragging && "relative z-20",
         )}
       >
@@ -1677,6 +1698,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             {draftIndicator}
             {title}
             {pinIndicator}
+            {nestedChildrenToggle}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
@@ -1845,6 +1867,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 <span className="flex-1" />
               )}
               {pinIndicator}
+              {nestedChildrenToggle}
               {/* The visible state owns this slot's width: status at rest,
                   actions on hover/keyboard focus or while the popover is open. Keeping
                   the hidden state out of flow lets the project label reclaim
@@ -2352,6 +2375,22 @@ export default function Sidebar() {
     [routeDraftThread, routeTarget],
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
+  const [expandedParents, setExpandedParents] = useLocalStorage(
+    "t3code:sidebar:expanded-parents",
+    EMPTY_EXPANDED_PARENT_KEYS,
+    EXPANDED_PARENT_KEYS_SCHEMA,
+  );
+  const expandedParentKeys = useMemo(() => new Set(expandedParents), [expandedParents]);
+  const toggleParentChildren = useCallback(
+    (threadRef: ScopedThreadRef) => {
+      const key = scopedThreadKey(threadRef);
+      clearSelection();
+      setExpandedParents((keys) =>
+        keys.includes(key) ? keys.filter((candidate) => candidate !== key) : [...keys, key],
+      );
+    },
+    [clearSelection, setExpandedParents],
+  );
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
   // Post-settle navigation validates against the CURRENT route, not the one
@@ -2534,6 +2573,10 @@ export default function Sidebar() {
     () => resolveVisibleProjectRefKeys(hiddenProjectKeys, projectFilterGroups),
     [hiddenProjectKeys, projectFilterGroups],
   );
+  const sidebarChildren = useMemo(
+    () => groupSidebarChildren(threads, scopedProjectKeys),
+    [threads, scopedProjectKeys],
+  );
   const projectScopeTriggerLabel =
     scopedProjectGroup?.displayName ??
     (allProjectsCheckboxState === "all"
@@ -2541,10 +2584,6 @@ export default function Sidebar() {
       : allProjectsCheckboxState === "none"
         ? "No projects"
         : `${visibleProjectGroups.length} projects`);
-  const nestedRowsByParent = useMemo(
-    () => sidebarNestedRows(threads, scopedProjectKeys, routeThreadKey),
-    [threads, scopedProjectKeys, routeThreadKey],
-  );
   // Any filter change drops the selection so bulk actions only touch visible rows.
   const settledResetKey = [...hiddenProjectKeys].sort().join(",");
   const setHiddenProjectKeys = useCallback(
@@ -5170,6 +5209,16 @@ export default function Sidebar() {
                             // sortable wrapper keeps its identity during a drag.
                             key={`${threadKey}:${rowVariant}${nestedSubRow ? ":nested" : ""}`}
                             nestedSubRow={nestedSubRow}
+                            nestedChildCount={
+                              nestedSubRow
+                                ? 0
+                                : (sidebarChildren.get(threadKey)?.children.length ?? 0)
+                            }
+                            nestedActiveCount={
+                              nestedSubRow ? 0 : (sidebarChildren.get(threadKey)?.activeCount ?? 0)
+                            }
+                            nestedChildrenExpanded={expandedParentKeys.has(threadKey)}
+                            onToggleNestedChildren={toggleParentChildren}
                             thread={thread}
                             variant={rowVariant}
                             // Snoozed rows wake, settled rows un-settle, and cards settle.
@@ -5296,8 +5345,19 @@ export default function Sidebar() {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           // Hidden during drags: it is not part of the sortable list.
                           if (dragState === null) {
-                            for (const child of nestedRowsByParent.get(item.key) ?? []) {
-                              items.push(renderThreadRowInner(child, "active", undefined, true));
+                            for (const child of visibleSidebarChildren(
+                              sidebarChildren.get(item.key)?.children ?? [],
+                              expandedParentKeys.has(item.key),
+                              routeThreadKey,
+                            )) {
+                              items.push(
+                                renderThreadRowInner(
+                                  child,
+                                  child.settledOverride === "settled" ? "settled" : "active",
+                                  undefined,
+                                  true,
+                                ),
+                              );
                             }
                           }
                           continue;
