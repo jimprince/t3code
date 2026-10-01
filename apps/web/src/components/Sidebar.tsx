@@ -52,19 +52,15 @@ import {
   ChevronDownIcon,
   CircleAlertIcon,
   CircleCheckIcon,
-  CircleDashedIcon,
   ClockIcon,
   CornerDownRightIcon,
-  EyeIcon,
   FolderIcon,
   GitBranchIcon,
-  MessageCircleQuestionIcon,
   MinusIcon,
   PinIcon,
   PinOffIcon,
   PlusIcon,
   SettingsIcon,
-  ShieldQuestionIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -144,6 +140,16 @@ import { resolveThreadActionProjectRef, startNewThreadFromContext } from "../lib
 import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings";
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
+import {
+  flattenVisibleSidebarChildren,
+  groupSidebarChildren,
+  hasActiveSidebarDescendants,
+  resolveSidebarChildStatus,
+  sidebarNestedPathKeys,
+  sidebarPinnedPathKeys,
+} from "./sidebar/nestedThreadVisibility.logic";
+import { SidebarNestedThreadToggle } from "./sidebar/SidebarNestedThreadToggle";
+import { SidebarThreadRowStatus } from "./sidebar/SidebarThreadRowStatus";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
@@ -264,7 +270,6 @@ import {
   applySidebarThreadNesting,
   isThreadNestingMenuId,
   resolveThreadNestingMenuState,
-  sidebarNestedRows,
 } from "../threadNesting.logic";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
@@ -292,6 +297,8 @@ const SETTLED_TAIL_INITIAL_COUNT = 10;
 const SETTLED_TAIL_PAGE_COUNT = 25;
 // Fresh keys deliberately reset both shelves to collapsed for existing users.
 const SETTLED_SHELF_EXPANDED_KEY = "t3code:sidebar:settled-expanded";
+const EXPANDED_PARENT_KEYS_SCHEMA = Schema.Array(Schema.String);
+const EMPTY_EXPANDED_PARENT_KEYS: string[] = [];
 const SNOOZED_SHELF_EXPANDED_KEY = "t3code:sidebar:snoozed-expanded";
 const WORKING_SHELF_EXPANDED_KEY = "t3code:sidebar:working-expanded";
 
@@ -1102,8 +1109,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
    * composer. Absent when the sidebar cannot open server threads.
    */
   onFileDropThreads?: ((threadRef: ScopedThreadRef, files: File[]) => void) | undefined;
-  /** Open nested thread shown indented under its parent's row. */
-  nestedSubRow?: boolean;
+  /** Zero for top-level rows; each nested level adds one compact indent. */
+  nestedDepth?: number;
+  nestedChildCount?: number;
+  nestedActiveCount?: number;
+  nestedChildrenExpanded?: boolean;
+  onToggleNestedChildren?: (threadRef: ScopedThreadRef) => void;
 }) {
   const {
     isRenaming,
@@ -1131,6 +1142,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     () => scopeThreadRef(thread.environmentId, thread.id),
     [thread.environmentId, thread.id],
   );
+  const nestedDepth = props.nestedDepth ?? 0;
+  const nestedSubRow = nestedDepth > 0;
   const threadKey = scopedThreadKey(threadRef);
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(props.isActive);
   const isRegeneratingTitle = thread.titleRegeneration != null;
@@ -1186,7 +1199,12 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Same semantics as the legacy sidebar (never-visited counts as read):
   // switching sidebars must not light up every historical thread as unread.
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
-  const status = resolveSidebarThreadStatus(thread);
+  const status = nestedSubRow
+    ? resolveSidebarChildStatus(thread, (props.nestedActiveCount ?? 0) > 0)
+    : resolveSidebarThreadStatus({
+        ...thread,
+        hasActiveDescendants: (props.nestedActiveCount ?? 0) > 0,
+      });
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so the pill clears only when the user re-engages:
@@ -1222,45 +1240,51 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           // full of them (and repaints every vsync on high-refresh displays).
           className: "text-sky-600 dark:text-sky-400",
         }
-      : status === "monitoring"
+      : status === "supervising"
         ? {
-            // Monitoring is calm background presence, not active progress
-            // (monitoring-pill D6), so it keeps the label at full strength.
-            label: "Monitoring",
-            icon: "monitoring" as const,
-            className: "text-foreground dark:text-white",
+            label: "Supervising",
+            icon: "supervising" as const,
+            className: "text-sky-600 dark:text-sky-400",
           }
-        : status === "approval"
+        : status === "monitoring"
           ? {
-              label: "Approval",
-              icon: "approval" as const,
-              className: "text-warning-foreground",
+              // Monitoring is calm background presence, not active progress
+              // (monitoring-pill D6), so it keeps the label at full strength.
+              label: "Monitoring",
+              icon: "monitoring" as const,
+              className: "text-foreground dark:text-white",
             }
-          : status === "input"
+          : status === "approval"
             ? {
-                label: "Input",
-                icon: "input" as const,
-                className: "text-indigo-600 dark:text-indigo-300",
+                label: "Approval",
+                icon: "approval" as const,
+                className: "text-warning-foreground",
               }
-            : status === "failed"
+            : status === "input"
               ? {
-                  label: "Failed",
-                  icon: "failed" as const,
-                  className: "text-red-700 dark:text-red-300",
+                  label: "Input",
+                  icon: "input" as const,
+                  className: "text-indigo-600 dark:text-indigo-300",
                 }
-              : isWoke
+              : status === "failed"
                 ? {
-                    label: "Woke",
-                    icon: "woke" as const,
-                    className: "text-warning-foreground",
+                    label: "Failed",
+                    icon: "failed" as const,
+                    className: "text-red-700 dark:text-red-300",
                   }
-                : isUnread
+                : isWoke
                   ? {
-                      label: "Done",
-                      icon: "done" as const,
-                      className: "text-emerald-700 dark:text-emerald-300",
+                      label: "Woke",
+                      icon: "woke" as const,
+                      className: "text-warning-foreground",
                     }
-                  : null;
+                  : isUnread
+                    ? {
+                        label: "Done",
+                        icon: "done" as const,
+                        className: "text-emerald-700 dark:text-emerald-300",
+                      }
+                    : null;
   const isWokeStatus = topStatus?.icon === "woke";
 
   const branchMismatch = resolveLocalCheckoutBranchMismatch({
@@ -1509,19 +1533,21 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // dnd-kit props for the row root. Same bag on both variants: every row in
   // the list translates around the gap as the drag passes it.
   const sortable = props.sortable;
+  const sortableStyle = sortable
+    ? {
+        transform: CSS.Translate.toString(sortable.transform),
+        transition: sortable.transition,
+        // A zero-height boundary also makes dnd-kit scale the source to
+        // zero. Only projected peers use scaleY as a visibility sentinel.
+        visibility:
+          !sortable.isDragging && sortable.transform?.scaleY === 0
+            ? ("hidden" as const)
+            : undefined,
+      }
+    : undefined;
   const sortableRootProps = sortable
     ? {
         ref: sortable.setNodeRef,
-        style: {
-          transform: CSS.Translate.toString(sortable.transform),
-          transition: sortable.transition,
-          // A zero-height boundary also makes dnd-kit scale the source to
-          // zero. Only projected peers use scaleY as a visibility sentinel.
-          visibility:
-            !sortable.isDragging && sortable.transform?.scaleY === 0
-              ? ("hidden" as const)
-              : undefined,
-        },
         ...sortable.listeners,
       }
     : {};
@@ -1672,6 +1698,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     )
   ) : null;
 
+  const nestedChildrenToggle =
+    (props.nestedChildCount ?? 0) > 0 ? (
+      <SidebarNestedThreadToggle
+        count={props.nestedChildCount!}
+        activeCount={props.nestedActiveCount ?? 0}
+        expanded={props.nestedChildrenExpanded ?? false}
+        onToggle={() => props.onToggleNestedChildren?.(threadRef)}
+      />
+    ) : null;
+
   if (variant === "slim") {
     return (
       <li
@@ -1681,8 +1717,13 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         className={cn(
           // Matches the h-9 row so unrendered rows never shift the list when they paint.
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
+          nestedSubRow && "relative",
           sortable?.isDragging && "relative z-20",
         )}
+        style={{
+          ...sortableStyle,
+          ...(nestedSubRow ? { paddingInlineStart: nestedDepth * 12 } : {}),
+        }}
       >
         <Tooltip disabled={sortable?.isDragging}>
           <TooltipTrigger
@@ -1718,6 +1759,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             {draftIndicator}
             {title}
             {pinIndicator}
+            {nestedChildrenToggle}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
@@ -1838,13 +1880,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         // Matches the h-[4.875rem] content box; the py-0.5 padding is added on top.
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
         sortable?.isDragging && "relative z-20",
-        props.nestedSubRow && "relative pl-4",
+        nestedSubRow && "relative",
       )}
+      style={{
+        ...sortableStyle,
+        ...(nestedSubRow ? { paddingInlineStart: nestedDepth * 12 } : {}),
+      }}
     >
-      {props.nestedSubRow ? (
+      {nestedSubRow ? (
         <CornerDownRightIcon
           aria-hidden
-          className="absolute top-3 left-0.5 size-3 text-muted-foreground"
+          className="absolute top-3 size-3 text-muted-foreground"
+          style={{ insetInlineStart: (nestedDepth - 1) * 12 + 2 }}
         />
       ) : null}
       <Tooltip disabled={snoozeMenuOpen || sortable?.isDragging}>
@@ -1886,14 +1933,14 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                 <span className="flex-1" />
               )}
               {pinIndicator}
-              {/* The visible state owns this slot's width: status at rest,
-                  actions on hover/keyboard focus or while the popover is open. Keeping
-                  the hidden state out of flow lets the project label reclaim
-                  space without either state overlapping it. */}
+              {nestedChildrenToggle}
+              {/* Reserve one stable trailing slot for both states. If hover
+                  actions enter normal flow, this slot grows and the adjacent
+                  sub-agent chevron scurries left before the pointer arrives. */}
               {sortable?.isDragging ? (
                 dragDestination
               ) : (
-                <span className="group/sidebar-status-slot relative ml-auto flex h-5 min-w-8 shrink-0 items-stretch justify-end text-xs">
+                <span className="group/sidebar-status-slot relative ml-auto flex h-5 w-28 shrink-0 items-stretch justify-end text-xs">
                   {/* Read-only status labels yield to the hover actions. Woke is
                     itself an action, so it stays pointer-enabled and visible
                     while the other controls appear beside it. */}
@@ -1928,35 +1975,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                         </Tooltip>
                       ) : (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 font-medium",
-                            topStatus.className,
-                          )}
-                        >
-                          {topStatus.icon === "working" ? (
-                            <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "input" ? (
-                            <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "approval" ? (
-                            <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "failed" ? (
-                            <CircleAlertIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "monitoring" ? (
-                            <EyeIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "done" ? (
-                            <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
-                          ) : null}
-                          {/* The label alone is the live region: a role="status"
-                            wrapper around the ticking duration would make
-                            screen readers announce every second. */}
-                          <span role="status">{topStatus.label}</span>
-                          {status === "working" ? (
-                            <span aria-hidden>
-                              <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
-                            </span>
-                          ) : null}
-                        </span>
+                        <SidebarThreadRowStatus
+                          status={topStatus}
+                          trailing={
+                            status === "working" ? (
+                              // The label alone is the live region: the ticking
+                              // duration must not be announced every second.
+                              <span aria-hidden>
+                                <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
+                              </span>
+                            ) : null
+                          }
+                        />
                       )
                     ) : (
                       threadTimeLabel(thread)
@@ -1970,8 +2000,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                         // would keep the controls pinned over the status label
                         // once the pointer moves away (e.g. after a failed
                         // settle) instead of cross-fading back.
-                        "pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 transition-opacity has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:static has-[:focus-visible]:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:static group-hover/sidebar-row:opacity-100",
-                        snoozeMenuOpen && "pointer-events-auto static opacity-100",
+                        "pointer-events-none absolute inset-y-0 right-0 flex items-stretch opacity-0 transition-opacity has-[:focus-visible]:pointer-events-auto has-[:focus-visible]:opacity-100 group-hover/sidebar-row:pointer-events-auto group-hover/sidebar-row:opacity-100",
+                        snoozeMenuOpen && "pointer-events-auto opacity-100",
                       )}
                     >
                       {hasUnsentDraft ? (
@@ -2085,7 +2115,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               </span>
             </div>
           </div>
-          {props.nestedSubRow && props.projectDisplayName ? (
+          {nestedSubRow && props.projectDisplayName ? (
             <span className="max-w-24 shrink-0 truncate text-2xs text-muted-foreground">
               {props.projectDisplayName}
             </span>
@@ -2394,6 +2424,22 @@ export default function Sidebar() {
     [routeDraftThread, routeTarget],
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
+  const [expandedParents, setExpandedParents] = useLocalStorage(
+    "t3code:sidebar:expanded-parents",
+    EMPTY_EXPANDED_PARENT_KEYS,
+    EXPANDED_PARENT_KEYS_SCHEMA,
+  );
+  const expandedParentKeys = useMemo(() => new Set(expandedParents), [expandedParents]);
+  const toggleParentChildren = useCallback(
+    (threadRef: ScopedThreadRef) => {
+      const key = scopedThreadKey(threadRef);
+      clearSelection();
+      setExpandedParents((keys) =>
+        keys.includes(key) ? keys.filter((candidate) => candidate !== key) : [...keys, key],
+      );
+    },
+    [clearSelection, setExpandedParents],
+  );
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
   // Post-settle navigation validates against the CURRENT route, not the one
@@ -2576,6 +2622,18 @@ export default function Sidebar() {
     () => resolveVisibleProjectRefKeys(hiddenProjectKeys, projectFilterGroups),
     [hiddenProjectKeys, projectFilterGroups],
   );
+  const sidebarChildren = useMemo(
+    () => groupSidebarChildren(threads, scopedProjectKeys),
+    [threads, scopedProjectKeys],
+  );
+  const sidebarNestedPath = useMemo(
+    () => sidebarNestedPathKeys(threads, routeThreadKey),
+    [routeThreadKey, threads],
+  );
+  const sidebarVisibleNestedPath = useMemo(
+    () => new Set([...sidebarNestedPath, ...sidebarPinnedPathKeys(sidebarChildren)]),
+    [sidebarChildren, sidebarNestedPath],
+  );
   const projectScopeTriggerLabel =
     scopedProjectGroup?.displayName ??
     (allProjectsCheckboxState === "all"
@@ -2583,10 +2641,6 @@ export default function Sidebar() {
       : allProjectsCheckboxState === "none"
         ? "No projects"
         : `${visibleProjectGroups.length} projects`);
-  const nestedRowsByParent = useMemo(
-    () => sidebarNestedRows(threads, scopedProjectKeys, routeThreadKey),
-    [threads, scopedProjectKeys, routeThreadKey],
-  );
   // Any filter change drops the selection so bulk actions only touch visible rows.
   const settledResetKey = [...hiddenProjectKeys].sort().join(",");
   const setHiddenProjectKeys = useCallback(
@@ -2749,6 +2803,7 @@ export default function Sidebar() {
       const supportsSettlement = capabilities?.threadSettlement === true;
       const supportsSnooze = capabilities?.threadSnooze === true;
       const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+      const supervisesActiveDescendants = hasActiveSidebarDescendants(sidebarChildren, threadKey);
       if (capabilities?.threadActiveReorder === true) activeReorderable.add(threadKey);
       // Older servers retain their existing drag actions. Active placement
       // additionally requires its own ordering capability at the drop target.
@@ -2775,7 +2830,11 @@ export default function Sidebar() {
       } else if (supportsSnooze && effectiveSnoozed(thread, { now: preciseNow })) {
         // Snooze outranks settlement and pinning until the thread wakes.
         snoozed.push(thread);
-      } else if (supportsSettlement && thread.settledOverride === "settled") {
+      } else if (
+        supportsSettlement &&
+        thread.settledOverride === "settled" &&
+        !supervisesActiveDescendants
+      ) {
         settled.push(thread);
       } else if (thread.pinnedAt != null) {
         pinned.push(thread);
@@ -2831,6 +2890,7 @@ export default function Sidebar() {
     optimisticDrop,
     scopedProjectKeys,
     serverConfigs,
+    sidebarChildren,
     snoozeWakeTick,
     threads,
     workingShelfEnabled,
@@ -5287,7 +5347,7 @@ export default function Sidebar() {
                         thread: EnvironmentThreadShell,
                         section: SidebarSection,
                         sortable?: SortableThreadRowBag,
-                        nestedSubRow = false,
+                        nestedDepth = 0,
                       ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -5304,15 +5364,20 @@ export default function Sidebar() {
                           <SidebarThreadRow
                             // Fade between card and compact rows while the outer
                             // sortable wrapper keeps its identity during a drag.
-                            key={`${threadKey}:${rowVariant}${nestedSubRow ? ":nested" : ""}`}
-                            nestedSubRow={nestedSubRow}
+                            key={`${threadKey}:${rowVariant}:depth-${nestedDepth}`}
+                            nestedDepth={nestedDepth}
+                            nestedChildCount={sidebarChildren.get(threadKey)?.children.length ?? 0}
+                            nestedActiveCount={sidebarChildren.get(threadKey)?.activeCount ?? 0}
+                            nestedChildrenExpanded={expandedParentKeys.has(threadKey)}
+                            onToggleNestedChildren={toggleParentChildren}
                             thread={thread}
                             variant={rowVariant}
-                            // Snoozed rows wake, settled rows un-settle, and cards settle.
+                            // A settled parent supervising active descendants stays a card,
+                            // but its action still follows its own lifecycle.
                             variantAction={
                               section === "snoozed"
                                 ? "unsnooze"
-                                : section === "settled"
+                                : thread.settledOverride === "settled"
                                   ? "unsettle"
                                   : "settle"
                             }
@@ -5433,8 +5498,20 @@ export default function Sidebar() {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           // Hidden during drags: it is not part of the sortable list.
                           if (dragState === null) {
-                            for (const child of nestedRowsByParent.get(item.key) ?? []) {
-                              items.push(renderThreadRowInner(child, "active", undefined, true));
+                            for (const { thread: child, depth } of flattenVisibleSidebarChildren({
+                              rootParentKey: item.key,
+                              groups: sidebarChildren,
+                              expandedParentKeys,
+                              viewedPathKeys: sidebarVisibleNestedPath,
+                            })) {
+                              items.push(
+                                renderThreadRowInner(
+                                  child,
+                                  child.settledOverride === "settled" ? "settled" : "active",
+                                  undefined,
+                                  depth,
+                                ),
+                              );
                             }
                           }
                           continue;
