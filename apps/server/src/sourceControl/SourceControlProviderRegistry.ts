@@ -1,6 +1,7 @@
 import * as GiteaSourceControlProvider from "./GiteaSourceControlProvider.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
-import type { GiteaInstanceConfig } from "@t3tools/contracts";
+import { SourceControlProviderInfo, type GiteaInstanceConfig } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import * as Cache from "effect/Cache";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
@@ -28,9 +29,35 @@ import {
 import { ServerConfig } from "../config.ts";
 import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
 import * as VcsProcess from "../vcs/VcsProcess.ts";
+import { ExecutableCacheGeneration } from "../processRunner.ts";
+import { HostProcessEnvironment } from "@t3tools/shared/hostProcess";
 
 const PROVIDER_DETECTION_CACHE_CAPACITY = 2_048;
 const PROVIDER_DETECTION_CACHE_TTL = Duration.seconds(5);
+
+type Refinement = Effect.Effect<SourceControlProvider.SourceControlProviderContext | null>;
+const RefinementInput = Schema.fromJsonString(
+  Schema.Struct({
+    cwd: Schema.String,
+    context: Schema.NullOr(
+      Schema.Struct({
+        provider: SourceControlProviderInfo,
+        remoteName: Schema.String,
+        remoteUrl: Schema.String,
+        requestedHost: Schema.optionalKey(Schema.String),
+      }),
+    ),
+    generation: Schema.String,
+  }),
+);
+const encodeGeneration = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
+const encodeRefinementInput = Schema.encodeSync(RefinementInput);
+const decodeRefinementInput = Schema.decodeSync(RefinementInput);
+/** A sweep retains each refinement until every link in that sweep has finished. */
+export const ProviderRefinementScope = Context.Reference<Map<string, Refinement> | undefined>(
+  "t3/ProviderRefinementScope",
+  { defaultValue: () => undefined },
+);
 
 export interface SourceControlProviderRegistration {
   readonly kind: SourceControlProviderKind;
@@ -206,8 +233,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
   function* (registrations: ReadonlyArray<SourceControlProviderRegistration>) {
     const config = yield* ServerConfig;
     const settings = yield* ServerSettingsService;
-    const getInstances = settings.getSettings.pipe(
-      Effect.map((value) => value.giteaInstances),
+    const getProviderSettings = settings.getSettings.pipe(
       Effect.mapError(
         () =>
           new SourceControlProviderError({
@@ -218,6 +244,7 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
           }),
       ),
     );
+    const getInstances = getProviderSettings.pipe(Effect.map((value) => value.giteaInstances));
     const process = yield* VcsProcess.VcsProcess;
     const vcsRegistry = yield* VcsDriverRegistry.VcsDriverRegistry;
     const providers = new Map<
@@ -275,6 +302,30 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
       timeToLive: (exit) => (Exit.isSuccess(exit) ? PROVIDER_DETECTION_CACHE_TTL : Duration.zero),
     });
 
+    const explicitContextCache = yield* Cache.makeWith<
+      string,
+      SourceControlProvider.SourceControlProviderContext | null
+    >(
+      (key) => {
+        const input = decodeRefinementInput(key);
+        return refineUnknownRemoteProvider({
+          specs: discoverySpecs,
+          process,
+          cwd: input.cwd,
+          context: input.context,
+        }).pipe(Effect.provideService(ExecutableCacheGeneration, input.generation));
+      },
+      {
+        capacity: PROVIDER_DETECTION_CACHE_CAPACITY,
+        timeToLive: (exit) =>
+          Exit.isSuccess(exit)
+            ? exit.value?.provider.kind === "unknown"
+              ? Duration.minutes(10)
+              : Duration.seconds(5)
+            : Duration.zero,
+      },
+    );
+
     const configuredContext = (
       context: SourceControlProvider.SourceControlProviderContext | null,
       instances: ReadonlyArray<GiteaInstanceConfig>,
@@ -289,16 +340,30 @@ export const makeWithProviders = Effect.fn("makeSourceControlProviderRegistryWit
     const resolveHandle: SourceControlProviderRegistry["Service"]["resolveHandle"] = Effect.fn(
       "SourceControlProviderRegistry.resolveHandle",
     )(function* (input) {
-      const instances = yield* getInstances;
+      const providerSettings = yield* getProviderSettings;
+      const instances = providerSettings.giteaInstances;
+      const environment = yield* HostProcessEnvironment;
+      const generation = encodeGeneration([
+        providerSettings,
+        environment.PATH,
+        environment.PATHEXT,
+      ]);
+      const explicitContext = configuredContext(input.context ?? null, instances);
+      const refineExplicit = Effect.gen(function* () {
+        const key = encodeRefinementInput({ cwd: input.cwd, context: explicitContext, generation });
+        const scope = yield* ProviderRefinementScope;
+        if (scope === undefined) return yield* Cache.get(explicitContextCache, key);
+        let refinement = scope.get(key);
+        if (refinement === undefined) {
+          refinement = yield* Effect.cached(Cache.get(explicitContextCache, key));
+          scope.set(key, refinement);
+        }
+        return yield* refinement;
+      });
       const resolved =
         input.context === undefined
           ? yield* Cache.get(providerContextCache, input.cwd)
-          : yield* refineUnknownRemoteProvider({
-              specs: discoverySpecs,
-              process,
-              cwd: input.cwd,
-              context: configuredContext(input.context, instances),
-            });
+          : yield* refineExplicit;
       const context = configuredContext(resolved, instances);
       const kind = context?.provider.kind ?? "unknown";
       const provider = providers.get(kind) ?? unsupportedProvider(kind);
