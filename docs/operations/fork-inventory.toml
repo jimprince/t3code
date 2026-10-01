@@ -1296,3 +1296,13 @@ retire_when = "Upstream supports cross-project nesting with independent executio
 depends_on = ["fork-nested-threads"]
 roles = []
 note = "Parentage only controls placement and attention rollup in the same environment. The child's project controls execution, defaults, search, and project filters. Cross-project children remain visible with their project label; an unreachable parent returns them to top level. Parent archive, settlement, and project deletion do not cascade across projects. Mobile retains its existing flat project-owned listing."
+
+[[patch]]
+name = "fork-launch-health"
+subject = "feat(diagnostics): warn before macOS process launches stall"
+class = "product"
+purpose = "Sample macOS syspolicyd through the existing native helper, record bounded runner attempt/failure rates and expose configurable early warnings in web, desktop and mobile Diagnostics."
+retire_when = "Upstream provides equivalent native daemon and launch-rate health warnings."
+depends_on = ["fork-resource-recovery", "fork-spawn-budget"]
+roles = []
+note = "No sampling subprocesses or automatic daemon recovery. Counts cover the shared process runner, excluding vendor descendants and direct SDK spawns."
