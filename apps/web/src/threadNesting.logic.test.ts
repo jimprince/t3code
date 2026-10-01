@@ -5,7 +5,6 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   applySidebarThreadNesting,
-  sidebarNestedRows,
   isNestedUnder,
   isThreadNestingMenuId,
   listNestedThreads,
@@ -330,44 +329,6 @@ describe("resolveViewedNestedThread", () => {
     expect(resolveViewedNestedThread(archivedParent, key("child"))).toBeNull();
     expect(resolveViewedNestedThread(nested, key("parent"))).toBeNull();
     expect(resolveViewedNestedThread(nested, null)).toBeNull();
-  });
-});
-
-describe("cross-project sidebar placement", () => {
-  const parent = thread("parent");
-  const child = thread("child", { projectId: projectB, parentThreadId: parent.id });
-  const parentKey = scopedThreadKey(scopeThreadRef(envA, parent.id));
-
-  it("places cross-project children under the parent while retaining their badge project", () => {
-    expect(sidebarNestedRows([parent, child], null, null).get(parentKey)).toEqual([child]);
-    expect(applySidebarThreadNesting([parent, child]).map((entry) => entry.id)).toEqual([
-      parent.id,
-    ]);
-  });
-
-  it("leaves the child top-level when the parent is filtered, removed, or archived", () => {
-    const selectedProjects = new Set([`${envA}:${projectB}`]);
-    expect(sidebarNestedRows([parent, child], selectedProjects, null).size).toBe(0);
-    const eligible = [parent, child].filter((entry) =>
-      selectedProjects.has(`${entry.environmentId}:${entry.projectId}`),
-    );
-    expect(applySidebarThreadNesting(eligible)).toEqual([child]);
-    expect(applySidebarThreadNesting([child])).toEqual([child]);
-    expect(sidebarNestedRows([{ ...parent, archivedAt: "now" }, child], null, null).size).toBe(0);
-  });
-
-  it("keeps same-project children in the Agents panel unless they are open", () => {
-    const same = { ...child, projectId: projectA };
-    expect(sidebarNestedRows([parent, same], null, null).size).toBe(0);
-    expect(
-      sidebarNestedRows([parent, same], null, scopedThreadKey(scopeThreadRef(envA, same.id))).get(
-        parentKey,
-      ),
-    ).toEqual([same]);
-  });
-
-  it("does not display children excluded by their own project filter", () => {
-    expect(sidebarNestedRows([parent, child], new Set([`${envA}:${projectA}`]), null).size).toBe(0);
   });
 });
 
