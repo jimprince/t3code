@@ -95,6 +95,7 @@ export interface OrchestrationProposedPlan {
 }
 
 export interface OrchestrationThread {
+  parentThreadId?: string | null;
   id: string;
   projectId: string;
   title: string;
@@ -129,6 +130,7 @@ export interface OrchestrationShellSnapshot {
 }
 
 export interface OrchestrationThreadShell {
+  parentThreadId?: string | null;
   id: string;
   projectId: string;
   title: string;
@@ -197,6 +199,8 @@ export type NotificationLevel = "all" | "attention" | "none";
 
 export interface SavedSubscription {
   level?: NotificationLevel;
+  /** Minutes between unanswered nested-child reminders; zero disables reminders. */
+  inputReminderMinutes?: number;
   lastDirectMessageTurnId?: string | null;
   errorEventKey?: string | null;
   observedState?: AgentState;
@@ -241,6 +245,10 @@ export type SavedNotificationStatus =
   | "superseded";
 
 export interface SavedNotification {
+  pendingQuestion?: string | null;
+  pendingInputRequestKey?: string | null;
+  isChildInput?: boolean;
+  reminderOfEventKey?: string | null;
   completionDisposition?: "quiet" | "attention" | null;
   occurrences?: number;
   lastOccurrenceKey?: string;
