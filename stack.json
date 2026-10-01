@@ -1,11 +1,12 @@
 {
   "version": 5,
-  "prev": "b493235889a6ea4042acd4846a387b41b471454f",
-  "head": "b6bdb3268d025adb7430f6253593ca72c96cd1a7",
+  "prev": "3110d89f6cb2a51fea71154a878156820ca76d11",
+  "head": "0b9eac96130a9d8a1407284b1964f995b1aa3bca",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
-    "fork-provider-turn-safety"
+    "fork-provider-turn-safety",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-bounded-diagnostics",
@@ -195,6 +196,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "816f725f263459817e01763434cec3f3b9c37cc3"
+    },
+    "refresh-temp": {
+      "oid": "0b9eac96130a9d8a1407284b1964f995b1aa3bca"
     }
   }
 }
