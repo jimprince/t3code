@@ -660,6 +660,7 @@ const buildAppUnderTest = (options?: {
           NativeTelemetryClient.layerTest(options?.layers?.nativeTelemetryClient),
           DesktopTelemetryReceiver.layerTest(options?.layers?.desktopTelemetryReceiver),
           ResourceAttribution.layer,
+          ServerSettings.layerTest(),
         ),
       ),
     );
