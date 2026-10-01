@@ -1,0 +1,271 @@
+#!/usr/bin/env bash
+# t3-thread-deploy: publish a pinned runtime snapshot of the t3-thread CLI and
+# optionally retain the ones it replaces.
+#
+# The `t3-thread` wrapper runs from $SNAP_ROOT/current so that switching
+# branches in the development checkout cannot roll the CLI back. Nothing else
+# reads these directories, and before this script existed nothing removed them
+# either: each hand-deployment left its predecessor behind (five copies in four
+# days, Sep 2026). By default this script keeps exactly one; --retain-snapshots
+# preserves predecessors and partial snapshots for operator-managed rollback.
+#
+# Usage:
+#   t3-thread-deploy [--from <checkout>] [--ref <git-ref>] [--dry-run] [--prune-only] [--retain-snapshots]
+#
+# Env overrides (mainly for testing):
+#   T3_THREAD_SOURCE_REPO   development checkout to snapshot (default ~/Programming/t3code-fork)
+#   T3_THREAD_SNAPSHOT_ROOT snapshot root (default ~/.local/share/t3-thread)
+set -euo pipefail
+
+SOURCE_REPO="${T3_THREAD_SOURCE_REPO:-$HOME/Programming/t3code-fork}"
+SNAP_ROOT="${T3_THREAD_SNAPSHOT_ROOT:-$HOME/.local/share/t3-thread}"
+REF=""
+DRY_RUN=0
+PRUNE_ONLY=0
+RETAIN_SNAPSHOTS=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --from) SOURCE_REPO="${2:?--from needs a path}"; shift 2 ;;
+    --ref) REF="${2:?--ref needs a git ref}"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --prune-only) PRUNE_ONLY=1; shift ;;
+    --retain-snapshots) RETAIN_SNAPSHOTS=1; shift ;;
+    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "t3-thread-deploy: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+run() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "  would run: $*"
+  else
+    "$@"
+  fi
+}
+
+# Refuse to operate on an unset or implausible root; this script deletes directories.
+case "$SNAP_ROOT" in
+  ""|"/"|"$HOME") echo "t3-thread-deploy: refusing to use snapshot root '$SNAP_ROOT'" >&2; exit 2 ;;
+esac
+
+# The fork tracks whichever package manager upstream uses; it moved from pnpm to
+# bun during 2026, and old snapshots still install with pnpm. Follow the tree
+# being deployed instead of pinning one.
+install_deps() {
+  local dest="$1" manager
+  manager="$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([a-z]*\)@.*/\1/p' "$dest/package.json" 2>/dev/null | head -1)"
+  if [ -z "$manager" ]; then
+    if [ -f "$dest/bun.lock" ] || [ -f "$dest/bun.lockb" ]; then manager=bun
+    elif [ -f "$dest/pnpm-lock.yaml" ]; then manager=pnpm
+    fi
+  fi
+  case "$manager" in
+    bun) run env -C "$dest" bun install --frozen-lockfile ;;
+    pnpm) run env -C "$dest" pnpm install --frozen-lockfile ;;
+    *) echo "t3-thread-deploy: cannot tell which package manager $dest uses" >&2; return 1 ;;
+  esac
+  # A fresh install hardlinks from the manager's content store; copying
+  # node_modules from the source checkout would duplicate GBs of store content.
+}
+
+verify_snapshot() {
+  local ws="$1/apps/t3-thread"
+  (cd "$ws" && node scripts/build.mjs && node scripts/launch.mjs --help >/dev/null)
+}
+
+deploy() {
+  [ -e "$SOURCE_REPO/.git" ] || { echo "t3-thread-deploy: $SOURCE_REPO is not a git checkout" >&2; exit 1; }
+  local target_ref sha dest
+  target_ref="${REF:-HEAD}"
+  sha="$(git -C "$SOURCE_REPO" rev-parse --short=8 "$target_ref")"
+  dest="$SNAP_ROOT/$sha"
+  echo "source: $SOURCE_REPO @ $(git -C "$SOURCE_REPO" rev-parse --abbrev-ref "$target_ref" 2>/dev/null || echo "$target_ref") ($sha)"
+
+  if [ -e "$dest" ]; then
+    echo "snapshot $sha already present; repointing current at it"
+  else
+    echo "creating snapshot $sha from $SOURCE_REPO"
+    # Retention also preserves a failed new snapshot for inspection. Otherwise
+    # this error path removes it; promotion never runs when preparation fails.
+    trap '[ "$DRY_RUN" -eq 1 ] || [ "$RETAIN_SNAPSHOTS" -eq 1 ] || /bin/rm -rf "${dest:?}"' ERR
+    # --local hardlinks git objects instead of copying them.
+    run git clone --quiet --local --no-checkout "$SOURCE_REPO" "$dest"
+    run git -C "$dest" checkout --quiet --detach "$sha"
+    # The CLI workspace comes from the fork patch stack; plain upstream main does
+    # not have it. Fail here rather than after a multi-minute install.
+    if [ "$DRY_RUN" -eq 0 ] && [ ! -f "$dest/apps/t3-thread/package.json" ]; then
+      echo "t3-thread-deploy: $target_ref ($sha) has no apps/t3-thread workspace; deploy a ref with the fork patch stack applied" >&2
+      false
+    fi
+    install_deps "$dest"
+    trap - ERR
+  fi
+
+  # Prove the new snapshot runs before it becomes current, because prune deletes
+  # the one it replaces immediately afterwards.
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "  would verify: $dest/apps/t3-thread builds once and runs 'scripts/launch.mjs --help'"
+  else
+    verify_snapshot "$dest" || {
+      echo "t3-thread-deploy: $dest does not run; leaving current unchanged" >&2
+      exit 1
+    }
+  fi
+
+  echo "pointing current -> $sha"
+  run ln -sfn "$sha" "$SNAP_ROOT/current.tmp"
+  # Atomic swap that must not follow the old link into its directory: GNU mv
+  # spells that -T, BSD (macOS) mv spells it -h.
+  if mv --version >/dev/null 2>&1; then
+    run mv -Tf "$SNAP_ROOT/current.tmp" "$SNAP_ROOT/current"
+  else
+    run mv -hf "$SNAP_ROOT/current.tmp" "$SNAP_ROOT/current"
+  fi
+}
+
+# Restart only the dedicated user service, after verification and promotion but
+# before removing its old runtime. Other hosts retain on-demand watcher behavior.
+user_systemctl() {
+  local runtime_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+  env XDG_RUNTIME_DIR="$runtime_dir"     DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS:-unix:path=$runtime_dir/bus}"     systemctl --user "$@"
+}
+
+verify_managed_watcher() {
+  local pid lease_file
+  pid="$(user_systemctl show t3-thread-watcher.service --property=MainPID --value)"
+  lease_file="${T3_AGENT_STATE_FILE:-$HOME/.config/t3-remote-agents/state.json}"
+  node - "${lease_file%/*}/watch.pid" "$pid" "$SNAP_ROOT/current/apps/t3-thread" <<'NODE'
+const fs = require('node:fs/promises');
+const [leasePath, pid, runtime] = process.argv.slice(2);
+async function verify() {
+  if (!/^[1-9][0-9]*$/.test(pid)) throw new Error('Managed watcher has no live PID');
+  const expectedCwd = await fs.realpath(runtime);
+  const deadline = Date.now() + 5000;
+  do {
+    try {
+      const lease = JSON.parse(await fs.readFile(leasePath, 'utf8'));
+      const stat = await fs.readFile(`/proc/${pid}/stat`, 'utf8');
+      const start = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[19];
+      const boot = (await fs.readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim();
+      const cwd = await fs.readlink(`/proc/${pid}/cwd`);
+      if (lease.pid === Number(pid) && lease.startTime === start && lease.bootId === boot && cwd === expectedCwd) return;
+    } catch { /* The user service can become active before its lease is claimed. */ }
+    await new Promise(resolve => setTimeout(resolve, 100));
+  } while (Date.now() < deadline);
+  throw new Error('Managed watcher does not own the live lease in the promoted runtime');
+}
+verify().catch(error => { console.error(error.message); process.exitCode = 1; });
+NODE
+}
+
+restart_managed_watcher() {
+  local unit=t3-thread-watcher.service load_state
+  load_state="$(user_systemctl show "$unit" --property=LoadState --value 2>/dev/null || true)"
+  if [ "$load_state" != loaded ]; then
+    if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/$unit" ]; then
+      echo "t3-thread-deploy: cannot load configured user $unit; previous snapshots retained." >&2
+      return 1
+    fi
+    return 0
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "  would restart and verify: user $unit"
+  else
+    user_systemctl restart "$unit" && user_systemctl is-active --quiet "$unit" && verify_managed_watcher || {
+      echo "t3-thread-deploy: watcher restart failed; current is promoted, previous snapshots retained. Repair the user service or repoint current before pruning." >&2
+      return 1
+    }
+  fi
+}
+
+# Never remove a runtime still used by a leased watcher, including unmanaged
+# and prune-only paths. Read only: lease reclamation remains the CLI's job.
+check_prune_watcher() {
+  local state_file="${T3_AGENT_STATE_FILE:-$HOME/.config/t3-remote-agents/state.json}"
+  node - "${state_file%/*}/watch.pid" "$@" <<'NODE'
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const [leasePath, ...predecessors] = process.argv.slice(2);
+async function check() {
+  let raw;
+  try { raw = (await fs.readFile(leasePath, 'utf8')).trim(); }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  const legacy = /^[1-9][0-9]*$/.test(raw);
+  let lease;
+  try { lease = legacy ? { pid: Number(raw) } : JSON.parse(raw); }
+  catch { throw new Error('Malformed watcher lease; refusing to prune'); }
+  if (!lease || !Number.isSafeInteger(lease.pid) || lease.pid <= 0 ||
+      (!legacy && (typeof lease.bootId !== 'string' || !lease.bootId ||
+                   typeof lease.startTime !== 'string' || !/^[0-9]+$/.test(lease.startTime)))) {
+    throw new Error('Cannot verify watcher lease; refusing to prune');
+  }
+  // The Linux deployment guard uses the same boot/start identity as the CLI.
+  // Other platforms with a lease need explicit watcher shutdown before pruning.
+  if (process.platform !== 'linux') throw new Error('Cannot verify watcher cwd on this platform; refusing to prune');
+  if (!legacy && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(lease.bootId)) throw new Error('Invalid Linux boot identity; refusing to prune');
+  const boot = (await fs.readFile('/proc/sys/kernel/random/boot_id', 'utf8')).trim();
+  if (!legacy && lease.bootId !== boot) return;
+  let stat;
+  try { stat = await fs.readFile(`/proc/${lease.pid}/stat`, 'utf8'); }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  const start = stat.slice(stat.lastIndexOf(')') + 2).trim().split(/\s+/)[19];
+  if (!/^[0-9]+$/.test(start)) throw new Error('Cannot verify watcher process; refusing to prune');
+  if (legacy) throw new Error('Live legacy watcher lease needs owner inspection; refusing to prune');
+  if (lease.startTime !== start) return;
+  let cwd;
+  try { cwd = await fs.readlink(`/proc/${lease.pid}/cwd`); }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  for (const entry of predecessors) {
+    const runtime = await fs.realpath(entry);
+    if (cwd === runtime || cwd.startsWith(runtime + path.sep) || cwd === runtime + ' (deleted)') {
+      throw new Error('Live watcher uses a predecessor runtime; stop that watcher before pruning');
+    }
+  }
+}
+check().catch(error => { console.error(`t3-thread-deploy: ${error.message}`); process.exitCode = 1; });
+NODE
+}
+
+prune() {
+  if [ "$RETAIN_SNAPSHOTS" -eq 1 ]; then
+    echo "retaining snapshots; no pruning"
+    return 0
+  fi
+
+  local current_target
+  current_target="$(readlink "$SNAP_ROOT/current" 2>/dev/null || true)"
+  if [ -z "$current_target" ] || [ ! -d "$SNAP_ROOT/$current_target" ]; then
+    echo "t3-thread-deploy: current symlink missing or dangling; not pruning" >&2
+    exit 1
+  fi
+
+  local entry name pruned=0
+  local candidates=()
+  for entry in "$SNAP_ROOT"/*/; do
+    [ -d "$entry" ] || continue
+    name="$(basename "$entry")"
+    [ "$name" = "$current_target" ] && continue
+    [ "$name" = "current" ] && continue
+    candidates+=("${SNAP_ROOT:?}/$name")
+  done
+  # Preflight all predecessors before any deletion, then narrow the race window
+  # by rereading the lease immediately before each individual deletion.
+  if [ "${#candidates[@]}" -gt 0 ]; then
+    check_prune_watcher "${candidates[@]}"
+  fi
+  for entry in "${candidates[@]}"; do
+    check_prune_watcher "$entry"
+    echo "pruning superseded snapshot $(basename "$entry")"
+    run /bin/rm -rf "$entry"
+    pruned=$((pruned + 1))
+  done
+  [ "$pruned" -eq 0 ] && echo "nothing to prune; current ($current_target) is the only snapshot"
+  return 0
+}
+
+if [ "$PRUNE_ONLY" -eq 0 ]; then
+  deploy
+  restart_managed_watcher
+fi
+prune
