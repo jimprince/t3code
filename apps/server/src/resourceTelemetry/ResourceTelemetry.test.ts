@@ -1,3 +1,6 @@
+import { recordProcessLaunch } from "../processLaunchDiagnostics.ts";
+import * as Clock from "effect/Clock";
+import { layerTest as serverSettingsLayerTest } from "../serverSettings.ts";
 import type {
   DesktopHostTelemetrySnapshot,
   ResourceMonitorProcessSample,
@@ -142,6 +145,71 @@ function desktopSnapshot(sampledAtUnixMs: number): DesktopHostTelemetrySnapshot 
 }
 
 describe("ResourceTelemetry", () => {
+  it.effect(
+    "records minute launch health without retaining live diagnostics or spawning a sampler",
+    () =>
+      Effect.gen(function* () {
+        const calls = yield* Ref.make(0);
+        const demand = yield* Ref.make<ReadonlyArray<boolean>>([]);
+        const sampled = yield* Deferred.make<void>();
+        const nativeLayer = NativeTelemetryClient.layerTest({
+          sampleNow: Effect.gen(function* () {
+            const at = DateTime.toEpochMillis(yield* DateTime.now);
+            const sequence = yield* Ref.updateAndGet(calls, (count) => count + 1);
+            yield* Deferred.succeed(sampled, undefined);
+            return nativeGeneration(
+              {
+                ...nativeSnapshot({
+                  sequence,
+                  sampledAtUnixMs: at,
+                  childCpuTimeMs: 0,
+                  childWriteBytes: 0,
+                }),
+                syspolicyd: {
+                  sampledAtUnixMs: at,
+                  pid: 99,
+                  startTimeMs: 10,
+                  residentBytes: 2 * 1024 ** 3,
+                  cpuPercent: 40,
+                },
+              },
+              0,
+            );
+          }),
+        });
+        const telemetryLayer = ResourceTelemetry.layer.pipe(
+          Layer.provide(serverSettingsLayerTest()),
+          Layer.provide(
+            Layer.mergeAll(
+              nativeLayer,
+              DesktopTelemetryReceiver.layerTest({
+                setDiagnosticsDemand: (enabled) =>
+                  Ref.update(demand, (values) => [...values, enabled]),
+              }),
+              ResourceAttribution.layer,
+            ),
+          ),
+        );
+        yield* Effect.gen(function* () {
+          const telemetry = yield* ResourceTelemetry.ResourceTelemetry;
+          expect(yield* Ref.get(calls)).toBe(0);
+          yield* TestClock.adjust("59 seconds");
+          const now = yield* Clock.currentTimeMillis;
+          recordProcessLaunch(now, "health-test", "attempted");
+          recordProcessLaunch(now, "health-test", "failed");
+          yield* TestClock.adjust("1 second");
+          yield* Deferred.await(sampled);
+          const health = (yield* telemetry.latest).health.processLaunch;
+          expect(health?.syspolicyd?.residentBytes).toBe(2 * 1024 ** 3);
+          expect(health?.warnings[0]).toContain("memory exceeds");
+          expect(health?.attemptsPerMinute).toBe(1);
+          expect(health?.failuresPerMinute).toBe(1);
+          expect(yield* Ref.get(calls)).toBe(1);
+          expect(yield* Ref.get(demand)).toEqual([]);
+        }).pipe(Effect.provide(telemetryLayer), Effect.scoped);
+      }),
+  );
+
   it.effect("enables live native and Electron collection only while changes are retained", () =>
     Effect.gen(function* () {
       const sampledAtUnixMs = DateTime.toEpochMillis(yield* DateTime.now);
@@ -169,6 +237,7 @@ describe("ResourceTelemetry", () => {
           Ref.update(demandChanges, (changes) => [...changes, enabled]),
       });
       const telemetryLayer = ResourceTelemetry.layer.pipe(
+        Layer.provide(serverSettingsLayerTest()),
         Layer.provide(Layer.mergeAll(nativeLayer, desktopLayer, ResourceAttribution.layer)),
       );
 
@@ -205,6 +274,7 @@ describe("ResourceTelemetry", () => {
           Ref.update(demandChanges, (changes) => [...changes, enabled]),
       });
       const telemetryLayer = ResourceTelemetry.layer.pipe(
+        Layer.provide(serverSettingsLayerTest()),
         Layer.provide(Layer.mergeAll(nativeLayer, desktopLayer, ResourceAttribution.layer)),
       );
 
@@ -254,6 +324,7 @@ describe("ResourceTelemetry", () => {
           latest: Effect.succeedSome(desktop),
         });
         const telemetryLayer = ResourceTelemetry.layer.pipe(
+          Layer.provide(serverSettingsLayerTest()),
           Layer.provide(Layer.mergeAll(nativeLayer, desktopLayer, ResourceAttribution.layer)),
         );
 
@@ -301,6 +372,7 @@ describe("ResourceTelemetry", () => {
           }),
         });
         const telemetryLayer = ResourceTelemetry.layer.pipe(
+          Layer.provide(serverSettingsLayerTest()),
           Layer.provide(
             Layer.mergeAll(
               nativeLayer,
@@ -362,6 +434,7 @@ describe("ResourceTelemetry", () => {
           ),
         });
         const telemetryLayer = ResourceTelemetry.layer.pipe(
+          Layer.provide(serverSettingsLayerTest()),
           Layer.provide(
             Layer.mergeAll(
               NativeTelemetryClient.layerTest(),
@@ -443,6 +516,7 @@ describe("ResourceTelemetry", () => {
           changes: Stream.fromPubSub(desktopChanges),
         });
         const telemetryLayer = ResourceTelemetry.layer.pipe(
+          Layer.provide(serverSettingsLayerTest()),
           Layer.provide(Layer.mergeAll(nativeLayer, desktopLayer, attributionLayer)),
         );
 
@@ -548,7 +622,10 @@ describe("ResourceTelemetry", () => {
       });
       const attributionLayer = ResourceAttribution.layer;
       const dependencies = Layer.mergeAll(nativeLayer, desktopLayer, attributionLayer);
-      const telemetryLayer = ResourceTelemetry.layer.pipe(Layer.provide(dependencies));
+      const telemetryLayer = ResourceTelemetry.layer.pipe(
+        Layer.provide(serverSettingsLayerTest()),
+        Layer.provide(dependencies),
+      );
       const layer = Layer.mergeAll(dependencies, telemetryLayer);
 
       yield* Effect.gen(function* () {
