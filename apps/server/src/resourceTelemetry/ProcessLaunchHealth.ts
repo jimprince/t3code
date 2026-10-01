@@ -4,7 +4,7 @@ import type {
   SyspolicydSample,
 } from "@t3tools/contracts";
 
-export const LAUNCH_HEALTH_GUIDANCE =
+const LAUNCH_HEALTH_GUIDANCE =
   "Reduce active threads. If macOS launches still stall, run sudo killall syspolicyd ONCE in a terminal on the server Mac. Repeated kills can cause launchd to throttle the daemon and freeze WindowServer.";
 
 /** Bounded history, same daemon identity, and clock-reset handling prevent restart/clock false alarms. */
