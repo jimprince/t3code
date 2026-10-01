@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "4c370cef84df7eeb38476b5444c3a2fa2cf313c2",
-  "head": "a14f43543645a0cda034037b17a73228a3225415",
+  "prev": "8a9e3417d8ac691c38329d49075226106948032b",
+  "head": "5671052375ff6bedb34b800f85c75c54258b681f",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -42,7 +42,8 @@
     "fork-nested-threads",
     "fork-resume-background-work",
     "fork-overnight-updates",
-    "fork-spawn-budget"
+    "fork-spawn-budget",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-t3-thread-prebuilt",
@@ -195,6 +196,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "8218117dfa818083d65c8a6d34937dc5818bc3f1"
+    },
+    "refresh-temp": {
+      "oid": "5671052375ff6bedb34b800f85c75c54258b681f"
     }
   }
 }
