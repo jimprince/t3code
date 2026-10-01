@@ -1,5 +1,6 @@
 import * as Cause from "effect/Cause";
 import * as Context from "effect/Context";
+import { BackgroundProcessWork } from "../processRunner.ts";
 import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -557,7 +558,7 @@ export const make = Effect.gen(function* () {
         const exit = yield* refreshRemoteStatus(cwd, {
           refreshUpstream: !Duration.isZero(configuredInterval),
           policyCwds: [...demandCwds.keys()],
-        }).pipe(Effect.exit);
+        }).pipe(Effect.provideService(BackgroundProcessWork, true), Effect.exit);
         if (Exit.isSuccess(exit)) {
           yield* Ref.set(needsInitialRefreshRef, false);
           yield* Ref.set(consecutiveFailuresRef, 0);
