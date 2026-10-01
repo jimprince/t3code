@@ -148,6 +148,12 @@ describe("resolveThreadListV2Status", () => {
       "ready",
     );
   });
+
+  it("uses shared supervising priority and suppresses it for settled rows", () => {
+    const thread = makeThread({ id: ThreadId.make("parent"), title: "Parent" });
+    expect(resolveThreadListV2Status(thread, 1)).toBe("supervising");
+    expect(resolveThreadListV2Status({ ...thread, settledOverride: "settled" }, 1)).toBe("ready");
+  });
 });
 
 describe("queued messages keep a settled thread active", () => {

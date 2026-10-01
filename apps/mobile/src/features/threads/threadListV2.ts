@@ -9,6 +9,12 @@ import {
 } from "@t3tools/client-runtime/state/thread-settled";
 import type { SnoozePreset } from "@t3tools/client-runtime/state/thread-settled";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import {
+  countActiveDescendantsByThread,
+  resolveThreadDisplayStatus,
+  threadActivityKey,
+  type ThreadDisplayStatus,
+} from "@t3tools/client-runtime/state/thread-status";
 import { threadSearchMatchKey } from "@t3tools/client-runtime/state/thread-search";
 import {
   sortActiveThreadsByOrderKey,
@@ -39,7 +45,7 @@ export { snoozeWakeLabel };
  * (approval), "in motion" (working), and "broken" (failed). Ready is the
  * unlabeled resting state.
  */
-export type ThreadListV2Status = "approval" | "input" | "working" | "failed" | "ready";
+export type ThreadListV2Status = ThreadDisplayStatus;
 export type ThreadListV2SwipeAction = "archive" | "settle" | "unsettle" | "snooze" | "unsnooze";
 
 export function resolveThreadListV2SnoozeMenuSelection(input: {
@@ -118,21 +124,22 @@ export const THREAD_LIST_V2_SETTLED_INITIAL_COUNT = 10;
 export const THREAD_LIST_V2_SETTLED_PAGE_COUNT = 25;
 
 export function resolveThreadListV2Status(
-  thread: Pick<EnvironmentThreadShell, "hasPendingApprovals" | "hasPendingUserInput" | "session">,
+  thread: Pick<
+    EnvironmentThreadShell,
+    | "hasPendingApprovals"
+    | "hasPendingUserInput"
+    | "session"
+    | "latestTurn"
+    | "backgroundLiveness"
+    | "settledOverride"
+  >,
+  activeDescendantCount = 0,
 ): ThreadListV2Status {
-  if (thread.hasPendingApprovals) {
-    return "approval";
-  }
-  if (thread.hasPendingUserInput) {
-    return "input";
-  }
-  if (thread.session?.status === "running" || thread.session?.status === "starting") {
-    return "working";
-  }
-  if (thread.session?.status === "error") {
-    return "failed";
-  }
-  return "ready";
+  return resolveThreadDisplayStatus({
+    ...thread,
+    hasActiveDescendants: activeDescendantCount > 0,
+    settled: thread.settledOverride === "settled",
+  });
 }
 
 /** NaN-safe Date.parse for sort comparators: a malformed timestamp must not
@@ -196,6 +203,7 @@ export function getThreadListV2OrderedSection(input: {
 
 export interface ThreadListV2Item {
   readonly thread: EnvironmentThreadShell;
+  readonly activeDescendantCount?: number;
   readonly variant: "card" | "slim";
   /** Snoozed-shelf row: shows the wake countdown and offers Wake. */
   readonly snoozed: boolean;
@@ -321,6 +329,7 @@ export function threadListV2ListItemsAreEqual(
         previous.type === "v2-thread" &&
         previous.key === item.key &&
         previous.item.thread === item.item.thread &&
+        previous.item.activeDescendantCount === item.item.activeDescendantCount &&
         previous.item.variant === item.item.variant &&
         previous.item.snoozed === item.item.snoozed &&
         previous.item.pinned === item.item.pinned &&
@@ -367,7 +376,12 @@ function resolveThreadListV2ItemTimeLabel(
 ): string {
   const { thread, variant, snoozed } = item;
   if (showSnoozeWakeLabel) return "";
-  if (variant === "card" && resolveThreadListV2Status(thread) !== "ready") return "";
+  if (
+    variant === "card" &&
+    resolveThreadListV2Status(thread, item.activeDescendantCount) !== "ready"
+  ) {
+    return "";
+  }
   const settledTimestamp =
     variant === "slim" && !snoozed ? resolveSettledThreadTimestamp(thread) : null;
   return relativeTime(
@@ -528,6 +542,9 @@ export function buildThreadListV2Items(input: {
   readonly queuedThreadKeys?: ReadonlySet<string>;
 }): ThreadListV2Layout {
   const now = input.now;
+  const activeDescendantCounts = countActiveDescendantsByThread(input.threads);
+  const activeDescendantCount = (thread: EnvironmentThreadShell) =>
+    activeDescendantCounts.get(threadActivityKey(thread)) ?? 0;
   const pending =
     input.pendingOrder == null
       ? null
@@ -630,6 +647,7 @@ export function buildThreadListV2Items(input: {
   )) {
     items.push({
       thread,
+      activeDescendantCount: activeDescendantCount(thread),
       variant: "card",
       snoozed: false,
       pinned: true,
@@ -639,6 +657,7 @@ export function buildThreadListV2Items(input: {
   for (const thread of orderedActive) {
     items.push({
       thread,
+      activeDescendantCount: activeDescendantCount(thread),
       variant: "card",
       snoozed: false,
       pinned: false,
@@ -649,6 +668,7 @@ export function buildThreadListV2Items(input: {
   for (const thread of visibleSnoozed) {
     items.push({
       thread,
+      activeDescendantCount: activeDescendantCount(thread),
       variant: "slim",
       snoozed: true,
       pinned: false,
@@ -659,6 +679,7 @@ export function buildThreadListV2Items(input: {
   for (const thread of visibleSettled) {
     items.push({
       thread,
+      activeDescendantCount: activeDescendantCount(thread),
       variant: "slim",
       snoozed: false,
       pinned: false,
