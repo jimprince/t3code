@@ -1,6 +1,6 @@
-Bottom: a42b97b1ed97b778cde6403789124f1903fe6b1f
-Top:    66693b20446a3c01cba15a936911fa26e44e4b71
+Bottom: 4ffade6230bfa33035212cc6537ee31d0cfb3474
+Top:    17ff1e03bbc3e2da3a730be8d6aea8379a7bc0e7
 Author: User <user@example.com>
-Date:   2026-10-01 10:42:32 +0000
+Date:   2026-10-01 10:42:48 +0000
 
 feat(source-control): configure Gitea instances and branch PR badges

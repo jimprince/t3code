@@ -1,6 +1,6 @@
-Bottom: 179fde4e2fa94471e80b9ef67976663b616830c2
-Top:    8f78c75ac9aa98a27be21838e1a6b28467759ec5
+Bottom: d290b3d8c17f3883b26d3c64d9b5ad064e339b50
+Top:    ad095b91a3ad87a775579362cb4f76c37243937d
 Author: User <user@example.com>
-Date:   2026-10-01 10:42:32 +0000
+Date:   2026-10-01 10:42:48 +0000
 
 feat(web): preview GLB and STL models inline
