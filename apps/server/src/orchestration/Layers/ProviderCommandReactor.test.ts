@@ -3698,6 +3698,79 @@ describe("ProviderCommandReactor", () => {
     });
   });
 
+  it.each([null, "/tmp/worker-project-worktree"])(
+    "starts cross-project nested workers in their own workspace (%s)",
+    async (worktreePath) => {
+      const harness = await createHarness();
+      const now = "2026-01-01T00:00:00.000Z";
+      await harness.runEffect(
+        harness.engine.dispatch({
+          type: "project.create",
+          commandId: CommandId.make("cross-parent-project"),
+          projectId: asProjectId("parent-project"),
+          title: "Supervisor repository",
+          workspaceRoot: "/tmp/supervisor-project",
+          defaultModelSelection: null,
+          createdAt: now,
+        }),
+      );
+      await harness.runEffect(
+        harness.engine.dispatch({
+          type: "thread.create",
+          commandId: CommandId.make("cross-parent-thread"),
+          threadId: ThreadId.make("supervisor"),
+          projectId: asProjectId("parent-project"),
+          title: "Supervisor",
+          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          branch: null,
+          worktreePath: null,
+          createdAt: now,
+        }),
+      );
+      await harness.runEffect(
+        harness.engine.dispatch({
+          type: "thread.parent.set",
+          commandId: CommandId.make("cross-nest"),
+          threadId: ThreadId.make("thread-1"),
+          parentThreadId: ThreadId.make("supervisor"),
+        }),
+      );
+      await harness.runEffect(
+        harness.engine.dispatch({
+          type: "thread.meta.update",
+          commandId: CommandId.make("cross-worktree"),
+          threadId: ThreadId.make("thread-1"),
+          worktreePath,
+        }),
+      );
+      await harness.runEffect(
+        harness.engine.dispatch({
+          type: "thread.turn.start",
+          commandId: CommandId.make("cross-turn"),
+          threadId: ThreadId.make("thread-1"),
+          message: {
+            messageId: asMessageId("cross-message"),
+            role: "user",
+            text: "Run in my repository",
+            attachments: [],
+          },
+          interactionMode: DEFAULT_PROVIDER_INTERACTION_MODE,
+          runtimeMode: "approval-required",
+          createdAt: now,
+        }),
+      );
+      await harness.drain();
+      expect(harness.startSession).toHaveBeenCalledTimes(1);
+      expect(harness.startSession.mock.calls[0]?.[1]).toMatchObject({
+        threadId: ThreadId.make("thread-1"),
+        cwd: worktreePath ?? "/tmp/provider-project",
+      });
+      expect(harness.sendTurn).toHaveBeenCalledTimes(1);
+    },
+  );
+
   it("restarts claude sessions when claude effort changes", async () => {
     const harness = await createHarness({
       threadModelSelection: {

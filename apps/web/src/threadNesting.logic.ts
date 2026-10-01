@@ -5,7 +5,7 @@ import type { ContextMenuItem, EnvironmentId, ThreadId } from "@t3tools/contract
 /**
  * Pure rules for nested threads on web and desktop. A nested thread leaves the
  * sidebar and is listed in its parent's Agents panel. The server enforces
- * same-project acyclic parentage; these helpers only decide presentation and
+ * same-environment acyclic parentage; these helpers only decide presentation and
  * which nesting actions to offer, and they never hide a thread whose direct
  * parent the user cannot reach.
  */
@@ -19,7 +19,7 @@ const threadKey = (thread: Pick<NestingThread, "environmentId" | "id">) =>
 
 /**
  * Ids of threads nested right now within one environment's thread list: the
- * direct parent is present in the same project, not archived, and the edge is
+ * direct parent is present, not archived, and the edge is
  * not part of a cycle.
  * A thread whose parent is archived, deleted, or unknown is not nested, so it
  * falls back to the sidebar instead of being stranded.
@@ -32,13 +32,7 @@ export function resolveNestedThreadIds(
   for (const thread of threads) {
     if (thread.parentThreadId == null) continue;
     const parent = byId.get(thread.parentThreadId);
-    if (
-      parent === undefined ||
-      parent.id === thread.id ||
-      parent.projectId !== thread.projectId ||
-      parent.archivedAt !== null
-    )
-      continue;
+    if (parent === undefined || parent.id === thread.id || parent.archivedAt !== null) continue;
 
     const visited = new Set<ThreadId>();
     let ancestor: (typeof threads)[number] | undefined = thread;
@@ -71,6 +65,36 @@ export function resolveNestedThreadKeys(threads: ReadonlyArray<NestingThread>): 
     }
   }
   return nested;
+}
+
+/** Visible cross-project children, indexed once for sidebar placement. Same-project
+ * children retain their existing Agents-panel placement, except the open child.
+ * Filter before resolving parents so hiding a project cannot strand a child.
+ */
+export function sidebarNestedRows<T extends NestingThread>(
+  threads: ReadonlyArray<T>,
+  visibleProjectKeys: ReadonlySet<string> | null,
+  viewedThreadKey: string | null,
+): ReadonlyMap<string, ReadonlyArray<T>> {
+  const visible = threads.filter(
+    (thread) =>
+      thread.archivedAt === null &&
+      (visibleProjectKeys === null ||
+        visibleProjectKeys.has(`${thread.environmentId}:${thread.projectId}`)),
+  );
+  const nested = resolveNestedThreadKeys(visible);
+  const byKey = new Map(visible.map((thread) => [threadKey(thread), thread]));
+  const rows = new Map<string, T[]>();
+  for (const child of visible) {
+    if (child.parentThreadId == null || !nested.has(threadKey(child))) continue;
+    const parentKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.parentThreadId));
+    const parent = byKey.get(parentKey)!;
+    if (child.projectId === parent.projectId && threadKey(child) !== viewedThreadKey) continue;
+    const siblings = rows.get(parentKey);
+    if (siblings) siblings.push(child);
+    else rows.set(parentKey, [child]);
+  }
+  return rows;
 }
 
 type AttentionThread = NestingThread &
@@ -212,7 +236,7 @@ const NEST_PARENT_CANDIDATE_LIMIT = 12;
 /**
  * Threads `thread` may be nested under, most recently updated first. Mirrors
  * the server's rules so the menu only offers moves it will accept: same
- * environment and project, unarchived, and never the thread itself, its current
+ * environment, unarchived, and never the thread itself, its current
  * parent, or one of its descendants.
  */
 export function selectNestParentCandidates<
@@ -237,7 +261,6 @@ export function selectNestParentCandidates<
     .filter(
       (candidate) =>
         candidate.environmentId === thread.environmentId &&
-        candidate.projectId === thread.projectId &&
         candidate.id !== thread.id &&
         candidate.id !== thread.parentThreadId &&
         canParentThreads(candidate) &&
@@ -255,7 +278,7 @@ export interface NestedDraftIntent {
 
 /**
  * The parent a nested draft will be created under, or null when the draft no
- * longer matches it (moved to another environment or project) or the parent
+ * longer matches it (moved to another environment) or the parent
  * can no longer take children. Null means the draft sends as a normal thread.
  */
 export function resolveNestedDraftParent<T extends NestingThread>(input: {
@@ -271,9 +294,7 @@ export function resolveNestedDraftParent<T extends NestingThread>(input: {
     (thread) =>
       thread.environmentId === intent.environmentId && thread.id === intent.parentThreadId,
   );
-  return parent !== undefined && parent.projectId === draft.projectId && canParentThreads(parent)
-    ? parent
-    : null;
+  return parent !== undefined && canParentThreads(parent) ? parent : null;
 }
 
 export type ThreadNestingMenuId =

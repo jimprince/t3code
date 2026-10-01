@@ -264,7 +264,7 @@ import {
   applySidebarThreadNesting,
   isThreadNestingMenuId,
   resolveThreadNestingMenuState,
-  resolveViewedNestedThread,
+  sidebarNestedRows,
 } from "../threadNesting.logic";
 import { Tooltip, TooltipPopup, TooltipProvider, TooltipTrigger } from "./ui/tooltip";
 import { MiddleTruncate } from "./ui/middle-truncate";
@@ -2085,6 +2085,11 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               </span>
             </div>
           </div>
+          {props.nestedSubRow && props.projectDisplayName ? (
+            <span className="max-w-24 shrink-0 truncate text-2xs text-muted-foreground">
+              {props.projectDisplayName}
+            </span>
+          ) : null}
           {props.jumpLabel ? <JumpHintBadge label={props.jumpLabel} /> : null}
         </TooltipTrigger>
         {detailsTooltip}
@@ -2389,11 +2394,6 @@ export default function Sidebar() {
     [routeDraftThread, routeTarget],
   );
   const routeThreadKey = routeThreadRef ? scopedThreadKey(routeThreadRef) : null;
-  // An open nested thread shows under its parent so the way back stays visible.
-  const viewedNestedThread = useMemo(
-    () => resolveViewedNestedThread(threads, routeThreadKey),
-    [routeThreadKey, threads],
-  );
   const routeTargetRef = useRef(routeTarget);
   routeTargetRef.current = routeTarget;
   // Post-settle navigation validates against the CURRENT route, not the one
@@ -2583,8 +2583,11 @@ export default function Sidebar() {
       : allProjectsCheckboxState === "none"
         ? "No projects"
         : `${visibleProjectGroups.length} projects`);
-  // Any filter change drops the selection: rows selected under the old filter
-  // may be hidden now, and bulk actions must never count or touch invisible rows.
+  const nestedRowsByParent = useMemo(
+    () => sidebarNestedRows(threads, scopedProjectKeys, routeThreadKey),
+    [threads, scopedProjectKeys, routeThreadKey],
+  );
+  // Any filter change drops the selection so bulk actions only touch visible rows.
   const settledResetKey = [...hiddenProjectKeys].sort().join(",");
   const setHiddenProjectKeys = useCallback(
     (nextHiddenProjectKeys: readonly string[]) => {
@@ -2717,7 +2720,7 @@ export default function Sidebar() {
     // memo exactly at the next wake boundary.
     void snoozeWakeTick;
     const preciseNow = new Date().toISOString();
-    const visible = applySidebarThreadNesting(threads).filter((thread) => {
+    const eligible = threads.filter((thread) => {
       const projectRefKey = `${thread.environmentId}:${thread.projectId}`;
       return (
         thread.archivedAt === null &&
@@ -2725,6 +2728,7 @@ export default function Sidebar() {
       );
     });
     observeInboxReturns(workingShelfEnabled ? threads : null);
+    const visible = applySidebarThreadNesting(eligible);
     const pinned: EnvironmentThreadShell[] = [];
     const active: EnvironmentThreadShell[] = [];
     const working: EnvironmentThreadShell[] = [];
@@ -5428,15 +5432,10 @@ export default function Sidebar() {
                         if (item.kind === "thread") {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
                           // Hidden during drags: it is not part of the sortable list.
-                          if (viewedNestedThread?.parentKey === item.key && dragState === null) {
-                            items.push(
-                              renderThreadRowInner(
-                                viewedNestedThread.thread,
-                                "active",
-                                undefined,
-                                true,
-                              ),
-                            );
+                          if (dragState === null) {
+                            for (const child of nestedRowsByParent.get(item.key) ?? []) {
+                              items.push(renderThreadRowInner(child, "active", undefined, true));
+                            }
                           }
                           continue;
                         }
