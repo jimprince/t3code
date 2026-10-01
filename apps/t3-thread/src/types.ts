@@ -191,8 +191,14 @@ export interface SavedAgent {
   lastSeenAssistantMessageId?: string | null;
 }
 
+export type NotificationLevel = "all" | "attention" | "none";
+
 export interface SavedSubscription {
-  events?: "all" | "attention";
+  level?: NotificationLevel;
+  lastDirectMessageTurnId?: string | null;
+  errorEventKey?: string | null;
+  observedState?: AgentState;
+  observedReason?: string;
   subscriberThreadId: string;
   subscriberAgentName: string | null;
   subscriberEnvironment: string;
@@ -233,6 +239,9 @@ export type SavedNotificationStatus =
   | "superseded";
 
 export interface SavedNotification {
+  completionDisposition?: "quiet" | "attention" | null;
+  occurrences?: number;
+  lastOccurrenceKey?: string;
   id: string;
   eventKey: string;
   subscriberThreadId: string;
@@ -247,6 +256,8 @@ export interface SavedNotification {
   latestTurnId: string | null;
   preview: string | null;
   status: SavedNotificationStatus;
+  /** Confirmed first-delivery guide; retained across routes and watcher restarts. */
+  onboardingDelivered?: boolean;
   createdAt: string;
   updatedAt: string;
   deliveredAt?: string | null;
