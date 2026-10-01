@@ -1159,7 +1159,23 @@ export const StorageCleanupSettings = Schema.Struct({
 });
 export type StorageCleanupSettings = typeof StorageCleanupSettings.Type;
 
+export const ProcessLaunchWarningSettings = Schema.Struct({
+  syspolicydRssMb: Schema.Int.check(Schema.isGreaterThan(0)).pipe(
+    Schema.withDecodingDefault(Effect.succeed(1024)),
+  ),
+  syspolicydGrowthMb: Schema.Int.check(Schema.isGreaterThan(0)).pipe(
+    Schema.withDecodingDefault(Effect.succeed(300)),
+  ),
+  spawnAttemptsPerMinute: Schema.Int.check(Schema.isGreaterThan(0)).pipe(
+    Schema.withDecodingDefault(Effect.succeed(600)),
+  ),
+});
+export type ProcessLaunchWarningSettings = typeof ProcessLaunchWarningSettings.Type;
+
 export const ServerSettings = Schema.Struct({
+  processLaunchWarnings: ProcessLaunchWarningSettings.pipe(
+    Schema.withDecodingDefault(Effect.succeed(Schema.decodeSync(ProcessLaunchWarningSettings)({}))),
+  ),
   worktreeCleanup: WorktreeCleanup.pipe(Schema.withDecodingDefault(Effect.succeed(null))),
   storageCleanup: StorageCleanupSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed(Schema.decodeSync(StorageCleanupSettings)({}))),
@@ -1527,6 +1543,13 @@ const OpenCodeSettingsPatch = Schema.Struct({
 });
 
 export const ServerSettingsPatch = Schema.Struct({
+  processLaunchWarnings: Schema.optionalKey(
+    Schema.Struct({
+      syspolicydRssMb: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
+      syspolicydGrowthMb: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
+      spawnAttemptsPerMinute: Schema.optionalKey(Schema.Int.check(Schema.isGreaterThan(0))),
+    }),
+  ),
   worktreeCleanup: Schema.optionalKey(
     Schema.NullOr(
       Schema.Union([
