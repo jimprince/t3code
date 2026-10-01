@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { resolveSidebarThreadStatus } from "../Sidebar.logic";
 import { applySidebarThreadNesting } from "../../threadNesting.logic";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -109,8 +110,10 @@ describe("sidebar nested children", () => {
     });
     const groups = groupSidebarChildren([root, quiet, branch, worker, waiting]);
     expect(groups.get(key(root))?.activeCount).toBe(2);
+    expect(groups.get(key(root))?.inputChildren.map((child) => child.id)).toEqual([waiting.id]);
     expect(groups.get(key(root))?.children.map((child) => child.id)).toEqual([branch.id, quiet.id]);
     expect(groups.get(key(branch))?.activeCount).toBe(2);
+    expect(groups.get(key(branch))?.inputChildren.map((child) => child.id)).toEqual([waiting.id]);
     expect(groups.get(key(worker))?.activeCount).toBe(1);
     expect(hasActiveSidebarDescendants(groups, key(root))).toBe(true);
     expect(hasActiveSidebarDescendants(groups, key(quiet))).toBe(false);
@@ -280,4 +283,36 @@ describe("cross-project sidebar integration", () => {
       ).size,
     ).toBe(0);
   });
+});
+
+it("keeps a working parent's own state while identifying waiting children, and clears on lifecycle changes", () => {
+  const parent = thread("parent", { session: { status: "running" } });
+  const input = thread("input", { parentThreadId: parent.id, hasPendingUserInput: true });
+  const list = applySidebarThreadNesting([parent, input]);
+  expect(
+    resolveSidebarThreadStatus({
+      ...list[0]!,
+      session: {
+        threadId: parent.id,
+        status: "running",
+        providerName: null,
+        runtimeMode: "full-access",
+        activeTurnId: null,
+        lastError: null,
+        updatedAt: parent.createdAt,
+      },
+      backgroundLiveness: null,
+    }),
+  ).toBe("working");
+  const group = groupSidebarChildren([parent, input]).get(key(parent))!;
+  expect(group.inputChildren.map((child) => child.id)).toEqual([input.id]);
+  for (const changed of [
+    { ...input, settledOverride: "settled" as const },
+    { ...input, archivedAt: "2026-10-01T01:00:00Z" },
+    { ...input, hasPendingUserInput: false },
+  ]) {
+    expect(groupSidebarChildren([parent, changed]).get(key(parent))?.inputChildren ?? []).toEqual(
+      [],
+    );
+  }
 });
