@@ -96,26 +96,30 @@ const rejection = (command: OrchestrationCommand, model: OrchestrationReadModel)
   );
 
 it.layer(NodeServices.layer)("thread nesting", (it) => {
-  it.effect("creates a thread nested under its orchestrator", () =>
+  it.effect("creates nested threads in the same or a different project", () =>
     Effect.gen(function* () {
-      const next = yield* decideAndProject(
-        {
-          type: "thread.create",
-          commandId: CommandId.make("cmd-create"),
-          threadId: WORKER,
-          projectId: PROJECT,
-          title: "Worker",
-          modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          branch: null,
-          worktreePath: null,
-          createdAt: NOW,
-          parentThreadId: ORCHESTRATOR,
-        },
-        readModel([thread(ORCHESTRATOR)]),
-      );
-      expect(next.threads.find((entry) => entry.id === WORKER)?.parentThreadId).toBe(ORCHESTRATOR);
+      for (const projectId of [PROJECT, OTHER_PROJECT]) {
+        const next = yield* decideAndProject(
+          {
+            type: "thread.create",
+            commandId: CommandId.make("cmd-create"),
+            threadId: WORKER,
+            projectId,
+            title: "Worker",
+            modelSelection: { instanceId: ProviderInstanceId.make("codex"), model: "gpt-5.4" },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            createdAt: NOW,
+            parentThreadId: ORCHESTRATOR,
+          },
+          readModel([thread(ORCHESTRATOR)]),
+        );
+        expect(next.threads.find((entry) => entry.id === WORKER)?.parentThreadId).toBe(
+          ORCHESTRATOR,
+        );
+      }
     }),
   );
 
@@ -134,7 +138,59 @@ it.layer(NodeServices.layer)("thread nesting", (it) => {
     }),
   );
 
-  it.effect("rejects nesting that would make a tree, a cycle, or cross projects", () =>
+  it.effect(
+    "re-nests across projects and preserves the child's execution workspace after parent removal",
+    () =>
+      Effect.gen(function* () {
+        const child = thread(WORKER, {
+          projectId: OTHER_PROJECT,
+          branch: "worker-branch",
+          worktreePath: "/tmp/worker-worktree",
+        });
+        const nested = yield* decideAndProject(
+          setParent(WORKER, ORCHESTRATOR),
+          readModel([thread(ORCHESTRATOR), child]),
+        );
+        expect(nested.threads.find((entry) => entry.id === WORKER)).toMatchObject({
+          projectId: OTHER_PROJECT,
+          parentThreadId: ORCHESTRATOR,
+          branch: child.branch,
+          worktreePath: child.worktreePath,
+        });
+        const archived = yield* decideAndProject(
+          {
+            type: "thread.archive",
+            commandId: CommandId.make("archive-parent"),
+            threadId: ORCHESTRATOR,
+          },
+          nested,
+        );
+        expect(archived.threads.find((entry) => entry.id === WORKER)).toMatchObject({
+          archivedAt: null,
+          projectId: OTHER_PROJECT,
+          worktreePath: child.worktreePath,
+        });
+        const removed = yield* decideAndProject(
+          {
+            type: "project.delete",
+            commandId: CommandId.make("remove-parent-project"),
+            projectId: PROJECT,
+            force: true,
+          },
+          nested,
+        );
+        expect(removed.threads.find((entry) => entry.id === WORKER)).toMatchObject({
+          projectId: OTHER_PROJECT,
+          deletedAt: null,
+          branch: child.branch,
+          worktreePath: child.worktreePath,
+        });
+        const unnested = yield* decideAndProject(setParent(WORKER, null), removed);
+        expect(unnested.threads.find((entry) => entry.id === WORKER)?.parentThreadId).toBeNull();
+      }),
+  );
+
+  it.effect("rejects nesting that would make a tree or a cycle", () =>
     Effect.gen(function* () {
       const nestedParent = readModel([
         thread(ORCHESTRATOR, { parentThreadId: ThreadId.make("top") }),
@@ -156,14 +212,6 @@ it.layer(NodeServices.layer)("thread nesting", (it) => {
 
       const self = readModel([thread(WORKER)]);
       expect(yield* rejection(setParent(WORKER, WORKER), self)).toContain("under itself");
-
-      const crossProject = readModel([
-        thread(ORCHESTRATOR, { projectId: OTHER_PROJECT }),
-        thread(WORKER),
-      ]);
-      expect(yield* rejection(setParent(WORKER, ORCHESTRATOR), crossProject)).toContain(
-        "same project",
-      );
 
       const archivedParent = readModel([thread(ORCHESTRATOR, { archivedAt: NOW }), thread(WORKER)]);
       expect(yield* rejection(setParent(WORKER, ORCHESTRATOR), archivedParent)).toContain(
