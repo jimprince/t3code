@@ -102,7 +102,7 @@ it.effect(
       );
       assert.isTrue(handles.every((handle) => handle.context?.provider.kind === "unknown"));
       const firstAttempts = attempts;
-      assert.isTrue(firstAttempts > 0);
+      assert.strictEqual(firstAttempts, 1);
       yield* registry.resolveHandle(input);
       assert.strictEqual(attempts, firstAttempts);
       yield* TestClock.adjust("1 minute");
