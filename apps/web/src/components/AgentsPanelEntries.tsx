@@ -7,7 +7,16 @@ import type {
 import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
 import { useRouter } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
-import { ChevronDownIcon, PanelLeftIcon } from "lucide-react";
+import {
+  CheckIcon,
+  CircleIcon,
+  CircleAlertIcon,
+  CircleHelpIcon,
+  CirclePauseIcon,
+  ShieldQuestionIcon,
+  ChevronDownIcon,
+  PanelLeftIcon,
+} from "lucide-react";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 
 import {
@@ -15,14 +24,16 @@ import {
   isAgentsPanelEntrySettled,
   shelveAgentsPanelEntries,
 } from "~/agentsPanelShelf.logic";
+import { useNowMinute } from "~/hooks/useNowMinute";
+import { formatSubagentTokenCount } from "@t3tools/client-runtime/state/subagentRuntime";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useThreadNestingActions } from "~/hooks/useThreadNesting";
 import { cn } from "~/lib/utils";
-import { useProject, useThreadShell, useThreadShells } from "~/state/entities";
+import { useProject, useServerConfigs, useThreadShell, useThreadShells } from "~/state/entities";
 import { listNestedThreads } from "~/threadNesting.logic";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
-import { resolveSidebarThreadStatus, resolveThreadStatusPill } from "./Sidebar.logic";
+import { nestedThreadStatus, nestedThreadDuration } from "./nestedThreadDetails.logic";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "./ui/tooltip";
 
@@ -47,46 +58,94 @@ export function useNestedThreads(
   );
 }
 
-// Static dots only: the panel never animates status.
-function nestedThreadStatus(thread: EnvironmentThreadShell) {
-  const pill = resolveThreadStatusPill({ thread });
-  if (pill !== null) return { label: pill.label, dotClass: pill.dotClass };
-  return resolveSidebarThreadStatus(thread) === "failed"
-    ? { label: "Failed", dotClass: "bg-destructive" }
-    : { label: "Idle", dotClass: "bg-muted-foreground/50" };
-}
+const NESTED_STATUS = {
+  working: { label: "Working", Icon: CircleIcon, className: "text-info" },
+  input: { label: "Needs input", Icon: CircleHelpIcon, className: "text-info" },
+  approval: { label: "Approval", Icon: ShieldQuestionIcon, className: "text-warning" },
+  completed: { label: "Completed", Icon: CheckIcon, className: "text-success" },
+  error: { label: "Error", Icon: CircleAlertIcon, className: "text-error" },
+  settled: { label: "Settled", Icon: CheckIcon, className: "text-muted-foreground" },
+  interrupted: { label: "Interrupted", Icon: CirclePauseIcon, className: "text-muted-foreground" },
+  ready: { label: "Ready", Icon: CircleIcon, className: "text-muted-foreground" },
+};
 
 function NestedThreadRow({
   thread,
+  parentProjectId,
   onOpen,
   onMoveToSidebar,
 }: {
   thread: EnvironmentThreadShell;
+  parentProjectId: EnvironmentThreadShell["projectId"] | undefined;
   onOpen: (threadRef: ScopedThreadRef) => void;
   onMoveToSidebar: (threadRef: ScopedThreadRef) => void;
 }) {
   const threadRef = scopeThreadRef(thread.environmentId, thread.id);
-  const status = nestedThreadStatus(thread);
+  const status = NESTED_STATUS[nestedThreadStatus(thread)];
+  const nowMinute = useNowMinute();
+  const duration = nestedThreadDuration(thread, `${nowMinute}:00Z`);
+  const config = useServerConfigs().get(thread.environmentId);
+  const instanceId = thread.session?.providerInstanceId ?? thread.modelSelection.instanceId;
+  const provider = config?.providers.find((entry) => entry.instanceId === instanceId);
+  const effort = thread.modelSelection.options?.find((option) =>
+    ["reasoningEffort", "effort", "thinkingLevel"].includes(option.id),
+  )?.value;
+  const summary = thread.agentPanelSummary;
+  const output =
+    summary?.latestOutput?.split(/\r?\n/, 1)[0] || thread.session?.lastError || status.label;
+  const tokens = summary?.processedTokens ?? summary?.contextTokens;
+  const metadata = [
+    thread.modelSelection.model,
+    effort == null ? null : String(effort),
+    provider?.displayName ?? instanceId,
+    tokens == null
+      ? null
+      : `${formatSubagentTokenCount(tokens)} ${summary?.processedTokens == null ? "ctx tok" : "tok"}`,
+    summary ? `${summary.toolCalls} tools` : null,
+    thread.branch,
+    thread.worktreePath,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const project = useProject(scopeProjectRef(thread.environmentId, thread.projectId));
   return (
     <div className="flex items-center gap-1 rounded-md hover:bg-accent/40">
       <button
         type="button"
         onClick={() => onOpen(threadRef)}
-        className="grid min-w-0 flex-1 grid-cols-[0.375rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1rem] items-center gap-x-2 px-1.5 py-1 text-left"
+        className="grid min-w-0 flex-1 grid-cols-[0.375rem_minmax(0,1fr)_auto] grid-rows-[1.25rem_1.125rem_1rem] items-center gap-x-2 px-1.5 py-1 text-left"
       >
         <span className="col-start-1 row-start-1 flex items-center">
-          <span aria-hidden className={cn("size-1.5 shrink-0 rounded-full", status.dotClass)} />
+          <status.Icon
+            aria-label={status.label}
+            className={cn("size-3 shrink-0", status.className)}
+          />
         </span>
-        <span className="col-start-2 row-start-1 min-w-0 truncate text-sm font-medium">
-          {thread.title}
+        <span className="col-start-2 row-start-1 flex min-w-0 items-baseline gap-2">
+          <span className="min-w-0 truncate text-sm font-medium">{thread.title}</span>
+          {parentProjectId === undefined || thread.projectId !== parentProjectId ? (
+            <span className="max-w-28 shrink-0 truncate rounded-sm border border-border/60 px-1 font-mono text-3xs text-muted-foreground">
+              {project?.title ?? thread.projectId}
+            </span>
+          ) : null}
         </span>
         <span className="col-start-3 row-start-1 font-mono text-2xs text-muted-foreground/80">
-          {formatRelativeTimeLabel(thread.latestUserMessageAt ?? thread.updatedAt)}
+          {duration} · {status.label}
         </span>
-        <span className="col-start-2 col-end-4 row-start-2 truncate font-mono text-2xs text-muted-foreground/70">
-          {status.label} · {project?.title ?? thread.projectId} · {thread.modelSelection.model}
+        <span className="col-start-2 col-end-4 row-start-2 truncate text-xs text-muted-foreground">
+          {output}
         </span>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <span className="col-start-2 col-end-4 row-start-3 truncate font-mono text-2xs text-muted-foreground/70" />
+            }
+          >
+            {metadata} · last activity{" "}
+            {formatRelativeTimeLabel(summary?.lastActivityAt ?? thread.updatedAt)}
+          </TooltipTrigger>
+          <TooltipPopup side="top">{metadata}</TooltipPopup>
+        </Tooltip>
       </button>
       <Tooltip>
         <TooltipTrigger
@@ -162,6 +221,9 @@ export function AgentsPanelEntries({
   renderAgent: (agent: RuntimeSubagent) => ReactNode;
 }) {
   const router = useRouter();
+  const parent = useThreadShell(
+    environmentId && threadId ? scopeThreadRef(environmentId, threadId) : null,
+  );
   const { setThreadParent } = useThreadNestingActions();
   const openThread = useCallback(
     (threadRef: ScopedThreadRef) =>
@@ -210,6 +272,7 @@ export function AgentsPanelEntries({
           <NestedThreadRow
             key={entry.key}
             thread={entry.thread}
+            parentProjectId={parent?.projectId}
             onOpen={openThread}
             onMoveToSidebar={moveToSidebar}
           />
