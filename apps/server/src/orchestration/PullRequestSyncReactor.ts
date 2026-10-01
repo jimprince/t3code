@@ -26,6 +26,8 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
+import { ProviderRefinementScope } from "../sourceControl/SourceControlProviderRegistry.ts";
+import { BackgroundProcessWork } from "../processRunner.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as OrchestrationEngine from "./Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./Services/ProjectionSnapshotQuery.ts";
@@ -296,17 +298,36 @@ export const make = Effect.gen(function* () {
       );
     });
 
+    const repositories = new Map<string, Array<readonly [string, ReadonlyArray<LinkEntry>]>>();
+    for (const [key, entries] of groups) {
+      if ((requestedKey !== undefined && requestedKey !== key) || !isDue(key, entries, nowMs))
+        continue;
+      const first = entries[0]!;
+      const repositoryKey = JSON.stringify([
+        first.thread.projectId,
+        normalizeThreadPullRequestKey(first.link).host,
+        first.link.repository,
+      ]);
+      const repository = repositories.get(repositoryKey) ?? [];
+      repository.push([key, entries]);
+      repositories.set(repositoryKey, repository);
+    }
     yield* Effect.forEach(
-      groups,
-      ([key, entries]) =>
-        (requestedKey === undefined || requestedKey === key) && isDue(key, entries, nowMs)
-          ? syncGroup(key, entries).pipe(
+      repositories.values(),
+      (repository) =>
+        Effect.forEach(
+          repository,
+          ([key, entries]) =>
+            syncGroup(key, entries).pipe(
               Effect.catchCause(logSkipped("pull request sync skipped", { key })),
-            )
-          : Effect.void,
-      // As wide as one batched summary read, so the sweep's reads on a host arrive together and
-      // GitHub answers them in one request rather than one `gh pr view` apiece.
-      { concurrency: 25, discard: true },
+            ),
+          // Keep a small batch for hosts that coalesce summaries; only two repository contexts at once.
+          { concurrency: 4, discard: true },
+        ),
+      { concurrency: 2, discard: true },
+    ).pipe(
+      Effect.provideService(ProviderRefinementScope, new Map()),
+      Effect.provideService(BackgroundProcessWork, true),
     );
   });
 

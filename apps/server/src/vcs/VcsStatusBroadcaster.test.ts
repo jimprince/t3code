@@ -28,6 +28,7 @@ import * as VcsStatusBroadcaster from "./VcsStatusBroadcaster.ts";
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
+import { BackgroundProcessWork } from "../processRunner.ts";
 
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
 
@@ -78,6 +79,7 @@ function makeTestLayer(state: {
   remoteInvalidationCalls: number;
   remoteStatusRefreshUpstreamValues?: Array<boolean | undefined>;
   backgroundWorkEnabled?: boolean;
+  backgroundModes?: Array<boolean>;
 }) {
   return VcsStatusBroadcaster.layer.pipe(
     Layer.provideMerge(NodeServices.layer),
@@ -90,8 +92,10 @@ function makeTestLayer(state: {
             return state.currentLocalStatus;
           }),
         remoteStatus: (_input, options) =>
-          Effect.sync(() => {
+          Effect.gen(function* () {
+            const background = yield* BackgroundProcessWork;
             state.remoteStatusCalls += 1;
+            state.backgroundModes?.push(background);
             state.remoteStatusRefreshUpstreamValues?.push(options?.refreshUpstream);
             return state.currentRemoteStatus;
           }),
@@ -637,6 +641,7 @@ describe("VcsStatusBroadcaster", () => {
       localInvalidationCalls: 0,
       remoteInvalidationCalls: 0,
       remoteStatusRefreshUpstreamValues: [] as Array<boolean | undefined>,
+      backgroundModes: [] as Array<boolean>,
     };
 
     return Effect.gen(function* () {
@@ -675,11 +680,14 @@ describe("VcsStatusBroadcaster", () => {
       assert.equal(state.remoteStatusCalls, 1);
       assert.equal(state.remoteInvalidationCalls, 0);
       assert.deepStrictEqual(state.remoteStatusRefreshUpstreamValues, [false]);
+      assert.deepStrictEqual(state.backgroundModes, [true]);
 
       yield* TestClock.adjust(Duration.minutes(2));
       assert.equal(state.remoteStatusCalls, 1);
       assert.equal(state.remoteInvalidationCalls, 0);
 
+      yield* broadcaster.refreshStatus("/repo");
+      assert.deepStrictEqual(state.backgroundModes, [true, false]);
       yield* Scope.close(scope, Exit.void);
     }).pipe(Effect.provide(Layer.merge(makeTestLayer(state), TestClock.layer())));
   });
