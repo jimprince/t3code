@@ -1325,3 +1325,13 @@ retire_when = "Upstream provides active nested-worker counts and remembered expa
 depends_on = ["fork-nested-threads"]
 roles = []
 note = "Expanded rows recursively render direct children at a compact 12px indent per level. Active counts include all reachable descendants, pinned siblings sort first, and branches containing activity sort before other quiet branches while preserving creation order within each group. A collapsed ancestor retains the path to the open descendant and to any pinned descendant, so a nested pin remains hierarchical instead of being duplicated in the top-level Pinned shelf. Child rows reuse ordinary sidebar status labels; a running turn is only a fallback when session state is absent, because a stopped session is authoritative over a stale running turn. An idle, unsettled parent with active descendants reads Supervising across client thread lists; settled parents keep their settled presentation while existing descendant counts and attention remain visible. The web row reserves a stable trailing status/action slot so hover controls and live labels cannot move the active-count control. The active-count control remains expand/collapse rather than introducing a separate filter mode."
+
+[[patch]]
+name = "fork-child-input-attention"
+subject = "feat(threads): separate child input attention from parent status"
+class = "product"
+purpose = "Keep parent status independent, expose waiting child input, and remind subscribed parents while questions remain pending."
+retire_when = "Upstream provides independent parent status, child attention navigation and configurable unanswered-question reminders."
+depends_on = ["fork-notification-preferences", "fork-sidebar-agent-visibility"]
+roles = []
+note = "Replaces sidebar child-state rollup with separate child input markers. Input counts recurse through every reachable descendant, so both roots and collapsed nested parents state how many sub-agents need input. Reminders use existing direct-caller subscriptions and confirmed-delivery history, with no new polling process."
