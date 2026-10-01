@@ -62,6 +62,71 @@ function createWatchClient(environment: SavedEnvironment): WatchClient {
   return new RemoteEnvironmentClient(environment);
 }
 
+/** Per-watcher cache: share reads within a pass, park terminal mappings for its lifetime.
+ * Settled sources re-check each minute so remote unsettle remains observable.
+ */
+export function createWatchPoller(factory: WatchClientFactory = createWatchClient, now = Date.now) {
+  const reads = new Map<string, Promise<OrchestrationThread>>();
+  const parked = new Map<
+    string,
+    { until: number; read: Promise<OrchestrationThread>; reason: string }
+  >();
+  const clientFactory: WatchClientFactory = (environment) => ({
+    findThread(threadId) {
+      const key = `${environment.name}:${threadId}`;
+      const skipped = parked.get(key);
+      if (skipped && now() < skipped.until) return skipped.read;
+      if (!reads.has(key)) {
+        const read: Promise<OrchestrationThread> = factory(environment)
+          .findThread(threadId)
+          .then((thread) => {
+            const reason =
+              thread.archivedAt || thread.deletedAt
+                ? "archived"
+                : thread.settledOverride === "settled"
+                  ? "settled"
+                  : null;
+            if (reason)
+              parked.set(key, {
+                until: reason === "settled" ? now() + 60_000 : Infinity,
+                read: Promise.resolve(thread),
+                reason,
+              });
+            else parked.delete(key);
+            return thread;
+          })
+          .catch((error: unknown) => {
+            if (isMissingThread(error)) {
+              // Keep the rejected read to flag the mapping without hitting RPC every pass.
+              parked.set(key, { until: Infinity, read, reason: "missing" });
+            }
+            throw error;
+          });
+        reads.set(key, read);
+      }
+      return reads.get(key)!;
+    },
+    sendMessage(input) {
+      return factory(environment).sendMessage(input);
+    },
+  });
+  return {
+    clientFactory,
+    beginPoll: () => reads.clear(),
+    skippedMappings: () =>
+      [...parked].map(([mapping, value]) => ({ mapping, reason: value.reason })),
+  };
+}
+
+export function isMissingThread(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /Thread .* was not found/i.test(message);
+}
+
+export function nextWatchInterval(intervalMs: number, workRemaining: boolean): number {
+  return workRemaining ? intervalMs : Math.max(intervalMs, 60_000);
+}
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -146,6 +211,12 @@ export async function scanAttentionNotifications(
   const scanned: SavedNotification[] = [];
 
   for (const sourceAgent of scopedAgents) {
+    if (
+      !state.subscriptions.some(
+        (subscription) => subscription.sourceThreadId === sourceAgent.threadId,
+      )
+    )
+      continue;
     const sourceEnvironment = requireEnvironment(state, sourceAgent.environment);
     const sourceClient = clientFactory(sourceEnvironment);
     let sourceThread: OrchestrationThread;
@@ -156,6 +227,12 @@ export async function scanAttentionNotifications(
       // should not prevent detection for every other watched route.
       continue;
     }
+    if (
+      sourceThread.archivedAt ||
+      sourceThread.deletedAt ||
+      sourceThread.settledOverride === "settled"
+    )
+      continue;
     const overview = buildAgentOverview(sourceAgent, sourceThread);
     if (!needsAttention(overview)) {
       continue;
@@ -311,7 +388,11 @@ export async function hasActiveWork(
     try {
       const environment = requireEnvironment(state, agent.environment);
       const thread = await clientFactory(environment).findThread(agent.threadId);
-      if (IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)) {
+      if (
+        !thread.deletedAt &&
+        thread.settledOverride !== "settled" &&
+        IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)
+      ) {
         return true;
       }
     } catch {
