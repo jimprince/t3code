@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "871d34344adb68829ebb2fd93691b854490327f5",
-  "head": "fca5091cc37ed509c3e5d6a85e67f81370e8cd53",
+  "prev": "042946295e37985c06fa9500813f2c1866abdb1e",
+  "head": "29419b1de9af6369fb9b67eb9796ab49aed90e9c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -43,14 +43,13 @@
     "fork-resume-background-work",
     "fork-overnight-updates",
     "fork-spawn-budget",
-    "fork-t3-thread-prebuilt"
-  ],
-  "unapplied": [
+    "fork-t3-thread-prebuilt",
     "fork-cross-project-thread-nesting",
     "fork-launch-health",
     "fork-notification-preferences",
     "fork-sidebar-agent-visibility"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -75,7 +74,7 @@
       "oid": "450e784228a0235063b16e6b8157c92d0f3d6f1b"
     },
     "fork-cross-project-thread-nesting": {
-      "oid": "651b6d6bba14b96fec03edc76382188578c8659e"
+      "oid": "c3ea3d3b301fd483d3a728c54bf01b746107e3ea"
     },
     "fork-desktop-delivery": {
       "oid": "6f72c8c6102614d59ba7598be2bd09e7e40c87d5"
@@ -105,7 +104,7 @@
       "oid": "916cd5b0e6e313d9b3bb91c0026b4697c9afd6d7"
     },
     "fork-launch-health": {
-      "oid": "6f5684a199ea0d2398d74b0de802099378e085ec"
+      "oid": "4ee2bf96a1a454bb327b864964af0a8e44d660d8"
     },
     "fork-maintenance-automation": {
       "oid": "0bcedc056af0048dfb3e5c04903628d9be01718a"
@@ -117,7 +116,7 @@
       "oid": "b7869c3953028b7d44e0d4e202fa1c6319cb6cb6"
     },
     "fork-notification-preferences": {
-      "oid": "41ba128c41c320098df9cacfa2a4c0592bcff3cf"
+      "oid": "c714e676a86705abb21b8f2f2138c786210f9ecf"
     },
     "fork-orcaslicer-handoff": {
       "oid": "501b7511bb25e4dad2a1724a921a9a9b31f2c49f"
@@ -156,7 +155,7 @@
       "oid": "73f6411faf80a2b1faefd8e2b81bf74c145d1d5d"
     },
     "fork-sidebar-agent-visibility": {
-      "oid": "ee7cb79514976026474422e2b7582b2b1b479f94"
+      "oid": "29419b1de9af6369fb9b67eb9796ab49aed90e9c"
     },
     "fork-spawn-budget": {
       "oid": "a14f43543645a0cda034037b17a73228a3225415"
