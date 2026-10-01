@@ -5,10 +5,15 @@ Canonical runbook for supervising T3-based agents with this repo.
 ## CLI Form
 
 Examples below use `t3-thread <command>` (the wrapper in `~/.shared/bin/t3-thread`),
-which works from any cwd and targets the canonical checkout. When developing in
-a separate worktree, run `pnpm run cli -- <command>` from `apps/t3-thread` so
-you exercise that worktree's source. Both forms invoke `tsx src/cli.ts`, so
-edits to the selected checkout's `src/` are picked up without rebuilding.
+which works from any cwd and prefers the pinned runtime snapshot. Normal commands
+validate the build stamp and load `dist/cli.cjs` in one Node process. Missing or
+stale builds fail without installing dependencies or rebuilding automatically.
+
+When developing in a separate worktree, run `node scripts/build.mjs` once from
+`apps/t3-thread`, then `node scripts/launch.mjs <command>` to exercise that
+worktree's build. Source or dependency changes require rebuilding. Set
+`T3_THREAD_DEV=1` and `T3_THREAD_REPO=<worktree>/apps/t3-thread` explicitly when
+you intend to run source through tsx instead.
 
 ## Quick Start
 
@@ -796,6 +801,14 @@ copied test state directory as proof of the production environment's identity.
 Execution rechecks thread lifecycle and Git state before each non-forced removal.
 This reduces the stale-plan window; it does not lock out concurrent external Git
 operations, so avoid starting work in archived checkouts during cleanup.
+
+### Operator launch and polling cost
+
+The default CLI entry point is prebuilt JavaScript. See
+[Prebuilt operator runtime](../README.md#prebuilt-operator-runtime) for explicit
+build/deploy commands, source development, and stale-build recovery. Watchers
+use the same entry point as their caller. Idle polls back off to one minute;
+missing and archived sources are flagged and parked for the watcher's lifetime.
 
 ## Pinning workers
 
