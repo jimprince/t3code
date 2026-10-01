@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+# t3-thread-deploy: publish a pinned runtime snapshot of the t3-thread CLI and
+# prune the ones it replaces.
+#
+# The `t3-thread` wrapper runs from $SNAP_ROOT/current so that switching
+# branches in the development checkout cannot roll the CLI back. Nothing else
+# reads these directories, and before this script existed nothing removed them
+# either: each hand-deployment left its predecessor behind (five copies in four
+# days, Sep 2026). Deploying through this script keeps exactly one.
+#
+# Usage:
+#   t3-thread-deploy [--from <checkout>] [--ref <git-ref>] [--dry-run] [--prune-only]
+#
+# Env overrides (mainly for testing):
+#   T3_THREAD_SOURCE_REPO   development checkout to snapshot (default ~/Programming/t3code-fork)
+#   T3_THREAD_SNAPSHOT_ROOT snapshot root (default ~/.local/share/t3-thread)
+set -euo pipefail
+
+SOURCE_REPO="${T3_THREAD_SOURCE_REPO:-$HOME/Programming/t3code-fork}"
+SNAP_ROOT="${T3_THREAD_SNAPSHOT_ROOT:-$HOME/.local/share/t3-thread}"
+REF=""
+DRY_RUN=0
+PRUNE_ONLY=0
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --from) SOURCE_REPO="${2:?--from needs a path}"; shift 2 ;;
+    --ref) REF="${2:?--ref needs a git ref}"; shift 2 ;;
+    --dry-run) DRY_RUN=1; shift ;;
+    --prune-only) PRUNE_ONLY=1; shift ;;
+    -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "t3-thread-deploy: unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+run() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "  would run: $*"
+  else
+    "$@"
+  fi
+}
+
+# Refuse to operate on an unset or implausible root; this script deletes directories.
+case "$SNAP_ROOT" in
+  ""|"/"|"$HOME") echo "t3-thread-deploy: refusing to use snapshot root '$SNAP_ROOT'" >&2; exit 2 ;;
+esac
+
+# The fork tracks whichever package manager upstream uses; it moved from pnpm to
+# bun during 2026, and old snapshots still install with pnpm. Follow the tree
+# being deployed instead of pinning one.
+install_deps() {
+  local dest="$1" manager
+  manager="$(sed -n 's/.*"packageManager"[[:space:]]*:[[:space:]]*"\([a-z]*\)@.*/\1/p' "$dest/package.json" 2>/dev/null | head -1)"
+  if [ -z "$manager" ]; then
+    if [ -f "$dest/bun.lock" ] || [ -f "$dest/bun.lockb" ]; then manager=bun
+    elif [ -f "$dest/pnpm-lock.yaml" ]; then manager=pnpm
+    fi
+  fi
+  case "$manager" in
+    bun) run env -C "$dest" bun install --frozen-lockfile ;;
+    pnpm) run env -C "$dest" pnpm install --frozen-lockfile ;;
+    *) echo "t3-thread-deploy: cannot tell which package manager $dest uses" >&2; return 1 ;;
+  esac
+  # A fresh install hardlinks from the manager's content store; copying
+  # node_modules from the source checkout would duplicate GBs of store content.
+}
+
+verify_snapshot() {
+  local ws="$1/apps/t3-thread"
+  (cd "$ws" && node scripts/build.mjs && node scripts/launch.mjs --help >/dev/null)
+}
+
+deploy() {
+  [ -e "$SOURCE_REPO/.git" ] || { echo "t3-thread-deploy: $SOURCE_REPO is not a git checkout" >&2; exit 1; }
+  local target_ref sha dest
+  target_ref="${REF:-HEAD}"
+  sha="$(git -C "$SOURCE_REPO" rev-parse --short=8 "$target_ref")"
+  dest="$SNAP_ROOT/$sha"
+  echo "source: $SOURCE_REPO @ $(git -C "$SOURCE_REPO" rev-parse --abbrev-ref "$target_ref" 2>/dev/null || echo "$target_ref") ($sha)"
+
+  if [ -e "$dest" ]; then
+    echo "snapshot $sha already present; repointing current at it"
+  else
+    echo "creating snapshot $sha from $SOURCE_REPO"
+    # Remove a half-built snapshot rather than leaving it to be mistaken for a
+    # working one; the cutover below never runs if we exit here.
+    trap '[ "$DRY_RUN" -eq 1 ] || /bin/rm -rf "${dest:?}"' ERR
+    # --local hardlinks git objects instead of copying them.
+    run git clone --quiet --local --no-checkout "$SOURCE_REPO" "$dest"
+    run git -C "$dest" checkout --quiet --detach "$sha"
+    # The CLI workspace comes from the fork patch stack; plain upstream main does
+    # not have it. Fail here rather than after a multi-minute install.
+    if [ "$DRY_RUN" -eq 0 ] && [ ! -f "$dest/apps/t3-thread/package.json" ]; then
+      echo "t3-thread-deploy: $target_ref ($sha) has no apps/t3-thread workspace; deploy a ref with the fork patch stack applied" >&2
+      false
+    fi
+    install_deps "$dest"
+    trap - ERR
+  fi
+
+  # Prove the new snapshot runs before it becomes current, because prune deletes
+  # the one it replaces immediately afterwards.
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "  would verify: $dest/apps/t3-thread builds once and runs 'scripts/launch.mjs --help'"
+  else
+    verify_snapshot "$dest" || {
+      echo "t3-thread-deploy: $dest does not run; leaving current unchanged" >&2
+      exit 1
+    }
+  fi
+
+  echo "pointing current -> $sha"
+  run ln -sfn "$sha" "$SNAP_ROOT/current.tmp"
+  # Atomic swap that must not follow the old link into its directory: GNU mv
+  # spells that -T, BSD (macOS) mv spells it -h.
+  if mv --version >/dev/null 2>&1; then
+    run mv -Tf "$SNAP_ROOT/current.tmp" "$SNAP_ROOT/current"
+  else
+    run mv -hf "$SNAP_ROOT/current.tmp" "$SNAP_ROOT/current"
+  fi
+}
+
+prune() {
+  local current_target
+  current_target="$(readlink "$SNAP_ROOT/current" 2>/dev/null || true)"
+  if [ -z "$current_target" ] || [ ! -d "$SNAP_ROOT/$current_target" ]; then
+    echo "t3-thread-deploy: current symlink missing or dangling; not pruning" >&2
+    exit 1
+  fi
+
+  local entry name pruned=0
+  for entry in "$SNAP_ROOT"/*/; do
+    [ -d "$entry" ] || continue
+    name="$(basename "$entry")"
+    [ "$name" = "$current_target" ] && continue
+    [ "$name" = "current" ] && continue
+    echo "pruning superseded snapshot $name"
+    # /bin/rm directly: the shared rm wrapper's two-phase confirmation is for
+    # interactive callers, and this path is already guarded above.
+    run /bin/rm -rf "${SNAP_ROOT:?}/$name"
+    pruned=$((pruned + 1))
+  done
+  [ "$pruned" -eq 0 ] && echo "nothing to prune; current ($current_target) is the only snapshot"
+  return 0
+}
+
+[ "$PRUNE_ONLY" -eq 1 ] || deploy
+prune
