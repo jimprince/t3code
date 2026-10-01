@@ -1,0 +1,4 @@
+id = "process-launch-early-warning"
+category = "feature"
+functionality = "diagnostics"
+text = "Diagnostics warns about growing macOS syspolicyd memory and sustained T3 launch attempts, with configurable thresholds and minute-by-minute server logs."
