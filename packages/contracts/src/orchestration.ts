@@ -945,7 +945,19 @@ export const OrchestrationProjectShell = Schema.Struct({
 });
 export type OrchestrationProjectShell = typeof OrchestrationProjectShell.Type;
 
+/** Bounded nested-worker metadata; avoids hydrating every child's full history. */
+export const ThreadAgentPanelSummary = Schema.Struct({
+  // SQLite counts Unicode characters; astral characters occupy two JS code units.
+  latestOutput: Schema.NullOr(Schema.String.check(Schema.isMaxLength(640))),
+  contextTokens: Schema.NullOr(NonNegativeInt),
+  processedTokens: Schema.NullOr(NonNegativeInt),
+  toolCalls: NonNegativeInt,
+  lastActivityAt: IsoDateTime,
+});
+export type ThreadAgentPanelSummary = typeof ThreadAgentPanelSummary.Type;
+
 export const OrchestrationThreadShell = Schema.Struct({
+  agentPanelSummary: Schema.optionalKey(ThreadAgentPanelSummary),
   id: ThreadId,
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
