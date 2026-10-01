@@ -5,10 +5,15 @@ Canonical runbook for supervising T3-based agents with this repo.
 ## CLI Form
 
 Examples below use `t3-thread <command>` (the wrapper in `~/.shared/bin/t3-thread`),
-which works from any cwd and targets the canonical checkout. When developing in
-a separate worktree, run `pnpm run cli -- <command>` from `apps/t3-thread` so
-you exercise that worktree's source. Both forms invoke `tsx src/cli.ts`, so
-edits to the selected checkout's `src/` are picked up without rebuilding.
+which works from any cwd and prefers the pinned runtime snapshot. Normal commands
+validate the build stamp and load `dist/cli.cjs` in one Node process. Missing or
+stale builds fail without installing dependencies or rebuilding automatically.
+
+When developing in a separate worktree, run `node scripts/build.mjs` once from
+`apps/t3-thread`, then `node scripts/launch.mjs <command>` to exercise that
+worktree's build. Source or dependency changes require rebuilding. Set
+`T3_THREAD_DEV=1` and `T3_THREAD_REPO=<worktree>/apps/t3-thread` explicitly when
+you intend to run source through tsx instead.
 
 ## Quick Start
 
