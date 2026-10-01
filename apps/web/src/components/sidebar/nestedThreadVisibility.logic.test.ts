@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { applySidebarThreadNesting } from "../../threadNesting.logic";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
@@ -77,5 +78,44 @@ describe("sidebar nested children", () => {
     expect(visibleSidebarChildren(children, false, null)).toEqual([]);
     expect(visibleSidebarChildren(children, true, null)).toEqual(children);
     expect(visibleSidebarChildren(children, false, key(children[1]!))).toEqual([children[1]]);
+  });
+});
+
+describe("cross-project sidebar integration", () => {
+  const parent = thread("parent");
+  const child = thread("cross-project", {
+    parentThreadId: parent.id,
+    projectId: ProjectId.make("project-b"),
+    session: { status: "running" },
+  });
+
+  it("counts and expands a worker from its own project and keeps it reachable when collapsed", () => {
+    const group = groupSidebarChildren([parent, child]).get(key(parent))!;
+    expect(group.activeCount).toBe(1);
+    expect(group.children).toEqual([child]);
+    expect(group.children[0]!.projectId).toBe(child.projectId);
+    expect(visibleSidebarChildren(group.children, false, null)).toEqual([]);
+    expect(visibleSidebarChildren(group.children, true, null)).toEqual([child]);
+    expect(visibleSidebarChildren(group.children, false, key(child))).toEqual([child]);
+  });
+
+  it("applies the child filter and returns orphaned workers to their own project", () => {
+    const childProjectOnly = new Set([`${child.environmentId}:${child.projectId}`]);
+    expect(groupSidebarChildren([parent, child], childProjectOnly).size).toBe(0);
+    const eligible = [parent, child].filter((entry) =>
+      childProjectOnly.has(`${entry.environmentId}:${entry.projectId}`),
+    );
+    expect(applySidebarThreadNesting(eligible)).toEqual([child]);
+    expect(applySidebarThreadNesting([child])).toEqual([child]);
+    expect(groupSidebarChildren([child]).size).toBe(0);
+    expect(
+      groupSidebarChildren([{ ...parent, archivedAt: "2026-10-01T00:01:00Z" }, child]).size,
+    ).toBe(0);
+    expect(
+      groupSidebarChildren(
+        [parent, child],
+        new Set([`${parent.environmentId}:${parent.projectId}`]),
+      ).size,
+    ).toBe(0);
   });
 });
