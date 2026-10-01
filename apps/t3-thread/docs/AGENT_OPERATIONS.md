@@ -246,20 +246,28 @@ Prefer nested T3 threads for sub-agents: the user can open them, answer them,
 and move them with `t3-thread nest` / `unnest`. Built-in subagents (Claude's
 Task/Agent tool, Codex native spawns) cannot be opened, promoted, or answered;
 use them only for brief read-only lookups inside your own turn that the user
-did not ask to see. Nesting needs the worker in your environment and project;
+did not ask to see. Nesting needs the worker in your environment;
 otherwise, or on a server without nesting, the worker is top-level and the
 `nesting` field in the create output says why. Tell the user when that happens.
 
 - no flag: nests under the calling thread (`T3_THREAD_ID`). If the caller is
   itself nested, the worker joins the caller's parent, because nesting is one
-  level deep. A caller in another project or environment gets a top-level
+  level deep. A caller in another environment gets a top-level
   worker; the `nesting` field in the create output says why.
 - `--top-level`: put the worker in the sidebar, for work the user should
   watch directly.
 - `--parent <agent-or-thread>`: nest under a specific thread in the same
-  environment and project.
+  environment.
 - Move a worker later with `t3-thread nest <agent> --parent <agent-or-thread>`
   or `t3-thread unnest <agent>`.
+
+Workers keep their own project, model defaults, branch, and execution worktree.
+Cross-project workers appear under their parent in the sidebar with their own
+project label. Project filters apply to each thread's own project; when the
+parent is filtered out, hidden, archived, or removed, its children fall back to
+top level in their own project. Removing a parent project deletes only that
+project's threads. Archiving or settling a parent does not archive or settle
+its children. Unnesting returns the child to top level.
 
 When a nested worker needs attention (its subscription notifies you), handle
 it yourself before involving the user:
