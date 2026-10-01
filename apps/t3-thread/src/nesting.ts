@@ -19,8 +19,8 @@ export type CreateParentDecision =
 /**
  * Picks the thread a new worker nests under. By default a worker nests under
  * the calling thread; nesting is one level deep, so a worker started by an
- * already-nested thread joins that thread's parent. Callers in another project
- * or environment get a top-level worker with the reason reported.
+ * already-nested thread joins that thread's parent. Callers in another
+ * environment get a top-level worker with the reason reported.
  */
 export function resolveCreateParent(input: {
   readonly explicitParentThreadId: string | null;
@@ -46,9 +46,6 @@ export function resolveCreateParent(input: {
   const caller = live.find((thread) => thread.id === input.callerThreadId);
   if (!caller) {
     return { parentThreadId: null, reason: "calling thread is in another environment" };
-  }
-  if (caller.projectId !== input.projectId) {
-    return { parentThreadId: null, reason: "calling thread is in another project" };
   }
   if (!caller.parentThreadId) return { parentThreadId: caller.id, reason: "caller" };
   const grandparent = live.find((thread) => thread.id === caller.parentThreadId);
