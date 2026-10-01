@@ -1335,3 +1335,13 @@ retire_when = "Upstream provides independent parent status, child attention navi
 depends_on = ["fork-notification-preferences", "fork-sidebar-agent-visibility"]
 roles = []
 note = "Replaces sidebar child-state rollup with separate child input markers. Input counts recurse through every reachable descendant, so both roots and collapsed nested parents state how many sub-agents need input. Reminders use existing direct-caller subscriptions and confirmed-delivery history, with no new polling process."
+
+[[patch]]
+name = "fork-agent-panel-thread-details"
+subject = "feat(web): show detailed nested thread activity in Agents panel"
+class = "product"
+purpose = "Give nested worker rows output, state, model, provider, metrics, duration, activity and workspace context without full-history subscriptions."
+retire_when = "Upstream shows equivalent nested-worker details through bounded shell data."
+depends_on = ["fork-nested-threads", "fork-child-input-attention"]
+roles = []
+note = "Optional derived metadata preserves old-server compatibility. Ordinary top-level shells omit summaries, and nested output is bounded to its first 320 characters."
