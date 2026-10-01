@@ -740,6 +740,7 @@ function ThreadNavigationSidebarPane(
             <ThreadListV2Row
               onNewThreadOnBranch={props.onNewThreadOnBranch}
               thread={thread}
+              activeDescendantCount={item.item.activeDescendantCount}
               variant={item.item.variant}
               hasQueuedMessages={item.hasQueuedMessages}
               snoozed={item.item.snoozed}
