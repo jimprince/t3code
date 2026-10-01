@@ -176,6 +176,13 @@ open, it shows in the sidebar under its parent, and the header breadcrumb names
 the parent; click it to go back. Agents that start worker threads with
 `t3-thread` nest them under their own thread by default.
 
+The parent's sidebar card counts nested agents that are running, monitoring, or
+waiting for input or approval. Settled and archived children do not count. Expand
+its agent list to open any child; active children appear first with the same static
+status signals as other sidebar threads, followed by quieter idle and settled work.
+The list starts collapsed and remembers your choice on that device. A child you
+are viewing remains visible when the list is collapsed.
+
 Settled work folds into a collapsed **Settled** shelf at the bottom of the
 Agents panel: nested threads that are settled, including by automatic
 settlement, and subagents or workflows that have finished. Something that
@@ -189,8 +196,8 @@ Agents panel or from the thread's own menu. **New thread under this one** in a
 thread's menu starts a thread that is nested from the start.
 
 Nesting is one level deep within an environment and can span projects. A child
-keeps its own repository, worktree, branch, and model defaults. Cross-project
-children appear under their parent in the sidebar with their project label.
+keeps its own repository, worktree, branch, and model defaults. Expand the parent's agent list to see cross-project children in the sidebar
+with their own project label.
 Project filters apply to each thread's own project. If the parent is hidden,
 filtered out, archived, or removed, the child appears at top level in its own
 project. Removing the parent's project does not delete children from other
