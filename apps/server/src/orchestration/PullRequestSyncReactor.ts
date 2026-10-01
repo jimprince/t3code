@@ -126,9 +126,9 @@ export class PullRequestSyncReactor extends Context.Service<
   }
 >()("t3/orchestration/PullRequestSyncReactor") {}
 
-/** @public Service construction is part of the canonical Effect module API. */
 const encodeRepositoryKey = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
+/** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const engine = yield* OrchestrationEngine.OrchestrationEngineService;
   const snapshots = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
