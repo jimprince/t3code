@@ -330,3 +330,13 @@ per minute; archived and confirmed missing sources are parked until the watcher
 restarts. `skippedMappings` flags these mappings without deleting local aliases.
 Use `t3-thread forget <name>` to remove an obsolete alias. `status` without a name
 reports missing aliases and continues showing the remaining threads.
+
+Notification routing defaults to `all`. Use `create --notify-level attention` or
+`subscribe --watch <worker> --level attention` for supervision with direct result
+messages. `none` keeps required escalation alerts. Workers can end with
+`T3_NOTIFY: quiet` or `T3_NOTIFY: attention`; see
+[notification levels](docs/AGENT_OPERATIONS.md#notification-levels-and-quiet-results).
+
+For replying to worker notifications and choosing your subscription level, see
+[Thread communication](docs/THREAD_COMMUNICATION.md). The first delivered notice
+includes a short guide once per subscriber.
