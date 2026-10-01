@@ -11,6 +11,7 @@ vi.mock("~/hooks/useThreadNesting", () => ({
   useThreadNestingActions: () => ({ setThreadParent: vi.fn() }),
 }));
 vi.mock("~/state/entities", () => ({
+  useProject: () => ({ title: "Worker project" }),
   useThreadShell: () => null,
   useThreadShellsForProjectRefs: () => [],
 }));
@@ -87,6 +88,7 @@ it("folds settled rows into a collapsed Settled shelf", () => {
 
   const text = container.textContent ?? "";
   expect(text).toContain("Thread live");
+  expect(text).toContain("Worker project");
   expect(text).toContain("Spawn working");
   expect(text).not.toContain("Thread done");
   expect(text).not.toContain("Spawn finished");
