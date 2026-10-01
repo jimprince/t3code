@@ -110,6 +110,7 @@ export function buildNotificationRecord(input: {
     createdAt: input.existing?.createdAt ?? input.now,
     updatedAt: input.now,
     deliveredAt: input.existing?.deliveredAt ?? null,
+    onboardingDelivered: input.existing?.onboardingDelivered,
     lastAttemptedAt: input.existing?.lastAttemptedAt ?? null,
     lastError: input.existing?.lastError ?? null,
     deliveryClaimId: input.existing?.deliveryClaimId ?? null,
@@ -135,6 +136,7 @@ export function mergeDetectedNotification(
     status: existing.status,
     createdAt: existing.createdAt,
     deliveredAt: existing.deliveredAt ?? null,
+    onboardingDelivered: existing.onboardingDelivered,
     lastAttemptedAt: existing.lastAttemptedAt ?? null,
     lastError: existing.lastError ?? null,
     deliveryClaimId: existing.deliveryClaimId ?? null,
@@ -149,10 +151,13 @@ export function mergeDetectedNotification(
  * supervisor to decide whether the worker is finished, because nothing else
  * settles a quiet worker before automatic settlement days later.
  */
-export function buildNotificationMessage(notification: SavedNotification): string {
+export function buildNotificationMessage(
+  notification: SavedNotification,
+  includeOnboarding = false,
+): string {
   const sourceLabel = notification.sourceAgentName ?? notification.sourceThreadId;
   const preview = notification.preview ? summarizeMessageText(notification.preview, 120) : null;
-  return [
+  const notice = [
     `HomeNetwork orchestrator notification: ${sourceLabel} needs attention.`,
     `State: ${notification.sourceState}.`,
     `Reason: ${notification.reason}.`,
@@ -164,6 +169,18 @@ export function buildNotificationMessage(notification: SavedNotification): strin
   ]
     .filter(Boolean)
     .join(" ");
+  if (!includeOnboarding) return notice;
+  return `${notice}\n\n${[
+    "Thread communication quick start (shown once per subscriber):",
+    `This is an automatic watcher notice about worker ${sourceLabel}, routed by your subscription.`,
+    `Read its full output: \`t3-thread result ${sourceLabel}\`.`,
+    `Reply or assign work: \`t3-thread send ${sourceLabel} "message"\`; busy sends queue until its turn ends; \`t3-thread queue\` lists pending sends.`,
+    `Questions/approvals: \`t3-thread pending ${sourceLabel}\`, \`t3-thread answer ${sourceLabel} "answer"\`, \`t3-thread approve ${sourceLabel}\` or \`t3-thread deny ${sourceLabel}\`.`,
+    `Notification level: \`t3-thread agent subscribe --watch ${sourceLabel} --level all|attention|none\`; input, approval and error notices always pass these levels.`,
+    `Stop this subscription: \`t3-thread agent unsubscribe --watch ${sourceLabel}\`. Make your own turn quiet by ending your final response with \`T3_NOTIFY: quiet\`.`,
+    `Finished worker: \`t3-thread settle ${sourceLabel}\`; give it more work with send if needed.`,
+    "Full guide: apps/t3-thread/docs/THREAD_COMMUNICATION.md (in the t3-thread checkout).",
+  ].join("\n")}`;
 }
 
 /** Required escalation bypasses both subscription filtering and quiet completion. */

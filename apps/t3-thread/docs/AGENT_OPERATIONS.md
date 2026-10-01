@@ -536,6 +536,11 @@ t3-thread create \
 
 ### Notification levels and quiet results
 
+The first delivered notice includes a short guide once per subscriber, across
+all workers. The receipt survives restarts and unsubscribe/resubscribe; failed
+or held deliveries do not consume it. See [Thread communication](THREAD_COMMUNICATION.md)
+for the full reply, approval and notification controls.
+
 New subscriptions default to `all`, preserving completion and attention notices.
 Existing subscriptions without a level also use `all`. Choose at creation with
 `create ... --notify-level attention`, or change an existing route with

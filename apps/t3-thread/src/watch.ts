@@ -506,7 +506,17 @@ export async function claimPendingNotifications(
           left.eventKey.localeCompare(right.eventKey),
       );
 
-    const claimedSubscribers = new Set<string>();
+    // A different watcher may already be delivering another event to this
+    // recipient. Serialize those too, including the first onboarding delivery.
+    const claimedSubscribers = new Set(
+      state.notifications
+        .filter(
+          (notification) =>
+            notification.status === "delivering" &&
+            !isClaimStale(notification, claimedAtMs, claimTimeoutMs),
+        )
+        .map((notification) => notification.subscriberThreadId),
+    );
     for (const notification of claimable) {
       if (claimedSubscribers.has(notification.subscriberThreadId)) {
         continue;
@@ -684,13 +694,19 @@ export async function deliverPendingNotifications(
             nextAttemptAt: new Date(attemptedAtMs + BUSY_RECIPIENT_RETRY_MS).toISOString(),
           };
         } else {
+          const includeOnboarding = !state.notifications.some(
+            (candidate) =>
+              candidate.subscriberThreadId === notification.subscriberThreadId &&
+              candidate.onboardingDelivered === true,
+          );
           await subscriberClient.sendMessage({
             threadId: notification.subscriberThreadId,
-            text: buildNotificationMessage(notification),
+            text: buildNotificationMessage(notification, includeOnboarding),
           });
           result = {
             ...notification,
             status: "delivered",
+            onboardingDelivered: includeOnboarding,
             updatedAt: attemptedAt,
             deliveredAt: attemptedAt,
             lastAttemptedAt: attemptedAt,

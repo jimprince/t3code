@@ -247,6 +247,8 @@ export interface SavedNotification {
   latestTurnId: string | null;
   preview: string | null;
   status: SavedNotificationStatus;
+  /** Confirmed first-delivery guide; retained across routes and watcher restarts. */
+  onboardingDelivered?: boolean;
   createdAt: string;
   updatedAt: string;
   deliveredAt?: string | null;
