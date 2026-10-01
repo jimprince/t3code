@@ -838,8 +838,12 @@ export function shouldRecedeSidebarThread(input: {
 
 type SidebarThreadStatusInput = Pick<
   SidebarThreadSummary,
-  "hasPendingApprovals" | "hasPendingUserInput" | "session" | "backgroundLiveness"
->;
+  "hasPendingApprovals" | "hasPendingUserInput" | "backgroundLiveness"
+> & {
+  session:
+    | SidebarThreadSummary["session"]
+    | Pick<NonNullable<SidebarThreadSummary["session"]>, "status" | "lastError">;
+};
 
 export function resolveSidebarThreadStatus(thread: SidebarThreadStatusInput): SidebarThreadStatus {
   if (thread.hasPendingApprovals) {
