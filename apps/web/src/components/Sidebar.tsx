@@ -148,7 +148,10 @@ import {
   sidebarNestedPathKeys,
   sidebarPinnedPathKeys,
 } from "./sidebar/nestedThreadVisibility.logic";
-import { SidebarNestedThreadToggle } from "./sidebar/SidebarNestedThreadToggle";
+import {
+  SidebarNestedInputAttention,
+  SidebarNestedThreadToggle,
+} from "./sidebar/SidebarNestedThreadToggle";
 import { SidebarThreadRowStatus } from "./sidebar/SidebarThreadRowStatus";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
@@ -1113,6 +1116,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   nestedDepth?: number;
   nestedChildCount?: number;
   nestedActiveCount?: number;
+  nestedInputCount?: number;
+  nestedInputChildId?: ThreadId | undefined;
+  onOpenNestedInput?: (parent: ScopedThreadRef, childId: ThreadId) => void;
   nestedChildrenExpanded?: boolean;
   onToggleNestedChildren?: (threadRef: ScopedThreadRef) => void;
 }) {
@@ -1707,6 +1713,16 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         onToggle={() => props.onToggleNestedChildren?.(threadRef)}
       />
     ) : null;
+  const nestedInputAttention =
+    (props.nestedInputCount ?? 0) > 0 ? (
+      <SidebarNestedInputAttention
+        inputCount={props.nestedInputCount!}
+        onOpenInput={() => {
+          if (props.nestedInputChildId)
+            props.onOpenNestedInput?.(threadRef, props.nestedInputChildId);
+        }}
+      />
+    ) : null;
 
   if (variant === "slim") {
     return (
@@ -1760,6 +1776,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             {title}
             {pinIndicator}
             {nestedChildrenToggle}
+            {nestedInputAttention}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
@@ -2061,6 +2078,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               ) : null}
             </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
+              {nestedInputAttention}
               {/* Always the branch. The plan step used to take this slot while
                   working, but it truncated to a half-sentence and dropped the
                   branch, so the row lost its most stable identifier. */}
@@ -3166,6 +3184,15 @@ export default function Sidebar() {
       });
     },
     [clearSelection, isMobile, router, setOpenMobile, setSelectionAnchor],
+  );
+
+  const openNestedInput = useCallback(
+    (parent: ScopedThreadRef, childId: ThreadId) => {
+      const key = scopedThreadKey(parent);
+      setExpandedParents((keys) => (keys.includes(key) ? keys : [...keys, key]));
+      void navigateToThread(scopeThreadRef(parent.environmentId, childId));
+    },
+    [navigateToThread, setExpandedParents],
   );
 
   // Dropping files on a row opens that thread and attaches the files there.
@@ -5368,6 +5395,13 @@ export default function Sidebar() {
                             nestedDepth={nestedDepth}
                             nestedChildCount={sidebarChildren.get(threadKey)?.children.length ?? 0}
                             nestedActiveCount={sidebarChildren.get(threadKey)?.activeCount ?? 0}
+                            nestedInputCount={
+                              sidebarChildren.get(threadKey)?.inputChildren.length ?? 0
+                            }
+                            nestedInputChildId={
+                              sidebarChildren.get(threadKey)?.inputChildren[0]?.id
+                            }
+                            onOpenNestedInput={openNestedInput}
                             nestedChildrenExpanded={expandedParentKeys.has(threadKey)}
                             onToggleNestedChildren={toggleParentChildren}
                             thread={thread}
