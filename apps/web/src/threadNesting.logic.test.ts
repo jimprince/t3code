@@ -5,6 +5,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   applySidebarThreadNesting,
+  sidebarNestedRows,
   isNestedUnder,
   isThreadNestingMenuId,
   listNestedThreads,
@@ -57,7 +58,7 @@ const parentId = ThreadId.make("parent");
 const ids = (threads: ReadonlyArray<TestThread>) => threads.map((entry) => entry.id);
 
 describe("resolveNestedThreadKeys", () => {
-  it("nests through live parent chains in the same environment and project", () => {
+  it("nests through live parent chains in the same environment", () => {
     const keys = resolveNestedThreadKeys([
       thread("root"),
       thread("parent", { parentThreadId: ThreadId.make("root") }),
@@ -67,6 +68,7 @@ describe("resolveNestedThreadKeys", () => {
     ]);
     expect([...keys].toSorted()).toEqual([
       scopedThreadKey(scopeThreadRef(envA, ThreadId.make("child"))),
+      scopedThreadKey(scopeThreadRef(envA, ThreadId.make("other-project"))),
       scopedThreadKey(scopeThreadRef(envA, ThreadId.make("parent"))),
     ]);
   });
@@ -195,7 +197,7 @@ describe("listNestedThreads", () => {
 describe("selectNestParentCandidates", () => {
   const subject = thread("subject");
 
-  it("offers unarchived threads at any depth in the same environment and project, newest first", () => {
+  it("offers unarchived threads at any depth in the same environment, newest first", () => {
     const result = selectNestParentCandidates(subject, [
       subject,
       thread("old", { updatedAt: "2026-09-02T00:00:00.000Z" }),
@@ -205,7 +207,7 @@ describe("selectNestParentCandidates", () => {
       thread("other-project", { projectId: projectB }),
       thread("other-env", { environmentId: envB }),
     ]);
-    expect(ids(result)).toEqual(["new", "old", "nested"]);
+    expect(ids(result)).toEqual(["new", "old", "nested", "other-project"]);
   });
 
   it("excludes the current parent and honors the limit", () => {
@@ -254,7 +256,6 @@ describe("resolveNestedDraftParent", () => {
   it("drops the parent when the draft moved or the parent can no longer take children", () => {
     const cases = [
       { draft: { environmentId: envB, projectId: projectA }, threads: [thread("parent")] },
-      { draft: { environmentId: envA, projectId: projectB }, threads: [thread("parent")] },
       { draft, threads: [thread("parent", { archivedAt: "2026-09-02T00:00:00.000Z" })] },
       { draft, threads: [] },
     ];
@@ -332,12 +333,50 @@ describe("resolveViewedNestedThread", () => {
   });
 });
 
+describe("cross-project sidebar placement", () => {
+  const parent = thread("parent");
+  const child = thread("child", { projectId: projectB, parentThreadId: parent.id });
+  const parentKey = scopedThreadKey(scopeThreadRef(envA, parent.id));
+
+  it("places cross-project children under the parent while retaining their badge project", () => {
+    expect(sidebarNestedRows([parent, child], null, null).get(parentKey)).toEqual([child]);
+    expect(applySidebarThreadNesting([parent, child]).map((entry) => entry.id)).toEqual([
+      parent.id,
+    ]);
+  });
+
+  it("leaves the child top-level when the parent is filtered, removed, or archived", () => {
+    const selectedProjects = new Set([`${envA}:${projectB}`]);
+    expect(sidebarNestedRows([parent, child], selectedProjects, null).size).toBe(0);
+    const eligible = [parent, child].filter((entry) =>
+      selectedProjects.has(`${entry.environmentId}:${entry.projectId}`),
+    );
+    expect(applySidebarThreadNesting(eligible)).toEqual([child]);
+    expect(applySidebarThreadNesting([child])).toEqual([child]);
+    expect(sidebarNestedRows([{ ...parent, archivedAt: "now" }, child], null, null).size).toBe(0);
+  });
+
+  it("keeps same-project children in the Agents panel unless they are open", () => {
+    const same = { ...child, projectId: projectA };
+    expect(sidebarNestedRows([parent, same], null, null).size).toBe(0);
+    expect(
+      sidebarNestedRows([parent, same], null, scopedThreadKey(scopeThreadRef(envA, same.id))).get(
+        parentKey,
+      ),
+    ).toEqual([same]);
+  });
+
+  it("does not display children excluded by their own project filter", () => {
+    expect(sidebarNestedRows([parent, child], new Set([`${envA}:${projectA}`]), null).size).toBe(0);
+  });
+});
+
 describe("isNestedUnder", () => {
-  it("matches a live parent at any depth in the same environment and project", () => {
+  it("matches a live parent at any depth in the same environment", () => {
     const child = thread("child", { parentThreadId: parentId });
     expect(isNestedUnder(child, thread("parent"))).toBe(true);
     expect(isNestedUnder(child, thread("parent", { environmentId: envB }))).toBe(false);
-    expect(isNestedUnder(child, thread("parent", { projectId: projectB }))).toBe(false);
+    expect(isNestedUnder(child, thread("parent", { projectId: projectB }))).toBe(true);
     expect(isNestedUnder(child, thread("parent", { archivedAt: "2026-09-02T00:00:00.000Z" }))).toBe(
       false,
     );
