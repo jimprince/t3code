@@ -103,7 +103,7 @@ describe("applySidebarThreadNesting", () => {
     expect(applySidebarThreadNesting(threads)).toBe(threads);
   });
 
-  it("hides nested threads and rolls their pending approval and input into the parent", () => {
+  it("hides nested threads without changing the parent’s own pending requests", () => {
     const result = applySidebarThreadNesting([
       thread("parent"),
       thread("approval", { parentThreadId: parentId, hasPendingApprovals: true }),
@@ -111,7 +111,7 @@ describe("applySidebarThreadNesting", () => {
       thread("sibling"),
     ]);
     expect(ids(result)).toEqual(["parent", "sibling"]);
-    expect(result[0]).toMatchObject({ hasPendingApprovals: true, hasPendingUserInput: true });
+    expect(result[0]).toMatchObject({ hasPendingApprovals: false, hasPendingUserInput: false });
     expect(result[1]).toMatchObject({ hasPendingApprovals: false, hasPendingUserInput: false });
   });
 
@@ -128,20 +128,20 @@ describe("applySidebarThreadNesting", () => {
     expect(result[0]).toMatchObject({ id: parentId, hasPendingApprovals: false });
   });
 
-  it("shows a working or monitoring sub-agent as the parent's background work", () => {
+  it("keeps child work separate from the parent’s own background work", () => {
     const running = { status: "running" } as EnvironmentThreadShell["session"];
     const [idleParent] = applySidebarThreadNesting([
       thread("parent"),
       thread("worker", { parentThreadId: parentId, session: running }),
       thread("watcher", { parentThreadId: parentId, backgroundLiveness: "monitoring" }),
     ]);
-    expect(idleParent).toMatchObject({ backgroundLiveness: "working" });
+    expect(idleParent?.backgroundLiveness).toBeUndefined();
 
     const [monitoringParent] = applySidebarThreadNesting([
       thread("parent"),
       thread("watcher", { parentThreadId: parentId, backgroundLiveness: "monitoring" }),
     ]);
-    expect(monitoringParent).toMatchObject({ backgroundLiveness: "monitoring" });
+    expect(monitoringParent?.backgroundLiveness).toBeUndefined();
 
     const busyParent = thread("parent", { backgroundLiveness: "working" });
     const [unchanged] = applySidebarThreadNesting([
@@ -171,7 +171,7 @@ describe("applySidebarThreadNesting", () => {
       thread("child", { parentThreadId: parentId, hasPendingApprovals: true }),
     ]);
     expect(result.map((entry) => [entry.environmentId, entry.hasPendingApprovals])).toEqual([
-      [envA, true],
+      [envA, false],
       [envB, false],
     ]);
   });
