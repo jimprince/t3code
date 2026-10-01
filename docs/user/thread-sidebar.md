@@ -198,12 +198,17 @@ under…**. To bring one back, choose **Move to sidebar** from its row in the
 Agents panel or from the thread's own menu. **New thread under this one** in a
 thread's menu starts a thread that is nested from the start.
 
-Nesting can continue through multiple levels and stays within a project. When a
-nested thread is working, monitoring, or waiting on an approval or a question, its parent shows
-that state in the sidebar. An orchestrating agent is expected to answer its workers itself and ask
-you only when it cannot. If a parent is archived, its nested threads return to
-the sidebar. Nesting is not available in the mobile app yet; mobile lists every
-thread.
+Nesting can continue through multiple levels within an environment and can span
+projects. A child keeps its own repository, worktree, branch, and model defaults.
+Cross-project children appear under their parent in the sidebar with their project
+label. Project filters apply to each thread's own project. If the parent is hidden,
+filtered out, archived, or removed, the child appears at top level in its own
+project. Removing the parent's project does not delete children from other projects.
+Archiving or settling a parent does not archive or settle its children. When a
+nested thread is working, monitoring, or waiting on an approval or a question, its
+parent shows that state in the sidebar. An orchestrating agent is expected to answer
+its workers itself and ask you only when it cannot. Nesting is not available in the
+mobile app yet; mobile lists every thread.
 
 ## Snooze until later
 
