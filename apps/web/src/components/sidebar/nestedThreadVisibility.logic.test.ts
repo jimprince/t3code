@@ -102,11 +102,12 @@ describe("cross-project sidebar integration", () => {
   it("applies the child filter and returns orphaned workers to their own project", () => {
     const childProjectOnly = new Set([`${child.environmentId}:${child.projectId}`]);
     expect(groupSidebarChildren([parent, child], childProjectOnly).size).toBe(0);
-    const eligible = [parent, child].filter((entry) =>
+    const orphan = { ...child, session: null };
+    const eligible = [parent, orphan].filter((entry) =>
       childProjectOnly.has(`${entry.environmentId}:${entry.projectId}`),
     );
-    expect(applySidebarThreadNesting(eligible)).toEqual([child]);
-    expect(applySidebarThreadNesting([child])).toEqual([child]);
+    expect(applySidebarThreadNesting(eligible)).toEqual([orphan]);
+    expect(applySidebarThreadNesting([orphan])).toEqual([orphan]);
     expect(groupSidebarChildren([child]).size).toBe(0);
     expect(
       groupSidebarChildren([{ ...parent, archivedAt: "2026-10-01T00:01:00Z" }, child]).size,
