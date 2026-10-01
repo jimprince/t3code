@@ -13,12 +13,20 @@ const manifests = [
   "apps/web/package.json",
   "packages/contracts/package.json",
 ];
-const requiredJobs = [
-  "Check",
+// Every CI job whose success is source verification, by display name. One entry
+// per shard in ci.yml's test_server matrix.
+export const requiredJobs = [
+  "Lint",
+  "Typecheck",
+  "Build",
   "Test",
+  "Test Web",
   "Test Server 1",
   "Test Server 2",
   "Test Server 3",
+  "Test Server 4",
+  "Test Server 5",
+  "Test Server 6",
   "Release Smoke",
 ];
 const record = (value: unknown): value is Record<string, unknown> =>

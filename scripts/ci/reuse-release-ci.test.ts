@@ -1,7 +1,7 @@
 // @effect-diagnostics nodeBuiltinImport:off
 import { assert, describe, it } from "vite-plus/test";
 import { createFixtureRepo, type FixtureRepo } from "./lib/git-fixture.ts";
-import { releaseCISource, reuseReleaseCI } from "./reuse-release-ci.ts";
+import { releaseCISource, requiredJobs, reuseReleaseCI } from "./reuse-release-ci.ts";
 
 const version = "0.0.39-nightly.20260904.1280-fork.5";
 const repository = "owner/fork";
@@ -11,7 +11,6 @@ const manifests = [
   "apps/web/package.json",
   "packages/contracts/package.json",
 ];
-const jobs = ["Check", "Test", "Test Server 1", "Test Server 2", "Test Server 3", "Release Smoke"];
 function seed(repo: FixtureRepo) {
   for (const path of manifests)
     repo.writeFile(path, JSON.stringify({ version: "0.0.0", dependencies: { example: "1.0.0" } }));
@@ -35,7 +34,7 @@ const runFor = (sha: string) => ({
   conclusion: "success",
 });
 const jobEvidence = () => ({
-  jobs: jobs.map((name) => ({ name, status: "completed", conclusion: "success" })),
+  jobs: requiredJobs.map((name) => ({ name, status: "completed", conclusion: "success" })),
 });
 
 describe("release CI reuse", () => {
