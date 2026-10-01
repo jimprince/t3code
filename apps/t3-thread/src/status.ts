@@ -4,8 +4,8 @@ import type { AgentStatus, OrchestrationThread, OrchestrationThreadShell } from 
 /**
  * The source turn a new subscription should treat as already known.
  *
- * A source that is idle, completed, or errored at subscribe time has nothing
- * new to say about that turn, so it becomes the baseline and is never routed.
+ * A source that is not running becomes the baseline for routine completion.
+ * Required escalations still route even when they belong to that baseline.
  * A source that is mid-turn returns null: the subscriber signed up to hear
  * how that turn ends, so its completion must still route.
  */
@@ -27,6 +27,7 @@ export function classifyThread(
     };
   }
 
+  const pending = "activities" in thread ? findPendingRequests(thread.activities) : [];
   const hasActionableProposedPlan =
     "hasActionableProposedPlan" in thread
       ? thread.hasActionableProposedPlan
@@ -38,7 +39,6 @@ export function classifyThread(
     };
   }
 
-  const pending = "activities" in thread ? findPendingRequests(thread.activities) : [];
   if (
     ("hasPendingApprovals" in thread && thread.hasPendingApprovals) ||
     pending.some((request) => request.kind === "approval")
