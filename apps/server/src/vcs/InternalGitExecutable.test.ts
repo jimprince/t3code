@@ -6,7 +6,8 @@ import { SpawnExecutableResolution } from "@t3tools/shared/shell";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import { ChildProcessSpawner } from "effect/unstable/process";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
+import { it } from "@effect/vitest";
+import { afterEach, beforeEach, describe, expect, vi } from "vite-plus/test";
 import * as ProcessRunner from "../processRunner.ts";
 import * as VcsProcess from "./VcsProcess.ts";
 import { makeInternalGitResolver } from "./InternalGitExecutable.ts";
@@ -37,9 +38,9 @@ describe("internal Git executable", () => {
     cwd: root,
   });
 
-  it("VcsProcess bypasses wrappers while the shared runner preserves agent PATH", async () => {
-    const results = await Effect.runPromise(
-      Effect.gen(function* () {
+  it.effect("VcsProcess bypasses wrappers while the shared runner preserves agent PATH", () =>
+    Effect.gen(function* () {
+      const results = yield* Effect.gen(function* () {
         const vcs = yield* VcsProcess.VcsProcess;
         const runner = yield* ProcessRunner.ProcessRunner;
         const internal = yield* vcs.run(input());
@@ -53,29 +54,29 @@ describe("internal Git executable", () => {
         ),
         Effect.provideService(HostProcessPlatform, "linux"),
         Effect.provideService(HostProcessEnvironment, env),
-      ),
-    );
-    expect(results.internal.stdout).toBe("native-git");
-    expect(results.agent.stdout).toBe("agent-guard");
-    expect(env.PATH).toBe(`${NodePath.dirname(wrapper)}:${NodePath.dirname(native)}`);
-  });
+      );
+      expect(results.internal.stdout).toBe("native-git");
+      expect(results.agent.stdout).toBe("agent-guard");
+      expect(env.PATH).toBe(`${NodePath.dirname(wrapper)}:${NodePath.dirname(native)}`);
+    }),
+  );
 
-  it("VcsProcess reuses resolution across repositories and concurrent requests", async () => {
-    const resolve = vi.fn((candidate: string) => (candidate === native ? native : undefined));
-    const run = vi.fn((_input: ProcessRunner.ProcessRunInput) =>
-      Effect.succeed({
-        code: ChildProcessSpawner.ExitCode(0),
-        stdout: "git version native",
-        stderr: "",
-        timedOut: false,
-        stdoutTruncated: false,
-        stderrTruncated: false,
-        stdoutInvalidUtf8: false,
-        stderrInvalidUtf8: false,
-      } satisfies ProcessRunner.ProcessRunOutput),
-    );
-    await Effect.runPromise(
-      VcsProcess.make.pipe(
+  it.effect("VcsProcess reuses resolution across repositories and concurrent requests", () =>
+    Effect.gen(function* () {
+      const resolve = vi.fn((candidate: string) => (candidate === native ? native : undefined));
+      const run = vi.fn((_input: ProcessRunner.ProcessRunInput) =>
+        Effect.succeed({
+          code: ChildProcessSpawner.ExitCode(0),
+          stdout: "git version native",
+          stderr: "",
+          timedOut: false,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          stdoutInvalidUtf8: false,
+          stderrInvalidUtf8: false,
+        } satisfies ProcessRunner.ProcessRunOutput),
+      );
+      yield* VcsProcess.make.pipe(
         Effect.flatMap((service) =>
           Effect.all(
             [
@@ -90,11 +91,11 @@ describe("internal Git executable", () => {
         Effect.provideService(HostProcessPlatform, "linux"),
         Effect.provideService(HostProcessEnvironment, env),
         Effect.provideService(SpawnExecutableResolution, resolve),
-      ),
-    );
-    expect(resolve.mock.calls).toEqual([[native, "linux", env]]);
-    expect(run.mock.calls.map(([request]) => request.command)).toEqual([native, native, "gh"]);
-  });
+      );
+      expect(resolve.mock.calls).toEqual([[native, "linux", env]]);
+      expect(run.mock.calls.map(([request]) => request.command)).toEqual([native, native, "gh"]);
+    }),
+  );
 
   it("prefers system Git on macOS without checking the wrapper", () => {
     const resolve = vi.fn((candidate: string) =>
@@ -119,11 +120,11 @@ describe("internal Git executable", () => {
     expect(resolve.mock.calls.map(([path]) => path)).toEqual(["/usr/bin/git", native]);
   });
 
-  it("never spawns a wrapper when it is the only Git available", async () => {
-    const run = vi.fn();
-    env.PATH = NodePath.dirname(wrapper);
-    const errors = await Effect.runPromise(
-      VcsProcess.make.pipe(
+  it.effect("never spawns a wrapper when it is the only Git available", () =>
+    Effect.gen(function* () {
+      const run = vi.fn();
+      env.PATH = NodePath.dirname(wrapper);
+      const errors = yield* VcsProcess.make.pipe(
         Effect.flatMap((service) =>
           Effect.all([
             service.run(input()).pipe(Effect.flip),
@@ -133,14 +134,14 @@ describe("internal Git executable", () => {
         Effect.provideService(ProcessRunner.ProcessRunner, ProcessRunner.ProcessRunner.of({ run })),
         Effect.provideService(HostProcessPlatform, "linux"),
         Effect.provideService(HostProcessEnvironment, env),
-      ),
-    );
-    expect(errors.map((error) => error._tag)).toEqual([
-      "VcsProcessSpawnError",
-      "VcsProcessSpawnError",
-    ]);
-    expect(run).not.toHaveBeenCalled();
-  });
+      );
+      expect(errors.map((error) => error._tag)).toEqual([
+        "VcsProcessSpawnError",
+        "VcsProcessSpawnError",
+      ]);
+      expect(run).not.toHaveBeenCalled();
+    }),
+  );
 
   it("keys cached resolution by PATH and by cwd for relative PATH entries", () => {
     const resolve = vi.fn((candidate: string) => candidate);
