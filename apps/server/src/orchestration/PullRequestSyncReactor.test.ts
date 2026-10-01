@@ -35,6 +35,14 @@ import {
 import { ProjectionSnapshotQuery } from "./Services/ProjectionSnapshotQuery.ts";
 import * as PullRequestSyncReactor from "./PullRequestSyncReactor.ts";
 import { resolveAutoSettlementAt } from "./ThreadSettlementPolicy.ts";
+import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
+import * as SourceControlProvider from "../sourceControl/SourceControlProvider.ts";
+import * as VcsProcess from "../vcs/VcsProcess.ts";
+import * as VcsDriverRegistry from "../vcs/VcsDriverRegistry.ts";
+import * as ServerConfig from "../config.ts";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { ServerSettingsService } from "../serverSettings.ts";
+import { BackgroundProcessWork } from "../processRunner.ts";
 
 const NOW = "2026-08-28T12:00:00.000Z";
 const PROJECT_ID = ProjectId.make("sync-project");
@@ -296,6 +304,90 @@ function applySync(
 }
 
 describe("PullRequestSyncReactor", () => {
+  it.effect("discovers each repository remote once per sweep and persists every PR", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        let discoveries = 0;
+        const unexpected = () => Effect.die("Unexpected provider operation");
+        const provider = SourceControlProvider.SourceControlProvider.of({
+          kind: "github",
+          listChangeRequests: unexpected,
+          getChangeRequest: unexpected,
+          createChangeRequest: unexpected,
+          getRepositoryCloneUrls: unexpected,
+          createRepository: unexpected,
+          getDefaultBranch: unexpected,
+          checkoutChangeRequest: unexpected,
+        });
+        const registry = yield* SourceControlProviderRegistry.makeWithProviders([
+          {
+            kind: "github",
+            provider,
+            discovery: {
+              type: "managed-cli",
+              kind: "github",
+              label: "test",
+              installHint: "test",
+              probe: unexpected,
+              refineUnknownRemote: ({ context }) =>
+                Effect.sync(() => {
+                  discoveries++;
+                  return { ...context.provider, kind: "github" as const };
+                }),
+            },
+          },
+        ]).pipe(
+          Effect.provide(
+            Layer.mergeAll(
+              ServerConfig.layerTest("/repo", { prefix: "t3-spawn-sweep-test-" }).pipe(
+                Layer.provide(NodeServices.layer),
+              ),
+              ServerSettingsService.layerTest(),
+              Layer.mock(VcsProcess.VcsProcess)({}),
+              Layer.mock(VcsDriverRegistry.VcsDriverRegistry)({}),
+            ),
+          ),
+        );
+        const links = [1, 2, 3, 4, 5].map((number) => makeLink(number));
+        links.push(
+          makeLink(6, null, {
+            repository: "owner/other",
+            url: "https://github.com/owner/other/pull/6",
+          }),
+        );
+        const fixture = yield* makeHarness({
+          snapshot: makeSnapshot([makeThread("one", { pullRequests: links })]),
+          summary: (ref) =>
+            Effect.gen(function* () {
+              assert.isTrue(yield* BackgroundProcessWork);
+              const handle = yield* registry
+                .resolveHandle({
+                  cwd: "/repo",
+                  context: {
+                    provider: {
+                      kind: "unknown",
+                      name: "self-hosted.test",
+                      baseUrl: "https://self-hosted.test",
+                    },
+                    remoteName: "origin",
+                    remoteUrl: `https://self-hosted.test/${ref.repository}.git`,
+                  },
+                })
+                .pipe(Effect.orDie);
+              assert.strictEqual(handle.provider.kind, "github");
+              // The fifth link starts after the shared five-second detection cache expired.
+              yield* TestClock.adjust("6 seconds");
+              return makeSummary(ref);
+            }),
+        });
+        yield* Effect.gen(function* () {
+          yield* startAndSweep(fixture);
+          assert.strictEqual(discoveries, 2);
+          assert.strictEqual((yield* Ref.get(fixture.syncCommands)).length, 6);
+        }).pipe(Effect.provide(fixture.layer));
+      }),
+    ),
+  );
   it.effect("syncs a newly linked merged PR without waiting for the periodic sweep", () =>
     Effect.scoped(
       Effect.gen(function* () {
