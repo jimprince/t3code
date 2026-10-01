@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
+import { resolveSidebarThreadStatus } from "../Sidebar.logic";
 import { applySidebarThreadNesting } from "../../threadNesting.logic";
 import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
@@ -134,4 +135,36 @@ describe("cross-project sidebar integration", () => {
       ).size,
     ).toBe(0);
   });
+});
+
+it("keeps a working parent's own state while identifying waiting children, and clears on lifecycle changes", () => {
+  const parent = thread("parent", { session: { status: "running" } });
+  const input = thread("input", { parentThreadId: parent.id, hasPendingUserInput: true });
+  const list = applySidebarThreadNesting([parent, input]);
+  expect(
+    resolveSidebarThreadStatus({
+      ...list[0]!,
+      session: {
+        threadId: parent.id,
+        status: "running",
+        providerName: null,
+        runtimeMode: "full-access",
+        activeTurnId: null,
+        lastError: null,
+        updatedAt: parent.createdAt,
+      },
+      backgroundLiveness: null,
+    }),
+  ).toBe("working");
+  const group = groupSidebarChildren([parent, input]).get(key(parent))!;
+  expect(group.inputChildren.map((child) => child.id)).toEqual([input.id]);
+  for (const changed of [
+    { ...input, settledOverride: "settled" as const },
+    { ...input, archivedAt: "2026-10-01T01:00:00Z" },
+    { ...input, hasPendingUserInput: false },
+  ]) {
+    expect(groupSidebarChildren([parent, changed]).get(key(parent))?.inputChildren ?? []).toEqual(
+      [],
+    );
+  }
 });
