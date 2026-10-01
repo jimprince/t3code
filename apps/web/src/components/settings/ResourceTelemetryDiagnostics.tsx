@@ -955,6 +955,35 @@ export function ResourceTelemetryDiagnostics({
 
   return (
     <>
+      {snapshot?.health.processLaunch ? (
+        <SettingsSection
+          title="Process launch health"
+          icon={<AlertTriangleIcon className="size-4" />}
+        >
+          <div className="px-4 py-3 text-xs sm:px-5">
+            {snapshot.health.processLaunch.warnings.map((warning) => (
+              <p key={warning} role="alert" className="mb-2 text-warning-foreground">
+                {warning}
+              </p>
+            ))}
+            <p>
+              T3 process runner: {snapshot.health.processLaunch.attemptsPerMinute} attempts/min,{" "}
+              {snapshot.health.processLaunch.failuresPerMinute} spawn failures/min. Agent
+              descendants and direct provider SDK spawns are outside this count.
+            </p>
+            <p>
+              syspolicyd:{" "}
+              {snapshot.health.processLaunch.syspolicyd
+                ? `${formatBytes(snapshot.health.processLaunch.syspolicyd.residentBytes)} RSS, ${snapshot.health.processLaunch.syspolicyd.cpuPercent.toFixed(1)}% CPU`
+                : "Unavailable (macOS only; native read may require permission)"}
+            </p>
+            <p>
+              Sampled {new Date(snapshot.health.processLaunch.sampledAtUnixMs).toLocaleTimeString()}
+              .
+            </p>
+          </div>
+        </SettingsSection>
+      ) : null}
       <SettingsSection
         title="Resource monitor"
         icon={<ActivityIcon className="size-4 text-muted-foreground" />}
