@@ -195,10 +195,18 @@ label when its agent list is expanded. Project filters apply to each thread's ow
 filtered out, archived, or removed, the child appears at top level in its own
 project. Removing the parent's project does not delete children from other projects.
 Archiving or settling a parent does not archive or settle its children. When a
-nested thread is working, monitoring, or waiting on an approval or a question, its
-parent shows that state in the sidebar. An orchestrating agent is expected to answer
-its workers itself and ask you only when it cannot. Nesting is not available in the
-mobile app yet; mobile lists every thread.
+The parent keeps its own status; expanding it shows descendant rows with their
+individual statuses, while a separate marker opens sub-agents waiting
+for input. An orchestrating agent is expected to answer its workers itself and ask
+you only when it cannot. If a parent is archived, its nested threads return to
+the sidebar. Nesting is not available in the mobile app yet; mobile lists every
+thread.
+
+Nested threads in the Agents panel show their latest output, model and effort,
+provider pool, tokens and tools when available, turn duration, last activity and
+workspace. A project badge identifies workers in a different project. Token
+counts labeled `ctx tok` describe occupied context when the provider does not
+report a cumulative processed-token count.
 
 ## Snooze until later
 
@@ -206,8 +214,3 @@ Choose **Snooze → Custom…** from a thread's menu to pick a date and time in 
 local time zone, or a duration in minutes, hours, or days. Durations start when
 you confirm; one day means 24 hours. On web and desktop, you can also snooze
 several selected threads together. Choose **Wake thread** to bring a thread back early.
-
-A parent's status describes its own work and requests. A separate sub-agent input
-marker counts waiting, unsettled children; select it to expand the children and
-open the first waiting child. Answering, settling or archiving a child clears its
-marker. Child work remains visible through the active sub-agent count.
