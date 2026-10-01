@@ -34,6 +34,7 @@ import IconChevronLeft from "@tabler/icons-react-native/IconChevronLeft";
 import IconChevronRight from "@tabler/icons-react-native/IconChevronRight";
 import IconChevronUp from "@tabler/icons-react-native/IconChevronUp";
 import IconCircle from "@tabler/icons-react-native/IconCircle";
+import IconCircleDashed from "@tabler/icons-react-native/IconCircleDashed";
 import IconCircleCheck from "@tabler/icons-react-native/IconCircleCheck";
 import IconCircleXFilled from "@tabler/icons-react-native/IconCircleXFilled";
 import IconTicket from "@tabler/icons-react-native/IconTicket";
@@ -139,6 +140,7 @@ const ANDROID_ICON_BY_SF_SYMBOL = {
   checkmark: IconCheck,
   "checkmark.circle": IconCircleCheck,
   circle: IconCircle,
+  "circle.dotted": IconCircleDashed,
   clock: IconClock,
   timer: IconClock,
   ticket: IconTicket,
