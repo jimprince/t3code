@@ -1194,11 +1194,11 @@ note = "Idle means no desktop-hosted thread (primary or desktop-local secondary)
 name = "fork-nested-threads"
 subject = "feat(threads): nest threads under an orchestrating thread"
 class = "product"
-purpose = "Let a thread nest under an orchestrating thread so it leaves the sidebar and appears in the parent's Agents panel, move threads in and out of nesting, default t3-thread workers to nest under their caller, and let parents answer their workers' questions and approvals from the CLI."
+purpose = "Let a thread nest under an orchestrating thread so it appears in the parent's Agents panel, with cross-project workers also indented in the sidebar, move threads in and out of nesting, default t3-thread workers to nest under their caller, and let parents answer their workers' questions and approvals from the CLI."
 retire_when = "Upstream provides persistent parent/child thread placement with an equivalent Agents-panel view and CLI escalation, or the fork stops wanting orchestrator nesting."
 depends_on = ["fork-worker-operations"]
 roles = []
-note = "parentThreadId is an optional thread field (fork migration 6, projection_threads.parent_thread_id) set at creation or by thread.parent.set, which emits thread.meta-updated so older clients ignore it; servers advertise threadNesting on the environment descriptor, which is where t3-thread reads it (serverGetConfig does not carry it). Nesting is one level deep within one project; the decider rejects self, nested parents, parents with a nested caller, cross-project, and archived parents. Children of an archived or missing parent show in the sidebar. The parent's sidebar row rolls up its nested threads' approvals, questions, and working or monitoring state. Desktop and web only; mobile lists every thread until a follow-up. t3-thread nests workers under the caller by default (a nested caller's workers join its parent), and pending/answer/approve/deny let the parent escalate instead of the user."
+note = "parentThreadId is an optional thread field (fork migration 6, projection_threads.parent_thread_id) set at creation or by thread.parent.set, which emits thread.meta-updated so older clients ignore it; servers advertise threadNesting on the environment descriptor, which is where t3-thread reads it (serverGetConfig does not carry it). Nesting is one level deep within one environment; children retain their own execution project; the decider rejects self, nested parents, parents with a nested caller and archived parents. Cross-project children show their own project label. Children of an archived, missing, hidden, or filtered parent show at top level in their own project. Parent lifecycle changes never cascade to children. The parent's sidebar row rolls up its nested threads' approvals, questions, and working or monitoring state. Desktop and web only; mobile lists every thread until a follow-up. t3-thread nests workers under the caller by default (a nested caller's workers join its parent), and pending/answer/approve/deny let the parent escalate instead of the user."
 
 [[patch.decision]]
 id = "agents-panel-settled-shelf"
@@ -1256,3 +1256,13 @@ purpose = "Reduce operator CLI launches through explicit prebuilt JavaScript and
 retire_when = "The worker operator CLI supplies equivalent prebuilt launch and adaptive polling behavior."
 depends_on = ["fork-worker-operations"]
 roles = []
+
+[[patch]]
+name = "fork-cross-project-thread-nesting"
+subject = "feat(threads): nest workers across projects"
+class = "product"
+purpose = "Place workers from different repositories under a supervisor while retaining each child's own project and execution workspace."
+retire_when = "Upstream supports cross-project nesting with independent execution workspaces and reachable fallback placement, or cross-project supervision is no longer wanted."
+depends_on = ["fork-nested-threads"]
+roles = []
+note = "Parentage only controls placement and attention rollup in the same environment. The child's project controls execution, defaults, search, and project filters. Cross-project children remain visible with their project label; an unreachable parent returns them to top level. Parent archive, settlement, and project deletion do not cascade across projects. Mobile retains its existing flat project-owned listing."
