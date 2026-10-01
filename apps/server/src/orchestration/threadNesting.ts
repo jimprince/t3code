@@ -7,9 +7,8 @@ type NestingThread = Pick<
 
 /**
  * Why `threadId` cannot be nested under `parentThreadId`, or null when it can.
- * Nesting stays inside one project at this layer. Parentage may be arbitrarily
- * deep, so walking the proposed parent's ancestors is the one place that
- * prevents cycles.
+ * The child keeps its own project. Parentage may be arbitrarily deep, so
+ * walking the proposed parent's ancestors is the one place that prevents cycles.
  */
 export function threadNestingViolation(input: {
   readonly threads: ReadonlyArray<NestingThread>;
@@ -24,10 +23,6 @@ export function threadNestingViolation(input: {
   const parent = live.find((thread) => thread.id === input.parentThreadId);
   if (!parent) return `Parent thread '${input.parentThreadId}' does not exist.`;
   if (parent.archivedAt !== null) return "Threads cannot be nested under an archived thread.";
-  if (parent.projectId !== input.projectId) {
-    return "A nested thread must be in the same project as its parent.";
-  }
-
   const byId = new Map(live.map((thread) => [thread.id, thread] as const));
   const visited = new Set<ThreadId>();
   let ancestor: NestingThread | undefined = parent;
