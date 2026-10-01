@@ -251,17 +251,17 @@ Prefer nested T3 threads for sub-agents: the user can open them, answer them,
 and move them with `t3-thread nest` / `unnest`. Built-in subagents (Claude's
 Task/Agent tool, Codex native spawns) cannot be opened, promoted, or answered;
 use them only for brief read-only lookups inside your own turn that the user
-did not ask to see. Nesting needs the worker in your environment and project;
+did not ask to see. Nesting needs the worker in your environment;
 otherwise, or on a server without nesting, the worker is top-level and the
 `nesting` field in the create output says why. Tell the user when that happens.
 
 - no flag: nests under the calling thread (`T3_THREAD_ID`), including when the
-  caller is itself nested. A caller in another project or environment gets a top-level
+  caller is itself nested. A caller in another environment gets a top-level
   worker; the `nesting` field in the create output says why.
 - `--top-level`: put the worker in the sidebar, for work the user should
   watch directly.
 - `--parent <agent-or-thread>`: nest under a specific thread in the same
-  environment and project.
+  environment.
 - Move a worker later with `t3-thread nest <agent> --parent <agent-or-thread>`
   or `t3-thread unnest <agent>`.
 
