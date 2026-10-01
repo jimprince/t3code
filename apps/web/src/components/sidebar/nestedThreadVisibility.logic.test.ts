@@ -103,7 +103,7 @@ describe("cross-project sidebar integration", () => {
     const childProjectOnly = new Set([`${child.environmentId}:${child.projectId}`]);
     expect(groupSidebarChildren([parent, child], childProjectOnly).size).toBe(0);
     const orphan = { ...child, session: null };
-    const eligible = [parent, orphan].filter((entry) =>
+    const eligible = [{ ...parent, session: null }, orphan].filter((entry) =>
       childProjectOnly.has(`${entry.environmentId}:${entry.projectId}`),
     );
     expect(applySidebarThreadNesting(eligible)).toEqual([orphan]);
