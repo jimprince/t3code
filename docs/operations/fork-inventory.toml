@@ -1405,3 +1405,13 @@ retire_when = "Upstream provides message provenance and an equivalent orchestrat
 depends_on = ["fork-worker-operations", "fork-nested-threads"]
 roles = []
 note = "Ordinary watcher notices end with subscription controls; mandatory child-input notices omit them. Nested child input and approval notices derive their route from the current local or remote parent (stable descriptor ID, mapped to saved pairings), wake settled parents and remind once after 20 minutes per pending request. Origin rides as one unreferenced t3-origin context record (packages/shared/src/messageOrigin.ts), so it never reaches the provider or renders as a chip, and older clients keep it as an unknown record; messages from older CLIs fall back to the notification text prefix. Queued real sends wake settled workers; only notification-origin sends (or legacy notification prefixes without origin) are held by settlement. Only notices and sends from the thread's own descendants fold, so a worker's instructions from its parent stay visible. Live, streaming and unanswered turns never fold, and the classifier is derived from current state, so a folded turn that later raises a request or ends with T3_NOTIFY: attention surfaces without any stored flag. Traffic results are stabilized so streaming replies keep the timeline on its fast path. Mobile folds by default with per-run expansion; the All traffic switch and needs-you count are web and desktop only."
+
+[[patch]]
+name = "fork-page-agent-tray"
+subject = "feat(web): agent tray beside sidebar pages"
+class = "product"
+purpose = "Give each sidebar page a right-hand tray with its own agent that operates the visible page on desktop and reaches T3 threads through the t3-thread CLI."
+retire_when = "Upstream offers a per-page or per-site agent beside embedded pages, or the fork stops showing sidebar pages."
+depends_on = ["fork-embedded-pages"]
+roles = []
+note = "A tray conversation is an ordinary thread in the server-owned chat project whose id starts with page-agent-; the server drops that namespace from client-facing shell feeds, thread search, and relay activity instead of persisting a hidden flag, while server reactors still see the threads (an idle one may auto-settle; the next send unsettles it). Desktop hosts the page as that thread's only Browser preview tab on the default profile, so its preview tools drive exactly the page; the tab closes with the page view. Page-agent threads always get the preview MCP capability. Web keeps the iframe and offers chat only. Conversations are per device in localStorage: current and previous, a fresh one after 30 idle minutes, discarded ones deleted only once no turn runs. t3-thread resolves page-agent ids by thread detail because shell lists never contain them."
