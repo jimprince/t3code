@@ -33,11 +33,12 @@ export async function updateThreadSubscriptions(input: typeof UpdateThreadSubscr
     const matches = (route: ThreadSubscription) =>
       route.subscriberThreadId === input.threadId && sources.has(route.sourceThreadId);
     const removed = routes.filter(matches);
+    const stored = Array.isArray(state.subscriptions) ? state.subscriptions : [];
     const subscriptions =
       input.action === "remove"
-        ? routes.filter((route) => !matches(route))
+        ? stored.filter((route) => !matches(decodeRoute(route)))
         : [
-            ...routes,
+            ...stored,
             ...input.routes.filter(
               (route) =>
                 !routes.some(

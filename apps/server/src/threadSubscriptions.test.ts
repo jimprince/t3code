@@ -34,8 +34,16 @@ async function fixture(test: () => Promise<void>) {
 describe("thread subscription storage", () => {
   it("lists, removes, restores, and preserves other supervisors, credentials, queue and audit", async () =>
     fixture(async () => {
-      const selected = route("chosen", "worker");
-      const other = route("other", "worker");
+      const selected = {
+        ...route("chosen", "worker"),
+        level: "none" as const,
+        inputReminderMinutes: 10,
+        lastDirectMessageTurnId: "turn-direct",
+        errorEventKey: "failure",
+        observedState: "error",
+        observedReason: "quota",
+      };
+      const other = { ...route("other", "worker"), futureRouteField: "retained" };
       const state = {
         version: 1,
         subscriptions: [selected, other],
@@ -82,7 +90,7 @@ describe("thread subscription storage", () => {
         routes: removed.routes,
       });
       expect((await listThreadSubscriptions("chosen")).routes).toEqual([selected]);
-      expect((await listThreadSubscriptions("other")).routes).toEqual([other]);
+      expect((await loadState(state)).subscriptions).toContainEqual(other);
     }));
 
   it("serializes removal with concurrent CLI writes and rejects routes for another subscriber", async () =>

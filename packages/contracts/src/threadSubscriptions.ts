@@ -12,7 +12,12 @@ export const ThreadSubscription = Schema.Struct({
   createdAt: Schema.String,
   updatedAt: Schema.String,
   baselineTurnId: Schema.optionalKey(Schema.NullOr(Schema.String)),
-  events: Schema.optionalKey(Schema.Literals(["all", "attention"])),
+  level: Schema.optionalKey(Schema.Literals(["all", "attention", "none"])),
+  inputReminderMinutes: Schema.optionalKey(Schema.Number),
+  lastDirectMessageTurnId: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  errorEventKey: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  observedState: Schema.optionalKey(Schema.String),
+  observedReason: Schema.optionalKey(Schema.String),
 });
 export type ThreadSubscription = typeof ThreadSubscription.Type;
 export const ThreadSubscriptionsInput = Schema.Struct({ threadId: ThreadId });
