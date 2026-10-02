@@ -4,7 +4,7 @@ import { memo } from "react";
 import { SidebarMenuButton, SidebarMenuItem, useSidebar } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { EmbeddedPageIcon } from "./embeddedPageIcons";
-import { useEmbeddedPages } from "./EmbeddedPageView";
+import { useEmbeddedPages } from "./useEmbeddedPages";
 
 /** One footer icon per configured page, rendered inside the sidebar utility row. */
 export const SidebarEmbeddedPageItems = memo(function SidebarEmbeddedPageItems() {

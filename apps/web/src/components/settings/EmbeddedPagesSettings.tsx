@@ -37,7 +37,7 @@ function EmbeddedPageForm({
   const [error, setError] = useState("");
   return (
     <form
-      className="flex flex-wrap items-center gap-2 py-2"
+      className="flex flex-wrap items-center gap-2 px-4 py-2"
       onSubmit={(event) => {
         event.preventDefault();
         const data = new FormData(event.currentTarget);
@@ -56,7 +56,7 @@ function EmbeddedPageForm({
       }}
     >
       <Select value={icon} onValueChange={(value) => value && setIcon(value)}>
-        <SelectTrigger size="compact" className="w-14" aria-label="Icon">
+        <SelectTrigger size="compact" className="w-16 min-w-0" aria-label="Icon">
           <SelectValue>
             <EmbeddedPageIcon icon={icon} className="size-4" />
           </SelectValue>
@@ -135,7 +135,7 @@ export function EmbeddedPagesSettingsSection() {
   const write = (next: readonly EmbeddedPage[]) => update({ embeddedPages: [...next] });
   return (
     <SettingsSection id="embedded-pages" title="Sidebar pages">
-      <p className="text-sm text-muted-foreground">
+      <p className="px-4 pt-3 text-sm text-muted-foreground">
         Web pages that open from an icon in the sidebar footer. Synced to every connected
         environment.
       </p>
@@ -166,16 +166,18 @@ export function EmbeddedPagesSettingsSection() {
           remove={() => setDraft(null)}
         />
       ) : null}
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={draft !== null}
-        onClick={() =>
-          setDraft({ id: randomUUID(), name: "", url: "", icon: DEFAULT_EMBEDDED_PAGE_ICON })
-        }
-      >
-        Add page
-      </Button>
+      <div className="px-4 pb-3">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={draft !== null}
+          onClick={() =>
+            setDraft({ id: randomUUID(), name: "", url: "", icon: DEFAULT_EMBEDDED_PAGE_ICON })
+          }
+        >
+          Add page
+        </Button>
+      </div>
     </SettingsSection>
   );
 }

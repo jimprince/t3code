@@ -10,7 +10,10 @@ import type { EmbeddedPage } from "@t3tools/contracts";
  * - `iframe`: a browser frame. Cookies are third-party here, so a page whose
  *   login cookie is `SameSite=Lax` (the common default) cannot stay signed in
  *   unless it is on the same site as this app; the header always offers
- *   "Open in browser" for that case.
+ *   "Open in browser" for that case. A site that refuses framing outright
+ *   (X-Frame-Options, CSP frame-ancestors) shows the browser's blank error
+ *   page, and that refusal cannot be observed from this page, so the header
+ *   action is the fallback there too.
  * - `blocked`: the browser refuses to load it at all, so the view explains why
  *   instead of drawing an empty frame.
  */

@@ -16,5 +16,6 @@ same pages.
   signed in to there stays signed in, and plain `http://` pages work.
 - **Web:** a browser will not show an `http://` page inside T3 Code opened over `https://`; the
   page offers **Open in browser** instead. A site whose login only works as a first-party page may
-  not stay signed in inside the frame. Use **Open in browser** for those.
+  not stay signed in inside the frame, and a site that does not allow embedding from your T3 Code
+  address shows a blank page. Use **Open in browser** for those.
 - **Mobile:** pages are listed under **Settings → App** and open in the in-app browser.

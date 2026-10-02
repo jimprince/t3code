@@ -1,13 +1,9 @@
-import { useAtomValue } from "@effect/atom-react";
-import { resolveEmbeddedPages, type EmbeddedPage } from "@t3tools/contracts";
 import { ExternalLinkIcon } from "lucide-react";
-import { useMemo } from "react";
 
 import { usePreviewWebviewConfig } from "~/browser/previewWebviewConfigState";
 import { isElectron } from "~/env";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
-import { usePrimaryEnvironmentId, useEnvironments } from "~/state/environments";
-import { primaryServerConfigAtom } from "~/state/server";
+import { usePrimaryEnvironmentId } from "~/state/environments";
 import type { EnvironmentId } from "@t3tools/contracts";
 
 import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
@@ -15,6 +11,7 @@ import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
 import { findEmbeddedPage, resolveEmbeddedPageHost } from "./embeddedPages.logic";
+import { useEmbeddedPages } from "./useEmbeddedPages";
 
 /**
  * Everything a normal tab allows except navigating T3 Code itself away. Pages
@@ -24,20 +21,6 @@ import { findEmbeddedPage, resolveEmbeddedPageHost } from "./embeddedPages.logic
  */
 const EMBEDDED_PAGE_FRAME_SANDBOX =
   "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals";
-
-/** The sidebar footer pages this client shows, from the shared `embeddedPages` setting. */
-export function useEmbeddedPages(): readonly EmbeddedPage[] {
-  const primarySettings = useAtomValue(primaryServerConfigAtom)?.settings ?? null;
-  const { environments } = useEnvironments();
-  return useMemo(
-    () =>
-      resolveEmbeddedPages(
-        primarySettings,
-        environments.map((environment) => environment.serverConfig?.settings ?? null),
-      ),
-    [environments, primarySettings],
-  );
-}
 
 /** Main-area view for one footer page, opened from its sidebar icon. */
 export function EmbeddedPageView({ pageId }: { readonly pageId: string }) {
