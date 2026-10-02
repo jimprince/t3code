@@ -1,0 +1,4 @@
+id = "notification-attention-transitions"
+category = "fix"
+functionality = "t3-thread notifications"
+text = "Routed worker notifications no longer replay a source's earlier state at subscribe time or deliver a backlog of stale events one turn at a time; only the newest attention transition is delivered."
