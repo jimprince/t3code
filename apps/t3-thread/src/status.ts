@@ -133,7 +133,6 @@ export function formatThreadLine(
     thread.id,
     `[${status.state}]`,
     thread.title,
-    `scope=${JSON.stringify(thread.scope ?? null)}`,
     thread.projectId,
     `settled=${thread.settledOverride === "settled"}`,
     `pinned=${thread.pinnedAt != null}`,

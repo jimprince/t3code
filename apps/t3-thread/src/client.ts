@@ -1,5 +1,5 @@
-import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
 import type { ProjectAutomation } from "@t3tools/contracts";
+import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -458,34 +458,25 @@ export class RemoteEnvironmentClient {
 
   async renameThread(input: {
     threadId: string;
-    title?: string;
-    scope?: string | null;
-  }): Promise<{ threadId: string; title: string; scope: string | null }> {
-    const title = input.title?.trim();
-    const scope = input.scope === undefined ? undefined : input.scope?.trim() || null;
-    if (input.title !== undefined && !title) throw new Error("Thread title must not be empty.");
-    if (title === undefined && scope === undefined) {
-      throw new Error("Thread title or scope must be provided.");
-    }
+    title: string;
+  }): Promise<{ threadId: string; title: string }> {
+    const title = input.title.trim();
+    if (!title) throw new Error("Thread title must not be empty.");
     const rpc = await this.openRpc();
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.meta.update",
         commandId: NodeCrypto.randomUUID(),
         threadId: input.threadId,
-        ...(title !== undefined ? { title } : {}),
-        ...(scope !== undefined ? { scope } : {}),
+        title,
       });
     } finally {
       await rpc.dispose();
     }
     const thread = await this.findThread(input.threadId);
-    if (title !== undefined && thread.title !== title)
+    if (thread.title !== title)
       throw new Error("Thread title readback did not match the requested title.");
-    if (scope !== undefined && (thread.scope ?? null) !== scope) {
-      throw new Error("Thread scope readback did not match the requested scope.");
-    }
-    return { threadId: thread.id, title: thread.title, scope: thread.scope ?? null };
+    return { threadId: thread.id, title: thread.title };
   }
 
   async createAgentThread(input: {
@@ -499,7 +490,6 @@ export class RemoteEnvironmentClient {
     baseBranch?: string;
     startFromOrigin?: boolean;
     initialMessage?: string;
-    workerContext?: WorkerContext;
     parentThreadId?: string | null;
     settleOnComplete?: boolean;
     pin?: boolean;
@@ -547,18 +537,7 @@ export class RemoteEnvironmentClient {
         message: {
           messageId: NodeCrypto.randomUUID(),
           role: "user",
-          text: input.workerContext
-            ? wrapWithPreamble(initialMessage, {
-                ...input.workerContext,
-                threadId,
-                environment: this.environment.name,
-                projectId: project.id,
-                projectTitle: project.title,
-                branch: input.branch ?? null,
-                worktreePath: input.branch ? null : project.workspaceRoot,
-                createdAt,
-              })
-            : initialMessage,
+          text: initialMessage,
           attachments: [],
         },
         modelSelection,
@@ -626,6 +605,8 @@ export class RemoteEnvironmentClient {
     allowWhileRunning?: boolean;
     queueWhileRunning?: boolean;
     agentName?: string | null;
+    /** Marks the message as sent on a thread's behalf; see `@t3tools/shared/messageOrigin`. */
+    origin?: MessageOrigin | null;
   }): Promise<SendMessageOutcome> {
     const thread = await this.findThread(input.threadId);
     if (thread.archivedAt || thread.deletedAt) {
@@ -645,6 +626,7 @@ export class RemoteEnvironmentClient {
         agentName: input.agentName ?? null,
         environment: this.environment.name,
         text: input.text,
+        origin: input.origin ?? null,
         queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
       });
       return {
@@ -666,6 +648,7 @@ export class RemoteEnvironmentClient {
           role: "user",
           text: input.text,
           attachments: [],
+          ...(input.origin ? { context: makeMessageOriginContext(input.origin) } : {}),
         },
         runtimeMode: thread.runtimeMode,
         interactionMode: thread.interactionMode,

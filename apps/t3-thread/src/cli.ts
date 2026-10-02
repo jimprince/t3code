@@ -83,6 +83,7 @@ import {
 } from "./watch.js";
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
 import type { SavedAgent, SavedNotification, SavedQueuedSend } from "./types.js";
+import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -218,6 +219,14 @@ async function resolveNotifyEndpoint(
     throw new Error("Internal error: caller notification was selected without a caller thread.");
   }
   return resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment);
+}
+
+/** Origin for a send made from inside a T3 thread; a send from a plain terminal has none. */
+function callerSendOrigin(state: { agents: ReadonlyArray<SavedAgent> }): MessageOrigin | null {
+  const fromThreadId = resolveCallerThreadId();
+  if (!fromThreadId) return null;
+  const fromName = state.agents.find((agent) => agent.threadId === fromThreadId)?.name;
+  return { source: "thread-send", fromThreadId, ...(fromName ? { fromName } : {}) };
 }
 
 async function withCallerFromEnv(): Promise<{
@@ -833,45 +842,22 @@ agent
 agent
   .command("rename")
   .argument("<agent-or-thread>", "saved agent name or raw thread UUID (including your own)")
-  .option("--title <text>", "new thread title")
-  .option("--scope <text>", "project scope shown with the thread")
-  .option("--clear-scope", "remove the project scope")
+  .requiredOption("--title <text>", "new thread title")
   .action(async (reference, options) => {
-    if (options.scope !== undefined && options.clearScope) {
-      throw new Error("Use either --scope or --clear-scope, not both.");
-    }
-    if (options.title === undefined && options.scope === undefined && !options.clearScope) {
-      throw new Error("Provide --title, --scope, or --clear-scope.");
-    }
     const { agent: target, client } = await withAgent(reference);
-    const renamed = await client.renameThread({
-      threadId: target.threadId,
-      ...(options.title !== undefined ? { title: options.title } : {}),
-      ...(options.scope !== undefined
-        ? { scope: options.scope }
-        : options.clearScope
-          ? { scope: null }
-          : {}),
-    });
+    const renamed = await client.renameThread({ threadId: target.threadId, title: options.title });
     await updateState(async (state) => ({
       state: {
         ...state,
         agents: state.agents.map((saved) =>
-          options.title !== undefined &&
-          saved.environment === target.environment &&
-          saved.threadId === target.threadId
+          saved.environment === target.environment && saved.threadId === target.threadId
             ? { ...saved, title: renamed.title }
             : saved,
         ),
       },
       result: null,
     }));
-    printJson({
-      ...renamed,
-      environment: target.environment,
-      renamed: options.title !== undefined,
-      scopeUpdated: options.scope !== undefined || Boolean(options.clearScope),
-    });
+    printJson({ ...renamed, environment: target.environment, renamed: true });
   });
 
 agent
@@ -1626,6 +1612,7 @@ agent
           text: messageParts.join(" ").trim(),
           queueWhileRunning: options.queue,
           agentName: saved ? savedAgent.name : null,
+          origin: callerSendOrigin(state),
         }),
     });
     const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
@@ -1681,6 +1668,7 @@ for (const kind of ["clarify", "revise", "complete"] as const) {
         threadId: savedAgent.threadId,
         text: buildFollowUpMessage(kind, messageParts.join(" ")),
         agentName: saved ? savedAgent.name : null,
+        origin: callerSendOrigin(await loadState()),
       });
       if (outcome.queued) {
         await ensureNotificationWatcher();

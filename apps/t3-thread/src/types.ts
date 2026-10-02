@@ -1,4 +1,6 @@
 import type { ProjectAutomation } from "@t3tools/contracts";
+import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
+
 export interface ServerAuthDescriptor {
   policy: string;
   bootstrapMethods: string[];
@@ -99,7 +101,6 @@ export interface OrchestrationThread {
   id: string;
   projectId: string;
   title: string;
-  scope?: string | null;
   modelSelection: ModelSelection;
   runtimeMode: string;
   interactionMode: string;
@@ -135,7 +136,6 @@ export interface OrchestrationThreadShell {
   id: string;
   projectId: string;
   title: string;
-  scope?: string | null;
   modelSelection: ModelSelection;
   runtimeMode: string;
   interactionMode: string;
@@ -322,6 +322,8 @@ export interface SavedQueuedSend {
   agentName: string | null;
   environment: string;
   text: string;
+  /** Sender recorded at enqueue time; absent on sends queued by older CLIs. */
+  origin?: MessageOrigin;
   status: QueuedSendStatus;
   /** Turn that was running when the send was accepted, for operator diagnostics. */
   queuedDuringTurnId: string | null;
