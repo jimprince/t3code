@@ -1376,6 +1376,7 @@ depends_on = ["fork-worker-operations"]
 roles = []
 note = "Native bootstrap persists manual thread.meta.update intent before the first turn when lockTitle is set; saved aliases and raw UUIDs share rename readback."
 
+[[patch]]
 name = "fork-embedded-pages"
 subject = "feat(web): pin web pages as sidebar footer icons"
 class = "product"
