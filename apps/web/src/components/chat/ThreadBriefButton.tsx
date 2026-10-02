@@ -75,12 +75,9 @@ function BriefBody({ state }: { readonly state: BriefState }) {
     return <p className="text-sm text-muted-foreground">Briefing from the latest turns.</p>;
   }
   if (state.status === "error") {
-    // Provider failures can carry a whole CLI log; show its start and keep the rest on hover.
+    // Provider failures can carry a whole CLI log; keep it to a short scrollable box.
     return (
-      <p
-        className="line-clamp-4 break-words text-sm text-destructive-foreground"
-        title={state.message}
-      >
+      <p className="max-h-24 overflow-y-auto break-words text-sm text-destructive-foreground">
         {state.message}
       </p>
     );
