@@ -683,6 +683,14 @@ Important caveat:
 
 - Do **not** use the stripped-down `subagents --backend opencode ...` one-shot path for this validation. That harness is intentionally tool-stripped and may fail the test for reasons unrelated to the repo docs. Use a full agent backend instead.
 
+## Pinning workers
+
+Creation is unpinned by default. Pass `create --pin` to pin a new worker, including
+one nested under a parent. Use `pin <name-or-thread-id>` and `unpin <name-or-thread-id>`
+to change existing threads. `status <name-or-thread-id>` reports `pinned` and `pinnedAt`;
+the all-worker status list marks pinned threads. Pinning uses the server's existing
+lifecycle; manual settlement removes a pin.
+
 ## Notification ownership and handoff
 
 Nested `create` subscribes its caller by default. `create --top-level` does not;
