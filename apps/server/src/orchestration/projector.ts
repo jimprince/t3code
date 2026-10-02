@@ -461,6 +461,7 @@ export function projectEvent(
             unsettledAt: null,
             activeOrderKey: null,
             autoSettleDisabledAt: null,
+            settleOnComplete: payload.settleOnComplete ?? null,
             ...(payload.parentThreadId ? { parentThreadId: payload.parentThreadId } : {}),
             snoozedUntil: null,
             snoozedAt: null,
@@ -658,6 +659,9 @@ export function projectEvent(
               ...(payload.worktreePath !== undefined ? { worktreePath: payload.worktreePath } : {}),
               ...(payload.activeOrderKey !== undefined
                 ? { activeOrderKey: payload.activeOrderKey }
+                : {}),
+              ...(payload.settleOnComplete !== undefined
+                ? { settleOnComplete: payload.settleOnComplete }
                 : {}),
               ...(payload.parentThreadId !== undefined
                 ? { parentThreadId: payload.parentThreadId }
