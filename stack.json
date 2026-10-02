@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "6630a7716da02181dac71b80d0c9b7958860df35",
-  "head": "2c373b3e56e365cba0335754448f3c2344d7acd6",
+  "prev": "70fcb4d6cc30fdc25cf85b76d4c504ff038d8370",
+  "head": "2c25e09dc44ca9ee92fbba8b3363388a19f1228a",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -39,13 +39,13 @@
     "fork-step-preview",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
-    "fork-nested-threads"
-  ],
-  "unapplied": [
+    "fork-nested-threads",
     "fork-resume-background-work",
     "fork-overnight-updates",
     "fork-spawn-budget",
-    "fork-t3-thread-prebuilt",
+    "fork-t3-thread-prebuilt"
+  ],
+  "unapplied": [
     "fork-cross-project-thread-nesting",
     "fork-launch-health",
     "fork-notification-preferences",
@@ -138,7 +138,7 @@
       "oid": "07ebc6890d6f46fb4d2de5fa5b75da0f3689c7ea"
     },
     "fork-overnight-updates": {
-      "oid": "ab73aedebb75e4473c42e5f530d930a5e6d17df3"
+      "oid": "0b3d3c55dd312b0161600726b65a14a5e2159f2f"
     },
     "fork-pr-dismissal": {
       "oid": "b8b9b3d44bd58079856848495696d4a6ba0155a4"
@@ -168,7 +168,7 @@
       "oid": "38253acc800ff030f630cf4ed2e84e80665601ab"
     },
     "fork-resume-background-work": {
-      "oid": "8295464e481d824023fd3e92acdaac4f564d7589"
+      "oid": "5bd68f160a88497fd16e079a0330607bb2b17a4d"
     },
     "fork-sidebar-agent-visibility": {
       "oid": "6a7f239e23c81252b27cea214615941fe8c7a744"
@@ -177,13 +177,13 @@
       "oid": "454c1c05b1103f7298b7f73551e4bb6ee468c416"
     },
     "fork-spawn-budget": {
-      "oid": "2f5d22cddf87ad3fa9935adabf80a88786e7296f"
+      "oid": "b95442b88a9cbf3e5391ecc636acd84a4073a113"
     },
     "fork-step-preview": {
       "oid": "ad9ab11d869528fcfd453be64f79ff83baaf5939"
     },
     "fork-t3-thread-prebuilt": {
-      "oid": "f6b66e1fb3baf2ccaab83cdc20495301aaa6052a"
+      "oid": "2c25e09dc44ca9ee92fbba8b3363388a19f1228a"
     },
     "fork-thread-client-recovery": {
       "oid": "b728ff6d9b50d49f3a1680f167e26e318218ed30"
