@@ -456,6 +456,38 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  async renameThread(input: {
+    threadId: string;
+    title?: string;
+    scope?: string | null;
+  }): Promise<{ threadId: string; title: string; scope: string | null }> {
+    const title = input.title?.trim();
+    const scope = input.scope === undefined ? undefined : input.scope?.trim() || null;
+    if (input.title !== undefined && !title) throw new Error("Thread title must not be empty.");
+    if (title === undefined && scope === undefined) {
+      throw new Error("Thread title or scope must be provided.");
+    }
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: "thread.meta.update",
+        commandId: NodeCrypto.randomUUID(),
+        threadId: input.threadId,
+        ...(title !== undefined ? { title } : {}),
+        ...(scope !== undefined ? { scope } : {}),
+      });
+    } finally {
+      await rpc.dispose();
+    }
+    const thread = await this.findThread(input.threadId);
+    if (title !== undefined && thread.title !== title)
+      throw new Error("Thread title readback did not match the requested title.");
+    if (scope !== undefined && (thread.scope ?? null) !== scope) {
+      throw new Error("Thread scope readback did not match the requested scope.");
+    }
+    return { threadId: thread.id, title: thread.title, scope: thread.scope ?? null };
+  }
+
   async createAgentThread(input: {
     projectId: string;
     title: string;
@@ -476,6 +508,8 @@ export class RemoteEnvironmentClient {
     if (!project) {
       throw new Error(`Project '${input.projectId}' was not found in '${this.environment.name}'.`);
     }
+    const title = input.title.trim();
+    if (!title) throw new Error("Thread title must not be empty.");
     const initialMessage = input.initialMessage?.trim();
     if (!initialMessage) {
       throw new Error("agent create requires a non-empty initial message.");
@@ -521,13 +555,14 @@ export class RemoteEnvironmentClient {
           attachments: [],
         },
         modelSelection,
-        titleSeed: input.title,
+        titleSeed: title,
         runtimeMode,
         interactionMode,
         bootstrap: {
           createThread: {
+            lockTitle: true,
             projectId: project.id,
-            title: input.title,
+            title,
             modelSelection,
             runtimeMode,
             interactionMode,
@@ -560,7 +595,7 @@ export class RemoteEnvironmentClient {
     return {
       threadId,
       projectId: project.id,
-      title: input.title,
+      title,
       pinned: pinState?.pinned ?? false,
     };
   }
