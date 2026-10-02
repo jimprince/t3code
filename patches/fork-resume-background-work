@@ -1,6 +1,6 @@
 Bottom: 7d2500ba4b7b6d0c8f2b810b18c29d3eed67c9ca
 Top:    8cdc98ac7ee6836001a335c9e3240d95cf8c955b
 Author: User <user@example.com>
-Date:   2026-10-01 10:42:48 +0000
+Date:   2026-10-01 20:17:50 -0600
 
 feat(server): resume monitors and background agents after restarts
