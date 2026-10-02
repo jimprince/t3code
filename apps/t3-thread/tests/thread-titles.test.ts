@@ -75,34 +75,62 @@ function harness(failRename = false) {
   return { client, commands, dispose };
 }
 afterEach(() => vi.unstubAllEnvs());
-describe("worker bootstrap identity", () => {
-  it.each([true, false])("bootstraps a real thread identity (nested=%s)", async (nested) => {
+describe("operator thread titles", () => {
+  it("renames the calling thread through the server and verifies its title", async () => {
+    vi.stubEnv("T3_THREAD_ID", threadId);
     const h = harness();
-    const parent = nested
-      ? { threadId, name: "supervisor", title: "Supervisor", environment: "test" }
-      : null;
+    expect(await h.client.renameThread({ threadId, title: " Supervisor A " })).toEqual({
+      threadId,
+      title: "Supervisor A",
+    });
+    expect(h.commands).toHaveLength(1);
+    expect(h.commands[0]).toMatchObject({
+      type: "thread.meta.update",
+      threadId,
+      title: "Supervisor A",
+    });
+  });
+  it.each(["", "   "])("rejects empty title %j before dispatch", async (title) => {
+    const h = harness();
+    await expect(h.client.renameThread({ threadId, title })).rejects.toThrow("must not be empty");
+    expect(h.commands).toEqual([]);
+  });
+  it("does not claim a rename succeeded after server rejection", async () => {
+    const h = harness(true);
+    await expect(h.client.renameThread({ threadId, title: "Supervisor A" })).rejects.toThrow(
+      "rename rejected",
+    );
+    expect(h.dispose).toHaveBeenCalledOnce();
+  });
+  it("persists explicit title intent before starting the first message and keeps native worktree preparation", async () => {
+    const h = harness();
     const created = await h.client.createAgentThread({
       projectId: "project-1",
-      title: "Worker",
-      initialMessage: "Do the task",
-      parentThreadId: parent?.threadId,
-      workerContext: { name: "worker", parent, notifyLevel: "attention" },
+      title: "Supervisor A",
+      initialMessage: "Resume Printcell Supervision",
+      parentThreadId: threadId,
+      branch: "t3/supervisor",
     });
-    const command = h.commands[0]!;
-    expect(command.type).toBe("thread.turn.start");
-    if (command.type !== "thread.turn.start") throw new Error("missing turn");
-    expect(command.message.text).toContain(`thread_id: "${created.threadId}"`);
-    expect(command.message.text).toContain('saved_name: "worker"');
-    expect(command.message.text).toContain('environment: "test"');
-    expect(command.message.text).toContain('project_id: "project-1"');
-    expect(command.message.text).toContain('project_title: "Project"');
-    expect(command.message.text).toContain('worktree_path: "/tmp/project"');
-    expect(command.message.text).toContain(`parent_thread_id: "${nested ? threadId : "none"}"`);
-    expect(command.message.text).toContain(
-      `parent_send_command: "${nested ? "t3-thread send supervisor ..." : "none"}"`,
-    );
-    expect(command.message.text).toContain('notify_level: "attention"');
-    expect(command.message.text).toContain(`date_utc: "${new Date().toISOString().slice(0, 10)}"`);
-    expect(command.message.text.endsWith("--- BRIEF ---\nDo the task")).toBe(true);
+    expect(h.commands).toHaveLength(1);
+    expect(h.commands[0]).toMatchObject({
+      type: "thread.turn.start",
+      threadId: created.threadId,
+      bootstrap: {
+        createThread: { title: "Supervisor A", lockTitle: true, parentThreadId: threadId },
+        prepareWorktree: { branch: "t3/supervisor" },
+      },
+      message: { text: "Resume Printcell Supervision" },
+    });
+  });
+  it("does not create a thread with an empty explicit title", async () => {
+    const h = harness();
+    await expect(
+      h.client.createAgentThread({
+        projectId: "project-1",
+        title: "  ",
+        initialMessage: "Resume supervision",
+      }),
+    ).rejects.toThrow("must not be empty");
+    expect(h.commands).toEqual([]);
   });
 });
