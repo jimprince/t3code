@@ -6,6 +6,7 @@ import {
   ProviderDriverKind,
   PullRequestOperationError,
   ThreadId,
+  TurnId,
   type OrchestrationCommand,
   type OrchestrationEvent,
   type OrchestrationProjectShell,
@@ -352,6 +353,91 @@ const startHarness = Effect.fn("startThreadSettlementHarness")(function* (
 });
 
 describe("ThreadSettlementReactor", () => {
+  it.effect(
+    "settles completed workers without PR lookup while opt-outs and pending work remain active",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* TestClock.setTime(Date.parse(NOW));
+          const completed = {
+            turnId: TurnId.make("completed-turn"),
+            state: "completed" as const,
+            requestedAt: "2026-08-28T11:00:00.000Z",
+            startedAt: "2026-08-28T11:00:00.000Z",
+            completedAt: NOW,
+            assistantMessageId: null,
+          };
+          const base = {
+            latestTurn: completed,
+            latestUserMessageAt: completed.requestedAt,
+            parentThreadId: ThreadId.make("parent"),
+          };
+          const fixture = yield* makeHarness({
+            settings: {
+              ...DEFAULT_SERVER_SETTINGS,
+              sidebarAutoSettleAfterDays: null,
+              sidebarAutoSettleOnMerge: false,
+              projectSettingsOverrides: { [PROJECT_ID]: { subthreadSettleOnComplete: true } },
+            },
+            snapshot: makeSnapshot([
+              makeThread("nested", base),
+              makeThread("explicit", { ...base, parentThreadId: null, settleOnComplete: true }),
+              makeThread("ui", { ...base, parentThreadId: null }),
+              makeThread("disabled", {
+                ...base,
+                autoSettleDisabledAt: NOW,
+                settleOnComplete: true,
+              }),
+              makeThread("no-completion", { ...base, settleOnComplete: false }),
+              makeThread("approval", { ...base, hasPendingApprovals: true }),
+              makeThread("input", { ...base, hasPendingUserInput: true }),
+              makeThread("plan", { ...base, hasActionableProposedPlan: true }),
+              makeThread("queued", { ...base, latestUserMessageAt: "2026-08-28T12:00:01.000Z" }),
+            ]),
+          });
+          yield* Effect.gen(function* () {
+            const reactor = yield* ThreadSettlementReactor.ThreadSettlementReactor;
+            yield* startHarness(reactor, fixture.activation, fixture.snapshotReads);
+            assert.deepStrictEqual(
+              (yield* Ref.get(fixture.commands)).map((command) => command.threadId),
+              [ThreadId.make("nested"), ThreadId.make("explicit")],
+            );
+            assert.deepStrictEqual(yield* Ref.get(fixture.branchCalls), []);
+            // A completed session event schedules the same policy immediately.
+            const thread = makeThread("event-complete", base);
+            yield* Ref.set(fixture.snapshots, makeSnapshot([thread]));
+            yield* fixture.publishEvent({
+              type: "thread.session-set",
+              eventId: EventId.make("complete-event"),
+              sequence: 2,
+              aggregateKind: "thread",
+              aggregateId: thread.id,
+              occurredAt: NOW,
+              commandId: null,
+              causationEventId: null,
+              correlationId: null,
+              metadata: {},
+              payload: {
+                threadId: thread.id,
+                session: {
+                  threadId: thread.id,
+                  status: "ready",
+                  providerName: "Codex",
+                  runtimeMode: "full-access",
+                  activeTurnId: null,
+                  lastError: null,
+                  updatedAt: NOW,
+                },
+              },
+            });
+            yield* Queue.take(fixture.snapshotReads);
+            yield* reactor.drain;
+            assert.strictEqual((yield* Ref.get(fixture.commands)).at(-1)?.threadId, thread.id);
+          }).pipe(Effect.provide(fixture.layer));
+        }),
+      ),
+  );
+
   it("distinguishes a project that inherits the threshold from one that disables it", () => {
     const inherits = ThreadSettlementReactor.autoSettlementSettingsKey({
       ...DEFAULT_SERVER_SETTINGS,
@@ -666,7 +752,8 @@ describe("ThreadSettlementReactor", () => {
           assert.deepStrictEqual(yield* Ref.get(fixture.summaryCalls), []);
           assert.deepStrictEqual(yield* Ref.get(fixture.invalidatedCwds), []);
           assert.deepStrictEqual(yield* Ref.get(fixture.commands), []);
-          assert.strictEqual(yield* Ref.get(fixture.snapshotReadCount), 0);
+          // Completion preferences remain eligible even when PR and inactivity settlement are off.
+          assert.ok((yield* Ref.get(fixture.snapshotReadCount)) > 0);
 
           yield* fixture.updateSettings({ sidebarAutoSettleAfterDays: 1 });
           yield* Queue.take(fixture.snapshotReads);
@@ -1083,7 +1170,7 @@ describe("ThreadSettlementReactor", () => {
           yield* Queue.take(fixture.settingsReads);
           yield* reactor.drain;
           assert.deepStrictEqual(yield* Ref.get(fixture.commands), []);
-          assert.strictEqual(yield* Ref.get(fixture.snapshotReadCount), 1);
+          assert.strictEqual(yield* Ref.get(fixture.snapshotReadCount), 2);
 
           yield* Ref.set(state, "closed");
           yield* fixture.updateSettings({ enableAgentBrowserAccess: false });
@@ -1092,7 +1179,7 @@ describe("ThreadSettlementReactor", () => {
           yield* Deferred.succeed(releaseLaterLookup, undefined);
           yield* reactor.drain;
 
-          assert.strictEqual(yield* Ref.get(fixture.snapshotReadCount), 2);
+          assert.strictEqual(yield* Ref.get(fixture.snapshotReadCount), 3);
           assert.strictEqual(yield* Ref.get(lookupCount), 2);
           assert.deepStrictEqual(
             (yield* Ref.get(fixture.commands)).map((command) => command.threadId),
