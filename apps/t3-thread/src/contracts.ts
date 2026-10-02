@@ -260,9 +260,12 @@ export const ServerConfig = Schema.Struct({
   providers: Schema.Array(ServerProvider),
   settings: Schema.Struct({
     subthreadSettleOnComplete: SharedServerSettings.fields.subthreadSettleOnComplete,
-    projectSettingsOverrides: Schema.Record(Schema.String, Schema.Struct({
-      subthreadSettleOnComplete: Schema.optionalKey(Schema.Boolean),
-    })).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+    projectSettingsOverrides: Schema.Record(
+      Schema.String,
+      Schema.Struct({
+        subthreadSettleOnComplete: Schema.optionalKey(Schema.Boolean),
+      }),
+    ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
   }).pipe(
     Schema.withDecodingDefault(
       Effect.succeed({

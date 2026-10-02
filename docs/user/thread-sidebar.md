@@ -60,7 +60,8 @@ files directly; see [Attach files](./composer.md#attach-files).
 On web and desktop, pinning or unpinning a thread keeps the sidebar at your current
 scroll position instead of following the thread to its new place in the list.
 
-Pinning does not prevent automatic settlement. Settling a thread removes its pin.
+Pinning does not prevent automatic settlement, which keeps the pin. Manually
+settling a thread removes its pin. Pinned threads are protected from automatic archive.
 
 On web and desktop, drag a thread between sections to change its state. Drag a thread up into
 the pinned section to pin it at the spot you drop it; drag a pinned thread down into the active
@@ -204,8 +205,8 @@ Settled work folds into a collapsed **Settled** shelf at the bottom of the
 Agents panel: nested threads that are settled, including by automatic
 settlement, and subagents or workflows that have finished. Something that
 finishes while you are watching stays where it is until you next open the
-panel. When a `t3-thread` worker completes, its orchestrating agent is asked
-whether the worker is finished and can settle it.
+panel. A `t3-thread` worker settles after a completed turn by default when
+no input or approval is pending. Its parent can send a follow-up to resume it.
 
 To nest a thread yourself, open its menu in the sidebar and choose **Nest
 under…**. To bring one back, choose **Move to sidebar** from its row in the

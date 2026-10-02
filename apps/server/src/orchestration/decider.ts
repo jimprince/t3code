@@ -607,8 +607,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: alreadySettled ? thread.updatedAt : occurredAt,
         },
       };
-      // Settling is "I'm done with this": clear states that would keep the
-      // row pinned or snoozed instead of showing the new settled state.
+      // Explicit settlement clears pinning. Automatic settlement retains the user's
+      // pin so completed workers remain visible and protected from automatic archive.
       const companionEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
       for (const [requestId, request] of pendingRequests) {
         companionEvents.push({
@@ -633,7 +633,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           },
         });
       }
-      if (thread.pinnedAt != null) {
+      if (command.type === "thread.settle" && thread.pinnedAt != null) {
         companionEvents.push({
           ...(yield* withEventBase({
             aggregateKind: "thread",

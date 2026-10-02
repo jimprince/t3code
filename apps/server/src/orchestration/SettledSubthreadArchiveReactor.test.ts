@@ -202,6 +202,26 @@ it.layer(NodeServices.layer)("automatic archive decider", (it) => {
       ]) {
         assert.strictEqual(isSettledSubthreadArchiveCandidate(guarded, [guarded], NOW), false);
       }
+      const pinnedActive = thread("pinned-active", {
+        pinnedAt: NOW,
+        settledOverride: null,
+        settledAt: null,
+      });
+      for (const type of ["thread.auto-settle", "thread.settle"] as const) {
+        const settlement = yield* decideOrchestrationCommand({
+          command: {
+            type,
+            commandId: CommandId.make(type),
+            threadId: pinnedActive.id,
+            ...(type === "thread.auto-settle" ? { settledAt: NOW } : {}),
+          },
+          readModel: model([pinnedActive]),
+        });
+        assert.strictEqual(
+          settlement.some((event) => event.type === "thread.unpinned"),
+          type === "thread.settle",
+        );
+      }
       const resumed = yield* decideOrchestrationCommand({
         command: {
           type: "thread.turn.start",
