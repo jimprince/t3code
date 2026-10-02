@@ -1,7 +1,7 @@
-Bottom: 3ff35b80f203e8197d91e03a24bbec4f7dad9e3e
-Top:    e0b5b881b1be4407d464f0355c41de62f0b3227d
+Bottom: 9b907afd72cc1804999b6378592c9af0138f5315
+Top:    db1b6818d83e34c397bac7e4e9784dca9d584ce4
 Author: User <user@example.com>
-Date:   2026-10-02 10:09:53 +0000
+Date:   2026-10-02 10:21:08 +0000
 
 feat(threads): separate child input attention from parent status
 
