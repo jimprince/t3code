@@ -1055,8 +1055,7 @@ const buildAppUnderTest = (options?: {
           }),
         ),
       ),
-      Layer.provide(Layer.mock(ThreadTransfer)({})),
-      Layer.provide(Layer.mock(ThreadBrief)({})),
+      Layer.provide(Layer.mergeAll(Layer.mock(ThreadTransfer)({}), Layer.mock(ThreadBrief)({}))),
       Layer.provide(
         Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
           getUserInputActivity: () => Effect.die("unused"),

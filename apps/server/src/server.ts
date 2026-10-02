@@ -540,7 +540,8 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
         Layer.provide(VcsProcess.layer),
         Layer.provide(ProviderSessionRuntime.layer),
       ),
-      ThreadBriefLive,
+      // Settings are merged above this point in the chain, so provide them here.
+      ThreadBriefLive.pipe(Layer.provide(ServerSettingsLayerLive)),
       CheckpointingLayerLive,
     ),
   ),
