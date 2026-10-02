@@ -1,3 +1,4 @@
+import * as SchemaGetter from "effect/SchemaGetter";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as SqlSchema from "effect/unstable/sql/SqlSchema";
 import * as Effect from "effect/Effect";
@@ -21,6 +22,12 @@ import {
 
 const ProjectionThreadDbRow = ProjectionThread.mapFields(
   Struct.assign({
+    settleOnComplete: Schema.optional(Schema.NullOr(Schema.Number)).pipe(
+      Schema.decodeTo(Schema.optional(Schema.NullOr(Schema.Boolean)), {
+        decode: SchemaGetter.transform((value) => (value == null ? value : value !== 0)),
+        encode: SchemaGetter.transform((value) => (value == null ? value : value ? 1 : 0)),
+      }),
+    ),
     modelSelection: Schema.fromJsonString(ModelSelection),
     titleState: Schema.NullOr(Schema.fromJsonString(ThreadTitleState)),
     linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
@@ -61,6 +68,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pin_order_key,
           active_order_key,
           auto_settle_disabled_at,
+          settle_on_complete,
           parent_thread_id,
           title_regeneration_request_id,
           title_regeneration_started_at,
@@ -96,6 +104,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           ${row.pinOrderKey ?? null},
           ${row.activeOrderKey ?? null},
           ${row.autoSettleDisabledAt ?? null},
+          ${row.settleOnComplete == null ? null : row.settleOnComplete ? 1 : 0},
           ${row.parentThreadId ?? null},
           ${row.titleRegenerationRequestId ?? null},
           ${row.titleRegenerationStartedAt ?? null},
@@ -131,6 +140,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pin_order_key = excluded.pin_order_key,
           active_order_key = excluded.active_order_key,
           auto_settle_disabled_at = excluded.auto_settle_disabled_at,
+          settle_on_complete = excluded.settle_on_complete,
           parent_thread_id = excluded.parent_thread_id,
           title_regeneration_request_id = excluded.title_regeneration_request_id,
           title_regeneration_started_at = excluded.title_regeneration_started_at,
@@ -173,6 +183,7 @@ const makeProjectionThreadRepository = Effect.gen(function* () {
           pin_order_key AS "pinOrderKey",
           active_order_key AS "activeOrderKey",
           auto_settle_disabled_at AS "autoSettleDisabledAt",
+          settle_on_complete AS "settleOnComplete",
           parent_thread_id AS "parentThreadId",
           title_regeneration_request_id AS "titleRegenerationRequestId",
           title_regeneration_started_at AS "titleRegenerationStartedAt",
