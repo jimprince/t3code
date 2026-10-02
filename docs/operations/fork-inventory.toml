@@ -1415,3 +1415,13 @@ retire_when = "Upstream offers an equivalent on-demand thread summary, or Brad v
 depends_on = ["fork-orchestrator-focus"]
 roles = []
 note = "The transcript starts after the last message with no t3-origin record, so it is bounded to what the user has not seen and to its newest 24k characters; a quiet stretch answers without a model call. generateThreadBrief is an optional TextGeneration operation implemented for Codex (including managed Codex) and Claude; other providers fail with a message naming the supported ones. The RPC needs the operate scope because it spends model quota. The button lives in the fork-orchestrator-focus bar on web and desktop; mobile has no Brief me."
+
+[[patch]]
+name = "fork-sidebar-nested-tidiness"
+subject = "feat(sidebar): fold quiet nested threads"
+class = "product"
+purpose = "Keep expanded orchestrators scannable by folding quiet children, grouping untouched creation bursts, and labeling only cross-project children."
+retire_when = "Upstream offers equivalent nested-thread folding and burst grouping without repeating project headers."
+depends_on = ["fork-sidebar-agent-visibility"]
+roles = []
+note = "Pinned, active, input-blocked, currently viewed, and ancestor-of-active rows remain individually visible. Other quiet siblings fold into one reversible done row, except untouched siblings created within the same two-minute window, which form their own reversible burst row. Grouping is derived from shell timestamps and status only, so activity immediately removes a child. Nested rows suppress repeated project headers and show a compact badge only when their direct parent belongs to another project."
