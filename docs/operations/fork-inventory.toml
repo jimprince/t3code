@@ -1345,3 +1345,13 @@ retire_when = "Upstream shows equivalent nested-worker details through bounded s
 depends_on = ["fork-nested-threads", "fork-child-input-attention"]
 roles = []
 note = "Optional derived metadata preserves old-server compatibility. Ordinary top-level shells omit summaries, and nested output is bounded to its first 320 characters."
+
+[[patch]]
+name = "fork-sidebar-drag-to-nest"
+subject = "feat(web): drag threads to nest them"
+class = "product"
+purpose = "Let web and desktop users nest threads directly through the existing sidebar drag interaction."
+retire_when = "Upstream supports drag-to-nest with cycle-safe parent assignment and an equivalent accessible menu action."
+depends_on = ["fork-cross-project-thread-nesting", "fork-sidebar-agent-visibility"]
+roles = []
+note = "Dragging defaults to reorder. An eligible row becomes a nesting target only after the pointer moves right by one existing 12px child indent; returning within half an indent restores reorder without boundary flicker. Reorder shows a full-width insertion line, while nesting highlights the parent and shows an indented child-depth marker. Parent assignment uses the same thread.parent.set action and candidate rules as the context menu. Nesting preserves the dragged thread's own pin, while a section drop moves it to the top level and lets Pinned or Active set that state. Nested rows are drag sources, reorder only inside their matching pinned or unpinned sibling bucket, and never duplicate into the top-level Pinned shelf."
