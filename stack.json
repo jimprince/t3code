@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "be56d5d034abd0f0b41fc37e1939a13b1ec83ac3",
-  "head": "1a5dbb3c545207e7f04d8b5fb7172255ebd53ae7",
+  "prev": "d0c652a3e982f1312bc408b01e4118c4b822b2b6",
+  "head": "9fe6f5b9d1a5d2fa68a8bee66b86840f32797b2b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -50,7 +50,8 @@
     "fork-worker-inactivity",
     "fork-thread-titles",
     "fork-subthread-lifecycle",
-    "fork-orchestrator-focus"
+    "fork-orchestrator-focus",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-conversation-fork",
@@ -315,6 +316,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "0c06ba85df0caa7c87c395025a892ad06a542525"
+    },
+    "refresh-temp": {
+      "oid": "9fe6f5b9d1a5d2fa68a8bee66b86840f32797b2b"
     }
   }
 }
