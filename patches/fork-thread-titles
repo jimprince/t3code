@@ -1,0 +1,6 @@
+Bottom: c31ac10bade0b7a2f1f2cd38f13c88138e2fd2cd
+Top:    c31ac10bade0b7a2f1f2cd38f13c88138e2fd2cd
+Author: User <user@example.com>
+Date:   2026-10-02 14:20:14 -0600
+
+feat(t3-thread): rename threads and preserve explicit titles
