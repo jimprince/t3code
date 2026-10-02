@@ -1395,3 +1395,13 @@ retire_when = "Upstream supplies per-worker completion settlement and guarded de
 depends_on = ["fork-nested-threads", "fork-worker-operations"]
 roles = []
 note = "Completion settlement reuses thread.auto-settle, ThreadSettlementPolicy, and autoSettleDisabledAt; the opt-out always wins. UI top-level threads default off, nested threads inherit the project default, and CLI workers capture the project default with explicit override flags. Archiving uses normal archive events and a nearest-deadline timer, never a periodic sweep, and revalidates pinning, opt-out, and all descendants at dispatch. Automatic settlement preserves pins; manual settlement clears them. Unarchive starts a fresh retention window. Mobile gets the same project/environment controls; desktop shares web settings."
+
+[[patch]]
+name = "fork-page-agent-tray"
+subject = "feat(web): agent tray beside sidebar pages"
+class = "product"
+purpose = "Give each sidebar page a right-hand tray with its own agent that operates the visible page on desktop and reaches T3 threads through the t3-thread CLI."
+retire_when = "Upstream offers a per-page or per-site agent beside embedded pages, or the fork stops showing sidebar pages."
+depends_on = ["fork-embedded-pages"]
+roles = []
+note = "A tray conversation is an ordinary thread in the server-owned chat project whose id starts with page-agent-; the server drops that namespace from client-facing shell feeds, thread search, and relay activity instead of persisting a hidden flag, while server reactors still see the threads (an idle one may auto-settle; the next send unsettles it). Desktop hosts the page as that thread's only Browser preview tab on the default profile, so its preview tools drive exactly the page; the tab closes with the page view. Page-agent threads always get the preview MCP capability. Web keeps the iframe and offers chat only. Conversations are per device in localStorage: current and previous, a fresh one after 30 idle minutes, discarded ones deleted only once no turn runs. t3-thread resolves page-agent ids by thread detail because shell lists never contain them."
