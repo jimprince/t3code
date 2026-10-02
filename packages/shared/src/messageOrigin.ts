@@ -9,7 +9,7 @@
  */
 import type { ComposerContextId, OrchestrationMessageContext } from "@t3tools/contracts";
 
-export const MESSAGE_ORIGIN_CONTEXT_KIND = "t3-origin";
+const MESSAGE_ORIGIN_CONTEXT_KIND = "t3-origin";
 
 export type MessageOriginSource = "worker-notification" | "thread-send";
 
