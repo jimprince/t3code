@@ -1,0 +1,4 @@
+id = "worker-shared-runtime-identity"
+category = "fix"
+functionality = "threads"
+text = "Cursor and OpenCode workers can resolve their exact thread through T3 MCP for caller notifications. The operator CLI explains when shell identity is unavailable, and held message queues no longer hide a completed worker turn."
