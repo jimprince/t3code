@@ -1573,7 +1573,6 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerThreadSubscriptionsRpc,
   WsServerUpdateThreadSubscriptionsRpc,
 
-
   WsServerPreviewRecoveryRpc,
   WsServerExecuteRecoveryRpc,
   WsServerRequestHeadlessUpdateCheckRpc,
