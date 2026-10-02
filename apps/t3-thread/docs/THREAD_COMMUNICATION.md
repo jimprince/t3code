@@ -44,6 +44,15 @@ Neither line suppresses required escalations. Omitting the line preserves the
 usual behavior. Successful direct sends, including accepted queued sends, deduplicate
 only the matching subscriber and turn; `all` explicitly opts into both notices.
 
+## Reaching the user from a worker-started turn
+
+Notices and sends from your workers carry their origin, and the app folds the
+turns they start out of the user's default view. When such a turn needs the
+user, ask through your provider's structured question or approval tool, or end
+the final response with the exact line `T3_NOTIFY: attention`; either keeps the
+turn visible. A question written only in prose inside a folded turn can go
+unseen. Turns started by the user's own messages never fold.
+
 ## First-delivery guide
 
 The short guide appears once per subscriber across all workers. Only a confirmed
