@@ -83,6 +83,9 @@ layer("worker inactivity from persisted provider progress", (it) => {
             settledOverride: snapshot.thread.settledOverride ?? null,
             settledAt: snapshot.thread.settledAt ?? null,
             unsettledAt: snapshot.thread.unsettledAt ?? null,
+            messages: snapshot.thread.messages.map((message) => ({ ...message })),
+            proposedPlans: snapshot.thread.proposedPlans.map((plan) => ({ ...plan })),
+            checkpoints: snapshot.thread.checkpoints.map((checkpoint) => ({ ...checkpoint })),
             modelSelection: { provider: "codex", model: "test" },
             activities: snapshot.thread.activities.map((activity) => ({ ...activity })),
           } satisfies OrchestrationThread;
