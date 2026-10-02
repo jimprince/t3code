@@ -23,6 +23,10 @@
       "types": "./src/orchestration.ts",
       "import": "./src/orchestration.ts"
     },
+    "./pageAgents": {
+      "types": "./src/pageAgents.ts",
+      "import": "./src/pageAgents.ts"
+    },
     "./settings": {
       "types": "./src/settings.ts",
       "import": "./src/settings.ts"
