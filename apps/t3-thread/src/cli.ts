@@ -830,45 +830,22 @@ agent
 agent
   .command("rename")
   .argument("<agent-or-thread>", "saved agent name or raw thread UUID (including your own)")
-  .option("--title <text>", "new thread title")
-  .option("--scope <text>", "project scope shown with the thread")
-  .option("--clear-scope", "remove the project scope")
+  .requiredOption("--title <text>", "new thread title")
   .action(async (reference, options) => {
-    if (options.scope !== undefined && options.clearScope) {
-      throw new Error("Use either --scope or --clear-scope, not both.");
-    }
-    if (options.title === undefined && options.scope === undefined && !options.clearScope) {
-      throw new Error("Provide --title, --scope, or --clear-scope.");
-    }
     const { agent: target, client } = await withAgent(reference);
-    const renamed = await client.renameThread({
-      threadId: target.threadId,
-      ...(options.title !== undefined ? { title: options.title } : {}),
-      ...(options.scope !== undefined
-        ? { scope: options.scope }
-        : options.clearScope
-          ? { scope: null }
-          : {}),
-    });
+    const renamed = await client.renameThread({ threadId: target.threadId, title: options.title });
     await updateState(async (state) => ({
       state: {
         ...state,
         agents: state.agents.map((saved) =>
-          options.title !== undefined &&
-          saved.environment === target.environment &&
-          saved.threadId === target.threadId
+          saved.environment === target.environment && saved.threadId === target.threadId
             ? { ...saved, title: renamed.title }
             : saved,
         ),
       },
       result: null,
     }));
-    printJson({
-      ...renamed,
-      environment: target.environment,
-      renamed: options.title !== undefined,
-      scopeUpdated: options.scope !== undefined || Boolean(options.clearScope),
-    });
+    printJson({ ...renamed, environment: target.environment, renamed: true });
   });
 
 agent
