@@ -150,13 +150,13 @@ export function useThreadNestingActions() {
 
   /** Nests `threadRef` under `parentThreadId`, or with null returns it to the sidebar. */
   const setThreadParent = useCallback(
-    async (threadRef: ScopedThreadRef, parentThreadId: ThreadId | null): Promise<void> => {
+    async (threadRef: ScopedThreadRef, parentThreadId: ThreadId | null): Promise<boolean> => {
       if (!readEnvironmentSupportsThreadNesting(threadRef.environmentId)) {
         failureToast(
           "Nesting unavailable",
           new Error("Update this environment's server to nest threads."),
         );
-        return;
+        return false;
       }
       const dispatch = async (nextParentThreadId: ThreadId | null) => {
         const result = await setParent({
@@ -174,7 +174,8 @@ export function useThreadNestingActions() {
         return result._tag === "Success";
       };
       const previousParentThreadId = readThreadShell(threadRef)?.parentThreadId ?? null;
-      if (!(await dispatch(parentThreadId)) || parentThreadId === null) return;
+      if (!(await dispatch(parentThreadId))) return false;
+      if (parentThreadId === null) return true;
       // The row leaves the sidebar, so say where it went and offer the way back.
       const parentTitle =
         readThreadShell(scopeThreadRef(threadRef.environmentId, parentThreadId))?.title ??
@@ -191,6 +192,7 @@ export function useThreadNestingActions() {
           },
         },
       });
+      return true;
     },
     [setParent],
   );
@@ -232,7 +234,10 @@ export function useThreadNestingActions() {
       state: ThreadNestingMenuState | null,
     ): Promise<void> => {
       if (id === "new-nested-thread") return startNestedThread(threadRef);
-      if (id === "move-to-sidebar") return setThreadParent(threadRef, null);
+      if (id === "move-to-sidebar") {
+        await setThreadParent(threadRef, null);
+        return;
+      }
       const parentThreadId = nestUnderMenuTarget(id, state);
       if (parentThreadId !== null) await setThreadParent(threadRef, parentThreadId);
     },
@@ -283,7 +288,9 @@ export function useThreadNestingPaletteItems(
       searchTerms: ["move to sidebar", "unnest", "nested", "parent"],
       title: "Move thread to sidebar",
       icon: <PanelLeftIcon className={ITEM_ICON_CLASS} />,
-      run: () => setThreadParent(threadRef, null),
+      run: async () => {
+        await setThreadParent(threadRef, null);
+      },
     });
   }
   return items;

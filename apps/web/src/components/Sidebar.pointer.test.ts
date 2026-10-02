@@ -2,6 +2,11 @@ import type { SensorProps } from "@dnd-kit/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { act, createElement, StrictMode } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
+import {
+  resolveSidebarRowDropMode,
+  SIDEBAR_NESTED_INDENT_PX,
+  type SidebarRowDropMode,
+} from "./Sidebar.drag";
 import { SidebarDragLifecycle, SidebarPointerSensor } from "./Sidebar.pointer";
 
 class TestDocument extends EventTarget {
@@ -33,16 +38,17 @@ function gesture() {
     onPending: vi.fn(),
   };
   const onFinish = vi.fn();
+  const onCoordinatesChange = vi.fn();
   // The sensor never reads dnd-kit's layout context or active node.
   const props = {
     active: "thread",
     event: pointer("pointerdown"),
-    options: { distance: 6, onAttach: vi.fn(), onFinish },
+    options: { distance: 6, onAttach: vi.fn(), onCoordinatesChange, onFinish },
     ...callbacks,
   } as unknown as SensorProps<ConstructorParameters<typeof SidebarPointerSensor>[0]["options"]>;
   const sensor = new SidebarPointerSensor(props);
   sensors.push(sensor);
-  return { sensor, onFinish, ...callbacks };
+  return { sensor, onCoordinatesChange, onFinish, ...callbacks };
 }
 
 beforeEach(() => {
@@ -72,10 +78,46 @@ describe("sidebar pointer lifecycle", () => {
     const drag = gesture();
     document.dispatchEvent(pointer("pointermove", { clientY: 17 }));
     expect(drag.onStart).toHaveBeenCalledExactlyOnceWith({ x: 10, y: 10 });
+    expect(drag.sensor.coordinates()).toEqual({ x: 10, y: 17 });
+    document.dispatchEvent(pointer("pointermove", { clientY: 40 }));
+    expect(drag.sensor.coordinates()).toEqual({ x: 10, y: 40 });
     document.dispatchEvent(pointer("pointerup", { buttons: 0 }));
     expect(drag.onEnd).toHaveBeenCalledOnce();
     expect(drag.onAbort).not.toHaveBeenCalled();
     expect(drag.onFinish).toHaveBeenCalledOnce();
+  });
+
+  it("keeps vertical row drags in reorder mode, nests after an indent, and reverts left", () => {
+    const drag = gesture();
+    let mode: SidebarRowDropMode = "reorder";
+    drag.onCoordinatesChange.mockImplementation(({ x }) => {
+      mode = resolveSidebarRowDropMode({
+        activationX: 10,
+        pointerX: x,
+        previousMode: mode,
+        nestEligible: true,
+      });
+    });
+
+    document.dispatchEvent(pointer("pointermove", { clientX: 10, clientY: 20 }));
+    document.dispatchEvent(pointer("pointermove", { clientX: 10, clientY: 80 }));
+    expect(mode).toBe("reorder");
+    expect(drag.onCoordinatesChange).toHaveBeenLastCalledWith({ x: 10, y: 80 });
+
+    document.dispatchEvent(
+      pointer("pointermove", { clientX: 10 + SIDEBAR_NESTED_INDENT_PX, clientY: 80 }),
+    );
+    expect(mode).toBe("nest");
+
+    document.dispatchEvent(
+      pointer("pointermove", { clientX: 10 + SIDEBAR_NESTED_INDENT_PX / 2, clientY: 80 }),
+    );
+    expect(mode).toBe("nest");
+
+    document.dispatchEvent(
+      pointer("pointermove", { clientX: 10 + SIDEBAR_NESTED_INDENT_PX / 2 - 1, clientY: 80 }),
+    );
+    expect(mode).toBe("reorder");
   });
 
   const interruptions = {
