@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "0821138fa0d1a25a83f0820e12e71b59129abb3a",
-  "head": "31d8d588370c2de68fa09fbc5325d09dfd7da65f",
+  "prev": "66e6ce842f8b853841159e45c55f06b9fb8b6b62",
+  "head": "8bfe005baba5be32d60e64b5edb670169f5b62fe",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -39,13 +39,13 @@
     "fork-step-preview",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
-    "fork-nested-threads"
-  ],
-  "unapplied": [
+    "fork-nested-threads",
     "fork-resume-background-work",
     "fork-overnight-updates",
     "fork-spawn-budget",
-    "fork-t3-thread-prebuilt",
+    "fork-t3-thread-prebuilt"
+  ],
+  "unapplied": [
     "fork-cross-project-thread-nesting",
     "fork-launch-health",
     "fork-notification-preferences",
@@ -134,7 +134,7 @@
       "oid": "290747fceafa73de5680c00ddf09a8a9efd34691"
     },
     "fork-overnight-updates": {
-      "oid": "ab73aedebb75e4473c42e5f530d930a5e6d17df3"
+      "oid": "c58e3a7bb445fbf7cd367b9477af9c9ffa9bc9dc"
     },
     "fork-pr-dismissal": {
       "oid": "b8f95b405de88329bb58f58795076cd1feac9173"
@@ -164,7 +164,7 @@
       "oid": "4542e52ef0541ff136af66b67fce8a5cb3cfad28"
     },
     "fork-resume-background-work": {
-      "oid": "8295464e481d824023fd3e92acdaac4f564d7589"
+      "oid": "ada6d616e90e0a15ca1b227fcd88f6c868f23041"
     },
     "fork-sidebar-agent-visibility": {
       "oid": "6a7f239e23c81252b27cea214615941fe8c7a744"
@@ -173,13 +173,13 @@
       "oid": "454c1c05b1103f7298b7f73551e4bb6ee468c416"
     },
     "fork-spawn-budget": {
-      "oid": "2f5d22cddf87ad3fa9935adabf80a88786e7296f"
+      "oid": "bba07bca345a2168c3654e746620830654559eca"
     },
     "fork-step-preview": {
       "oid": "4c910462981417511eb0f0a0fea357189d7b158a"
     },
     "fork-t3-thread-prebuilt": {
-      "oid": "f6b66e1fb3baf2ccaab83cdc20495301aaa6052a"
+      "oid": "8bfe005baba5be32d60e64b5edb670169f5b62fe"
     },
     "fork-thread-client-recovery": {
       "oid": "63dafeae62e4d6cfe2c584eb0c41217030f60b6c"
