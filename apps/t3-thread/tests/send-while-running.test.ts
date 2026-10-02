@@ -3,6 +3,8 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { describe, expect, it, vi } from "vite-plus/test";
 
+import { readMessageOrigin } from "@t3tools/shared/messageOrigin";
+
 import { RemoteEnvironmentClient } from "../src/client.js";
 import { loadState } from "../src/state.js";
 import type { OrchestrationThread, SavedEnvironment } from "../src/types.js";
@@ -143,6 +145,26 @@ describe("RemoteEnvironmentClient.sendMessage while a turn is running", () => {
       expect(result).toMatchObject({ dispatched: true, queued: false });
       expect(harness.commands).toHaveLength(1);
       expect((await loadState()).queuedSends).toHaveLength(0);
+    });
+  });
+
+  it("records who sent the message on both the dispatched and the queued path", async () => {
+    await withTempState(async () => {
+      const origin = { source: "thread-send" as const, fromThreadId: "thread-worker" };
+      const idle = makeRunningThread();
+      const idleHarness = makeHarness({ ...idle, latestTurn: null, session: null });
+      await idleHarness.client.sendMessage({ threadId: "thread-1", text: "done", origin });
+      const message = (idleHarness.commands[0] as { message: { context?: unknown } }).message;
+      expect(readMessageOrigin({ text: "done", context: message.context as never })).toEqual(
+        origin,
+      );
+
+      await makeHarness(makeRunningThread()).client.sendMessage({
+        threadId: "thread-1",
+        text: "done",
+        origin,
+      });
+      expect((await loadState()).queuedSends[0]?.origin).toEqual(origin);
     });
   });
 
