@@ -1164,6 +1164,19 @@ describe("resolveSidebarDropTarget", () => {
     expect(resolve("nope", "a1")).toBeNull();
     expect(resolve(sidebarMarkerId("pinned-divider"), "a1")).toBeNull();
   });
+
+  it("places a nested source that is absent from the top-level sortable list", () => {
+    expect(resolveSidebarDropTarget(items, "nested", "p1", "pinned")).toEqual({
+      section: "pinned",
+      pinnedOrder: ["nested", "p1", "p2"],
+      activeOrder: ["a1", "a2"],
+    });
+    expect(resolveSidebarDropTarget(items, "nested", "a2", "active")).toEqual({
+      section: "active",
+      pinnedOrder: ["p1", "p2"],
+      activeOrder: ["a1", "nested", "a2"],
+    });
+  });
 });
 
 describe("planSidebarThreadDrop", () => {
