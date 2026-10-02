@@ -6,6 +6,7 @@ import { replaceComposerContextReferences } from "@t3tools/shared/composerContex
 import * as Schema from "effect/Schema";
 import {
   DndContext,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -220,6 +221,7 @@ import {
   createSidebarCollisionDetection,
   createSidebarSortingStrategy,
   restrictBelowSidebarLabel,
+  resolveSidebarRowDropZone,
 } from "./Sidebar.drag";
 import { SidebarDragLifecycle, SidebarPointerSensor } from "./Sidebar.pointer";
 import { createSidebarListMotion } from "./Sidebar.motion";
@@ -265,6 +267,7 @@ import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuShortcut, MenuTrigger } f
 import { useThreadNestingActions } from "../hooks/useThreadNesting";
 import {
   applySidebarThreadNesting,
+  canNestThreadUnder,
   isThreadNestingMenuId,
   resolveThreadNestingMenuState,
 } from "../threadNesting.logic";
@@ -568,6 +571,15 @@ function SortableThreadRow(props: {
     [listeners, setNodeRef, transform, transition, isDragging],
   );
   return props.children(bag);
+}
+
+function SidebarNestDropRow(props: {
+  id: string;
+  enabled: boolean;
+  children: (setNodeRef: (node: HTMLElement | null) => void) => ReactNode;
+}) {
+  const { setNodeRef } = useDroppable({ id: props.id, disabled: !props.enabled });
+  return props.children(setNodeRef);
 }
 
 // Unsent work shares one look: the new-thread draft rows and thread rows
@@ -1074,6 +1086,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   nestedInputCount?: number;
   nestedInputChildId?: ThreadId | undefined;
   onOpenNestedInput?: (parent: ScopedThreadRef, childId: ThreadId) => void;
+  nestDropTarget?: boolean;
+  nestDropRef?: ((node: HTMLElement | null) => void) | undefined;
   nestedChildrenExpanded?: boolean;
   onToggleNestedChildren?: (threadRef: ScopedThreadRef) => void;
 }) {
@@ -1669,12 +1683,15 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
     return (
       <li
         data-thread-item
+        data-nest-drop-target={props.nestDropTarget || undefined}
+        ref={props.nestDropRef}
         {...sortableRootProps}
         {...(fileDropHandlers ?? {})}
         className={cn(
           // Matches the h-9 row so unrendered rows never shift the list when they paint.
           "list-none [content-visibility:auto] [contain-intrinsic-size:auto_36px]",
           nestedSubRow && "relative",
+          props.nestDropTarget && "bg-primary/10 ring-1 ring-inset ring-primary",
           sortable?.isDragging && "relative z-20",
         )}
         style={{
@@ -1831,6 +1848,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   return (
     <li
       data-thread-item
+      data-nest-drop-target={props.nestDropTarget || undefined}
+      ref={props.nestDropRef}
       {...sortableRootProps}
       {...(fileDropHandlers ?? {})}
       className={cn(
@@ -1838,6 +1857,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         "list-none py-0.5 [content-visibility:auto] [contain-intrinsic-size:auto_78px]",
         sortable?.isDragging && "relative z-20",
         nestedSubRow && "relative",
+        props.nestDropTarget && "bg-primary/10 ring-1 ring-inset ring-primary",
       )}
       style={{
         ...sortableStyle,
@@ -2285,7 +2305,7 @@ export default function Sidebar() {
     archiveThread,
     deleteThread,
   } = useThreadActions();
-  const { runNestingMenuAction } = useThreadNestingActions();
+  const { runNestingMenuAction, setThreadParent } = useThreadNestingActions();
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
@@ -2756,6 +2776,7 @@ export default function Sidebar() {
       if (capabilities?.threadPinning === true && capabilities.threadPinReorder === true) {
         draggable.add(threadKey);
       }
+      if (capabilities?.threadNesting === true) draggable.add(threadKey);
       if (optimisticDrop?.key === threadKey) {
         const projected = applySidebarThreadDrop(
           thread,
@@ -3376,10 +3397,14 @@ export default function Sidebar() {
     readonly occurredAt: string;
     readonly activationY: number | null;
     readonly targetSection: SidebarSection | null;
+    readonly nestTargetKey: string | null;
   } | null>(null);
   const dragTargetSection = dragState?.targetSection ?? null;
+  const nestTargetKey = dragState?.nestTargetKey ?? null;
   const dragSensorRef = useRef<SidebarPointerSensor | null>(null);
+  const dragPointerYRef = useRef<number | null>(null);
   const finishThreadDrag = useCallback((started: boolean) => {
+    dragPointerYRef.current = dragSensorRef.current?.coordinates().y ?? null;
     dragSensorRef.current = null;
     if (started) {
       listMotionRef.current?.release();
@@ -3388,6 +3413,7 @@ export default function Sidebar() {
   }, []);
   const attachDragSensor = useCallback((sensor: SidebarPointerSensor) => {
     dragSensorRef.current = sensor;
+    dragPointerYRef.current = sensor.coordinates().y;
   }, []);
   const cancelThreadDrag = useCallback(() => {
     dragSensorRef.current?.cancel();
@@ -3557,6 +3583,7 @@ export default function Sidebar() {
         activeKey,
         activeSection,
         targetSection: activeSection,
+        nestTargetKey: null,
         occurredAt: new Date().toISOString(),
         activationY:
           event.activatorEvent instanceof PointerEvent ? event.activatorEvent.clientY : null,
@@ -3645,16 +3672,39 @@ export default function Sidebar() {
   ]);
   const handleThreadDragOver = useCallback(
     (event: DragOverEvent) => {
-      const target = event.over
-        ? resolveSidebarDropTarget(sidebarListItems, String(event.active.id), String(event.over.id))
-        : null;
+      const activeKey = String(event.active.id);
+      const overKey = event.over === null ? null : String(event.over.id);
+      const activeThread = threadByKey.get(activeKey);
+      const targetThread = overKey === null ? undefined : threadByKey.get(overKey);
+      const canNest =
+        activeThread !== undefined &&
+        targetThread !== undefined &&
+        serverConfigs.get(activeThread.environmentId)?.environment.capabilities.threadNesting ===
+          true &&
+        canNestThreadUnder(activeThread, targetThread, threads);
+      const nestTarget =
+        canNest &&
+        resolveSidebarRowDropZone(
+          dragSensorRef.current?.coordinates().y ?? dragPointerYRef.current,
+          event.over?.rect,
+        ) === "nest"
+          ? overKey
+          : null;
+      const target =
+        nestTarget === null && overKey !== null
+          ? resolveSidebarDropTarget(sidebarListItems, activeKey, overKey)
+          : null;
       setDragState((current) =>
-        current === null || current.activeKey !== String(event.active.id)
+        current === null || current.activeKey !== activeKey
           ? current
-          : { ...current, targetSection: target?.section ?? null },
+          : {
+              ...current,
+              targetSection: nestTarget === null ? (target?.section ?? null) : null,
+              nestTargetKey: nestTarget,
+            },
       );
     },
-    [sidebarListItems],
+    [serverConfigs, sidebarListItems, threadByKey, threads],
   );
   const sortableIds = useMemo(() => sidebarListItems.map(sidebarListItemId), [sidebarListItems]);
   const draggedSettledOrder = useMemo(() => {
@@ -3671,6 +3721,7 @@ export default function Sidebar() {
     () =>
       createSidebarSortingStrategy({
         items: sidebarListItems,
+        nestTargetKey,
         boundaryLabelHeight: SIDEBAR_DRAG_LABEL_HEIGHT,
         settledOrder: draggedSettledOrder,
         settledExpanded: settledShelfExpanded,
@@ -3680,6 +3731,7 @@ export default function Sidebar() {
       }),
     [
       draggedSettledOrder,
+      nestTargetKey,
       routeThreadKey,
       settledShelfExpanded,
       settledVisibleCount,
@@ -3740,6 +3792,15 @@ export default function Sidebar() {
       {
         items: sidebarListItems,
         activationY: dragActivationY ?? null,
+        isNestTarget: (id) => {
+          const target = threadByKey.get(id);
+          return (
+            target !== undefined &&
+            serverConfigs.get(source.environmentId)?.environment.capabilities.threadNesting ===
+              true &&
+            canNestThreadUnder(source, target, threads)
+          );
+        },
       },
     );
   }, [
@@ -3755,16 +3816,32 @@ export default function Sidebar() {
     pinnedKeys,
     sidebarListItems,
     threadByKey,
+    threads,
   ]);
   const handleThreadDragEnd = useCallback(
     (event: DragEndEvent) => {
       const activeKey = String(event.active.id);
       const activeSection = sectionByThreadKey.get(activeKey);
+      const activeThread = threadByKey.get(activeKey);
+      const nestParent = event.over === null ? undefined : threadByKey.get(String(event.over.id));
+      if (
+        activeThread !== undefined &&
+        nestParent !== undefined &&
+        serverConfigs.get(activeThread.environmentId)?.environment.capabilities.threadNesting ===
+          true &&
+        canNestThreadUnder(activeThread, nestParent, threads) &&
+        resolveSidebarRowDropZone(dragPointerYRef.current, event.over?.rect) === "nest"
+      ) {
+        void setThreadParent(
+          scopeThreadRef(activeThread.environmentId, activeThread.id),
+          nestParent.id,
+        );
+        return;
+      }
       const target =
         event.over === null
           ? null
           : resolveSidebarDropTarget(sidebarListItems, activeKey, String(event.over.id));
-      const activeThread = threadByKey.get(activeKey);
       if (activeSection === undefined || target === null || activeThread === undefined) return;
       const threadRef = scopeThreadRef(activeThread.environmentId, activeThread.id);
       const plan = planSidebarThreadDrop({
@@ -3910,8 +3987,10 @@ export default function Sidebar() {
       reorderActiveThread,
       sectionByThreadKey,
       settleThread,
+      setThreadParent,
       sidebarListItems,
       threadByKey,
+      threads,
       unpinThread,
       unsettleThread,
       unsnoozeThread,
@@ -5225,6 +5304,7 @@ export default function Sidebar() {
                         section: SidebarSection,
                         sortable?: SortableThreadRowBag,
                         nestedDepth = 0,
+                        nestDropRef?: (node: HTMLElement | null) => void,
                       ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -5250,6 +5330,8 @@ export default function Sidebar() {
                               sidebarChildren.get(threadKey)?.inputChildren[0]?.id
                             }
                             onOpenNestedInput={openNestedInput}
+                            nestDropTarget={nestTargetKey === threadKey}
+                            nestDropRef={nestDropRef}
                             nestedChildrenExpanded={expandedParentKeys.has(threadKey)}
                             onToggleNestedChildren={toggleParentChildren}
                             thread={thread}
@@ -5377,23 +5459,32 @@ export default function Sidebar() {
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
-                          // Hidden during drags: it is not part of the sortable list.
-                          if (dragState === null) {
-                            for (const { thread: child, depth } of flattenVisibleSidebarChildren({
-                              rootParentKey: item.key,
-                              groups: sidebarChildren,
-                              expandedParentKeys,
-                              viewedPathKeys: sidebarNestedPath,
-                            })) {
-                              items.push(
-                                renderThreadRowInner(
-                                  child,
-                                  child.settledOverride === "settled" ? "settled" : "active",
-                                  undefined,
-                                  depth,
-                                ),
-                              );
-                            }
+                          for (const { thread: child, depth } of flattenVisibleSidebarChildren({
+                            rootParentKey: item.key,
+                            groups: sidebarChildren,
+                            expandedParentKeys,
+                            viewedPathKeys: sidebarNestedPath,
+                          })) {
+                            const childKey = scopedThreadKey(
+                              scopeThreadRef(child.environmentId, child.id),
+                            );
+                            items.push(
+                              <SidebarNestDropRow
+                                key={`${childKey}:nest-drop-row`}
+                                id={childKey}
+                                enabled={dragState !== null}
+                              >
+                                {(setNodeRef) =>
+                                  renderThreadRowInner(
+                                    child,
+                                    child.settledOverride === "settled" ? "settled" : "active",
+                                    undefined,
+                                    depth,
+                                    setNodeRef,
+                                  )
+                                }
+                              </SidebarNestDropRow>,
+                            );
                           }
                           continue;
                         }
