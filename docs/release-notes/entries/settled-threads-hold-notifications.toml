@@ -1,0 +1,4 @@
+id = "settled-threads-hold-notifications"
+category = "fix"
+functionality = "t3-thread notifications"
+text = "Settled threads stay settled: worker notifications are held until you unsettle the thread, then only the newest from each worker arrives, and settling from the CLI lists the thread's subscriptions with the command to cut each."

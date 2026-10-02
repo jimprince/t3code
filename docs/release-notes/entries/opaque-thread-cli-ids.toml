@@ -1,0 +1,4 @@
+id = "opaque-thread-cli-ids"
+category = "fix"
+functionality = "t3-thread"
+text = "Operator commands now accept delegated and automation thread IDs without changing their encoded namespaces."

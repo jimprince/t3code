@@ -19,7 +19,7 @@ import { getFallbackThreadIdAfterDelete, pinOrderKeyBetween } from "../component
 import { useComposerDraftStore } from "../composerDraftStore";
 import { terminalEnvironment } from "../state/terminal";
 import { appAtomRegistry } from "../rpc/atomRegistry";
-import { environmentServerConfigsAtom } from "../state/server";
+import { serverEnvironment, environmentServerConfigsAtom } from "../state/server";
 import { isScratchProject } from "@t3tools/client-runtime/state/projects";
 import { threadEnvironment } from "../state/threads";
 import { vcsEnvironment } from "../state/vcs";
@@ -244,6 +244,8 @@ export function useAcknowledgeThreadWoke() {
 }
 
 export function useThreadActions() {
+  const listSubscriptions = useAtomCommand(serverEnvironment.threadSubscriptions);
+  const updateSubscriptions = useAtomCommand(serverEnvironment.updateThreadSubscriptions);
   const closeTerminal = useAtomCommand(terminalEnvironment.close);
   const archiveThreadMutation = useAtomCommand(threadEnvironment.archive, {
     reportFailure: false,
@@ -757,6 +759,56 @@ export function useThreadActions() {
         action.finish();
         return result;
       }
+      if (
+        appAtomRegistry.get(environmentServerConfigsAtom).get(target.environmentId)?.environment
+          .capabilities.threadSubscriptions
+      ) {
+        const subscriptions = await listSubscriptions({
+          environmentId: target.environmentId,
+          input: { threadId: target.threadId },
+        });
+        if (subscriptions._tag === "Success" && subscriptions.value.routes.length > 0) {
+          const routes = subscriptions.value.routes;
+          const names = routes
+            .map((route) => route.sourceAgentName ?? route.sourceThreadId)
+            .join(", ");
+          const subscriptionToast = toastManager.add({
+            title: "Subscriptions held while settled",
+            description: `${names}. Remove these subscriptions to stop future notifications.`,
+            timeout: 0,
+            actionProps: {
+              children: "Remove subscriptions",
+              onClick: async () => {
+                const removed = await updateSubscriptions({
+                  environmentId: target.environmentId,
+                  input: { threadId: target.threadId, action: "remove", routes },
+                });
+                if (removed._tag === "Success") {
+                  toastManager.close(subscriptionToast);
+                  const removedToast = toastManager.add({
+                    title: "Subscriptions removed",
+                    actionProps: {
+                      children: "Restore",
+                      onClick: () => {
+                        void updateSubscriptions({
+                          environmentId: target.environmentId,
+                          input: {
+                            threadId: target.threadId,
+                            action: "restore",
+                            routes: removed.value.routes,
+                          },
+                        }).then((restored) => {
+                          if (restored._tag === "Success") toastManager.close(removedToast);
+                        });
+                      },
+                    },
+                  });
+                }
+              },
+            },
+          });
+        }
+      }
       if (wokeAt !== null) {
         markThreadVisited(scopedThreadKey(target), wokeAt);
       }
@@ -790,6 +842,8 @@ export function useThreadActions() {
       pinThread,
       resolveThreadTarget,
       settleThreadMutation,
+      listSubscriptions,
+      updateSubscriptions,
       snoozeThreadMutation,
       unsettleThread,
     ],
