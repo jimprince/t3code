@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "6e90294148a5ad6aed59b71b7c6363e466cbb5b2",
-  "head": "c3e03f1b55c011f9fe9a4dfc2b5070f9a35b4568",
+  "prev": "09e41c494d43842458a4fbd4131f86c426196e8f",
+  "head": "5d381cc5d1739b84c990b56a30e476d7723a2cb3",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -49,8 +49,7 @@
     "fork-notification-preferences",
     "fork-sidebar-agent-visibility",
     "fork-child-input-attention",
-    "fork-agent-panel-thread-details",
-    "refresh-temp"
+    "fork-agent-panel-thread-details"
   ],
   "unapplied": [],
   "hidden": [],
@@ -59,7 +58,7 @@
       "oid": "4474d4b52f24654d640102692ba061e28b0ca9a8"
     },
     "fork-agent-panel-thread-details": {
-      "oid": "21b7b39d5745e439188cf56462c7aeb48c42a834"
+      "oid": "5d381cc5d1739b84c990b56a30e476d7723a2cb3"
     },
     "fork-attachment-compatibility": {
       "oid": "4a4a4cf39eea67999ccdbc24e88402102ff85bf2"
@@ -74,7 +73,7 @@
       "oid": "2cadb127f1dadf950ceabcb82ef2e9b296ce2cc7"
     },
     "fork-child-input-attention": {
-      "oid": "ff8346a14b53607a5f1f430163d5fb27a724eea6"
+      "oid": "0ea8c450d22e30533f443b4b785005bac81c9495"
     },
     "fork-codex-goal-visibility": {
       "oid": "fa272cac92f40c16a7d67ec2e3276a1fb568f673"
@@ -125,7 +124,7 @@
       "oid": "a1a07d07d0898c767dc282078dd611a0bbf7180e"
     },
     "fork-notification-preferences": {
-      "oid": "a29e4007e59eba0d54caaadaa3fd3320d8406fd3"
+      "oid": "339e4f7456589ddb3f1e61040037e4071a17749f"
     },
     "fork-orcaslicer-handoff": {
       "oid": "b9df1ccf7c08738b0e475bbfe00da9cebe4d9720"
@@ -164,7 +163,7 @@
       "oid": "112cc4dc4107e19c99e764df1ad1f5975ab60b72"
     },
     "fork-sidebar-agent-visibility": {
-      "oid": "98af0fb2e9393da4e0edd549d828fa8ec6cfc576"
+      "oid": "bbbc6abf1c8bb06760c22f119b7d77f6d95b7d83"
     },
     "fork-spawn-budget": {
       "oid": "3bdece9d606dc46b249eb3ae229d104a1f2af276"
@@ -195,9 +194,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "8838890ec815c7873feb7234676bd3b753538072"
-    },
-    "refresh-temp": {
-      "oid": "c3e03f1b55c011f9fe9a4dfc2b5070f9a35b4568"
     }
   }
 }
