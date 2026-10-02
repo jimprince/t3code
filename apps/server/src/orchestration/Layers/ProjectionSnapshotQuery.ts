@@ -1,3 +1,4 @@
+import * as SchemaGetter from "effect/SchemaGetter";
 import {
   AgentSessionImportSource,
   ThreadAgentPanelSummary,
@@ -133,6 +134,12 @@ const ProjectionThreadPullRequestDbRowSchema = ProjectionThreadPullRequest.mapFi
 );
 const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
   Struct.assign({
+    settleOnComplete: Schema.optional(Schema.NullOr(Schema.Number)).pipe(
+      Schema.decodeTo(Schema.optional(Schema.NullOr(Schema.Boolean)), {
+        decode: SchemaGetter.transform((value) => (value == null ? value : value !== 0)),
+        encode: SchemaGetter.transform((value) => (value == null ? value : value ? 1 : 0)),
+      }),
+    ),
     modelSelection: Schema.fromJsonString(ModelSelection),
     titleState: Schema.NullOr(Schema.fromJsonString(ThreadTitleState)),
     linkedPullRequest: Schema.NullOr(Schema.fromJsonString(ThreadLinkedPullRequest)),
@@ -633,6 +640,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pin_order_key AS "pinOrderKey",
           active_order_key AS "activeOrderKey",
           auto_settle_disabled_at AS "autoSettleDisabledAt",
+          settle_on_complete AS "settleOnComplete",
           parent_thread_id AS "parentThreadId",
           title_regeneration_request_id AS "titleRegenerationRequestId",
           title_regeneration_started_at AS "titleRegenerationStartedAt",
@@ -684,6 +692,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pin_order_key AS "pinOrderKey",
           active_order_key AS "activeOrderKey",
           auto_settle_disabled_at AS "autoSettleDisabledAt",
+          settle_on_complete AS "settleOnComplete",
           parent_thread_id AS "parentThreadId",
           title_regeneration_request_id AS "titleRegenerationRequestId",
           title_regeneration_started_at AS "titleRegenerationStartedAt",
@@ -762,6 +771,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pin_order_key AS "pinOrderKey",
           active_order_key AS "activeOrderKey",
           auto_settle_disabled_at AS "autoSettleDisabledAt",
+          settle_on_complete AS "settleOnComplete",
           parent_thread_id AS "parentThreadId",
           title_regeneration_request_id AS "titleRegenerationRequestId",
           title_regeneration_started_at AS "titleRegenerationStartedAt",
@@ -1372,6 +1382,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pin_order_key AS "pinOrderKey",
           active_order_key AS "activeOrderKey",
           auto_settle_disabled_at AS "autoSettleDisabledAt",
+          settle_on_complete AS "settleOnComplete",
           parent_thread_id AS "parentThreadId",
           title_regeneration_request_id AS "titleRegenerationRequestId",
           title_regeneration_started_at AS "titleRegenerationStartedAt",
@@ -1494,6 +1505,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           pinned_at AS "pinnedAt",
           pin_order_key AS "pinOrderKey",
           active_order_key AS "activeOrderKey",
+          settle_on_complete AS "settleOnComplete",
           parent_thread_id AS "parentThreadId",
           title_regeneration_request_id AS "titleRegenerationRequestId",
           title_regeneration_started_at AS "titleRegenerationStartedAt",
@@ -2506,6 +2518,7 @@ pending_approval_requests AS (
                 pinOrderKey: row.pinOrderKey ?? null,
                 activeOrderKey: row.activeOrderKey ?? null,
                 autoSettleDisabledAt: row.autoSettleDisabledAt ?? null,
+                settleOnComplete: row.settleOnComplete ?? null,
                 ...(row.parentThreadId ? { parentThreadId: row.parentThreadId } : {}),
                 titleRegeneration: mapTitleRegeneration(row),
                 titleState: row.titleState,
@@ -2755,6 +2768,7 @@ pending_approval_requests AS (
                   pinOrderKey: row.pinOrderKey ?? null,
                   activeOrderKey: row.activeOrderKey ?? null,
                   autoSettleDisabledAt: row.autoSettleDisabledAt ?? null,
+                  settleOnComplete: row.settleOnComplete ?? null,
                   ...(row.parentThreadId ? { parentThreadId: row.parentThreadId } : {}),
                   titleRegeneration: mapTitleRegeneration(row),
                   titleState: row.titleState,
@@ -2918,6 +2932,7 @@ pending_approval_requests AS (
                         pinOrderKey: row.pinOrderKey ?? null,
                         activeOrderKey: row.activeOrderKey ?? null,
                         autoSettleDisabledAt: row.autoSettleDisabledAt ?? null,
+                        settleOnComplete: row.settleOnComplete ?? null,
                         ...(row.parentThreadId ? { parentThreadId: row.parentThreadId } : {}),
                         titleRegeneration: mapTitleRegeneration(row),
                         titleState: row.titleState,
@@ -3112,6 +3127,7 @@ pending_approval_requests AS (
                   pinOrderKey: row.pinOrderKey ?? null,
                   activeOrderKey: row.activeOrderKey ?? null,
                   autoSettleDisabledAt: row.autoSettleDisabledAt ?? null,
+                  settleOnComplete: row.settleOnComplete ?? null,
                   ...(row.parentThreadId ? { parentThreadId: row.parentThreadId } : {}),
                   titleRegeneration: mapTitleRegeneration(row),
                   titleState: row.titleState,
@@ -3487,6 +3503,7 @@ pending_approval_requests AS (
         pinOrderKey: threadRow.value.pinOrderKey ?? null,
         activeOrderKey: threadRow.value.activeOrderKey ?? null,
         autoSettleDisabledAt: threadRow.value.autoSettleDisabledAt ?? null,
+        settleOnComplete: threadRow.value.settleOnComplete ?? null,
         ...(threadRow.value.parentThreadId
           ? { parentThreadId: threadRow.value.parentThreadId }
           : {}),
@@ -3812,6 +3829,7 @@ pending_approval_requests AS (
         pinOrderKey: threadRow.value.pinOrderKey ?? null,
         activeOrderKey: threadRow.value.activeOrderKey ?? null,
         autoSettleDisabledAt: threadRow.value.autoSettleDisabledAt ?? null,
+        settleOnComplete: threadRow.value.settleOnComplete ?? null,
         ...(threadRow.value.parentThreadId
           ? { parentThreadId: threadRow.value.parentThreadId }
           : {}),
