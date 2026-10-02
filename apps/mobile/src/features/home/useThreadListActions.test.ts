@@ -34,6 +34,11 @@ vi.mock("react", () => ({
   useRef: (current: unknown) => ({ current }),
 }));
 vi.mock("react-native", () => ({
+  Platform: {
+    get OS() {
+      return process.env.EXPO_OS;
+    },
+  },
   Alert: {
     alert: (title: string, _message: string, buttons?: { text: string; onPress?: () => void }[]) =>
       state.alerts.push({ title, buttons }),
@@ -55,6 +60,10 @@ vi.mock("../../state/session", () => ({
 }));
 vi.mock("../../state/server", () => ({
   environmentServerConfigsAtom: "server-configs",
+  serverEnvironment: {
+    threadSubscriptions: async () => AsyncResult.success({ routes: [] }),
+    updateThreadSubscriptions: async () => AsyncResult.success(undefined),
+  },
 }));
 vi.mock("../../state/atom-registry", () => ({
   appAtomRegistry: {
