@@ -493,11 +493,11 @@ export class RemoteEnvironmentClient {
           buildModelSelection({ providerModels }) ??
           DEFAULT_MODEL_SELECTION);
 
-    const config = await this.getServerConfig();
+    const config = await this.getServerConfig().catch(() => null);
     const settleOnComplete =
       input.settleOnComplete ??
-      config.settings.projectSettingsOverrides[project.id]?.subthreadSettleOnComplete ??
-      config.settings.subthreadSettleOnComplete ??
+      config?.settings.projectSettingsOverrides[project.id]?.subthreadSettleOnComplete ??
+      config?.settings.subthreadSettleOnComplete ??
       true;
     const threadId = NodeCrypto.randomUUID();
     const runtimeMode = input.runtimeMode ?? "full-access";
