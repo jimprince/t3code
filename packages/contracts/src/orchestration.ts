@@ -904,6 +904,7 @@ export const OrchestrationThread = Schema.Struct({
   // Orchestrating thread this one is nested under (one level, same project).
   // Nested threads leave the sidebar and appear in the parent's Agents panel.
   // Optional so payloads from pre-nesting servers still decode.
+  settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   // Pending-only state. Optional so older servers remain compatible.
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
@@ -990,6 +991,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
+  settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
@@ -1395,6 +1397,7 @@ const ThreadCreateCommand = Schema.Struct({
   createdAt: IsoDateTime,
   historyImport: Schema.optional(Schema.Literal(true)),
   /** Nest the new thread under this orchestrating thread. */
+  settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
 });
 
@@ -1405,6 +1408,8 @@ const ThreadDeleteCommand = Schema.Struct({
 });
 
 const ThreadArchiveCommand = Schema.Struct({
+  /** Deadline guard for the server-owned automatic archive path. */
+  autoArchiveSettledBefore: Schema.optional(IsoDateTime),
   type: Schema.Literal("thread.archive"),
   commandId: CommandId,
   threadId: ThreadId,
@@ -1516,6 +1521,7 @@ const ThreadActiveReorderCommand = Schema.Struct({
 });
 
 const ThreadMetaUpdateCommand = Schema.Struct({
+  settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   type: Schema.Literal("thread.meta.update"),
   commandId: CommandId,
   threadId: ThreadId,
@@ -1577,6 +1583,7 @@ const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
   branch: Schema.NullOr(TrimmedNonEmptyString),
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
+  settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
 });
 
@@ -2081,6 +2088,7 @@ export const ThreadCreatedPayload = Schema.Struct({
   worktreePath: Schema.NullOr(TrimmedNonEmptyString),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
+  settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
 });
 
@@ -2160,6 +2168,7 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   threadId: ThreadId,
   // Nesting rides this existing event so older clients ignore it. Null moves
   // the thread back to the sidebar.
+  settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   // Order updates use this existing event so older clients can ignore the
   // new field while continuing to decode the event stream.
