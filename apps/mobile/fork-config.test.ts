@@ -105,7 +105,7 @@ describe("applyMobileForkConfig", () => {
         "expo-quick-actions",
         "expo-widgets",
         "./plugins/withIosCocoaPodsUuidCache.cjs",
-        ]),
+      ]),
     );
     expect(widgetOptions).toMatchObject({
       bundleIdentifier: `com.brad.t3code${identifierSuffix}.widgets`,
