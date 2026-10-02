@@ -1,3 +1,4 @@
+import { observeInactivity, inactivityStillCurrent } from "./inactivity.js";
 import { withInputReminder, inputNotificationStillCurrent } from "./inputReminders.js";
 import * as NodeCrypto from "node:crypto";
 
@@ -237,16 +238,16 @@ async function scanAttentionState(
     try {
       sourceThread = await sourceClient.findThread(sourceAgent.threadId);
     } catch {
+      for (const subscription of state.subscriptions.filter(
+        (route) => route.sourceThreadId === sourceAgent.threadId,
+      )) {
+        subscription.inactivityObservation = null;
+        observedSubscriptions.push(subscription);
+      }
       // Saved agents/subscriptions can outlive remote threads. A stale source
       // should not prevent detection for every other watched route.
       continue;
     }
-    if (
-      sourceThread.archivedAt ||
-      sourceThread.deletedAt ||
-      sourceThread.settledOverride === "settled"
-    )
-      continue;
     const overview = buildAgentOverview(sourceAgent, sourceThread);
     if (
       overview.state === "error" &&
@@ -263,6 +264,7 @@ async function scanAttentionState(
     }
 
     for (const subscription of subscriptions) {
+      const inactive = observeInactivity(subscription, sourceThread, now());
       if (
         subscription.observedState !== overview.state ||
         subscription.observedReason !== overview.reason
@@ -271,6 +273,28 @@ async function scanAttentionState(
       subscription.observedState = overview.state;
       subscription.observedReason = overview.reason;
       observedSubscriptions.push(subscription);
+      if (inactive) {
+        const detected = buildNotificationRecord({
+          sourceAgent,
+          subscription,
+          overview: {
+            ...overview,
+            state: "inactive",
+            reason: `No observable provider, tool, or reasoning progress for ${subscription.inactivityMinutes} minutes during an active turn. A silent long-running tool or hidden reasoning may still be working; inspect before intervening.`,
+          },
+          thread: sourceThread,
+          now: now(),
+        });
+        detected.inactivityActivityAt = subscription.inactivityObservation!.activityAt;
+        detected.eventKey = `${subscription.subscriberThreadId}:${sourceAgent.threadId}:inactive:${sourceThread.latestTurn!.turnId}:${detected.inactivityActivityAt}`;
+        scanned.push(detected);
+      }
+      if (
+        sourceThread.archivedAt ||
+        sourceThread.deletedAt ||
+        sourceThread.settledOverride === "settled"
+      )
+        continue;
       if (
         (overview.state === "completed" || overview.state === "idle") &&
         isNotificationReply(sourceThread)
@@ -374,8 +398,8 @@ function supersedeOvertakenNotifications(
  * True when the watcher still has something to do: any undelivered notification, or any
  * subscribed source thread that is still actively in flight. Used as the idle-exit guard
  * so the watcher never quits while a watched thread could still produce a completion.
- * Unreachable source threads are treated as not-in-flight (so an unpaired/dead env lets
- * the watcher idle out instead of spinning forever).
+ * Unreachable sources with enabled inactivity monitoring retain the watcher;
+ * unknown liveness cannot establish that assigned work has finished.
  */
 export async function hasActiveWork(
   options: { env?: string; clientFactory?: WatchClientFactory } = {},
@@ -417,8 +441,18 @@ export async function hasActiveWork(
       ) {
         return true;
       }
-    } catch {
-      // Unreachable env/thread → treat as not in flight.
+    } catch (error) {
+      // Unknown liveness must not idle-exit an opted-in monitor during a transient outage.
+      if (
+        !isMissingThread(error) &&
+        state.subscriptions.some(
+          (route) =>
+            route.sourceThreadId === agent.threadId &&
+            route.level !== "none" &&
+            (route.inactivityMinutes ?? 0) > 0,
+        )
+      )
+        return true;
     }
   }
 
@@ -516,6 +550,15 @@ export async function detectAttentionEvents(
           return observed
             ? {
                 ...subscription,
+                inactivityObservation:
+                  observed.updatedAt === subscription.updatedAt &&
+                  observed.inactivityMinutes === subscription.inactivityMinutes &&
+                  (!subscription.inactivityObservation ||
+                    !observed.inactivityObservation ||
+                    Date.parse(observed.inactivityObservation.observedAt) >=
+                      Date.parse(subscription.inactivityObservation.observedAt))
+                    ? observed.inactivityObservation
+                    : subscription.inactivityObservation,
                 observedState: observed.observedState,
                 observedReason: observed.observedReason,
                 errorEventKey: observed.errorEventKey,
@@ -719,6 +762,26 @@ export async function deliverPendingNotifications(
           });
           if (persisted) delivered.push(persisted);
           continue;
+        }
+        if (notification.sourceState === "inactive") {
+          const source = await clientFactory(
+            requireEnvironment(state, notification.sourceEnvironment),
+          ).findThread(notification.sourceThreadId);
+          if (!inactivityStillCurrent(notification, subscription, source, now())) {
+            result = {
+              ...notification,
+              status: "superseded",
+              updatedAt: now(),
+              lastError:
+                "Worker resumed activity, is no longer active, or monitoring was disabled.",
+            };
+            const persisted = await finalizeNotificationAttempt({
+              notification: result,
+              claimId: notification.deliveryClaimId ?? null,
+            });
+            if (persisted) delivered.push(persisted);
+            continue;
+          }
         }
         if (notification.pendingInputRequestKey) {
           const source = await clientFactory(
