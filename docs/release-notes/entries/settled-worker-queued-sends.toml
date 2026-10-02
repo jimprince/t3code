@@ -1,0 +1,4 @@
+id = "settled-worker-queued-sends"
+category = "fix"
+functionality = "worker threads"
+text = "Queued follow-ups now resume settled workers at the next turn boundary while automatic notifications remain held."
