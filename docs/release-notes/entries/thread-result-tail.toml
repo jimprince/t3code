@@ -1,0 +1,4 @@
+id = "thread-result-tail"
+category = "fix"
+functionality = "operator CLI"
+text = "Thread result tails now show the latest timeline items in order, with an optional bounded human-message filter."

@@ -1,7 +1,11 @@
 import {
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
+  type ThreadId,
+  type MessageId,
   type OrchestrationProjectShell,
+  type OrchestrationV2ProjectedTurnItem,
+  withoutPageAgentThreads,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Predicate from "effect/Predicate";
@@ -31,6 +35,7 @@ import * as ProjectStore from "./ProjectStore.ts";
 import { buildActiveShellSnapshot, loadShellSnapshotParts } from "./ShellStream.ts";
 import { boundedSnapshotResponseFields } from "./ThreadStream.ts";
 import { projectThreadProjectionForWire } from "./WireProjection.ts";
+import { isHumanAuthoredMessage } from "../threadRecovery/humanOrigin.ts";
 
 function isThreadNotFound(error: unknown): boolean {
   return (
@@ -55,6 +60,27 @@ export const layer = HttpApiBuilder.group(
     const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
     const projectStore = yield* ProjectStore.ProjectStoreV2;
     const projectEnrichment = yield* ProjectEnrichmentService.ProjectEnrichmentService;
+
+    const humanMessageIds = Effect.fn("http.orchestration.resultHumanMessageIds")(function* (
+      rows: ReadonlyArray<OrchestrationV2ProjectedTurnItem>,
+    ) {
+      const bySource = new Map<ThreadId, Array<MessageId>>();
+      for (const row of rows) {
+        if (row.item.type !== "user_message") continue;
+        const ids = bySource.get(row.sourceThreadId) ?? [];
+        ids.push(row.item.messageId);
+        bySource.set(row.sourceThreadId, ids);
+      }
+      const matches = yield* Effect.forEach([...bySource], ([threadId, messageIds]) =>
+        threadManagement.getThreadRecords(threadId, ["messages"], { messageIds }).pipe(
+          Effect.map((records) => records.messages.filter(isHumanAuthoredMessage).map((m) => m.id)),
+          Effect.catch((error) =>
+            failEnvironmentInternal("orchestration_thread_history_failed", error),
+          ),
+        ),
+      );
+      return matches.flat();
+    });
 
     const enrichProjectShells = Effect.fn("http.orchestration.enrichProjectShells")(
       (projects: ReadonlyArray<OrchestrationProjectShell>) =>
@@ -230,6 +256,48 @@ export const layer = HttpApiBuilder.group(
                 }),
               ),
             );
+        }),
+      )
+      .handle(
+        "threadResultPage",
+        Effect.fn("environment.orchestration.threadResultPage")(function* (args) {
+          yield* annotateEnvironmentRequest(args.endpoint.name);
+          yield* requireEnvironmentScope(AuthOrchestrationReadScope);
+          const afterPosition =
+            args.query.afterPosition === undefined ? -1 : Number(args.query.afterPosition);
+          const limit = Number(args.query.limit);
+          if (
+            !Number.isSafeInteger(afterPosition) ||
+            afterPosition < -1 ||
+            !Number.isSafeInteger(limit) ||
+            limit < 0 ||
+            limit > 100
+          ) {
+            return yield* failEnvironmentInvalidRequest("invalid_command");
+          }
+          const page = yield* threadManagement
+            .getTimelinePage(args.params.threadId, {
+              afterPosition,
+              limit,
+              view: "activity",
+            })
+            .pipe(
+              Effect.catch(
+                Effect.fnUntraced(function* (error) {
+                  if (isThreadNotFound(error))
+                    return yield* failEnvironmentNotFound("thread_not_found");
+                  return yield* failEnvironmentInternal(
+                    "orchestration_thread_history_failed",
+                    error,
+                  );
+                }),
+              ),
+            );
+          return {
+            totalItems: page.totalItems,
+            items: [...page.items],
+            humanMessageIds: yield* humanMessageIds(page.items),
+          };
         }),
       );
   }),
