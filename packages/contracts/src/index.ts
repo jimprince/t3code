@@ -47,3 +47,4 @@ export * from "./usage.ts";
 export * from "./rpc.ts";
 export * from "./worktreeSetup.ts";
 export * from "./embeddedPages.ts";
+export * from "./pageAgents.ts";
