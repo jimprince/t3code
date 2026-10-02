@@ -62,7 +62,7 @@ import {
   upsertEnvironment,
 } from "./state.js";
 import { cancelQueuedSend, drainQueuedSends, hasQueuedWork, listQueuedSends } from "./sendQueue.js";
-import { wrapWithPreamble } from "./thread-preamble.js";
+import { withSenderHeader } from "./thread-identity.js";
 import {
   planExplicitThreadOrder,
   planThreadMove,
@@ -83,6 +83,7 @@ import {
 } from "./watch.js";
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
 import type { SavedAgent, SavedNotification, SavedQueuedSend } from "./types.js";
+import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -218,6 +219,18 @@ async function resolveNotifyEndpoint(
     throw new Error("Internal error: caller notification was selected without a caller thread.");
   }
   return resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment);
+}
+
+/** Origin for a send made from inside a T3 thread; a send from a plain terminal has none. */
+function callerSendOrigin(state: Awaited<ReturnType<typeof loadState>>): MessageOrigin | null {
+  const fromThreadId = resolveCallerThreadId();
+  if (!fromThreadId) return null;
+  const fromName = resolveCallerEndpointFromLocalContext(
+    state,
+    fromThreadId,
+    resolveCallerEnvironmentMetadata(),
+  )?.name;
+  return { source: "thread-send", fromThreadId, ...(fromName ? { fromName } : {}) };
 }
 
 async function withCallerFromEnv(): Promise<{
@@ -747,8 +760,7 @@ agent
     }
     const client = new RemoteEnvironmentClient(environment);
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
-    const initialMessage =
-      options.preamble === false ? options.message : wrapWithPreamble(options.message);
+    const snapshot = await client.getShellSnapshot();
     const nesting = resolveCreateParent({
       explicitParentThreadId: options.parent
         ? resolveParentThreadId(state, options.parent, options.env)
@@ -757,7 +769,7 @@ agent
       serverSupportsNesting: await client.supportsThreadNesting(),
       callerThreadId: resolveCallerThreadId(),
       projectId: options.project,
-      threads: (await client.getShellSnapshot()).threads,
+      threads: snapshot.threads,
     });
     const created = await client.createAgentThread({
       pin: options.pin === true,
@@ -772,7 +784,29 @@ agent
       startFromOrigin: !options.localBase,
       runtimeMode: options.runtimeMode,
       interactionMode: options.interactionMode,
-      initialMessage,
+      initialMessage: options.message,
+      ...(options.preamble === false
+        ? {}
+        : {
+            workerContext: {
+              name: options.name,
+              notifyLevel: notifyCaller ? (options.notifyLevel ?? "all") : "none",
+              parent: nesting.parentThreadId
+                ? {
+                    threadId: nesting.parentThreadId,
+                    name:
+                      state.agents.find(
+                        (agent) =>
+                          agent.threadId === nesting.parentThreadId &&
+                          agent.environment === options.env,
+                      )?.name ?? null,
+                    title: snapshot.threads.find((thread) => thread.id === nesting.parentThreadId)
+                      ?.title,
+                    environment: environment.name,
+                  }
+                : null,
+            },
+          }),
     });
     const createdAt = new Date().toISOString();
     const savedAgent = {
@@ -1609,6 +1643,22 @@ agent
   .argument("<message...>", "message text")
   .option("--no-queue", "fail instead of queueing when the target thread is still running")
   .action(async (name, messageParts: string[], options: { queue: boolean }) => {
+    const rawText = messageParts.join(" ").trim();
+    const routingState = await loadState();
+    const callerId = resolveCallerThreadId();
+    const sender = callerId
+      ? await resolveThreadEndpoint(
+          routingState,
+          callerId,
+          undefined,
+          resolveCallerEnvironmentMetadata(),
+        )
+      : null;
+    const text = withSenderHeader(
+      rawText,
+      callerSendOrigin(routingState),
+      sender?.environment ?? "unknown",
+    );
     const { agent: savedAgent, client, saved } = await withAgent(name);
     const state = await loadState();
     const outcome = await sendDirectResult({
@@ -1626,6 +1676,8 @@ agent
           text: messageParts.join(" ").trim(),
           queueWhileRunning: options.queue,
           agentName: saved ? savedAgent.name : null,
+          origin: callerSendOrigin(state),
+          senderEnvironment: sender?.environment,
         }),
     });
     const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
@@ -1681,6 +1733,12 @@ for (const kind of ["clarify", "revise", "complete"] as const) {
         threadId: savedAgent.threadId,
         text: buildFollowUpMessage(kind, messageParts.join(" ")),
         agentName: saved ? savedAgent.name : null,
+        origin: callerSendOrigin(await loadState()),
+        senderEnvironment: resolveCallerEndpointFromLocalContext(
+          await loadState(),
+          resolveCallerThreadId() ?? "",
+          resolveCallerEnvironmentMetadata(),
+        )?.environment,
       });
       if (outcome.queued) {
         await ensureNotificationWatcher();

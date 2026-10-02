@@ -543,9 +543,9 @@ t3-thread create \
 
 ### Notification levels and quiet results
 
-Nested workers waiting for input remind their subscribed parent every 45 minutes,
-including the pending question. Configure with `--input-reminder-minutes <minutes>`
-on `create` or `subscribe`; zero disables repeats. Answered, settled, archived or
+Nested workers waiting for input or approval notify their current parent even without
+a subscription, then send one reminder after 20 minutes, including the pending question. Configure with `--input-reminder-minutes <minutes>`
+on `create` or `subscribe`; zero disables the reminder. Answered, settled, archived or
 unnested workers stop reminders. See [Thread communication](THREAD_COMMUNICATION.md).
 
 The first delivered notice includes a short guide once per subscriber, across
@@ -939,8 +939,11 @@ retry from the app). Settlement still holds delivery, even after a quota reset.
 Quota failures replying to routed notifications do not emit further error
 notifications; genuine approvals, questions, and other errors still route.
 
-Settlement also holds persisted sends until explicit resume. Legacy queued routed
-notifications respect quota holds; explicit operator retry remains available.
+Settlement holds queued notifications until explicit resume. Queued parent and
+operator sends resume a settled thread at the next turn boundary, just like direct
+sends. Explicit message origin takes precedence over the legacy notification text
+prefix. Legacy queued routed notifications respect quota holds; explicit operator
+retry remains available.
 A direct CLI retry restarts delivery of held notifications, even if the watcher
 had idled out.
 
