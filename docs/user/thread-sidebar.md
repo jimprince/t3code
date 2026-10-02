@@ -191,7 +191,7 @@ thread's menu starts a thread that is nested from the start.
 Nesting can continue through multiple levels within an environment and can span
 projects. A child keeps its own repository, worktree, branch, and model defaults.
 Cross-project children appear under their parent in the sidebar with their project
-label. Project filters apply to each thread's own project. If the parent is hidden,
+label when its agent list is expanded. Project filters apply to each thread's own project. If the parent is hidden,
 filtered out, archived, or removed, the child appears at top level in its own
 project. Removing the parent's project does not delete children from other projects.
 Archiving or settling a parent does not archive or settle its children. When a
