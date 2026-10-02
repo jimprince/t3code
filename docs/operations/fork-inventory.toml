@@ -1395,3 +1395,13 @@ retire_when = "Upstream supplies per-worker completion settlement and guarded de
 depends_on = ["fork-nested-threads", "fork-worker-operations"]
 roles = []
 note = "Completion settlement reuses thread.auto-settle, ThreadSettlementPolicy, and autoSettleDisabledAt; the opt-out always wins. UI top-level threads default off, nested threads inherit the project default, and CLI workers capture the project default with explicit override flags. Archiving uses normal archive events and a nearest-deadline timer, never a periodic sweep, and revalidates pinning, opt-out, and all descendants at dispatch. Automatic settlement preserves pins; manual settlement clears them. Unarchive starts a fresh retention window. Mobile gets the same project/environment controls; desktop shares web settings."
+
+[[patch]]
+name = "fork-orchestrator-focus"
+subject = "feat(threads): fold worker traffic in orchestrator threads"
+class = "product"
+purpose = "Stamp t3-thread notices and sends with their origin, and fold an orchestrator's worker-started turns behind one row per run on web and mobile, keeping the user's conversation and anything that asks for them visible, with an All traffic switch."
+retire_when = "Upstream provides message provenance and an equivalent orchestrator view that hides worker traffic while surfacing questions, approvals and flagged results."
+depends_on = ["fork-worker-operations", "fork-nested-threads"]
+roles = []
+note = "Origin rides as one unreferenced t3-origin context record (packages/shared/src/messageOrigin.ts), so it never reaches the provider or renders as a chip, and older clients keep it as an unknown record; messages from older CLIs fall back to the notification text prefix. Queued real sends wake settled workers; only notification-origin sends (or legacy notification prefixes without origin) are held by settlement. Only notices and sends from the thread's own descendants fold, so a worker's instructions from its parent stay visible. Live, streaming and unanswered turns never fold, and the classifier is derived from current state, so a folded turn that later raises a request or ends with T3_NOTIFY: attention surfaces without any stored flag. Traffic results are stabilized so streaming replies keep the timeline on its fast path. Mobile folds by default with per-run expansion; the All traffic switch and needs-you count are web and desktop only."
