@@ -1397,6 +1397,16 @@ roles = []
 note = "Completion settlement reuses thread.auto-settle, ThreadSettlementPolicy, and autoSettleDisabledAt; the opt-out always wins. UI top-level threads default off, nested threads inherit the project default, and CLI workers capture the project default with explicit override flags. Archiving uses normal archive events and a nearest-deadline timer, never a periodic sweep, and revalidates pinning, opt-out, and all descendants at dispatch. Automatic settlement preserves pins; manual settlement clears them. Unarchive starts a fresh retention window. Mobile gets the same project/environment controls; desktop shares web settings."
 
 [[patch]]
+name = "fork-sidebar-nested-tidiness"
+subject = "feat(web): condense quiet nested threads"
+class = "product"
+purpose = "Keep expanded orchestrators scannable by folding quiet children, grouping untouched creation bursts, and labeling only cross-project children."
+retire_when = "Upstream offers equivalent nested-thread folding and burst grouping without repeating project headers."
+depends_on = ["fork-sidebar-agent-visibility"]
+roles = []
+note = "Pinned, active, input-blocked, currently viewed, and ancestor-of-active rows remain individually visible. Other quiet siblings fold into one reversible done row, except untouched siblings created within the same two-minute window, which form their own reversible burst row. Grouping is derived from shell timestamps and status only, so activity immediately removes a child. Nested rows suppress repeated project headers and show a compact badge only when their direct parent belongs to another project."
+
+[[patch]]
 name = "fork-orchestrator-focus"
 subject = "feat(threads): fold worker traffic in orchestrator threads"
 class = "product"
