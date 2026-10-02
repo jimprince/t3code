@@ -1,3 +1,4 @@
+import type { BackgroundRun } from "@t3tools/client-runtime/background-turns";
 import * as Option from "effect/Option";
 import { foldUserInputActivities } from "@t3tools/client-runtime/work-log/user-input";
 import * as Schema from "effect/Schema";
@@ -182,6 +183,14 @@ export type ThreadFeedEntry =
       readonly createdAt: string;
       readonly turnId: TurnId;
       readonly label: string;
+      readonly expanded: boolean;
+    }
+  | {
+      /** Brad view: a run of worker turns folded to one row (see backgroundFeed.ts). */
+      readonly type: "background-fold";
+      readonly id: string;
+      readonly createdAt: string;
+      readonly run: BackgroundRun;
       readonly expanded: boolean;
     }
   | {

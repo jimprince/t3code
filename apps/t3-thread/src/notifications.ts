@@ -1,4 +1,5 @@
-import { pendingInputKey } from "./inputReminders.js";
+import { senderHeader } from "./thread-identity.js";
+import { pendingInputKey, matchesCurrentParent } from "./inputReminders.js";
 import * as NodeCrypto from "node:crypto";
 import { findPendingRequests } from "./nesting.js";
 
@@ -83,22 +84,25 @@ export function buildNotificationRecord(input: {
         .map((request) => `${request.kind}:${request.requestId}`)
         .sort()
     : [];
-  const eventKey = requiresRequestKey
-    ? `${baseKey}:${input.overview.state}:${JSON.stringify(pendingIds)}:${JSON.stringify(
-        input.thread.proposedPlans
-          .filter((plan) => !plan.implementedAt)
-          .map((plan) => plan.id)
-          .sort(),
-      )}`
-    : baseKey;
+  const isChildInput =
+    ["needs-input", "needs-approval"].includes(input.overview.state) &&
+    matchesCurrentParent(input.thread, input.subscription);
+  const eventKey = isChildInput
+    ? `${input.subscription.subscriberEnvironmentId ?? input.subscription.subscriberEnvironment}:${input.subscription.subscriberThreadId}:${input.thread.id}:pending:${pendingInputKey(input.thread)}`
+    : requiresRequestKey
+      ? `${baseKey}:${input.overview.state}:${JSON.stringify(pendingIds)}:${JSON.stringify(
+          input.thread.proposedPlans
+            .filter((plan) => !plan.implementedAt)
+            .map((plan) => plan.id)
+            .sort(),
+        )}`
+      : baseKey;
 
   return {
-    pendingInputRequestKey:
-      input.overview.state === "needs-input" ? pendingInputKey(input.thread) : null,
-    isChildInput:
-      input.overview.state === "needs-input" &&
-      input.thread.parentThreadId === input.subscription.subscriberThreadId &&
-      input.subscription.sourceEnvironment === input.subscription.subscriberEnvironment,
+    pendingInputRequestKey: ["needs-input", "needs-approval"].includes(input.overview.state)
+      ? pendingInputKey(input.thread)
+      : null,
+    isChildInput,
     pendingQuestion:
       input.overview.state === "needs-input"
         ? findPendingRequests(input.thread.activities)
@@ -118,6 +122,7 @@ export function buildNotificationRecord(input: {
     subscriberThreadId: input.subscription.subscriberThreadId,
     subscriberAgentName: input.subscription.subscriberAgentName,
     subscriberEnvironment: input.subscription.subscriberEnvironment,
+    subscriberEnvironmentId: input.subscription.subscriberEnvironmentId,
     sourceThreadId: input.subscription.sourceThreadId,
     sourceAgentName: input.subscription.sourceAgentName,
     sourceEnvironment: input.subscription.sourceEnvironment,
@@ -178,12 +183,15 @@ export function buildNotificationMessage(
   const sourceLabel = notification.sourceAgentName ?? notification.sourceThreadId;
   const preview = notification.preview ? summarizeMessageText(notification.preview, 120) : null;
   const notice = [
-    `T3 orchestrator notification: ${sourceLabel} ${notification.sourceState === "completed" ? "completed a turn" : "needs attention"}.`,
+    `T3 orchestrator notification: ${sourceLabel} ${notification.sourceState === "completed" ? "completed a turn" : "needs attention"}. ${senderHeader({ threadId: notification.sourceThreadId, name: notification.sourceAgentName, environment: notification.sourceEnvironment })}`,
     notification.reminderOfEventKey ? "Reminder: this sub-agent is still waiting for input." : null,
     `State: ${notification.sourceState}.`,
     `Reason: ${notification.reason}.`,
     (notification.occurrences ?? 1) > 1 ? `Occurrences: ${notification.occurrences}.` : null,
     preview ? `Latest output: ${preview}.` : null,
+    notification.isChildInput
+      ? "You are responsible for this child's pending request. Answer or approve it if you can, or route it to the chief of staff when one exists. Otherwise ask Brad with the structured question tool, or end your final response with T3_NOTIFY: attention so it appears in his Needs you."
+      : null,
     notification.pendingQuestion ? `Pending question: ${notification.pendingQuestion}` : null,
     notification.sourceState === "completed"
       ? `Decide whether ${sourceLabel} is finished: if so, settle it with \`t3-thread settle ${sourceLabel}\`; if not, send it the follow-up.`
@@ -191,18 +199,13 @@ export function buildNotificationMessage(
   ]
     .filter(Boolean)
     .join(" ");
-  if (!includeOnboarding) return notice;
-  return `${notice}\n\n${[
-    "Thread communication quick start (shown once per subscriber):",
-    `This is an automatic watcher notice about worker ${sourceLabel}, routed by your subscription.`,
-    `Read its full output: \`t3-thread result ${sourceLabel}\`.`,
-    `Reply or assign work: \`t3-thread send ${sourceLabel} "message"\`; busy sends queue until its turn ends; \`t3-thread queue\` lists pending sends.`,
-    `Questions/approvals: \`t3-thread pending ${sourceLabel}\`, \`t3-thread answer ${sourceLabel} "answer"\`, \`t3-thread approve ${sourceLabel}\` or \`t3-thread deny ${sourceLabel}\`.`,
-    `Notification level: \`t3-thread agent subscribe --watch ${sourceLabel} --level all|attention|none\`; input, approval and error notices always pass these levels.`,
-    `Stop this subscription: \`t3-thread agent unsubscribe --watch ${sourceLabel}\`. Make your own turn quiet by ending your final response with \`T3_NOTIFY: quiet\`.`,
-    `Finished worker: \`t3-thread settle ${sourceLabel}\`; give it more work with send if needed.`,
-    "Full guide: apps/t3-thread/docs/THREAD_COMMUNICATION.md (in the t3-thread checkout).",
-  ].join("\n")}`;
+  const guide = includeOnboarding
+    ? `Thread communication quick start: read output with \`t3-thread result ${sourceLabel}\`; inspect queued sends with \`t3-thread queue\`. Full guide: apps/t3-thread/docs/THREAD_COMMUNICATION.md.`
+    : null;
+  const controls = notification.isChildInput
+    ? null
+    : `Notifications: t3-thread agent subscribe --watch ${notification.sourceThreadId} --level attention|none · stop: t3-thread agent unsubscribe --watch ${notification.sourceThreadId}`;
+  return [notice, guide, controls].filter(Boolean).join("\n");
 }
 
 /** Required escalation bypasses both subscription filtering and quiet completion. */
