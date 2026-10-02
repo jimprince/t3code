@@ -5,6 +5,9 @@ import {
   createSidebarCollisionDetection,
   createSidebarSortingStrategy,
   restrictBelowSidebarLabel,
+  resolveSidebarRowDropMode,
+  resolveSidebarThreadDropIntent,
+  SIDEBAR_NESTED_INDENT_PX,
 } from "./Sidebar.drag";
 import {
   resolveSidebarDropTarget,
@@ -122,6 +125,56 @@ describe("sidebar collision detection", () => {
   it("selects the nearest supported target", () => {
     const detector = createSidebarCollisionDetection(() => true);
     expect(detector(collisionArgs())[0]?.id).toBe("blocked");
+  });
+
+  it("requires a rightward indent to nest and returns left to reorder", () => {
+    const args = collisionArgs();
+    const target = args.droppableRects.get("blocked")!;
+    const detector = createSidebarCollisionDetection(() => false, {
+      activationX: 100,
+      isNestTarget: (id) => id === "blocked",
+    });
+    expect(
+      resolveSidebarRowDropMode({
+        activationX: 100,
+        pointerX: 100,
+        previousMode: "reorder",
+        nestEligible: true,
+      }),
+    ).toBe("reorder");
+    expect(
+      detector({
+        ...args,
+        pointerCoordinates: { x: 100, y: target.top + target.height / 2 },
+      })[0]?.id,
+    ).toBe("source");
+    expect(
+      detector({
+        ...args,
+        pointerCoordinates: {
+          x: 100 + SIDEBAR_NESTED_INDENT_PX,
+          y: target.top + target.height / 2,
+        },
+      })[0]?.id,
+    ).toBe("blocked");
+    expect(
+      detector({
+        ...args,
+        pointerCoordinates: {
+          x: 100 + SIDEBAR_NESTED_INDENT_PX / 2,
+          y: target.top + target.height / 2,
+        },
+      })[0]?.id,
+    ).toBe("blocked");
+    expect(
+      detector({
+        ...args,
+        pointerCoordinates: {
+          x: 100 + SIDEBAR_NESTED_INDENT_PX / 2 - 1,
+          y: target.top + target.height / 2,
+        },
+      })[0]?.id,
+    ).toBe("source");
   });
 
   it.each([
@@ -252,7 +305,177 @@ describe("sidebar collision detection", () => {
   });
 });
 
+describe("sidebar thread drop intent", () => {
+  const pinnedTarget = { section: "pinned" as const, pinnedOrder: ["p", "a"], activeOrder: [] };
+  const activeTarget = { section: "active" as const, pinnedOrder: ["p"], activeOrder: ["a"] };
+  const resolve = (overrides: Partial<Parameters<typeof resolveSidebarThreadDropIntent>[0]> = {}) =>
+    resolveSidebarThreadDropIntent({
+      activeKey: "a",
+      activeParentKey: null,
+      activePinned: false,
+      overKey: "p",
+      overParentKey: null,
+      overPinned: true,
+      mode: "reorder",
+      canNest: true,
+      reorderDropEdge: "after",
+      siblingOrder: [],
+      target: pinnedTarget,
+      ...overrides,
+    });
+
+  it("lets section reorder own pinning while row nesting preserves it", () => {
+    expect(resolve()).toEqual({
+      kind: "move-top-level",
+      target: pinnedTarget,
+      clearParent: false,
+    });
+    expect(resolve({ mode: "nest" })).toEqual({ kind: "nest", parentKey: "p" });
+    expect(
+      resolve({
+        activePinned: true,
+        overKey: "u",
+        overPinned: false,
+        target: activeTarget,
+      }),
+    ).toEqual({ kind: "move-top-level", target: activeTarget, clearParent: false });
+    expect(
+      resolve({
+        activePinned: true,
+        overKey: "u",
+        overPinned: false,
+        mode: "nest",
+        target: activeTarget,
+      }),
+    ).toEqual({ kind: "nest", parentKey: "u" });
+  });
+
+  it("reorders pinned subthreads only within their own sibling pin bucket", () => {
+    expect(
+      resolve({
+        activeKey: "c2",
+        activeParentKey: "parent",
+        activePinned: true,
+        overKey: "c1",
+        overParentKey: "parent",
+        overPinned: true,
+        siblingOrder: ["c1", "c2", "c3"],
+        target: null,
+        reorderDropEdge: "before",
+      }),
+    ).toEqual({ kind: "reorder-siblings", order: ["c2", "c1", "c3"] });
+    expect(
+      resolve({
+        activeKey: "c2",
+        activeParentKey: "parent",
+        activePinned: true,
+        overKey: "c1",
+        overParentKey: "parent",
+        overPinned: false,
+        siblingOrder: ["c1", "c2"],
+        target: null,
+      }),
+    ).toEqual({ kind: "none" });
+  });
+
+  it("moves a subthread to another parent without changing its pin state", () => {
+    expect(
+      resolve({
+        activeParentKey: "old-parent",
+        activePinned: true,
+        overKey: "new-parent",
+        overPinned: false,
+        mode: "nest",
+        target: null,
+      }),
+    ).toEqual({ kind: "nest", parentKey: "new-parent" });
+  });
+
+  it.each([
+    { activePinned: false, pinned: true, target: pinnedTarget },
+    { activePinned: true, pinned: false, target: activeTarget },
+  ] as const)("unnests into a section and lets that section set pinned=$pinned", (row) => {
+    expect(
+      resolve({ activeParentKey: "parent", activePinned: row.activePinned, target: row.target }),
+    ).toEqual({
+      kind: "move-top-level",
+      target: row.target,
+      clearParent: true,
+    });
+  });
+
+  it("resolves reverse moves without carrying stale parent or pin intent", () => {
+    expect(resolve({ activePinned: false, target: pinnedTarget })).toEqual({
+      kind: "move-top-level",
+      target: pinnedTarget,
+      clearParent: false,
+    });
+    expect(resolve({ activePinned: true, target: activeTarget })).toEqual({
+      kind: "move-top-level",
+      target: activeTarget,
+      clearParent: false,
+    });
+    expect(
+      resolve({
+        activeParentKey: "parent",
+        activePinned: true,
+        target: pinnedTarget,
+      }),
+    ).toEqual({ kind: "move-top-level", target: pinnedTarget, clearParent: true });
+    expect(
+      resolve({
+        activeParentKey: null,
+        activePinned: true,
+        overKey: "parent",
+        mode: "nest",
+        target: null,
+      }),
+    ).toEqual({ kind: "nest", parentKey: "parent" });
+  });
+
+  it("moves only the dragged parent while descendant pin state remains out of the intent", () => {
+    expect(
+      resolve({
+        activeKey: "parent",
+        activePinned: false,
+        overKey: "p",
+        target: pinnedTarget,
+      }),
+    ).toEqual({ kind: "move-top-level", target: pinnedTarget, clearParent: false });
+  });
+
+  it("rejects self and descendant nesting even across sections", () => {
+    expect(resolve({ overKey: "a", canNest: false, mode: "nest", target: null })).toEqual({
+      kind: "none",
+    });
+    expect(resolve({ overKey: "descendant", canNest: false, mode: "nest", target: null })).toEqual({
+      kind: "none",
+    });
+  });
+
+  it("uses the same nesting result for cross-project and collapsed row targets", () => {
+    expect(resolve({ overKey: "other-project", mode: "nest", target: null })).toEqual({
+      kind: "nest",
+      parentKey: "other-project",
+    });
+    expect(resolve({ overKey: "collapsed-parent", mode: "nest", target: null })).toEqual({
+      kind: "nest",
+      parentKey: "collapsed-parent",
+    });
+  });
+});
+
 describe("sidebar drag projection", () => {
+  it("keeps every peer stationary while a row is the nesting target", () => {
+    const items = [pinnedHeader, divider, thread("a1", "active"), thread("a2", "active")];
+    const transforms = preview(
+      { items, nestTargetKey: "a2", settledOrder: [], settledExpanded: false },
+      "a1",
+      "a2",
+    );
+    expect([...transforms.values()]).toEqual(items.map(() => stationary));
+  });
+
   it.each([
     ["a1", "a2"],
     ["a1", sidebarMarkerId("settled-header")],
