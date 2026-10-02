@@ -13,20 +13,28 @@ const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
 const hidden = { ...stationary, scaleY: 0 };
 type ThreadItem = Extract<SidebarListItem, { kind: "thread" }>;
 type Layout = Parameters<SortingStrategy>[0];
+export const SIDEBAR_NESTED_INDENT_PX = 12;
+export type SidebarRowDropMode = "reorder" | "nest";
 const isShelfHeader = (item: SidebarListItem | undefined) =>
   item?.kind === "marker" &&
   (item.marker === "working-header" ||
     item.marker === "snoozed-header" ||
     item.marker === "settled-header");
 
-/** The center half of a row is an explicit nesting target; its edges keep reorder behavior. */
-export function resolveSidebarRowDropZone(
-  pointerY: number | null | undefined,
-  rect: Pick<DOMRect, "top" | "bottom" | "height"> | null | undefined,
-): "nest" | "reorder" {
-  if (pointerY == null || rect == null) return "reorder";
-  const edge = rect.height / 4;
-  return pointerY >= rect.top + edge && pointerY <= rect.bottom - edge ? "nest" : "reorder";
+/** Nest only after one child indent of deliberate rightward movement. Once
+ * nested, half an indent of hysteresis keeps small pointer corrections stable. */
+export function resolveSidebarRowDropMode(input: {
+  activationX: number | null | undefined;
+  pointerX: number | null | undefined;
+  previousMode: SidebarRowDropMode;
+  nestEligible: boolean;
+}): SidebarRowDropMode {
+  if (!input.nestEligible || input.activationX == null || input.pointerX == null) {
+    return "reorder";
+  }
+  const threshold =
+    input.previousMode === "nest" ? SIDEBAR_NESTED_INDENT_PX / 2 : SIDEBAR_NESTED_INDENT_PX;
+  return input.pointerX - input.activationX >= threshold ? "nest" : "reorder";
 }
 
 /** Keep the lifted card below the Pins label, including when Pins is empty.
@@ -46,6 +54,7 @@ export function createSidebarCollisionDetection(
   isValidTarget: (id: string) => boolean,
   options: {
     items?: readonly SidebarListItem[];
+    activationX?: number | null;
     activationY?: number | null;
     isNestTarget?: (id: string) => boolean;
   } = {},
@@ -53,6 +62,7 @@ export function createSidebarCollisionDetection(
   const validity = new Map<string, boolean>();
   const sections = new Map<string, SidebarSection | null>();
   let previousPointerY = options.activationY;
+  let rowDropMode: SidebarRowDropMode = "reorder";
   let boundarySection: "pinned" | "active" | undefined;
   return (args) => {
     let collisions = closestCenter(args);
@@ -97,14 +107,17 @@ export function createSidebarCollisionDetection(
     }
     const nearest = collisions[0];
     if (!nearest || nearest.id === args.active.id) {
+      rowDropMode = "reorder";
       return collisions;
     }
     const id = String(nearest.id);
-    if (
-      options.isNestTarget?.(id) === true &&
-      resolveSidebarRowDropZone(args.pointerCoordinates?.y, args.droppableRects.get(nearest.id)) ===
-        "nest"
-    ) {
+    rowDropMode = resolveSidebarRowDropMode({
+      activationX: options.activationX,
+      pointerX: args.pointerCoordinates?.x,
+      previousMode: rowDropMode,
+      nestEligible: options.isNestTarget?.(id) === true,
+    });
+    if (rowDropMode === "nest") {
       return collisions;
     }
     const valid = validity.get(id) ?? isValidTarget(id);

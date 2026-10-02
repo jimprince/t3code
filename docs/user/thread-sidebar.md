@@ -198,9 +198,10 @@ under…**. To bring one back, choose **Move to sidebar** from its row in the
 Agents panel or from the thread's own menu. **New thread under this one** in a
 thread's menu starts a thread that is nested from the start.
 
-On web and desktop, you can also drag a sidebar thread onto the center of
-another thread row to nest it. An outlined row means the drop will nest; move
-to the top or bottom edge to keep the existing reorder drop instead.
+On web and desktop, dragging a sidebar thread reorders it by default. While the
+pointer is over another thread row, move right by one child indent to nest it.
+The highlighted parent and indented marker show a nesting drop; move back left
+to restore the full-width reorder marker.
 
 Nesting can continue through multiple levels within an environment and can span
 projects. A child keeps its own repository, worktree, branch, and model defaults.

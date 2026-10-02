@@ -5,7 +5,8 @@ import {
   createSidebarCollisionDetection,
   createSidebarSortingStrategy,
   restrictBelowSidebarLabel,
-  resolveSidebarRowDropZone,
+  resolveSidebarRowDropMode,
+  SIDEBAR_NESTED_INDENT_PX,
 } from "./Sidebar.drag";
 import {
   resolveSidebarDropTarget,
@@ -125,23 +126,54 @@ describe("sidebar collision detection", () => {
     expect(detector(collisionArgs())[0]?.id).toBe("blocked");
   });
 
-  it("uses the row center for nesting and leaves both edges for reordering", () => {
+  it("requires a rightward indent to nest and returns left to reorder", () => {
     const args = collisionArgs();
     const target = args.droppableRects.get("blocked")!;
     const detector = createSidebarCollisionDetection(() => false, {
+      activationX: 100,
       isNestTarget: (id) => id === "blocked",
     });
-    expect(resolveSidebarRowDropZone(target.top + 1, target)).toBe("reorder");
-    expect(resolveSidebarRowDropZone(target.top + target.height / 2, target)).toBe("nest");
+    expect(
+      resolveSidebarRowDropMode({
+        activationX: 100,
+        pointerX: 100,
+        previousMode: "reorder",
+        nestEligible: true,
+      }),
+    ).toBe("reorder");
     expect(
       detector({
         ...args,
-        pointerCoordinates: { x: 130, y: target.top + target.height / 2 },
+        pointerCoordinates: { x: 100, y: target.top + target.height / 2 },
+      })[0]?.id,
+    ).toBe("source");
+    expect(
+      detector({
+        ...args,
+        pointerCoordinates: {
+          x: 100 + SIDEBAR_NESTED_INDENT_PX,
+          y: target.top + target.height / 2,
+        },
       })[0]?.id,
     ).toBe("blocked");
-    expect(detector({ ...args, pointerCoordinates: { x: 130, y: target.top + 1 } })[0]?.id).toBe(
-      "source",
-    );
+    expect(
+      detector({
+        ...args,
+        pointerCoordinates: {
+          x: 100 + SIDEBAR_NESTED_INDENT_PX / 2,
+          y: target.top + target.height / 2,
+        },
+      })[0]?.id,
+    ).toBe("blocked");
+    expect(
+      detector({
+        ...args,
+        pointerCoordinates: {
+          x: 100 + SIDEBAR_NESTED_INDENT_PX / 2 - 1,
+          y: target.top + target.height / 2,
+        },
+      })[0]?.id,
+    ).toBe("source");
   });
 
   it.each([
@@ -273,7 +305,7 @@ describe("sidebar collision detection", () => {
 });
 
 describe("sidebar drag projection", () => {
-  it("keeps every peer stationary while the row center is a nesting target", () => {
+  it("keeps every peer stationary while a row is the nesting target", () => {
     const items = [pinnedHeader, divider, thread("a1", "active"), thread("a2", "active")];
     const transforms = preview(
       { items, nestTargetKey: "a2", settledOrder: [], settledExpanded: false },

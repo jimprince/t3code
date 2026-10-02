@@ -2,6 +2,11 @@ import type { SensorProps } from "@dnd-kit/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 import { act, createElement, StrictMode } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
+import {
+  resolveSidebarRowDropMode,
+  SIDEBAR_NESTED_INDENT_PX,
+  type SidebarRowDropMode,
+} from "./Sidebar.drag";
 import { SidebarDragLifecycle, SidebarPointerSensor } from "./Sidebar.pointer";
 
 class TestDocument extends EventTarget {
@@ -79,6 +84,38 @@ describe("sidebar pointer lifecycle", () => {
     expect(drag.onEnd).toHaveBeenCalledOnce();
     expect(drag.onAbort).not.toHaveBeenCalled();
     expect(drag.onFinish).toHaveBeenCalledOnce();
+  });
+
+  it("keeps vertical row drags in reorder mode, nests after an indent, and reverts left", () => {
+    const drag = gesture();
+    let mode: SidebarRowDropMode = "reorder";
+    drag.onMove.mockImplementation(({ x }) => {
+      mode = resolveSidebarRowDropMode({
+        activationX: 10,
+        pointerX: x,
+        previousMode: mode,
+        nestEligible: true,
+      });
+    });
+
+    document.dispatchEvent(pointer("pointermove", { clientX: 10, clientY: 20 }));
+    document.dispatchEvent(pointer("pointermove", { clientX: 10, clientY: 80 }));
+    expect(mode).toBe("reorder");
+
+    document.dispatchEvent(
+      pointer("pointermove", { clientX: 10 + SIDEBAR_NESTED_INDENT_PX, clientY: 80 }),
+    );
+    expect(mode).toBe("nest");
+
+    document.dispatchEvent(
+      pointer("pointermove", { clientX: 10 + SIDEBAR_NESTED_INDENT_PX / 2, clientY: 80 }),
+    );
+    expect(mode).toBe("nest");
+
+    document.dispatchEvent(
+      pointer("pointermove", { clientX: 10 + SIDEBAR_NESTED_INDENT_PX / 2 - 1, clientY: 80 }),
+    );
+    expect(mode).toBe("reorder");
   });
 
   const interruptions = {

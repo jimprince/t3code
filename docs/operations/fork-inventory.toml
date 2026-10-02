@@ -1354,4 +1354,4 @@ purpose = "Let web and desktop users nest threads directly through the existing 
 retire_when = "Upstream supports drag-to-nest with cycle-safe parent assignment and an equivalent accessible menu action."
 depends_on = ["fork-cross-project-thread-nesting", "fork-sidebar-agent-visibility"]
 roles = []
-note = "The center half of an eligible row is a static outlined nesting target; its top and bottom quarters preserve the existing reorder behavior. Parent assignment uses the same thread.parent.set action and candidate rules as the context menu."
+note = "Dragging defaults to reorder. An eligible row becomes a nesting target only after the pointer moves right by one existing 12px child indent; returning within half an indent restores reorder without boundary flicker. Reorder shows a full-width insertion line, while nesting highlights the parent and shows an indented child-depth marker. Parent assignment uses the same thread.parent.set action and candidate rules as the context menu."
