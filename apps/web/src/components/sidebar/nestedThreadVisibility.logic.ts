@@ -52,13 +52,15 @@ export function groupSidebarChildren<T extends SidebarChild>(
           visibleProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
         );
   const nested = resolveNestedThreadKeys(eligible);
-  const groups = new Map<string, { children: T[]; activeCount: number }>();
+  const groups = new Map<string, { children: T[]; activeCount: number; inputChildren: T[] }>();
   for (const thread of eligible) {
     const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
     if (!nested.has(key) || thread.archivedAt !== null || thread.parentThreadId == null) continue;
     const parentKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.parentThreadId));
-    const group = groups.get(parentKey) ?? { children: [], activeCount: 0 };
+    const group = groups.get(parentKey) ?? { children: [], activeCount: 0, inputChildren: [] };
     group.children.push(thread);
+    if (thread.settledOverride !== "settled" && thread.hasPendingUserInput)
+      group.inputChildren.push(thread);
     if (isActiveSidebarChild(thread)) group.activeCount += 1;
     groups.set(parentKey, group);
   }
