@@ -12,7 +12,7 @@ import { scopedThreadKey } from "../../lib/scopedEntities";
 import { refreshArchivedThreadsForEnvironment } from "../archive/useArchivedThreadSnapshots";
 import { pinOrderKeyBetween } from "@t3tools/client-runtime/state/thread-sort";
 import { appAtomRegistry } from "../../state/atom-registry";
-import { environmentServerConfigsAtom } from "../../state/server";
+import { serverEnvironment, environmentServerConfigsAtom } from "../../state/server";
 import { environmentThreadShells, threadEnvironment } from "../../state/threads";
 import { queuedThreadKeysAtom } from "../../state/use-thread-outbox";
 import { useAtomCommand } from "../../state/use-atom-command";
@@ -275,9 +275,61 @@ export function useThreadListActions(): {
     },
     [executeAction],
   );
+  const listSubscriptions = useAtomCommand(serverEnvironment.threadSubscriptions);
+  const updateSubscriptions = useAtomCommand(serverEnvironment.updateThreadSubscriptions);
   const settleThread = useCallback(
-    async (thread: EnvironmentThreadShell) => (await executeAction("settle", thread)) === true,
-    [executeAction],
+    async (thread: EnvironmentThreadShell) => {
+      if (!(await executeAction("settle", thread))) return false;
+      if (
+        appAtomRegistry.get(environmentServerConfigsAtom).get(thread.environmentId)?.environment
+          .capabilities.threadSubscriptions
+      ) {
+        const subscriptions = await listSubscriptions({
+          environmentId: thread.environmentId,
+          input: { threadId: thread.id },
+        });
+        if (subscriptions._tag === "Success" && subscriptions.value.routes.length > 0) {
+          const routes = subscriptions.value.routes;
+          Alert.alert(
+            "Subscriptions held while settled",
+            routes.map((route) => route.sourceAgentName ?? route.sourceThreadId).join("\n"),
+            [
+              { text: "Keep subscriptions", style: "cancel" },
+              {
+                text: "Remove subscriptions",
+                onPress: () => {
+                  void (async () => {
+                    const removed = await updateSubscriptions({
+                      environmentId: thread.environmentId,
+                      input: { threadId: thread.id, action: "remove", routes },
+                    });
+                    if (removed._tag === "Success")
+                      Alert.alert("Subscriptions removed", "You can restore these routes.", [
+                        { text: "Done", style: "cancel" },
+                        {
+                          text: "Restore",
+                          onPress: () => {
+                            void updateSubscriptions({
+                              environmentId: thread.environmentId,
+                              input: {
+                                threadId: thread.id,
+                                action: "restore",
+                                routes: removed.value.routes,
+                              },
+                            });
+                          },
+                        },
+                      ]);
+                  })();
+                },
+              },
+            ],
+          );
+        }
+      }
+      return true;
+    },
+    [executeAction, listSubscriptions, updateSubscriptions],
   );
   const snoozeThread = useCallback(
     async (thread: EnvironmentThreadShell, snoozedUntil: string) => {
