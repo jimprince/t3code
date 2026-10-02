@@ -1481,19 +1481,21 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // dnd-kit props for the row root. Same bag on both variants: every row in
   // the list translates around the gap as the drag passes it.
   const sortable = props.sortable;
+  const sortableStyle = sortable
+    ? {
+        transform: CSS.Translate.toString(sortable.transform),
+        transition: sortable.transition,
+        // A zero-height boundary also makes dnd-kit scale the source to
+        // zero. Only projected peers use scaleY as a visibility sentinel.
+        visibility:
+          !sortable.isDragging && sortable.transform?.scaleY === 0
+            ? ("hidden" as const)
+            : undefined,
+      }
+    : undefined;
   const sortableRootProps = sortable
     ? {
         ref: sortable.setNodeRef,
-        style: {
-          transform: CSS.Translate.toString(sortable.transform),
-          transition: sortable.transition,
-          // A zero-height boundary also makes dnd-kit scale the source to
-          // zero. Only projected peers use scaleY as a visibility sentinel.
-          visibility:
-            !sortable.isDragging && sortable.transform?.scaleY === 0
-              ? ("hidden" as const)
-              : undefined,
-        },
         ...sortable.listeners,
       }
     : {};
@@ -1667,7 +1669,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           sortable?.isDragging && "relative z-20",
         )}
         style={{
-          ...sortableRootProps?.style,
+          ...sortableStyle,
           ...(nestedSubRow ? { paddingInlineStart: nestedDepth * 12 } : {}),
         }}
       >
@@ -1829,7 +1831,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         nestedSubRow && "relative",
       )}
       style={{
-        ...sortableRootProps?.style,
+        ...sortableStyle,
         ...(nestedSubRow ? { paddingInlineStart: nestedDepth * 12 } : {}),
       }}
     >
