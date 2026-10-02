@@ -12,6 +12,9 @@ export type SidebarChild = Pick<
   | "parentThreadId"
   | "archivedAt"
   | "createdAt"
+  | "pinnedAt"
+  | "pinOrderKey"
+  | "activeOrderKey"
   | "hasPendingApprovals"
   | "hasPendingUserInput"
   | "backgroundLiveness"
@@ -45,6 +48,11 @@ export function groupSidebarChildren<T extends SidebarChild>(
   threads: ReadonlyArray<T>,
   visibleProjectKeys: ReadonlySet<string> | null = null,
 ) {
+  const compareOrderKey = (left: string | null, right: string | null) => {
+    if (left === null) return right === null ? 0 : 1;
+    if (right === null) return -1;
+    return left.localeCompare(right);
+  };
   const eligible =
     visibleProjectKeys === null
       ? threads
@@ -80,8 +88,14 @@ export function groupSidebarChildren<T extends SidebarChild>(
   };
   for (const [parentKey, group] of groups) {
     group.activeCount = countActiveDescendants(parentKey, new Set());
-    group.children.sort(
-      (a, b) =>
+    group.children.sort((a, b) => {
+      const pinnedDifference = Number(b.pinnedAt != null) - Number(a.pinnedAt != null);
+      if (pinnedDifference !== 0) return pinnedDifference;
+      if (a.pinnedAt != null && b.pinnedAt != null) {
+        const pinnedOrder = compareOrderKey(a.pinOrderKey ?? null, b.pinOrderKey ?? null);
+        if (pinnedOrder !== 0) return pinnedOrder;
+      }
+      const activeDifference =
         Number(
           isActiveSidebarChild(b) ||
             countActiveDescendants(
@@ -89,18 +103,52 @@ export function groupSidebarChildren<T extends SidebarChild>(
               new Set(),
             ) > 0,
         ) -
-          Number(
-            isActiveSidebarChild(a) ||
-              countActiveDescendants(
-                scopedThreadKey(scopeThreadRef(a.environmentId, a.id)),
-                new Set(),
-              ) > 0,
-          ) ||
-        a.createdAt.localeCompare(b.createdAt) ||
-        a.id.localeCompare(b.id),
-    );
+        Number(
+          isActiveSidebarChild(a) ||
+            countActiveDescendants(
+              scopedThreadKey(scopeThreadRef(a.environmentId, a.id)),
+              new Set(),
+            ) > 0,
+        );
+      if (activeDifference !== 0) return activeDifference;
+      if (a.pinnedAt == null && b.pinnedAt == null) {
+        const activeOrder = compareOrderKey(a.activeOrderKey ?? null, b.activeOrderKey ?? null);
+        if (activeOrder !== 0) return activeOrder;
+      }
+      return a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id);
+    });
   }
   return groups;
+}
+
+/** Keep pinned descendants and their nested ancestor path visible through collapsed rows. */
+export function sidebarPinnedPathKeys<T extends SidebarChild>(
+  groups: ReadonlyMap<string, { readonly children: ReadonlyArray<T> }>,
+): ReadonlySet<string> {
+  const byKey = new Map<string, T>();
+  const pinned: T[] = [];
+  for (const group of groups.values()) {
+    for (const child of group.children) {
+      const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
+      byKey.set(childKey, child);
+      if (child.pinnedAt != null) pinned.push(child);
+    }
+  }
+
+  const path = new Set<string>();
+  for (const child of pinned) {
+    let current: T | undefined = child;
+    while (current !== undefined) {
+      const currentKey = scopedThreadKey(scopeThreadRef(current.environmentId, current.id));
+      if (path.has(currentKey)) break;
+      path.add(currentKey);
+      if (current.parentThreadId == null) break;
+      current = byKey.get(
+        scopedThreadKey(scopeThreadRef(current.environmentId, current.parentThreadId)),
+      );
+    }
+  }
+  return path;
 }
 
 /** A settled parent stays in the active shelf while any descendant still needs supervision. */
