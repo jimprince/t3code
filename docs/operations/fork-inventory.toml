@@ -1374,4 +1374,4 @@ purpose = "Let operators and agents rename threads and preserve explicitly chose
 retire_when = "Upstream operator tooling provides equivalent rename and explicit title preservation."
 depends_on = ["fork-worker-operations"]
 roles = []
-note = "Uses existing manual thread.meta.update intent before the first turn; saved aliases and raw UUIDs share server readback."
+note = "Native bootstrap persists manual thread.meta.update intent before the first turn when lockTitle is set; saved aliases and raw UUIDs share rename readback."

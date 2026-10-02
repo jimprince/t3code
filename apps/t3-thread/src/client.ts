@@ -497,27 +497,6 @@ export class RemoteEnvironmentClient {
     const createdAt = nowIso();
     const rpc = await this.openRpc();
     try {
-      // A manual title update blocks first-turn generation, including in-flight refinements.
-      await rpc.request("dispatchCommand", {
-        type: "thread.create",
-        commandId: NodeCrypto.randomUUID(),
-        threadId,
-        projectId: project.id,
-        title,
-        modelSelection,
-        runtimeMode,
-        interactionMode,
-        branch: null,
-        worktreePath: null,
-        createdAt,
-        ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
-      });
-      await rpc.request("dispatchCommand", {
-        type: "thread.meta.update",
-        commandId: NodeCrypto.randomUUID(),
-        threadId,
-        title,
-      });
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
         commandId: NodeCrypto.randomUUID(),
@@ -532,20 +511,33 @@ export class RemoteEnvironmentClient {
         titleSeed: title,
         runtimeMode,
         interactionMode,
-        ...(input.branch
-          ? {
-              bootstrap: {
+        bootstrap: {
+          createThread: {
+            lockTitle: true,
+            projectId: project.id,
+            title,
+            modelSelection,
+            runtimeMode,
+            interactionMode,
+            branch: null,
+            worktreePath: null,
+            createdAt,
+            ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
+          },
+          ...(input.branch
+            ? {
                 prepareWorktree: {
                   projectCwd: project.workspaceRoot,
                   baseBranch: input.baseBranch ?? "main",
                   branch: input.branch,
-                  // The historical wire key selects remote-based creation (gitea, then origin).
+                  // The wire key is retained for server compatibility. Its
+                  // current meaning is remote-based creation (gitea, then origin).
                   startFromOrigin: input.startFromOrigin ?? true,
                 },
                 runSetupScript: true,
-              },
-            }
-          : {}),
+              }
+            : {}),
+        },
         createdAt,
       });
     } finally {

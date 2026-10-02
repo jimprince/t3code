@@ -111,33 +111,26 @@ describe("operator thread titles", () => {
       parentThreadId: threadId,
       branch: "t3/supervisor",
     });
-    expect(h.commands.map((c) => c.type)).toEqual([
-      "thread.create",
-      "thread.meta.update",
-      "thread.turn.start",
-    ]);
+    expect(h.commands).toHaveLength(1);
     expect(h.commands[0]).toMatchObject({
+      type: "thread.turn.start",
       threadId: created.threadId,
-      title: "Supervisor A",
-      parentThreadId: threadId,
-    });
-    expect(h.commands[1]).toMatchObject({ threadId: created.threadId, title: "Supervisor A" });
-    expect(h.commands[2]).toMatchObject({
-      threadId: created.threadId,
-      bootstrap: { prepareWorktree: { branch: "t3/supervisor" } },
+      bootstrap: {
+        createThread: { title: "Supervisor A", lockTitle: true, parentThreadId: threadId },
+        prepareWorktree: { branch: "t3/supervisor" },
+      },
       message: { text: "Resume Printcell Supervision" },
     });
-    expect(h.commands[2]).not.toHaveProperty("bootstrap.createThread");
   });
-  it("does not start a provider turn if explicit title protection fails", async () => {
-    const h = harness(true);
+  it("does not create a thread with an empty explicit title", async () => {
+    const h = harness();
     await expect(
       h.client.createAgentThread({
         projectId: "project-1",
-        title: "Supervisor A",
+        title: "  ",
         initialMessage: "Resume supervision",
       }),
-    ).rejects.toThrow("rename rejected");
-    expect(h.commands.map((c) => c.type)).toEqual(["thread.create", "thread.meta.update"]);
+    ).rejects.toThrow("must not be empty");
+    expect(h.commands).toEqual([]);
   });
 });
