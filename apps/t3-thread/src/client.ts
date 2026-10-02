@@ -443,6 +443,7 @@ export class RemoteEnvironmentClient {
     startFromOrigin?: boolean;
     initialMessage?: string;
     parentThreadId?: string | null;
+    settleOnComplete?: boolean;
     pin?: boolean;
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
     const snapshot = await this.getShellSnapshot();
@@ -467,6 +468,12 @@ export class RemoteEnvironmentClient {
           buildModelSelection({ providerModels }) ??
           DEFAULT_MODEL_SELECTION);
 
+    const config = await this.getServerConfig();
+    const settleOnComplete =
+      input.settleOnComplete ??
+      config.settings.projectSettingsOverrides[project.id]?.subthreadSettleOnComplete ??
+      config.settings.subthreadSettleOnComplete ??
+      true;
     const threadId = NodeCrypto.randomUUID();
     const runtimeMode = input.runtimeMode ?? "full-access";
     const interactionMode = input.interactionMode ?? "default";
@@ -497,6 +504,7 @@ export class RemoteEnvironmentClient {
             branch: null,
             worktreePath: null,
             createdAt,
+            settleOnComplete,
             ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
           },
           ...(input.branch

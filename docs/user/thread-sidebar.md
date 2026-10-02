@@ -60,7 +60,8 @@ files directly; see [Attach files](./composer.md#attach-files).
 On web and desktop, pinning or unpinning a thread keeps the sidebar at your current
 scroll position instead of following the thread to its new place in the list.
 
-Pinning does not prevent automatic settlement. Settling a thread removes its pin.
+Pinning does not prevent automatic settlement, which keeps the pin. Manually
+settling a thread removes its pin. Pinned threads are protected from automatic archive.
 
 On web and desktop, drag a thread between sections to change its state. Drag a thread up into
 the pinned section to pin it at the spot you drop it; drag a pinned thread down into the active
@@ -127,6 +128,20 @@ sending an answer or restarting the agent. Settling also closes the thread's
 terminals that wait at an idle prompt, and keeps their output. A terminal that
 runs a command, such as a dev server, stays open.
 
+Agent-created workers settle when a turn completes without pending input or approvals.
+UI-created top-level threads keep their usual settlement rules. Change the project default
+with **Settle completed workers** in **Thread behavior**; a worker can override it at creation.
+The thread's **Auto-settle behavior: Disabled** overrides completion settlement too.
+A follow-up resumes a settled worker automatically.
+
+Settled subthreads archive after seven days by default. **Archive settled subthreads**
+and its days setting can be changed per environment or project in **Thread behavior**.
+Disable the setting to retain them indefinitely. Restoring a settled thread or making
+a later change starts a fresh archive recovery window. Pinned threads, threads with automatic
+settlement disabled, and threads with active descendants never auto-archive. Restore a
+conversation through the existing archive; worktree cleanup may separately reclaim its
+checkout after the recovery window.
+
 By default, environments settle inactive threads after three days and settle
 threads whose pull request merged. A closed pull request can also settle an idle
 thread. Work in progress, pending questions or approvals, and live background work
@@ -190,8 +205,8 @@ Settled work folds into a collapsed **Settled** shelf at the bottom of the
 Agents panel: nested threads that are settled, including by automatic
 settlement, and subagents or workflows that have finished. Something that
 finishes while you are watching stays where it is until you next open the
-panel. When a `t3-thread` worker completes, its orchestrating agent is asked
-whether the worker is finished and can settle it.
+panel. A `t3-thread` worker settles after a completed turn by default when
+no input or approval is pending. Its parent can send a follow-up to resume it.
 
 To nest a thread yourself, open its menu in the sidebar and choose **Nest
 under…**. To bring one back, choose **Move to sidebar** from its row in the

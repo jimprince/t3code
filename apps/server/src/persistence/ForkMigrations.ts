@@ -9,6 +9,8 @@ import Migration0005 from "./ForkMigrations/005_MigrateSidebarOrderEvents.ts";
 import Migration0006 from "./ForkMigrations/006_ProjectionThreadsParentThread.ts";
 import Migration0007 from "./ForkMigrations/007_ThreadBackgroundWork.ts";
 
+import Migration0008 from "./ForkMigrations/008_ProjectionThreadsSettleOnComplete.ts";
+
 export const FORK_MIGRATIONS_TABLE = "effect_sql_fork_migrations";
 
 export const forkMigrationEntries = [
@@ -19,6 +21,7 @@ export const forkMigrationEntries = [
   [5, "MigrateSidebarOrderEvents", Migration0005],
   [6, "ProjectionThreadsParentThread", Migration0006],
   [7, "ThreadBackgroundWork", Migration0007],
+  [8, "ProjectionThreadsSettleOnComplete", Migration0008],
 ] as const;
 
 const makeForkMigrationLoader = (throughId?: number) =>
