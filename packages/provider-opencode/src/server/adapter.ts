@@ -1,3 +1,4 @@
+import { withT3ThreadIdentityEnv } from "@t3tools/provider-core/server/t3ThreadIdentityEnv";
 import type {
   Event as OpenCodeEvent,
   Message as OpenCodeMessage,
@@ -959,7 +960,7 @@ export const makeOpenCodeAdapterV2 = Effect.fn("makeOpenCodeAdapterV2")(function
           binaryPath: options.settings.binaryPath,
           directory: cwd,
           serverUrl: options.settings.serverUrl,
-          environment: options.environment,
+          environment: withT3ThreadIdentityEnv(options.environment, { threadId: input.threadId }),
         });
         const client = runtime.createOpenCodeSdkClient({
           baseUrl: connection.url,
