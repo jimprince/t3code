@@ -1,0 +1,4 @@
+id = "mcp-held-queue-resume"
+category = "fix"
+functionality = "agents"
+text = "Agents can see when queued messages are held after a restart and explicitly resume them through MCP. New queued sends report an inherited hold."
