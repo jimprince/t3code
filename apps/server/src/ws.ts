@@ -1452,6 +1452,14 @@ const makeWsRpcLayer = (
               // terminals and provider sessions under the reused thread id.
               createdThread = true;
               yield* threadDeletionReactor.drainThrough(created.sequence);
+              if (bootstrap.createThread.lockTitle === true) {
+                yield* dispatchFromClient({
+                  type: "thread.meta.update",
+                  commandId: yield* serverCommandId("bootstrap-manual-title"),
+                  threadId: command.threadId,
+                  title: bootstrap.createThread.title,
+                });
+              }
               // Persist the send now rather than with the turn: the thread is
               // real from here on, so any client (or a reload) sees the message
               // while the worktree is still being prepared. The turn start
