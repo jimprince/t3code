@@ -191,13 +191,24 @@ export function resolveSidebarDropTarget(
   items: readonly SidebarListItem[],
   activeKey: string,
   overId: string,
+  activeSection?: SidebarSection,
 ): SidebarDropTarget | null {
   const activeIndex = items.findIndex((item) => sidebarListItemId(item) === activeKey);
   const overIndex = items.findIndex((item) => sidebarListItemId(item) === overId);
-  if (activeIndex === -1 || overIndex === -1 || items[activeIndex]?.kind !== "thread") return null;
-  const moved = items.filter((_, index) => index !== activeIndex);
-  moved.splice(overIndex, 0, items[activeIndex]!);
-  const section = sectionAtSidebarSlot(moved, overIndex);
+  if (overIndex === -1) return null;
+  const active =
+    activeIndex === -1
+      ? activeSection === undefined
+        ? null
+        : ({ kind: "thread", key: activeKey, section: activeSection } as const)
+      : items[activeIndex]?.kind === "thread"
+        ? items[activeIndex]
+        : null;
+  if (active === null) return null;
+  const moved = activeIndex === -1 ? [...items] : items.filter((_, index) => index !== activeIndex);
+  const insertionIndex = overIndex;
+  moved.splice(insertionIndex, 0, active);
+  const section = sectionAtSidebarSlot(moved, insertionIndex);
   if (section === "working" || section === "snoozed") return null;
   const pinnedOrder: string[] = [];
   const activeOrder: string[] = [];
