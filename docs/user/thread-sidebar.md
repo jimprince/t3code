@@ -126,6 +126,12 @@ cannot drag or move threads within it. Your saved order returns when you turn it
 
 ## Settle finished work
 
+When a thread has notification subscriptions stored on its environment, settling
+shows the source threads and offers to remove those subscriptions. Keep them to
+hold notifications until you un-settle; remove them to stop future delivery.
+You can restore the removed routes from the confirmation. Routes managed on
+another operator machine must be changed there.
+
 Choose **Settle thread** from its menu to move finished work out of the active list
 without deleting the conversation. **Un-settle thread** restores it to active work
 and prevents automatic settlement until new activity resumes the usual rules.

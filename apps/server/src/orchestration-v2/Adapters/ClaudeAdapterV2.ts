@@ -1,3 +1,4 @@
+import { withT3ThreadIdentityEnv } from "../../provider/t3ThreadIdentityEnv.ts";
 import * as NodeCrypto from "node:crypto";
 
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
@@ -6996,7 +6997,7 @@ export function makeClaudeAdapterV2(
             cwd: turnInput.runtimePolicy.cwd,
             attachmentsDir,
             settings: adapterOptions.settings,
-            environment: adapterOptions.environment,
+            environment: withT3ThreadIdentityEnv(adapterOptions.environment, { threadId: turnInput.providerThread.appThreadId ?? input.threadId }),
             tools: queryPolicy.tools ?? CLAUDE_CODE_PRESET_TOOLS,
             ...mcpOverrides,
             permissionMode: queryPolicy.permissionMode,
