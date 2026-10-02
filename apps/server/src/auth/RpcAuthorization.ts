@@ -37,6 +37,8 @@ export const RPC_REQUIRED_SCOPES = {
   [ORCHESTRATION_WS_METHODS.exportThread]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_WS_METHODS.importThread]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_WS_METHODS.forkThread]: AuthOrchestrationOperateScope,
+  // Brief me runs a text generation model, so it spends the operator's quota.
+  [ORCHESTRATION_WS_METHODS.briefThread]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverPreviewRecovery]: AuthOrchestrationReadScope,
   [WS_METHODS.serverExecuteRecovery]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverRequestHeadlessUpdateCheck]: AuthOrchestrationOperateScope,

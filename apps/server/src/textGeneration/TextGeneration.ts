@@ -9,6 +9,7 @@ import type { ProviderInstance } from "../provider/ProviderDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as ThreadTitleLinks from "./ThreadTitleLinks.ts";
 import type { TextGenerationPolicy } from "./TextGenerationPolicy.ts";
+import type { ThreadBriefOutput, ThreadBriefTranscript } from "./ThreadBriefPrompt.ts";
 
 export interface CommitMessageGenerationInput {
   cwd: string;
@@ -70,6 +71,14 @@ export interface ThreadTitleGenerationInput {
   modelSelection: ModelSelection;
 }
 
+/** Brief me: summarize an orchestrator's worker traffic since the user last spoke. */
+export interface ThreadBriefGenerationInput {
+  cwd: string;
+  threadTitle: string;
+  transcript: ThreadBriefTranscript;
+  modelSelection: ModelSelection;
+}
+
 export interface ThreadTitleGenerationResult {
   title: string;
   needsRefinement?: boolean | undefined;
@@ -106,6 +115,11 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    /** Optional: providers without it report Brief me as unsupported. */
+    readonly generateThreadBrief?: (
+      input: ThreadBriefGenerationInput,
+    ) => Effect.Effect<ThreadBriefOutput, TextGenerationError>;
   }
 >()("t3/textGeneration/TextGeneration") {}
 
@@ -113,7 +127,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "generateThreadBrief";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -164,6 +179,20 @@ export const make = Effect.gen(function* () {
               ));
             return yield* textGeneration.generateThreadTitle({ ...input, linkedContext });
           }),
+        ),
+      ),
+    generateThreadBrief: (input) =>
+      resolveInstance(registry, "generateThreadBrief", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) =>
+          textGeneration.generateThreadBrief
+            ? textGeneration.generateThreadBrief(input)
+            : Effect.fail(
+                new TextGenerationError({
+                  operation: "generateThreadBrief",
+                  detail:
+                    "Brief me needs a Codex or Claude text generation model. Choose one in Settings.",
+                }),
+              ),
         ),
       ),
   });
