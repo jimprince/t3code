@@ -5,6 +5,7 @@ import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   flattenVisibleSidebarChildren,
+  flattenTidiedSidebarChildren,
   groupSidebarChildren,
   hasActiveSidebarDescendants,
   isActiveSidebarChild,
@@ -24,6 +25,8 @@ function thread(id: string, overrides: Partial<SidebarChild> = {}): SidebarChild
     parentThreadId: null,
     archivedAt: null,
     createdAt: "2026-10-01T00:00:00Z",
+    updatedAt: "2026-10-01T00:00:01Z",
+    title: id,
     pinnedAt: null,
     pinOrderKey: null,
     activeOrderKey: null,
@@ -242,6 +245,148 @@ describe("sidebar nested children", () => {
         viewedPathKeys: sidebarPinnedPathKeys(unpinnedGroups),
       }),
     ).toEqual([]);
+  });
+
+  it("folds quiet children behind one done row while keeping supervised branches visible", () => {
+    const root = thread("root");
+    const working = thread("working", {
+      parentThreadId: root.id,
+      session: { status: "running" },
+    });
+    const pinned = thread("pinned", {
+      parentThreadId: root.id,
+      pinnedAt: "2026-10-01T00:00:00Z",
+    });
+    const branch = thread("branch", { parentThreadId: root.id });
+    const waiting = thread("waiting", {
+      parentThreadId: branch.id,
+      hasPendingUserInput: true,
+    });
+    const doneOne = thread("done-one", {
+      parentThreadId: root.id,
+      settledOverride: "settled",
+    });
+    const doneTwo = thread("done-two", {
+      parentThreadId: root.id,
+      latestTurn: { state: "completed" },
+    });
+    const groups = groupSidebarChildren([root, working, pinned, branch, waiting, doneOne, doneTwo]);
+    const collapsed = flattenTidiedSidebarChildren({
+      rootParentKey: key(root),
+      groups,
+      expandedParentKeys: new Set([key(root)]),
+      viewedPathKeys: new Set(),
+      expandedDoneGroupKeys: new Set(),
+      expandedBurstGroupKeys: new Set(),
+    });
+
+    expect(
+      collapsed.map((row) => [row.kind, row.kind === "thread" ? row.thread.id : row.count]),
+    ).toEqual([
+      ["thread", pinned.id],
+      ["thread", branch.id],
+      ["thread", working.id],
+      ["done", 2],
+    ]);
+
+    const doneKey = collapsed.find((row) => row.kind === "done")!.key;
+    expect(
+      flattenTidiedSidebarChildren({
+        rootParentKey: key(root),
+        groups,
+        expandedParentKeys: new Set([key(root)]),
+        viewedPathKeys: new Set(),
+        expandedDoneGroupKeys: new Set([doneKey]),
+        expandedBurstGroupKeys: new Set(),
+      }).map((row) => (row.kind === "thread" ? row.thread.id : row.kind)),
+    ).toEqual([pinned.id, branch.id, working.id, "done", doneOne.id, doneTwo.id]);
+  });
+
+  it("groups untouched creation bursts and removes a child as soon as it becomes active", () => {
+    const root = thread("root");
+    const halloweenOne = thread("halloween-one", {
+      parentThreadId: root.id,
+      title: "Halloween animal concepts",
+      createdAt: "2026-10-01T00:00:00Z",
+      updatedAt: "2026-10-01T00:00:00Z",
+    });
+    const halloweenTwo = thread("halloween-two", {
+      parentThreadId: root.id,
+      title: "Halloween wearable concepts",
+      createdAt: "2026-10-01T00:01:30Z",
+      updatedAt: "2026-10-01T00:01:30Z",
+    });
+    const nowWorking = thread("halloween-working", {
+      parentThreadId: root.id,
+      title: "Halloween lighting concepts",
+      createdAt: "2026-10-01T00:01:45Z",
+      updatedAt: "2026-10-01T00:01:45Z",
+      session: { status: "running" },
+    });
+    const individuallyTouched = thread("touched", {
+      parentThreadId: root.id,
+      title: "Halloween touched concept",
+      createdAt: "2026-10-01T00:01:50Z",
+      updatedAt: "2026-10-01T00:02:00Z",
+    });
+    const groups = groupSidebarChildren([
+      root,
+      halloweenOne,
+      halloweenTwo,
+      nowWorking,
+      individuallyTouched,
+    ]);
+    const rows = flattenTidiedSidebarChildren({
+      rootParentKey: key(root),
+      groups,
+      expandedParentKeys: new Set([key(root)]),
+      viewedPathKeys: new Set(),
+      expandedDoneGroupKeys: new Set(),
+      expandedBurstGroupKeys: new Set(),
+    });
+
+    expect(
+      rows.map((row) => [row.kind, row.kind === "thread" ? row.thread.id : row.count]),
+    ).toEqual([
+      ["thread", nowWorking.id],
+      ["burst", 2],
+      ["done", 1],
+    ]);
+    const burst = rows.find((row) => row.kind === "burst")!;
+    expect(burst.label).toBe("Halloween · 2");
+    expect(
+      flattenTidiedSidebarChildren({
+        rootParentKey: key(root),
+        groups,
+        expandedParentKeys: new Set([key(root)]),
+        viewedPathKeys: new Set(),
+        expandedDoneGroupKeys: new Set(),
+        expandedBurstGroupKeys: new Set([burst.key]),
+      }).map((row) => (row.kind === "thread" ? row.thread.id : row.kind)),
+    ).toEqual([nowWorking.id, "burst", halloweenOne.id, halloweenTwo.id, "done"]);
+  });
+
+  it("does not show folded or burst controls beneath a collapsed parent", () => {
+    const root = thread("root");
+    const pinned = thread("pinned", {
+      parentThreadId: root.id,
+      pinnedAt: "2026-10-01T00:00:00Z",
+    });
+    const quiet = thread("quiet", {
+      parentThreadId: root.id,
+      settledOverride: "settled",
+    });
+    const groups = groupSidebarChildren([root, pinned, quiet]);
+    expect(
+      flattenTidiedSidebarChildren({
+        rootParentKey: key(root),
+        groups,
+        expandedParentKeys: new Set(),
+        viewedPathKeys: sidebarPinnedPathKeys(groups),
+        expandedDoneGroupKeys: new Set(),
+        expandedBurstGroupKeys: new Set(),
+      }).map((row) => (row.kind === "thread" ? row.thread.id : row.kind)),
+    ).toEqual([pinned.id]);
   });
 });
 

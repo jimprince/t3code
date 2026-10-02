@@ -12,6 +12,8 @@ export type SidebarChild = Pick<
   | "parentThreadId"
   | "archivedAt"
   | "createdAt"
+  | "updatedAt"
+  | "title"
   | "pinnedAt"
   | "pinOrderKey"
   | "activeOrderKey"
@@ -23,6 +25,26 @@ export type SidebarChild = Pick<
   session?: Pick<NonNullable<EnvironmentThreadShell["session"]>, "status"> | null;
   latestTurn?: Pick<NonNullable<EnvironmentThreadShell["latestTurn"]>, "state"> | null;
 };
+
+export type SidebarChildGroup<T extends SidebarChild> = {
+  children: T[];
+  activeCount: number;
+  inputChildren: T[];
+};
+
+export type TidiedSidebarChildRow<T extends SidebarChild> =
+  | { kind: "thread"; thread: T; depth: number; parentKey: string }
+  | { kind: "done"; key: string; count: number; depth: number; expanded: boolean }
+  | {
+      kind: "burst";
+      key: string;
+      count: number;
+      label: string;
+      depth: number;
+      expanded: boolean;
+    };
+
+const SIDEBAR_CHILD_BURST_WINDOW_MS = 2 * 60 * 1_000;
 
 /** Match ordinary sidebar status, using the shell turn only while session state is absent. */
 export function resolveSidebarChildStatus(
@@ -64,7 +86,7 @@ export function groupSidebarChildren<T extends SidebarChild>(
           visibleProjectKeys.has(`${thread.environmentId}:${thread.projectId}`),
         );
   const nested = resolveNestedThreadKeys(eligible);
-  const groups = new Map<string, { children: T[]; activeCount: number; inputChildren: T[] }>();
+  const groups = new Map<string, SidebarChildGroup<T>>();
   for (const thread of eligible) {
     const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
     if (!nested.has(key) || thread.archivedAt !== null || thread.parentThreadId == null) continue;
@@ -249,6 +271,159 @@ export function flattenVisibleSidebarChildren<
     )) {
       rows.push({ thread: child, depth });
       append(scopedThreadKey(scopeThreadRef(child.environmentId, child.id)), depth + 1, ancestors);
+    }
+    ancestors.delete(parentKey);
+  };
+  append(input.rootParentKey, 1, new Set());
+  return rows;
+}
+
+function commonTitlePrefix(titles: ReadonlyArray<string>): string | null {
+  const words = titles.map((title) => title.trim().split(/\s+/));
+  const first = words[0];
+  if (first === undefined) return null;
+  let length = first.length;
+  for (const titleWords of words.slice(1)) {
+    length = Math.min(length, titleWords.length);
+    for (let index = 0; index < length; index += 1) {
+      if (
+        first[index]!.localeCompare(titleWords[index]!, undefined, { sensitivity: "accent" }) !== 0
+      ) {
+        length = index;
+        break;
+      }
+    }
+  }
+  const prefix = first
+    .slice(0, length)
+    .join(" ")
+    .replace(/[\s:–—-]+$/u, "");
+  return prefix.length >= 4 ? prefix : null;
+}
+
+function untouchedBurstGroups<T extends SidebarChild>(
+  children: ReadonlyArray<T>,
+): ReadonlyArray<ReadonlyArray<T>> {
+  const candidates = children
+    .filter(
+      (child) =>
+        child.pinnedAt == null &&
+        !isActiveSidebarChild(child) &&
+        child.latestTurn == null &&
+        child.updatedAt === child.createdAt &&
+        Number.isFinite(Date.parse(child.createdAt)),
+    )
+    .toSorted((left, right) => left.createdAt.localeCompare(right.createdAt));
+  const bursts: T[][] = [];
+  let current: T[] = [];
+  let startedAt = 0;
+  for (const child of candidates) {
+    const createdAt = Date.parse(child.createdAt);
+    if (current.length === 0 || createdAt - startedAt <= SIDEBAR_CHILD_BURST_WINDOW_MS) {
+      if (current.length === 0) startedAt = createdAt;
+      current.push(child);
+      continue;
+    }
+    if (current.length > 1) bursts.push(current);
+    current = [child];
+    startedAt = createdAt;
+  }
+  if (current.length > 1) bursts.push(current);
+  return bursts;
+}
+
+/** Fold quiet siblings without hiding pinned, supervised, or currently viewed branches. */
+export function flattenTidiedSidebarChildren<T extends SidebarChild>(input: {
+  rootParentKey: string;
+  groups: ReadonlyMap<string, SidebarChildGroup<T>>;
+  expandedParentKeys: ReadonlySet<string>;
+  viewedPathKeys: ReadonlySet<string>;
+  expandedDoneGroupKeys: ReadonlySet<string>;
+  expandedBurstGroupKeys: ReadonlySet<string>;
+}): ReadonlyArray<TidiedSidebarChildRow<T>> {
+  const rows: Array<TidiedSidebarChildRow<T>> = [];
+  const appendThread = (thread: T, parentKey: string, depth: number, ancestors: Set<string>) => {
+    rows.push({ kind: "thread", thread, parentKey, depth });
+    append(scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)), depth + 1, ancestors);
+  };
+  const append = (parentKey: string, depth: number, ancestors: Set<string>) => {
+    if (ancestors.has(parentKey)) return;
+    ancestors.add(parentKey);
+    const children = input.groups.get(parentKey)?.children ?? [];
+    if (!input.expandedParentKeys.has(parentKey)) {
+      for (const child of visibleSidebarChildren(children, false, input.viewedPathKeys)) {
+        appendThread(child, parentKey, depth, ancestors);
+      }
+      ancestors.delete(parentKey);
+      return;
+    }
+
+    const individuallyVisible = new Set<string>();
+    for (const child of children) {
+      const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
+      if (
+        child.pinnedAt != null ||
+        isActiveSidebarChild(child) ||
+        (input.groups.get(childKey)?.activeCount ?? 0) > 0 ||
+        input.viewedPathKeys.has(childKey)
+      ) {
+        individuallyVisible.add(childKey);
+      }
+    }
+    const quiet = children.filter(
+      (child) =>
+        !individuallyVisible.has(scopedThreadKey(scopeThreadRef(child.environmentId, child.id))),
+    );
+    const bursts = untouchedBurstGroups(quiet);
+    const burstByMember = new Map<string, { key: string; children: ReadonlyArray<T> }>();
+    for (const burst of bursts) {
+      const key = `burst:${parentKey}:${burst.map((child) => child.id).join(",")}`;
+      const entry = { key, children: burst };
+      for (const child of burst) {
+        burstByMember.set(scopedThreadKey(scopeThreadRef(child.environmentId, child.id)), entry);
+      }
+    }
+    const done = quiet.filter(
+      (child) => !burstByMember.has(scopedThreadKey(scopeThreadRef(child.environmentId, child.id))),
+    );
+    const doneKey = `done:${parentKey}`;
+    let renderedDone = false;
+    const renderedBursts = new Set<string>();
+    for (const child of children) {
+      const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
+      if (individuallyVisible.has(childKey)) {
+        appendThread(child, parentKey, depth, ancestors);
+        continue;
+      }
+      const burst = burstByMember.get(childKey);
+      if (burst !== undefined) {
+        if (renderedBursts.has(burst.key)) continue;
+        renderedBursts.add(burst.key);
+        const expanded = input.expandedBurstGroupKeys.has(burst.key);
+        const prefix = commonTitlePrefix(burst.children.map((entry) => entry.title));
+        rows.push({
+          kind: "burst",
+          key: burst.key,
+          count: burst.children.length,
+          label:
+            prefix === null
+              ? `${burst.children.length} created together`
+              : `${prefix} · ${burst.children.length}`,
+          depth,
+          expanded,
+        });
+        if (expanded) {
+          for (const member of burst.children) appendThread(member, parentKey, depth, ancestors);
+        }
+        continue;
+      }
+      if (renderedDone || done.length === 0) continue;
+      renderedDone = true;
+      const expanded = input.expandedDoneGroupKeys.has(doneKey);
+      rows.push({ kind: "done", key: doneKey, count: done.length, depth, expanded });
+      if (expanded) {
+        for (const member of done) appendThread(member, parentKey, depth, ancestors);
+      }
     }
     ancestors.delete(parentKey);
   };
