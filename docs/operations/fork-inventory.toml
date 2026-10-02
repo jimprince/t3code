@@ -1365,3 +1365,13 @@ retire_when = "Upstream or the operator CLI provides equivalent activity-based i
 depends_on = ["fork-notification-preferences"]
 roles = []
 note = "Monitoring is disabled on existing routes until explicitly enabled. A successful observation window, persisted per route, excludes network failures and sleep gaps; current-turn activity identifies one episode across watcher restart. Completed, settled, archived, input-waiting, plan-waiting, stopped and quota-held workers are excluded. Silent tools or hidden reasoning can still be working, so notices report missing evidence and never assert provider failure or perform recovery. Idle missing-result alerts are excluded because assignments do not prove an outstanding result obligation."
+
+[[patch]]
+name = "fork-orchestrator-focus"
+subject = "feat(threads): fold worker traffic in orchestrator threads"
+class = "product"
+purpose = "Stamp t3-thread notices and sends with their origin, and fold an orchestrator's worker-started turns behind one row per run on web and mobile, keeping the user's conversation and anything that asks for them visible, with an All traffic switch."
+retire_when = "Upstream provides message provenance and an equivalent orchestrator view that hides worker traffic while surfacing questions, approvals and flagged results."
+depends_on = ["fork-worker-operations", "fork-nested-threads"]
+roles = []
+note = "Origin rides as one unreferenced t3-origin context record (packages/shared/src/messageOrigin.ts), so it never reaches the provider or renders as a chip, and older clients keep it as an unknown record; messages from older CLIs fall back to the notification text prefix. Only notices and sends from the thread's own descendants fold, so a worker's instructions from its parent stay visible. Live, streaming and unanswered turns never fold, and the classifier is derived from current state, so a folded turn that later raises a request or ends with T3_NOTIFY: attention surfaces without any stored flag. Traffic results are stabilized so streaming replies keep the timeline on its fast path. Mobile folds by default with per-run expansion; the All traffic switch and needs-you count are web and desktop only."
