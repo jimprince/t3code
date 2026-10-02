@@ -38,16 +38,17 @@ function gesture() {
     onPending: vi.fn(),
   };
   const onFinish = vi.fn();
+  const onCoordinatesChange = vi.fn();
   // The sensor never reads dnd-kit's layout context or active node.
   const props = {
     active: "thread",
     event: pointer("pointerdown"),
-    options: { distance: 6, onAttach: vi.fn(), onFinish },
+    options: { distance: 6, onAttach: vi.fn(), onCoordinatesChange, onFinish },
     ...callbacks,
   } as unknown as SensorProps<ConstructorParameters<typeof SidebarPointerSensor>[0]["options"]>;
   const sensor = new SidebarPointerSensor(props);
   sensors.push(sensor);
-  return { sensor, onFinish, ...callbacks };
+  return { sensor, onCoordinatesChange, onFinish, ...callbacks };
 }
 
 beforeEach(() => {
@@ -89,7 +90,7 @@ describe("sidebar pointer lifecycle", () => {
   it("keeps vertical row drags in reorder mode, nests after an indent, and reverts left", () => {
     const drag = gesture();
     let mode: SidebarRowDropMode = "reorder";
-    drag.onMove.mockImplementation(({ x }) => {
+    drag.onCoordinatesChange.mockImplementation(({ x }) => {
       mode = resolveSidebarRowDropMode({
         activationX: 10,
         pointerX: x,
@@ -101,6 +102,7 @@ describe("sidebar pointer lifecycle", () => {
     document.dispatchEvent(pointer("pointermove", { clientX: 10, clientY: 20 }));
     document.dispatchEvent(pointer("pointermove", { clientX: 10, clientY: 80 }));
     expect(mode).toBe("reorder");
+    expect(drag.onCoordinatesChange).toHaveBeenLastCalledWith({ x: 10, y: 80 });
 
     document.dispatchEvent(
       pointer("pointermove", { clientX: 10 + SIDEBAR_NESTED_INDENT_PX, clientY: 80 }),

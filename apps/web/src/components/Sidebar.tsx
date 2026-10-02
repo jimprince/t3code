@@ -3540,8 +3540,14 @@ export default function Sidebar() {
   const dragSensorRef = useRef<SidebarPointerSensor | null>(null);
   const dragRowDropModeRef = useRef<SidebarRowDropMode>("reorder");
   const dragNestTargetKeyRef = useRef<string | null>(null);
+  const dragOverRef = useRef<{
+    activeKey: string;
+    overKey: string | null;
+    overRect: { top: number; height: number } | null;
+  } | null>(null);
   const finishThreadDrag = useCallback((started: boolean) => {
     dragSensorRef.current = null;
+    dragOverRef.current = null;
     if (started) {
       listMotionRef.current?.release();
       setDragState(null);
@@ -3553,13 +3559,6 @@ export default function Sidebar() {
   const cancelThreadDrag = useCallback(() => {
     dragSensorRef.current?.cancel();
   }, []);
-  const dndSensors = useSensors(
-    useSensor(SidebarPointerSensor, {
-      distance: 6,
-      onAttach: attachDragSensor,
-      onFinish: finishThreadDrag,
-    }),
-  );
   const sectionByThreadKey = useMemo(() => {
     const map = new Map<string, SidebarSection>();
     const add = (list: readonly EnvironmentThreadShell[], section: SidebarSection) => {
@@ -3819,10 +3818,13 @@ export default function Sidebar() {
     sidebarListOrderKey,
     visibleDraftSessionCount,
   ]);
-  const handleThreadDragOver = useCallback(
-    (event: DragOverEvent) => {
-      const activeKey = String(event.active.id);
-      const overKey = event.over === null ? null : String(event.over.id);
+  const updateThreadDragPreview = useCallback(
+    (
+      activeKey: string,
+      overKey: string | null,
+      overRect: { top: number; height: number } | null,
+      pointer: { x: number; y: number } | undefined,
+    ) => {
       const activeThread = threadByKey.get(activeKey);
       const targetThread = overKey === null ? undefined : threadByKey.get(overKey);
       const canNest =
@@ -3835,7 +3837,6 @@ export default function Sidebar() {
         current === null || current.activeKey !== activeKey
           ? current
           : (() => {
-              const pointer = dragSensorRef.current?.coordinates();
               const rowDropMode = resolveSidebarRowDropMode({
                 activationX: current.activationX,
                 pointerX: pointer?.x,
@@ -3850,27 +3851,62 @@ export default function Sidebar() {
                   ? resolveSidebarDropTarget(sidebarListItems, activeKey, overKey)
                   : null;
               const overThread = overKey === null ? undefined : threadByKey.get(overKey);
-              const reorderDropEdge =
+              const reorderDropEdge: "before" | "after" | null =
                 nestTarget === null &&
                 target !== null &&
                 overThread !== undefined &&
                 overKey !== activeKey &&
-                pointer !== undefined
-                  ? pointer.y < event.over!.rect.top + event.over!.rect.height / 2
+                pointer !== undefined &&
+                overRect !== null
+                  ? pointer.y < overRect.top + overRect.height / 2
                     ? "before"
                     : "after"
                   : null;
-              return {
+              const next = {
                 ...current,
                 targetSection: nestTarget === null ? (target?.section ?? null) : null,
                 nestTargetKey: nestTarget,
                 reorderTargetKey: reorderDropEdge === null ? null : overKey,
                 reorderDropEdge,
               };
+              return next.targetSection === current.targetSection &&
+                next.nestTargetKey === current.nestTargetKey &&
+                next.reorderTargetKey === current.reorderTargetKey &&
+                next.reorderDropEdge === current.reorderDropEdge
+                ? current
+                : next;
             })(),
       );
     },
     [serverConfigs, sidebarListItems, threadByKey, threads],
+  );
+  const handleThreadDragOver = useCallback(
+    (event: DragOverEvent) => {
+      const activeKey = String(event.active.id);
+      const overKey = event.over === null ? null : String(event.over.id);
+      const overRect =
+        event.over === null ? null : { top: event.over.rect.top, height: event.over.rect.height };
+      dragOverRef.current = { activeKey, overKey, overRect };
+      updateThreadDragPreview(activeKey, overKey, overRect, dragSensorRef.current?.coordinates());
+    },
+    [updateThreadDragPreview],
+  );
+  const handleThreadDragCoordinatesChange = useCallback(
+    (pointer: { x: number; y: number }) => {
+      const over = dragOverRef.current;
+      if (over !== null) {
+        updateThreadDragPreview(over.activeKey, over.overKey, over.overRect, pointer);
+      }
+    },
+    [updateThreadDragPreview],
+  );
+  const dndSensors = useSensors(
+    useSensor(SidebarPointerSensor, {
+      distance: 6,
+      onAttach: attachDragSensor,
+      onCoordinatesChange: handleThreadDragCoordinatesChange,
+      onFinish: finishThreadDrag,
+    }),
   );
   const sortableIds = useMemo(() => sidebarListItems.map(sidebarListItemId), [sidebarListItems]);
   const draggedSettledOrder = useMemo(() => {
