@@ -1,4 +1,5 @@
 import { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
+import type { BackgroundFolds, BackgroundRun } from "@t3tools/client-runtime/background-turns";
 export { worktreeSetupAgentStarted } from "@t3tools/client-runtime/worktree-setup";
 import * as Equal from "effect/Equal";
 import { shallow } from "zustand/vanilla/shallow";
@@ -400,6 +401,13 @@ export type MessagesTimelineRow =
       expanded: boolean;
     }
   | {
+      kind: "background-fold";
+      id: string;
+      createdAt: string;
+      run: BackgroundRun;
+      expanded: boolean;
+    }
+  | {
       kind: "context-compaction";
       id: string;
       createdAt: string;
@@ -551,6 +559,12 @@ function deriveTerminalAssistantMessageIds(timelineEntries: ReadonlyArray<Timeli
   }
 
   return new Set(lastAssistantMessageIdByResponseKey.values());
+}
+
+function isHiddenByBackgroundFold(entry: TimelineEntry, folds: BackgroundFolds): boolean {
+  if (entry.kind === "message") return folds.hiddenMessageIds.has(entry.message.id);
+  const turnId = entry.kind === "work" ? entry.entry.turnId : entry.proposedPlan.turnId;
+  return turnId != null && folds.hiddenTurnIds.has(turnId);
 }
 
 interface TurnFold {
@@ -975,6 +989,8 @@ export function deriveMessagesTimelineRows(input: {
   worktreeSetup?: WorktreeSetupSnapshot | null;
   /** Messages sent during the running turn, rendered after the live rows. */
   queuedMessages?: ReadonlyArray<QueuedComposerMessage>;
+  /** Brad view: worker turns to fold behind one row per run. */
+  backgroundFolds?: BackgroundFolds | undefined;
 }): MessagesTimelineRow[] {
   const turnDiffSummaryByAssistantMessageId = new Map<MessageId, TurnDiffSummary>();
   for (const summary of input.turnDiffSummaries) {
@@ -1129,6 +1145,23 @@ export function deriveMessagesTimelineRows(input: {
   for (let index = 0; index < input.timelineEntries.length; index += 1) {
     const timelineEntry = input.timelineEntries[index];
     if (!timelineEntry) {
+      continue;
+    }
+
+    const backgroundRun =
+      timelineEntry.kind === "message"
+        ? input.backgroundFolds?.runByAnchorMessageId.get(timelineEntry.message.id)
+        : undefined;
+    if (backgroundRun) {
+      nextRows.push({
+        kind: "background-fold",
+        id: backgroundRun.id,
+        createdAt: backgroundRun.startedAt,
+        run: backgroundRun,
+        expanded: !input.backgroundFolds!.hiddenMessageIds.has(backgroundRun.anchorMessageId),
+      });
+    }
+    if (input.backgroundFolds && isHiddenByBackgroundFold(timelineEntry, input.backgroundFolds)) {
       continue;
     }
 
@@ -1628,6 +1661,11 @@ function isRowUnchanged(a: MessagesTimelineRow, b: MessagesTimelineRow): boolean
     case "turn-fold": {
       const bf = b as typeof a;
       return a.createdAt === bf.createdAt && a.label === bf.label && a.expanded === bf.expanded;
+    }
+
+    case "background-fold": {
+      const bb = b as typeof a;
+      return a.run === bb.run && a.expanded === bb.expanded;
     }
 
     case "context-compaction": {

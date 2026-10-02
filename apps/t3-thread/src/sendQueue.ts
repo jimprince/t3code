@@ -1,5 +1,7 @@
 import * as NodeCrypto from "node:crypto";
 
+import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
+
 import {
   loadState,
   nextQueuedSendSequence,
@@ -46,6 +48,7 @@ export interface QueueClient {
     text: string;
     allowWhileRunning?: boolean;
     queueWhileRunning?: boolean;
+    origin?: MessageOrigin | null;
   }): Promise<unknown>;
 }
 
@@ -61,6 +64,7 @@ export async function enqueueSend(input: {
   agentName: string | null;
   environment: string;
   text: string;
+  origin?: MessageOrigin | null;
   queuedDuringTurnId: string | null;
   now?: () => string;
 }): Promise<SavedQueuedSend> {
@@ -74,6 +78,7 @@ export async function enqueueSend(input: {
       agentName: input.agentName,
       environment: input.environment,
       text: input.text,
+      ...(input.origin ? { origin: input.origin } : {}),
       status: "queued",
       queuedDuringTurnId: input.queuedDuringTurnId,
       attempts: 0,
@@ -299,8 +304,11 @@ export async function drainQueuedSends(options: {
     }
 
     const quota = threadQuotaBlock(thread);
+    const notification = head.origin
+      ? head.origin.source === "worker-notification"
+      : /^(?:HomeNetwork|T3) orchestrator notification:/.test(head.text);
     if (
-      thread.settledOverride === "settled" ||
+      (notification && thread.settledOverride === "settled") ||
       (/^(?:HomeNetwork|T3) orchestrator notification:/.test(head.text) &&
         quota &&
         (quota.resetsAt === null || quota.resetsAt > Date.parse(attemptedAt)))
@@ -322,6 +330,7 @@ export async function drainQueuedSends(options: {
       await client.sendMessage({
         threadId: claimed.threadId,
         text: claimed.text,
+        origin: claimed.origin ?? null,
         queueWhileRunning: false,
       });
       result = {
