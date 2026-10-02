@@ -1,6 +1,6 @@
-Bottom: 14eda8ac52aeb41a107398f51f9374e6b88f29fa
-Top:    464e7f9b2144733eca62066551444abf8c7cb813
+Bottom: 87fb63d5c255999ef5b33abfdb1dae4777b59f14
+Top:    d22e26fc6e1c8007612a9d0a884b13d190504ba4
 Author: Codex <codex@users.noreply.github.com>
-Date:   2026-10-01 20:22:05 -0600
+Date:   2026-10-01 20:23:38 -0600
 
 feat(threads): nest workers across projects

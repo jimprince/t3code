@@ -1,6 +1,6 @@
-Bottom: dc24aa8ee6bc4c30cb500aac2b14f902f18196ef
-Top:    04072a3f17a240414e4ce9053e3fef447a08cdba
+Bottom: d905f3f0d4d7230e89973120597b2089007e8afc
+Top:    57c92fc881bbc96f89f1060385924fd03f23ce2d
 Author: User <user@example.com>
-Date:   2026-10-01 20:21:05 -0600
+Date:   2026-10-01 20:23:38 -0600
 
 feat(web): dismiss pull requests in bulk
