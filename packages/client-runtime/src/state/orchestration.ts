@@ -45,5 +45,9 @@ export function createOrchestrationEnvironmentAtoms<R, E>(
       label: "environment-data:orchestration:fork-thread",
       tag: ORCHESTRATION_WS_METHODS.forkThread,
     }),
+    briefThread: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:orchestration:brief-thread",
+      tag: ORCHESTRATION_WS_METHODS.briefThread,
+    }),
   };
 }
