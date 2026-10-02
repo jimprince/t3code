@@ -12,6 +12,7 @@ export type SidebarChild = Pick<
   | "parentThreadId"
   | "archivedAt"
   | "createdAt"
+  | "pinnedAt"
   | "hasPendingApprovals"
   | "hasPendingUserInput"
   | "backgroundLiveness"
@@ -82,6 +83,7 @@ export function groupSidebarChildren<T extends SidebarChild>(
     group.activeCount = countActiveDescendants(parentKey, new Set());
     group.children.sort(
       (a, b) =>
+        Number(b.pinnedAt != null) - Number(a.pinnedAt != null) ||
         Number(
           isActiveSidebarChild(b) ||
             countActiveDescendants(
@@ -101,6 +103,36 @@ export function groupSidebarChildren<T extends SidebarChild>(
     );
   }
   return groups;
+}
+
+/** Keep pinned descendants and their nested ancestor path visible through collapsed rows. */
+export function sidebarPinnedPathKeys<T extends SidebarChild>(
+  groups: ReadonlyMap<string, { readonly children: ReadonlyArray<T> }>,
+): ReadonlySet<string> {
+  const byKey = new Map<string, T>();
+  const pinned: T[] = [];
+  for (const group of groups.values()) {
+    for (const child of group.children) {
+      const childKey = scopedThreadKey(scopeThreadRef(child.environmentId, child.id));
+      byKey.set(childKey, child);
+      if (child.pinnedAt != null) pinned.push(child);
+    }
+  }
+
+  const path = new Set<string>();
+  for (const child of pinned) {
+    let current: T | undefined = child;
+    while (current !== undefined) {
+      const currentKey = scopedThreadKey(scopeThreadRef(current.environmentId, current.id));
+      if (path.has(currentKey)) break;
+      path.add(currentKey);
+      if (current.parentThreadId == null) break;
+      current = byKey.get(
+        scopedThreadKey(scopeThreadRef(current.environmentId, current.parentThreadId)),
+      );
+    }
+  }
+  return path;
 }
 
 /** A settled parent stays in the active shelf while any descendant still needs supervision. */

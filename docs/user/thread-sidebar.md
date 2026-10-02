@@ -204,6 +204,9 @@ Cross-project children appear under their parent in the sidebar with their proje
 label when its agent list is expanded. Project filters apply to each thread's own project. If the parent is hidden,
 filtered out, archived, or removed, the child appears at top level in its own
 project. Removing the parent's project does not delete children from other projects.
+Pin a nested thread from its sidebar menu to keep it visible under its parent when
+the parent is collapsed and first among its siblings when expanded. It stays out of
+the top-level **Pinned** section; unpin it to restore normal collapse behavior.
 Archiving or settling a parent does not archive or settle its children. When a
 nested thread is working, monitoring, or waiting on an approval or a question, its
 parent shows that state in the sidebar. An orchestrating agent is expected to answer
