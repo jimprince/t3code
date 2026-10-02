@@ -73,6 +73,7 @@ const commandTool = {
   ],
 };
 const queueEntry = Schema.Struct({
+  queueHeld: Schema.Boolean,
   queuedRunId: RunId,
   text: Schema.String,
   truncated: Schema.Boolean,
@@ -87,6 +88,7 @@ const QueueListTool = Tool.make("t3_queue_list", {
     limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 100 }))),
   }),
   success: Schema.Struct({
+    queueHeld: Schema.Boolean,
     items: Schema.Array(queueEntry),
     nextCursor: Schema.NullOr(NonNegativeInt),
   }),
@@ -101,6 +103,13 @@ const QueueReadTool = Tool.make("t3_queue_read", {
 })
   .annotate(Tool.Readonly, true)
   .annotate(Tool.Destructive, false);
+const QueueResumeTool = Tool.make("t3_queue_resume", {
+  ...commandTool,
+  description:
+    "Explicitly resume all held queued runs, including automatic completion notices. Omit threadId for this thread. Review stale queued instructions before resuming; sending a new message does not release a hold.",
+  parameters: Schema.Struct({ threadId: Schema.optional(ThreadId) }),
+}).annotate(Tool.Destructive, true);
+
 const QueueEditTool = Tool.make("t3_queue_edit", {
   ...commandTool,
   description:
@@ -285,6 +294,7 @@ export const ThreadToolkit = Toolkit.make(
   ThreadOrganizeTool,
   QueueListTool,
   QueueReadTool,
+  QueueResumeTool,
   QueueEditTool,
   QueueCancelTool,
   QueueReorderTool,
