@@ -216,7 +216,9 @@ it.layer(NodeServices.layer)("automatic archive decider", (it) => {
           readModel: model([pinnedActive]),
         });
         assert.strictEqual(
-          settlement.events.some((event) => event.type === "thread.unpinned"),
+          ("type" in settlement ? [settlement] : settlement).some(
+            (event) => event.type === "thread.unpinned",
+          ),
           type === "thread.settle",
         );
       }
