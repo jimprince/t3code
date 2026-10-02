@@ -108,6 +108,7 @@ import {
   OrchestrationDispatchCommandError,
   OrchestrationExportThreadError,
   OrchestrationForkThreadError,
+  OrchestrationBriefThreadError,
   OrchestrationGetFullThreadDiffError,
   OrchestrationGetFullThreadDiffInput,
   OrchestrationGetSnapshotError,
@@ -1464,6 +1465,12 @@ const WsOrchestrationForkThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.forkThrea
   error: Schema.Union([OrchestrationForkThreadError, EnvironmentAuthorizationError]),
 });
 
+const WsOrchestrationBriefThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.briefThread, {
+  payload: OrchestrationRpcSchemas.briefThread.input,
+  success: OrchestrationRpcSchemas.briefThread.output,
+  error: Schema.Union([OrchestrationBriefThreadError, EnvironmentAuthorizationError]),
+});
+
 const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
   payload: Schema.Struct({}),
   success: TerminalEvent,
@@ -1692,4 +1699,5 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationExportThreadRpc,
   WsOrchestrationImportThreadRpc,
   WsOrchestrationForkThreadRpc,
+  WsOrchestrationBriefThreadRpc,
 );
