@@ -180,7 +180,7 @@ export interface OrchestrationThreadShell {
 export interface OrchestrationMessage {
   attachments?: readonly import("@t3tools/contracts").ChatAttachment[];
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "reasoning";
   text: string;
   turnId: string | null;
   streaming: boolean;
@@ -220,6 +220,14 @@ export interface SavedAgent {
 export type NotificationLevel = "all" | "attention" | "none";
 
 export interface SavedSubscription {
+  /** Opt-in inactivity monitoring; zero or absent disables it. */
+  inactivityMinutes?: number;
+  inactivityObservation?: {
+    turnId: string;
+    activityAt: string;
+    quietSince: string;
+    observedAt: string;
+  } | null;
   level?: NotificationLevel;
   /** Minutes between unanswered nested-child reminders; zero disables reminders. */
   inputReminderMinutes?: number;
@@ -267,6 +275,7 @@ export type SavedNotificationStatus =
   | "superseded";
 
 export interface SavedNotification {
+  inactivityActivityAt?: string;
   pendingQuestion?: string | null;
   pendingInputRequestKey?: string | null;
   isChildInput?: boolean;
@@ -355,6 +364,7 @@ export interface StateFile {
 }
 
 export type AgentState =
+  | "inactive"
   | "needs-approval"
   | "needs-input"
   | "needs-plan"
