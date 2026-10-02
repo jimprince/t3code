@@ -61,7 +61,7 @@ export class T3RpcClient {
   }
 
   async subscribeThreadSnapshot<T>(threadId: string): Promise<T> {
-    return this.requestStreamFirst<T>("subscribeThread", { threadId });
+    return this.requestStreamFirst<T>("subscribeThread", { threadId, reasoningMessages: true });
   }
 
   async dispose(): Promise<void> {
