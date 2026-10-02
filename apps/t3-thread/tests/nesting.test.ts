@@ -59,9 +59,9 @@ describe("resolveCreateParent", () => {
     });
   });
 
-  it("joins the caller's parent when the caller is itself nested", () => {
+  it("nests under the caller when the caller is itself nested", () => {
     const threads = [thread("lead"), thread("orchestrator", { parentThreadId: "lead" })];
-    expect(create({ threads })).toEqual({ parentThreadId: "lead", reason: "caller-parent" });
+    expect(create({ threads })).toEqual({ parentThreadId: "orchestrator", reason: "caller" });
   });
 });
 

@@ -13,14 +13,13 @@ interface NestingThread {
 }
 
 export type CreateParentDecision =
-  | { readonly parentThreadId: string; readonly reason: "explicit" | "caller" | "caller-parent" }
+  | { readonly parentThreadId: string; readonly reason: "explicit" | "caller" }
   | { readonly parentThreadId: null; readonly reason: string };
 
 /**
  * Picks the thread a new worker nests under. By default a worker nests under
- * the calling thread; nesting is one level deep, so a worker started by an
- * already-nested thread joins that thread's parent. Callers in another project
- * or environment get a top-level worker with the reason reported.
+ * the calling thread, including when that caller is itself nested. Callers in
+ * another project or environment get a top-level worker with the reason reported.
  */
 export function resolveCreateParent(input: {
   readonly explicitParentThreadId: string | null;
@@ -50,11 +49,7 @@ export function resolveCreateParent(input: {
   if (caller.projectId !== input.projectId) {
     return { parentThreadId: null, reason: "calling thread is in another project" };
   }
-  if (!caller.parentThreadId) return { parentThreadId: caller.id, reason: "caller" };
-  const grandparent = live.find((thread) => thread.id === caller.parentThreadId);
-  return grandparent
-    ? { parentThreadId: grandparent.id, reason: "caller-parent" }
-    : { parentThreadId: caller.id, reason: "caller" };
+  return { parentThreadId: caller.id, reason: "caller" };
 }
 
 export interface PendingQuestion {

@@ -250,9 +250,8 @@ did not ask to see. Nesting needs the worker in your environment and project;
 otherwise, or on a server without nesting, the worker is top-level and the
 `nesting` field in the create output says why. Tell the user when that happens.
 
-- no flag: nests under the calling thread (`T3_THREAD_ID`). If the caller is
-  itself nested, the worker joins the caller's parent, because nesting is one
-  level deep. A caller in another project or environment gets a top-level
+- no flag: nests under the calling thread (`T3_THREAD_ID`), including when the
+  caller is itself nested. A caller in another project or environment gets a top-level
   worker; the `nesting` field in the create output says why.
 - `--top-level`: put the worker in the sidebar, for work the user should
   watch directly.

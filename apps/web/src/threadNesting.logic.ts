@@ -4,10 +4,10 @@ import type { ContextMenuItem, EnvironmentId, ThreadId } from "@t3tools/contract
 
 /**
  * Pure rules for nested threads on web and desktop. A nested thread leaves the
- * sidebar and is listed in its parent's Agents panel. The server enforces the
- * shape (one level, same project); these helpers only decide presentation and
- * which nesting actions to offer, and they never hide a thread whose parent
- * the user cannot reach.
+ * sidebar and is listed in its parent's Agents panel. The server enforces
+ * same-project acyclic parentage; these helpers only decide presentation and
+ * which nesting actions to offer, and they never hide a thread whose direct
+ * parent the user cannot reach.
  */
 type NestingThread = Pick<
   EnvironmentThreadShell,
@@ -19,7 +19,8 @@ const threadKey = (thread: Pick<NestingThread, "environmentId" | "id">) =>
 
 /**
  * Ids of threads nested right now within one environment's thread list: the
- * parent is present in the same project, not archived, and itself top-level.
+ * direct parent is present in the same project, not archived, and the edge is
+ * not part of a cycle.
  * A thread whose parent is archived, deleted, or unknown is not nested, so it
  * falls back to the sidebar instead of being stranded.
  */
@@ -32,14 +33,25 @@ export function resolveNestedThreadIds(
     if (thread.parentThreadId == null) continue;
     const parent = byId.get(thread.parentThreadId);
     if (
-      parent !== undefined &&
-      parent.id !== thread.id &&
-      parent.projectId === thread.projectId &&
-      parent.archivedAt === null &&
-      parent.parentThreadId == null
-    ) {
-      nested.add(thread.id);
+      parent === undefined ||
+      parent.id === thread.id ||
+      parent.projectId !== thread.projectId ||
+      parent.archivedAt !== null
+    )
+      continue;
+
+    const visited = new Set<ThreadId>();
+    let ancestor: (typeof threads)[number] | undefined = thread;
+    let cyclic = false;
+    while (ancestor?.parentThreadId != null) {
+      if (visited.has(ancestor.id)) {
+        cyclic = true;
+        break;
+      }
+      visited.add(ancestor.id);
+      ancestor = byId.get(ancestor.parentThreadId);
     }
+    if (!cyclic) nested.add(thread.id);
   }
   return nested;
 }
@@ -190,9 +202,9 @@ export function listNestedThreads<
     );
 }
 
-/** Whether `thread` can be a parent: top-level and not archived. */
+/** Whether `thread` can accept children. */
 export function canParentThreads(thread: NestingThread): boolean {
-  return thread.parentThreadId == null && thread.archivedAt === null;
+  return thread.archivedAt === null;
 }
 
 const NEST_PARENT_CANDIDATE_LIMIT = 12;
@@ -200,17 +212,27 @@ const NEST_PARENT_CANDIDATE_LIMIT = 12;
 /**
  * Threads `thread` may be nested under, most recently updated first. Mirrors
  * the server's rules so the menu only offers moves it will accept: same
- * environment and project, top-level, unarchived, and never when `thread`
- * already has nested threads of its own (archived children count).
+ * environment and project, unarchived, and never the thread itself, its current
+ * parent, or one of its descendants.
  */
 export function selectNestParentCandidates<
   T extends NestingThread & Pick<EnvironmentThreadShell, "updatedAt">,
 >(thread: NestingThread, threads: ReadonlyArray<T>, limit = NEST_PARENT_CANDIDATE_LIMIT): T[] {
-  const hasChildren = threads.some(
-    (candidate) =>
-      candidate.environmentId === thread.environmentId && candidate.parentThreadId === thread.id,
+  const byId = new Map(
+    threads
+      .filter((candidate) => candidate.environmentId === thread.environmentId)
+      .map((candidate) => [candidate.id, candidate] as const),
   );
-  if (hasChildren) return [];
+  const wouldCreateCycle = (candidate: T) => {
+    const visited = new Set<ThreadId>();
+    let ancestor: T | undefined = candidate;
+    while (ancestor !== undefined) {
+      if (ancestor.id === thread.id || visited.has(ancestor.id)) return true;
+      visited.add(ancestor.id);
+      ancestor = ancestor.parentThreadId == null ? undefined : byId.get(ancestor.parentThreadId);
+    }
+    return false;
+  };
   return threads
     .filter(
       (candidate) =>
@@ -218,7 +240,8 @@ export function selectNestParentCandidates<
         candidate.projectId === thread.projectId &&
         candidate.id !== thread.id &&
         candidate.id !== thread.parentThreadId &&
-        canParentThreads(candidate),
+        canParentThreads(candidate) &&
+        !wouldCreateCycle(candidate),
     )
     .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     .slice(0, limit);

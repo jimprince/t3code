@@ -134,41 +134,54 @@ it.layer(NodeServices.layer)("thread nesting", (it) => {
     }),
   );
 
-  it.effect("rejects nesting that would make a tree, a cycle, or cross projects", () =>
-    Effect.gen(function* () {
-      const nestedParent = readModel([
-        thread(ORCHESTRATOR, { parentThreadId: ThreadId.make("top") }),
-        thread(ThreadId.make("top")),
-        thread(WORKER),
-      ]);
-      expect(yield* rejection(setParent(WORKER, ORCHESTRATOR), nestedParent)).toContain(
-        "one level deep",
-      );
+  it.effect(
+    "allows deep trees and rejects cycles, cross-project parents, and archived parents",
+    () =>
+      Effect.gen(function* () {
+        const nestedParent = readModel([
+          thread(ORCHESTRATOR, { parentThreadId: ThreadId.make("top") }),
+          thread(ThreadId.make("top")),
+          thread(WORKER),
+        ]);
+        const deeper = yield* decideAndProject(setParent(WORKER, ORCHESTRATOR), nestedParent);
+        expect(deeper.threads.find((entry) => entry.id === WORKER)?.parentThreadId).toBe(
+          ORCHESTRATOR,
+        );
 
-      const hasChildren = readModel([
-        thread(ORCHESTRATOR),
-        thread(WORKER, { parentThreadId: ORCHESTRATOR }),
-        thread(ThreadId.make("other")),
-      ]);
-      expect(
-        yield* rejection(setParent(ORCHESTRATOR, ThreadId.make("other")), hasChildren),
-      ).toContain("nested threads of its own");
+        const hasChildren = readModel([
+          thread(ORCHESTRATOR),
+          thread(WORKER, { parentThreadId: ORCHESTRATOR }),
+          thread(ThreadId.make("other")),
+        ]);
+        const movedBranch = yield* decideAndProject(
+          setParent(ORCHESTRATOR, ThreadId.make("other")),
+          hasChildren,
+        );
+        expect(movedBranch.threads.find((entry) => entry.id === ORCHESTRATOR)?.parentThreadId).toBe(
+          ThreadId.make("other"),
+        );
+        expect(yield* rejection(setParent(ThreadId.make("other"), WORKER), movedBranch)).toContain(
+          "descendants",
+        );
 
-      const self = readModel([thread(WORKER)]);
-      expect(yield* rejection(setParent(WORKER, WORKER), self)).toContain("under itself");
+        const self = readModel([thread(WORKER)]);
+        expect(yield* rejection(setParent(WORKER, WORKER), self)).toContain("under itself");
 
-      const crossProject = readModel([
-        thread(ORCHESTRATOR, { projectId: OTHER_PROJECT }),
-        thread(WORKER),
-      ]);
-      expect(yield* rejection(setParent(WORKER, ORCHESTRATOR), crossProject)).toContain(
-        "same project",
-      );
+        const crossProject = readModel([
+          thread(ORCHESTRATOR, { projectId: OTHER_PROJECT }),
+          thread(WORKER),
+        ]);
+        expect(yield* rejection(setParent(WORKER, ORCHESTRATOR), crossProject)).toContain(
+          "same project",
+        );
 
-      const archivedParent = readModel([thread(ORCHESTRATOR, { archivedAt: NOW }), thread(WORKER)]);
-      expect(yield* rejection(setParent(WORKER, ORCHESTRATOR), archivedParent)).toContain(
-        "archived",
-      );
-    }),
+        const archivedParent = readModel([
+          thread(ORCHESTRATOR, { archivedAt: NOW }),
+          thread(WORKER),
+        ]);
+        expect(yield* rejection(setParent(WORKER, ORCHESTRATOR), archivedParent)).toContain(
+          "archived",
+        );
+      }),
   );
 });

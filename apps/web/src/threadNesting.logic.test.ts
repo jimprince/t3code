@@ -57,15 +57,18 @@ const parentId = ThreadId.make("parent");
 const ids = (threads: ReadonlyArray<TestThread>) => threads.map((entry) => entry.id);
 
 describe("resolveNestedThreadKeys", () => {
-  it("nests a thread only under a live, top-level parent in the same environment and project", () => {
+  it("nests through live parent chains in the same environment and project", () => {
     const keys = resolveNestedThreadKeys([
-      thread("parent"),
+      thread("root"),
+      thread("parent", { parentThreadId: ThreadId.make("root") }),
       thread("child", { parentThreadId: parentId }),
       thread("other-project", { parentThreadId: parentId, projectId: projectB }),
       thread("missing-parent", { parentThreadId: ThreadId.make("gone") }),
     ]);
-    expect([...keys]).toHaveLength(1);
-    expect([...keys][0]).toContain("child");
+    expect([...keys].toSorted()).toEqual([
+      scopedThreadKey(scopeThreadRef(envA, ThreadId.make("child"))),
+      scopedThreadKey(scopeThreadRef(envA, ThreadId.make("parent"))),
+    ]);
   });
 
   it("returns a thread to the sidebar when its parent is archived", () => {
@@ -84,7 +87,7 @@ describe("resolveNestedThreadKeys", () => {
     expect(keys.size).toBe(0);
   });
 
-  it("does not hide a child whose parent is itself nested, so a chain cannot strand it", () => {
+  it("does not hide a cycle", () => {
     const keys = resolveNestedThreadKeys([
       thread("a", { parentThreadId: ThreadId.make("b") }),
       thread("b", { parentThreadId: ThreadId.make("a") }),
@@ -192,7 +195,7 @@ describe("listNestedThreads", () => {
 describe("selectNestParentCandidates", () => {
   const subject = thread("subject");
 
-  it("offers top-level, unarchived threads in the same environment and project, newest first", () => {
+  it("offers unarchived threads at any depth in the same environment and project, newest first", () => {
     const result = selectNestParentCandidates(subject, [
       subject,
       thread("old", { updatedAt: "2026-09-02T00:00:00.000Z" }),
@@ -202,7 +205,7 @@ describe("selectNestParentCandidates", () => {
       thread("other-project", { projectId: projectB }),
       thread("other-env", { environmentId: envB }),
     ]);
-    expect(ids(result)).toEqual(["new", "old"]);
+    expect(ids(result)).toEqual(["new", "old", "nested"]);
   });
 
   it("excludes the current parent and honors the limit", () => {
@@ -220,13 +223,14 @@ describe("selectNestParentCandidates", () => {
     expect(ids(result)).toEqual(["a"]);
   });
 
-  it("offers nothing when the thread already has children, archived ones included", () => {
+  it("lets a branch move while excluding its descendants", () => {
     const result = selectNestParentCandidates(subject, [
       subject,
       thread("candidate"),
-      thread("child", { parentThreadId: subject.id, archivedAt: "2026-09-02T00:00:00.000Z" }),
+      thread("child", { parentThreadId: subject.id }),
+      thread("grandchild", { parentThreadId: ThreadId.make("child") }),
     ]);
-    expect(result).toEqual([]);
+    expect(ids(result)).toEqual(["candidate"]);
   });
 });
 
@@ -238,6 +242,13 @@ describe("resolveNestedDraftParent", () => {
     expect(resolveNestedDraftParent({ intent, draft, threads: [thread("parent")] })?.id).toBe(
       parentId,
     );
+    expect(
+      resolveNestedDraftParent({
+        intent,
+        draft,
+        threads: [thread("parent", { parentThreadId: ThreadId.make("root") })],
+      })?.id,
+    ).toBe(parentId);
   });
 
   it("drops the parent when the draft moved or the parent can no longer take children", () => {
@@ -245,7 +256,6 @@ describe("resolveNestedDraftParent", () => {
       { draft: { environmentId: envB, projectId: projectA }, threads: [thread("parent")] },
       { draft: { environmentId: envA, projectId: projectB }, threads: [thread("parent")] },
       { draft, threads: [thread("parent", { archivedAt: "2026-09-02T00:00:00.000Z" })] },
-      { draft, threads: [thread("parent", { parentThreadId: ThreadId.make("other") })] },
       { draft, threads: [] },
     ];
     for (const input of cases) {
@@ -289,12 +299,12 @@ describe("thread action menu nesting items", () => {
     expect(nestUnderMenuTarget("nest-under:unknown", state)).toBeNull();
   });
 
-  it("offers Move to sidebar, and not New thread under, for a nested thread", () => {
+  it("offers both child creation and Move to sidebar for a nested thread", () => {
     const subject = thread("subject", { parentThreadId: parentId });
     const state = resolveThreadNestingMenuState(subject, [subject, thread("parent")], true);
     const menuIds = withThreadNestingMenuItems(baseItems, state).map((item) => item.id);
     expect(menuIds).toContain("move-to-sidebar");
-    expect(menuIds).not.toContain("new-nested-thread");
+    expect(menuIds).toContain("new-nested-thread");
     expect(isThreadNestingMenuId("move-to-sidebar")).toBe(true);
     expect(isThreadNestingMenuId("nest-under:x")).toBe(true);
     expect(isThreadNestingMenuId("rename")).toBe(false);
@@ -323,7 +333,7 @@ describe("resolveViewedNestedThread", () => {
 });
 
 describe("isNestedUnder", () => {
-  it("matches only a live, top-level parent in the same environment and project", () => {
+  it("matches a live parent at any depth in the same environment and project", () => {
     const child = thread("child", { parentThreadId: parentId });
     expect(isNestedUnder(child, thread("parent"))).toBe(true);
     expect(isNestedUnder(child, thread("parent", { environmentId: envB }))).toBe(false);
@@ -332,7 +342,7 @@ describe("isNestedUnder", () => {
       false,
     );
     expect(isNestedUnder(child, thread("parent", { parentThreadId: ThreadId.make("top") }))).toBe(
-      false,
+      true,
     );
   });
 });

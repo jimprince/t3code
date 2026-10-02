@@ -7,8 +7,9 @@ type NestingThread = Pick<
 
 /**
  * Why `threadId` cannot be nested under `parentThreadId`, or null when it can.
- * Nesting is one level deep and stays inside one project, so the sidebar and
- * the parent's Agents panel never have to render a tree or chase a cycle.
+ * Nesting stays inside one project at this layer. Parentage may be arbitrarily
+ * deep, so walking the proposed parent's ancestors is the one place that
+ * prevents cycles.
  */
 export function threadNestingViolation(input: {
   readonly threads: ReadonlyArray<NestingThread>;
@@ -26,11 +27,19 @@ export function threadNestingViolation(input: {
   if (parent.projectId !== input.projectId) {
     return "A nested thread must be in the same project as its parent.";
   }
-  if ((parent.parentThreadId ?? null) !== null) {
-    return "Threads nest one level deep, and the chosen parent is itself nested.";
-  }
-  if (live.some((thread) => (thread.parentThreadId ?? null) === input.threadId)) {
-    return "This thread has nested threads of its own, so it cannot be nested.";
+
+  const byId = new Map(live.map((thread) => [thread.id, thread] as const));
+  const visited = new Set<ThreadId>();
+  let ancestor: NestingThread | undefined = parent;
+  while (ancestor !== undefined) {
+    if (ancestor.id === input.threadId) {
+      return "A thread cannot be nested under one of its descendants.";
+    }
+    if (visited.has(ancestor.id)) {
+      return "The chosen parent is already part of a nesting cycle.";
+    }
+    visited.add(ancestor.id);
+    ancestor = ancestor.parentThreadId == null ? undefined : byId.get(ancestor.parentThreadId);
   }
   return null;
 }
