@@ -1375,3 +1375,13 @@ retire_when = "Upstream operator tooling provides equivalent rename and explicit
 depends_on = ["fork-worker-operations"]
 roles = []
 note = "Native bootstrap persists manual thread.meta.update intent before the first turn when lockTitle is set; saved aliases and raw UUIDs share title and scope readback. Scope is optional server-owned thread metadata, and an empty value clears it."
+
+[[patch]]
+name = "fork-embedded-pages"
+subject = "feat(web): pin web pages as sidebar footer icons"
+class = "product"
+purpose = "Let users configure named web pages that open from sidebar footer icons in the main area, hosted per surface with an honest Open in browser fallback."
+retire_when = "Upstream offers configurable embedded or pinned web pages in the sidebar, or the fork stops showing them."
+depends_on = []
+roles = []
+note = "Stored as the shared server setting embeddedPages so one edit reaches every connected environment and mobile can read it. Desktop hosts pages in an Electron webview on the Browser panel's default-profile partition (no mixed-content block, first-party cookies). Web uses an iframe; http pages from an https app are shown as blocked with Open in browser, and SameSite=Lax login cookies cannot persist in a cross-site frame, so the header always offers Open in browser. Mobile lists pages under Settings > App and opens them in the in-app browser. Footer change is one mounted component so other footer icons rebase cleanly."
