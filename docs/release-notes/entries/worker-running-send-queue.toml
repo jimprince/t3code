@@ -1,0 +1,4 @@
+id = "worker-running-send-queue"
+category = "feature"
+functionality = "worker operations"
+text = "Queue follow-up messages to busy worker threads and deliver them at the next turn boundary."

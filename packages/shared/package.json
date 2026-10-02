@@ -390,6 +390,10 @@
     "./codexAuthHandoff": {
       "types": "./src/codexAuthHandoff.ts",
       "import": "./src/codexAuthHandoff.ts"
+    },
+    "./threadRoutingState": {
+      "types": "./src/threadRoutingState.ts",
+      "import": "./src/threadRoutingState.ts"
     }
   },
   "scripts": {
