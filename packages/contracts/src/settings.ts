@@ -1,4 +1,5 @@
 import { SshDeviceHostConfigs } from "./device.ts";
+import { EmbeddedPages } from "./embeddedPages.ts";
 import * as Effect from "effect/Effect";
 import * as Duration from "effect/Duration";
 import * as Schema from "effect/Schema";
@@ -1388,6 +1389,8 @@ export const ServerSettings = Schema.Struct({
   usagePriceOverrides: Schema.Record(TrimmedNonEmptyString, UsageModelPriceOverride).pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
+  /** Sidebar footer pages. A shared preference, synced to every environment. */
+  embeddedPages: EmbeddedPages.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
 });
 export type ServerSettings = typeof ServerSettings.Type;
 
@@ -1681,6 +1684,8 @@ export const ServerSettingsPatch = Schema.Struct({
   usagePriceOverrides: Schema.optionalKey(
     Schema.Record(TrimmedNonEmptyString, Schema.NullOr(UsageModelPriceOverride)),
   ),
+  /** Replaces the whole list, so removing and reordering need no extra encoding. */
+  embeddedPages: Schema.optionalKey(EmbeddedPages),
 });
 export type ServerSettingsPatch = typeof ServerSettingsPatch.Type;
 
