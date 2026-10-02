@@ -6,7 +6,7 @@
  * agent tooling) while they still run turns and stream their detail by id like
  * any other thread.
  */
-export const PAGE_AGENT_THREAD_ID_PREFIX = "page-agent-";
+const PAGE_AGENT_THREAD_ID_PREFIX = "page-agent-";
 
 export function isPageAgentThreadId(threadId: string): boolean {
   return threadId.startsWith(PAGE_AGENT_THREAD_ID_PREFIX);

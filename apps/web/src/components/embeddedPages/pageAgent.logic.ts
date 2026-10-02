@@ -91,7 +91,7 @@ export function deletePageAgentConversation(
     : { current: stored.previous, previous: null, lastSentAt: now };
 }
 
-export const PAGE_AGENT_DEFAULT_MODEL = "gpt-6.1-sol";
+const PAGE_AGENT_DEFAULT_MODEL = "gpt-6.1-sol";
 
 interface PageAgentModelCandidate {
   readonly instanceId: ProviderInstanceId;
