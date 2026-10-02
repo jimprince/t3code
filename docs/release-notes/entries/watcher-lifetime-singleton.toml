@@ -1,0 +1,4 @@
+id = "watcher-lifetime-singleton"
+category = "fix"
+functionality = "worker operations"
+text = "Keep a single notification watcher running on macOS even when boot-time readings drift or its PID lease is lost."

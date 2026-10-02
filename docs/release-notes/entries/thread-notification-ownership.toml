@@ -1,0 +1,4 @@
+id = "thread-notification-ownership"
+category = "fix"
+functionality = "threads"
+text = "Top-level threads no longer subscribe their creators automatically; approvals and questions notify supervisors reliably, notification replies stop cascading, and settling offers subscription removal and restoration."

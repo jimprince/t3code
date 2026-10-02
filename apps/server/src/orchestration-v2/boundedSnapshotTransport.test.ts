@@ -12,6 +12,7 @@ import {
   ORCHESTRATION_PROTOCOL_VERSION,
   OrchestrationV2ThreadBoundedSnapshot,
   OrchestrationV2ThreadStreamItem,
+  PlanId,
   ProjectId,
   ProviderDriverKind,
   ProviderInstanceId,
@@ -278,6 +279,67 @@ function itemIds(projection: OrchestrationV2ThreadProjection): string[] {
 }
 
 it.layer(TestLayer)("compact bounded snapshot transport", (it) => {
+  it.effect(
+    "operator summaries preserve old message and plan totals through the production window and wire path",
+    () =>
+      Effect.gen(function* () {
+        const projections = yield* ProjectionStore.ProjectionStoreV2;
+        const at = yield* DateTime.now;
+        const reply = {
+          id: MessageId.make("message:operator-old-reply"),
+          threadId: LONG,
+          runId: longRun,
+          nodeId: null,
+          role: "assistant" as const,
+          text: "Earlier reply",
+          createdBy: "agent" as const,
+          creationSource: "provider" as const,
+          attachments: [],
+          streaming: false,
+          createdAt: at,
+          updatedAt: at,
+        };
+        yield* projections.apply({
+          id: EventId.make("event:operator-message"),
+          type: "message.updated",
+          threadId: LONG,
+          occurredAt: at,
+          payload: reply,
+        });
+        for (const [index, status] of ["active", "completed", "superseded"].entries()) {
+          yield* projections.apply({
+            id: EventId.make(`event:operator-plan:${index}`),
+            type: "plan.updated",
+            threadId: LONG,
+            occurredAt: at,
+            payload: {
+              id: PlanId.make(`plan:operator:${index}`),
+              threadId: LONG,
+              runId: longRun,
+              nodeId: NodeId.make(`node:${longRun}`),
+              kind: "proposed_plan",
+              status: status as "active" | "completed" | "superseded",
+              markdown: "Plan",
+            },
+          });
+        }
+        const { decoded } = yield* firstSnapshot({
+          threadId: LONG,
+          acceptBoundedSnapshot: true,
+          includeOperatorSummary: true,
+        });
+        assert.deepStrictEqual(decoded.operatorSummary, {
+          messageCount: 1,
+          proposedPlanCount: 3,
+          latestAssistantMessage: reply,
+        });
+        assert.isBelow(decoded.projection.turnItems.length, 92);
+        assert.isFalse(decoded.projection.messages.some((message) => message.id === reply.id));
+        const without = yield* firstSnapshot({ threadId: LONG, acceptBoundedSnapshot: true });
+        assert.isUndefined(without.decoded.operatorSummary);
+      }),
+  );
+
   describe.each([
     ["fork", FORK],
     ["long run with a retained interrupt request", LONG],
