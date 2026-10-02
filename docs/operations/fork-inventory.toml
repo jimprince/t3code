@@ -1355,3 +1355,13 @@ retire_when = "Upstream supports drag-to-nest with cycle-safe parent assignment 
 depends_on = ["fork-cross-project-thread-nesting", "fork-sidebar-agent-visibility"]
 roles = []
 note = "Dragging defaults to reorder. An eligible row becomes a nesting target only after the pointer moves right by one existing 12px child indent; returning within half an indent restores reorder without boundary flicker. Reorder shows a full-width insertion line, while nesting highlights the parent and shows an indented child-depth marker. Parent assignment uses the same thread.parent.set action and candidate rules as the context menu. Nesting preserves the dragged thread's own pin, while a section drop moves it to the top level and lets Pinned or Active set that state. Nested rows are drag sources, reorder only inside their matching pinned or unpinned sibling bucket, and never duplicate into the top-level Pinned shelf."
+
+[[patch]]
+name = "fork-worker-inactivity"
+subject = "feat(t3-thread): alert supervisors when active workers go quiet"
+class = "product"
+purpose = "Offer opt-in per-subscription attention alerts after an active worker stops producing observable provider, tool, or reasoning progress."
+retire_when = "Upstream or the operator CLI provides equivalent activity-based inactivity monitoring with episode deduplication and state-safe delivery."
+depends_on = ["fork-notification-preferences"]
+roles = []
+note = "Monitoring is disabled on existing routes until explicitly enabled. A successful observation window, persisted per route, excludes network failures and sleep gaps; current-turn activity identifies one episode across watcher restart. Completed, settled, archived, input-waiting, plan-waiting, stopped and quota-held workers are excluded. Silent tools or hidden reasoning can still be working, so notices report missing evidence and never assert provider failure or perform recovery. Idle missing-result alerts are excluded because assignments do not prove an outstanding result obligation."
