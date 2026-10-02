@@ -1,0 +1,4 @@
+id = "cli-worker-pinning"
+category = "feature"
+functionality = "threads"
+text = "Pin new workers with t3-thread create --pin, change existing workers with pin and unpin, and inspect pinned status from the CLI."
