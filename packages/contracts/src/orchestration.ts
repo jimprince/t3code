@@ -45,6 +45,7 @@ export const ORCHESTRATION_WS_METHODS = {
   exportThread: "orchestration.exportThread",
   importThread: "orchestration.importThread",
   forkThread: "orchestration.forkThread",
+  briefThread: "orchestration.briefThread",
 } as const;
 
 export const ProviderApprovalPolicy = Schema.Literals([
@@ -1327,6 +1328,23 @@ export const OrchestrationForkThreadResult = Schema.Struct({
   warnings: Schema.Array(Schema.String),
 });
 export type OrchestrationForkThreadResult = typeof OrchestrationForkThreadResult.Type;
+
+/** Brief me: a summary of an orchestrator's worker traffic since the user last spoke. */
+export const OrchestrationBriefThreadInput = Schema.Struct({
+  threadId: ThreadId,
+});
+export type OrchestrationBriefThreadInput = typeof OrchestrationBriefThreadInput.Type;
+
+export const OrchestrationBriefThreadResult = Schema.Struct({
+  generatedAt: IsoDateTime,
+  /** Worker-started turns the brief covers. Zero means nothing happened to brief. */
+  turnCount: NonNegativeInt,
+  needsYou: Schema.Array(Schema.String),
+  done: Schema.Array(Schema.String),
+  moving: Schema.Array(Schema.String),
+  blocked: Schema.Array(Schema.String),
+});
+export type OrchestrationBriefThreadResult = typeof OrchestrationBriefThreadResult.Type;
 
 export const ProjectCreateCommand = Schema.Struct({
   type: Schema.Literal("project.create"),
@@ -2759,6 +2777,10 @@ export const OrchestrationRpcSchemas = {
     input: OrchestrationForkThreadInput,
     output: OrchestrationForkThreadResult,
   },
+  briefThread: {
+    input: OrchestrationBriefThreadInput,
+    output: OrchestrationBriefThreadResult,
+  },
 } as const;
 
 export class OrchestrationGetSnapshotError extends Schema.TaggedError<OrchestrationGetSnapshotError>()(
@@ -2821,6 +2843,14 @@ export class OrchestrationImportThreadError extends Schema.TaggedError<Orchestra
 
 export class OrchestrationForkThreadError extends Schema.TaggedError<OrchestrationForkThreadError>()(
   "OrchestrationForkThreadError",
+  {
+    message: TrimmedNonEmptyString,
+    cause: Schema.optional(Schema.Defect()),
+  },
+) {}
+
+export class OrchestrationBriefThreadError extends Schema.TaggedError<OrchestrationBriefThreadError>()(
+  "OrchestrationBriefThreadError",
   {
     message: TrimmedNonEmptyString,
     cause: Schema.optional(Schema.Defect()),
