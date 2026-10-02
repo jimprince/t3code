@@ -8,6 +8,7 @@ import {
   upsertQueuedSend,
 } from "./state.js";
 import { classifyThread } from "./status.js";
+import { threadQuotaBlock } from "./quota.js";
 import type { OrchestrationThread, SavedEnvironment, SavedQueuedSend, StateFile } from "./types.js";
 
 /**
@@ -294,6 +295,16 @@ export async function drainQueuedSends(options: {
           now: attemptedAt,
         })),
       );
+      continue;
+    }
+
+    const quota = threadQuotaBlock(thread);
+    if (
+      thread.settledOverride === "settled" ||
+      (/^(?:HomeNetwork|T3) orchestrator notification:/.test(head.text) &&
+        quota &&
+        (quota.resetsAt === null || quota.resetsAt > Date.parse(attemptedAt)))
+    ) {
       continue;
     }
 

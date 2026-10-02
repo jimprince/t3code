@@ -2521,6 +2521,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     context: ClaudeSessionContext,
     message: string,
     cause?: unknown,
+    code?: string,
   ) {
     if (cause !== undefined) {
       void cause;
@@ -2537,6 +2538,7 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
       payload: {
         message,
         class: "provider_error",
+        ...(code ? { code } : {}),
         ...(cause !== undefined ? { detail: cause } : {}),
       },
       providerRefs: nativeProviderRefs(context),
@@ -3562,7 +3564,16 @@ export const makeClaudeAdapter = Effect.fn("makeClaudeAdapter")(function* (
     const { status, errorMessage } = resultOutcome(message, failureHint);
 
     if (status === "failed") {
-      yield* emitRuntimeError(context, errorMessage ?? "Claude turn failed.");
+      yield* emitRuntimeError(
+        context,
+        errorMessage ?? "Claude turn failed.",
+        undefined,
+        turn &&
+          !turn.authenticationFailureMessage &&
+          (turn.rejectedRateLimitTypes.size > 0 || turn.latestAssistantRateLimited)
+          ? "usage_limit"
+          : undefined,
+      );
     }
 
     yield* completeTurn(context, status, errorMessage, message);

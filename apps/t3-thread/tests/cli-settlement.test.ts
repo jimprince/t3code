@@ -13,6 +13,29 @@ const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 const workspace = NodeURL.fileURLToPath(new URL("..", import.meta.url));
 const threadId = "22222222-2222-4222-8222-222222222222";
 
+function subscriptionState(): StateFile {
+  const route = (sourceThreadId: string, sourceAgentName: string | null) => ({
+    subscriberThreadId: threadId,
+    subscriberAgentName: "orchestrator",
+    subscriberEnvironment: "offline",
+    sourceThreadId,
+    sourceAgentName,
+    sourceEnvironment: "offline",
+    createdAt: "2026-09-25T00:00:00.000Z",
+    updatedAt: "2026-09-25T00:00:00.000Z",
+  });
+  const state: StateFile = {
+    version: 1,
+    environments: [],
+    agents: [],
+    // An unsaved source is named only by its thread id.
+    subscriptions: [route("source-unsaved", null), route("source-kept", "kept")],
+    notifications: [],
+    queuedSends: [],
+  };
+  return state;
+}
+
 describe("settlement command registration and caller identity", () => {
   it.each([
     ["settle", threadId],
@@ -60,28 +83,43 @@ describe("settlement command registration and caller identity", () => {
 });
 
 describe("subscriptions listed by settle", () => {
+  it.each([
+    [
+      ["--subscriber", threadId],
+      ["source-unsaved", "source-kept"],
+    ],
+    [["--subscriber", "orchestrator", "--source", "source-unsaved"], ["source-unsaved"]],
+    [["--source", "kept"], ["source-kept"]],
+  ] as const)(
+    "filters persisted subscriptions through %j",
+    async (filters, expectedSources) => {
+      const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-cli-routes-"));
+      const stateFile = NodePath.join(directory, "state.json");
+      const env = { ...process.env, T3_AGENT_STATE_FILE: stateFile };
+      delete env.T3_THREAD_ID;
+      try {
+        await NodeFSP.writeFile(stateFile, JSON.stringify(subscriptionState()));
+        const result = await execFile(
+          NodePath.join(workspace, "node_modules/.bin/tsx"),
+          ["src/cli.ts", "subscriptions", ...filters],
+          { cwd: workspace, env },
+        );
+        expect(
+          JSON.parse(result.stdout).map(
+            (route: { sourceThreadId: string }) => route.sourceThreadId,
+          ),
+        ).toEqual(expectedSources);
+      } finally {
+        await NodeFSP.rm(directory, { recursive: true, force: true });
+      }
+    },
+    15_000,
+  );
+
   it("prints an unsubscribe command that works from any thread", async () => {
     const directory = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-cli-unsub-"));
     const stateFile = NodePath.join(directory, "state.json");
-    const route = (sourceThreadId: string, sourceAgentName: string | null) => ({
-      subscriberThreadId: threadId,
-      subscriberAgentName: "orchestrator",
-      subscriberEnvironment: "offline",
-      sourceThreadId,
-      sourceAgentName,
-      sourceEnvironment: "offline",
-      createdAt: "2026-09-25T00:00:00.000Z",
-      updatedAt: "2026-09-25T00:00:00.000Z",
-    });
-    const state: StateFile = {
-      version: 1,
-      environments: [],
-      agents: [],
-      // An unsaved source is named only by its thread id.
-      subscriptions: [route("source-unsaved", null), route("source-kept", "kept")],
-      notifications: [],
-      queuedSends: [],
-    };
+    const state = subscriptionState();
     try {
       await NodeFSP.writeFile(stateFile, JSON.stringify(state));
       const [listed] = describeSubscriptionsOf(state, threadId);
