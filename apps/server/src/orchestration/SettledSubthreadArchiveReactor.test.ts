@@ -211,7 +211,13 @@ it.layer(NodeServices.layer)("automatic archive decider", (it) => {
         const settlement = yield* decideOrchestrationCommand({
           command:
             type === "thread.auto-settle"
-              ? { type, commandId: CommandId.make(type), threadId: pinnedActive.id, settledAt: NOW }
+              ? {
+                  type,
+                  commandId: CommandId.make(type),
+                  threadId: pinnedActive.id,
+                  settledAt: NOW,
+                  snapshotSequence: 1,
+                }
               : { type, commandId: CommandId.make(type), threadId: pinnedActive.id },
           readModel: model([pinnedActive]),
         });
@@ -233,6 +239,8 @@ it.layer(NodeServices.layer)("automatic archive decider", (it) => {
             text: "Continue",
             attachments: [],
           },
+          runtimeMode: "full-access",
+          interactionMode: "default",
           createdAt: NOW,
         },
         readModel: model([parent]),
