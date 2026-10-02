@@ -1,3 +1,4 @@
+import { t3OrchestrationSystemPrompt } from "../../provider/T3OrchestrationInstructions.ts";
 import type {
   AgentMessage,
   AgentOptions,
@@ -2175,7 +2176,13 @@ export function makeCursorAdapterV2(
               detail: "Cursor turn requires non-empty text or attachments.",
             });
           }
-          const text = `${userText}\n\n${buildRuntimeInstructions({ harness: "Cursor", model: turnInput.modelSelection.model })}`;
+          const text = [
+            userText,
+            buildRuntimeInstructions({ harness: "Cursor", model: turnInput.modelSelection.model }),
+            t3OrchestrationSystemPrompt(cursorMcpServers(turnInput.threadId) !== undefined),
+          ]
+            .filter(Boolean)
+            .join("\n\n");
           return images.length === 0
             ? text
             : ({
