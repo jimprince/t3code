@@ -69,6 +69,7 @@ import {
 } from "./watch.js";
 import type { CallerEnvironmentMetadata, SubscriptionEndpoint } from "./state.js";
 import type { SavedAgent, SavedNotification, SavedQueuedSend } from "./types.js";
+import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -204,6 +205,14 @@ async function resolveNotifyEndpoint(
     throw new Error("Internal error: caller notification was selected without a caller thread.");
   }
   return resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment);
+}
+
+/** Origin for a send made from inside a T3 thread; a send from a plain terminal has none. */
+function callerSendOrigin(state: { agents: ReadonlyArray<SavedAgent> }): MessageOrigin | null {
+  const fromThreadId = resolveCallerThreadId();
+  if (!fromThreadId) return null;
+  const fromName = state.agents.find((agent) => agent.threadId === fromThreadId)?.name;
+  return { source: "thread-send", fromThreadId, ...(fromName ? { fromName } : {}) };
 }
 
 async function withCallerFromEnv(): Promise<{
@@ -1476,6 +1485,7 @@ agent
           text: messageParts.join(" ").trim(),
           queueWhileRunning: options.queue,
           agentName: saved ? savedAgent.name : null,
+          origin: callerSendOrigin(state),
         }),
     });
     const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
@@ -1531,6 +1541,7 @@ for (const kind of ["clarify", "revise", "complete"] as const) {
         threadId: savedAgent.threadId,
         text: buildFollowUpMessage(kind, messageParts.join(" ")),
         agentName: saved ? savedAgent.name : null,
+        origin: callerSendOrigin(await loadState()),
       });
       if (outcome.queued) {
         await ensureNotificationWatcher();
