@@ -28,7 +28,12 @@ import {
   needsAttention,
   summarizeMessageText,
 } from "./monitor.js";
-import { classifyThread, formatThreadLine, subscriptionBaselineTurnId } from "./status.js";
+import {
+  classifyThread,
+  formatThreadLine,
+  selectThreadChildren,
+  subscriptionBaselineTurnId,
+} from "./status.js";
 import {
   assertNotSelfSubscription,
   buildSubscriptionRecord,
@@ -352,13 +357,30 @@ program
 program
   .command("threads")
   .requiredOption("--env <name>", "saved environment name")
-  .description("List remote thread shells without loading full thread history")
+  .option(
+    "--parent <agent-or-thread>",
+    "list children of this agent or thread in the selected environment",
+  )
+  .option("--recursive", "include all descendants (requires --parent)")
+  .description("List remote thread shells, including nesting, settlement and pin state")
   .action(async (options) => {
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
     const client = new RemoteEnvironmentClient(environment);
+    if (options.recursive && !options.parent) {
+      throw new Error("--recursive requires --parent");
+    }
+    const parentThreadId = options.parent
+      ? resolveParentThreadId(state, options.parent, environment.name)
+      : null;
     const threads = await client.listThreads();
-    printLines(threads.map(formatThreadLine));
+    const titles = new Map(threads.map((thread) => [thread.id, thread.title]));
+    const selected = parentThreadId
+      ? selectThreadChildren(threads, parentThreadId, Boolean(options.recursive))
+      : threads;
+    printLines(
+      selected.map((thread) => formatThreadLine(thread, titles.get(thread.parentThreadId ?? ""))),
+    );
   });
 
 program
@@ -1203,6 +1225,10 @@ agent
     const thread = await client.findThread(savedAgent.threadId);
     const status = classifyThread(thread);
     const latestAssistant = getLatestAssistantMessage(thread);
+    const parentThreadId = thread.parentThreadId ?? null;
+    const parentTitle = parentThreadId
+      ? ((await client.listThreads()).find((parent) => parent.id === parentThreadId)?.title ?? null)
+      : null;
     printJson({
       agent: saved ? savedAgent.name : null,
       environment: savedAgent.environment,
@@ -1212,6 +1238,8 @@ agent
       saved,
       checkedEnvironments: target.checkedEnvironments,
       unreachableEnvironments: target.unreachableEnvironments,
+      parentThreadId,
+      parentTitle,
       pinned: thread.pinnedAt != null,
       pinnedAt: thread.pinnedAt ?? null,
       settledOverride: thread.settledOverride ?? null,
