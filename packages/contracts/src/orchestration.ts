@@ -1567,6 +1567,8 @@ const ThreadInteractionModeSetCommand = Schema.Struct({
 });
 
 const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
+  /** Persist explicit manual title intent before automatic first-turn titling. */
+  lockTitle: Schema.optional(Schema.Boolean),
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
   modelSelection: ModelSelection,
