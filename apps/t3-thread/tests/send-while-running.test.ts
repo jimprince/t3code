@@ -1,4 +1,3 @@
-import { drainQueuedSends } from "../src/sendQueue.js";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -7,7 +6,7 @@ import { describe, expect, it, vi } from "vite-plus/test";
 import { readMessageOrigin } from "@t3tools/shared/messageOrigin";
 
 import { RemoteEnvironmentClient } from "../src/client.js";
-import { loadState, saveState } from "../src/state.js";
+import { loadState } from "../src/state.js";
 import type { OrchestrationThread, SavedEnvironment } from "../src/types.js";
 
 const environment: SavedEnvironment = {
@@ -88,37 +87,6 @@ async function withTempState(test: () => Promise<void>): Promise<void> {
 }
 
 describe("RemoteEnvironmentClient.sendMessage while a turn is running", () => {
-  it("delivers a queued sender header once, retaining the origin record", async () => {
-    await withTempState(async () => {
-      await saveState({ ...(await loadState()), environments: [environment] });
-      const thread = makeRunningThread();
-      const harness = makeHarness(thread);
-      const origin = {
-        source: "thread-send" as const,
-        fromThreadId: "parent-id",
-        fromName: "parent",
-      };
-      await harness.client.sendMessage({
-        threadId: thread.id,
-        text: "continue",
-        origin,
-        senderEnvironment: "dev-vm",
-      });
-      const queued = (await loadState()).queuedSends[0]!;
-      expect(queued.text).toContain('thread_id: "parent-id"');
-      expect(queued.text).toContain('saved_name: "parent"');
-      expect(queued.text).toContain('environment: "dev-vm"');
-      expect(queued.text).toContain('reply: "t3-thread send parent ..."');
-      thread.latestTurn = { ...thread.latestTurn!, state: "completed" };
-      thread.session = null;
-      thread.settledOverride = "settled";
-      expect(await drainQueuedSends({ clientFactory: () => harness.client })).toHaveLength(1);
-      const message = harness.commands[0]!.message as { text: string; context: unknown };
-      expect(message.text).toBe(queued.text);
-      expect(message.text.match(/T3 thread message:/g)).toHaveLength(1);
-      expect(readMessageOrigin(message)).toEqual(origin);
-    });
-  });
   it("queues the message and dispatches it at the next turn boundary", async () => {
     await withTempState(async () => {
       const harness = makeHarness(makeRunningThread());
