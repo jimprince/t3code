@@ -3,6 +3,7 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 
+import { RemoteEnvironmentClient } from "../src/client.js";
 import { loadState, saveState } from "../src/state.js";
 import { buildSubscriptionRecord } from "../src/state.js";
 import { sendDirectResult } from "../src/directResult.js";
@@ -158,7 +159,7 @@ function createClientFactory(input: {
       },
       async sendMessage(message) {
         await input.onSend?.(message);
-        sentMessages.push(message);
+        sentMessages.push({ threadId: message.threadId, text: message.text });
       },
     };
     return client;
@@ -190,6 +191,227 @@ async function withTempState(test: () => Promise<void>): Promise<void> {
 }
 
 describe("watch flows", () => {
+  it("holds and coalesces new notifications against a persisted quota failure, then recovers on explicit retry", async () => {
+    await withTempState(async () => {
+      const subscriber = makeThread({
+        id: "thread-coordinator-a",
+        latestTurn: { ...makeThread().latestTurn!, state: "error" },
+        session: {
+          threadId: "thread-coordinator-a",
+          status: "error",
+          providerName: "claudeAgent",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: "Claude usage limit reached. Send the message again once the limit resets.",
+          updatedAt: "2026-04-17T00:00:02.000Z",
+        },
+      });
+      const source = makeThread();
+      const { clientFactory, sentMessages } = createClientFactory({
+        sourceThread: source,
+        subscriberThread: subscriber,
+      });
+      const now = () => "2026-04-17T01:00:00.000Z";
+      await detectAttentionEvents({ clientFactory, now });
+      const legacyState = await loadState();
+      legacyState.notifications.push({
+        ...legacyState.notifications[0]!,
+        id: "older-record",
+        eventKey: "older-event",
+        latestTurnId: "old-turn",
+      });
+      await saveState(legacyState);
+      // Re-detect the already persisted current event: old versions can leave a backlog.
+      await detectAttentionEvents({ clientFactory, now });
+      expect(
+        (await loadState()).notifications.find((event) => event.id === "older-record")?.status,
+      ).toBe("superseded");
+      await deliverPendingNotifications({ clientFactory, now });
+      source.latestTurn = { ...source.latestTurn!, turnId: "turn-2" };
+      await detectAttentionEvents({ clientFactory, now });
+      await deliverPendingNotifications({ clientFactory, now });
+      const state = await loadState();
+      expect(sentMessages).toHaveLength(0);
+      expect(state.notifications.map((event) => event.status).sort()).toEqual([
+        "held",
+        "superseded",
+        "superseded",
+      ]);
+      // Restart with persisted records, then an explicit user turn succeeds.
+      await saveState(state);
+      subscriber.activities = [
+        {
+          kind: "runtime.error",
+          turnId: "turn-1",
+          payload: { message: subscriber.session!.lastError },
+        },
+      ];
+      subscriber.session = null;
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T01:02:00.000Z" });
+      expect(sentMessages).toHaveLength(0);
+      subscriber.latestTurn = {
+        ...subscriber.latestTurn!,
+        turnId: "explicit-retry",
+        state: "completed",
+      };
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T01:04:00.000Z" });
+      expect(sentMessages).toHaveLength(1);
+      expect(
+        (await loadState()).notifications.filter((event) => event.status === "delivered"),
+      ).toHaveLength(1);
+    });
+  });
+
+  it("releases quota holds at a structured reset, but never bypasses settlement or retries an already expired failed window", async () => {
+    await withTempState(async () => {
+      const subscriber = makeThread({
+        id: "thread-coordinator-a",
+        latestTurn: { ...makeThread().latestTurn!, state: "error" },
+        activities: [
+          {
+            kind: "runtime.warning",
+            turnId: "turn-1",
+            createdAt: "2026-04-17T00:00:01.000Z",
+            payload: {
+              detail: {
+                status: "rejected",
+                rateLimitType: "five_hour",
+                resetsAt: Date.parse("2026-04-17T02:00:00.000Z") / 1000,
+              },
+            },
+          },
+        ],
+      });
+      const { clientFactory, sentMessages } = createClientFactory({ subscriberThread: subscriber });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T01:00:00.000Z" });
+      expect(sentMessages).toHaveLength(0);
+      expect(await hasActiveWork({ clientFactory })).toBe(true);
+      subscriber.settledOverride = "settled";
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T02:01:00.000Z" });
+      expect(sentMessages).toHaveLength(0);
+      expect(await hasActiveWork({ clientFactory })).toBe(false);
+      subscriber.settledOverride = null;
+      await deliverPendingNotifications({ clientFactory, now: () => "2026-04-17T02:03:00.000Z" });
+      expect(sentMessages).toHaveLength(1);
+      // A new failure after that same reset must await explicit retry.
+      subscriber.latestTurn = {
+        ...subscriber.latestTurn!,
+        turnId: "turn-2",
+        completedAt: "2026-04-17T02:03:01.000Z",
+      };
+      subscriber.activities[0]!.turnId = "turn-2";
+      const source = makeThread({
+        latestTurn: { ...makeThread().latestTurn!, turnId: "source-2" },
+      });
+      const again = createClientFactory({ sourceThread: source, subscriberThread: subscriber });
+      await detectAttentionEvents({ clientFactory: again.clientFactory });
+      await deliverPendingNotifications({
+        clientFactory: again.clientFactory,
+        now: () => "2026-04-17T02:05:00.000Z",
+      });
+      expect(again.sentMessages).toHaveLength(0);
+    });
+  });
+
+  it("delivers normally after provider recovery and when provisioned overage permits work", async () => {
+    for (const state of ["completed", "error"] as const) {
+      await withTempState(async () => {
+        const subscriber = makeThread({
+          id: "thread-coordinator-a",
+          latestTurn: { ...makeThread().latestTurn!, state },
+          activities: [
+            {
+              kind: "runtime.warning",
+              turnId: "turn-1",
+              createdAt: "2026-04-17T00:00:01.000Z",
+              payload: {
+                detail: {
+                  status: "rejected",
+                  rateLimitType: "five_hour",
+                  resetsAt: 9999999999,
+                  ...(state === "error" ? { isUsingOverage: true } : {}),
+                },
+              },
+            },
+          ],
+        });
+        const { clientFactory, sentMessages } = createClientFactory({
+          subscriberThread: subscriber,
+        });
+        await detectAttentionEvents({ clientFactory });
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(1);
+      });
+    }
+  });
+
+  it("suppresses routed quota-error cascades while preserving ordinary errors and pending requests", async () => {
+    await withTempState(async () => {
+      const source = makeThread({
+        latestTurn: { ...makeThread().latestTurn!, state: "error" },
+        messages: [
+          {
+            ...makeThread().messages[0]!,
+            role: "user",
+            text: "HomeNetwork orchestrator notification: Worker needs attention",
+          },
+        ],
+        activities: [{ kind: "runtime.error", turnId: "turn-1", payload: { code: "usage_limit" } }],
+      });
+      const { clientFactory } = createClientFactory({ sourceThread: source });
+      expect(await detectAttentionEvents({ clientFactory })).toHaveLength(0);
+      for (const request of [
+        { kind: "approval.requested", payload: { requestId: "approve-1" } },
+        {
+          kind: "user-input.requested",
+          payload: {
+            requestId: "input-1",
+            questions: [{ id: "q1", question: "Which host?", options: [] }],
+          },
+        },
+      ]) {
+        source.activities.push({
+          ...request,
+          turnId: "turn-1",
+          createdAt: "2026-04-17T00:00:03.000Z",
+        });
+        expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+        source.activities.pop();
+      }
+      source.activities = [];
+      expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+      source.activities = [
+        { kind: "runtime.error", turnId: "turn-1", payload: { code: "usage_limit" } },
+      ];
+      source.messages[0]!.text = "Please try again";
+      expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+    });
+  });
+
+  it("keeps a routed event recoverable when the real send client discovers a busy recipient", async () => {
+    await withTempState(async () => {
+      await detectAttentionEvents({ clientFactory: createClientFactory({}).clientFactory });
+      class BusyOnSend extends RemoteEnvironmentClient {
+        reads = 0;
+        override async findThread(threadId: string): Promise<OrchestrationThread> {
+          return makeThread({
+            id: threadId,
+            latestTurn: {
+              ...makeThread().latestTurn!,
+              state: this.reads++ === 0 ? "completed" : "running",
+            },
+          });
+        }
+      }
+      const client = new BusyOnSend(makeEnvironment());
+      const attempted = await deliverPendingNotifications({ clientFactory: () => client });
+      expect(attempted[0]?.status).toBe("delivery-failed");
+      expect((await loadState()).queuedSends).toEqual([]);
+      expect((await loadState()).notifications[0]?.status).toBe("delivery-failed");
+    });
+  });
+
   it("deduplicates repeated detection passes and leaves notifications pending in no-deliver mode", async () => {
     await withTempState(async () => {
       const { clientFactory, sentMessages } = createClientFactory({});
@@ -459,6 +681,121 @@ describe("hasActiveWork (idle-exit guard)", () => {
       const { clientFactory } = createClientFactory({});
       await detectAttentionEvents({ env: "dev-vm", clientFactory });
       expect(await hasActiveWork({ env: "dev-vm", clientFactory })).toBe(true);
+    });
+  });
+});
+
+describe("notification ownership and attention", () => {
+  it.each(["approval", "user-input"] as const)(
+    "delivers %s requests from full snapshots without assistant output",
+    async (kind) => {
+      await withTempState(async () => {
+        const source = makeThread({
+          messages: [],
+          latestTurn: { ...makeThread().latestTurn!, state: "running", assistantMessageId: null },
+          activities: [
+            {
+              kind: kind === "approval" ? "approval.requested" : "user-input.requested",
+              createdAt: "2026-04-17T00:00:03.000Z",
+              payload: {
+                requestId: "request-1",
+                questions: [{ id: "q", question: "Choose?", options: [] }],
+              },
+            },
+          ],
+        });
+        const { clientFactory, sentMessages } = createClientFactory({ sourceThread: source });
+        expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(1);
+        expect(sentMessages[0]!.text).toContain(
+          kind === "approval" ? "needs-approval" : "needs-input",
+        );
+        await detectAttentionEvents({ clientFactory });
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(1);
+      });
+    },
+  );
+
+  it("suppresses notification replies while preserving real completions and explicit attention", async () => {
+    await withTempState(async () => {
+      const source = makeThread();
+      source.messages.unshift({
+        ...source.messages[0]!,
+        id: "notification",
+        role: "user",
+        text: "HomeNetwork orchestrator notification: child completed a turn.",
+      });
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread: source });
+      expect(await detectAttentionEvents({ clientFactory })).toEqual([]);
+      source.activities.push({
+        kind: "approval.requested",
+        createdAt: "2026-04-17T00:00:03.000Z",
+        payload: { requestId: "request-1" },
+      });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(1);
+      source.activities.push({
+        kind: "approval.resolved",
+        createdAt: "2026-04-17T00:00:04.000Z",
+        payload: { requestId: "request-1" },
+      });
+      source.messages.push({
+        ...source.messages[0]!,
+        id: "real-instruction",
+        role: "user",
+        text: "Do the next task.",
+      });
+      expect(await detectAttentionEvents({ clientFactory })).toHaveLength(1);
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(2);
+      expect(sentMessages[1]!.text).toContain("completed a turn");
+    });
+  });
+
+  it("lets multiple supervisors opt into attention without changing completion routes", async () => {
+    await withTempState(async () => {
+      const state = await loadState();
+      state.subscriptions.push(
+        makeSubscription({ subscriberThreadId: "attention-supervisor", level: "attention" }),
+      );
+      await saveState(state);
+      const source = makeThread();
+      const { clientFactory } = createClientFactory({ sourceThread: source });
+      expect(
+        (await detectAttentionEvents({ clientFactory })).map((event) => event.subscriberThreadId),
+      ).toEqual(["thread-coordinator-a"]);
+      source.activities.push({
+        kind: "approval.requested",
+        createdAt: "2026-04-17T00:00:03.000Z",
+        payload: { requestId: "approval" },
+      });
+      const attention = await detectAttentionEvents({ clientFactory });
+      expect(attention.map((event) => event.subscriberThreadId)).toEqual([
+        "thread-coordinator-a",
+        "attention-supervisor",
+      ]);
+      expect(new Set((await loadState()).notifications.map((event) => event.eventKey)).size).toBe(
+        3,
+      );
+    });
+  });
+
+  it("preserves delivered events with historical keys instead of replaying them", async () => {
+    await withTempState(async () => {
+      const { clientFactory, sentMessages } = createClientFactory({});
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      const state = await loadState();
+      state.notifications[0]!.eventKey =
+        "thread-coordinator-a:thread-worker-a:assistant:assistant-1";
+      await saveState(state);
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(1);
+      expect((await loadState()).notifications).toHaveLength(1);
     });
   });
 });

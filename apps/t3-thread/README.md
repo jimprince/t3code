@@ -238,7 +238,7 @@ Safety defaults:
 
 ## Notifications
 
-When `T3_THREAD_ID` is set, `create` auto-subscribes the caller thread to the new worker by default.
+When `T3_THREAD_ID` is set, nested `create` auto-subscribes the caller thread to the new worker by default. `create --top-level` requires an explicit `--notify` to add a subscription.
 When `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME` are also set, the CLI resolves unsaved caller
 threads directly from that environment metadata and maps it to the saved environment key used for routing.
 
@@ -340,3 +340,40 @@ messages. `none` keeps required escalation alerts. Workers can end with
 For replying to worker notifications and choosing your subscription level, see
 [Thread communication](docs/THREAD_COMMUNICATION.md). The first delivered notice
 includes a short guide once per subscriber.
+
+## Notification ownership and handoff
+
+Nested `create` subscribes its caller by default. `create --top-level` does not;
+use an explicit `--notify` or `--notify <subscriber>` to opt in. `--no-notify`
+disables either route. Always check `notifySubscribed` in the result.
+
+Completion notifications say that a turn completed; pending approvals, questions,
+plans, errors, and interruptions say that attention is needed. A reply to a routed
+notification does not emit another completion notification. It can still report
+an approval, question, plan, error, or interruption. To reduce routine completion notices:
+
+```bash
+t3-thread subscribe --watch <source> --level attention
+# Restore completion notifications on the same route:
+t3-thread subscribe --watch <source> --level all
+```
+
+Existing routes continue to include completions unless explicitly changed. Multiple
+supervisors may subscribe independently. Unsubscribe cancels queued notifications
+for that route; a message already accepted by the server cannot be recalled.
+
+For a supervisor handoff, subscribe the replacement to each retained source,
+verify its routes with `subscriptions --subscriber <replacement>`, then unsubscribe
+the retiring supervisor from those sources and verify its list is empty. Only then
+send the old supervisor its final handoff. Its own close-out uses
+`settle "$T3_THREAD_ID" --self`; a different thread uses `settle <old-supervisor>`.
+Never infer settlement from a deferred receipt; read its eventual log or status.
+
+Use `queue --open` for current queued work. Plain `queue` is history and includes
+terminal records; inspect `status`, `actionable`, `queuedAt`, `ageSeconds`, and
+`dispatchedAt` before treating an entry as an instruction.
+
+If creation fails after a transport error, inspect remote threads by title,
+project, branch, and creation time before retrying. Every new invocation chooses
+a new identity, so retry can create a duplicate; attach an existing thread instead.
+Run the CLI under the Node version required by the fork.

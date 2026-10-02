@@ -210,7 +210,7 @@ Recommended:
 - T3 chooses and records the worktree path. Do not pass or manage a worktree path from this wrapper.
 - Worktree creation starts from the freshly fetched `gitea` remote when it exists, otherwise `origin`; pass `--local-base` only when a local base is intentional. Qualified bases such as `upstream/main` select any configured remote explicitly, including custom names.
 - Reuse the same `--name` if you want to replace a failed or obsolete saved agent mapping.
-- When you invoke `t3-thread create` from inside a T3 caller thread, that caller is auto-subscribed to completion/attention events from the new worker by default.
+- When you invoke nested `t3-thread create` from inside a T3 caller thread, that caller is auto-subscribed to completion/attention events from the new worker by default. `--top-level` creates no subscription unless `--notify` is explicit.
 - Add `--no-notify` when you want to suppress that default subscription.
 - Add `--notify <subscriber>` when you want to subscribe a different saved agent by name or thread id at create time.
 
@@ -227,7 +227,7 @@ Post-create reliability checklist:
 
 `--notify` behavior:
 
-- no flag: if `T3_THREAD_ID` is set, the current caller thread is auto-subscribed by default
+- no flag: if `T3_THREAD_ID` is set, the current caller thread is auto-subscribed for nested creation; `--top-level` does not subscribe
 - no flag: if `T3_ENVIRONMENT_ID` and `T3_ENVIRONMENT_NAME` are also set, unsaved caller threads resolve directly from that metadata; the CLI maps environment id/name/label back to the saved environment key used for routing
 - no flag: if `T3_THREAD_ID` is not set, create still succeeds without a subscription
 - `--no-notify` disables the default caller subscription
@@ -839,3 +839,54 @@ The default CLI entry point is prebuilt JavaScript. See
 build/deploy commands, source development, and stale-build recovery. Watchers
 use the same entry point as their caller. Idle polls back off to one minute;
 missing and archived sources are flagged and parked for the watcher's lifetime.
+
+## Notification ownership and handoff
+
+Nested `create` subscribes its caller by default. `create --top-level` does not;
+use an explicit `--notify` or `--notify <subscriber>` to opt in. `--no-notify`
+disables either route. Always check `notifySubscribed` in the result.
+
+Completion notifications say that a turn completed; pending approvals, questions,
+plans, errors, and interruptions say that attention is needed. A reply to a routed
+notification does not emit another completion notification. It can still report
+an approval, question, plan, error, or interruption. To reduce routine completion notices:
+
+```bash
+t3-thread subscribe --watch <source> --level attention
+# Restore completion notifications on the same route:
+t3-thread subscribe --watch <source> --level all
+```
+
+Existing routes continue to include completions unless explicitly changed. Multiple
+supervisors may subscribe independently. Unsubscribe cancels queued notifications
+for that route; a message already accepted by the server cannot be recalled.
+
+For a supervisor handoff, subscribe the replacement to each retained source,
+verify its routes with `subscriptions --subscriber <replacement>`, then unsubscribe
+the retiring supervisor from those sources and verify its list is empty. Only then
+send the old supervisor its final handoff. Its own close-out uses
+`settle "$T3_THREAD_ID" --self`; a different thread uses `settle <old-supervisor>`.
+Never infer settlement from a deferred receipt; read its eventual log or status.
+
+Use `queue --open` for current queued work. Plain `queue` is history and includes
+terminal records; inspect `status`, `actionable`, `queuedAt`, `ageSeconds`, and
+`dispatchedAt` before treating an entry as an instruction.
+
+If creation fails after a transport error, inspect remote threads by title,
+project, branch, and creation time before retrying. Every new invocation chooses
+a new identity, so retry can create a duplicate; attach an existing thread instead.
+Run the CLI under the Node version required by the fork.
+
+Automatic notifications are held when the recipient's current turn reports a
+usage limit. The newest event per source is retained without spending delivery
+attempts. A successful explicit retry releases delivery on the next watcher pass;
+a provider-reported future reset keeps the watcher alive for recovery. If the
+provider supplies no usable reset, retry explicitly (or restart `watch` after a
+retry from the app). Settlement still holds delivery, even after a quota reset.
+Quota failures replying to routed notifications do not emit further error
+notifications; genuine approvals, questions, and other errors still route.
+
+Settlement also holds persisted sends until explicit resume. Legacy queued routed
+notifications respect quota holds; explicit operator retry remains available.
+A direct CLI retry restarts delivery of held notifications, even if the watcher
+had idled out.
