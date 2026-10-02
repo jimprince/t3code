@@ -41,7 +41,7 @@ export function SidebarNestedThreadToggle(props: {
           className="inline-flex min-w-0 items-center gap-1 rounded-sm text-xs text-info outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           <MessageCircleQuestionIcon aria-hidden className="size-3 shrink-0" />
-          {`${props.inputCount} sub-agent${props.inputCount === 1 ? "" : "s"} ${props.inputCount === 1 ? "needs" : "need"} input`}
+          {`${props.inputCount} input`}
         </button>
       ) : null}
     </span>
