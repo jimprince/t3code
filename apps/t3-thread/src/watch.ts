@@ -1,3 +1,4 @@
+import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
 import { observeInactivity, inactivityStillCurrent } from "./inactivity.js";
 import { withInputReminder, inputNotificationStillCurrent } from "./inputReminders.js";
 import * as NodeCrypto from "node:crypto";
@@ -58,6 +59,7 @@ export interface WatchClient {
     threadId: string;
     text: string;
     queueWhileRunning?: boolean;
+    origin?: MessageOrigin | null;
   }): Promise<unknown>;
 }
 
@@ -870,6 +872,11 @@ export async function deliverPendingNotifications(
           await subscriberClient.sendMessage({
             threadId: notification.subscriberThreadId,
             text: buildNotificationMessage(notification, includeOnboarding),
+            origin: {
+              source: "worker-notification",
+              fromThreadId: notification.sourceThreadId,
+              ...(notification.sourceAgentName ? { fromName: notification.sourceAgentName } : {}),
+            },
             queueWhileRunning: false,
           });
           result = {
