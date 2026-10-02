@@ -1,0 +1,4 @@
+id = "crash-safe-agent-state-lock"
+category = "fix"
+functionality = "agents"
+text = "Agents messaging no longer stalls after a crashed CLI leaves its state lock behind."
