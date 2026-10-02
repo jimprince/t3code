@@ -1,3 +1,5 @@
+import { withT3ThreadIdentityEnv } from "../../provider/t3ThreadIdentityEnv.ts";
+
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
 import {
   dynamicToolTitle,
@@ -7347,7 +7349,10 @@ export const makeClaudeAdapterV2 = Effect.fn("makeClaudeAdapterV2")(function* (
             cwd: turnInput.runtimePolicy.cwd,
             attachmentsDir,
             settings: adapterOptions.settings,
-            environment: { ...adapterOptions.environment, ...mcpOverrides.mcpEnvironment },
+            environment: withT3ThreadIdentityEnv(
+              { ...adapterOptions.environment, ...mcpOverrides.mcpEnvironment },
+              { threadId: turnInput.providerThread.appThreadId ?? input.threadId },
+            ),
             tools: queryPolicy.tools ?? CLAUDE_CODE_PRESET_TOOLS,
             ...(mcpOverrides.allowedTools === undefined
               ? {}
