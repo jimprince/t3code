@@ -104,7 +104,7 @@ held events, at most the newest per source, go out on the next watcher pass.
 After an unsettle in the app, a running watcher finds them within a minute; if
 no watcher is running they wait for the next one.
 
-A notification for a completed worker ends by asking the supervisor to decide
+A notification for a completed worker asks the supervisor to decide
 whether that worker is finished, naming the exact `t3-thread settle <worker>`
 command. Settle a finished worker so it leaves the active list (and the parent's
 Agents panel) now instead of when automatic settlement reaches it days later;
@@ -543,12 +543,14 @@ t3-thread create \
 
 ### Notification levels and quiet results
 
-Nested workers waiting for input remind their subscribed parent every 45 minutes,
-including the pending question. Configure with `--input-reminder-minutes <minutes>`
-on `create` or `subscribe`; zero disables repeats. Answered, settled, archived or
+Nested workers waiting for input or approval notify their current parent even without
+a subscription, then send one reminder after 20 minutes, including the pending question. Configure with `--input-reminder-minutes <minutes>`
+on `create` or `subscribe`; zero disables the reminder. Answered, settled, archived or
 unnested workers stop reminders. See [Thread communication](THREAD_COMMUNICATION.md).
 
-The first delivered notice includes a short guide once per subscriber, across
+Ordinary watcher notices end with a one-line command to change or stop the
+subscription; mandatory child-input notices omit those controls.
+The first delivered notice includes a one-line guide link once per subscriber, across
 all workers. The receipt survives restarts and unsubscribe/resubscribe; failed
 or held deliveries do not consume it. See [Thread communication](THREAD_COMMUNICATION.md)
 for the full reply, approval and notification controls.
@@ -939,8 +941,11 @@ retry from the app). Settlement still holds delivery, even after a quota reset.
 Quota failures replying to routed notifications do not emit further error
 notifications; genuine approvals, questions, and other errors still route.
 
-Settlement also holds persisted sends until explicit resume. Legacy queued routed
-notifications respect quota holds; explicit operator retry remains available.
+Settlement holds queued notifications until explicit resume. Queued parent and
+operator sends resume a settled thread at the next turn boundary, just like direct
+sends. Explicit message origin takes precedence over the legacy notification text
+prefix. Legacy queued routed notifications respect quota holds; explicit operator
+retry remains available.
 A direct CLI retry restarts delivery of held notifications, even if the watcher
 had idled out.
 

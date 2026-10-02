@@ -169,6 +169,27 @@ async function withState(state: StateFile, test: () => Promise<void>): Promise<v
   }
 }
 
+describe("notification origin", () => {
+  it("marks each delivered notification as coming from its worker", async () => {
+    await withState(makeState(), async () => {
+      const origins: unknown[] = [];
+      const { clientFactory, sent } = createClientFactory({
+        onSend: (message) => {
+          origins.push((message as { origin?: unknown }).origin);
+        },
+      });
+
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+
+      expect(sent).toHaveLength(1);
+      expect(origins).toEqual([
+        expect.objectContaining({ source: "worker-notification", fromThreadId: "thread-worker-a" }),
+      ]);
+    });
+  });
+});
+
 describe("terminal recipients", () => {
   it("stops retrying and releases the watcher when the recipient is archived", async () => {
     // REGRESSION: an archived recipient used to fail delivery forever, which both
@@ -631,7 +652,10 @@ describe("notification onboarding", () => {
       expect(sent[0]?.text).toContain("t3-thread result worker-a");
       expect(sent[0]?.text).toContain("t3-thread queue");
       expect(sent[0]?.text).toContain("THREAD_COMMUNICATION.md");
-      expect(sent[0]!.text.split("\n").length).toBeLessThanOrEqual(15);
+      expect(sent[0]!.text.split("\n")).toHaveLength(3);
+      expect(sent[0]!.text.split("\n").at(-1)).toContain(
+        "agent unsubscribe --watch thread-worker-a",
+      );
       threads["thread-worker-a"] = makeCompletedThread({
         latestTurn: {
           ...threads["thread-worker-a"].latestTurn!,
@@ -646,6 +670,9 @@ describe("notification onboarding", () => {
       await deliverPendingNotifications({ env: "dev-vm", clientFactory });
       expect(sent).toHaveLength(2);
       expect(sent[1]?.text).not.toContain("Thread communication quick start");
+      expect(sent[1]!.text.split("\n").at(-1)).toContain(
+        "agent unsubscribe --watch thread-worker-a",
+      );
       const persisted = await loadState();
       // Replacing the route models unsubscribe/resubscribe; onboarding history
       // belongs to the subscriber, not this route or the watcher's process.
