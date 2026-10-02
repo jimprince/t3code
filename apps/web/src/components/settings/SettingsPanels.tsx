@@ -169,6 +169,7 @@ import {
   useSettingsSearchTarget,
   useSettingsSearchTargetId,
 } from "./settingsLayout";
+import { EmbeddedPagesSettingsSection } from "./EmbeddedPagesSettings";
 import { searchableSetting } from "./settingsSearch";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { PanelAnimationsPreview } from "./PanelAnimationsPreview";
@@ -3276,6 +3277,8 @@ export function GeneralSettingsPanel() {
           }
         />
       </SettingsSection>
+
+      <EmbeddedPagesSettingsSection />
 
       <SettingsSection id="about" title="About">
         {isElectron || HOSTED_APP_CHANNEL ? (
