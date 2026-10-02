@@ -660,7 +660,9 @@ export function projectEvent(
               ...(payload.activeOrderKey !== undefined
                 ? { activeOrderKey: payload.activeOrderKey }
                 : {}),
-              ...(payload.settleOnComplete !== undefined ? { settleOnComplete: payload.settleOnComplete } : {}),
+              ...(payload.settleOnComplete !== undefined
+                ? { settleOnComplete: payload.settleOnComplete }
+                : {}),
               ...(payload.parentThreadId !== undefined
                 ? { parentThreadId: payload.parentThreadId }
                 : {}),

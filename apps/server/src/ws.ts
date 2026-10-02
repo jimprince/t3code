@@ -1443,7 +1443,8 @@ const makeWsRpcLayer = (
                 worktreePath: bootstrap.createThread.worktreePath,
                 createdAt: bootstrap.createThread.createdAt,
                 ...(bootstrap.createThread.settleOnComplete !== undefined
-                  ? { settleOnComplete: bootstrap.createThread.settleOnComplete } : {}),
+                  ? { settleOnComplete: bootstrap.createThread.settleOnComplete }
+                  : {}),
                 ...(bootstrap.createThread.parentThreadId != null
                   ? { parentThreadId: bootstrap.createThread.parentThreadId }
                   : {}),

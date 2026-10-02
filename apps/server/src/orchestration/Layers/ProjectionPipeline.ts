@@ -832,7 +832,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...(event.payload.activeOrderKey !== undefined
               ? { activeOrderKey: event.payload.activeOrderKey }
               : {}),
-            ...(event.payload.settleOnComplete !== undefined ? { settleOnComplete: event.payload.settleOnComplete } : {}),
+            ...(event.payload.settleOnComplete !== undefined
+              ? { settleOnComplete: event.payload.settleOnComplete }
+              : {}),
             ...(event.payload.parentThreadId !== undefined
               ? { parentThreadId: event.payload.parentThreadId }
               : {}),
