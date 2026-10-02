@@ -52,19 +52,15 @@ import {
   ChevronDownIcon,
   CircleAlertIcon,
   CircleCheckIcon,
-  CircleDashedIcon,
   ClockIcon,
   CornerDownRightIcon,
-  EyeIcon,
   FolderIcon,
   GitBranchIcon,
-  MessageCircleQuestionIcon,
   MinusIcon,
   PinIcon,
   PinOffIcon,
   PlusIcon,
   SettingsIcon,
-  ShieldQuestionIcon,
   SquarePenIcon,
   TerminalIcon,
   Undo2Icon,
@@ -146,9 +142,11 @@ import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import {
   groupSidebarChildren,
+  resolveSidebarChildStatus,
   visibleSidebarChildren,
 } from "./sidebar/nestedThreadVisibility.logic";
 import { SidebarNestedThreadToggle } from "./sidebar/SidebarNestedThreadToggle";
+import { SidebarThreadRowStatus } from "./sidebar/SidebarThreadRowStatus";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
@@ -1155,7 +1153,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   // Same semantics as the legacy sidebar (never-visited counts as read):
   // switching sidebars must not light up every historical thread as unread.
   const isUnread = hasUnseenCompletion({ ...thread, lastVisitedAt });
-  const status = resolveSidebarThreadStatus(thread);
+  const status = props.nestedSubRow
+    ? resolveSidebarChildStatus(thread)
+    : resolveSidebarThreadStatus(thread);
   // A woken thread reappears at its original position (the sort is
   // deliberately static), so the pill has to carry the weight. Snoozing is
   // an explicit act, so the pill clears only when the user re-engages:
@@ -1910,35 +1910,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
                           <TooltipPopup side="top">Dismiss Woke notification</TooltipPopup>
                         </Tooltip>
                       ) : (
-                        <span
-                          className={cn(
-                            "inline-flex items-center gap-1 font-medium",
-                            topStatus.className,
-                          )}
-                        >
-                          {topStatus.icon === "working" ? (
-                            <CircleDashedIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "input" ? (
-                            <MessageCircleQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "approval" ? (
-                            <ShieldQuestionIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "failed" ? (
-                            <CircleAlertIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "monitoring" ? (
-                            <EyeIcon aria-hidden className="size-4 shrink-0" />
-                          ) : topStatus.icon === "done" ? (
-                            <CircleCheckIcon aria-hidden className="size-4 shrink-0" />
-                          ) : null}
-                          {/* The label alone is the live region: a role="status"
-                            wrapper around the ticking duration would make
-                            screen readers announce every second. */}
-                          <span role="status">{topStatus.label}</span>
-                          {status === "working" ? (
-                            <span aria-hidden>
-                              <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
-                            </span>
-                          ) : null}
-                        </span>
+                        <SidebarThreadRowStatus
+                          status={topStatus}
+                          trailing={
+                            status === "working" ? (
+                              // The label alone is the live region: the ticking
+                              // duration must not be announced every second.
+                              <span aria-hidden>
+                                <WorkingDuration startedAt={resolveWorkingStartedAt(thread)} />
+                              </span>
+                            ) : null
+                          }
+                        />
                       )
                     ) : (
                       threadTimeLabel(thread)

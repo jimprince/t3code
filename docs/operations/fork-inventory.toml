@@ -1318,3 +1318,4 @@ purpose = "Show active nested workers on their parent's sidebar row and expand o
 retire_when = "Upstream provides active nested-worker counts and remembered expandable sidebar placement, or the fork stops showing nested workers."
 depends_on = ["fork-nested-threads"]
 roles = []
+note = "Expanded parents place active children first, then keep the existing creation order within active and quiet groups. Child rows reuse ordinary sidebar status labels; a running turn is only a fallback when session state is absent, because a stopped session is authoritative over a stale running turn. The active-count control remains expand/collapse rather than introducing a separate filter mode."

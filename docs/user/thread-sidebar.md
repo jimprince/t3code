@@ -176,10 +176,12 @@ open, it shows in the sidebar under its parent, and the header breadcrumb names
 the parent; click it to go back. Agents that start worker threads with
 `t3-thread` nest them under their own thread by default.
 
-The parent's sidebar card counts nested agents that are running or waiting for
-input or approval. Settled and archived children do not count. Expand its agent
-list to open any child; the list starts collapsed and remembers your choice on
-that device. A child you are viewing remains visible when the list is collapsed.
+The parent's sidebar card counts nested agents that are running, monitoring, or
+waiting for input or approval. Settled and archived children do not count. Expand
+its agent list to open any child; active children appear first with the same static
+status signals as other sidebar threads, followed by quieter idle and settled work.
+The list starts collapsed and remembers your choice on that device. A child you
+are viewing remains visible when the list is collapsed.
 
 Settled work folds into a collapsed **Settled** shelf at the bottom of the
 Agents panel: nested threads that are settled, including by automatic

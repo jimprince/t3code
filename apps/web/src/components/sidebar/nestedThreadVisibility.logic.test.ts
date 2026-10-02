@@ -4,6 +4,8 @@ import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   groupSidebarChildren,
+  isActiveSidebarChild,
+  resolveSidebarChildStatus,
   visibleSidebarChildren,
   type SidebarChild,
 } from "./nestedThreadVisibility.logic";
@@ -19,6 +21,7 @@ function thread(id: string, overrides: Partial<SidebarChild> = {}): SidebarChild
     createdAt: "2026-10-01T00:00:00Z",
     hasPendingApprovals: false,
     hasPendingUserInput: false,
+    backgroundLiveness: null,
     session: null,
     latestTurn: null,
     settledOverride: null,
@@ -28,7 +31,7 @@ function thread(id: string, overrides: Partial<SidebarChild> = {}): SidebarChild
 const key = (value: SidebarChild) => scopedThreadKey(scopeThreadRef(value.environmentId, value.id));
 
 describe("sidebar nested children", () => {
-  it("counts running and blocked children once, excluding settled, archived, and idle children", () => {
+  it("counts active children once and sorts them ahead of quiet children", () => {
     const parent = thread("parent");
     const child = (id: string, overrides: Partial<SidebarChild> = {}) =>
       thread(id, { parentThreadId: parent.id, ...overrides });
@@ -36,19 +39,31 @@ describe("sidebar nested children", () => {
       child("running", { session: { status: "running" }, hasPendingUserInput: true }),
       child("input", { hasPendingUserInput: true }),
       child("approval", { hasPendingApprovals: true }),
+      child("monitor", { backgroundLiveness: "monitoring" }),
       child("settled", { settledOverride: "settled", hasPendingUserInput: true }),
       child("archived", { archivedAt: "2026-10-01T00:01:00Z", hasPendingUserInput: true }),
       child("idle"),
     ];
     const group = groupSidebarChildren([parent, ...children]).get(key(parent))!;
-    expect(group.activeCount).toBe(3);
+    expect(group.activeCount).toBe(4);
     expect(group.children.map((value) => value.id)).toEqual([
       "approval",
-      "idle",
       "input",
+      "monitor",
       "running",
+      "idle",
       "settled",
     ]);
+  });
+
+  it("uses a running turn as a working fallback without overriding authoritative session state", () => {
+    const runningTurn = thread("turn", { latestTurn: { state: "running" } });
+    expect(resolveSidebarChildStatus(runningTurn)).toBe("working");
+    expect(isActiveSidebarChild(runningTurn)).toBe(true);
+    expect(resolveSidebarChildStatus({ ...runningTurn, session: { status: "stopped" } })).toBe(
+      "ready",
+    );
+    expect(isActiveSidebarChild({ ...runningTurn, session: { status: "stopped" } })).toBe(false);
   });
 
   it("keeps environments separate and leaves orphan children to the ordinary sidebar", () => {
