@@ -384,6 +384,7 @@ import {
   worktreeSetupAgentStarted,
 } from "./chat/MessagesTimeline.logic";
 import { OrchestratorFocusBar, useOrchestratorFocus } from "./chat/OrchestratorFocus";
+import { ThreadBriefButton } from "./chat/ThreadBriefButton";
 import type {
   BackgroundRun,
   BackgroundTurnMessage,
@@ -10030,7 +10031,14 @@ export default function ChatView(props: ChatViewProps) {
                 traffic={orchestratorFocus.traffic}
                 allTraffic={orchestratorFocus.allTraffic}
                 onAllTrafficChange={orchestratorFocus.setAllTraffic}
-              />
+              >
+                {activeServerThread ? (
+                  <ThreadBriefButton
+                    environmentId={activeServerThread.environmentId}
+                    threadId={activeServerThread.id}
+                  />
+                ) : null}
+              </OrchestratorFocusBar>
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
                 backgroundRuns={
