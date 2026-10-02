@@ -12359,89 +12359,103 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
         );
       }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
-  it.effect("falls back to the project checkout when worktree mode targets a non-repository", () =>
-    Effect.gen(function* () {
-      const dispatchedCommands: Array<OrchestrationCommand> = [];
-      const createWorktree = vi.fn(
-        (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
-          Effect.die(new Error("createWorktree must not run for a non-repository")),
-      );
+  it.effect.each([false, true])(
+    "preserves optional explicit title intent in non-repository bootstrap (lockTitle=%s)",
+    (lockTitle) =>
+      Effect.gen(function* () {
+        const dispatchedCommands: Array<OrchestrationCommand> = [];
+        const createWorktree = vi.fn(
+          (_: Parameters<GitVcsDriver.GitVcsDriver["Service"]["createWorktree"]>[0]) =>
+            Effect.die(new Error("createWorktree must not run for a non-repository")),
+        );
 
-      yield* buildAppUnderTest({
-        layers: {
-          gitVcsDriver: {
-            execute: () => Effect.succeed(SUCCESSFUL_GIT_EXECUTION),
-            createWorktree,
+        yield* buildAppUnderTest({
+          layers: {
+            gitVcsDriver: {
+              execute: () => Effect.succeed(SUCCESSFUL_GIT_EXECUTION),
+              createWorktree,
+            },
+            orchestrationEngine: {
+              dispatch: (command) =>
+                Effect.sync(() => {
+                  dispatchedCommands.push(command);
+                  return { sequence: dispatchedCommands.length };
+                }),
+              readEvents: () => Stream.empty,
+            },
           },
-          orchestrationEngine: {
-            dispatch: (command) =>
-              Effect.sync(() => {
-                dispatchedCommands.push(command);
-                return { sequence: dispatchedCommands.length };
-              }),
-            readEvents: () => Stream.empty,
-          },
-        },
-      });
+        });
 
-      const createdAt = "2026-01-01T00:00:00.000Z";
-      const wsUrl = yield* getWsServerUrl("/ws");
-      const response = yield* Effect.scoped(
-        withWsRpcClient(wsUrl, (client) =>
-          client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
-            type: "thread.turn.start",
-            commandId: CommandId.make("cmd-bootstrap-turn-start-non-repo"),
+        const createdAt = "2026-01-01T00:00:00.000Z";
+        const wsUrl = yield* getWsServerUrl("/ws");
+        const response = yield* Effect.scoped(
+          withWsRpcClient(wsUrl, (client) =>
+            client[ORCHESTRATION_WS_METHODS.dispatchCommand]({
+              type: "thread.turn.start",
+              commandId: CommandId.make("cmd-bootstrap-turn-start-non-repo"),
+              threadId: ThreadId.make("thread-bootstrap-non-repo"),
+              message: {
+                messageId: MessageId.make("msg-bootstrap-non-repo"),
+                role: "user",
+                text: "hello",
+                attachments: [],
+              },
+              modelSelection: defaultModelSelection,
+              runtimeMode: "full-access",
+              interactionMode: "default",
+              bootstrap: {
+                createThread: {
+                  ...(lockTitle ? { lockTitle: true } : {}),
+                  projectId: defaultProjectId,
+                  title: "Bootstrap Thread",
+                  modelSelection: defaultModelSelection,
+                  runtimeMode: "full-access",
+                  interactionMode: "default",
+                  branch: null,
+                  worktreePath: null,
+                  createdAt,
+                },
+                prepareWorktree: {
+                  projectCwd: "/tmp/project",
+                  baseBranch: "main",
+                  branch: "t3code/bootstrap-refName",
+                },
+                runSetupScript: true,
+              },
+              createdAt,
+            }),
+          ),
+        );
+
+        assert.equal(response.sequence, lockTitle ? 5 : 4);
+        assert.equal(createWorktree.mock.calls.length, 0);
+        assert.deepEqual(
+          dispatchedCommands.map((command) => command.type),
+          [
+            "thread.create",
+            ...(lockTitle ? ["thread.meta.update"] : []),
+            "thread.message.user.append",
+            "thread.activity.append",
+            "thread.turn.start",
+            "thread.activity.append",
+          ],
+        );
+        if (lockTitle) {
+          const manualTitleCommand = dispatchedCommands[1];
+          assert.ok(manualTitleCommand);
+          assert.deepEqual(manualTitleCommand, {
+            type: "thread.meta.update",
+            commandId: manualTitleCommand.commandId,
             threadId: ThreadId.make("thread-bootstrap-non-repo"),
-            message: {
-              messageId: MessageId.make("msg-bootstrap-non-repo"),
-              role: "user",
-              text: "hello",
-              attachments: [],
-            },
-            modelSelection: defaultModelSelection,
-            runtimeMode: "full-access",
-            interactionMode: "default",
-            bootstrap: {
-              createThread: {
-                projectId: defaultProjectId,
-                title: "Bootstrap Thread",
-                modelSelection: defaultModelSelection,
-                runtimeMode: "full-access",
-                interactionMode: "default",
-                branch: null,
-                worktreePath: null,
-                createdAt,
-              },
-              prepareWorktree: {
-                projectCwd: "/tmp/project",
-                baseBranch: "main",
-                branch: "t3code/bootstrap-refName",
-              },
-              runSetupScript: true,
-            },
-            createdAt,
-          }),
-        ),
-      );
-
-      assert.equal(response.sequence, 4);
-      assert.equal(createWorktree.mock.calls.length, 0);
-      assert.deepEqual(
-        dispatchedCommands.map((command) => command.type),
-        [
-          "thread.create",
-          "thread.message.user.append",
-          "thread.activity.append",
-          "thread.turn.start",
-          "thread.activity.append",
-        ],
-      );
-      const finalCommand = dispatchedCommands[3];
-      assertTrue(finalCommand?.type === "thread.turn.start");
-      if (finalCommand?.type === "thread.turn.start") {
-        assert.equal(finalCommand.bootstrap, undefined);
-      }
-    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+            title: "Bootstrap Thread",
+          });
+        }
+        const finalCommand = dispatchedCommands[lockTitle ? 4 : 3];
+        assertTrue(finalCommand?.type === "thread.turn.start");
+        if (finalCommand?.type === "thread.turn.start") {
+          assert.equal(finalCommand.bootstrap, undefined);
+        }
+      }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
   it.effect("falls back to the project checkout when the worktree base has no commit", () =>
