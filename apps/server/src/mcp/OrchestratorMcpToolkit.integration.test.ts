@@ -1163,14 +1163,67 @@ describe("orchestrator MCP toolkit", () => {
             });
             const queueSecondPage = yield* invoke("t3_queue_list", { cursor: 1, limit: 1 });
             expect(queueSecondPage.structuredContent).toEqual({
-              items: [{ queuedRunId: queuedUserRun.id, text: "🙂".repeat(1000), truncated: true }],
+              queueHeld: false,
+              items: [
+                {
+                  queuedRunId: queuedUserRun.id,
+                  queueHeld: false,
+                  text: "🙂".repeat(1000),
+                  truncated: true,
+                },
+              ],
               nextCursor: null,
             });
             const queueRead = yield* invoke("t3_queue_read", { queuedRunId: queuedUserRun.id });
             expect(queueRead.structuredContent).toEqual({
               queuedRunId: queuedUserRun.id,
+              queueHeld: false,
               text: "🙂".repeat(16000),
               truncated: true,
+            });
+            // Restart recovery holds are durable run state, not a transport flag.
+            yield* (yield* EventSink.EventSinkV2).write({
+              events: [
+                {
+                  id: EventId.make("event:mcp-queue-held"),
+                  type: "run.updated",
+                  threadId: parentThreadId,
+                  runId: queuedUserRun.id,
+                  occurredAt: yield* DateTime.now,
+                  payload: { ...queuedUserRun, queueHeld: true },
+                },
+              ],
+            });
+            const heldSendCall = yield* invoke("t3_thread_send", {
+              threadId: parentThreadId,
+              message: "New message while older queued work is held",
+              mode: "queue",
+              clientRequestId: "mcp-held-send",
+            });
+            const heldSend = yield* decodeThreadSendResult(heldSendCall.structuredContent).pipe(
+              Effect.orDie,
+            );
+            expect(heldSend).toMatchObject({ status: "queued", queueHeld: true });
+            const heldRead = yield* invoke("t3_thread_read", { threadId: parentThreadId });
+            expect(heldRead.structuredContent).toMatchObject({ thread: { queueHeld: true } });
+            const heldList = yield* invoke("t3_queue_list", {});
+            expect(heldList.structuredContent).toMatchObject({ queueHeld: true });
+            const resumeCall = yield* invoke("t3_queue_resume", { threadId: parentThreadId });
+            expect(resumeCall.isError).toBe(false);
+            const resumedQueue = yield* orchestrator.getThreadProjection(parentThreadId);
+            expect(resumedQueue.runs.find((run) => run.id === queuedUserRun.id)).toMatchObject({
+              userMessageId: queuedUserMessageId,
+              status: "queued",
+              queueHeld: false,
+            });
+            expect(resumedQueue.runs.find((run) => run.id === heldSend.runId)?.queueHeld).toBe(
+              false,
+            );
+            yield* orchestrator.dispatch({
+              type: "queued-run.cancel",
+              commandId: CommandId.make("command:mcp-held-send:cleanup"),
+              threadId: parentThreadId,
+              runId: heldSend.runId,
             });
             const missingQueueRead = yield* invoke("t3_queue_read", { queuedRunId: parentRun.id });
             expect(missingQueueRead.structuredContent).toMatchObject({ code: "invalid_request" });
