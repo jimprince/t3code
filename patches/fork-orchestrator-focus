@@ -1,6 +1,6 @@
-Bottom: c2bdbb05324bd9f34e680415960e83771e0cf4d4
-Top:    f68420ace0c8427c7beb04d03a73196adbf3cc8b
+Bottom: 27b252a89f3f6722d2a9e478903f4a6adc8094f6
+Top:    b6c5615ed4cf88c11df6bbaa39bb51df27a75466
 Author: brad <bradprin@live.com>
-Date:   2026-10-02 21:45:23 +0000
+Date:   2026-10-02 22:28:20 +0000
 
 feat(threads): fold worker traffic in orchestrator threads

@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "3fa4342e5c96560fab234eb26e9823b579162a7f",
-  "head": "092449f44c83b0c4fd8df23e3e5119ec1eaec4a0",
+  "prev": "c9f5ee344c876e3581558bee28b577cf76bbd8e3",
+  "head": "539f37c2ecee5e3945ef5a8afe86d8bf8a27c798",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -51,15 +51,14 @@
     "fork-child-input-attention",
     "fork-agent-panel-thread-details",
     "fork-sidebar-drag-to-nest",
-    "fork-worker-inactivity"
-  ],
-  "unapplied": [
+    "fork-worker-inactivity",
     "fork-thread-titles",
     "fork-embedded-pages",
     "fork-subthread-lifecycle",
     "fork-orchestrator-focus",
     "fork-orchestrator-brief"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -96,7 +95,7 @@
       "oid": "87246776cb5b330078bae01ee789ff55859d1268"
     },
     "fork-embedded-pages": {
-      "oid": "8499ac41ed0713d8e1011f444c38779f29f9dfc5"
+      "oid": "81091adef1442b76fa5b798ccb5abcaa4381391b"
     },
     "fork-enter-sends-queued": {
       "oid": "174634474815c7a99b29499bf91588a8ee1fa749"
@@ -141,10 +140,10 @@
       "oid": "4d350df6f0faeb50569ff56f9044b4433fffa244"
     },
     "fork-orchestrator-brief": {
-      "oid": "f3e1105344b83ea196143cee0eb010f0b3e3c822"
+      "oid": "539f37c2ecee5e3945ef5a8afe86d8bf8a27c798"
     },
     "fork-orchestrator-focus": {
-      "oid": "d766d28a9adf6a8258ef69db509eab8b81166cbe"
+      "oid": "e059991422acac426f06998772771dea37398f01"
     },
     "fork-overnight-updates": {
       "oid": "ce75d918168baafa37c42331200a7da68f579ce0"
@@ -192,7 +191,7 @@
       "oid": "6b3668ec7ef27b68ac6245f97234320c08a4d5be"
     },
     "fork-subthread-lifecycle": {
-      "oid": "ff5a9e9565f3afd8d9cd1e0c3da796c6124367a8"
+      "oid": "61191194020291ddc3caff8541c1abdc68276f06"
     },
     "fork-t3-thread-prebuilt": {
       "oid": "7d8aaf0bfa9bf87f264df4faf4ab3d56e754afd2"
@@ -204,7 +203,7 @@
       "oid": "d1c358e72e019b3da3fbbb01047446a63e34456f"
     },
     "fork-thread-titles": {
-      "oid": "3019b26320ab9899c87db0fc2b5830ca0c66b3a5"
+      "oid": "6e6645c71230278a4cc7a87b669a9d3f20877630"
     },
     "fork-thread-transfer": {
       "oid": "5353523b036fcedd8cd0090ddd22e2512cbda483"
