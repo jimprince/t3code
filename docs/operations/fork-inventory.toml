@@ -1375,3 +1375,13 @@ retire_when = "Upstream operator tooling provides equivalent rename and explicit
 depends_on = ["fork-worker-operations"]
 roles = []
 note = "Native bootstrap persists manual thread.meta.update intent before the first turn when lockTitle is set; saved aliases and raw UUIDs share rename readback."
+
+[[patch]]
+name = "fork-subthread-lifecycle"
+subject = "feat(threads): settle completed workers and archive settled subthreads"
+class = "product"
+purpose = "Settle agent-created workers at completed turn boundaries and archive eligible settled subthreads after a configurable recovery period."
+retire_when = "Upstream supplies per-worker completion settlement and guarded deadline-based subthread archiving across server, settings, and operator CLI."
+depends_on = ["fork-nested-threads", "fork-worker-operations"]
+roles = []
+note = "Completion settlement reuses thread.auto-settle, ThreadSettlementPolicy, and autoSettleDisabledAt; the opt-out always wins. UI top-level threads default off, nested threads inherit the project default, and CLI workers capture the project default with explicit override flags. Archiving uses normal archive events and a nearest-deadline timer, never a periodic sweep, and revalidates pinning, opt-out, and all descendants at dispatch. Automatic settlement preserves pins; manual settlement clears them. Unarchive starts a fresh retention window. Mobile gets the same project/environment controls; desktop shares web settings."
