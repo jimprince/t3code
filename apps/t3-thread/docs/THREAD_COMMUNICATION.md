@@ -18,6 +18,8 @@ output preview. Run `t3-thread result <name>` for the full latest turn output;
 - Finish a worker: `t3-thread settle <name>`. `t3-thread unsettle <name>` reopens it;
   sending new work also resumes it. Settling yourself requires `--self`.
 
+Worker start prompts include their real ID, saved name, environment, project and parent reply command. Inter-thread sends and watcher notices identify their sender and include a reply command; queued sends preserve one header.
+
 ## Choose notifications
 
 When creating a worker, choose `--notify-level all|attention|none`. To change an
@@ -33,9 +35,9 @@ existing subscription from your own thread, run
 - `none` suppresses ordinary completions and interruptions.
 
 Questions, approvals, plan review and errors always pass all three levels. To
-stop all routed notifications from a worker, use
-`t3-thread agent unsubscribe --watch <name>`. Settled recipients hold notices until
-unsettled. Repeated identical errors produce one notice; their accumulated count
+stop optional routed notifications from a worker, use
+`t3-thread agent unsubscribe --watch <name>`. Settled recipients hold ordinary notices until
+unsettled; a nested child’s question or approval wakes its parent at the next turn boundary. Repeated identical errors produce one notice; their accumulated count
 is available through `t3-thread notifications` until the source state or reason changes.
 
 Workers can end their final response with the exact line `T3_NOTIFY: quiet` to
@@ -44,9 +46,22 @@ Neither line suppresses required escalations. Omitting the line preserves the
 usual behavior. Successful direct sends, including accepted queued sends, deduplicate
 only the matching subscriber and turn; `all` explicitly opts into both notices.
 
+## Reaching the user from a worker-started turn
+
+Notices and sends from your workers carry their origin, and the app folds the
+turns they start out of the user's default view. When such a turn needs the
+user, ask through your provider's structured question or approval tool, or end
+the final response with the exact line `T3_NOTIFY: attention`; either keeps the
+turn visible. A question written only in prose inside a folded turn can go
+unseen. Turns started by the user's own messages never fold.
+
 ## First-delivery guide
 
-The short guide appears once per subscriber across all workers. Only a confirmed
+Ordinary watcher notices end with one line of commands to change or stop that
+worker’s subscription. Child-input notices omit those controls because a parent’s
+responsibility continues without a subscription.
+
+A one-line guide link appears once per subscriber across all workers. Only a confirmed
 successful notification delivery consumes it, so retries, held notices and filtered
 completions do not. The receipt is saved in notification history, survives watcher
 restarts and unsubscribe/resubscribe, and is retained when errors are recounted.
@@ -56,15 +71,26 @@ See [Agent operations](AGENT_OPERATIONS.md) for pairing, lookup and watcher reco
 
 ## Waiting-child reminders
 
-A nested worker's unanswered question is sent again to its subscribed parent every
-45 minutes after the last confirmed delivery, with the question and choices.
-Change a route with `t3-thread subscribe --watch <name> --input-reminder-minutes 20`,
-or choose the interval at creation using `--input-reminder-minutes 20`.
-Zero disables reminders while preserving the initial input notification. All
-notification levels still deliver input escalations. The interval and delivery
-history survive watcher restart. Answering, settling, archiving or unnesting the
-worker stops reminders; unsubscribe also removes the route. A busy or settled
-parent retains the latest pending notice under the usual delivery rules.
+A nested child's pending question or approval always reaches its current parent,
+including UI-created children, moved children and children without a saved subscription.
+Existing subscriptions retain their preferences. The watcher sends an initial notice
+and one reminder after 20 minutes if the request is still pending; it never repeats
+that reminder, including after watcher restart. Change the delay with
+`t3-thread subscribe --watch <name> --input-reminder-minutes <minutes>` or the same
+option at creation. Zero disables the reminder and preserves the initial notice.
+Answering, settling, archiving or unnesting the child cancels pending reminders.
+Removing a subscription does not remove the parent's responsibility; unnest the
+child to remove that implicit route. A busy parent receives the notice at its turn
+boundary; a settled parent is woken. Remote parents are routed using `remoteParent.environmentId`, the stable server
+descriptor ID, mapped to your saved environment alias. Missing pairings or expired
+credentials appear as blocked in `t3-thread notifications`; pairing that descriptor
+releases the notice even under a new alias. Changing either remote parent ID cancels
+the old pending reminder. Remote nesting requires servers with the
+`remoteThreadNesting` capability.
+
+The parent should answer or approve when it can, or route the request to the chief
+of staff when available. Otherwise ask Brad with the structured question tool or
+end the final response with `T3_NOTIFY: attention` to put it in Brad's Needs you.
 
 For a worker that should still be actively working, opt into one alert per
 silence episode with `t3-thread subscribe --watch <source> --level attention
