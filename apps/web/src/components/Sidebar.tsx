@@ -143,7 +143,7 @@ import { useClientSettings, useUpdateClientSettings } from "../hooks/useSettings
 import { useCopyToClipboard } from "../hooks/useCopyToClipboard";
 import { useLocalStorage } from "../hooks/useLocalStorage";
 import {
-  flattenVisibleSidebarChildren,
+  flattenTidiedSidebarChildren,
   groupSidebarChildren,
   hasActiveSidebarDescendants,
   resolveSidebarChildStatus,
@@ -750,6 +750,35 @@ function SidebarDragBoundary(props: {
   );
 }
 
+function SidebarNestedGroupRow(props: {
+  label: string;
+  depth: number;
+  expanded: boolean;
+  kind: "done" | "burst";
+  onToggle: () => void;
+}) {
+  return (
+    <li
+      className="list-none"
+      style={{ paddingInlineStart: props.depth * SIDEBAR_NESTED_INDENT_PX }}
+    >
+      <button
+        type="button"
+        data-testid={`sidebar-nested-${props.kind}-group`}
+        aria-expanded={props.expanded}
+        onClick={props.onToggle}
+        className="flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-left text-xs text-sidebar-muted-foreground/70 outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+      >
+        <ChevronDownIcon
+          aria-hidden
+          className={cn("size-3 shrink-0", !props.expanded && "-rotate-90")}
+        />
+        <span className="min-w-0 flex-1 truncate">{props.label}</span>
+      </button>
+    </li>
+  );
+}
+
 // Shelf headers stay visible and keep their measured height while dragging.
 function SidebarSectionHeader(props: {
   marker: "working-header" | "snoozed-header" | "settled-header";
@@ -1124,6 +1153,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   environmentMachine: EnvironmentMachineKind;
   project: EnvironmentProject | null;
   projectDisplayName: string | null;
+  nestedProjectDisplayName?: string | null;
   providerEntryByInstanceId: ReadonlyMap<string, ProviderInstanceEntry>;
   timestampFormat: TimestampFormat;
   onThreadClick: (event: ReactMouseEvent, threadRef: ScopedThreadRef) => void;
@@ -1823,15 +1853,26 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             {accessibleTitle}
             {/* Settled history recedes: dimmed favicon at rest, restored on
               hover so the tail stays scannable when you're hunting. */}
-            <span
-              className={cn(
-                "shrink-0 transition-opacity",
-                (!props.isActive || variantAction === "unsettle") &&
-                  "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
-              )}
-            >
-              {props.project ? <ProjectFavicon project={props.project} className="size-4" /> : null}
-            </span>
+            {nestedSubRow ? (
+              props.nestedProjectDisplayName ? (
+                <span className="inline-flex max-w-20 shrink-0 items-center gap-1 truncate text-2xs text-muted-foreground">
+                  <FolderIcon aria-hidden className="size-3 shrink-0" />
+                  <span className="truncate">{props.nestedProjectDisplayName}</span>
+                </span>
+              ) : null
+            ) : (
+              <span
+                className={cn(
+                  "shrink-0 transition-opacity",
+                  (!props.isActive || variantAction === "unsettle") &&
+                    "opacity-40 grayscale group-focus-within/sidebar-row:opacity-100 group-focus-within/sidebar-row:grayscale-0 group-hover/sidebar-row:opacity-100 group-hover/sidebar-row:grayscale-0",
+                )}
+              >
+                {props.project ? (
+                  <ProjectFavicon project={props.project} className="size-4" />
+                ) : null}
+              </span>
+            )}
             {draftIndicator}
             {title}
             {pinIndicator}
@@ -1997,18 +2038,29 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
           <div className="relative z-10 h-[4.875rem] px-(--sidebar-row-content-inset) py-(--sidebar-content-inset)">
             <div className="flex h-5 min-w-0 items-center gap-1.5">
               {draftIndicator}
-              {props.project ? (
-                <ProjectFavicon project={props.project} className="size-4 shrink-0" />
-              ) : null}
-              {props.projectDisplayName ? (
-                <span
-                  className={cn(
-                    "min-w-0 flex-1 truncate text-secondary-label text-xs",
-                    shouldRecede ? "font-normal" : "font-medium",
-                  )}
-                >
-                  {props.projectDisplayName}
-                </span>
+              {nestedSubRow ? (
+                props.nestedProjectDisplayName ? (
+                  <span className="inline-flex min-w-0 flex-1 items-center gap-1 text-2xs text-muted-foreground">
+                    <FolderIcon aria-hidden className="size-3 shrink-0" />
+                    <span className="truncate">{props.nestedProjectDisplayName}</span>
+                  </span>
+                ) : (
+                  <span className="flex-1" />
+                )
+              ) : props.projectDisplayName ? (
+                <>
+                  {props.project ? (
+                    <ProjectFavicon project={props.project} className="size-4 shrink-0" />
+                  ) : null}
+                  <span
+                    className={cn(
+                      "min-w-0 flex-1 truncate text-secondary-label text-xs",
+                      shouldRecede ? "font-normal" : "font-medium",
+                    )}
+                  >
+                    {props.projectDisplayName}
+                  </span>
+                </>
               ) : (
                 <span className="flex-1" />
               )}
@@ -2196,11 +2248,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               </span>
             </div>
           </div>
-          {nestedSubRow && props.projectDisplayName ? (
-            <span className="max-w-24 shrink-0 truncate text-2xs text-muted-foreground">
-              {props.projectDisplayName}
-            </span>
-          ) : null}
           {props.jumpLabel ? <JumpHintBadge label={props.jumpLabel} /> : null}
         </TooltipTrigger>
         {detailsTooltip}
@@ -2511,6 +2558,21 @@ export default function Sidebar() {
     EXPANDED_PARENT_KEYS_SCHEMA,
   );
   const expandedParentKeys = useMemo(() => new Set(expandedParents), [expandedParents]);
+  const [expandedNestedGroups, setExpandedNestedGroups] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const toggleNestedGroup = useCallback(
+    (key: string) => {
+      clearSelection();
+      setExpandedNestedGroups((current) => {
+        const next = new Set(current);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    },
+    [clearSelection],
+  );
   const toggleParentChildren = useCallback(
     (threadRef: ScopedThreadRef) => {
       const key = scopedThreadKey(threadRef);
@@ -5685,6 +5747,7 @@ export default function Sidebar() {
                         section: SidebarSection,
                         sortable?: SortableThreadRowBag,
                         nestedDepth = 0,
+                        nestedProjectDisplayName: string | null = null,
                       ) => {
                         const threadKey = scopedThreadKey(
                           scopeThreadRef(thread.environmentId, thread.id),
@@ -5786,6 +5849,7 @@ export default function Sidebar() {
                                 `${thread.environmentId}:${thread.projectId}`,
                               ) ?? null
                             }
+                            nestedProjectDisplayName={nestedProjectDisplayName}
                             providerEntryByInstanceId={
                               providerEntriesByEnvironment.get(thread.environmentId) ??
                               EMPTY_PROVIDER_ENTRIES
@@ -5846,15 +5910,38 @@ export default function Sidebar() {
                       for (const item of sidebarListItems) {
                         if (item.kind === "thread") {
                           items.push(renderThreadRow(threadByKey.get(item.key)!, item.section));
-                          for (const { thread: child, depth } of flattenVisibleSidebarChildren({
+                          for (const row of flattenTidiedSidebarChildren({
                             rootParentKey: item.key,
                             groups: sidebarChildren,
                             expandedParentKeys,
                             viewedPathKeys: sidebarVisibleNestedPath,
+                            expandedDoneGroupKeys: expandedNestedGroups,
+                            expandedBurstGroupKeys: expandedNestedGroups,
                           })) {
+                            if (row.kind !== "thread") {
+                              items.push(
+                                <SidebarNestedGroupRow
+                                  key={row.key}
+                                  label={row.kind === "done" ? `${row.count} done` : row.label}
+                                  depth={row.depth}
+                                  expanded={row.expanded}
+                                  kind={row.kind}
+                                  onToggle={() => toggleNestedGroup(row.key)}
+                                />,
+                              );
+                              continue;
+                            }
+                            const { thread: child, depth } = row;
                             const childKey = scopedThreadKey(
                               scopeThreadRef(child.environmentId, child.id),
                             );
+                            const parent = threadByKey.get(row.parentKey);
+                            const nestedProjectDisplayName =
+                              parent !== undefined && parent.projectId !== child.projectId
+                                ? (projectDisplayNameByKey.get(
+                                    `${child.environmentId}:${child.projectId}`,
+                                  ) ?? null)
+                                : null;
                             items.push(
                               <DraggableNestedThreadRow
                                 key={`${childKey}:nest-drop-row`}
@@ -5872,6 +5959,7 @@ export default function Sidebar() {
                                     child.settledOverride === "settled" ? "settled" : "active",
                                     bag,
                                     depth,
+                                    nestedProjectDisplayName,
                                   )
                                 }
                               </DraggableNestedThreadRow>,
