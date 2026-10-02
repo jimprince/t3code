@@ -148,7 +148,10 @@ import {
   resolveSidebarChildStatus,
   sidebarNestedPathKeys,
 } from "./sidebar/nestedThreadVisibility.logic";
-import { SidebarNestedThreadToggle } from "./sidebar/SidebarNestedThreadToggle";
+import {
+  SidebarNestedInputAttention,
+  SidebarNestedThreadToggle,
+} from "./sidebar/SidebarNestedThreadToggle";
 import { SidebarThreadRowStatus } from "./sidebar/SidebarThreadRowStatus";
 import { useNowMinute } from "../hooks/useNowMinute";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
@@ -1669,13 +1672,18 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       <SidebarNestedThreadToggle
         count={props.nestedChildCount!}
         activeCount={props.nestedActiveCount ?? 0}
-        inputCount={props.nestedInputCount ?? 0}
+        expanded={props.nestedChildrenExpanded ?? false}
+        onToggle={() => props.onToggleNestedChildren?.(threadRef)}
+      />
+    ) : null;
+  const nestedInputAttention =
+    (props.nestedInputCount ?? 0) > 0 ? (
+      <SidebarNestedInputAttention
+        inputCount={props.nestedInputCount!}
         onOpenInput={() => {
           if (props.nestedInputChildId)
             props.onOpenNestedInput?.(threadRef, props.nestedInputChildId);
         }}
-        expanded={props.nestedChildrenExpanded ?? false}
-        onToggle={() => props.onToggleNestedChildren?.(threadRef)}
       />
     ) : null;
 
@@ -1734,6 +1742,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
             {title}
             {pinIndicator}
             {nestedChildrenToggle}
+            {nestedInputAttention}
             {terminalStatusIcon}
             {isRegeneratingTitle ? (
               <span role="status" className="sr-only">
@@ -2039,6 +2048,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
               ) : null}
             </div>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-secondary-label text-xs">
+              {nestedInputAttention}
               {/* Always the branch. The plan step used to take this slot while
                   working, but it truncated to a half-sentence and dropped the
                   branch, so the row lost its most stable identifier. */}

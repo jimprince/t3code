@@ -3,7 +3,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
-import { SidebarNestedThreadToggle } from "./SidebarNestedThreadToggle";
+import {
+  SidebarNestedInputAttention,
+  SidebarNestedThreadToggle,
+} from "./SidebarNestedThreadToggle";
 
 let container: HTMLDivElement;
 let root: Root;
@@ -22,14 +25,10 @@ afterEach(() => {
 it("shows recursive activity and input rollups on a collapsed nested parent", () => {
   act(() => {
     root.render(
-      <SidebarNestedThreadToggle
-        count={2}
-        activeCount={1}
-        inputCount={1}
-        expanded={false}
-        onOpenInput={vi.fn()}
-        onToggle={vi.fn()}
-      />,
+      <>
+        <SidebarNestedThreadToggle count={2} activeCount={1} expanded={false} onToggle={vi.fn()} />
+        <SidebarNestedInputAttention inputCount={1} onOpenInput={vi.fn()} />
+      </>,
     );
   });
 
@@ -42,14 +41,10 @@ it("shows recursive activity and input rollups on a collapsed nested parent", ()
 it("pluralizes descendant input attention", () => {
   act(() => {
     root.render(
-      <SidebarNestedThreadToggle
-        count={3}
-        activeCount={2}
-        inputCount={2}
-        expanded
-        onOpenInput={vi.fn()}
-        onToggle={vi.fn()}
-      />,
+      <>
+        <SidebarNestedThreadToggle count={3} activeCount={2} expanded onToggle={vi.fn()} />
+        <SidebarNestedInputAttention inputCount={2} onOpenInput={vi.fn()} />
+      </>,
     );
   });
 
