@@ -261,6 +261,12 @@ to it says how many worker turns asked for you since your last message. On
 mobile, folded rows expand on tap; the switch and the count are web and desktop
 only.
 
+**Brief me**, next to the switch, summarizes what the workers and the
+orchestrator did since your last message: what needs you, what finished, what is
+still moving and what is blocked. It uses the text generation model from
+Settings, which must be a Codex or Claude model, and runs again each time you
+open it. The brief is shown only to you and is not added to the thread.
+
 ## Snooze until later
 
 Choose **Snooze → Custom…** from a thread's menu to pick a date and time in your
