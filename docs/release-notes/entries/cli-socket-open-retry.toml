@@ -1,0 +1,4 @@
+id = "cli-socket-open-retry"
+category = "fix"
+functionality = "connections"
+text = "The thread CLI retries temporary connection failures after server restart without replaying sent requests."
