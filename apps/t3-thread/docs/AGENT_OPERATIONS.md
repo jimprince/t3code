@@ -928,6 +928,42 @@ notifications respect quota holds; explicit operator retry remains available.
 A direct CLI retry restarts delivery of held notifications, even if the watcher
 had idled out.
 
+### Active-worker inactivity monitoring
+
+Enable this on each supervisor subscription; 15 minutes is the recommended
+threshold. Existing routes remain unchanged until enabled:
+
+```bash
+# Run in the supervisor thread to update its existing route:
+t3-thread subscribe --watch <source> --level attention --inactivity-minutes 15
+# Disable inactivity alerts, preserving required question/approval/fault notices:
+t3-thread subscribe --watch <source> --inactivity-minutes 0
+# Create with quiet completions and inactivity monitoring:
+t3-thread create ... --notify-level attention --inactivity-minutes 15
+```
+
+`subscriptions` reports each route's threshold and latest observation. The
+existing watcher detects and delivers these notices; no extra daemon is needed.
+Keep its scan interval below two minutes. Monitoring starts when the watcher
+first successfully observes an active turn, rather than retrospectively treating
+old work as stalled. A failed source read or a gap over two minutes (including
+sleep or a long watcher restart) starts a fresh observation window.
+
+Current-turn assistant/reasoning updates and provider tool/task lifecycle or
+progress events reset the window. Session timestamps, metadata edits, old-turn
+activity, and mere presence of an open tool do not. One alert is retained per
+silence episode across watcher restarts, with a new episode after genuine
+progress. Delivery rechecks the source: resumed progress, completion, waiting
+input/approval/plan, settlement, archive, stopped sessions, or current quota holds
+cancel stale alerts. Notification level `none` disables inactivity alerts;
+`attention` keeps them while ordinary quiet completions stay quiet.
+
+The notice reports **no observable progress**, not a dead provider: a silent
+long-running tool or reasoning hidden by a provider can still be healthy. Inspect
+`status` and `worklog` before deciding what to do. Monitoring never interrupts,
+retries, changes accounts/providers, or infers an outstanding result from an idle
+thread's assignment text.
+
 ## Timed project automations
 
 Use `t3-thread automation list --env <name> --project <id>` to inspect server-owned definitions
