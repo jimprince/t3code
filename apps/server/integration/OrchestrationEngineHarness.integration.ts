@@ -68,6 +68,7 @@ import {
 } from "../src/orchestration/Services/OrchestrationEngine.ts";
 import { ThreadArchiveCleanupReactor } from "../src/orchestration/Services/ThreadArchiveCleanupReactor.ts";
 import { ThreadDeletionReactor } from "../src/orchestration/Services/ThreadDeletionReactor.ts";
+import * as SettledSubthreadArchiveReactor from "../src/orchestration/SettledSubthreadArchiveReactor.ts";
 import * as ThreadSettlementReactor from "../src/orchestration/ThreadSettlementReactor.ts";
 import * as PullRequestSyncReactor from "../src/orchestration/PullRequestSyncReactor.ts";
 import * as ThreadPullRequestReactor from "../src/orchestration/ThreadPullRequestReactor.ts";
@@ -415,10 +416,16 @@ export const makeOrchestrationIntegrationHarness = (
         }),
       ),
       Layer.provideMerge(
-        Layer.succeed(ThreadSettlementReactor.ThreadSettlementReactor, {
-          start: () => Effect.void,
-          drain: Effect.void,
-        }),
+        Layer.mergeAll(
+          Layer.succeed(SettledSubthreadArchiveReactor.SettledSubthreadArchiveReactor, {
+            start: () => Effect.void,
+            drain: Effect.void,
+          }),
+          Layer.succeed(ThreadSettlementReactor.ThreadSettlementReactor, {
+            start: () => Effect.void,
+            drain: Effect.void,
+          }),
+        ),
       ),
       Layer.provideMerge(
         Layer.succeed(PullRequestSyncReactor.PullRequestSyncReactor, {
