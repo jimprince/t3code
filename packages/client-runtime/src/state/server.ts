@@ -1083,6 +1083,15 @@ export function createServerEnvironmentAtoms<R, E>(
       refreshTrigger: ({ environmentId }) => usageScanSettingsAtom(environmentId),
     }),
 
+    threadSubscriptions: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:thread-subscriptions",
+      tag: WS_METHODS.serverThreadSubscriptions,
+    }),
+    updateThreadSubscriptions: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:update-thread-subscriptions",
+      tag: WS_METHODS.serverUpdateThreadSubscriptions,
+    }),
+
     recoveryPreview: createEnvironmentRpcQueryAtomFamily(runtime, {
       label: "environment-data:server:recovery-preview",
       tag: WS_METHODS.serverPreviewRecovery,

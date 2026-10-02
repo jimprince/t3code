@@ -5,6 +5,12 @@ import {
   ChatGptHandoffInput,
   ChatGptHandoffState,
 } from "./providerSetup.ts";
+import {
+  ThreadSubscriptionsInput,
+  ThreadSubscriptionsResult,
+  UpdateThreadSubscriptionsInput,
+  ThreadSubscriptionsError,
+} from "./threadSubscriptions.ts";
 import * as Schema from "effect/Schema";
 import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
@@ -416,6 +422,9 @@ export const WS_METHODS = {
   serverGetUsageSummary: "server.getUsageSummary",
   serverRefreshUsageRates: "server.refreshUsageRates",
 
+  serverThreadSubscriptions: "server.threadSubscriptions",
+  serverUpdateThreadSubscriptions: "server.updateThreadSubscriptions",
+
   serverPreviewRecovery: "server.previewRecovery",
   serverExecuteRecovery: "server.executeRecovery",
   serverRequestHeadlessUpdateCheck: "server.requestHeadlessUpdateCheck",
@@ -719,6 +728,17 @@ const WsServerSignalProcessRpc = Rpc.make(WS_METHODS.serverSignalProcess, {
   payload: ServerSignalProcessInput,
   success: ServerSignalProcessResult,
   error: EnvironmentAuthorizationError,
+});
+
+const WsServerThreadSubscriptionsRpc = Rpc.make(WS_METHODS.serverThreadSubscriptions, {
+  payload: ThreadSubscriptionsInput,
+  success: ThreadSubscriptionsResult,
+  error: Schema.Union([EnvironmentAuthorizationError, ThreadSubscriptionsError]),
+});
+const WsServerUpdateThreadSubscriptionsRpc = Rpc.make(WS_METHODS.serverUpdateThreadSubscriptions, {
+  payload: UpdateThreadSubscriptionsInput,
+  success: ThreadSubscriptionsResult,
+  error: Schema.Union([EnvironmentAuthorizationError, ThreadSubscriptionsError]),
 });
 
 const WsServerPreviewRecoveryRpc = Rpc.make(WS_METHODS.serverPreviewRecovery, {
@@ -1550,6 +1570,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsServerReportClientActivityRpc,
   WsServerReportHostPowerStateRpc,
   WsServerGetBackgroundPolicyRpc,
+  WsServerThreadSubscriptionsRpc,
+  WsServerUpdateThreadSubscriptionsRpc,
 
   WsServerPreviewRecoveryRpc,
   WsServerExecuteRecoveryRpc,
