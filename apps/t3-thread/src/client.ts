@@ -1,5 +1,7 @@
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
+import { withSenderHeader } from "./thread-identity.js";
 import type { ProjectAutomation } from "@t3tools/contracts";
+import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -626,12 +628,16 @@ export class RemoteEnvironmentClient {
     allowWhileRunning?: boolean;
     queueWhileRunning?: boolean;
     agentName?: string | null;
+    /** Marks the message as sent on a thread's behalf; see `@t3tools/shared/messageOrigin`. */
+    origin?: MessageOrigin | null;
+    senderEnvironment?: string;
   }): Promise<SendMessageOutcome> {
     const thread = await this.findThread(input.threadId);
     if (thread.archivedAt || thread.deletedAt) {
       throw new Error(`Thread '${thread.id}' is archived and cannot receive messages.`);
     }
 
+    const text = withSenderHeader(input.text, input.origin, input.senderEnvironment ?? "unknown");
     const status = classifyThread(thread);
     if (status.state === "running" && !input.allowWhileRunning) {
       if (input.queueWhileRunning === false) {
@@ -644,7 +650,8 @@ export class RemoteEnvironmentClient {
         threadId: thread.id,
         agentName: input.agentName ?? null,
         environment: this.environment.name,
-        text: input.text,
+        text,
+        origin: input.origin ?? null,
         queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
       });
       return {
@@ -664,8 +671,9 @@ export class RemoteEnvironmentClient {
         message: {
           messageId: NodeCrypto.randomUUID(),
           role: "user",
-          text: input.text,
+          text,
           attachments: [],
+          ...(input.origin ? { context: makeMessageOriginContext(input.origin) } : {}),
         },
         runtimeMode: thread.runtimeMode,
         interactionMode: thread.interactionMode,
