@@ -251,6 +251,7 @@ async function ensureNotificationWatcher(
 const program = new Command();
 const AGENT_COMMAND_ALIASES = new Set([
   "create",
+  "rename",
   "attach",
   "list",
   "archive",
@@ -297,6 +298,7 @@ Direct thread commands:
   project      Manage T3 Code projects on a paired environment
   models       List live provider/model slugs from a paired environment
   create       Create and start a branch-pinned T3 worker thread
+  rename       Set a thread title by saved name or UUID
   search       Locate a thread UUID across paired environments
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
@@ -783,6 +785,27 @@ agent
       nestedUnder: nesting.parentThreadId,
       nesting: nesting.reason,
     });
+  });
+
+agent
+  .command("rename")
+  .argument("<agent-or-thread>", "saved agent name or raw thread UUID (including your own)")
+  .requiredOption("--title <text>", "new thread title")
+  .action(async (reference, options) => {
+    const { agent: target, client } = await withAgent(reference);
+    const renamed = await client.renameThread({ threadId: target.threadId, title: options.title });
+    await updateState(async (state) => ({
+      state: {
+        ...state,
+        agents: state.agents.map((saved) =>
+          saved.environment === target.environment && saved.threadId === target.threadId
+            ? { ...saved, title: renamed.title }
+            : saved,
+        ),
+      },
+      result: null,
+    }));
+    printJson({ ...renamed, environment: target.environment, renamed: true });
   });
 
 agent

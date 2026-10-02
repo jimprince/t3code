@@ -431,6 +431,29 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  async renameThread(input: {
+    threadId: string;
+    title: string;
+  }): Promise<{ threadId: string; title: string }> {
+    const title = input.title.trim();
+    if (!title) throw new Error("Thread title must not be empty.");
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: "thread.meta.update",
+        commandId: NodeCrypto.randomUUID(),
+        threadId: input.threadId,
+        title,
+      });
+    } finally {
+      await rpc.dispose();
+    }
+    const thread = await this.findThread(input.threadId);
+    if (thread.title !== title)
+      throw new Error("Thread title readback did not match the requested title.");
+    return { threadId: thread.id, title: thread.title };
+  }
+
   async createAgentThread(input: {
     projectId: string;
     title: string;
@@ -449,6 +472,8 @@ export class RemoteEnvironmentClient {
     if (!project) {
       throw new Error(`Project '${input.projectId}' was not found in '${this.environment.name}'.`);
     }
+    const title = input.title.trim();
+    if (!title) throw new Error("Thread title must not be empty.");
     const initialMessage = input.initialMessage?.trim();
     if (!initialMessage) {
       throw new Error("agent create requires a non-empty initial message.");
@@ -472,6 +497,27 @@ export class RemoteEnvironmentClient {
     const createdAt = nowIso();
     const rpc = await this.openRpc();
     try {
+      // A manual title update blocks first-turn generation, including in-flight refinements.
+      await rpc.request("dispatchCommand", {
+        type: "thread.create",
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+        projectId: project.id,
+        title,
+        modelSelection,
+        runtimeMode,
+        interactionMode,
+        branch: null,
+        worktreePath: null,
+        createdAt,
+        ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
+      });
+      await rpc.request("dispatchCommand", {
+        type: "thread.meta.update",
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+        title,
+      });
       await rpc.request("dispatchCommand", {
         type: "thread.turn.start",
         commandId: NodeCrypto.randomUUID(),
@@ -483,35 +529,23 @@ export class RemoteEnvironmentClient {
           attachments: [],
         },
         modelSelection,
-        titleSeed: input.title,
+        titleSeed: title,
         runtimeMode,
         interactionMode,
-        bootstrap: {
-          createThread: {
-            projectId: project.id,
-            title: input.title,
-            modelSelection,
-            runtimeMode,
-            interactionMode,
-            branch: null,
-            worktreePath: null,
-            createdAt,
-            ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
-          },
-          ...(input.branch
-            ? {
+        ...(input.branch
+          ? {
+              bootstrap: {
                 prepareWorktree: {
                   projectCwd: project.workspaceRoot,
                   baseBranch: input.baseBranch ?? "main",
                   branch: input.branch,
-                  // The wire key is retained for server compatibility. Its
-                  // current meaning is remote-based creation (gitea, then origin).
+                  // The historical wire key selects remote-based creation (gitea, then origin).
                   startFromOrigin: input.startFromOrigin ?? true,
                 },
                 runSetupScript: true,
-              }
-            : {}),
-        },
+              },
+            }
+          : {}),
         createdAt,
       });
     } finally {
@@ -521,7 +555,7 @@ export class RemoteEnvironmentClient {
     return {
       threadId,
       projectId: project.id,
-      title: input.title,
+      title,
     };
   }
 
