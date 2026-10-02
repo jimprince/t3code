@@ -3,6 +3,7 @@ import {
   AuthOrchestrationReadScope,
   EnvironmentHttpApi,
 } from "@t3tools/contracts";
+import { withoutPageAgentThreads } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as HttpApiBuilder from "effect/unstable/httpapi/HttpApiBuilder";
@@ -53,13 +54,12 @@ export const orchestrationHttpApiLayer = HttpApiBuilder.group(
         Effect.fn("environment.orchestration.shellSnapshot")(function* (args) {
           yield* annotateEnvironmentRequest(args.endpoint.name);
           yield* requireEnvironmentScope(AuthOrchestrationReadScope);
-          return yield* projectionSnapshotQuery
-            .getShellSnapshot()
-            .pipe(
-              Effect.catch((cause) =>
-                failEnvironmentInternal("orchestration_snapshot_failed", cause),
-              ),
-            );
+          return yield* projectionSnapshotQuery.getShellSnapshot().pipe(
+            Effect.map(withoutPageAgentThreads),
+            Effect.catch((cause) =>
+              failEnvironmentInternal("orchestration_snapshot_failed", cause),
+            ),
+          );
         }),
       )
       .handle(
