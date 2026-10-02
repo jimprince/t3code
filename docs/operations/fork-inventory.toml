@@ -1365,3 +1365,13 @@ retire_when = "Upstream or the operator CLI provides equivalent activity-based i
 depends_on = ["fork-notification-preferences"]
 roles = []
 note = "Monitoring is disabled on existing routes until explicitly enabled. A successful observation window, persisted per route, excludes network failures and sleep gaps; current-turn activity identifies one episode across watcher restart. Completed, settled, archived, input-waiting, plan-waiting, stopped and quota-held workers are excluded. Silent tools or hidden reasoning can still be working, so notices report missing evidence and never assert provider failure or perform recovery. Idle missing-result alerts are excluded because assignments do not prove an outstanding result obligation."
+
+[[patch]]
+name = "fork-subthread-lifecycle"
+subject = "feat(threads): settle completed workers and archive settled subthreads"
+class = "product"
+purpose = "Settle agent-created workers at completed turn boundaries and archive eligible settled subthreads after a configurable recovery period."
+retire_when = "Upstream supplies per-worker completion settlement and guarded deadline-based subthread archiving across server, settings, and operator CLI."
+depends_on = ["fork-nested-threads", "fork-worker-operations"]
+roles = []
+note = "Completion settlement reuses thread.auto-settle, ThreadSettlementPolicy, and autoSettleDisabledAt; the opt-out always wins. UI top-level threads default off, nested threads inherit the project default, and CLI workers capture the project default with explicit override flags. Archiving uses normal archive events and a nearest-deadline timer, never a periodic sweep, and revalidates pinning, opt-out, and all descendants at dispatch. Automatic settlement preserves pins; manual settlement clears them. Unarchive starts a fresh retention window. Mobile gets the same project/environment controls; desktop shares web settings."
