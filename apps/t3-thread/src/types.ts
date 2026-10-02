@@ -99,6 +99,7 @@ export interface OrchestrationThread {
   updatedAt: string;
   archivedAt: string | null;
   settledOverride?: "settled" | "active" | null;
+  pinnedAt?: string | null | undefined;
   settledAt?: string | null;
   unsettledAt?: string | null;
   deletedAt?: string | null;
@@ -130,6 +131,7 @@ export interface OrchestrationThreadShell {
   updatedAt: string;
   archivedAt: string | null;
   settledOverride?: "settled" | "active" | null;
+  pinnedAt?: string | null | undefined;
   settledAt?: string | null;
   unsettledAt?: string | null;
   session: OrchestrationSession | null;

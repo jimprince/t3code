@@ -8,6 +8,7 @@ export interface AgentOverview {
   title: string;
   state: AgentState;
   reason: string;
+  pinned: boolean;
   hasNewOutput: boolean;
   latestAssistantMessageId: string | null;
   latestAssistantPreview: string | null;
@@ -73,6 +74,7 @@ export function buildAgentOverview(agent: SavedAgent, thread: OrchestrationThrea
     title: agent.title,
     state: status.state,
     reason: status.reason,
+    pinned: thread.pinnedAt != null,
     hasNewOutput: hasNewAssistantOutput(agent, thread),
     latestAssistantMessageId: latestAssistant?.id ?? null,
     latestAssistantPreview: latestAssistant ? summarizeMessageText(latestAssistant.text) : null,
@@ -97,7 +99,7 @@ export function formatOverviewLine(overview: AgentOverview): string {
   const stateLabel = overview.hasNewOutput ? `${overview.state}/new` : overview.state;
   return [
     overview.name,
-    `[${stateLabel}]`,
+    `[${stateLabel}${overview.pinned ? "/pinned" : ""}]`,
     overview.threadId,
     overview.title,
     overview.reason,

@@ -229,6 +229,8 @@ const AGENT_COMMAND_ALIASES = new Set([
   "archive",
   "settle",
   "unsettle",
+  "pin",
+  "unpin",
   "forget",
   "caller",
   "subscriptions",
@@ -265,6 +267,7 @@ Direct thread commands:
   models       List live provider/model slugs from a paired environment
   create       Create and start a branch-pinned T3 worker thread
   search       Locate a thread UUID across paired environments
+  pin/unpin    Change worker pinning (create --pin starts pinned)
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
   result       Fetch latest/final worker output
@@ -591,6 +594,7 @@ agent
     "--no-notify",
     "disable automatic completion/attention notifications for the created worker",
   )
+  .option("--pin", "pin the new thread (default: unpinned)")
   .action(async (options) => {
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
@@ -610,6 +614,7 @@ agent
     const initialMessage =
       options.preamble === false ? options.message : wrapWithPreamble(options.message);
     const created = await client.createAgentThread({
+      pin: options.pin === true,
       projectId: options.project,
       title: options.title,
       provider: options.provider,
@@ -665,6 +670,7 @@ agent
       notifySubscribed: Boolean(notifyCaller),
       notifySubscriberAgentName: notifyCaller?.name ?? null,
       notifySubscriberThreadId: notifyCaller?.threadId ?? null,
+      pinned: created.pinned,
     });
   });
 
@@ -774,6 +780,21 @@ agent
       withSubscriptions(await client.settleThread(savedAgent.threadId, { self: options.self })),
     );
   });
+
+for (const operation of ["pin", "unpin"] as const) {
+  agent
+    .command(operation)
+    .description(
+      operation === "pin"
+        ? "Pin an existing thread, including a nested worker"
+        : "Unpin an existing thread",
+    )
+    .argument("<name>", "agent name or raw thread UUID")
+    .action(async (name) => {
+      const { agent: savedAgent, client } = await withAgent(name);
+      printJson(await client.setThreadPinned(savedAgent.threadId, operation === "pin"));
+    });
+}
 
 agent
   .command("unsettle")
@@ -1191,6 +1212,8 @@ agent
       saved,
       checkedEnvironments: target.checkedEnvironments,
       unreachableEnvironments: target.unreachableEnvironments,
+      pinned: thread.pinnedAt != null,
+      pinnedAt: thread.pinnedAt ?? null,
       settledOverride: thread.settledOverride ?? null,
       settledAt: thread.settledAt ?? null,
       unsettledAt: thread.unsettledAt ?? null,
