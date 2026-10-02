@@ -1,0 +1,4 @@
+id = "agent-thread-order-cli"
+category = "feature"
+functionality = "worker operations"
+text = "Let agents inspect, arrange, move, and reset sidebar thread order with t3-thread."
