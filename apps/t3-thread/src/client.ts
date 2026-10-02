@@ -1,3 +1,4 @@
+import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -580,6 +581,8 @@ export class RemoteEnvironmentClient {
     allowWhileRunning?: boolean;
     queueWhileRunning?: boolean;
     agentName?: string | null;
+    /** Marks the message as sent on a thread's behalf; see `@t3tools/shared/messageOrigin`. */
+    origin?: MessageOrigin | null;
   }): Promise<SendMessageOutcome> {
     const thread = await this.findThread(input.threadId);
     if (thread.archivedAt || thread.deletedAt) {
@@ -599,6 +602,7 @@ export class RemoteEnvironmentClient {
         agentName: input.agentName ?? null,
         environment: this.environment.name,
         text: input.text,
+        origin: input.origin ?? null,
         queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
       });
       return {
@@ -620,6 +624,7 @@ export class RemoteEnvironmentClient {
           role: "user",
           text: input.text,
           attachments: [],
+          ...(input.origin ? { context: makeMessageOriginContext(input.origin) } : {}),
         },
         runtimeMode: thread.runtimeMode,
         interactionMode: thread.interactionMode,

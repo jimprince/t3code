@@ -125,6 +125,30 @@ async function queue(text: string, threadId = "thread-worker-a"): Promise<void> 
 }
 
 describe("send queue drain", () => {
+  it("dispatches a queued send with the sender it was queued under", async () => {
+    await withTempState(async () => {
+      const origin = { source: "thread-send" as const, fromThreadId: "thread-worker-b" };
+      await enqueueSend({
+        threadId: "thread-worker-a",
+        agentName: "worker-a",
+        environment: "dev-vm",
+        text: "result: done",
+        origin,
+        queuedDuringTurnId: "turn-1",
+      });
+      const origins: unknown[] = [];
+      const { clientFactory } = createClientFactory({
+        onSend: (message) => {
+          origins.push((message as { origin?: unknown }).origin);
+        },
+      });
+
+      await drainQueuedSends({ clientFactory });
+
+      expect(origins).toEqual([origin]);
+    });
+  });
+
   it("holds persisted sends while settled and releases them only after explicit resume", async () => {
     await withTempState(async () => {
       await queue("Please retry the operation");
