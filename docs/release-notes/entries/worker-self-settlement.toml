@@ -1,0 +1,4 @@
+id = "worker-self-settlement"
+category = "fix"
+functionality = "t3-thread lifecycle"
+text = "Threads can accept a request to settle themselves with --self: a background helper waits for the current response to finish, preserving the server's active-work guard."
