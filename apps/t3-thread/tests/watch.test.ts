@@ -759,7 +759,7 @@ describe("notification ownership and attention", () => {
     await withTempState(async () => {
       const state = await loadState();
       state.subscriptions.push(
-        makeSubscription({ subscriberThreadId: "attention-supervisor", events: "attention" }),
+        makeSubscription({ subscriberThreadId: "attention-supervisor", level: "attention" }),
       );
       await saveState(state);
       const source = makeThread();
@@ -797,6 +797,7 @@ describe("notification ownership and attention", () => {
       expect(sentMessages).toHaveLength(1);
       expect((await loadState()).notifications).toHaveLength(1);
     });
+  });
 });
 
 describe("watch polling cost", () => {

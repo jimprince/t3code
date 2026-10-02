@@ -252,9 +252,8 @@ async function scanAttentionState(
       overview.state === "error" &&
       isNotificationReply(sourceThread) &&
       threadQuotaBlock(sourceThread)
-    ) {
+    )
       continue;
-    }
 
     const subscriptions = state.subscriptions.filter(
       (subscription) => subscription.sourceThreadId === sourceAgent.threadId,
@@ -272,7 +271,11 @@ async function scanAttentionState(
       subscription.observedState = overview.state;
       subscription.observedReason = overview.reason;
       observedSubscriptions.push(subscription);
-      if ((overview.state === "completed" || overview.state === "idle") && isNotificationReply(sourceThread)) continue;
+      if (
+        (overview.state === "completed" || overview.state === "idle") &&
+        isNotificationReply(sourceThread)
+      )
+        continue;
       if (!needsAttention(overview) || !shouldNotify(subscription, overview, sourceThread))
         continue;
       // Attention for the turn that was already current when the subscriber
@@ -472,7 +475,17 @@ export async function detectAttentionEvents(
         ),
       );
       const existing =
-        notifications.find((candidate) => candidate.eventKey === notification.eventKey) ?? null;
+        notifications.find((candidate) => candidate.eventKey === notification.eventKey) ??
+        notifications.find(
+          (candidate) =>
+            notification.sourceState === "completed" &&
+            candidate.sourceState === notification.sourceState &&
+            candidate.subscriberThreadId === notification.subscriberThreadId &&
+            candidate.sourceThreadId === notification.sourceThreadId &&
+            candidate.latestTurnId === notification.latestTurnId &&
+            candidate.latestAssistantMessageId === notification.latestAssistantMessageId,
+        ) ??
+        null;
       if (notification.sourceState === "error") {
         notification = {
           ...notification,
@@ -481,7 +494,10 @@ export async function detectAttentionEvents(
             (existing?.lastOccurrenceKey === notification.lastOccurrenceKey ? 0 : 1),
         };
       }
-      const merged = mergeDetectedNotification(existing, notification);
+      const merged = mergeDetectedNotification(
+        existing,
+        existing ? { ...notification, eventKey: existing.eventKey } : notification,
+      );
       notifications = upsertNotification(notifications, merged);
       notifications = supersedeOvertakenNotifications(notifications, merged, merged.updatedAt);
       persisted.push(merged);
@@ -781,9 +797,8 @@ export async function deliverPendingNotifications(
             ) ||
             latest.notifications.find((event) => event.id === notification.id)?.status !==
               "delivering"
-          ) {
+          )
             continue;
-          }
           const includeOnboarding = !state.notifications.some(
             (candidate) =>
               candidate.subscriberThreadId === notification.subscriberThreadId &&

@@ -849,12 +849,12 @@ disables either route. Always check `notifySubscribed` in the result.
 Completion notifications say that a turn completed; pending approvals, questions,
 plans, errors, and interruptions say that attention is needed. A reply to a routed
 notification does not emit another completion notification. It can still report
-an approval, question, plan, error, or interruption. To watch only those states:
+an approval, question, plan, error, or interruption. To reduce routine completion notices:
 
 ```bash
-t3-thread subscribe --watch <source> --events attention
+t3-thread subscribe --watch <source> --level attention
 # Restore completion notifications on the same route:
-t3-thread subscribe --watch <source> --events all
+t3-thread subscribe --watch <source> --level all
 ```
 
 Existing routes continue to include completions unless explicitly changed. Multiple

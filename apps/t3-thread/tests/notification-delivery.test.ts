@@ -663,7 +663,7 @@ describe("notification onboarding", () => {
       await deliverPendingNotifications({ env: "dev-vm", clientFactory: next.clientFactory });
       expect(next.sent).toHaveLength(1);
       expect(next.sent[0]?.text).not.toContain("Thread communication quick start");
-      expect(next.sent[0]?.text).toContain("worker-b needs attention");
+      expect(next.sent[0]?.text).toContain("worker-b completed a turn");
     });
   });
 
