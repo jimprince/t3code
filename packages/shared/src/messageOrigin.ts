@@ -7,6 +7,8 @@
  * and clients that predate this kind keep it as an unknown record. Messages from
  * older CLIs carry no record; the notification text prefix is the fallback.
  */
+import type { ComposerContextId, OrchestrationMessageContext } from "@t3tools/contracts";
+
 export const MESSAGE_ORIGIN_CONTEXT_KIND = "t3-origin";
 
 export type MessageOriginSource = "worker-notification" | "thread-send";
@@ -22,13 +24,15 @@ export interface MessageOrigin {
 const NOTIFICATION_PREFIX = /^(?:HomeNetwork|T3) orchestrator notification: (\S+) /;
 
 /** Context to attach to a `thread.turn.start` message sent on someone's behalf. */
-export function makeMessageOriginContext(origin: MessageOrigin) {
+export function makeMessageOriginContext(origin: MessageOrigin): OrchestrationMessageContext {
   return {
-    version: 1 as const,
+    version: 1,
     records: [
       {
-        version: 1 as const,
-        contextId: MESSAGE_ORIGIN_CONTEXT_KIND,
+        version: 1,
+        // The fixed id satisfies the ComposerContextId pattern; a type-only import keeps
+        // the CLI bundle from loading the contracts runtime.
+        contextId: MESSAGE_ORIGIN_CONTEXT_KIND as ComposerContextId,
         label: "",
         kind: MESSAGE_ORIGIN_CONTEXT_KIND,
         payload: origin,

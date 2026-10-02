@@ -1158,7 +1158,7 @@ export function deriveMessagesTimelineRows(input: {
         id: backgroundRun.id,
         createdAt: backgroundRun.startedAt,
         run: backgroundRun,
-        expanded: !input.backgroundFolds!.hiddenMessageIds.has(timelineEntry.message.id),
+        expanded: !input.backgroundFolds!.hiddenMessageIds.has(backgroundRun.anchorMessageId),
       });
     }
     if (input.backgroundFolds && isHiddenByBackgroundFold(timelineEntry, input.backgroundFolds)) {
