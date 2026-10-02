@@ -133,6 +133,35 @@ export function canParentThreads(thread: NestingThread): boolean {
 
 const NEST_PARENT_CANDIDATE_LIMIT = 12;
 
+/** Whether moving `thread` under `candidate` is valid in the current tree. */
+export function canNestThreadUnder<T extends NestingThread>(
+  thread: NestingThread,
+  candidate: T,
+  threads: ReadonlyArray<T>,
+): boolean {
+  if (
+    candidate.environmentId !== thread.environmentId ||
+    candidate.id === thread.id ||
+    candidate.id === thread.parentThreadId ||
+    !canParentThreads(candidate)
+  ) {
+    return false;
+  }
+  const byId = new Map(
+    threads
+      .filter((entry) => entry.environmentId === thread.environmentId)
+      .map((entry) => [entry.id, entry] as const),
+  );
+  const visited = new Set<ThreadId>();
+  let ancestor: T | undefined = candidate;
+  while (ancestor !== undefined) {
+    if (ancestor.id === thread.id || visited.has(ancestor.id)) return false;
+    visited.add(ancestor.id);
+    ancestor = ancestor.parentThreadId == null ? undefined : byId.get(ancestor.parentThreadId);
+  }
+  return true;
+}
+
 /**
  * Threads `thread` may be nested under, most recently updated first. Mirrors
  * the server's rules so the menu only offers moves it will accept: same
@@ -142,30 +171,8 @@ const NEST_PARENT_CANDIDATE_LIMIT = 12;
 export function selectNestParentCandidates<
   T extends NestingThread & Pick<EnvironmentThreadShell, "updatedAt">,
 >(thread: NestingThread, threads: ReadonlyArray<T>, limit = NEST_PARENT_CANDIDATE_LIMIT): T[] {
-  const byId = new Map(
-    threads
-      .filter((candidate) => candidate.environmentId === thread.environmentId)
-      .map((candidate) => [candidate.id, candidate] as const),
-  );
-  const wouldCreateCycle = (candidate: T) => {
-    const visited = new Set<ThreadId>();
-    let ancestor: T | undefined = candidate;
-    while (ancestor !== undefined) {
-      if (ancestor.id === thread.id || visited.has(ancestor.id)) return true;
-      visited.add(ancestor.id);
-      ancestor = ancestor.parentThreadId == null ? undefined : byId.get(ancestor.parentThreadId);
-    }
-    return false;
-  };
   return threads
-    .filter(
-      (candidate) =>
-        candidate.environmentId === thread.environmentId &&
-        candidate.id !== thread.id &&
-        candidate.id !== thread.parentThreadId &&
-        canParentThreads(candidate) &&
-        !wouldCreateCycle(candidate),
-    )
+    .filter((candidate) => canNestThreadUnder(thread, candidate, threads))
     .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     .slice(0, limit);
 }
