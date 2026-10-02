@@ -1,17 +1,25 @@
-import { ExternalLinkIcon } from "lucide-react";
+import { BotIcon, ExternalLinkIcon } from "lucide-react";
+import { useState } from "react";
 
-import { usePreviewWebviewConfig } from "~/browser/previewWebviewConfigState";
+import { BrowserSurfaceSlot } from "~/browser/BrowserSurfaceSlot";
 import { isElectron } from "~/env";
 import { isPreviewSupportedInRuntime } from "~/previewStateStore";
 import { usePrimaryEnvironmentId } from "~/state/environments";
-import type { EnvironmentId } from "@t3tools/contracts";
+import type { EmbeddedPage, EnvironmentId, ScopedThreadRef } from "@t3tools/contracts";
 
 import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadcrumb";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
 import { findEmbeddedPage, resolveEmbeddedPageHost } from "./embeddedPages.logic";
+import { PageAgentTray } from "./PageAgentTray";
 import { useEmbeddedPages } from "./useEmbeddedPages";
+import {
+  usePageAgentBrowserTab,
+  usePageAgentClosedTrayGuard,
+  usePageAgentConversations,
+  usePageAgentDiscard,
+} from "./usePageAgent";
 
 /**
  * Everything a normal tab allows except navigating T3 Code itself away. Pages
@@ -26,6 +34,92 @@ const EMBEDDED_PAGE_FRAME_SANDBOX =
 export function EmbeddedPageView({ pageId }: { readonly pageId: string }) {
   const page = findEmbeddedPage(useEmbeddedPages(), pageId);
   const primaryEnvironmentId = usePrimaryEnvironmentId();
+  return page !== null && primaryEnvironmentId !== null ? (
+    <EmbeddedPageWithAgent
+      key={`${primaryEnvironmentId}:${page.id}`}
+      page={page}
+      environmentId={primaryEnvironmentId}
+    />
+  ) : (
+    <EmbeddedPageLayout page={page} environmentId={primaryEnvironmentId} agent={null} />
+  );
+}
+
+/** A page with its tray agent, which lives on the primary environment. */
+function EmbeddedPageWithAgent(props: {
+  readonly page: EmbeddedPage;
+  readonly environmentId: EnvironmentId;
+}) {
+  const { page, environmentId } = props;
+  const { stored, setStored, threadRef, pendingDeletes, discard, settleDiscard } =
+    usePageAgentConversations(environmentId, page.id);
+  const [trayOpen, setTrayOpen] = useState(false);
+  if (stored === null || threadRef === null) return null;
+  return (
+    <>
+      {pendingDeletes.map((threadId) => (
+        <PageAgentDiscard
+          key={threadId}
+          environmentId={environmentId}
+          threadId={threadId}
+          onSettled={settleDiscard}
+        />
+      ))}
+      <PageAgentClosedTrayGuard
+        threadRef={threadRef}
+        enabled={!trayOpen && stored.lastSentAt !== null}
+      />
+      <EmbeddedPageLayout
+        page={page}
+        environmentId={environmentId}
+        agent={{
+          threadRef,
+          trayOpen,
+          onToggleTray: () => setTrayOpen((open) => !open),
+          tray: trayOpen ? (
+            <PageAgentTray
+              key={threadRef.threadId}
+              page={page}
+              environmentId={environmentId}
+              threadRef={threadRef}
+              conversations={stored}
+              onConversationsChange={setStored}
+              onDiscard={discard}
+              pageActionsAvailable={isPreviewSupportedInRuntime()}
+              onClose={() => setTrayOpen(false)}
+            />
+          ) : null,
+        }}
+      />
+    </>
+  );
+}
+
+function PageAgentDiscard(props: Parameters<typeof usePageAgentDiscard>[0]) {
+  usePageAgentDiscard(props);
+  return null;
+}
+
+function PageAgentClosedTrayGuard(props: Parameters<typeof usePageAgentClosedTrayGuard>[0]) {
+  usePageAgentClosedTrayGuard(props);
+  return null;
+}
+
+function EmbeddedPageLayout({
+  page,
+  environmentId: primaryEnvironmentId,
+  agent,
+}: {
+  readonly page: EmbeddedPage | null;
+  readonly environmentId: EnvironmentId | null;
+  readonly agent: {
+    readonly threadRef: ScopedThreadRef;
+    readonly trayOpen: boolean;
+    readonly onToggleTray: () => void;
+    /** Desktop drives the page; a browser frame on web cannot be operated. */
+    readonly tray: React.ReactNode;
+  } | null;
+}) {
   const host = page
     ? resolveEmbeddedPageHost(page.url, {
         desktopWebview: isPreviewSupportedInRuntime() && primaryEnvironmentId !== null,
@@ -52,35 +146,45 @@ export function EmbeddedPageView({ pageId }: { readonly pageId: string }) {
               Open in browser
             </Button>
           ) : null}
+          {agent ? (
+            <Button
+              size="xs"
+              variant={agent.trayOpen ? "secondary" : "outline"}
+              aria-pressed={agent.trayOpen}
+              onClick={agent.onToggleTray}
+            >
+              <BotIcon />
+              Agent
+            </Button>
+          ) : null}
         </WorkspacePageHeader>
-        <div className="relative min-h-0 flex-1 border-t">
-          {page === null || host === null ? (
-            <p className="p-6 text-sm text-muted-foreground">
-              This page was removed. Add it again in Settings → General → Sidebar pages.
-            </p>
-          ) : host.kind === "blocked" ? (
-            <div className="space-y-3 p-6 text-sm">
-              <p className="text-muted-foreground">{host.reason}</p>
-              <Button size="sm" render={<a href={page.url} target="_blank" rel="noreferrer" />}>
-                <ExternalLinkIcon />
-                Open in browser
-              </Button>
-            </div>
-          ) : host.kind === "webview" && primaryEnvironmentId !== null ? (
-            <EmbeddedPageWebview
-              key={page.url}
-              environmentId={primaryEnvironmentId}
-              url={page.url}
-            />
-          ) : (
-            <iframe
-              key={page.url}
-              className="absolute inset-0 size-full bg-white"
-              src={page.url}
-              title={page.name}
-              sandbox={EMBEDDED_PAGE_FRAME_SANDBOX}
-            />
-          )}
+        <div className="flex min-h-0 flex-1 border-t">
+          <div className="relative min-h-0 min-w-0 flex-1">
+            {page === null || host === null ? (
+              <p className="p-6 text-sm text-muted-foreground">
+                This page was removed. Add it again in Settings → General → Sidebar pages.
+              </p>
+            ) : host.kind === "blocked" ? (
+              <div className="space-y-3 p-6 text-sm">
+                <p className="text-muted-foreground">{host.reason}</p>
+                <Button size="sm" render={<a href={page.url} target="_blank" rel="noreferrer" />}>
+                  <ExternalLinkIcon />
+                  Open in browser
+                </Button>
+              </div>
+            ) : host.kind === "webview" && agent !== null ? (
+              <EmbeddedPageBrowserTab threadRef={agent.threadRef} pageId={page.id} url={page.url} />
+            ) : (
+              <iframe
+                key={page.url}
+                className="absolute inset-0 size-full bg-white"
+                src={page.url}
+                title={page.name}
+                sandbox={EMBEDDED_PAGE_FRAME_SANDBOX}
+              />
+            )}
+          </div>
+          {agent?.tray}
         </div>
       </div>
     </SidebarInset>
@@ -88,25 +192,22 @@ export function EmbeddedPageView({ pageId }: { readonly pageId: string }) {
 }
 
 /**
- * A plain Electron guest on the primary environment's default browser profile,
- * the same session the Browser panel uses. The desktop shell only admits
- * guests on browser partitions, so this waits for that partition.
+ * The page as the tray conversation's browser tab, on the default browser
+ * profile the Browser panel uses, so its sign-ins carry over and the agent's
+ * preview tools drive what the user sees.
  */
-function EmbeddedPageWebview({
-  environmentId,
-  url,
-}: {
-  readonly environmentId: EnvironmentId;
+function EmbeddedPageBrowserTab(props: {
+  readonly threadRef: ScopedThreadRef;
+  readonly pageId: string;
   readonly url: string;
 }) {
-  const config = usePreviewWebviewConfig(environmentId);
-  if (config === null) return null;
-  return (
-    <webview
+  const runtimeTabId = usePageAgentBrowserTab(props);
+  return runtimeTabId === null ? null : (
+    <BrowserSurfaceSlot
+      key={runtimeTabId}
+      tabId={runtimeTabId}
+      visible
       className="absolute inset-0 size-full"
-      src={url}
-      partition={config.partition}
-      webpreferences={config.webPreferences}
     />
   );
 }
