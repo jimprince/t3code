@@ -72,8 +72,21 @@ export function resolveAutoSettlementAt(input: {
   readonly now: string;
   readonly autoSettleAfterDays: number | null;
   readonly autoSettleOnMerge: boolean;
+  readonly subthreadSettleOnComplete?: boolean;
 }): string | null {
   const { thread } = input;
+  if (!isAutoSettlementCandidate(thread, input.now)) return null;
+  const complete =
+    thread.settleOnComplete ??
+    (thread.parentThreadId != null && input.subthreadSettleOnComplete === true);
+  if (
+    complete &&
+    thread.latestTurn?.state === "completed" &&
+    thread.latestTurn.completedAt != null &&
+    !thread.hasActionableProposedPlan
+  ) {
+    return thread.latestTurn.completedAt;
+  }
   let pullRequest = input.pullRequest;
   const links = visibleThreadPullRequests(thread.pullRequests);
   if (links.some((link) => link.snapshot === null || link.snapshot.state === "open")) return null;
@@ -96,7 +109,6 @@ export function resolveAutoSettlementAt(input: {
             closedAt: latest.snapshot.closedAt ?? null,
           };
   }
-  if (!isAutoSettlementCandidate(thread, input.now)) return null;
   const activityAt = latestTimestamp([
     thread.latestUserMessageAt,
     thread.latestTurn?.requestedAt,
