@@ -1,0 +1,4 @@
+id = "cli-thread-json-snapshot"
+category = "feature"
+functionality = "worker CLI"
+text = "Threads can now be listed as a read-only JSON snapshot with active run timing and queued or held message counts; unavailable queues report an error per thread."
