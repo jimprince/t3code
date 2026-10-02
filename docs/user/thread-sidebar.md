@@ -198,6 +198,14 @@ under…**. To bring one back, choose **Move to sidebar** from its row in the
 Agents panel or from the thread's own menu. **New thread under this one** in a
 thread's menu starts a thread that is nested from the start.
 
+On web and desktop, dragging a sidebar thread reorders it by default. While the
+pointer is over another thread row, move right by one child indent to nest it.
+The highlighted parent and indented marker show a nesting drop; move back left
+to restore the full-width reorder marker. Nesting preserves the dragged thread's
+pin state. Dropping into the top-level **Pinned** or active section moves a nested
+thread back to the sidebar and pins or unpins it to match that section. Nested
+threads can also be reordered among siblings with the same pin state.
+
 Nesting can continue through multiple levels within an environment and can span
 projects. A child keeps its own repository, worktree, branch, and model defaults.
 Cross-project children appear under their parent in the sidebar with their project
