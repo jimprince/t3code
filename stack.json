@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "b77a3c45e3057c0819faacdff5856566d39cdab0",
-  "head": "08a6f63899cd0ae58640a22a42173dbf2b80df7d",
+  "prev": "4877324e438f60799a282e6f8193c930ce858d50",
+  "head": "a7ff5032aa37bb37fb6f8c73fe7b1c17f7019dff",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -39,14 +39,14 @@
     "fork-step-preview",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
-    "fork-nested-threads"
-  ],
-  "unapplied": [
+    "fork-nested-threads",
     "fork-resume-background-work",
     "fork-overnight-updates",
     "fork-spawn-budget",
     "fork-t3-thread-prebuilt",
-    "fork-cross-project-thread-nesting",
+    "fork-cross-project-thread-nesting"
+  ],
+  "unapplied": [
     "fork-launch-health",
     "fork-notification-preferences",
     "fork-sidebar-agent-visibility",
@@ -83,7 +83,7 @@
       "oid": "d201b7b9b8499f3ae182acf896ba97e6796b6cac"
     },
     "fork-cross-project-thread-nesting": {
-      "oid": "6d78297b7a48e83ad2eff5ed0339672eee80d8ee"
+      "oid": "a7ff5032aa37bb37fb6f8c73fe7b1c17f7019dff"
     },
     "fork-desktop-delivery": {
       "oid": "d2ca7d614ee0acf3daac9cd35d9ccbd4a010bf15"
@@ -131,7 +131,7 @@
       "oid": "fca9ac6db60d28ade6ec5b9f71a647b28548becc"
     },
     "fork-overnight-updates": {
-      "oid": "281c0ee371be2b11bd031b418ac85d58d0bc5ba8"
+      "oid": "26271b8f71688bf81daae8e893378d9be8b80186"
     },
     "fork-pr-dismissal": {
       "oid": "8a6be66c3baead2a35181a579cb06c9bbe280d39"
@@ -161,19 +161,19 @@
       "oid": "ee967e7e96fa7f5221dfcfb4ea9f95e218d64201"
     },
     "fork-resume-background-work": {
-      "oid": "66d0e441b1ae5a591b5e6996e4ded3b01922a7d4"
+      "oid": "778ed4bb14ae8b80343423dd2d605a85f2ff3494"
     },
     "fork-sidebar-agent-visibility": {
       "oid": "81a53b976776b4342cc88ab34d1c5c2cfe00ad34"
     },
     "fork-spawn-budget": {
-      "oid": "395754f23c9079c235ec15ce8acb1f59058692e6"
+      "oid": "2b85055282193818c54bfa34ba18d4c3f5081dd6"
     },
     "fork-step-preview": {
       "oid": "b076e8fd8b4a3544fbf18f1ed7ba21bd95ba90de"
     },
     "fork-t3-thread-prebuilt": {
-      "oid": "7dd291e3c87ec442d234fe926ddf485dd2865cc7"
+      "oid": "676b8d95e2d5d56a80a2df7f91bf4b5243e3b5b3"
     },
     "fork-thread-client-recovery": {
       "oid": "10f0eb59c9064a8035b5efc226f5827f79f09a56"
