@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "590541f8f2244041938abace0bdc48e79fde8447",
-  "head": "583b0d7dc97b47e20bf8c8084f264de38b76208c",
+  "prev": "f16c4abb499a1c12e6329d3d2cdbe56c6d325cc1",
+  "head": "5cdd0b30a04b2c2d0fad0b563204906dd3de5616",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -39,13 +39,13 @@
     "fork-step-preview",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
-    "fork-nested-threads"
-  ],
-  "unapplied": [
+    "fork-nested-threads",
     "fork-resume-background-work",
     "fork-overnight-updates",
     "fork-spawn-budget",
-    "fork-t3-thread-prebuilt",
+    "fork-t3-thread-prebuilt"
+  ],
+  "unapplied": [
     "fork-cross-project-thread-nesting",
     "fork-launch-health",
     "fork-notification-preferences",
@@ -133,7 +133,7 @@
       "oid": "747ef7bce8d179df0544e6015da4a487bc49ecac"
     },
     "fork-overnight-updates": {
-      "oid": "ab73aedebb75e4473c42e5f530d930a5e6d17df3"
+      "oid": "8014e44dad6859cf212011b9bfd592ef0fcd3004"
     },
     "fork-pr-dismissal": {
       "oid": "0e4c26f4bd481cf1bdec95316d6211b77fbf7e8b"
@@ -163,7 +163,7 @@
       "oid": "7822697c97aa1841329463093dfef1002c40861b"
     },
     "fork-resume-background-work": {
-      "oid": "8295464e481d824023fd3e92acdaac4f564d7589"
+      "oid": "b176761bc3cb428071b38f73cb9f6aaa9b632651"
     },
     "fork-sidebar-agent-visibility": {
       "oid": "6a7f239e23c81252b27cea214615941fe8c7a744"
@@ -172,13 +172,13 @@
       "oid": "454c1c05b1103f7298b7f73551e4bb6ee468c416"
     },
     "fork-spawn-budget": {
-      "oid": "2f5d22cddf87ad3fa9935adabf80a88786e7296f"
+      "oid": "98bcc6936e5b46af38daf87a7c9a9272df4f377b"
     },
     "fork-step-preview": {
       "oid": "92505d7c03631f3a5a2bc09eab295b2b59f70c01"
     },
     "fork-t3-thread-prebuilt": {
-      "oid": "f6b66e1fb3baf2ccaab83cdc20495301aaa6052a"
+      "oid": "5cdd0b30a04b2c2d0fad0b563204906dd3de5616"
     },
     "fork-thread-client-recovery": {
       "oid": "e398cfa75c6c5a3294df1feba1e7e6b97c1694fb"
