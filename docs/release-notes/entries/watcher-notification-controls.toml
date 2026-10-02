@@ -1,0 +1,4 @@
+id = "watcher-notification-controls"
+category = "feature"
+functionality = "worker threads"
+text = "Watcher notifications include a short command to change or stop the subscription, with a smaller first-delivery guide."
