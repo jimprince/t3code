@@ -4,6 +4,7 @@ import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  canNestThreadUnder,
   applySidebarThreadNesting,
   isNestedUnder,
   isThreadNestingMenuId,
@@ -225,13 +226,17 @@ describe("selectNestParentCandidates", () => {
   });
 
   it("lets a branch move while excluding its descendants", () => {
-    const result = selectNestParentCandidates(subject, [
+    const threads = [
       subject,
       thread("candidate"),
       thread("child", { parentThreadId: subject.id }),
       thread("grandchild", { parentThreadId: ThreadId.make("child") }),
-    ]);
+    ];
+    const result = selectNestParentCandidates(subject, threads);
     expect(ids(result)).toEqual(["candidate"]);
+    expect(canNestThreadUnder(subject, threads[1]!, threads)).toBe(true);
+    expect(canNestThreadUnder(subject, threads[2]!, threads)).toBe(false);
+    expect(canNestThreadUnder(subject, threads[3]!, threads)).toBe(false);
   });
 });
 
