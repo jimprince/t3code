@@ -1365,3 +1365,13 @@ retire_when = "Upstream or the operator CLI provides equivalent activity-based i
 depends_on = ["fork-notification-preferences"]
 roles = []
 note = "Monitoring is disabled on existing routes until explicitly enabled. A successful observation window, persisted per route, excludes network failures and sleep gaps; current-turn activity identifies one episode across watcher restart. Completed, settled, archived, input-waiting, plan-waiting, stopped and quota-held workers are excluded. Silent tools or hidden reasoning can still be working, so notices report missing evidence and never assert provider failure or perform recovery. Idle missing-result alerts are excluded because assignments do not prove an outstanding result obligation."
+
+[[patch]]
+name = "fork-thread-titles"
+subject = "feat(t3-thread): rename threads and preserve explicit titles"
+class = "product"
+purpose = "Let operators and agents edit thread titles and project scope while preserving explicitly chosen creation titles."
+retire_when = "Upstream operator tooling provides equivalent rename and explicit title preservation."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "Native bootstrap persists manual thread.meta.update intent before the first turn when lockTitle is set; saved aliases and raw UUIDs share title and scope readback. Scope is optional server-owned thread metadata, and an empty value clears it."
