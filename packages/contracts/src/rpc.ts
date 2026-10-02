@@ -3,6 +3,7 @@ import {
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
 } from "./orchestrationV2.ts";
+import { THREAD_SUBSCRIPTION_METHODS, ThreadSubscriptionRpcs } from "./threadSubscriptions.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
   McpAppCallToolInput,
@@ -358,6 +359,7 @@ import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 
 export const WS_METHODS = {
+  ...THREAD_SUBSCRIPTION_METHODS,
   // Project registry methods
   projectsList: "projects.list",
   projectsAdd: "projects.add",
@@ -1809,6 +1811,7 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 ) {}
 
 export const WsRpcGroup = RpcGroup.make(
+  ...ThreadSubscriptionRpcs,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,

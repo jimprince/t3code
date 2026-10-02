@@ -1,3 +1,4 @@
+import { withT3ThreadIdentityEnv } from "../../provider/t3ThreadIdentityEnv.ts";
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "@t3tools/provider-core/server/handoffBudget";
 import { makeProviderTextDeltaCoalescer } from "./ProviderTextDeltaCoalescer.ts";
@@ -1705,7 +1706,10 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           providerSessionId: input.providerSessionId,
           runtimePolicy: input.runtimePolicy,
           settings: resolvedRuntime?.config ?? adapterOptions.settings,
-          environment: resolvedRuntime?.environment ?? adapterOptions.environment,
+          environment: withT3ThreadIdentityEnv(
+            resolvedRuntime?.environment ?? adapterOptions.environment,
+            { threadId: input.threadId },
+          ),
         });
         const additionalContextByThread = yield* Ref.make(
           new Map<
