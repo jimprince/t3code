@@ -36,6 +36,7 @@ export interface AntigravityAcpRuntimeInput extends Omit<
   | "transformSessionUpdate"
   | "transformStdout"
 > {
+  readonly processEnvironment?: NodeJS.ProcessEnv;
   /** Device CLI environment supplied for this provider session. */
   readonly agentDeviceEnvironment?: Readonly<Record<string, string>>;
   readonly childProcessSpawner: ChildProcessSpawner.ChildProcessSpawner["Service"];
