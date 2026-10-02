@@ -327,3 +327,8 @@ If creation fails after a transport error, inspect remote threads by title,
 project, branch, and creation time before retrying. Every new invocation chooses
 a new identity, so retry can create a duplicate; attach an existing thread instead.
 Run the CLI under the Node version required by the fork.
+
+Inspect nesting with `t3-thread status <name-or-thread-id>` or list children with
+`t3-thread threads --env <environment> --parent <name-or-thread-id>`.
+Add `--recursive` for every descendant. Listings include parent ids and available
+titles, state, settlement and pin status, using the server read model.
