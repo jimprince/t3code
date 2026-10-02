@@ -99,6 +99,7 @@ export interface OrchestrationThread {
   id: string;
   projectId: string;
   title: string;
+  scope?: string | null;
   modelSelection: ModelSelection;
   runtimeMode: string;
   interactionMode: string;
@@ -134,6 +135,7 @@ export interface OrchestrationThreadShell {
   id: string;
   projectId: string;
   title: string;
+  scope?: string | null;
   modelSelection: ModelSelection;
   runtimeMode: string;
   interactionMode: string;

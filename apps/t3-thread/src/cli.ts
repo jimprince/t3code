@@ -265,6 +265,7 @@ async function ensureNotificationWatcher(
 const program = new Command();
 const AGENT_COMMAND_ALIASES = new Set([
   "create",
+  "rename",
   "attach",
   "list",
   "archive",
@@ -315,6 +316,7 @@ Direct thread commands:
   project      Manage T3 Code projects on a paired environment
   models       List live provider/model slugs from a paired environment
   create       Create and start a branch-pinned T3 worker thread
+  rename       Set a thread title by saved name or UUID
   search       Locate a thread UUID across paired environments
   pin/unpin    Change worker pinning (create --pin starts pinned)
   order/move  Arrange workers in their shared sidebar section
@@ -822,6 +824,50 @@ agent
       pinned: created.pinned,
       nestedUnder: nesting.parentThreadId,
       nesting: nesting.reason,
+    });
+  });
+
+agent
+  .command("rename")
+  .argument("<agent-or-thread>", "saved agent name or raw thread UUID (including your own)")
+  .option("--title <text>", "new thread title")
+  .option("--scope <text>", "project scope shown with the thread")
+  .option("--clear-scope", "remove the project scope")
+  .action(async (reference, options) => {
+    if (options.scope !== undefined && options.clearScope) {
+      throw new Error("Use either --scope or --clear-scope, not both.");
+    }
+    if (options.title === undefined && options.scope === undefined && !options.clearScope) {
+      throw new Error("Provide --title, --scope, or --clear-scope.");
+    }
+    const { agent: target, client } = await withAgent(reference);
+    const renamed = await client.renameThread({
+      threadId: target.threadId,
+      ...(options.title !== undefined ? { title: options.title } : {}),
+      ...(options.scope !== undefined
+        ? { scope: options.scope }
+        : options.clearScope
+          ? { scope: null }
+          : {}),
+    });
+    await updateState(async (state) => ({
+      state: {
+        ...state,
+        agents: state.agents.map((saved) =>
+          options.title !== undefined &&
+          saved.environment === target.environment &&
+          saved.threadId === target.threadId
+            ? { ...saved, title: renamed.title }
+            : saved,
+        ),
+      },
+      result: null,
+    }));
+    printJson({
+      ...renamed,
+      environment: target.environment,
+      renamed: options.title !== undefined,
+      scopeUpdated: options.scope !== undefined || Boolean(options.clearScope),
     });
   });
 
