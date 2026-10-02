@@ -209,16 +209,14 @@ it.layer(NodeServices.layer)("automatic archive decider", (it) => {
       });
       for (const type of ["thread.auto-settle", "thread.settle"] as const) {
         const settlement = yield* decideOrchestrationCommand({
-          command: {
-            type,
-            commandId: CommandId.make(type),
-            threadId: pinnedActive.id,
-            ...(type === "thread.auto-settle" ? { settledAt: NOW } : {}),
-          },
+          command:
+            type === "thread.auto-settle"
+              ? { type, commandId: CommandId.make(type), threadId: pinnedActive.id, settledAt: NOW }
+              : { type, commandId: CommandId.make(type), threadId: pinnedActive.id },
           readModel: model([pinnedActive]),
         });
         assert.strictEqual(
-          settlement.some((event) => event.type === "thread.unpinned"),
+          settlement.events.some((event) => event.type === "thread.unpinned"),
           type === "thread.settle",
         );
       }
