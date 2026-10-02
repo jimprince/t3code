@@ -1,3 +1,4 @@
+import { t3ThreadIdentityEnv } from "@t3tools/provider-core/server/t3ThreadIdentityEnv";
 // @effect-diagnostics nodeBuiltinImport:off
 
 import {
@@ -680,9 +681,14 @@ interface AcpMcpContext {
 function acpMcpContext(
   session: McpProviderSession.McpProviderSessionConfig | undefined,
   self: SelfInvocation,
+  threadId: ThreadId | null,
 ): AcpMcpContext {
   if (session === undefined) {
-    return { servers: [], acpServers: [] };
+    return {
+      servers: [],
+      acpServers: [],
+      ...(threadId === null ? {} : { processEnvironment: t3ThreadIdentityEnv({ threadId }) }),
+    };
   }
   // Stdio is ACP's required baseline MCP transport. Agents that advertise
   // optional http support still routinely fail to wire injected http servers
@@ -707,6 +713,7 @@ function acpMcpContext(
     endpoint: session.endpoint,
     authorization: session.authorizationHeader,
     processEnvironment: {
+      ...(threadId === null ? {} : t3ThreadIdentityEnv({ threadId })),
       T3_ACP_MCP_ENDPOINT: session.endpoint,
       T3_ACP_MCP_AUTHORIZATION: session.authorizationHeader,
       T3_ACP_MCP_NODE: self.command,
@@ -1492,8 +1499,10 @@ export const makeAcpAdapterV2 = Effect.fn("makeAcpAdapterV2")(function* (
   const { flavor, selfInvocation: self } = options;
   const readMcpContext = (threadId: ThreadId | null) =>
     threadId === null
-      ? Effect.succeed(acpMcpContext(undefined, self))
-      : mcpSessions.read(threadId).pipe(Effect.map((session) => acpMcpContext(session, self)));
+      ? Effect.succeed(acpMcpContext(undefined, self, threadId))
+      : mcpSessions
+          .read(threadId)
+          .pipe(Effect.map((session) => acpMcpContext(session, self, threadId)));
   const driver = flavor.driver;
   const continuationRequests = options.continuationRequests;
   const postSettleContinuationEnabled =

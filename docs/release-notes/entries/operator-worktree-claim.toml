@@ -1,0 +1,4 @@
+id = "operator-worktree-claim"
+category = "fix"
+functionality = "worker operations"
+text = "Creating a worker on a new branch provisions its worktree once so the first turn can start successfully."
