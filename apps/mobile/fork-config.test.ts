@@ -51,7 +51,6 @@ function makeUpstreamConfig(appVariant: "development" | "preview" | "production"
         },
       ],
       "./plugins/withIosCocoaPodsUuidCache.cjs",
-      "./plugins/withIosSceneLifecycle.cjs",
     ],
     extra: {
       appVariant,
@@ -106,8 +105,7 @@ describe("applyMobileForkConfig", () => {
         "expo-quick-actions",
         "expo-widgets",
         "./plugins/withIosCocoaPodsUuidCache.cjs",
-        "./plugins/withIosSceneLifecycle.cjs",
-      ]),
+        ]),
     );
     expect(widgetOptions).toMatchObject({
       bundleIdentifier: `com.brad.t3code${identifierSuffix}.widgets`,
@@ -171,7 +169,6 @@ describe("applyMobileForkConfig", () => {
         },
       ],
       "./plugins/withIosCocoaPodsUuidCache.cjs",
-      "./plugins/withIosSceneLifecycle.cjs",
     ]);
   });
 
