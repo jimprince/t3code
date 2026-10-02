@@ -9,6 +9,7 @@ import {
   isActiveSidebarChild,
   resolveSidebarChildStatus,
   sidebarNestedPathKeys,
+  sidebarPinnedPathKeys,
   visibleSidebarChildren,
   type SidebarChild,
 } from "./nestedThreadVisibility.logic";
@@ -22,6 +23,9 @@ function thread(id: string, overrides: Partial<SidebarChild> = {}): SidebarChild
     parentThreadId: null,
     archivedAt: null,
     createdAt: "2026-10-01T00:00:00Z",
+    pinnedAt: null,
+    pinOrderKey: null,
+    activeOrderKey: null,
     hasPendingApprovals: false,
     hasPendingUserInput: false,
     backgroundLiveness: null,
@@ -112,6 +116,56 @@ describe("sidebar nested children", () => {
     expect(hasActiveSidebarDescendants(groups, key(quiet))).toBe(false);
   });
 
+  it("sorts pinned siblings first and restores ordinary ordering after unpinning", () => {
+    const root = thread("root");
+    const active = thread("active", {
+      parentThreadId: root.id,
+      session: { status: "running" },
+    });
+    const pinned = thread("pinned", {
+      parentThreadId: root.id,
+      pinnedAt: "2026-10-01T01:00:00Z",
+    });
+    expect(groupSidebarChildren([root, active, pinned]).get(key(root))?.children).toEqual([
+      pinned,
+      active,
+    ]);
+    expect(
+      groupSidebarChildren([root, active, { ...pinned, pinnedAt: null }])
+        .get(key(root))
+        ?.children.map((child) => child.id),
+    ).toEqual([active.id, pinned.id]);
+    expect(applySidebarThreadNesting([root, pinned])).toEqual([root]);
+  });
+
+  it("preserves drag order inside pinned and unpinned sibling buckets", () => {
+    const root = thread("root");
+    const pinnedLater = thread("pinned-later", {
+      parentThreadId: root.id,
+      pinnedAt: "2026-10-01T01:00:00Z",
+      pinOrderKey: "z",
+    });
+    const pinnedFirst = thread("pinned-first", {
+      parentThreadId: root.id,
+      pinnedAt: "2026-10-01T02:00:00Z",
+      pinOrderKey: "a",
+    });
+    const activeLater = thread("active-later", {
+      parentThreadId: root.id,
+      activeOrderKey: "z",
+    });
+    const activeFirst = thread("active-first", {
+      parentThreadId: root.id,
+      activeOrderKey: "a",
+    });
+
+    expect(
+      groupSidebarChildren([root, pinnedLater, activeLater, pinnedFirst, activeFirst])
+        .get(key(root))
+        ?.children.map((child) => child.id),
+    ).toEqual([pinnedFirst.id, pinnedLater.id, activeFirst.id, activeLater.id]);
+  });
+
   it("collapses siblings by default, expands all children, and preserves the open descendant path", () => {
     const children = [thread("one"), thread("two")];
     expect(visibleSidebarChildren(children, false, new Set())).toEqual([]);
@@ -144,6 +198,47 @@ describe("sidebar nested children", () => {
       [grandchild.id, 2],
       [greatGrandchild.id, 3],
     ]);
+  });
+
+  it("keeps a pinned descendant and its ancestor path visible while collapsed", () => {
+    const root = thread("root");
+    const child = thread("child", { parentThreadId: root.id });
+    const pinnedGrandchild = thread("pinned-grandchild", {
+      parentThreadId: child.id,
+      pinnedAt: "2026-10-01T01:00:00Z",
+    });
+    const hiddenSibling = thread("hidden", { parentThreadId: root.id });
+    const groups = groupSidebarChildren([root, child, pinnedGrandchild, hiddenSibling]);
+    const pinnedPath = sidebarPinnedPathKeys(groups);
+
+    expect(pinnedPath).toEqual(new Set([key(pinnedGrandchild), key(child)]));
+    expect(
+      flattenVisibleSidebarChildren({
+        rootParentKey: key(root),
+        groups,
+        expandedParentKeys: new Set(),
+        viewedPathKeys: pinnedPath,
+      }).map(({ thread: row, depth }) => [row.id, depth]),
+    ).toEqual([
+      [child.id, 1],
+      [pinnedGrandchild.id, 2],
+    ]);
+
+    const unpinnedGroups = groupSidebarChildren([
+      root,
+      child,
+      { ...pinnedGrandchild, pinnedAt: null },
+      hiddenSibling,
+    ]);
+    expect(sidebarPinnedPathKeys(unpinnedGroups)).toEqual(new Set());
+    expect(
+      flattenVisibleSidebarChildren({
+        rootParentKey: key(root),
+        groups: unpinnedGroups,
+        expandedParentKeys: new Set(),
+        viewedPathKeys: sidebarPinnedPathKeys(unpinnedGroups),
+      }),
+    ).toEqual([]);
   });
 });
 

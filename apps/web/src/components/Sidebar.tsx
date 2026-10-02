@@ -146,6 +146,7 @@ import {
   hasActiveSidebarDescendants,
   resolveSidebarChildStatus,
   sidebarNestedPathKeys,
+  sidebarPinnedPathKeys,
 } from "./sidebar/nestedThreadVisibility.logic";
 import { SidebarNestedThreadToggle } from "./sidebar/SidebarNestedThreadToggle";
 import { SidebarThreadRowStatus } from "./sidebar/SidebarThreadRowStatus";
@@ -2620,6 +2621,10 @@ export default function Sidebar() {
   const sidebarNestedPath = useMemo(
     () => sidebarNestedPathKeys(threads, routeThreadKey),
     [routeThreadKey, threads],
+  );
+  const sidebarVisibleNestedPath = useMemo(
+    () => new Set([...sidebarNestedPath, ...sidebarPinnedPathKeys(sidebarChildren)]),
+    [sidebarChildren, sidebarNestedPath],
   );
   const projectScopeTriggerLabel =
     scopedProjectGroup?.displayName ??
@@ -5489,7 +5494,7 @@ export default function Sidebar() {
                               rootParentKey: item.key,
                               groups: sidebarChildren,
                               expandedParentKeys,
-                              viewedPathKeys: sidebarNestedPath,
+                              viewedPathKeys: sidebarVisibleNestedPath,
                             })) {
                               items.push(
                                 renderThreadRowInner(
