@@ -671,7 +671,8 @@ descendant. Saved parent aliases must belong to the selected environment.
 Listings use the server's active thread shells, including settled workers;
 archived threads are outside this listing. No thread histories are loaded.
 `status <agent-or-thread-id>` reports `parentThreadId` and `parentTitle` (null
-when the parent is outside the active shell snapshot).
+when the parent is outside the active shell snapshot). The all-worker status
+list includes each worker's parent id.
 
 ## Retiring Worker Worktrees
 

@@ -9,6 +9,7 @@ export interface AgentOverview {
   state: AgentState;
   reason: string;
   pinned: boolean;
+  parentThreadId: string | null;
   hasNewOutput: boolean;
   latestAssistantMessageId: string | null;
   latestAssistantPreview: string | null;
@@ -75,6 +76,7 @@ export function buildAgentOverview(agent: SavedAgent, thread: OrchestrationThrea
     state: status.state,
     reason: status.reason,
     pinned: thread.pinnedAt != null,
+    parentThreadId: thread.parentThreadId ?? null,
     hasNewOutput: hasNewAssistantOutput(agent, thread),
     latestAssistantMessageId: latestAssistant?.id ?? null,
     latestAssistantPreview: latestAssistant ? summarizeMessageText(latestAssistant.text) : null,
@@ -102,6 +104,7 @@ export function formatOverviewLine(overview: AgentOverview): string {
     `[${stateLabel}${overview.pinned ? "/pinned" : ""}]`,
     overview.threadId,
     overview.title,
+    `parent=${overview.parentThreadId ?? "none"}`,
     overview.reason,
   ].join(" ");
 }

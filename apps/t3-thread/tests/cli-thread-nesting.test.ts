@@ -75,18 +75,26 @@ async function run(args: string[]) {
     notifications: [],
     queuedSends: [],
   };
+  fixture.state.agents.push({
+    ...fixture.state.agents[0]!,
+    name: "worker",
+    threadId: childId,
+    title: "Worker",
+  });
   vi.resetModules();
   const { RemoteEnvironmentClient } = await import("../src/client.js");
   const list = vi
     .spyOn(RemoteEnvironmentClient.prototype, "listThreads")
     .mockResolvedValue(threads);
-  const detail = vi.spyOn(RemoteEnvironmentClient.prototype, "findThread").mockResolvedValue({
-    ...threads[1]!,
-    messages: [],
-    activities: [],
-    checkpoints: [],
-    proposedPlans: [],
-  });
+  const detail = vi
+    .spyOn(RemoteEnvironmentClient.prototype, "findThread")
+    .mockImplementation(async (id) => ({
+      ...threads.find((thread) => thread.id === id)!,
+      messages: [],
+      activities: [],
+      checkpoints: [],
+      proposedPlans: [],
+    }));
   let finish!: (value: string) => void;
   const printed = new Promise<string>((resolve) => {
     finish = resolve;
@@ -130,6 +138,11 @@ describe("CLI nesting readback", () => {
     expect(output).toContain(grandchildId);
     expect(output).not.toContain(`${rootId} [idle]`);
     expect(output).not.toContain("Other");
+  });
+  it("includes nesting in the all-worker status list", async () => {
+    const { output } = await run(["status"]);
+    expect(output).toContain("parent=none");
+    expect(output).toContain(`parent=${rootId}`);
   });
   it("shows a raw thread's parent id and title in status", async () => {
     const { output } = await run(["status", childId]);
