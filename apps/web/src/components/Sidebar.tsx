@@ -1655,7 +1655,6 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         count={props.nestedChildCount!}
         activeCount={props.nestedActiveCount ?? 0}
         inputCount={props.nestedInputCount ?? 0}
-        compact={nestedSubRow}
         onOpenInput={() => {
           if (props.nestedInputChildId)
             props.onOpenNestedInput?.(threadRef, props.nestedInputChildId);

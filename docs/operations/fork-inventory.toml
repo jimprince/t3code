@@ -1328,4 +1328,4 @@ purpose = "Keep parent status independent, expose waiting child input, and remin
 retire_when = "Upstream provides independent parent status, child attention navigation and configurable unanswered-question reminders."
 depends_on = ["fork-notification-preferences", "fork-sidebar-agent-visibility"]
 roles = []
-note = "Replaces sidebar child-state rollup with separate child input markers. Reminders use existing parent subscriptions and confirmed-delivery history, with no new polling process."
+note = "Replaces sidebar child-state rollup with separate child input markers. Input counts recurse through every reachable descendant, so both roots and collapsed nested parents state how many sub-agents need input. Reminders use existing direct-caller subscriptions and confirmed-delivery history, with no new polling process."

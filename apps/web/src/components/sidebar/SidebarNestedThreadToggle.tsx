@@ -6,10 +6,13 @@ export function SidebarNestedThreadToggle(props: {
   activeCount: number;
   expanded: boolean;
   inputCount?: number;
-  compact?: boolean;
   onOpenInput?: () => void;
   onToggle: () => void;
 }) {
+  const inputLabel =
+    props.inputCount === 1
+      ? "1 sub-agent needs input"
+      : `${props.inputCount ?? 0} sub-agents need input`;
   return (
     <span className="inline-flex min-w-0 items-center gap-2">
       <button
@@ -31,7 +34,7 @@ export function SidebarNestedThreadToggle(props: {
       {(props.inputCount ?? 0) > 0 ? (
         <button
           type="button"
-          aria-label={`Open ${props.inputCount} sub-agent${props.inputCount === 1 ? "" : "s"} needing input`}
+          aria-label={`Open ${inputLabel}`}
           onPointerDown={(event) => event.stopPropagation()}
           onKeyDown={(event) => event.stopPropagation()}
           onDoubleClick={(event) => event.stopPropagation()}
@@ -42,7 +45,7 @@ export function SidebarNestedThreadToggle(props: {
           className="inline-flex min-w-0 items-center gap-1 rounded-sm text-xs text-info outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           <MessageCircleQuestionIcon aria-hidden className="size-3 shrink-0" />
-          {props.compact ? props.inputCount : `${props.inputCount} input`}
+          {inputLabel}
         </button>
       ) : null}
     </span>
