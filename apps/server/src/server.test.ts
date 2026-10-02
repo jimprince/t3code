@@ -11366,6 +11366,53 @@ it.layer(NodeServices.layer)("server router seam", (it) => {
     }).pipe(Effect.provide(NodeHttpServer.layerTest)),
   );
 
+  it.effect("subscribeShell never sends page-agent threads", () =>
+    Effect.gen(function* () {
+      const pageAgentThreadId = ThreadId.make("page-agent-status-board-1");
+      const threadId = ThreadId.make("thread-visible");
+      const now = "2026-01-01T00:00:00.000Z";
+      const makeEvent = (sequence: number, aggregateId: ThreadId): OrchestrationEvent => ({
+        sequence,
+        eventId: EventId.make(`event-page-agent-${sequence}`),
+        aggregateKind: "thread",
+        aggregateId,
+        occurredAt: now,
+        commandId: null,
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        type: "thread.message-sent",
+        payload: {} as never,
+      });
+
+      yield* buildAppUnderTest({
+        layers: {
+          orchestrationEngine: {
+            latestSequence: Effect.succeed(2),
+            readEvents: () => Stream.make(makeEvent(1, pageAgentThreadId), makeEvent(2, threadId)),
+          },
+          projectionSnapshotQuery: {
+            getThreadShellById: (id) =>
+              Effect.succeedSome(makeDefaultOrchestrationThreadShell({ id })),
+          },
+        },
+      });
+
+      const wsUrl = yield* getWsServerUrl("/ws");
+      const items = yield* Effect.scoped(
+        withWsRpcClient(wsUrl, (client) =>
+          client[ORCHESTRATION_WS_METHODS.subscribeShell]({ afterSequence: 0 }).pipe(
+            Stream.take(1),
+            Stream.runCollect,
+          ),
+        ),
+      );
+
+      const [first] = Array.from(items);
+      assert.equal(first?.kind === "thread-upserted" ? first.thread.id : null, threadId);
+    }).pipe(Effect.provide(NodeHttpServer.layerTest)),
+  );
+
   it.effect("subscribeShell coalescing still removes a project after a trailing update", () =>
     Effect.gen(function* () {
       const projectId = ProjectId.make("project-gone");
