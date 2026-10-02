@@ -30,7 +30,7 @@ export const EMBEDDED_PAGE_ICONS: ReadonlyArray<{
 export const DEFAULT_EMBEDDED_PAGE_ICON = "globe";
 
 /** Unknown ids (picked on a newer client) draw the default globe. */
-export function embeddedPageIcon(id: string): LucideIcon {
+function embeddedPageIcon(id: string): LucideIcon {
   return EMBEDDED_PAGE_ICONS.find((icon) => icon.id === id)?.Icon ?? GlobeIcon;
 }
 

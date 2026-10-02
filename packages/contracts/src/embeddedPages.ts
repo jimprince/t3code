@@ -3,7 +3,7 @@ import * as Schema from "effect/Schema";
 import { TrimmedNonEmptyString } from "./baseSchemas.ts";
 
 /** Whether a string is an absolute http(s) URL, the only kind a page can frame or open. */
-export function isEmbeddedPageUrl(value: string): boolean {
+function isEmbeddedPageUrl(value: string): boolean {
   try {
     const { protocol } = new URL(value);
     return protocol === "http:" || protocol === "https:";
