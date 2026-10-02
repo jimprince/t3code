@@ -214,6 +214,36 @@ const makeOrchestrationEngine = Effect.gen(function* () {
           });
         }
 
+        if (
+          envelope.command.type === "thread.archive" &&
+          envelope.command.autoArchiveSettledBefore !== undefined
+        ) {
+          const ids = new Set([envelope.command.threadId]);
+          // Include descendants behind archived intermediate nodes as well.
+          let grew = true;
+          while (grew) {
+            grew = false;
+            for (const thread of commandReadModel.threads) {
+              if (
+                thread.parentThreadId != null &&
+                ids.has(thread.parentThreadId) &&
+                !ids.has(thread.id)
+              ) {
+                ids.add(thread.id);
+                grew = true;
+              }
+            }
+          }
+          if (
+            [...ids].some((id) => threadBackgroundLiveness.getThreadBackgroundLiveness(id) !== null)
+          ) {
+            return yield* new OrchestrationCommandInvariantError({
+              commandType: envelope.command.type,
+              detail: "thread or descendant has live background work",
+            });
+          }
+        }
+
         // New and moved projects do not carry a resolved identity in the event-derived
         // command model. Legacy PR edits need it to identify the link they replace.
         if (

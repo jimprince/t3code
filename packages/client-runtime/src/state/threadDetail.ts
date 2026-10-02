@@ -61,6 +61,7 @@ export function mergeEnvironmentThread(
     unsettledAt: shell.unsettledAt,
     activeOrderKey: shell.activeOrderKey,
     autoSettleDisabledAt: shell.autoSettleDisabledAt,
+    settleOnComplete: shell.settleOnComplete,
     parentThreadId: shell.parentThreadId,
     snoozedUntil: shell.snoozedUntil,
     snoozedAt: shell.snoozedAt,

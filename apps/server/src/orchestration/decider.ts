@@ -46,6 +46,7 @@ import {
 } from "./commandInvariants.ts";
 import { projectEvent } from "./projector.ts";
 import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
+import { isSettledSubthreadArchiveCandidate } from "./SettledSubthreadArchivePolicy.ts";
 import { threadNestingViolation } from "./threadNesting.ts";
 
 const monogramSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -451,6 +452,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
           ...(createParentThreadId !== null ? { parentThreadId: createParentThreadId } : {}),
+          ...(command.settleOnComplete !== undefined
+            ? { settleOnComplete: command.settleOnComplete }
+            : {}),
         },
       };
     }
@@ -485,6 +489,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       });
       if (thread.archivedAt !== null) {
         return [];
+      }
+      if (
+        command.autoArchiveSettledBefore !== undefined &&
+        !isSettledSubthreadArchiveCandidate(
+          thread,
+          readModel.threads,
+          command.autoArchiveSettledBefore,
+        )
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} is no longer eligible for automatic archive`,
+        });
       }
       const occurredAt = yield* nowIso;
       return {
@@ -590,8 +607,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: alreadySettled ? thread.updatedAt : occurredAt,
         },
       };
-      // Settling is "I'm done with this": clear states that would keep the
-      // row pinned or snoozed instead of showing the new settled state.
+      // Explicit settlement clears pinning. Automatic settlement retains the user's
+      // pin so completed workers remain visible and protected from automatic archive.
       const companionEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
       for (const [requestId, request] of pendingRequests) {
         companionEvents.push({
@@ -616,7 +633,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           },
         });
       }
-      if (thread.pinnedAt != null) {
+      if (command.type === "thread.settle" && thread.pinnedAt != null) {
         companionEvents.push({
           ...(yield* withEventBase({
             aggregateKind: "thread",
@@ -1115,6 +1132,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         type: "thread.meta-updated",
         payload: {
           threadId: command.threadId,
+          ...(command.settleOnComplete !== undefined
+            ? { settleOnComplete: command.settleOnComplete }
+            : {}),
           ...(command.title !== undefined
             ? {
                 title: command.title,
