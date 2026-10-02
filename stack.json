@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "d74ea84b544b110894ee3a39b07a36b39bc64422",
-  "head": "edd0d49f46eeb0e62c3e720f9788092cbae28c49",
+  "prev": "25020f6ed0f9d2519b6fe2f9e444241af126e919",
+  "head": "50747e088d05d2c27cfa28038d58e871dd7de0f0",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -46,14 +46,14 @@
     "fork-t3-thread-prebuilt",
     "fork-cross-project-thread-nesting",
     "fork-launch-health",
-    "fork-notification-preferences"
-  ],
-  "unapplied": [
+    "fork-notification-preferences",
     "fork-sidebar-agent-visibility",
     "fork-child-input-attention",
     "fork-agent-panel-thread-details",
     "fork-sidebar-drag-to-nest",
-    "fork-worker-inactivity",
+    "fork-worker-inactivity"
+  ],
+  "unapplied": [
     "fork-thread-titles",
     "fork-embedded-pages",
     "fork-subthread-lifecycle"
@@ -64,7 +64,7 @@
       "oid": "d64f79d9dd26a19b06a677744960d23958d5a06c"
     },
     "fork-agent-panel-thread-details": {
-      "oid": "8d67d41300e9af07df1e773be1825712715f0d28"
+      "oid": "d2a3428cb1c8ea09593bf0c114166d6cdbdadc81"
     },
     "fork-attachment-compatibility": {
       "oid": "6fc9d7d1b9dee159c5f3f208e9a6904fac1c4df6"
@@ -79,7 +79,7 @@
       "oid": "fe5ea548f26c10947cb8cdeed714a4a80f1f6893"
     },
     "fork-child-input-attention": {
-      "oid": "f113a3545aa6b7bc077a6479e9f2e436f2c57a70"
+      "oid": "5a776afcbf7d9587f59f5e186f324a0921d61ea7"
     },
     "fork-codex-goal-visibility": {
       "oid": "b7f0dd66b8d3fb30e9d5db3f6866c93d2017ab2d"
@@ -172,10 +172,10 @@
       "oid": "8dc0caab4dc51fef287d1fff2bfab3e755c384fa"
     },
     "fork-sidebar-agent-visibility": {
-      "oid": "8d5f1b18c85551280afa54c7d972d00c8e219a6a"
+      "oid": "ad2fb8ebc7b72f07091b89a14fd3eeab49e860c9"
     },
     "fork-sidebar-drag-to-nest": {
-      "oid": "7aa4e1891ffacca3db57e0f34ff730089714ec3e"
+      "oid": "780f4f1cc6578dd2469fedb568084034707f00f9"
     },
     "fork-spawn-budget": {
       "oid": "5a8dba91ced540ba44247065ee6391aa92734c36"
@@ -205,7 +205,7 @@
       "oid": "fd3a2527b5aaccdd1d58cf88042662557826cbeb"
     },
     "fork-worker-inactivity": {
-      "oid": "513f10c87824e6b71157e209a22a482e7616b388"
+      "oid": "50747e088d05d2c27cfa28038d58e871dd7de0f0"
     },
     "fork-worker-operations": {
       "oid": "52f4b831bff2d9f92c2efe158f5bc43e205f9baa"
