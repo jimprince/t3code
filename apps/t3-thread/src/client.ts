@@ -420,7 +420,8 @@ export class RemoteEnvironmentClient {
     branch?: string;
     baseBranch?: string;
     initialMessage?: string;
-  }): Promise<{ threadId: string; projectId: string; title: string }> {
+    pin?: boolean;
+  }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
     const snapshot = await this.getShellSnapshot();
     const project = snapshot.projects.find((candidate) => candidate.id === input.projectId);
     if (!project) {
@@ -491,10 +492,12 @@ export class RemoteEnvironmentClient {
       await rpc.dispose();
     }
 
+    const pinState = input.pin ? await this.setThreadPinned(threadId, true) : null;
     return {
       threadId,
       projectId: project.id,
       title: input.title,
+      pinned: pinState?.pinned ?? false,
     };
   }
 
@@ -660,6 +663,26 @@ export class RemoteEnvironmentClient {
     } finally {
       await rpc.dispose();
     }
+  }
+
+  async setThreadPinned(threadId: string, pinned: boolean) {
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: pinned ? "thread.pin" : "thread.unpin",
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+      });
+    } finally {
+      await rpc.dispose();
+    }
+    const thread = await this.findThread(threadId);
+    return {
+      threadId: thread.id,
+      environment: this.environment.name,
+      pinned: thread.pinnedAt != null,
+      pinnedAt: thread.pinnedAt ?? null,
+    };
   }
 
   async settleThread(threadId: string, options: { self?: boolean } = {}) {
