@@ -1,4 +1,8 @@
 import { ArrowUpIcon, ClockIcon } from "lucide-react";
+import {
+  resolveBackgroundFolds,
+  type BackgroundRun,
+} from "@t3tools/client-runtime/background-turns";
 import { ReadOnlySourcePreview } from "../files/AttachmentFilePreview";
 import { useRightPanelStore } from "~/rightPanelStore";
 import {
@@ -53,6 +57,7 @@ import {
 const EMPTY_AGENT_PANEL_MODEL = emptyAgentPanelModel();
 const NOOP_OPEN_AGENTS = () => {};
 const EMPTY_QUEUED_MESSAGES: ReadonlyArray<QueuedComposerMessage> = [];
+const EMPTY_BACKGROUND_RUNS: ReadonlyArray<BackgroundRun> = [];
 const NOOP_QUEUED_MESSAGE_ACTION = (_id: string) => {};
 const NOOP_USE_ARTIFACT_TEMPLATE = () => {};
 const NOOP_OPEN_ATTACHMENT = (_attachment: ChatFileAttachment) => {};
@@ -296,6 +301,7 @@ interface TimelineRowSharedState {
   openPullRequest: (event: MouseEvent<HTMLElement>, url: string) => void;
   onOpenTurnDiff: (turnId: TurnId, filePath?: string) => void;
   onToggleTurnFold: (turnId: TurnId) => void;
+  onToggleBackgroundFold: (runId: string) => void;
   onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
   onToggleWorkEntry: (anchorKey: string, collapsed: boolean) => void;
   onToggleSpawnRow: (entryId: string, expanded: boolean) => void;
@@ -481,6 +487,8 @@ interface MessagesTimelineProps {
   onSteerQueuedMessage?: (id: string) => void;
   steerQueuedMessageShortcutLabel?: string | null;
   onRemoveQueuedMessage?: (id: string) => void;
+  /** Brad view: worker turns that fold behind one row per run. Empty shows all traffic. */
+  backgroundRuns?: ReadonlyArray<BackgroundRun>;
 }
 
 // ---------------------------------------------------------------------------
@@ -540,6 +548,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
   topFadeEnabled = false,
   loadEarlier = null,
   queuedMessages = EMPTY_QUEUED_MESSAGES,
+  backgroundRuns = EMPTY_BACKGROUND_RUNS,
   onSteerQueuedMessage = NOOP_QUEUED_MESSAGE_ACTION,
   steerQueuedMessageShortcutLabel = null,
   onRemoveQueuedMessage = NOOP_QUEUED_MESSAGE_ACTION,
@@ -702,6 +711,29 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     },
     [suspendEndScrollMaintenanceForDisclosure],
   );
+  // Run ids embed their first message id, so expansions never collide across threads.
+  const [expandedBackgroundRunIds, setExpandedBackgroundRunIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const onToggleBackgroundFold = useCallback(
+    (runId: string) => {
+      suspendEndScrollMaintenanceForDisclosure(runId);
+      setExpandedBackgroundRunIds((existing) => {
+        const next = new Set(existing);
+        if (next.has(runId)) next.delete(runId);
+        else next.add(runId);
+        return next;
+      });
+    },
+    [suspendEndScrollMaintenanceForDisclosure],
+  );
+  const backgroundFolds = useMemo(
+    () =>
+      backgroundRuns.length === 0
+        ? undefined
+        : resolveBackgroundFolds(backgroundRuns, expandedBackgroundRunIds),
+    [backgroundRuns, expandedBackgroundRunIds],
+  );
   const onToggleWorkGroup = useCallback(
     (groupId: string, anchorKey: string) => {
       suspendEndScrollMaintenanceForDisclosure(anchorKey, expandedWorkGroupIds.has(groupId));
@@ -803,6 +835,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
         liveAgentTaskIds,
         worktreeSetup,
         queuedMessages,
+        backgroundFolds,
       },
       previous?.threadKey === listIdentityKey && previous.workspaceRoot === workspaceRoot
         ? previous.projection
@@ -826,6 +859,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
     liveAgentTaskIds,
     worktreeSetup,
     queuedMessages,
+    backgroundFolds,
   ]);
   const rows = useStableRows(rawRows, listIdentityKey);
   const minimapItems = useMemo(() => deriveTimelineMinimapItems(rows), [rows]);
@@ -1181,6 +1215,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       openPullRequest,
       onOpenTurnDiff,
       onToggleTurnFold,
+      onToggleBackgroundFold,
       onToggleWorkGroup,
       onToggleWorkEntry: suspendEndScrollMaintenanceForDisclosure,
       onToggleSpawnRow,
@@ -1220,6 +1255,7 @@ export const MessagesTimeline = memo(function MessagesTimeline({
       openPullRequest,
       onOpenTurnDiff,
       onToggleTurnFold,
+      onToggleBackgroundFold,
       onToggleWorkGroup,
       suspendEndScrollMaintenanceForDisclosure,
       onToggleSpawnRow,
@@ -1801,7 +1837,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
           ? "pb-1"
           : isExpandedToolGroupHeader
             ? "pb-0"
-            : row.kind === "turn-fold" || row.kind === "working"
+            : row.kind === "turn-fold" || row.kind === "background-fold" || row.kind === "working"
               ? "pb-1.5"
               : (row.kind === "message" &&
                     row.message.role === "assistant" &&
@@ -1840,6 +1876,7 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "activity-group" ? <ActivityGroupTimelineRow row={row} /> : null}
       {row.kind === "work-toggle" ? <WorkGroupToggleTimelineRow row={row} /> : null}
       {row.kind === "turn-fold" ? <TurnFoldTimelineRow row={row} /> : null}
+      {row.kind === "background-fold" ? <BackgroundFoldTimelineRow row={row} /> : null}
       {row.kind === "context-compaction" ? <ContextCompactionTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "user" ? <UserTimelineRow row={row} /> : null}
       {row.kind === "message" && row.message.role === "assistant" ? (
@@ -2528,6 +2565,42 @@ function TurnFoldTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "turn-
         createdAt={row.createdAt}
         timestampFormat={ctx.timestampFormat}
         className="ms-auto"
+      />
+    </div>
+  );
+}
+
+/** Brad view: a run of worker turns, folded to its count, senders and latest line. */
+function BackgroundFoldTimelineRow({
+  row,
+}: {
+  row: Extract<TimelineRow, { kind: "background-fold" }>;
+}) {
+  const ctx = use(TimelineRowCtx);
+  const Icon = row.expanded ? ChevronDownIcon : ChevronRightIcon;
+  const { run } = row;
+  const count = `${run.turnCount} background ${run.turnCount === 1 ? "turn" : "turns"}`;
+
+  return (
+    <div className="group/timeline-row relative flex min-w-0 items-center gap-2 border-y border-border/60 py-1 pe-0.5">
+      <button
+        type="button"
+        aria-expanded={row.expanded}
+        data-scroll-anchor-ignore
+        onClick={() => ctx.onToggleBackgroundFold(run.id)}
+        className="flex min-w-0 flex-1 cursor-pointer select-none items-center gap-2 rounded-md px-1 text-start text-sm leading-relaxed text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/70"
+      >
+        <Icon className="size-3.5 shrink-0" />
+        <span className="shrink-0 text-foreground tabular-nums">{count}</span>
+        {run.senderLabels.length > 0 ? (
+          <span className="shrink-0">with {run.senderLabels.join(", ")}</span>
+        ) : null}
+        {run.lastLine ? <span className="min-w-0 truncate opacity-70">{run.lastLine}</span> : null}
+      </button>
+      <TimelineRowTimestamp
+        createdAt={run.endedAt}
+        timestampFormat={ctx.timestampFormat}
+        className="ms-auto shrink-0"
       />
     </div>
   );
