@@ -36,6 +36,7 @@ import {
   type ProviderSession,
   type ServerSettings as ServerSettingsValue,
 } from "@t3tools/contracts";
+import { isPageAgentThreadId } from "@t3tools/contracts";
 import { expandAssistantCitationsForProvider } from "@t3tools/shared/assistantCitations";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { causeErrorTag } from "@t3tools/shared/observability";
@@ -980,7 +981,8 @@ const makeProviderService = Effect.fn("makeProviderService")(function* (
   ) {
     const capabilities = new Set<McpInvocationContext.McpCapability>(["pull-requests"]);
     const access = yield* agentAccessSettings(threadId);
-    if (access.browser) capabilities.add("preview");
+    // A page agent exists to operate its embedded page, so it always gets the browser.
+    if (access.browser || isPageAgentThreadId(threadId)) capabilities.add("preview");
     if (access.device) capabilities.add("device");
     return capabilities;
   });

@@ -4,6 +4,7 @@ import {
 } from "@t3tools/shared/usageLimits";
 import { listThreadSubscriptions, updateThreadSubscriptions } from "./threadSubscriptions.ts";
 import { ThreadSubscriptionsError } from "@t3tools/contracts";
+import { isPageAgentThreadId, withoutPageAgentThreads } from "@t3tools/contracts";
 import * as Cause from "effect/Cause";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -963,30 +964,33 @@ const makeWsRpcLayer = (
         threadId: ThreadId,
         sequence: number,
       ): Effect.Effect<Option.Option<OrchestrationShellStreamEvent>, never, never> =>
-        retryShellProjectionRead(
-          "thread",
-          threadId,
-          projectionSnapshotQuery.getThreadShellById(threadId),
-        ).pipe(
-          Effect.map(
-            Option.flatMap((thread) =>
-              Option.match(thread, {
-                onNone: () =>
-                  Option.some<OrchestrationShellStreamEvent>({
-                    kind: "thread-removed" as const,
-                    sequence,
-                    threadId,
+        // Page-agent threads never enter a client's thread list.
+        isPageAgentThreadId(threadId)
+          ? Effect.succeedNone
+          : retryShellProjectionRead(
+              "thread",
+              threadId,
+              projectionSnapshotQuery.getThreadShellById(threadId),
+            ).pipe(
+              Effect.map(
+                Option.flatMap((thread) =>
+                  Option.match(thread, {
+                    onNone: () =>
+                      Option.some<OrchestrationShellStreamEvent>({
+                        kind: "thread-removed" as const,
+                        sequence,
+                        threadId,
+                      }),
+                    onSome: (nextThread) =>
+                      Option.some<OrchestrationShellStreamEvent>({
+                        kind: "thread-upserted" as const,
+                        sequence,
+                        thread: nextThread,
+                      }),
                   }),
-                onSome: (nextThread) =>
-                  Option.some<OrchestrationShellStreamEvent>({
-                    kind: "thread-upserted" as const,
-                    sequence,
-                    thread: nextThread,
-                  }),
-              }),
-            ),
-          ),
-        );
+                ),
+              ),
+            );
 
       // Turn a batch of domain events into shell stream items, coalescing by
       // aggregate first. `toShellStreamEvent` re-reads the *current* projected
@@ -2245,6 +2249,9 @@ const makeWsRpcLayer = (
           observeRpcEffect(
             ORCHESTRATION_WS_METHODS.searchThreads,
             projectionSnapshotQuery.searchThreads(input).pipe(
+              Effect.map((result) => ({
+                matches: result.matches.filter((match) => !isPageAgentThreadId(match.threadId)),
+              })),
               Effect.mapError(
                 (cause) =>
                   new OrchestrationSearchThreadsError({
@@ -2342,6 +2349,7 @@ const makeWsRpcLayer = (
               );
 
               const loadSnapshot = projectionSnapshotQuery.getShellSnapshot().pipe(
+                Effect.map(withoutPageAgentThreads),
                 Effect.tapError((cause) =>
                   Effect.logError("orchestration shell snapshot load failed", { cause }),
                 ),
