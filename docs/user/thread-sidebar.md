@@ -213,6 +213,11 @@ under…**. To bring one back, choose **Move to sidebar** from its row in the
 Agents panel or from the thread's own menu. **New thread under this one** in a
 thread's menu starts a thread that is nested from the start.
 
+Expanded parents keep pinned and active work visible. Quiet children fold into
+one **done** row, while untouched children created together may share a burst row;
+select either row to expand or collapse it in place. A child from another project
+shows that project beside its title instead of adding another project heading.
+
 On web and desktop, dragging a sidebar thread reorders it by default. While the
 pointer is over another thread row, move right by one child indent to nest it.
 The highlighted parent and indented marker show a nesting drop; move back left
