@@ -420,6 +420,12 @@ project, branch, and creation time before retrying. Every new invocation chooses
 a new identity, so retry can create a duplicate; attach an existing thread instead.
 Run the CLI under the Node version required by the fork.
 
+Enable activity-based attention alerts on an existing worker route with
+`t3-thread subscribe --watch <source> --level attention --inactivity-minutes 15`.
+Use `--inactivity-minutes 0` to disable monitoring. New workers accept the same
+threshold on `create`, together with `--notify-level attention`. See the
+[monitoring guide](docs/AGENT_OPERATIONS.md#active-worker-inactivity-monitoring).
+
 Inspect nesting with `t3-thread status <name-or-thread-id>` or list children with
 `t3-thread threads --env <environment> --parent <name-or-thread-id>`.
 Add `--recursive` for every descendant. Listings include parent ids and available
