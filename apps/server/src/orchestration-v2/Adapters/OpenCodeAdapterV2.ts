@@ -1,3 +1,4 @@
+import { withT3ThreadIdentityEnv } from "../../provider/t3ThreadIdentityEnv.ts";
 import type {
   Event as OpenCodeEvent,
   Message as OpenCodeMessage,
@@ -960,7 +961,7 @@ export function makeOpenCodeAdapterV2(
           binaryPath: options.settings.binaryPath,
           directory: cwd,
           serverUrl: options.settings.serverUrl,
-          environment: options.environment,
+          environment: withT3ThreadIdentityEnv(options.environment, { threadId: input.threadId }),
         });
         const client = runtime.createOpenCodeSdkClient({
           baseUrl: connection.url,
