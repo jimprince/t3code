@@ -1,4 +1,9 @@
 import {
+  resolveBackgroundFolds,
+  type BackgroundRun,
+} from "@t3tools/client-runtime/background-turns";
+import { applyBackgroundFolds } from "./backgroundFeed.logic";
+import {
   WorktreeWorkingHeader,
   WorktreeSetupCard,
   type WorktreeSetupCardProps,
@@ -245,6 +250,8 @@ function isFreshTimestamp(input: string): boolean {
 }
 
 export interface ThreadFeedProps {
+  /** Brad view: worker runs to fold, from useBackgroundRuns. */
+  readonly backgroundRuns?: ReadonlyArray<BackgroundRun>;
   readonly worktreeSetup?: WorktreeSetupCardProps | null;
   readonly setupWorkingStartedAt?: string | null;
   readonly queuedMessages: ReadonlyArray<QueuedThreadMessage>;
@@ -1372,6 +1379,7 @@ function renderFeedEntry(
     readonly onToggleWorkGroup: (groupId: string, anchorKey: string) => void;
     readonly onToggleWorkRow: (rowId: string, anchorKey: string) => void;
     readonly onToggleTurnFold: (turnId: TurnId) => void;
+    readonly onToggleBackgroundFold: (runId: string) => void;
     readonly onToggleReasoning: (messageId: string) => void;
     readonly onPressPreview: (source: FilePreviewSource) => void;
     readonly onPressVideo: (attachment: ChatFileAttachment, sourceIdentifier: string) => void;
@@ -1392,6 +1400,37 @@ function renderFeedEntry(
 ) {
   const entry = info.item;
   const { markdownStyles, iconSubtleColor, userBubbleColor } = props;
+
+  if (entry.type === "background-fold") {
+    const { run } = entry;
+    const count = `${run.turnCount} background ${run.turnCount === 1 ? "turn" : "turns"}`;
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: entry.expanded }}
+        onPress={() => props.onToggleBackgroundFold(run.id)}
+        hitSlop={4}
+        className="mb-1 min-h-11 flex-row items-center gap-2 border-y border-border-subtle px-2"
+        style={{
+          minHeight: Math.max(TURN_FOLD_HEIGHT - 3.5, props.workRowSizing.estimatedRowHeight),
+        }}
+      >
+        <ThreadDisclosureChevron
+          expanded={entry.expanded}
+          collapsedDirection="right"
+          size={15}
+          tintColor={iconSubtleColor}
+        />
+        <Text
+          key={props.workRowSizing.textSizeKey}
+          numberOfLines={1}
+          className="flex-1 font-t3-medium text-sm tabular-nums text-foreground-muted"
+        >
+          {run.senderLabels.length > 0 ? `${count} with ${run.senderLabels.join(", ")}` : count}
+        </Text>
+      </Pressable>
+    );
+  }
 
   if (entry.type === "turn-fold") {
     return (
@@ -2448,20 +2487,36 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     }
     return ids;
   }, [expandedWorkGroups]);
+  // Run ids embed their first message id, so expansions never collide across threads.
+  const [expandedBackgroundRunIds, setExpandedBackgroundRunIds] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+  const backgroundRuns = props.backgroundRuns;
+  const backgroundFolds = useMemo(
+    () =>
+      backgroundRuns && backgroundRuns.length > 0
+        ? resolveBackgroundFolds(backgroundRuns, expandedBackgroundRunIds)
+        : undefined,
+    [backgroundRuns, expandedBackgroundRunIds],
+  );
   const presentedFeed = useMemo(
     () =>
-      appendPendingThreadMessages(
-        deriveThreadFeedPresentation(
+      applyBackgroundFolds(
+        appendPendingThreadMessages(
+          deriveThreadFeedPresentation(
+            props.feed,
+            props.latestTurn,
+            expandedTurnIds,
+            expandedWorkGroupIds,
+            props.activeWorkStartedAt,
+          ),
           props.feed,
-          props.latestTurn,
-          expandedTurnIds,
-          expandedWorkGroupIds,
-          props.activeWorkStartedAt,
+          props.queuedMessages,
         ),
-        props.feed,
-        props.queuedMessages,
+        backgroundFolds,
       ),
     [
+      backgroundFolds,
       props.queuedMessages,
       expandedTurnIds,
       expandedWorkGroupIds,
@@ -2659,6 +2714,19 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     [suspendEndScrollMaintenanceForDisclosure],
   );
 
+  const onToggleBackgroundFold = useCallback(
+    (runId: string) => {
+      suspendEndScrollMaintenanceForDisclosure(runId);
+      setExpandedBackgroundRunIds((current) => {
+        const next = new Set(current);
+        if (next.has(runId)) next.delete(runId);
+        else next.add(runId);
+        return next;
+      });
+    },
+    [suspendEndScrollMaintenanceForDisclosure],
+  );
+
   const onToggleTurnFold = useCallback(
     (turnId: TurnId) => {
       suspendEndScrollMaintenanceForDisclosure(`turn-fold:${turnId}`);
@@ -2724,6 +2792,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             ? WORK_GROUP_TOGGLE_HEIGHT
             : undefined;
         case "turn-fold":
+        case "background-fold":
           return TURN_FOLD_HEIGHT;
         case "work-toggle":
         case "thinking":
@@ -2769,6 +2838,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             onToggleWorkGroup,
             onToggleWorkRow,
             onToggleTurnFold,
+            onToggleBackgroundFold,
             onToggleReasoning,
             onPressPreview,
             onPressVideo,
@@ -2826,6 +2896,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       onPressVideo,
       onToggleReasoning,
       onToggleTurnFold,
+      onToggleBackgroundFold,
       onToggleWorkGroup,
       onToggleWorkRow,
       props.environmentId,
