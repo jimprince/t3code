@@ -99,7 +99,9 @@ export function PageAgentTray(props: {
 
   const running = sending || (thread !== null && isPageAgentRunning(thread));
   const runningRef = useRef(running);
-  runningRef.current = running;
+  useEffect(() => {
+    runningRef.current = running;
+  }, [running]);
   const interrupt = () => {
     void interruptTurn({ environmentId, input: { threadId: threadRef.threadId } });
   };

@@ -76,20 +76,19 @@ function EmbeddedPageWithAgent(props: {
           threadRef,
           trayOpen,
           onToggleTray: () => setTrayOpen((open) => !open),
-          tray: (pageActionsAvailable) =>
-            trayOpen ? (
-              <PageAgentTray
-                key={threadRef.threadId}
-                page={page}
-                environmentId={environmentId}
-                threadRef={threadRef}
-                conversations={stored}
-                onConversationsChange={setStored}
-                onDiscard={discard}
-                pageActionsAvailable={pageActionsAvailable}
-                onClose={() => setTrayOpen(false)}
-              />
-            ) : null,
+          tray: trayOpen ? (
+            <PageAgentTray
+              key={threadRef.threadId}
+              page={page}
+              environmentId={environmentId}
+              threadRef={threadRef}
+              conversations={stored}
+              onConversationsChange={setStored}
+              onDiscard={discard}
+              pageActionsAvailable={isPreviewSupportedInRuntime()}
+              onClose={() => setTrayOpen(false)}
+            />
+          ) : null,
         }}
       />
     </>
@@ -117,7 +116,8 @@ function EmbeddedPageLayout({
     readonly threadRef: ScopedThreadRef;
     readonly trayOpen: boolean;
     readonly onToggleTray: () => void;
-    readonly tray: (pageActionsAvailable: boolean) => React.ReactNode;
+    /** Desktop drives the page; a browser frame on web cannot be operated. */
+    readonly tray: React.ReactNode;
   } | null;
 }) {
   const host = page
@@ -184,7 +184,7 @@ function EmbeddedPageLayout({
               />
             )}
           </div>
-          {agent?.tray(host?.kind === "webview")}
+          {agent?.tray}
         </div>
       </div>
     </SidebarInset>
