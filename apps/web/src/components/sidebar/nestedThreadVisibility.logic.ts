@@ -122,6 +122,14 @@ export function groupSidebarChildren<T extends SidebarChild>(
   return groups;
 }
 
+/** A settled parent stays in the active shelf while any descendant still needs supervision. */
+export function hasActiveSidebarDescendants(
+  groups: ReadonlyMap<string, { readonly activeCount: number }>,
+  parentKey: string,
+): boolean {
+  return (groups.get(parentKey)?.activeCount ?? 0) > 0;
+}
+
 /** Nested rows on the path to the open thread stay visible through collapsed ancestors. */
 export function sidebarNestedPathKeys<T extends SidebarChild>(
   threads: ReadonlyArray<T>,

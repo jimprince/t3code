@@ -6,6 +6,7 @@ import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environ
 import {
   flattenVisibleSidebarChildren,
   groupSidebarChildren,
+  hasActiveSidebarDescendants,
   isActiveSidebarChild,
   resolveSidebarChildStatus,
   sidebarNestedPathKeys,
@@ -110,6 +111,8 @@ describe("sidebar nested children", () => {
     expect(groups.get(key(branch))?.activeCount).toBe(2);
     expect(groups.get(key(branch))?.inputChildren.map((child) => child.id)).toEqual([waiting.id]);
     expect(groups.get(key(worker))?.activeCount).toBe(1);
+    expect(hasActiveSidebarDescendants(groups, key(root))).toBe(true);
+    expect(hasActiveSidebarDescendants(groups, key(quiet))).toBe(false);
   });
 
   it("collapses siblings by default, expands all children, and preserves the open descendant path", () => {

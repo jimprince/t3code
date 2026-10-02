@@ -144,6 +144,7 @@ import { useLocalStorage } from "../hooks/useLocalStorage";
 import {
   flattenVisibleSidebarChildren,
   groupSidebarChildren,
+  hasActiveSidebarDescendants,
   resolveSidebarChildStatus,
   sidebarNestedPathKeys,
 } from "./sidebar/nestedThreadVisibility.logic";
@@ -2768,6 +2769,7 @@ export default function Sidebar() {
       const supportsSettlement = capabilities?.threadSettlement === true;
       const supportsSnooze = capabilities?.threadSnooze === true;
       const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+      const supervisesActiveDescendants = hasActiveSidebarDescendants(sidebarChildren, threadKey);
       if (capabilities?.threadActiveReorder === true) activeReorderable.add(threadKey);
       // Older servers retain their existing drag actions. Active placement
       // additionally requires its own ordering capability at the drop target.
@@ -2795,7 +2797,11 @@ export default function Sidebar() {
       } else if (supportsSnooze && effectiveSnoozed(thread, { now: preciseNow })) {
         // Snooze outranks settlement and pinning until the thread wakes.
         snoozed.push(thread);
-      } else if (supportsSettlement && thread.settledOverride === "settled") {
+      } else if (
+        supportsSettlement &&
+        thread.settledOverride === "settled" &&
+        !supervisesActiveDescendants
+      ) {
         settled.push(thread);
       } else if (thread.pinnedAt != null) {
         pinned.push(thread);
@@ -2838,7 +2844,15 @@ export default function Sidebar() {
       settledThreads: sortSettledThreads(settled),
       snoozeNow: preciseNow,
     };
-  }, [nowMinute, optimisticDrop, scopedProjectKeys, serverConfigs, snoozeWakeTick, threads]);
+  }, [
+    nowMinute,
+    optimisticDrop,
+    scopedProjectKeys,
+    serverConfigs,
+    sidebarChildren,
+    snoozeWakeTick,
+    threads,
+  ]);
 
   const threadSearchInputRef = useRef<HTMLInputElement>(null);
   const [threadSearchQuery, setThreadSearchQuery] = useState("");
@@ -5322,11 +5336,12 @@ export default function Sidebar() {
                             onToggleNestedChildren={toggleParentChildren}
                             thread={thread}
                             variant={rowVariant}
-                            // Snoozed rows wake, settled rows un-settle, and cards settle.
+                            // A settled parent supervising active descendants stays a card,
+                            // but its action still follows its own lifecycle.
                             variantAction={
                               section === "snoozed"
                                 ? "unsnooze"
-                                : section === "settled"
+                                : thread.settledOverride === "settled"
                                   ? "unsettle"
                                   : "settle"
                             }
