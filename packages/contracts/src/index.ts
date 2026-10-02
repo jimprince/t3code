@@ -6,6 +6,7 @@ export * from "./codexNativeGoal.ts";
 export * from "./background.ts";
 export * from "./auth.ts";
 export * from "./environment.ts";
+export * from "./threadSubscriptions.ts";
 export * from "./environmentHttp.ts";
 export * from "./relayClient.ts";
 export * from "./desktopBootstrap.ts";

@@ -57,7 +57,7 @@ export function buildNotificationEventKey(input: {
     : input.latestTurnId
       ? `turn:${input.latestTurnId}:${input.sourceState}`
       : `state:${input.sourceState}`;
-  return `${input.subscriberThreadId}:${input.sourceThreadId}:${marker}`;
+  return `${input.subscriberThreadId}:${input.sourceThreadId}:${input.latestTurnId ?? "none"}:${input.sourceState}:${marker}`;
 }
 
 export function buildNotificationRecord(input: {
@@ -178,7 +178,7 @@ export function buildNotificationMessage(
   const sourceLabel = notification.sourceAgentName ?? notification.sourceThreadId;
   const preview = notification.preview ? summarizeMessageText(notification.preview, 120) : null;
   const notice = [
-    `HomeNetwork orchestrator notification: ${sourceLabel} needs attention.`,
+    `T3 orchestrator notification: ${sourceLabel} ${notification.sourceState === "completed" ? "completed a turn" : "needs attention"}.`,
     notification.reminderOfEventKey ? "Reminder: this sub-agent is still waiting for input." : null,
     `State: ${notification.sourceState}.`,
     `Reason: ${notification.reason}.`,

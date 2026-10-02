@@ -181,9 +181,10 @@ async function resolveNotifyEndpoint(
   state: Awaited<ReturnType<typeof loadState>>,
   notify: string | boolean | undefined,
   preferredEnvironment?: string,
+  topLevel = false,
 ): Promise<SubscriptionEndpoint | null> {
   const callerEnvironment = resolveCallerEnvironmentMetadata();
-  const preference = resolveNotifyPreference(notify);
+  const preference = resolveNotifyPreference(notify, process.env, topLevel);
 
   if (preference.kind === "none") {
     return null;
@@ -685,7 +686,12 @@ agent
   .action(async (options) => {
     const state = await loadState();
     const environment = requireEnvironment(state, options.env);
-    const notifyCaller = await resolveNotifyEndpoint(state, options.notify, options.env);
+    const notifyCaller = await resolveNotifyEndpoint(
+      state,
+      options.notify,
+      options.env,
+      options.topLevel === true,
+    );
     if (options.worktree) {
       throw new Error(
         "`--worktree` is no longer supported by agent create. T3 chooses the worktree path; use `--branch` and `--base-branch` only.",
@@ -969,15 +975,23 @@ agent
 agent
   .command("subscriptions")
   .description("List saved attention-routing subscriptions")
-  .option("--subscriber <name>", "filter by subscriber agent name")
-  .option("--source <name>", "filter by source agent name")
+  .option("--subscriber <name>", "filter by subscriber agent name or thread UUID")
+  .option("--source <name>", "filter by source agent name or thread UUID")
   .action(async (options) => {
     const state = await loadState();
     const subscriptions = state.subscriptions.filter((subscription) => {
-      if (options.subscriber && subscription.subscriberAgentName !== options.subscriber) {
+      if (
+        options.subscriber &&
+        subscription.subscriberAgentName !== options.subscriber &&
+        subscription.subscriberThreadId !== options.subscriber
+      ) {
         return false;
       }
-      if (options.source && subscription.sourceAgentName !== options.source) {
+      if (
+        options.source &&
+        subscription.sourceAgentName !== options.source &&
+        subscription.sourceThreadId !== options.source
+      ) {
         return false;
       }
       return true;
@@ -1077,6 +1091,18 @@ agent
       state: {
         ...currentState,
         subscriptions: removeSubscription(currentState.subscriptions, route),
+        notifications: currentState.notifications.map((notification) =>
+          notification.subscriberThreadId === route.subscriberThreadId &&
+          notification.sourceThreadId === route.sourceThreadId &&
+          !["delivered", "superseded", "undeliverable"].includes(notification.status)
+            ? {
+                ...notification,
+                status: "superseded" as const,
+                updatedAt: new Date().toISOString(),
+                nextAttemptAt: null,
+              }
+            : notification,
+        ),
       },
       result: null,
     }));
@@ -1093,16 +1119,24 @@ agent
 agent
   .command("notifications")
   .description("List saved routed notification events")
-  .option("--subscriber <name>", "filter by subscriber agent name")
-  .option("--source <name>", "filter by source agent name")
+  .option("--subscriber <name>", "filter by subscriber agent name or thread UUID")
+  .option("--source <name>", "filter by source agent name or thread UUID")
   .option("--status <status>", "filter by notification status")
   .action(async (options) => {
     const state = await loadState();
     const notifications = state.notifications.filter((notification) => {
-      if (options.subscriber && notification.subscriberAgentName !== options.subscriber) {
+      if (
+        options.subscriber &&
+        notification.subscriberAgentName !== options.subscriber &&
+        notification.subscriberThreadId !== options.subscriber
+      ) {
         return false;
       }
-      if (options.source && notification.sourceAgentName !== options.source) {
+      if (
+        options.source &&
+        notification.sourceAgentName !== options.source &&
+        notification.sourceThreadId !== options.source
+      ) {
         return false;
       }
       if (options.status && notification.status !== options.status) {
@@ -1382,7 +1416,8 @@ agent
           agentName: saved ? savedAgent.name : null,
         }),
     });
-    if (outcome.queued) {
+    const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
+    if (outcome.queued || released.length > 0) {
       await ensureNotificationWatcher();
     }
     printJson({
@@ -1407,7 +1442,11 @@ agent
         ...(options.env ? { env: options.env } : {}),
         ...(threadId ? { threadId } : {}),
         ...(options.open ? { openOnly: true } : {}),
-      }),
+      }).map((send) => ({
+        ...send,
+        ageSeconds: Math.max(0, Math.floor((Date.now() - Date.parse(send.queuedAt)) / 1000)),
+        actionable: ["queued", "dispatching"].includes(send.status),
+      })),
     );
   });
 

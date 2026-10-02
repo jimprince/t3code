@@ -1,7 +1,8 @@
-import * as NodeFSP from "node:fs/promises";
-import * as NodeOS from "node:os";
-import * as NodePath from "node:path";
-import * as NodeCrypto from "node:crypto";
+import {
+  loadState as readRoutingState,
+  saveState as writeRoutingState,
+  updateState as updateRoutingState,
+} from "@t3tools/shared/threadRoutingState";
 
 import type {
   NotificationLevel,
@@ -29,11 +30,6 @@ export type NotifyPreference =
   | { kind: "caller" }
   | { kind: "explicit"; subscriber: string };
 
-const DEFAULT_STATE_DIR = NodePath.join(NodeOS.homedir(), ".config", "t3-remote-agents");
-const DEFAULT_STATE_FILE = NodePath.join(DEFAULT_STATE_DIR, "state.json");
-const STATE_LOCK_TIMEOUT_MS = 10_000;
-const STATE_LOCK_RETRY_MS = 50;
-
 const EMPTY_STATE: StateFile = {
   version: 1,
   environments: [],
@@ -42,14 +38,6 @@ const EMPTY_STATE: StateFile = {
   notifications: [],
   queuedSends: [],
 };
-
-export function resolveStateFile(): string {
-  return process.env.T3_AGENT_STATE_FILE?.trim() || DEFAULT_STATE_FILE;
-}
-
-async function ensureStateDir(stateFile: string): Promise<void> {
-  await NodeFSP.mkdir(NodePath.dirname(stateFile), { recursive: true });
-}
 
 function normalizeState(parsed: Partial<StateFile>): StateFile {
   return {
@@ -63,68 +51,14 @@ function normalizeState(parsed: Partial<StateFile>): StateFile {
   };
 }
 
-async function loadStateFromFile(stateFile: string): Promise<StateFile> {
-  try {
-    const raw = await NodeFSP.readFile(stateFile, "utf8");
-    const parsed = JSON.parse(raw) as Partial<StateFile>;
-    return normalizeState(parsed);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("ENOENT")) {
-      return structuredClone(EMPTY_STATE);
-    }
-    throw error;
-  }
-}
+export { resolveStateFile } from "@t3tools/shared/threadRoutingState";
 
 export async function loadState(): Promise<StateFile> {
-  return loadStateFromFile(resolveStateFile());
-}
-
-async function saveStateToFile(stateFile: string, state: StateFile): Promise<void> {
-  await ensureStateDir(stateFile);
-  const tempFile = NodePath.join(
-    NodePath.dirname(stateFile),
-    `.${NodePath.basename(stateFile)}.${NodeCrypto.randomUUID()}.tmp`,
-  );
-  await NodeFSP.writeFile(tempFile, `${JSON.stringify(state, null, 2)}\n`, "utf8");
-  await NodeFSP.rename(tempFile, stateFile);
+  return normalizeState(await readRoutingState(EMPTY_STATE));
 }
 
 export async function saveState(state: StateFile): Promise<void> {
-  await saveStateToFile(resolveStateFile(), state);
-}
-
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function withStateLock<T>(stateFile: string, task: () => Promise<T>): Promise<T> {
-  await ensureStateDir(stateFile);
-  const lockFile = `${stateFile}.lock`;
-  const startedAt = Date.now();
-
-  for (;;) {
-    try {
-      const handle = await NodeFSP.open(lockFile, "wx");
-      try {
-        await handle.writeFile(`${process.pid}\n`, "utf8");
-        return await task();
-      } finally {
-        await handle.close();
-        await NodeFSP.unlink(lockFile).catch(() => {});
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes("EEXIST")) {
-        throw error;
-      }
-      if (Date.now() - startedAt > STATE_LOCK_TIMEOUT_MS) {
-        throw new Error(`Timed out waiting for state lock '${lockFile}'.`, { cause: error });
-      }
-      await sleep(STATE_LOCK_RETRY_MS);
-    }
-  }
+  await writeRoutingState(state);
 }
 
 export async function updateState<T>(
@@ -132,13 +66,7 @@ export async function updateState<T>(
     state: StateFile,
   ) => Promise<{ state: StateFile; result: T }> | { state: StateFile; result: T },
 ): Promise<T> {
-  const stateFile = resolveStateFile();
-  return withStateLock(stateFile, async () => {
-    const current = await loadStateFromFile(stateFile);
-    const { state, result } = await mutator(current);
-    await saveStateToFile(stateFile, state);
-    return result;
-  });
+  return updateRoutingState(EMPTY_STATE, (state) => mutator(normalizeState(state)));
 }
 
 export function upsertEnvironment(
@@ -303,8 +231,9 @@ export function resolveCallerEndpointFromLocalContext(
 export function resolveNotifyPreference(
   notify: string | boolean | undefined,
   env: NodeJS.ProcessEnv = process.env,
+  topLevel = false,
 ): NotifyPreference {
-  if (notify === false) {
+  if (notify === false || (topLevel && notify === undefined)) {
     return { kind: "none" };
   }
 

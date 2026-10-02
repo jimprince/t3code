@@ -77,7 +77,7 @@ describe("notification helpers", () => {
         latestTurnId: "turn-1",
         sourceState: "completed",
       }),
-    ).toBe("thread-coordinator-a:thread-worker-a:assistant:assistant-1");
+    ).toBe("thread-coordinator-a:thread-worker-a:turn-1:completed:assistant:assistant-1");
   });
 
   it("falls back to turn and state when no assistant message exists", () => {
@@ -89,7 +89,7 @@ describe("notification helpers", () => {
         latestTurnId: "turn-1",
         sourceState: "error",
       }),
-    ).toBe("thread-coordinator-a:thread-worker-a:turn:turn-1:error");
+    ).toBe("thread-coordinator-a:thread-worker-a:turn-1:error:turn:turn-1:error");
   });
 
   it("builds a pending notification record from overview and subscription data", () => {
@@ -138,7 +138,7 @@ describe("notification helpers", () => {
       }),
     );
 
-    expect(message).toContain("worker-a needs attention");
+    expect(message).toContain("worker-a completed a turn");
     expect(message).toContain("State: completed.");
     expect(message).toContain("Reason: latest turn completed.");
     expect(message).toContain(

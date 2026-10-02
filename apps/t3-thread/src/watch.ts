@@ -15,6 +15,7 @@ import {
 } from "./notifications.js";
 import { loadState, requireEnvironment, updateState, upsertNotification } from "./state.js";
 import { classifyThread } from "./status.js";
+import { threadQuotaBlock } from "./quota.js";
 import { isProcessRunning } from "./watcher-process.js";
 import type {
   OrchestrationThread,
@@ -29,7 +30,7 @@ const DELIVERY_CLAIM_TIMEOUT_MS = 60_000;
 /** How long to wait before re-offering a notification to a recipient that is mid-turn. */
 const BUSY_RECIPIENT_RETRY_MS = 30_000;
 
-/** How often a running watcher re-checks whether a settled recipient was unsettled. */
+/** How often a running watcher rechecks settlement and quota holds. */
 const SETTLED_RECIPIENT_RECHECK_MS = 60_000;
 
 /**
@@ -38,10 +39,25 @@ const SETTLED_RECIPIENT_RECHECK_MS = 60_000;
  */
 const PROCESS_STARTED_AT_MS = Date.now();
 
+/** A normal reply to a routed notification must not wake another supervisor. */
+function isNotificationReply(thread: OrchestrationThread): boolean {
+  for (let index = thread.messages.length - 1; index >= 0; index -= 1) {
+    const message = thread.messages[index]!;
+    if (message.role === "user") {
+      return /^(?:HomeNetwork|T3) orchestrator notification:/.test(message.text);
+    }
+  }
+  return false;
+}
+
 export interface WatchClient {
   findThread(threadId: string): Promise<OrchestrationThread>;
   /** Result is unused here; `RemoteEnvironmentClient.sendMessage` reports dispatch vs queue. */
-  sendMessage(input: { threadId: string; text: string }): Promise<unknown>;
+  sendMessage(input: {
+    threadId: string;
+    text: string;
+    queueWhileRunning?: boolean;
+  }): Promise<unknown>;
 }
 
 export type WatchClientFactory = (environment: SavedEnvironment) => WatchClient;
@@ -232,6 +248,12 @@ async function scanAttentionState(
     )
       continue;
     const overview = buildAgentOverview(sourceAgent, sourceThread);
+    if (
+      overview.state === "error" &&
+      isNotificationReply(sourceThread) &&
+      threadQuotaBlock(sourceThread)
+    )
+      continue;
 
     const subscriptions = state.subscriptions.filter(
       (subscription) => subscription.sourceThreadId === sourceAgent.threadId,
@@ -249,6 +271,11 @@ async function scanAttentionState(
       subscription.observedState = overview.state;
       subscription.observedReason = overview.reason;
       observedSubscriptions.push(subscription);
+      if (
+        (overview.state === "completed" || overview.state === "idle") &&
+        isNotificationReply(sourceThread)
+      )
+        continue;
       if (!needsAttention(overview) || !shouldNotify(subscription, overview, sourceThread))
         continue;
       // Attention for the turn that was already current when the subscriber
@@ -289,12 +316,19 @@ async function scanAttentionState(
 }
 
 /**
- * Statuses that keep the watcher awake. `held` is left out: it waits on the
- * user unsettling a thread, which can take days, and each watcher pass
- * snapshots every saved agent.
+ * Statuses that always keep the watcher awake. Holds with a known quota reset
+ * also keep it awake; indefinite holds wait for operator activity, since each
+ * watcher pass snapshots every saved agent.
  */
 const UNDELIVERED_STATUSES = new Set(["pending", "delivering", "delivery-failed"]);
-const IN_FLIGHT_SOURCE_STATES = new Set(["running", "starting", "ready"]);
+const IN_FLIGHT_SOURCE_STATES = new Set([
+  "running",
+  "starting",
+  "ready",
+  "needs-approval",
+  "needs-input",
+  "needs-plan",
+]);
 
 /**
  * Undelivered statuses that a newer event on the same route may overtake.
@@ -351,7 +385,9 @@ export async function hasActiveWork(
 
   const undelivered = state.notifications.some(
     (notification) =>
-      UNDELIVERED_STATUSES.has(notification.status) && matchesEnvFilter(notification, options.env),
+      (UNDELIVERED_STATUSES.has(notification.status) ||
+        (notification.status === "held" && Boolean(notification.quotaResetAt))) &&
+      matchesEnvFilter(notification, options.env),
   );
   if (undelivered) {
     return true;
@@ -439,7 +475,17 @@ export async function detectAttentionEvents(
         ),
       );
       const existing =
-        notifications.find((candidate) => candidate.eventKey === notification.eventKey) ?? null;
+        notifications.find((candidate) => candidate.eventKey === notification.eventKey) ??
+        notifications.find(
+          (candidate) =>
+            notification.sourceState === "completed" &&
+            candidate.sourceState === notification.sourceState &&
+            candidate.subscriberThreadId === notification.subscriberThreadId &&
+            candidate.sourceThreadId === notification.sourceThreadId &&
+            candidate.latestTurnId === notification.latestTurnId &&
+            candidate.latestAssistantMessageId === notification.latestAssistantMessageId,
+        ) ??
+        null;
       if (notification.sourceState === "error") {
         notification = {
           ...notification,
@@ -448,11 +494,12 @@ export async function detectAttentionEvents(
             (existing?.lastOccurrenceKey === notification.lastOccurrenceKey ? 0 : 1),
         };
       }
-      const merged = mergeDetectedNotification(existing, notification);
+      const merged = mergeDetectedNotification(
+        existing,
+        existing ? { ...notification, eventKey: existing.eventKey } : notification,
+      );
       notifications = upsertNotification(notifications, merged);
-      if (!existing) {
-        notifications = supersedeOvertakenNotifications(notifications, merged, merged.updatedAt);
-      }
+      notifications = supersedeOvertakenNotifications(notifications, merged, merged.updatedAt);
       persisted.push(merged);
     }
 
@@ -566,7 +613,7 @@ async function finalizeNotificationAttempt(input: {
     const current =
       state.notifications.find((candidate) => candidate.eventKey === input.notification.eventKey) ??
       null;
-    if (!current || current.deliveryClaimId !== input.claimId) {
+    if (!current || current.status !== "delivering" || current.deliveryClaimId !== input.claimId) {
       return {
         state,
         result: null,
@@ -699,6 +746,7 @@ export async function deliverPendingNotifications(
         const subscriberClient = clientFactory(subscriberEnvironment);
         const subscriberThread = await subscriberClient.findThread(notification.subscriberThreadId);
         const subscriberStatus = classifyThread(subscriberThread);
+        const quota = threadQuotaBlock(subscriberThread);
 
         if (subscriberThread.archivedAt || subscriberThread.deletedAt) {
           result = terminal(
@@ -713,6 +761,18 @@ export async function deliverPendingNotifications(
             updatedAt: attemptedAt,
             lastAttemptedAt: attemptedAt,
             lastError: "Subscriber thread is settled; held until it is unsettled.",
+            quotaResetAt: null,
+            nextAttemptAt: new Date(attemptedAtMs + SETTLED_RECIPIENT_RECHECK_MS).toISOString(),
+          };
+        } else if (quota && (quota.resetsAt === null || quota.resetsAt > attemptedAtMs)) {
+          result = {
+            ...notification,
+            status: "held",
+            updatedAt: attemptedAt,
+            lastAttemptedAt: attemptedAt,
+            lastError:
+              "Subscriber is quota-blocked; held until explicit retry or a reported reset.",
+            quotaResetAt: quota.resetsAt === null ? null : new Date(quota.resetsAt).toISOString(),
             nextAttemptAt: new Date(attemptedAtMs + SETTLED_RECIPIENT_RECHECK_MS).toISOString(),
           };
         } else if (subscriberStatus.state === "running") {
@@ -727,6 +787,18 @@ export async function deliverPendingNotifications(
             nextAttemptAt: new Date(attemptedAtMs + BUSY_RECIPIENT_RETRY_MS).toISOString(),
           };
         } else {
+          // Snapshot reads can be slow; an unsubscribe during that read wins.
+          const latest = await loadState();
+          if (
+            !latest.subscriptions.some(
+              (route) =>
+                route.subscriberThreadId === notification.subscriberThreadId &&
+                route.sourceThreadId === notification.sourceThreadId,
+            ) ||
+            latest.notifications.find((event) => event.id === notification.id)?.status !==
+              "delivering"
+          )
+            continue;
           const includeOnboarding = !state.notifications.some(
             (candidate) =>
               candidate.subscriberThreadId === notification.subscriberThreadId &&
@@ -735,6 +807,7 @@ export async function deliverPendingNotifications(
           await subscriberClient.sendMessage({
             threadId: notification.subscriberThreadId,
             text: buildNotificationMessage(notification, includeOnboarding),
+            queueWhileRunning: false,
           });
           result = {
             ...notification,
