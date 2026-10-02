@@ -1,3 +1,4 @@
+import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -1811,6 +1812,7 @@ const layerWsRpc = (
       });
 
       const handlers = ServerWsRpcGroup.of({
+        ...threadSubscriptionHandlers(threadManagement),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
