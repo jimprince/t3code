@@ -350,6 +350,7 @@ export const OrchestratorMcpThreadReadInput = Schema.Struct({
 export type OrchestratorMcpThreadReadInput = typeof OrchestratorMcpThreadReadInput.Type;
 
 export const OrchestratorMcpThreadDetail = Schema.Struct({
+  queueHeld: Schema.optionalKey(Schema.Boolean),
   threadId: ThreadId,
   projectId: ProjectId,
   title: Schema.String,
@@ -383,6 +384,7 @@ export const OrchestratorMcpThreadDetail = Schema.Struct({
 export type OrchestratorMcpThreadDetail = typeof OrchestratorMcpThreadDetail.Type;
 
 export const OrchestratorMcpThreadRun = Schema.Struct({
+  queueHeld: Schema.optionalKey(Schema.Boolean),
   runId: RunId,
   ordinal: PositiveInt,
   status: OrchestrationV2RunStatus,
@@ -431,6 +433,7 @@ export const OrchestratorMcpThreadSendInput = Schema.Struct({
 export type OrchestratorMcpThreadSendInput = typeof OrchestratorMcpThreadSendInput.Type;
 
 export const OrchestratorMcpThreadSendResult = Schema.Struct({
+  queueHeld: Schema.optionalKey(Schema.Boolean),
   threadId: ThreadId,
   messageId: MessageId,
   runId: RunId,
