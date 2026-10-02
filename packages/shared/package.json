@@ -474,6 +474,10 @@
     "./PtyAdapter": {
       "types": "./src/PtyAdapter.ts",
       "import": "./src/PtyAdapter.ts"
+    },
+    "./threadRoutingState": {
+      "types": "./src/threadRoutingState.ts",
+      "import": "./src/threadRoutingState.ts"
     }
   },
   "scripts": {
