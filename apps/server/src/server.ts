@@ -170,6 +170,7 @@ import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 import * as UsageService from "./usage/UsageService.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import { ThreadTransferLive } from "./orchestration/Layers/ThreadTransfer.ts";
+import { ThreadBriefLive } from "./orchestration/Layers/ThreadBrief.ts";
 import {
   clearPersistedServerRuntimeState,
   makePersistedServerRuntimeState,
@@ -539,6 +540,8 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
         Layer.provide(VcsProcess.layer),
         Layer.provide(ProviderSessionRuntime.layer),
       ),
+      // Settings are merged above this point in the chain, so provide them here.
+      ThreadBriefLive.pipe(Layer.provide(ServerSettingsLayerLive)),
       CheckpointingLayerLive,
     ),
   ),
