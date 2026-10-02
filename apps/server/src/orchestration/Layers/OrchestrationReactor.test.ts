@@ -10,6 +10,7 @@ import { ProviderCommandReactor } from "../Services/ProviderCommandReactor.ts";
 import { ProviderRuntimeIngestionService } from "../Services/ProviderRuntimeIngestion.ts";
 import { ThreadArchiveCleanupReactor } from "../Services/ThreadArchiveCleanupReactor.ts";
 import { ThreadDeletionReactor } from "../Services/ThreadDeletionReactor.ts";
+import * as SettledSubthreadArchiveReactor from "../SettledSubthreadArchiveReactor.ts";
 import * as ThreadSettlementReactor from "../ThreadSettlementReactor.ts";
 import * as PullRequestSyncReactor from "../PullRequestSyncReactor.ts";
 import * as ThreadPullRequestReactor from "../ThreadPullRequestReactor.ts";
@@ -97,13 +98,19 @@ describe("OrchestrationReactor", () => {
           }),
         ),
         Layer.provideMerge(
-          Layer.succeed(ThreadSettlementReactor.ThreadSettlementReactor, {
-            start: () => {
-              started.push("thread-settlement-reactor");
-              return Effect.void;
-            },
-            drain: Effect.void,
-          }),
+          Layer.mergeAll(
+            Layer.succeed(SettledSubthreadArchiveReactor.SettledSubthreadArchiveReactor, {
+              start: () => Effect.void,
+              drain: Effect.void,
+            }),
+            Layer.succeed(ThreadSettlementReactor.ThreadSettlementReactor, {
+              start: () => {
+                started.push("thread-settlement-reactor");
+                return Effect.void;
+              },
+              drain: Effect.void,
+            }),
+          ),
         ),
         Layer.provideMerge(
           Layer.succeed(PullRequestSyncReactor.PullRequestSyncReactor, {
