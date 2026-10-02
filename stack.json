@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "0aaa78a1a153ce0779549086f2d38c8aac2219e0",
-  "head": "e0d9b4a158fad2d4831eda10d798c6e847a703b1",
+  "prev": "1e8ac782184e048a1b502a0a2c75cd61ddecd883",
+  "head": "ce161001429ebf1b764720196258f4fee9ccb809",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -9,10 +9,10 @@
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
     "fork-general-chat",
-    "fork-conversation-fork"
+    "fork-conversation-fork",
+    "fork-thread-transfer"
   ],
   "unapplied": [
-    "fork-thread-transfer",
     "fork-thread-history-compatibility",
     "fork-project-selection",
     "fork-private-connection-defaults",
@@ -182,7 +182,7 @@
       "oid": "b5380670a982be58a5a5b3d7c22f3cdb1e9c33bc"
     },
     "fork-thread-transfer": {
-      "oid": "7642abf69163f1e100da42323947f75aaa655fc6"
+      "oid": "ce161001429ebf1b764720196258f4fee9ccb809"
     },
     "fork-unsupported-pr-hosts": {
       "oid": "6788ed66a1451586df21b02af6254c328c3ab122"
