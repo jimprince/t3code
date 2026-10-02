@@ -728,6 +728,8 @@ agent
     "unanswered child reminder interval; 0 disables reminders",
     parseInputReminderMinutes,
   )
+  .option("--settle-on-complete", "settle when a turn completes without pending input")
+  .option("--no-settle-on-complete", "disable completion settlement for this worker")
   .option("--top-level", "list the worker in the sidebar instead of nesting it")
   .action(async (options) => {
     const state = await loadState();
@@ -760,6 +762,7 @@ agent
     const created = await client.createAgentThread({
       pin: options.pin === true,
       parentThreadId: nesting.parentThreadId,
+      settleOnComplete: options.settleOnComplete,
       projectId: options.project,
       title: options.title,
       provider: options.provider,
