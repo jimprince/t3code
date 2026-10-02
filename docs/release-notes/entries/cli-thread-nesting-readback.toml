@@ -1,0 +1,4 @@
+id = "cli-thread-nesting-readback"
+category = "feature"
+functionality = "threads"
+text = "Inspect worker parent ids and titles from t3-thread status and threads, and list direct children or all descendants with threads --parent and --recursive. Listings include settlement and pin status."
