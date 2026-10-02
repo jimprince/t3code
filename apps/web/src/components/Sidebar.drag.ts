@@ -19,6 +19,16 @@ const isShelfHeader = (item: SidebarListItem | undefined) =>
     item.marker === "snoozed-header" ||
     item.marker === "settled-header");
 
+/** The center half of a row is an explicit nesting target; its edges keep reorder behavior. */
+export function resolveSidebarRowDropZone(
+  pointerY: number | null | undefined,
+  rect: Pick<DOMRect, "top" | "bottom" | "height"> | null | undefined,
+): "nest" | "reorder" {
+  if (pointerY == null || rect == null) return "reorder";
+  const edge = rect.height / 4;
+  return pointerY >= rect.top + edge && pointerY <= rect.bottom - edge ? "nest" : "reorder";
+}
+
 /** Keep the lifted card below the Pins label, including when Pins is empty.
  * The container rect follows scrolling; the offset is measured once at pickup. */
 export function restrictBelowSidebarLabel(
@@ -37,6 +47,7 @@ export function createSidebarCollisionDetection(
   options: {
     items?: readonly SidebarListItem[];
     activationY?: number | null;
+    isNestTarget?: (id: string) => boolean;
   } = {},
 ): CollisionDetection {
   const validity = new Map<string, boolean>();
@@ -89,6 +100,13 @@ export function createSidebarCollisionDetection(
       return collisions;
     }
     const id = String(nearest.id);
+    if (
+      options.isNestTarget?.(id) === true &&
+      resolveSidebarRowDropZone(args.pointerCoordinates?.y, args.droppableRects.get(nearest.id)) ===
+        "nest"
+    ) {
+      return collisions;
+    }
     const valid = validity.get(id) ?? isValidTarget(id);
     validity.set(id, valid);
     return valid ? collisions : collisions.filter((collision) => collision.id === args.active.id);
@@ -99,6 +117,7 @@ export function createSidebarCollisionDetection(
  * A zero scaleY marks rows/markers to hide while retaining their measured nodes. */
 export function createSidebarSortingStrategy(input: {
   items: readonly SidebarListItem[];
+  nestTargetKey?: string | null;
   settledOrder: readonly string[];
   /** Time-ordered inbox (Working beta): where the lifted row would land. */
   activeOrder?: readonly string[];
@@ -121,6 +140,7 @@ export function createSidebarSortingStrategy(input: {
     const active = items[activeIndex];
     const over = items[overIndex] ?? active;
     if (active?.kind !== "thread" || !over || !rects[0]) return [];
+    if (input.nestTargetKey === sidebarListItemId(over)) return items.map(() => stationary);
     const target = resolveSidebarDropTarget(items, active.key, sidebarListItemId(over));
     if (!target) return [];
     const groups: Record<SidebarSection, ThreadItem[]> = {
