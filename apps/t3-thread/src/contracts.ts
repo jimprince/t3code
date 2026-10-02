@@ -1,3 +1,4 @@
+import { ServerSettings as SharedServerSettings } from "@t3tools/contracts/settings";
 import {
   ClientOrchestrationCommand as SharedClientOrchestrationCommand,
   OrchestrationDispatchCommandError,
@@ -257,6 +258,22 @@ export type ServerProvider = typeof ServerProvider.Type;
 
 export const ServerConfig = Schema.Struct({
   providers: Schema.Array(ServerProvider),
+  settings: Schema.Struct({
+    subthreadSettleOnComplete: SharedServerSettings.fields.subthreadSettleOnComplete,
+    projectSettingsOverrides: Schema.Record(
+      Schema.String,
+      Schema.Struct({
+        subthreadSettleOnComplete: Schema.optionalKey(Schema.Boolean),
+      }),
+    ).pipe(Schema.withDecodingDefault(Effect.succeed({}))),
+  }).pipe(
+    Schema.withDecodingDefault(
+      Effect.succeed({
+        subthreadSettleOnComplete: true,
+        projectSettingsOverrides: {},
+      }),
+    ),
+  ),
 });
 
 export type ServerConfig = typeof ServerConfig.Type;
