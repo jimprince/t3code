@@ -72,6 +72,9 @@ export function buildBoundedThreadStreamSnapshot(input: {
   readonly snapshotSequence: number;
   readonly projection: OrchestrationV2ThreadProjection;
   readonly compactTurnItems?: boolean;
+  readonly operatorSummary?:
+    | import("@t3tools/contracts").OrchestrationV2OperatorSummary
+    | undefined;
 }): ThreadSnapshotStreamItem {
   const bounded = buildBoundedThreadProjection({
     snapshotSequence: input.snapshotSequence,
@@ -80,6 +83,7 @@ export function buildBoundedThreadStreamSnapshot(input: {
   return {
     kind: "snapshot",
     snapshotSequence: input.snapshotSequence,
+    ...(input.operatorSummary === undefined ? {} : { operatorSummary: input.operatorSummary }),
     ...boundedSnapshotResponseFields({
       bounded,
       compactTurnItems: input.compactTurnItems === true,

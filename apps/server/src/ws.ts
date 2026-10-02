@@ -1,3 +1,4 @@
+import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -747,6 +748,7 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
     readonly requestCompletionMarker?: boolean;
     readonly acceptBoundedSnapshot?: boolean;
     readonly acceptCompactTurnItems?: boolean;
+    readonly includeOperatorSummary?: boolean;
   }) {
     const threadManagement = yield* ThreadManagementService.ThreadManagementService;
     const applicationEvents = yield* OrchestrationEventStore.OrchestrationEventStore;
@@ -826,6 +828,7 @@ export const subscribeOrchestrationV2Thread = Effect.fn("ws.orchestrationV2.subs
           ? threadManagement.getThreadSnapshotWindow(input.threadId, {
               rowLimit: THREAD_HISTORY_SNAPSHOT_ROW_LIMIT,
               userTurnLimit: THREAD_HISTORY_PAGE_POLICY.maxUserTurns,
+              includeOperatorSummary: input.includeOperatorSummary === true,
             })
           : threadManagement.getThreadSnapshot(input.threadId)
       ).pipe(
@@ -1811,6 +1814,7 @@ const layerWsRpc = (
       });
 
       const handlers = ServerWsRpcGroup.of({
+        ...threadSubscriptionHandlers(threadManagement),
         [ORCHESTRATION_V2_WS_METHODS.dispatchCommand]: (command) =>
           Effect.annotateCurrentSpan({
             "orchestration_v2.command_id": command.commandId,
