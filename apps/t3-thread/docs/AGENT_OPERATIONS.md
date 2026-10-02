@@ -936,3 +936,12 @@ long-running tool or reasoning hidden by a provider can still be healthy. Inspec
 `status` and `worklog` before deciding what to do. Monitoring never interrupts,
 retries, changes accounts/providers, or infers an outstanding result from an idle
 thread's assignment text.
+
+## Thread titles
+
+`create --title "Supervisor A"` preserves that explicit title through automatic
+first-message titling. Change a title at any time with
+`t3-thread rename <saved-name-or-thread-uuid> --title "New title"` (the nested
+`agent rename` form also works). This can rename the calling thread; it does not
+start or interrupt a provider turn. The command verifies the server title and
+updates matching local aliases after success.
