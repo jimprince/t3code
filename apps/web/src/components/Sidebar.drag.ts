@@ -13,11 +13,29 @@ const stationary = { x: 0, y: 0, scaleX: 1, scaleY: 1 };
 const hidden = { ...stationary, scaleY: 0 };
 type ThreadItem = Extract<SidebarListItem, { kind: "thread" }>;
 type Layout = Parameters<SortingStrategy>[0];
+export const SIDEBAR_NESTED_INDENT_PX = 12;
+export type SidebarRowDropMode = "reorder" | "nest";
 const isShelfHeader = (item: SidebarListItem | undefined) =>
   item?.kind === "marker" &&
   (item.marker === "working-header" ||
     item.marker === "snoozed-header" ||
     item.marker === "settled-header");
+
+/** Nest only after one child indent of deliberate rightward movement. Once
+ * nested, half an indent of hysteresis keeps small pointer corrections stable. */
+export function resolveSidebarRowDropMode(input: {
+  activationX: number | null | undefined;
+  pointerX: number | null | undefined;
+  previousMode: SidebarRowDropMode;
+  nestEligible: boolean;
+}): SidebarRowDropMode {
+  if (!input.nestEligible || input.activationX == null || input.pointerX == null) {
+    return "reorder";
+  }
+  const threshold =
+    input.previousMode === "nest" ? SIDEBAR_NESTED_INDENT_PX / 2 : SIDEBAR_NESTED_INDENT_PX;
+  return input.pointerX - input.activationX >= threshold ? "nest" : "reorder";
+}
 
 /** Keep the lifted card below the Pins label, including when Pins is empty.
  * The container rect follows scrolling; the offset is measured once at pickup. */
@@ -36,12 +54,15 @@ export function createSidebarCollisionDetection(
   isValidTarget: (id: string) => boolean,
   options: {
     items?: readonly SidebarListItem[];
+    activationX?: number | null;
     activationY?: number | null;
+    isNestTarget?: (id: string) => boolean;
   } = {},
 ): CollisionDetection {
   const validity = new Map<string, boolean>();
   const sections = new Map<string, SidebarSection | null>();
   let previousPointerY = options.activationY;
+  let rowDropMode: SidebarRowDropMode = "reorder";
   let boundarySection: "pinned" | "active" | undefined;
   return (args) => {
     let collisions = closestCenter(args);
@@ -86,9 +107,19 @@ export function createSidebarCollisionDetection(
     }
     const nearest = collisions[0];
     if (!nearest || nearest.id === args.active.id) {
+      rowDropMode = "reorder";
       return collisions;
     }
     const id = String(nearest.id);
+    rowDropMode = resolveSidebarRowDropMode({
+      activationX: options.activationX,
+      pointerX: args.pointerCoordinates?.x,
+      previousMode: rowDropMode,
+      nestEligible: options.isNestTarget?.(id) === true,
+    });
+    if (rowDropMode === "nest") {
+      return collisions;
+    }
     const valid = validity.get(id) ?? isValidTarget(id);
     validity.set(id, valid);
     return valid ? collisions : collisions.filter((collision) => collision.id === args.active.id);
@@ -99,6 +130,7 @@ export function createSidebarCollisionDetection(
  * A zero scaleY marks rows/markers to hide while retaining their measured nodes. */
 export function createSidebarSortingStrategy(input: {
   items: readonly SidebarListItem[];
+  nestTargetKey?: string | null;
   settledOrder: readonly string[];
   /** Time-ordered inbox (Working beta): where the lifted row would land. */
   activeOrder?: readonly string[];
@@ -121,6 +153,7 @@ export function createSidebarSortingStrategy(input: {
     const active = items[activeIndex];
     const over = items[overIndex] ?? active;
     if (active?.kind !== "thread" || !over || !rects[0]) return [];
+    if (input.nestTargetKey === sidebarListItemId(over)) return items.map(() => stationary);
     const target = resolveSidebarDropTarget(items, active.key, sidebarListItemId(over));
     if (!target) return [];
     const groups: Record<SidebarSection, ThreadItem[]> = {
