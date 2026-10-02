@@ -244,6 +244,23 @@ workspace. A project badge identifies workers in a different project. Token
 counts labeled `ctx tok` describe occupied context when the provider does not
 report a cumulative processed-token count.
 
+### Focus on what needs you
+
+An orchestrating thread receives a lot of traffic from its workers: completion
+notices and results sent with `t3-thread`. In an orchestrator, turns started by
+that traffic fold into one **N background turns** row, so your own messages, the
+agent's replies to you and anything that asks for you stay readable. A worker
+turn stays visible when it raised an approval or a question, or when the agent
+ended it with the line `T3_NOTIFY: attention`; a folded turn that later raises
+one reappears on its own. Messages from the thread's parent or from other
+threads that are not its workers never fold.
+
+Click a folded row to read those turns in place. To see every turn, switch the
+bar above the conversation from **Brad view** to **All traffic**; the count next
+to it says how many worker turns asked for you since your last message. On
+mobile, folded rows expand on tap; the switch and the count are web and desktop
+only.
+
 ## Snooze until later
 
 Choose **Snooze → Custom…** from a thread's menu to pick a date and time in your
