@@ -132,6 +132,7 @@ export function applyThreadDetailEvent(
           unsettledAt: null,
           activeOrderKey: null,
           autoSettleDisabledAt: null,
+          settleOnComplete: event.payload.settleOnComplete ?? null,
           ...(event.payload.parentThreadId ? { parentThreadId: event.payload.parentThreadId } : {}),
           snoozedUntil: null,
           snoozedAt: null,
@@ -289,6 +290,9 @@ export function applyThreadDetailEvent(
             : {}),
           ...(event.payload.activeOrderKey !== undefined
             ? { activeOrderKey: event.payload.activeOrderKey }
+            : {}),
+          ...(event.payload.settleOnComplete !== undefined
+            ? { settleOnComplete: event.payload.settleOnComplete }
             : {}),
           ...(event.payload.parentThreadId !== undefined
             ? { parentThreadId: event.payload.parentThreadId }
