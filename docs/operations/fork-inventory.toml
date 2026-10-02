@@ -1405,3 +1405,13 @@ retire_when = "Upstream provides message provenance and an equivalent orchestrat
 depends_on = ["fork-worker-operations", "fork-nested-threads"]
 roles = []
 note = "Origin rides as one unreferenced t3-origin context record (packages/shared/src/messageOrigin.ts), so it never reaches the provider or renders as a chip, and older clients keep it as an unknown record; messages from older CLIs fall back to the notification text prefix. Queued real sends wake settled workers; only notification-origin sends (or legacy notification prefixes without origin) are held by settlement. Only notices and sends from the thread's own descendants fold, so a worker's instructions from its parent stay visible. Live, streaming and unanswered turns never fold, and the classifier is derived from current state, so a folded turn that later raises a request or ends with T3_NOTIFY: attention surfaces without any stored flag. Traffic results are stabilized so streaming replies keep the timeline on its fast path. Mobile folds by default with per-run expansion; the All traffic switch and needs-you count are web and desktop only."
+
+[[patch]]
+name = "fork-orchestrator-brief"
+subject = "feat(threads): brief me summary of worker traffic"
+class = "product"
+purpose = "Summarize an orchestrator thread's worker traffic since the user's last message on demand, through a server RPC that runs the configured text generation model and returns the brief without persisting it."
+retire_when = "Upstream offers an equivalent on-demand thread summary, or Brad view is retired."
+depends_on = ["fork-orchestrator-focus"]
+roles = []
+note = "The transcript starts after the last message with no t3-origin record, so it is bounded to what the user has not seen and to its newest 24k characters; a quiet stretch answers without a model call. generateThreadBrief is an optional TextGeneration operation implemented for Codex (including managed Codex) and Claude; other providers fail with a message naming the supported ones. The RPC needs the operate scope because it spends model quota. The button lives in the fork-orchestrator-focus bar on web and desktop; mobile has no Brief me."
