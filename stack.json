@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "fdcc6b510c24289c76a2462a3462cacd8144c185",
-  "head": "2afba11279af3891cd5178f485b4aa0916ab5139",
+  "prev": "85eb008767699e3aba3dc19abc3fc2cffc36b919",
+  "head": "99b64cb2e764416371fffac61bb87b5389599a75",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -48,11 +48,12 @@
     "fork-launch-health",
     "fork-notification-preferences",
     "fork-sidebar-agent-visibility",
-    "fork-child-input-attention",
+    "fork-child-input-attention"
+  ],
+  "unapplied": [
     "fork-agent-panel-thread-details",
     "fork-sidebar-drag-to-nest"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
