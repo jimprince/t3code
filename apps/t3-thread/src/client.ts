@@ -431,6 +431,29 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  async renameThread(input: {
+    threadId: string;
+    title: string;
+  }): Promise<{ threadId: string; title: string }> {
+    const title = input.title.trim();
+    if (!title) throw new Error("Thread title must not be empty.");
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: "thread.meta.update",
+        commandId: NodeCrypto.randomUUID(),
+        threadId: input.threadId,
+        title,
+      });
+    } finally {
+      await rpc.dispose();
+    }
+    const thread = await this.findThread(input.threadId);
+    if (thread.title !== title)
+      throw new Error("Thread title readback did not match the requested title.");
+    return { threadId: thread.id, title: thread.title };
+  }
+
   async createAgentThread(input: {
     projectId: string;
     title: string;
@@ -450,6 +473,8 @@ export class RemoteEnvironmentClient {
     if (!project) {
       throw new Error(`Project '${input.projectId}' was not found in '${this.environment.name}'.`);
     }
+    const title = input.title.trim();
+    if (!title) throw new Error("Thread title must not be empty.");
     const initialMessage = input.initialMessage?.trim();
     if (!initialMessage) {
       throw new Error("agent create requires a non-empty initial message.");
@@ -484,13 +509,14 @@ export class RemoteEnvironmentClient {
           attachments: [],
         },
         modelSelection,
-        titleSeed: input.title,
+        titleSeed: title,
         runtimeMode,
         interactionMode,
         bootstrap: {
           createThread: {
+            lockTitle: true,
             projectId: project.id,
-            title: input.title,
+            title,
             modelSelection,
             runtimeMode,
             interactionMode,
@@ -523,7 +549,7 @@ export class RemoteEnvironmentClient {
     return {
       threadId,
       projectId: project.id,
-      title: input.title,
+      title,
       pinned: pinState?.pinned ?? false,
     };
   }
