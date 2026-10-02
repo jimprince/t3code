@@ -1,0 +1,4 @@
+id = "sidebar-nested-pin-dragging"
+category = "fix"
+functionality = "thread organization"
+text = "Drag nested threads without losing their pin state, or drop them into Pinned or Active to move them back to the sidebar."
