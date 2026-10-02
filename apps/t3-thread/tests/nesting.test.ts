@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { RemoteEnvironmentClient } from "../src/client.js";
 import { buildUserInputAnswers, findPendingRequests, resolveCreateParent } from "../src/nesting.js";
+import { buildSubscriptionRecord, resolveNotifyPreference } from "../src/state.js";
 import type { SavedEnvironment } from "../src/types.js";
 
 const thread = (id: string, overrides: Record<string, unknown> = {}) => ({
@@ -62,6 +63,26 @@ describe("resolveCreateParent", () => {
   it("nests under the caller when the caller is itself nested", () => {
     const threads = [thread("lead"), thread("orchestrator", { parentThreadId: "lead" })];
     expect(create({ threads })).toEqual({ parentThreadId: "orchestrator", reason: "caller" });
+  });
+
+  it("keeps nesting and notification ownership on the direct caller at every depth", () => {
+    const threads = [thread("root"), thread("caller", { parentThreadId: "root" })];
+    const nesting = create({ callerThreadId: "caller", threads });
+    const notify = resolveNotifyPreference(undefined, {
+      T3_THREAD_ID: "caller",
+    } as NodeJS.ProcessEnv);
+    const route = buildSubscriptionRecord(
+      { threadId: "caller", name: "caller", environment: "dev-vm" },
+      { threadId: "grandchild", name: "grandchild", environment: "dev-vm" },
+      "2026-10-02T00:00:00.000Z",
+    );
+
+    expect(nesting).toEqual({ parentThreadId: "caller", reason: "caller" });
+    expect(notify).toEqual({ kind: "caller" });
+    expect(route).toMatchObject({
+      subscriberThreadId: "caller",
+      sourceThreadId: "grandchild",
+    });
   });
 });
 

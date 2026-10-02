@@ -260,6 +260,17 @@ otherwise, or on a server without nesting, the worker is top-level and the
 - Move a worker later with `t3-thread nest <agent> --parent <agent-or-thread>`
   or `t3-thread unnest <agent>`.
 
+Nesting and notification ownership stay direct at every depth: a worker created
+by a nested caller is parented to that caller, and its completion or attention
+subscription targets that same caller (or the explicit `--notify` target), not
+the root of the tree. Parent settlement and archive never cascade to descendants.
+
+This CLI ships per operator machine rather than inside desktop releases. After
+the stack lands, each machine that runs `t3-thread` or a watcher must deploy the
+landed fork ref with `t3-thread-deploy --from <fork-checkout> --ref <landed-ref>`.
+The deploy helper builds and validates the pinned snapshot; restart any watcher
+that was already running so it loads the new snapshot.
+
 When a nested worker needs attention (its subscription notifies you), handle
 it yourself before involving the user:
 

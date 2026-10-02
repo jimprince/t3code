@@ -134,6 +134,56 @@ it.layer(NodeServices.layer)("thread nesting", (it) => {
     }),
   );
 
+  it.effect("settling or archiving a parent does not stop or settle its working child", () =>
+    Effect.gen(function* () {
+      const child = thread(WORKER, {
+        parentThreadId: ORCHESTRATOR,
+        session: {
+          threadId: WORKER,
+          status: "running",
+          providerName: "codex",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: NOW,
+        },
+      });
+      const nested = readModel([thread(ORCHESTRATOR), child]);
+      const settled = yield* decideAndProject(
+        {
+          type: "thread.settle",
+          commandId: CommandId.make("settle-parent"),
+          threadId: ORCHESTRATOR,
+        },
+        nested,
+      );
+      expect(settled.threads.find((entry) => entry.id === ORCHESTRATOR)?.settledOverride).toBe(
+        "settled",
+      );
+      expect(settled.threads.find((entry) => entry.id === WORKER)).toMatchObject({
+        parentThreadId: ORCHESTRATOR,
+        settledOverride: null,
+        archivedAt: null,
+        session: { status: "running" },
+      });
+
+      const archived = yield* decideAndProject(
+        {
+          type: "thread.archive",
+          commandId: CommandId.make("archive-parent"),
+          threadId: ORCHESTRATOR,
+        },
+        settled,
+      );
+      expect(archived.threads.find((entry) => entry.id === WORKER)).toMatchObject({
+        parentThreadId: ORCHESTRATOR,
+        settledOverride: null,
+        archivedAt: null,
+        session: { status: "running" },
+      });
+    }),
+  );
+
   it.effect(
     "allows deep trees and rejects cycles, cross-project parents, and archived parents",
     () =>
