@@ -7,6 +7,7 @@
  *
  * @module ClaudeTextGeneration
  */
+import { buildThreadBriefPrompt } from "./ThreadBriefPrompt.ts";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Option from "effect/Option";
@@ -102,7 +103,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateThreadBrief",
     value: unknown,
     detail: string,
   ): Effect.Effect<string, TextGenerationError> =>
@@ -132,7 +134,8 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateThreadBrief";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -410,10 +413,24 @@ export const makeClaudeTextGeneration = Effect.fn("makeClaudeTextGeneration")(fu
       };
     });
 
+  const generateThreadBrief: NonNullable<
+    TextGeneration.TextGeneration["Service"]["generateThreadBrief"]
+  > = Effect.fn("ClaudeTextGeneration.generateThreadBrief")(function* (input) {
+    const { prompt, outputSchema } = buildThreadBriefPrompt(input);
+    return yield* runClaudeJson({
+      operation: "generateThreadBrief",
+      cwd: input.cwd,
+      prompt,
+      outputSchemaJson: outputSchema,
+      modelSelection: input.modelSelection,
+    });
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateThreadBrief,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
