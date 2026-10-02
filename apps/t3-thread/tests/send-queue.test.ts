@@ -125,19 +125,86 @@ async function queue(text: string, threadId = "thread-worker-a"): Promise<void> 
 }
 
 describe("send queue drain", () => {
-  it("holds persisted sends while settled and releases them only after explicit resume", async () => {
+  it("dispatches a queued send with the sender it was queued under", async () => {
     await withTempState(async () => {
-      await queue("Please retry the operation");
-      const thread = makeThread({ settledOverride: "settled" });
-      const { clientFactory, sent } = createClientFactory({ thread: () => thread });
+      const origin = { source: "thread-send" as const, fromThreadId: "thread-worker-b" };
+      await enqueueSend({
+        threadId: "thread-worker-a",
+        agentName: "worker-a",
+        environment: "dev-vm",
+        text: "result: done",
+        origin,
+        queuedDuringTurnId: "turn-1",
+      });
+      const origins: unknown[] = [];
+      const { clientFactory } = createClientFactory({
+        onSend: (message) => {
+          origins.push((message as { origin?: unknown }).origin);
+        },
+      });
+
       await drainQueuedSends({ clientFactory });
-      expect(sent).toHaveLength(0);
-      expect((await loadState()).queuedSends[0]?.attempts).toBe(0);
-      thread.settledOverride = null;
-      await drainQueuedSends({ clientFactory });
-      expect(sent.map((message) => message.text)).toEqual(["Please retry the operation"]);
+
+      expect(origins).toEqual([origin]);
     });
   });
+
+  it.each([
+    { text: "Please retry the operation", origin: undefined },
+    {
+      text: "Parent follow-up",
+      origin: { source: "thread-send" as const, fromThreadId: "parent" },
+    },
+    {
+      text: "T3 orchestrator notification: quoted text",
+      origin: { source: "thread-send" as const },
+    },
+  ])("delivers a queued real send to a settled idle thread: $text", async ({ text, origin }) => {
+    await withTempState(async () => {
+      await enqueueSend({
+        threadId: "thread-worker-a",
+        agentName: "worker-a",
+        environment: "dev-vm",
+        text,
+        origin,
+        queuedDuringTurnId: "turn-1",
+      });
+      const { clientFactory, sent } = createClientFactory({
+        thread: () => makeThread({ settledOverride: "settled" }),
+      });
+      await drainQueuedSends({ clientFactory });
+      expect(sent.map((message) => message.text)).toEqual([text]);
+      expect((await loadState()).queuedSends[0]?.status).toBe("dispatched");
+    });
+  });
+
+  it.each([
+    { text: "Worker finished", origin: { source: "worker-notification" as const } },
+    { text: "T3 orchestrator notification: Worker completed", origin: undefined },
+    { text: "HomeNetwork orchestrator notification: Worker completed", origin: undefined },
+  ])(
+    "holds queued notifications until a settled thread resumes: $text",
+    async ({ text, origin }) => {
+      await withTempState(async () => {
+        await enqueueSend({
+          threadId: "thread-worker-a",
+          agentName: "worker-a",
+          environment: "dev-vm",
+          text,
+          origin,
+          queuedDuringTurnId: "turn-1",
+        });
+        const thread = makeThread({ settledOverride: "settled" });
+        const { clientFactory, sent } = createClientFactory({ thread: () => thread });
+        await drainQueuedSends({ clientFactory });
+        expect(sent).toHaveLength(0);
+        expect((await loadState()).queuedSends[0]).toMatchObject({ status: "queued", attempts: 0 });
+        thread.settledOverride = null;
+        await drainQueuedSends({ clientFactory });
+        expect(sent.map((message) => message.text)).toEqual([text]);
+      });
+    },
+  );
 
   it("holds legacy queued notifications after quota failure while permitting explicit operator retry", async () => {
     for (const text of [
