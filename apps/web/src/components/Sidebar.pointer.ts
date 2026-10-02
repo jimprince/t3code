@@ -11,6 +11,7 @@ export function SidebarDragLifecycle({ onUnmount }: { onUnmount: () => void }) {
 type Options = {
   distance: number;
   onAttach: (sensor: SidebarPointerSensor) => void;
+  onCoordinatesChange: (coordinates: { x: number; y: number }) => void;
   onFinish: (started: boolean) => void;
 };
 
@@ -27,11 +28,15 @@ export class SidebarPointerSensor {
   autoScrollEnabled = true;
   private phase: "pending" | "dragging" | "finished" = "pending";
   private readonly pointer: PointerEvent;
+  private readonly initialCoordinates: { x: number; y: number };
+  private latestCoordinates: { x: number; y: number };
   private readonly document: Document;
   private readonly window: Window;
 
   constructor(private readonly props: SensorProps<Options>) {
     this.pointer = props.event as PointerEvent;
+    this.initialCoordinates = { x: this.pointer.clientX, y: this.pointer.clientY };
+    this.latestCoordinates = this.initialCoordinates;
     this.document = getOwnerDocument(this.pointer.target);
     this.window = getWindow(this.pointer.target);
     this.document.addEventListener("pointermove", this.move, { passive: false, capture: true });
@@ -45,10 +50,10 @@ export class SidebarPointerSensor {
     this.document.addEventListener("dragstart", this.preventDefault);
     this.document.addEventListener("contextmenu", this.preventDefault);
     props.options.onAttach(this);
-    props.onPending(props.active, { distance: props.options.distance }, this.coordinates());
+    props.onPending(props.active, { distance: props.options.distance }, this.initialCoordinates);
   }
 
-  private coordinates = () => ({ x: this.pointer.clientX, y: this.pointer.clientY });
+  coordinates = () => this.latestCoordinates;
   private preventDefault = (event: Event) => event.preventDefault();
   private clearClickSuppression = () => {
     this.document.removeEventListener("click", this.suppressClick, { capture: true });
@@ -66,6 +71,7 @@ export class SidebarPointerSensor {
     // a drag when the initiating button is no longer held.
     if ((event.buttons & 1) === 0) return this.cancel();
     const coordinates = { x: event.clientX, y: event.clientY };
+    this.latestCoordinates = coordinates;
     if (this.phase === "pending") {
       const offset = {
         x: event.clientX - this.pointer.clientX,
@@ -75,7 +81,7 @@ export class SidebarPointerSensor {
         this.props.onPending(
           this.props.active,
           { distance: this.props.options.distance },
-          this.coordinates(),
+          this.initialCoordinates,
           offset,
         );
         return;
@@ -84,12 +90,13 @@ export class SidebarPointerSensor {
       this.document.addEventListener("click", this.suppressClick, { capture: true });
       this.document.addEventListener("selectionchange", this.clearSelection);
       this.clearSelection();
-      this.props.onStart(this.coordinates());
+      this.props.onStart(this.initialCoordinates);
       return;
     }
     if (this.phase === "dragging") {
       if (event.cancelable) event.preventDefault();
       this.props.onMove(coordinates);
+      this.props.options.onCoordinatesChange(coordinates);
     }
   };
 
