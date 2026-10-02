@@ -1,0 +1,4 @@
+id = "watcher-pid-reuse"
+category = "fix"
+functionality = "worker notifications"
+text = "Worker notifications recover after reboot even when another process reuses an old watcher PID."
