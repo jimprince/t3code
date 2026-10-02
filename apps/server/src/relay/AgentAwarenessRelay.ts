@@ -5,6 +5,7 @@ import type {
   OrchestrationThreadShell,
   ThreadId,
 } from "@t3tools/contracts";
+import { isPageAgentThreadId, withoutPageAgentThreads } from "@t3tools/contracts";
 import {
   RelayApi,
   type RelayAgentActivityPublishProofPayload,
@@ -71,6 +72,10 @@ export function eventThreadId(event: OrchestrationEvent): ThreadId | null {
 
 export function shouldPublishAgentAwarenessEvent(event: OrchestrationEvent): boolean {
   if (event.metadata.historyImport === true) {
+    return false;
+  }
+  const threadId = eventThreadId(event);
+  if (threadId !== null && isPageAgentThreadId(threadId)) {
     return false;
   }
   switch (event.type) {
@@ -564,7 +569,7 @@ export const make = Effect.gen(function* () {
       return "unlinked" as const;
     }
     const environmentId = yield* serverEnvironment.getEnvironmentId;
-    const snapshot = yield* snapshotQuery.getShellSnapshot();
+    const snapshot = withoutPageAgentThreads(yield* snapshotQuery.getShellSnapshot());
     const activeThreadIds = resolveAgentAwarenessRelayActiveThreadIds({
       environmentId,
       startedAt,
