@@ -72,6 +72,9 @@ describe("sidebar pointer lifecycle", () => {
     const drag = gesture();
     document.dispatchEvent(pointer("pointermove", { clientY: 17 }));
     expect(drag.onStart).toHaveBeenCalledExactlyOnceWith({ x: 10, y: 10 });
+    expect(drag.sensor.coordinates()).toEqual({ x: 10, y: 17 });
+    document.dispatchEvent(pointer("pointermove", { clientY: 40 }));
+    expect(drag.sensor.coordinates()).toEqual({ x: 10, y: 40 });
     document.dispatchEvent(pointer("pointerup", { buttons: 0 }));
     expect(drag.onEnd).toHaveBeenCalledOnce();
     expect(drag.onAbort).not.toHaveBeenCalled();
