@@ -1,0 +1,4 @@
+id = "thread-identity-headers"
+category = "fix"
+functionality = "worker threads"
+text = "Worker start prompts and inter-thread messages identify the worker, environment and parent, with a direct reply command."
