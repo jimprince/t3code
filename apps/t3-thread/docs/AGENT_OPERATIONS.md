@@ -661,7 +661,18 @@ List all threads for an environment:
 
 ```bash
 t3-thread threads --env <environment>
+t3-thread threads --env <environment> --parent <agent-or-thread-id>
+t3-thread threads --env <environment> --parent <agent-or-thread-id> --recursive
 ```
+
+Listings include state, `settled`, `pinned`, parent thread id, and the parent's
+available title. `--parent` lists direct children; `--recursive` includes every
+descendant. Saved parent aliases must belong to the selected environment.
+Listings use the server's active thread shells, including settled workers;
+archived threads are outside this listing. No thread histories are loaded.
+`status <agent-or-thread-id>` reports `parentThreadId` and `parentTitle` (null
+when the parent is outside the active shell snapshot). The all-worker status
+list also includes each worker's parent id.
 
 ## Retiring Worker Worktrees
 

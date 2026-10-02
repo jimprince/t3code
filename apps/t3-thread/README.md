@@ -383,3 +383,8 @@ Enable activity-based attention alerts on an existing worker route with
 Use `--inactivity-minutes 0` to disable monitoring. New workers accept the same
 threshold on `create`, together with `--notify-level attention`. See the
 [monitoring guide](docs/AGENT_OPERATIONS.md#active-worker-inactivity-monitoring).
+
+Inspect nesting with `t3-thread status <name-or-thread-id>` or list children with
+`t3-thread threads --env <environment> --parent <name-or-thread-id>`.
+Add `--recursive` for every descendant. Listings include parent ids and available
+titles, state, settlement and pin status, using the server read model.

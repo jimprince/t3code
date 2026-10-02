@@ -98,7 +98,47 @@ export function classifyThread(
   };
 }
 
-export function formatThreadLine(thread: OrchestrationThread | OrchestrationThreadShell): string {
+export function selectThreadChildren(
+  threads: readonly OrchestrationThreadShell[],
+  parentThreadId: string,
+  recursive: boolean,
+): OrchestrationThreadShell[] {
+  const parents = new Set([parentThreadId]);
+  if (recursive) {
+    const children = new Map<string, OrchestrationThreadShell[]>();
+    for (const thread of threads) {
+      if (thread.parentThreadId == null) continue;
+      const siblings = children.get(thread.parentThreadId) ?? [];
+      siblings.push(thread);
+      children.set(thread.parentThreadId, siblings);
+    }
+    for (const id of parents) {
+      for (const child of children.get(id) ?? []) parents.add(child.id);
+    }
+  }
+  return threads.filter(
+    (thread) =>
+      thread.id !== parentThreadId &&
+      thread.parentThreadId != null &&
+      parents.has(thread.parentThreadId),
+  );
+}
+
+export function formatThreadLine(
+  thread: OrchestrationThread | OrchestrationThreadShell,
+  parentTitle?: string,
+): string {
   const status = classifyThread(thread);
-  return [thread.id, `[${status.state}]`, thread.title, thread.projectId, status.reason].join(" ");
+  return [
+    thread.id,
+    `[${status.state}]`,
+    thread.title,
+    thread.projectId,
+    `settled=${thread.settledOverride === "settled"}`,
+    `pinned=${thread.pinnedAt != null}`,
+    thread.parentThreadId
+      ? `parent=${thread.parentThreadId}${parentTitle ? ` (${parentTitle})` : ""}`
+      : "parent=none",
+    status.reason,
+  ].join(" ");
 }

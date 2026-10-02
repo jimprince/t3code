@@ -14,7 +14,7 @@ export async function readSavedStatus(
     const thread = await factory(requireEnvironment(state, agent.environment)).findThread(
       agent.threadId,
     );
-    return formatOverviewLine(buildAgentOverview(agent, thread));
+    return `${formatOverviewLine(buildAgentOverview(agent, thread))} parent=${thread.parentThreadId ?? "none"}`;
   } catch (error) {
     if (!isMissingThread(error)) throw error;
     return `${agent.name} [missing] ${agent.threadId} ${agent.title} :: saved mapping is stale; use t3-thread forget ${agent.name}`;
