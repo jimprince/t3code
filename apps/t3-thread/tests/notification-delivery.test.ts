@@ -169,6 +169,27 @@ async function withState(state: StateFile, test: () => Promise<void>): Promise<v
   }
 }
 
+describe("notification origin", () => {
+  it("marks each delivered notification as coming from its worker", async () => {
+    await withState(makeState(), async () => {
+      const origins: unknown[] = [];
+      const { clientFactory, sent } = createClientFactory({
+        onSend: (message) => {
+          origins.push((message as { origin?: unknown }).origin);
+        },
+      });
+
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      await deliverPendingNotifications({ env: "dev-vm", clientFactory });
+
+      expect(sent).toHaveLength(1);
+      expect(origins).toEqual([
+        expect.objectContaining({ source: "worker-notification", fromThreadId: "thread-worker-a" }),
+      ]);
+    });
+  });
+});
+
 describe("terminal recipients", () => {
   it("stops retrying and releases the watcher when the recipient is archived", async () => {
     // REGRESSION: an archived recipient used to fail delivery forever, which both

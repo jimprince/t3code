@@ -378,7 +378,16 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { PullRequestThreadDialog } from "./PullRequestThreadDialog";
 import { MessagesTimeline } from "./chat/MessagesTimeline";
 import type { AssistantCitationRequest } from "./chat/AssistantCitationSource";
-import { resolveTimelineIsAtEnd, worktreeSetupAgentStarted } from "./chat/MessagesTimeline.logic";
+import {
+  deriveUnsettledTurnId,
+  resolveTimelineIsAtEnd,
+  worktreeSetupAgentStarted,
+} from "./chat/MessagesTimeline.logic";
+import { OrchestratorFocusBar, useOrchestratorFocus } from "./chat/OrchestratorFocus";
+import type {
+  BackgroundRun,
+  BackgroundTurnMessage,
+} from "@t3tools/client-runtime/background-turns";
 import { resolveComposerTimelineInset, resolveScrollToEndClearance } from "./composerFooterLayout";
 import { ChatHeader } from "./chat/ChatHeader";
 import { PanelLayoutControls, RightPanelMaximizeControl } from "./chat/PanelLayoutControls";
@@ -722,6 +731,10 @@ function pasteTextToFocusComposer(event: ClipboardEvent): string | null {
   const text = event.clipboardData.getData("text/plain");
   return text.length > 0 ? text : null;
 }
+
+const EMPTY_FOCUS_MESSAGES: ReadonlyArray<BackgroundTurnMessage> = [];
+const EMPTY_FOCUS_ACTIVITIES: ReadonlyArray<OrchestrationThreadActivity> = [];
+const EMPTY_BACKGROUND_RUNS: ReadonlyArray<BackgroundRun> = [];
 
 const draftFanoutStateAtom = Atom.family((_routeKey: string) =>
   Atom.make({
@@ -2131,6 +2144,13 @@ export default function ChatView(props: ChatViewProps) {
   const activeRunningTurnId =
     (activeThread?.session?.status === "running" ? activeThread.session.activeTurnId : null) ??
     (activeLatestTurn?.state === "running" ? activeLatestTurn.turnId : null);
+  const orchestratorFocus = useOrchestratorFocus({
+    environmentId: activeServerThread?.environmentId ?? null,
+    threadId: activeServerThread?.id ?? null,
+    messages: activeServerThread?.messages ?? EMPTY_FOCUS_MESSAGES,
+    activities: activeServerThread?.activities ?? EMPTY_FOCUS_ACTIVITIES,
+    liveTurnId: deriveUnsettledTurnId(activeLatestTurn, activeRunningTurnId),
+  });
   // Reading a finished thread clears the sidebar's Done badge. The visit is
   // stamped at the turn's completion time — not now/updatedAt — so it clears
   // exactly the completion the user is looking at: a wake or completion that
@@ -10006,8 +10026,18 @@ export default function ChatView(props: ChatViewProps) {
             </div>
             {/* Messages Wrapper */}
             <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+              <OrchestratorFocusBar
+                traffic={orchestratorFocus.traffic}
+                allTraffic={orchestratorFocus.allTraffic}
+                onAllTrafficChange={orchestratorFocus.setAllTraffic}
+              />
               {/* Messages — LegendList handles virtualization and scrolling internally */}
               <MessagesTimeline
+                backgroundRuns={
+                  paintOnlyDisplayedTimeline || orchestratorFocus.allTraffic
+                    ? EMPTY_BACKGROUND_RUNS
+                    : orchestratorFocus.traffic.runs
+                }
                 citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
                 citationHistoryLoading={threadDetailLoading}
                 {...(!paintOnlyDisplayedTimeline
