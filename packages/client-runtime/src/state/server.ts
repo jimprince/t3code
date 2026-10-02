@@ -1137,6 +1137,16 @@ export function createServerEnvironmentAtoms<R, E>(
       staleTimeMs: 0,
       idleTtlMs: 0,
     }),
+
+    threadSubscriptions: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:thread-subscriptions",
+      tag: WS_METHODS.serverThreadSubscriptions,
+    }),
+    updateThreadSubscriptions: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:update-thread-subscriptions",
+      tag: WS_METHODS.serverUpdateThreadSubscriptions,
+    }),
+
     configProjection,
     welcome,
     legacyThreadMigration: createEnvironmentRpcSubscriptionAtomFamily(runtime, {
