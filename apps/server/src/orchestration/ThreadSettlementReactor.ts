@@ -38,23 +38,11 @@ export class ThreadSettlementReactor extends Context.Service<
   }
 >()("t3/orchestration/ThreadSettlementReactor") {}
 
-/** @public Service construction is part of the canonical Effect module API. */
-/** Whether any environment default or project override can settle a thread. */
-function autoSettlementConfigured(settings: ServerSettingsValue): boolean {
-  if (settings.sidebarAutoSettleOnMerge || settings.sidebarAutoSettleAfterDays !== null) {
-    return true;
-  }
-  return Object.values(settings.projectSettingsOverrides).some(
-    (entry) =>
-      entry.sidebarAutoSettleOnMerge === true ||
-      (entry.sidebarAutoSettleAfterDays !== undefined && entry.sidebarAutoSettleAfterDays !== null),
-  );
-}
-
 /** Identity of every settlement input, so unrelated settings edits do not trigger a sweep. */
 /** @internal Exported for tests. */
 export function autoSettlementSettingsKey(settings: ServerSettingsValue): string {
   return JSON.stringify([
+    settings.subthreadSettleOnComplete,
     settings.sidebarAutoSettleOnMerge,
     settings.sidebarAutoSettleAfterDays,
     // Only entries that touch settlement, in a stable order, so a project
@@ -63,12 +51,14 @@ export function autoSettlementSettingsKey(settings: ServerSettingsValue): string
     Object.entries(settings.projectSettingsOverrides)
       .filter(
         ([, entry]) =>
+          entry.subthreadSettleOnComplete !== undefined ||
           entry.sidebarAutoSettleOnMerge !== undefined ||
           entry.sidebarAutoSettleAfterDays !== undefined,
       )
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([projectId, entry]) => [
         projectId,
+        entry.subthreadSettleOnComplete ?? "inherit",
         entry.sidebarAutoSettleOnMerge ?? "inherit",
         entry.sidebarAutoSettleAfterDays === undefined
           ? "inherit"
@@ -92,9 +82,7 @@ export const make = Effect.gen(function* () {
     threadId?: ThreadId,
   ) {
     const settings = yield* settingsService.getSettings;
-    if (!autoSettlementConfigured(settings)) {
-      return;
-    }
+
     const snapshot = yield* readSweepSnapshot(snapshots, threadId ?? null);
     const now = DateTime.formatIso(yield* DateTime.now);
     const projects = new Map(snapshot.projects.map((project) => [project.id, project]));
@@ -117,6 +105,7 @@ export const make = Effect.gen(function* () {
           now: decisionNow,
           autoSettleAfterDays: settings.sidebarAutoSettleAfterDays,
           autoSettleOnMerge: settings.sidebarAutoSettleOnMerge,
+          subthreadSettleOnComplete: settings.subthreadSettleOnComplete,
         });
         if (settledAt === null) {
           return thread;
@@ -154,7 +143,11 @@ export const make = Effect.gen(function* () {
       },
     ))
       .filter((thread) => thread !== null)
-      .filter((thread) => !thread.pullRequests.some((link) => link.source !== "stack-dismissed"));
+      .filter((thread) => !thread.pullRequests.some((link) => link.source !== "stack-dismissed"))
+      .filter((thread) => {
+        const scoped = resolveProjectSettings(settings, thread.projectId).settings;
+        return scoped.sidebarAutoSettleOnMerge || scoped.sidebarAutoSettleAfterDays !== null;
+      });
 
     // Use the same cwd as PR discovery so both paths share GitManager's cache.
     const lookupCwdByThreadId = new Map<string, string>();
@@ -220,6 +213,7 @@ export const make = Effect.gen(function* () {
             now: decisionNow,
             autoSettleAfterDays: settings.sidebarAutoSettleAfterDays,
             autoSettleOnMerge: settings.sidebarAutoSettleOnMerge,
+            subthreadSettleOnComplete: settings.subthreadSettleOnComplete,
           }) !== null
         );
       });
@@ -333,6 +327,10 @@ export const make = Effect.gen(function* () {
 
   const processEvent = (event: OrchestrationEvent) => {
     switch (event.type) {
+      case "thread.turn-diff-completed":
+      case "thread.meta-updated":
+      case "thread.auto-settle-set":
+        return worker.enqueue(event.payload.threadId);
       case "thread.pull-request-linked":
       case "thread.pull-request-synced":
       case "thread.pull-request-unlinked":
