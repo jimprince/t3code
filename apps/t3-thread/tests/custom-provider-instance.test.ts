@@ -1,0 +1,44 @@
+import { shell, shellSnapshot } from "./v2-fixture.js";
+import { describe, expect, it } from "vite-plus/test";
+
+import { decodeServerProvider, decodeShellSnapshotItem } from "../src/contracts.js";
+
+const CUSTOM_INSTANCE_ID = "claudeAgent_ucalgary";
+
+// Custom provider instance ids (`claudeAgent_ucalgary`) are first-class in T3 Code
+// and must not be rejected by the operator CLI's snapshot contracts.
+describe("custom provider instance ids", () => {
+  it("decodes a shell snapshot thread selecting a custom provider instance", async () => {
+    const item = decodeShellSnapshotItem(
+      shellSnapshot([
+        shell({
+          providerInstanceId: CUSTOM_INSTANCE_ID,
+          modelSelection: { instanceId: CUSTOM_INSTANCE_ID, model: "claude-opus-5" },
+        }),
+      ]),
+    );
+
+    expect(item.kind).toBe("snapshot");
+    if (item.kind !== "snapshot") {
+      throw new Error("Expected a snapshot stream item.");
+    }
+    expect(item.snapshot.threads[0]?.modelSelection.provider).toBe(CUSTOM_INSTANCE_ID);
+  });
+
+  it("decodes a server provider advertising a custom instance id", async () => {
+    const provider = decodeServerProvider({
+      provider: "claudeAgent",
+      instanceId: CUSTOM_INSTANCE_ID,
+      driver: "claudeAgent",
+      enabled: true,
+      installed: true,
+      version: "1.2.3",
+      status: "ready",
+      auth: { status: "authenticated" },
+      checkedAt: "2026-09-03T00:00:00.000Z",
+      models: [],
+    });
+
+    expect(provider.instanceId).toBe(CUSTOM_INSTANCE_ID);
+  });
+});

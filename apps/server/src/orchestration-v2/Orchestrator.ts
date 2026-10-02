@@ -334,6 +334,9 @@ export interface OrchestratorV2Shape {
       readonly schemaVersion: number;
       readonly snapshotSequence: number;
       readonly projection: OrchestrationV2ThreadProjection;
+      readonly operatorSummary?:
+        | import("@t3tools/contracts").OrchestrationV2OperatorSummary
+        | undefined;
     },
     OrchestratorV2Error
   >;
