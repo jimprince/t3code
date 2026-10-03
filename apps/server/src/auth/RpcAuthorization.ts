@@ -37,6 +37,10 @@ export const RPC_REQUIRED_SCOPES = {
   [ORCHESTRATION_WS_METHODS.exportThread]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_WS_METHODS.importThread]: AuthOrchestrationOperateScope,
   [ORCHESTRATION_WS_METHODS.forkThread]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_WS_METHODS.listNamedAgents]: AuthOrchestrationReadScope,
+  // Resolving can start an agent, and handover replaces one; both act.
+  [ORCHESTRATION_WS_METHODS.resolveNamedAgent]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_WS_METHODS.handOverNamedAgent]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverPreviewRecovery]: AuthOrchestrationReadScope,
   [WS_METHODS.serverExecuteRecovery]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverRequestHeadlessUpdateCheck]: AuthOrchestrationOperateScope,
