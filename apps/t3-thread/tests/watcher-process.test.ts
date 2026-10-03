@@ -1,5 +1,5 @@
 import * as NodeChildProcess from "node:child_process";
-import { once } from "node:events";
+import * as NodeEvents from "node:events";
 import * as NodeFSP from "node:fs/promises";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -64,7 +64,7 @@ describe("watcher process helpers", () => {
         const child = NodeChildProcess.spawn(process.execPath, ["-e", "process.stdin.resume()"], {
           stdio: "pipe",
         });
-        await once(child, "spawn");
+        await NodeEvents.once(child, "spawn");
         const pid = child.pid!;
         try {
           const identity = await readProcessIdentity(pid);
@@ -77,7 +77,7 @@ describe("watcher process helpers", () => {
           expect(JSON.parse(await NodeFSP.readFile(pidFile, "utf8")).pid).toBe(process.pid);
           await release?.();
         } finally {
-          const exited = once(child, "exit");
+          const exited = NodeEvents.once(child, "exit");
           child.kill();
           await exited;
         }

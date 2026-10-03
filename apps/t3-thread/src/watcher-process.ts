@@ -1,7 +1,9 @@
 import * as NodeChildProcess from "node:child_process";
 import * as NodeFSP from "node:fs/promises";
 import * as NodePath from "node:path";
-import { promisify } from "node:util";
+import * as NodeUtil from "node:util";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import * as Effect from "effect/Effect";
 
 import { resolveStateFile, updateState } from "./state.js";
 
@@ -27,11 +29,12 @@ interface WatcherLease {
   startTime: string;
 }
 
-const execFile = promisify(NodeChildProcess.execFile);
+const execFile = NodeUtil.promisify(NodeChildProcess.execFile);
 
 /** Process identity survives PID reuse, but never a reboot or process replacement. */
 export async function readProcessIdentity(pid: number): Promise<WatcherLease | null> {
-  if (process.platform === "linux") {
+  const platform = Effect.runSync(HostProcessPlatform);
+  if (platform === "linux") {
     const bootId = (await NodeFSP.readFile("/proc/sys/kernel/random/boot_id", "utf8")).trim();
     let stat: string;
     try {
@@ -48,7 +51,7 @@ export async function readProcessIdentity(pid: number): Promise<WatcherLease | n
     if (!startTime || !/^\d+$/.test(startTime)) throw new Error(`Invalid process stat for ${pid}.`);
     return { pid, bootId, startTime };
   }
-  if (process.platform === "darwin") {
+  if (platform === "darwin") {
     const bootId = (await execFile("sysctl", ["-n", "kern.boottime"])).stdout.trim();
     let startTime: string;
     try {
@@ -59,7 +62,7 @@ export async function readProcessIdentity(pid: number): Promise<WatcherLease | n
     }
     return startTime ? { pid, bootId, startTime } : null;
   }
-  throw new Error(`Watcher process identity is unsupported on ${process.platform}.`);
+  throw new Error(`Watcher process identity is unsupported on ${platform}.`);
 }
 
 async function readWatcherLease(pidFile: string): Promise<WatcherLease | number | null> {
