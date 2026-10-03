@@ -195,6 +195,29 @@ for audit and recovery.
 This path is for a genuinely new concern. Existing-purpose work still refreshes
 its owning patch directly. Rebase repair still never creates a patch.
 
+### Batched integration
+
+When several reviewed candidates are ready, integrate them under one lease claim
+instead of one publication each. Write a `t3code.stgit-integration/v1` plan: a
+`concerns` array whose entries each carry a full `candidate` SHA, an optional
+`repo` holding it, and either `owner` (refresh that existing patch) or `patch`
+(`name`, `subject`, `class`, `purpose`, `retireWhen`, `dependsOn`; create it).
+Then run:
+
+```bash
+scripts/ci/integrate-stgit-concerns --plan <plan.json> \
+  --output ~/maintenance-work/<task> --expected-main <claim-time-main-sha>
+```
+
+It prepares one fresh stack clone, captures one set of publication leases
+before any edit, applies each concern in order, and runs the stack and
+documentation checks after every one. A concern that conflicts or fails a check
+is rolled back to the stack state before it and reported under `skipped`, so one
+bad candidate does not hold up the rest. It exits nonzero when nothing applied
+and never verifies or publishes: the printed `next` command runs
+`scripts/ci/verify-stgit-replay` once for the whole batch, so a batch costs one
+candidate CI run and one lease claim.
+
 ## Reducing maintenance cost
 
 Use this surface-reduction ladder whenever a patch repeatedly conflicts:
@@ -466,7 +489,8 @@ tag-preparation and workflow fixtures:
   scripts/ci/check-fork-docs.test.ts
 ```
 
-Batch completed concerns before one leased publication. The nightly push gate
+Batch completed concerns before one leased publication (see
+[Batched integration](#batched-integration)). The nightly push gate
 already compares packaged-source trees; metadata-only maintenance should not
 create a desktop release. Never renew a lease to force a queued writer through.
 
@@ -477,7 +501,7 @@ with fetched upstream tags and stack-history refs. It writes outside the checkou
 
 ```bash
 python3 scripts/ci/fork-reliability.py \
-  --checkout "$PWD" --output /tmp/fork-reliability \
+  --checkout "$PWD" --output ~/maintenance-work/fork-reliability \
   --from-date 2026-08-10 --to-date 2026-09-09 --collect --surface
 ```
 

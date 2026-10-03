@@ -139,6 +139,19 @@ scripts/ci/deploy-stgit-concern --manifest <candidate.json> --check
 scripts/ci/deploy-stgit-concern --manifest <candidate.json> --push
 ```
 
+When several reviewed candidates are ready, batch them under one lease claim
+and one candidate CI run with a `t3code.stgit-integration/v1` plan (see the
+runbook's batched integration section):
+
+```bash
+scripts/ci/integrate-stgit-concerns --plan <plan.json> \
+  --output ~/maintenance-work/<task> --expected-main <claim-time-main-sha>
+```
+
+A candidate that conflicts or fails a check is rolled back and reported as
+skipped; the command never verifies or publishes. Keep clones in
+`~/maintenance-work/<task>`, not `/tmp`.
+
 The manifest contains exact main and metadata leases, the candidate object,
 the new patch identity, its allowed paths, and shell-free verification argv.
 Deployment clones the claimed stack, rejects undeclared paths, applies the
