@@ -9,6 +9,7 @@
 import {
   IsoDateTime,
   ModelSelection,
+  PermanentAgent,
   ProjectIconOverride,
   ProjectId,
   ProjectKind,
@@ -33,6 +34,7 @@ export const ProjectionProject = Schema.Struct({
   faviconPath: Schema.optional(Schema.NullOr(Schema.String)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
   scripts: Schema.Array(ProjectScript),
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
