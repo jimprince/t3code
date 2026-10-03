@@ -83,7 +83,10 @@ import Migration0059 from "./Migrations/054_ProjectionThreadsAutoSettleDisabledA
  * Uses Migrator.fromRecord which parses the key format and
  * returns migrations sorted by ID.
  */
+import Migration0060 from "./Migrations/055_ProjectionProjectAutomations.ts";
+
 const migrationEntries = [
+  [60, "ProjectionProjectAutomations", Migration0060],
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
   [3, "CheckpointDiffBlobs", Migration0003],
