@@ -60,12 +60,23 @@ import { ThreadSearchMatchExcerpt } from "./thread-search-match";
 // Live Activity/widgets (amber approval, indigo input, sky working) so a
 // thread reads the same color everywhere it surfaces.
 const STATUS_LABEL_BY_STATUS: Partial<
-  Record<ThreadListV2Status, { label: string; className: string }>
+  Record<
+    ThreadListV2Status,
+    { label: string; className: string; icon?: "circle.dotted" | undefined }
+  >
 > = {
   approval: { label: "Approval", className: "text-warning-foreground" },
   input: { label: "Input", className: "text-adaptive-indigo-600-300" },
-  working: { label: "Working", className: "text-adaptive-sky-600-400" },
-  supervising: { label: "Supervising", className: "text-foreground" },
+  working: {
+    label: "Working",
+    className: "text-adaptive-sky-600-400",
+    icon: "circle.dotted",
+  },
+  supervising: {
+    label: "Supervising",
+    className: "text-adaptive-sky-600-400",
+    icon: "circle.dotted",
+  },
   failed: { label: "Failed", className: "text-danger-foreground" },
 };
 
@@ -921,17 +932,27 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             type="monochrome"
           />
         ) : null}
-        <Text
-          className={cn(
-            "text-xs tabular-nums",
-            statusLabel?.className ??
-              (selected
-                ? selectedThreadRowColors.foregroundClassName
-                : rowAppearance.tertiaryForegroundClassName),
-          )}
-        >
-          {statusLabel?.label ?? timeLabel}
-        </Text>
+        <View className="flex-row items-center gap-1">
+          {statusLabel?.icon ? (
+            <SymbolView
+              name={statusLabel.icon}
+              size={12}
+              tintColorClassName="accent-adaptive-sky-600-400"
+              type="monochrome"
+            />
+          ) : null}
+          <Text
+            className={cn(
+              "text-xs tabular-nums",
+              statusLabel?.className ??
+                (selected
+                  ? selectedThreadRowColors.foregroundClassName
+                  : rowAppearance.tertiaryForegroundClassName),
+            )}
+          >
+            {statusLabel?.label ?? timeLabel}
+          </Text>
+        </View>
       </View>
       <Text
         className={cn(
