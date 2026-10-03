@@ -13,6 +13,7 @@ import type {
   ThreadPullRequestLink,
   TurnId,
 } from "@t3tools/contracts";
+import { threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import { threadPullRequestKeysEqual } from "@t3tools/shared/threadPullRequests";
 import { isImportedAgentSessionMessageId } from "@t3tools/contracts";
 import { compareDateTimeStrings } from "@t3tools/shared/dateTime";
@@ -138,6 +139,7 @@ export function applyThreadDetailEvent(
           snoozedAt: null,
           deletedAt: null,
           pullRequests: [],
+          issues: [],
           messages: [],
           proposedPlans: [],
           activities: [],
@@ -342,6 +344,50 @@ export function applyThreadDetailEvent(
         event.payload.updatedAt,
       );
     }
+
+    case "thread.issue-linked":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          issues: [
+            ...(thread.issues ?? []).filter(
+              (issue) => !threadIssueKeysEqual(issue, event.payload.link),
+            ),
+            event.payload.link,
+          ],
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
+    case "thread.issue-unlinked":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          issues: (thread.issues ?? []).filter(
+            (issue) => !threadIssueKeysEqual(issue, event.payload),
+          ),
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
+    case "thread.issue-synced":
+      if (!thread.issues?.some((issue) => threadIssueKeysEqual(issue, event.payload))) {
+        return { kind: "unchanged" };
+      }
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          issues: thread.issues.map((issue) =>
+            threadIssueKeysEqual(issue, event.payload)
+              ? { ...issue, url: event.payload.url, snapshot: event.payload.snapshot }
+              : issue,
+          ),
+          updatedAt: event.payload.updatedAt,
+        },
+      };
 
     case "thread.runtime-mode-set":
       return {
