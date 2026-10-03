@@ -409,6 +409,9 @@ export function projectEvent(
                   ...(payload.permanentAgent !== undefined
                     ? { permanentAgent: payload.permanentAgent }
                     : {}),
+                  ...(payload.automations !== undefined
+                    ? { automations: payload.automations }
+                    : {}),
                   ...(payload.scripts !== undefined ? { scripts: payload.scripts } : {}),
                   updatedAt: payload.updatedAt,
                 }
