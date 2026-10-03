@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "154faaca932186d7f7a000bd30c95753e5af726c",
-  "head": "66ab657b048bb81a6e351d0332bc57597be17be0",
+  "prev": "cc8cda51cb8e89be0a0441647e12194635f743ab",
+  "head": "e1df17048272160fabce8390b33b687cf09a5ad5",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -63,11 +63,10 @@
     "fork-sandbox-session-recovery",
     "fork-agent-thread-ordering",
     "fork-named-agents",
-    "fork-gitea-issue-links"
-  ],
-  "unapplied": [
+    "fork-gitea-issue-links",
     "fork-orchestrators-view"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -167,7 +166,7 @@
       "oid": "904ce7206b4c8f5f0d15b2d6223ee86345afb6cb"
     },
     "fork-orchestrators-view": {
-      "oid": "1bcc9923bf7d9148a02b93e0c93e9f73e8d8f26d"
+      "oid": "e1df17048272160fabce8390b33b687cf09a5ad5"
     },
     "fork-overnight-updates": {
       "oid": "9a16bcffac560b592d500f554325f17e9c0ec671"
