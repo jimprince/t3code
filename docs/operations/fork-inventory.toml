@@ -1463,3 +1463,13 @@ retire_when = "Upstream exposes server-owned thread order to automation and offe
 depends_on = ["fork-worker-operations"]
 roles = []
 note = "The existing pinOrderKey and activeOrderKey remain the only stored order state. thread.order.reset clears the current section's key through a backward-compatible thread.meta-updated event; no migration is needed. Pinned rows sort manually first and new pins land at the top. Active rows remain recency-first until explicitly moved, then join the manual run. Nested rows use the same rule within their direct sibling bucket."
+
+[[patch]]
+name = "fork-named-agents"
+subject = "feat(threads): named agents with one live thread each"
+class = "product"
+purpose = "Give a resource exactly one owner: a project marked as a named agent holds at most one live top-level thread, enforced in the decider on every root-creating path, with atomic handover, auto-start on send by name from the folder's AGENT.md and BRIEFING.md, and t3-thread agents/send routing."
+retire_when = "Upstream provides singleton agents with a durable charter and briefing, name routing and an equivalent one-live-thread guarantee."
+depends_on = ["fork-nested-threads", "fork-worker-operations", "fork-subthread-lifecycle"]
+roles = []
+note = "permanentAgent is an optional project field, persisted as projection_projects.permanent_agent_json by fork migration 9 and set through project.meta.update; snapshot rows include it only when set, so upstream shapes are unchanged. Live root = not archived, not deleted, no parent; nested threads are sub-agents and never count. Guarded paths: thread.create, thread.import, thread.unarchive and thread.parent.set to null. thread.create may carry handoverFromThreadId, which archives the idle live root in the same command and is refused while it is starting, running or awaiting input. An agent root is created with autoSettleDisabledAt and refuses re-enabling, so completion settlement never parks it. NamedAgents reads AGENT.md and BRIEFING.md from the project folder on the server host; a dormant agent's first turn is built from both plus the request, and a lost start race resolves to the winner. t3-thread send consults named agents only for names that are neither saved aliases nor UUIDs. Not in scope: resolver of whose request wins, scope enforcement, context-full reincarnation, a roster UI."
