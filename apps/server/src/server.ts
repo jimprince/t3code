@@ -172,6 +172,7 @@ import * as UsageService from "./usage/UsageService.ts";
 import { OrchestrationLayerLive } from "./orchestration/runtimeLayer.ts";
 import { ThreadTransferLive } from "./orchestration/Layers/ThreadTransfer.ts";
 import { ThreadBriefLive } from "./orchestration/Layers/ThreadBrief.ts";
+import { NamedAgentsLive } from "./orchestration/Layers/NamedAgents.ts";
 import {
   clearPersistedServerRuntimeState,
   makePersistedServerRuntimeState,
@@ -544,6 +545,7 @@ const RuntimeCoreDependenciesLive = ReactorLayerLive.pipe(
       ),
       // Settings are merged above this point in the chain, so provide them here.
       ThreadBriefLive.pipe(Layer.provide(ServerSettingsLayerLive)),
+      NamedAgentsLive.pipe(Layer.provide(ServerSettingsLayerLive)),
       CheckpointingLayerLive,
     ),
   ),
