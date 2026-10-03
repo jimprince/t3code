@@ -454,7 +454,7 @@ export const SETTINGS_SEARCH_ITEMS = [
   },
   {
     id: "orchestrators-view",
-    title: "Orchestrators view",
+    title: "Projects view",
     to: "/settings/general",
     searchTerms: ["sidebar workers agents threads board"],
   },

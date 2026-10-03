@@ -2,7 +2,11 @@ import { describe, expect, it } from "vite-plus/test";
 import { ProviderInstanceId } from "@t3tools/contracts";
 
 import type { EnvironmentProject, EnvironmentThreadShell } from "./models.ts";
-import { buildOrchestratorSummaries, orchestratorDoneSince } from "./orchestrators.ts";
+import {
+  buildOrchestratorSummaries,
+  buildStandaloneThreadGroups,
+  orchestratorDoneSince,
+} from "./orchestrators.ts";
 
 const project = (id: string): EnvironmentProject => ({
   id: id as EnvironmentProject["id"],
@@ -85,8 +89,32 @@ describe("buildOrchestratorSummaries", () => {
     expect(summary?.needsYou.map((item) => [item.kind, item.thread.id])).toEqual([
       ["input", "grandchild"],
     ]);
-    expect(summary?.projects.map((item) => item.id)).toEqual(["project-b", "project-a"]);
+    expect(summary?.projects.map((item) => item.id)).toEqual(["project-a", "project-b"]);
     expect(summary?.issues.map((issue) => issue.number)).toEqual([7]);
+  });
+
+  it("includes plan-ready attention and idle blocked work without counting it as active", () => {
+    const root = thread("root", null);
+    const plan = thread("plan", "root", {
+      interactionMode: "plan",
+      hasActionableProposedPlan: true,
+    });
+    const blocked = thread("blocked", "root", {
+      agentPanelSummary: {
+        latestOutput: "Blocked: waiting for credentials",
+        contextTokens: null,
+        processedTokens: null,
+        toolCalls: 1,
+        lastActivityAt: "2026-10-01T04:00:00.000Z",
+      },
+    });
+    const [summary] = buildOrchestratorSummaries([root, plan, blocked], [project("project-a")]);
+    expect(summary?.needsYou.map((item) => [item.kind, item.thread.id])).toEqual([
+      ["plan", "plan"],
+    ]);
+    expect(summary?.blocked.map((item) => item.thread.id)).toEqual(["blocked"]);
+    expect(summary?.activeWorkerCount).toBe(0);
+    expect(summary?.latestActivityAt).toBe("2026-10-01T04:00:00.000Z");
   });
 
   it("excludes archived roots, tolerates cycles, and keeps settled roots from supervising", () => {
@@ -105,6 +133,54 @@ describe("buildOrchestratorSummaries", () => {
     const cycle = thread("cycle", "cycle");
     const [summary] = buildOrchestratorSummaries([root, child, cycle], [project("project-a")]);
     expect(summary?.status).toBe("ready");
+  });
+});
+
+describe("buildStandaloneThreadGroups", () => {
+  it("keeps only actionable roots without descendants and sorts needs-you first", () => {
+    const approval = thread("approval", null, { hasPendingApprovals: true });
+    const working = thread("working", null, {
+      updatedAt: "2026-10-01T03:00:00.000Z",
+      session: {
+        threadId: "working" as EnvironmentThreadShell["id"],
+        status: "running",
+        providerName: "codex",
+        runtimeMode: "full-access",
+        activeTurnId: null,
+        updatedAt: "2026-10-01T03:00:00.000Z",
+        lastError: null,
+      },
+    });
+    const parent = thread("parent", null, { hasPendingUserInput: true });
+    const child = thread("child", "parent");
+    const quiet = thread("quiet", null);
+    const groups = buildStandaloneThreadGroups(
+      [working, parent, child, quiet, approval],
+      [project("project-a")],
+      {},
+    );
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.threads.map(({ thread, status }) => [thread.id, status])).toEqual([
+      ["approval", "approval"],
+      ["working", "working"],
+    ]);
+  });
+
+  it("surfaces a standalone unseen completion from device-local visit state", () => {
+    const completed = thread("completed", null, {
+      latestTurn: {
+        turnId: "turn-completed" as never,
+        state: "completed",
+        requestedAt: "2026-10-01T00:00:00.000Z",
+        startedAt: null,
+        completedAt: "2026-10-01T02:00:00.000Z",
+        assistantMessageId: null,
+      },
+    });
+    const groups = buildStandaloneThreadGroups([completed], [project("project-a")], {
+      "env-1:completed": "2026-10-01T01:00:00.000Z",
+    });
+    expect(groups[0]?.threads[0]?.status).toBe("completed");
   });
 });
 

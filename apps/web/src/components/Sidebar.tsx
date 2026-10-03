@@ -5530,7 +5530,7 @@ export default function Sidebar() {
                   onClick={() => setSidebarMode("orchestrators")}
                 >
                   <UsersIcon className="size-3.5" />
-                  Orchestrators
+                  Projects
                 </button>
               </div>
             ) : null}

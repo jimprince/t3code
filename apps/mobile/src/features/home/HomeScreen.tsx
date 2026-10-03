@@ -241,8 +241,8 @@ function MobileOrchestratorList({
     return (
       <View className="flex-1 items-center justify-center px-8">
         <EmptyState
-          title="No orchestrators"
-          detail="Orchestrators appear when a top-level thread has workers."
+          title="No projects"
+          detail="Projects appear when a top-level thread has workers."
           variant={Platform.OS === "android" ? "plain" : undefined}
         />
       </View>
@@ -1115,7 +1115,7 @@ export function HomeScreen(props: HomeScreenProps) {
           <SegmentedControl
             options={[
               { value: "threads", label: "Threads" },
-              { value: "orchestrators", label: "Orchestrators" },
+              { value: "orchestrators", label: "Projects" },
             ]}
             selected={homeMode}
             onSelect={setHomeMode}

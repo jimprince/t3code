@@ -2302,14 +2302,14 @@ export function GeneralSettingsPanel() {
       <SettingsSection id="organization" title="Organization">
         <SettingsRow
           {...searchableSetting("orchestrators-view")}
-          description="Show the Threads and Orchestrators switch in the sidebar."
+          description="Show the Threads and Projects switch in the sidebar."
           control={
             <Switch
               checked={settings.sidebarOrchestratorsEnabled}
               onCheckedChange={(checked) =>
                 updateSettings({ sidebarOrchestratorsEnabled: Boolean(checked) })
               }
-              aria-label="Orchestrators view"
+              aria-label="Projects view"
             />
           }
         />
