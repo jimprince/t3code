@@ -1,6 +1,6 @@
-Bottom: a5bbb4d5bbc5dbcb66d5c71e62c93dd303d01d69
-Top:    a5bbb4d5bbc5dbcb66d5c71e62c93dd303d01d69
+Bottom: 49b67245c46525d2a2d142308f37eb6044ee6f52
+Top:    49b67245c46525d2a2d142308f37eb6044ee6f52
 Author: brad <bradprin@live.com>
-Date:   2026-10-03 02:33:20 +0000
+Date:   2026-10-03 02:36:09 +0000
 
 feat: let agents control thread order
