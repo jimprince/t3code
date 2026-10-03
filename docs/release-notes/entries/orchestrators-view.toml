@@ -1,0 +1,4 @@
+id = "orchestrators-view"
+category = "feature"
+functionality = "orchestrators"
+text = "See every active orchestrator in one sidebar view, then open a board of work that needs you, active workers, recent completions, issues, and pull requests."
