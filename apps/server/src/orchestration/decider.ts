@@ -47,6 +47,7 @@ import {
 import { projectEvent } from "./projector.ts";
 import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
 import { isSettledSubthreadArchiveCandidate } from "./SettledSubthreadArchivePolicy.ts";
+import { decideProjectAutomation } from "./projectAutomationDecider.ts";
 import { threadNestingViolation } from "./threadNesting.ts";
 import {
   liveNamedAgentThreads,
@@ -232,6 +233,28 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
   Crypto.Crypto
 > {
   switch (command.type) {
+    case "project.automation.create":
+    case "project.automation.update":
+    case "project.automation.pause":
+    case "project.automation.resume":
+    case "project.automation.delete":
+    case "project.automation.run":
+    case "project.automation.fire":
+    case "project.automation.run.update": {
+      const project = yield* requireProject({ readModel, command, projectId: command.projectId });
+      const now = yield* nowIso;
+      const automations = yield* decideProjectAutomation(project, command, readModel.threads, now);
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "project",
+          aggregateId: command.projectId,
+          occurredAt: now,
+          commandId: command.commandId,
+        })),
+        type: "project.meta-updated",
+        payload: { projectId: command.projectId, automations, updatedAt: now },
+      };
+    }
     case "project.create": {
       yield* requireProjectAbsent({
         readModel,

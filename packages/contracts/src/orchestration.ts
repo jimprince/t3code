@@ -584,7 +584,14 @@ export type ProjectIconOverride = typeof ProjectIconOverride.Type;
 export const ProjectKind = Schema.Literals(["workspace", "chat"]);
 export type ProjectKind = typeof ProjectKind.Type;
 
+import {
+  ProjectAutomation,
+  ProjectAutomationCommands,
+  ProjectAutomationInternalCommands,
+} from "./projectAutomations.ts";
+
 export const OrchestrationProject = Schema.Struct({
+  automations: Schema.optionalKey(Schema.Array(ProjectAutomation)),
   id: ProjectId,
   title: TrimmedNonEmptyString,
   kind: Schema.optionalKey(ProjectKind),
@@ -941,6 +948,7 @@ export const OrchestrationReadModel = Schema.Struct({
 export type OrchestrationReadModel = typeof OrchestrationReadModel.Type;
 
 export const OrchestrationProjectShell = Schema.Struct({
+  automations: Schema.optionalKey(Schema.Array(ProjectAutomation)),
   id: ProjectId,
   title: TrimmedNonEmptyString,
   kind: Schema.optionalKey(ProjectKind),
@@ -1738,6 +1746,7 @@ const ThreadSessionStopCommand = Schema.Struct({
 });
 
 const DispatchableClientOrchestrationCommand = Schema.Union([
+  ProjectAutomationCommands,
   ProjectCreateCommand,
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
@@ -1774,6 +1783,7 @@ export type DispatchableClientOrchestrationCommand =
   typeof DispatchableClientOrchestrationCommand.Type;
 
 export const ClientOrchestrationCommand = Schema.Union([
+  ProjectAutomationCommands,
   ClientProjectCreateCommand,
   ProjectMetaUpdateCommand,
   ProjectDeleteCommand,
@@ -1994,6 +2004,7 @@ const ThreadImportCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
+  ProjectAutomationInternalCommands,
   ThreadAutoSettleCommand,
   ThreadPullRequestSyncCommand,
   ThreadPullRequestLinkSyncCommand,
@@ -2085,6 +2096,7 @@ export const ProjectCreatedPayload = Schema.Struct({
 });
 
 export const ProjectMetaUpdatedPayload = Schema.Struct({
+  automations: Schema.optionalKey(Schema.Array(ProjectAutomation)),
   projectId: ProjectId,
   title: Schema.optional(TrimmedNonEmptyString),
   workspaceRoot: Schema.optional(TrimmedNonEmptyString),
