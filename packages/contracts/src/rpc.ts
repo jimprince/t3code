@@ -17,6 +17,12 @@ import * as Rpc from "effect/unstable/rpc/Rpc";
 import * as RpcGroup from "effect/unstable/rpc/RpcGroup";
 import { NonNegativeInt, TrimmedNonEmptyString } from "./baseSchemas.ts";
 import {
+  ThreadIssueLinkResult,
+  ThreadIssueOperationError,
+  ThreadIssueReferenceInput,
+  ThreadIssueUnlinkResult,
+} from "./threadIssue.ts";
+import {
   CodexAuthCallbackInput,
   CodexAuthCallbackState,
   ProviderAuthCancelInput,
@@ -464,6 +470,9 @@ export const WS_METHODS = {
   pullRequestsLabelCandidates: "pullRequests.labelCandidates",
   pullRequestsSetLabels: "pullRequests.setLabels",
 
+  threadIssuesLink: "threadIssues.link",
+  threadIssuesUnlink: "threadIssues.unlink",
+
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlCloneRepository: "sourceControl.cloneRepository",
@@ -802,6 +811,18 @@ const WsPullRequestsListRpc = Rpc.make(WS_METHODS.pullRequestsList, {
   payload: PullRequestListInput,
   success: PullRequestListResult,
   error: PullRequestRpcError,
+});
+
+const WsThreadIssuesLinkRpc = Rpc.make(WS_METHODS.threadIssuesLink, {
+  payload: ThreadIssueReferenceInput,
+  success: ThreadIssueLinkResult,
+  error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
+});
+
+const WsThreadIssuesUnlinkRpc = Rpc.make(WS_METHODS.threadIssuesUnlink, {
+  payload: ThreadIssueReferenceInput,
+  success: ThreadIssueUnlinkResult,
+  error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
 });
 
 /**
@@ -1626,6 +1647,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsRequestReviewersRpc,
   WsPullRequestsLabelCandidatesRpc,
   WsPullRequestsSetLabelsRpc,
+  WsThreadIssuesLinkRpc,
+  WsThreadIssuesUnlinkRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
