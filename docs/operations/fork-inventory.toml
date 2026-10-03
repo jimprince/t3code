@@ -1483,3 +1483,13 @@ retire_when = "Upstream provides equivalent server-owned issue links with agent 
 depends_on = ["fork-gitea-connections", "fork-worker-operations", "fork-embedded-pages"]
 roles = []
 note = "A link stores normalized host/repository/number plus a cached title and open/closed state after validating the issue through the configured Gitea API; other hosts and pull requests are rejected. Multiple issues may be linked per thread and unlink is the reverse state. Web and desktop badges deep-link the configured Agent Status Board by repo and issue, with the canonical Gitea URL as the fallback. Mobile receives the shared issue data but has no badge in this patch because its thread list has no pull-request badge analogue."
+
+[[patch]]
+name = "fork-orchestrators-view"
+subject = "feat(web): add orchestrators view"
+class = "product"
+purpose = "Collect top-level threads with nested workers into a shared sidebar view and derive a focused needs-you, working, completed, issue and pull-request board from live thread state."
+retire_when = "Upstream provides an equivalent cross-project orchestrator overview derived from nested thread state."
+depends_on = ["fork-sidebar-agent-visibility", "fork-gitea-issue-links"]
+roles = []
+note = "An orchestrator is a non-archived top-level thread with at least one non-archived child. Counts and sections traverse descendants cycle-safely at every depth without a persisted summary. Web and desktop provide the full board; mobile provides a read-only orchestrator list that opens the root thread. Done-since-last-visit timestamps stay per device in local storage."
