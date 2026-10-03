@@ -31,26 +31,43 @@ const EMBEDDED_PAGE_FRAME_SANDBOX =
   "allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox allow-downloads allow-modals";
 
 /** Main-area view for one footer page, opened from its sidebar icon. */
-export function EmbeddedPageView({ pageId }: { readonly pageId: string }) {
+export function EmbeddedPageView({
+  pageId,
+  issueTarget,
+}: {
+  readonly pageId: string;
+  readonly issueTarget?: { readonly repo?: string; readonly issue?: string };
+}) {
   const page = findEmbeddedPage(useEmbeddedPages(), pageId);
+  const targetUrl =
+    page && issueTarget?.repo && issueTarget.issue
+      ? `${page.url.replace(/\/$/, "")}/?repo=${encodeURIComponent(issueTarget.repo)}&issue=${encodeURIComponent(issueTarget.issue)}`
+      : page?.url;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   return page !== null && primaryEnvironmentId !== null ? (
     <EmbeddedPageWithAgent
       key={`${primaryEnvironmentId}:${page.id}`}
       page={page}
+      targetUrl={targetUrl}
       environmentId={primaryEnvironmentId}
     />
   ) : (
-    <EmbeddedPageLayout page={page} environmentId={primaryEnvironmentId} agent={null} />
+    <EmbeddedPageLayout
+      page={page}
+      targetUrl={targetUrl}
+      environmentId={primaryEnvironmentId}
+      agent={null}
+    />
   );
 }
 
 /** A page with its tray agent, which lives on the primary environment. */
 function EmbeddedPageWithAgent(props: {
   readonly page: EmbeddedPage;
+  readonly targetUrl: string | undefined;
   readonly environmentId: EnvironmentId;
 }) {
-  const { page, environmentId } = props;
+  const { page, targetUrl, environmentId } = props;
   const { stored, setStored, threadRef, pendingDeletes, discard, settleDiscard } =
     usePageAgentConversations(environmentId, page.id);
   const [trayOpen, setTrayOpen] = useState(false);
@@ -71,6 +88,7 @@ function EmbeddedPageWithAgent(props: {
       />
       <EmbeddedPageLayout
         page={page}
+        targetUrl={targetUrl}
         environmentId={environmentId}
         agent={{
           threadRef,
@@ -107,10 +125,12 @@ function PageAgentClosedTrayGuard(props: Parameters<typeof usePageAgentClosedTra
 
 function EmbeddedPageLayout({
   page,
+  targetUrl,
   environmentId: primaryEnvironmentId,
   agent,
 }: {
   readonly page: EmbeddedPage | null;
+  readonly targetUrl: string | undefined;
   readonly environmentId: EnvironmentId | null;
   readonly agent: {
     readonly threadRef: ScopedThreadRef;
@@ -120,8 +140,9 @@ function EmbeddedPageLayout({
     readonly tray: React.ReactNode;
   } | null;
 }) {
-  const host = page
-    ? resolveEmbeddedPageHost(page.url, {
+  const effectiveUrl = targetUrl ?? page?.url;
+  const host = effectiveUrl
+    ? resolveEmbeddedPageHost(effectiveUrl, {
         desktopWebview: isPreviewSupportedInRuntime() && primaryEnvironmentId !== null,
         appProtocol: window.location.protocol,
       })
@@ -140,7 +161,7 @@ function EmbeddedPageLayout({
             <Button
               size="xs"
               variant="outline"
-              render={<a href={page.url} target="_blank" rel="noreferrer" />}
+              render={<a href={effectiveUrl} target="_blank" rel="noreferrer" />}
             >
               <ExternalLinkIcon />
               Open in browser
@@ -160,25 +181,32 @@ function EmbeddedPageLayout({
         </WorkspacePageHeader>
         <div className="flex min-h-0 flex-1 border-t">
           <div className="relative min-h-0 min-w-0 flex-1">
-            {page === null || host === null ? (
+            {page === null || host === null || effectiveUrl === undefined ? (
               <p className="p-6 text-sm text-muted-foreground">
                 This page was removed. Add it again in Settings → General → Sidebar pages.
               </p>
             ) : host.kind === "blocked" ? (
               <div className="space-y-3 p-6 text-sm">
                 <p className="text-muted-foreground">{host.reason}</p>
-                <Button size="sm" render={<a href={page.url} target="_blank" rel="noreferrer" />}>
+                <Button
+                  size="sm"
+                  render={<a href={effectiveUrl} target="_blank" rel="noreferrer" />}
+                >
                   <ExternalLinkIcon />
                   Open in browser
                 </Button>
               </div>
             ) : host.kind === "webview" && agent !== null ? (
-              <EmbeddedPageBrowserTab threadRef={agent.threadRef} pageId={page.id} url={page.url} />
+              <EmbeddedPageBrowserTab
+                threadRef={agent.threadRef}
+                pageId={page.id}
+                url={effectiveUrl}
+              />
             ) : (
               <iframe
-                key={page.url}
+                key={effectiveUrl}
                 className="absolute inset-0 size-full bg-white"
-                src={page.url}
+                src={effectiveUrl}
                 title={page.name}
                 sandbox={EMBEDDED_PAGE_FRAME_SANDBOX}
               />
