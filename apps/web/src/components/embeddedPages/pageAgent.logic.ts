@@ -190,3 +190,32 @@ export function isPageAgentRunning(
     thread.session?.status === "running"
   );
 }
+
+/**
+ * Gives a page conversation exactly one browser tab: an existing server tab
+ * (a renderer reload keeps them) is reused, otherwise one is opened at `url`.
+ * The server's list is read directly rather than through a passive
+ * subscription, which never settles for a thread nothing else is watching and
+ * left the page blank. A tab opened after `isCancelled` turns true (the page
+ * view unmounted mid-open) is closed again so no hidden guest outlives the view.
+ */
+export async function ensurePageAgentTab(deps: {
+  /** Fetches the server's tabs for the thread and stores them; false on failure. */
+  readonly syncFromServer: () => Promise<boolean>;
+  readonly hasTab: () => boolean;
+  /** Opens a tab and returns its id, or null when the open failed. */
+  readonly openTab: () => Promise<string | null>;
+  readonly closeTab: (tabId: string) => void;
+  readonly isCancelled: () => boolean;
+}): Promise<"reused" | "opened" | "cancelled" | "failed"> {
+  await deps.syncFromServer();
+  if (deps.isCancelled()) return "cancelled";
+  if (deps.hasTab()) return "reused";
+  const tabId = await deps.openTab();
+  if (tabId === null) return "failed";
+  if (deps.isCancelled()) {
+    deps.closeTab(tabId);
+    return "cancelled";
+  }
+  return "opened";
+}
