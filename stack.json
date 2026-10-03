@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "c7cc4fa14dd3dd3d29e8df7ac03b3a5a5a8c3624",
-  "head": "dc60ff24e317ef8b70becc3448467b0dd2f1fdd4",
+  "prev": "535912bff3550c3d5c2500ee8770cd5ad0d49a3e",
+  "head": "a6c568e1e916fb6bea2034106243dfcf7ce535fe",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -47,10 +47,10 @@
     "fork-cross-project-thread-nesting",
     "fork-launch-health",
     "fork-notification-preferences",
-    "fork-sidebar-agent-visibility"
+    "fork-sidebar-agent-visibility",
+    "fork-child-input-attention"
   ],
   "unapplied": [
-    "fork-child-input-attention",
     "fork-agent-panel-thread-details",
     "fork-sidebar-drag-to-nest",
     "fork-worker-inactivity",
@@ -88,7 +88,7 @@
       "oid": "fe5ea548f26c10947cb8cdeed714a4a80f1f6893"
     },
     "fork-child-input-attention": {
-      "oid": "77a08e85a931901d392c7bcbc155ac0e90ee906a"
+      "oid": "a6c568e1e916fb6bea2034106243dfcf7ce535fe"
     },
     "fork-codex-goal-visibility": {
       "oid": "539d7f7b5af2d8d3badbb2817913605f175811bb"
