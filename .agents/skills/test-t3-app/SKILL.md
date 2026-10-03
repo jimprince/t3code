@@ -10,6 +10,11 @@ the panel reports unavailable, explain the blocker and stop verification.
 Do not install or switch to another automation system. For native mobile
 testing, use [test-t3-mobile](../test-t3-mobile/SKILL.md).
 
+Persistent clones outside the managed worktree layout can fall back to ambient
+`~/.t3` state even when `<clone>/.t3` exists (tracked in t3code-fork#72). In
+those clones, pass `--home-dir <clone>/.t3` explicitly and verify the
+`[dev-runner]` baseDir line before opening the browser.
+
 ## Start the app
 
 Reuse this task's healthy dev server. Otherwise run `vp run dev` from the
