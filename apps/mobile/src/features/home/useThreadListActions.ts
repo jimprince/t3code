@@ -255,6 +255,7 @@ export function useThreadListActions(): {
     thread: EnvironmentThreadShell,
     direction: ThreadMoveDestination,
   ) => Promise<boolean>;
+  readonly resetThreadOrder: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly renameThread: (thread: EnvironmentThreadShell) => void;
   readonly regenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
 } {
@@ -264,6 +265,9 @@ export function useThreadListActions(): {
   const pinMutation = useAtomCommand(threadEnvironment.pin, { reportFailure: false });
   const unpinMutation = useAtomCommand(threadEnvironment.unpin, { reportFailure: false });
   const setAutoSettleMutation = useAtomCommand(threadEnvironment.setAutoSettle, {
+    reportFailure: false,
+  });
+  const resetOrderMutation = useAtomCommand(threadEnvironment.resetOrder, {
     reportFailure: false,
   });
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
@@ -784,6 +788,19 @@ export function useThreadListActions(): {
     ],
   );
 
+  const resetThreadOrder = useCallback(
+    async (thread: EnvironmentThreadShell) => {
+      const result = await resetOrderMutation({
+        environmentId: thread.environmentId,
+        input: { threadId: thread.id },
+      });
+      if (result._tag === "Success") return true;
+      Alert.alert("Could not reset order", String(Cause.squash(result.cause)));
+      return false;
+    },
+    [resetOrderMutation],
+  );
+
   const confirmDeleteThread = useConfirmDeleteThread(executeAction);
 
   return {
@@ -797,6 +814,7 @@ export function useThreadListActions(): {
     unpinThread,
     setThreadAutoSettle,
     moveThread,
+    resetThreadOrder,
     renameThread,
     regenerateThreadTitle,
   };
