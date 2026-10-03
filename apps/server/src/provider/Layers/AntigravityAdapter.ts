@@ -93,6 +93,7 @@ const ResumeCursor = Schema.Struct({
 });
 const decodeResumeCursor = Schema.decodeUnknownOption(ResumeCursor);
 const isAcpError = Schema.is(EffectAcpErrors.AcpError);
+const isAcpTransportError = Schema.is(EffectAcpErrors.AcpTransportError);
 
 type Adapter = ProviderAdapterShape<ProviderAdapterError>;
 type Runtime = Pick<
@@ -113,6 +114,7 @@ type NativePermission = EffectAcpSchema.RequestPermissionRequest;
 type NativePermissionResponse = EffectAcpSchema.RequestPermissionResponse;
 
 function mapAntigravityError(threadId: ThreadId, method: string, cause: EffectAcpErrors.AcpError) {
+  const detail = isAcpTransportError(cause) ? cause.detail?.trim() : undefined;
   return isAntigravitySignInRequiredError(cause)
     ? new ProviderAdapterRequestError({
         provider: PROVIDER,
@@ -120,7 +122,9 @@ function mapAntigravityError(threadId: ThreadId, method: string, cause: EffectAc
         detail: ANTIGRAVITY_SIGN_IN_REQUIRED_MESSAGE,
         cause,
       })
-    : mapAcpToAdapterError(PROVIDER, threadId, method, cause);
+    : detail
+      ? new ProviderAdapterRequestError({ provider: PROVIDER, method, detail, cause })
+      : mapAcpToAdapterError(PROVIDER, threadId, method, cause);
 }
 
 export interface AntigravityAdapterOptions {
