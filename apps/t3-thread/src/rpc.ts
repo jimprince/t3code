@@ -1,5 +1,6 @@
 import * as NodeSocket from "@effect/platform-node/NodeSocket";
 import { ORCHESTRATION_WS_METHODS } from "@t3tools/contracts/orchestration";
+import { WS_METHODS } from "@t3tools/contracts";
 import { Effect, Exit, Layer, ManagedRuntime, Option, Scope, Stream } from "effect";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 import * as Socket from "effect/unstable/socket/Socket";
@@ -17,6 +18,8 @@ const RPC_METHODS = {
   listNamedAgents: ORCHESTRATION_WS_METHODS.listNamedAgents,
   resolveNamedAgent: ORCHESTRATION_WS_METHODS.resolveNamedAgent,
   handOverNamedAgent: ORCHESTRATION_WS_METHODS.handOverNamedAgent,
+  threadIssuesLink: WS_METHODS.threadIssuesLink,
+  threadIssuesUnlink: WS_METHODS.threadIssuesUnlink,
 } as const;
 
 const makeT3RpcClient = RpcClient.make(WsRpcGroup);
@@ -52,7 +55,9 @@ export class T3RpcClient {
       | "getArchivedShellSnapshot"
       | "listNamedAgents"
       | "resolveNamedAgent"
-      | "handOverNamedAgent",
+      | "handOverNamedAgent"
+      | "threadIssuesLink"
+      | "threadIssuesUnlink",
     input: unknown,
   ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<

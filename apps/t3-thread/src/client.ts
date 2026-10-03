@@ -35,6 +35,7 @@ import type {
   OrchestrationShellSnapshot,
   OrchestrationThread,
   OrchestrationThreadShell,
+  ThreadIssueLink,
   SavedEnvironment,
 } from "./types.js";
 import type { ServerConfig, ServerProvider } from "./contracts.js";
@@ -960,6 +961,36 @@ export class RemoteEnvironmentClient {
       pinned: thread.pinnedAt != null,
       pinnedAt: thread.pinnedAt ?? null,
     };
+  }
+
+  async linkIssue(
+    threadId: string,
+    reference: string,
+  ): Promise<{
+    link: ThreadIssueLink;
+    changed: boolean;
+  }> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request("threadIssuesLink", { threadId, reference });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async unlinkIssue(
+    threadId: string,
+    reference: string,
+  ): Promise<{
+    unlinked: boolean;
+    issue: { host: string; repository: string; number: number };
+  }> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request("threadIssuesUnlink", { threadId, reference });
+    } finally {
+      await rpc.dispose();
+    }
   }
 
   async settleThread(threadId: string, options: { self?: boolean } = {}) {
