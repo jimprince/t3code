@@ -37,6 +37,8 @@ import {
   ProjectionThreadProposedPlanRepository,
 } from "../../persistence/Services/ProjectionThreadProposedPlans.ts";
 import * as ProjectionThreadPullRequests from "../../persistence/ProjectionThreadPullRequests.ts";
+import * as ProjectionThreadIssues from "../../persistence/ProjectionThreadIssues.ts";
+import { threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import { ProjectionThreadSessionRepository } from "../../persistence/Services/ProjectionThreadSessions.ts";
 import {
   type ProjectionTurn,
@@ -489,6 +491,8 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
     const projectionThreadProposedPlanRepository = yield* ProjectionThreadProposedPlanRepository;
     const projectionThreadPullRequestRepository =
       yield* ProjectionThreadPullRequests.ProjectionThreadPullRequestRepository;
+    const projectionThreadIssueRepository =
+      yield* ProjectionThreadIssues.ProjectionThreadIssueRepository;
     const projectionThreadActivityRepository = yield* ProjectionThreadActivityRepository;
     const projectionThreadSessionRepository = yield* ProjectionThreadSessionRepository;
     const projectionTurnRepository = yield* ProjectionTurnRepository;
@@ -617,6 +621,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
         case "thread.created":
           // A draft retry can re-create this id; links belong to the old incarnation.
           yield* projectionThreadPullRequestRepository.deleteByThreadId({
+            threadId: event.payload.threadId,
+          });
+          yield* projectionThreadIssueRepository.deleteByThreadId({
             threadId: event.payload.threadId,
           });
           yield* projectionThreadRepository.upsert({
@@ -971,6 +978,62 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           return;
         }
 
+        case "thread.issue-linked": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) return;
+          yield* projectionThreadIssueRepository.upsert({
+            threadId: event.payload.threadId,
+            ...event.payload.link,
+          });
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.issue-unlinked": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) return;
+          yield* projectionThreadIssueRepository.delete({
+            threadId: event.payload.threadId,
+            host: event.payload.host,
+            repository: event.payload.repository,
+            number: event.payload.number,
+          });
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.issue-synced": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) return;
+          const issues = yield* projectionThreadIssueRepository.listByThreadId({
+            threadId: event.payload.threadId,
+          });
+          const issue = issues.find((candidate) => threadIssueKeysEqual(candidate, event.payload));
+          if (issue === undefined) return;
+          yield* projectionThreadIssueRepository.upsert({
+            ...issue,
+            url: event.payload.url,
+            snapshot: event.payload.snapshot,
+          });
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
         case "thread.runtime-mode-set": {
           const existingRow = yield* projectionThreadRepository.getById({
             threadId: event.payload.threadId,
@@ -1074,6 +1137,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
           }
           // A tombstoned thread must not show up as linked to a pull request.
           yield* projectionThreadPullRequestRepository.deleteByThreadId({
+            threadId: event.payload.threadId,
+          });
+          yield* projectionThreadIssueRepository.deleteByThreadId({
             threadId: event.payload.threadId,
           });
           const existingRow = yield* projectionThreadRepository.getById({
@@ -2306,6 +2372,7 @@ export const OrchestrationProjectionPipelineLive = Layer.effect(
   Layer.provideMerge(ProjectionThreadMessageRepositoryLive),
   Layer.provideMerge(ProjectionThreadProposedPlanRepositoryLive),
   Layer.provideMerge(ProjectionThreadPullRequests.layer),
+  Layer.provideMerge(ProjectionThreadIssues.layer),
   Layer.provideMerge(ProjectionThreadActivityRepositoryLive),
   Layer.provideMerge(ProjectionThreadSessionRepositoryLive),
   Layer.provideMerge(ProjectionTurnRepositoryLive),

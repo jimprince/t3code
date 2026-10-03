@@ -46,6 +46,7 @@ export interface ExecutionEnvironmentDescriptor {
     threadOrderReset?: boolean;
     sessionRefresh?: boolean;
     threadNesting?: boolean;
+    threadIssues?: boolean;
   };
 }
 
@@ -108,6 +109,7 @@ export interface OrchestrationThread {
   interactionMode: string;
   branch: string | null;
   worktreePath: string | null;
+  issues?: readonly ThreadIssueLink[];
   latestTurn: OrchestrationLatestTurn | null;
   createdAt: string;
   updatedAt: string;
@@ -145,6 +147,7 @@ export interface OrchestrationThreadShell {
   interactionMode: string;
   branch: string | null;
   worktreePath: string | null;
+  issues?: readonly ThreadIssueLink[];
   latestTurn: OrchestrationLatestTurn | null;
   createdAt: string;
   updatedAt: string;
@@ -160,6 +163,15 @@ export interface OrchestrationThreadShell {
   hasPendingApprovals: boolean;
   hasPendingUserInput: boolean;
   hasActionableProposedPlan: boolean;
+}
+
+export interface ThreadIssueLink {
+  host: string;
+  repository: string;
+  number: number;
+  url: string;
+  linkedAt: string;
+  snapshot: { title: string; state: "open" | "closed"; syncedAt: string };
 }
 
 export interface OrchestrationMessage {
