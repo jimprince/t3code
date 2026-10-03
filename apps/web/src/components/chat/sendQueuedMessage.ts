@@ -16,7 +16,6 @@ import {
   releaseDraftAttachments,
   startAttachmentUpload,
 } from "../../lib/attachmentUploadQueue";
-import { newMessageId } from "../../lib/utils";
 import { latestCompletedToolActivityId, useQueuedMessageStore } from "../../queuedMessageStore";
 import { appAtomRegistry } from "../../rpc/atomRegistry";
 import { readThread, readThreadShell } from "../../state/entities";
@@ -181,7 +180,7 @@ export async function sendQueuedMessage(
       input: {
         threadId,
         message: {
-          messageId: newMessageId(),
+          messageId: message.messageId,
           role: "user",
           text:
             context !== undefined && !inlineContext
