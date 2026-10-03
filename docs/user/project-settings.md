@@ -111,3 +111,18 @@ or local commits. It skips checkouts on another branch or without an upstream. I
 local work, resolve it yourself before automatic pulls can resume.
 
 For remote-based worktree creation, see [New worktrees from a remote branch](./worktrees.md).
+
+## Timed automations
+
+Add an automation from the project's Automations section. Choose hourly, daily, or
+weekly, write the prompt, and choose a fresh thread for every run or an existing
+thread. Times use the saved timezone, even when you connect from another device.
+On a Projects page, the target defaults to that project's orchestrator.
+
+The server must be running. After downtime, it runs the latest missed occurrence
+once if it is within 24 hours; older occurrences are skipped. A busy target waits
+until its next turn boundary. An archived or deleted target fails with a visible
+reason. Fresh threads use the project's default provider, model, and permissions.
+Pause, edit, delete, or run an automation immediately from the same section, and
+open recent runs to read their output. Pausing stops future schedules; an already
+queued run remains queued. Deleting removes the definition and queued runs.
