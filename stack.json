@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "b8d00026aef2ac0f20219cd5faea13136d4239f8",
-  "head": "53a486483a686e0d28e98de74cbd3cfef8cbaa9a",
+  "prev": "843eedd25c1fea8ec64feac354fb8a0a22df1a2a",
+  "head": "32beea4fd850217738bc96f378c5f75cc77035b4",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -61,11 +61,10 @@
     "fork-antigravity-errors",
     "fork-interrupted-turn-rewind",
     "fork-sandbox-session-recovery",
-    "fork-agent-thread-ordering"
-  ],
-  "unapplied": [
+    "fork-agent-thread-ordering",
     "fork-named-agents"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
