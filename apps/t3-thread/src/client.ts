@@ -716,16 +716,11 @@ export class RemoteEnvironmentClient {
         `'${this.environment.name}' runs a server without automatic-order reset. Update T3 Code there first.`,
       );
     }
-    const rpc = await this.openRpc();
-    try {
-      await rpc.request("dispatchCommand", {
-        type: "thread.order.reset",
-        commandId: NodeCrypto.randomUUID(),
-        threadId,
-      });
-    } finally {
-      await rpc.dispose();
-    }
+    await this.dispatchOnce({
+      type: "thread.order.reset",
+      commandId: NodeCrypto.randomUUID(),
+      threadId,
+    });
   }
 
   /** Whether this environment's server stores thread nesting (threadNesting capability). */
