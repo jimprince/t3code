@@ -1,10 +1,12 @@
 {
   "version": 5,
-  "prev": "b6dedcf242aeeea3dada6502074bd7189982e8b2",
-  "head": "ee3cffbe8bb0b7b51be0a3c6f5788bf19d767756",
+  "prev": "9b513529957ac78951d9c53215fb6d963541e1aa",
+  "head": "8a7084c8f0fea27b13e8f21289639606c0d5b7db",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations",
+    "fork-worker-operations"
+  ],
+  "unapplied": [
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
@@ -64,7 +66,6 @@
     "fork-sandbox-session-recovery",
     "fork-agent-thread-ordering"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
