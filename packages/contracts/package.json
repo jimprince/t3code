@@ -38,6 +38,10 @@
     "./relay": {
       "types": "./src/relay.ts",
       "import": "./src/relay.ts"
+    },
+    "./projectAutomations": {
+      "types": "./src/projectAutomations.ts",
+      "import": "./src/projectAutomations.ts"
     }
   },
   "scripts": {
