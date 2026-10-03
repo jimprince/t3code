@@ -92,6 +92,8 @@ The most common defect in this repo is a change that works on the path you teste
 
 An empty database is a bad test. Seed your worktree's `.t3` with a copy of real data instead of pointing at live state:
 
+Startup keeps copied provider sessions and background work stopped outside the default live `~/.t3/userdata`, even if the copied settings enable restart continuation. Leave `T3CODE_RESUME_SANDBOX_THREADS` unset for UI testing; set it to `true` only when deliberately testing automatic recovery in isolated state. Never opt in with copied sessions that still use real working directories.
+
 - Copy from `~/.t3/userdata` (the developer's real data, the most realistic test set) or `~/.t3/dev`. Worktree state lives at `<worktree>/.t3/userdata`.
 - Snapshot the database with `VACUUM INTO`, which is safe even while a server has the source open and yields one consistent file:
 

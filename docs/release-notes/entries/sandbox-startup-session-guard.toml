@@ -1,0 +1,4 @@
+id = "sandbox-startup-session-guard"
+category = "fix"
+functionality = "development"
+text = "Servers using sandbox state keep copied agent sessions stopped on startup unless recovery is explicitly enabled."

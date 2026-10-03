@@ -9,6 +9,10 @@ import {
   TurnId,
 } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
+import * as NodeOS from "node:os";
+import * as Path from "effect/Path";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as ServerConfig from "./config.ts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -89,6 +93,8 @@ const unusedDirectoryOperations = {
 const runReconciliation = (input: {
   readonly threads: ReadonlyArray<ReturnType<typeof makeThread>>;
   readonly continueAfterRestart?: boolean;
+  readonly allowSandboxResume?: boolean;
+  readonly liveDefaultHome?: boolean;
   readonly liveThreadIds?: ReadonlyArray<ThreadId>;
   readonly providerService?: ProviderService.ProviderService["Service"];
   readonly directory: ProviderSessionDirectory.ProviderSessionDirectory["Service"];
@@ -118,6 +124,27 @@ const runReconciliation = (input: {
         ServerSettings.layerTest({
           continueThreadsAfterServerUpdate: input.continueAfterRestart ?? false,
         }),
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: { T3CODE_RESUME_SANDBOX_THREADS: String(input.allowSandboxResume ?? true) },
+          }),
+        ),
+        Layer.effect(
+          ServerConfig.ServerConfig,
+          Effect.gen(function* () {
+            const config = yield* ServerConfig.ServerConfig;
+            const path = yield* Path.Path;
+            return {
+              ...config,
+              ...(input.liveDefaultHome
+                ? { stateDir: path.join(NodeOS.homedir(), ".t3", "userdata") }
+                : {}),
+            };
+          }),
+        ).pipe(
+          Layer.provide(ServerConfig.layerTest("/", { prefix: "startup-reconcile-" })),
+          Layer.provide(NodeServices.layer),
+        ),
         NodeServices.layer,
       ),
     ),
@@ -181,14 +208,17 @@ it.effect("marks active running sessions that have persisted resume state", () =
 
 it.effect.each(
   (["marked update", "opt-in restart"] as const).flatMap((recovery) =>
-    (["current", "previous", "missing"] as const).map((persistedTurn) => ({
-      recovery,
-      persistedTurn,
-    })),
+    (["current", "previous", "missing"] as const).flatMap((persistedTurn) =>
+      (["live default", "explicit sandbox"] as const).map((home) => ({
+        recovery,
+        persistedTurn,
+        home,
+      })),
+    ),
   ),
 )(
-  "continues $recovery sessions with a $persistedTurn directory turn",
-  ({ recovery, persistedTurn }) =>
+  "continues $recovery sessions with a $persistedTurn directory turn in $home",
+  ({ recovery, persistedTurn, home }) =>
     Effect.gen(function* () {
       const codex = makeThread(
         "thread-continue-codex",
@@ -262,6 +292,8 @@ it.effect.each(
       yield* runReconciliation({
         threads: [codex, fallback],
         continueAfterRestart: recovery === "opt-in restart",
+        allowSandboxResume: home === "explicit sandbox",
+        liveDefaultHome: home === "live default",
         providerService,
         directory: {
           ...unusedDirectoryOperations,
@@ -733,7 +765,15 @@ it.effect("does not fail startup when the live provider session inventory cannot
       subscribeDomainEvents: Effect.succeed(Stream.empty),
       latestSequence: Effect.succeed(0),
     }),
-    Effect.provide(Layer.mergeAll(NodeServices.layer, ServerSettings.layerTest())),
+    Effect.provide(
+      Layer.mergeAll(
+        NodeServices.layer,
+        ServerSettings.layerTest(),
+        ServerConfig.layerTest("/", { prefix: "startup-reconcile-" }).pipe(
+          Layer.provide(NodeServices.layer),
+        ),
+      ),
+    ),
     Effect.tap(() => Effect.sync(() => assert.equal(queried, false))),
   );
 });
@@ -1014,3 +1054,84 @@ it.effect("settles failed opt-in recovery without retrying the provider turn", (
     });
   }),
 );
+
+for (const status of ["running", "starting", "ready"] as const) {
+  it.effect(
+    `keeps copied ${status} provider sessions stopped despite restart settings and markers`,
+    () => {
+      const turnId = TurnId.make("sandbox-turn");
+      const thread = makeThread("sandbox-thread", status, status === "ready" ? null : turnId);
+      const sends: ProviderSendTurnInput[] = [];
+      const commands: OrchestrationCommand[] = [];
+      return runReconciliation({
+        threads: [thread],
+        continueAfterRestart: true,
+        allowSandboxResume: false,
+        providerService: {
+          ...makeProviderService(),
+          sendTurn: (input) =>
+            Effect.sync(() => {
+              sends.push(input);
+              return { threadId: input.threadId, turnId };
+            }),
+        },
+        directory: {
+          ...unusedDirectoryOperations,
+          getBinding: () =>
+            Effect.succeedSome({
+              threadId: thread.id,
+              provider: ProviderDriverKind.make("codex"),
+              providerInstanceId,
+              status: status === "ready" ? "stopped" : status,
+              resumeCursor: { threadId: thread.id },
+              runtimePayload: {
+                activeTurnId: thread.session.activeTurnId,
+                continueAfterServerUpdate: turnId,
+                continueAfterServerUpdatePrepared: status === "ready",
+              },
+            }),
+          listBindings: () =>
+            Effect.succeed(
+              status === "ready"
+                ? [
+                    {
+                      threadId: thread.id,
+                      provider: ProviderDriverKind.make("codex"),
+                      providerInstanceId,
+                      bootGenerationId: null,
+                      lastSeenAt: updatedAt,
+                      runtimePayload: {
+                        activeTurnId: null,
+                        continueAfterServerUpdate: turnId,
+                        continueAfterServerUpdatePrepared: true,
+                      },
+                    },
+                  ]
+                : [],
+            ),
+          upsert: () => Effect.void,
+          recordImportedTranscript: () => Effect.die("unused"),
+          getProvider: () => Effect.die("unused"),
+          listThreadIds: () => Effect.die("unused"),
+        },
+        dispatch: (command) =>
+          Effect.sync(() => {
+            commands.push(command);
+            return { sequence: commands.length };
+          }),
+      }).pipe(
+        Effect.tap(() =>
+          Effect.sync(() => {
+            assert.deepStrictEqual(sends, []);
+            assert.deepStrictEqual(
+              commands.map(
+                (command) => command.type === "thread.session.set" && command.session.status,
+              ),
+              ["error"],
+            );
+          }),
+        ),
+      );
+    },
+  );
+}
