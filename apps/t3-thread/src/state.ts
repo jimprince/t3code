@@ -1,4 +1,3 @@
-import { DEFAULT_INPUT_REMINDER_MINUTES } from "./inputReminders.js";
 import {
   loadState as readRoutingState,
   saveState as writeRoutingState,
@@ -301,7 +300,6 @@ export function buildSubscriptionRecord(
 ): SavedSubscription {
   return {
     ...existing,
-    nestingDerived: false,
     inactivityMinutes: options.inactivityMinutes ?? existing?.inactivityMinutes ?? 0,
     inactivityObservation:
       options.inactivityMinutes !== undefined &&
@@ -309,10 +307,7 @@ export function buildSubscriptionRecord(
         ? null
         : existing?.inactivityObservation,
     level: options.level ?? existing?.level ?? "all",
-    inputReminderMinutes:
-      options.inputReminderMinutes ??
-      existing?.inputReminderMinutes ??
-      DEFAULT_INPUT_REMINDER_MINUTES,
+    inputReminderMinutes: options.inputReminderMinutes ?? existing?.inputReminderMinutes ?? 45,
     subscriberThreadId: caller.threadId,
     subscriberAgentName: caller.name,
     subscriberEnvironment: caller.environment,
