@@ -8,21 +8,29 @@ import {
   ThreadId,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { RegistryContext } from "@effect/atom-react";
+import type { AtomRegistry } from "effect/unstable/reactivity";
+import { useCallback, useContext, useEffect, useMemo, useRef } from "react";
 
 import { previewRuntimeTabId } from "~/browser/previewRuntimeTabId";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { randomUUID } from "~/lib/utils";
-import { readThreadPreviewState, useThreadPreviewState } from "~/previewStateStore";
+import {
+  readThreadPreviewState,
+  reconcilePreviewServerSessions,
+  useThreadPreviewState,
+} from "~/previewStateStore";
 import { useThreadDetail, useThreadStatus } from "~/state/entities";
 import { previewEnvironment } from "~/state/preview";
 import { threadEnvironment } from "~/state/threads";
 import { useAtomCommand } from "~/state/use-atom-command";
+import { useAtomQueryRunner } from "~/state/use-atom-query-runner";
 
 import { closePreviewSession } from "../preview/closePreviewSession";
 import { openPreviewSession } from "../preview/openPreviewSession";
 import { usePreviewSession } from "../preview/usePreviewSession";
 import {
+  ensurePageAgentTab,
   isPageAgentRunning,
   newPageAgentConversation,
   PageAgentConversations,
@@ -142,38 +150,65 @@ export function usePageAgentBrowserTab(input: {
   readonly pageId: string;
   readonly url: string;
 }): string | null {
-  const { threadRef, pageId, url } = input;
+  const { pageId, url } = input;
+  const { environmentId, threadId } = input.threadRef;
+  const registry = useContext(RegistryContext) as AtomRegistry.AtomRegistry;
+  const listPreviews = useAtomQueryRunner(previewEnvironment.list, { reportFailure: false });
   const open = useAtomCommand(previewEnvironment.open, "page tab open");
   const close = useAtomCommand(previewEnvironment.close, { reportFailure: false });
+  const threadRef = useMemo(
+    () => scopeThreadRef(environmentId, threadId),
+    [environmentId, threadId],
+  );
   usePreviewSession(threadRef);
   const state = useThreadPreviewState(threadRef);
-  const openingRef = useRef<string | null>(null);
-  const threadKey = `${threadRef.environmentId}:${threadRef.threadId}`;
-  const synced = state.serverEpoch !== null;
-  const hasTab = Object.keys(state.sessions).length > 0;
+  // Read at open time so a settings edit or re-render does not reopen the tab.
+  const urlRef = useRef(url);
+  useEffect(() => {
+    urlRef.current = url;
+  }, [url]);
 
   useEffect(() => {
-    // Wait for the server's list so a reload reuses a live tab instead of adding one.
-    if (!synced || hasTab || openingRef.current === threadKey) return;
-    openingRef.current = threadKey;
-    void openPreviewSession({
-      openPreview: open,
-      threadRef,
-      url: lastPageUrls.get(pageId) ?? url,
-      profileId: DEFAULT_BROWSER_PROFILE_ID,
-    });
-  }, [hasTab, open, pageId, synced, threadKey, threadRef, url]);
-
-  const closeTabs = useCallback(() => {
-    const current = readThreadPreviewState(threadRef);
-    for (const [tabId, snapshot] of Object.entries(current.sessions)) {
-      if (tabId === current.activeTabId && snapshot.navStatus._tag !== "Idle") {
-        lastPageUrls.set(pageId, snapshot.navStatus.url);
-      }
+    let cancelled = false;
+    const listTarget = { environmentId, input: { threadId } } as const;
+    const closeTab = (tabId: string) => {
+      const snapshot = readThreadPreviewState(threadRef).sessions[tabId] ?? null;
       void closePreviewSession({ closePreview: close, snapshot, tabId, threadRef });
-    }
-  }, [close, pageId, threadRef]);
-  useEffect(() => closeTabs, [closeTabs]);
+    };
+    void ensurePageAgentTab({
+      syncFromServer: async () => {
+        registry.refresh(previewEnvironment.list(listTarget));
+        const listed = await listPreviews(listTarget);
+        if (listed._tag !== "Success") return false;
+        reconcilePreviewServerSessions(threadRef, listed.value);
+        return true;
+      },
+      hasTab: () => Object.keys(readThreadPreviewState(threadRef).sessions).length > 0,
+      openTab: async () => {
+        const opened = await openPreviewSession({
+          openPreview: open,
+          threadRef,
+          url: lastPageUrls.get(pageId) ?? urlRef.current,
+          profileId: DEFAULT_BROWSER_PROFILE_ID,
+        });
+        return opened._tag === "Success" ? opened.value.tabId : null;
+      },
+      closeTab,
+      isCancelled: () => cancelled,
+    });
+    return () => {
+      cancelled = true;
+      const current = readThreadPreviewState(threadRef);
+      for (const [tabId, snapshot] of Object.entries(current.sessions)) {
+        if (tabId === current.activeTabId && snapshot.navStatus._tag !== "Idle") {
+          lastPageUrls.set(pageId, snapshot.navStatus.url);
+        }
+        closeTab(tabId);
+      }
+    };
+    // Every dependency is stable for one conversation; a change here means a new
+    // conversation or page, and only then may the live tab close and reopen.
+  }, [close, environmentId, listPreviews, open, pageId, registry, threadId, threadRef]);
 
   return state.activeTabId === null
     ? null

@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   buildPageAgentPreamble,
   deletePageAgentConversation,
+  ensurePageAgentTab,
   isPageAgentRunning,
   newPageAgentConversation,
   openPageAgentConversation,
@@ -154,5 +155,75 @@ describe("isPageAgentRunning", () => {
         session: { status: "ready", activeTurnId: null } as never,
       }),
     ).toBe(false);
+  });
+});
+
+describe("ensurePageAgentTab", () => {
+  const harness = (options: { serverTabs: string[]; listOk?: boolean; openFails?: boolean }) => {
+    const tabs = new Set<string>();
+    const calls: string[] = [];
+    let cancelled = false;
+    const deps = {
+      syncFromServer: async () => {
+        calls.push("sync");
+        if (options.listOk === false) return false;
+        for (const tab of options.serverTabs) tabs.add(tab);
+        return true;
+      },
+      hasTab: () => tabs.size > 0,
+      openTab: async () => {
+        calls.push("open");
+        if (options.openFails) return null;
+        tabs.add("tab_new");
+        return "tab_new";
+      },
+      closeTab: (tabId: string) => {
+        calls.push(`close:${tabId}`);
+        tabs.delete(tabId);
+      },
+      isCancelled: () => cancelled,
+    };
+    return { deps, calls, tabs, cancel: () => (cancelled = true) };
+  };
+
+  it("opens the page after the server reports no tab, without waiting on a passive subscription", async () => {
+    const { deps, calls } = harness({ serverTabs: [] });
+    await expect(ensurePageAgentTab(deps)).resolves.toBe("opened");
+    expect(calls).toEqual(["sync", "open"]);
+  });
+
+  it("reuses a tab the server still holds, so a reload does not add a second guest", async () => {
+    const { deps, calls } = harness({ serverTabs: ["tab_1"] });
+    await expect(ensurePageAgentTab(deps)).resolves.toBe("reused");
+    expect(calls).toEqual(["sync"]);
+  });
+
+  it("still opens when the server list cannot be read", async () => {
+    const { deps, calls } = harness({ serverTabs: [], listOk: false });
+    await expect(ensurePageAgentTab(deps)).resolves.toBe("opened");
+    expect(calls).toEqual(["sync", "open"]);
+  });
+
+  it("closes a tab whose open finished after the page view went away", async () => {
+    const h = harness({ serverTabs: [] });
+    const openTab = h.deps.openTab;
+    const result = ensurePageAgentTab({
+      ...h.deps,
+      openTab: async () => {
+        const tabId = await openTab();
+        h.cancel();
+        return tabId;
+      },
+    });
+    await expect(result).resolves.toBe("cancelled");
+    expect(h.calls).toEqual(["sync", "open", "close:tab_new"]);
+    expect(h.tabs.size).toBe(0);
+  });
+
+  it("does not open once the view is gone before the list returns", async () => {
+    const h = harness({ serverTabs: [] });
+    h.cancel();
+    await expect(ensurePageAgentTab(h.deps)).resolves.toBe("cancelled");
+    expect(h.calls).toEqual(["sync"]);
   });
 });
