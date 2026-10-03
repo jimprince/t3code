@@ -768,3 +768,24 @@ Settlement also holds persisted sends until explicit resume. Legacy queued route
 notifications respect quota holds; explicit operator retry remains available.
 A direct CLI retry restarts delivery of held notifications, even if the watcher
 had idled out.
+
+## Timed project automations
+
+Use `t3-thread automation list --env <name> --project <id>` to inspect server-owned definitions
+and recent runs. Add with `t3-thread automation add --env <name> --project <id> --name "Digest"
+--prompt "Summarize changes" --schedule daily --time 09:00 --timezone America/Toronto`.
+Choose `--thread <id>` for an existing target, otherwise each run starts a fresh thread
+using project defaults. `--owner-thread <id>` associates fresh runs with an orchestrator
+on its Projects page. Weekly schedules also accept `--day mon`; hourly ignores `--time`.
+
+The controls use the same persisted transitions as the clients. The server owns timers; the CLI
+does not need to stay open. Queued runs wait for busy targets, archived targets fail,
+and restart coalesces missed occurrences within 24 hours. Pause stops future schedules;
+remove cancels queued runs and removes the definition. Run-now also works while paused.
+
+```bash
+t3-thread automation pause <automation-id> --env <name> --project <id>
+t3-thread automation resume <automation-id> --env <name> --project <id>
+t3-thread automation remove <automation-id> --env <name> --project <id>
+t3-thread automation run-now <automation-id> --env <name> --project <id>
+```

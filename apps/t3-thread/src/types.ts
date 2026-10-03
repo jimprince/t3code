@@ -1,3 +1,4 @@
+import type { ProjectAutomation } from "@t3tools/contracts";
 export interface ServerAuthDescriptor {
   policy: string;
   bootstrapMethods: string[];
@@ -68,6 +69,7 @@ export interface OrchestrationSession {
 }
 
 export interface OrchestrationProjectShell {
+  automations?: readonly ProjectAutomation[];
   id: string;
   title: string;
   workspaceRoot: string;

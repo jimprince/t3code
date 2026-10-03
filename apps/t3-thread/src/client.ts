@@ -1,3 +1,4 @@
+import type { ProjectAutomation } from "@t3tools/contracts";
 import * as NodeCrypto from "node:crypto";
 
 import {
@@ -238,6 +239,29 @@ export class RemoteEnvironmentClient {
   async listThreads(): Promise<OrchestrationThreadShell[]> {
     const snapshot = await this.getShellSnapshot();
     return snapshot.threads;
+  }
+
+  async listAutomations(projectId: string): Promise<readonly ProjectAutomation[]> {
+    const project = (await this.listProjects()).find((entry) => entry.id === projectId);
+    if (!project) throw new Error("Project does not exist on this environment.");
+    return project.automations ?? [];
+  }
+
+  async dispatchAutomation(command: {
+    type: string;
+    projectId: string;
+    commandId: string;
+    automation?: unknown;
+    automationId?: string;
+  }): Promise<readonly ProjectAutomation[]> {
+    await this.listAutomations(command.projectId);
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+    return this.listAutomations(command.projectId);
   }
 
   async listProjects(): Promise<OrchestrationProjectShell[]> {
