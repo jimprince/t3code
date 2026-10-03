@@ -9,7 +9,7 @@ import {
   type QueuedComposerMessage,
 } from "./queuedMessageStore";
 
-function makeMessage(prompt: string): Omit<QueuedComposerMessage, "id"> {
+function makeMessage(prompt: string): Omit<QueuedComposerMessage, "id" | "messageId"> {
   return {
     prompt,
     images: [],
@@ -44,6 +44,13 @@ describe("queuedMessageStore", () => {
 
     expect(queue("thread-a").map((message) => message.prompt)).toEqual(["first", "second"]);
     expect(queue("thread-b").map((message) => message.prompt)).toEqual(["other"]);
+  });
+
+  it("keeps one message id from queueing through dispatch", () => {
+    const { enqueue, beginSend } = useQueuedMessageStore.getState();
+    const queued = enqueue("thread-a", makeMessage("first"));
+    expect(queued.messageId).toBeTruthy();
+    expect(beginSend("thread-a", queued.id, null)?.messageId).toBe(queued.messageId);
   });
 
   it("allows one send per thread and re-anchors the rest to the current tool boundary", () => {
