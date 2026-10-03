@@ -207,11 +207,13 @@ project. Removing the parent's project does not delete children from other proje
 Pin a nested thread from its sidebar menu to keep it visible under its parent when
 the parent is collapsed and first among its siblings when expanded. It stays out of
 the top-level **Pinned** section; unpin it to restore normal collapse behavior.
-Archiving or settling a parent does not archive or settle its children. When a
-nested thread is working, monitoring, or waiting on an approval or a question, its
-parent shows that state in the sidebar. An orchestrating agent is expected to answer
-its workers itself and ask you only when it cannot. Nesting is not available in the
-mobile app yet; mobile lists every thread.
+Archiving or settling a parent does not archive or settle its children. An idle
+parent shows **Supervising** while any descendant is working or needs input; its
+separate child-attention marker still identifies questions that need an answer.
+Settled parents keep their settled presentation. An orchestrating agent is expected
+to answer its workers itself and ask you only when it cannot. Nesting is not
+available in the mobile app yet; mobile lists every thread and uses the same
+**Supervising** status for an idle parent with active descendants.
 
 ## Snooze until later
 
