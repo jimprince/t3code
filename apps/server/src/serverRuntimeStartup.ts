@@ -18,6 +18,7 @@ import {
 } from "@t3tools/contracts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import * as Cause from "effect/Cause";
+import * as Config from "effect/Config";
 import * as Console from "effect/Console";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -593,6 +594,14 @@ const clearProviderSessionContinuationMarkers = (threadIds: ReadonlyArray<Thread
   }).pipe(Effect.mapError(toServerUpdateThreadContinuationError));
 
 export const reconcileProviderSessions = Effect.gen(function* () {
+  const config = yield* ServerConfig.ServerConfig;
+  const path = yield* Path.Path;
+  const allowSandboxResume = yield* Config.Boolean("T3CODE_RESUME_SANDBOX_THREADS").pipe(
+    Config.withDefault(false),
+  );
+  const allowStartupResume =
+    allowSandboxResume ||
+    path.resolve(config.stateDir) === path.join(NodeOS.homedir(), ".t3", "userdata");
   const crypto = yield* Crypto.Crypto;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
@@ -608,7 +617,7 @@ export const reconcileProviderSessions = Effect.gen(function* () {
     ),
   );
   const continueAfterRestartFor = (projectId: ProjectId) =>
-    Option.isSome(restartSettings)
+    allowStartupResume && Option.isSome(restartSettings)
       ? resolveProjectSettings(restartSettings.value, projectId).settings
           .continueThreadsAfterServerUpdate
       : false;
@@ -760,6 +769,7 @@ export const reconcileProviderSessions = Effect.gen(function* () {
       });
 
     if (
+      allowStartupResume &&
       Option.isSome(binding) &&
       (continuationMarked || interruptedByRestart) &&
       (session.status === "running" || session.status === "starting" || preparedWhileReady) &&

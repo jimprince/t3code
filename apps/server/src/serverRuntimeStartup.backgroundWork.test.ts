@@ -9,6 +9,8 @@ import {
   TurnId,
 } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
+import * as ConfigProvider from "effect/ConfigProvider";
+import * as ServerConfig from "./config.ts";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -169,6 +171,12 @@ const reconcile = (input: {
               [quietProject]: { continueThreadsAfterServerUpdate: false },
             },
           }),
+          ConfigProvider.layer(
+            ConfigProvider.fromEnv({ env: { T3CODE_RESUME_SANDBOX_THREADS: "true" } }),
+          ),
+          ServerConfig.layerTest("/", { prefix: "startup-background-" }).pipe(
+            Layer.provide(NodeServices.layer),
+          ),
           NodeServices.layer,
         ),
       ),

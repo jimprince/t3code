@@ -1445,3 +1445,12 @@ purpose = "Preserve explanatory Antigravity transport errors so startup and canc
 retire_when = "Upstream preserves native transport details in Antigravity adapter errors."
 depends_on = []
 roles = []
+
+[[patch]]
+name = "fork-sandbox-session-recovery"
+subject = "fix(server): keep copied sandbox sessions stopped on startup"
+class = "divergence"
+purpose = "Prevent copied provider sessions and background work from automatically resuming outside the live default T3 home unless explicitly requested."
+retire_when = "Upstream guards automatic startup continuation in copied sandbox state."
+depends_on = ["fork-provider-turn-safety", "fork-resume-background-work"]
+roles = []

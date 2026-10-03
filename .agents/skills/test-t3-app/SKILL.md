@@ -39,3 +39,11 @@ using retained terminal sessions or captured PIDs.
 When sharing is requested, start with `vp run dev --share` and give the user
 a fresh complete pairing URL that you have not consumed. Keep other credentials
 out of screenshots, commits, and replies.
+
+### Copied sessions stay stopped
+
+Server startup suppresses automatic provider and background-work continuation outside
+`~/.t3/userdata`, including copied continuation markers and enabled restart settings.
+Leave `T3CODE_RESUME_SANDBOX_THREADS` unset during UI testing. Set it to `true` only
+for a deliberate recovery test with isolated sessions and working directories; copied
+sessions that still point to real working directories must never be opted in. This guard does not prevent an explicit new turn.
