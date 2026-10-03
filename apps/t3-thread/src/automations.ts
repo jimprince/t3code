@@ -1,5 +1,5 @@
 import * as NodeCrypto from "node:crypto";
-import { ProjectAutomationDefinition } from "@t3tools/contracts";
+import { ProjectAutomationDefinition } from "@t3tools/contracts/projectAutomations";
 import * as Schema from "effect/Schema";
 import type { Command } from "commander";
 import { RemoteEnvironmentClient } from "./client.js";
