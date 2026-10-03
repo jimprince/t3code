@@ -1435,3 +1435,12 @@ purpose = "Preserve explanatory Antigravity transport errors so startup and canc
 retire_when = "Upstream preserves native transport details in Antigravity adapter errors."
 depends_on = []
 roles = []
+
+[[patch]]
+name = "fork-interrupted-turn-rewind"
+subject = "fix(web): allow editing interrupted turns without checkpoints"
+class = "upstream-bound"
+purpose = "Offer Edit from here for the latest interrupted user message even when no assistant checkpoint exists, using the last ready checkpoint or conversation-only baseline."
+retire_when = "Upstream offers rewind for interrupted turns without assistant checkpoints."
+depends_on = []
+roles = []
