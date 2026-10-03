@@ -1,3 +1,4 @@
+import type { ProjectAutomation } from "@t3tools/contracts";
 import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
 import * as NodeCrypto from "node:crypto";
 
@@ -260,6 +261,29 @@ export class RemoteEnvironmentClient {
     } finally {
       await rpc.dispose();
     }
+  }
+
+  async listAutomations(projectId: string): Promise<readonly ProjectAutomation[]> {
+    const project = (await this.listProjects()).find((entry) => entry.id === projectId);
+    if (!project) throw new Error("Project does not exist on this environment.");
+    return project.automations ?? [];
+  }
+
+  async dispatchAutomation(command: {
+    type: string;
+    projectId: string;
+    commandId: string;
+    automation?: unknown;
+    automationId?: string;
+  }): Promise<readonly ProjectAutomation[]> {
+    await this.listAutomations(command.projectId);
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", command);
+    } finally {
+      await rpc.dispose();
+    }
+    return this.listAutomations(command.projectId);
   }
 
   async listProjects(): Promise<OrchestrationProjectShell[]> {

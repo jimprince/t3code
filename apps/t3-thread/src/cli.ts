@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { registerAutomationCommands } from "./automations.js";
 import { parseInactivityMinutes } from "./inactivity.js";
 import { Command } from "commander";
 
@@ -555,6 +556,8 @@ worktree
       removals: plan.removals,
     });
   });
+
+registerAutomationCommands(program);
 
 const project = program.command("project").description("Manage T3 Code projects");
 

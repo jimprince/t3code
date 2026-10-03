@@ -1,3 +1,4 @@
+import type { ProjectAutomation } from "@t3tools/contracts";
 import type { MessageOrigin } from "@t3tools/shared/messageOrigin";
 
 export interface ServerAuthDescriptor {
@@ -74,6 +75,7 @@ export interface OrchestrationSession {
 }
 
 export interface OrchestrationProjectShell {
+  automations?: readonly ProjectAutomation[];
   id: string;
   title: string;
   workspaceRoot: string;
