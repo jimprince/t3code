@@ -28,14 +28,14 @@ export function SidebarThreadRowStatus({
     status.icon === "working" || status.icon === "supervising"
       ? CircleDashedIcon
       : status.icon === "input"
-          ? MessageCircleQuestionIcon
-          : status.icon === "approval"
-            ? ShieldQuestionIcon
-            : status.icon === "failed"
-              ? CircleAlertIcon
-              : status.icon === "monitoring"
-                ? EyeIcon
-                : CircleCheckIcon;
+        ? MessageCircleQuestionIcon
+        : status.icon === "approval"
+          ? ShieldQuestionIcon
+          : status.icon === "failed"
+            ? CircleAlertIcon
+            : status.icon === "monitoring"
+              ? EyeIcon
+              : CircleCheckIcon;
   return (
     <span className={cn("inline-flex items-center gap-1 font-medium", status.className)}>
       <Icon aria-hidden className="size-4 shrink-0" />
