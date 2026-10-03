@@ -1,5 +1,6 @@
 import * as SchemaGetter from "effect/SchemaGetter";
 import {
+  ProjectAutomation,
   AgentSessionImportSource,
   ThreadAgentPanelSummary,
   ApprovalRequestId,
@@ -108,6 +109,7 @@ const MESSAGE_TRIM_WHITESPACE =
   "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
 const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
   Struct.assign({
+    automations: Schema.fromJsonString(Schema.Array(ProjectAutomation)),
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
     autoPull: Schema.Number,
     projectIcon: Schema.NullOr(Schema.fromJsonString(ProjectIconOverride)),
@@ -423,6 +425,7 @@ function mapProjectShellRow(
     autoPull: row.autoPull === 1,
     faviconPath: row.faviconPath ?? null,
     projectIcon: row.projectIcon ?? null,
+    ...(row.automations.length > 0 ? { automations: row.automations } : {}),
     scripts: row.scripts,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -573,6 +576,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           auto_pull AS "autoPull",
           favicon_path AS "faviconPath",
           project_icon_json AS "projectIcon",
+          automations_json AS "automations",
           scripts_json AS "scripts",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -1251,6 +1255,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           auto_pull AS "autoPull",
           favicon_path AS "faviconPath",
           project_icon_json AS "projectIcon",
+          automations_json AS "automations",
           scripts_json AS "scripts",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -1278,6 +1283,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           auto_pull AS "autoPull",
           favicon_path AS "faviconPath",
           project_icon_json AS "projectIcon",
+          automations_json AS "automations",
           scripts_json AS "scripts",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
@@ -2483,6 +2489,7 @@ pending_approval_requests AS (
                 autoPull: row.autoPull === 1,
                 faviconPath: row.faviconPath ?? null,
                 projectIcon: row.projectIcon ?? null,
+                ...(row.automations.length > 0 ? { automations: row.automations } : {}),
                 scripts: row.scripts,
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
@@ -2656,6 +2663,7 @@ pending_approval_requests AS (
                   autoPull: row.autoPull === 1,
                   faviconPath: row.faviconPath ?? null,
                   projectIcon: row.projectIcon ?? null,
+                  ...(row.automations.length > 0 ? { automations: row.automations } : {}),
                   scripts: row.scripts,
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
