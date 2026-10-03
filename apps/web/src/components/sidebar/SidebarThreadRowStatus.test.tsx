@@ -37,3 +37,20 @@ it("renders the working signal used by an active nested row without continuous a
   expect(container.textContent).toContain("4m");
   expect(container.querySelector("svg")?.getAttribute("class")).not.toContain("animate");
 });
+
+it("renders supervising as a static descendant-activity signal", () => {
+  act(() => {
+    root.render(
+      <SidebarThreadRowStatus
+        status={{
+          label: "Supervising",
+          icon: "supervising",
+          className: "text-foreground dark:text-white",
+        }}
+      />,
+    );
+  });
+
+  expect(container.querySelector('[role="status"]')?.textContent).toBe("Supervising");
+  expect(container.querySelector("svg")?.getAttribute("class")).not.toContain("animate");
+});

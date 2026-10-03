@@ -5,6 +5,7 @@ import {
   EyeIcon,
   MessageCircleQuestionIcon,
   ShieldQuestionIcon,
+  UsersIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -12,7 +13,7 @@ import { cn } from "~/lib/utils";
 
 export type SidebarThreadRowStatusValue = {
   label: string;
-  icon: "working" | "input" | "approval" | "failed" | "monitoring" | "done";
+  icon: "working" | "supervising" | "input" | "approval" | "failed" | "monitoring" | "done";
   className: string;
 };
 
@@ -27,15 +28,17 @@ export function SidebarThreadRowStatus({
   const Icon =
     status.icon === "working"
       ? CircleDashedIcon
-      : status.icon === "input"
-        ? MessageCircleQuestionIcon
-        : status.icon === "approval"
-          ? ShieldQuestionIcon
-          : status.icon === "failed"
-            ? CircleAlertIcon
-            : status.icon === "monitoring"
-              ? EyeIcon
-              : CircleCheckIcon;
+      : status.icon === "supervising"
+        ? UsersIcon
+        : status.icon === "input"
+          ? MessageCircleQuestionIcon
+          : status.icon === "approval"
+            ? ShieldQuestionIcon
+            : status.icon === "failed"
+              ? CircleAlertIcon
+              : status.icon === "monitoring"
+                ? EyeIcon
+                : CircleCheckIcon;
   return (
     <span className={cn("inline-flex items-center gap-1 font-medium", status.className)}>
       <Icon aria-hidden className="size-4 shrink-0" />

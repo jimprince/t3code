@@ -25,15 +25,19 @@ export type SidebarChild = Pick<
 };
 
 /** Match ordinary sidebar status, using the shell turn only while session state is absent. */
-export function resolveSidebarChildStatus(thread: SidebarChild): SidebarThreadStatus {
-  const status = resolveSidebarThreadStatus({
+export function resolveSidebarChildStatus(
+  thread: SidebarChild,
+  hasActiveDescendants = false,
+): SidebarThreadStatus {
+  return resolveSidebarThreadStatus({
     hasPendingApprovals: thread.hasPendingApprovals,
     hasPendingUserInput: thread.hasPendingUserInput,
     session: thread.session ? { ...thread.session, lastError: null } : null,
+    latestTurn: thread.latestTurn,
     backgroundLiveness: thread.backgroundLiveness,
+    settledOverride: thread.settledOverride,
+    hasActiveDescendants,
   });
-  if (status !== "ready" || thread.session != null) return status;
-  return thread.latestTurn?.state === "running" ? "working" : status;
 }
 
 export function isActiveSidebarChild(thread: SidebarChild): boolean {
