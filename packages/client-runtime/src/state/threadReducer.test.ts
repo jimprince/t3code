@@ -358,6 +358,26 @@ describe("applyThreadDetailEvent", () => {
       },
     );
 
+    it("clears a pinned order key without disturbing the retained active slot", () => {
+      const result = applyThreadDetailEvent(
+        { ...baseThread, pinnedAt: baseThread.createdAt, pinOrderKey: "g", activeOrderKey: "m" },
+        {
+          ...baseEventFields,
+          sequence: 5,
+          occurredAt: "2026-04-01T05:00:00.000Z",
+          aggregateKind: "thread",
+          aggregateId: baseThread.id,
+          type: "thread.meta-updated",
+          payload: { threadId: baseThread.id, pinOrderKey: null, updatedAt: baseThread.updatedAt },
+        },
+      );
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.pinOrderKey).toBeNull();
+        expect(result.thread.activeOrderKey).toBe("m");
+      }
+    });
+
     it("patches title and branch", () => {
       const result = applyThreadDetailEvent(
         { ...baseThread, activeOrderKey: "m" },
