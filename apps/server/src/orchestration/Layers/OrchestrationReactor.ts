@@ -1,3 +1,4 @@
+import * as ProjectAutomationService from "../ProjectAutomationService.ts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -23,6 +24,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
   const checkpointReactor = yield* CheckpointReactor;
   const threadArchiveCleanupReactor = yield* ThreadArchiveCleanupReactor;
   const threadDeletionReactor = yield* ThreadDeletionReactor;
+  const automations = yield* ProjectAutomationService.ProjectAutomationService;
   const archiveSubthreads = yield* SettledSubthreadArchiveReactor.SettledSubthreadArchiveReactor;
   const threadSettlementReactor = yield* ThreadSettlementReactor.ThreadSettlementReactor;
   const pullRequestSyncReactor = yield* PullRequestSyncReactor.PullRequestSyncReactor;
@@ -39,6 +41,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
     yield* threadPullRequestReactor.start();
     yield* threadSettlementReactor.start();
     yield* archiveSubthreads.start();
+    yield* automations.start();
     yield* pullRequestSyncReactor.start();
     yield* agentAwarenessRelay.start();
     yield* storageCleanup.start();
