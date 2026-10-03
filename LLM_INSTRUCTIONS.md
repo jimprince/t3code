@@ -121,6 +121,7 @@ and mobile rather than treating one green job as all deliverables.
 
 ## Discovery
 
+- [Isolated UI testing](./.agents/skills/test-t3-app/SKILL.md): seed sandbox state and verify through the Browser panel without resuming copied agents.
 - [Fork documentation index](./docs/fork.md)
 - [Release operations](./docs/operations/release.md)
 - [Stack maintenance and recovery](./docs/operations/fork-maintenance.md)
