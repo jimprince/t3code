@@ -574,6 +574,10 @@ describe("ClientSettings environment identification", () => {
 describe("ClientSettings sidebar", () => {
   it("defaults to the current sidebar", () => {
     expect(decodeClientSettings({}).legacySidebarEnabled).toBe(false);
+    expect(decodeClientSettings({}).sidebarOrchestratorsEnabled).toBe(true);
+    expect(
+      decodeClientSettingsPatch({ sidebarOrchestratorsEnabled: false }).sidebarOrchestratorsEnabled,
+    ).toBe(false);
   });
 
   it("drops the retired sidebar v2 beta keys, resetting everyone to the default", () => {
