@@ -12,8 +12,10 @@ import {
   type OrchestrationThread,
   type ThreadPullRequestKey,
   type ThreadPullRequestLink,
+  type ThreadIssueKey,
   type OrchestrationThreadActivity,
 } from "@t3tools/contracts";
+import { normalizeThreadIssueKey, threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import {
   legacyLinkedPullRequestOf,
   legacyThreadPullRequestKey,
@@ -147,6 +149,10 @@ function findPullRequestLink(
   key: ThreadPullRequestKey,
 ): ThreadPullRequestLink | undefined {
   return thread.pullRequests.find((link) => threadPullRequestKeysEqual(link, key));
+}
+
+function findIssueLink(thread: Pick<OrchestrationThread, "issues">, key: ThreadIssueKey) {
+  return thread.issues?.find((link) => threadIssueKeysEqual(link, key));
 }
 
 function withEventBase(
@@ -1498,6 +1504,82 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           url: command.url,
           snapshot: command.snapshot,
           stack: command.stack,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "thread.issue.link": {
+      const thread = yield* requireThread({ readModel, command, threadId: command.threadId });
+      const key = normalizeThreadIssueKey(command.link);
+      if (findIssueLink(thread, key) !== undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `issue ${key.host}/${key.repository}#${key.number} is already linked to thread ${command.threadId}`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.issue-linked",
+        payload: {
+          threadId: command.threadId,
+          link: { ...command.link, ...key },
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
+    case "thread.issue.unlink": {
+      const thread = yield* requireThread({ readModel, command, threadId: command.threadId });
+      const key = normalizeThreadIssueKey(command);
+      if (findIssueLink(thread, key) === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `issue ${key.host}/${key.repository}#${key.number} is not linked to thread ${command.threadId}`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.issue-unlinked",
+        payload: { threadId: command.threadId, ...key, updatedAt: occurredAt },
+      };
+    }
+
+    case "thread.issue.sync": {
+      const thread = yield* requireThread({ readModel, command, threadId: command.threadId });
+      const key = normalizeThreadIssueKey(command);
+      if (findIssueLink(thread, key) === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `issue ${key.host}/${key.repository}#${key.number} is not linked to thread ${command.threadId}`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.issue-synced",
+        payload: {
+          threadId: command.threadId,
+          ...key,
+          url: command.url,
+          snapshot: command.snapshot,
           updatedAt: occurredAt,
         },
       };
