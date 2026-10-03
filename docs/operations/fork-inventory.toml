@@ -1425,3 +1425,13 @@ retire_when = "Upstream offers equivalent nested-thread folding and burst groupi
 depends_on = ["fork-sidebar-agent-visibility"]
 roles = []
 note = "Pinned, active, input-blocked, currently viewed, and ancestor-of-active rows remain individually visible. Other quiet siblings fold into one reversible done row, except untouched siblings created within the same two-minute window, which form their own reversible burst row. Grouping is derived from shell timestamps and status only, so activity immediately removes a child. Nested rows suppress repeated project headers and show a compact badge only when their direct parent belongs to another project."
+
+
+[[patch]]
+name = "fork-antigravity-errors"
+subject = "fix(antigravity): show native transport failure details"
+class = "upstream-bound"
+purpose = "Preserve explanatory Antigravity transport errors so startup and cancellation failures are actionable in every client."
+retire_when = "Upstream preserves native transport details in Antigravity adapter errors."
+depends_on = []
+roles = []
