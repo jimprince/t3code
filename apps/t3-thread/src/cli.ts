@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { registerAutomationCommands } from "./automations.js";
 
 import { Command } from "commander";
 
@@ -1626,6 +1627,8 @@ agent
       lastSeenAssistantMessageId: latestAssistant.id,
     });
   });
+
+registerAutomationCommands(program);
 
 program.parseAsync(process.argv).catch((error) => {
   process.stderr.write(`${formatCliError(error)}\n`);
