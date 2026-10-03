@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "843eedd25c1fea8ec64feac354fb8a0a22df1a2a",
-  "head": "32beea4fd850217738bc96f378c5f75cc77035b4",
+  "prev": "ab052be24d7f27d00840f07c11a40a26000dfcb7",
+  "head": "6b6344e99f4e024aa6ac480a1e00234ca7f2ef54",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -62,7 +62,8 @@
     "fork-interrupted-turn-rewind",
     "fork-sandbox-session-recovery",
     "fork-agent-thread-ordering",
-    "fork-named-agents"
+    "fork-named-agents",
+    "fork-gitea-issue-links"
   ],
   "unapplied": [],
   "hidden": [],
@@ -120,6 +121,9 @@
     },
     "fork-gitea-connections": {
       "oid": "cfb67812cee4db256b1580953b2bdee6a70b95b4"
+    },
+    "fork-gitea-issue-links": {
+      "oid": "6b6344e99f4e024aa6ac480a1e00234ca7f2ef54"
     },
     "fork-gitea-pr-actions": {
       "oid": "4c74508ceee20820ce6b46c4d53e3b3f57f3c978"
