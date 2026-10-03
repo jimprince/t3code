@@ -113,6 +113,7 @@ import * as ProjectionSnapshotQuery from "./orchestration/Services/ProjectionSna
 import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionReactor.ts";
 import { ThreadTransfer } from "./orchestration/Services/ThreadTransfer.ts";
 import { ThreadBrief } from "./orchestration/Services/ThreadBrief.ts";
+import { NamedAgents } from "./orchestration/Services/NamedAgents.ts";
 import {
   observeRpcEffect as instrumentRpcEffect,
   observeRpcStream as instrumentRpcStream,
@@ -573,6 +574,7 @@ const makeWsRpcLayer = (
       const gitWorkflow = yield* GitWorkflowService.GitWorkflowService;
       const threadTransfer = yield* ThreadTransfer;
       const threadBrief = yield* ThreadBrief;
+      const namedAgents = yield* NamedAgents;
       const review = yield* ReviewService.ReviewService;
       const vcsProvisioning = yield* VcsProvisioningService.VcsProvisioningService;
       const vcsStatusBroadcaster = yield* VcsStatusBroadcaster.VcsStatusBroadcaster;
@@ -2284,6 +2286,20 @@ const makeWsRpcLayer = (
           observeRpcEffect(ORCHESTRATION_WS_METHODS.forkThread, threadTransfer.forkThread(input), {
             "rpc.aggregate": "orchestration",
           }),
+        [ORCHESTRATION_WS_METHODS.listNamedAgents]: () =>
+          observeRpcEffect(ORCHESTRATION_WS_METHODS.listNamedAgents, namedAgents.list(), {
+            "rpc.aggregate": "orchestration",
+          }),
+        [ORCHESTRATION_WS_METHODS.resolveNamedAgent]: (input) =>
+          observeRpcEffect(ORCHESTRATION_WS_METHODS.resolveNamedAgent, namedAgents.resolve(input), {
+            "rpc.aggregate": "orchestration",
+          }),
+        [ORCHESTRATION_WS_METHODS.handOverNamedAgent]: (input) =>
+          observeRpcEffect(
+            ORCHESTRATION_WS_METHODS.handOverNamedAgent,
+            namedAgents.handOver(input),
+            { "rpc.aggregate": "orchestration" },
+          ),
         [ORCHESTRATION_WS_METHODS.briefThread]: (input) =>
           observeRpcEffect(ORCHESTRATION_WS_METHODS.briefThread, threadBrief.briefThread(input), {
             "rpc.aggregate": "orchestration",
