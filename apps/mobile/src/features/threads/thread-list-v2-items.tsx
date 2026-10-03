@@ -65,7 +65,7 @@ const STATUS_LABEL_BY_STATUS: Partial<
   approval: { label: "Approval", className: "text-warning-foreground" },
   input: { label: "Input", className: "text-adaptive-indigo-600-300" },
   working: { label: "Working", className: "text-adaptive-sky-600-400" },
-  supervising: { label: "Supervising", className: "text-foreground" },
+  supervising: { label: "Supervising", className: "text-adaptive-sky-600-400" },
   failed: { label: "Failed", className: "text-danger-foreground" },
 };
 
@@ -918,6 +918,14 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
             name="pin"
             size={11}
             tintColorClassName={rowAppearance.mutedIconTintClassName}
+            type="monochrome"
+          />
+        ) : null}
+        {status === "working" || status === "supervising" ? (
+          <SymbolView
+            name="circle.dotted"
+            size={11}
+            tintColorClassName="text-adaptive-sky-600-400"
             type="monochrome"
           />
         ) : null}

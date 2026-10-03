@@ -1244,7 +1244,7 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
         ? {
             label: "Supervising",
             icon: "supervising" as const,
-            className: "text-foreground dark:text-white",
+            className: "text-sky-600 dark:text-sky-400",
           }
         : status === "monitoring"
           ? {

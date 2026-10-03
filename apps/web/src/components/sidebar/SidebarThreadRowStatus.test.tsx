@@ -45,12 +45,14 @@ it("renders supervising as a static descendant-activity signal", () => {
         status={{
           label: "Supervising",
           icon: "supervising",
-          className: "text-foreground dark:text-white",
+          className: "text-sky-600 dark:text-sky-400",
         }}
       />,
     );
   });
 
   expect(container.querySelector('[role="status"]')?.textContent).toBe("Supervising");
+  expect(container.firstElementChild?.getAttribute("class")).toContain("text-sky-600");
+  expect(container.querySelector("svg")?.getAttribute("class")).toContain("lucide-circle-dashed");
   expect(container.querySelector("svg")?.getAttribute("class")).not.toContain("animate");
 });
