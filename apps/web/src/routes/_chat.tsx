@@ -249,7 +249,11 @@ function ChatRouteLayout() {
   return (
     <>
       <ChatRouteGlobalShortcuts />
-      {threadTarget && !isOrchestratorRoute ? <ThreadRouteView target={threadTarget} /> : <Outlet />}
+      {threadTarget && !isOrchestratorRoute ? (
+        <ThreadRouteView target={threadTarget} />
+      ) : (
+        <Outlet />
+      )}
     </>
   );
 }
