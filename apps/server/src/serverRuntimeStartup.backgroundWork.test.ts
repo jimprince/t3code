@@ -9,6 +9,7 @@ import {
   TurnId,
 } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
+import * as ConfigProvider from "effect/ConfigProvider";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -92,6 +93,8 @@ const reconcile = (input: {
   readonly bindings: ReadonlyArray<ProviderSessionDirectory.ProviderRuntimeBinding>;
   readonly stoppedWork: ReadonlyMap<ThreadId, ReadonlyArray<StoppedBackgroundTask>>;
   readonly awaitSends: ReadonlyArray<ThreadId>;
+  readonly disableStartupResume?: boolean;
+  readonly bindingReads?: ThreadId[];
   readonly liveThreadIds?: ReadonlyArray<ThreadId>;
 }) =>
   Effect.gen(function* () {
@@ -129,6 +132,13 @@ const reconcile = (input: {
     };
 
     yield* ServerRuntimeStartup.reconcileProviderSessions.pipe(
+      Effect.provide(
+        ConfigProvider.layer(
+          ConfigProvider.fromEnv({
+            env: input.disableStartupResume ? { T3CODE_DISABLE_STARTUP_RESUME: "1" } : {},
+          }),
+        ),
+      ),
       Effect.provideService(ProjectionSnapshotQuery.ProjectionSnapshotQuery, {
         getCommandReadModel: () => Effect.succeed({ threads: input.threads } as never),
       } as unknown as ProjectionSnapshotQuery.ProjectionSnapshotQuery["Service"]),
@@ -142,7 +152,11 @@ const reconcile = (input: {
         getProvider: () => Effect.die("unused"),
         listThreadIds: () => Effect.die("unused"),
         listBindings: () => Effect.succeed([]),
-        getBinding: (threadId) => Effect.sync(() => Option.fromNullishOr(bindings.get(threadId))),
+        getBinding: (threadId) =>
+          Effect.sync(() => {
+            input.bindingReads?.push(threadId);
+            return Option.fromNullishOr(bindings.get(threadId));
+          }),
         upsert: (next) =>
           Effect.sync(() => {
             bindings.set(next.threadId, { ...bindings.get(next.threadId), ...next });
@@ -245,3 +259,23 @@ it.effect("adds the stopped work to a mid-turn continuation instead of a second 
     );
   }),
 );
+
+it.effect("keeps copied idle background work stopped when startup recovery is disabled", () => {
+  const thread = makeThread("copied-background-thread");
+  const bindingReads: ThreadId[] = [];
+  return reconcile({
+    threads: [thread],
+    bindings: [binding(thread)],
+    stoppedWork: new Map([[thread.id, [monitor]]]),
+    awaitSends: [],
+    disableStartupResume: true,
+    bindingReads,
+  }).pipe(
+    Effect.tap((sends) =>
+      Effect.sync(() => {
+        assert.deepStrictEqual(sends, []);
+        assert.deepStrictEqual(bindingReads, []);
+      }),
+    ),
+  );
+});
