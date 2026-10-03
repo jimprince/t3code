@@ -28,6 +28,12 @@ Add `--browser` to open a browser automatically.
 
 Linked worktrees default to their own `.t3/userdata`, even when `T3CODE_HOME` is set.
 The main checkout defaults to `~/.t3/dev/userdata`. An explicit `--home-dir` wins in both cases.
+
+Automatic provider-session and background-work continuation is disabled outside the live
+`~/.t3/userdata`, even when copied settings or session markers request it. Set
+`T3CODE_RESUME_SANDBOX_THREADS=true` only for an intentional recovery test with isolated
+sessions and working directories, or for an installed server deliberately using a custom
+live home. Explicit new turns remain available in sandbox state.
 Never run a development server against the live `~/.t3/userdata`.
 See [test data](../../AGENTS.md#test-data) for copying a consistent database snapshot.
 
