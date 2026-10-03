@@ -3895,3 +3895,164 @@ describe("computeStableMessagesTimelineRows", () => {
     expect(reordered.result).toEqual([initial.result[1], initial.result[0]]);
   });
 });
+
+describe("editing the latest interrupted user message", () => {
+  const createdAt = "2026-10-02T20:00:10Z";
+  const message: ChatMessage = {
+    id: MessageId.make("interrupted-user"),
+    role: "user",
+    text: "Retry this",
+    turnId: null,
+    createdAt,
+    updatedAt: createdAt,
+    streaming: false,
+  };
+  const previous: TurnDiffSummary = {
+    turnId: TurnId.make("previous-turn"),
+    assistantMessageId: MessageId.make("previous-assistant"),
+    completedAt: "2026-10-02T20:00:05Z",
+    checkpointTurnCount: 3,
+    checkpointRef: CheckpointRef.make("refs/t3/checkpoints/previous"),
+    status: "ready",
+    files: [],
+  };
+  const missing: TurnDiffSummary = {
+    turnId: TurnId.make("interrupted-turn"),
+    assistantMessageId: null,
+    completedAt: "2026-10-02T20:00:15Z",
+    checkpointTurnCount: 4,
+    checkpointRef: CheckpointRef.make("refs/t3/checkpoints/missing"),
+    status: "missing",
+    files: [],
+  };
+  const input = {
+    timelineEntries: [{ id: "interrupted-user", kind: "message" as const, createdAt, message }],
+    latestTurn: {
+      turnId: missing.turnId,
+      state: "interrupted" as const,
+      startedAt: createdAt,
+      completedAt: missing.completedAt,
+    },
+    isWorking: false,
+    activeTurnStartedAt: null,
+    turnDiffSummaries: [previous, missing],
+    supportsConversationRollback: true,
+  };
+  const userRow = (rows: MessagesTimelineRow[]) =>
+    rows.find((row) => row.kind === "message" && row.message.id === message.id);
+
+  it("targets the last ready checkpoint before a user message with no assistant response", () => {
+    expect(userRow(deriveMessagesTimelineRows(input))).toMatchObject({ revertTurnCount: 3 });
+  });
+  it("skips missing prior checkpoints and later ready checkpoints", () => {
+    expect(
+      userRow(
+        deriveMessagesTimelineRows({
+          ...input,
+          turnDiffSummaries: [
+            previous,
+            {
+              ...previous,
+              turnId: TurnId.make("prior-missing"),
+              status: "missing",
+              checkpointTurnCount: 4,
+            },
+            {
+              ...previous,
+              turnId: TurnId.make("later-ready"),
+              completedAt: missing.completedAt,
+              checkpointTurnCount: 5,
+            },
+            missing,
+          ],
+        }),
+      ),
+    ).toMatchObject({ revertTurnCount: 3 });
+  });
+  it("offers conversation-only rewind to the baseline when no ready checkpoint exists", () => {
+    expect(
+      userRow(deriveMessagesTimelineRows({ ...input, turnDiffSummaries: [missing] })),
+    ).toMatchObject({ revertTurnCount: 0 });
+  });
+  it("offers rewind even when the interrupted turn has a partial assistant response", () => {
+    const assistant = {
+      ...message,
+      id: MessageId.make("partial-assistant"),
+      role: "assistant" as const,
+      turnId: missing.turnId,
+      createdAt: missing.completedAt,
+    };
+    expect(
+      userRow(
+        deriveMessagesTimelineRows({
+          ...input,
+          timelineEntries: [
+            ...input.timelineEntries,
+            { id: "partial", kind: "message", createdAt: assistant.createdAt, message: assistant },
+          ],
+          turnDiffSummaries: [
+            previous,
+            { ...missing, checkpointTurnCount: 5, assistantMessageId: assistant.id },
+          ],
+        }),
+      ),
+    ).toMatchObject({ revertTurnCount: 3 });
+  });
+  it("preserves the existing rewind boundary of an older message with a missing checkpoint", () => {
+    const earlierUser = {
+      ...message,
+      id: MessageId.make("earlier-user"),
+      createdAt: "2026-10-02T20:00:08Z",
+    };
+    const earlierAssistant = {
+      ...message,
+      id: MessageId.make("earlier-assistant"),
+      role: "assistant" as const,
+      turnId: TurnId.make("earlier-turn"),
+      createdAt: "2026-10-02T20:00:09Z",
+    };
+    const rows = deriveMessagesTimelineRows({
+      ...input,
+      timelineEntries: [
+        {
+          id: "earlier-user",
+          kind: "message",
+          createdAt: earlierUser.createdAt,
+          message: earlierUser,
+        },
+        {
+          id: "earlier-assistant",
+          kind: "message",
+          createdAt: earlierAssistant.createdAt,
+          message: earlierAssistant,
+        },
+        ...input.timelineEntries,
+      ],
+      turnDiffSummaries: [
+        previous,
+        {
+          ...missing,
+          turnId: earlierAssistant.turnId,
+          assistantMessageId: earlierAssistant.id,
+          completedAt: earlierAssistant.createdAt,
+        },
+        missing,
+      ],
+    });
+    expect(
+      rows.find((row) => row.kind === "message" && row.message.id === earlierUser.id),
+    ).toMatchObject({ revertTurnCount: 3 });
+    expect(userRow(rows)).toMatchObject({ revertTurnCount: 3 });
+  });
+  it("does not offer the fallback during a running turn", () => {
+    const state = "running" as const;
+    expect(
+      userRow(deriveMessagesTimelineRows({ ...input, latestTurn: { ...input.latestTurn, state } })),
+    ).toMatchObject({ revertTurnCount: undefined });
+  });
+  it("does not offer the fallback to a provider without rollback", () => {
+    expect(
+      userRow(deriveMessagesTimelineRows({ ...input, supportsConversationRollback: false })),
+    ).toMatchObject({ revertTurnCount: undefined });
+  });
+});
