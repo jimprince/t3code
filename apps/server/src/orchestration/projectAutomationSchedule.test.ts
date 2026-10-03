@@ -41,7 +41,9 @@ describe("automation calendar", () => {
     ).toBe("2026-03-08T07:30:00.000Z");
   });
   it("does not fire the upcoming occurrence a fraction of a second early", () => {
-    expect(latestAutomationRun({ kind: "hourly", timeZone: "UTC" }, "2026-10-03T05:59:59.999Z")).toBe("2026-10-03T05:00:00.000Z");
+    expect(
+      latestAutomationRun({ kind: "hourly", timeZone: "UTC" }, "2026-10-03T05:59:59.999Z"),
+    ).toBe("2026-10-03T05:00:00.000Z");
   });
   it("coalesces missed occurrences including the exact current boundary", () => {
     expect(latestAutomationRun({ kind: "hourly", timeZone: "UTC" }, "2026-10-03T06:00:00Z")).toBe(
