@@ -113,6 +113,7 @@ interface HomeScreenProps {
     thread: EnvironmentThreadShell,
     direction: ThreadMoveDestination,
   ) => Promise<boolean>;
+  readonly onResetThreadOrder: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly onRenameThread: (thread: EnvironmentThreadShell) => void;
   readonly onRegenerateThreadTitle: (thread: EnvironmentThreadShell) => Promise<boolean>;
   readonly onSelectPendingTask: (pendingTask: PendingNewTask) => void;
@@ -427,6 +428,12 @@ export function HomeScreen(props: HomeScreenProps) {
     },
     [props.onMoveThread],
   );
+  const handleResetThreadOrder = useCallback(
+    (thread: EnvironmentThreadShell) => {
+      void props.onResetThreadOrder(thread);
+    },
+    [props.onResetThreadOrder],
+  );
   const handleUnpinThread = useCallback(
     (thread: EnvironmentThreadShell) => {
       void props.onUnpinThread(thread);
@@ -541,6 +548,13 @@ export function HomeScreen(props: HomeScreenProps) {
       if (config.environment.capabilities.threadActiveReorder === true) {
         supported.add(environmentId);
       }
+    }
+    return supported;
+  }, [serverConfigs]);
+  const orderResetEnvironmentIds = useMemo(() => {
+    const supported = new Set<EnvironmentId>();
+    for (const [environmentId, config] of serverConfigs) {
+      if (config.environment.capabilities.threadOrderReset === true) supported.add(environmentId);
     }
     return supported;
   }, [serverConfigs]);
@@ -806,6 +820,7 @@ export function HomeScreen(props: HomeScreenProps) {
               ? pinReorderEnvironmentIds.has(thread.environmentId)
               : activeReorderEnvironmentIds.has(thread.environmentId)
           }
+          orderResetSupported={orderResetEnvironmentIds.has(thread.environmentId)}
           canMoveUp={item.canMoveUp}
           canMoveDown={item.canMoveDown}
           onSnoozeThread={handleSnoozeThread}
@@ -815,6 +830,7 @@ export function HomeScreen(props: HomeScreenProps) {
           onUnpinThread={handleUnpinThread}
           onSetThreadAutoSettle={handleSetThreadAutoSettle}
           onMoveThread={handleMoveThread}
+          onResetThreadOrder={handleResetThreadOrder}
           onSwipeableClose={handleSwipeableClose}
           onSwipeableWillOpen={handleSwipeableWillOpen}
           activationKey={item.key}
@@ -824,7 +840,9 @@ export function HomeScreen(props: HomeScreenProps) {
     [
       handleDeleteThread,
       activeReorderEnvironmentIds,
+      orderResetEnvironmentIds,
       handleMoveThread,
+      handleResetThreadOrder,
       handlePinThread,
       handleRegenerateThreadTitle,
       handleRenameThread,
