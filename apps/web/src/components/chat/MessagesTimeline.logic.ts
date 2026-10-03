@@ -946,6 +946,7 @@ function buildRevertTurnCountByUserMessageId(input: {
   runningTurnId: TurnId | null;
 }): Map<MessageId, number> {
   const byUserMessageId = new Map<MessageId, number>();
+  let latestUserHasUsableCheckpoint = false;
   const entryCount = input.supportsConversationRollback ? input.timelineEntries.length : 0;
   for (let index = 0; index < entryCount; index += 1) {
     const entry = input.timelineEntries[index];
@@ -953,6 +954,7 @@ function buildRevertTurnCountByUserMessageId(input: {
       continue;
     }
 
+    latestUserHasUsableCheckpoint = false;
     for (let nextIndex = index + 1; nextIndex < input.timelineEntries.length; nextIndex += 1) {
       const nextEntry = input.timelineEntries[nextIndex];
       if (!nextEntry || nextEntry.kind !== "message") {
@@ -965,13 +967,13 @@ function buildRevertTurnCountByUserMessageId(input: {
       if (!summary) {
         continue;
       }
-      if (summary.status !== "ready") break;
       const turnCount =
         summary.checkpointTurnCount ?? input.inferredCheckpointTurnCountByTurnId[summary.turnId];
       if (typeof turnCount !== "number") {
         break;
       }
       byUserMessageId.set(entry.message.id, Math.max(0, turnCount - 1));
+      latestUserHasUsableCheckpoint = summary.status === "ready";
       break;
     }
   }
@@ -989,7 +991,7 @@ function buildRevertTurnCountByUserMessageId(input: {
     !input.runningTurnId &&
     terminal &&
     latestUserEntry?.kind === "message" &&
-    !byUserMessageId.has(latestUserEntry.message.id)
+    !latestUserHasUsableCheckpoint
   ) {
     let retainedTurnCount = 0;
     for (const summary of input.turnDiffSummaries) {

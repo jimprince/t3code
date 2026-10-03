@@ -3998,6 +3998,52 @@ describe("editing the latest interrupted user message", () => {
       ),
     ).toMatchObject({ revertTurnCount: 3 });
   });
+  it("preserves the existing rewind boundary of an older message with a missing checkpoint", () => {
+    const earlierUser = {
+      ...message,
+      id: MessageId.make("earlier-user"),
+      createdAt: "2026-10-02T20:00:08Z",
+    };
+    const earlierAssistant = {
+      ...message,
+      id: MessageId.make("earlier-assistant"),
+      role: "assistant" as const,
+      turnId: TurnId.make("earlier-turn"),
+      createdAt: "2026-10-02T20:00:09Z",
+    };
+    const rows = deriveMessagesTimelineRows({
+      ...input,
+      timelineEntries: [
+        {
+          id: "earlier-user",
+          kind: "message",
+          createdAt: earlierUser.createdAt,
+          message: earlierUser,
+        },
+        {
+          id: "earlier-assistant",
+          kind: "message",
+          createdAt: earlierAssistant.createdAt,
+          message: earlierAssistant,
+        },
+        ...input.timelineEntries,
+      ],
+      turnDiffSummaries: [
+        previous,
+        {
+          ...missing,
+          turnId: earlierAssistant.turnId,
+          assistantMessageId: earlierAssistant.id,
+          completedAt: earlierAssistant.createdAt,
+        },
+        missing,
+      ],
+    });
+    expect(
+      rows.find((row) => row.kind === "message" && row.message.id === earlierUser.id),
+    ).toMatchObject({ revertTurnCount: 3 });
+    expect(userRow(rows)).toMatchObject({ revertTurnCount: 3 });
+  });
   it("does not offer the fallback during a running turn", () => {
     const state = "running" as const;
     expect(
