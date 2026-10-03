@@ -847,6 +847,32 @@ export const ThreadPullRequestLink = Schema.Struct({
 });
 export type ThreadPullRequestLink = typeof ThreadPullRequestLink.Type;
 
+export const ThreadIssueState = Schema.Literals(["open", "closed"]);
+export type ThreadIssueState = typeof ThreadIssueState.Type;
+
+/** Identity of a Gitea issue across projects and environments. */
+export const ThreadIssueKey = Schema.Struct({
+  host: TrimmedNonEmptyString,
+  repository: TrimmedNonEmptyString,
+  number: PositiveInt,
+});
+export type ThreadIssueKey = typeof ThreadIssueKey.Type;
+
+export const ThreadIssueSnapshot = Schema.Struct({
+  title: TrimmedNonEmptyString,
+  state: ThreadIssueState,
+  syncedAt: IsoDateTime,
+});
+export type ThreadIssueSnapshot = typeof ThreadIssueSnapshot.Type;
+
+export const ThreadIssueLink = Schema.Struct({
+  ...ThreadIssueKey.fields,
+  url: TrimmedNonEmptyString,
+  linkedAt: IsoDateTime,
+  snapshot: ThreadIssueSnapshot,
+});
+export type ThreadIssueLink = typeof ThreadIssueLink.Type;
+
 // Compat: thread goals (set/clear/evaluate, auto-continuation) were removed.
 // This type and the `goal` field below remain only so pre-removal threads and
 // event history still decode and replay; there is no way to create a new
@@ -883,6 +909,8 @@ export const OrchestrationThread = Schema.Struct({
   pullRequests: Schema.Array(ThreadPullRequestLink).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
+  // Optional while clients and persisted snapshots roll through the feature.
+  issues: Schema.optionalKey(Schema.Array(ThreadIssueLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
   goal: Schema.optionalKey(Schema.NullOr(OrchestrationThreadGoal)),
@@ -995,6 +1023,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   pullRequests: Schema.Array(ThreadPullRequestLink).pipe(
     Schema.withDecodingDefault(Effect.succeed([])),
   ),
+  issues: Schema.optionalKey(Schema.Array(ThreadIssueLink)),
   branchPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
   latestTurn: Schema.NullOr(OrchestrationLatestTurn),
   goal: Schema.optionalKey(Schema.NullOr(OrchestrationThreadGoal)),
@@ -1588,6 +1617,29 @@ const ThreadPullRequestUnlinkCommand = Schema.Struct({
   ...ThreadPullRequestKey.fields,
 });
 
+const ThreadIssueLinkCommand = Schema.Struct({
+  type: Schema.Literal("thread.issue.link"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  link: ThreadIssueLink,
+});
+
+const ThreadIssueUnlinkCommand = Schema.Struct({
+  type: Schema.Literal("thread.issue.unlink"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  ...ThreadIssueKey.fields,
+});
+
+const ThreadIssueSyncCommand = Schema.Struct({
+  type: Schema.Literal("thread.issue.sync"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  ...ThreadIssueKey.fields,
+  url: TrimmedNonEmptyString,
+  snapshot: ThreadIssueSnapshot,
+});
+
 const ThreadRuntimeModeSetCommand = Schema.Struct({
   type: Schema.Literal("thread.runtime-mode.set"),
   commandId: CommandId,
@@ -1768,6 +1820,8 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadPullRequestLinkCommand,
   ThreadPullRequestUnlinkCommand,
+  ThreadIssueLinkCommand,
+  ThreadIssueUnlinkCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ThreadTurnStartCommand,
@@ -1805,6 +1859,8 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadMetaUpdateCommand,
   ThreadPullRequestLinkCommand,
   ThreadPullRequestUnlinkCommand,
+  ThreadIssueLinkCommand,
+  ThreadIssueUnlinkCommand,
   ThreadRuntimeModeSetCommand,
   ThreadInteractionModeSetCommand,
   ClientThreadTurnStartCommand,
@@ -2004,6 +2060,7 @@ const ThreadImportCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
+  ThreadIssueSyncCommand,
   ProjectAutomationInternalCommands,
   ThreadAutoSettleCommand,
   ThreadPullRequestSyncCommand,
@@ -2054,6 +2111,9 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.pull-request-linked",
   "thread.pull-request-unlinked",
   "thread.pull-request-synced",
+  "thread.issue-linked",
+  "thread.issue-unlinked",
+  "thread.issue-synced",
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
   "thread.goal-set",
@@ -2258,6 +2318,29 @@ export const ThreadPullRequestSyncedPayload = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 export type ThreadPullRequestSyncedPayload = typeof ThreadPullRequestSyncedPayload.Type;
+
+export const ThreadIssueLinkedPayload = Schema.Struct({
+  threadId: ThreadId,
+  link: ThreadIssueLink,
+  updatedAt: IsoDateTime,
+});
+export type ThreadIssueLinkedPayload = typeof ThreadIssueLinkedPayload.Type;
+
+export const ThreadIssueUnlinkedPayload = Schema.Struct({
+  threadId: ThreadId,
+  ...ThreadIssueKey.fields,
+  updatedAt: IsoDateTime,
+});
+export type ThreadIssueUnlinkedPayload = typeof ThreadIssueUnlinkedPayload.Type;
+
+export const ThreadIssueSyncedPayload = Schema.Struct({
+  threadId: ThreadId,
+  ...ThreadIssueKey.fields,
+  url: TrimmedNonEmptyString,
+  snapshot: ThreadIssueSnapshot,
+  updatedAt: IsoDateTime,
+});
+export type ThreadIssueSyncedPayload = typeof ThreadIssueSyncedPayload.Type;
 
 export const ThreadRuntimeModeSetPayload = Schema.Struct({
   threadId: ThreadId,
@@ -2524,6 +2607,21 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.pull-request-synced"),
     payload: ThreadPullRequestSyncedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.issue-linked"),
+    payload: ThreadIssueLinkedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.issue-unlinked"),
+    payload: ThreadIssueUnlinkedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.issue-synced"),
+    payload: ThreadIssueSyncedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

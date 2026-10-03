@@ -41,6 +41,7 @@ import {
   ThreadPullRequestSnapshot,
   ThreadPullRequestStack,
   type ThreadPullRequestLink,
+  ThreadIssueLink,
 } from "@t3tools/contracts";
 import { legacyLinkedPullRequestOf } from "@t3tools/shared/threadPullRequests";
 import * as Arr from "effect/Array";
@@ -152,6 +153,7 @@ const ProjectionThreadDbRowSchema = ProjectionThread.mapFields(
     agentPanelSummary: Schema.optionalKey(
       Schema.NullOr(Schema.fromJsonString(ThreadAgentPanelSummary)),
     ),
+    issues: Schema.fromJsonString(Schema.Array(ThreadIssueLink)),
   }),
 );
 const ProjectionThreadActivityDbRowSchema = ProjectionThreadActivity.mapFields(
@@ -617,6 +619,22 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
     ) ELSE NULL END AS "agentPanelSummary",
   `;
 
+  const threadIssuesColumn = sql`
+    coalesce((
+      SELECT json_group_array(json_object(
+        'host', issue.host,
+        'repository', issue.repository,
+        'number', issue.number,
+        'url', issue.url,
+        'linkedAt', issue.linked_at,
+        'snapshot', json(issue.snapshot_json)
+      ))
+      FROM projection_thread_issues issue
+      WHERE issue.thread_id = threads.thread_id
+      ORDER BY issue.linked_at ASC, issue.number ASC
+    ), '[]') AS "issues",
+  `;
+
   const listThreadRows = SqlSchema.findAll({
     Request: Schema.Void,
     Result: ProjectionThreadDbRowSchema,
@@ -624,6 +642,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       sql`
         SELECT
           ${agentPanelSummaryColumns}
+          ${threadIssuesColumn}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -676,6 +695,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       sql`
         SELECT
           ${agentPanelSummaryColumns}
+          ${threadIssuesColumn}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -755,6 +775,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       sql`
         SELECT
           ${agentPanelSummaryColumns}
+          ${threadIssuesColumn}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -1370,6 +1391,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       sql`
         SELECT
           ${agentPanelSummaryColumns}
+          ${threadIssuesColumn}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -1494,6 +1516,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
       sql`
         SELECT
           ${agentPanelSummaryColumns}
+          ${threadIssuesColumn}
           thread_id AS "threadId",
           project_id AS "projectId",
           title,
@@ -2517,6 +2540,7 @@ pending_approval_requests AS (
                   row.projectId,
                   repositoryIdentities.get(row.projectId),
                 ),
+                issues: row.issues,
                 branchPullRequest: row.branchPullRequest,
                 latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                 goal: row.goal,
@@ -2769,6 +2793,7 @@ pending_approval_requests AS (
                     row.projectId,
                     repositoryIdentities.get(row.projectId),
                   ),
+                  issues: row.issues,
                   branchPullRequest: row.branchPullRequest,
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                   goal: row.goal,
@@ -2934,6 +2959,7 @@ pending_approval_requests AS (
                           row.projectId,
                           repositoryIdentities.get(row.projectId),
                         ),
+                        issues: row.issues,
                         latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                         goal: row.goal,
                         createdAt: row.createdAt,
@@ -3129,6 +3155,7 @@ pending_approval_requests AS (
                     row.projectId,
                     repositoryIdentities.get(row.projectId),
                   ),
+                  issues: row.issues,
                   latestTurn: latestTurnByThread.get(row.threadId) ?? null,
                   goal: row.goal,
                   createdAt: row.createdAt,
@@ -3510,6 +3537,7 @@ pending_approval_requests AS (
             : Option.getOrNull(yield* getProjectShellById(threadRow.value.projectId))
                 ?.repositoryIdentity,
         ),
+        issues: threadRow.value.issues,
         branchPullRequest: threadRow.value.branchPullRequest,
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         goal: threadRow.value.goal,
@@ -3836,6 +3864,7 @@ pending_approval_requests AS (
             : Option.getOrNull(yield* getProjectShellById(threadRow.value.projectId))
                 ?.repositoryIdentity,
         ),
+        issues: threadRow.value.issues,
         branchPullRequest: threadRow.value.branchPullRequest,
         latestTurn: Option.isSome(latestTurnRow) ? mapLatestTurn(latestTurnRow.value) : null,
         goal: threadRow.value.goal,
