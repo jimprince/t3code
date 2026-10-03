@@ -744,14 +744,13 @@ describe("MessagesTimeline", () => {
     expect(resolveTimelineMinimapNavigationInteractive(8)).toBe(false);
     expect(resolveTimelineMinimapNavigationInteractive(0)).toBe(false);
 
-    // The collapsed target stays narrow, but an open preview keeps its full
-    // 20rem width plus the 2rem offset from the minimap rail interactive.
+    // Opening a preview never expands the rail target into the message area.
     expect(resolveTimelineMinimapInteractiveWidth(0, false)).toBe(0);
     expect(resolveTimelineMinimapInteractiveWidth(14, false)).toBe(14);
     expect(resolveTimelineMinimapInteractiveWidth(40, false)).toBe(40);
-    expect(resolveTimelineMinimapInteractiveWidth(0, true)).toBe("22rem");
-    expect(resolveTimelineMinimapInteractiveWidth(14, true)).toBe("22rem");
-    expect(resolveTimelineMinimapInteractiveWidth(40, true)).toBe("22rem");
+    expect(resolveTimelineMinimapInteractiveWidth(0, true)).toBe(0);
+    expect(resolveTimelineMinimapInteractiveWidth(14, true)).toBe(14);
+    expect(resolveTimelineMinimapInteractiveWidth(40, true)).toBe(40);
   });
 
   it("anchors the first user message using its measured height", () => {

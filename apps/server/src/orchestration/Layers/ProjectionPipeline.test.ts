@@ -595,6 +595,28 @@ it.layer(BaseTestLayer)("OrchestrationProjectionPipeline", (it) => {
         assert.deepEqual(rows, [{ activeOrderKey: "gm", updatedAt: orderUpdatedAt }]);
       }
 
+      yield* eventStore.append({
+        type: "thread.meta-updated",
+        eventId: EventId.make("evt-thread-scope"),
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        occurredAt: "2026-01-01T00:00:00.600Z",
+        commandId: CommandId.make("cmd-thread-scope"),
+        causationEventId: null,
+        correlationId: null,
+        metadata: {},
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          scope: "Coordinates the entire repo",
+          updatedAt: orderUpdatedAt,
+        },
+      });
+      yield* projectionPipeline.bootstrap;
+      const scopeRows = yield* sql<{ readonly scope: string | null }>`
+        SELECT scope FROM projection_threads WHERE thread_id = 'thread-1'
+      `;
+      assert.deepEqual(scopeRows, [{ scope: "Coordinates the entire repo" }]);
+
       // Settled lifecycle through the DB pipeline: thread.settled writes the
       // override + timestamp, thread.unsettled(user) flips to the active pin.
       yield* eventStore.append({

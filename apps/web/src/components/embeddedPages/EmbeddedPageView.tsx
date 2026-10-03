@@ -1,4 +1,5 @@
-import { BotIcon, ExternalLinkIcon } from "lucide-react";
+import { useLocation, useNavigate } from "@tanstack/react-router";
+import { ArrowLeftIcon, BotIcon, ExternalLinkIcon } from "lucide-react";
 import { useState } from "react";
 
 import { BrowserSurfaceSlot } from "~/browser/BrowserSurfaceSlot";
@@ -18,6 +19,7 @@ import {
 } from "./embeddedPages.logic";
 import { PageAgentTray } from "./PageAgentTray";
 import { useEmbeddedPages } from "./useEmbeddedPages";
+import "../orchestrators/projectNavigation";
 import {
   usePageAgentBrowserTab,
   usePageAgentClosedTrayGuard,
@@ -144,6 +146,8 @@ function EmbeddedPageLayout({
     readonly tray: React.ReactNode;
   } | null;
 }) {
+  const navigate = useNavigate();
+  const projectReturn = useLocation({ select: (location) => location.state.projectReturn });
   const effectiveUrl = targetUrl ?? page?.url;
   const host = effectiveUrl
     ? resolveEmbeddedPageHost(effectiveUrl, {
@@ -156,6 +160,21 @@ function EmbeddedPageLayout({
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
         <WorkspacePageHeader electron={isElectron}>
+          {projectReturn ? (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Back to project"
+              onClick={() =>
+                void navigate({
+                  to: "/orchestrators/$environmentId/$threadId",
+                  params: projectReturn,
+                })
+              }
+            >
+              <ArrowLeftIcon />
+            </Button>
+          ) : null}
           <WorkspaceBreadcrumb ariaLabel="Page breadcrumb" className="min-w-0 flex-1">
             <WorkspaceBreadcrumbItem current>
               <h1 className="truncate">{page?.name ?? "Page not found"}</h1>
