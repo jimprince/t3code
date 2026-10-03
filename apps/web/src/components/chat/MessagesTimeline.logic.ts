@@ -934,12 +934,16 @@ function attachTrailingToolGroupsToAssistant(
   return result;
 }
 
-/** Match each user message to the next assistant checkpoint. */
+/** Match user messages to checkpoint boundaries, including an interrupted final turn. */
 function buildRevertTurnCountByUserMessageId(input: {
   supportsConversationRollback: boolean;
   timelineEntries: ReadonlyArray<TimelineEntry>;
   turnDiffSummaryByAssistantMessageId: ReadonlyMap<MessageId, TurnDiffSummary>;
   inferredCheckpointTurnCountByTurnId: Readonly<Record<string, number | undefined>>;
+  turnDiffSummaries: ReadonlyArray<TurnDiffSummary>;
+  latestTurn: TimelineLatestTurn | null;
+  isWorking: boolean;
+  runningTurnId: TurnId | null;
 }): Map<MessageId, number> {
   const byUserMessageId = new Map<MessageId, number>();
   const entryCount = input.supportsConversationRollback ? input.timelineEntries.length : 0;
@@ -961,6 +965,7 @@ function buildRevertTurnCountByUserMessageId(input: {
       if (!summary) {
         continue;
       }
+      if (summary.status !== "ready") break;
       const turnCount =
         summary.checkpointTurnCount ?? input.inferredCheckpointTurnCountByTurnId[summary.turnId];
       if (typeof turnCount !== "number") {
@@ -969,6 +974,33 @@ function buildRevertTurnCountByUserMessageId(input: {
       byUserMessageId.set(entry.message.id, Math.max(0, turnCount - 1));
       break;
     }
+  }
+  const latestUserEntry = input.timelineEntries.findLast(
+    (entry) => entry.kind === "message" && entry.message.role === "user",
+  );
+  const terminal =
+    !input.latestTurn ||
+    input.latestTurn.state === "completed" ||
+    input.latestTurn.state === "interrupted" ||
+    input.latestTurn.state === "error";
+  if (
+    input.supportsConversationRollback &&
+    !input.isWorking &&
+    !input.runningTurnId &&
+    terminal &&
+    latestUserEntry?.kind === "message" &&
+    !byUserMessageId.has(latestUserEntry.message.id)
+  ) {
+    let retainedTurnCount = 0;
+    for (const summary of input.turnDiffSummaries) {
+      if (summary.status !== "ready" || summary.completedAt > latestUserEntry.message.createdAt)
+        continue;
+      const turnCount =
+        summary.checkpointTurnCount ?? input.inferredCheckpointTurnCountByTurnId[summary.turnId];
+      if (typeof turnCount === "number") retainedTurnCount = Math.max(retainedTurnCount, turnCount);
+    }
+    // Zero also permits conversation-only rewind when no filesystem baseline is available.
+    byUserMessageId.set(latestUserEntry.message.id, retainedTurnCount);
   }
   return byUserMessageId;
 }
@@ -1002,6 +1034,10 @@ export function deriveMessagesTimelineRows(input: {
     supportsConversationRollback: input.supportsConversationRollback,
     timelineEntries: input.timelineEntries,
     turnDiffSummaryByAssistantMessageId,
+    turnDiffSummaries: input.turnDiffSummaries,
+    latestTurn: input.latestTurn ?? null,
+    isWorking: input.isWorking,
+    runningTurnId: input.runningTurnId ?? null,
     inferredCheckpointTurnCountByTurnId: input.supportsConversationRollback
       ? inferCheckpointTurnCountByTurnId(input.turnDiffSummaries)
       : {},
