@@ -1,0 +1,4 @@
+id = "supervising-thread-status"
+category = "feature"
+functionality = "thread lists"
+text = "See Supervising on an idle orchestrator while one of its nested agents is still active."
