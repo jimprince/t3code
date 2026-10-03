@@ -1482,4 +1482,4 @@ purpose = "Persist project-owned timed prompts, recover scheduled runs after dow
 retire_when = "Upstream provides equivalent project-scoped timed automations with persisted runs and busy-target delivery."
 depends_on = ["fork-subthread-lifecycle"]
 roles = []
-note = "Hourly, daily and weekly schedules store an IANA timezone. One event-driven timer wakes at the next due time; downtime coalesces to the latest missed occurrence within 24 hours. Copied dev state cannot fire automation runs while startup resume is disabled. CLI commands remain owned by fork-worker-operations."
+note = "Hourly, daily and weekly schedules store an IANA timezone. One event-driven timer wakes at the next due time; downtime coalesces to the latest missed occurrence within 24 hours. Copied dev state cannot fire automation runs while startup resume is disabled. CLI commands remain owned by fork-worker-operations. Fork migration10 follows the published named-agent migration9; integrate on the current fork stack before deployment."
