@@ -150,7 +150,7 @@ function EnvironmentNotifications({
             : status === "failed"
               ? "Thread failed"
               : "Input needed";
-      if (!nestedThreadIds.has(thread.id) && hasNotificationSound(mode)) {
+      if (hasNotificationSound(mode)) {
         void playNotificationSound(kind, () =>
           hasNotificationSound(getClientSettings().notificationMode),
         );
