@@ -48,6 +48,12 @@ import { projectEvent } from "./projector.ts";
 import { threadHasQueuedTurnStart } from "./ThreadSettlementPolicy.ts";
 import { isSettledSubthreadArchiveCandidate } from "./SettledSubthreadArchivePolicy.ts";
 import { threadNestingViolation } from "./threadNesting.ts";
+import {
+  liveNamedAgentThreads,
+  namedAgentOf,
+  namedAgentSlotViolation,
+  namedAgentThreadIsBusy,
+} from "./namedAgents.ts";
 
 const monogramSegmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
@@ -313,6 +319,27 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           exceptProjectId: command.projectId,
         });
       }
+      if (command.permanentAgent) {
+        const agentName = command.permanentAgent.name;
+        const namesake = readModel.projects.find(
+          (candidate) =>
+            candidate.id !== command.projectId &&
+            candidate.deletedAt === null &&
+            candidate.permanentAgent?.name === agentName,
+        );
+        if (namesake !== undefined) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Named agent '${agentName}' already exists in project '${namesake.id}'.`,
+          });
+        }
+        if (liveNamedAgentThreads(readModel.threads, command.projectId).length > 1) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Project '${command.projectId}' has several live top-level threads; archive or nest all but one before naming it an agent.`,
+          });
+        }
+      }
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -336,6 +363,9 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.faviconPath !== undefined ? { faviconPath: command.faviconPath } : {}),
           ...(command.projectIcon !== undefined ? { projectIcon: command.projectIcon } : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
+          ...(command.permanentAgent !== undefined
+            ? { permanentAgent: command.permanentAgent }
+            : {}),
           updatedAt: occurredAt,
         },
       };
@@ -431,7 +461,57 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: createNestingViolation,
         });
       }
-      return {
+      // Named agents: one live top-level incarnation, replaced only by an
+      // atomic handover from an idle predecessor.
+      const agentName = project.permanentAgent?.name ?? null;
+      const isAgentRoot = agentName !== null && createParentThreadId === null;
+      const handoverFromThreadId = command.handoverFromThreadId ?? null;
+      if (handoverFromThreadId !== null && !isAgentRoot) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Only a named agent's top-level thread can be handed over.",
+        });
+      }
+      const handoverEvents: PlannedOrchestrationEvent[] = [];
+      if (isAgentRoot) {
+        const live = liveNamedAgentThreads(readModel.threads, command.projectId, command.threadId);
+        const current = live[0];
+        if (handoverFromThreadId === null && current !== undefined) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: `Named agent '${agentName}' already has a live thread (${current.id}). Send to it, or hand it over.`,
+          });
+        }
+        if (handoverFromThreadId !== null) {
+          if (current === undefined || current.id !== handoverFromThreadId || live.length > 1) {
+            return yield* new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `Named agent '${agentName}' can only hand over from its live thread${current ? ` (${current.id})` : ""}.`,
+            });
+          }
+          if (namedAgentThreadIsBusy(current) || openRequests(current).size > 0) {
+            return yield* new OrchestrationCommandInvariantError({
+              commandType: command.type,
+              detail: `Named agent '${agentName}' is busy in ${current.id}; hand over after its turn finishes.`,
+            });
+          }
+          handoverEvents.push({
+            ...(yield* withEventBase({
+              aggregateKind: "thread",
+              aggregateId: current.id,
+              occurredAt: command.createdAt,
+              commandId: command.commandId,
+            })),
+            type: "thread.archived",
+            payload: {
+              threadId: current.id,
+              archivedAt: command.createdAt,
+              updatedAt: command.createdAt,
+            },
+          });
+        }
+      }
+      const createdEvent: PlannedOrchestrationEvent = {
         ...(yield* withEventBase({
           aggregateKind: "thread",
           aggregateId: command.threadId,
@@ -457,6 +537,28 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             : {}),
         },
       };
+      if (!isAgentRoot) {
+        return createdEvent;
+      }
+      // An incarnation never settles itself away; the agent stays reachable.
+      return [
+        ...handoverEvents,
+        createdEvent,
+        {
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: command.threadId,
+            occurredAt: command.createdAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.auto-settle-set",
+          payload: {
+            threadId: command.threadId,
+            autoSettleDisabledAt: command.createdAt,
+            updatedAt: command.createdAt,
+          },
+        },
+      ];
     }
 
     case "thread.delete": {
@@ -521,11 +623,25 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
     }
 
     case "thread.unarchive": {
-      yield* requireThreadArchived({
+      const archivedThread = yield* requireThreadArchived({
         readModel,
         command,
         threadId: command.threadId,
       });
+      if ((archivedThread.parentThreadId ?? null) === null) {
+        const slotViolation = namedAgentSlotViolation({
+          threads: readModel.threads,
+          projects: readModel.projects,
+          projectId: archivedThread.projectId,
+          threadId: archivedThread.id,
+        });
+        if (slotViolation !== null) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: slotViolation,
+          });
+        }
+      }
       const occurredAt = yield* nowIso;
       return {
         ...(yield* withEventBase({
@@ -928,6 +1044,16 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // state again keeps the existing timestamps so duplicates do not churn
       // ordering. The flag is independent of the settled lifecycle: it only
       // gates the automatic paths, so it never blocks a manual settle.
+      if (
+        command.enabled &&
+        (thread.parentThreadId ?? null) === null &&
+        namedAgentOf(readModel.projects, thread.projectId) !== null
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "A named agent's live thread cannot settle automatically.",
+        });
+      }
       const currentlyDisabledAt = thread.autoSettleDisabledAt ?? null;
       const unchanged = command.enabled
         ? currentlyDisabledAt === null
@@ -1034,6 +1160,19 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           return yield* new OrchestrationCommandInvariantError({
             commandType: command.type,
             detail: violation,
+          });
+        }
+      } else if (thread.archivedAt === null && thread.deletedAt === null) {
+        const slotViolation = namedAgentSlotViolation({
+          threads: readModel.threads,
+          projects: readModel.projects,
+          projectId: thread.projectId,
+          threadId: thread.id,
+        });
+        if (slotViolation !== null) {
+          return yield* new OrchestrationCommandInvariantError({
+            commandType: command.type,
+            detail: slotViolation,
           });
         }
       }
@@ -2336,6 +2475,18 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      const importSlotViolation = namedAgentSlotViolation({
+        threads: readModel.threads,
+        projects: readModel.projects,
+        projectId: command.projectId,
+        threadId: command.threadId,
+      });
+      if (importSlotViolation !== null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: importSlotViolation,
+        });
+      }
 
       const portable = command.thread;
       const plannedEvents: PlannedOrchestrationEvent[] = [];
