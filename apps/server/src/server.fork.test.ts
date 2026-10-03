@@ -927,12 +927,7 @@ const buildAppUnderTest = (options?: {
           }),
         ),
       ),
-      Layer.provide(
-        Layer.mergeAll(
-          Layer.mock(ThreadTransfer)({}),
-          Layer.mock(NamedAgents)({}),
-        ),
-      ),
+      Layer.provide(Layer.mergeAll(Layer.mock(ThreadTransfer)({}), Layer.mock(NamedAgents)({}))),
       Layer.provide(
         Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
           getCommandReadModel: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
