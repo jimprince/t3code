@@ -1,6 +1,6 @@
-Bottom: 5b9e604953395c2c118f61ffebd31b0b0197a1c4
-Top:    c0d7636c1ae3b3f0a84a9e14439313f118f97b80
+Bottom: 7f8e555d65ea196fbdd5685d21f8db7a92c575e4
+Top:    793d86f7a77cee2d0f55c77bcfd6c4a8c26dd833
 Author: brad <bradprin@live.com>
-Date:   2026-10-03 06:28:00 +0000
+Date:   2026-10-03 06:38:12 +0000
 
 feat(threads): brief me summary of worker traffic
