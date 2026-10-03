@@ -1114,6 +1114,23 @@ it.effect("decodes active reorder commands through client and orchestration boun
   }),
 );
 
+it.effect("decodes the order reset command and nullable pinned placement", () =>
+  Effect.gen(function* () {
+    const command = yield* decodeClientOrchestrationCommand({
+      type: "thread.order.reset",
+      commandId: "cmd-order-reset",
+      threadId: "thread-1",
+    });
+    assert.strictEqual(command.type, "thread.order.reset");
+    const payload = yield* decodeThreadMetaUpdatedPayload({
+      threadId: "thread-1",
+      pinOrderKey: null,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(payload.pinOrderKey, null);
+  }),
+);
+
 it.effect("decodes active placement on existing metadata events while accepting old payloads", () =>
   Effect.gen(function* () {
     const payload = { threadId: "thread-1", updatedAt: "2026-01-01T00:00:00.000Z" };

@@ -511,10 +511,12 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   readonly titleRegenerationSupported: boolean;
   /** Server supports reordering this card's section. */
   readonly reorderSupported?: boolean;
+  readonly orderResetSupported?: boolean;
   readonly onMoveThread?: (
     thread: EnvironmentThreadShell,
     direction: ThreadMoveDestination,
   ) => void;
+  readonly onResetThreadOrder?: (thread: EnvironmentThreadShell) => void;
   /** Position flags for the card's section so the menu disables the move that
       would fall off the end of the list. */
   readonly canMoveUp?: boolean;
@@ -598,6 +600,10 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   );
   const handleMoveUp = useCallback(() => onMoveThread?.(thread, "up"), [onMoveThread, thread]);
   const handleMoveDown = useCallback(() => onMoveThread?.(thread, "down"), [onMoveThread, thread]);
+  const handleResetOrder = useCallback(
+    () => props.onResetThreadOrder?.(thread),
+    [props.onResetThreadOrder, thread],
+  );
   const handleArchive = useCallback(() => onArchiveThread(thread), [onArchiveThread, thread]);
 
   // Swipe: the v2 primary action is the lifecycle transition. Un-settling a
@@ -655,6 +661,16 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               image: "arrow.down",
               attributes: { disabled: props.canMoveDown !== true },
             } satisfies MenuAction,
+            ...(props.orderResetSupported === true &&
+            (thread.pinnedAt != null ? thread.pinOrderKey : thread.activeOrderKey) != null
+              ? [
+                  {
+                    id: "reset-order",
+                    title: "Reset to automatic order",
+                    image: "arrow.uturn.backward",
+                  } satisfies MenuAction,
+                ]
+              : []),
           ]
         : []),
       ...(props.pinningSupported
@@ -669,8 +685,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       props.canMoveDown,
       props.canMoveUp,
       props.reorderSupported,
+      props.orderResetSupported,
       props.pinningSupported,
       thread.pinnedAt,
+      thread.pinOrderKey,
+      thread.activeOrderKey,
       variant,
     ],
   );
@@ -782,6 +801,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "arrange") appAtomRegistry.set(threadArrangementOpenAtom, true);
       if (nativeEvent.event === "move-up") handleMoveUp();
       if (nativeEvent.event === "move-down") handleMoveDown();
+      if (nativeEvent.event === "reset-order") handleResetOrder();
       if (nativeEvent.event === "archive") handleArchive();
       if (nativeEvent.event === "rename") handleRename();
       if (nativeEvent.event === "regenerate-title") handleRegenerateTitle();
@@ -813,6 +833,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       handleRename,
       handleMoveDown,
       handleMoveUp,
+      handleResetOrder,
       handlePin,
       handleSettle,
       handleSnooze,
