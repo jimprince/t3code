@@ -7,6 +7,7 @@
  * @module ProjectionProjectRepository
  */
 import {
+  ProjectAutomation,
   IsoDateTime,
   ModelSelection,
   PermanentAgent,
@@ -24,6 +25,7 @@ import type * as Effect from "effect/Effect";
 import type { ProjectionRepositoryError } from "../Errors.ts";
 
 export const ProjectionProject = Schema.Struct({
+  automations: Schema.optionalKey(Schema.Array(ProjectAutomation)),
   projectId: ProjectId,
   title: Schema.String,
   kind: ProjectKind,
