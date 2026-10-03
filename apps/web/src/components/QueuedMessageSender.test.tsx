@@ -188,6 +188,9 @@ describe("sendQueuedMessage", () => {
 
     expect(commandsRun()).toEqual(["runtime", "start"]);
     expect(io.run.mock.calls[1]?.[2]).toMatchObject({ input: { runtimeMode: "full-access" } });
+    expect(io.run.mock.calls[1]?.[2]).toMatchObject({
+      input: { message: { messageId: message.messageId } },
+    });
     expect(queue()).toBeUndefined();
   });
 

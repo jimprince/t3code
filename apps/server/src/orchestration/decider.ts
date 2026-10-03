@@ -1345,6 +1345,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
                 },
               }
             : {}),
+          ...(command.scope !== undefined ? { scope: command.scope } : {}),
           ...(command.regenerateTitle === true
             ? {
                 titleState: {
