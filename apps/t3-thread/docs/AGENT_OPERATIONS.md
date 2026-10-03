@@ -237,6 +237,28 @@ Post-create reliability checklist:
 - persists the same subscription you would otherwise create manually with `agent subscribe --watch <new-agent>`
 - does not replace manual `subscribe`; it is the create-time ownership wiring path
 
+## Named Agents
+
+A named agent is the single owner of one resource (a printer, a deployment). Its
+project folder holds `AGENT.md` (frontmatter `name`, `scope`, `environment`; the
+body is the charter) and `BRIEFING.md` (current state, open items, memories). The
+server keeps at most one live top-level thread per agent; nested threads are its
+sub-agents. Names are unique per environment.
+
+```bash
+t3-thread agents                                   # name, environment, scope, live thread, status
+t3-thread agents add printer --env dev-vm --path ~/.shared/agents/printer --scope "The K1 printer"
+t3-thread send printer "Print bracket v3"          # routes to the live thread, or starts one
+t3-thread agents handover printer "Resume the queue"
+```
+
+`send <name>` checks saved aliases and thread UUIDs first; only an unknown name is
+looked up as a named agent. When the agent has no live thread, the server starts
+one whose first message is the charter, the briefing and your request, and `send`
+reports `"started": true`. Handover is atomic and refused while the agent is
+busy. Before touching a resource another agent may own, check `t3-thread agents`
+and send to its owner instead of acting.
+
 ## Nested Workers And Escalation
 
 Three kinds of delegated work exist in T3 Code. Match the user's words:
