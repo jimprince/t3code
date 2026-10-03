@@ -660,6 +660,7 @@ export function projectEvent(
               ...(payload.activeOrderKey !== undefined
                 ? { activeOrderKey: payload.activeOrderKey }
                 : {}),
+              ...(payload.pinOrderKey !== undefined ? { pinOrderKey: payload.pinOrderKey } : {}),
               ...(payload.settleOnComplete !== undefined
                 ? { settleOnComplete: payload.settleOnComplete }
                 : {}),
