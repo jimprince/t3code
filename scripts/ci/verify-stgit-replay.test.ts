@@ -89,8 +89,24 @@ if [[ "$*" == *'--parallel'* && "$GATE_MODE" == multiple-failures ]]; then exit 
   }
 });
 
+// Stands in for vp: records calls and fails the pre-check the mode names.
+const vpStub = `#!/bin/sh
+printf '%s\\n' "$*" >> .git/vp-calls
+if [ "$*" = 'run knip:check' ] && [ "$GATE_MODE" = knip-fail ]; then exit 43; fi
+case "$*" in 'fmt --check'*) if [ "$GATE_MODE" = format-fail ]; then exit 44; fi ;; esac
+exit 0
+`;
+
 describe("verify-stgit-replay promotion gate", () => {
-  for (const mode of ["pass", "ci-fail", "stage-fail", "mutate", "policy-fail"]) {
+  for (const mode of [
+    "pass",
+    "ci-fail",
+    "stage-fail",
+    "mutate",
+    "policy-fail",
+    "knip-fail",
+    "format-fail",
+  ]) {
     it(`handles ${mode} before permitting promotion`, () => {
       const repo = createFixtureRepo();
       try {
@@ -102,7 +118,7 @@ describe("verify-stgit-replay promotion gate", () => {
         repo.writeFile("scripts/ci/check-fork-release-notes.ts", "process.exit(0);\n");
         repo.writeFile(
           "scripts/ci/stage-ci-candidate",
-          `#!/bin/sh\nexit ${mode === "stage-fail" ? 78 : 0}\n`,
+          `#!/bin/sh\n: > .git/staged\nexit ${mode === "stage-fail" ? 78 : 0}\n`,
         );
         repo.writeFile(
           "scripts/ci/reuse-release-ci.ts",
@@ -118,13 +134,16 @@ case "$2" in
 esac
 `,
         );
+        repo.writeFile("bin/vp", vpStub);
         repo.writeFile("tracked.txt", "original\n");
         for (const path of [
           "scripts/ci/check-stgit-stack",
           "scripts/ci/stage-ci-candidate",
           "bin/gh",
+          "bin/vp",
         ])
           NodeFS.chmodSync(NodePath.join(repo.dir, path), 0o755);
+        repo.git("update-ref", "refs/remotes/origin/main", repo.git("rev-parse", "HEAD"));
         const head = repo.commitAll("gate fixture");
         NodeFS.writeFileSync(
           NodePath.join(repo.dir, ".git/run.json"),
@@ -162,6 +181,22 @@ esac
         assert.equal(repo.git("rev-parse", "HEAD"), head);
         if (mode === "pass") assert.equal(result.status, 0, result.stderr);
         else assert.notEqual(result.status, 0, `${mode} must block promotion`);
+        const vpCalls = NodeFS.existsSync(NodePath.join(repo.dir, ".git/vp-calls"))
+          ? NodeFS.readFileSync(NodePath.join(repo.dir, ".git/vp-calls"), "utf8")
+          : "";
+        const staged = NodeFS.existsSync(NodePath.join(repo.dir, ".git/staged"));
+        if (mode === "pass") {
+          assert.include(vpCalls, "install --frozen-lockfile\n");
+          assert.include(vpCalls, "run knip:check\n");
+          assert.match(vpCalls, /fmt --check --no-error-on-unmatched-pattern -- .*tracked\.txt/);
+        }
+        if (mode === "knip-fail") {
+          assert.equal(result.status, 43);
+          assert.notInclude(vpCalls, "fmt --check");
+        }
+        if (mode === "format-fail") assert.equal(result.status, 44);
+        if (mode === "knip-fail" || mode === "format-fail")
+          assert.isFalse(staged, "a failed pre-check must not spend a candidate CI round");
         if (mode === "mutate") assert.include(result.stderr, "Verification changed the candidate");
         if (mode === "policy-fail") assert.equal(result.status, 69);
         if (mode === "stage-fail") assert.equal(result.status, 78);
@@ -207,12 +242,15 @@ case "$1" in
 esac
 `,
       );
+      repo.writeFile("bin/vp", vpStub);
       for (const path of [
         "scripts/ci/check-stgit-stack",
         "scripts/ci/stage-ci-candidate",
         "bin/gh",
+        "bin/vp",
       ])
         NodeFS.chmodSync(NodePath.join(repo.dir, path), 0o755);
+      repo.git("update-ref", "refs/remotes/origin/main", repo.git("rev-parse", "HEAD"));
       const head = repo.commitAll("gate fixture");
       NodeFS.writeFileSync(
         NodePath.join(repo.dir, ".git/run.json"),

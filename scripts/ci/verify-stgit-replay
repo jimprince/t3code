@@ -8,6 +8,22 @@ tree="$(git rev-parse 'HEAD^{tree}')"
 scripts/ci/check-stgit-stack
 bun scripts/ci/check-fork-docs.ts
 bun scripts/ci/check-fork-release-notes.ts
+
+# Pre-check the two failures candidate CI rejects most often (Knip and
+# formatting), so they cost seconds here instead of a candidate CI round trip.
+# This is a droppable pre-check; candidate CI remains the authoritative gate.
+if [[ ! -d node_modules ]]; then vp install --frozen-lockfile; fi
+vp run knip:check
+published_main="refs/remotes/${STGIT_REMOTE:-origin}/main"
+git rev-parse --verify --quiet "$published_main" >/dev/null ||
+  { echo "Cannot find $published_main to select changed files for the format check." >&2; exit 1; }
+changed=()
+while IFS= read -r -d '' file; do changed+=("$file"); done < <(
+  git diff --name-only -z --diff-filter=ACMR "$published_main" HEAD
+)
+# An empty list would make `vp fmt` check the whole worktree, so skip it.
+if [[ ${#changed[@]} -gt 0 ]]; then vp fmt --check --no-error-on-unmatched-pattern -- "${changed[@]}"; fi
+
 scripts/ci/stage-ci-candidate
 export CI_CANDIDATE_SHA="$head"
 # Resolve evidence against the remote the candidate was staged on. A bare
