@@ -7,6 +7,7 @@ import type {
   ThreadPullRequestKey,
   ThreadPullRequestLink,
 } from "@t3tools/contracts";
+import { threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import {
   isImportedAgentSessionMessageId,
   OrchestrationCheckpointSummary,
@@ -49,6 +50,9 @@ import {
   ThreadPullRequestLinkedPayload,
   ThreadPullRequestSyncedPayload,
   ThreadPullRequestUnlinkedPayload,
+  ThreadIssueLinkedPayload,
+  ThreadIssueSyncedPayload,
+  ThreadIssueUnlinkedPayload,
   ThreadSnoozedPayload,
   ThreadUnpinnedPayload,
   ThreadUnarchivedPayload,
@@ -456,6 +460,7 @@ export function projectEvent(
             branch: payload.branch,
             worktreePath: payload.worktreePath,
             pullRequests: [],
+            issues: [],
             branchPullRequest: null,
             latestTurn: null,
             goal: null,
@@ -765,6 +770,57 @@ export function projectEvent(
             ...nextBase,
             threads: updateThread(nextBase.threads, payload.threadId, {
               ...pullRequestsPatch(thread, pullRequests, nextBase.projects),
+              updatedAt: payload.updatedAt,
+            }),
+          };
+        }),
+      );
+
+    case "thread.issue-linked":
+      return decodeForEvent(ThreadIssueLinkedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            issues: [
+              ...(nextBase.threads
+                .find((thread) => thread.id === payload.threadId)!
+                .issues?.filter((issue) => !threadIssueKeysEqual(issue, payload.link)) ?? []),
+              payload.link,
+            ],
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.issue-unlinked":
+      return decodeForEvent(ThreadIssueUnlinkedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => ({
+          ...nextBase,
+          threads: updateThread(nextBase.threads, payload.threadId, {
+            issues:
+              nextBase.threads
+                .find((thread) => thread.id === payload.threadId)
+                ?.issues?.filter((issue) => !threadIssueKeysEqual(issue, payload)) ?? [],
+            updatedAt: payload.updatedAt,
+          }),
+        })),
+      );
+
+    case "thread.issue-synced":
+      return decodeForEvent(ThreadIssueSyncedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          if (!thread || !thread.issues?.some((issue) => threadIssueKeysEqual(issue, payload))) {
+            return nextBase;
+          }
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              issues: thread.issues.map((issue) =>
+                threadIssueKeysEqual(issue, payload)
+                  ? { ...issue, url: payload.url, snapshot: payload.snapshot }
+                  : issue,
+              ),
               updatedAt: payload.updatedAt,
             }),
           };
