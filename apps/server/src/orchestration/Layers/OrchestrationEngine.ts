@@ -66,6 +66,14 @@ function commandToAggregateRef(command: OrchestrationCommand): {
   readonly aggregateId: ProjectId | ThreadId;
 } {
   switch (command.type) {
+    case "project.automation.create":
+    case "project.automation.update":
+    case "project.automation.pause":
+    case "project.automation.resume":
+    case "project.automation.delete":
+    case "project.automation.run":
+    case "project.automation.fire":
+    case "project.automation.run.update":
     case "project.create":
     case "project.meta.update":
     case "project.delete":
