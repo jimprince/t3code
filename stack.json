@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "c9e4d6459cb2c24f1c18a4e53269ed539cb0a087",
-  "head": "f9f336087d293445d33ed07f245e916edd4b4b40",
+  "prev": "396c5bef039e7b15041f15bdff2a86eca18d0fce",
+  "head": "8d03c32fd43a4cfaaa11ef2592e109bd0d7bd18b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -74,7 +74,7 @@
       "oid": "c3eb29072550f6d1a02af748a42afb24507cc578"
     },
     "fork-agent-thread-ordering": {
-      "oid": "f9f336087d293445d33ed07f245e916edd4b4b40"
+      "oid": "8d03c32fd43a4cfaaa11ef2592e109bd0d7bd18b"
     },
     "fork-antigravity-errors": {
       "oid": "93f937e88317f5d684ee5bc0de3199192c0c6ec2"
