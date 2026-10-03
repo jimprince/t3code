@@ -1453,3 +1453,13 @@ purpose = "Disable automatic provider session and background-work recovery in de
 retire_when = "Upstream guards automatic startup continuation in copied sandbox state."
 depends_on = ["fork-provider-turn-safety", "fork-resume-background-work"]
 roles = []
+
+[[patch]]
+name = "fork-agent-thread-ordering"
+subject = "feat(threads): let agents control sidebar order"
+class = "product"
+purpose = "Share persisted pinned and active sibling order between agents and every client, with row-menu movement and an explicit return to automatic placement."
+retire_when = "Upstream exposes server-owned thread order to automation and offers equivalent move and reset controls on every client."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "The existing pinOrderKey and activeOrderKey remain the only stored order state. thread.order.reset clears the current section's key through a backward-compatible thread.meta-updated event; no migration is needed. Pinned rows sort manually first and new pins land at the top. Active rows remain recency-first until explicitly moved, then join the manual run. Nested rows use the same rule within their direct sibling bucket."

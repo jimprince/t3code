@@ -150,6 +150,54 @@ it.layer(NodeServices.layer)("active thread ordering", (it) => {
     }),
   );
 
+  it.effect("resets the current pinned or active section without changing activity", () =>
+    Effect.gen(function* () {
+      for (const readModel of [
+        makeReadModel({ activeOrderKey: "m", unsettledAt: BEFORE_NOW }),
+        makeReadModel({ pinnedAt: BEFORE_NOW, pinOrderKey: "g", activeOrderKey: "m" }),
+      ]) {
+        const pinned = readModel.threads[0]!.pinnedAt != null;
+        const decided = yield* decideOrchestrationCommand({
+          command: {
+            type: "thread.order.reset",
+            commandId: CommandId.make(`reset-${pinned ? "pinned" : "active"}`),
+            threadId: THREAD_ID,
+          },
+          readModel,
+        });
+        const event = Array.isArray(decided) ? decided[0]! : decided;
+        expect(event).toMatchObject({
+          type: "thread.meta-updated",
+          payload: {
+            threadId: THREAD_ID,
+            ...(pinned ? { pinOrderKey: null } : { activeOrderKey: null }),
+            updatedAt: NOW,
+          },
+        });
+        const projected = yield* projectEvent(readModel, { ...event, sequence: 1 });
+        expect(projected.threads[0]).toMatchObject({
+          activeOrderKey: pinned ? "m" : null,
+          pinOrderKey: null,
+          updatedAt: NOW,
+        });
+      }
+    }),
+  );
+
+  it.effect("rejects resetting a settled unpinned thread", () =>
+    Effect.gen(function* () {
+      const error = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.order.reset",
+          commandId: CommandId.make("reset-settled"),
+          threadId: THREAD_ID,
+        },
+        readModel: makeReadModel({ settledOverride: "settled" }),
+      }).pipe(Effect.flip);
+      expect(error._tag).toBe("OrchestrationCommandInvariantError");
+    }),
+  );
+
   it.effect(
     "changes a snoozed thread's retained slot without waking it or changing timestamps",
     () =>
