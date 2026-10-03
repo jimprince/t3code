@@ -1,4 +1,5 @@
 import type {
+  MessageId,
   ModelSelection,
   PreviewAnnotationPayload,
   ProviderInteractionMode,
@@ -9,7 +10,7 @@ import { create } from "zustand";
 import type { LocalDispatchSnapshot } from "./components/ChatView.logic";
 import type { ComposerFileAttachment, ComposerImageAttachment } from "./composerDraftStore";
 import type { TerminalContextDraft } from "./lib/terminalContext";
-import { randomUUID } from "./lib/utils";
+import { newMessageId, randomUUID } from "./lib/utils";
 import type { ReviewCommentContext } from "./reviewCommentContext";
 
 /**
@@ -32,6 +33,8 @@ export interface QueuedMessageSendSettings {
  */
 export interface QueuedComposerMessage {
   id: string;
+  /** Stable id used when this queued draft becomes a persisted user message. */
+  messageId: MessageId;
   prompt: string;
   images: ComposerImageAttachment[];
   files: ComposerFileAttachment[];
@@ -75,7 +78,10 @@ interface QueuedDispatch {
 interface QueuedMessageStoreState {
   queuesByThreadKey: Record<string, QueuedComposerMessage[]>;
   lastDispatchByThreadKey: Record<string, QueuedDispatch>;
-  enqueue: (threadKey: string, message: Omit<QueuedComposerMessage, "id">) => QueuedComposerMessage;
+  enqueue: (
+    threadKey: string,
+    message: Omit<QueuedComposerMessage, "id" | "messageId">,
+  ) => QueuedComposerMessage;
   /**
    * Marks one message as sending and returns it, or null when it is gone or
    * the thread already has a send under way. The other messages are
@@ -133,7 +139,11 @@ export const useQueuedMessageStore = create<QueuedMessageStoreState>()((set, get
     queuesByThreadKey: {},
     lastDispatchByThreadKey: {},
     enqueue: (threadKey, message) => {
-      const entry: QueuedComposerMessage = { ...message, id: randomUUID() };
+      const entry: QueuedComposerMessage = {
+        ...message,
+        id: randomUUID(),
+        messageId: newMessageId(),
+      };
       update(threadKey, [...queueOf(threadKey), entry]);
       return entry;
     },

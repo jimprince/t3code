@@ -1,4 +1,4 @@
-import { ProviderInstanceId } from "@t3tools/contracts";
+import { MessageId, ProviderInstanceId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { queuedMessageForEmptyEnter } from "./queuedMessageEnter";
@@ -7,6 +7,7 @@ import type { QueuedComposerMessage } from "./queuedMessageStore";
 function queued(id: string): QueuedComposerMessage {
   return {
     id,
+    messageId: MessageId.make(`message-${id}`),
     prompt: `prompt ${id}`,
     images: [],
     files: [],
