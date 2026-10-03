@@ -237,6 +237,7 @@ import { isEditableFocused } from "../lib/editableFocus";
 import ThreadTerminalDrawer from "./ThreadTerminalDrawer";
 import {
   AlarmClockIcon,
+  ArrowLeftIcon,
   CheckCircle2Icon,
   ChevronDownIcon,
   DownloadIcon,
@@ -496,6 +497,7 @@ import {
   codexArtifactTemplatePromptToAppend,
   waitForStartedServerThread,
   shouldRefocusComposerOnWindowFocus,
+  shouldShowTimelineMinimap,
 } from "./ChatView.logic";
 import type { ThreadSyncPhase } from "../threadSync";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -764,7 +766,13 @@ function isCompactCommandMessage(message: ChatMessage): boolean {
   return message.role === "user" && text === "/compact" && !message.attachments?.length;
 }
 
-type ChatViewProps =
+type ChatViewPresentationProps = {
+  readonly presentation?: "full" | "project-panel" | "project-request";
+  readonly revealMessageId?: MessageId | null;
+  readonly onMessageSent?: ((messageId: MessageId) => void) | undefined;
+};
+
+type ChatViewProps = (
   | {
       environmentId: EnvironmentId;
       threadId: ThreadId;
@@ -784,7 +792,9 @@ type ChatViewProps =
       threadSyncPhase?: never;
       routeKind: "draft";
       draftId: DraftId;
-    };
+    }
+) &
+  ChatViewPresentationProps;
 
 interface TerminalLaunchContext {
   threadId: ThreadId;
@@ -1505,6 +1515,9 @@ export default function ChatView(props: ChatViewProps) {
     onDiffPanelOpen,
     reserveTitleBarControlInset = true,
     forceExpandedMobileComposer = false,
+    presentation = "full",
+    revealMessageId = null,
+    onMessageSent,
   } = props;
   const draftId = routeKind === "draft" ? props.draftId : null;
   const threadSyncPhase = routeKind === "server" ? (props.threadSyncPhase ?? null) : null;
@@ -1631,6 +1644,7 @@ export default function ChatView(props: ChatViewProps) {
     select: (location) => ({
       href: location.href,
       key: location.state.assistantCitationActivation ?? location.state.__TSR_key,
+      projectReturn: location.state.projectReturn,
     }),
   });
   const citationRequest = useMemo<AssistantCitationRequest | null>(() => {
@@ -2035,6 +2049,10 @@ export default function ChatView(props: ChatViewProps) {
     setTimelineAnchor({ threadKey: activeThreadKey, messageId: null });
   }
   const timelineAnchorMessageId = timelineAnchor.messageId;
+  useEffect(() => {
+    if (revealMessageId === null || activeThreadKey === null) return;
+    setTimelineAnchor({ threadKey: activeThreadKey, messageId: revealMessageId });
+  }, [activeThreadKey, revealMessageId]);
   const activeRightPanelKind = useRightPanelStore((state) =>
     selectActiveRightPanel(state.byThreadKey, activeThreadRef),
   );
@@ -7871,7 +7889,7 @@ export default function ChatView(props: ChatViewProps) {
       ) {
         return;
       }
-      useQueuedMessageStore.getState().enqueue(activeThreadKey, {
+      const queued = useQueuedMessageStore.getState().enqueue(activeThreadKey, {
         prompt: promptForSend,
         images: [...composerImages],
         files: [...composerFiles],
@@ -7891,6 +7909,7 @@ export default function ChatView(props: ChatViewProps) {
       composerTerminalContextsRef.current = [];
       clearComposerDraftContent(composerDraftTarget);
       composerRef.current?.resetCursorState();
+      onMessageSent?.(queued.messageId);
       return;
     }
     const threadIdForSend = activeThread.id;
@@ -8645,6 +8664,7 @@ export default function ChatView(props: ChatViewProps) {
         failure = startResult;
       } else {
         turnStartSucceeded = true;
+        onMessageSent?.(messageIdForSend);
         // The turn is under way and will spend quota, so that thread's limits
         // snapshot is stale. Uploads may have outlasted a navigation, so only
         // the sending thread's panel clears.
@@ -9904,6 +9924,11 @@ export default function ChatView(props: ChatViewProps) {
     addFiles: (files) => composerRef.current?.addDroppedFiles(files),
     addFolders: (folders) => composerRef.current?.addDroppedFolders(folders),
   });
+  const openProjectReturn = () => {
+    const target = citationLocation.projectReturn;
+    if (!target) return;
+    void navigate({ to: "/orchestrators/$environmentId/$threadId", params: target });
+  };
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background">
@@ -9930,7 +9955,7 @@ export default function ChatView(props: ChatViewProps) {
           ) : null}
         </WizardPopup>
       </Dialog>
-      {rightPanelControlsAtRoot ? panelLayoutControls : null}
+      {presentation === "full" && rightPanelControlsAtRoot ? panelLayoutControls : null}
       <div
         className={cn(
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
@@ -9939,49 +9964,61 @@ export default function ChatView(props: ChatViewProps) {
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
       >
         {/* Top bar */}
-        <WorkspacePageHeader
-          data-chat-header
-          electron={isElectron}
-          reserveNativeControls={reserveTitleBarControlInset && !inlineRightPanelOwnsTitleBar}
-          className="relative bg-background"
-        >
-          {isElectron && rightPanelControlsAtRoot ? (
-            <span
-              aria-hidden
-              className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] h-[var(--workspace-topbar-height)] w-28 [-webkit-app-region:no-drag]"
+        {presentation === "full" ? (
+          <WorkspacePageHeader
+            data-chat-header
+            electron={isElectron}
+            reserveNativeControls={reserveTitleBarControlInset && !inlineRightPanelOwnsTitleBar}
+            className="relative bg-background"
+          >
+            {isElectron && rightPanelControlsAtRoot ? (
+              <span
+                aria-hidden
+                className="pointer-events-none fixed top-[var(--workspace-controls-top)] right-[var(--workspace-controls-right)] h-[var(--workspace-topbar-height)] w-28 [-webkit-app-region:no-drag]"
+              />
+            ) : null}
+            {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
+            {citationLocation.projectReturn ? (
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Back to project"
+                onClick={openProjectReturn}
+              >
+                <ArrowLeftIcon />
+              </Button>
+            ) : null}
+            <ChatHeader
+              {...(!supportsPullRequests || activeProjectRepository === null
+                ? {}
+                : { onOpenPullRequest: openProjectPullRequest })}
+              activeThreadEnvironmentId={activeThread.environmentId}
+              activeThreadId={activeThread.id}
+              {...(routeKind === "draft" && draftId ? { draftId } : {})}
+              activeThreadTitle={activeThread.title}
+              issues={activeThreadMetadata?.issues ?? []}
+              isServerThread={isServerThread}
+              activeProject={activeProject}
+              openInCwd={gitCwd}
+              activeProjectScripts={activeProjectScripts}
+              preferredScriptId={
+                activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
+              }
+              keybindings={keybindings}
+              availableEditors={availableEditors}
+              rightPanelOpen={rightPanelOpen}
+              gitCwd={gitCwd}
+              onNewThreadInProject={handleNewThreadInActiveProject}
+              {...(activeDraftLogicalProjectKey
+                ? { onOpenProjectSettings: handleOpenDraftProjectSettings }
+                : {})}
+              onRunProjectScript={runProjectScript}
+              onAddProjectScript={saveProjectScript}
+              onUpdateProjectScript={updateProjectScript}
+              onDeleteProjectScript={deleteProjectScript}
             />
-          ) : null}
-          {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
-          <ChatHeader
-            {...(!supportsPullRequests || activeProjectRepository === null
-              ? {}
-              : { onOpenPullRequest: openProjectPullRequest })}
-            activeThreadEnvironmentId={activeThread.environmentId}
-            activeThreadId={activeThread.id}
-            {...(routeKind === "draft" && draftId ? { draftId } : {})}
-            activeThreadTitle={activeThread.title}
-            issues={activeThreadMetadata?.issues ?? []}
-            isServerThread={isServerThread}
-            activeProject={activeProject}
-            openInCwd={gitCwd}
-            activeProjectScripts={activeProjectScripts}
-            preferredScriptId={
-              activeProject ? (lastInvokedScriptByProjectId[activeProject.id] ?? null) : null
-            }
-            keybindings={keybindings}
-            availableEditors={availableEditors}
-            rightPanelOpen={rightPanelOpen}
-            gitCwd={gitCwd}
-            onNewThreadInProject={handleNewThreadInActiveProject}
-            {...(activeDraftLogicalProjectKey
-              ? { onOpenProjectSettings: handleOpenDraftProjectSettings }
-              : {})}
-            onRunProjectScript={runProjectScript}
-            onAddProjectScript={saveProjectScript}
-            onUpdateProjectScript={updateProjectScript}
-            onDeleteProjectScript={deleteProjectScript}
-          />
-        </WorkspacePageHeader>
+          </WorkspacePageHeader>
+        ) : null}
 
         {/* Main content area with optional plan sidebar */}
         <div className="flex min-h-0 min-w-0 flex-1">
@@ -10027,117 +10064,126 @@ export default function ChatView(props: ChatViewProps) {
             </div>
             {/* Messages Wrapper */}
             <div className="relative flex min-h-0 flex-1 flex-col bg-background">
-              <OrchestratorFocusBar
-                traffic={orchestratorFocus.traffic}
-                allTraffic={orchestratorFocus.allTraffic}
-                onAllTrafficChange={orchestratorFocus.setAllTraffic}
-              />
-              {/* Messages — LegendList handles virtualization and scrolling internally */}
-              <MessagesTimeline
-                backgroundRuns={
-                  paintOnlyDisplayedTimeline || orchestratorFocus.allTraffic
-                    ? EMPTY_BACKGROUND_RUNS
-                    : orchestratorFocus.traffic.runs
-                }
-                citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
-                citationHistoryLoading={threadDetailLoading}
-                {...(!paintOnlyDisplayedTimeline
-                  ? {
-                      onCiteAssistantText: citeAssistantText,
-                      agentPanelModel,
-                      onOpenAgents: addAgentsSurface,
-                      onUseArtifactTemplate: useArtifactTemplate,
-                      ...(activeProject ? { onRunShellCommand: runShellCommand } : {}),
+              {presentation !== "project-request" ? (
+                <>
+                  <OrchestratorFocusBar
+                    traffic={orchestratorFocus.traffic}
+                    allTraffic={orchestratorFocus.allTraffic}
+                    onAllTrafficChange={orchestratorFocus.setAllTraffic}
+                  />
+                  {/* Messages — LegendList handles virtualization and scrolling internally */}
+                  <MessagesTimeline
+                    showMinimap={shouldShowTimelineMinimap(presentation)}
+                    backgroundRuns={
+                      paintOnlyDisplayedTimeline || orchestratorFocus.allTraffic
+                        ? EMPTY_BACKGROUND_RUNS
+                        : orchestratorFocus.traffic.runs
                     }
-                  : {})}
-                isWorking={!paintOnlyDisplayedTimeline && isWorking}
-                isPreparingWorktree={!paintOnlyDisplayedTimeline && isPreparingWorktree}
-                isCompacting={!paintOnlyDisplayedTimeline && isCompacting}
-                isThreadDetailLoading={!paintOnlyDisplayedTimeline && isThreadDetailLoading}
-                activeTurnStartedAt={paintOnlyDisplayedTimeline ? null : activeWorkStartedAt}
-                worktreeSetup={paintOnlyDisplayedTimeline ? null : worktreeSetup}
-                onCancelWorktreeSetup={onCancelWorktreeSetup}
-                {...(draftId ? { onWorktreeSetupWorkLocally } : {})}
-                {...(onOpenWorktreeSetupTerminal ? { onOpenWorktreeSetupTerminal } : {})}
-                listRef={legendListRef}
-                timelineEntries={displayedTimeline.entries}
-                latestTurn={paintOnlyDisplayedTimeline ? null : activeLatestTurn}
-                runningTurnId={paintOnlyDisplayedTimeline ? null : activeRunningTurnId}
-                turnDiffSummaries={
-                  paintOnlyDisplayedTimeline
-                    ? EMPTY_HELD_TURN_DIFF_SUMMARIES
-                    : activeThread.checkpoints
-                }
-                activeThreadEnvironmentId={
-                  displayedThreadRef?.environmentId ?? activeThread.environmentId
-                }
-                routeThreadKey={displayedTimelineKey}
-                displayThreadKey={displayedTimelineKey}
-                onOpenTurnDiff={paintOnlyDisplayedTimeline ? noopHeldTurnDiff : onOpenTurnDiff}
-                supportsConversationRollback={
-                  !paintOnlyDisplayedTimeline && supportsConversationRollback
-                }
-                onRevertToTurnCount={
-                  paintOnlyDisplayedTimeline ? noopHeldRevert : onRevertTimelineTurn
-                }
-                onForkMessage={paintOnlyDisplayedTimeline ? noopHeldFork : onForkMessage}
-                canForkThread={Boolean(
-                  !paintOnlyDisplayedTimeline &&
-                  isServerThread &&
-                  activeProject &&
-                  activeProject.kind !== "chat",
-                )}
-                canForkToNewWorktree={Boolean(
-                  !paintOnlyDisplayedTimeline &&
-                  isServerThread &&
-                  activeProject &&
-                  activeProject.kind !== "chat" &&
-                  isGitRepo,
-                )}
-                isRevertingCheckpoint={!paintOnlyDisplayedTimeline && isRevertingCheckpoint}
-                onImageExpand={onExpandTimelineImage}
-                onFileOpen={paintOnlyDisplayedTimeline ? noopHeldAttachment : openFileAttachment}
-                onFileDownload={
-                  paintOnlyDisplayedTimeline ? noopHeldAttachment : downloadFileAttachment
-                }
-                markdownCwd={
-                  paintOnlyDisplayedTimeline
-                    ? (heldPaintContext?.markdownCwd ?? undefined)
-                    : (gitCwd ?? undefined)
-                }
-                resolvedTheme={resolvedTheme}
-                timestampFormat={timestampFormat}
-                workspaceRoot={
-                  paintOnlyDisplayedTimeline
-                    ? (heldPaintContext?.workspaceRoot ?? undefined)
-                    : activeWorkspaceRoot
-                }
-                skills={
-                  activeProviderStatus
-                    ? resolveProviderSkillsForCwd(activeProviderStatus, gitCwd)
-                    : EMPTY_PROVIDER_SKILLS
-                }
-                anchorMessageId={paintOnlyDisplayedTimeline ? null : timelineAnchorMessageId}
-                onAnchorReady={onTimelineAnchorReady}
-                contentInsetEndAdjustment={composerTimelineInset}
-                liveFollowEnabled={!paintOnlyDisplayedTimeline && timelineLiveFollowEnabled}
-                onIsAtEndChange={onIsAtEndChange}
-                onContentOverflowChange={setTimelineOverflows}
-                onToolOutputCollapsedAtEnd={onToolOutputCollapsedAtEnd}
-                onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
-                cancelPositionRestoreRef={cancelPositionRestoreRef}
-                hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
-                topFadeEnabled={!hasTimelineTopBanner}
-                loadEarlier={paintOnlyDisplayedTimeline ? null : loadEarlierTurns}
-                queuedMessages={paintOnlyDisplayedTimeline ? EMPTY_QUEUED_MESSAGES : queuedMessages}
-                onSteerQueuedMessage={onSteerQueuedMessage}
-                steerQueuedMessageShortcutLabel={shortcutLabelForCommand(
-                  keybindings,
-                  "thread.steerQueuedMessage",
-                  { context: { terminalFocus: false } },
-                )}
-                onRemoveQueuedMessage={onRemoveQueuedMessage}
-              />
+                    citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
+                    citationHistoryLoading={threadDetailLoading}
+                    {...(!paintOnlyDisplayedTimeline
+                      ? {
+                          onCiteAssistantText: citeAssistantText,
+                          agentPanelModel,
+                          onOpenAgents: addAgentsSurface,
+                          onUseArtifactTemplate: useArtifactTemplate,
+                          ...(activeProject ? { onRunShellCommand: runShellCommand } : {}),
+                        }
+                      : {})}
+                    isWorking={!paintOnlyDisplayedTimeline && isWorking}
+                    isPreparingWorktree={!paintOnlyDisplayedTimeline && isPreparingWorktree}
+                    isCompacting={!paintOnlyDisplayedTimeline && isCompacting}
+                    isThreadDetailLoading={!paintOnlyDisplayedTimeline && isThreadDetailLoading}
+                    activeTurnStartedAt={paintOnlyDisplayedTimeline ? null : activeWorkStartedAt}
+                    worktreeSetup={paintOnlyDisplayedTimeline ? null : worktreeSetup}
+                    onCancelWorktreeSetup={onCancelWorktreeSetup}
+                    {...(draftId ? { onWorktreeSetupWorkLocally } : {})}
+                    {...(onOpenWorktreeSetupTerminal ? { onOpenWorktreeSetupTerminal } : {})}
+                    listRef={legendListRef}
+                    timelineEntries={displayedTimeline.entries}
+                    latestTurn={paintOnlyDisplayedTimeline ? null : activeLatestTurn}
+                    runningTurnId={paintOnlyDisplayedTimeline ? null : activeRunningTurnId}
+                    turnDiffSummaries={
+                      paintOnlyDisplayedTimeline
+                        ? EMPTY_HELD_TURN_DIFF_SUMMARIES
+                        : activeThread.checkpoints
+                    }
+                    activeThreadEnvironmentId={
+                      displayedThreadRef?.environmentId ?? activeThread.environmentId
+                    }
+                    routeThreadKey={displayedTimelineKey}
+                    displayThreadKey={displayedTimelineKey}
+                    onOpenTurnDiff={paintOnlyDisplayedTimeline ? noopHeldTurnDiff : onOpenTurnDiff}
+                    supportsConversationRollback={
+                      !paintOnlyDisplayedTimeline && supportsConversationRollback
+                    }
+                    onRevertToTurnCount={
+                      paintOnlyDisplayedTimeline ? noopHeldRevert : onRevertTimelineTurn
+                    }
+                    onForkMessage={paintOnlyDisplayedTimeline ? noopHeldFork : onForkMessage}
+                    canForkThread={Boolean(
+                      !paintOnlyDisplayedTimeline &&
+                      isServerThread &&
+                      activeProject &&
+                      activeProject.kind !== "chat",
+                    )}
+                    canForkToNewWorktree={Boolean(
+                      !paintOnlyDisplayedTimeline &&
+                      isServerThread &&
+                      activeProject &&
+                      activeProject.kind !== "chat" &&
+                      isGitRepo,
+                    )}
+                    isRevertingCheckpoint={!paintOnlyDisplayedTimeline && isRevertingCheckpoint}
+                    onImageExpand={onExpandTimelineImage}
+                    onFileOpen={
+                      paintOnlyDisplayedTimeline ? noopHeldAttachment : openFileAttachment
+                    }
+                    onFileDownload={
+                      paintOnlyDisplayedTimeline ? noopHeldAttachment : downloadFileAttachment
+                    }
+                    markdownCwd={
+                      paintOnlyDisplayedTimeline
+                        ? (heldPaintContext?.markdownCwd ?? undefined)
+                        : (gitCwd ?? undefined)
+                    }
+                    resolvedTheme={resolvedTheme}
+                    timestampFormat={timestampFormat}
+                    workspaceRoot={
+                      paintOnlyDisplayedTimeline
+                        ? (heldPaintContext?.workspaceRoot ?? undefined)
+                        : activeWorkspaceRoot
+                    }
+                    skills={
+                      activeProviderStatus
+                        ? resolveProviderSkillsForCwd(activeProviderStatus, gitCwd)
+                        : EMPTY_PROVIDER_SKILLS
+                    }
+                    anchorMessageId={paintOnlyDisplayedTimeline ? null : timelineAnchorMessageId}
+                    onAnchorReady={onTimelineAnchorReady}
+                    contentInsetEndAdjustment={composerTimelineInset}
+                    liveFollowEnabled={!paintOnlyDisplayedTimeline && timelineLiveFollowEnabled}
+                    onIsAtEndChange={onIsAtEndChange}
+                    onContentOverflowChange={setTimelineOverflows}
+                    onToolOutputCollapsedAtEnd={onToolOutputCollapsedAtEnd}
+                    onManualNavigation={cancelTimelineLiveFollowForUserNavigation}
+                    cancelPositionRestoreRef={cancelPositionRestoreRef}
+                    hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
+                    topFadeEnabled={!hasTimelineTopBanner}
+                    loadEarlier={paintOnlyDisplayedTimeline ? null : loadEarlierTurns}
+                    queuedMessages={
+                      paintOnlyDisplayedTimeline ? EMPTY_QUEUED_MESSAGES : queuedMessages
+                    }
+                    onSteerQueuedMessage={onSteerQueuedMessage}
+                    steerQueuedMessageShortcutLabel={shortcutLabelForCommand(
+                      keybindings,
+                      "thread.steerQueuedMessage",
+                      { context: { terminalFocus: false } },
+                    )}
+                    onRemoveQueuedMessage={onRemoveQueuedMessage}
+                  />
+                </>
+              ) : null}
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
               {showScrollToBottom && (
@@ -10466,27 +10512,36 @@ export default function ChatView(props: ChatViewProps) {
         </div>
         {/* end horizontal flex container */}
 
-        {mountedTerminalThreadRefs.map(({ key: mountedThreadKey, threadRef: mountedThreadRef }) => (
-          <PersistentThreadTerminalDrawer
-            key={mountedThreadKey}
-            threadRef={mountedThreadRef}
-            threadId={mountedThreadRef.threadId}
-            active={mountedThreadKey === activeThreadKey}
-            launchContext={
-              mountedThreadKey === activeThreadKey ? (activeTerminalLaunchContext ?? null) : null
-            }
-            focusRequestId={mountedThreadKey === activeThreadKey ? terminalFocusRequestId : 0}
-            splitShortcutLabel={splitTerminalShortcutLabel ?? undefined}
-            splitVerticalShortcutLabel={splitTerminalVerticalShortcutLabel ?? undefined}
-            newShortcutLabel={newTerminalShortcutLabel ?? undefined}
-            closeShortcutLabel={closeTerminalShortcutLabel ?? undefined}
-            keybindings={keybindings}
-            onAddTerminalContext={addTerminalContextToDraft}
-          />
-        ))}
+        {presentation === "full"
+          ? mountedTerminalThreadRefs.map(
+              ({ key: mountedThreadKey, threadRef: mountedThreadRef }) => (
+                <PersistentThreadTerminalDrawer
+                  key={mountedThreadKey}
+                  threadRef={mountedThreadRef}
+                  threadId={mountedThreadRef.threadId}
+                  active={mountedThreadKey === activeThreadKey}
+                  launchContext={
+                    mountedThreadKey === activeThreadKey
+                      ? (activeTerminalLaunchContext ?? null)
+                      : null
+                  }
+                  focusRequestId={mountedThreadKey === activeThreadKey ? terminalFocusRequestId : 0}
+                  splitShortcutLabel={splitTerminalShortcutLabel ?? undefined}
+                  splitVerticalShortcutLabel={splitTerminalVerticalShortcutLabel ?? undefined}
+                  newShortcutLabel={newTerminalShortcutLabel ?? undefined}
+                  closeShortcutLabel={closeTerminalShortcutLabel ?? undefined}
+                  keybindings={keybindings}
+                  onAddTerminalContext={addTerminalContextToDraft}
+                />
+              ),
+            )
+          : null}
       </div>
 
-      {rightPanelPresent && !shouldUseRightPanelSheet && activeThreadRef ? (
+      {presentation === "full" &&
+      rightPanelPresent &&
+      !shouldUseRightPanelSheet &&
+      activeThreadRef ? (
         <RightPanelTabs
           mode="inline"
           widthStorageKey={`t3code:preview-panel-width:${activeThreadKey}`}
@@ -10532,7 +10587,10 @@ export default function ChatView(props: ChatViewProps) {
           {rightPanelContent}
         </RightPanelTabs>
       ) : null}
-      {rightPanelPresent && shouldUseRightPanelSheet && activeThreadRef ? (
+      {presentation === "full" &&
+      rightPanelPresent &&
+      shouldUseRightPanelSheet &&
+      activeThreadRef ? (
         <RightPanelSheet
           animationDurationMs={panelAnimationsActive ? panelAnimationDurationMs : 0}
           open={rightPanelOpen}

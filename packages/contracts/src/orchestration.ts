@@ -893,10 +893,14 @@ export const OrchestrationThreadGoal = Schema.Struct({
 });
 export type OrchestrationThreadGoal = typeof OrchestrationThreadGoal.Type;
 
+export const ThreadScope = TrimmedNonEmptyString.check(Schema.isMaxLength(500));
+export type ThreadScope = typeof ThreadScope.Type;
+
 export const OrchestrationThread = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
+  scope: Schema.optionalKey(Schema.NullOr(ThreadScope)),
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode.pipe(
@@ -1012,6 +1016,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   id: ThreadId,
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
+  scope: Schema.optionalKey(Schema.NullOr(ThreadScope)),
   modelSelection: ModelSelection,
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode.pipe(
@@ -1587,6 +1592,7 @@ const ThreadMetaUpdateCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   title: Schema.optional(TrimmedNonEmptyString),
+  scope: Schema.optional(Schema.NullOr(ThreadScope)),
   regenerateTitle: Schema.optional(Schema.Literal(true)),
   modelSelection: Schema.optional(ModelSelection),
   branch: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
@@ -2276,6 +2282,7 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   title: Schema.optional(TrimmedNonEmptyString),
+  scope: Schema.optional(Schema.NullOr(ThreadScope)),
   /** Intent marker consumed by the title-generation reactor. Keeping this on
       the existing event lets older clients safely ignore the new field. */
   regenerateTitle: Schema.optional(Schema.Literal(true)),
