@@ -18,6 +18,9 @@ export type ThreadActionMenuId =
   | "project-settings"
   | "pin"
   | "unpin"
+  | "move-up"
+  | "move-down"
+  | "reset-order"
   | "settle"
   | "unsettle"
   | "auto-settle"
@@ -50,6 +53,12 @@ export interface ThreadActionMenuState {
     readonly isActive: boolean;
   } | null;
   readonly isPinned: boolean;
+  /** Sidebar-only order controls; null on surfaces without list context. */
+  readonly ordering: {
+    readonly canMoveUp: boolean;
+    readonly canMoveDown: boolean;
+    readonly isManual: boolean;
+  } | null;
   readonly isSettled: boolean;
   /** False while the user has turned automatic settlement off for this thread. */
   readonly autoSettleEnabled: boolean;
@@ -66,6 +75,7 @@ export interface ThreadActionMenuState {
     readonly snooze: boolean;
     readonly pinning: boolean;
     readonly titleRegeneration: boolean;
+    readonly orderReset: boolean;
   };
   readonly snoozePresets: ReadonlyArray<SnoozePreset>;
   /** Null or absent when the environment's server cannot nest threads. */
@@ -101,6 +111,31 @@ function buildBaseThreadActionMenuItems(
           state.isPinned
             ? { id: "unpin" as const, label: "Unpin thread", icon: "pin-off" }
             : { id: "pin" as const, label: "Pin thread", icon: "pin" },
+        ]
+      : []),
+    ...(state.ordering
+      ? [
+          {
+            id: "move-up" as const,
+            label: "Move up",
+            icon: "arrow-up",
+            disabled: !state.ordering.canMoveUp,
+          },
+          {
+            id: "move-down" as const,
+            label: "Move down",
+            icon: "arrow-down",
+            disabled: !state.ordering.canMoveDown,
+          },
+          ...(state.supports.orderReset && state.ordering.isManual
+            ? [
+                {
+                  id: "reset-order" as const,
+                  label: "Reset to automatic order",
+                  icon: "undo-2",
+                },
+              ]
+            : []),
         ]
       : []),
     // Both lifecycle actions stay available on pinned threads: settling

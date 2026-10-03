@@ -1520,6 +1520,12 @@ const ThreadActiveReorderCommand = Schema.Struct({
   orderKey: TrimmedNonEmptyString,
 });
 
+const ThreadOrderResetCommand = Schema.Struct({
+  type: Schema.Literal("thread.order.reset"),
+  commandId: CommandId,
+  threadId: ThreadId,
+});
+
 const ThreadMetaUpdateCommand = Schema.Struct({
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   type: Schema.Literal("thread.meta.update"),
@@ -1730,6 +1736,7 @@ const DispatchableClientOrchestrationCommand = Schema.Union([
   ThreadPinReorderCommand,
   ThreadAutoSettleSetCommand,
   ThreadActiveReorderCommand,
+  ThreadOrderResetCommand,
   ThreadParentSetCommand,
   ThreadMetaUpdateCommand,
   ThreadPullRequestLinkCommand,
@@ -1765,6 +1772,7 @@ export const ClientOrchestrationCommand = Schema.Union([
   ThreadPinReorderCommand,
   ThreadAutoSettleSetCommand,
   ThreadActiveReorderCommand,
+  ThreadOrderResetCommand,
   ThreadParentSetCommand,
   ThreadMetaUpdateCommand,
   ThreadPullRequestLinkCommand,
@@ -2173,6 +2181,7 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   // Order updates use this existing event so older clients can ignore the
   // new field while continuing to decode the event stream.
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
+  pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   title: Schema.optional(TrimmedNonEmptyString),
   /** Intent marker consumed by the title-generation reactor. Keeping this on
       the existing event lets older clients safely ignore the new field. */
