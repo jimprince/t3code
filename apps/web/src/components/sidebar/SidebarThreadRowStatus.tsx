@@ -5,7 +5,6 @@ import {
   EyeIcon,
   MessageCircleQuestionIcon,
   ShieldQuestionIcon,
-  UsersIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -26,11 +25,9 @@ export function SidebarThreadRowStatus({
   trailing?: ReactNode;
 }) {
   const Icon =
-    status.icon === "working"
+    status.icon === "working" || status.icon === "supervising"
       ? CircleDashedIcon
-      : status.icon === "supervising"
-        ? UsersIcon
-        : status.icon === "input"
+      : status.icon === "input"
           ? MessageCircleQuestionIcon
           : status.icon === "approval"
             ? ShieldQuestionIcon
