@@ -26,6 +26,13 @@ import {
 import { ProviderInstanceId } from "./providerInstance.ts";
 import { CodexNativeGoalSummary } from "./codexNativeGoal.ts";
 import {
+  HandOverNamedAgentInput,
+  ListNamedAgentsResult,
+  NamedAgentThreadResult,
+  PermanentAgent,
+  ResolveNamedAgentInput,
+} from "./namedAgents.ts";
+import {
   PullRequestActor,
   PullRequestChecksState,
   PullRequestMergeability,
@@ -46,6 +53,9 @@ export const ORCHESTRATION_WS_METHODS = {
   importThread: "orchestration.importThread",
   forkThread: "orchestration.forkThread",
   briefThread: "orchestration.briefThread",
+  listNamedAgents: "orchestration.listNamedAgents",
+  resolveNamedAgent: "orchestration.resolveNamedAgent",
+  handOverNamedAgent: "orchestration.handOverNamedAgent",
 } as const;
 
 export const ProviderApprovalPolicy = Schema.Literals([
@@ -592,6 +602,8 @@ export const OrchestrationProject = Schema.Struct({
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
   scripts: Schema.Array(ProjectScript),
+  /** Named agent this project is the home of; see namedAgents.ts. */
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
   deletedAt: Schema.NullOr(IsoDateTime),
@@ -942,6 +954,8 @@ export const OrchestrationProjectShell = Schema.Struct({
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
   scripts: Schema.Array(ProjectScript),
+  /** Named agent this project is the home of; see namedAgents.ts. */
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -1390,6 +1404,8 @@ const ProjectMetaUpdateCommand = Schema.Struct({
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
+  /** Absent = leave unchanged; null = the project stops being a named agent. */
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
 });
 
 const ProjectDeleteCommand = Schema.Struct({
@@ -1417,6 +1433,8 @@ const ThreadCreateCommand = Schema.Struct({
   /** Nest the new thread under this orchestrating thread. */
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  /** Named agents: archive this live incarnation in the same commit. */
+  handoverFromThreadId: Schema.optional(ThreadId),
 });
 
 const ThreadDeleteCommand = Schema.Struct({
@@ -2078,6 +2096,8 @@ export const ProjectCreatedPayload = Schema.Struct({
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
   scripts: Schema.Array(ProjectScript),
+  /** Named agent this project is the home of; see namedAgents.ts. */
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   createdAt: IsoDateTime,
   updatedAt: IsoDateTime,
 });
@@ -2093,6 +2113,7 @@ export const ProjectMetaUpdatedPayload = Schema.Struct({
   faviconPath: Schema.optional(Schema.NullOr(ProjectFaviconPath)),
   projectIcon: Schema.optional(Schema.NullOr(ProjectIconOverride)),
   scripts: Schema.optional(Schema.Array(ProjectScript)),
+  permanentAgent: Schema.optional(Schema.NullOr(PermanentAgent)),
   updatedAt: IsoDateTime,
 });
 
@@ -2800,6 +2821,18 @@ export const OrchestrationRpcSchemas = {
   briefThread: {
     input: OrchestrationBriefThreadInput,
     output: OrchestrationBriefThreadResult,
+  },
+  listNamedAgents: {
+    input: Schema.Struct({}),
+    output: ListNamedAgentsResult,
+  },
+  resolveNamedAgent: {
+    input: ResolveNamedAgentInput,
+    output: NamedAgentThreadResult,
+  },
+  handOverNamedAgent: {
+    input: HandOverNamedAgentInput,
+    output: NamedAgentThreadResult,
   },
 } as const;
 
