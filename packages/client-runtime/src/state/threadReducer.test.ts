@@ -411,7 +411,7 @@ describe("applyThreadDetailEvent", () => {
       }
     });
 
-    it("patches title and branch", () => {
+    it("patches title, scope, and branch", () => {
       const result = applyThreadDetailEvent(
         { ...baseThread, activeOrderKey: "m" },
         {
@@ -424,6 +424,7 @@ describe("applyThreadDetailEvent", () => {
           payload: {
             threadId: ThreadId.make("thread-1"),
             title: "Updated Title",
+            scope: "Coordinates the entire repo",
             branch: "feature/demo",
             updatedAt: "2026-04-01T05:00:00.000Z",
           },
@@ -433,6 +434,7 @@ describe("applyThreadDetailEvent", () => {
       expect(result.kind).toBe("updated");
       if (result.kind === "updated") {
         expect(result.thread.title).toBe("Updated Title");
+        expect(result.thread.scope).toBe("Coordinates the entire repo");
         expect(result.thread.branch).toBe("feature/demo");
         expect(result.thread.activeOrderKey).toBe("m");
         // Model selection should be unchanged since it wasn't in the payload
