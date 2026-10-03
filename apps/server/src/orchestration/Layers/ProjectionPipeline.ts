@@ -549,6 +549,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             ...(event.payload.permanentAgent !== undefined
               ? { permanentAgent: event.payload.permanentAgent }
               : {}),
+            ...(event.payload.automations !== undefined
+              ? { automations: event.payload.automations }
+              : {}),
             ...(event.payload.scripts !== undefined ? { scripts: event.payload.scripts } : {}),
             updatedAt: event.payload.updatedAt,
           });
