@@ -92,6 +92,8 @@ The most common defect in this repo is a change that works on the path you teste
 
 An empty database is a bad test. Seed your worktree's `.t3` with a copy of real data instead of pointing at live state:
 
+`vp run dev` disables automatic provider and background-work recovery with `T3CODE_DISABLE_STARTUP_RESUME=1`, even if copied settings or markers request continuation. Set this flag on any manually launched server using copied state. Only set it to `0` for a deliberate recovery test with isolated sessions and working directories; never resume copied sessions that still use real working directories. Installed servers retain startup recovery by default, including custom `--base-dir` homes.
+
 - Copy from `~/.t3/userdata` (the developer's real data, the most realistic test set) or `~/.t3/dev`. Worktree state lives at `<worktree>/.t3/userdata`.
 - Snapshot the database with `VACUUM INTO`, which is safe even while a server has the source open and yields one consistent file:
 
