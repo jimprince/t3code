@@ -6,6 +6,7 @@ const baseState: ThreadActionMenuState = {
   branch: null,
   projectFilter: null,
   isPinned: false,
+  ordering: null,
   isSettled: false,
   autoSettleEnabled: true,
   isSnoozed: false,
@@ -19,6 +20,7 @@ const baseState: ThreadActionMenuState = {
     snooze: true,
     pinning: true,
     titleRegeneration: true,
+    orderReset: true,
   },
   snoozePresets: [
     { id: "hour", label: "In 1 hour", whenLabel: "3:00 PM", snoozedUntil: "2026-08-07T15:00:00Z" },
@@ -46,6 +48,7 @@ describe("buildThreadActionMenuItems", () => {
           snooze: false,
           pinning: false,
           titleRegeneration: false,
+          orderReset: false,
         },
       }),
     ).toEqual(["rename", "mark-unread", "copy", "project-settings", "archive", "delete"]);
@@ -161,6 +164,7 @@ describe("buildThreadActionMenuItems", () => {
           snooze: false,
           pinning: false,
           titleRegeneration: false,
+          orderReset: false,
         },
       }),
     ).toContain("archive");
@@ -171,5 +175,21 @@ describe("buildThreadActionMenuItems", () => {
       (item) => item.id === "archive",
     );
     expect(archiveItem?.disabled).toBe(true);
+  });
+
+  it("offers sidebar ordering and the reverse path only for a manually ordered row", () => {
+    const items = buildThreadActionMenuItems({
+      ...baseState,
+      ordering: { canMoveUp: false, canMoveDown: true, isManual: true },
+    });
+    expect(items.find((item) => item.id === "move-up")?.disabled).toBe(true);
+    expect(items.find((item) => item.id === "move-down")?.disabled).toBe(false);
+    expect(items.find((item) => item.id === "reset-order")?.label).toBe("Reset to automatic order");
+    expect(
+      ids({
+        ...baseState,
+        ordering: { canMoveUp: true, canMoveDown: true, isManual: false },
+      }),
+    ).not.toContain("reset-order");
   });
 });
