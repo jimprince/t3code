@@ -923,8 +923,11 @@ retry from the app). Settlement still holds delivery, even after a quota reset.
 Quota failures replying to routed notifications do not emit further error
 notifications; genuine approvals, questions, and other errors still route.
 
-Settlement also holds persisted sends until explicit resume. Legacy queued routed
-notifications respect quota holds; explicit operator retry remains available.
+Settlement holds queued notifications until explicit resume. Queued parent and
+operator sends resume a settled thread at the next turn boundary, just like direct
+sends. Explicit message origin takes precedence over the legacy notification text
+prefix. Legacy queued routed notifications respect quota holds; explicit operator
+retry remains available.
 A direct CLI retry restarts delivery of held notifications, even if the watcher
 had idled out.
 

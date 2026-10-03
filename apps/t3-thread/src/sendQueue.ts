@@ -304,8 +304,11 @@ export async function drainQueuedSends(options: {
     }
 
     const quota = threadQuotaBlock(thread);
+    const notification = head.origin
+      ? head.origin.source === "worker-notification"
+      : /^(?:HomeNetwork|T3) orchestrator notification:/.test(head.text);
     if (
-      thread.settledOverride === "settled" ||
+      (notification && thread.settledOverride === "settled") ||
       (/^(?:HomeNetwork|T3) orchestrator notification:/.test(head.text) &&
         quota &&
         (quota.resetsAt === null || quota.resetsAt > Date.parse(attemptedAt)))
