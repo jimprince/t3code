@@ -14,6 +14,9 @@ const RPC_METHODS = {
   getFullThreadDiff: ORCHESTRATION_WS_METHODS.getFullThreadDiff,
   subscribeShell: ORCHESTRATION_WS_METHODS.subscribeShell,
   subscribeThread: ORCHESTRATION_WS_METHODS.subscribeThread,
+  listNamedAgents: ORCHESTRATION_WS_METHODS.listNamedAgents,
+  resolveNamedAgent: ORCHESTRATION_WS_METHODS.resolveNamedAgent,
+  handOverNamedAgent: ORCHESTRATION_WS_METHODS.handOverNamedAgent,
 } as const;
 
 const makeT3RpcClient = RpcClient.make(WsRpcGroup);
@@ -46,7 +49,10 @@ export class T3RpcClient {
       | "dispatchCommand"
       | "getTurnDiff"
       | "getFullThreadDiff"
-      | "getArchivedShellSnapshot",
+      | "getArchivedShellSnapshot"
+      | "listNamedAgents"
+      | "resolveNamedAgent"
+      | "handOverNamedAgent",
     input: unknown,
   ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<
