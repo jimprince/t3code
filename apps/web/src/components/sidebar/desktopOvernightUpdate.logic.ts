@@ -15,14 +15,17 @@ export function isOvernight(now: Date): boolean {
 }
 
 export type OvernightUpdateStep =
-  | { readonly type: "download" | "install"; readonly key: string }
+  | {
+      readonly type: "download" | "install";
+      readonly key: string;
+      readonly minimumSystemIdleSeconds?: number;
+    }
   | { readonly type: "wait" };
 
 /**
- * What the overnight updater should do now. A download starts as soon as the
- * night begins; an install also waits until no local agent is working and the
- * user has left the window alone. Each step is tried once per version per
- * night, so a failure waits for the next night instead of looping.
+ * Overnight downloads keep their schedule and retries. Daytime updates also
+ * require system idle time, and are attempted once per version. Both install
+ * paths require no local agent work and a quiet window.
  */
 export function resolveOvernightUpdateStep(input: {
   readonly state: DesktopUpdateState | null;
@@ -30,21 +33,49 @@ export function resolveOvernightUpdateStep(input: {
   readonly userQuiet: boolean;
   readonly busyAgentCount: number;
   readonly attempted: ReadonlySet<string>;
+  readonly installUpdatesWhenIdle?: boolean;
+  readonly updateIdleMinutes?: number;
+  readonly systemIdleSeconds?: number | null;
 }): OvernightUpdateStep {
   const { state, now } = input;
-  if (state === null || !state.enabled || !isOvernight(now)) return { type: "wait" };
+  if (state === null || !state.enabled) return { type: "wait" };
+  const overnight = isOvernight(now);
+  const minimumSystemIdleSeconds = (input.updateIdleMinutes ?? 15) * 60;
+  const systemIdleSeconds = input.systemIdleSeconds;
+  const daytimeIdle =
+    (input.installUpdatesWhenIdle ?? true) &&
+    typeof systemIdleSeconds === "number" &&
+    Number.isFinite(systemIdleSeconds) &&
+    systemIdleSeconds >= minimumSystemIdleSeconds &&
+    input.busyAgentCount === 0;
+  if (!overnight && !daytimeIdle) return { type: "wait" };
   const night = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
   const action = resolveDesktopUpdateButtonAction(state);
   let step: OvernightUpdateStep = { type: "wait" };
   if (action === "download" && state.availableVersion) {
-    step = { type: "download", key: `download ${state.availableVersion} ${night}` };
+    step = {
+      type: "download",
+      key: overnight
+        ? `download ${state.availableVersion} ${night}`
+        : `download ${state.availableVersion} idle`,
+    };
   } else if (
     action === "install" &&
     state.downloadedVersion &&
-    input.userQuiet &&
+    (input.userQuiet || !overnight) &&
     input.busyAgentCount === 0
   ) {
-    step = { type: "install", key: `install ${state.downloadedVersion} ${night}` };
+    const daytimeKey = `install ${state.downloadedVersion} idle`;
+    if (input.attempted.has(daytimeKey)) return { type: "wait" };
+    if (
+      !overnight &&
+      [...input.attempted].some((key) => key.startsWith(`install ${state.downloadedVersion} `))
+    ) {
+      return { type: "wait" };
+    }
+    step = overnight
+      ? { type: "install", key: `install ${state.downloadedVersion} ${night}` }
+      : { type: "install", key: daytimeKey, minimumSystemIdleSeconds };
   }
   return step.type !== "wait" && input.attempted.has(step.key) ? { type: "wait" } : step;
 }

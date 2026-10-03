@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { useClientSettings, useClientSettingsHydrated } from "../../hooks/useSettings";
 import { isElectron } from "../../env";
 import { useDesktopUpdateState } from "../../state/desktopUpdate";
 import { installDownloadedUpdate, useLocalAgentsBlockingRestart } from "./desktopIdleRestart";
@@ -13,24 +14,54 @@ const CLOCK_INTERVAL_MS = 30_000;
 const INTERACTION_EVENTS = ["pointerdown", "keydown", "wheel"] as const;
 
 /** The local time and whether the user has left the window alone, re-read every 30 seconds. */
-function useOvernightClock(): { readonly now: Date; readonly userQuiet: boolean } {
-  const [clock, setClock] = useState(() => ({ now: new Date(), userQuiet: false }));
+function useOvernightClock() {
+  const [clock, setClock] = useState<{
+    now: Date;
+    userQuiet: boolean;
+    systemIdleSeconds: number | null;
+  }>(() => ({ now: new Date(), userQuiet: false, systemIdleSeconds: null }));
   useEffect(() => {
     let lastInteractionAt = Date.now();
+    let disposed = false;
+    let sampling = false;
+    const sampleIdleTime = () => {
+      const bridge = window.desktopBridge;
+      if (sampling || !bridge?.getUpdateState) return;
+      sampling = true;
+      void bridge
+        .getUpdateState()
+        .then((state) => {
+          if (!disposed)
+            setClock((current) => ({
+              ...current,
+              systemIdleSeconds: state.systemIdleSeconds ?? null,
+            }));
+        })
+        .catch(() => {
+          if (!disposed) setClock((current) => ({ ...current, systemIdleSeconds: null }));
+        })
+        .finally(() => {
+          sampling = false;
+        });
+    };
+    sampleIdleTime();
     const onInteraction = () => {
       lastInteractionAt = Date.now();
-      setClock((current) => (current.userQuiet ? { now: new Date(), userQuiet: false } : current));
+      setClock({ now: new Date(), userQuiet: false, systemIdleSeconds: null });
     };
     const interval = window.setInterval(() => {
-      setClock({
+      setClock((current) => ({
+        ...current,
         now: new Date(),
         userQuiet: Date.now() - lastInteractionAt >= OVERNIGHT_USER_QUIET_MS,
-      });
+      }));
+      sampleIdleTime();
     }, CLOCK_INTERVAL_MS);
     for (const event of INTERACTION_EVENTS) {
       window.addEventListener(event, onInteraction, { capture: true, passive: true });
     }
     return () => {
+      disposed = true;
       window.clearInterval(interval);
       for (const event of INTERACTION_EVENTS) {
         window.removeEventListener(event, onInteraction, { capture: true });
@@ -41,7 +72,7 @@ function useOvernightClock(): { readonly now: Date; readonly userQuiet: boolean 
 }
 
 /**
- * Installs desktop updates overnight without being asked: downloads the
+ * Installs desktop updates overnight or after daytime system idle: downloads the
  * update, then restarts into it once local agents have stayed idle for the
  * usual grace period and nobody is using the window. The desktop app rolls
  * back an update that fails to start. Mounted once at AppRoot.
@@ -53,12 +84,27 @@ export function DesktopOvernightUpdateWatcher() {
 function OvernightUpdateWatcher() {
   const state = useDesktopUpdateState();
   const busyAgentCount = useLocalAgentsBlockingRestart();
-  const { now, userQuiet } = useOvernightClock();
+  const { now, userQuiet, systemIdleSeconds } = useOvernightClock();
+  const settings = useClientSettings();
+  const settingsHydrated = useClientSettingsHydrated();
+  const installing = useRef(false);
   const [attempted, setAttempted] = useState<ReadonlySet<string>>(() => new Set());
-  const step = resolveOvernightUpdateStep({ state, now, userQuiet, busyAgentCount, attempted });
+  const step = resolveOvernightUpdateStep({
+    state,
+    now,
+    userQuiet,
+    busyAgentCount,
+    attempted,
+    installUpdatesWhenIdle: settingsHydrated && settings.installUpdatesWhenIdle,
+    updateIdleMinutes: settings.updateIdleMinutes,
+    systemIdleSeconds,
+  });
   const stepType = step.type;
   const stepKey = step.type === "wait" ? null : step.key;
 
+  const minimumSystemIdleSeconds =
+    step.type === "install" ? step.minimumSystemIdleSeconds : undefined;
+  const downloadedVersion = state?.downloadedVersion;
   useEffect(() => {
     if (stepKey === null) return;
     const markAttempted = () => setAttempted((current) => new Set(current).add(stepKey));
@@ -68,11 +114,23 @@ function OvernightUpdateWatcher() {
       return;
     }
     const timer = window.setTimeout(() => {
-      markAttempted();
-      void installDownloadedUpdate();
+      if (installing.current) return;
+      installing.current = true;
+      if (minimumSystemIdleSeconds === undefined) markAttempted();
+      void installDownloadedUpdate(
+        minimumSystemIdleSeconds !== undefined && downloadedVersion
+          ? { expectedVersion: downloadedVersion, minimumSystemIdleSeconds }
+          : undefined,
+      )
+        .then((accepted) => {
+          if (accepted && minimumSystemIdleSeconds !== undefined) markAttempted();
+        })
+        .finally(() => {
+          installing.current = false;
+        });
     }, IDLE_RESTART_GRACE_MS);
     return () => window.clearTimeout(timer);
-  }, [stepKey, stepType]);
+  }, [stepKey, stepType, minimumSystemIdleSeconds, downloadedVersion]);
 
   return null;
 }

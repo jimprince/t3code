@@ -78,3 +78,86 @@ describe("resolveOvernightUpdateStep", () => {
     ).toEqual({ type: "install", key: "install 1.1.0 2026-9-28" });
   });
 });
+
+const daytime = { ...idle, now: at(14), systemIdleSeconds: 900 };
+
+describe("daytime idle updates", () => {
+  it("downloads and installs at the default 15-minute threshold", () => {
+    expect(resolveOvernightUpdateStep({ ...daytime, state: available })).toEqual({
+      type: "download",
+      key: "download 1.1.0 idle",
+    });
+    expect(resolveOvernightUpdateStep({ ...daytime, state: downloaded })).toEqual({
+      type: "install",
+      key: "install 1.1.0 idle",
+      minimumSystemIdleSeconds: 900,
+    });
+    expect(
+      resolveOvernightUpdateStep({ ...daytime, state: downloaded, systemIdleSeconds: 899 }),
+    ).toEqual({ type: "wait" });
+  });
+
+  it("uses the selected threshold and requires system idle and local agents", () => {
+    expect(
+      resolveOvernightUpdateStep({ ...daytime, state: downloaded, updateIdleMinutes: 20 }),
+    ).toEqual({ type: "wait" });
+    expect(
+      resolveOvernightUpdateStep({
+        ...daytime,
+        state: downloaded,
+        updateIdleMinutes: 20,
+        systemIdleSeconds: 1200,
+      }),
+    ).toMatchObject({ type: "install", minimumSystemIdleSeconds: 1200 });
+    for (const overrides of [
+      { userQuiet: false, systemIdleSeconds: 0 },
+      { busyAgentCount: 1 },
+      { systemIdleSeconds: null },
+      { systemIdleSeconds: Number.NaN },
+      { systemIdleSeconds: Infinity },
+    ]) {
+      expect(resolveOvernightUpdateStep({ ...daytime, state: downloaded, ...overrides })).toEqual({
+        type: "wait",
+      });
+    }
+  });
+
+  it("turns off daytime updates while preserving overnight downloads and installs", () => {
+    for (const state of [available, downloaded]) {
+      expect(
+        resolveOvernightUpdateStep({ ...daytime, state, installUpdatesWhenIdle: false }),
+      ).toEqual({ type: "wait" });
+      expect(
+        resolveOvernightUpdateStep({
+          ...idle,
+          state,
+          systemIdleSeconds: 0,
+          installUpdatesWhenIdle: false,
+        }).type,
+      ).toBe(state.status === "available" ? "download" : "install");
+    }
+  });
+
+  it("attempts a daytime install once per version across days and schedules", () => {
+    const attempted = new Set(["install 1.1.0 idle"]);
+    for (const now of [at(14), new Date(2026, 8, 28, 14), at(2)]) {
+      expect(resolveOvernightUpdateStep({ ...daytime, now, state: downloaded, attempted })).toEqual(
+        { type: "wait" },
+      );
+    }
+    expect(
+      resolveOvernightUpdateStep({
+        ...daytime,
+        state: { ...downloaded, downloadedVersion: "1.2.0" },
+        attempted,
+      }).type,
+    ).toBe("install");
+    expect(
+      resolveOvernightUpdateStep({
+        ...daytime,
+        state: downloaded,
+        attempted: new Set(["install 1.1.0 2026-9-26"]),
+      }),
+    ).toEqual({ type: "wait" });
+  });
+});

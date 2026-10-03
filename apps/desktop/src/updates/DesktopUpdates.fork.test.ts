@@ -14,6 +14,7 @@ import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopState from "../app/DesktopState.ts";
 import * as DesktopBackendPool from "../backend/DesktopBackendPool.ts";
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
@@ -171,6 +172,11 @@ function makeHarness(options: UpdatesHarnessOptions = {}) {
     : DesktopAppSettings.layer;
 
   const layer = DesktopUpdates.layer.pipe(
+    Layer.provide(
+      Layer.mock(ElectronPowerMonitor.ElectronPowerMonitor, {
+        getSystemIdleTime: Effect.succeed(0),
+      }),
+    ),
     Layer.provideMerge(updaterLayer),
     Layer.provideMerge(windowLayer),
     Layer.provideMerge(backendLayer),

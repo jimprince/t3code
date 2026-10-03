@@ -4,6 +4,8 @@ import { create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 
 const mocks = vi.hoisted(() => ({
+  idleSeconds: 0,
+  installWhenIdle: true,
   threads: [] as Array<Record<string, unknown>>,
   updateState: null as DesktopUpdateState | null,
 }));
@@ -11,6 +13,13 @@ const mocks = vi.hoisted(() => ({
 vi.mock("../../env", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../env")>()),
   isElectron: true,
+}));
+vi.mock("../../hooks/useSettings", () => ({
+  useClientSettings: () => ({
+    installUpdatesWhenIdle: mocks.installWhenIdle,
+    updateIdleMinutes: 15,
+  }),
+  useClientSettingsHydrated: () => true,
 }));
 vi.mock("../../state/entities", () => ({ useThreadShells: () => mocks.threads }));
 vi.mock("../../state/environments", () => ({
@@ -78,10 +87,16 @@ beforeEach(() => {
     clearInterval: globalThis.clearInterval,
     addEventListener: (event: string, listener: () => void) => listeners.set(event, listener),
     removeEventListener: (event: string) => listeners.delete(event),
-    desktopBridge: { downloadUpdate, installUpdate },
+    desktopBridge: {
+      downloadUpdate,
+      installUpdate,
+      getUpdateState: async () => ({ ...mocks.updateState, systemIdleSeconds: mocks.idleSeconds }),
+    },
   });
   downloadUpdate.mockClear();
   installUpdate.mockClear();
+  mocks.idleSeconds = 0;
+  mocks.installWhenIdle = true;
   mocks.threads = [thread("ready")];
   mocks.updateState = {
     enabled: true,
@@ -141,4 +156,45 @@ it("leaves updates alone during the day", () => {
   advance(OVERNIGHT_USER_QUIET_MS * 3);
   expect(installUpdate).not.toHaveBeenCalled();
   expect(downloadUpdate).not.toHaveBeenCalled();
+});
+
+it("installs an idle daytime update through the guarded install path and cancels on input", async () => {
+  vi.setSystemTime(new Date(2026, 8, 27, 14, 0));
+  mocks.idleSeconds = 900;
+  mount();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(0);
+  });
+  act(() => listeners.get("keydown")?.());
+  mocks.idleSeconds = 0;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(IDLE_RESTART_GRACE_MS);
+  });
+  expect(installUpdate).not.toHaveBeenCalled();
+  mocks.idleSeconds = 900;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(30_000);
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(IDLE_RESTART_GRACE_MS);
+  });
+  expect(installUpdate).toHaveBeenCalledWith({
+    expectedVersion: "1.1.0",
+    minimumSystemIdleSeconds: 900,
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(OVERNIGHT_USER_QUIET_MS);
+  });
+  expect(installUpdate).toHaveBeenCalledTimes(1);
+});
+
+it("keeps an opted-out daytime watcher idle even when system and agents are idle", async () => {
+  vi.setSystemTime(new Date(2026, 8, 27, 14, 0));
+  mocks.idleSeconds = 900;
+  mocks.installWhenIdle = false;
+  mount();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(OVERNIGHT_USER_QUIET_MS);
+  });
+  expect(installUpdate).not.toHaveBeenCalled();
 });

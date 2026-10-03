@@ -28,6 +28,7 @@ import * as DesktopConfig from "../app/DesktopConfig.ts";
 import * as DesktopEnvironment from "../app/DesktopEnvironment.ts";
 import * as DesktopObservability from "../app/DesktopObservability.ts";
 import * as DesktopState from "../app/DesktopState.ts";
+import * as ElectronPowerMonitor from "../electron/ElectronPowerMonitor.ts";
 import * as ElectronUpdater from "../electron/ElectronUpdater.ts";
 import * as ElectronWindow from "../electron/ElectronWindow.ts";
 import * as IpcChannels from "../ipc/channels.ts";
@@ -187,6 +188,7 @@ export class DesktopUpdates extends Context.Service<
     readonly install: Effect.Effect<DesktopUpdateActionResult>;
     readonly installPrepared: (
       expectedVersion: string,
+      minimumSystemIdleSeconds?: number,
     ) => Effect.Effect<DesktopPreparedUpdateInstallResult>;
   }
 >()("@t3tools/desktop/updates/DesktopUpdates") {}
@@ -286,6 +288,7 @@ export const make = Effect.gen(function* () {
   const pool = yield* DesktopBackendPool.DesktopBackendPool;
   const desktopState = yield* DesktopState.DesktopState;
   const electronUpdater = yield* ElectronUpdater.ElectronUpdater;
+  const powerMonitor = yield* ElectronPowerMonitor.ElectronPowerMonitor;
   const electronWindow = yield* ElectronWindow.ElectronWindow;
   const environment = yield* DesktopEnvironment.DesktopEnvironment;
   const fileSystem = yield* FileSystem.FileSystem;
@@ -590,7 +593,7 @@ export const make = Effect.gen(function* () {
     );
   });
 
-  const installDownloadedUpdate = (expectedVersion?: string) =>
+  const installDownloadedUpdate = (expectedVersion?: string, minimumSystemIdleSeconds?: number) =>
     Effect.scoped(
       Effect.gen(function* () {
         const actionCompletions = yield* PubSub.subscribe(finishedUpdateActions);
@@ -620,6 +623,13 @@ export const make = Effect.gen(function* () {
                 (state.status === "error" &&
                   (state.errorContext === null || state.errorContext === "install"));
               if (!hasInstallableDownload) return "refused" as const;
+              // Input may have resumed since the renderer sampled system idle time.
+              if (minimumSystemIdleSeconds !== undefined) {
+                const idleSeconds = yield* powerMonitor.getSystemIdleTime;
+                if (!Number.isFinite(idleSeconds) || idleSeconds < minimumSystemIdleSeconds) {
+                  return "refused" as const;
+                }
+              }
               return (yield* tryStartUpdateAction("install"))
                 ? ("admitted" as const)
                 : ("refused" as const);
@@ -698,6 +708,7 @@ export const make = Effect.gen(function* () {
 
   const installWithExpectedVersion = Effect.fn("desktop.updates.install")(function* (
     expectedVersion?: string,
+    minimumSystemIdleSeconds?: number,
   ) {
     if (yield* Ref.get(desktopState.quitting)) {
       return {
@@ -707,7 +718,7 @@ export const make = Effect.gen(function* () {
         state: yield* Ref.get(updateStateRef),
       };
     }
-    const result = yield* installDownloadedUpdate(expectedVersion);
+    const result = yield* installDownloadedUpdate(expectedVersion, minimumSystemIdleSeconds);
     return {
       accepted: result.accepted,
       completed: result.completed,
@@ -912,7 +923,12 @@ export const make = Effect.gen(function* () {
   });
 
   return DesktopUpdates.of({
-    getState: Ref.get(updateStateRef),
+    getState: Effect.gen(function* () {
+      return {
+        ...(yield* Ref.get(updateStateRef)),
+        systemIdleSeconds: yield* powerMonitor.getSystemIdleTime,
+      };
+    }),
     isActionActive: activeUpdateAction.pipe(Effect.map(Option.isSome)),
     isInstallActive: activeUpdateAction.pipe(
       Effect.map((action) => Option.isSome(action) && action.value === "install"),
@@ -1060,7 +1076,8 @@ export const make = Effect.gen(function* () {
     install: installWithExpectedVersion().pipe(
       Effect.map(({ accepted, completed, state }) => ({ accepted, completed, state })),
     ),
-    installPrepared: (expectedVersion) => installWithExpectedVersion(expectedVersion),
+    installPrepared: (expectedVersion, minimumSystemIdleSeconds) =>
+      installWithExpectedVersion(expectedVersion, minimumSystemIdleSeconds),
   });
 });
 
