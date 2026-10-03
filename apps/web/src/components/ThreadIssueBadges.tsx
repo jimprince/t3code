@@ -76,9 +76,7 @@ export function ThreadIssueBadges({ issues }: { readonly issues: readonly Thread
           }
         >
           <span
-            className={
-              open ? "contents text-sky-600 dark:text-sky-400" : "contents text-muted-foreground"
-            }
+            className={open ? "contents text-info" : "contents text-muted-foreground"}
           >
             <Icon aria-hidden className="size-3 shrink-0" />
             <span className="text-xs tabular-nums">#{issue.number}</span>
