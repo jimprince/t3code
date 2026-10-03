@@ -142,4 +142,29 @@ describe("worker pinning", () => {
     expect(overview.pinned).toBe(true);
     expect(formatOverviewLine(overview)).toContain("/pinned]");
   });
+
+  it("dispatches persisted pinned/active order and reset commands", async () => {
+    const h = harness();
+    vi.spyOn(h.client, "describe").mockResolvedValue({
+      environmentId: "test",
+      label: "test",
+      platform: { os: "linux", arch: "x64" },
+      serverVersion: "test",
+      capabilities: {
+        threadPinReorder: true,
+        threadActiveReorder: true,
+        threadOrderReset: true,
+      },
+    });
+    await h.client.applyThreadOrder([
+      { threadId: base.id, section: "pinned", orderKey: "f" },
+      { threadId: base.id, section: "active", orderKey: "m" },
+    ]);
+    await h.client.resetThreadOrder(base.id);
+    expect(h.commands).toEqual([
+      expect.objectContaining({ type: "thread.pin.reorder", orderKey: "f" }),
+      expect.objectContaining({ type: "thread.active.reorder", orderKey: "m" }),
+      expect.objectContaining({ type: "thread.order.reset" }),
+    ]);
+  });
 });

@@ -649,6 +649,58 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  async applyThreadOrder(
+    assignments: ReadonlyArray<{
+      threadId: string;
+      section: "pinned" | "active";
+      orderKey: string;
+    }>,
+  ): Promise<void> {
+    const capabilities = (await this.describe()).capabilities;
+    for (const section of new Set(assignments.map((assignment) => assignment.section))) {
+      const supported =
+        section === "pinned"
+          ? capabilities.threadPinReorder === true
+          : capabilities.threadActiveReorder === true;
+      if (!supported) {
+        throw new Error(
+          `'${this.environment.name}' runs a server without ${section} thread ordering. Update T3 Code there first.`,
+        );
+      }
+    }
+    const rpc = await this.openRpc();
+    try {
+      for (const assignment of assignments) {
+        await rpc.request("dispatchCommand", {
+          type: assignment.section === "pinned" ? "thread.pin.reorder" : "thread.active.reorder",
+          commandId: NodeCrypto.randomUUID(),
+          threadId: assignment.threadId,
+          orderKey: assignment.orderKey,
+        });
+      }
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  async resetThreadOrder(threadId: string): Promise<void> {
+    if ((await this.describe()).capabilities.threadOrderReset !== true) {
+      throw new Error(
+        `'${this.environment.name}' runs a server without automatic-order reset. Update T3 Code there first.`,
+      );
+    }
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("dispatchCommand", {
+        type: "thread.order.reset",
+        commandId: NodeCrypto.randomUUID(),
+        threadId,
+      });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   async interrupt(threadId: string): Promise<void> {
     const thread = await this.findThread(threadId);
     const rpc = await this.openRpc();

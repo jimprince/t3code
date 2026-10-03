@@ -55,6 +55,13 @@ import {
 } from "./state.js";
 import { cancelQueuedSend, drainQueuedSends, hasQueuedWork, listQueuedSends } from "./sendQueue.js";
 import { wrapWithPreamble } from "./thread-preamble.js";
+import {
+  planExplicitThreadOrder,
+  planThreadMove,
+  sameThreadOrderGroup,
+  sortThreadOrderGroup,
+  threadOrderSection,
+} from "./threadOrder.js";
 import { claimWatcherLease, ensureWatcherProcess } from "./watcher-process.js";
 import {
   decideWatcherExit,
@@ -236,6 +243,8 @@ const AGENT_COMMAND_ALIASES = new Set([
   "unsettle",
   "pin",
   "unpin",
+  "order",
+  "move",
   "forget",
   "caller",
   "subscriptions",
@@ -273,6 +282,7 @@ Direct thread commands:
   create       Create and start a branch-pinned T3 worker thread
   search       Locate a thread UUID across paired environments
   pin/unpin    Change worker pinning (create --pin starts pinned)
+  order/move  Arrange workers in their shared sidebar section
   status       Show compact status for one saved worker or all workers
   worklog      Show recent T3 runtime/provider activity for a worker
   result       Fetch latest/final worker output
@@ -817,6 +827,93 @@ for (const operation of ["pin", "unpin"] as const) {
       printJson(await client.setThreadPinned(savedAgent.threadId, operation === "pin"));
     });
 }
+
+agent
+  .command("order")
+  .description("Put listed sibling threads first; unlisted siblings retain their relative order")
+  .requiredOption("--env <name>", "saved environment name")
+  .option("--reset", "return the listed threads to automatic order")
+  .argument("<threads...>", "saved agent names or raw thread UUIDs")
+  .action(async (references: string[], options) => {
+    const state = await loadState();
+    const environment = requireEnvironment(state, options.env);
+    const client = new RemoteEnvironmentClient(environment);
+    const ids = references.map((reference) =>
+      resolveParentThreadId(state, reference, environment.name),
+    );
+    const shells = await client.listThreads();
+    const byId = new Map(shells.map((thread) => [thread.id, thread]));
+    const selected = ids.map((id) => {
+      const thread = byId.get(id);
+      if (!thread) throw new Error(`Thread '${id}' was not found in '${environment.name}'.`);
+      return thread;
+    });
+    if (options.reset) {
+      for (const thread of selected) await client.resetThreadOrder(thread.id);
+      printJson({ environment: environment.name, reset: ids });
+      return;
+    }
+    const first = selected[0]!;
+    const section = threadOrderSection(first);
+    if (section === null) throw new Error(`Thread '${first.id}' is not in an orderable section.`);
+    if (selected.some((thread) => !sameThreadOrderGroup(first, thread))) {
+      throw new Error("All listed threads must be siblings in the same pinned or active section.");
+    }
+    const group = shells.filter((thread) => sameThreadOrderGroup(first, thread));
+    const assignments = planExplicitThreadOrder({ group, leadingIds: ids });
+    await client.applyThreadOrder(assignments.map((assignment) => ({ ...assignment, section })));
+    printJson({
+      environment: environment.name,
+      section,
+      order: [
+        ...ids,
+        ...sortThreadOrderGroup(group)
+          .map((thread) => thread.id)
+          .filter((id) => !ids.includes(id)),
+      ],
+      writes: assignments.length,
+    });
+  });
+
+agent
+  .command("move")
+  .description("Move a thread before, after, to the top, or to the bottom of its sibling section")
+  .argument("<thread>", "saved agent name or raw thread UUID")
+  .option("--before <thread>", "place before this sibling")
+  .option("--after <thread>", "place after this sibling")
+  .option("--top", "place first")
+  .option("--bottom", "place last")
+  .action(async (reference, options) => {
+    const destinations = [options.before, options.after, options.top, options.bottom].filter(
+      Boolean,
+    );
+    if (destinations.length !== 1) {
+      throw new Error("Choose exactly one of --before, --after, --top, or --bottom.");
+    }
+    const { state, agent: savedAgent, client } = await withAgent(reference);
+    const shells = await client.listThreads();
+    const thread = shells.find((candidate) => candidate.id === savedAgent.threadId);
+    if (!thread) throw new Error(`Thread '${savedAgent.threadId}' was not found.`);
+    const section = threadOrderSection(thread);
+    if (section === null) throw new Error(`Thread '${thread.id}' is not in an orderable section.`);
+    const resolveDestination = (value: string | undefined) =>
+      value === undefined ? undefined : resolveParentThreadId(state, value, savedAgent.environment);
+    const group = shells.filter((candidate) => sameThreadOrderGroup(thread, candidate));
+    const assignments = planThreadMove({
+      group,
+      threadId: thread.id,
+      beforeId: resolveDestination(options.before),
+      afterId: resolveDestination(options.after),
+      edge: options.top ? "top" : options.bottom ? "bottom" : undefined,
+    });
+    await client.applyThreadOrder(assignments.map((assignment) => ({ ...assignment, section })));
+    printJson({
+      threadId: thread.id,
+      environment: savedAgent.environment,
+      section,
+      writes: assignments.length,
+    });
+  });
 
 agent
   .command("unsettle")

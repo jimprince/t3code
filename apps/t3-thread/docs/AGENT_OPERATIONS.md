@@ -702,6 +702,22 @@ to change existing threads. `status <name-or-thread-id>` reports `pinned` and `p
 the all-worker status list marks pinned threads. Pinning uses the server's existing
 lifecycle; manual settlement removes a pin.
 
+Arrange pinned or active siblings through the same persisted order the clients use:
+
+```bash
+t3-thread order --env <environment> <thread> [thread...]
+t3-thread move <thread> --before <sibling>
+t3-thread move <thread> --after <sibling>
+t3-thread move <thread> --top
+t3-thread move <thread> --bottom
+t3-thread order --env <environment> --reset <thread> [thread...]
+```
+
+`order` puts the listed threads first and retains the relative order of unlisted
+siblings after them. A move stays within the thread's pinned or active sibling
+section, including nested children. Reset returns each listed thread to automatic
+order. New pins continue to land at the top without rewriting existing slots.
+
 ## Notification ownership and handoff
 
 Nested `create` subscribes its caller by default. `create --top-level` does not;

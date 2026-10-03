@@ -136,6 +136,9 @@ export function formatThreadLine(
     thread.projectId,
     `settled=${thread.settledOverride === "settled"}`,
     `pinned=${thread.pinnedAt != null}`,
+    `order=${thread.pinnedAt != null ? "pinned" : "active"}:${
+      (thread.pinnedAt != null ? thread.pinOrderKey : thread.activeOrderKey) ?? "automatic"
+    }`,
     thread.parentThreadId
       ? `parent=${thread.parentThreadId}${parentTitle ? ` (${parentTitle})` : ""}`
       : "parent=none",

@@ -36,6 +36,9 @@ export interface ExecutionEnvironmentDescriptor {
   serverVersion: string;
   capabilities: {
     repositoryIdentity?: boolean;
+    threadPinReorder?: boolean;
+    threadActiveReorder?: boolean;
+    threadOrderReset?: boolean;
   };
 }
 
@@ -100,6 +103,8 @@ export interface OrchestrationThread {
   archivedAt: string | null;
   settledOverride?: "settled" | "active" | null;
   pinnedAt?: string | null | undefined;
+  pinOrderKey?: string | null | undefined;
+  activeOrderKey?: string | null | undefined;
   settledAt?: string | null;
   unsettledAt?: string | null;
   deletedAt?: string | null;
@@ -132,6 +137,8 @@ export interface OrchestrationThreadShell {
   archivedAt: string | null;
   settledOverride?: "settled" | "active" | null;
   pinnedAt?: string | null | undefined;
+  pinOrderKey?: string | null | undefined;
+  activeOrderKey?: string | null | undefined;
   settledAt?: string | null;
   unsettledAt?: string | null;
   session: OrchestrationSession | null;
