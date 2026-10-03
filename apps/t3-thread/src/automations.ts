@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import * as NodeCrypto from "node:crypto";
 import { ProjectAutomationDefinition } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
 import type { Command } from "commander";
@@ -21,6 +21,8 @@ type Options = {
   paused?: boolean;
 };
 
+const decodeDefinition = Schema.decodeUnknownSync(ProjectAutomationDefinition);
+
 function definition(options: Options) {
   if (options.thread && options.newThread) throw new Error("Choose --thread or --new-thread.");
   const days = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -31,8 +33,8 @@ function definition(options: Options) {
       : options.schedule === "daily"
         ? { kind: "daily", time: options.time, timeZone: options.timezone }
         : { kind: options.schedule, time: options.time, day, timeZone: options.timezone };
-  return Schema.decodeUnknownSync(ProjectAutomationDefinition)({
-    id: randomUUID(),
+  return decodeDefinition({
+    id: NodeCrypto.randomUUID(),
     name: options.name,
     prompt: options.prompt,
     schedule,
@@ -88,7 +90,7 @@ export function registerAutomationCommands(
           await client(options.env)
         ).dispatchAutomation({
           type: "project.automation.create",
-          commandId: randomUUID(),
+          commandId: NodeCrypto.randomUUID(),
           projectId: options.project,
           automation,
         }),
@@ -111,7 +113,7 @@ export function registerAutomationCommands(
             await client(options.env)
           ).dispatchAutomation({
             type: `project.automation.${type}`,
-            commandId: randomUUID(),
+            commandId: NodeCrypto.randomUUID(),
             projectId: options.project,
             automationId: id,
           }),
