@@ -1,6 +1,5 @@
-import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
-import { withSenderHeader } from "./thread-identity.js";
 import type { ProjectAutomation } from "@t3tools/contracts";
+import type { NamedAgentSummary } from "./namedAgents.js";
 import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
 import * as NodeCrypto from "node:crypto";
 
@@ -460,34 +459,25 @@ export class RemoteEnvironmentClient {
 
   async renameThread(input: {
     threadId: string;
-    title?: string;
-    scope?: string | null;
-  }): Promise<{ threadId: string; title: string; scope: string | null }> {
-    const title = input.title?.trim();
-    const scope = input.scope === undefined ? undefined : input.scope?.trim() || null;
-    if (input.title !== undefined && !title) throw new Error("Thread title must not be empty.");
-    if (title === undefined && scope === undefined) {
-      throw new Error("Thread title or scope must be provided.");
-    }
+    title: string;
+  }): Promise<{ threadId: string; title: string }> {
+    const title = input.title.trim();
+    if (!title) throw new Error("Thread title must not be empty.");
     const rpc = await this.openRpc();
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.meta.update",
         commandId: NodeCrypto.randomUUID(),
         threadId: input.threadId,
-        ...(title !== undefined ? { title } : {}),
-        ...(scope !== undefined ? { scope } : {}),
+        title,
       });
     } finally {
       await rpc.dispose();
     }
     const thread = await this.findThread(input.threadId);
-    if (title !== undefined && thread.title !== title)
+    if (thread.title !== title)
       throw new Error("Thread title readback did not match the requested title.");
-    if (scope !== undefined && (thread.scope ?? null) !== scope) {
-      throw new Error("Thread scope readback did not match the requested scope.");
-    }
-    return { threadId: thread.id, title: thread.title, scope: thread.scope ?? null };
+    return { threadId: thread.id, title: thread.title };
   }
 
   async createAgentThread(input: {
@@ -501,7 +491,6 @@ export class RemoteEnvironmentClient {
     baseBranch?: string;
     startFromOrigin?: boolean;
     initialMessage?: string;
-    workerContext?: WorkerContext;
     parentThreadId?: string | null;
     settleOnComplete?: boolean;
     pin?: boolean;
@@ -549,18 +538,7 @@ export class RemoteEnvironmentClient {
         message: {
           messageId: NodeCrypto.randomUUID(),
           role: "user",
-          text: input.workerContext
-            ? wrapWithPreamble(initialMessage, {
-                ...input.workerContext,
-                threadId,
-                environment: this.environment.name,
-                projectId: project.id,
-                projectTitle: project.title,
-                branch: input.branch ?? null,
-                worktreePath: input.branch ? null : project.workspaceRoot,
-                createdAt,
-              })
-            : initialMessage,
+          text: initialMessage,
           attachments: [],
         },
         modelSelection,
@@ -630,14 +608,12 @@ export class RemoteEnvironmentClient {
     agentName?: string | null;
     /** Marks the message as sent on a thread's behalf; see `@t3tools/shared/messageOrigin`. */
     origin?: MessageOrigin | null;
-    senderEnvironment?: string;
   }): Promise<SendMessageOutcome> {
     const thread = await this.findThread(input.threadId);
     if (thread.archivedAt || thread.deletedAt) {
       throw new Error(`Thread '${thread.id}' is archived and cannot receive messages.`);
     }
 
-    const text = withSenderHeader(input.text, input.origin, input.senderEnvironment ?? "unknown");
     const status = classifyThread(thread);
     if (status.state === "running" && !input.allowWhileRunning) {
       if (input.queueWhileRunning === false) {
@@ -650,7 +626,7 @@ export class RemoteEnvironmentClient {
         threadId: thread.id,
         agentName: input.agentName ?? null,
         environment: this.environment.name,
-        text,
+        text: input.text,
         origin: input.origin ?? null,
         queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
       });
@@ -671,7 +647,7 @@ export class RemoteEnvironmentClient {
         message: {
           messageId: NodeCrypto.randomUUID(),
           role: "user",
-          text,
+          text: input.text,
           attachments: [],
           ...(input.origin ? { context: makeMessageOriginContext(input.origin) } : {}),
         },
@@ -813,6 +789,58 @@ export class RemoteEnvironmentClient {
 
   /** Whether this environment's server stores thread nesting (threadNesting capability). */
   /** Capabilities come from the environment descriptor; serverGetConfig does not carry them. */
+  /** Named agents on this environment: singleton owners of one resource each. */
+  async listNamedAgents(): Promise<NamedAgentSummary[]> {
+    const rpc = await this.openRpc();
+    try {
+      return (await rpc.request<{ agents: NamedAgentSummary[] }>("listNamedAgents", {})).agents;
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** The agent's live thread; a dormant agent starts with `message` as its first request. */
+  async resolveNamedAgent(
+    name: string,
+    message?: string,
+  ): Promise<{ threadId: string; started: boolean }> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request("resolveNamedAgent", {
+        name,
+        ...(message !== undefined ? { message } : {}),
+      });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** Replace the idle live incarnation with a fresh one seeded from the agent folder. */
+  async handOverNamedAgent(
+    name: string,
+    message?: string,
+  ): Promise<{ threadId: string; started: boolean }> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request("handOverNamedAgent", {
+        name,
+        ...(message !== undefined ? { message } : {}),
+      });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** Make a project the home of a named agent, or (null) stop it being one. */
+  async setPermanentAgent(projectId: string, name: string | null): Promise<void> {
+    await this.dispatchOnce({
+      type: "project.meta.update",
+      commandId: NodeCrypto.randomUUID(),
+      projectId,
+      permanentAgent: name === null ? null : { name },
+    });
+  }
+
   async supportsThreadNesting(): Promise<boolean> {
     return (await this.describe()).capabilities.threadNesting === true;
   }

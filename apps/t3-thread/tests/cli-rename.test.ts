@@ -84,7 +84,7 @@ describe("rename command", () => {
     }
     const rename = vi
       .spyOn(RemoteEnvironmentClient.prototype, "renameThread")
-      .mockResolvedValue({ threadId, title: "Supervisor A", scope: null });
+      .mockResolvedValue({ threadId, title: "Supervisor A" });
     let finish!: (value: string) => void;
     const printed = new Promise<string>((resolve) => {
       finish = resolve;
@@ -97,82 +97,9 @@ describe("rename command", () => {
     await import("../src/cli.js");
     const output = JSON.parse(await printed);
     expect(rename).toHaveBeenCalledWith({ threadId, title: "Supervisor A" });
-    expect(output).toMatchObject({
-      threadId,
-      title: "Supervisor A",
-      renamed: true,
-      scopeUpdated: false,
-    });
+    expect(output).toMatchObject({ threadId, title: "Supervisor A", renamed: true });
     expect(fixture.state.agents.map((agent) => agent.title)).toEqual(
       saved ? ["Supervisor A", "Supervisor A"] : [],
     );
-  });
-
-  it("updates scope without changing saved titles", async () => {
-    fixture.state = {
-      version: 1,
-      environments: [
-        {
-          name: "local",
-          httpBaseUrl: "http://127.0.0.1:1",
-          wsBaseUrl: "ws://127.0.0.1:1",
-          environmentId: "local",
-          label: "Local",
-          serverVersion: "test",
-          bearerToken: "test",
-          expiresAt: "2099-01-01T00:00:00.000Z",
-          pairedAt: "2026-10-02T00:00:00.000Z",
-        },
-      ],
-      agents: [
-        {
-          name: "worker",
-          environment: "local",
-          threadId,
-          projectId: "project-1",
-          title: "Original",
-          createdAt: "2026-10-02T00:00:00.000Z",
-          lastSeenAssistantMessageId: null,
-        },
-      ],
-      subscriptions: [],
-      notifications: [],
-      queuedSends: [],
-    };
-    vi.resetModules();
-    const { RemoteEnvironmentClient } = await import("../src/client.js");
-    const rename = vi.spyOn(RemoteEnvironmentClient.prototype, "renameThread").mockResolvedValue({
-      threadId,
-      title: "Original",
-      scope: "Coordinates the entire repo",
-    });
-    let finish!: (value: string) => void;
-    const printed = new Promise<string>((resolve) => {
-      finish = resolve;
-    });
-    vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
-      finish(String(chunk));
-      return true;
-    });
-    process.argv = [
-      process.execPath,
-      "cli.ts",
-      "rename",
-      "worker",
-      "--scope",
-      "Coordinates the entire repo",
-    ];
-    await import("../src/cli.js");
-    expect(rename).toHaveBeenCalledWith({
-      threadId,
-      scope: "Coordinates the entire repo",
-    });
-    expect(JSON.parse(await printed)).toMatchObject({
-      threadId,
-      scope: "Coordinates the entire repo",
-      renamed: false,
-      scopeUpdated: true,
-    });
-    expect(fixture.state.agents[0]?.title).toBe("Original");
   });
 });
