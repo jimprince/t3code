@@ -120,6 +120,7 @@ import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionRe
 import * as PullRequestSyncReactor from "./orchestration/PullRequestSyncReactor.ts";
 import { ThreadTransfer } from "./orchestration/Services/ThreadTransfer.ts";
 import { ThreadBrief } from "./orchestration/Services/ThreadBrief.ts";
+import { NamedAgents } from "./orchestration/Services/NamedAgents.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { PersistenceSqlError } from "./persistence/Errors.ts";
 import * as ProviderRegistry from "./provider/Services/ProviderRegistry.ts";
@@ -927,7 +928,13 @@ const buildAppUnderTest = (options?: {
           }),
         ),
       ),
-      Layer.provide(Layer.mergeAll(Layer.mock(ThreadTransfer)({}), Layer.mock(ThreadBrief)({}))),
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(ThreadTransfer)({}),
+          Layer.mock(ThreadBrief)({}),
+          Layer.mock(NamedAgents)({}),
+        ),
+      ),
       Layer.provide(
         Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
           getCommandReadModel: () => Effect.succeed(makeDefaultOrchestrationReadModel()),
