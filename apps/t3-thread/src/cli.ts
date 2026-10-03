@@ -62,7 +62,7 @@ import {
   upsertEnvironment,
 } from "./state.js";
 import { cancelQueuedSend, drainQueuedSends, hasQueuedWork, listQueuedSends } from "./sendQueue.js";
-import { withSenderHeader } from "./thread-identity.js";
+import { wrapWithPreamble } from "./thread-preamble.js";
 import {
   planExplicitThreadOrder,
   planThreadMove,
@@ -222,14 +222,10 @@ async function resolveNotifyEndpoint(
 }
 
 /** Origin for a send made from inside a T3 thread; a send from a plain terminal has none. */
-function callerSendOrigin(state: Awaited<ReturnType<typeof loadState>>): MessageOrigin | null {
+function callerSendOrigin(state: { agents: ReadonlyArray<SavedAgent> }): MessageOrigin | null {
   const fromThreadId = resolveCallerThreadId();
   if (!fromThreadId) return null;
-  const fromName = resolveCallerEndpointFromLocalContext(
-    state,
-    fromThreadId,
-    resolveCallerEnvironmentMetadata(),
-  )?.name;
+  const fromName = state.agents.find((agent) => agent.threadId === fromThreadId)?.name;
   return { source: "thread-send", fromThreadId, ...(fromName ? { fromName } : {}) };
 }
 
@@ -760,7 +756,8 @@ agent
     }
     const client = new RemoteEnvironmentClient(environment);
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
-    const snapshot = await client.getShellSnapshot();
+    const initialMessage =
+      options.preamble === false ? options.message : wrapWithPreamble(options.message);
     const nesting = resolveCreateParent({
       explicitParentThreadId: options.parent
         ? resolveParentThreadId(state, options.parent, options.env)
@@ -769,7 +766,7 @@ agent
       serverSupportsNesting: await client.supportsThreadNesting(),
       callerThreadId: resolveCallerThreadId(),
       projectId: options.project,
-      threads: snapshot.threads,
+      threads: (await client.getShellSnapshot()).threads,
     });
     const created = await client.createAgentThread({
       pin: options.pin === true,
@@ -784,29 +781,7 @@ agent
       startFromOrigin: !options.localBase,
       runtimeMode: options.runtimeMode,
       interactionMode: options.interactionMode,
-      initialMessage: options.message,
-      ...(options.preamble === false
-        ? {}
-        : {
-            workerContext: {
-              name: options.name,
-              notifyLevel: notifyCaller ? (options.notifyLevel ?? "all") : "none",
-              parent: nesting.parentThreadId
-                ? {
-                    threadId: nesting.parentThreadId,
-                    name:
-                      state.agents.find(
-                        (agent) =>
-                          agent.threadId === nesting.parentThreadId &&
-                          agent.environment === options.env,
-                      )?.name ?? null,
-                    title: snapshot.threads.find((thread) => thread.id === nesting.parentThreadId)
-                      ?.title,
-                    environment: environment.name,
-                  }
-                : null,
-            },
-          }),
+      initialMessage,
     });
     const createdAt = new Date().toISOString();
     const savedAgent = {
@@ -867,45 +842,22 @@ agent
 agent
   .command("rename")
   .argument("<agent-or-thread>", "saved agent name or raw thread UUID (including your own)")
-  .option("--title <text>", "new thread title")
-  .option("--scope <text>", "project scope shown with the thread")
-  .option("--clear-scope", "remove the project scope")
+  .requiredOption("--title <text>", "new thread title")
   .action(async (reference, options) => {
-    if (options.scope !== undefined && options.clearScope) {
-      throw new Error("Use either --scope or --clear-scope, not both.");
-    }
-    if (options.title === undefined && options.scope === undefined && !options.clearScope) {
-      throw new Error("Provide --title, --scope, or --clear-scope.");
-    }
     const { agent: target, client } = await withAgent(reference);
-    const renamed = await client.renameThread({
-      threadId: target.threadId,
-      ...(options.title !== undefined ? { title: options.title } : {}),
-      ...(options.scope !== undefined
-        ? { scope: options.scope }
-        : options.clearScope
-          ? { scope: null }
-          : {}),
-    });
+    const renamed = await client.renameThread({ threadId: target.threadId, title: options.title });
     await updateState(async (state) => ({
       state: {
         ...state,
         agents: state.agents.map((saved) =>
-          options.title !== undefined &&
-          saved.environment === target.environment &&
-          saved.threadId === target.threadId
+          saved.environment === target.environment && saved.threadId === target.threadId
             ? { ...saved, title: renamed.title }
             : saved,
         ),
       },
       result: null,
     }));
-    printJson({
-      ...renamed,
-      environment: target.environment,
-      renamed: options.title !== undefined,
-      scopeUpdated: options.scope !== undefined || Boolean(options.clearScope),
-    });
+    printJson({ ...renamed, environment: target.environment, renamed: true });
   });
 
 agent
@@ -1643,22 +1595,6 @@ agent
   .argument("<message...>", "message text")
   .option("--no-queue", "fail instead of queueing when the target thread is still running")
   .action(async (name, messageParts: string[], options: { queue: boolean }) => {
-    const rawText = messageParts.join(" ").trim();
-    const routingState = await loadState();
-    const callerId = resolveCallerThreadId();
-    const sender = callerId
-      ? await resolveThreadEndpoint(
-          routingState,
-          callerId,
-          undefined,
-          resolveCallerEnvironmentMetadata(),
-        )
-      : null;
-    const text = withSenderHeader(
-      rawText,
-      callerSendOrigin(routingState),
-      sender?.environment ?? "unknown",
-    );
     const { agent: savedAgent, client, saved } = await withAgent(name);
     const state = await loadState();
     const outcome = await sendDirectResult({
@@ -1677,7 +1613,6 @@ agent
           queueWhileRunning: options.queue,
           agentName: saved ? savedAgent.name : null,
           origin: callerSendOrigin(state),
-          senderEnvironment: sender?.environment,
         }),
     });
     const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
@@ -1734,11 +1669,6 @@ for (const kind of ["clarify", "revise", "complete"] as const) {
         text: buildFollowUpMessage(kind, messageParts.join(" ")),
         agentName: saved ? savedAgent.name : null,
         origin: callerSendOrigin(await loadState()),
-        senderEnvironment: resolveCallerEndpointFromLocalContext(
-          await loadState(),
-          resolveCallerThreadId() ?? "",
-          resolveCallerEnvironmentMetadata(),
-        )?.environment,
       });
       if (outcome.queued) {
         await ensureNotificationWatcher();
