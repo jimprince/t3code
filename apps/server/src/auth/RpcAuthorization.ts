@@ -39,6 +39,10 @@ export const RPC_REQUIRED_SCOPES = {
   [ORCHESTRATION_WS_METHODS.forkThread]: AuthOrchestrationOperateScope,
   // Brief me runs a text generation model, so it spends the operator's quota.
   [ORCHESTRATION_WS_METHODS.briefThread]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_WS_METHODS.listNamedAgents]: AuthOrchestrationReadScope,
+  // Resolving can start an agent, and handover replaces one; both act.
+  [ORCHESTRATION_WS_METHODS.resolveNamedAgent]: AuthOrchestrationOperateScope,
+  [ORCHESTRATION_WS_METHODS.handOverNamedAgent]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverPreviewRecovery]: AuthOrchestrationReadScope,
   [WS_METHODS.serverExecuteRecovery]: AuthOrchestrationOperateScope,
   [WS_METHODS.serverRequestHeadlessUpdateCheck]: AuthOrchestrationOperateScope,
