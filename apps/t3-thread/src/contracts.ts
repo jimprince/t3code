@@ -10,6 +10,13 @@ import {
 } from "@t3tools/contracts/orchestration";
 import { EnvironmentAuthorizationError } from "@t3tools/contracts/auth";
 import { NamedAgentError } from "@t3tools/contracts/namedAgents";
+import {
+  ThreadIssueLinkResult,
+  ThreadIssueOperationError,
+  ThreadIssueReferenceInput,
+  ThreadIssueUnlinkResult,
+  WS_METHODS,
+} from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
@@ -416,6 +423,19 @@ const namedAgentRpc = <M extends "listNamedAgents" | "resolveNamedAgent" | "hand
     error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
   });
 
+// The CLI's client only knows the RPCs registered here; `issue link|unlink` need theirs.
+const WsThreadIssuesLinkRpc = Rpc.make(WS_METHODS.threadIssuesLink, {
+  payload: ThreadIssueReferenceInput,
+  success: ThreadIssueLinkResult,
+  error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
+});
+
+const WsThreadIssuesUnlinkRpc = Rpc.make(WS_METHODS.threadIssuesUnlink, {
+  payload: ThreadIssueReferenceInput,
+  success: ThreadIssueUnlinkResult,
+  error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
+});
+
 export const WsRpcGroup = RpcGroup.make(
   WsServerGetConfigRpc,
   WsOrchestrationDispatchCommandRpc,
@@ -427,4 +447,6 @@ export const WsRpcGroup = RpcGroup.make(
   namedAgentRpc("listNamedAgents"),
   namedAgentRpc("resolveNamedAgent"),
   namedAgentRpc("handOverNamedAgent"),
+  WsThreadIssuesLinkRpc,
+  WsThreadIssuesUnlinkRpc,
 );
