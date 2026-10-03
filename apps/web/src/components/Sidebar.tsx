@@ -24,6 +24,7 @@ import {
   threadWokeAt,
 } from "@t3tools/client-runtime/state/thread-settled";
 import {
+  planPinnedMove,
   resolveSettledThreadTimestamp,
   sortSettledThreads,
 } from "@t3tools/client-runtime/state/thread-sort";
@@ -2460,6 +2461,9 @@ export default function Sidebar() {
   const updateThreadMetadata = useAtomCommand(threadEnvironment.updateMetadata, {
     reportFailure: false,
   });
+  const resetThreadOrder = useAtomCommand(threadEnvironment.resetOrder, {
+    reportFailure: false,
+  });
   const exportThreadForMove = useAtomCommand(orchestrationEnvironment.exportThread, {
     reportFailure: false,
   });
@@ -4772,6 +4776,27 @@ export default function Sidebar() {
         const isSettled = settledThreadKeysRef.current.has(threadKey);
         const isSnoozed = snoozedThreadKeysRef.current.has(threadKey);
         const isPinned = thread.pinnedAt != null;
+        const siblingOrder =
+          thread.parentThreadId == null
+            ? isPinned
+              ? pinnedKeys
+              : activeKeys
+            : (
+                sidebarChildren.get(
+                  scopedThreadKey(scopeThreadRef(thread.environmentId, thread.parentThreadId)),
+                )?.children ?? []
+              )
+                .filter((child) => (child.pinnedAt != null) === isPinned)
+                .map((child) => scopedThreadKey(scopeThreadRef(child.environmentId, child.id)));
+        const siblingIndex = siblingOrder.indexOf(threadKey);
+        const supportsSectionReorder = isPinned
+          ? serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinReorder ===
+            true
+          : serverConfigs.get(thread.environmentId)?.environment.capabilities
+              .threadActiveReorder === true;
+        const supportsOrderReset =
+          serverConfigs.get(thread.environmentId)?.environment.capabilities.threadOrderReset ===
+          true;
         // Presets resolve at menu-open time (same as the popover).
         const snoozePresets = resolveSnoozePresets(new Date(), timestampFormat);
         const threadProjectGroup =
@@ -4812,6 +4837,14 @@ export default function Sidebar() {
                   }
                 : null,
               isPinned,
+              ordering:
+                !isSettled && supportsSectionReorder && siblingIndex >= 0
+                  ? {
+                      canMoveUp: siblingIndex > 0,
+                      canMoveDown: siblingIndex < siblingOrder.length - 1,
+                      isManual: (isPinned ? thread.pinOrderKey : thread.activeOrderKey) != null,
+                    }
+                  : null,
               isSettled,
               autoSettleEnabled: thread.autoSettleDisabledAt == null,
               isSnoozed,
@@ -4826,6 +4859,7 @@ export default function Sidebar() {
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
                 titleRegeneration: supportsTitleRegeneration,
+                orderReset: supportsOrderReset,
               },
               snoozePresets,
               nesting,
@@ -4901,6 +4935,51 @@ export default function Sidebar() {
           case "unpin":
             attemptUnpin(threadRef);
             return;
+          case "move-up":
+          case "move-down": {
+            const assignments = planPinnedMove({
+              orderedIds: siblingOrder,
+              keysById: isPinned ? pinnedKeysById : activeKeysById,
+              movedId: threadKey,
+              direction: clicked.value === "move-up" ? "up" : "down",
+            });
+            if (assignments === null) return;
+            for (const assignment of assignments) {
+              const target = threadByKey.get(assignment.id);
+              if (!target) continue;
+              const result = await (isPinned ? reorderPinnedThread : reorderActiveThread)(
+                scopeThreadRef(target.environmentId, target.id),
+                assignment.orderKey,
+              );
+              if (result._tag === "Failure") {
+                toastManager.add(
+                  stackedThreadToast({
+                    type: "error",
+                    title: "Failed to reorder threads",
+                    description: String(squashAtomCommandFailure(result)),
+                  }),
+                );
+                return;
+              }
+            }
+            return;
+          }
+          case "reset-order": {
+            const result = await resetThreadOrder({
+              environmentId: thread.environmentId,
+              input: { threadId: thread.id },
+            });
+            if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+              toastManager.add(
+                stackedThreadToast({
+                  type: "error",
+                  title: "Failed to reset thread order",
+                  description: String(squashAtomCommandFailure(result)),
+                }),
+              );
+            }
+            return;
+          }
           case "auto-settle:enabled":
           case "auto-settle:disabled": {
             const result = await setThreadAutoSettle(
