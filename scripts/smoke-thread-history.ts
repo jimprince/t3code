@@ -196,6 +196,7 @@ async function boot(command: readonly string[], cwd: string, home: string, works
         HOME: home,
         XDG_CONFIG_HOME: NodePath.join(home, "config"),
         T3CODE_HOME: home,
+        T3CODE_DISABLE_STARTUP_RESUME: "1",
         T3CODE_LOG_LEVEL: "Error",
       },
     },
