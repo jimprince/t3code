@@ -139,6 +139,26 @@ function ProjectOverviewContent(props: {
         </View>
       </SettingsSection>
 
+      <SettingsSection title="Automations">
+        {props.members.flatMap((member) =>
+          (member.automations ?? []).map((automation) => (
+            <View key={`${member.environmentId}:${automation.id}`} className="gap-1 p-4">
+              <Text className="text-base text-foreground">{automation.name}</Text>
+              <Text className="text-sm text-foreground-muted">
+                {automation.enabled ? automation.schedule.kind : "Paused"} ·{" "}
+                {automation.schedule.timeZone} · Next{" "}
+                {new Date(automation.nextRunAt).toLocaleString()}
+              </Text>
+              {automation.runs.slice(0, 5).map((run) => (
+                <Text key={run.id} className="text-sm text-foreground-muted">
+                  {new Date(run.scheduledAt).toLocaleString()} · {run.status}
+                  {run.result ? ` · ${run.result}` : ""}
+                </Text>
+              ))}
+            </View>
+          )),
+        )}
+      </SettingsSection>
       <SettingsSection title="Checkouts">
         {props.members.map((member, index) => {
           const environment = props.environments.find(

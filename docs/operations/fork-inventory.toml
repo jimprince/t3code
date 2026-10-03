@@ -1473,3 +1473,11 @@ retire_when = "Upstream provides singleton agents with a durable charter and bri
 depends_on = ["fork-nested-threads", "fork-worker-operations", "fork-subthread-lifecycle"]
 roles = []
 note = "permanentAgent is an optional project field, persisted as projection_projects.permanent_agent_json by fork migration 9 and set through project.meta.update; snapshot rows include it only when set, so upstream shapes are unchanged. Live root = not archived, not deleted, no parent; nested threads are sub-agents and never count. Guarded paths: thread.create, thread.import, thread.unarchive and thread.parent.set to null. thread.create may carry handoverFromThreadId, which archives the idle live root in the same command and is refused while it is starting, running or awaiting input. An agent root is created with autoSettleDisabledAt and refuses re-enabling, so completion settlement never parks it. NamedAgents reads AGENT.md and BRIEFING.md from the project folder on the server host; a dormant agent's first turn is built from both plus the request, and a lost start race resolves to the winner. t3-thread send consults named agents only for names that are neither saved aliases nor UUIDs. Not in scope: resolver of whose request wins, scope enforcement, context-full reincarnation, a roster UI."
+[[patch]]
+name = "fork-project-automations"
+subject = "feat(projects): run timed project automations"
+class = "product"
+purpose = "Persist project-owned timed prompts, recover scheduled runs after downtime, queue busy thread targets, and expose automation management and run results to clients."
+retire_when = "Upstream provides equivalent project-scoped timed automations with persisted runs and busy-target delivery."
+depends_on = ["fork-subthread-lifecycle", "fork-named-agents"]
+roles = []
