@@ -27,6 +27,7 @@ const automationCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "project automation",
   tag: ORCHESTRATION_WS_METHODS.dispatchCommand,
 });
+const decodeDefinition = Schema.decodeOption(ProjectAutomationDefinition);
 const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 type Props = { environmentId: EnvironmentId; projectId: ProjectId; rootThreadId?: ThreadId };
 
@@ -73,7 +74,7 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
   ) => void send({ type, commandId: CommandId.make(randomUUID()), projectId, automationId });
   const save = async () => {
     if (!editing) return;
-    const definition = Schema.decodeUnknownOption(ProjectAutomationDefinition)(editing);
+    const definition = decodeDefinition(editing);
     if (definition._tag === "None") {
       setError("Enter a name, prompt, valid time, and timezone.");
       return;

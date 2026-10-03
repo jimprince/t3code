@@ -240,7 +240,7 @@ const make = Effect.gen(function* () {
               });
             } else nextDue = Math.min(nextDue, Date.parse(automation.nextRunAt));
           }
-          for (const run of [...automation.runs].reverse()) {
+          for (const run of automation.runs.toReversed()) {
             if (run.status !== "queued" && run.status !== "running") continue;
             yield* execute(project, automation, run).pipe(
               Effect.catchCauseIf(

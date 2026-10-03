@@ -32,6 +32,7 @@ import { decideOrchestrationCommand } from "./decider.ts";
 import { createEmptyReadModel, projectEvent } from "./projector.ts";
 import * as Automations from "./ProjectAutomationService.ts";
 
+const decodeEvent = Schema.decodeUnknownEffect(OrchestrationEvent);
 const NOW = "2026-10-03T06:00:00.000Z";
 const projectId = ProjectId.make("project");
 const model = { instanceId: ProviderInstanceId.make("codex"), model: "gpt-6.1-sol" };
@@ -85,7 +86,7 @@ it.layer(NodeServices.layer)("automation persistence transitions", (it) => {
       const dispatch = Effect.fn(function* (command: OrchestrationCommand) {
         const event = yield* decideOrchestrationCommand({ command, readModel: state });
         if (!("type" in event)) throw new Error("Expected one metadata event");
-        const persisted = yield* Schema.decodeUnknownEffect(OrchestrationEvent)({
+        const persisted = yield* decodeEvent({
           ...event,
           sequence: state.snapshotSequence + 1,
         });
@@ -168,7 +169,7 @@ function harness(
                 Effect.orDie,
               );
               if (!("type" in event)) throw new Error("Expected metadata event");
-              const persisted = yield* Schema.decodeUnknownEffect(OrchestrationEvent)({
+              const persisted = yield* decodeEvent({
                 ...event,
                 sequence: 1,
               }).pipe(Effect.orDie);
