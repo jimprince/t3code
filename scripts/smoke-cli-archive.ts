@@ -145,6 +145,7 @@ const smokeCliArchive = Effect.fn("smokeCliArchive")(function* (input: {
           TMPDIR: scratch,
           TEMP: scratch,
           T3CODE_HOME: home,
+          T3CODE_DISABLE_STARTUP_RESUME: "1",
         },
         extendEnv: false,
       },

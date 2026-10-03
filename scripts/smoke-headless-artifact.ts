@@ -221,6 +221,7 @@ async function smokeServe(artifactRoot: string, entrypoint: string): Promise<voi
         ...process.env,
         PATH: "",
         T3CODE_LOG_LEVEL: "Error",
+        T3CODE_DISABLE_STARTUP_RESUME: "1",
       },
       stdio: ["ignore", "pipe", "pipe"],
     },
