@@ -9,6 +9,7 @@ import * as Struct from "effect/Struct";
 import {
   ModelSelection,
   PermanentAgent,
+  ProjectAutomation,
   ProjectIconOverride,
   ProjectScript,
 } from "@t3tools/contracts";
@@ -22,6 +23,7 @@ import {
 
 const ProjectionProjectDbRow = ProjectionProject.mapFields(
   Struct.assign({
+    automations: Schema.fromJsonString(Schema.Array(ProjectAutomation)),
     defaultModelSelection: Schema.NullOr(Schema.fromJsonString(ModelSelection)),
     autoPull: Schema.Number,
     projectIcon: Schema.NullOr(Schema.fromJsonString(ProjectIconOverride)),
@@ -47,6 +49,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           auto_pull,
           favicon_path,
           project_icon_json,
+          automations_json,
           scripts_json,
           permanent_agent_json,
           created_at,
@@ -63,6 +66,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           ${row.autoPull ? 1 : 0},
           ${row.faviconPath ?? null},
           ${row.projectIcon ? JSON.stringify(row.projectIcon) : null},
+          ${JSON.stringify(row.automations ?? [])},
           ${JSON.stringify(row.scripts)},
           ${row.permanentAgent ? JSON.stringify(row.permanentAgent) : null},
           ${row.createdAt},
@@ -79,6 +83,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           auto_pull = excluded.auto_pull,
           favicon_path = excluded.favicon_path,
           project_icon_json = excluded.project_icon_json,
+          automations_json = excluded.automations_json,
           scripts_json = excluded.scripts_json,
           permanent_agent_json = excluded.permanent_agent_json,
           created_at = excluded.created_at,
@@ -102,6 +107,7 @@ const makeProjectionProjectRepository = Effect.gen(function* () {
           auto_pull AS "autoPull",
           favicon_path AS "faviconPath",
           project_icon_json AS "projectIcon",
+          automations_json AS "automations",
           scripts_json AS "scripts",
           permanent_agent_json AS "permanentAgent",
           created_at AS "createdAt",

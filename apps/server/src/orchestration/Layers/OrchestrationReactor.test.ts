@@ -1,3 +1,4 @@
+import * as ProjectAutomationService from "../ProjectAutomationService.ts";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
@@ -99,6 +100,10 @@ describe("OrchestrationReactor", () => {
         ),
         Layer.provideMerge(
           Layer.mergeAll(
+            Layer.succeed(ProjectAutomationService.ProjectAutomationService, {
+              start: () => Effect.void,
+              drain: Effect.void,
+            }),
             Layer.succeed(SettledSubthreadArchiveReactor.SettledSubthreadArchiveReactor, {
               start: () => Effect.void,
               drain: Effect.void,
