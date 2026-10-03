@@ -1,3 +1,4 @@
+import { NamedAgentError } from "./namedAgents.ts";
 import {
   ChatGptReconnectProfileInput,
   ChatGptReconnectProfile,
@@ -1464,6 +1465,24 @@ const WsOrchestrationForkThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.forkThrea
   error: Schema.Union([OrchestrationForkThreadError, EnvironmentAuthorizationError]),
 });
 
+const WsOrchestrationListNamedAgentsRpc = Rpc.make(ORCHESTRATION_WS_METHODS.listNamedAgents, {
+  payload: OrchestrationRpcSchemas.listNamedAgents.input,
+  success: OrchestrationRpcSchemas.listNamedAgents.output,
+  error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+});
+
+const WsOrchestrationResolveNamedAgentRpc = Rpc.make(ORCHESTRATION_WS_METHODS.resolveNamedAgent, {
+  payload: OrchestrationRpcSchemas.resolveNamedAgent.input,
+  success: OrchestrationRpcSchemas.resolveNamedAgent.output,
+  error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+});
+
+const WsOrchestrationHandOverNamedAgentRpc = Rpc.make(ORCHESTRATION_WS_METHODS.handOverNamedAgent, {
+  payload: OrchestrationRpcSchemas.handOverNamedAgent.input,
+  success: OrchestrationRpcSchemas.handOverNamedAgent.output,
+  error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+});
+
 const WsSubscribeTerminalEventsRpc = Rpc.make(WS_METHODS.subscribeTerminalEvents, {
   payload: Schema.Struct({}),
   success: TerminalEvent,
@@ -1692,4 +1711,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationExportThreadRpc,
   WsOrchestrationImportThreadRpc,
   WsOrchestrationForkThreadRpc,
+  WsOrchestrationListNamedAgentsRpc,
+  WsOrchestrationResolveNamedAgentRpc,
+  WsOrchestrationHandOverNamedAgentRpc,
 );
