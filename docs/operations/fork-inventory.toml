@@ -1444,3 +1444,12 @@ purpose = "Offer Edit from here for the latest interrupted user message even whe
 retire_when = "Upstream offers rewind for interrupted turns without assistant checkpoints."
 depends_on = []
 roles = []
+
+[[patch]]
+name = "fork-sandbox-session-recovery"
+subject = "fix(server): keep copied sandbox sessions stopped on startup"
+class = "divergence"
+purpose = "Disable automatic provider session and background-work recovery in dev and test launchers while preserving installed-server recovery at every live home."
+retire_when = "Upstream guards automatic startup continuation in copied sandbox state."
+depends_on = ["fork-provider-turn-safety", "fork-resume-background-work"]
+roles = []
