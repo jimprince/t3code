@@ -110,6 +110,30 @@ it.layer(NodeServices.layer)("active thread ordering", (it) => {
     }),
   );
 
+  it.effect("sets and clears project scope through thread metadata", () =>
+    Effect.gen(function* () {
+      let readModel = makeReadModel();
+      for (const scope of ["Coordinates the entire repo", null] as const) {
+        const decided = yield* decideOrchestrationCommand({
+          command: {
+            type: "thread.meta.update",
+            commandId: CommandId.make(`scope-${scope ?? "clear"}`),
+            threadId: THREAD_ID,
+            scope,
+          },
+          readModel,
+        });
+        const event = Array.isArray(decided) ? decided[0]! : decided;
+        expect(event).toMatchObject({
+          type: "thread.meta-updated",
+          payload: { threadId: THREAD_ID, scope },
+        });
+        readModel = yield* projectEvent(readModel, { ...event, sequence: 1 });
+        expect(readModel.threads[0]?.scope).toBe(scope);
+      }
+    }),
+  );
+
   for (const [label, overrides] of [
     ["archived", { archivedAt: NOW }],
     ["deleted", { deletedAt: NOW }],
