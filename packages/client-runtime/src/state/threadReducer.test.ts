@@ -48,6 +48,39 @@ const baseThread: OrchestrationThread = {
 };
 
 describe("applyThreadDetailEvent", () => {
+  it("refreshes issue badges on every client without restoring an unlinked issue", () => {
+    const linkedAt = baseThread.createdAt;
+    const issue = {
+      host: "git.home:3000",
+      repository: "brad/t3code-fork",
+      number: 73,
+      url: "https://git.bradleyprince.com/brad/t3code-fork/issues/73",
+      linkedAt,
+      snapshot: { title: "Fallback", state: "open" as const, syncedAt: linkedAt },
+    };
+    const event = {
+      ...baseEventFields,
+      sequence: 1,
+      occurredAt: linkedAt,
+      aggregateKind: "thread" as const,
+      aggregateId: baseThread.id,
+      type: "thread.issue-synced" as const,
+      payload: {
+        threadId: baseThread.id,
+        ...issue,
+        snapshot: { title: "Fixed issue", state: "closed" as const, syncedAt: linkedAt },
+        updatedAt: linkedAt,
+      },
+    };
+    const result = applyThreadDetailEvent({ ...baseThread, issues: [issue] }, event);
+    expect(result.kind).toBe("updated");
+    if (result.kind === "updated") {
+      expect(result.thread.issues).toEqual([{ ...issue, snapshot: event.payload.snapshot }]);
+    }
+    expect(applyThreadDetailEvent({ ...baseThread, issues: [] }, event)).toEqual({
+      kind: "unchanged",
+    });
+  });
   describe("project events", () => {
     it("returns unchanged for project.created", () => {
       const result = applyThreadDetailEvent(baseThread, {

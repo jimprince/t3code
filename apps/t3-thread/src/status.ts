@@ -143,6 +143,7 @@ export function formatThreadLine(
     thread.parentThreadId
       ? `parent=${thread.parentThreadId}${parentTitle ? ` (${parentTitle})` : ""}`
       : "parent=none",
+    `issues=${(thread.issues ?? []).map((issue) => `${issue.repository}#${issue.number}:${issue.snapshot.state}`).join(",") || "none"}`,
     status.reason,
   ].join(" ");
 }
