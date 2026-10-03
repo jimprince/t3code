@@ -133,7 +133,6 @@ export function formatThreadLine(
     thread.id,
     `[${status.state}]`,
     thread.title,
-    `scope=${JSON.stringify(thread.scope ?? null)}`,
     thread.projectId,
     `settled=${thread.settledOverride === "settled"}`,
     `pinned=${thread.pinnedAt != null}`,
@@ -143,6 +142,7 @@ export function formatThreadLine(
     thread.parentThreadId
       ? `parent=${thread.parentThreadId}${parentTitle ? ` (${parentTitle})` : ""}`
       : "parent=none",
+    `issues=${(thread.issues ?? []).map((issue) => `${issue.repository}#${issue.number}:${issue.snapshot.state}`).join(",") || "none"}`,
     status.reason,
   ].join(" ");
 }

@@ -254,8 +254,7 @@ describe("state helpers", () => {
 
     expect(buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z")).toEqual({
       level: "all",
-      nestingDerived: false,
-      inputReminderMinutes: 20,
+      inputReminderMinutes: 45,
       inactivityMinutes: 0,
       inactivityObservation: undefined,
       subscriberThreadId: "thread-coordinator-a",
@@ -301,8 +300,7 @@ describe("state helpers", () => {
 
     expect(buildSubscriptionRecord(caller, source, "2026-04-18T19:00:00.000Z")).toEqual({
       level: "all",
-      nestingDerived: false,
-      inputReminderMinutes: 20,
+      inputReminderMinutes: 45,
       inactivityMinutes: 0,
       inactivityObservation: undefined,
       subscriberThreadId: "thread-unsaved-caller",
