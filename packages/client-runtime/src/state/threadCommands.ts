@@ -29,6 +29,7 @@ import {
   type PinThreadInput,
   type ReorderPinnedThreadInput,
   type ReorderActiveThreadInput,
+  type ResetThreadOrderInput,
   type SetThreadAutoSettleInput,
   type SetThreadParentInput,
   type SettleThreadInput,
@@ -55,6 +56,7 @@ import {
   pinThread,
   reorderPinnedThread,
   reorderActiveThread,
+  resetThreadOrder,
   setThreadAutoSettle,
   setThreadParent,
   settleThread,
@@ -85,6 +87,7 @@ export type {
   PinThreadInput,
   ReorderPinnedThreadInput,
   ReorderActiveThreadInput,
+  ResetThreadOrderInput,
   SetThreadAutoSettleInput,
   SetThreadParentInput,
   SettleThreadInput,
@@ -185,6 +188,12 @@ export function createThreadEnvironmentAtoms<R, E>(
     reorderActive: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:thread:reorder-active",
       execute: (input: ReorderActiveThreadInput) => reorderActiveThread(input),
+      scheduler,
+      concurrency,
+    }),
+    resetOrder: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:thread:reset-order",
+      execute: (input: ResetThreadOrderInput) => resetThreadOrder(input),
       scheduler,
       concurrency,
     }),
@@ -346,6 +355,10 @@ export function createThreadEnvironmentAtoms<R, E>(
     reorderActive: optimistic.wrap(commands.reorderActive, (thread, input) => ({
       ...thread,
       activeOrderKey: input.orderKey,
+    })),
+    resetOrder: optimistic.wrap(commands.resetOrder, (thread) => ({
+      ...thread,
+      ...(thread.pinnedAt != null ? { pinOrderKey: null } : { activeOrderKey: null }),
     })),
     setParent: optimistic.wrap(commands.setParent, (thread, input) => ({
       ...thread,
