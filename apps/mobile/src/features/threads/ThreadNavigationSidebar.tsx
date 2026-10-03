@@ -154,6 +154,7 @@ function ThreadNavigationSidebarPane(
     unpinThread,
     setThreadAutoSettle,
     moveThread,
+    resetThreadOrder,
     renameThread,
     regenerateThreadTitle,
   } = useThreadListActions();
@@ -361,6 +362,13 @@ function ThreadNavigationSidebarPane(
       if (config.environment.capabilities.threadActiveReorder === true) {
         supported.add(environmentId);
       }
+    }
+    return supported;
+  }, [serverConfigs]);
+  const orderResetEnvironmentIds = useMemo(() => {
+    const supported = new Set<EnvironmentId>();
+    for (const [environmentId, config] of serverConfigs) {
+      if (config.environment.capabilities.threadOrderReset === true) supported.add(environmentId);
     }
     return supported;
   }, [serverConfigs]);
@@ -785,6 +793,7 @@ function ThreadNavigationSidebarPane(
                   ? pinReorderEnvironmentIds.has(thread.environmentId)
                   : activeReorderEnvironmentIds.has(thread.environmentId)
               }
+              orderResetSupported={orderResetEnvironmentIds.has(thread.environmentId)}
               canMoveUp={item.canMoveUp}
               canMoveDown={item.canMoveDown}
               onSnoozeThread={snoozeThread}
@@ -794,6 +803,7 @@ function ThreadNavigationSidebarPane(
               onUnpinThread={unpinThread}
               onSetThreadAutoSettle={setThreadAutoSettle}
               onMoveThread={moveThread}
+              onResetThreadOrder={resetThreadOrder}
               onSwipeableClose={handleSwipeableClose}
               onSwipeableWillOpen={handleSwipeableWillOpen}
               simultaneousSwipeGesture={sidebarScrollGesture}
@@ -833,6 +843,7 @@ function ThreadNavigationSidebarPane(
     [
       archiveThread,
       activeReorderEnvironmentIds,
+      orderResetEnvironmentIds,
       confirmDeletePendingTask,
       confirmDeleteThread,
       handleSelectThread,
@@ -840,6 +851,7 @@ function ThreadNavigationSidebarPane(
       handleSwipeableWillOpen,
       machineByEnvironmentId,
       moveThread,
+      resetThreadOrder,
       openPendingTask,
       pinReorderEnvironmentIds,
       pinThread,
