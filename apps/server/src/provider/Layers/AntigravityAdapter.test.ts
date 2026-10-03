@@ -74,6 +74,7 @@ const makeHarness = Effect.fn("makeAntigravityAdapterHarness")(function* (option
   readonly holdCancel?: boolean;
   readonly holdClose?: boolean;
   readonly holdDispatch?: boolean;
+  readonly cancelFailure?: AcpErrors.AcpError;
 }) {
   const runtimeEvents = yield* Queue.unbounded<AcpSessionRuntimeEvent>();
   const canonicalEvents = yield* Queue.unbounded<ProviderRuntimeEvent>();
@@ -202,6 +203,7 @@ const makeHarness = Effect.fn("makeAntigravityAdapterHarness")(function* (option
         );
       }),
     cancel: Effect.gen(function* () {
+      if (options?.cancelFailure) return yield* options.cancelFailure;
       const prompt = active;
       if (!prompt) return;
       calls.push(`cancel:${prompt.index}`);
@@ -302,6 +304,27 @@ const layer = ServerConfig.layerTest(process.cwd(), {
 }).pipe(Layer.provideMerge(NodeServices.layer));
 
 it.layer(layer)("AntigravityAdapter", (it) => {
+  it.effect("reports why native cancellation failed instead of an opaque transport error", () =>
+    Effect.gen(function* () {
+      const detail = "The ACP agent did not finish cancellation. Its process was stopped.";
+      const h = yield* makeHarness({
+        cancelFailure: new AcpErrors.AcpTransportError({
+          operation: "call-rpc",
+          method: "session/cancel",
+          detail,
+          cause: undefined,
+        }),
+      });
+      yield* h.adapter.startSession({ threadId, cwd: process.cwd(), runtimeMode: "full-access" });
+      const error = yield* h.adapter.interruptTurn(threadId).pipe(Effect.flip);
+      expect(error).toMatchObject({
+        _tag: "ProviderAdapterRequestError",
+        method: "session/cancel",
+        detail,
+      });
+    }),
+  );
+
   it.effect(
     "runs native auth, resume, models, commands, and streaming through the ACP transport",
     () =>
