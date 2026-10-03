@@ -985,6 +985,38 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.order.reset": {
+      const thread = yield* requireThreadNotArchived({
+        readModel,
+        command,
+        threadId: command.threadId,
+      });
+      if (
+        thread.deletedAt !== null ||
+        (thread.pinnedAt == null && thread.settledOverride === "settled")
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} is not in an orderable sidebar section`,
+        });
+      }
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt: yield* nowIso,
+          commandId: command.commandId,
+        })),
+        type: "thread.meta-updated",
+        payload: {
+          threadId: command.threadId,
+          ...(thread.pinnedAt != null ? { pinOrderKey: null } : { activeOrderKey: null }),
+          // Returning to automatic order is list metadata, not thread activity.
+          updatedAt: thread.updatedAt,
+        },
+      };
+    }
+
     case "thread.parent.set": {
       const thread = yield* requireThread({
         readModel,
