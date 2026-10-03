@@ -47,7 +47,8 @@ describe("prebuilt launch", () => {
     } finally {
       await NodeFSP.rm(temp, { recursive: true, force: true });
     }
-  });
+    // Three real launches, one holding a watcher for a second: parallel CI needs headroom.
+  }, 15_000);
 
   it("selects the build by default, refuses stale/missing builds and opts into tsx", async () => {
     const temp = await NodeFSP.mkdtemp(NodePath.join(NodeOS.tmpdir(), "t3-wrapper-"));
