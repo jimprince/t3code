@@ -132,6 +132,7 @@ import { ThreadDeletionReactor } from "./orchestration/Services/ThreadDeletionRe
 import * as PullRequestSyncReactor from "./orchestration/PullRequestSyncReactor.ts";
 import { ThreadTransfer } from "./orchestration/Services/ThreadTransfer.ts";
 import { ThreadBrief } from "./orchestration/Services/ThreadBrief.ts";
+import { NamedAgents } from "./orchestration/Services/NamedAgents.ts";
 import { SqlitePersistenceMemory } from "./persistence/Layers/Sqlite.ts";
 import { OrchestrationEventStoreLive } from "./persistence/Layers/OrchestrationEventStore.ts";
 import { OrchestrationEventStore } from "./persistence/Services/OrchestrationEventStore.ts";
@@ -1055,7 +1056,13 @@ const buildAppUnderTest = (options?: {
           }),
         ),
       ),
-      Layer.provide(Layer.mergeAll(Layer.mock(ThreadTransfer)({}), Layer.mock(ThreadBrief)({}))),
+      Layer.provide(
+        Layer.mergeAll(
+          Layer.mock(ThreadTransfer)({}),
+          Layer.mock(ThreadBrief)({}),
+          Layer.mock(NamedAgents)({}),
+        ),
+      ),
       Layer.provide(
         Layer.mock(ProjectionSnapshotQuery.ProjectionSnapshotQuery)({
           getUserInputActivity: () => Effect.die("unused"),

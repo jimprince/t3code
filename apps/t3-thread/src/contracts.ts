@@ -9,6 +9,7 @@ import {
   ORCHESTRATION_WS_METHODS,
 } from "@t3tools/contracts/orchestration";
 import { EnvironmentAuthorizationError } from "@t3tools/contracts/auth";
+import { NamedAgentError } from "@t3tools/contracts/namedAgents";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import * as SchemaIssue from "effect/SchemaIssue";
@@ -406,6 +407,15 @@ const WsOrchestrationSubscribeThreadRpc = Rpc.make(ORCHESTRATION_WS_METHODS.subs
   stream: true,
 });
 
+const namedAgentRpc = <M extends "listNamedAgents" | "resolveNamedAgent" | "handOverNamedAgent">(
+  method: M,
+) =>
+  Rpc.make(ORCHESTRATION_WS_METHODS[method], {
+    payload: OrchestrationRpcSchemas[method].input,
+    success: OrchestrationRpcSchemas[method].output,
+    error: Schema.Union([NamedAgentError, EnvironmentAuthorizationError]),
+  });
+
 export const WsRpcGroup = RpcGroup.make(
   WsServerGetConfigRpc,
   WsOrchestrationDispatchCommandRpc,
@@ -414,4 +424,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsOrchestrationGetArchivedShellSnapshotRpc,
   WsOrchestrationSubscribeShellRpc,
   WsOrchestrationSubscribeThreadRpc,
+  namedAgentRpc("listNamedAgents"),
+  namedAgentRpc("resolveNamedAgent"),
+  namedAgentRpc("handOverNamedAgent"),
 );

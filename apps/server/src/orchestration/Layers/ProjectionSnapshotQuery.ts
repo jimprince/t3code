@@ -19,6 +19,7 @@ import {
   OrchestrationThreadGoal,
   OrchestrationThread,
   OrchestrationThreadDetailSnapshot,
+  PermanentAgent,
   ProjectScript,
   ProjectIconOverride,
   TurnId,
@@ -112,6 +113,7 @@ const ProjectionProjectDbRowSchema = ProjectionProject.mapFields(
     autoPull: Schema.Number,
     projectIcon: Schema.NullOr(Schema.fromJsonString(ProjectIconOverride)),
     scripts: Schema.fromJsonString(Schema.Array(ProjectScript)),
+    permanentAgent: Schema.NullOr(Schema.fromJsonString(PermanentAgent)),
   }),
 );
 const ProjectionThreadMessageDbRowSchema = ProjectionThreadMessage.mapFields(
@@ -424,6 +426,7 @@ function mapProjectShellRow(
     faviconPath: row.faviconPath ?? null,
     projectIcon: row.projectIcon ?? null,
     scripts: row.scripts,
+    ...(row.permanentAgent ? { permanentAgent: row.permanentAgent } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -574,6 +577,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           favicon_path AS "faviconPath",
           project_icon_json AS "projectIcon",
           scripts_json AS "scripts",
+          permanent_agent_json AS "permanentAgent",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -1252,6 +1256,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           favicon_path AS "faviconPath",
           project_icon_json AS "projectIcon",
           scripts_json AS "scripts",
+          permanent_agent_json AS "permanentAgent",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -1279,6 +1284,7 @@ const makeProjectionSnapshotQuery = Effect.gen(function* () {
           favicon_path AS "faviconPath",
           project_icon_json AS "projectIcon",
           scripts_json AS "scripts",
+          permanent_agent_json AS "permanentAgent",
           created_at AS "createdAt",
           updated_at AS "updatedAt",
           deleted_at AS "deletedAt"
@@ -2484,6 +2490,7 @@ pending_approval_requests AS (
                 faviconPath: row.faviconPath ?? null,
                 projectIcon: row.projectIcon ?? null,
                 scripts: row.scripts,
+                ...(row.permanentAgent ? { permanentAgent: row.permanentAgent } : {}),
                 createdAt: row.createdAt,
                 updatedAt: row.updatedAt,
                 deletedAt: row.deletedAt,
@@ -2657,6 +2664,7 @@ pending_approval_requests AS (
                   faviconPath: row.faviconPath ?? null,
                   projectIcon: row.projectIcon ?? null,
                   scripts: row.scripts,
+                  ...(row.permanentAgent ? { permanentAgent: row.permanentAgent } : {}),
                   createdAt: row.createdAt,
                   updatedAt: row.updatedAt,
                   deletedAt: row.deletedAt,
@@ -3250,6 +3258,9 @@ pending_approval_requests AS (
                     faviconPath: option.value.faviconPath ?? null,
                     projectIcon: option.value.projectIcon ?? null,
                     scripts: option.value.scripts,
+                    ...(option.value.permanentAgent
+                      ? { permanentAgent: option.value.permanentAgent }
+                      : {}),
                     createdAt: option.value.createdAt,
                     updatedAt: option.value.updatedAt,
                     deletedAt: option.value.deletedAt,
@@ -3265,6 +3276,9 @@ pending_approval_requests AS (
                       repositoryIdentity,
                       defaultModelSelection: option.value.defaultModelSelection,
                       scripts: option.value.scripts,
+                      ...(option.value.permanentAgent
+                        ? { permanentAgent: option.value.permanentAgent }
+                        : {}),
                       createdAt: option.value.createdAt,
                       updatedAt: option.value.updatedAt,
                       deletedAt: option.value.deletedAt,
