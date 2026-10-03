@@ -13,7 +13,6 @@ import {
 } from "@t3tools/contracts";
 import { assert, it } from "@effect/vitest";
 import * as DateTime from "effect/DateTime";
-import * as ConfigProvider from "effect/ConfigProvider";
 import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
@@ -451,11 +450,6 @@ it.effect.each(["opt-in desktop restart", "marked remote update"] as const)(
           originalTurnId,
         );
         yield* ServerRuntimeStartup.reconcileProviderSessions.pipe(
-          Effect.provide(
-            ConfigProvider.layer(
-              ConfigProvider.fromEnv({ env: { T3CODE_RESUME_SANDBOX_THREADS: "true" } }),
-            ),
-          ),
           Effect.provideService(ProviderService.ProviderService, {
             ...provider,
             getCapabilities: () =>

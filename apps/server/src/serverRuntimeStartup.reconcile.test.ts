@@ -93,7 +93,7 @@ const unusedDirectoryOperations = {
 const runReconciliation = (input: {
   readonly threads: ReadonlyArray<ReturnType<typeof makeThread>>;
   readonly continueAfterRestart?: boolean;
-  readonly allowSandboxResume?: boolean;
+  readonly disableStartupResume?: boolean;
   readonly liveDefaultHome?: boolean;
   readonly liveThreadIds?: ReadonlyArray<ThreadId>;
   readonly providerService?: ProviderService.ProviderService["Service"];
@@ -126,7 +126,10 @@ const runReconciliation = (input: {
         }),
         ConfigProvider.layer(
           ConfigProvider.fromEnv({
-            env: { T3CODE_RESUME_SANDBOX_THREADS: String(input.allowSandboxResume ?? true) },
+            env:
+              input.disableStartupResume === undefined
+                ? {}
+                : { T3CODE_DISABLE_STARTUP_RESUME: input.disableStartupResume ? "1" : "0" },
           }),
         ),
         Layer.effect(
@@ -138,7 +141,7 @@ const runReconciliation = (input: {
               ...config,
               ...(input.liveDefaultHome
                 ? { stateDir: path.join(NodeOS.homedir(), ".t3", "userdata") }
-                : {}),
+                : { stateDir: "/custom-live-base/userdata" }),
             };
           }),
         ).pipe(
@@ -209,7 +212,7 @@ it.effect("marks active running sessions that have persisted resume state", () =
 it.effect.each(
   (["marked update", "opt-in restart"] as const).flatMap((recovery) =>
     (["current", "previous", "missing"] as const).flatMap((persistedTurn) =>
-      (["live default", "explicit sandbox"] as const).map((home) => ({
+      (["live default", "live custom base", "explicit recovery sandbox"] as const).map((home) => ({
         recovery,
         persistedTurn,
         home,
@@ -292,8 +295,9 @@ it.effect.each(
       yield* runReconciliation({
         threads: [codex, fallback],
         continueAfterRestart: recovery === "opt-in restart",
-        allowSandboxResume: home === "explicit sandbox",
+
         liveDefaultHome: home === "live default",
+        ...(home === "explicit recovery sandbox" ? { disableStartupResume: false } : {}),
         providerService,
         directory: {
           ...unusedDirectoryOperations,
@@ -1066,7 +1070,7 @@ for (const status of ["running", "starting", "ready"] as const) {
       return runReconciliation({
         threads: [thread],
         continueAfterRestart: true,
-        allowSandboxResume: false,
+        disableStartupResume: true,
         providerService: {
           ...makeProviderService(),
           sendTurn: (input) =>

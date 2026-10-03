@@ -594,14 +594,10 @@ const clearProviderSessionContinuationMarkers = (threadIds: ReadonlyArray<Thread
   }).pipe(Effect.mapError(toServerUpdateThreadContinuationError));
 
 export const reconcileProviderSessions = Effect.gen(function* () {
-  const config = yield* ServerConfig.ServerConfig;
-  const path = yield* Path.Path;
-  const allowSandboxResume = yield* Config.Boolean("T3CODE_RESUME_SANDBOX_THREADS").pipe(
+  const disableStartupResume = yield* Config.Boolean("T3CODE_DISABLE_STARTUP_RESUME").pipe(
     Config.withDefault(false),
   );
-  const allowStartupResume =
-    allowSandboxResume ||
-    path.resolve(config.stateDir) === path.join(NodeOS.homedir(), ".t3", "userdata");
+  const allowStartupResume = !disableStartupResume;
   const crypto = yield* Crypto.Crypto;
   const directory = yield* ProviderSessionDirectory.ProviderSessionDirectory;
   const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
