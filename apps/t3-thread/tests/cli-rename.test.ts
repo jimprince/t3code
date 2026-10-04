@@ -97,7 +97,12 @@ describe("rename command", () => {
     await import("../src/cli.js");
     const output = JSON.parse(await printed);
     expect(rename).toHaveBeenCalledWith({ threadId, title: "Supervisor A" });
-    expect(output).toMatchObject({ threadId, title: "Supervisor A", updated: true });
+    expect(output).toMatchObject({
+      threadId,
+      title: "Supervisor A",
+      renamed: true,
+      scopeUpdated: false,
+    });
     expect(fixture.state.agents.map((agent) => agent.title)).toEqual(
       saved ? ["Supervisor A", "Supervisor A"] : [],
     );
@@ -165,7 +170,8 @@ describe("rename command", () => {
     expect(JSON.parse(await printed)).toMatchObject({
       threadId,
       scope: "Coordinates the entire repo",
-      updated: true,
+      renamed: false,
+      scopeUpdated: true,
     });
     expect(fixture.state.agents[0]?.title).toBe("Original");
   });

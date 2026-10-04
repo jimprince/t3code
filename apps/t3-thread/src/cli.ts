@@ -878,7 +878,12 @@ agent
       },
       result: null,
     }));
-    printJson({ ...renamed, environment: target.environment, updated: true });
+    printJson({
+      ...renamed,
+      environment: target.environment,
+      renamed: options.title !== undefined,
+      scopeUpdated: options.scope !== undefined || options.clearScope,
+    });
   });
 
 agent
