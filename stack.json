@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "9d455190db441e75ca0a3d1eee605982ec5f8cc5",
-  "head": "aae76552abb7100dbddc8dceb8cb5d19fcad3e0e",
+  "prev": "352ebedd3f121d8c4a1bbf0a0f623bba728e9f21",
+  "head": "084e0c855816fa7e999b73791934ab3a7b6f45de",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -67,7 +67,8 @@
     "fork-gitea-issue-links",
     "fork-orchestrators-view",
     "fork-project-issues-board",
-    "fork-request-ledger"
+    "fork-request-ledger",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -266,6 +267,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "6fe6f8e4c759f4c7e9d203dd250837da65ace50d"
+    },
+    "refresh-temp": {
+      "oid": "084e0c855816fa7e999b73791934ab3a7b6f45de"
     }
   }
 }
