@@ -1,12 +1,10 @@
 {
   "version": 5,
-  "prev": "514f93e3b7d495f6f859535a89733318dd25c87a",
-  "head": "e5068a9ea5256cfcee7019ea65548dd81d1fe403",
+  "prev": "10c76641617acd3ebd6b3bfe1138a1f63bee4313",
+  "head": "e43bb729550971a2bd2ffabf59bc50aaf9f6fe8c",
   "applied": [
     "fork-build-ci-compat",
-    "fork-worker-operations"
-  ],
-  "unapplied": [
+    "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
     "fork-thread-client-recovery",
@@ -54,7 +52,9 @@
     "fork-agent-panel-thread-details",
     "fork-sidebar-drag-to-nest",
     "fork-worker-inactivity",
-    "fork-thread-titles",
+    "fork-thread-titles"
+  ],
+  "unapplied": [
     "fork-embedded-pages",
     "fork-subthread-lifecycle",
     "fork-orchestrator-focus",
