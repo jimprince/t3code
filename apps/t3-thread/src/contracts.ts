@@ -16,6 +16,12 @@ import {
   ThreadIssueReferenceInput,
   ThreadIssueUnlinkResult,
   WS_METHODS,
+  ProjectIssuesError,
+  ProjectIssuesListResult,
+  ProjectRequestCreateInput,
+  ProjectRequestRef,
+  ProjectRequestsListInput,
+  ProjectRequestUpdateInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -436,6 +442,24 @@ const WsThreadIssuesUnlinkRpc = Rpc.make(WS_METHODS.threadIssuesUnlink, {
   error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
 });
 
+// Request ledger: agents list, file, start and hand back Brad's requests.
+const projectRequestError = Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]);
+const WsProjectRequestsCreateRpc = Rpc.make(WS_METHODS.projectRequestsCreate, {
+  payload: ProjectRequestCreateInput,
+  success: ProjectRequestRef,
+  error: projectRequestError,
+});
+const WsProjectRequestsUpdateRpc = Rpc.make(WS_METHODS.projectRequestsUpdate, {
+  payload: ProjectRequestUpdateInput,
+  success: ProjectRequestRef,
+  error: projectRequestError,
+});
+const WsProjectRequestsListRpc = Rpc.make(WS_METHODS.projectRequestsList, {
+  payload: ProjectRequestsListInput,
+  success: ProjectIssuesListResult,
+  error: projectRequestError,
+});
+
 export const WsRpcGroup = RpcGroup.make(
   WsServerGetConfigRpc,
   WsOrchestrationDispatchCommandRpc,
@@ -449,4 +473,7 @@ export const WsRpcGroup = RpcGroup.make(
   namedAgentRpc("handOverNamedAgent"),
   WsThreadIssuesLinkRpc,
   WsThreadIssuesUnlinkRpc,
+  WsProjectRequestsCreateRpc,
+  WsProjectRequestsUpdateRpc,
+  WsProjectRequestsListRpc,
 );
