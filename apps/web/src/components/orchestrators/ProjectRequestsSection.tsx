@@ -23,6 +23,7 @@ const EXCERPT_LINES = 4;
 function excerpt(text: string): string {
   return text
     .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/\*\*|__|`/g, "")
     .split("\n")
     .map((line) => line.trim())
     .filter((line) => line.length > 0)
