@@ -26,6 +26,8 @@ import {
   ProjectIssuesError,
   ProjectIssuesListInput,
   ProjectIssuesListResult,
+  ProjectRequestSettleInput,
+  ProjectRequestSettleResult,
 } from "./projectIssues.ts";
 import {
   CodexAuthCallbackInput,
@@ -478,6 +480,7 @@ export const WS_METHODS = {
   threadIssuesLink: "threadIssues.link",
   threadIssuesUnlink: "threadIssues.unlink",
   projectIssuesList: "projectIssues.list",
+  projectRequestsSettle: "projectRequests.settle",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -834,6 +837,12 @@ const WsThreadIssuesUnlinkRpc = Rpc.make(WS_METHODS.threadIssuesUnlink, {
 const WsProjectIssuesListRpc = Rpc.make(WS_METHODS.projectIssuesList, {
   payload: ProjectIssuesListInput,
   success: ProjectIssuesListResult,
+  error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+const WsProjectRequestsSettleRpc = Rpc.make(WS_METHODS.projectRequestsSettle, {
+  payload: ProjectRequestSettleInput,
+  success: ProjectRequestSettleResult,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 
@@ -1662,6 +1671,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsThreadIssuesLinkRpc,
   WsThreadIssuesUnlinkRpc,
   WsProjectIssuesListRpc,
+  WsProjectRequestsSettleRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,

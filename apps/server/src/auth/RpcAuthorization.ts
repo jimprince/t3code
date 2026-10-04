@@ -120,6 +120,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.threadIssuesLink]: AuthOrchestrationOperateScope,
   [WS_METHODS.threadIssuesUnlink]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectIssuesList]: AuthOrchestrationReadScope,
+  [WS_METHODS.projectRequestsSettle]: AuthOrchestrationOperateScope,
   [WS_METHODS.sourceControlLookupRepository]: AuthOrchestrationReadScope,
   [WS_METHODS.sourceControlCloneRepository]: AuthOrchestrationOperateScope,
   [WS_METHODS.sourceControlPublishRepository]: AuthOrchestrationOperateScope,
