@@ -50,6 +50,12 @@ export const ProjectIssue = Schema.Struct({
   closedAt: Schema.NullOr(IsoDateTime),
   /** Threads in the project tree that link this issue. */
   linkedThreadIds: Schema.Array(ThreadId),
+  /** For a request waiting on Brad: the newest comment, usually the agent's answer or summary. */
+  latestComment: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({ author: Schema.String, body: Schema.String, createdAt: IsoDateTime }),
+    ),
+  ),
 });
 export type ProjectIssue = typeof ProjectIssue.Type;
 
@@ -73,6 +79,18 @@ export const ProjectIssuesListResult = Schema.Struct({
   fetchedAt: IsoDateTime,
 });
 export type ProjectIssuesListResult = typeof ProjectIssuesListResult.Type;
+
+/** Brad settles a request: closes its issue. Settling is only ever Brad's action. */
+export const ProjectRequestSettleInput = Schema.Struct({
+  rootThreadId: ThreadId,
+  host: TrimmedNonEmptyString,
+  repository: TrimmedNonEmptyString,
+  number: PositiveInt,
+});
+export type ProjectRequestSettleInput = typeof ProjectRequestSettleInput.Type;
+
+export const ProjectRequestSettleResult = Schema.Struct({ settled: Schema.Boolean });
+export type ProjectRequestSettleResult = typeof ProjectRequestSettleResult.Type;
 
 export class ProjectIssuesError extends Schema.TaggedError<ProjectIssuesError>()(
   "ProjectIssuesError",

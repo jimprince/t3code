@@ -1,0 +1,4 @@
+id = "request-ledger"
+category = "feature"
+functionality = "projects"
+text = "Requests you type in any thread are tracked as Gitea issues and listed on the project page by what you do next (answers ready, review, approve, test) or as still with the agents, until you settle them. Turn it off under Source control settings."
