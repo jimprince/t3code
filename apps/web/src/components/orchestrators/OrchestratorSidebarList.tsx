@@ -14,6 +14,7 @@ import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { useUiStateStore } from "../../uiStateStore";
 import { ThreadIssueBadges } from "../ThreadIssueBadges";
+import { ProjectFavicon } from "../ProjectFavicon";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 
 const QUIET_AFTER_MS = 7 * 24 * 60 * 60 * 1_000;
@@ -31,6 +32,12 @@ const STANDALONE_STATUS: Record<
 function ProjectRow({ summary }: { readonly summary: OrchestratorSummary }) {
   const navigate = useNavigate();
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
+  const rootProject =
+    summary.projects.find(
+      (project) =>
+        project.environmentId === summary.root.environmentId &&
+        project.id === summary.root.projectId,
+    ) ?? summary.projects[0];
   return (
     <li className="relative rounded-md hover:bg-sidebar-row-hover">
       <button
@@ -46,6 +53,7 @@ function ProjectRow({ summary }: { readonly summary: OrchestratorSummary }) {
       />
       <div className="pointer-events-none relative z-10 flex w-full flex-col gap-1.5 px-2.5 py-2 text-left">
         <span className="flex min-w-0 w-full items-center gap-2">
+          {rootProject ? <ProjectFavicon project={rootProject} className="size-4" /> : null}
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
             {summary.root.title}
           </span>

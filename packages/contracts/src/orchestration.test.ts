@@ -1162,6 +1162,32 @@ it.effect("decodes active placement on existing metadata events while accepting 
   }),
 );
 
+it.effect("decodes optional project scope updates and preserves old thread payloads", () =>
+  Effect.gen(function* () {
+    const command = yield* decodeClientOrchestrationCommand({
+      type: "thread.meta.update",
+      commandId: "cmd-scope",
+      threadId: "thread-1",
+      scope: "Coordinates the entire repo",
+    });
+    assert.strictEqual(command.type, "thread.meta.update");
+    if (command.type === "thread.meta.update") {
+      assert.strictEqual(command.scope, "Coordinates the entire repo");
+    }
+    const cleared = yield* decodeThreadMetaUpdatedPayload({
+      threadId: "thread-1",
+      scope: null,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(cleared.scope, null);
+    const oldPayload = yield* decodeThreadMetaUpdatedPayload({
+      threadId: "thread-1",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    assert.strictEqual(oldPayload.scope, undefined);
+  }),
+);
+
 it.effect("accepts a title regeneration intent in thread.meta.update", () =>
   Effect.gen(function* () {
     const parsed = yield* decodeOrchestrationCommand({
