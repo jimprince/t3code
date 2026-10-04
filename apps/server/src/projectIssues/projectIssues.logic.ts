@@ -8,7 +8,7 @@ import type {
 
 /** Labels the Agent Status Board uses for its lanes; the project board reads the same ones. */
 export const STATUS_LABELS = ["needs-review", "in-progress", "backlog"] as const;
-export const ARCHIVED_LABEL = "archived";
+const ARCHIVED_LABEL = "archived";
 /** Marks an issue as a request Brad made (the request ledger). */
 export const REQUEST_LABEL = "ask";
 
