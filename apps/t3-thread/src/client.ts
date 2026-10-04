@@ -457,25 +457,34 @@ export class RemoteEnvironmentClient {
 
   async renameThread(input: {
     threadId: string;
-    title: string;
-  }): Promise<{ threadId: string; title: string }> {
-    const title = input.title.trim();
-    if (!title) throw new Error("Thread title must not be empty.");
+    title?: string;
+    scope?: string | null;
+  }): Promise<{ threadId: string; title: string; scope: string | null }> {
+    const title = input.title?.trim();
+    const scope = input.scope === undefined ? undefined : input.scope?.trim() || null;
+    if (input.title !== undefined && !title) throw new Error("Thread title must not be empty.");
+    if (title === undefined && scope === undefined) {
+      throw new Error("Thread title or scope must be provided.");
+    }
     const rpc = await this.openRpc();
     try {
       await rpc.request("dispatchCommand", {
         type: "thread.meta.update",
         commandId: NodeCrypto.randomUUID(),
         threadId: input.threadId,
-        title,
+        ...(title !== undefined ? { title } : {}),
+        ...(scope !== undefined ? { scope } : {}),
       });
     } finally {
       await rpc.dispose();
     }
     const thread = await this.findThread(input.threadId);
-    if (thread.title !== title)
+    if (title !== undefined && thread.title !== title)
       throw new Error("Thread title readback did not match the requested title.");
-    return { threadId: thread.id, title: thread.title };
+    if (scope !== undefined && (thread.scope ?? null) !== scope) {
+      throw new Error("Thread scope readback did not match the requested scope.");
+    }
+    return { threadId: thread.id, title: thread.title, scope: thread.scope ?? null };
   }
 
   async createAgentThread(input: {

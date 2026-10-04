@@ -973,6 +973,10 @@ first-message titling. Change a title at any time with
 start or interrupt a provider turn. The command verifies the server title and
 updates matching local aliases after success.
 
+Project orchestrators can also publish a concise scope beside their title with
+`--scope "Coordinates the entire repo"`. Use `--clear-scope` to remove it. The
+scope is server-owned and appears in `threads` and `status` output on every machine.
+
 ## Timed project automations
 
 Use `t3-thread automation list --env <name> --project <id>` to inspect server-owned definitions
