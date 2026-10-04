@@ -882,7 +882,7 @@ agent
       ...renamed,
       environment: target.environment,
       renamed: options.title !== undefined,
-      scopeUpdated: options.scope !== undefined || options.clearScope,
+      scopeUpdated: options.scope !== undefined || Boolean(options.clearScope),
     });
   });
 
