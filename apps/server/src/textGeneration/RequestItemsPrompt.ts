@@ -1,7 +1,7 @@
 import * as Schema from "effect/Schema";
 
 /** Request kinds the ledger tracks; each has its own lifecycle on the project page. */
-export const REQUEST_KINDS = ["question", "deliverable", "plan", "change", "test"] as const;
+const REQUEST_KINDS = ["question", "deliverable", "plan", "change", "test"] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
 
 const REQUEST_ITEMS_PROMPT = `You extract the requests a person made in one chat message to their AI agents, so each request can be tracked until the person settles it.
