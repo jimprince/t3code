@@ -92,6 +92,50 @@ export type ProjectRequestSettleInput = typeof ProjectRequestSettleInput.Type;
 export const ProjectRequestSettleResult = Schema.Struct({ settled: Schema.Boolean });
 export type ProjectRequestSettleResult = typeof ProjectRequestSettleResult.Type;
 
+/** Request kinds; each has its own lifecycle on the project page. */
+export const ProjectRequestKind = Schema.Literals([
+  "question",
+  "deliverable",
+  "plan",
+  "change",
+  "test",
+]);
+export type ProjectRequestKind = typeof ProjectRequestKind.Type;
+
+/** An agent files a request on Brad's behalf, in the tracker of its thread's project tree. */
+export const ProjectRequestCreateInput = Schema.Struct({
+  threadId: ThreadId,
+  title: TrimmedNonEmptyString,
+  kind: ProjectRequestKind,
+  detail: Schema.optionalKey(Schema.String),
+});
+export type ProjectRequestCreateInput = typeof ProjectRequestCreateInput.Type;
+
+/**
+ * An agent moves a request: `in-progress` when it starts, `needs-review` when the
+ * answer, draft or plan is ready for Brad (with a summary comment). Settling is
+ * not an agent action.
+ */
+export const ProjectRequestUpdateInput = Schema.Struct({
+  threadId: ThreadId,
+  /** Issue number in the project's tracker repository, or a full issue URL. */
+  reference: TrimmedNonEmptyString,
+  status: Schema.Literals(["pending", "in-progress", "needs-review"]),
+  comment: Schema.optionalKey(Schema.String),
+});
+export type ProjectRequestUpdateInput = typeof ProjectRequestUpdateInput.Type;
+
+export const ProjectRequestRef = Schema.Struct({
+  host: TrimmedNonEmptyString,
+  repository: TrimmedNonEmptyString,
+  number: PositiveInt,
+  url: TrimmedNonEmptyString,
+});
+export type ProjectRequestRef = typeof ProjectRequestRef.Type;
+
+export const ProjectRequestsListInput = Schema.Struct({ threadId: ThreadId });
+export type ProjectRequestsListInput = typeof ProjectRequestsListInput.Type;
+
 export class ProjectIssuesError extends Schema.TaggedError<ProjectIssuesError>()(
   "ProjectIssuesError",
   { message: Schema.String },

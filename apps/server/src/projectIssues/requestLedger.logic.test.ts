@@ -8,6 +8,7 @@ import {
   fallbackRequestItem,
   formatRequestIssueBody,
   isObviouslyNotARequest,
+  parseRequestReference,
 } from "./requestLedger.logic.ts";
 
 function turnStart(text: string, extra: Record<string, unknown> = {}) {
@@ -88,5 +89,33 @@ describe("formatRequestIssueBody", () => {
     expect(body).toContain("> Can we connect the ReSpeaker?");
     expect(body).toContain("**Audio worker** (under **Printcell Orchestrator**)");
     expect(parseRequestMarker(body)).toEqual(source);
+  });
+});
+
+describe("parseRequestReference", () => {
+  const tracker = { host: "git.bradleyprince.com", repository: "brad/printcell" };
+
+  it("reads numbers in the tracker, owner/repo#N and same-host URLs", () => {
+    expect(parseRequestReference("12", tracker)).toEqual({
+      repository: "brad/printcell",
+      number: 12,
+    });
+    expect(parseRequestReference("#7", tracker)).toEqual({
+      repository: "brad/printcell",
+      number: 7,
+    });
+    expect(parseRequestReference("Brad/Other#3", tracker)).toEqual({
+      repository: "brad/other",
+      number: 3,
+    });
+    expect(
+      parseRequestReference("https://git.bradleyprince.com/brad/printcell/issues/9", tracker),
+    ).toEqual({ repository: "brad/printcell", number: 9 });
+  });
+
+  it("rejects other hosts and malformed references", () => {
+    expect(parseRequestReference("https://github.com/brad/printcell/issues/9", tracker)).toBeNull();
+    expect(parseRequestReference("0", tracker)).toBeNull();
+    expect(parseRequestReference("printcell", tracker)).toBeNull();
   });
 });

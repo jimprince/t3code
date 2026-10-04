@@ -108,3 +108,24 @@ export function formatRequestIssueBody(input: {
     "",
   ].join("\n");
 }
+
+/**
+ * An agent's reference to a request: a number or `#N` in the project's tracker,
+ * `owner/repo#N` on the same host, or a full issue URL on the tracker's host.
+ */
+export function parseRequestReference(
+  reference: string,
+  tracker: { readonly host: string; readonly repository: string },
+): { repository: string; number: number } | null {
+  const trimmed = reference.trim();
+  const local = /^#?([1-9]\d*)$/.exec(trimmed);
+  if (local) return { repository: tracker.repository, number: Number(local[1]) };
+  const short = /^([\w.-]+\/[\w.-]+)#([1-9]\d*)$/.exec(trimmed);
+  if (short) return { repository: short[1]!.toLowerCase(), number: Number(short[2]) };
+  if (!URL.canParse(trimmed)) return null;
+  const url = new URL(trimmed);
+  const path = /^\/([^/]+\/[^/]+)\/issues\/([1-9]\d*)\/?$/.exec(url.pathname);
+  return url.host.toLowerCase() === tracker.host && path
+    ? { repository: path[1]!.toLowerCase(), number: Number(path[2]) }
+    : null;
+}

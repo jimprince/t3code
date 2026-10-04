@@ -3116,6 +3116,18 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.projectRequestsSettle, requestLedger.settle(input), {
             "rpc.aggregate": "project-issues",
           }),
+        [WS_METHODS.projectRequestsCreate]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsCreate, requestLedger.create(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsUpdate]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsUpdate, requestLedger.update(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsList]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsList, requestLedger.listForThread(input), {
+            "rpc.aggregate": "project-issues",
+          }),
         [WS_METHODS.pullRequestsListStats]: (input) =>
           observeRpcEffect(WS_METHODS.pullRequestsListStats, pullRequests.listStats(input), {
             "rpc.aggregate": "pull-requests",
