@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "2ad9232a03b4b33b292c7ce9010fc1c5680b1889",
-  "head": "17010cfcf80a13840ad1179b821aff713bf13f85",
+  "prev": "d66585253d867841409f2b3f9e3f9f753a17476a",
+  "head": "b0353fe67c7b316e655d92f37ffaad43c83bc09a",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -64,13 +64,12 @@
     "fork-agent-thread-ordering",
     "fork-named-agents",
     "fork-project-automations",
-    "fork-gitea-issue-links"
-  ],
-  "unapplied": [
+    "fork-gitea-issue-links",
     "fork-orchestrators-view",
     "fork-project-issues-board",
     "fork-request-ledger"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -170,7 +169,7 @@
       "oid": "b58b4a95f0a49a3a0fdc13f3fb98793d070899b0"
     },
     "fork-orchestrators-view": {
-      "oid": "c43ef4bfb8f2e64d6d3bae633de44c7a8a0dbf72"
+      "oid": "e527a43439df9addc77bbf5d7002610886d78fed"
     },
     "fork-overnight-updates": {
       "oid": "c3c2325b9d1138a0c0539bd561af0bff217ffdf8"
@@ -191,7 +190,7 @@
       "oid": "569ffab4e88bd0218592a79738d49b87ff3b352a"
     },
     "fork-project-issues-board": {
-      "oid": "1cd69585d1ff7a8a73be24a456e85a7297e4d532"
+      "oid": "e5ced78c7ef350ecce40464dc949425c0bfd63b0"
     },
     "fork-project-selection": {
       "oid": "ea231748e174ac63fee91266ccdcbfb6bf17b620"
@@ -206,7 +205,7 @@
       "oid": "8a56a24c18acd59402a0dc2939a27da984302402"
     },
     "fork-request-ledger": {
-      "oid": "ae5450ad5246f39990e39c11d988b6370f46b2cd"
+      "oid": "b0353fe67c7b316e655d92f37ffaad43c83bc09a"
     },
     "fork-resource-recovery": {
       "oid": "728564f80823714180fcace5f88bace7fadec1d7"
