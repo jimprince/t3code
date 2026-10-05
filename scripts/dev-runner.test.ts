@@ -152,6 +152,31 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
   });
 
   describe("createDevRunnerEnv", () => {
+    it.effect.each(["dev", "dev:server", "dev:web", "dev:desktop"] as const)(
+      "disables copied-session recovery in %s unless explicitly requested",
+      (mode) =>
+        Effect.gen(function* () {
+          const input = {
+            mode,
+            serverOffset: 0,
+            webOffset: 0,
+            t3Home: "/copied-test-home",
+            browser: undefined,
+            autoBootstrapProjectFromCwd: undefined,
+            logWebSocketEvents: undefined,
+            host: undefined,
+            port: undefined,
+            devUrl: undefined,
+          } as const;
+          const sandbox = yield* createDevRunnerEnv({ ...input, baseEnv: {} });
+          assert.equal(sandbox.T3CODE_DISABLE_STARTUP_RESUME, "1");
+          const recoveryTest = yield* createDevRunnerEnv({
+            ...input,
+            baseEnv: { T3CODE_DISABLE_STARTUP_RESUME: "0" },
+          });
+          assert.equal(recoveryTest.T3CODE_DISABLE_STARTUP_RESUME, "0");
+        }),
+    );
     it.effect("forwards the reusable auth token to web dev and removes it for desktop", () =>
       Effect.gen(function* () {
         const input = {
