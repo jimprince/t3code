@@ -923,3 +923,25 @@ id = "socket-open-209-auth-session-refresh"
 date = "2026-10-08"
 decided = "adapt"
 rationale = "Carry the socket-open deadline through session discovery and refresh once before opening attempts."
+
+[[patch]]
+name = "fork-inline-3d-objects"
+subject = "feat(web): preview GLB and STL models inline"
+class = "divergence"
+purpose = "Preview bounded, validated GLB and STL files inline across web chat, attachment, workspace-file, and standalone assistant-link surfaces while native clients retain their download/open fallback."
+retire_when = "Upstream provides equivalent secure, demand-rendered inline GLB and STL previews across the same attachment and workspace surfaces."
+depends_on = ["fork-attachment-compatibility", "fork-remote-file-downloads"]
+roles = []
+note = "Shared model asset wrappers keep signed-URL, refresh, and download handling out of the markdown, timeline, and file-panel integration points. Reuses modern durable attachments and exact signed workspace-file assets. Model previews are limited to 50 MiB, 2 million triangles, 64 megapixels of embedded PNG/JPEG textures, two visible WebGL contexts, and no external resources, compression decoders, scripts, HTML, or animation playback. The lockfile delta is intentionally left for lockfile-owner to absorb."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "keep-on-top"
+rationale = "Use V2 durable file attachments and native timeline chips with one fork viewer mount. Preserve exact workspace grants and native literal filename classification, signed URL refresh, and remote download dependency."
+
+[[patch.decision]]
+id = "upstream12449-workspace-root-preview-path"
+date = "2026-09-30"
+decided = "adapt"
+rationale = "Upstream commit 55ec55b1f resolves a workspace-root link to a null relativePath and gates the project-file read on relativePath !== null. That guard and this patch's !isModel guard suppress the read for different reasons, so both belong in the same condition; isModel already requires a non-null path, so reading the resolved path keeps model previews working for workspace links."
