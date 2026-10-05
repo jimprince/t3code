@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "952e30da887c92476df6f82f01b2b09b89d2a3a0",
-  "head": "28b90a32ae84cba367650318d6a260d6cbffa248",
+  "prev": "6af6fcf27808a9325aab045d448eb584aba9a87e",
+  "head": "210dee2eda5800b71242d98c0871d2c891eaadfd",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -88,11 +88,10 @@
     "fork-projects-pinned",
     "fork-project-health",
     "fork-standing-agent-autosettle",
-    "fork-task-view"
-  ],
-  "unapplied": [
+    "fork-task-view",
     "fork-release-horizon"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -261,7 +260,7 @@
       "oid": "25e89b5b6810a74f552bf0276bee4b21bf7d5dd3"
     },
     "fork-release-horizon": {
-      "oid": "9bf10219f8862bb2087eaacfcc940fed2d2a9421"
+      "oid": "210dee2eda5800b71242d98c0871d2c891eaadfd"
     },
     "fork-release-publication": {
       "oid": "09e3f234998283f5a249afc031eaa360e5495bff"
