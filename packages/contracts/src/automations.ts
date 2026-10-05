@@ -1,0 +1,203 @@
+import * as Cron from "effect/Cron";
+import * as Result from "effect/Result";
+import * as Schema from "effect/Schema";
+import {
+  IsoDateTime,
+  MessageId,
+  ProjectId,
+  ThreadId,
+  TrimmedNonEmptyString,
+} from "./baseSchemas.ts";
+import { ProjectAutomationSchedule } from "./projectAutomations.ts";
+
+/**
+ * Scripts and automation rules. A script is a named prompt procedure scoped to a project or
+ * global; an automation is an on/off rule `triggers -> actions` whose firings are recorded as
+ * runs. These records live in their own tables, outside the orchestration read model.
+ */
+
+const Name = TrimmedNonEmptyString.check(Schema.isMaxLength(120));
+const Prompt = TrimmedNonEmptyString.check(Schema.isMaxLength(100_000));
+const Time = Schema.String.check(Schema.isPattern(/^([01]\d|2[0-3]):[0-5]\d$/));
+const TimeZone = ProjectAutomationSchedule.members[0].fields.timeZone;
+
+/** Script names are typed on the command line, so they stay shell-friendly. */
+export const AutomationScriptName = TrimmedNonEmptyString.check(
+  Schema.isMaxLength(80),
+  Schema.isPattern(/^[a-z0-9][a-z0-9._-]*$/),
+);
+
+const CronExpression = TrimmedNonEmptyString.check(
+  Schema.makeFilter(
+    (value) =>
+      (value.split(/\s+/).length === 5 && Result.isSuccess(Cron.parse(value))) ||
+      "Expected a five-field cron expression (minute hour day month weekday)",
+  ),
+);
+
+export const AutomationSchedule = Schema.Union([
+  ...ProjectAutomationSchedule.members,
+  Schema.Struct({
+    kind: Schema.Literal("weekdays"),
+    time: Time,
+    days: Schema.Array(Schema.Int.check(Schema.isBetween({ minimum: 0, maximum: 6 }))).check(
+      Schema.isMinLength(1),
+    ),
+    timeZone: TimeZone,
+  }),
+  Schema.Struct({ kind: Schema.Literal("cron"), expression: CronExpression, timeZone: TimeZone }),
+]);
+export type AutomationSchedule = typeof AutomationSchedule.Type;
+
+export const AutomationTrigger = Schema.Union([
+  Schema.Struct({ type: Schema.Literal("schedule"), schedule: AutomationSchedule }),
+]);
+export type AutomationTrigger = typeof AutomationTrigger.Type;
+
+export const AutomationAgentTarget = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("new-thread") }),
+  Schema.Struct({ kind: Schema.Literal("existing-thread"), threadId: ThreadId }),
+]);
+export type AutomationAgentTarget = typeof AutomationAgentTarget.Type;
+
+/** Start an agent turn from a saved script or an inline prompt. */
+export const AutomationAgentAction = Schema.Struct({
+  type: Schema.Literal("agent"),
+  script: Schema.optionalKey(AutomationScriptName),
+  prompt: Schema.optionalKey(Prompt),
+  target: AutomationAgentTarget,
+}).check(
+  Schema.makeFilter(
+    (action) =>
+      (action.script === undefined) !== (action.prompt === undefined) ||
+      "Choose either a script or a prompt",
+  ),
+);
+export const AutomationAction = Schema.Union([AutomationAgentAction]);
+export type AutomationAction = typeof AutomationAction.Type;
+
+export const AutomationDefinition = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  projectId: ProjectId,
+  name: Name,
+  enabled: Schema.Boolean,
+  /** Orchestrator the automation reports to; new threads nest under it. */
+  ownerThreadId: Schema.optionalKey(ThreadId),
+  /** Empty means the automation only runs by hand. */
+  triggers: Schema.Array(AutomationTrigger).check(Schema.isMaxLength(10)),
+  actions: Schema.Array(AutomationAction).check(Schema.isMinLength(1), Schema.isMaxLength(10)),
+});
+export type AutomationDefinition = typeof AutomationDefinition.Type;
+
+export const Automation = Schema.Struct({
+  ...AutomationDefinition.fields,
+  nextRunAt: Schema.NullOr(IsoDateTime),
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+export type Automation = typeof Automation.Type;
+
+export const AutomationRunStatus = Schema.Literals([
+  "queued",
+  "running",
+  "completed",
+  "failed",
+  "skipped",
+]);
+export type AutomationRunStatus = typeof AutomationRunStatus.Type;
+
+/** One action's progress within a run. Agent steps own the thread and message they start. */
+export const AutomationRunStep = Schema.Struct({
+  kind: Schema.Literal("agent"),
+  status: AutomationRunStatus,
+  target: AutomationAgentTarget,
+  threadId: ThreadId,
+  messageId: MessageId,
+  title: Schema.String,
+  prompt: Schema.String,
+  script: Schema.optionalKey(Schema.String),
+  result: Schema.NullOr(Schema.String),
+  startedAt: Schema.NullOr(IsoDateTime),
+  finishedAt: Schema.NullOr(IsoDateTime),
+});
+export type AutomationRunStep = typeof AutomationRunStep.Type;
+
+export const AutomationRunTrigger = Schema.Union([
+  Schema.Struct({ kind: Schema.Literal("schedule"), scheduledAt: IsoDateTime }),
+  Schema.Struct({ kind: Schema.Literal("manual") }),
+]);
+
+export const AutomationRun = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  automationId: TrimmedNonEmptyString,
+  projectId: ProjectId,
+  name: Schema.String,
+  /** Same automation + key never fires twice. */
+  dedupeKey: TrimmedNonEmptyString,
+  trigger: AutomationRunTrigger,
+  ownerThreadId: Schema.optionalKey(ThreadId),
+  dryRun: Schema.Boolean,
+  status: AutomationRunStatus,
+  result: Schema.NullOr(Schema.String),
+  steps: Schema.Array(AutomationRunStep),
+  createdAt: IsoDateTime,
+  finishedAt: Schema.NullOr(IsoDateTime),
+});
+export type AutomationRun = typeof AutomationRun.Type;
+
+export const AutomationScriptDefinition = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  /** Null makes the script global: every project's automations and runs can use it. */
+  projectId: Schema.NullOr(ProjectId),
+  name: AutomationScriptName,
+  description: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(500))),
+  prompt: Prompt,
+});
+export type AutomationScriptDefinition = typeof AutomationScriptDefinition.Type;
+
+export const AutomationScript = Schema.Struct({
+  ...AutomationScriptDefinition.fields,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
+});
+export type AutomationScript = typeof AutomationScript.Type;
+
+export class AutomationError extends Schema.TaggedError<AutomationError>()("AutomationError", {
+  message: Schema.String,
+}) {}
+
+/** Omit projectId to list every project's automations on the server. */
+export const AutomationsListInput = Schema.Struct({ projectId: Schema.optionalKey(ProjectId) });
+export const AutomationsListResult = Schema.Struct({ automations: Schema.Array(Automation) });
+export const AutomationIdInput = Schema.Struct({ automationId: TrimmedNonEmptyString });
+export const AutomationSetEnabledInput = Schema.Struct({
+  automationId: TrimmedNonEmptyString,
+  enabled: Schema.Boolean,
+});
+export const AutomationRunInput = Schema.Struct({
+  automationId: TrimmedNonEmptyString,
+  dryRun: Schema.optionalKey(Schema.Boolean),
+});
+export const AutomationRunsInput = Schema.Struct({
+  automationId: Schema.optionalKey(TrimmedNonEmptyString),
+  projectId: Schema.optionalKey(ProjectId),
+  limit: Schema.optionalKey(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 200 }))),
+});
+export const AutomationRunsResult = Schema.Struct({ runs: Schema.Array(AutomationRun) });
+
+/** Project scripts plus global ones; omit projectId for the global library only. */
+export const AutomationScriptsListInput = Schema.Struct({
+  projectId: Schema.optionalKey(ProjectId),
+});
+export const AutomationScriptsListResult = Schema.Struct({
+  scripts: Schema.Array(AutomationScript),
+});
+export const AutomationScriptIdInput = Schema.Struct({ scriptId: TrimmedNonEmptyString });
+/** Run a script by hand: a new thread in the project, or a turn in an existing thread. */
+export const AutomationScriptRunInput = Schema.Struct({
+  projectId: ProjectId,
+  script: AutomationScriptName,
+  target: Schema.optionalKey(AutomationAgentTarget),
+  ownerThreadId: Schema.optionalKey(ThreadId),
+  dryRun: Schema.optionalKey(Schema.Boolean),
+});
