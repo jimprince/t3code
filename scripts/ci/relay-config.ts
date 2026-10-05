@@ -1,3 +1,5 @@
+// @effect-diagnostics nodeBuiltinImport:off - CI helper writes GitHub step outputs synchronously.
+// @effect-diagnostics globalConsole:off - CI helper reports to the workflow log.
 import { appendFileSync } from "node:fs";
 
 export const requiredRelayConfig = [
