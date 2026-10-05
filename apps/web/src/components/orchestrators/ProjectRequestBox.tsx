@@ -1,17 +1,15 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { MessageId } from "@t3tools/contracts";
 import { XIcon } from "lucide-react";
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 
 import type { ComposerImageAttachment } from "../../composerDraftStore";
 import { randomUUID } from "../../lib/utils";
-import { useQueuedMessageStore } from "../../queuedMessageStore";
 import { saveRequestForLater } from "../../state/projectRoadmap";
 import { useAtomCommand } from "../../state/use-atom-command";
-import { sendQueuedMessage } from "../chat/sendQueuedMessage";
 import { Button } from "../ui/button";
 import { Textarea } from "../ui/textarea";
+import { sendToOrchestrator } from "./sendToOrchestrator";
 
 function imageAttachment(file: File): ComposerImageAttachment {
   return {
@@ -76,29 +74,10 @@ export function ProjectRequestBox({
 
   const send = () => {
     if (!text.trim() && images.length === 0) return;
-    const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
-    const queued = useQueuedMessageStore.getState().enqueue(scopedThreadKey(rootRef), {
-      prompt: text,
-      images,
-      files: [],
-      terminalContexts: [],
-      previewAnnotations: [],
-      reviewComments: [],
-      sendSettings: {
-        modelSelection: summary.root.modelSelection,
-        runtimeMode: summary.root.runtimeMode,
-        interactionMode: summary.root.interactionMode,
-        promptEffort: null,
-      },
-      queuedAfterToolActivityId: null,
-      createdAt: new Date().toISOString(),
-    });
-    const running =
-      summary.root.session?.status === "running" || summary.root.session?.status === "starting";
-    if (!running) void sendQueuedMessage(rootRef, queued.id);
+    const sent = sendToOrchestrator(summary, text, images);
     reset();
-    flash(running ? "Queued for the orchestrator" : "Sent");
-    onSent?.(queued.messageId);
+    flash(sent.queued ? "Queued for the orchestrator" : "Sent");
+    onSent?.(sent.messageId);
   };
 
   const saveLater = async () => {
