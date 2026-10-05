@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "27843ae637a011ece0595c238fc6129fa6ed34ae",
-  "head": "75b3f247a7c11525011e106a82ec557cbee012f2",
+  "prev": "23dd55015030464063746b15c02d74ba9f8bbc32",
+  "head": "5f3f513f62599a54d8fa1cc92b7c14bfc6447594",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -66,8 +66,7 @@
     "fork-project-automations",
     "fork-gitea-issue-links",
     "fork-orchestrators-view",
-    "fork-project-issues-board",
-    "refresh-temp"
+    "fork-project-issues-board"
   ],
   "unapplied": [],
   "hidden": [],
@@ -190,7 +189,7 @@
       "oid": "618c99359da289b9b25bf70eab950b45be010950"
     },
     "fork-project-issues-board": {
-      "oid": "9a81182498b4686a7fd59479f921c9541e558882"
+      "oid": "5f3f513f62599a54d8fa1cc92b7c14bfc6447594"
     },
     "fork-project-selection": {
       "oid": "5f3080ec7439cdb80020bdf035e911e39b3ae5be"
@@ -263,9 +262,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b944a2751d8828af07f0b2402a53eeac5ad02a0c"
-    },
-    "refresh-temp": {
-      "oid": "75b3f247a7c11525011e106a82ec557cbee012f2"
     }
   }
 }
