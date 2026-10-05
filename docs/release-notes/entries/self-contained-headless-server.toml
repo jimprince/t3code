@@ -1,0 +1,4 @@
+id = "self-contained-headless-server"
+category = "feature"
+functionality = "headless server"
+text = "Linux headless installs no longer require a separate Node.js installation, and failed upgrades reliably roll back to the previous version."
