@@ -17,6 +17,7 @@ import type {
 } from "../src/types.js";
 import {
   deliverPendingNotifications,
+  unblockNotificationsForEnvironment,
   detectAttentionEvents,
   hasActiveWork,
   createWatchPoller,
@@ -840,7 +841,7 @@ describe("watch polling cost", () => {
     ]);
   });
 
-  it("ignores unsubscribed and terminal sources without creating attention events", async () => {
+  it("inspects unsubscribed sources for nesting and ignores terminal sources", async () => {
     const state: StateFile = {
       version: 1,
       environments: [makeEnvironment()],
@@ -858,10 +859,10 @@ describe("watch polling cost", () => {
       async sendMessage() {},
     });
     expect(await scanAttentionNotifications(state, { clientFactory })).toEqual([]);
-    expect(reads).toBe(0);
+    expect(reads).toBe(1);
     state.subscriptions = [makeSubscription()];
     expect(await scanAttentionNotifications(state, { clientFactory })).toEqual([]);
-    expect(reads).toBe(1);
+    expect(reads).toBe(2);
   });
 
   it("backs off idle polls and resumes the configured active cadence", () => {
@@ -1278,7 +1279,7 @@ describe("child input reminders", () => {
         },
       ],
     });
-  it("reminds after 45 minutes with the pending question, then waits another interval and survives restart", async () => {
+  it("delivers one reminder after 20 minutes and never repeats after restart", async () => {
     await withTempState(async () => {
       const { clientFactory, sentMessages } = createClientFactory({ sourceThread: waiting() });
       let clock = start;
@@ -1286,7 +1287,7 @@ describe("child input reminders", () => {
       await detectAttentionEvents({ clientFactory, now });
       await deliverPendingNotifications({ clientFactory, now });
       expect(sentMessages[0]?.text).toContain("Which gripper should I use?");
-      clock += 44 * 60_000;
+      clock += 19 * 60_000;
       await detectAttentionEvents({ clientFactory, now });
       await deliverPendingNotifications({ clientFactory, now });
       expect(sentMessages).toHaveLength(1);
@@ -1305,8 +1306,349 @@ describe("child input reminders", () => {
       clock += 45 * 60_000;
       await detectAttentionEvents({ clientFactory: restarted.clientFactory, now });
       await deliverPendingNotifications({ clientFactory: restarted.clientFactory, now });
-      expect(restarted.sentMessages).toHaveLength(1);
-      expect(restarted.sentMessages[0]?.text).toContain("Reminder");
+      expect(restarted.sentMessages).toHaveLength(0);
+    });
+  });
+  it.each(["user-input", "approval"] as const)(
+    "discovers an unsaved UI-created %s child and wakes its settled parent",
+    async (kind) => {
+      await withTempState(async () => {
+        await saveState({ ...(await loadState()), subscriptions: [], agents: [] });
+        const child = waiting();
+        child.projectId = "other-project";
+        if (kind === "approval")
+          child.activities = [
+            {
+              kind: "approval.requested",
+              createdAt: new Date(start).toISOString(),
+              payload: { requestId: "approval-1" },
+            },
+          ];
+        const factory = createClientFactory({
+          sourceThread: child,
+          subscriberThread: makeThread({
+            id: "thread-coordinator-a",
+            settledOverride: "settled",
+            latestTurn: null,
+            messages: [],
+          }),
+        });
+        const clientFactory: WatchClientFactory = (environment) => ({
+          ...factory.clientFactory(environment),
+          listThreads: async () => [
+            {
+              ...child,
+              hasPendingApprovals: kind === "approval",
+              hasPendingUserInput: kind === "user-input",
+              hasActionableProposedPlan: false,
+              latestUserMessageAt: null,
+            },
+          ],
+        });
+        let clock = start;
+        const now = () => new Date(clock).toISOString();
+        expect(await hasActiveWork({ clientFactory })).toBe(true);
+        await detectAttentionEvents({ clientFactory, now });
+        expect((await deliverPendingNotifications({ clientFactory, now }))[0]?.status).toBe(
+          "delivered",
+        );
+        expect(factory.sentMessages).toHaveLength(1);
+        const message = factory.sentMessages[0]!.text;
+        expect(message).toContain('thread_id: "thread-worker-a"');
+        expect(message).toContain('environment: "dev-vm"');
+        expect(message).toContain("You are responsible");
+        expect(message).toContain("T3_NOTIFY: attention");
+        expect(message.match(/T3 orchestrator notification:/g)).toHaveLength(1);
+        clock += 20 * 60_000;
+        await detectAttentionEvents({ clientFactory, now });
+        await deliverPendingNotifications({ clientFactory, now });
+        expect(factory.sentMessages).toHaveLength(2);
+        clock += 100 * 60_000;
+        await detectAttentionEvents({ clientFactory, now });
+        await deliverPendingNotifications({ clientFactory, now });
+        expect(factory.sentMessages).toHaveLength(2);
+      });
+    },
+  );
+  it("routes to a saved parent on another environment without a subscription", async () => {
+    await withTempState(async () => {
+      const state = await loadState();
+      await saveState({
+        ...state,
+        subscriptions: [],
+        environments: [
+          ...state.environments,
+          makeEnvironment({ name: "mac", environmentId: "mac-id" }),
+        ],
+        agents: [
+          ...state.agents.filter((agent) => agent.threadId !== "thread-coordinator-a"),
+          makeAgent({ name: "parent", threadId: "thread-coordinator-a", environment: "mac" }),
+        ],
+      });
+      const factory = createClientFactory({ sourceThread: waiting() });
+      const destinations: string[] = [];
+      const clientFactory: WatchClientFactory = (environment) => ({
+        ...factory.clientFactory(environment),
+        sendMessage: async (input) => {
+          destinations.push(environment.name);
+          return factory.clientFactory(environment).sendMessage(input);
+        },
+      });
+      await detectAttentionEvents({ clientFactory, now: () => new Date(start).toISOString() });
+      await deliverPendingNotifications({ clientFactory });
+      expect(destinations).toEqual(["mac"]);
+    });
+  });
+  it.each(["user-input", "approval"] as const)(
+    "routes remote %s from descriptor ID to the saved alias and wakes a settled parent",
+    async (kind) => {
+      await withTempState(async () => {
+        const state = await loadState();
+        await saveState({
+          ...state,
+          agents: [],
+          subscriptions: [],
+          environments: [
+            ...state.environments,
+            makeEnvironment({ name: "mac-alias", environmentId: "mac-stable-id" }),
+          ],
+        });
+        const child = waiting();
+        child.parentThreadId = null;
+        child.remoteParent = { environmentId: "mac-stable-id", threadId: "thread-coordinator-a" };
+        if (kind === "approval")
+          child.activities = [
+            {
+              kind: "approval.requested",
+              createdAt: new Date(start).toISOString(),
+              payload: { requestId: "remote-approval" },
+            },
+          ];
+        const factory = createClientFactory({
+          sourceThread: child,
+          subscriberThread: makeThread({
+            id: "thread-coordinator-a",
+            settledOverride: "settled",
+            latestTurn: null,
+            messages: [],
+          }),
+        });
+        const destinations: string[] = [];
+        const clientFactory: WatchClientFactory = (environment) => ({
+          ...factory.clientFactory(environment),
+          listThreads: async () =>
+            environment.name === "dev-vm"
+              ? [
+                  {
+                    ...child,
+                    hasPendingApprovals: kind === "approval",
+                    hasPendingUserInput: kind === "user-input",
+                    hasActionableProposedPlan: false,
+                    latestUserMessageAt: null,
+                  },
+                ]
+              : [],
+          sendMessage: async (input) => {
+            destinations.push(environment.name);
+            return factory.clientFactory(environment).sendMessage(input);
+          },
+        });
+        let clock = start;
+        const now = () => new Date(clock).toISOString();
+        expect(await hasActiveWork({ clientFactory })).toBe(true);
+        await detectAttentionEvents({ clientFactory, now });
+        await deliverPendingNotifications({ clientFactory, now });
+        expect(destinations).toEqual(["mac-alias"]);
+        expect((await loadState()).notifications[0]).toMatchObject({
+          isChildInput: true,
+          subscriberEnvironmentId: "mac-stable-id",
+          subscriberEnvironment: "mac-alias",
+          status: "delivered",
+        });
+        clock += 20 * 60_000;
+        await detectAttentionEvents({ clientFactory, now });
+        await deliverPendingNotifications({ clientFactory, now });
+        clock += 100 * 60_000;
+        await detectAttentionEvents({ clientFactory, now });
+        await deliverPendingNotifications({ clientFactory, now });
+        expect(destinations).toEqual(["mac-alias", "mac-alias"]);
+      });
+    },
+  );
+  it("retains an explicit remote-parent subscription and its disabled reminder", async () => {
+    await withTempState(async () => {
+      const state = await loadState();
+      await saveState({
+        ...state,
+        environments: [
+          ...state.environments,
+          makeEnvironment({ name: "mac-alias", environmentId: "mac-stable-id" }),
+        ],
+        subscriptions: [
+          makeSubscription({
+            subscriberEnvironment: "mac-alias",
+            level: "none",
+            inputReminderMinutes: 0,
+          }),
+        ],
+      });
+      const child = waiting();
+      child.parentThreadId = null;
+      child.remoteParent = { environmentId: "mac-stable-id", threadId: "thread-coordinator-a" };
+      const factory = createClientFactory({ sourceThread: child });
+      let clock = start;
+      const now = () => new Date(clock).toISOString();
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      clock += 100 * 60_000;
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      expect(factory.sentMessages).toHaveLength(1);
+      expect((await loadState()).subscriptions).toHaveLength(1);
+    });
+  });
+  it("blocks an unpaired remote descriptor clearly and releases it when paired under an alias", async () => {
+    await withTempState(async () => {
+      await saveState({ ...(await loadState()), subscriptions: [] });
+      const child = waiting();
+      child.parentThreadId = null;
+      child.remoteParent = {
+        environmentId: "unpaired-stable-id",
+        threadId: "thread-coordinator-a",
+      };
+      const factory = createClientFactory({ sourceThread: child });
+      const now = () => new Date(start).toISOString();
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      expect((await loadState()).notifications[0]).toMatchObject({
+        status: "blocked",
+        lastError: expect.stringContaining("unpaired-stable-id"),
+      });
+      const state = await loadState();
+      await saveState({
+        ...state,
+        environments: [
+          ...state.environments,
+          makeEnvironment({ name: "new-alias", environmentId: "unpaired-stable-id" }),
+        ],
+      });
+      expect(await unblockNotificationsForEnvironment("new-alias", { now })).toHaveLength(1);
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      expect(factory.sentMessages).toHaveLength(1);
+      expect((await loadState()).notifications[0]).toMatchObject({
+        status: "delivered",
+        subscriberEnvironment: "new-alias",
+      });
+      expect((await loadState()).subscriptions).toHaveLength(1);
+    });
+  });
+  it("never mistakes a saved alias for a remote descriptor ID", async () => {
+    await withTempState(async () => {
+      await saveState({ ...(await loadState()), subscriptions: [] });
+      const child = waiting();
+      child.parentThreadId = null;
+      child.remoteParent = { environmentId: "dev-vm", threadId: "thread-coordinator-a" };
+      const factory = createClientFactory({ sourceThread: child });
+      const now = () => new Date(start).toISOString();
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      expect((await loadState()).notifications[0]).toMatchObject({
+        status: "blocked",
+        lastError: expect.stringContaining("environment ID 'dev-vm'"),
+      });
+      expect(await unblockNotificationsForEnvironment("dev-vm", { now })).toHaveLength(0);
+      expect(factory.sentMessages).toHaveLength(0);
+    });
+  });
+  it("cancels a reminder when the remote parent moves to another descriptor with the same thread ID", async () => {
+    await withTempState(async () => {
+      const state = await loadState();
+      await saveState({
+        ...state,
+        subscriptions: [],
+        environments: [
+          ...state.environments,
+          makeEnvironment({ name: "mac-alias", environmentId: "mac-stable-id" }),
+          makeEnvironment({ name: "other-alias", environmentId: "other-stable-id" }),
+        ],
+      });
+      const child = waiting();
+      child.parentThreadId = null;
+      child.remoteParent = { environmentId: "mac-stable-id", threadId: "thread-coordinator-a" };
+      const factory = createClientFactory({ sourceThread: child });
+      let clock = start;
+      const now = () => new Date(clock).toISOString();
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      clock += 20 * 60_000;
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      child.remoteParent = { environmentId: "other-stable-id", threadId: "thread-coordinator-a" };
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      expect(factory.sentMessages).toHaveLength(1);
+      expect((await loadState()).notifications.at(-1)?.status).toBe("superseded");
+      const destinations: string[] = [];
+      const clientFactory: WatchClientFactory = (environment) => ({
+        ...factory.clientFactory(environment),
+        sendMessage: async (input) => {
+          destinations.push(environment.name);
+          return factory.clientFactory(environment).sendMessage(input);
+        },
+      });
+      await detectAttentionEvents({ clientFactory, now });
+      await deliverPendingNotifications({ clientFactory, now });
+      expect(destinations).toEqual(["other-alias"]);
+    });
+  });
+  it("tracks simultaneous requests separately and cancels the answered request's reminder", async () => {
+    await withTempState(async () => {
+      const child = waiting();
+      child.activities.push({
+        kind: "approval.requested",
+        createdAt: new Date(start).toISOString(),
+        payload: { requestId: "approval-2" },
+      });
+      const factory = createClientFactory({ sourceThread: child });
+      let clock = start;
+      const now = () => new Date(clock).toISOString();
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      expect(factory.sentMessages).toHaveLength(1);
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      expect(factory.sentMessages).toHaveLength(2);
+      child.activities.push({
+        kind: "user-input.resolved",
+        createdAt: now(),
+        payload: { requestId: "question-1" },
+      });
+      clock += 20 * 60_000;
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      expect(factory.sentMessages).toHaveLength(3);
+      expect(factory.sentMessages[2]!.text).toContain("needs-approval");
+      clock += 100 * 60_000;
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+      expect(factory.sentMessages).toHaveLength(3);
+    });
+  });
+  it("reports an unresolved parent route instead of silently losing the request", async () => {
+    await withTempState(async () => {
+      await saveState({ ...(await loadState()), subscriptions: [] });
+      const child = waiting();
+      child.parentThreadId = "unknown-cross-environment-parent";
+      const factory = createClientFactory({ sourceThread: child });
+      let clock = start;
+      const now = () => new Date(clock).toISOString();
+      await detectAttentionEvents({ clientFactory: factory.clientFactory, now });
+      for (let attempt = 0; attempt < 6; attempt++) {
+        await deliverPendingNotifications({ clientFactory: factory.clientFactory, now });
+        clock += 11 * 60_000;
+      }
+      const notice = (await loadState()).notifications[0]!;
+      expect(notice.status).toBe("undeliverable");
+      expect(notice.lastError).toContain(child.parentThreadId);
+      expect(factory.sentMessages).toHaveLength(0);
     });
   });
   it.each([0, 10])(
