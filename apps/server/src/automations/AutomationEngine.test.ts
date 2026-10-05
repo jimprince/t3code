@@ -289,7 +289,8 @@ it.layer(NodeServices.layer)("automation engine", (it) => {
             actions: [{ type: "agent", script: "review", target: { kind: "new-thread" } }],
           });
           const run = yield* engine.run(daily.id);
-          expect(run.steps[0]).toMatchObject({ prompt: "project", script: "review" });
+          expect(run.steps[0]?.script).toBe("review");
+          expect(run.steps[0]?.prompt).toMatch(/^project\n\n---\nResult mode: review/);
           const blocked = yield* engine.removeScript("p").pipe(Effect.flip);
           expect(blocked.message).toContain('"Digest"');
           const missing = yield* engine
@@ -306,6 +307,92 @@ it.layer(NodeServices.layer)("automation engine", (it) => {
         }).pipe(Effect.provide(h.layer));
       }),
     ),
+  );
+
+  it.effect("spells out a script's result mode in its prompt, overridable per run", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const h = yield* harness();
+        yield* Effect.gen(function* () {
+          const engine = yield* AutomationEngine;
+          yield* engine.saveScript({ id: "s", projectId, name: "audit", prompt: "Audit it." });
+          const review = yield* engine.runScript({ projectId, script: "audit" });
+          expect(review.steps[0]?.resultMode).toBe("review");
+          expect(review.steps[0]?.prompt).toMatch(
+            /^Audit it\.\n\n---\nResult mode: review\nFile nothing/,
+          );
+          const settle = yield* engine.runScript({
+            projectId,
+            script: "audit",
+            resultMode: "file-and-settle",
+          });
+          expect(settle.steps[0]?.prompt).toContain("t3-thread request add");
+          expect(settle.steps[0]?.prompt).toContain('t3-thread settle "$T3_THREAD_ID" --self');
+          // Inline prompts (every imported timed automation) are sent exactly as written.
+          yield* engine.save(daily);
+          const inline = yield* engine.run(daily.id);
+          expect(inline.steps[0]?.prompt).toBe("Summarize changes");
+          expect(inline.steps[0]?.resultMode).toBeUndefined();
+        }).pipe(Effect.provide(h.layer));
+      }),
+    ),
+  );
+
+  it.effect(
+    "ships the global starter library and turns paused timed automations into scripts",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* TestClock.setTime(Date.parse(NOW));
+          const onDemand = (id: string, name: string, enabled: boolean): ProjectAutomation => ({
+            id,
+            name,
+            prompt: `${name} prompt`,
+            schedule: { kind: "weekly", day: 0, time: "06:00", timeZone: "America/Edmonton" },
+            target: { kind: "new-thread" },
+            enabled,
+            nextRunAt: "2026-10-11T12:00:00.000Z",
+            runs: [],
+          });
+          const h = yield* harness({
+            legacy: [
+              { projectId, automation: onDemand("2a135c02", "Review outstanding issues", false) },
+              { projectId, automation: onDemand("937a61cd", "Review workspaces", false) },
+              { projectId, automation: onDemand("492fe5b1", "Fork health refresh", true) },
+            ],
+          });
+          yield* Effect.gen(function* () {
+            const engine = yield* AutomationEngine;
+            const starters = yield* engine.listScripts(null);
+            expect(starters.map((script) => script.name).sort()).toEqual([
+              "code-quality",
+              "data-model-review",
+              "dead-code",
+              "dependencies",
+              "docs-currency",
+              "performance",
+              "refactoring",
+              "ux-review",
+            ]);
+            expect(starters.every((script) => script.resultMode === "review")).toBe(true);
+            yield* engine.start();
+            yield* h.settle;
+            const project = (yield* engine.listScripts(projectId)).filter(
+              (script) => script.projectId === projectId,
+            );
+            expect(project.map((script) => [script.name, script.prompt])).toEqual([
+              ["review-outstanding-issues", "Review outstanding issues prompt"],
+              ["review-workspaces", "Review workspaces prompt"],
+            ]);
+            // The paused automations themselves are still there, still paused.
+            const paused = (yield* engine.list(projectId)).filter((entry) => !entry.enabled);
+            expect(paused.map((entry) => entry.id).sort()).toEqual(["2a135c02", "937a61cd"]);
+            const run = yield* engine.runScript({ projectId, script: "review-workspaces" });
+            expect(run.steps[0]?.prompt).toContain("Result mode: review");
+          }).pipe(Effect.provide(h.layer));
+        }),
+      ),
   );
 
   it.effect("records a dry run without starting anything", () =>

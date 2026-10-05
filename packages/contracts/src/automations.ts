@@ -60,11 +60,21 @@ export const AutomationAgentTarget = Schema.Union([
 ]);
 export type AutomationAgentTarget = typeof AutomationAgentTarget.Type;
 
+/**
+ * What a script run does with its findings. `review` files nothing and leaves the thread open for
+ * Brad to read; `file-only` files findings as requests; `file-and-settle` also settles the thread.
+ * The mode is spelled out at the end of the run's prompt.
+ */
+export const AutomationResultMode = Schema.Literals(["review", "file-only", "file-and-settle"]);
+export type AutomationResultMode = typeof AutomationResultMode.Type;
+
 /** Start an agent turn from a saved script or an inline prompt. */
 export const AutomationAgentAction = Schema.Struct({
   type: Schema.Literal("agent"),
   script: Schema.optionalKey(AutomationScriptName),
   prompt: Schema.optionalKey(Prompt),
+  /** Overrides the script's mode; an inline prompt gets no mode unless one is set here. */
+  resultMode: Schema.optionalKey(AutomationResultMode),
   target: AutomationAgentTarget,
 }).check(
   Schema.makeFilter(
@@ -116,6 +126,7 @@ export const AutomationRunStep = Schema.Struct({
   title: Schema.String,
   prompt: Schema.String,
   script: Schema.optionalKey(Schema.String),
+  resultMode: Schema.optionalKey(AutomationResultMode),
   result: Schema.NullOr(Schema.String),
   startedAt: Schema.NullOr(IsoDateTime),
   finishedAt: Schema.NullOr(IsoDateTime),
@@ -152,6 +163,8 @@ export const AutomationScriptDefinition = Schema.Struct({
   name: AutomationScriptName,
   description: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(500))),
   prompt: Prompt,
+  /** Defaults to `review`. */
+  resultMode: Schema.optionalKey(AutomationResultMode),
 });
 export type AutomationScriptDefinition = typeof AutomationScriptDefinition.Type;
 
@@ -199,5 +212,6 @@ export const AutomationScriptRunInput = Schema.Struct({
   script: AutomationScriptName,
   target: Schema.optionalKey(AutomationAgentTarget),
   ownerThreadId: Schema.optionalKey(ThreadId),
+  resultMode: Schema.optionalKey(AutomationResultMode),
   dryRun: Schema.optionalKey(Schema.Boolean),
 });

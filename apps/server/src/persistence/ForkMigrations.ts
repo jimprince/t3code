@@ -17,6 +17,7 @@ import Migration0011 from "./ForkMigrations/011_ProjectionThreadsScope.ts";
 
 import Migration0012 from "./ForkMigrations/012_ProjectionThreadsRemoteParent.ts";
 import Migration0013 from "./ForkMigrations/013_Automations.ts";
+import Migration0014 from "./ForkMigrations/014_AutomationStarterScripts.ts";
 
 export const FORK_MIGRATIONS_TABLE = "effect_sql_fork_migrations";
 
@@ -34,6 +35,7 @@ export const forkMigrationEntries = [
   [11, "ProjectionThreadsScope", Migration0011],
   [12, "ProjectionThreadsRemoteParent", Migration0012],
   [13, "Automations", Migration0013],
+  [14, "AutomationStarterScripts", Migration0014],
 ] as const;
 
 const makeForkMigrationLoader = (throughId?: number) =>

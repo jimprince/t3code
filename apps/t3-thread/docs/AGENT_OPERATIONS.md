@@ -1032,7 +1032,7 @@ schedule triggers start agent turns from an inline prompt or a script.
 ```bash
 t3-thread script add --env <name> --global --name review-prs --prompt-file review.md
 t3-thread script list --env <name> --project <id>          # project + global
-t3-thread script run review-prs --env <name> --project <id> [--thread <id>] [--dry-run]
+t3-thread script run review-prs --env <name> --project <id> [--thread <id>] [--mode file-only] [--dry-run]
 t3-thread script remove review-prs --env <name> --global  # refused while an automation uses it
 
 t3-thread automation add --env <name> --project <id> --name "PR review" --script review-prs \
@@ -1047,7 +1047,13 @@ t3-thread automation runs [<automation-id>] --env <name> [--project <id>] [--lim
 
 Schedules are `hourly`, `daily`, `weekly --day mon`, `weekdays --days mon-fri|mon,wed,fri`,
 `cron --cron '<5 fields>'`, or `manual` (run-now only). `script add` replaces a same-named
-script in the same scope. Choose `--thread <id>` for an existing target, otherwise each run
+script in the same scope. `--result-mode review|file-only|file-and-settle` on `script add` (or
+`--mode` on one `script run`, `--result-mode` on `automation add --script`) sets what a run does
+with its findings: review files nothing and leaves the thread open (default), file-only files
+each finding with `t3-thread request add`, file-and-settle also settles the run thread. The mode is
+appended to the run's prompt; inline-prompt automations are sent unchanged. Global starter scripts
+(code-quality, performance, dependencies, refactoring, ux-review, docs-currency,
+data-model-review, dead-code) are seeded once and then behave like any other script. Choose `--thread <id>` for an existing target, otherwise each run
 starts a fresh thread using project defaults; `--owner-thread <id>` nests fresh runs under an
 orchestrator and shows the rule on its Projects page.
 

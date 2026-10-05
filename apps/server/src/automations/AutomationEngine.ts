@@ -4,6 +4,7 @@ import {
   ThreadId,
   type Automation,
   type AutomationAgentTarget,
+  type AutomationResultMode,
   type AutomationDefinition,
   type AutomationRun,
   type AutomationRunStep,
@@ -28,6 +29,7 @@ import * as Stream from "effect/Stream";
 import { forkParked } from "../serverActivation.ts";
 import { AgentGateway } from "./AgentGateway.ts";
 import { AutomationStore } from "./AutomationStore.ts";
+import { withResultMode } from "./resultModes.ts";
 import { automationTimeZone, latestScheduledRun, nextScheduledRun } from "./schedule.ts";
 
 const MAX_AUTOMATIONS_PER_PROJECT = 100;
@@ -73,6 +75,7 @@ export class AutomationEngine extends Context.Service<
       script: string;
       target?: AutomationAgentTarget;
       ownerThreadId?: ThreadId;
+      resultMode?: AutomationResultMode;
       dryRun?: boolean;
     }) => Fx<AutomationRun>;
   }
@@ -161,6 +164,30 @@ function importLegacyAutomation(
   };
 }
 
+/** The project script a paused legacy automation becomes, or null when its name has no slug. */
+function legacyScript(
+  projectId: ProjectId,
+  legacy: ProjectAutomation,
+  now: string,
+): AutomationScript | null {
+  if (legacy.enabled) return null;
+  const name = legacy.name
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^[^a-z0-9]+|-+$/g, "")
+    .slice(0, 80);
+  if (name === "") return null;
+  return {
+    id: `legacy:${legacy.id}`,
+    projectId,
+    name,
+    description: `From the paused automation "${legacy.name}".`,
+    prompt: legacy.prompt,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 const make = Effect.gen(function* () {
   const store = yield* AutomationStore;
   const gateway = yield* AgentGateway;
@@ -193,11 +220,13 @@ const make = Effect.gen(function* () {
     const at = input.trigger.kind === "schedule" ? input.trigger.scheduledAt : input.now;
     const steps: AutomationRunStep[] = [];
     for (const [index, action] of input.actions.entries()) {
-      let prompt = action.prompt;
+      let prompt = action.prompt ?? "";
+      let resultMode = action.resultMode;
       if (action.script !== undefined) {
         const script = yield* store.findScript(input.projectId, action.script);
         if (Option.isNone(script)) return yield* fail(`Script "${action.script}" does not exist.`);
         prompt = script.value.prompt;
+        resultMode ??= script.value.resultMode ?? "review";
       }
       const id = `automation:${runId}${index === 0 ? "" : `:${index}`}`;
       steps.push({
@@ -208,8 +237,9 @@ const make = Effect.gen(function* () {
           action.target.kind === "existing-thread" ? action.target.threadId : ThreadId.make(id),
         messageId: MessageId.make(id),
         title: runTitle(input.name, at, input.timeZone),
-        prompt: prompt ?? "",
+        prompt: withResultMode(prompt, resultMode),
         ...(action.script !== undefined ? { script: action.script } : {}),
+        ...(resultMode !== undefined ? { resultMode } : {}),
         result: input.dryRun ? "Dry run: not started." : null,
         startedAt: null,
         finishedAt: input.dryRun ? input.now : null,
@@ -349,6 +379,15 @@ const make = Effect.gen(function* () {
         Effect.gen(function* () {
           if (!(yield* store.insertAutomationOnce(imported.automation))) return;
           for (const run of imported.runs) yield* store.insertRun(run);
+          // A paused timed automation was an on-demand procedure: offer it as a script too.
+          const script = legacyScript(projectId, automation, now);
+          if (
+            script !== null &&
+            !(yield* store.listScripts(projectId)).some(
+              (entry) => entry.projectId === projectId && entry.name === script.name,
+            )
+          )
+            yield* store.saveScript(script);
         }),
       );
     }
@@ -569,6 +608,7 @@ const make = Effect.gen(function* () {
     script: string;
     target?: AutomationAgentTarget;
     ownerThreadId?: ThreadId;
+    resultMode?: AutomationResultMode;
     dryRun?: boolean;
   }) =>
     locked(
@@ -593,7 +633,14 @@ const make = Effect.gen(function* () {
           ownerThreadId: input.ownerThreadId,
           dedupeKey: `${dryRun ? "dry-run" : "manual"}:${yield* Effect.orDie(crypto.randomUUIDv4)}`,
           trigger: { kind: "manual" },
-          actions: [{ type: "agent", script: input.script, target }],
+          actions: [
+            {
+              type: "agent",
+              script: input.script,
+              target,
+              ...(input.resultMode ? { resultMode: input.resultMode } : {}),
+            },
+          ],
           timeZone: automationTimeZone([]),
           now,
           dryRun,

@@ -138,3 +138,15 @@ commands. A project script replaces a shared script of the same name in that
 project. A run reads the script when it starts, so editing a script changes
 future runs only. Cron schedules, script automations and dry runs (record what a
 run would do without starting it) are available from the command line.
+
+Every project starts with shared quality scripts: code-quality, performance,
+dependencies, refactoring, ux-review, docs-currency, data-model-review and
+dead-code. Each reports findings with evidence and a suggested action, and
+proposes removals rather than making them.
+
+A script's result mode says what a run does with its findings. `review` (the
+default) files nothing and leaves the thread open so you can read it and tell the
+agent what to follow up. `file-only` files each finding as a request.
+`file-and-settle` files them and then settles the thread. Set the mode on the
+script, or override it for one run. Every run links to the thread it started.
+A paused timed automation also becomes a project script of the same name.

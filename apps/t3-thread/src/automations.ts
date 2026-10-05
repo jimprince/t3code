@@ -28,6 +28,8 @@ type Options = {
   paused?: boolean;
   dryRun?: boolean;
   limit?: string;
+  resultMode?: string;
+  mode?: string;
 };
 
 const DAYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
@@ -104,6 +106,7 @@ function definition(options: Options) {
       {
         type: "agent",
         ...(options.script ? { script: options.script } : { prompt: text }),
+        ...(options.resultMode ? { resultMode: options.resultMode } : {}),
         target: options.thread
           ? { kind: "existing-thread", threadId: options.thread }
           : { kind: "new-thread" },
@@ -165,6 +168,10 @@ export function registerAutomationCommands(
     .option("--new-thread", "new thread each run (default)")
     .option("--owner-thread <id>", "orchestrator shown in Projects")
     .option("--paused", "create paused")
+    .option(
+      "--result-mode <mode>",
+      "review (default: file nothing, thread stays open), file-only, or file-and-settle",
+    )
     .action((options: Options) => call(options.env, "automationsSave", definition(options)));
   for (const [name, enabled] of [
     ["pause", false],
@@ -241,6 +248,10 @@ export function registerAutomationCommands(
     .option("--prompt <text>")
     .option("--prompt-file <path>")
     .option("--description <text>")
+    .option(
+      "--result-mode <mode>",
+      "review (default: file nothing, thread stays open), file-only, or file-and-settle",
+    )
     .action(async (options: Options) => {
       const projectId = scope(options);
       const text = prompt(options);
@@ -257,6 +268,7 @@ export function registerAutomationCommands(
           name: options.name,
           prompt: text,
           ...(options.description ? { description: options.description } : {}),
+          ...(options.resultMode ? { resultMode: options.resultMode } : {}),
         }),
       );
     });
@@ -280,6 +292,7 @@ export function registerAutomationCommands(
     .requiredOption("--project <id>")
     .option("--thread <id>", "existing target thread")
     .option("--owner-thread <id>", "nest the new thread under this orchestrator")
+    .option("--mode <mode>", "result mode for this run, overriding the script's")
     .option("--dry-run", "record what would run without starting anything")
     .action((name: string, options: Options) =>
       call(options.env, "automationScriptsRun", {
@@ -289,6 +302,7 @@ export function registerAutomationCommands(
           ? { target: { kind: "existing-thread", threadId: options.thread } }
           : {}),
         ...(options.ownerThread ? { ownerThreadId: options.ownerThread } : {}),
+        ...(options.mode ? { resultMode: options.mode } : {}),
         ...(options.dryRun ? { dryRun: true } : {}),
       }),
     );

@@ -151,6 +151,37 @@ describe("automation operator commands", () => {
     });
   });
 
+  it("carries result modes on scripts and per run", async () => {
+    const h = harness();
+    await h.run([
+      "script",
+      "add",
+      "--global",
+      "--name",
+      "audit",
+      "--prompt",
+      "Audit",
+      "--result-mode",
+      "file-only",
+    ]);
+    expect(h.calls.at(-1)?.input).toMatchObject({ resultMode: "file-only" });
+    await h.run(["script", "run", "audit", "--project", "p", "--mode", "file-and-settle"]);
+    expect(h.calls.at(-1)?.input).toMatchObject({ resultMode: "file-and-settle" });
+    await expect(
+      h.run([
+        "script",
+        "add",
+        "--global",
+        "--name",
+        "x",
+        "--prompt",
+        "y",
+        "--result-mode",
+        "later",
+      ]),
+    ).rejects.toThrow();
+  });
+
   it("runs a script in an existing thread", async () => {
     const h = harness();
     await h.run(["script", "run", "check-logs", "--project", "p", "--thread", "t1"]);
