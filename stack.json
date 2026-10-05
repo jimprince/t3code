@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "103e6d748fa7e20cd35de4488cf905beb91eaf8b",
+  "prev": "80d9572e6e238ccbd91c0817e3b7c28179001cfa",
   "head": "b97fc36bb0c3da0c2d07bfd4e4b95efb706ce33f",
   "applied": [
     "fork-build-ci-compat",
@@ -10,7 +10,6 @@
   ],
   "unapplied": [
     "fork-thread-client-recovery",
-    "fork-general-chat",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
@@ -135,9 +134,6 @@
     },
     "fork-fresh-remote-worktrees": {
       "oid": "7ddb74add64fc9eed2eb25705d8e358eb49dc522"
-    },
-    "fork-general-chat": {
-      "oid": "c6ebad76788a8b307f5b2b152e3a1c0b93c41418"
     },
     "fork-gitea-connections": {
       "oid": "e23c145ba30f4141b467cb79c46e3e213441e782"
