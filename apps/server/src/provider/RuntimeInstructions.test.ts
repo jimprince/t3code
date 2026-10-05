@@ -8,6 +8,7 @@ describe("buildRuntimeInstructions", () => {
     expect(instructions).toContain("with the full PR URL immediately after creating a PR");
     expect(instructions).toContain("For a stack, call it for every layer");
     expect(instructions).toContain("call list_thread_pull_requests and link any PR");
+    expect(instructions).toContain("Link generated GLB and STL files with Markdown");
   });
 
   it("keeps known model and effort metadata on one line", () => {
