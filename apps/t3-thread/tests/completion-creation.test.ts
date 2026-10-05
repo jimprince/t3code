@@ -71,24 +71,34 @@ describe("worker completion creation", () => {
           subscribeThreadSnapshot: vi.fn(),
         }),
       });
-      await client.createAgentThread({
-        projectId: "project",
-        title: "Worker",
-        initialMessage: "Do work",
-        parentThreadId: "parent",
-        settleOnComplete: explicit,
+      vi.spyOn(client, "describe").mockResolvedValue({
+        environmentId: "test",
+        label: "test",
+        platform: { os: "linux", arch: "x64" },
+        serverVersion: "test",
+        capabilities: { remoteThreadNesting: true },
       });
-      expect(request).toHaveBeenCalledWith(
-        "dispatchCommand",
-        expect.objectContaining({
-          bootstrap: expect.objectContaining({
-            createThread: expect.objectContaining({
-              parentThreadId: "parent",
-              settleOnComplete: expected,
+      const remoteParent = { environmentId: "vm", threadId: "parent" };
+      for (const parent of [{ parentThreadId: "parent" }, { remoteParent }]) {
+        await client.createAgentThread({
+          projectId: "project",
+          title: "Worker",
+          initialMessage: "Do work",
+          ...parent,
+          settleOnComplete: explicit,
+        });
+        expect(request).toHaveBeenCalledWith(
+          "dispatchCommand",
+          expect.objectContaining({
+            bootstrap: expect.objectContaining({
+              createThread: expect.objectContaining({
+                ...parent,
+                settleOnComplete: expected,
+              }),
             }),
           }),
-        }),
-      );
+        );
+      }
     },
   );
 });

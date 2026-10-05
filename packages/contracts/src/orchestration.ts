@@ -12,6 +12,7 @@ import {
   ClientSurface,
   CommandId,
   EventId,
+  EnvironmentId,
   IsoDateTime,
   MessageId,
   NonNegativeInt,
@@ -39,6 +40,13 @@ import {
   PullRequestReviewDecision,
   PullRequestState,
 } from "./pullRequest.ts";
+
+/** A parent owned by another server. Only the child server persists this link. */
+export const RemoteThreadParent = Schema.Struct({
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+});
+export type RemoteThreadParent = typeof RemoteThreadParent.Type;
 
 export const ORCHESTRATION_WS_METHODS = {
   dispatchCommand: "orchestration.dispatchCommand",
@@ -957,6 +965,7 @@ export const OrchestrationThread = Schema.Struct({
   // Optional so payloads from pre-nesting servers still decode.
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  remoteParent: Schema.optionalKey(Schema.NullOr(RemoteThreadParent)),
   // Pending-only state. Optional so older servers remain compatible.
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
@@ -1049,6 +1058,7 @@ export const OrchestrationThreadShell = Schema.Struct({
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  remoteParent: Schema.optionalKey(Schema.NullOr(RemoteThreadParent)),
   titleRegeneration: Schema.optional(Schema.NullOr(ThreadTitleRegeneration)),
   titleState: Schema.optional(Schema.NullOr(ThreadTitleState)),
   session: Schema.NullOr(OrchestrationSession),
@@ -1457,6 +1467,7 @@ const ThreadCreateCommand = Schema.Struct({
   /** Nest the new thread under this orchestrating thread. */
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  remoteParent: Schema.optionalKey(Schema.NullOr(RemoteThreadParent)),
   /** Named agents: archive this live incarnation in the same commit. */
   handoverFromThreadId: Schema.optional(ThreadId),
 });
@@ -1546,6 +1557,7 @@ const ThreadParentSetCommand = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
   parentThreadId: Schema.NullOr(ThreadId),
+  remoteParent: Schema.optionalKey(Schema.NullOr(RemoteThreadParent)),
 });
 
 const ThreadUnpinCommand = Schema.Struct({
@@ -1675,6 +1687,7 @@ const ThreadTurnStartBootstrapCreateThread = Schema.Struct({
   createdAt: IsoDateTime,
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  remoteParent: Schema.optionalKey(Schema.NullOr(RemoteThreadParent)),
 });
 
 const ThreadTurnStartBootstrapPrepareWorktree = Schema.Struct({
@@ -2197,6 +2210,7 @@ export const ThreadCreatedPayload = Schema.Struct({
   updatedAt: IsoDateTime,
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  remoteParent: Schema.optionalKey(Schema.NullOr(RemoteThreadParent)),
 });
 
 export const ThreadDeletedPayload = Schema.Struct({
@@ -2277,6 +2291,7 @@ export const ThreadMetaUpdatedPayload = Schema.Struct({
   // the thread back to the sidebar.
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  remoteParent: Schema.optionalKey(Schema.NullOr(RemoteThreadParent)),
   // Order updates use this existing event so older clients can ignore the
   // new field while continuing to decode the event stream.
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
