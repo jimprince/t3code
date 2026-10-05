@@ -161,6 +161,7 @@ import { Button, InlineButton } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
 import { useAssetUrlRefresh, useAssetUrls, useAssetUrlState } from "../../assets/assetUrls";
 import { MediaVideoPlayer } from "../media/MediaVideoPlayer";
+import { TimelineModelPreviews } from "../model/ModelAssetPreviews";
 import { getVirtualizedScrollFadeClassName } from "../ui/scroll-area";
 import {
   buildAttachmentVideoAsset,
@@ -2441,6 +2442,11 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             ))}
           </div>
         )}
+        <TimelineModelPreviews
+          files={userFiles}
+          environmentId={ctx.activeThreadEnvironmentId}
+          onDownload={ctx.onFileDownload}
+        />
         {unchippedFiles.length > 0 || unknownAttachments.length > 0 ? (
           <div className="mb-2 flex flex-col gap-1">
             {unchippedFiles.map((file) => {
@@ -2772,6 +2778,12 @@ function AssistantTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "mess
             />
           </AssistantCitationSource>
         </div>
+        <TimelineModelPreviews
+          files={(row.message.attachments ?? []).filter(isFileAttachment)}
+          environmentId={ctx.activeThreadEnvironmentId}
+          onDownload={ctx.onFileDownload}
+        />
+
         <AssistantChangedFilesSection
           turnSummary={row.assistantTurnDiffSummary}
           routeThreadKey={ctx.routeThreadKey}

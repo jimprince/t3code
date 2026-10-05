@@ -71,7 +71,11 @@ import {
   markdownImageSourceFragment,
 } from "@t3tools/client-runtime/markdown-images";
 import { mediaFileReference, mediaUrlReference } from "@t3tools/client-runtime/media-reference";
-import { mediaKindFromPath, mediaMimeTypeFromExtension } from "@t3tools/shared/filePreview";
+import {
+  isWorkspaceModelPreviewPath,
+  mediaKindFromPath,
+  mediaMimeTypeFromExtension,
+} from "@t3tools/shared/filePreview";
 import * as Cause from "effect/Cause";
 import { AsyncResult } from "effect/reactivity";
 import React, {
@@ -120,6 +124,7 @@ import { ExpandedImageDialog } from "./chat/ExpandedImageDialog";
 import { markdownImageGallery, markdownImageItems } from "./chat/markdownImageGallery";
 import { MediaVideoPlayer } from "./media/MediaVideoPlayer";
 import { MediaActions, type MediaActionSource } from "./media/MediaActions";
+import { ChatMarkdownAssetModel } from "./model/ModelAssetPreviews";
 import { resolveProtocolRelativeMediaUrl } from "./media/mediaContent";
 import { FileTagChipContent } from "./chat/FileTagChip";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
@@ -2994,6 +2999,21 @@ const CHAT_MARKDOWN_COMPONENTS = {
       ? (markdownFileLinkMetaByHref.get(normalizedHref) ??
         resolveMarkdownFileLinkMeta(normalizedHref, cwd, imageBaseDir ?? cwd))
       : null;
+    if (
+      fileLinkMeta &&
+      node?.properties?.dataStandalone === true &&
+      threadRef &&
+      fileLinkMeta.workspaceRelativePath !== null &&
+      isWorkspaceModelPreviewPath(fileLinkMeta.basename)
+    ) {
+      return (
+        <ChatMarkdownAssetModel
+          threadRef={threadRef}
+          path={fileLinkMeta.filePath}
+          name={fileLinkMeta.basename}
+        />
+      );
+    }
     if (!fileLinkMeta) {
       const faviconHost = resolveExternalWebLinkHost(href);
       const pullRequestAutolink = String(
