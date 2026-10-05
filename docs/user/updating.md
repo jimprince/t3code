@@ -36,6 +36,23 @@ refused rather than running half-upgraded:
 
 Update the side the notice names, then reconnect.
 
+## Linux fork server updates
+
+The Linux headless updater waits while threads have active or queued work,
+including approval and input requests. A deferred update retries after work ends;
+you do not need to close completed thread conversations. The app’s remote update
+request uses this same idle check.
+
+To deliberately interrupt active work, run this command on the Linux host:
+
+```sh
+~/.local/bin/t3code-headless-upgrade --force
+```
+
+Normal scheduled checks never use that override. To inspect readiness without
+installing anything, use `~/.local/bin/t3code-headless-upgrade --check-idle`.
+
+
 ## Update a connected server
 
 The offered action depends on how the server runs:
@@ -98,3 +115,7 @@ download updates in the background and apply them when you next leave the app.
 It saves drafts and queued messages before restarting. If you keep the app open
 for a long time, it may ask to install immediately; choosing **Later** leaves the
 update queued for the next suitable moment.
+
+Before a V2 upgrade the Linux updater saves a read-only database snapshot under the service release root. Binary rollback does not undo V2 writes; restore data only from an offline backup. Update operator CLIs and servers together to protocol 2.
+
+For the first upgrade from V1, set `T3CODE_HEADLESS_STATE_DB` to the existing `userdata/state.sqlite` path in the updater service environment. Remove that override after cutover so subsequent checks use `userdata/statev2.sqlite`.
