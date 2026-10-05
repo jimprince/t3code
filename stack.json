@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "bbce83e33e3889e7d41217e8da581a9c2d73d91a",
-  "head": "49c6305bc7c34c78bf2edb342da43b38efc80073",
+  "prev": "47a50265987103b37b8f8446f8ce15dc0b7a1050",
+  "head": "7ad2651eacd6cec23a5b5c59a5a5d31bf5d21e1c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -69,15 +69,14 @@
     "fork-project-issues-board",
     "fork-request-ledger",
     "fork-cross-environment-nesting",
-    "fork-project-dashboard-widgets"
-  ],
-  "unapplied": [
+    "fork-project-dashboard-widgets",
     "fork-project-roadmap",
     "fork-project-page-workflow",
     "fork-project-canvas",
     "fork-project-task-types",
     "fork-scripts-automations"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -201,7 +200,7 @@
       "oid": "0f90fffe831c5cbc3f90f414db8604f8c43f053e"
     },
     "fork-project-canvas": {
-      "oid": "9853729d5025378a246d96d765a1970b60d68a73"
+      "oid": "ae2e781272b5c327e5e601398b2ca835ee8f031e"
     },
     "fork-project-dashboard-widgets": {
       "oid": "49c6305bc7c34c78bf2edb342da43b38efc80073"
@@ -210,16 +209,16 @@
       "oid": "887e38d7ff19d3e535fcf0b02ab386a21e2be0b2"
     },
     "fork-project-page-workflow": {
-      "oid": "e106307dcf369b16f7398ed21e9375b56f198165"
+      "oid": "c81efc75152b8bdac996aae52a7833c8154962ab"
     },
     "fork-project-roadmap": {
-      "oid": "cc05f8d8b200374b8f3c50f56d5aabaedf8fc0cd"
+      "oid": "59c25f87f574b2c8af918bd64334dba17cd5287b"
     },
     "fork-project-selection": {
       "oid": "5f3080ec7439cdb80020bdf035e911e39b3ae5be"
     },
     "fork-project-task-types": {
-      "oid": "a4b9fd88045f13ad59cdb117c5f90696db1cd65d"
+      "oid": "40381d0a7508bcc46ae6d73c43948761bf0922fd"
     },
     "fork-provider-turn-safety": {
       "oid": "4b0ef4c2ba9c23fbcc4775830e7232aa7074aebf"
@@ -246,7 +245,7 @@
       "oid": "88fb1955b5938646618053964e7cf28c68c8d940"
     },
     "fork-scripts-automations": {
-      "oid": "aa08d4cb0397d5e94cd94395584df958ab17328a"
+      "oid": "7ad2651eacd6cec23a5b5c59a5a5d31bf5d21e1c"
     },
     "fork-sidebar-agent-visibility": {
       "oid": "226f04d520eef60bf9f6c204685c970bf1612457"
