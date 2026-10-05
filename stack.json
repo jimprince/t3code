@@ -1,9 +1,11 @@
 {
   "version": 5,
-  "prev": "e252f32479b51412d82f28062dde9d998bfae07e",
-  "head": "c43ef4bfb8f2e64d6d3bae633de44c7a8a0dbf72",
+  "prev": "514f93e3b7d495f6f859535a89733318dd25c87a",
+  "head": "fe5ea548f26c10947cb8cdeed714a4a80f1f6893",
   "applied": [
-    "fork-build-ci-compat",
+    "fork-build-ci-compat"
+  ],
+  "unapplied": [
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
@@ -67,7 +69,6 @@
     "fork-gitea-issue-links",
     "fork-orchestrators-view"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
