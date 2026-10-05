@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f87017d660ea220df0a53ad000e2907a90025486",
-  "head": "4838805b1c83569cbc49221c7525ffaa34e24404",
+  "prev": "e86717b13f92db67b4136367fbe69a8ec4da5bf3",
+  "head": "6a1c7312f1365e29d80948b86ed4f2ad4ae3dc0a",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -25,7 +25,8 @@
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh",
     "fork-inline-3d-objects",
-    "fork-orcaslicer-handoff"
+    "fork-orcaslicer-handoff",
+    "fork-3mf-preview"
   ],
   "unapplied": [
     "fork-thread-client-recovery",
@@ -37,7 +38,6 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-codex-goal-visibility",
-    "fork-3mf-preview",
     "fork-step-preview",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
@@ -86,7 +86,7 @@
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
-      "oid": "e00bf1f63e399a04027d9e1f817ddfd4bfc7e7b6"
+      "oid": "6a1c7312f1365e29d80948b86ed4f2ad4ae3dc0a"
     },
     "fork-agent-panel-thread-details": {
       "oid": "a3dc42737257cb33831541ff06d2de0192433813"
