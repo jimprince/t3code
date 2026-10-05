@@ -679,6 +679,15 @@ const make = Effect.gen(function* () {
           }),
         ),
       );
+      if (
+        project.kind === "chat" &&
+        (input.workspaceStrategy.type !== "root" || input.workspaceStrategy.branch != null)
+      ) {
+        return yield* mapError(
+          input,
+          "resolve-project",
+        )("General Chat cannot override its server workspace.");
+      }
       if (input.reuseExistingThread === true && input.threadId === undefined) {
         return yield* mapError(
           input,
