@@ -208,27 +208,30 @@ it.layer(NodeServices.layer)("automatic archive decider", (it) => {
         settledOverride: null,
         settledAt: null,
       });
-      for (const type of ["thread.auto-settle", "thread.settle"] as const) {
-        const settlement = yield* decideOrchestrationCommand({
-          command:
-            type === "thread.auto-settle"
-              ? {
-                  type,
-                  commandId: CommandId.make(type),
-                  threadId: pinnedActive.id,
-                  settledAt: NOW,
-                  snapshotSequence: 1,
-                }
-              : { type, commandId: CommandId.make(type), threadId: pinnedActive.id },
-          readModel: model([pinnedActive]),
-        });
-        assert.strictEqual(
-          ("type" in settlement ? [settlement] : settlement).some(
-            (event) => event.type === "thread.unpinned",
-          ),
-          type === "thread.settle",
-        );
-      }
+      const autoSettlePinned = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.auto-settle",
+          commandId: CommandId.make("thread.auto-settle"),
+          threadId: pinnedActive.id,
+          settledAt: NOW,
+          snapshotSequence: 1,
+        },
+        readModel: model([pinnedActive]),
+      }).pipe(Effect.result);
+      assert.strictEqual(autoSettlePinned._tag, "Failure");
+      const manualSettle = yield* decideOrchestrationCommand({
+        command: {
+          type: "thread.settle",
+          commandId: CommandId.make("thread.settle"),
+          threadId: pinnedActive.id,
+        },
+        readModel: model([pinnedActive]),
+      });
+      assert.ok(
+        ("type" in manualSettle ? [manualSettle] : manualSettle).some(
+          (event) => event.type === "thread.unpinned",
+        ),
+      );
       const resumed = yield* decideOrchestrationCommand({
         command: {
           type: "thread.turn.start",
