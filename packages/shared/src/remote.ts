@@ -4,6 +4,7 @@ const PAIRING_TOKEN_PARAM = "token";
 const HOSTED_PAIRING_HOST_PARAM = "host";
 const HOSTED_PAIRING_LABEL_PARAM = "label";
 const SUPPORTED_REMOTE_BACKEND_PROTOCOLS = new Set(["http:", "https:", "ws:", "wss:"]);
+import { applyPrivateRemoteDefaults } from "./privateRemoteDefaults.ts";
 
 export const readHashParams = (url: URL): URLSearchParams =>
   new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : url.hash);
@@ -82,7 +83,8 @@ const normalizeRemoteBaseUrl = (
   }
 
   const withoutLeadingSlashes = trimmed.replace(/^\/+/, "");
-  const normalizedInput = /^[a-zA-Z][a-zA-Z\d+-]*:\/\//.test(withoutLeadingSlashes)
+  const hasExplicitProtocol = /^[a-zA-Z][a-zA-Z\d+-]*:\/\//.test(withoutLeadingSlashes);
+  const normalizedInput = hasExplicitProtocol
     ? withoutLeadingSlashes
     : `https://${withoutLeadingSlashes}`;
   let url: URL;
@@ -97,6 +99,7 @@ const normalizeRemoteBaseUrl = (
       protocol: url.protocol,
     });
   }
+  applyPrivateRemoteDefaults(url, hasExplicitProtocol, withoutLeadingSlashes);
   url.pathname = "/";
   url.search = "";
   url.hash = "";
