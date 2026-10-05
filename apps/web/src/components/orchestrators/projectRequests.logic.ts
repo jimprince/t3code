@@ -1,16 +1,8 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { ProjectIssue, ProjectPendingRequest, ProjectRequestStage } from "@t3tools/contracts";
 
-/** Task types, from the `ask:<kind>` label requests and typed issues carry. */
-export type RequestKind =
-  | "bug"
-  | "feature"
-  | "question"
-  | "deliverable"
-  | "plan"
-  | "change"
-  | "test"
-  | "maintenance";
+/** Item types, from the `ask:<kind>` label requests and typed issues carry. */
+export type RequestKind = "question" | "task" | "epic";
 
 /** What Brad does next with a request that is his to act on. */
 export type ForYouGroup = "answers" | "review" | "approve" | "test";
@@ -25,6 +17,10 @@ export const FOR_YOU_GROUPS: ReadonlyArray<{ group: ForYouGroup; title: string }
 export interface ProjectRequest {
   readonly issue: ProjectIssue;
   readonly kind: RequestKind;
+  /** A task tagged `bug`. */
+  readonly bug: boolean;
+  /** Typed `ask:maintenance` in the past: upkeep that stays out of Needs you's way. */
+  readonly maintenance: boolean;
   readonly stage: ProjectRequestStage;
   /** Worker threads linked to this request (its orchestrator excluded): who is on it. */
   readonly servedBy: ReadonlyArray<EnvironmentThreadShell>;
@@ -40,25 +36,41 @@ export interface ProjectRequest {
 }
 
 const LEFT_BEHIND_MS = 24 * 60 * 60 * 1000;
-const KINDS: ReadonlyArray<RequestKind> = [
-  "bug",
-  "feature",
-  "question",
-  "deliverable",
-  "plan",
-  "change",
-  "test",
-  "maintenance",
-];
+const KINDS: ReadonlyArray<RequestKind> = ["question", "task", "epic"];
 
-/** An issue's task type, or null when it carries no `ask:<kind>` label. */
+const labelNames = (labels: ReadonlyArray<string>) =>
+  new Set(labels.map((label) => label.toLowerCase()));
+
+/**
+ * An issue's item type, or null when it carries no `ask:<kind>` label. A current
+ * label (`ask:question`, `ask:task`, `ask:epic`) wins; otherwise an earlier one is
+ * read as its successor: plan is an epic, any other `ask:*` label is a task.
+ */
 export function taskKind(labels: ReadonlyArray<string>): RequestKind | null {
-  const names = new Set(labels.map((label) => label.toLowerCase()));
-  return KINDS.find((kind) => names.has(`ask:${kind}`)) ?? null;
+  const names = labelNames(labels);
+  const current = KINDS.find((kind) => names.has(`ask:${kind}`));
+  if (current) return current;
+  if (names.has("ask:plan")) return "epic";
+  return [...names].some((name) => name.startsWith("ask:")) ? "task" : null;
 }
 
 export function requestKind(labels: ReadonlyArray<string>): RequestKind {
-  return taskKind(labels) ?? "deliverable";
+  return taskKind(labels) ?? "task";
+}
+
+/**
+ * Tagged `bug`, or typed `ask:bug` with no current type label (a current label
+ * wins, so retyping an old bug keeps the tag only through the `bug` label).
+ */
+export function isBug(labels: ReadonlyArray<string>): boolean {
+  const names = labelNames(labels);
+  if (names.has("bug")) return true;
+  return names.has("ask:bug") && !KINDS.some((kind) => names.has(`ask:${kind}`));
+}
+
+/** Upkeep: a task that carries the earlier `ask:maintenance` label as history. */
+export function isMaintenance(labels: ReadonlyArray<string>): boolean {
+  return taskKind(labels) === "task" && labelNames(labels).has("ask:maintenance");
 }
 
 /** The issue belongs to this project tree: asked in it, or linked to one of its threads. */
@@ -75,11 +87,9 @@ function groupForKind(kind: RequestKind): ForYouGroup {
   switch (kind) {
     case "question":
       return "answers";
-    case "plan":
+    case "epic":
       return "approve";
-    case "test":
-      return "test";
-    default:
+    case "task":
       return "review";
   }
 }
@@ -144,6 +154,8 @@ export function deriveProjectRequests(
     requests.push({
       issue,
       kind,
+      bug: isBug(issue.labels),
+      maintenance: isMaintenance(issue.labels),
       stage,
       servedBy,
       testStep: stage === "needs-test" ? testStepOf(issue) : null,
@@ -183,6 +195,7 @@ export const nextReleaseRequests = (requests: ReadonlyArray<ProjectRequest>) =>
 export interface CompletedTask {
   readonly issue: ProjectIssue;
   readonly kind: RequestKind | null;
+  readonly bug: boolean;
   /** Shipped and waiting for Brad's test; the open request to settle. */
   readonly toTest: ProjectRequest | null;
 }
@@ -211,7 +224,7 @@ export function deriveCompleted(
   };
   for (const request of requests) {
     if (request.stage === "needs-test")
-      add({ issue: request.issue, kind: request.kind, toTest: request });
+      add({ issue: request.issue, kind: request.kind, bug: request.bug, toTest: request });
   }
   for (const issue of issues) {
     if (issue.status === "archived") continue;
@@ -220,6 +233,7 @@ export function deriveCompleted(
     add({
       issue,
       kind: issue.isRequest ? requestKind(issue.labels) : taskKind(issue.labels),
+      bug: isBug(issue.labels),
       toTest: null,
     });
   }
@@ -248,8 +262,8 @@ export interface MaintenanceTask {
 }
 
 /**
- * Open maintenance tasks that do not need Brad: requests typed maintenance still
- * with the agents, and open tracker issues typed `ask:maintenance`.
+ * Open maintenance tasks that do not need Brad: requests still with the agents, and
+ * open tracker issues, that carry the earlier `ask:maintenance` label.
  */
 export function deriveMaintenance(
   issues: ReadonlyArray<ProjectIssue>,
@@ -262,14 +276,14 @@ export function deriveMaintenance(
   for (const issue of issues) {
     if (issue.isRequest || issue.closedAt !== null || (isParked(issue) && !includeLater)) continue;
     if (issue.status === "done" || issue.status === "archived") continue;
-    if (taskKind(issue.labels) === "maintenance") tasks.push({ issue, stage: null, request: null });
+    if (isMaintenance(issue.labels)) tasks.push({ issue, stage: null, request: null });
   }
   return tasks;
 }
 
 /** Maintenance requests nobody needs Brad for leave the Requests list for Maintenance. */
 export const isMaintenanceWithAgents = (request: ProjectRequest) =>
-  request.kind === "maintenance" && request.forYou === null && request.stage !== "awaiting-release";
+  request.maintenance && request.forYou === null && request.stage !== "awaiting-release";
 
 /** First line of a comment, without its "Progress:" or "Test:" prefix and markdown. */
 export function latestProgressLine(body: string | null | undefined): string | null {
