@@ -115,7 +115,8 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
       </div>
       {automations.map((automation) => {
         const draft = toDraft(automation);
-        const timeZone = automation.triggers[0]?.schedule.timeZone;
+        const first = automation.triggers[0];
+        const timeZone = first?.type === "schedule" ? first.schedule.timeZone : undefined;
         const target = automation.actions[0]?.target;
         return (
           <div key={automation.id} className="space-y-1">

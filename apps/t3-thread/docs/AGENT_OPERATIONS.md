@@ -1039,13 +1039,20 @@ t3-thread automation add --env <name> --project <id> --name "PR review" --script
   --schedule weekdays --days mon-fri --time 09:00 --timezone America/Edmonton
 t3-thread automation add --env <name> --project <id> --name "Digest" --prompt "Summarize changes" \
   --schedule cron --cron "*/30 9-17 * * 1-5" --timezone America/Toronto
+t3-thread automation add --env <name> --project <id> --name "CI fixer" --script fix-ci \
+  --on ci.failed --repository brad/t3code-fork
 t3-thread automation list --env <name> [--project <id>]
 t3-thread automation pause|resume|remove <automation-id> --env <name>
 t3-thread automation run-now <automation-id> --env <name> [--dry-run]
 t3-thread automation runs [<automation-id>] --env <name> [--project <id>] [--limit 20]
 ```
 
-Schedules are `hourly`, `daily`, `weekly --day mon`, `weekdays --days mon-fri|mon,wed,fri`,
+Events (`--on`) are `pull-request.opened`, `ci.failed`, `issue.labeled` (needs `--owner-thread`;
+its project's repositories are watched), `worker.blocked` (approval, input or session error in a
+project thread) and `release.published` (needs `--repository owner/name`); filter with
+`--repository`, `--label`, `--for-thread`. With `--on` there is no schedule unless `--schedule` is
+also given. Each new state fires once (run key `event:<kind>:<state>`); polled sources (labels,
+releases, every five minutes) treat their first sighting as a baseline. Schedules are `hourly`, `daily`, `weekly --day mon`, `weekdays --days mon-fri|mon,wed,fri`,
 `cron --cron '<5 fields>'`, or `manual` (run-now only). `script add` replaces a same-named
 script in the same scope. `--result-mode review|file-only|file-and-settle` on `script add` (or
 `--mode` on one `script run`, `--result-mode` on `automation add --script`) sets what a run does

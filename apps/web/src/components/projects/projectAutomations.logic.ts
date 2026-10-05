@@ -2,6 +2,8 @@ import type {
   Automation,
   AutomationAgentTarget,
   AutomationDefinition,
+  AutomationEventKind,
+  AutomationTrigger,
   AutomationSchedule,
   ProjectId,
   ThreadId,
@@ -36,6 +38,7 @@ export function toDraft(automation: Automation): AutomationDraft | null {
     automation.triggers.length !== 1 ||
     automation.actions.length !== 1 ||
     trigger === undefined ||
+    trigger.type !== "schedule" ||
     action === undefined ||
     action.prompt === undefined
   )
@@ -81,9 +84,24 @@ export function scheduleLabel(schedule: AutomationSchedule): string {
   }
 }
 
+const EVENT_LABELS: Record<AutomationEventKind, string> = {
+  "pull-request.opened": "When a pull request is linked",
+  "ci.failed": "When checks fail",
+  "issue.labeled": "When an issue is labeled",
+  "worker.blocked": "When a worker is blocked",
+  "release.published": "On a new release",
+};
+
+function triggerLabel(trigger: AutomationTrigger): string {
+  if (trigger.type === "schedule") return scheduleLabel(trigger.schedule);
+  const filter = trigger.filter ?? {};
+  const scope = [filter.label, filter.repository].filter(Boolean).join(" in ");
+  return `${EVENT_LABELS[trigger.event]}${scope ? ` (${scope})` : ""}`;
+}
+
 export function automationSummary(automation: Automation): string {
-  const schedules = automation.triggers.map((trigger) => scheduleLabel(trigger.schedule));
-  return schedules.length === 0 ? "Manual only" : schedules.join(" or ");
+  const labels = automation.triggers.map(triggerLabel);
+  return labels.length === 0 ? "Manual only" : labels.join(" or ");
 }
 
 /**

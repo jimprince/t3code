@@ -1,6 +1,12 @@
 import { ProjectId, ThreadId, type Automation } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
-import { belongsToRoot, fromDraft, scheduleLabel, toDraft } from "./projectAutomations.logic";
+import {
+  automationSummary,
+  belongsToRoot,
+  fromDraft,
+  scheduleLabel,
+  toDraft,
+} from "./projectAutomations.logic";
 
 const root = ThreadId.make("root");
 const automation: Automation = {
@@ -38,6 +44,18 @@ describe("project automation panel logic", () => {
     const base = { kind: "weekdays", time: "09:00", timeZone: "UTC" } as const;
     expect(scheduleLabel({ ...base, days: [5, 1, 2, 3, 4] })).toBe("Weekdays at 09:00");
     expect(scheduleLabel({ ...base, days: [1, 3] })).toBe("Mon, Wed at 09:00");
+  });
+
+  it("summarizes event triggers and keeps them out of the schedule editor", () => {
+    const onCi: Automation = {
+      ...automation,
+      triggers: [
+        { type: "event", event: "ci.failed", filter: { repository: "brad/t3code-fork" } },
+        ...automation.triggers,
+      ],
+    };
+    expect(automationSummary(onCi)).toBe("When checks fail (brad/t3code-fork) or Daily at 03:00");
+    expect(toDraft({ ...onCi, triggers: [onCi.triggers[0]!] })).toBeNull();
   });
 
   it("scopes rules to an orchestrator page", () => {

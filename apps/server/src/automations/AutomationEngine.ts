@@ -4,6 +4,7 @@ import {
   ThreadId,
   type Automation,
   type AutomationAgentTarget,
+  type AutomationEventKind,
   type AutomationResultMode,
   type AutomationDefinition,
   type AutomationRun,
@@ -30,11 +31,22 @@ import { forkParked } from "../serverActivation.ts";
 import { AgentGateway } from "./AgentGateway.ts";
 import { AutomationStore } from "./AutomationStore.ts";
 import { withResultMode } from "./resultModes.ts";
+import {
+  eventContext,
+  eventsFor,
+  stateKey,
+  triggerMatches,
+  type AutomationEvent,
+  type AutomationObservation,
+} from "./events.ts";
+import { ReleaseFeed } from "./ReleaseFeed.ts";
 import { automationTimeZone, latestScheduledRun, nextScheduledRun } from "./schedule.ts";
 
 const MAX_AUTOMATIONS_PER_PROJECT = 100;
 const MAX_UNFINISHED_RUNS = 20;
 const MISSED_AFTER_MS = 86_400_000;
+/** Issue labels and GitHub releases are polled; everything else is pushed. */
+const POLL_INTERVAL_MS = 5 * 60_000;
 
 const sameStep = (a: AutomationRunStep, b: AutomationRunStep | undefined) =>
   b !== undefined &&
@@ -57,6 +69,8 @@ export class AutomationEngine extends Context.Service<
   {
     readonly start: () => Effect.Effect<void, never, Scope.Scope>;
     readonly drain: Effect.Effect<void>;
+    /** Polls issue labels and releases now; the server also does this every five minutes. */
+    readonly pollNow: Effect.Effect<void>;
     readonly list: (projectId?: ProjectId) => Fx<ReadonlyArray<Automation>>;
     readonly save: (definition: AutomationDefinition) => Fx<Automation>;
     readonly remove: (automationId: string) => Fx<void>;
@@ -191,6 +205,7 @@ function legacyScript(
 const make = Effect.gen(function* () {
   const store = yield* AutomationStore;
   const gateway = yield* AgentGateway;
+  const releases = yield* ReleaseFeed;
   const crypto = yield* Crypto.Crypto;
   const scope = yield* Scope.Scope;
   const permit = yield* Semaphore.make(1);
@@ -199,6 +214,8 @@ const make = Effect.gen(function* () {
   );
   const nowIso = DateTime.now.pipe(Effect.map(DateTime.formatIso));
   let watched: ReadonlySet<string> = new Set();
+  /** Event kinds some enabled automation listens to; refreshed every pass. */
+  let wanted: ReadonlySet<AutomationEventKind> = new Set();
   let timer: Fiber.Fiber<void> | undefined;
   let enqueue: () => Effect.Effect<void> = () => Effect.void;
   const locked = <A, E>(effect: Effect.Effect<A, E>) => permit.withPermits(1)(effect);
@@ -215,6 +232,8 @@ const make = Effect.gen(function* () {
     timeZone: string;
     now: string;
     dryRun: boolean;
+    /** What fired the run, appended to every prompt. */
+    context?: string;
   }) {
     const runId = `${input.projectId}:${input.automationId}:${input.dedupeKey}`;
     const at = input.trigger.kind === "schedule" ? input.trigger.scheduledAt : input.now;
@@ -237,7 +256,10 @@ const make = Effect.gen(function* () {
           action.target.kind === "existing-thread" ? action.target.threadId : ThreadId.make(id),
         messageId: MessageId.make(id),
         title: runTitle(input.name, at, input.timeZone),
-        prompt: withResultMode(prompt, resultMode),
+        prompt: withResultMode(
+          input.context ? `${prompt}\n\n${input.context}` : prompt,
+          resultMode,
+        ),
         ...(action.script !== undefined ? { script: action.script } : {}),
         ...(resultMode !== undefined ? { resultMode } : {}),
         result: input.dryRun ? "Dry run: not started." : null,
@@ -402,7 +424,17 @@ const make = Effect.gen(function* () {
     const now = yield* nowIso;
     yield* importLegacy(now);
     let nextDue = Infinity;
-    for (const automation of yield* store.listAutomations()) {
+    const automations = yield* store.listAutomations();
+    wanted = new Set(
+      automations.flatMap((automation) =>
+        automation.enabled
+          ? automation.triggers.flatMap((trigger) =>
+              trigger.type === "event" ? [trigger.event] : [],
+            )
+          : [],
+      ),
+    );
+    for (const automation of automations) {
       if (!automation.enabled || automation.nextRunAt === null) continue;
       if (Date.parse(automation.nextRunAt) <= Date.parse(now)) yield* fire(automation, now);
       else nextDue = Math.min(nextDue, Date.parse(automation.nextRunAt));
@@ -416,6 +448,129 @@ const make = Effect.gen(function* () {
         Effect.forkIn(scope),
       );
   });
+
+  /** Records one run for every enabled automation an event matches; the run key dedupes. */
+  const ingest = Effect.fn("AutomationEngine.ingest")(function* (
+    event: AutomationEvent,
+    now: string,
+  ) {
+    let started = false;
+    for (const automation of yield* store.listAutomations(event.projectId ?? undefined)) {
+      if (
+        !automation.enabled ||
+        !automation.triggers.some((trigger) => triggerMatches(trigger, event))
+      )
+        continue;
+      const full = (yield* unfinished(automation.id)) >= MAX_UNFINISHED_RUNS;
+      const built = yield* buildRun({
+        automationId: automation.id,
+        projectId: automation.projectId,
+        name: automation.name,
+        ownerThreadId: automation.ownerThreadId,
+        dedupeKey: `event:${event.kind}:${event.key}`,
+        trigger: {
+          kind: "event",
+          event: event.kind,
+          summary: event.summary,
+          ...(event.url ? { url: event.url } : {}),
+          occurredAt: event.occurredAt,
+        },
+        actions: automation.actions,
+        timeZone: automationTimeZone(automation.triggers),
+        now,
+        dryRun: false,
+        context: eventContext(event),
+      }).pipe(
+        Effect.map((run): AutomationRun =>
+          full
+            ? {
+                ...run,
+                status: "skipped",
+                result: "Too many unfinished automation runs.",
+                finishedAt: now,
+                steps: run.steps.map((step) => ({ ...step, status: "skipped", finishedAt: now })),
+              }
+            : run,
+        ),
+      );
+      if ((yield* store.insertRun(built)) && !full) started = true;
+    }
+    return started;
+  });
+
+  /** Compares an observation with the remembered state, records any runs, then remembers it. */
+  const observe = (observation: AutomationObservation) =>
+    locked(
+      Effect.gen(function* () {
+        const now = yield* nowIso;
+        const key = stateKey(observation);
+        const previous = key === null ? undefined : yield* store.getState(key);
+        const { events, state } = eventsFor(observation, previous);
+        return yield* store.transaction(
+          Effect.gen(function* () {
+            let started = false;
+            for (const event of events) if (yield* ingest(event, now)) started = true;
+            if (key !== null && state !== null && state !== previous)
+              yield* store.setState(key, state, now);
+            return started;
+          }),
+        );
+      }),
+    ).pipe(
+      Effect.flatMap((started) => (started ? enqueue() : Effect.void)),
+      Effect.catchCauseIf(
+        (cause) => !Cause.hasInterruptsOnly(cause),
+        (cause) => Effect.logWarning("automation event failed", { cause: Cause.pretty(cause) }),
+      ),
+    );
+
+  const observer = yield* makeDrainableWorker(observe);
+
+  /** Polls the sources that cannot push, only for what enabled automations listen to. */
+  const poll = Effect.gen(function* () {
+    if (disabled) return;
+    const automations = (yield* store.listAutomations()).filter((automation) => automation.enabled);
+    const listening = (kind: AutomationEventKind) =>
+      automations.filter((automation) =>
+        automation.triggers.some((trigger) => trigger.type === "event" && trigger.event === kind),
+      );
+    const roots = new Set(
+      listening("issue.labeled").flatMap((automation) =>
+        automation.ownerThreadId ? [automation.ownerThreadId] : [],
+      ),
+    );
+    for (const root of roots)
+      for (const observation of yield* gateway.projectIssueLabels(root))
+        yield* observer.enqueue(observation);
+    const repositories = new Set(
+      listening("release.published").flatMap((automation) =>
+        automation.triggers.flatMap((trigger) =>
+          trigger.type === "event" &&
+          trigger.event === "release.published" &&
+          trigger.filter?.repository
+            ? [trigger.filter.repository]
+            : [],
+        ),
+      ),
+    );
+    for (const repository of repositories) {
+      const release = yield* releases.latest(repository);
+      if (Option.isSome(release))
+        yield* observer.enqueue({
+          type: "release",
+          repository,
+          tag: release.value.tag,
+          url: release.value.url,
+          at: release.value.publishedAt || (yield* nowIso),
+        });
+    }
+  }).pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.interrupt
+        : Effect.logWarning("automation poll failed", { cause: Cause.pretty(cause) }),
+    ),
+  );
 
   const worker = yield* makeDrainableWorker((_item: undefined) =>
     locked(pass).pipe(
@@ -448,6 +603,15 @@ const make = Effect.gen(function* () {
       !(yield* gateway.threadInProject(definition.ownerThreadId, definition.projectId))
     )
       return yield* fail("Owner thread must belong to this project.");
+    for (const trigger of definition.triggers) {
+      if (trigger.type !== "event") continue;
+      if (trigger.event === "issue.labeled" && !definition.ownerThreadId)
+        return yield* fail(
+          "Issue triggers need an owner thread: its project's repositories are watched.",
+        );
+      if (trigger.event === "release.published" && !trigger.filter?.repository)
+        return yield* fail("Release triggers need a repository (owner/name).");
+    }
     for (const action of definition.actions) {
       if (
         action.target.kind === "existing-thread" &&
@@ -651,17 +815,27 @@ const make = Effect.gen(function* () {
 
   const start = Effect.fn("AutomationEngine.start")(function* () {
     const wakeups = yield* gateway.wakeups(() => watched);
+    const observations = yield* gateway.observations(() => wanted);
     yield* forkParked(
       Effect.gen(function* () {
         yield* worker.enqueue(undefined);
         yield* Stream.runForEach(wakeups, () => worker.enqueue(undefined));
       }),
     );
+    yield* forkParked(
+      Stream.runForEach(observations, (observation) =>
+        disabled ? Effect.void : observer.enqueue(observation),
+      ),
+    );
+    yield* forkParked(Effect.forever(Effect.sleep(POLL_INTERVAL_MS).pipe(Effect.andThen(poll))));
   });
 
   return AutomationEngine.of({
     start,
-    drain: worker.drain,
+    pollNow: poll,
+    drain: Effect.all([observer.drain, worker.drain], { discard: true }).pipe(
+      Effect.andThen(worker.drain),
+    ),
     list: (projectId) => store.listAutomations(projectId),
     save,
     remove,

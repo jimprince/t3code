@@ -2,6 +2,7 @@ import {
   CommandId,
   DEFAULT_MODEL_BY_PROVIDER,
   ProviderInstanceId,
+  type AutomationEventKind,
   type AutomationRun,
   type AutomationRunStep,
   type ProjectAutomation,
@@ -20,6 +21,8 @@ import { threadHasQueuedTurnStart } from "../orchestration/ThreadSettlementPolic
 import * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
 import * as ServerSettings from "../serverSettings.ts";
+import * as ProjectIssuesService from "../projectIssues/ProjectIssuesService.ts";
+import type { AutomationObservation } from "./events.ts";
 
 /** Why the engine should look again. */
 export type AutomationWakeup = "thread" | "legacy" | "project";
@@ -46,6 +49,17 @@ export class AgentGateway extends Context.Service<
     readonly wakeups: (
       watched: () => ReadonlySet<string>,
     ) => Effect.Effect<Stream.Stream<AutomationWakeup>, never, Scope.Scope>;
+    /**
+     * Thread, pull-request and session changes for the event kinds `wanted` returns, as neutral
+     * observations. Nothing is read for kinds no enabled automation listens to.
+     */
+    readonly observations: (
+      wanted: () => ReadonlySet<AutomationEventKind>,
+    ) => Effect.Effect<Stream.Stream<AutomationObservation>, never, Scope.Scope>;
+    /** Labels of every issue in the repositories of the project an orchestrator thread leads. */
+    readonly projectIssueLabels: (
+      rootThreadId: ThreadId,
+    ) => Effect.Effect<ReadonlyArray<AutomationObservation>>;
     /** Timed automations stored on projects by the original fork scheduler; read only. */
     readonly legacyAutomations: Effect.Effect<
       ReadonlyArray<{ readonly projectId: ProjectId; readonly automation: ProjectAutomation }>
@@ -57,6 +71,7 @@ const make = Effect.gen(function* () {
   const engine = yield* OrchestrationEngine.OrchestrationEngineService;
   const snapshots = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const settingsService = yield* ServerSettings.ServerSettingsService;
+  const projectIssues = yield* ProjectIssuesService.make;
 
   const nowIso = DateTime.now.pipe(Effect.map(DateTime.formatIso));
 
@@ -216,6 +231,111 @@ const make = Effect.gen(function* () {
       ),
     );
 
+  const observations = (wanted: () => ReadonlySet<AutomationEventKind>) =>
+    engine.subscribeDomainEvents.pipe(
+      Effect.map((events) =>
+        events.pipe(
+          Stream.mapEffect((event): Effect.Effect<ReadonlyArray<AutomationObservation>> =>
+            Effect.gen(function* () {
+              const kinds = wanted();
+              if (event.aggregateKind !== "thread" || kinds.size === 0) return [];
+              const relevant =
+                (event.type === "thread.pull-request-linked" && kinds.has("pull-request.opened")) ||
+                (event.type === "thread.pull-request-synced" && kinds.has("ci.failed")) ||
+                (kinds.has("worker.blocked") &&
+                  (event.type === "thread.session-set" ||
+                    (event.type === "thread.activity-appended" &&
+                      (event.payload.activity.kind === "approval.requested" ||
+                        event.payload.activity.kind === "user-input.requested"))));
+              if (!relevant) return [];
+              const thread = yield* snapshots
+                .getThreadShellByIdIncludingArchived(event.payload.threadId)
+                .pipe(Effect.orElseSucceed(() => Option.none()));
+              if (Option.isNone(thread)) return [];
+              const base = {
+                projectId: thread.value.projectId,
+                threadId: thread.value.id,
+                at: event.occurredAt,
+              };
+              switch (event.type) {
+                case "thread.pull-request-linked":
+                  return [
+                    {
+                      ...base,
+                      type: "pull-request-linked",
+                      repository: event.payload.link.repository,
+                      number: event.payload.link.number,
+                      url: event.payload.link.url,
+                      title: event.payload.link.snapshot?.title ?? null,
+                    },
+                  ];
+                case "thread.pull-request-synced":
+                  return [
+                    {
+                      ...base,
+                      type: "pull-request-checks",
+                      repository: event.payload.repository,
+                      number: event.payload.number,
+                      url: event.payload.url ?? "",
+                      title: event.payload.snapshot.title,
+                      checks: event.payload.snapshot.checksState ?? null,
+                    },
+                  ];
+                case "thread.activity-appended":
+                  return [
+                    {
+                      ...base,
+                      type: "thread-waiting",
+                      title: thread.value.title,
+                      reason:
+                        event.payload.activity.kind === "approval.requested" ? "approval" : "input",
+                      requestId: event.payload.activity.id,
+                    },
+                  ];
+                case "thread.session-set":
+                  return [
+                    {
+                      ...base,
+                      type: "thread-session",
+                      title: thread.value.title,
+                      status: event.payload.session.status,
+                      error: event.payload.session.lastError,
+                    },
+                  ];
+                default:
+                  return [];
+              }
+            }),
+          ),
+          Stream.flatMap((items) => Stream.fromIterable(items)),
+        ),
+      ),
+    );
+
+  const projectIssueLabels = (rootThreadId: ThreadId) =>
+    Effect.gen(function* () {
+      const root = yield* snapshots.getThreadShellByIdIncludingArchived(rootThreadId);
+      if (Option.isNone(root)) return [];
+      const listed = yield* projectIssues.list({ rootThreadId });
+      const at = DateTime.formatIso(yield* DateTime.now);
+      return listed.issues.map((issue): AutomationObservation => ({
+        type: "issue-labels",
+        projectId: root.value.projectId,
+        repository: issue.repository,
+        number: issue.number,
+        url: issue.url,
+        title: issue.title,
+        labels: issue.labels,
+        at,
+      }));
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("automation issue poll failed", { rootThreadId, cause }).pipe(
+          Effect.as([]),
+        ),
+      ),
+    );
+
   const legacyAutomations = snapshots.getProjectShells().pipe(
     Effect.map((projects) =>
       projects.flatMap((project) =>
@@ -230,6 +350,8 @@ const make = Effect.gen(function* () {
     threadInProject,
     advance,
     wakeups,
+    observations,
+    projectIssueLabels,
     legacyAutomations,
   });
 });

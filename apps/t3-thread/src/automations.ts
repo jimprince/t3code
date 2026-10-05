@@ -16,7 +16,11 @@ type Options = {
   promptFile?: string;
   script?: string;
   description?: string;
-  schedule: string;
+  schedule?: string;
+  on?: string;
+  repository?: string;
+  label?: string;
+  forThread?: string;
   time: string;
   day: string;
   days?: string;
@@ -61,7 +65,7 @@ export function parseDays(value: string): number[] {
 
 function schedule(options: Options) {
   const timeZone = options.timezone;
-  switch (options.schedule) {
+  switch (options.schedule ?? (options.on ? "manual" : "daily")) {
     case "manual":
       return null;
     case "hourly":
@@ -101,7 +105,26 @@ function definition(options: Options) {
     name: options.name,
     enabled: !options.paused,
     ...(options.ownerThread ? { ownerThreadId: options.ownerThread } : {}),
-    triggers: timing ? [{ type: "schedule", schedule: timing }] : [],
+    triggers: [
+      ...(timing ? [{ type: "schedule", schedule: timing }] : []),
+      ...(options.on
+        ? [
+            {
+              type: "event",
+              event: options.on,
+              ...(options.repository || options.label || options.forThread
+                ? {
+                    filter: {
+                      ...(options.repository ? { repository: options.repository } : {}),
+                      ...(options.label ? { label: options.label } : {}),
+                      ...(options.forThread ? { threadId: options.forThread } : {}),
+                    },
+                  }
+                : {}),
+            },
+          ]
+        : []),
+    ],
     actions: [
       {
         type: "agent",
@@ -158,7 +181,17 @@ export function registerAutomationCommands(
     .option("--prompt <text>", "inline prompt")
     .option("--prompt-file <path>", "read the prompt from a file")
     .option("--script <name>", "run a saved script (see `t3-thread script list`)")
-    .option("--schedule <kind>", "hourly, daily, weekly, weekdays, cron or manual", "daily")
+    .option(
+      "--schedule <kind>",
+      "hourly, daily, weekly, weekdays, cron or manual (default daily, or none with --on)",
+    )
+    .option(
+      "--on <event>",
+      "pull-request.opened, ci.failed, issue.labeled (needs --owner-thread), worker.blocked or release.published (needs --repository)",
+    )
+    .option("--repository <owner/name>", "only events from this repository")
+    .option("--label <label>", "issue.labeled: only this label")
+    .option("--for-thread <id>", "only events from this thread")
     .option("--time <HH:MM>", "local time", "09:00")
     .option("--day <day>", "weekly day", "mon")
     .option("--days <days>", "weekdays schedule: mon-fri, mon,wed,fri", "mon-fri")

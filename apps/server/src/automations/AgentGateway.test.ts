@@ -5,6 +5,7 @@ import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import { FetchHttpClient } from "effect/unstable/http";
 import { expect } from "vite-plus/test";
 import { ServerConfig } from "../config.ts";
 import { OrchestrationEngineLive } from "../orchestration/Layers/OrchestrationEngine.ts";
@@ -22,6 +23,7 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import * as AgentGateway from "./AgentGateway.ts";
 import * as AutomationEngine from "./AutomationEngine.ts";
 import * as AutomationStore from "./AutomationStore.ts";
+import * as ReleaseFeed from "./ReleaseFeed.ts";
 
 function runtimeLayer(dbPath: string, cwd: string) {
   const orchestration = Layer.mergeAll(
@@ -32,7 +34,9 @@ function runtimeLayer(dbPath: string, cwd: string) {
     OrchestrationProjectionSnapshotQueryLive,
   );
   return AutomationEngine.layer.pipe(
-    Layer.provideMerge(Layer.mergeAll(AgentGateway.layer, AutomationStore.layer)),
+    Layer.provideMerge(
+      Layer.mergeAll(AgentGateway.layer, AutomationStore.layer, ReleaseFeed.layer),
+    ),
     Layer.provideMerge(orchestration),
     Layer.provide(
       Layer.mock(ServerSettingsService)({ getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS) }),
@@ -45,6 +49,7 @@ function runtimeLayer(dbPath: string, cwd: string) {
     Layer.provideMerge(makeSqlitePersistenceLive(dbPath)),
     Layer.provideMerge(ServerConfig.layerTest(cwd, { prefix: "t3-automation-gateway-" })),
     Layer.provideMerge(NodeServices.layer),
+    Layer.provideMerge(FetchHttpClient.layer),
   );
 }
 

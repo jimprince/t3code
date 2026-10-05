@@ -189,12 +189,15 @@ function MemberAutomations({ member }: { readonly member: EnvironmentProject }) 
     projectAutomations.runs({ ...input, input: { projectId: member.id, limit: 50 } }),
   );
   return (list.data?.automations ?? []).map((automation) => {
-    const schedule = automation.triggers[0]?.schedule;
+    const trigger = automation.triggers[0];
+    const schedule = trigger?.type === "schedule" ? trigger.schedule : undefined;
     return (
       <View key={automation.id} className="gap-1 p-4">
         <Text className="text-base text-foreground">{automation.name}</Text>
         <Text className="text-sm text-foreground-muted">
-          {automation.enabled ? (schedule?.kind ?? "manual") : "Paused"}
+          {automation.enabled
+            ? (schedule?.kind ?? (trigger?.type === "event" ? `on ${trigger.event}` : "manual"))
+            : "Paused"}
           {schedule ? ` · ${schedule.timeZone}` : ""}
           {automation.nextRunAt ? ` · Next ${new Date(automation.nextRunAt).toLocaleString()}` : ""}
         </Text>

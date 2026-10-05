@@ -99,6 +99,41 @@ describe("automation operator commands", () => {
     });
   });
 
+  it("adds an event trigger without a schedule", async () => {
+    const h = harness();
+    await h.run([
+      "automation",
+      "add",
+      "--project",
+      "p",
+      "--name",
+      "CI watch",
+      "--script",
+      "fix-ci",
+      "--on",
+      "ci.failed",
+      "--repository",
+      "brad/t3code-fork",
+    ]);
+    expect(h.calls[0]?.input).toMatchObject({
+      triggers: [{ type: "event", event: "ci.failed", filter: { repository: "brad/t3code-fork" } }],
+    });
+    await expect(
+      h.run([
+        "automation",
+        "add",
+        "--project",
+        "p",
+        "--name",
+        "x",
+        "--prompt",
+        "y",
+        "--on",
+        "push",
+      ]),
+    ).rejects.toThrow();
+  });
+
   it("parses day lists and wrapping ranges", () => {
     expect(parseDays("mon,wed,fri")).toEqual([1, 3, 5]);
     expect(parseDays("fri-mon")).toEqual([0, 1, 5, 6]);

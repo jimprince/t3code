@@ -1,6 +1,7 @@
 import * as AgentGateway from "./automations/AgentGateway.ts";
 import * as AutomationEngine from "./automations/AutomationEngine.ts";
 import * as AutomationStore from "./automations/AutomationStore.ts";
+import * as ReleaseFeed from "./automations/ReleaseFeed.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeHttp from "node:http";
 
@@ -285,7 +286,7 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(SettledSubthreadArchiveReactor.layer),
   Layer.provideMerge(
     AutomationEngine.layer.pipe(
-      Layer.provide(Layer.mergeAll(AgentGateway.layer, AutomationStore.layer)),
+      Layer.provide(Layer.mergeAll(AgentGateway.layer, AutomationStore.layer, ReleaseFeed.layer)),
     ),
   ),
   Layer.provideMerge(PullRequestSyncReactor.layer),

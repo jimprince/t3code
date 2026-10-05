@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 import { latestScheduledRun, nextScheduledRun } from "./schedule.ts";
 
-const at = (schedule: Parameters<typeof nextScheduledRun>[0][number]["schedule"]) => [
-  { type: "schedule" as const, schedule },
-];
+const at = (
+  schedule: Extract<
+    Parameters<typeof nextScheduledRun>[0][number],
+    { type: "schedule" }
+  >["schedule"],
+) => [{ type: "schedule" as const, schedule }];
 
 describe("automation schedules", () => {
   it("skips weekends for a weekday schedule", () => {

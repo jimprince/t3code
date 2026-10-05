@@ -60,6 +60,9 @@ export class AutomationStore extends Context.Service<
       projectId?: ProjectId;
       limit: number;
     }) => Fx<ReadonlyArray<AutomationRun>>;
+    /** Last value an event source saw under a state key. */
+    readonly getState: (key: string) => Fx<string | undefined>;
+    readonly setState: (key: string, value: string, now: string) => Fx<void>;
     readonly transaction: <A, E>(
       effect: Effect.Effect<A, E>,
     ) => Effect.Effect<A, E | AutomationError>;
@@ -226,7 +229,21 @@ const make = Effect.gen(function* () {
               ORDER BY created_at DESC, run_id DESC LIMIT ${input.limit}`,
     ).pipe(Effect.flatMap(runs));
 
+  const getState = (key: string) =>
+    fail(
+      sql<{ value: string }>`SELECT value FROM automation_source_state WHERE state_key = ${key}`,
+    ).pipe(Effect.map((rows) => rows[0]?.value));
+
+  const setState = (key: string, value: string, now: string) =>
+    fail(sql`
+      INSERT INTO automation_source_state (state_key, value, updated_at)
+      VALUES (${key}, ${value}, ${now})
+      ON CONFLICT (state_key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+    `).pipe(Effect.asVoid);
+
   return AutomationStore.of({
+    getState,
+    setState,
     listAutomations,
     getAutomation,
     saveAutomation,

@@ -19,6 +19,8 @@ import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import { AgentGateway } from "./AgentGateway.ts";
 import { AutomationEngine, layer as engineLayer } from "./AutomationEngine.ts";
 import { AutomationStore, layer as storeLayer } from "./AutomationStore.ts";
+import type { AutomationObservation } from "./events.ts";
+import { ReleaseFeed, type Release } from "./ReleaseFeed.ts";
 
 // 2026-10-05 is a Monday.
 const NOW = "2026-10-05T06:00:00.000Z";
@@ -44,6 +46,9 @@ function harness(
     const legacy = [...(options.legacy ?? [])];
     const advanced: AutomationRunStep[] = [];
     const passes = yield* Queue.unbounded<void>();
+    const observations = yield* Queue.unbounded<AutomationObservation>();
+    const issues = new Map<string, AutomationObservation[]>();
+    const latestReleases = new Map<string, Release>();
     const gateway = Layer.mock(AgentGateway)({
       projectExists: () => Effect.succeed(true),
       threadInProject: () => Effect.succeed(true),
@@ -53,14 +58,29 @@ function harness(
           return options.advance?.(step) ?? { ...step, status: "running", startedAt: NOW };
         }),
       wakeups: () => Effect.succeed(Stream.never),
+      observations: () => Effect.succeed(Stream.fromQueue(observations)),
+      projectIssueLabels: (root) => Effect.sync(() => issues.get(root) ?? []),
       legacyAutomations: Queue.offer(passes, undefined).pipe(Effect.as([...legacy])),
     });
     return {
       layer: engineLayer.pipe(
-        Layer.provideMerge(Layer.mergeAll(storeLayer, gateway)),
+        Layer.provideMerge(
+          Layer.mergeAll(
+            storeLayer,
+            gateway,
+            Layer.mock(ReleaseFeed)({
+              latest: (repository) =>
+                Effect.sync(() => Option.fromNullishOr(latestReleases.get(repository))),
+            }),
+          ),
+        ),
         Layer.provide(SqlitePersistenceMemory),
       ),
       advanced,
+      issues,
+      latestReleases,
+      /** Pushes an orchestration observation; a firing one is awaited with `settle`. */
+      push: (observation: AutomationObservation) => Queue.offer(observations, observation),
       /** Waits for one complete engine pass. */
       settle: Effect.gen(function* () {
         yield* Queue.take(passes);
@@ -441,6 +461,227 @@ it.layer(NodeServices.layer)("automation engine", (it) => {
           expect(run?.status).toBe("failed");
           expect(run?.steps.map((step) => step.status)).toEqual(["failed", "skipped"]);
           expect(h.advanced).toHaveLength(1);
+        }).pipe(Effect.provide(h.layer));
+      }),
+    ),
+  );
+
+  const onEvent = (
+    id: string,
+    trigger: Extract<AutomationDefinition["triggers"][number], { type: "event" }>,
+    extra: Partial<AutomationDefinition> = {},
+  ): AutomationDefinition => ({
+    ...daily,
+    id,
+    name: id,
+    triggers: [trigger],
+    ...extra,
+  });
+  const pr = { projectId, threadId: ThreadId.make("worker"), repository: "brad/t3code-fork" };
+
+  it.effect("fires on a pull request's checks turning failing, once per failing episode", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const h = yield* harness();
+        yield* Effect.gen(function* () {
+          const engine = yield* AutomationEngine;
+          yield* engine.save(
+            onEvent("ci", {
+              type: "event",
+              event: "ci.failed",
+              filter: { repository: pr.repository },
+            }),
+          );
+          yield* engine.start();
+          yield* h.settle;
+          const checks = (
+            checksState: "passing" | "failing" | "pending",
+            at: string,
+            repository = pr.repository,
+          ): AutomationObservation => ({
+            ...pr,
+            repository,
+            type: "pull-request-checks",
+            number: 7,
+            url: `https://git.example/${repository}/pulls/7`,
+            title: "Fix sync",
+            checks: checksState,
+            at,
+          });
+          yield* h.push(checks("pending", "2026-10-05T06:01:00.000Z"));
+          yield* h.push(checks("failing", "2026-10-05T06:02:00.000Z", "other/repo"));
+          yield* h.push(checks("failing", "2026-10-05T06:03:00.000Z"));
+          yield* h.settle;
+          const [first] = yield* engine.runs({ automationId: "ci" });
+          expect(first?.trigger).toMatchObject({
+            kind: "event",
+            event: "ci.failed",
+            summary: 'Checks are failing on pull request brad/t3code-fork#7 "Fix sync".',
+          });
+          expect(first?.steps[0]?.prompt).toContain(
+            "Summarize changes\n\n---\nTriggered by: Checks are failing",
+          );
+          expect(first?.steps[0]?.prompt).toContain(
+            "Link: https://git.example/brad/t3code-fork/pulls/7",
+          );
+          // Still failing (another sync of the same run) does not fire; failing again after a
+          // pass does.
+          yield* h.push(checks("failing", "2026-10-05T06:04:00.000Z"));
+          yield* h.push(checks("passing", "2026-10-05T06:05:00.000Z"));
+          yield* h.push(checks("failing", "2026-10-05T06:06:00.000Z"));
+          yield* h.settle;
+          const runs = yield* engine.runs({ automationId: "ci" });
+          expect(runs.map((run) => run.dedupeKey)).toEqual([
+            "event:ci.failed:brad/t3code-fork#7:2026-10-05T06:06:00.000Z",
+            "event:ci.failed:brad/t3code-fork#7:2026-10-05T06:03:00.000Z",
+          ]);
+        }).pipe(Effect.provide(h.layer));
+      }),
+    ),
+  );
+
+  it.effect("fires once per linked pull request and per blocked worker state", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const h = yield* harness();
+        yield* Effect.gen(function* () {
+          const engine = yield* AutomationEngine;
+          yield* engine.save(onEvent("opened", { type: "event", event: "pull-request.opened" }));
+          yield* engine.save(onEvent("blocked", { type: "event", event: "worker.blocked" }));
+          yield* engine.start();
+          yield* h.settle;
+          const linked: AutomationObservation = {
+            ...pr,
+            type: "pull-request-linked",
+            number: 9,
+            url: "https://git.example/pulls/9",
+            title: null,
+            at: NOW,
+          };
+          yield* h.push(linked);
+          yield* h.settle;
+          yield* h.push({ ...linked, at: "2026-10-05T06:10:00.000Z" });
+          const session = (status: string, at: string): AutomationObservation => ({
+            ...pr,
+            type: "thread-session",
+            title: "Worker",
+            status,
+            error: status === "error" ? "Provider crashed" : null,
+            at,
+          });
+          yield* h.push({
+            ...pr,
+            type: "thread-waiting",
+            title: "Worker",
+            reason: "approval",
+            requestId: "activity-1",
+            at: NOW,
+          });
+          yield* h.settle;
+          yield* h.push(session("error", "2026-10-05T06:11:00.000Z"));
+          yield* h.settle;
+          yield* h.push(session("error", "2026-10-05T06:12:00.000Z"));
+          yield* h.push(session("ready", "2026-10-05T06:13:00.000Z"));
+          yield* h.push(session("error", "2026-10-05T06:14:00.000Z"));
+          yield* h.settle;
+          expect(yield* engine.runs({ automationId: "opened" })).toHaveLength(1);
+          const blocked = yield* engine.runs({ automationId: "blocked" });
+          expect(blocked.map((run) => run.trigger.kind === "event" && run.trigger.summary)).toEqual(
+            [
+              'Thread "Worker" stopped with an error: Provider crashed',
+              'Thread "Worker" stopped with an error: Provider crashed',
+              'Thread "Worker" is waiting for an approval.',
+            ],
+          );
+        }).pipe(Effect.provide(h.layer));
+      }),
+    ),
+  );
+
+  it.effect("polls issue labels from a baseline and fires only on newly added labels", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const h = yield* harness();
+        yield* Effect.gen(function* () {
+          const engine = yield* AutomationEngine;
+          yield* engine.save(
+            onEvent(
+              "triage",
+              { type: "event", event: "issue.labeled", filter: { label: "bug" } },
+              { ownerThreadId: owner },
+            ),
+          );
+          const issue = (number: number, labels: string[]): AutomationObservation => ({
+            type: "issue-labels",
+            projectId,
+            repository: "brad/t3code-fork",
+            number,
+            url: `https://git.example/issues/${number}`,
+            title: `Issue ${number}`,
+            labels,
+            at: NOW,
+          });
+          const poll = (issues: AutomationObservation[]) =>
+            Effect.gen(function* () {
+              h.issues.set(owner, issues);
+              yield* engine.pollNow;
+              yield* engine.drain;
+            });
+          // Labels present before anyone watched are the baseline.
+          yield* poll([issue(1, ["bug"]), issue(2, [])]);
+          yield* poll([issue(1, ["bug", "docs"]), issue(2, ["bug"])]);
+          yield* poll([issue(1, ["bug", "docs"]), issue(2, ["bug"])]);
+          const runs = yield* engine.runs({ automationId: "triage" });
+          expect(runs.map((run) => run.trigger.kind === "event" && run.trigger.summary)).toEqual([
+            'Issue brad/t3code-fork#2 "Issue 2" was labeled bug.',
+          ]);
+          const unowned = yield* engine
+            .save(onEvent("x", { type: "event", event: "issue.labeled" }))
+            .pipe(Effect.flip);
+          expect(unowned.message).toContain("owner thread");
+        }).pipe(Effect.provide(h.layer));
+      }),
+    ),
+  );
+
+  it.effect("fires every project's release automation once per new release", () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        yield* TestClock.setTime(Date.parse(NOW));
+        const h = yield* harness();
+        yield* Effect.gen(function* () {
+          const engine = yield* AutomationEngine;
+          const upstream = {
+            type: "event" as const,
+            event: "release.published" as const,
+            filter: { repository: "pingdotgg/t3code" },
+          };
+          yield* engine.save(onEvent("here", upstream));
+          yield* engine.save(onEvent("there", upstream, { projectId: ProjectId.make("other") }));
+          const poll = (tag: string) =>
+            Effect.gen(function* () {
+              h.latestReleases.set("pingdotgg/t3code", {
+                tag,
+                url: `https://github.com/pingdotgg/t3code/releases/tag/${tag}`,
+                publishedAt: NOW,
+              });
+              yield* engine.pollNow;
+              yield* engine.drain;
+            });
+          yield* poll("v0.0.46-nightly.20261004");
+          yield* poll("v0.0.46-nightly.20261005");
+          yield* poll("v0.0.46-nightly.20261005");
+          for (const id of ["here", "there"])
+            expect((yield* engine.runs({ automationId: id })).map((run) => run.dedupeKey)).toEqual([
+              "event:release.published:pingdotgg/t3code:v0.0.46-nightly.20261005",
+            ]);
+          const unnamed = yield* engine
+            .save(onEvent("y", { type: "event", event: "release.published" }))
+            .pipe(Effect.flip);
+          expect(unnamed.message).toContain("repository");
         }).pipe(Effect.provide(h.layer));
       }),
     ),

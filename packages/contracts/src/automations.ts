@@ -49,8 +49,36 @@ export const AutomationSchedule = Schema.Union([
 ]);
 export type AutomationSchedule = typeof AutomationSchedule.Type;
 
+/**
+ * Things that happen and can fire an automation. Each fires once per new state: a pull request
+ * linked to a thread in the project, a linked pull request's checks turning failing, an issue in
+ * the owner's project repositories gaining a label, a thread in the project waiting for approval
+ * or input or its session failing, and a new GitHub release in a repository.
+ */
+export const AutomationEventKind = Schema.Literals([
+  "pull-request.opened",
+  "ci.failed",
+  "issue.labeled",
+  "worker.blocked",
+  "release.published",
+]);
+export type AutomationEventKind = typeof AutomationEventKind.Type;
+
+/** Every set field must match. `repository` is `owner/name`. */
+export const AutomationEventFilter = Schema.Struct({
+  repository: Schema.optionalKey(TrimmedNonEmptyString),
+  label: Schema.optionalKey(TrimmedNonEmptyString),
+  threadId: Schema.optionalKey(ThreadId),
+});
+export type AutomationEventFilter = typeof AutomationEventFilter.Type;
+
 export const AutomationTrigger = Schema.Union([
   Schema.Struct({ type: Schema.Literal("schedule"), schedule: AutomationSchedule }),
+  Schema.Struct({
+    type: Schema.Literal("event"),
+    event: AutomationEventKind,
+    filter: Schema.optionalKey(AutomationEventFilter),
+  }),
 ]);
 export type AutomationTrigger = typeof AutomationTrigger.Type;
 
@@ -136,6 +164,14 @@ export type AutomationRunStep = typeof AutomationRunStep.Type;
 export const AutomationRunTrigger = Schema.Union([
   Schema.Struct({ kind: Schema.Literal("schedule"), scheduledAt: IsoDateTime }),
   Schema.Struct({ kind: Schema.Literal("manual") }),
+  /** What the run saw: the event, in words, and where to look. */
+  Schema.Struct({
+    kind: Schema.Literal("event"),
+    event: AutomationEventKind,
+    summary: Schema.String,
+    url: Schema.optionalKey(Schema.String),
+    occurredAt: IsoDateTime,
+  }),
 ]);
 
 export const AutomationRun = Schema.Struct({

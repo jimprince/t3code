@@ -150,3 +150,19 @@ agent what to follow up. `file-only` files each finding as a request.
 `file-and-settle` files them and then settles the thread. Set the mode on the
 script, or override it for one run. Every run links to the thread it started.
 A paused timed automation also becomes a project script of the same name.
+
+### Event triggers
+
+An automation can also start when something happens, from `t3-thread automation
+add --on <event>`: a pull request is linked to a thread in the project
+(`pull-request.opened`), a linked pull request's checks start failing
+(`ci.failed`), an issue in the owning orchestrator's repositories gets a label
+(`issue.labeled`), a thread in the project waits for an approval or an answer or
+its session fails (`worker.blocked`), or a GitHub repository publishes a release
+(`release.published`, for example `pingdotgg/t3code`). Narrow a trigger with
+`--repository`, `--label` or `--for-thread`.
+
+Each new state fires once: a pull request whose checks keep failing does not
+start another run until they pass and fail again. Labels and releases are checked
+every five minutes, and ones that existed before the automation was watching do
+not fire. The run's prompt ends with what happened and a link to it.
