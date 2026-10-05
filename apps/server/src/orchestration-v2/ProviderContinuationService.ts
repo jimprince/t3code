@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Ref from "effect/Ref";
 
+import { automaticStartupResumeAllowed } from "../fork/recovery/StartupResumePolicy.ts";
 import * as IdAllocator from "./IdAllocator.ts";
 import * as ProviderContinuationRequests from "./ProviderContinuationRequests.ts";
 import * as ThreadManagementService from "./ThreadManagementService.ts";
@@ -63,6 +64,7 @@ export const workerLive = Layer.effectDiscard(
     const requests = yield* ProviderContinuationRequests.ProviderContinuationRequests;
     const threads = yield* ThreadManagementService.ThreadManagementService;
     const retryAttempts = yield* Ref.make(new Map<string, number>());
+    const allowAutomaticResume = yield* automaticStartupResumeAllowed;
 
     const clearRetryAttempt = (key: string) =>
       Ref.update(retryAttempts, (current) => {
@@ -82,6 +84,29 @@ export const workerLive = Layer.effectDiscard(
 
     const dispatchContinuation = Effect.fn("ProviderContinuationService.dispatchContinuation")(
       function* (request: ProviderContinuationRequests.ProviderContinuationRequest) {
+        // Recovery can offer durable completions after command-ready. Guard
+        // automatic dispatch here rather than relying on effect timestamps.
+        if (!allowAutomaticResume) {
+          if (request.delegatedCompletion !== undefined) {
+            yield* clearRetryAttempt(
+              delegatedCompletionRetryKey(request, request.delegatedCompletion),
+            );
+          }
+          const clear = Effect.suspend(() =>
+            request.clearIfCurrent !== undefined
+              ? request.clearIfCurrent()
+              : (request.dispatchIfCurrent?.(Effect.void) ?? Effect.void),
+          );
+          yield* clear.pipe(
+            Effect.catchCause((cause) =>
+              Effect.logWarning("sandbox.continuation-clear-failed", {
+                threadId: request.threadId,
+                cause,
+              }),
+            ),
+          );
+          return;
+        }
         const projection = yield* threads.getThreadRecords(
           request.threadId,
           ["messages", "runs", "providerTurns"],
