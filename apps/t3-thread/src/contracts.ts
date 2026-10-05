@@ -23,6 +23,11 @@ import {
   ProjectRequestRef,
   ProjectRequestsListInput,
   ProjectRequestUpdateInput,
+  ProjectDashboard,
+  ProjectDashboardError,
+  ProjectDashboardGetInput,
+  ProjectDashboardSetTrackerInput,
+  ProjectDashboardSetWidgetsInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -461,6 +466,24 @@ const WsProjectRequestsListRpc = Rpc.make(WS_METHODS.projectRequestsList, {
   error: projectRequestError,
 });
 
+// Project page widgets and tracker repository.
+const projectDashboardError = Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]);
+const WsProjectDashboardGetRpc = Rpc.make(WS_METHODS.projectDashboardGet, {
+  payload: ProjectDashboardGetInput,
+  success: ProjectDashboard,
+  error: projectDashboardError,
+});
+const WsProjectDashboardSetWidgetsRpc = Rpc.make(WS_METHODS.projectDashboardSetWidgets, {
+  payload: ProjectDashboardSetWidgetsInput,
+  success: ProjectDashboard,
+  error: projectDashboardError,
+});
+const WsProjectDashboardSetTrackerRpc = Rpc.make(WS_METHODS.projectDashboardSetTracker, {
+  payload: ProjectDashboardSetTrackerInput,
+  success: ProjectDashboard,
+  error: projectDashboardError,
+});
+
 export const WsRpcGroup = RpcGroup.make(
   WsServerGetConfigRpc,
   WsOrchestrationDispatchCommandRpc,
@@ -477,4 +500,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectRequestsCreateRpc,
   WsProjectRequestsUpdateRpc,
   WsProjectRequestsListRpc,
+  WsProjectDashboardGetRpc,
+  WsProjectDashboardSetWidgetsRpc,
+  WsProjectDashboardSetTrackerRpc,
 );
