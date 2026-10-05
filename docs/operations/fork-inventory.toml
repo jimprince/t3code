@@ -1535,3 +1535,13 @@ depends_on = [
 ]
 roles = []
 note = "Remote parents are optional metadata, persisted only by the child server. Disconnected, archived, missing, or cyclic parents do not hide the child. Servers do not traverse or mutate remote descendants; client presentation combines connected environments. Fork migration 12 reserves the nullable JSON column independently of the V1 core replacement."
+
+[[patch]]
+name = "fork-project-dashboard-widgets"
+subject = "feat(projects): configurable dashboard widgets"
+class = "product"
+purpose = "Turn the project page into an ordered, per-project list of widgets with a Requests widget that shows each ask's stage and owner, a Release widget derived from request stages, worker rows that name the request they serve, and an explicit Gitea tracker repository per project."
+retire_when = "Upstream provides configurable project dashboards with request tracking, or the project page is retired."
+depends_on = ["fork-request-ledger", "fork-orchestrators-view"]
+roles = []
+note = "Widget order (per orchestrator root thread) and tracker repositories (per T3 project) live in <stateDir>/project-dashboards.json, written atomically under a process-wide lock and read on demand, behind projectDashboard.get/setWidgets/setTracker and t3-thread dashboard set and project tracker set. Widget ids are open strings so later concerns (roadmap, canvas) add widgets without a schema change; clients drop unknown ids and default to requests, needs-you, release, roadmap, working, blocked, done, new-request, issues, prs, canvas, automations. A configured tracker (owner/repo on the first Gitea instance, or a repository URL) wins over the git remote in ProjectIssuesService.repositoryForProject, so the ledger, board and capture all use it. The Release widget has no store: next release is stage awaiting-release, shipped is stage needs-test grouped by milestone with the posted test step. Mobile shows read-only request and release lines under each project."
