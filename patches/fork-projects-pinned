@@ -1,6 +1,6 @@
-Bottom: 67b9981620fbadd6c4b8cb152c5f0c420df8acc1
-Top:    9f850e00704a421bdf0fd65700f9100c9b0fb8c8
+Bottom: be2c35c8a8df69e59e5b7aeb5d3d20c95bb4473f
+Top:    487ee4bbcca414e780ce50ee6b08e35d3a3771c1
 Author: brad <bradprin@live.com>
-Date:   2026-10-05 22:32:38 +0000
+Date:   2026-10-05 23:02:59 +0000
 
 feat(projects): pinned top-level threads are projects, listed first
