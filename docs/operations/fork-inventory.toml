@@ -481,3 +481,24 @@ id = "rpc-scope-map-relocation-951"
 date = "2026-07-29"
 decided = "relocate"
 rationale = "Upstream moved the RPC scope map into auth/RpcAuthorization.ts and type-coupled it to WsRpcGroup. Keep the fork's transfer, recovery, and headless scopes at that new location so missing scope coverage remains a compile-time error."
+
+[[patch]]
+name = "fork-workspace-file-uploads"
+subject = "feat(web): upload files into workspace via drag-and-drop"
+class = "product"
+purpose = "Let operators drop files onto the files pane to upload them (binary-safe, collision auto-rename) into the workspace root of the paired server."
+retire_when = "Upstream ships a binary-capable workspace upload RPC with drag-and-drop in the files pane."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "Reorganized 2026-09-06 from fork-web-files-upload."
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Retain binary uploads on native V2 project commands and scope middleware; isolate upload RPC and drop controller in fork-owned modules, preserving directory and path-search refresh."
+
+[[patch.decision]]
+id = "upstream-directory-entry-refresh"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Keep the upload RPC and drop overlay alongside upstream's incremental FileTree rendering, and refresh the new directory-entry and path-search data sources after a successful upload instead of the retired project entries query."
