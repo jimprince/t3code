@@ -155,3 +155,30 @@ describe("prebuilt launch", () => {
     }
   });
 });
+
+it("streams unscoped agent status under a 512 MiB heap cap", async () => {
+  await run(process.execPath, ["scripts/build.mjs"], { cwd: workspace });
+  const result = await run(process.execPath, ["tests/fixtures/status-smoke.mjs"], {
+    cwd: workspace,
+    timeout: 195_000,
+  });
+  expect(JSON.parse(result.stdout)).toMatchObject({
+    command: "agent status",
+    agents: 48,
+    heapCapMiB: 512,
+    status: "pass",
+  });
+}, 210_000);
+
+it("streams threads JSON read-only under a 512 MiB heap cap", async () => {
+  await run(process.execPath, ["scripts/build.mjs"], { cwd: workspace });
+  const result = await run(process.execPath, ["tests/fixtures/threads-smoke.mjs"], {
+    cwd: workspace,
+    timeout: 60_000,
+  });
+  expect(JSON.parse(result.stdout)).toMatchObject({
+    command: "threads --json",
+    heapCapMiB: 512,
+    status: "pass",
+  });
+}, 65_000);

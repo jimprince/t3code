@@ -1,0 +1,4 @@
+id = "t3-thread-prebuilt-launch"
+category = "performance"
+functionality = "worker threads"
+text = "Worker-thread commands use prebuilt JavaScript, idle watchers poll less often, and missing saved workers no longer abort status listings."
