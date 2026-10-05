@@ -23,6 +23,9 @@ const RPC_METHODS = {
   projectRequestsCreate: WS_METHODS.projectRequestsCreate,
   projectRequestsUpdate: WS_METHODS.projectRequestsUpdate,
   projectRequestsList: WS_METHODS.projectRequestsList,
+  projectDashboardGet: WS_METHODS.projectDashboardGet,
+  projectDashboardSetWidgets: WS_METHODS.projectDashboardSetWidgets,
+  projectDashboardSetTracker: WS_METHODS.projectDashboardSetTracker,
 } as const;
 
 const makeT3RpcClient = RpcClient.make(WsRpcGroup);
@@ -63,7 +66,10 @@ export class T3RpcClient {
       | "threadIssuesUnlink"
       | "projectRequestsCreate"
       | "projectRequestsUpdate"
-      | "projectRequestsList",
+      | "projectRequestsList"
+      | "projectDashboardGet"
+      | "projectDashboardSetWidgets"
+      | "projectDashboardSetTracker",
     input: unknown,
   ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<
