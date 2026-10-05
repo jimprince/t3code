@@ -98,9 +98,11 @@ export interface OrchestrationProposedPlan {
 
 export interface OrchestrationThread {
   parentThreadId?: string | null;
+  remoteParent?: { environmentId: string; threadId: string } | null;
   id: string;
   projectId: string;
   title: string;
+  scope?: string | null;
   modelSelection: ModelSelection;
   runtimeMode: string;
   interactionMode: string;
@@ -133,9 +135,11 @@ export interface OrchestrationShellSnapshot {
 
 export interface OrchestrationThreadShell {
   parentThreadId?: string | null;
+  remoteParent?: { environmentId: string; threadId: string } | null;
   id: string;
   projectId: string;
   title: string;
+  scope?: string | null;
   modelSelection: ModelSelection;
   runtimeMode: string;
   interactionMode: string;
@@ -200,6 +204,8 @@ export interface SavedAgent {
 export type NotificationLevel = "all" | "attention" | "none";
 
 export interface SavedSubscription {
+  /** Implicit parent routing, refreshed from the current nesting rather than a saved opt-in. */
+  nestingDerived?: boolean;
   /** Opt-in inactivity monitoring; zero or absent disables it. */
   inactivityMinutes?: number;
   inactivityObservation?: {
@@ -209,7 +215,7 @@ export interface SavedSubscription {
     observedAt: string;
   } | null;
   level?: NotificationLevel;
-  /** Minutes between unanswered nested-child reminders; zero disables reminders. */
+  /** Minutes before the single unanswered nested-child reminder; zero disables reminders. */
   inputReminderMinutes?: number;
   lastDirectMessageTurnId?: string | null;
   errorEventKey?: string | null;
@@ -218,6 +224,8 @@ export interface SavedSubscription {
   subscriberThreadId: string;
   subscriberAgentName: string | null;
   subscriberEnvironment: string;
+  /** Stable descriptor ID for remote-parent routing, independent of saved aliases. */
+  subscriberEnvironmentId?: string;
   sourceThreadId: string;
   sourceAgentName: string | null;
   sourceEnvironment: string;
@@ -268,6 +276,8 @@ export interface SavedNotification {
   subscriberThreadId: string;
   subscriberAgentName: string | null;
   subscriberEnvironment: string;
+  /** Stable descriptor ID for remote-parent routing, independent of saved aliases. */
+  subscriberEnvironmentId?: string;
   sourceThreadId: string;
   sourceAgentName: string | null;
   sourceEnvironment: string;

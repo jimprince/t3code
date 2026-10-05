@@ -543,9 +543,9 @@ t3-thread create \
 
 ### Notification levels and quiet results
 
-Nested workers waiting for input remind their subscribed parent every 45 minutes,
-including the pending question. Configure with `--input-reminder-minutes <minutes>`
-on `create` or `subscribe`; zero disables repeats. Answered, settled, archived or
+Nested workers waiting for input or approval notify their current parent even without
+a subscription, then send one reminder after 20 minutes, including the pending question. Configure with `--input-reminder-minutes <minutes>`
+on `create` or `subscribe`; zero disables the reminder. Answered, settled, archived or
 unnested workers stop reminders. See [Thread communication](THREAD_COMMUNICATION.md).
 
 The first delivered notice includes a short guide once per subscriber, across
@@ -991,6 +991,10 @@ first-message titling. Change a title at any time with
 `agent rename` form also works). This can rename the calling thread; it does not
 start or interrupt a provider turn. The command verifies the server title and
 updates matching local aliases after success.
+
+Project orchestrators can also publish a concise scope beside their title with
+`--scope "Coordinates the entire repo"`. Use `--clear-scope` to remove it. The
+scope is server-owned and appears in `threads` and `status` output on every machine.
 
 ## Timed project automations
 
