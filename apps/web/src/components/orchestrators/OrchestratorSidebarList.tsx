@@ -12,6 +12,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, CircleAlertIcon, UsersIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
+import { useEnvironments } from "../../state/environments";
 import { useProjects, useThreadShells } from "../../state/entities";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -115,6 +116,7 @@ function ProjectRow({ summary }: { readonly summary: OrchestratorSummary }) {
 export function OrchestratorSidebarList() {
   const projects = useProjects();
   const threads = useThreadShells();
+  const { environments } = useEnvironments();
   const navigate = useNavigate();
   const lastVisitedAtByThreadKey = useUiStateStore((state) => state.threadLastVisitedAtById);
   const [quietExpanded, setQuietExpanded] = useState(false);
@@ -249,6 +251,16 @@ export function OrchestratorSidebarList() {
                         />
                         <span className="min-w-0 flex-1 truncate text-sidebar-foreground">
                           {thread.title}
+                          {thread.remoteParent && (
+                            <span className="text-sidebar-muted-foreground">
+                              {" "}
+                              · parent on{" "}
+                              {environments.find(
+                                (environment) =>
+                                  environment.environmentId === thread.remoteParent?.environmentId,
+                              )?.label ?? thread.remoteParent.environmentId}
+                            </span>
+                          )}
                         </span>
                         <span className="shrink-0 text-3xs text-sidebar-muted-foreground">
                           {presentation.label}

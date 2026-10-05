@@ -160,6 +160,7 @@ import {
 } from "./sidebar/SidebarNestedThreadToggle";
 import { SidebarThreadRowStatus } from "./sidebar/SidebarThreadRowStatus";
 import { useNowMinute } from "../hooks/useNowMinute";
+import { threadParentKey } from "@t3tools/client-runtime/state/thread-status";
 import { useEnvironments, usePrimaryEnvironmentId } from "../state/environments";
 import {
   readThreadShell,
@@ -1189,8 +1190,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   nestedChildCount?: number;
   nestedActiveCount?: number;
   nestedInputCount?: number;
-  nestedInputChildId?: ThreadId | undefined;
-  onOpenNestedInput?: (parent: ScopedThreadRef, childId: ThreadId) => void;
+  parentEnvironmentLabel?: string | null;
+  nestedInputChildRef?: ScopedThreadRef | undefined;
+  onOpenNestedInput?: (parent: ScopedThreadRef, child: ScopedThreadRef) => void;
   nestDropTarget?: boolean;
   reorderDropEdge?: "before" | "after" | null;
   nestedChildrenExpanded?: boolean;
@@ -1224,6 +1226,10 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
   );
   const nestedDepth = props.nestedDepth ?? 0;
   const nestedSubRow = nestedDepth > 0;
+  const remoteParentLabel =
+    thread.remoteParent == null || nestedSubRow
+      ? null
+      : (props.parentEnvironmentLabel ?? thread.remoteParent.environmentId);
   const threadKey = scopedThreadKey(threadRef);
   const { leaseLiveStatus, rowRef } = useSidebarRowSubscriptionLease(props.isActive);
   const isRegeneratingTitle = thread.titleRegeneration != null;
@@ -1692,6 +1698,9 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       )}
     >
       {thread.title}
+      {remoteParentLabel && (
+        <span className="text-muted-foreground"> · parent on {remoteParentLabel}</span>
+      )}
     </span>
   );
   const accessibleTitle = isRenaming ? null : <span className="sr-only">{thread.title}</span>;
@@ -1793,8 +1802,8 @@ const SidebarThreadRow = memo(function SidebarThreadRow(props: {
       <SidebarNestedInputAttention
         inputCount={props.nestedInputCount!}
         onOpenInput={() => {
-          if (props.nestedInputChildId)
-            props.onOpenNestedInput?.(threadRef, props.nestedInputChildId);
+          if (props.nestedInputChildRef)
+            props.onOpenNestedInput?.(threadRef, props.nestedInputChildRef);
         }}
       />
     ) : null;
@@ -3341,10 +3350,10 @@ export default function Sidebar() {
   );
 
   const openNestedInput = useCallback(
-    (parent: ScopedThreadRef, childId: ThreadId) => {
+    (parent: ScopedThreadRef, child: ScopedThreadRef) => {
       const key = scopedThreadKey(parent);
       setExpandedParents((keys) => (keys.includes(key) ? keys : [...keys, key]));
-      void navigateToThread(scopeThreadRef(parent.environmentId, childId));
+      void navigateToThread(child);
     },
     [navigateToThread, setExpandedParents],
   );
@@ -4007,8 +4016,10 @@ export default function Sidebar() {
                   : null;
               const overThread = overKey === null ? undefined : threadByKey.get(overKey);
               const sameSiblingBucket =
-                activeThread.parentThreadId != null &&
-                overThread?.parentThreadId === activeThread.parentThreadId &&
+                threadParentKey(activeThread) !== null &&
+                overThread !== undefined &&
+                threadParentKey(overThread) === threadParentKey(activeThread) &&
+                overThread.environmentId === activeThread.environmentId &&
                 (overThread.pinnedAt != null) === (activeThread.pinnedAt != null);
               const reorderDropEdge: "before" | "after" | null =
                 nestTarget === null &&
@@ -4149,8 +4160,10 @@ export default function Sidebar() {
       (id) => {
         const targetThread = threadByKey.get(id);
         const sameSiblingBucket =
-          source.parentThreadId != null &&
-          targetThread?.parentThreadId === source.parentThreadId &&
+          threadParentKey(source) !== null &&
+          targetThread !== undefined &&
+          threadParentKey(targetThread) === threadParentKey(source) &&
+          targetThread.environmentId === source.environmentId &&
           (targetThread.pinnedAt != null) === (source.pinnedAt != null);
         if (sameSiblingBucket) return true;
         const target = resolveSidebarDropTarget(
@@ -4235,15 +4248,8 @@ export default function Sidebar() {
               String(event.over.id),
               activeSection,
             );
-      const activeParentThreadId = activeThread.parentThreadId ?? null;
-      const activeParentKey =
-        activeParentThreadId === null
-          ? null
-          : scopedThreadKey(scopeThreadRef(activeThread.environmentId, activeParentThreadId));
-      const overParentKey =
-        nestParent?.parentThreadId == null
-          ? null
-          : scopedThreadKey(scopeThreadRef(nestParent.environmentId, nestParent.parentThreadId));
+      const activeParentKey = threadParentKey(activeThread);
+      const overParentKey = nestParent === undefined ? null : threadParentKey(nestParent);
       const pointer = dragSensorRef.current?.coordinates();
       const reorderDropEdge =
         event.over !== null &&
@@ -4258,7 +4264,11 @@ export default function Sidebar() {
         activeParentKey === null
           ? []
           : (sidebarChildren.get(activeParentKey)?.children ?? [])
-              .filter((child) => (child.pinnedAt != null) === (activeThread.pinnedAt != null))
+              .filter(
+                (child) =>
+                  child.environmentId === activeThread.environmentId &&
+                  (child.pinnedAt != null) === (activeThread.pinnedAt != null),
+              )
               .map((child) => scopedThreadKey(scopeThreadRef(child.environmentId, child.id)));
       const intent = resolveSidebarThreadDropIntent({
         activeKey,
@@ -4797,16 +4807,16 @@ export default function Sidebar() {
         const isSnoozed = snoozedThreadKeysRef.current.has(threadKey);
         const isPinned = thread.pinnedAt != null;
         const siblingOrder =
-          thread.parentThreadId == null
+          threadParentKey(thread) === null
             ? isPinned
               ? pinnedKeys
               : activeKeys
-            : (
-                sidebarChildren.get(
-                  scopedThreadKey(scopeThreadRef(thread.environmentId, thread.parentThreadId)),
-                )?.children ?? []
-              )
-                .filter((child) => (child.pinnedAt != null) === isPinned)
+            : (sidebarChildren.get(threadParentKey(thread)!)?.children ?? [])
+                .filter(
+                  (child) =>
+                    child.environmentId === thread.environmentId &&
+                    (child.pinnedAt != null) === isPinned,
+                )
                 .map((child) => scopedThreadKey(scopeThreadRef(child.environmentId, child.id)));
         const siblingIndex = siblingOrder.indexOf(threadKey);
         const supportsSectionReorder = isPinned
@@ -5895,14 +5905,23 @@ export default function Sidebar() {
                             // sortable wrapper keeps its identity during a drag.
                             key={`${threadKey}:${rowVariant}:depth-${nestedDepth}`}
                             nestedDepth={nestedDepth}
+                            parentEnvironmentLabel={
+                              thread.remoteParent
+                                ? (environmentLabelById.get(thread.remoteParent.environmentId) ??
+                                  null)
+                                : null
+                            }
                             nestedChildCount={sidebarChildren.get(threadKey)?.children.length ?? 0}
                             nestedActiveCount={sidebarChildren.get(threadKey)?.activeCount ?? 0}
                             nestedInputCount={
                               sidebarChildren.get(threadKey)?.inputChildren.length ?? 0
                             }
-                            nestedInputChildId={
-                              sidebarChildren.get(threadKey)?.inputChildren[0]?.id
-                            }
+                            nestedInputChildRef={(() => {
+                              const child = sidebarChildren.get(threadKey)?.inputChildren[0];
+                              return child
+                                ? scopeThreadRef(child.environmentId, child.id)
+                                : undefined;
+                            })()}
                             onOpenNestedInput={openNestedInput}
                             nestDropTarget={nestTargetKey === threadKey}
                             reorderDropEdge={
