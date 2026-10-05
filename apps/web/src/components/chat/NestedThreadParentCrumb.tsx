@@ -20,7 +20,11 @@ export function NestedThreadParentCrumb({ threadRef }: { threadRef: ScopedThread
   const router = useRouter();
   const thread = useThreadShell(threadRef);
   const parent = useThreadShell(
-    thread?.parentThreadId ? scopeThreadRef(thread.environmentId, thread.parentThreadId) : null,
+    thread?.remoteParent
+      ? scopeThreadRef(thread.remoteParent.environmentId, thread.remoteParent.threadId)
+      : thread?.parentThreadId
+        ? scopeThreadRef(thread.environmentId, thread.parentThreadId)
+        : null,
   );
   if (thread === null || parent === null || !isNestedUnder(thread, parent)) return null;
   const parentRef = scopeThreadRef(parent.environmentId, parent.id);

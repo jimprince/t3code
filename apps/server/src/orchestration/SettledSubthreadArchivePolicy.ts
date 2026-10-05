@@ -4,6 +4,7 @@ type ArchiveThread = Pick<
   OrchestrationThreadShell,
   | "id"
   | "parentThreadId"
+  | "remoteParent"
   | "archivedAt"
   | "settledOverride"
   | "updatedAt"
@@ -31,7 +32,7 @@ export function isSettledSubthreadArchiveCandidate(
   settledBefore: string,
 ): boolean {
   if (
-    thread.parentThreadId == null ||
+    (thread.parentThreadId == null && thread.remoteParent == null) ||
     thread.archivedAt !== null ||
     thread.settledOverride !== "settled" ||
     thread.settledAt === null ||

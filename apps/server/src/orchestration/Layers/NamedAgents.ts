@@ -30,7 +30,8 @@ function liveIncarnation(snapshot: OrchestrationShellSnapshot, project: Orchestr
       (thread) =>
         thread.projectId === project.id &&
         thread.archivedAt === null &&
-        (thread.parentThreadId ?? null) === null,
+        (thread.parentThreadId ?? null) === null &&
+        thread.remoteParent == null,
     ) ?? null
   );
 }
