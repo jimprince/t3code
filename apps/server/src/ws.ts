@@ -181,6 +181,8 @@ import * as PullRequestSyncReactor from "./orchestration/PullRequestSyncReactor.
 import * as ThreadIssueService from "./orchestration/ThreadIssueService.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as RequestLedger from "./projectIssues/RequestLedger.ts";
+import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
+import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
@@ -689,6 +691,9 @@ const makeWsRpcLayer = (
       const threadIssues = yield* ThreadIssueService.make;
       const projectIssues = yield* ProjectIssuesService.make;
       const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
+      const projectDashboard = yield* ProjectDashboardService.make(
+        yield* ProjectDashboardStore.make,
+      );
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
@@ -3129,6 +3134,22 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.projectRequestsUpdate, requestLedger.update(input), {
             "rpc.aggregate": "project-issues",
           }),
+        [WS_METHODS.projectDashboardGet]: (input) =>
+          observeRpcEffect(WS_METHODS.projectDashboardGet, projectDashboard.get(input), {
+            "rpc.aggregate": "project-dashboard",
+          }),
+        [WS_METHODS.projectDashboardSetWidgets]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectDashboardSetWidgets,
+            projectDashboard.setWidgets(input),
+            { "rpc.aggregate": "project-dashboard" },
+          ),
+        [WS_METHODS.projectDashboardSetTracker]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectDashboardSetTracker,
+            projectDashboard.setTracker(input),
+            { "rpc.aggregate": "project-dashboard" },
+          ),
         [WS_METHODS.projectRequestsList]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsList, requestLedger.listForThread(input), {
             "rpc.aggregate": "project-issues",
