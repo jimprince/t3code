@@ -36,8 +36,10 @@ import {
   STATUS_LABELS,
   AWAITING_RELEASE_LABEL,
   NEEDS_TEST_LABEL,
+  PARKED_LABEL,
 } from "./projectIssues.logic.ts";
 import { ensureMilestone, setIssueMilestone } from "./giteaMilestones.ts";
+import { progressLineFor } from "./requestLedger.logic.ts";
 import {
   fallbackRequestItem,
   formatRequestIssueBody,
@@ -75,6 +77,9 @@ const GiteaComments = Schema.Array(
 );
 
 const RECENT_MESSAGE_LIMIT = 500;
+type LatestComment = { author: string; body: string; createdAt: string } | null;
+/** Each request's newest comment, kept until the issue's updated_at moves (process-wide). */
+const latestCommentCache = new Map<string, { updatedAt: string; comment: LatestComment }>();
 const COMMENT_EXCERPT_CHARS = 1_200;
 
 const fail = (message: string) => new ProjectIssuesError({ message });
@@ -197,7 +202,7 @@ export const make = (deps: {
     /** File one request issue and link it to its thread and orchestrator. */
     const fileRequest = (
       resolved: Resolved,
-      item: { title: string; kind: RequestKind; excerpt: string },
+      item: { title: string; kind: RequestKind; excerpt: string; parked?: boolean },
       messageId: string,
       itemIndex?: number,
     ) =>
@@ -206,6 +211,7 @@ export const make = (deps: {
         const labels = yield* ensureLabels(target.instance, target.repository, [
           REQUEST_LABEL,
           requestKindLabel(item.kind),
+          ...(item.parked ? [PARKED_LABEL] : []),
         ]);
         const issue = yield* api.request(
           target.instance,
@@ -396,6 +402,17 @@ export const make = (deps: {
 
     const startDrain = drain.pipe(Effect.forkDetach, Effect.asVoid);
 
+    /** Removes the parked label from an issue, when it has one. */
+    const unpark = (target: Resolved["target"], number: number) =>
+      Effect.gen(function* () {
+        const [parkedId] = yield* ensureLabels(target.instance, target.repository, [PARKED_LABEL]);
+        yield* api.send(
+          target.instance,
+          "DELETE",
+          `${GiteaApi.repositoryPath(target.repository)}/issues/${number}/labels/${parkedId}`,
+        );
+      });
+
     /**
      * Queue one typed message durably, then file it. The message is written to the
      * outbox before any Gitea call, so an outage delays filing but never loses it.
@@ -452,6 +469,7 @@ export const make = (deps: {
           title: input.title,
           kind: input.kind,
           excerpt: input.detail?.trim() || input.title,
+          ...(input.park ? { parked: true } : {}),
         };
         const stamp = yield* Clock.currentTimeMillis;
         const messageId = `agent:${input.threadId}:${stamp}`;
@@ -522,10 +540,19 @@ export const make = (deps: {
         if (!names.has(REQUEST_LABEL)) return yield* fail("That issue is not a request.");
         if (issue.state === "closed") return yield* fail("That request is already settled.");
         const stageLabels = [...STATUS_LABELS, AWAITING_RELEASE_LABEL, NEEDS_TEST_LABEL];
-        const known = yield* ensureLabels(target.instance, target.repository, stageLabels).pipe(
-          Effect.mapError((error) => fail(error.detail)),
-        );
-        for (const [index, name] of stageLabels.entries()) {
+        // Starting work on a parked idea takes it off the shelf.
+        if (input.status === "in-progress" && names.has(PARKED_LABEL)) {
+          yield* unpark(target, reference.number).pipe(
+            Effect.mapError((error) => fail(error.detail)),
+          );
+        }
+        const known =
+          input.status === undefined
+            ? []
+            : yield* ensureLabels(target.instance, target.repository, stageLabels).pipe(
+                Effect.mapError((error) => fail(error.detail)),
+              );
+        for (const [index, name] of input.status === undefined ? [] : stageLabels.entries()) {
           const wanted = name === input.status;
           if (wanted === names.has(name)) continue;
           yield* (
@@ -561,12 +588,15 @@ export const make = (deps: {
               .pipe(Effect.ignore);
           }
         }
-        if (input.comment?.trim()) {
+        // Every stage change leaves a short progress line on the issue, so the page can
+        // show the latest one even when the agent wrote no summary.
+        const note = input.comment?.trim() || progressLineFor(input.status);
+        if (note) {
           yield* api
-            .send(target.instance, "POST", `${path}/comments`, { body: input.comment.trim() })
+            .send(target.instance, "POST", `${path}/comments`, { body: note })
             .pipe(Effect.mapError((error) => fail(error.detail)));
         }
-        if (input.status === "in-progress") {
+        if (input.status === "in-progress" || input.status === undefined) {
           const url = `${target.instance.webOrigin.replace(/\/$/, "")}/${target.repository}/issues/${reference.number}`;
           yield* deps.threadIssues
             .link({ threadId: input.threadId, reference: url })
@@ -650,13 +680,20 @@ export const make = (deps: {
         const issues = yield* Effect.forEach(
           result.issues,
           (issue) => {
-            if (!issue.isRequest || issue.status !== "needs-review" || issue.comments === 0) {
+            if (!issue.isRequest || issue.closedAt !== null || issue.comments === 0) {
               return Effect.succeed(issue);
             }
             const instance = instances.find(
               (candidate) => new URL(candidate.webOrigin).host.toLowerCase() === issue.host,
             );
             if (!instance) return Effect.succeed(issue);
+            const cacheKey = `${issue.host}/${issue.repository}#${issue.number}`;
+            const cached = latestCommentCache.get(cacheKey);
+            if (cached && cached.updatedAt === issue.updatedAt) {
+              return Effect.succeed(
+                cached.comment ? { ...issue, latestComment: cached.comment } : issue,
+              );
+            }
             return api
               .request(
                 instance,
@@ -666,16 +703,15 @@ export const make = (deps: {
               .pipe(
                 Effect.map((comments) => {
                   const latest = comments.at(-1);
-                  return latest
+                  const comment: LatestComment = latest
                     ? {
-                        ...issue,
-                        latestComment: {
-                          author: latest.user?.login ?? "",
-                          body: latest.body.slice(0, COMMENT_EXCERPT_CHARS),
-                          createdAt: latest.created_at,
-                        },
+                        author: latest.user?.login ?? "",
+                        body: latest.body.slice(0, COMMENT_EXCERPT_CHARS),
+                        createdAt: latest.created_at,
                       }
-                    : issue;
+                    : null;
+                  latestCommentCache.set(cacheKey, { updatedAt: issue.updatedAt, comment });
+                  return comment ? { ...issue, latestComment: comment } : issue;
                 }),
                 Effect.orElseSucceed(() => issue),
               );
@@ -697,6 +733,7 @@ export const make = (deps: {
       update,
       listForThread,
       resolveThread,
+      unpark,
     };
   });
 
