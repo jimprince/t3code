@@ -17,6 +17,8 @@ import * as Option from "effect/Option";
 import * as Result from "effect/Result";
 import * as Schema from "effect/Schema";
 
+import { validateChatMutation } from "../forkProjects/ProjectKinds.ts";
+
 import * as EventSink from "../orchestration-v2/EventSink.ts";
 import * as IdAllocator from "../orchestration-v2/IdAllocator.ts";
 import * as LegacyV1ThreadImporter from "../orchestration-v2/legacy/LegacyV1ThreadImporter.ts";
@@ -34,6 +36,8 @@ import * as ProjectEnrichmentService from "./ProjectEnrichmentService.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 
 export interface ProjectCreateInput extends ProjectCreatePayload {
+  /** Server-owned capability, absent from public create payloads. */
+  readonly kind?: "workspace" | "chat";
   readonly commandId: CommandId;
   readonly projectId: ProjectId;
 }
@@ -163,6 +167,7 @@ export const make = Effect.gen(function* () {
     enrichment: ProjectEnrichmentService.ProjectEnrichment | null,
   ): Project => ({
     id: row.projectId,
+    kind: row.kind ?? "workspace",
     title: row.title,
     workspaceRoot: row.workspaceRoot,
     repositoryIdentity: enrichment?.repositoryIdentity ?? null,
@@ -177,11 +182,25 @@ export const make = Effect.gen(function* () {
     deletedAt: row.deletedAt,
   });
 
+  const assertMutable = (row: ProjectStore.ProjectRow, input: object) =>
+    validateChatMutation(row, input).pipe(
+      Effect.mapError(
+        (cause) =>
+          new ProjectOperationError({
+            operation: "dispatch-project-command",
+            projectId: row.projectId,
+            cause,
+          }),
+      ),
+    );
+
   const hydrate = Effect.fn("ProjectService.hydrate")(function* (row: ProjectStore.ProjectRow) {
     const enrichment =
-      row.deletedAt === null
-        ? yield* projectEnrichment.getAvailable(row.workspaceRoot)
-        : yield* projectEnrichment.peek(row.workspaceRoot);
+      row.kind === "chat"
+        ? null
+        : row.deletedAt === null
+          ? yield* projectEnrichment.getAvailable(row.workspaceRoot)
+          : yield* projectEnrichment.peek(row.workspaceRoot);
     return toProject(row, enrichment);
   });
 
@@ -346,6 +365,7 @@ export const make = Effect.gen(function* () {
         commandId: input.commandId,
         projectId: input.projectId,
         title: input.title,
+        kind: input.kind ?? "workspace",
         workspaceRoot,
         ...(input.scripts === undefined ? {} : { scripts: input.scripts }),
       });
@@ -360,6 +380,7 @@ export const make = Effect.gen(function* () {
       if (Option.isNone(existing)) {
         return yield* new ProjectNotFoundError({ projectId: input.projectId });
       }
+      yield* assertMutable(existing.value, input);
       const previousRoot = existing.value.workspaceRoot;
       const workspaceRoot =
         input.workspaceRoot === undefined
@@ -496,6 +517,7 @@ export const make = Effect.gen(function* () {
         return yield* new ProjectNotFoundError({ projectId });
       }
 
+      yield* assertMutable(existing.value, { delete: true });
       if (existing.value.deletedAt === null) {
         yield* deleteChildThreads(input);
       }
@@ -506,12 +528,14 @@ export const make = Effect.gen(function* () {
   );
 
   const enrichShell = (shell: OrchestrationProjectShell) =>
-    projectEnrichment.getAvailable(shell.workspaceRoot).pipe(
-      Effect.map((enrichment) => ({
-        ...shell,
-        repositoryIdentity: enrichment.repositoryIdentity,
-      })),
-    );
+    shell.kind === "chat"
+      ? Effect.succeed({ ...shell, repositoryIdentity: null })
+      : projectEnrichment.getAvailable(shell.workspaceRoot).pipe(
+          Effect.map((enrichment) => ({
+            ...shell,
+            repositoryIdentity: enrichment.repositoryIdentity,
+          })),
+        );
 
   const getShell: ProjectService["Service"]["getShell"] = Effect.fn("ProjectService.getShell")(
     function* (projectId) {
