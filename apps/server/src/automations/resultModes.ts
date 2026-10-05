@@ -2,7 +2,7 @@ import type { AutomationResultMode } from "@t3tools/contracts";
 
 const FILE = [
   "File each finding worth acting on as its own request, one per command:",
-  '`t3-thread request add "$T3_THREAD_ID" "<short title>" --kind <bug|feature|maintenance|change|test|question> --detail "<evidence and suggested action>"`.',
+  '`t3-thread request add "$T3_THREAD_ID" "<short title>" --kind <question|task|epic> [--bug] --detail "<evidence and suggested action>"`.',
   "Skip findings that duplicate an open request. End with a numbered summary of what you filed and what you left out, and why.",
 ];
 
