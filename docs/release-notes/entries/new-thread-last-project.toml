@@ -1,0 +1,4 @@
+id = "new-thread-last-project"
+category = "feature"
+functionality = "web sidebar"
+text = "New threads start in the project you are working in, or the one you last messaged, instead of always in General chat."
