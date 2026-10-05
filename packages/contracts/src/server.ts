@@ -612,6 +612,27 @@ export const ServerDirectEndpoint = Schema.Struct({
 });
 export type ServerDirectEndpoint = typeof ServerDirectEndpoint.Type;
 
+export const ServerHeadlessUpdateCheckStatus = Schema.Literals([
+  "queued",
+  "cooldown",
+  "unsupported",
+  "error",
+]);
+export type ServerHeadlessUpdateCheckStatus = typeof ServerHeadlessUpdateCheckStatus.Type;
+
+export const ServerHeadlessUpdateCheckInput = Schema.Struct({
+  clientVersion: TrimmedNonEmptyString,
+  serverVersion: TrimmedNonEmptyString,
+});
+export type ServerHeadlessUpdateCheckInput = typeof ServerHeadlessUpdateCheckInput.Type;
+
+export const ServerHeadlessUpdateCheckResult = Schema.Struct({
+  status: ServerHeadlessUpdateCheckStatus,
+  checkedAt: IsoDateTime,
+  message: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type ServerHeadlessUpdateCheckResult = typeof ServerHeadlessUpdateCheckResult.Type;
+
 export const ServerConfig = Schema.Struct({
   environment: ExecutionEnvironmentDescriptor,
   auth: ServerAuthDescriptor,
@@ -883,10 +904,30 @@ export const ServerLifecycleStreamLegacyThreadMigrationEvent = Schema.Struct({
 export type ServerLifecycleStreamLegacyThreadMigrationEvent =
   typeof ServerLifecycleStreamLegacyThreadMigrationEvent.Type;
 
+/** Announced before an intentional update takes this process offline. */
+export const ServerLifecycleUpdatingPayload = Schema.Struct({
+  at: IsoDateTime,
+  targetVersion: TrimmedNonEmptyString,
+  phase: Schema.Literals(["installing", "restarting", "failed"]),
+  etaSeconds: NonNegativeInt,
+  manualUpdateCommand: Schema.optionalKey(TrimmedNonEmptyString),
+  reason: Schema.optionalKey(TrimmedNonEmptyString),
+});
+export type ServerLifecycleUpdatingPayload = typeof ServerLifecycleUpdatingPayload.Type;
+
+export const ServerLifecycleStreamUpdatingEvent = Schema.Struct({
+  version: Schema.Literal(1),
+  sequence: NonNegativeInt,
+  type: Schema.Literal("updating"),
+  payload: ServerLifecycleUpdatingPayload,
+});
+export type ServerLifecycleStreamUpdatingEvent = typeof ServerLifecycleStreamUpdatingEvent.Type;
+
 export const ServerLifecycleStreamEvent = Schema.Union([
   ServerLifecycleStreamWelcomeEvent,
   ServerLifecycleStreamReadyEvent,
   ServerLifecycleStreamLegacyThreadMigrationEvent,
+  ServerLifecycleStreamUpdatingEvent,
 ]);
 export type ServerLifecycleStreamEvent = typeof ServerLifecycleStreamEvent.Type;
 
