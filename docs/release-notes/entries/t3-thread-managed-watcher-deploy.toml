@@ -1,0 +1,4 @@
+id = "t3-thread-managed-watcher-deploy"
+category = "fix"
+functionality = "worker operations"
+text = "Restart the persistent Linux thread watcher after a verified CLI deployment and preserve any predecessor runtime still used by a live leased watcher."
