@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "a5feadb65a3d5e6361e699762bb5dfe8765d8404",
+  "prev": "47b629c4d407ff22b28f6e73a31ee3d806955844",
   "head": "7358085b722210c6086a4e8fb27ac314cf08692b",
   "applied": [
     "fork-build-ci-compat",
@@ -21,7 +21,6 @@
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
     "fork-resource-recovery",
-    "fork-pr-dismissal",
     "fork-unsupported-pr-hosts",
     "fork-worktree-cleanup",
     "fork-gitea-connections",
@@ -192,9 +191,6 @@
     },
     "fork-page-agent-tray": {
       "oid": "5ebee716313f1a2821f013466470ddcaab635d37"
-    },
-    "fork-pr-dismissal": {
-      "oid": "d976c4c50086116814119c92e8286e4c3f1dffc9"
     },
     "fork-pr-project-exclusions": {
       "oid": "05f3d000d46880e092085a1e2a3a97298475427c"
