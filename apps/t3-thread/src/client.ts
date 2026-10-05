@@ -1,3 +1,4 @@
+import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
 import type { ProjectAutomation } from "./types.js";
@@ -141,12 +142,16 @@ function providerInventoryFromConfig(config: ServerConfig): ProviderModelInvento
 }
 
 export class RemoteEnvironmentClient {
-  readonly environment: SavedEnvironment;
+  private currentEnvironment: SavedEnvironment;
   private readonly rpcFactory: RpcFactory | null;
 
   constructor(environment: SavedEnvironment, options: { rpcFactory?: RpcFactory } = {}) {
-    this.environment = environment;
+    this.currentEnvironment = environment;
     this.rpcFactory = options.rpcFactory ?? null;
+  }
+
+  get environment(): SavedEnvironment {
+    return this.currentEnvironment;
   }
 
   static async pair(input: {
@@ -189,6 +194,7 @@ export class RemoteEnvironmentClient {
   }
 
   async describe(): Promise<ExecutionEnvironmentDescriptor> {
+    await this.refreshEnvironment();
     return fetchEnvironmentDescriptor(this.environment.httpBaseUrl);
   }
 
@@ -791,6 +797,7 @@ export class RemoteEnvironmentClient {
   }
 
   private async openRpc(): Promise<RemoteRpcClient> {
+    await this.refreshEnvironment();
     if (this.rpcFactory) {
       return this.rpcFactory(this.environment.wsBaseUrl);
     }
@@ -801,4 +808,9 @@ export class RemoteEnvironmentClient {
     });
     return new T3RpcClient(wsUrl);
   }
+  private async refreshEnvironment(): Promise<void> {
+    if (this.rpcFactory) return;
+    this.currentEnvironment = await refreshSavedEnvironmentSession(this.currentEnvironment);
+  }
+
 }
