@@ -253,7 +253,7 @@ describe("buildOrchestratorSummaries", () => {
     ).toEqual(["chief", "lone"]);
   });
 
-  it("keeps project trees in Threads only when Projects is disabled", () => {
+  it("keeps project trees in Threads only when Projects is disabled, except a pinned root's row", () => {
     const root = thread("root", null, { pinnedAt: "2026-10-01T00:00:00.000Z" });
     const child = thread("child", "root", { pinnedAt: "2026-10-01T00:00:00.000Z" });
     const standalone = thread("standalone", null);
@@ -267,6 +267,7 @@ describe("buildOrchestratorSummaries", () => {
     });
     const all = [root, child, standalone, archivedParent, orphan, finishedOnlyRoot, archivedChild];
     expect(threadsVisibleInThreadsMode(all, true).map((item) => item.id)).toEqual([
+      "root",
       "standalone",
       "archived-parent",
       "orphan",
