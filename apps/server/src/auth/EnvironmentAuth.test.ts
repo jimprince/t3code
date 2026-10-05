@@ -6,6 +6,7 @@ import {
 } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Duration from "effect/Duration";
 import * as Layer from "effect/Layer";
 import * as Redacted from "effect/Redacted";
 import * as Schema from "effect/Schema";
@@ -360,6 +361,85 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
 
       expect(verified.sessionId).toBe(bearer.sessionId);
     }).pipe(Effect.provide(layerEnvironmentAuth({ mode: "web", host: "192.168.1.50" }))),
+  );
+
+  it.effect("refreshes a bearer session while overlapping the presented token", () =>
+    Effect.gen(function* () {
+      const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const issued = yield* serverAuth.issueSession({
+        subject: "t3-thread",
+        scopes: ["orchestration:read"],
+        label: "t3-thread:local-mbp",
+      });
+      const presented = yield* serverAuth.authenticateHttpRequest(makeBearerRequest(issued.token));
+      const refreshed = yield* serverAuth.refreshSession(presented);
+      const oldToken = yield* serverAuth.authenticateHttpRequest(makeBearerRequest(issued.token));
+      const replacement = yield* serverAuth.authenticateHttpRequest(
+        makeBearerRequest(refreshed.access_token),
+      );
+
+      expect(oldToken.sessionId).toBe(presented.sessionId);
+      expect(replacement.subject).toBe(presented.subject);
+      expect(replacement.scopes).toEqual(presented.scopes);
+      expect(replacement.method).toBe(presented.method);
+      expect(replacement.client.label).toBe("t3-thread:local-mbp");
+      expect(refreshed.token_type).toBe("Bearer");
+    }).pipe(Effect.provide(layerEnvironmentAuth())),
+  );
+
+  it.effect("preserves scoped WebSocket tickets and rejects them after session revocation", () =>
+    Effect.gen(function* () {
+      const auth = yield* EnvironmentAuth.EnvironmentAuth;
+      const issued = yield* auth.issueSession({ scopes: ["orchestration:read"] });
+      const presented = yield* auth.authenticateHttpRequest(makeBearerRequest(issued.token));
+      const replacement = yield* auth.refreshSession(presented);
+      const refreshed = yield* auth.authenticateHttpRequest(
+        makeBearerRequest(replacement.access_token),
+      );
+      const ticket = yield* auth.issueWebSocketTicket(refreshed);
+      const request = { cookies: {}, headers: {}, url: `/ws?wsTicket=${ticket.ticket}` } as never;
+      const first = yield* auth.authenticateWebSocketUpgrade(request);
+      expect(first.scopes).toEqual(["orchestration:read"]);
+      yield* auth.revokeSession(refreshed.sessionId);
+      const revokedTicket = yield* Effect.flip(auth.authenticateWebSocketUpgrade(request));
+      expect(revokedTicket._tag).toBe("ServerAuthInvalidCredentialError");
+      const revoked = yield* Effect.flip(
+        auth.authenticateHttpRequest(makeBearerRequest(replacement.access_token)),
+      );
+      expect(revoked._tag).toBe("ServerAuthInvalidCredentialError");
+    }).pipe(Effect.provide(layerEnvironmentAuth())),
+  );
+
+  it.effect(
+    "refresh uses persisted scopes and rejects a principal revoked after authentication",
+    () =>
+      Effect.gen(function* () {
+        const auth = yield* EnvironmentAuth.EnvironmentAuth;
+        const issued = yield* auth.issueSession({ scopes: ["orchestration:read"] });
+        const principal = yield* auth.authenticateHttpRequest(makeBearerRequest(issued.token));
+        // A caller-supplied scope list must be ignored in favor of the persisted session's scopes.
+        const forged = { ...principal, scopes: ["access:write"] };
+        const replacement = yield* auth.refreshSession(forged);
+        const verified = yield* auth.authenticateHttpRequest(
+          makeBearerRequest(replacement.access_token),
+        );
+        expect(verified.scopes).toEqual(["orchestration:read"]);
+        yield* auth.revokeSession(principal.sessionId);
+        const rejected = yield* Effect.flip(auth.refreshSession(principal));
+        expect(rejected._tag).toBe("ServerAuthInvalidCredentialError");
+      }).pipe(Effect.provide(layerEnvironmentAuth())),
+  );
+
+  it.effect("does not authenticate an expired token for refresh", () =>
+    Effect.gen(function* () {
+      const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const expired = yield* serverAuth.issueSession({ ttl: Duration.zero });
+      const error = yield* serverAuth
+        .authenticateHttpRequest(makeBearerRequest(expired.token))
+        .pipe(Effect.flip);
+
+      expect(error._tag).toBe("ServerAuthInvalidCredentialError");
+    }).pipe(Effect.provide(layerEnvironmentAuth())),
   );
 
   it.effect("preserves pairing grants after rejecting scopes they do not grant", () =>
