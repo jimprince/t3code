@@ -1,0 +1,4 @@
+id = "sandbox-startup-session-guard"
+category = "fix"
+functionality = "development"
+text = "Development and test servers keep copied agent sessions stopped on startup; installed servers retain automatic recovery with custom data directories."
