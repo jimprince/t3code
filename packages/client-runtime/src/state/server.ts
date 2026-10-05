@@ -484,7 +484,7 @@ export function applyServerWelcomeEvent(
   current: EnvironmentServerWelcomeState,
   session: RpcSession,
   event: {
-    readonly type: "welcome" | "ready" | "legacyThreadMigration";
+    readonly type: "welcome" | "ready" | "legacyThreadMigration" | "updating";
     readonly payload: unknown;
   },
 ): EnvironmentServerWelcomeState {
@@ -1310,6 +1310,11 @@ export function createServerEnvironmentAtoms<R, E>(
         mode: "singleFlight",
         key: ({ environmentId }) => environmentId,
       },
+    }),
+    requestHeadlessUpdateCheck: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:server:request-headless-update-check",
+      tag: WS_METHODS.serverRequestHeadlessUpdateCheck,
+      concurrency: { mode: "singleFlight", key: ({ environmentId }) => environmentId },
     }),
   };
 }
