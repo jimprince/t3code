@@ -534,7 +534,7 @@ export function NewTaskFlowProvider(props: React.PropsWithChildren) {
   );
   // A thread without a project runs in a plain folder, so worktree mode
   // would leave it unsendable: it is always local and offers no choice.
-  const canChooseWorkspace = !isScratchDraft;
+  const canChooseWorkspace = !isScratchDraft && selectedProject?.kind !== "chat";
   const defaultWorkspaceMode: WorkspaceMode = canChooseWorkspace
     ? projectSettings.settings.defaultThreadEnvMode
     : "local";
