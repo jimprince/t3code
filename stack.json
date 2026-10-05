@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "47a50265987103b37b8f8446f8ce15dc0b7a1050",
-  "head": "7ad2651eacd6cec23a5b5c59a5a5d31bf5d21e1c",
+  "prev": "38b1a4fc5670bea2cf00ba5beb8c8a534fde241b",
+  "head": "40381d0a7508bcc46ae6d73c43948761bf0922fd",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -73,10 +73,11 @@
     "fork-project-roadmap",
     "fork-project-page-workflow",
     "fork-project-canvas",
-    "fork-project-task-types",
+    "fork-project-task-types"
+  ],
+  "unapplied": [
     "fork-scripts-automations"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
