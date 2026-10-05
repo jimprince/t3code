@@ -984,3 +984,26 @@ purpose = "Reduce operator CLI launches through explicit prebuilt JavaScript, re
 retire_when = "The worker operator CLI supplies equivalent prebuilt launch and adaptive polling behavior."
 depends_on = ["fork-worker-operations"]
 roles = []
+
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "keep-on-top"
+rationale = "Retain explicit Node bundle builds, source stamps, atomic runtime deployment and adaptive polling above the native V2 CLI."
+
+[[patch]]
+name = "fork-embedded-pages"
+subject = "feat(web): pin web pages as sidebar footer icons"
+class = "product"
+purpose = "Let users configure named web pages that open from sidebar footer icons in the main area, hosted per surface with an honest Open in browser fallback."
+retire_when = "Upstream offers configurable embedded or pinned web pages in the sidebar, or the fork stops showing them."
+depends_on = []
+roles = []
+note = "Stored as the shared server setting embeddedPages so one edit reaches every connected environment and mobile can read it. Desktop hosts pages in an Electron webview on the Browser panel's default-profile partition (no mixed-content block, first-party cookies). Web uses an iframe; http pages from an https app are shown as blocked with Open in browser, and SameSite=Lax login cookies cannot persist in a cross-site frame, so the header always offers Open in browser. Mobile lists pages under Settings > App and opens them in the in-app browser. Footer change is one mounted component so other footer icons rebase cleanly."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Reuse V2 shared settings persistence, existing sidebar footer mount and default-profile desktop webview; preserve explicit empty primary list and native usage model alias settings."
