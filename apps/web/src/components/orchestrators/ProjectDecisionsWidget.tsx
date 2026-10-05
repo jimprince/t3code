@@ -37,11 +37,12 @@ function DecisionAnswer({
               key={option.text}
               size="sm-multiline"
               variant={option.recommended ? "default" : "outline"}
+              className="max-w-full text-left"
               onClick={() => onAnswer({ option: option.text }, note.trim())}
             >
               {option.text}
               {option.recommended ? (
-                <span className="text-xs font-normal text-muted-foreground">recommended</span>
+                <span className="text-xs font-normal opacity-70">recommended</span>
               ) : null}
             </Button>
           ))}

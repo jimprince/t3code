@@ -623,6 +623,7 @@ export function applyLayoutOps(
 const DEFAULT_DASHBOARD_TYPES = [
   "requests",
   "needs-you",
+  "decisions",
   "release",
   "maintenance",
   "roadmap-summary",
