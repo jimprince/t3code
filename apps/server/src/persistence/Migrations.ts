@@ -11,7 +11,7 @@
 import * as Migrator from "effect/unstable/sql/Migrator";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
-import { reconcileV2PreviewMigration } from "./reconcileV2PreviewMigration.ts";
+import { forkV2MigrationEntries } from "./ForkV2Ledger.ts";
 
 // Import all migrations statically
 import Migration0001 from "./Migrations/001_OrchestrationEvents.ts";
@@ -81,7 +81,7 @@ import Migration0056 from "./Migrations/056_RemoveRedundantProjectionIndexes.ts"
  * Uses Migrator.fromRecord which parses the key format and
  * returns migrations sorted by ID.
  */
-export const migrationEntries = [
+const upstreamMigrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
   [3, "CheckpointDiffBlobs", Migration0003],
@@ -142,6 +142,8 @@ export const migrationEntries = [
   [56, "RemoveRedundantProjectionIndexes", Migration0056],
 ] as const;
 
+export const migrationEntries = forkV2MigrationEntries(upstreamMigrationEntries);
+
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
 
 const makeMigrationLoader = (throughId?: number) =>
@@ -176,14 +178,7 @@ export interface RunMigrationsOptions {
 export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {
-  const previewMigrations =
-    toMigrationInclusive === undefined || toMigrationInclusive >= 55
-      ? yield* reconcileV2PreviewMigration()
-      : [];
-  const executedMigrations = [
-    ...previewMigrations,
-    ...(yield* run({ loader: makeMigrationLoader(toMigrationInclusive) })),
-  ];
+  const executedMigrations = yield* run({ loader: makeMigrationLoader(toMigrationInclusive) });
   const migrations = executedMigrations.map(([id, name]) => `${id}_${name}`);
   yield* migrations.length === 0
     ? Effect.logDebug("Database schema is current")
