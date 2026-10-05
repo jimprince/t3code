@@ -39,6 +39,7 @@ import {
   AWAITING_RELEASE_LABEL,
   NEEDS_TEST_LABEL,
   PARKED_LABEL,
+  parseBlockedBy,
 } from "./projectIssues.logic.ts";
 import { ensureMilestone, setIssueMilestone } from "./giteaMilestones.ts";
 import {
@@ -92,6 +93,15 @@ type Answer = NonNullable<ProjectIssuesListResult["issues"][number]["answer"]>;
 /** Found answers never change, so they are kept for the life of the process. */
 const answerCache = new Map<string, Answer>();
 const COMMENT_EXCERPT_CHARS = 1_200;
+
+/** The issue with its newest comment, and any "Blocked by #N" that comment adds to its body's. */
+function withLatestComment(
+  issue: ProjectIssuesListResult["issues"][number],
+  comment: NonNullable<LatestComment>,
+): ProjectIssuesListResult["issues"][number] {
+  const blockedBy = [...new Set([...(issue.blockedBy ?? []), ...parseBlockedBy(comment.body)])];
+  return { ...issue, latestComment: comment, ...(blockedBy.length > 0 ? { blockedBy } : {}) };
+}
 
 const fail = (message: string) => new ProjectIssuesError({ message });
 
@@ -844,7 +854,7 @@ export const make = (deps: {
             const cached = latestCommentCache.get(cacheKey);
             if (cached && cached.updatedAt === issue.updatedAt) {
               return Effect.succeed(
-                cached.comment ? { ...issue, latestComment: cached.comment } : issue,
+                cached.comment ? withLatestComment(issue, cached.comment) : issue,
               );
             }
             return api
@@ -864,7 +874,7 @@ export const make = (deps: {
                       }
                     : null;
                   latestCommentCache.set(cacheKey, { updatedAt: issue.updatedAt, comment });
-                  return comment ? { ...issue, latestComment: comment } : issue;
+                  return comment ? withLatestComment(issue, comment) : issue;
                 }),
                 Effect.orElseSucceed(() => issue),
               );
