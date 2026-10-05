@@ -13,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ThreadIssueService from "../orchestration/ThreadIssueService.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import {
@@ -73,6 +74,7 @@ export const make = Effect.gen(function* () {
   const snapshots = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const settings = yield* ServerSettingsService;
   const api = yield* GiteaApi.make;
+  const threadIssues = yield* ThreadIssueService.make;
 
   const issueCache = new Map<string, { at: number; issues: ReadonlyArray<GiteaIssue> }>();
   const ownerCache = new Map<string, { at: number; login: string | null }>();
@@ -233,6 +235,40 @@ export const make = Effect.gen(function* () {
         for (const issue of items) {
           const labels = (issue.labels ?? []).map((label) => label.name);
           const issueKey = `${repositoryKey(target)}#${issue.number}`;
+          // Refresh persisted badge snapshots from the board's existing API read.
+          // sync checks that the link still exists, so unlink races cannot resurrect it.
+          for (const threadId of project.linkedThreads.get(issueKey) ?? []) {
+            const thread = yield* snapshots
+              .getThreadShellById(threadId)
+              .pipe(Effect.mapError(() => fail("Could not read linked thread issues.")));
+            const link =
+              thread._tag === "Some"
+                ? thread.value.issues?.find(
+                    (candidate) =>
+                      candidate.host === target.host &&
+                      candidate.repository === target.repository &&
+                      candidate.number === issue.number,
+                  )
+                : undefined;
+            if (link) {
+              yield* threadIssues
+                .sync({
+                  threadId,
+                  issue: {
+                    host: target.host,
+                    repository: target.repository,
+                    number: issue.number,
+                    url: link.url,
+                    snapshot: {
+                      title: issue.title,
+                      state: issue.state,
+                      syncedAt: DateTime.formatIso(yield* DateTime.now),
+                    },
+                  },
+                })
+                .pipe(Effect.ignore);
+            }
+          }
           issues.push({
             host: target.host,
             repository: target.repository,
