@@ -271,6 +271,7 @@ export function applyThreadDetailEvent(
         thread: {
           ...thread,
           ...(event.payload.title !== undefined ? { title: event.payload.title } : {}),
+          ...(event.payload.scope !== undefined ? { scope: event.payload.scope } : {}),
           ...(event.payload.titleState !== undefined
             ? { titleState: event.payload.titleState }
             : {}),
