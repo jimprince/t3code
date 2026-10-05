@@ -1,0 +1,51 @@
+name = "fork-general-chat"
+subject = "feat(projects): add repository-independent General Chat projects"
+class = "product"
+purpose = "Provide server-owned General Chat projects: the project kind contract and migrations, startup creation, decider guards, projection handling, sidebar grouping, and default compose behavior."
+retire_when = "Upstream ships an equivalent repository-independent chat project kind."
+depends_on = []
+roles = []
+note = "Reorganized 2026-09-06 from fork-general-chat-projects. Upstream ordering fixtures include the owning project required by General Chat metadata guards. Copied-state tests use T3_LIFECYCLE_FIXTURES, preserve the shipped migration ledger through the production runner, and create scoped disposable copies before writes."
+
+[[decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Port General Chat to native V2 project commands and receipts, preserving singleton IDs and imported kind metadata in a fork sidecar. Keep Scratch separate, kind guards and existing compose/grouping behavior."
+
+
+[[decision]]
+id = "upstream13612-scratch-threads"
+date = "2026-10-01"
+decided = "adapt"
+rationale = "Upstream 6b286ae8a adds threads without a project through a server-owned scratch folder on the non-git path, bound to a separate chat.newWithoutProject command. That is a workspace project in a hidden directory, not a repository-independent project kind, and it is not the fork's compose fallback, so General Chat stays. Keep upstream's useScratchProject wiring beside the fork's chat-kind partitioning; the retire_when condition is now close enough that a maintainer should weigh it against the 036/037 data transition."
+
+[[decision]]
+id = "new-thread-last-worked-project"
+date = "2026-09-25"
+decided = "adapt"
+decided_by = "brad"
+rationale = "New threads from the sidebar button and chat.new start in the open thread's or draft's project, else the most recently messaged project. General Chat stays the fallback compose target, and the palette's New chat entry still creates one directly."
+
+[[decision]]
+id = "upstream-project-repository-list-removal"
+date = "2026-09-20"
+decided = "narrow"
+rationale = "Upstream removed the project repository's listAll and deleteById queries. Retire the fork's kind-column edit to the removed list query while retaining General Chat kind persistence in the surviving upsert and getById paths."
+
+[[decision]]
+id = "upstream-web-type-import-cleanup"
+date = "2026-09-20"
+decided = "adapt"
+rationale = "Retain the General Chat thread extension while explicitly importing its surviving OrchestrationLatestTurn contract after upstream removed obsolete web type imports."
+
+[[decision]]
+id = "chat-enrichment-guard-951"
+date = "2026-07-29"
+decided = "retire"
+rationale = "Upstream adopted isChatProjectRow filtering in ProjectionSnapshotQuery enrichment, covering the fork guard. Retire the duplicate ws.ts enrichment and the related obsolete IPC, local API, and server stubs."
+[[decision]]
+id = "sidebar-project-header-styling"
+date = "2026-07-28"
+decided = "adapt"
+rationale = "The fork owns the General Chat structure (hideProjectHeader wrapper and chat affordance); upstream owns the design system. Preserve the structural additions while taking upstream styling."
