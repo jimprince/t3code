@@ -3135,6 +3135,10 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.projectRequestsSettle, requestLedger.settle(input), {
             "rpc.aggregate": "project-issues",
           }),
+        [WS_METHODS.projectRequestsSubmit]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsSubmit, requestLedger.submit(input), {
+            "rpc.aggregate": "project-issues",
+          }),
         [WS_METHODS.projectRequestsCreate]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsCreate, requestLedger.create(input), {
             "rpc.aggregate": "project-issues",

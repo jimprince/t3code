@@ -1,4 +1,4 @@
-import type { ThreadId } from "@t3tools/contracts";
+import type { ProjectIssue, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
 import { parseRequestMarker } from "./projectIssues.logic.ts";
@@ -8,9 +8,13 @@ import {
   fallbackRequestItem,
   formatRequestIssueBody,
   isObviouslyNotARequest,
+  formatFollowUpComment,
   parseRequestReference,
+  planRequestItem,
   progressLineFor,
+  requestCandidates,
 } from "./requestLedger.logic.ts";
+import { buildRequestItemsPrompt } from "../textGeneration/RequestItemsPrompt.ts";
 
 function turnStart(text: string, extra: Record<string, unknown> = {}) {
   return {
@@ -127,5 +131,101 @@ describe("progressLineFor", () => {
     expect(progressLineFor("awaiting-release")).toMatch(/next release/);
     expect(progressLineFor("needs-test")).toBeNull();
     expect(progressLineFor(undefined)).toBeNull();
+  });
+});
+
+describe("follow-ups instead of an issue per message", () => {
+  const issue = (number: number, overrides: Partial<ProjectIssue> = {}): ProjectIssue =>
+    ({
+      host: "git.example",
+      repository: "brad/gpu-transcriber",
+      number,
+      title: `Issue ${number}`,
+      url: `https://git.example/brad/gpu-transcriber/issues/${number}`,
+      status: "pending",
+      labels: [],
+      isRequest: false,
+      requestSource: null,
+      assignees: [],
+      comments: 0,
+      createdAt: "2026-10-05T00:00:00.000Z",
+      updatedAt: `2026-10-05T00:00:${String(number).padStart(2, "0")}.000Z`,
+      closedAt: null,
+      linkedThreadIds: [],
+      ...overrides,
+    }) as ProjectIssue;
+
+  it("offers the thread's linked issues first, then the project's open requests", () => {
+    const candidates = requestCandidates(
+      [
+        issue(17, { linkedThreadIds: ["voice" as ThreadId] }),
+        issue(30, { isRequest: true }),
+        issue(31),
+        issue(32, { isRequest: true, closedAt: "2026-10-05T01:00:00.000Z" }),
+      ],
+      "voice",
+    );
+    expect(candidates).toEqual([
+      { number: 17, title: "Issue 17", inThread: true },
+      { number: 30, title: "Issue 30", inThread: false },
+    ]);
+  });
+
+  const candidates = [
+    { number: 17, title: "Live chat", inThread: true },
+    { number: 30, title: "Bed temperature", inThread: false },
+  ];
+
+  it("comments follow-ups on the issue they continue and files only new work", () => {
+    const chat = { explicit: false, candidates, unsplit: false };
+    expect(planRequestItem({ kind: "change", existing: 17 }, chat)).toEqual({
+      action: "comment",
+      number: 17,
+    });
+    expect(planRequestItem({ kind: "deliverable", existing: 30 }, chat)).toEqual({
+      action: "comment",
+      number: 30,
+    });
+    expect(planRequestItem({ kind: "feature", existing: null }, chat)).toEqual({ action: "file" });
+    // A number the model invented is not an open issue: new work.
+    expect(planRequestItem({ kind: "feature", existing: 99 }, chat)).toEqual({ action: "file" });
+  });
+
+  it("never files questions from chat, but files everything from the New request box", () => {
+    const chat = { explicit: false, candidates, unsplit: false };
+    expect(planRequestItem({ kind: "question", existing: null }, chat)).toEqual({ action: "skip" });
+    expect(planRequestItem({ kind: "question", existing: 17 }, chat)).toEqual({ action: "skip" });
+    const box = { explicit: true, candidates, unsplit: false };
+    expect(planRequestItem({ kind: "question", existing: 17 }, box)).toEqual({ action: "file" });
+  });
+
+  it("without a model, follows the thread's newest linked issue", () => {
+    const unsplit = { explicit: false, candidates, unsplit: true };
+    expect(planRequestItem({ kind: "deliverable" }, unsplit)).toEqual({
+      action: "comment",
+      number: 17,
+    });
+    expect(
+      planRequestItem({ kind: "deliverable" }, { ...unsplit, candidates: [candidates[1]!] }),
+    ).toEqual({ action: "file" });
+  });
+
+  it("quotes the follow-up with a hidden marker", () => {
+    const body = formatFollowUpComment({
+      excerpt: "Just do the full version, number two.",
+      threadTitle: "Voice assistant",
+      messageId: "m-9",
+      item: 0,
+    });
+    expect(body).toContain("Follow-up from Brad in **Voice assistant**:");
+    expect(body).toContain("> Just do the full version, number two.");
+    expect(body).toContain('<!-- t3-request-followup {"messageId":"m-9","item":0} -->');
+  });
+
+  it("lists the open issues for the model, marking the conversation's own", () => {
+    const { prompt } = buildRequestItemsPrompt({ message: "Did it work?", candidates });
+    expect(prompt).toContain("#17 (this conversation): Live chat");
+    expect(prompt).toContain("#30: Bed temperature");
+    expect(buildRequestItemsPrompt({ message: "x" }).prompt).toContain("Open issues: none.");
   });
 });
