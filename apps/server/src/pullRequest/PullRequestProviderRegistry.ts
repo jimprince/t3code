@@ -1,3 +1,4 @@
+import * as GiteaPullRequestProvider from "./GiteaPullRequestProvider.ts";
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -36,8 +37,9 @@ export const make = Effect.gen(function* () {
   const drivers = yield* Effect.forEach(BuiltInDrivers.BUILT_IN_SOURCE_CONTROL_DRIVERS, (driver) =>
     driver.make.pipe(Effect.map((instance) => instance.pullRequests)),
   );
+  const gitea = yield* GiteaPullRequestProvider.make;
   return fromProviders(
-    drivers.filter((provider): provider is PullRequestProviderApi => provider !== null),
+    [gitea, ...drivers.filter((provider): provider is PullRequestProviderApi => provider !== null)],
   );
 });
 
