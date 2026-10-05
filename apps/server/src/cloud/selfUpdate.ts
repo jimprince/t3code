@@ -11,6 +11,7 @@ import * as Cause from "effect/Cause";
 import * as Config from "effect/Config";
 import * as Context from "effect/Context";
 import * as Duration from "effect/Duration";
+import * as DateTime from "effect/DateTime";
 import * as Effect from "effect/Effect";
 import * as HashSet from "effect/HashSet";
 import * as Option from "effect/Option";
@@ -23,6 +24,7 @@ import { HttpClient } from "effect/http";
 import { CLI_RELEASE_BASE_URL_ENV } from "@t3tools/shared/cliRelease";
 
 import * as ServerConfig from "../config.ts";
+import * as ServerLifecycleEvents from "../serverLifecycleEvents.ts";
 import * as DesktopAppUpdate from "../desktopUpdate/DesktopAppUpdate.ts";
 import * as ProcessRunner from "../processRunner.ts";
 import {
@@ -185,6 +187,25 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     yield* Config.String(CLI_RELEASE_BASE_URL_ENV).pipe(Config.option),
   );
   const inFlight = yield* Ref.make(false);
+  const lifecycle = yield* ServerLifecycleEvents.ServerLifecycleEvents;
+  const desktopTargets = new Map<string, string>();
+  const announce = Effect.fn("cloud.server_self_update.announce")(function* (
+    targetVersion: string,
+    phase: "installing" | "restarting" | "failed",
+    reason?: string,
+  ) {
+    yield* lifecycle.publish({
+      version: 1,
+      type: "updating",
+      payload: {
+        at: DateTime.formatIso(yield* DateTime.now),
+        targetVersion,
+        phase,
+        etaSeconds: phase === "failed" ? 0 : 30,
+        ...(reason ? { reason } : {}),
+      },
+    });
+  });
 
   const capability: ServerSelfUpdateCapability | null =
     serverConfig.mode === "desktop" ? "desktop-managed" : launcher.managed ? "boot-service" : null;
@@ -201,7 +222,12 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
       // update feed decides what it downloads, and the result carries what
       // it actually got.
       if (desktopAppUpdate.available) {
-        return yield* desktopAppUpdate.run(reportProgress);
+        const result = yield* desktopAppUpdate.run(reportProgress);
+        if (result.desktopUpdateToken !== undefined) {
+          desktopTargets.set(result.desktopUpdateToken, result.targetVersion);
+        }
+        yield* announce(result.targetVersion, "installing");
+        return result;
       }
       return yield* failWith(
         "This server is managed by the T3 Code desktop app on its machine; update the desktop app to update it.",
@@ -222,6 +248,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
     }
 
     return yield* Effect.gen(function* () {
+      yield* announce(targetVersion, "installing");
       yield* reportProgress("downloading");
       const paths = yield* ensurePinnedRuntimeInstalled({
         baseDir: serverConfig.baseDir,
@@ -311,6 +338,7 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
       );
 
       yield* reportProgress("installing");
+      yield* announce(targetVersion, "restarting");
       const updateId = yield* Effect.uninterruptible(
         launcher.requestUpdate({ targetVersion, dbPath: serverConfig.dbPath }).pipe(
           Effect.mapError((error) =>
@@ -331,13 +359,30 @@ export const make = Effect.fn("cloud.server_self_update.make")(function* () {
         runtimePath: paths.entryPath,
       });
       return { targetVersion, method: "boot-service" as const, updateId };
-    }).pipe(Effect.onError(() => Ref.set(inFlight, false)));
+    }).pipe(
+      Effect.onError((cause) =>
+        announce(targetVersion, "failed", String(Cause.squash(cause))).pipe(
+          Effect.andThen(Ref.set(inFlight, false)),
+        ),
+      ),
+    );
   });
 
   return ServerSelfUpdate.of({
     update,
-    commitDesktopUpdate: (requestId, onHandoffAccepted) =>
-      desktopAppUpdate.commit(requestId, onHandoffAccepted),
+    commitDesktopUpdate: (requestId, onHandoffAccepted) => {
+      const targetVersion = desktopTargets.get(requestId);
+      return (
+        targetVersion === undefined ? Effect.void : announce(targetVersion, "restarting")
+      ).pipe(
+        Effect.andThen(desktopAppUpdate.commit(requestId, onHandoffAccepted)),
+        Effect.onError((cause) =>
+          targetVersion === undefined || Cause.hasInterruptsOnly(cause)
+            ? Effect.void
+            : announce(targetVersion, "failed", String(Cause.squash(cause))),
+        ),
+      );
+    },
   });
 });
 
