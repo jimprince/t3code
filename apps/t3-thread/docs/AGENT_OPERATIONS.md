@@ -797,3 +797,7 @@ t3-thread automation run-now <automation-id> --env <name> --project <id>
 ### Organizational parents
 
 On M2 servers, `create --parent <name-or-uuid>` and `nest <name-or-uuid> --parent <parent>` use the supervision service, including parents in another project or paired environment. `unnest <name-or-uuid>` clears the organizational parent without changing provider execution lineage. Creation defaults to nesting under the caller; `--top-level` keeps it independent. Status includes local and remote parents. The server must advertise `threadNesting` (and `remoteThreadNesting` for remote parents); unsupported explicit requests fail before launch. Automatic-order reset uses the fork ordering service only when `threadOrderReset` is advertised.
+
+### Operator session renewal
+
+On protocol 2 environments advertising `sessionRefresh`, the CLI rotates valid bearer sessions in their final seven days and saves the replacement under its existing state-file lock. The old token keeps its original expiry so concurrent calls or an interrupted local save can retry. A failed refresh warns once and continues with the current credential; expired credentials require `t3-thread pair` again.
