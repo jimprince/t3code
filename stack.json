@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "2fdfee4da6f36b5396e4b5255a0f472dc1de9878",
+  "prev": "7803e66025aee3fb719fd05ed61dba1dee28bb75",
   "head": "0bd584c34ffc2d1f360a5683905b1e0dd1c789f2",
   "applied": [
     "fork-build-ci-compat",
@@ -35,7 +35,6 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-codex-goal-visibility",
-    "fork-inline-3d-objects",
     "fork-orcaslicer-handoff",
     "fork-3mf-preview",
     "fork-step-preview",
@@ -153,9 +152,6 @@
     },
     "fork-headless-delivery": {
       "oid": "6c0c0296664f0b4949caec2096a33037f71c07bc"
-    },
-    "fork-inline-3d-objects": {
-      "oid": "1d5809b04d900b9c31023b02e461a1f30052754b"
     },
     "fork-interrupted-turn-rewind": {
       "oid": "d2632aadcb88fc240e62ae6e96a435cbb213dfd6"
