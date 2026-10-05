@@ -39,6 +39,7 @@ const makeAuth = (
         : Effect.succeed({
             sessionId: AuthSessionId.make("stream-test"),
             subject: "stream-test",
+            client: { deviceType: "unknown" },
             method: "bearer-access-token",
             scopes,
           });
