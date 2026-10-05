@@ -72,6 +72,8 @@ import {
   parseRequestReference,
   clampTitle,
   REQUEST_LABEL_COLORS,
+  BUG_LABEL,
+  planKindLabelChange,
   requestKindLabel,
 } from "./requestLedger.logic.ts";
 import {
@@ -226,6 +228,7 @@ export const make = (deps: {
             ): ReadonlyArray<{
               title: string;
               kind: RequestKind;
+              bug?: boolean;
               excerpt: string;
               existing?: number | null;
             }> => result.items,
@@ -265,7 +268,13 @@ export const make = (deps: {
     /** File one request issue and link it to its thread and orchestrator. */
     const fileRequest = (
       resolved: Resolved,
-      item: { title: string; kind: RequestKind; excerpt: string; parked?: boolean },
+      item: {
+        title: string;
+        kind: RequestKind;
+        bug?: boolean | undefined;
+        excerpt: string;
+        parked?: boolean;
+      },
       messageId: string,
       itemIndex?: number,
     ) =>
@@ -274,6 +283,7 @@ export const make = (deps: {
         const labels = yield* ensureLabels(target.instance, target.repository, [
           REQUEST_LABEL,
           requestKindLabel(item.kind),
+          ...(item.bug ? [BUG_LABEL] : []),
           ...(item.parked ? [PARKED_LABEL] : []),
         ]);
         const issue = yield* api.request(
@@ -285,6 +295,7 @@ export const make = (deps: {
             body: formatRequestIssueBody({
               excerpt: item.excerpt,
               kind: item.kind,
+              bug: item.bug,
               threadTitle: thread.title,
               rootTitle: root.id === thread.id ? null : root.title,
               source: {
@@ -412,6 +423,7 @@ export const make = (deps: {
             const existing = (item as { existing?: number | null }).existing;
             return {
               kind: item.kind,
+              ...(item.bug ? { bug: true } : {}),
               title: item.title.trim() || entry.text,
               excerpt: item.excerpt.trim() || entry.text,
               ...(existing === undefined ? {} : { existing }),
@@ -620,6 +632,7 @@ export const make = (deps: {
         const item = {
           title: input.title,
           kind: input.kind,
+          ...(input.bug ? { bug: true } : {}),
           excerpt: input.detail?.trim() || input.title,
           ...(input.park ? { parked: true } : {}),
         };
@@ -691,7 +704,7 @@ export const make = (deps: {
         const names = new Set((issue.labels ?? []).map((label) => label.name.toLowerCase()));
         // Typing a task is the one change that applies to any tracker issue, open or closed.
         const typeOnly =
-          (input.kind !== undefined || input.title !== undefined) &&
+          (input.kind !== undefined || input.bug !== undefined || input.title !== undefined) &&
           input.status === undefined &&
           input.comment === undefined &&
           input.release === undefined;
@@ -705,19 +718,19 @@ export const make = (deps: {
             .send(target.instance, "PATCH", path, { title: input.title })
             .pipe(Effect.mapError((error) => fail(error.detail)));
         }
-        if (input.kind !== undefined) {
-          const wanted = requestKindLabel(input.kind);
-          const others = [...names].filter((name) => name.startsWith("ask:") && name !== wanted);
-          const [wantedId, ...otherIds] = yield* ensureLabels(target.instance, target.repository, [
-            wanted,
-            ...others,
+        const kindChange = planKindLabelChange(names, { kind: input.kind, bug: input.bug });
+        if (kindChange.add.length > 0 || kindChange.remove.length > 0) {
+          const ids = yield* ensureLabels(target.instance, target.repository, [
+            ...kindChange.add,
+            ...kindChange.remove,
           ]).pipe(Effect.mapError((error) => fail(error.detail)));
-          if (!names.has(wanted)) {
+          const added = ids.slice(0, kindChange.add.length);
+          if (added.length > 0) {
             yield* api
-              .send(target.instance, "POST", `${path}/labels`, { labels: [wantedId] })
+              .send(target.instance, "POST", `${path}/labels`, { labels: added })
               .pipe(Effect.mapError((error) => fail(error.detail)));
           }
-          for (const id of otherIds) {
+          for (const id of ids.slice(kindChange.add.length)) {
             yield* api
               .send(target.instance, "DELETE", `${path}/labels/${id}`)
               .pipe(Effect.mapError((error) => fail(error.detail)));
@@ -1020,7 +1033,12 @@ export const make = (deps: {
      */
     const decorate = (result: ProjectIssuesListResult, rootThreadId: ThreadId) =>
       Effect.gen(function* () {
-        type Pending = { entry: OutboxEntry; title: string; kind: RequestKind | null };
+        type Pending = {
+          entry: OutboxEntry;
+          title: string;
+          kind: RequestKind | null;
+          bug?: boolean;
+        };
         const pendingRequests = (yield* readOutbox).entries
           .filter((entry) => entry.rootThreadId === rootThreadId)
           .flatMap((entry): Pending[] =>
@@ -1029,13 +1047,19 @@ export const make = (deps: {
               : entry.items
                   .map((item, index) => ({ item, index }))
                   .filter(({ index }) => !entry.filed.includes(index))
-                  .map(({ item }) => ({ entry, title: item.title, kind: item.kind })),
+                  .map(({ item }) => ({
+                    entry,
+                    title: item.title,
+                    kind: item.kind,
+                    ...(item.bug ? { bug: true } : {}),
+                  })),
           )
-          .map(({ entry, title, kind }) => ({
+          .map(({ entry, title, kind, bug }) => ({
             messageId: entry.messageId,
             threadId: entry.threadId,
             title,
             kind,
+            ...(bug ? { bug } : {}),
             capturedAt: entry.capturedAt,
             attempts: entry.attempts,
             lastError: entry.lastError,
