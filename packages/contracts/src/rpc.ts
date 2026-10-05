@@ -55,6 +55,25 @@ import {
   ProjectCanvasReadInput,
 } from "./projectCanvas.ts";
 import {
+  Automation,
+  AutomationDefinition,
+  AutomationError,
+  AutomationIdInput,
+  AutomationRun,
+  AutomationRunInput,
+  AutomationRunsInput,
+  AutomationRunsResult,
+  AutomationScript,
+  AutomationScriptDefinition,
+  AutomationScriptIdInput,
+  AutomationScriptRunInput,
+  AutomationScriptsListInput,
+  AutomationScriptsListResult,
+  AutomationSetEnabledInput,
+  AutomationsListInput,
+  AutomationsListResult,
+} from "./automations.ts";
+import {
   CodexAuthCallbackInput,
   CodexAuthCallbackState,
   ProviderAuthCancelInput,
@@ -517,6 +536,16 @@ export const WS_METHODS = {
   projectRoadmapSaveVersion: "projectRoadmap.saveVersion",
   projectCanvasRead: "projectCanvas.read",
   projectCanvasAction: "projectCanvas.action",
+  automationsList: "automations.list",
+  automationsSave: "automations.save",
+  automationsRemove: "automations.remove",
+  automationsSetEnabled: "automations.setEnabled",
+  automationsRun: "automations.run",
+  automationsRuns: "automations.runs",
+  automationScriptsList: "automationScripts.list",
+  automationScriptsSave: "automationScripts.save",
+  automationScriptsRemove: "automationScripts.remove",
+  automationScriptsRun: "automationScripts.run",
 
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
@@ -944,6 +973,59 @@ const WsProjectRequestsListRpc = Rpc.make(WS_METHODS.projectRequestsList, {
   payload: ProjectRequestsListInput,
   success: ProjectIssuesListResult,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+});
+
+// Scripts and automation rules (apps/server/src/automations).
+const automationError = Schema.Union([AutomationError, EnvironmentAuthorizationError]);
+const WsAutomationsListRpc = Rpc.make(WS_METHODS.automationsList, {
+  payload: AutomationsListInput,
+  success: AutomationsListResult,
+  error: automationError,
+});
+const WsAutomationsSaveRpc = Rpc.make(WS_METHODS.automationsSave, {
+  payload: AutomationDefinition,
+  success: Automation,
+  error: automationError,
+});
+const WsAutomationsRemoveRpc = Rpc.make(WS_METHODS.automationsRemove, {
+  payload: AutomationIdInput,
+  success: Schema.Void,
+  error: automationError,
+});
+const WsAutomationsSetEnabledRpc = Rpc.make(WS_METHODS.automationsSetEnabled, {
+  payload: AutomationSetEnabledInput,
+  success: Automation,
+  error: automationError,
+});
+const WsAutomationsRunRpc = Rpc.make(WS_METHODS.automationsRun, {
+  payload: AutomationRunInput,
+  success: AutomationRun,
+  error: automationError,
+});
+const WsAutomationsRunsRpc = Rpc.make(WS_METHODS.automationsRuns, {
+  payload: AutomationRunsInput,
+  success: AutomationRunsResult,
+  error: automationError,
+});
+const WsAutomationScriptsListRpc = Rpc.make(WS_METHODS.automationScriptsList, {
+  payload: AutomationScriptsListInput,
+  success: AutomationScriptsListResult,
+  error: automationError,
+});
+const WsAutomationScriptsSaveRpc = Rpc.make(WS_METHODS.automationScriptsSave, {
+  payload: AutomationScriptDefinition,
+  success: AutomationScript,
+  error: automationError,
+});
+const WsAutomationScriptsRemoveRpc = Rpc.make(WS_METHODS.automationScriptsRemove, {
+  payload: AutomationScriptIdInput,
+  success: Schema.Void,
+  error: automationError,
+});
+const WsAutomationScriptsRunRpc = Rpc.make(WS_METHODS.automationScriptsRun, {
+  payload: AutomationScriptRunInput,
+  success: AutomationRun,
+  error: automationError,
 });
 
 /**
@@ -1783,6 +1865,16 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectRoadmapSaveVersionRpc,
   WsProjectCanvasReadRpc,
   WsProjectCanvasActionRpc,
+  WsAutomationsListRpc,
+  WsAutomationsSaveRpc,
+  WsAutomationsRemoveRpc,
+  WsAutomationsSetEnabledRpc,
+  WsAutomationsRunRpc,
+  WsAutomationsRunsRpc,
+  WsAutomationScriptsListRpc,
+  WsAutomationScriptsSaveRpc,
+  WsAutomationScriptsRemoveRpc,
+  WsAutomationScriptsRunRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,

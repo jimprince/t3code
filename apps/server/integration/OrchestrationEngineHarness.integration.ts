@@ -1,4 +1,4 @@
-import * as ProjectAutomationService from "../src/orchestration/ProjectAutomationService.ts";
+import * as AutomationEngine from "../src/automations/AutomationEngine.ts";
 // @effect-diagnostics nodeBuiltinImport:off
 import * as NodeChildProcess from "node:child_process";
 
@@ -418,7 +418,7 @@ export const makeOrchestrationIntegrationHarness = (
       ),
       Layer.provideMerge(
         Layer.mergeAll(
-          Layer.succeed(ProjectAutomationService.ProjectAutomationService, {
+          Layer.mock(AutomationEngine.AutomationEngine)({
             start: () => Effect.void,
             drain: Effect.void,
           }),
