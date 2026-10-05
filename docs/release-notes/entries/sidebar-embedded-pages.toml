@@ -1,0 +1,4 @@
+id = "sidebar-embedded-pages"
+category = "feature"
+functionality = "web sidebar"
+text = "Pin web pages such as a status board as sidebar footer icons that open in the main area, with an Open in browser fallback where a page cannot be shown inline."
