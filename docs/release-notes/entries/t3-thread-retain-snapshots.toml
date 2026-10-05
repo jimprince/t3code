@@ -1,0 +1,4 @@
+id = "t3-thread-retain-snapshots"
+category = "feature"
+functionality = "worker operations"
+text = "Allow thread CLI deployments to retain previous and incomplete runtime snapshots for inspection and rollback."
