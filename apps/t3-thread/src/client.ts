@@ -6,6 +6,7 @@ import {
 } from "./threadSnapshot.js";
 import { openRpcConnection } from "./openRpc.js";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
+import { refreshSavedEnvironmentSession } from "./sessionRefresh.js";
 import { pendingRequests, requirePendingRequest } from "./v2/requests.js";
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
 import type { ProjectAutomation } from "./types.js";
@@ -150,7 +151,7 @@ function providerInventoryFromConfig(config: ServerConfig): ProviderModelInvento
 }
 
 export class RemoteEnvironmentClient {
-  readonly environment: SavedEnvironment;
+  private currentEnvironment: SavedEnvironment;
   private readonly rpcFactory: RpcFactory | null;
   private readonly descriptorFactory: (() => Promise<ExecutionEnvironmentDescriptor>) | null;
 
@@ -161,9 +162,13 @@ export class RemoteEnvironmentClient {
       descriptorFactory?: () => Promise<ExecutionEnvironmentDescriptor>;
     } = {},
   ) {
-    this.environment = environment;
+    this.currentEnvironment = environment;
     this.rpcFactory = options.rpcFactory ?? null;
     this.descriptorFactory = options.descriptorFactory ?? null;
+  }
+
+  get environment(): SavedEnvironment {
+    return this.currentEnvironment;
   }
 
   static async pair(input: {
@@ -207,6 +212,7 @@ export class RemoteEnvironmentClient {
 
   async describe(): Promise<ExecutionEnvironmentDescriptor> {
     if (this.descriptorFactory) return this.descriptorFactory();
+    await this.refreshEnvironment();
     return fetchEnvironmentDescriptor(this.environment.httpBaseUrl);
   }
 
@@ -1066,6 +1072,17 @@ export class RemoteEnvironmentClient {
     if (this.rpcFactory) {
       return this.rpcFactory(this.environment.wsBaseUrl);
     }
-    return openRpcConnection(this.environment);
+    return openRpcConnection(this.environment, {
+      prepare: async (signal) => {
+        this.currentEnvironment = await refreshSavedEnvironmentSession(this.currentEnvironment, {
+          signal,
+        });
+        return this.environment;
+      },
+    });
+  }
+  private async refreshEnvironment(): Promise<void> {
+    if (this.rpcFactory) return;
+    this.currentEnvironment = await refreshSavedEnvironmentSession(this.currentEnvironment);
   }
 }
