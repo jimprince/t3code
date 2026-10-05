@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "230ff70b770612b80ad086b4d991856ab4a53b79",
-  "head": "0e7f74c4e4e7551329c36c5ab55169464d58d659",
+  "prev": "8287d3ca12eea354cea706fad06cc45d8314d170",
+  "head": "174f0180f04f7d17183414db4869e893efa4448c",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -72,7 +72,8 @@
     "fork-project-dashboard-widgets",
     "fork-project-roadmap",
     "fork-project-page-workflow",
-    "fork-project-canvas"
+    "fork-project-canvas",
+    "fork-project-task-types"
   ],
   "unapplied": [],
   "hidden": [],
@@ -214,6 +215,9 @@
     },
     "fork-project-selection": {
       "oid": "5f3080ec7439cdb80020bdf035e911e39b3ae5be"
+    },
+    "fork-project-task-types": {
+      "oid": "174f0180f04f7d17183414db4869e893efa4448c"
     },
     "fork-provider-turn-safety": {
       "oid": "4b0ef4c2ba9c23fbcc4775830e7232aa7074aebf"
