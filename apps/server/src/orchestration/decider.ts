@@ -711,6 +711,23 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           detail: `thread ${command.threadId} changed before automatic settlement`,
         });
       }
+      // Pinned threads and orchestrators stay where the user left them. Only a
+      // manual settle may remove one; the full model sees children the sweep cannot.
+      if (
+        command.type === "thread.auto-settle" &&
+        (thread.pinnedAt != null ||
+          readModel.threads.some(
+            (candidate) =>
+              candidate.parentThreadId === thread.id &&
+              candidate.archivedAt === null &&
+              candidate.deletedAt === null,
+          ))
+      ) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `thread ${command.threadId} is pinned or has child threads, so it never settles automatically`,
+        });
+      }
       // The server owns settle eligibility. A stale command must not settle
       // a thread whose session is coming alive or working.
       if (thread.session?.status === "starting" || thread.session?.status === "running") {
@@ -760,8 +777,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           updatedAt: alreadySettled ? thread.updatedAt : occurredAt,
         },
       };
-      // Explicit settlement clears pinning. Automatic settlement retains the user's
-      // pin so completed workers remain visible and protected from automatic archive.
+      // Explicit settlement clears pinning. Automatic settlement never reaches a
+      // pinned thread (rejected above), so only an explicit settle can unpin.
       const companionEvents: Array<Omit<OrchestrationEvent, "sequence">> = [];
       for (const [requestId, request] of pendingRequests) {
         companionEvents.push({
@@ -1236,6 +1253,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           threadId: command.threadId,
           parentThreadId: command.parentThreadId,
           remoteParent: command.remoteParent ?? null,
+          // Completion settlement is a worker setting; a promoted thread is not one.
+          ...(command.parentThreadId === null &&
+          command.remoteParent == null &&
+          (thread.parentThreadId != null || thread.remoteParent != null)
+            ? { settleOnComplete: null }
+            : {}),
           // Moving a thread between the sidebar and a parent is not activity.
           updatedAt: thread.updatedAt,
         },
