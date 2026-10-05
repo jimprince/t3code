@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ac64ec209cfac9a4f6aece97659e4000a6364488",
-  "head": "04f693a5c0d18305ef978d689100ebd48d7050dc",
+  "prev": "92d1e702c65769a9101c7dbce711988ee2591a89",
+  "head": "6331aa490b1486e19d44c5afff7c92eb9db08724",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -87,10 +87,11 @@
     "fork-textgen-tempfile-cause",
     "fork-projects-pinned",
     "fork-project-health",
-    "fork-standing-agent-autosettle",
+    "fork-standing-agent-autosettle"
+  ],
+  "unapplied": [
     "fork-task-view"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
