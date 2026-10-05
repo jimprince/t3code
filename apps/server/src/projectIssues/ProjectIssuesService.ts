@@ -20,7 +20,7 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import * as ProjectDashboardStore from "../projectDashboard/ProjectDashboardStore.ts";
 import { resolveTrackerSetting } from "../projectDashboard/projectDashboard.logic.ts";
-import { epicProgress } from "./epicProgress.logic.ts";
+import { epicProgress, parseEpicChecklist } from "./epicProgress.logic.ts";
 import {
   collectThreadTree,
   deriveProjectIssueStatus,
@@ -398,9 +398,15 @@ export const make = Effect.gen(function* () {
           body: comment.body.slice(0, COMMENT_CHARS),
           createdAt: comment.created_at,
         })),
-        childNumbers: siblings
-          .filter((sibling) => sibling.number !== raw.number && isPartOf(sibling.body, raw.number))
-          .map((sibling) => sibling.number),
+        // The same children epic progress counts: the body checklist plus "Part of #N".
+        childNumbers: [
+          ...new Set([
+            ...parseEpicChecklist(raw.body).map((item) => item.number),
+            ...siblings
+              .filter((sibling) => isPartOf(sibling.body, raw.number))
+              .map((sibling) => sibling.number),
+          ]),
+        ].filter((number) => number !== raw.number),
       } satisfies ProjectIssuesGetResult;
     });
 
