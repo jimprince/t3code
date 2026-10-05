@@ -1058,7 +1058,12 @@ t3-thread request ready "$T3_THREAD_ID" 12 --summary "<the answer, or what to lo
 t3-thread request ready "$T3_THREAD_ID" 12 --stage awaiting-release --summary "<what was built>"
 t3-thread request shipped "$T3_THREAD_ID" 12 --release fork.24 --test "<one-line test step>"
 t3-thread request reopen "$T3_THREAD_ID" 12
+t3-thread request note "$T3_THREAD_ID" 12 "blocked on the jaw pull force measurement"
 ```
+
+Record progress on the request's issue as you go with `request note` (one short line: started,
+blocked on X, ready for review, shipped in fork.N). Stage changes post a progress line on their
+own when you give no text. The project page shows each request's latest line.
 
 Stages: requested, in progress (`start`, which also links your thread to the request so the
 dashboard shows which request you serve), ready for review (`ready`), awaiting release
@@ -1095,7 +1100,7 @@ t3-thread project tracker clear "$T3_THREAD_ID"
 
 Versions are open Gitea milestones on the project's tracker repository; the first (by due date,
 then creation) is the next release, and its items feed the project page's Next release list.
-Items with no milestone are Later. Brad drags items between columns; agents use:
+Items with no milestone are Later. Ideas Brad saves for later carry the `parked` label and stay off the active Requests list; moving one into a version or starting it removes the label. Brad drags items between columns; agents use:
 
 ```bash
 t3-thread roadmap list "$T3_THREAD_ID"            # versions, their items, and Later

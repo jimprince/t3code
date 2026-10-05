@@ -149,6 +149,8 @@ export const ProjectRequestCreateInput = Schema.Struct({
   title: TrimmedNonEmptyString,
   kind: ProjectRequestKind,
   detail: Schema.optionalKey(Schema.String),
+  /** Save for later: filed parked, so it waits on the roadmap instead of the request list. */
+  park: Schema.optionalKey(Schema.Boolean),
 });
 export type ProjectRequestCreateInput = typeof ProjectRequestCreateInput.Type;
 
@@ -166,13 +168,10 @@ export const ProjectRequestUpdateInput = Schema.Struct({
    * waiting for the release batch. `needs-test`: shipped in `release`, waiting
    * for Brad to test (`comment` is the test step).
    */
-  status: Schema.Literals([
-    "pending",
-    "in-progress",
-    "needs-review",
-    "awaiting-release",
-    "needs-test",
-  ]),
+  /** Absent for a progress note: the comment is posted and the stage stays. */
+  status: Schema.optionalKey(
+    Schema.Literals(["pending", "in-progress", "needs-review", "awaiting-release", "needs-test"]),
+  ),
   comment: Schema.optionalKey(Schema.String),
   /** Release the request shipped in, recorded as its milestone (with `needs-test`). */
   release: Schema.optionalKey(TrimmedNonEmptyString),
