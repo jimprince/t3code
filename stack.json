@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e0cf6764142432a6895b892e01a914cc7ffd19fa",
-  "head": "52902d12aca01e863d03dd992cf172e805bcb968",
+  "prev": "a7c07d2363e04ac3a68dec3066dd74ccb2a3e33f",
+  "head": "5a491847bbc98cae77ad86c52984579e979f3f3e",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -55,7 +55,9 @@
     "fork-thread-titles",
     "fork-embedded-pages",
     "fork-subthread-lifecycle",
-    "fork-orchestrator-focus",
+    "fork-orchestrator-focus"
+  ],
+  "unapplied": [
     "fork-page-agent-tray",
     "fork-sidebar-nested-tidiness",
     "fork-antigravity-errors",
@@ -76,7 +78,6 @@
     "fork-project-task-types",
     "fork-scripts-automations"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
