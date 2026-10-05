@@ -520,6 +520,12 @@ async function scanKnownRoutes(
       // should not prevent detection for every other watched route.
       continue;
     }
+    if (
+      sourceThread.archivedAt ||
+      sourceThread.deletedAt ||
+      sourceThread.settledOverride === "settled"
+    )
+      continue;
     const overview = buildAgentOverview(sourceAgent, sourceThread);
     if (!needsAttention(overview)) {
       continue;
@@ -737,7 +743,11 @@ export async function hasActiveWork(
     try {
       const environment = requireEnvironment(state, agent.environment);
       const thread = await clientFactory(environment).findThread(agent.threadId);
-      if (IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)) {
+      if (
+        !thread.deletedAt &&
+        thread.settledOverride !== "settled" &&
+        IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)
+      ) {
         return true;
       }
     } catch {
