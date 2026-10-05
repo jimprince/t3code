@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "89346970eace1fcaaebe85945832f4512b327a6b",
-  "head": "551f77b1f304eae6631685f6f5f64a10649aa489",
+  "prev": "e2303a0a4581dcd9bf3758b18b4f1ceeb8a93aec",
+  "head": "8c4b8522976823289ffa1b014a7d97b28bb9f57f",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -71,7 +71,8 @@
     "fork-cross-environment-nesting",
     "fork-project-dashboard-widgets",
     "fork-project-roadmap",
-    "fork-project-page-workflow"
+    "fork-project-page-workflow",
+    "fork-project-canvas"
   ],
   "unapplied": [],
   "hidden": [],
@@ -195,6 +196,9 @@
     },
     "fork-project-automations": {
       "oid": "618c99359da289b9b25bf70eab950b45be010950"
+    },
+    "fork-project-canvas": {
+      "oid": "8c4b8522976823289ffa1b014a7d97b28bb9f57f"
     },
     "fork-project-dashboard-widgets": {
       "oid": "e33e766ee85ee9e79b3f25c7475d956580a62057"
