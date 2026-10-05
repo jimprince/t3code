@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "df85352cc81066fdc80e3ed3330ddc29f78f39b5",
-  "head": "214f267fa4af5efc54c345776e4db9cd92917e2c",
+  "prev": "7b5b2266365a0ecf4cfb45e091e905cb73fc3c7c",
+  "head": "aad9c8088547fbc378d4c1b125052200514b398f",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -24,7 +24,8 @@
     "fork-mobile-delivery",
     "fork-gitea-pr-browser",
     "fork-auth-session-refresh",
-    "fork-inline-3d-objects"
+    "fork-inline-3d-objects",
+    "fork-orcaslicer-handoff"
   ],
   "unapplied": [
     "fork-thread-client-recovery",
@@ -36,7 +37,6 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-codex-goal-visibility",
-    "fork-orcaslicer-handoff",
     "fork-3mf-preview",
     "fork-step-preview",
     "fork-enter-sends-queued",
@@ -179,7 +179,7 @@
       "oid": "ed5483647974f6a17a903825115edef03a81cd9d"
     },
     "fork-orcaslicer-handoff": {
-      "oid": "fff6741dfcac86e1a1a8a6a479513dcad6b8f2cc"
+      "oid": "aad9c8088547fbc378d4c1b125052200514b398f"
     },
     "fork-orchestrator-focus": {
       "oid": "92cb59dd97150f3203dcde5ac3ebe39321fbe1d2"
