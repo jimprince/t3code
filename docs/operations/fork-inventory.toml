@@ -1702,3 +1702,13 @@ depends_on = [
 ]
 roles = []
 note = "projectRequests.startIntake creates the intake thread (thread.create nested under the orchestrator, settleOnComplete, no CLI subscriber so nothing is notified) on claude-sonnet-5-5 when an enabled provider offers it, else another Claude Sonnet, else the orchestrator's model, and returns the fixed brief (buildIntakeBrief). The box then submits the request as explicit on the intake thread and sends brief plus Brad's words and images through the normal queued send path, so the ledger files the task from his words, linked to the intake and the orchestrator; a server without the RPC falls back to sending to the orchestrator. The brief: find the task, request type and request title, roadmap move next or later, then answer a question with request ready, or start one worker (--parent and --notify the orchestrator at attention level), or send the orchestrator one message, or catalog; note what was done; settle itself. projectRequests.update takes title (CLI request title)."
+
+[[patch]]
+name = "fork-textgen-tempfile-cause"
+subject = "fix(server): say why a text-generation temp file could not be written"
+class = "product"
+purpose = "Make the Codex text-generation temp-file failure diagnosable: the dev VM logged 'request ledger could not split a message' with only 'Failed to write temp file', six times on 2026-10-05, hiding why request splitting fell back."
+retire_when = "Upstream reports the underlying file-system error in its text-generation temp-file failures."
+depends_on = []
+roles = []
+note = "The prefix t3code-<prefix>-<pid>- is a plain basename, so the failure is not the prefix. The detail now reads 'Failed to write temp file in <os.tmpdir()>: <reason>' (for example 'NotFound: FileSystem.makeTempFileScoped (<path>)'); the request ledger's split warning logs the detail, so the next occurrence names its cause. A test points TMPDIR at a missing folder."
