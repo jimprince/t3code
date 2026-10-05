@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "9a432a4630068fb7cf3b3d1046b8bdb74b5b6f17",
-  "head": "d3ce641eea1c99880ad3e609431bb3f572a7709a",
+  "prev": "7c5e40a2c2414071aca8304896382dbe9c5353b2",
+  "head": "92ce77d2ac73ddac6b931ec08a35d8bb085d0af1",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -64,7 +64,9 @@
     "fork-agent-thread-ordering",
     "fork-named-agents",
     "fork-project-automations",
-    "fork-gitea-issue-links",
+    "fork-gitea-issue-links"
+  ],
+  "unapplied": [
     "fork-orchestrators-view",
     "fork-project-issues-board",
     "fork-request-ledger",
@@ -76,7 +78,6 @@
     "fork-project-task-types",
     "fork-scripts-automations"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
