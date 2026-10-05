@@ -14,11 +14,3 @@ declare module "@tanstack/react-router" {
 export function projectReturnState(project: ProjectReturnLocation) {
   return { projectReturn: project };
 }
-
-export function isProjectPullRequestDetail(
-  projectReturn: ProjectReturnLocation | undefined,
-  repository: string | undefined,
-  number: number | undefined,
-): boolean {
-  return projectReturn !== undefined && repository !== undefined && number !== undefined;
-}

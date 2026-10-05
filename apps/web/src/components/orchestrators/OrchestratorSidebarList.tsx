@@ -77,13 +77,7 @@ function ProjectRow({ summary }: { readonly summary: OrchestratorSummary }) {
             {summary.root.title}
           </span>
           <span className="pointer-events-auto flex items-center gap-1">
-            <ThreadIssueBadges
-              issues={summary.issues}
-              projectReturn={{
-                environmentId: summary.root.environmentId,
-                threadId: summary.root.id,
-              }}
-            />
+            <ThreadIssueBadges issues={summary.issues} />
           </span>
         </span>
         <span className="flex min-w-0 w-full items-center gap-2 text-xs">
