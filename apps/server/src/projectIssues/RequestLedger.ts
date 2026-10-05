@@ -25,6 +25,7 @@ import * as ServerConfig from "../config.ts";
 
 import type * as ThreadIssueService from "../orchestration/ThreadIssueService.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as ProjectionThreadMessages from "../persistence/Services/ProjectionThreadMessages.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import { TextGeneration } from "../textGeneration/TextGeneration.ts";
@@ -41,6 +42,7 @@ import {
 } from "./projectIssues.logic.ts";
 import { ensureMilestone, setIssueMilestone } from "./giteaMilestones.ts";
 import {
+  answerToMessage,
   formatFollowUpComment,
   planRequestItem,
   progressLineFor,
@@ -86,6 +88,9 @@ const RECENT_MESSAGE_LIMIT = 500;
 type LatestComment = { author: string; body: string; createdAt: string } | null;
 /** Each request's newest comment, kept until the issue's updated_at moves (process-wide). */
 const latestCommentCache = new Map<string, { updatedAt: string; comment: LatestComment }>();
+type Answer = NonNullable<ProjectIssuesListResult["issues"][number]["answer"]>;
+/** Found answers never change, so they are kept for the life of the process. */
+const answerCache = new Map<string, Answer>();
 const COMMENT_EXCERPT_CHARS = 1_200;
 
 const fail = (message: string) => new ProjectIssuesError({ message });
@@ -122,6 +127,9 @@ export const make = (deps: {
     const settings = yield* ServerSettingsService;
     // Optional so hosts without text generation (and narrow test layers) still file requests whole.
     const textGeneration = yield* Effect.serviceOption(TextGeneration);
+    const threadMessages = yield* Effect.serviceOption(
+      ProjectionThreadMessages.ProjectionThreadMessageRepository,
+    );
     const api = yield* GiteaApi.make;
     const fileSystem = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -858,7 +866,57 @@ export const make = (deps: {
           },
           { concurrency: 4 },
         );
-        return { ...result, issues, pendingRequests };
+        return { ...result, issues: yield* withAnswers(issues), pendingRequests };
+      });
+
+    /**
+     * Adds each open request's own answer: the reply to the message that filed it.
+     * A thread's messages are read only when one of its requests has a finished
+     * reply that is not cached yet, and at most once per listing.
+     */
+    const withAnswers = (issues: ReadonlyArray<ProjectIssuesListResult["issues"][number]>) =>
+      Effect.gen(function* () {
+        const repository = Option.getOrUndefined(threadMessages);
+        if (!repository) return issues;
+        const waiting = issues.filter(
+          (issue) =>
+            issue.isRequest &&
+            issue.closedAt === null &&
+            issue.requestSource !== null &&
+            !answerCache.has(issue.requestSource.messageId),
+        );
+        const threadsToRead = new Set<string>();
+        for (const issue of waiting) {
+          const source = issue.requestSource!;
+          const asked = yield* repository
+            .getByMessageId({ messageId: source.messageId as never })
+            .pipe(Effect.orElseSucceed(() => Option.none()));
+          if (Option.isNone(asked) || asked.value.turnId === null) continue;
+          const replied = yield* repository
+            .hasAssistantMessageForTurn({
+              threadId: asked.value.threadId,
+              turnId: asked.value.turnId,
+              streamingOnly: false,
+            })
+            .pipe(Effect.orElseSucceed(() => false));
+          if (replied) threadsToRead.add(asked.value.threadId);
+        }
+        for (const threadId of threadsToRead) {
+          const messages = yield* repository
+            .listByThreadId({ threadId: threadId as ThreadId })
+            .pipe(Effect.orElseSucceed(() => []));
+          for (const issue of waiting) {
+            if (issue.requestSource?.threadId !== threadId) continue;
+            const answer = answerToMessage(messages, issue.requestSource.messageId);
+            if (answer) answerCache.set(issue.requestSource.messageId, answer);
+          }
+        }
+        return issues.map((issue) => {
+          const answer = issue.requestSource
+            ? answerCache.get(issue.requestSource.messageId)
+            : undefined;
+          return answer && issue.closedAt === null ? { ...issue, answer } : issue;
+        });
       });
 
     // A restart or a new connection resumes filing anything left in the outbox.
