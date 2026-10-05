@@ -1,0 +1,4 @@
+id = "parent-pending-input-notices"
+category = "fix"
+functionality = "worker threads"
+text = "Local and remote parents receive child questions and approvals even without subscriptions, wake when settled, and receive one reminder after 20 minutes if still unanswered."
