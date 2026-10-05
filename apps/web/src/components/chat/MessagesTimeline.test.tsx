@@ -482,6 +482,48 @@ function buildSnapShotTimelineEntry(previewUrl?: string) {
 }
 
 describe("MessagesTimeline", () => {
+  it.each(["user", "assistant"] as const)(
+    "keeps the model size rejection and download action on a V2 %s message",
+    async (role) => {
+      vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+      Object.defineProperty(document, "getElementById", { value: () => ({}), configurable: true });
+      const entry =
+        role === "user"
+          ? buildUserTimelineEntry("Inspect the model.")
+          : buildAssistantTimelineEntry("Inspect the model.");
+      const file = {
+        type: "file" as const,
+        id: "v2-model-glb",
+        name: "part.glb",
+        mimeType: "model/gltf-binary",
+        sizeBytes: 50 * 1024 * 1024 + 1,
+      };
+      let renderer: ReactTestRenderer | undefined;
+      const download = vi.fn();
+      try {
+        await act(() => {
+          renderer = create(
+            <MessagesTimeline
+              {...buildProps()}
+              onFileDownload={download}
+              timelineEntries={[{ ...entry, message: { ...entry.message, attachments: [file] } }]}
+            />,
+          );
+        });
+        expect(JSON.stringify(renderer!.toJSON())).toContain("larger than the 50 MB preview limit");
+        const button = renderer!.root
+          .findAll(
+            (node) => node.type === "button" && node.props["aria-label"] === "Download part.glb",
+          )
+          .at(0)!;
+        await act(() => button.props.onClick());
+        expect(download).toHaveBeenCalledWith(file);
+      } finally {
+        await act(() => renderer?.unmount());
+      }
+    },
+  );
+
   it("shows dynamic tool input without cached output when the row is expanded", async () => {
     activityTestState.expanded = true;
     vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
