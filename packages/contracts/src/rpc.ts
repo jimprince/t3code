@@ -42,6 +42,7 @@ import {
   ProjectDashboardError,
   ProjectDashboardGetInput,
   ProjectDashboardSetTrackerInput,
+  ProjectDashboardSetHealthInput,
   ProjectDashboardSetWidgetsInput,
 } from "./projectDashboard.ts";
 import {
@@ -545,6 +546,7 @@ export const WS_METHODS = {
   projectDashboardGet: "projectDashboard.get",
   projectDashboardSetWidgets: "projectDashboard.setWidgets",
   projectDashboardSetTracker: "projectDashboard.setTracker",
+  projectDashboardSetHealth: "projectDashboard.setHealth",
   projectLayoutGet: "projectLayout.get",
   projectLayoutApply: "projectLayout.apply",
   projectLayoutRevert: "projectLayout.revert",
@@ -967,6 +969,12 @@ const WsProjectDashboardSetWidgetsRpc = Rpc.make(WS_METHODS.projectDashboardSetW
 });
 const WsProjectDashboardSetTrackerRpc = Rpc.make(WS_METHODS.projectDashboardSetTracker, {
   payload: ProjectDashboardSetTrackerInput,
+  success: ProjectDashboard,
+  error: projectDashboardError,
+});
+
+const WsProjectDashboardSetHealthRpc = Rpc.make(WS_METHODS.projectDashboardSetHealth, {
+  payload: ProjectDashboardSetHealthInput,
   success: ProjectDashboard,
   error: projectDashboardError,
 });
@@ -1927,6 +1935,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectDashboardGetRpc,
   WsProjectDashboardSetWidgetsRpc,
   WsProjectDashboardSetTrackerRpc,
+  WsProjectDashboardSetHealthRpc,
   WsProjectLayoutGetRpc,
   WsProjectLayoutApplyRpc,
   WsProjectLayoutRevertRpc,
