@@ -16,6 +16,9 @@ import {
   deliverPendingNotifications,
   detectAttentionEvents,
   hasActiveWork,
+  createWatchPoller,
+  nextWatchInterval,
+  scanAttentionNotifications,
   type WatchClient,
   type WatchClientFactory,
 } from "../src/watch.js";
@@ -66,6 +69,20 @@ function makeSubscription(overrides: Partial<SavedSubscription> = {}): SavedSubs
 
 function makeThread(overrides: Partial<OrchestrationThread> = {}): OrchestrationThread {
   return {
+    get runtimeRequests() {
+      const pending = new Map<string, { id: string; kind: string; status: "pending" }>();
+      for (const activity of this.activities) {
+        const id = String(activity.payload.requestId);
+        if (activity.kind.endsWith(".requested"))
+          pending.set(id, {
+            id,
+            status: "pending",
+            kind: activity.kind.startsWith("user-input") ? "user_input" : "approval",
+          });
+        else if (activity.kind.endsWith(".resolved")) pending.delete(id);
+      }
+      return [...pending.values()];
+    },
     id: "thread-worker-a",
     projectId: "project-1",
     title: "Worker A",
@@ -791,5 +808,76 @@ describe("notification ownership and attention", () => {
       expect(sentMessages).toHaveLength(1);
       expect((await loadState()).notifications).toHaveLength(1);
     });
+  });
+});
+
+describe("watch polling cost", () => {
+  it("shares reads and parks missing, archived and settled sources", async () => {
+    let time = 0;
+    const calls: string[] = [];
+    const poller = createWatchPoller(
+      () => ({
+        async findThread(id) {
+          calls.push(id);
+          if (id === "missing") throw new Error("Thread missing was not found");
+          return makeThread(
+            id === "archived"
+              ? { archivedAt: "2026-01-01" }
+              : { settledOverride: time < 60_000 ? "settled" : null },
+          );
+        },
+        async sendMessage() {},
+      }),
+      () => time,
+    );
+    const client = poller.clientFactory(makeEnvironment());
+    await client.findThread("settled");
+    await client.findThread("settled");
+    await client.findThread("archived");
+    await expect(client.findThread("missing")).rejects.toThrow("was not found");
+    poller.beginPoll();
+    await client.findThread("settled");
+    await client.findThread("archived");
+    await expect(client.findThread("missing")).rejects.toThrow("was not found");
+    expect(calls).toEqual(["settled", "archived", "missing"]);
+    time = 60_000;
+    poller.beginPoll();
+    expect((await client.findThread("settled")).settledOverride).toBeNull();
+    await client.findThread("archived");
+    expect(calls).toEqual(["settled", "archived", "missing", "settled"]);
+    expect(poller.skippedMappings()).toEqual([
+      { mapping: "dev-vm:archived", reason: "archived" },
+      { mapping: "dev-vm:missing", reason: "missing" },
+    ]);
+  });
+
+  it("ignores unsubscribed and terminal sources without creating attention events", async () => {
+    const state: StateFile = {
+      version: 1,
+      environments: [makeEnvironment()],
+      agents: [makeAgent()],
+      subscriptions: [],
+      notifications: [],
+      queuedSends: [],
+    };
+    let reads = 0;
+    const clientFactory: WatchClientFactory = () => ({
+      async findThread() {
+        reads++;
+        return makeThread({ settledOverride: "settled" });
+      },
+      async sendMessage() {},
+    });
+    expect(await scanAttentionNotifications(state, { clientFactory })).toEqual([]);
+    expect(reads).toBe(0);
+    state.subscriptions = [makeSubscription()];
+    expect(await scanAttentionNotifications(state, { clientFactory })).toEqual([]);
+    expect(reads).toBe(1);
+  });
+
+  it("backs off idle polls and resumes the configured active cadence", () => {
+    expect(nextWatchInterval(5000, false)).toBe(60_000);
+    expect(nextWatchInterval(5000, true)).toBe(5000);
+    expect(nextWatchInterval(120_000, false)).toBe(120_000);
   });
 });
