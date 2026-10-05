@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "5dd6c5110a8931a7e73900c72ce09e580991bcab",
-  "head": "6de8c6487103dac8bbd5edcc5e3279300f81a917",
+  "prev": "a5feadb65a3d5e6361e699762bb5dfe8765d8404",
+  "head": "7358085b722210c6086a4e8fb27ac314cf08692b",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -134,7 +134,7 @@
       "oid": "d851478183b81565100c8b76fd0976f9b41f5775"
     },
     "fork-fresh-remote-worktrees": {
-      "oid": "6de8c6487103dac8bbd5edcc5e3279300f81a917"
+      "oid": "7358085b722210c6086a4e8fb27ac314cf08692b"
     },
     "fork-general-chat": {
       "oid": "ac2702fa96bbe2870fff4230206758155f874571"
