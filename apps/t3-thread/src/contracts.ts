@@ -27,6 +27,7 @@ import {
   ProjectDashboardError,
   ProjectDashboardGetInput,
   ProjectDashboardSetTrackerInput,
+  ProjectDashboardSetHealthInput,
   ProjectDashboardSetWidgetsInput,
   ProjectRoadmap,
   ProjectRoadmapError,
@@ -489,6 +490,11 @@ const WsProjectDashboardSetTrackerRpc = Rpc.make(WS_METHODS.projectDashboardSetT
   success: ProjectDashboard,
   error: projectDashboardError,
 });
+const WsProjectDashboardSetHealthRpc = Rpc.make(WS_METHODS.projectDashboardSetHealth, {
+  payload: ProjectDashboardSetHealthInput,
+  success: ProjectDashboard,
+  error: projectDashboardError,
+});
 
 // Project roadmap.
 const projectRoadmapError = Schema.Union([ProjectRoadmapError, EnvironmentAuthorizationError]);
@@ -547,6 +553,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectDashboardGetRpc,
   WsProjectDashboardSetWidgetsRpc,
   WsProjectDashboardSetTrackerRpc,
+  WsProjectDashboardSetHealthRpc,
   WsProjectRoadmapGetRpc,
   WsProjectRoadmapMoveRpc,
   WsProjectRoadmapSaveVersionRpc,
