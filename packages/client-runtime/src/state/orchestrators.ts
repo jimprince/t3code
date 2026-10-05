@@ -124,7 +124,10 @@ export function sortOrchestratorSummariesForSidebar(
   );
 }
 
-/** Projects mode owns complete orchestrator trees; Threads keeps only standalone roots. */
+/**
+ * Projects mode owns complete orchestrator trees; Threads keeps standalone roots,
+ * plus each pinned project root's own row so a pin tops both lists in pin order.
+ */
 export function threadsVisibleInThreadsMode(
   threads: ReadonlyArray<EnvironmentThreadShell>,
   projectsViewEnabled: boolean,
@@ -148,7 +151,7 @@ export function threadsVisibleInThreadsMode(
     ) {
       continue;
     }
-    projectThreadKeys.add(rootKey);
+    if (root.pinnedAt == null) projectThreadKeys.add(rootKey);
     for (const descendant of collectDescendants(root, childrenByParent)) {
       projectThreadKeys.add(threadActivityKey(descendant));
     }
