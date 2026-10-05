@@ -1,0 +1,4 @@
+id = "gitea-pr-browser"
+category = "feature"
+functionality = "pull requests"
+text = "Browse Gitea pull requests, changed code, conversations, reviews and CI checks in the app."
