@@ -1,5 +1,5 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
+import type { ProjectIssue, ProjectPendingRequest, ProjectRequestStage } from "@t3tools/contracts";
 
 /** Task types, from the `ask:<kind>` label requests and typed issues carry. */
 export type RequestKind =
@@ -300,4 +300,26 @@ export function countParked(issues: ReadonlyArray<ProjectIssue>, rootThreadId: s
       (issue.requestSource?.rootThreadId === rootThreadId ||
         issue.linkedThreadIds.some((id) => id === rootThreadId)),
   ).length;
+}
+
+export type SentRequestStatus =
+  | { readonly state: "filing" }
+  | { readonly state: "pending" }
+  | { readonly state: "tracked"; readonly issues: ReadonlyArray<ProjectIssue> };
+
+/**
+ * What became of a message sent from the request box: the requests the ledger
+ * filed for it (matched by the message id in their provenance), queued for
+ * filing while Gitea is unreachable, or not filed yet.
+ */
+export function sentRequestStatus(
+  messageId: string,
+  issues: ReadonlyArray<ProjectIssue>,
+  pending: ReadonlyArray<Pick<ProjectPendingRequest, "messageId">>,
+): SentRequestStatus {
+  const filed = issues.filter((issue) => issue.requestSource?.messageId === messageId);
+  if (filed.length > 0) return { state: "tracked", issues: filed };
+  return pending.some((item) => item.messageId === messageId)
+    ? { state: "pending" }
+    : { state: "filing" };
 }
