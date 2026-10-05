@@ -7,7 +7,9 @@ import { useState } from "react";
 import { Platform, Pressable, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { projectAutomations } from "../../state/automations";
 import { projectEnvironment } from "../../state/projects";
+import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { SettingsScreen } from "./components/SettingsScreen";
 import { SettingsSection } from "./components/SettingsSection";
@@ -140,24 +142,9 @@ function ProjectOverviewContent(props: {
       </SettingsSection>
 
       <SettingsSection title="Automations">
-        {props.members.flatMap((member) =>
-          (member.automations ?? []).map((automation) => (
-            <View key={`${member.environmentId}:${automation.id}`} className="gap-1 p-4">
-              <Text className="text-base text-foreground">{automation.name}</Text>
-              <Text className="text-sm text-foreground-muted">
-                {automation.enabled ? automation.schedule.kind : "Paused"} ·{" "}
-                {automation.schedule.timeZone} · Next{" "}
-                {new Date(automation.nextRunAt).toLocaleString()}
-              </Text>
-              {automation.runs.slice(0, 5).map((run) => (
-                <Text key={run.id} className="text-sm text-foreground-muted">
-                  {new Date(run.scheduledAt).toLocaleString()} · {run.status}
-                  {run.result ? ` · ${run.result}` : ""}
-                </Text>
-              ))}
-            </View>
-          )),
-        )}
+        {props.members.map((member) => (
+          <MemberAutomations key={`${member.environmentId}:${member.id}`} member={member} />
+        ))}
       </SettingsSection>
       <SettingsSection title="Checkouts">
         {props.members.map((member, index) => {
@@ -192,4 +179,38 @@ function ProjectOverviewContent(props: {
       </SettingsSection>
     </>
   );
+}
+
+/** One environment's automation rules for this project, newest runs under each. */
+function MemberAutomations({ member }: { readonly member: EnvironmentProject }) {
+  const input = { environmentId: member.environmentId, input: { projectId: member.id } };
+  const list = useEnvironmentQuery(projectAutomations.list(input));
+  const runs = useEnvironmentQuery(
+    projectAutomations.runs({ ...input, input: { projectId: member.id, limit: 50 } }),
+  );
+  return (list.data?.automations ?? []).map((automation) => {
+    const trigger = automation.triggers[0];
+    const schedule = trigger?.type === "schedule" ? trigger.schedule : undefined;
+    return (
+      <View key={automation.id} className="gap-1 p-4">
+        <Text className="text-base text-foreground">{automation.name}</Text>
+        <Text className="text-sm text-foreground-muted">
+          {automation.enabled
+            ? (schedule?.kind ?? (trigger?.type === "event" ? `on ${trigger.event}` : "manual"))
+            : "Paused"}
+          {schedule ? ` · ${schedule.timeZone}` : ""}
+          {automation.nextRunAt ? ` · Next ${new Date(automation.nextRunAt).toLocaleString()}` : ""}
+        </Text>
+        {(runs.data?.runs ?? [])
+          .filter((run) => run.automationId === automation.id)
+          .slice(0, 5)
+          .map((run) => (
+            <Text key={run.id} className="text-sm text-foreground-muted">
+              {new Date(run.createdAt).toLocaleString()} · {run.status}
+              {run.result ? ` · ${run.result}` : ""}
+            </Text>
+          ))}
+      </View>
+    );
+  });
 }
