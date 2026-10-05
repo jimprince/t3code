@@ -1053,9 +1053,17 @@ t3-thread request list "$T3_THREAD_ID"
 t3-thread request add "$T3_THREAD_ID" "Measure the jaw pull force" --kind test --detail "<his words>"
 t3-thread request start "$T3_THREAD_ID" 12
 t3-thread request ready "$T3_THREAD_ID" 12 --summary "<the answer, or what to look at and where>"
+t3-thread request ready "$T3_THREAD_ID" 12 --stage awaiting-release --summary "<what was built>"
+t3-thread request shipped "$T3_THREAD_ID" 12 --release fork.24 --test "<one-line test step>"
 t3-thread request reopen "$T3_THREAD_ID" 12
 ```
 
-`ready` moves the request to `needs-review` and posts the summary as a comment; the page shows
-that comment as the answer. Use `add` when Brad asked you for something the capture missed.
-A request accepts an issue number in the tracker, `owner/repo#N`, or the issue URL.
+Stages: requested, in progress (`start`, which also links your thread to the request so the
+dashboard shows which request you serve), ready for review (`ready`), awaiting release
+(`ready --stage awaiting-release`: built and handed over, waiting for the release batch),
+shipped and waiting for Brad's test (`shipped`: records the release as the issue's milestone
+and posts the test step), settled (Brad only). `ready` and `shipped` post their text as a
+comment; the project page shows it as the answer or test step. Use `add` when Brad asked you
+for something the capture missed; when Gitea is unreachable it is queued and filed later
+(`"queued": true`). A request accepts an issue number in the tracker, `owner/repo#N`, or the
+issue URL.
