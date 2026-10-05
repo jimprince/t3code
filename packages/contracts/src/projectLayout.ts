@@ -84,19 +84,21 @@ export const PROJECT_WIDGET_TYPES: ReadonlyArray<ProjectWidgetType> = [
   {
     type: "roadmap-board",
     title: "Roadmap",
-    description: "The roadmap board: next version, later versions and Later, with drag and drop.",
+    description:
+      "The roadmap board: next version, later versions and Later, each task with its status and each version with a progress line.",
     fields: [],
   },
   {
     type: "issues-summary",
-    title: "Issues summary",
-    description: "One line of issue counts per lane linking to a tab with the issues board.",
+    title: "Tasks summary",
+    description: "One line of task counts per status linking to a tab with the Tasks board.",
     fields: [includeLater],
   },
   {
     type: "issues-board",
-    title: "Issues",
-    description: "Every tracker issue of the project in lanes, settle or reopen in place.",
+    title: "Tasks",
+    description:
+      "Every task (tracker issue) of the project in status lanes: For review, Active, Pending, Complete; settle or reopen in place.",
     fields: [
       {
         key: "pendingPreview",
@@ -676,7 +678,7 @@ export function defaultProjectLayoutTabs(
     },
     {
       id: "issues",
-      title: "Issues",
+      title: "Tasks",
       widgets: [{ id: "issues-board", type: "issues-board", config: { pendingPreview: 10 } }],
     },
   ];

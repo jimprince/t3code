@@ -24,7 +24,7 @@ const applied = (
 describe("default layout", () => {
   it("is today's page: Dashboard in the default order, Roadmap and Issues", () => {
     const tabs = defaultProjectLayoutTabs(null);
-    expect(tabs.map((tab) => tab.title)).toEqual(["Dashboard", "Roadmap", "Issues"]);
+    expect(tabs.map((tab) => tab.title)).toEqual(["Dashboard", "Roadmap", "Tasks"]);
     expect(tabs[0]!.widgets.map((widget) => widget.type)).toEqual([
       "requests",
       "needs-you",
