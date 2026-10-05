@@ -7,6 +7,8 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
+import * as Option from "effect/Option";
+import * as WorkspacePaths from "./workspace/WorkspacePaths.ts";
 import { HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
 
@@ -125,7 +127,11 @@ it.effect("parks automatic pull until activation without delaying command readin
           start: Effect.void,
           getSettings: Effect.succeed({ ...DEFAULT_SERVER_SETTINGS, defaultAutoPull: true }),
         }),
+        Layer.mock(WorkspacePaths.WorkspacePaths)({
+          normalizeWorkspaceRoot: (root) => Effect.succeed(root),
+        }),
         Layer.mock(ServerEnvironment.ServerEnvironment)({
+          getEnvironmentId: Effect.succeed(EnvironmentId.make("auto-pull-environment")),
           getDescriptor: Effect.succeed({
             environmentId: EnvironmentId.make("auto-pull-environment"),
             label: "Test environment",
@@ -137,7 +143,11 @@ it.effect("parks automatic pull until activation without delaying command readin
         Layer.mock(ProjectStore.ProjectStoreV2)({
           listShells: () => Effect.succeed(snapshot.projects),
         }),
-        Layer.mock(ProjectService.ProjectService)({ snapshot: Effect.succeed(snapshot) }),
+        Layer.mock(ProjectService.ProjectService)({
+          snapshot: Effect.succeed(snapshot),
+          getById: (id) =>
+            Effect.succeed(Option.some({ ...snapshot.projects[0]!, id, kind: "chat" as const })),
+        }),
         Layer.mock(ThreadManagement.ThreadManagementService)({
           getShellSnapshot: () =>
             Effect.succeed({
