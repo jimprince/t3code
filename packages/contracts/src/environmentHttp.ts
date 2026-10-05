@@ -21,6 +21,8 @@ import {
   AuthEnvironmentScope,
   AuthTokenExchangeRequest,
   AuthSessionState,
+  AuthSessionRefreshRequest,
+  AuthSessionRefreshResult,
   AuthWebSocketTicketResult,
   ServerAuthSessionMethod,
 } from "./auth.ts";
@@ -89,6 +91,7 @@ export type EnvironmentAuthInvalidReason = typeof EnvironmentAuthInvalidReason.T
 
 export const EnvironmentOperationForbiddenReason = Schema.Literals([
   "current_session_revoke_not_allowed",
+  "session_refresh_requires_bearer_access_token",
 ]);
 export type EnvironmentOperationForbiddenReason = typeof EnvironmentOperationForbiddenReason.Type;
 
@@ -97,6 +100,7 @@ export const EnvironmentInternalErrorReason = Schema.Literals([
   "browser_session_issuance_failed",
   "browser_session_cookie_failed",
   "access_token_issuance_failed",
+  "session_refresh_failed",
   "websocket_ticket_issuance_failed",
   "pairing_credential_issuance_failed",
   "pairing_links_load_failed",
@@ -324,6 +328,11 @@ const EnvironmentTokenExchangeErrors = [
   EnvironmentAuthInvalidError,
   EnvironmentInternalError,
 ] as const;
+const EnvironmentSessionRefreshErrors = [
+  EnvironmentAuthInvalidError,
+  EnvironmentOperationForbiddenError,
+  EnvironmentInternalError,
+] as const;
 const EnvironmentScopedOperationErrors = [
   EnvironmentScopeRequiredError,
   EnvironmentInternalError,
@@ -454,6 +463,14 @@ class EnvironmentAuthHttpApi extends HttpApiGroup.make("auth")
       success: AuthAccessTokenResult,
       error: EnvironmentTokenExchangeErrors,
     }),
+  )
+  .add(
+    HttpApiEndpoint.post("sessionRefresh", "/api/auth/session/refresh", {
+      headers: OptionalBearerHeaders,
+      payload: AuthSessionRefreshRequest,
+      success: AuthSessionRefreshResult,
+      error: EnvironmentSessionRefreshErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
   )
   .add(
     HttpApiEndpoint.post("webSocketTicket", "/api/auth/websocket-ticket", {
