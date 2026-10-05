@@ -70,7 +70,8 @@ import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectDecisionsWidget } from "./ProjectDecisionsWidget";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { ProjectTaskPanel } from "./ProjectTaskPanel";
-import { OpenTaskContext } from "./TaskLink";
+import { OpenTaskContext, TaskTitle } from "./TaskLink";
+import { deriveWorkstreams } from "./projectWorkstreams.logic";
 import type { TaskRef } from "./taskView.logic";
 import {
   ClickableRow,
@@ -93,7 +94,7 @@ import { ProjectRequestBox } from "./ProjectRequestBox";
 import { ProjectIssuesSummary, ProjectRoadmapSummary } from "./ProjectTabSummaries";
 import { resolveProjectTab, type ProjectTab } from "./projectTabs.logic";
 import { HEALTH_LABEL, isHealthStale, latestWorkChangeAt } from "./projectHealth.logic";
-import { TASK_STATUS_LABEL } from "./projectRequests.logic";
+import { issueKey, TASK_STATUS_LABEL } from "./projectRequests.logic";
 import {
   deriveBlocked,
   deriveWorkingNow,
@@ -467,6 +468,64 @@ function ProjectBlockedWidget({ summary }: { readonly summary: OrchestratorSumma
               </Button>
             ) : null}
           </ClickableRow>
+        ))}
+      </ul>
+    </BoardSection>
+  );
+}
+
+/**
+ * One line per active epic under the health line: its phase or milestone, N of
+ * M, the workers on it, the next step, and Blocked. Derived from the epics and
+ * their children only; hidden while no epic has work left. A row opens the epic.
+ */
+function ProjectWorkstreams({ summary }: { readonly summary: OrchestratorSummary }) {
+  const { statuses, query } = useTaskStatuses(summary);
+  const blockedRows = useBlockedRows(summary);
+  const rows = useMemo(
+    () =>
+      deriveWorkstreams({
+        issues: query.data?.issues ?? [],
+        statuses,
+        workingThreadIds: new Set(summary.working.map((item) => item.thread.id as string)),
+        blockedRows,
+        rootThreadId: summary.root.id,
+      }),
+    [blockedRows, query.data, statuses, summary.root.id, summary.working],
+  );
+  if (rows.length === 0) return null;
+  return (
+    <BoardSection title="Workstreams" count={rows.length}>
+      <ul className="divide-y divide-border">
+        {rows.map((row) => (
+          <li key={issueKey(row.epic)} className="py-1.5">
+            <TaskTitle
+              task={{
+                host: row.epic.host,
+                repository: row.epic.repository,
+                number: row.epic.number,
+              }}
+              url={row.epic.url}
+              className="flex w-full min-w-0 items-baseline gap-x-2 text-sm hover:underline"
+            >
+              <span className="shrink-0 font-medium">{row.epic.title}</span>
+              <span className="shrink-0 text-muted-foreground">
+                {row.milestone ? `${row.milestone} · ` : ""}
+                {row.progress}
+              </span>
+              {row.agents > 0 ? (
+                <span className="shrink-0 text-muted-foreground">
+                  {row.agents} {row.agents === 1 ? "agent" : "agents"}
+                </span>
+              ) : null}
+              {row.next ? (
+                <span className="min-w-0 truncate text-muted-foreground">
+                  next: {row.next.title}
+                </span>
+              ) : null}
+              {row.blocked ? <span className="shrink-0 text-error">Blocked</span> : null}
+            </TaskTitle>
+          </li>
         ))}
       </ul>
     </BoardSection>
@@ -975,6 +1034,7 @@ export function OrchestratorBoard({
                 </div>
 
                 <ProjectHealthLine summary={summary} />
+                {tab === "dashboard" ? <ProjectWorkstreams summary={summary} /> : null}
                 <ProjectReleaseLine
                   summary={summary}
                   runningVersion={
