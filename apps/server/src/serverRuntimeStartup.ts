@@ -1,3 +1,5 @@
+import * as StartupResumePolicy from "./fork/recovery/StartupResumePolicy.ts";
+import * as Option from "effect/Option";
 import {
   CommandId,
   DEFAULT_MODEL,
@@ -631,6 +633,10 @@ const make = (options?: StartupOptions) =>
 
       yield* options?.activate ?? Effect.void;
       yield* Effect.logDebug("Accepting commands");
+      const startupResumePolicy = yield* Effect.serviceOption(
+        StartupResumePolicy.StartupResumePolicy,
+      );
+      if (Option.isSome(startupResumePolicy)) yield* startupResumePolicy.value.markCommandReady;
       yield* commandGate.signalCommandReady;
       yield* Effect.logDebug("startup phase: publishing ready event");
       yield* runStartupPhase(
