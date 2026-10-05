@@ -41,7 +41,11 @@ const base = {
 };
 
 function harness() {
-  let current = { ...base, pinnedAt: null as string | null };
+  let current = {
+    ...base,
+    pinnedAt: null as string | null,
+    autoSettleDisabledAt: null as string | null,
+  };
   const commands: (typeof ClientOrchestrationCommand.Type)[] = [];
   const decode = Schema.decodeUnknownSync(ClientOrchestrationCommand);
   const request = vi.fn(async (method: string, input: unknown) => {
@@ -54,6 +58,13 @@ function harness() {
         ...current,
         id: command.threadId,
         pinnedAt: command.type === "thread.pin" ? timestamp : null,
+      };
+    }
+    if (command.type === "thread.auto-settle.set") {
+      current = {
+        ...current,
+        id: command.threadId,
+        autoSettleDisabledAt: command.enabled ? null : timestamp,
       };
     }
     return { sequence: commands.length };
@@ -105,6 +116,23 @@ describe("worker pinning", () => {
       pinnedAt: null,
     });
     expect(h.commands.map((command) => command.type)).toEqual(["thread.pin", "thread.unpin"]);
+  });
+  it("turns automatic settlement off and on and reads back the server state", async () => {
+    const h = harness();
+    expect(await h.client.setThreadAutoSettle(base.id, false)).toMatchObject({
+      autoSettle: false,
+      autoSettleDisabledAt: timestamp,
+    });
+    expect(await h.client.setThreadAutoSettle(base.id, true)).toMatchObject({
+      autoSettle: true,
+      autoSettleDisabledAt: null,
+    });
+    expect(
+      h.commands.map((command) => [command.type, "enabled" in command && command.enabled]),
+    ).toEqual([
+      ["thread.auto-settle.set", false],
+      ["thread.auto-settle.set", true],
+    ]);
   });
   it.each([false, true])(
     "create pin=%s leaves default unpinned and optionally pins the new worker",
