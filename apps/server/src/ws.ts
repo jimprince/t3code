@@ -183,6 +183,7 @@ import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
 import * as RequestLedger from "./projectIssues/RequestLedger.ts";
 import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardService.ts";
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
+import * as ProjectLayoutService from "./projectLayout/ProjectLayoutService.ts";
 import * as ProjectRoadmapService from "./projectRoadmap/ProjectRoadmapService.ts";
 import * as ProjectCanvasService from "./projectCanvas/ProjectCanvasService.ts";
 import * as AutomationEngine from "./automations/AutomationEngine.ts";
@@ -699,8 +700,10 @@ const makeWsRpcLayer = (
         ledger: requestLedger,
         projectIssues,
       });
+      const projectLayout = yield* ProjectLayoutService.ProjectLayoutService;
       const projectDashboard = yield* ProjectDashboardService.make(
         yield* ProjectDashboardStore.make,
+        projectLayout,
       );
       const automations = yield* AutomationEngine.AutomationEngine;
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
@@ -3185,6 +3188,33 @@ const makeWsRpcLayer = (
             projectDashboard.setTracker(input),
             { "rpc.aggregate": "project-dashboard" },
           ),
+        // Brad's edits from a client; the orchestrator edits through the MCP tools.
+        [WS_METHODS.projectLayoutGet]: (input) =>
+          observeRpcEffect(WS_METHODS.projectLayoutGet, projectLayout.get(input.threadId), {
+            "rpc.aggregate": "project-layout",
+          }),
+        [WS_METHODS.projectLayoutApply]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectLayoutApply,
+            projectLayout.apply(input, { kind: "user", threadId: null, reason: null }),
+            { "rpc.aggregate": "project-layout" },
+          ),
+        [WS_METHODS.projectLayoutRevert]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.projectLayoutRevert,
+            projectLayout.revert(input, { kind: "user", threadId: null, reason: null }),
+            { "rpc.aggregate": "project-layout" },
+          ),
+        [WS_METHODS.projectLayoutHistory]: (input) =>
+          observeRpcEffect(WS_METHODS.projectLayoutHistory, projectLayout.history(input), {
+            "rpc.aggregate": "project-layout",
+          }),
+        [WS_METHODS.subscribeProjectLayout]: (input) =>
+          observeRpcStream(
+            WS_METHODS.subscribeProjectLayout,
+            projectLayout.stream(input.threadId),
+            { "rpc.aggregate": "project-layout" },
+          ),
         [WS_METHODS.projectRequestsList]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsList, requestLedger.listForThread(input), {
             "rpc.aggregate": "project-issues",
@@ -4340,6 +4370,7 @@ export const websocketRpcRouteLayer = Layer.unwrap(
         ),
     });
     const pullRequests = yield* PullRequestService.PullRequestService;
+    const projectLayouts = yield* ProjectLayoutService.ProjectLayoutService;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -4388,6 +4419,9 @@ export const websocketRpcRouteLayer = Layer.unwrap(
               // One server-lifetime service means clients share the same PR caches, and a WS
               // mutation invalidates the HTTP diff cache that every client reads from.
               Layer.provide(Layer.succeed(PullRequestService.PullRequestService, pullRequests)),
+              Layer.provide(
+                Layer.succeed(ProjectLayoutService.ProjectLayoutService, projectLayouts),
+              ),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(
