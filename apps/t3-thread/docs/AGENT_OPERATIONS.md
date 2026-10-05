@@ -1166,11 +1166,17 @@ buttons: `docs/user/project-canvas/funnel/index.html`:
 <script>
   document.getElementById("advance").onclick = () =>
     window.parent.postMessage(
-      { type: "t3-canvas", id: "1", intent: "send", text: "Advance #42 Bracket v2 from render to print." },
+      {
+        type: "t3-canvas",
+        id: "1",
+        intent: "send",
+        text: "Advance #42 Bracket v2 from render to print.",
+      },
       "*",
     );
   window.addEventListener("message", (event) => {
-    if (event.data?.type === "t3-canvas-result") console.log(event.data.ok ? "sent" : event.data.reason);
+    if (event.data?.type === "t3-canvas-result")
+      console.log(event.data.ok ? "sent" : event.data.reason);
   });
 </script>
 ```
