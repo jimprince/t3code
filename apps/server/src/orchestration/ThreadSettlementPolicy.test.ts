@@ -169,6 +169,21 @@ describe("resolveAutoSettlementAt", () => {
     expect(decide(thread, { state: "merged", mergedAt: "2026-08-26T00:00:00.000Z" })).toBe(true);
   });
 
+  it("never settles a pinned thread, even after a completed worker turn or a stale inactivity window", () => {
+    const completed = {
+      turnId: TurnId.make("turn-pinned"),
+      state: "completed" as const,
+      requestedAt: "2026-08-27T00:00:00.000Z",
+      startedAt: "2026-08-27T00:01:00.000Z",
+      completedAt: "2026-08-27T00:02:00.000Z",
+      assistantMessageId: null,
+    };
+    const worker = { settleOnComplete: true, latestTurn: completed };
+    expect(decide(makeThread(worker))).toBe(true);
+    expect(decide(makeThread({ ...worker, pinnedAt: "2026-08-26T00:00:00.000Z" }))).toBe(false);
+    expect(decide(makeThread({ pinnedAt: "2026-08-26T00:00:00.000Z" }))).toBe(false);
+  });
+
   it("blocks pins, snooze, pending work, live sessions, and queued starts", () => {
     expect(decide(makeThread({ settledOverride: "active" }))).toBe(false);
   });
