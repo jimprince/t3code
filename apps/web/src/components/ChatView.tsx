@@ -497,6 +497,7 @@ import {
   codexArtifactTemplatePromptToAppend,
   waitForStartedServerThread,
   shouldRefocusComposerOnWindowFocus,
+  shouldShowTimelineMinimap,
 } from "./ChatView.logic";
 import type { ThreadSyncPhase } from "../threadSync";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
@@ -10072,6 +10073,7 @@ export default function ChatView(props: ChatViewProps) {
                   />
                   {/* Messages — LegendList handles virtualization and scrolling internally */}
                   <MessagesTimeline
+                    showMinimap={shouldShowTimelineMinimap(presentation)}
                     backgroundRuns={
                       paintOnlyDisplayedTimeline || orchestratorFocus.allTraffic
                         ? EMPTY_BACKGROUND_RUNS
