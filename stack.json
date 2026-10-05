@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "ab83550c18abcbf0634be1c7c566fd0ae4b53fe9",
-  "head": "4a58b1f6543e9efb7321f2bff017fe7bbf4b096c",
+  "prev": "364f4b47d147923d96946e50c45cdfef7bf436c4",
+  "head": "bec5cfaafa5057e5ca8eaa58f60a2ae70c91bb44",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -30,7 +30,8 @@
     "fork-step-preview",
     "fork-t3-thread-prebuilt",
     "fork-embedded-pages",
-    "fork-sandbox-session-recovery"
+    "fork-sandbox-session-recovery",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-thread-client-recovery",
@@ -315,6 +316,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b944a2751d8828af07f0b2402a53eeac5ad02a0c"
+    },
+    "refresh-temp": {
+      "oid": "bec5cfaafa5057e5ca8eaa58f60a2ae70c91bb44"
     }
   }
 }
