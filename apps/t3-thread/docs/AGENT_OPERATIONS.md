@@ -1069,3 +1069,24 @@ comment; the project page shows it as the answer or test step. Use `add` when Br
 for something the capture missed; when Gitea is unreachable it is queued and filed later
 (`"queued": true`). A request accepts an issue number in the tracker, `owner/repo#N`, or the
 issue URL.
+
+## Project page widgets and tracker repository
+
+A project page (the orchestrator's dashboard) is an ordered list of widgets: requests, needs-you,
+release, roadmap, working, blocked, done, new-request, issues, prs, canvas, automations. Brad
+changes it with Customize; an orchestrator can set it for him:
+
+```bash
+t3-thread dashboard show "$T3_THREAD_ID"
+t3-thread dashboard set "$T3_THREAD_ID" --widgets requests,release,needs-you,working,canvas
+t3-thread dashboard set "$T3_THREAD_ID" --reset
+```
+
+When a project's code is not on Gitea (for example GitHub `jimprince/t3code`) name its Gitea
+tracker so requests, the issue board and capture use it:
+
+```bash
+t3-thread project tracker set "$T3_THREAD_ID" brad/t3code-fork
+t3-thread project tracker show "$T3_THREAD_ID"
+t3-thread project tracker clear "$T3_THREAD_ID"
+```
