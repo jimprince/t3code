@@ -26,6 +26,7 @@ const RPC_METHODS = {
   projectDashboardGet: WS_METHODS.projectDashboardGet,
   projectDashboardSetWidgets: WS_METHODS.projectDashboardSetWidgets,
   projectDashboardSetTracker: WS_METHODS.projectDashboardSetTracker,
+  projectDashboardSetHealth: WS_METHODS.projectDashboardSetHealth,
   projectRoadmapGet: WS_METHODS.projectRoadmapGet,
   projectRoadmapMove: WS_METHODS.projectRoadmapMove,
   projectRoadmapSaveVersion: WS_METHODS.projectRoadmapSaveVersion,
@@ -88,6 +89,7 @@ export class T3RpcClient {
       | "projectDashboardGet"
       | "projectDashboardSetWidgets"
       | "projectDashboardSetTracker"
+      | "projectDashboardSetHealth"
       | "projectRoadmapGet"
       | "projectRoadmapMove"
       | "projectRoadmapSaveVersion"
