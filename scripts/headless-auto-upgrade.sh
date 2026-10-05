@@ -9,7 +9,12 @@ if [ -f "$config_file" ]; then
 fi
 
 repo="${T3CODE_HEADLESS_REPO:-jimprince/t3code}"
-channel="${T3CODE_HEADLESS_CHANNEL:-stable}"
+if [ "$repo" = jimprince/t3code ]; then
+  default_channel=nightly
+else
+  default_channel=stable
+fi
+channel="${T3CODE_HEADLESS_CHANNEL:-$default_channel}"
 root="${T3CODE_HEADLESS_ROOT:-$HOME/.local/share/t3code-server}"
 service_name="${T3CODE_HEADLESS_SERVICE:-t3code.service}"
 keep_releases="${T3CODE_HEADLESS_KEEP_RELEASES:-3}"
@@ -26,17 +31,25 @@ die() {
 pending_file="$root/update-pending"
 force=0
 check_only=0
-case "${1:-}" in
-  "") ;;
+allow_downgrade=0
+dry_run=0
+requested_tag=""
+while [ "$#" -gt 0 ]; do
+case "$1" in
   --force) force=1 ;;
   --check-idle) check_only=1 ;;
   --retry-pending) [ -f "$pending_file" ] || exit 0 ;;
+  --allow-downgrade) allow_downgrade=1 ;;
+  --dry-run) dry_run=1 ;;
+  --tag) shift; [ "$#" -gt 0 ] || die "--tag requires a release tag"; requested_tag="$1" ;;
   --help)
-    printf 'Usage: t3code-headless-upgrade [--check-idle | --retry-pending | --force]\nAutomatic updates defer while work is active. --force explicitly permits interruption.\n'
+    printf 'Usage: t3code-headless-upgrade [--check-idle | --retry-pending | --force] [--dry-run] [--tag TAG] [--allow-downgrade]\nAutomatic updates defer while work is active. --force permits interruption only.\nOlder releases require --allow-downgrade. --dry-run checks selection and versions without install mutations.\n'
     exit 0 ;;
   *) die "unknown argument '$1'; use --help" ;;
 esac
-[ "$#" -le 1 ] || die "too many arguments"
+shift
+done
+[[ "$requested_tag" =~ ^[A-Za-z0-9.+_-]*$ ]] || die "invalid release tag"
 
 # Read the live database strictly read-only, including its WAL. Missing or unfamiliar
 # state is an error, never evidence that it is safe to interrupt the server.
@@ -99,15 +112,6 @@ if [ "$check_only" = 1 ]; then
   check_idle
   exit $?
 fi
-require_idle
-
-# A deferred retry and the regular timer must never promote different releases together.
-mkdir -p "$root"
-exec 9>"$root/update.lock"
-if ! flock -n 9; then
-  log "another update check owns the install lock"
-  exit 0
-fi
 
 # Older installed releases used a Node-based bin/t3 wrapper. Keep the standard
 # fallback on PATH only so one of those releases remains usable for rollback.
@@ -147,46 +151,110 @@ if [ -n "${GITHUB_TOKEN:-}" ]; then
   curl_headers+=(-H "Authorization: Bearer $GITHUB_TOKEN")
 fi
 
+if [ -n "$requested_tag" ]; then
+  curl -fsSL "${curl_headers[@]}" "$github_api/releases/tags/$requested_tag" -o "$release_json_path"
+else
 case "$channel" in
   stable)
     curl -fsSL "${curl_headers[@]}" "$github_api/releases/latest" -o "$release_json_path"
     ;;
   nightly)
-    curl -fsSL "${curl_headers[@]}" "$github_api/releases?per_page=50" -o "$release_json_path"
+    # GitHub orders by release creation, which can put an old reroll first.
+    # Read all pages and choose by version, including numeric fork suffixes.
+    page=1
+    while :; do
+      page_path="$tmp_dir/releases.$page.json"
+      curl -fsSL "${curl_headers[@]}" "$github_api/releases?per_page=100&page=$page" -o "$page_path"
+      count="$(python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert isinstance(d,list); print(len(d))' "$page_path")"
+      [ "$count" = 100 ] || break
+      page=$((page + 1))
+    done
+    python3 - "$tmp_dir" "$release_json_path" <<'PY'
+import json,pathlib,sys
+data=[]
+for path in pathlib.Path(sys.argv[1]).glob('releases.*.json'):
+    data.extend(json.loads(path.read_text()))
+pathlib.Path(sys.argv[2]).write_text(json.dumps(data))
+PY
     ;;
   *)
     die "unsupported channel '$channel'; expected stable or nightly"
     ;;
 esac
+fi
+
+# Keep the ordering implementation in this installed script, so copying the
+# updater never depends on a separately deployed helper or a host Node runtime.
+version_tool="$tmp_dir/versions.py"
+cat > "$version_tool" <<'PYVERSIONS'
+import datetime
+import re
+
+def version_key(version):
+    if not isinstance(version, str):
+        raise ValueError('missing version')
+    match = re.fullmatch(r'v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?(?:\+([0-9A-Za-z.-]+))?', version)
+    if not match:
+        raise ValueError('unparseable version: ' + version)
+    major, minor, patch, pre, build = match.groups()
+    fork = 0
+    if pre:
+        suffix = re.search(r'(?:^|-)fork\.(0|[1-9]\d*)$', pre)
+        if suffix:
+            fork = int(suffix[1])
+            pre = pre[:suffix.start()] or None
+    identifiers = []
+    if pre:
+        for part in pre.split('.'):
+            if not part or (part.isdigit() and len(part) > 1 and part.startswith('0')):
+                raise ValueError('invalid prerelease: ' + version)
+            identifiers.append((0, int(part)) if part.isdigit() else (1, part))
+        if pre.startswith('nightly.'):
+            if not re.fullmatch(r'nightly\.\d{8}\.(0|[1-9]\d*)', pre):
+                raise ValueError('invalid nightly version: ' + version)
+            datetime.datetime.strptime(pre.split('.')[1], '%Y%m%d')
+    if build and any(not part for part in build.split('.')):
+        raise ValueError('invalid build metadata: ' + version)
+    return (int(major), int(minor), int(patch), pre is None, tuple(identifiers), fork)
+PYVERSIONS
 
 release_info="$(
-  python3 - "$release_json_path" "$channel" <<'PY'
+  python3 - "$release_json_path" "$channel" "$requested_tag" "$version_tool" "$repo" <<'PY'
 import json
+import re
 import sys
 
-path, channel = sys.argv[1], sys.argv[2]
+path, channel, requested_tag, version_tool, repo = sys.argv[1:]
+exec(open(version_tool).read())
 with open(path, "r", encoding="utf-8") as handle:
     data = json.load(handle)
 
 releases = data if isinstance(data, list) else [data]
+matching = []
 for release in releases:
     if release.get("draft"):
         continue
-    if channel == "nightly" and not release.get("prerelease"):
+    if requested_tag and release.get('tag_name') != requested_tag:
+        raise ValueError('release API returned a different tag')
+    if not requested_tag and channel == "nightly" and not release.get("prerelease"):
         continue
     tag = release.get("tag_name") or ""
+    if not requested_tag and channel == 'nightly' and repo == 'jimprince/t3code' and not re.fullmatch(r'v?\d+\.\d+\.\d+-nightly\.[\d.]+-fork\.\d+', tag):
+        continue
     version = tag[1:] if tag.startswith("v") else tag
     asset_name = f"t3-headless-{version}-linux-x64.tar.gz"
     for asset in release.get("assets", []):
         if asset.get("name") == asset_name:
-            print(json.dumps({
+            matching.append((version_key(version), {
                 "tag": tag,
                 "version": version,
                 "asset_name": asset_name,
                 "url": asset.get("browser_download_url"),
                 "digest": asset.get("digest") or "",
             }))
-            sys.exit(0)
+if matching:
+    print(json.dumps(max(matching, key=lambda item: item[0])[1]))
+    sys.exit(0)
 
 print(f"no {channel} release with matching headless linux asset", file=sys.stderr)
 sys.exit(2)
@@ -209,7 +277,57 @@ if [ -e "$current_link" ] || [ -L "$current_link" ]; then
   previous_target="$(readlink -f "$current_link" || true)"
 fi
 
-if [ "$previous_target" = "$release_dir" ]; then
+base_url="$(resolve_base_url)"
+guard_versions() {
+  # Query the running server even if current already points at the target.
+  # A symlink promotion can precede restart, or a restart can have failed.
+  curl --max-time 5 -fsS "${base_url%/}/.well-known/t3/environment" > "$tmp_dir/running.json" || \
+    die "cannot establish running version; refusing update"
+  running_version="$(python3 - "$tmp_dir/running.json" "$version" "$previous_target" "$allow_downgrade" "$version_tool" <<'PYGUARD'
+import json, pathlib, sys
+path, target, installed, permission, tool = sys.argv[1:]
+exec(open(tool).read())
+try:
+    running = json.loads(pathlib.Path(path).read_text()).get('serverVersion')
+    target_key = version_key(target)
+    versions = [('running', running)]
+    if installed:
+        versions.append(('installed', pathlib.Path(installed).name))
+    allow_downgrade = permission == '1'
+    for kind, current in versions:
+        older = target_key < version_key(current)
+        if older and not allow_downgrade:
+            raise ValueError(f'refusing downgrade: selected {target} is older than {kind} {current}; use --allow-downgrade for an intentional downgrade')
+    print(running)
+except (OSError, ValueError, TypeError, AttributeError) as error:
+    print(str(error), file=sys.stderr)
+    sys.exit(1)
+PYGUARD
+)" || die "version safety check failed"
+}
+guard_versions
+log "selected $version; running $running_version; channel $channel; repo $repo"
+if [ "$dry_run" = 1 ]; then
+  log "dry run: no download, install, activity marker or restart changes"
+  exit 0
+fi
+require_idle
+
+# A deferred retry and the regular timer must never promote releases together.
+mkdir -p "$root"
+exec 9>"$root/update.lock"
+if ! flock -n 9; then
+  log "another update check owns the install lock"
+  exit 0
+fi
+# Refresh the installed target and running version after waiting for the lock.
+previous_target=""
+if [ -e "$current_link" ] || [ -L "$current_link" ]; then
+  previous_target="$(readlink -f "$current_link" || true)"
+fi
+guard_versions
+
+if [ "$previous_target" = "$release_dir" ] && [ "$running_version" = "$version" ]; then
   rm -f "$pending_file"
   log "already on $version"
   exit 0
@@ -287,6 +405,7 @@ fi
 # A turn may have started while the asset was downloading or being validated.
 # Recheck immediately before changing current or signaling the live service.
 require_idle
+guard_versions
 
 tmp_link="$root/current.next.$$"
 ln -s "$release_dir" "$tmp_link"
@@ -367,7 +486,6 @@ PY
   return 1
 }
 
-base_url="$(resolve_base_url)"
 if restart_service && check_health "$base_url" "$version"; then
   rm -f "$pending_file"
   log "updated $service_name to $version"
