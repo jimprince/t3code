@@ -3,6 +3,8 @@ import {
   type GiteaInstanceConfig,
   type ProjectIssue,
   type ProjectIssueRepository,
+  type ProjectIssuesGetInput,
+  type ProjectIssuesGetResult,
   type ProjectIssuesListInput,
   type ProjectIssuesListResult,
   type ThreadId,
@@ -24,6 +26,7 @@ import {
   deriveRequestStage,
   giteaRepositoryForIdentity,
   instanceHost,
+  isPartOf,
   parseRequestMarker,
   REQUEST_LABEL,
   repositoryKey,
@@ -51,12 +54,21 @@ const GiteaIssue = Schema.Struct({
 });
 type GiteaIssue = typeof GiteaIssue.Type;
 const GiteaIssues = Schema.Array(GiteaIssue);
+const GiteaComments = Schema.Array(
+  Schema.Struct({
+    body: Schema.String,
+    created_at: Schema.String,
+    user: Schema.optional(Schema.NullOr(Schema.Struct({ login: Schema.String }))),
+  }),
+);
 const GiteaUser = Schema.Struct({ login: Schema.String });
 const GiteaRepo = Schema.Struct({ full_name: Schema.String });
 
 const OPEN_PAGE_LIMIT = 50;
 const OPEN_MAX_PAGES = 4;
 const CLOSED_WINDOW_DAYS = 14;
+const COMMENT_LIMIT = 10;
+const COMMENT_CHARS = 4_000;
 const ISSUE_CACHE_TTL_MS = 30_000;
 const REPO_LOOKUP_TTL_MS = 10 * 60_000;
 
@@ -245,6 +257,37 @@ export const make = Effect.gen(function* () {
     issueCache.delete(repositoryKey(target));
   };
 
+  const toProjectIssue = (
+    target: GiteaRepositoryTarget,
+    issue: GiteaIssue,
+    linkedThreadIds: ThreadId[],
+  ): ProjectIssue => {
+    const labels = (issue.labels ?? []).map((label) => label.name);
+    const isRequest = labels.some((label) => label.toLowerCase() === REQUEST_LABEL);
+    return {
+      host: target.host,
+      repository: target.repository,
+      number: issue.number,
+      title: issue.title.trim() || `#${issue.number}`,
+      url: issue.html_url,
+      status: deriveProjectIssueStatus(issue.state, labels),
+      labels,
+      isRequest,
+      ...(isRequest ? { stage: deriveRequestStage(issue.state, labels) } : {}),
+      milestone:
+        issue.milestone && issue.milestone.id > 0 && issue.milestone.title.trim()
+          ? { id: issue.milestone.id, title: issue.milestone.title.trim() }
+          : null,
+      requestSource: parseRequestMarker(issue.body),
+      assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
+      comments: Math.max(0, issue.comments ?? 0),
+      createdAt: issue.created_at,
+      updatedAt: issue.updated_at,
+      closedAt: issue.closed_at ?? null,
+      linkedThreadIds,
+    };
+  };
+
   const list = (input: ProjectIssuesListInput) =>
     Effect.gen(function* () {
       const project = yield* resolveProject(input.rootThreadId);
@@ -264,7 +307,6 @@ export const make = Effect.gen(function* () {
       for (const { target, items, error } of results) {
         repositories.push({ host: target.host, repository: target.repository, error });
         for (const issue of items) {
-          const labels = (issue.labels ?? []).map((label) => label.name);
           const issueKey = `${repositoryKey(target)}#${issue.number}`;
           // Refresh persisted badge snapshots from the board's existing API read.
           // sync checks that the link still exists, so unlink races cannot resurrect it.
@@ -300,29 +342,7 @@ export const make = Effect.gen(function* () {
                 .pipe(Effect.ignore);
             }
           }
-          const isRequest = labels.some((label) => label.toLowerCase() === REQUEST_LABEL);
-          issues.push({
-            host: target.host,
-            repository: target.repository,
-            number: issue.number,
-            title: issue.title.trim() || `#${issue.number}`,
-            url: issue.html_url,
-            status: deriveProjectIssueStatus(issue.state, labels),
-            labels,
-            isRequest,
-            ...(isRequest ? { stage: deriveRequestStage(issue.state, labels) } : {}),
-            milestone:
-              issue.milestone && issue.milestone.id > 0 && issue.milestone.title.trim()
-                ? { id: issue.milestone.id, title: issue.milestone.title.trim() }
-                : null,
-            requestSource: parseRequestMarker(issue.body),
-            assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
-            comments: Math.max(0, issue.comments ?? 0),
-            createdAt: issue.created_at,
-            updatedAt: issue.updated_at,
-            closedAt: issue.closed_at ?? null,
-            linkedThreadIds: project.linkedThreads.get(issueKey) ?? [],
-          });
+          issues.push(toProjectIssue(target, issue, project.linkedThreads.get(issueKey) ?? []));
         }
       }
       return {
@@ -332,7 +352,40 @@ export const make = Effect.gen(function* () {
       } satisfies ProjectIssuesListResult;
     });
 
-  return { list, resolveProject, repositoryForProject, invalidate, instancesOrFail };
+  /** One issue of the project with its body, latest comments and the issues "Part of" it. */
+  const get = (input: ProjectIssuesGetInput) =>
+    Effect.gen(function* () {
+      const project = yield* resolveProject(input.rootThreadId);
+      const target = project.targets.find(
+        (candidate) => repositoryKey(candidate) === repositoryKey(input),
+      );
+      if (!target) return yield* fail("That repository is not part of this project.");
+      const path = `${GiteaApi.repositoryPath(target.repository)}/issues/${input.number}`;
+      const [raw, comments, siblings] = yield* Effect.all(
+        [
+          api.request(target.instance, path, GiteaIssue),
+          api.request(target.instance, `${path}/comments`, GiteaComments),
+          fetchRepositoryIssues(target),
+        ],
+        { concurrency: 3 },
+      ).pipe(Effect.mapError((error) => fail(error.detail)));
+      if (raw.pull_request != null) return yield* fail("That is a pull request, not an issue.");
+      const issueKey = `${repositoryKey(target)}#${raw.number}`;
+      return {
+        issue: toProjectIssue(target, raw, project.linkedThreads.get(issueKey) ?? []),
+        body: raw.body ?? "",
+        comments: comments.slice(-COMMENT_LIMIT).map((comment) => ({
+          author: comment.user?.login ?? "",
+          body: comment.body.slice(0, COMMENT_CHARS),
+          createdAt: comment.created_at,
+        })),
+        childNumbers: siblings
+          .filter((sibling) => sibling.number !== raw.number && isPartOf(sibling.body, raw.number))
+          .map((sibling) => sibling.number),
+      } satisfies ProjectIssuesGetResult;
+    });
+
+  return { list, get, resolveProject, repositoryForProject, invalidate, instancesOrFail };
 });
 
 export type ProjectIssuesService = Effect.Success<typeof make>;
