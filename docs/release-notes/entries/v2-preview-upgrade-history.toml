@@ -1,0 +1,4 @@
+id = "v2-preview-upgrade-history"
+category = "fix"
+functionality = "history"
+text = "Upgrade published V2 preview databases without replaying their schema or losing history import progress."
