@@ -273,17 +273,19 @@ Prefer nested T3 threads for sub-agents: the user can open them, answer them,
 and move them with `t3-thread nest` / `unnest`. Built-in subagents (Claude's
 Task/Agent tool, Codex native spawns) cannot be opened, promoted, or answered;
 use them only for brief read-only lookups inside your own turn that the user
-did not ask to see. Nesting needs the worker in your environment;
-otherwise, or on a server without nesting, the worker is top-level and the
-`nesting` field in the create output says why. Tell the user when that happens.
+did not ask to see. Workers can nest across paired environments when the child's
+server supports remote nesting. Connect both environments in the client to see
+the merged tree. Without the parent's environment, the child stays reachable in
+the sidebar with a parent-environment note. Older servers require an update for
+remote nesting; local nesting still reports unsupported servers in `nesting`.
 
 - no flag: nests under the calling thread (`T3_THREAD_ID`), including when the
-  caller is itself nested. A caller in another environment gets a top-level
-  worker; the `nesting` field in the create output says why.
+  caller is itself nested, including callers on another paired environment.
 - `--top-level`: put the worker in the sidebar, for work the user should
   watch directly.
-- `--parent <agent-or-thread>`: nest under a specific thread in the same
-  environment.
+- `--parent <agent-or-thread>`: nest under a specific thread on any paired
+  environment. For example, `create --env local-mbp --parent vm-supervisor ...`
+  records a remote link only on the laptop server.
 - Move a worker later with `t3-thread nest <agent> --parent <agent-or-thread>`
   or `t3-thread unnest <agent>`.
 
