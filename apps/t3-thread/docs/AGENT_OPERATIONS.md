@@ -789,3 +789,7 @@ t3-thread automation resume <automation-id> --env <name> --project <id>
 t3-thread automation remove <automation-id> --env <name> --project <id>
 t3-thread automation run-now <automation-id> --env <name> --project <id>
 ```
+
+### Operator session renewal
+
+On protocol 2 environments advertising `sessionRefresh`, the CLI rotates valid bearer sessions in their final seven days and saves the replacement under its existing state-file lock. The old token keeps its original expiry so concurrent calls or an interrupted local save can retry. A failed refresh warns once and continues with the current credential; expired credentials require `t3-thread pair` again.
