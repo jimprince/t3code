@@ -41,9 +41,11 @@ export function useAttachmentDocument(input: {
       attachmentId: input.attachmentId,
       fileName: input.name,
       mimeType: input.mimeType,
-      disposition: "inline" as const,
+      // Native has no in-app WebGL viewer. Models use the unrestricted download
+      // capability so an oversized file can still reach the platform viewer.
+      disposition: kind === "model" ? ("attachment" as const) : ("inline" as const),
     }),
-    [input.attachmentId, input.name, input.mimeType],
+    [input.attachmentId, input.name, input.mimeType, kind],
   );
   const environmentId = input.attachment ? null : input.environmentId;
   const refresh = useRefreshAssetUrl(environmentId, resource);

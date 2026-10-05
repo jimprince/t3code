@@ -1,0 +1,4 @@
+id = "inline-3d-model-previews"
+category = "feature"
+functionality = "file previews"
+text = "Preview GLB and STL 3D models directly in chat, attachments, and workspace files."
