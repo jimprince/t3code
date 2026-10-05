@@ -1586,6 +1586,7 @@ depends_on = ["fork-request-ledger", "fork-project-dashboard-widgets", "fork-pro
 roles = []
 note = "The type is the existing ask:<kind> label, so the five original kinds keep working; capture classifies the three new ones. projectRequests.update takes kind (CLI request type) and swaps the issue's ask:<kind> label; a type-only update works on any tracker issue, open or closed, and links no thread. The Release widget lists completed tasks by milestone, newest first (shipped requests to test with Settle, then settled or closed tasks of the tree or of a release milestone within the 14-day closed window, then work completed outside a release), then Next release. Open maintenance tasks not needing Brad move from Requests to a new Maintenance widget after Release; saved custom widget orders keep it hidden until added under Customize. Issue cards show the type."
 
+[[patch]]
 name = "fork-scripts-automations"
 subject = "feat(projects): scripts and automation rules"
 class = "product"
