@@ -895,3 +895,31 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Register token-aware configured Gitea in the native shared PR browser beside unconfigured Forgejo; retain common viewed-files and issue navigation."
+
+[[patch]]
+name = "fork-auth-session-refresh"
+subject = "feat(auth): refresh operator sessions"
+class = "product"
+purpose = "Rotate valid bearer operator sessions before expiry so unattended t3-thread commands and notification delivery do not require monthly re-pairing."
+retire_when = "Upstream provides equivalent authenticated session rotation and t3-thread renewal behavior."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "On protocol 2 servers advertising sessionRefresh, the CLI rotates unexpired bearer access tokens in their final seven days. Replacement credentials retain persisted subject, scopes and client metadata; old credentials overlap until their original expiry. Unsupported descriptors skip refresh, transient failures warn once, and expired credentials require pairing."
+
+[[patch.decision]]
+id = "upstream-environment-capability-expansion"
+date = "2026-09-16"
+decided = "adapt"
+rationale = "Preserve upstream's projectCloneTracking capability alongside the fork's independent sessionRefresh capability. Upstream still lacks authenticated bearer-session rotation and t3-thread renewal behavior."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Keep operator refresh on V2 auth services, preserve metadata and proof binding, and overlap old credentials until their original expiry for concurrent operators."
+
+[[patch.decision]]
+id = "socket-open-209-auth-session-refresh"
+date = "2026-10-08"
+decided = "adapt"
+rationale = "Carry the socket-open deadline through session discovery and refresh once before opening attempts."
