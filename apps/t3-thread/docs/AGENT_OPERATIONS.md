@@ -1259,6 +1259,13 @@ child started), Building (some Active), Review (every child left is For review),
 `roadmap list` carries each epic's `epic: {done, total, remaining}` and each version's
 `description`.
 
+The Dashboard's Workstreams block lists each open epic that still has children, with no manual
+upkeep: the epic title, the earliest milestone among its open children ("M1 of M1-M4"), "N of M ·
+Phase", the working agents linked to the epic or its children, "next:" (the first Active child,
+else the first Pending), and a Blocked marker when a child is blocked. Keep the checklist and the
+"Part of #N" lines current and link worker threads to the children they work on; a click opens the
+epic.
+
 `request shipped --release fork.24` closes that release's milestone, so the next open version
 becomes the next release.
 
