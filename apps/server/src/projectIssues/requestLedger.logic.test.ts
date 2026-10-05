@@ -9,6 +9,7 @@ import {
   formatRequestIssueBody,
   isObviouslyNotARequest,
   parseRequestReference,
+  progressLineFor,
 } from "./requestLedger.logic.ts";
 
 function turnStart(text: string, extra: Record<string, unknown> = {}) {
@@ -117,5 +118,14 @@ describe("parseRequestReference", () => {
     expect(parseRequestReference("https://github.com/brad/printcell/issues/9", tracker)).toBeNull();
     expect(parseRequestReference("0", tracker)).toBeNull();
     expect(parseRequestReference("printcell", tracker)).toBeNull();
+  });
+});
+
+describe("progressLineFor", () => {
+  it("records a progress line for stage changes that carry no text", () => {
+    expect(progressLineFor("in-progress")).toBe("Progress: started");
+    expect(progressLineFor("awaiting-release")).toMatch(/next release/);
+    expect(progressLineFor("needs-test")).toBeNull();
+    expect(progressLineFor(undefined)).toBeNull();
   });
 });
