@@ -9,6 +9,7 @@ import {
   enqueueSend,
   hasQueuedWork,
   listQueuedSends,
+  summarizeQueuedSends,
   type QueueClientFactory,
 } from "../src/sendQueue.js";
 import { loadState, saveState } from "../src/state.js";
@@ -388,6 +389,120 @@ describe("send queue drain", () => {
 
       expect(sent).toEqual([]);
       expect((await loadState()).queuedSends[0]?.status).toBe("cancelled");
+    });
+  });
+});
+
+async function queueFrom(
+  sender: string | null,
+  text: string,
+  coalesceKey?: string,
+  threadId = "thread-worker-a",
+) {
+  return enqueueSend({
+    threadId,
+    agentName: "worker-a",
+    environment: "dev-vm",
+    text,
+    queuedDuringTurnId: "turn-1",
+    ...(sender ? { origin: { source: "thread-send" as const, fromThreadId: sender } } : {}),
+    ...(coalesceKey ? { coalesceKey } : {}),
+  });
+}
+
+describe("coalesced status notes", () => {
+  it("replaces the same sender's waiting note with the same key and keeps everything else", async () => {
+    await withTempState(async () => {
+      await queueFrom("worker-1", "progress 1", "progress");
+      await queueFrom("worker-2", "progress other worker", "progress");
+      await queueFrom("worker-1", "decision needed");
+      await queueFrom("worker-1", "other key", "phase");
+      await queueFrom("worker-1", "other thread", "progress", "thread-worker-b");
+      const latest = await queueFrom("worker-1", "progress 2", "progress");
+
+      expect(latest.superseded.map(({ text }) => text)).toEqual(["progress 1"]);
+      const open = listQueuedSends(await loadState(), { openOnly: true });
+      expect(open.map(({ text }) => text)).toEqual([
+        "progress other worker",
+        "decision needed",
+        "other key",
+        "other thread",
+        "progress 2",
+      ]);
+      const replaced = (await loadState()).queuedSends.find(({ text }) => text === "progress 1");
+      expect(replaced).toMatchObject({
+        status: "cancelled",
+        lastError: `Superseded by ${latest.queued.id}.`,
+      });
+    });
+  });
+
+  it("never drops a send without a key, and never replaces one a watcher already claimed", async () => {
+    await withTempState(async () => {
+      await queueFrom("worker-1", "plain 1");
+      const result = await queueFrom("worker-1", "plain 2");
+      expect(result.superseded).toEqual([]);
+
+      const claimed = await queueFrom("worker-1", "note 1", "progress");
+      const state = await loadState();
+      await saveState({
+        ...state,
+        queuedSends: state.queuedSends.map((send) =>
+          send.id === claimed.queued.id ? { ...send, status: "dispatching" } : send,
+        ),
+      });
+      const next = await queueFrom("worker-1", "note 2", "progress");
+
+      expect(next.superseded).toEqual([]);
+      expect(listQueuedSends(await loadState(), { openOnly: true })).toHaveLength(4);
+    });
+  });
+
+  it("keeps an operator's keyed sends apart from workers' with the same key", async () => {
+    await withTempState(async () => {
+      await queueFrom(null, "operator note", "progress");
+      const result = await queueFrom("worker-1", "worker note", "progress");
+      expect(result.superseded).toEqual([]);
+      const again = await queueFrom(null, "operator note 2", "progress");
+      expect(again.superseded.map(({ text }) => text)).toEqual(["operator note"]);
+    });
+  });
+});
+
+describe("queue summary", () => {
+  it("counts open sends by target and sender, largest first, ignoring settled ones", async () => {
+    await withTempState(async () => {
+      await queueFrom("worker-1", "a");
+      await queueFrom("worker-1", "b");
+      await queueFrom("worker-2", "c");
+      await queueFrom("worker-2", "d", undefined, "thread-worker-b");
+      const cancelled = await queueFrom("worker-1", "e");
+      await cancelQueuedSend(cancelled.queued.id);
+
+      const nowMs = Date.parse((await loadState()).queuedSends[0]!.queuedAt) + 90_000;
+      expect(summarizeQueuedSends(await loadState(), {}, nowMs)).toEqual({
+        open: 4,
+        byTarget: [
+          {
+            threadId: "thread-worker-a",
+            agentName: "worker-a",
+            open: 3,
+            bySender: [
+              { sender: "worker-1", name: null, open: 2 },
+              { sender: "worker-2", name: null, open: 1 },
+            ],
+            oldestAgeSeconds: 90,
+          },
+          {
+            threadId: "thread-worker-b",
+            agentName: "worker-a",
+            open: 1,
+            bySender: [{ sender: "worker-2", name: null, open: 1 }],
+            oldestAgeSeconds: expect.any(Number),
+          },
+        ],
+      });
+      expect(summarizeQueuedSends(await loadState(), { threadId: "thread-worker-b" }).open).toBe(1);
     });
   });
 });
