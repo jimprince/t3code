@@ -120,6 +120,30 @@ it.layer(NodeServices.layer)("thread nesting", (it) => {
     }),
   );
 
+  it.effect("drops worker-only completion settlement when a thread is unnested", () =>
+    Effect.gen(function* () {
+      const worker = thread(WORKER, { parentThreadId: ORCHESTRATOR, settleOnComplete: true });
+      const unnested = yield* decideAndProject(
+        setParent(WORKER, null),
+        readModel([worker, thread(ORCHESTRATOR)]),
+      );
+      expect(unnested.threads.find((entry) => entry.id === WORKER)?.settleOnComplete).toBeNull();
+
+      const renested = yield* decideAndProject(
+        setParent(WORKER, ORCHESTRATOR),
+        readModel([thread(WORKER, { settleOnComplete: true }), thread(ORCHESTRATOR)]),
+      );
+      expect(renested.threads.find((entry) => entry.id === WORKER)?.settleOnComplete).toBe(true);
+
+      const remoteWorker = thread(WORKER, {
+        remoteParent: { environmentId: EnvironmentId.make("vm"), threadId: ORCHESTRATOR },
+        settleOnComplete: true,
+      });
+      const promoted = yield* decideAndProject(setParent(WORKER, null), readModel([remoteWorker]));
+      expect(promoted.threads[0]?.settleOnComplete).toBeNull();
+    }),
+  );
+
   it.effect("creates nested threads in the same or a different project", () =>
     Effect.gen(function* () {
       for (const projectId of [PROJECT, OTHER_PROJECT]) {

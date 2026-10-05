@@ -120,6 +120,56 @@ it.layer(NodeServices.layer)("settled thread decider", (it) => {
     }),
   );
 
+  it.effect("never automatically settles a pinned thread or one with live children", () =>
+    Effect.gen(function* () {
+      const command = {
+        type: "thread.auto-settle" as const,
+        commandId: CommandId.make("cmd-auto-settle-protected"),
+        threadId: ThreadId.make("thread-1"),
+        snapshotSequence: 0,
+        settledAt: SETTLED_AT,
+      };
+      const pinned = yield* decideOrchestrationCommand({
+        command,
+        readModel: makeReadModel(null, null, null, [], [], { pinnedAt: SETTLED_AT }),
+      }).pipe(Effect.flip);
+      expect(pinned._tag).toBe("OrchestrationCommandInvariantError");
+
+      const base = makeReadModel(null);
+      const parent = base.threads[0]!;
+      const child = (id: string, overrides: Partial<OrchestrationThread>): OrchestrationThread => ({
+        ...parent,
+        id: ThreadId.make(id),
+        parentThreadId: parent.id,
+        ...overrides,
+      });
+      // A settled child still makes the thread an orchestrator.
+      const withChild = yield* decideOrchestrationCommand({
+        command,
+        readModel: {
+          ...base,
+          threads: [...base.threads, child("settled-child", { settledOverride: "settled" })],
+        },
+      }).pipe(Effect.flip);
+      expect(withChild._tag).toBe("OrchestrationCommandInvariantError");
+
+      const goneChildren = yield* decideOrchestrationCommand({
+        command,
+        readModel: {
+          ...base,
+          threads: [
+            ...base.threads,
+            child("archived-child", { archivedAt: NOW }),
+            child("deleted-child", { deletedAt: NOW }),
+          ],
+        },
+      });
+      expect((Array.isArray(goneChildren) ? goneChildren : [goneChildren])[0]?.type).toBe(
+        "thread.settled",
+      );
+    }),
+  );
+
   it.effect("settles awake threads without a redundant wake and re-emits idempotently", () =>
     Effect.gen(function* () {
       const event = yield* decideOrchestrationCommand({
