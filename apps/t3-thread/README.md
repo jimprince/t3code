@@ -368,7 +368,8 @@ is not proof that it owns the lease or delivered a notification.
 `watch --interval 5` uses five seconds while work remains, and sixty seconds
 while idle. Each pass shares thread reads and uses HTTP/RPC within the watcher
 process. Unsubscribed sources are not scanned. Settled sources are checked once
-per minute; archived and confirmed missing sources are parked until the watcher
+per minute, and one that finished a turn within the last hour still reports that final
+completion, so a worker that settles itself at close-out is not silent; archived and confirmed missing sources are parked until the watcher
 restarts. `skippedMappings` flags these mappings without deleting local aliases.
 Use `t3-thread forget <name>` to remove an obsolete alias. `status` without a name
 reports missing aliases and continues showing the remaining threads.

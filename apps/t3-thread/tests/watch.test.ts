@@ -192,6 +192,44 @@ async function withTempState(test: () => Promise<void>): Promise<void> {
 }
 
 describe("watch flows", () => {
+  it("reports the final completion of a worker that settled itself right after its turn", async () => {
+    await withTempState(async () => {
+      const settled = (settledAt: string) => makeThread({ settledOverride: "settled", settledAt });
+      const { clientFactory } = createClientFactory({
+        sourceThread: settled("2026-04-17T00:00:04.000Z"),
+      });
+      const events = await scanAttentionNotifications(await loadState(), {
+        clientFactory,
+        now: () => "2026-04-17T00:00:30.000Z",
+      });
+      expect(events).toMatchObject([{ sourceState: "completed", latestTurnId: "turn-1" }]);
+
+      const stale = createClientFactory({ sourceThread: settled("2026-04-17T00:00:04.000Z") });
+      expect(
+        await scanAttentionNotifications(await loadState(), {
+          clientFactory: stale.clientFactory,
+          now: () => "2026-04-17T03:00:00.000Z",
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  it("stays awake just long enough to record a completion that settled before the next pass", async () => {
+    await withTempState(async () => {
+      const finishedAt = (agoMs: number) => new Date(Date.now() - agoMs).toISOString();
+      const settledWorker = (agoMs: number) =>
+        makeThread({
+          settledOverride: "settled",
+          settledAt: finishedAt(agoMs),
+          latestTurn: { ...makeThread().latestTurn!, completedAt: finishedAt(agoMs) },
+        });
+      const recent = createClientFactory({ sourceThread: settledWorker(10_000) });
+      expect(await hasActiveWork({ clientFactory: recent.clientFactory })).toBe(true);
+      const old = createClientFactory({ sourceThread: settledWorker(10 * 60_000) });
+      expect(await hasActiveWork({ clientFactory: old.clientFactory })).toBe(false);
+    });
+  });
+
   it("holds and coalesces new notifications against a persisted quota failure, then recovers on explicit retry", async () => {
     await withTempState(async () => {
       const subscriber = makeThread({
