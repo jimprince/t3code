@@ -1,5 +1,6 @@
 import type {
   AuthAccessTokenResult,
+  AuthSessionRefreshResult,
   AuthSessionState,
   AuthWebSocketTicketResult,
   ExecutionEnvironmentDescriptor,
@@ -220,6 +221,20 @@ export async function fetchSessionState(input: {
     httpBaseUrl: input.httpBaseUrl,
     pathname: "/api/auth/session",
     bearerToken: input.bearerToken,
+  });
+}
+
+export async function refreshAccessToken(input: {
+  httpBaseUrl: string;
+  bearerToken: string;
+  signal?: AbortSignal;
+}): Promise<AuthSessionRefreshResult> {
+  return fetchRemoteJson<AuthSessionRefreshResult>({
+    httpBaseUrl: input.httpBaseUrl,
+    pathname: "/api/auth/session/refresh",
+    method: "POST",
+    bearerToken: input.bearerToken,
+    body: {},
   });
 }
 
