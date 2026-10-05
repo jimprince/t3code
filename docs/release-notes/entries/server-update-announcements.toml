@@ -1,0 +1,4 @@
+id = "server-update-announcements"
+category = "feature"
+functionality = "updates"
+text = "Server updates announce the target version and restart progress to connected clients before interruption."
