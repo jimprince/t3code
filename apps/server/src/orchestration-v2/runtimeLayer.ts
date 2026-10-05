@@ -1,3 +1,4 @@
+import * as StartupResumePolicy from "../fork/recovery/StartupResumePolicy.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as Layer from "effect/Layer";
@@ -289,7 +290,7 @@ const layerThreadTitleRegenerationProvided = ThreadTitleRegenerationService.laye
     Layer.mergeAll(layerThreadManagementProvided, ProjectStore.layer, TextGeneration.layer),
   ),
 );
-const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
+const layerNativeEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
   Layer.provide(
     Layer.mergeAll(
       layerRunFinalizationServiceProvided,
@@ -302,6 +303,10 @@ const layerEffectExecutorProvided = EffectWorker.layerExecutor.pipe(
       layerThreadManagementProvided,
     ),
   ),
+);
+const layerEffectExecutorProvided = StartupResumePolicy.executorLayer.pipe(
+  Layer.provideMerge(StartupResumePolicy.layer),
+  Layer.provide(layerNativeEffectExecutorProvided),
 );
 const layerEffectWorkerProvided = EffectWorker.layer.pipe(
   Layer.provide(Layer.merge(layerStores, layerEffectExecutorProvided)),
@@ -330,6 +335,7 @@ const layerMcpAppRequestsProvided = McpAppRequests.layer.pipe(
 );
 
 export const layer = Layer.mergeAll(
+  StartupResumePolicy.layer,
   layerOrchestratorProvided,
   layerMcpAppRequestsProvided,
   layerThreadManagementProvided,
