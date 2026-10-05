@@ -17,12 +17,13 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "esbuild src/cli.ts --bundle --platform=node --format=cjs --outfile=dist/cli.cjs",
-    "cli": "tsx src/cli.ts",
+    "build": "node scripts/build.mjs",
+    "cli": "node scripts/launch.mjs",
     "smoke": "tsx src/cli.ts envs >/dev/null && tsx src/cli.ts projects --env local-mbp >/dev/null && tsx src/cli.ts watch --once --no-deliver >/dev/null",
     "test": "vp test run",
     "typecheck": "tsc --noEmit",
-    "prepare": "esbuild src/cli.ts --bundle --platform=node --format=cjs --outfile=dist/cli.cjs"
+    "prepare": "node scripts/build.mjs",
+    "cli:dev": "tsx src/cli.ts"
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
