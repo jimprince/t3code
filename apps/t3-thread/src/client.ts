@@ -1,6 +1,5 @@
 import { wrapWithPreamble, type WorkerContext } from "./thread-preamble.js";
 import { withSenderHeader } from "./thread-identity.js";
-import type { ProjectAutomation } from "@t3tools/contracts";
 import type { NamedAgentSummary } from "./namedAgents.js";
 import { makeMessageOriginContext, type MessageOrigin } from "@t3tools/shared/messageOrigin";
 import * as NodeCrypto from "node:crypto";
@@ -22,7 +21,7 @@ import {
   fetchSessionState,
   resolveWebSocketUrl,
 } from "./http.js";
-import { T3RpcClient } from "./rpc.js";
+import { T3RpcClient, type AutomationRpcMethod } from "./rpc.js";
 import { enqueueSend } from "./sendQueue.js";
 import { classifyThread } from "./status.js";
 import { resolveCallerThreadId } from "./state.js";
@@ -252,27 +251,17 @@ export class RemoteEnvironmentClient {
     return snapshot.threads;
   }
 
-  async listAutomations(projectId: string): Promise<readonly ProjectAutomation[]> {
-    const project = (await this.listProjects()).find((entry) => entry.id === projectId);
-    if (!project) throw new Error("Project does not exist on this environment.");
-    return project.automations ?? [];
-  }
-
-  async dispatchAutomation(command: {
-    type: string;
-    projectId: string;
-    commandId: string;
-    automation?: unknown;
-    automationId?: string;
-  }): Promise<readonly ProjectAutomation[]> {
-    await this.listAutomations(command.projectId);
+  /** Scripts and automation rules; see apps/server/src/automations. */
+  async automationRpc<T = unknown>(
+    method: AutomationRpcMethod,
+    input: Record<string, unknown>,
+  ): Promise<T> {
     const rpc = await this.openRpc();
     try {
-      await rpc.request("dispatchCommand", command);
+      return await rpc.request<T>(method, input);
     } finally {
       await rpc.dispose();
     }
-    return this.listAutomations(command.projectId);
   }
 
   async listWorktreeGcThreads(): Promise<OrchestrationThreadShell[]> {
