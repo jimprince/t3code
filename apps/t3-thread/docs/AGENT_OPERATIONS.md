@@ -1187,6 +1187,17 @@ t3-thread project tracker show "$T3_THREAD_ID"
 t3-thread project tracker clear "$T3_THREAD_ID"
 ```
 
+The orchestrator keeps the project's health line, shown at the top of its page: one status
+(`on-track`, `at-risk`, `off-track`, `waiting-on-you`) and one sentence on where the work is
+heading. Set it whenever the project's state changes. The page marks it stale when it is older
+than a day or older than the newest worker or task change, and the dashboard curator checks it
+for freshness:
+
+```bash
+t3-thread project health set "$T3_THREAD_ID" at-risk "V2 port M1 waiting on plan approval"
+t3-thread project health show "$T3_THREAD_ID"
+```
+
 ## Project roadmap
 
 Versions are open Gitea milestones on the project's tracker repository; the first (by due date,
