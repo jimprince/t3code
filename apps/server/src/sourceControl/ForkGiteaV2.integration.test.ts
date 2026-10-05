@@ -16,6 +16,9 @@ import * as ProviderAdapterRegistry from "../orchestration-v2/ProviderAdapterReg
 import type { ProviderAdapterV2Shape } from "../orchestration-v2/ProviderAdapter.ts";
 import { CodexProviderCapabilitiesV2 } from "../orchestration-v2/Adapters/CodexAdapterV2.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
+import * as Schema from "effect/Schema";
+
+const encodeJson = Schema.encodeSync(Schema.fromJsonString(Schema.Unknown));
 
 const instanceId = ProviderInstanceId.make("codex");
 const adapter = {
@@ -90,7 +93,7 @@ it.effect(
         url: `https://api.example.test/${repository}/pull/42`,
       };
       yield* sql`UPDATE orchestration_v2_projection_threads
-        SET payload_json = json_set(payload_json, '$.linkedPullRequest', json(${JSON.stringify(legacy)}))
+        SET payload_json = json_set(payload_json, '$.linkedPullRequest', json(${encodeJson(legacy)}))
         WHERE thread_id = ${threadId}`;
       const url = `https://${host}/${repository}/pulls/42`;
       const sync = {
