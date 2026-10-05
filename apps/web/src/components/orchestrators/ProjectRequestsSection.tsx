@@ -19,6 +19,7 @@ import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
 import { TaskTitle } from "./TaskLink";
+import { RequestKindTag } from "./RequestKindTag";
 import {
   answerSentences,
   deriveCompleted,
@@ -26,6 +27,7 @@ import {
   deriveNeedsYou,
   deriveProjectRequests,
   FOR_YOU_GROUPS,
+  isBug,
   isMaintenanceWithAgents,
   issueKey,
   latestProgressLine,
@@ -36,6 +38,7 @@ import {
   requestsOfSettledThreads,
   STAGE_STATUS,
   TASK_STATUS_LABEL,
+  taskKind,
   taskStatuses,
   type CompletedTask,
   type NeedsYouItem,
@@ -418,7 +421,7 @@ function CompactRow({
         <ServedBy request={request} />
         <LatestProgress request={request} />
       </span>
-      <span className="text-xs text-muted-foreground">{request.kind}</span>
+      <RequestKindTag kind={request.kind} bug={request.bug} />
       <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
         {formatIssueAge(request.issue.createdAt, now)}
       </span>
@@ -490,6 +493,7 @@ function NeedsYouRowBody({
   return (
     <span className="min-w-0 flex-1">
       <IssueLink issue={issue} />
+      <RequestKindTag kind={taskKind(issue.labels)} bug={isBug(issue.labels)} />
       {group === "test" ? (
         <span className="mt-1 block text-xs text-foreground/90">
           {request?.testStep ? `Test: ${request.testStep}` : "No test step posted"}
@@ -706,7 +710,11 @@ export function ProjectRequestsSection({
                 className="flex items-center gap-3 py-1.5 text-muted-foreground"
               >
                 <span className="min-w-0 flex-1 truncate text-sm">{item.title}</span>
-                <span className="text-xs">{item.kind ?? "not split yet"}</span>
+                {item.kind ? (
+                  <RequestKindTag kind={item.kind} bug={item.bug === true} className="text-xs" />
+                ) : (
+                  <span className="text-xs">not split yet</span>
+                )}
                 <span className="shrink-0 text-xs">
                   {item.attempts === 0 ? "filing" : `Gitea unreachable, retry ${item.attempts}`}
                 </span>
@@ -819,7 +827,7 @@ function CompletedRow({
           </span>
         ) : null}
       </span>
-      {task.kind ? <span className="text-xs text-muted-foreground">{task.kind}</span> : null}
+      <RequestKindTag kind={task.kind} bug={task.bug} />
       <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">
         {formatIssueAge(task.issue.closedAt ?? task.issue.updatedAt, now)}
       </span>
