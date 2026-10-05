@@ -26,3 +26,9 @@ export const submitProjectRequest = createEnvironmentRpcCommand(connectionAtomRu
   label: "environment-data:project-requests:submit",
   tag: WS_METHODS.projectRequestsSubmit,
 });
+
+/** The New request box starts a short-lived intake thread to triage the request. */
+export const startRequestIntake = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "environment-data:project-requests:start-intake",
+  tag: WS_METHODS.projectRequestsStartIntake,
+});
