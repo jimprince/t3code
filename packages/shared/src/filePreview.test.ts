@@ -8,6 +8,7 @@ import {
   isWorkspaceAudioPreviewPath,
   isWorkspaceBrowserPreviewPath,
   isWorkspaceImagePreviewPath,
+  isWorkspaceModelPreviewPath,
   isWorkspacePreviewEntryPath,
   isWorkspaceVideoPreviewPath,
   mediaKindFromPath,
@@ -57,6 +58,21 @@ describe("workspace file previews", () => {
     expect(hostPreviewMimeTypeFromExtension(".mp4")).toBe("video/mp4");
     expect(hostPreviewMimeTypeFromExtension(".txt")).toBeNull();
   });
+
+  it.each(["scene.glb", "part.STL"])("recognizes model preview path %s", (path) => {
+    expect(isWorkspaceModelPreviewPath(path)).toBe(true);
+    expect(isWorkspacePreviewEntryPath(path)).toBe(true);
+  });
+});
+
+describe("literal model filenames", () => {
+  it.each(["part.stl?download=1", "part.glb#preview", "project.3mf?x=1", "gear.step#view"])(
+    "does not reinterpret literal workspace filename %s as a URL",
+    (name) => {
+      expect(isWorkspaceModelPreviewPath(name)).toBe(false);
+      expect(filePreviewKind({ name })).toBe("unsupported");
+    },
+  );
 });
 
 describe("media path parsing", () => {
@@ -92,6 +108,8 @@ describe("attachment preview classification", () => {
     ["report.pdf", "application/pdf", "pdf"],
     ["page.HTML", "", "html"],
     ["recording.mp3", "", "audio"],
+    ["scene.glb", "application/octet-stream", "model"],
+    ["part.stl", "model/stl", "model"],
     ["payload", "application/problem+json", "text"],
     ["archive.zip", "application/zip", "unsupported"],
     ["misleading.json", "application/pdf", "pdf"],
