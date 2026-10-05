@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vite-plus/test";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
+import * as Layer from "effect/Layer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { migrationManifest, runMigrations } from "./Migrations.ts";
@@ -85,8 +86,9 @@ describe.runIf(fixtures !== undefined)("published fork snapshots", () => {
                 yield* sql`SELECT name FROM sqlite_master WHERE name = 'orchestration_v2_effect_outbox'`,
               ).toHaveLength(1);
             }).pipe(
-              Effect.provide(makeSqlitePersistenceLive(destination)),
-              Effect.provide(NodeServices.layer),
+              Effect.provide(
+                makeSqlitePersistenceLive(destination).pipe(Layer.provideMerge(NodeServices.layer)),
+              ),
               Effect.scoped,
             ),
           );
