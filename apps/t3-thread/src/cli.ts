@@ -156,6 +156,7 @@ async function resolveParentLink(
 ): Promise<{
   parentThreadId: string | null;
   remoteParent?: { environmentId: string; threadId: string };
+  parentEnvironmentName?: string;
 }> {
   const caller =
     reference === resolveCallerThreadId()
@@ -172,6 +173,7 @@ async function resolveParentLink(
   return {
     parentThreadId: null,
     remoteParent: { environmentId: parentEnvironment.environmentId, threadId: target.threadId },
+    parentEnvironmentName: target.environment,
   };
 }
 
@@ -845,7 +847,18 @@ agent
                       ?.title,
                     environment: environment.name,
                   }
-                : null,
+                : parentLink?.remoteParent
+                  ? {
+                      threadId: parentLink.remoteParent.threadId,
+                      name:
+                        state.agents.find(
+                          (agent) =>
+                            agent.threadId === parentLink.remoteParent?.threadId &&
+                            agent.environment === parentLink.parentEnvironmentName,
+                        )?.name ?? null,
+                      environment: parentLink.parentEnvironmentName ?? environment.name,
+                    }
+                  : null,
             },
           }),
     });
