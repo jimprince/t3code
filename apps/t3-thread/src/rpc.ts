@@ -20,6 +20,9 @@ const RPC_METHODS = {
   handOverNamedAgent: ORCHESTRATION_WS_METHODS.handOverNamedAgent,
   threadIssuesLink: WS_METHODS.threadIssuesLink,
   threadIssuesUnlink: WS_METHODS.threadIssuesUnlink,
+  projectRequestsCreate: WS_METHODS.projectRequestsCreate,
+  projectRequestsUpdate: WS_METHODS.projectRequestsUpdate,
+  projectRequestsList: WS_METHODS.projectRequestsList,
 } as const;
 
 const makeT3RpcClient = RpcClient.make(WsRpcGroup);
@@ -57,7 +60,10 @@ export class T3RpcClient {
       | "resolveNamedAgent"
       | "handOverNamedAgent"
       | "threadIssuesLink"
-      | "threadIssuesUnlink",
+      | "threadIssuesUnlink"
+      | "projectRequestsCreate"
+      | "projectRequestsUpdate"
+      | "projectRequestsList",
     input: unknown,
   ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<
