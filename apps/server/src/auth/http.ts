@@ -32,6 +32,7 @@ import * as HttpEffect from "effect/http/HttpEffect";
 import { HttpServerRequest, HttpServerResponse } from "effect/http";
 import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 
+import { operatorSessionRefreshHandler } from "./OperatorSessionRefresh.ts";
 import * as EnvironmentAuth from "./EnvironmentAuth.ts";
 import * as SessionStore from "./SessionStore.ts";
 import { traceAuthenticatedRelayRequest, traceRelayRequest } from "../cloud/traceRelayRequest.ts";
@@ -133,7 +134,9 @@ export function failEnvironmentScopeRequired(requiredScope: AuthEnvironmentScope
   );
 }
 
-function failEnvironmentOperationForbidden(reason: "current_session_revoke_not_allowed") {
+export function failEnvironmentOperationForbidden(
+  reason: "current_session_revoke_not_allowed" | "session_refresh_requires_bearer_access_token",
+) {
   return currentEnvironmentTraceId.pipe(
     Effect.flatMap((traceId) =>
       Effect.fail(
@@ -412,6 +415,7 @@ export const layer = HttpApiBuilder.group(
           ),
         ),
       )
+      .handle("sessionRefresh", operatorSessionRefreshHandler(serverAuth))
       .handle(
         "webSocketTicket",
         Effect.fn("environment.auth.webSocketTicket")(
