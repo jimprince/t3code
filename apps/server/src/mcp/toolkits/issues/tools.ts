@@ -14,7 +14,8 @@ const dependencies = [McpInvocationContext.McpInvocationContext];
 
 const ThreadIssueReferenceInput = Schema.Struct({
   reference: TrimmedNonEmptyString.annotate({
-    description: "A configured Gitea owner/repo#N reference or canonical issue URL.",
+    description:
+      "A configured Gitea owner/repo#N reference or canonical issue URL, including a public alias of the configured instance.",
   }),
 });
 

@@ -261,3 +261,160 @@ describe("issue link service", () => {
       }),
   );
 });
+
+describe("issue link service with a public alias not in the configuration", () => {
+  const internalProject: Pick<OrchestrationProjectShell, "repositoryIdentity"> = {
+    repositoryIdentity: {
+      canonicalKey: "git.home/brad/switchboard",
+      provider: "gitea",
+      displayName: "brad/switchboard",
+      owner: "brad",
+      name: "switchboard",
+      locator: {
+        source: "git-remote",
+        remoteName: "origin",
+        remoteUrl: "ssh://git@git.home:2222/brad/switchboard.git",
+      },
+    },
+  };
+  const aliasUrl = "https://git.bradleyprince.com/brad/t3code-fork/issues/146";
+  const threadId = ThreadId.make("alias-worker");
+
+  const run = <A, E>(
+    operation: (service: Effect.Success<typeof make>) => Effect.Effect<A, E>,
+    options: { issues?: unknown[]; response?: (url: string) => Response } = {},
+  ) => {
+    const requests: string[] = [];
+    const dispatched: unknown[] = [];
+    const respond =
+      options.response ??
+      ((url: string) =>
+        url.endsWith("/repos/brad/t3code-fork/issues/146")
+          ? new Response(
+              JSON.stringify({
+                number: 146,
+                title: "Alias",
+                state: "open",
+                html_url: "http://git.home:3000/brad/t3code-fork/issues/146",
+              }),
+            )
+          : new Response("{}", { status: 404 }));
+    return make.pipe(
+      Effect.flatMap(operation),
+      Effect.result,
+      Effect.provideService(ProjectionSnapshotQuery, {
+        getThreadShellById: () =>
+          Effect.succeed(
+            Option.some({ id: threadId, projectId: "project", issues: options.issues ?? [] }),
+          ),
+        getProjectShellById: () => Effect.succeed(Option.some(internalProject)),
+      } as never),
+      Effect.provideService(OrchestrationEngineService, {
+        dispatch: (command: unknown) => {
+          dispatched.push(command);
+          return Effect.succeed({});
+        },
+      } as never),
+      Effect.provideService(
+        HttpClient.HttpClient,
+        HttpClient.make((request) => {
+          requests.push(request.url);
+          return Effect.succeed(HttpClientResponse.fromWeb(request, respond(request.url)));
+        }),
+      ),
+      Effect.provide(
+        Layer.mergeAll(
+          ServerSettingsService.layerTest({ giteaInstances: [macInstance] }),
+          NodeServices.layer,
+        ),
+      ),
+      Effect.map((result) => ({ result, requests, dispatched })),
+    );
+  };
+
+  effectIt.effect(
+    "links the public HTTPS alias once the configured instance confirms the issue",
+    () =>
+      Effect.gen(function* () {
+        const { result, dispatched } = yield* run((service) =>
+          service.link({ threadId, reference: aliasUrl }),
+        );
+        expect(result._tag).toBe("Success");
+        expect(dispatched).toMatchObject([
+          {
+            type: "thread.issue.link",
+            link: {
+              host: "git.home:3000",
+              repository: "brad/t3code-fork",
+              number: 146,
+              url: aliasUrl,
+              snapshot: { title: "Alias", state: "open" },
+            },
+          },
+        ]);
+      }),
+  );
+
+  effectIt.effect("rejects an alias URL that no configured instance has", () =>
+    Effect.gen(function* () {
+      const { result, dispatched } = yield* run((service) =>
+        service.link({
+          threadId,
+          reference: "https://github.com/brad/t3code-fork/issues/999",
+        }),
+      );
+      expect(result._tag).toBe("Failure");
+      expect(dispatched).toEqual([]);
+    }),
+  );
+
+  effectIt.effect("rejects an alias URL whose number is a pull request on the instance", () =>
+    Effect.gen(function* () {
+      const { result, dispatched } = yield* run(
+        (service) => service.link({ threadId, reference: aliasUrl }),
+        {
+          response: () =>
+            new Response(
+              JSON.stringify({
+                number: 146,
+                title: "PR",
+                state: "open",
+                html_url: "http://git.home:3000/brad/t3code-fork/pulls/146",
+                pull_request: { merged: false },
+              }),
+            ),
+        },
+      );
+      expect(result._tag).toBe("Failure");
+      expect(dispatched).toEqual([]);
+    }),
+  );
+
+  effectIt.effect("unlinks a linked alias URL without reaching the API", () =>
+    Effect.gen(function* () {
+      const { result, requests, dispatched } = yield* run(
+        (service) => service.unlink({ threadId, reference: aliasUrl }),
+        {
+          issues: [
+            {
+              host: "git.home:3000",
+              repository: "brad/t3code-fork",
+              number: 146,
+              url: aliasUrl,
+            },
+          ],
+        },
+      );
+      expect(result._tag).toBe("Success");
+      expect(requests).toEqual([]);
+      expect(dispatched).toMatchObject([
+        {
+          type: "thread.issue.unlink",
+          host: "git.home:3000",
+          repository: "brad/t3code-fork",
+          number: 146,
+        },
+      ]);
+    }),
+  );
+});

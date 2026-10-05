@@ -119,6 +119,48 @@ function projectTarget(
   return instance && repository.includes("/") ? { instance, repository } : null;
 }
 
+function parseCanonicalIssueUrl(reference: string) {
+  if (!URL.canParse(reference)) return null;
+  const url = new URL(reference);
+  if (url.username || url.password || url.search || url.hash) return null;
+  const parsed = parseIssuePath(url.pathname);
+  return parsed ? { url, ...parsed } : null;
+}
+
+/**
+ * A canonical issue URL on a host no instance or project names, such as a public
+ * HTTPS alias of an internal instance. The host proves nothing, so each instance
+ * is a candidate that the caller must confirm through its API.
+ */
+export function aliasIssueCandidates(
+  reference: string,
+  instances: readonly GiteaInstanceConfig[],
+): ResolvedIssueTarget[] {
+  const canonical = parseCanonicalIssueUrl(reference);
+  if (!canonical || !/^https?:$/.test(canonical.url.protocol)) return [];
+  return instances.map((instance) => ({
+    instance,
+    host: new URL(instance.webOrigin).host.toLowerCase(),
+    repository: canonical.repository.toLowerCase(),
+    number: canonical.number,
+    url: `${canonical.url.origin}/${canonical.repository}/issues/${canonical.number}`,
+  }));
+}
+
+/** The link a canonical issue URL names, matched by what was stored when it was linked. */
+function linkedIssueForUrl(reference: string, links: readonly ThreadIssueLink[] | undefined) {
+  const canonical = parseCanonicalIssueUrl(reference);
+  if (!canonical) return undefined;
+  const repository = canonical.repository.toLowerCase();
+  return links?.find(
+    (link) =>
+      link.number === canonical.number &&
+      link.repository === repository &&
+      URL.canParse(link.url) &&
+      new URL(link.url).origin === canonical.url.origin,
+  );
+}
+
 export function resolveThreadIssueReference(
   reference: string,
   project: Pick<OrchestrationProjectShell, "repositoryIdentity">,
@@ -253,14 +295,38 @@ export const make = Effect.gen(function* () {
       });
     });
 
+  const resolveTarget = (reference: string, state: Effect.Success<ReturnType<typeof context>>) =>
+    Effect.try({
+      try: () => resolveThreadIssueReference(reference, state.project, state.instances),
+      catch: (error) =>
+        isThreadIssueOperationError(error) ? error : fail("Invalid Gitea issue reference."),
+    }).pipe(
+      Effect.catch((error) =>
+        Effect.gen(function* () {
+          const confirmed = yield* Effect.forEach(
+            aliasIssueCandidates(reference, state.instances),
+            (candidate) =>
+              fetchThreadIssueMetadata(api, candidate).pipe(
+                Effect.timeoutOption("2 seconds"),
+                Effect.map((issue) =>
+                  Option.isSome(issue) && !isPullRequestIssue(issue.value)
+                    ? Option.some(candidate)
+                    : Option.none(),
+                ),
+                Effect.orElseSucceed(() => Option.none<ResolvedIssueTarget>()),
+              ),
+            { concurrency: "unbounded" },
+          );
+          const matches = confirmed.filter(Option.isSome);
+          return matches.length === 1 ? matches[0]!.value : yield* error;
+        }),
+      ),
+    );
+
   const link: ThreadIssueService["link"] = (input) =>
     Effect.gen(function* () {
       const state = yield* context(input.threadId);
-      const target = yield* Effect.try({
-        try: () => resolveThreadIssueReference(input.reference, state.project, state.instances),
-        catch: (error) =>
-          isThreadIssueOperationError(error) ? error : fail("Invalid Gitea issue reference."),
-      });
+      const target = yield* resolveTarget(input.reference, state);
       const existing = state.thread.issues?.find((issue) => threadIssueKeysEqual(issue, target));
       if (existing) {
         yield* refresh(input.threadId, target).pipe(Effect.ignore, Effect.forkDetach);
@@ -292,11 +358,19 @@ export const make = Effect.gen(function* () {
   const unlink: ThreadIssueService["unlink"] = (input) =>
     Effect.gen(function* () {
       const state = yield* context(input.threadId);
-      const target = yield* Effect.try({
-        try: () => resolveThreadIssueReference(input.reference, state.project, state.instances),
-        catch: (error) =>
-          isThreadIssueOperationError(error) ? error : fail("Invalid Gitea issue reference."),
-      });
+      const resolved = yield* Effect.result(
+        Effect.try({
+          try: () => resolveThreadIssueReference(input.reference, state.project, state.instances),
+          catch: (error) =>
+            isThreadIssueOperationError(error) ? error : fail("Invalid Gitea issue reference."),
+        }),
+      );
+      const aliased =
+        resolved._tag === "Failure"
+          ? linkedIssueForUrl(input.reference, state.thread.issues)
+          : undefined;
+      if (resolved._tag === "Failure" && !aliased) return yield* resolved.failure;
+      const target = resolved._tag === "Success" ? resolved.success : aliased!;
       const existing = state.thread.issues?.find((issue) => threadIssueKeysEqual(issue, target));
       const issue = { host: target.host, repository: target.repository, number: target.number };
       if (!existing) return { unlinked: false, issue };
