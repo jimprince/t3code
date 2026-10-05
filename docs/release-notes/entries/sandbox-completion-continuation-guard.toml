@@ -1,0 +1,4 @@
+id = "sandbox-completion-continuation-guard"
+category = "fix"
+functionality = "development"
+text = "Development and test servers with startup recovery disabled retain delegated task results without automatically waking copied threads; explicit messages still run."
