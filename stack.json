@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e4debdc54da3a9c477cc2f536c616039a94423d5",
-  "head": "38ca414bc4abeecb60687e54b83aef79e205b1e9",
+  "prev": "958df5ab173dda22a81a9f9da5ed4e52d583f95c",
+  "head": "e9693373158ae39fb67e81a117cc3aee6c0f8d88",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -76,7 +76,8 @@
     "fork-project-task-types",
     "fork-project-request-box-pinned",
     "fork-scripts-automations",
-    "fork-queue-coalesced-notes"
+    "fork-queue-coalesced-notes",
+    "refresh-temp"
   ],
   "unapplied": [],
   "hidden": [],
@@ -302,6 +303,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b944a2751d8828af07f0b2402a53eeac5ad02a0c"
+    },
+    "refresh-temp": {
+      "oid": "e9693373158ae39fb67e81a117cc3aee6c0f8d88"
     }
   }
 }
