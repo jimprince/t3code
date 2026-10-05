@@ -1,0 +1,4 @@
+id = "project-layout"
+category = "feature"
+functionality = "projects"
+text = "Project pages are now a layout you can shape: drag tabs and widgets, add, remove and resize them, add notes and links, and ask the project's orchestrator to change the page for you. Changes appear at once in every open app, with an Undo."
