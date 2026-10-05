@@ -51,11 +51,8 @@ import { OrchestratorStatus } from "./OrchestratorStatus";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
-<<<<<<< /tmp/ob_ours.tsx
-import { projectReturnState } from "./projectNavigation";
-=======
 import { ProjectRequestsSection } from "./ProjectRequestsSection";
->>>>>>> /tmp/ob_theirs.tsx
+import { projectReturnState } from "./projectNavigation";
 
 function BoardSection({
   title,
@@ -336,7 +333,6 @@ export function OrchestratorBoard({
                 </span>
               </div>
 
-<<<<<<< /tmp/ob_ours.tsx
               <BoardSection title="Needs you" count={summary.needsYou.length}>
                 {summary.needsYou.length === 0 ? (
                   <Empty>Nothing is waiting on you.</Empty>
@@ -355,20 +351,6 @@ export function OrchestratorBoard({
                             : item.kind === "input"
                               ? "Question"
                               : "Plan ready"}
-=======
-            <ProjectRequestsSection summary={summary} />
-
-            <BoardSection title="Working" count={summary.working.length}>
-              {summary.working.length === 0 ? (
-                <Empty>No workers are active.</Empty>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {summary.working.map((item) => (
-                    <li key={item.thread.id} className="flex items-start gap-3 py-2">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">
-                          {item.thread.title}
->>>>>>> /tmp/ob_theirs.tsx
                         </span>
                         <ThreadProviderModel
                           thread={item.thread}
@@ -380,6 +362,8 @@ export function OrchestratorBoard({
                   </ul>
                 )}
               </BoardSection>
+
+              <ProjectRequestsSection summary={summary} />
 
               <BoardSection title="Working" count={summary.working.length}>
                 {summary.working.length === 0 ? (
