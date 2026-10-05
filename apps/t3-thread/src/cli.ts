@@ -313,6 +313,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "nest",
   "unnest",
   "issue",
+  "request",
   "pending",
   "answer",
   "approve",
@@ -1584,6 +1585,75 @@ agent
       issues: thread.issues ?? [],
     });
   });
+
+const request = agent
+  .command("request")
+  .description(
+    "Track Brad's requests (Gitea issues labeled ask). Only Brad settles a request; agents start it, mark it ready with a summary, or file one he asked for.",
+  );
+
+request
+  .command("list")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .action(async (reference) => {
+    const { agent: target, client } = await withAgent(reference);
+    const result = await client.projectRequest<{
+      issues: ReadonlyArray<Record<string, unknown>>;
+    }>("projectRequestsList", { threadId: target.threadId });
+    printJson(
+      result.issues.map((item) => ({
+        number: item.number,
+        repository: item.repository,
+        title: item.title,
+        status: item.status,
+        labels: item.labels,
+        url: item.url,
+        requestedIn: (item.requestSource as { threadId?: string } | null)?.threadId ?? null,
+      })),
+    );
+  });
+
+request
+  .command("add")
+  .argument("<thread>", "saved agent name or raw thread UUID that Brad asked")
+  .argument("<title>", "the request in Brad's words")
+  .option("--kind <kind>", "question, deliverable, plan, change or test", "deliverable")
+  .option("--detail <text>", "Brad's exact words or extra context")
+  .action(async (reference, title, options: { kind: string; detail?: string }) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRequest("projectRequestsCreate", {
+        threadId: target.threadId,
+        title,
+        kind: options.kind,
+        ...(options.detail ? { detail: options.detail } : {}),
+      }),
+    );
+  });
+
+for (const [name, status, description] of [
+  ["start", "in-progress", "Mark a request as being worked on"],
+  ["ready", "needs-review", "Hand a request to Brad: answer, draft, plan or work is ready"],
+  ["reopen", "pending", "Return a request to pending"],
+] as const) {
+  request
+    .command(name)
+    .description(description)
+    .argument("<thread>", "saved agent name or raw thread UUID in the project")
+    .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
+    .option("--summary <text>", "comment for Brad: the answer, or what to look at and where")
+    .action(async (reference, requestReference, options: { summary?: string }) => {
+      const { agent: target, client } = await withAgent(reference);
+      printJson(
+        await client.projectRequest("projectRequestsUpdate", {
+          threadId: target.threadId,
+          reference: requestReference,
+          status,
+          ...(options.summary ? { comment: options.summary } : {}),
+        }),
+      );
+    });
+}
 
 const issue = agent.command("issue").description("Manage Gitea issues linked to a thread");
 
