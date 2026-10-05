@@ -14,8 +14,6 @@ export const REQUEST_LABEL_COLORS: Record<string, string> = {
   "ask:plan": "#9085e9",
   "ask:change": "#d95926",
   "ask:test": "#c98500",
-  "awaiting-release": "#9085e9",
-  "needs-test": "#fab219",
 };
 
 const ORIGIN_CONTEXT_KIND = "t3-origin";

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { ProviderInstanceId, TurnId } from "@t3tools/contracts";
+import { ProviderInstanceId } from "@t3tools/contracts";
 
 import type { EnvironmentProject, EnvironmentThreadShell } from "./models.ts";
 import {
@@ -54,6 +54,31 @@ const thread = (
 });
 
 describe("buildOrchestratorSummaries", () => {
+  it("includes remote children in project sections, activity counts, and attention", () => {
+    const root = thread("root", null);
+    const laptop = "laptop" as EnvironmentThreadShell["environmentId"];
+    const child = thread("child", null, {
+      environmentId: laptop,
+      remoteParent: { environmentId: root.environmentId, threadId: root.id },
+      hasPendingUserInput: true,
+      session: { status: "running" } as EnvironmentThreadShell["session"],
+    });
+    const laptopProject = { ...project("project-a"), environmentId: laptop };
+    const [summary] = buildOrchestratorSummaries(
+      [root, child],
+      [project("project-a"), laptopProject],
+    );
+    expect(summary?.descendants).toEqual([child]);
+    expect(summary?.projects).toEqual([project("project-a"), laptopProject]);
+    expect(summary?.needsYou).toEqual([{ kind: "input", thread: child }]);
+    expect(summary?.activeWorkerCount).toBe(1);
+    expect(
+      buildStandaloneThreadGroups([root, child], [project("project-a"), laptopProject], {}),
+    ).toEqual([]);
+    expect(buildStandaloneThreadGroups([child], [laptopProject], {})[0]?.threads[0]?.thread).toBe(
+      child,
+    );
+  });
   it("finds top-level orchestrators and rolls nested activity, attention, projects, and links up", () => {
     const root = thread("root", null, {
       issues: [
@@ -117,48 +142,6 @@ describe("buildOrchestratorSummaries", () => {
     expect(summary?.blocked.map((item) => item.thread.id)).toEqual(["blocked"]);
     expect(summary?.activeWorkerCount).toBe(0);
     expect(summary?.latestActivityAt).toBe("2026-10-01T04:00:00.000Z");
-  });
-
-  it("does not classify interrupted turns as blocked", () => {
-    const root = thread("root", null);
-    const interrupted = thread("interrupted", "root", {
-      latestTurn: {
-        turnId: TurnId.make("turn-interrupted"),
-        state: "interrupted",
-        requestedAt: "2026-10-01T02:59:00.000Z",
-        startedAt: "2026-10-01T03:00:00.000Z",
-        completedAt: "2026-10-01T03:01:00.000Z",
-        assistantMessageId: null,
-      },
-    });
-    const failed = thread("failed", "root", {
-      latestTurn: {
-        turnId: TurnId.make("turn-failed"),
-        state: "error",
-        requestedAt: "2026-10-01T02:59:00.000Z",
-        startedAt: "2026-10-01T03:00:00.000Z",
-        completedAt: "2026-10-01T03:01:00.000Z",
-        assistantMessageId: null,
-      },
-    });
-    const sessionFailed = thread("session-failed", "root", {
-      session: {
-        threadId: "session-failed" as EnvironmentThreadShell["id"],
-        status: "error",
-        providerName: "codex",
-        runtimeMode: "full-access",
-        activeTurnId: null,
-        updatedAt: "2026-10-01T03:01:00.000Z",
-        lastError: "provider exited",
-      },
-    });
-
-    const [summary] = buildOrchestratorSummaries(
-      [root, interrupted, failed, sessionFailed],
-      [project("project-a")],
-    );
-
-    expect(summary?.blocked.map((item) => item.thread.id)).toEqual(["failed", "session-failed"]);
   });
 
   it("excludes archived roots, tolerates cycles, and keeps settled roots from supervising", () => {

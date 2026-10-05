@@ -148,6 +148,35 @@ function resolveParentThreadId(
   return saved.threadId;
 }
 
+/** Resolves parent ownership without writing to the parent's server. */
+async function resolveParentLink(
+  state: Awaited<ReturnType<typeof loadState>>,
+  reference: string,
+  childEnvironment: string,
+): Promise<{
+  parentThreadId: string | null;
+  remoteParent?: { environmentId: string; threadId: string };
+  parentEnvironmentName?: string;
+}> {
+  const caller =
+    reference === resolveCallerThreadId()
+      ? resolveCallerEndpointFromLocalContext(state, reference, resolveCallerEnvironmentMetadata())
+      : null;
+  const target =
+    caller ??
+    (await resolveAgentTarget(state, reference, {
+      preferredEnvironment: childEnvironment,
+      clientFactory: (name) => new RemoteEnvironmentClient(requireEnvironment(state, name)),
+    }));
+  const parentEnvironment = requireEnvironment(state, target.environment);
+  if (target.environment === childEnvironment) return { parentThreadId: target.threadId };
+  return {
+    parentThreadId: null,
+    remoteParent: { environmentId: parentEnvironment.environmentId, threadId: target.threadId },
+    parentEnvironmentName: target.environment,
+  };
+}
+
 function toSubscriptionEndpoint(agent: SavedAgent): SubscriptionEndpoint {
   return {
     threadId: agent.threadId,
@@ -434,13 +463,18 @@ program
     if (options.recursive && !options.parent) {
       throw new Error("--recursive requires --parent");
     }
-    const parentThreadId = options.parent
-      ? resolveParentThreadId(state, options.parent, environment.name)
+    const parentLink = options.parent
+      ? await resolveParentLink(state, options.parent, environment.name)
       : null;
     const threads = await client.listThreads();
     const titles = new Map(threads.map((thread) => [thread.id, thread.title]));
-    const selected = parentThreadId
-      ? selectThreadChildren(threads, parentThreadId, Boolean(options.recursive))
+    const selected = parentLink
+      ? selectThreadChildren(
+          threads,
+          parentLink.remoteParent?.threadId ?? parentLink.parentThreadId!,
+          Boolean(options.recursive),
+          parentLink.remoteParent?.environmentId,
+        )
       : threads;
     printLines(
       selected.map((thread) => formatThreadLine(thread, titles.get(thread.parentThreadId ?? ""))),
@@ -765,10 +799,14 @@ agent
     const client = new RemoteEnvironmentClient(environment);
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
     const snapshot = await client.getShellSnapshot();
+    const parentReference = options.topLevel ? null : (options.parent ?? resolveCallerThreadId());
+    const parentLink =
+      parentReference === null
+        ? null
+        : await resolveParentLink(state, parentReference, options.env);
     const nesting = resolveCreateParent({
-      explicitParentThreadId: options.parent
-        ? resolveParentThreadId(state, options.parent, options.env)
-        : null,
+      explicitParentThreadId: options.parent ? (parentLink?.parentThreadId ?? null) : null,
+      remoteParent: parentLink?.remoteParent,
       topLevel: options.topLevel === true,
       serverSupportsNesting: await client.supportsThreadNesting(),
       callerThreadId: resolveCallerThreadId(),
@@ -778,6 +816,7 @@ agent
     const created = await client.createAgentThread({
       pin: options.pin === true,
       parentThreadId: nesting.parentThreadId,
+      remoteParent: "remoteParent" in nesting ? nesting.remoteParent : undefined,
       settleOnComplete: options.settleOnComplete,
       projectId: options.project,
       title: options.title,
@@ -808,7 +847,18 @@ agent
                       ?.title,
                     environment: environment.name,
                   }
-                : null,
+                : parentLink?.remoteParent
+                  ? {
+                      threadId: parentLink.remoteParent.threadId,
+                      name:
+                        state.agents.find(
+                          (agent) =>
+                            agent.threadId === parentLink.remoteParent?.threadId &&
+                            agent.environment === parentLink.parentEnvironmentName,
+                        )?.name ?? null,
+                      environment: parentLink.parentEnvironmentName ?? environment.name,
+                    }
+                  : null,
             },
           }),
     });
@@ -864,6 +914,7 @@ agent
       notifySubscriberThreadId: notifyCaller?.threadId ?? null,
       pinned: created.pinned,
       nestedUnder: nesting.parentThreadId,
+      remoteParent: "remoteParent" in nesting ? nesting.remoteParent : null,
       nesting: nesting.reason,
     });
   });
@@ -1567,6 +1618,7 @@ agent
       checkedEnvironments: target.checkedEnvironments,
       unreachableEnvironments: target.unreachableEnvironments,
       parentThreadId,
+      remoteParent: thread.remoteParent ?? null,
       parentTitle,
       pinned: thread.pinnedAt != null,
       pinnedAt: thread.pinnedAt ?? null,
@@ -1632,7 +1684,8 @@ request
   });
 
 for (const [name, status, description] of [
-  ["start", "in-progress", "Mark a request as being worked on (links your thread to it)"],
+  ["start", "in-progress", "Mark a request as being worked on"],
+  ["ready", "needs-review", "Hand a request to Brad: answer, draft, plan or work is ready"],
   ["reopen", "pending", "Return a request to pending"],
 ] as const) {
   request
@@ -1640,7 +1693,7 @@ for (const [name, status, description] of [
     .description(description)
     .argument("<thread>", "saved agent name or raw thread UUID in the project")
     .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
-    .option("--summary <text>", "comment for Brad")
+    .option("--summary <text>", "comment for Brad: the answer, or what to look at and where")
     .action(async (reference, requestReference, options: { summary?: string }) => {
       const { agent: target, client } = await withAgent(reference);
       printJson(
@@ -1653,52 +1706,6 @@ for (const [name, status, description] of [
       );
     });
 }
-
-request
-  .command("ready")
-  .description(
-    "Hand a request to Brad: ready to review now, or --stage awaiting-release when the work is built and waits for the next release batch",
-  )
-  .argument("<thread>", "saved agent name or raw thread UUID in the project")
-  .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
-  .option("--stage <stage>", "needs-review (default) or awaiting-release", "needs-review")
-  .option("--summary <text>", "comment for Brad: the answer, or what to look at and where")
-  .action(async (reference, requestReference, options: { stage: string; summary?: string }) => {
-    if (options.stage !== "needs-review" && options.stage !== "awaiting-release") {
-      throw new Error("--stage must be needs-review or awaiting-release.");
-    }
-    const { agent: target, client } = await withAgent(reference);
-    printJson(
-      await client.projectRequest("projectRequestsUpdate", {
-        threadId: target.threadId,
-        reference: requestReference,
-        status: options.stage,
-        ...(options.summary ? { comment: options.summary } : {}),
-      }),
-    );
-  });
-
-request
-  .command("shipped")
-  .description(
-    "Mark a request as shipped in a release; it waits for Brad's test until he settles it",
-  )
-  .argument("<thread>", "saved agent name or raw thread UUID in the project")
-  .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
-  .requiredOption("--release <tag>", "release it shipped in, for example fork.24 (its milestone)")
-  .requiredOption("--test <step>", "one-line test step for Brad")
-  .action(async (reference, requestReference, options: { release: string; test: string }) => {
-    const { agent: target, client } = await withAgent(reference);
-    printJson(
-      await client.projectRequest("projectRequestsUpdate", {
-        threadId: target.threadId,
-        reference: requestReference,
-        status: "needs-test",
-        release: options.release,
-        comment: `Test: ${options.test}`,
-      }),
-    );
-  });
 
 const issue = agent.command("issue").description("Manage Gitea issues linked to a thread");
 
@@ -1912,9 +1919,15 @@ agent
   .requiredOption("--parent <agent-or-thread>", "saved agent name or thread UUID to nest under")
   .action(async (name, options) => {
     const { state, agent: savedAgent, client } = await withAgent(name);
-    const parentThreadId = resolveParentThreadId(state, options.parent, savedAgent.environment);
-    await client.setThreadParent(savedAgent.threadId, parentThreadId);
-    printJson({ agent: savedAgent.name, threadId: savedAgent.threadId, parentThreadId });
+    const link = await resolveParentLink(state, options.parent, savedAgent.environment);
+    await client.setThreadParent(savedAgent.threadId, link.parentThreadId, link.remoteParent);
+    const thread = await client.getThreadDetail(savedAgent.threadId);
+    printJson({
+      agent: savedAgent.name,
+      threadId: savedAgent.threadId,
+      parentThreadId: thread.parentThreadId ?? null,
+      remoteParent: thread.remoteParent ?? null,
+    });
   });
 
 agent
@@ -1924,7 +1937,13 @@ agent
   .action(async (name) => {
     const { agent: savedAgent, client } = await withAgent(name);
     await client.setThreadParent(savedAgent.threadId, null);
-    printJson({ agent: savedAgent.name, threadId: savedAgent.threadId, parentThreadId: null });
+    const thread = await client.getThreadDetail(savedAgent.threadId);
+    printJson({
+      agent: savedAgent.name,
+      threadId: savedAgent.threadId,
+      parentThreadId: thread.parentThreadId ?? null,
+      remoteParent: thread.remoteParent ?? null,
+    });
   });
 
 agent

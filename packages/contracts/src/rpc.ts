@@ -27,7 +27,6 @@ import {
   ProjectIssuesListInput,
   ProjectIssuesListResult,
   ProjectRequestCreateInput,
-  ProjectRequestCreateResult,
   ProjectRequestRef,
   ProjectRequestSettleInput,
   ProjectRequestSettleResult,
@@ -856,7 +855,7 @@ const WsProjectRequestsSettleRpc = Rpc.make(WS_METHODS.projectRequestsSettle, {
 
 const WsProjectRequestsCreateRpc = Rpc.make(WS_METHODS.projectRequestsCreate, {
   payload: ProjectRequestCreateInput,
-  success: ProjectRequestCreateResult,
+  success: ProjectRequestRef,
   error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
 });
 

@@ -652,6 +652,7 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             autoSettleDisabledAt: null,
             settleOnComplete: event.payload.settleOnComplete ?? null,
             parentThreadId: event.payload.parentThreadId ?? null,
+            remoteParent: event.payload.remoteParent ?? null,
             titleRegenerationRequestId: null,
             titleRegenerationStartedAt: null,
             latestUserMessageAt: null,
@@ -851,6 +852,9 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
               : {}),
             ...(event.payload.settleOnComplete !== undefined
               ? { settleOnComplete: event.payload.settleOnComplete }
+              : {}),
+            ...(event.payload.remoteParent !== undefined
+              ? { remoteParent: event.payload.remoteParent }
               : {}),
             ...(event.payload.parentThreadId !== undefined
               ? { parentThreadId: event.payload.parentThreadId }

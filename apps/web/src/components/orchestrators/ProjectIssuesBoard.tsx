@@ -5,8 +5,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { MessageSquareIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import { resolveThreadIssueBadgeTarget } from "../ThreadIssueBadges";
-import { useEmbeddedPages } from "../embeddedPages/useEmbeddedPages";
 import { projectIssuesQuery } from "../../state/projectIssues";
 import { useEnvironmentQuery } from "../../state/query";
 import { buildThreadRouteParams } from "../../threadRoutes";
@@ -16,7 +14,6 @@ import {
   PROJECT_ISSUE_LANES,
   type ProjectIssueLaneStatus,
 } from "./projectIssuesBoard.logic";
-import { projectReturnState, type ProjectReturnLocation } from "./projectNavigation";
 
 const DONE_PREVIEW = 8;
 
@@ -24,44 +21,23 @@ function IssueRow({
   environmentId,
   issue,
   now,
-  projectReturn,
 }: {
   readonly environmentId: EnvironmentId;
   readonly issue: ProjectIssue;
   readonly now: number;
-  readonly projectReturn: ProjectReturnLocation;
 }) {
   const navigate = useNavigate();
-  const pages = useEmbeddedPages();
-  const target = resolveThreadIssueBadgeTarget(pages, issue);
   const thread = issue.requestSource?.threadId ?? issue.linkedThreadIds[0];
   return (
     <li className="border-b border-border/60 py-1.5 last:border-b-0">
-      {target.kind === "external" ? (
-        <a
-          href={target.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block truncate text-sm text-foreground hover:underline"
-        >
-          {issue.title}
-        </a>
-      ) : (
-        <button
-          type="button"
-          className="block max-w-full truncate text-sm text-foreground hover:underline"
-          onClick={() =>
-            void navigate({
-              to: "/embedded/$pageId",
-              params: { pageId: target.pageId },
-              search: { repo: target.repo, issue: target.issue },
-              state: projectReturnState(projectReturn),
-            })
-          }
-        >
-          {issue.title}
-        </button>
-      )}
+      <a
+        href={issue.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block truncate text-sm text-foreground hover:underline"
+      >
+        {issue.title}
+      </a>
       <div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
         <span className="truncate">
           {issue.repository.split("/")[1]}#{issue.number}
@@ -84,7 +60,6 @@ function IssueRow({
               void navigate({
                 to: "/$environmentId/$threadId",
                 params: buildThreadRouteParams(scopeThreadRef(environmentId, thread)),
-                state: projectReturnState(projectReturn),
               })
             }
           >
@@ -146,10 +121,6 @@ export function ProjectIssuesBoard({ summary }: { readonly summary: Orchestrator
                     environmentId={summary.root.environmentId}
                     issue={issue}
                     now={now}
-                    projectReturn={{
-                      environmentId: summary.root.environmentId,
-                      threadId: summary.root.id,
-                    }}
                   />
                 ))}
               </ul>
@@ -179,10 +150,6 @@ export function ProjectIssuesBoard({ summary }: { readonly summary: Orchestrator
                           environmentId={summary.root.environmentId}
                           issue={issue}
                           now={now}
-                          projectReturn={{
-                            environmentId: summary.root.environmentId,
-                            threadId: summary.root.id,
-                          }}
                         />
                       ))}
                     </ul>

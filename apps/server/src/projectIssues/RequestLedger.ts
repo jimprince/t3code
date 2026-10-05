@@ -34,10 +34,7 @@ import {
   REQUEST_LABEL,
   repositoryKey,
   STATUS_LABELS,
-  AWAITING_RELEASE_LABEL,
-  NEEDS_TEST_LABEL,
 } from "./projectIssues.logic.ts";
-import { ensureMilestone, setIssueMilestone } from "./giteaMilestones.ts";
 import {
   fallbackRequestItem,
   formatRequestIssueBody,
@@ -442,74 +439,24 @@ export const make = (deps: {
         ),
       );
 
-    /**
-     * An agent files a request Brad made of it. When Gitea cannot be reached the
-     * request is queued in the outbox (shown as Pending filing) and filed later.
-     */
+    /** An agent files a request Brad made of it. */
     const create = (input: ProjectRequestCreateInput) =>
       Effect.gen(function* () {
-        const item = {
-          title: input.title,
-          kind: input.kind,
-          excerpt: input.detail?.trim() || input.title,
-        };
+        const resolved = yield* resolveOrFail(input.threadId);
         const stamp = yield* Clock.currentTimeMillis;
-        const messageId = `agent:${input.threadId}:${stamp}`;
-        type Attempt =
-          | { readonly kind: "filed"; readonly request: ProjectRequestRef }
-          | { readonly kind: "no-tracker" }
-          | { readonly kind: "unreachable" };
-        const attempt: Attempt = yield* resolveThread(input.threadId).pipe(
-          Effect.flatMap((resolved): Effect.Effect<Attempt, unknown> =>
-            resolved
-              ? fileRequest(resolved, item, messageId, 0).pipe(
-                  Effect.map((request): Attempt => ({ kind: "filed", request })),
-                )
-              : Effect.succeed({ kind: "no-tracker" }),
-          ),
-          Effect.catch(() => Effect.succeed<Attempt>({ kind: "unreachable" })),
-        );
-        if (attempt.kind === "filed") return { request: attempt.request, queued: false };
-        if (attempt.kind === "no-tracker") {
-          return yield* fail(
-            "This thread's project has no Gitea tracker repository. Set one with t3-thread project tracker set.",
-          );
-        }
-        const snapshot = yield* snapshots
-          .getShellSnapshot()
-          .pipe(Effect.mapError(() => fail("Could not read threads.")));
-        yield* modifyOutbox((outbox) =>
-          enqueue(outbox, {
-            messageId,
-            threadId: input.threadId,
-            rootThreadId: findRootThreadId(snapshot.threads, input.threadId),
-            text: item.excerpt,
-            capturedAt: DateTime.formatIso(DateTime.makeUnsafe(stamp)),
-            items: [item],
-            filed: [],
-            attempts: 0,
-            lastError: "Gitea is unreachable.",
-            nextAttemptAt: stamp + 30_000,
-          }),
-        ).pipe(Effect.mapError(() => fail("Could not queue the request.")));
-        yield* startDrain;
-        return { request: null, queued: true };
+        return yield* fileRequest(
+          resolved,
+          { title: input.title, kind: input.kind, excerpt: input.detail?.trim() || input.title },
+          `agent:${input.threadId}:${stamp}`,
+        ).pipe(Effect.mapError((error) => fail(error.detail)));
       });
 
-    /**
-     * An agent moves a request through its stages: in progress, ready for Brad,
-     * handed over for the release batch, or shipped in a release and waiting for
-     * Brad's test. Starting a request links the agent's thread to it, so the
-     * dashboard can show which request each worker serves.
-     */
+    /** An agent moves a request between pending, in progress and ready for Brad. */
     const update = (input: ProjectRequestUpdateInput) =>
       Effect.gen(function* () {
         const resolved = yield* resolveOrFail(input.threadId);
         const reference = parseRequestReference(input.reference, resolved.target);
         if (!reference) return yield* fail("Expected an issue number, owner/repo#N, or issue URL.");
-        if (input.status === "needs-test" && !input.release) {
-          return yield* fail("A shipped request needs the release it shipped in.");
-        }
         const target =
           reference.repository === resolved.target.repository
             ? resolved.target
@@ -521,11 +468,10 @@ export const make = (deps: {
         const names = new Set((issue.labels ?? []).map((label) => label.name.toLowerCase()));
         if (!names.has(REQUEST_LABEL)) return yield* fail("That issue is not a request.");
         if (issue.state === "closed") return yield* fail("That request is already settled.");
-        const stageLabels = [...STATUS_LABELS, AWAITING_RELEASE_LABEL, NEEDS_TEST_LABEL];
-        const known = yield* ensureLabels(target.instance, target.repository, stageLabels).pipe(
-          Effect.mapError((error) => fail(error.detail)),
-        );
-        for (const [index, name] of stageLabels.entries()) {
+        const known = yield* ensureLabels(target.instance, target.repository, [
+          ...STATUS_LABELS,
+        ]).pipe(Effect.mapError((error) => fail(error.detail)));
+        for (const [index, name] of STATUS_LABELS.entries()) {
           const wanted = name === input.status;
           if (wanted === names.has(name)) continue;
           yield* (
@@ -534,31 +480,10 @@ export const make = (deps: {
               : api.send(target.instance, "DELETE", `${path}/labels/${known[index]}`)
           ).pipe(Effect.mapError((error) => fail(error.detail)));
         }
-        if (input.status === "needs-test" && input.release) {
-          const milestone = yield* ensureMilestone(
-            api,
-            target.instance,
-            target.repository,
-            input.release,
-          ).pipe(Effect.mapError((error) => fail(error.detail)));
-          yield* setIssueMilestone(
-            api,
-            target.instance,
-            target.repository,
-            reference.number,
-            milestone.id,
-          ).pipe(Effect.mapError((error) => fail(error.detail)));
-        }
         if (input.comment?.trim()) {
           yield* api
             .send(target.instance, "POST", `${path}/comments`, { body: input.comment.trim() })
             .pipe(Effect.mapError((error) => fail(error.detail)));
-        }
-        if (input.status === "in-progress") {
-          const url = `${target.instance.webOrigin.replace(/\/$/, "")}/${target.repository}/issues/${reference.number}`;
-          yield* deps.threadIssues
-            .link({ threadId: input.threadId, reference: url })
-            .pipe(Effect.ignore);
         }
         deps.projectIssues.invalidate(target);
         return {

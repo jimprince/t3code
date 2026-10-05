@@ -51,7 +51,6 @@ import {
   hydrateForkedMessageAttachments,
   hasServerAcknowledgedLocalDispatch,
   shouldRefocusComposerOnWindowFocus,
-  shouldShowTimelineMinimap,
   isBranchMismatchDismissedForSession,
   reconcileMountedTerminalThreadIds,
   recallCheckoutIsRepo,
@@ -93,14 +92,6 @@ import {
   waitForRevertedMessage,
   prepareRevertedMessageAttachments,
 } from "./ChatView.logic";
-
-describe("shouldShowTimelineMinimap", () => {
-  it("keeps the message rail out of the narrow project chat panel", () => {
-    expect(shouldShowTimelineMinimap("full")).toBe(true);
-    expect(shouldShowTimelineMinimap("project-request")).toBe(true);
-    expect(shouldShowTimelineMinimap("project-panel")).toBe(false);
-  });
-});
 
 describe("agent browser close confirmation", () => {
   const surfaces = [

@@ -34,27 +34,6 @@ export const ProjectIssueRequestSource = Schema.Struct({
 });
 export type ProjectIssueRequestSource = typeof ProjectIssueRequestSource.Type;
 
-/**
- * A request's stage: requested, in progress, ready for Brad's review, handed over
- * and waiting for the release batch, shipped and waiting for his test, settled.
- */
-export const ProjectRequestStage = Schema.Literals([
-  "requested",
-  "in-progress",
-  "ready",
-  "awaiting-release",
-  "needs-test",
-  "settled",
-]);
-export type ProjectRequestStage = typeof ProjectRequestStage.Type;
-
-/** A Gitea milestone: a version on the roadmap, or the release a request shipped in. */
-export const ProjectMilestone = Schema.Struct({
-  id: PositiveInt,
-  title: TrimmedNonEmptyString,
-});
-export type ProjectMilestone = typeof ProjectMilestone.Type;
-
 export const ProjectIssue = Schema.Struct({
   host: TrimmedNonEmptyString,
   repository: TrimmedNonEmptyString,
@@ -73,9 +52,6 @@ export const ProjectIssue = Schema.Struct({
   closedAt: Schema.NullOr(IsoDateTime),
   /** Threads in the project tree that link this issue. */
   linkedThreadIds: Schema.Array(ThreadId),
-  /** Set for requests (issues labeled ask). */
-  stage: Schema.optionalKey(ProjectRequestStage),
-  milestone: Schema.optionalKey(Schema.NullOr(ProjectMilestone)),
   /** For a request waiting on Brad: the newest comment, usually the agent's answer or summary. */
   latestComment: Schema.optionalKey(
     Schema.NullOr(
@@ -161,21 +137,8 @@ export const ProjectRequestUpdateInput = Schema.Struct({
   threadId: ThreadId,
   /** Issue number in the project's tracker repository, or a full issue URL. */
   reference: TrimmedNonEmptyString,
-  /**
-   * `needs-review`: ready for Brad to look at. `awaiting-release`: handed over,
-   * waiting for the release batch. `needs-test`: shipped in `release`, waiting
-   * for Brad to test (`comment` is the test step).
-   */
-  status: Schema.Literals([
-    "pending",
-    "in-progress",
-    "needs-review",
-    "awaiting-release",
-    "needs-test",
-  ]),
+  status: Schema.Literals(["pending", "in-progress", "needs-review"]),
   comment: Schema.optionalKey(Schema.String),
-  /** Release the request shipped in, recorded as its milestone (with `needs-test`). */
-  release: Schema.optionalKey(TrimmedNonEmptyString),
 });
 export type ProjectRequestUpdateInput = typeof ProjectRequestUpdateInput.Type;
 
@@ -186,13 +149,6 @@ export const ProjectRequestRef = Schema.Struct({
   url: TrimmedNonEmptyString,
 });
 export type ProjectRequestRef = typeof ProjectRequestRef.Type;
-
-/** A request an agent filed, or queued when Gitea was unreachable (filed later). */
-export const ProjectRequestCreateResult = Schema.Struct({
-  request: Schema.NullOr(ProjectRequestRef),
-  queued: Schema.Boolean,
-});
-export type ProjectRequestCreateResult = typeof ProjectRequestCreateResult.Type;
 
 export const ProjectRequestsListInput = Schema.Struct({ threadId: ThreadId });
 export type ProjectRequestsListInput = typeof ProjectRequestsListInput.Type;
