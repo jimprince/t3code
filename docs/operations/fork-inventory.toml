@@ -1743,6 +1743,7 @@ depends_on = [
   "fork-subthread-lifecycle",
   "fork-worker-operations",
   "fork-cross-environment-nesting",
+  "fork-worker-inactivity",
 ]
 roles = []
-note = "The decider rejects thread.auto-settle for a pinned thread or one with live children even when a sweep used a stale snapshot; manual settlement still clears pins. Unnesting clears the worker-only settle-on-complete setting. t3-thread auto-settle <thread> --off|--on sets the opt-out; the server refuses --on for a named agent's live top-level thread. t3-thread status no longer reports a running session as errored from an older failed turn. An unpinned childless top-level thread that already has settle-on-complete set still settles; run auto-settle --off on it."
+note = "The decider rejects thread.auto-settle for a pinned thread or one with live children even when a sweep used a stale snapshot; manual settlement still clears pins. Unnesting clears the worker-only settle-on-complete setting. t3-thread auto-settle <thread> --off|--on sets the opt-out; the server refuses --on for a named agent's live top-level thread. t3-thread status no longer reports a running session as errored from an older failed turn. An unpinned childless top-level thread that already has settle-on-complete set still settles; run auto-settle --off on it. watch.ts still delivers a settled worker's final completion to its supervisor, so an orchestrator no longer misses a worker that settled on finishing."
