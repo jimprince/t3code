@@ -635,6 +635,7 @@ function startShowcaseServer(
         ...NodeProcess.env,
         PATH: `${labelProbeDirectory}:${NodeProcess.env.PATH ?? ""}`,
         SHELL: shellPath,
+        T3CODE_DISABLE_STARTUP_RESUME: "1",
       },
     },
   );
