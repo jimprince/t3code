@@ -1019,3 +1019,18 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "reconcile-smaller"
 rationale = "Reuse V2 shared settings persistence, existing sidebar footer mount and default-profile desktop webview; preserve explicit empty primary list and native usage model alias settings."
+
+[[patch]]
+name = "fork-sandbox-session-recovery"
+subject = "fix(server): keep copied sandbox sessions stopped on startup"
+class = "divergence"
+purpose = "Disable automatic provider session and background-work recovery in dev and test launchers while preserving installed-server recovery at every live home."
+retire_when = "Upstream guards automatic startup continuation in copied sandbox state."
+depends_on = ["fork-provider-turn-safety"]
+roles = []
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Wrap the V2 effect executor and native recovery enqueue with the fork StartupResumePolicy: T3CODE_DISABLE_STARTUP_RESUME=1 suppresses copied automatic provider work and persisted continuations until command-ready, while reconciliation and fresh explicit turns proceed. Installed and custom-home servers keep native recovery. A full copied-state server launch test must precede release."
