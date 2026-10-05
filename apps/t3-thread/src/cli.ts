@@ -3,6 +3,8 @@ import { registerAutomationCommands } from "./automations.js";
 
 import { Command } from "commander";
 
+import { readSavedStatus } from "./saved-status.js";
+
 import {
   assertSavedAgentCapability,
   assertThreadSearchUuid,
@@ -23,7 +25,6 @@ import {
   buildAgentOverview,
   getLatestTurnAssistantMessage,
   formatInboxLine,
-  formatOverviewLine,
   getLatestAssistantMessage,
   hasNewAssistantOutput,
   needsAttention,
@@ -69,6 +70,8 @@ import {
   deliverPendingNotifications,
   detectAttentionEvents,
   hasActiveWork,
+  createWatchPoller,
+  nextWatchInterval,
   releaseHeldNotifications,
   unblockNotificationsForEnvironment,
 } from "./watch.js";
@@ -1386,16 +1389,21 @@ agent
     const startedAt = Date.now();
     let idleSince = 0;
     let handoff = false;
+    const poller = createWatchPoller();
 
     try {
       for (;;) {
+        poller.beginPoll();
         let detectedNotifications: SavedNotification[] = [];
         let deliveryResults: SavedNotification[] = [];
         let queuedSendResults: SavedQueuedSend[] = [];
         let scanError: string | null = null;
 
         try {
-          detectedNotifications = await detectAttentionEvents({ env: options.env });
+          detectedNotifications = await detectAttentionEvents({
+            env: options.env,
+            clientFactory: poller.clientFactory,
+          });
           deliveryResults = options.deliver
             ? await deliverPendingNotifications({ env: options.env })
             : [];
@@ -1411,7 +1419,7 @@ agent
         }
 
         const workRemaining =
-          (await hasActiveWork({ env: options.env })) ||
+          (await hasActiveWork({ env: options.env, clientFactory: poller.clientFactory })) ||
           hasQueuedWork(await loadState(), { env: options.env });
         printJson({
           scannedAt: nowIso(),
@@ -1422,6 +1430,8 @@ agent
           queuedSendResults,
           workRemaining,
           scanError,
+          skippedMappings: poller.skippedMappings(),
+          nextPollMs: nextWatchInterval(intervalMs, workRemaining),
         });
 
         if (options.once) {
@@ -1447,7 +1457,16 @@ agent
           break;
         }
 
-        await sleep(intervalMs);
+        // Backoff must not extend the configured idle or lifetime deadline.
+        await sleep(
+          Math.min(
+            nextWatchInterval(intervalMs, workRemaining),
+            idleExitMs > 0 && idleSince > 0
+              ? Math.max(0, idleExitMs - (nowMs - idleSince))
+              : Infinity,
+            maxLifetimeMs > 0 ? Math.max(0, maxLifetimeMs - (nowMs - startedAt)) : Infinity,
+          ),
+        );
       }
     } finally {
       await releaseLease?.();
@@ -1470,13 +1489,10 @@ agent
       const state = await loadState();
       const summaries = await Promise.all(
         state.agents.map(async (savedAgent) => {
-          const environment = requireEnvironment(state, savedAgent.environment);
-          const client = new RemoteEnvironmentClient(environment);
-          const thread = await client.findThread(savedAgent.threadId);
-          return buildAgentOverview(savedAgent, thread);
+          return readSavedStatus(savedAgent, state);
         }),
       );
-      printLines(summaries.map(formatOverviewLine));
+      printLines(summaries);
       return;
     }
 
