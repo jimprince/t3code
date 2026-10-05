@@ -1,7 +1,8 @@
+/** Dashboard | Issues | Roadmap: planning sits at the far right. */
 export const PROJECT_TABS = [
   { id: "dashboard", title: "Dashboard" },
-  { id: "roadmap", title: "Roadmap" },
   { id: "issues", title: "Issues" },
+  { id: "roadmap", title: "Roadmap" },
 ] as const;
 
 export type ProjectTab = (typeof PROJECT_TABS)[number]["id"];
