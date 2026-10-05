@@ -1,6 +1,6 @@
-Bottom: 3a9e5fd68fbf8cf5ef4f6de1bba6677ba3f6e40d
-Top:    48ac283ca68d19e75d05d9caf1c73da444a9dcd5
+Bottom: aa6dcdaf2e7a2d70a29570d259cad273350152cd
+Top:    1713e10338db24a1e04a5a5ab5c442f2f1143800
 Author: brad <bradprin@live.com>
-Date:   2026-10-05 22:51:47 +0000
+Date:   2026-10-05 22:51:54 +0000
 
 perf(t3-thread): run prebuilt commands and back off idle watchers
