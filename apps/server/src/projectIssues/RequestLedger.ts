@@ -6,6 +6,7 @@ import {
   type ProjectRequestCreateInput,
   type ProjectRequestRef,
   type ProjectRequestSettleInput,
+  type ProjectRequestSubmitInput,
   type ProjectRequestsListInput,
   type ProjectRequestUpdateInput,
   type ThreadId,
@@ -28,7 +29,7 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import { TextGeneration } from "../textGeneration/TextGeneration.ts";
 import type { ProjectIssuesService } from "./ProjectIssuesService.ts";
-import type { RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
+import type { RequestCandidate, RequestKind } from "../textGeneration/RequestItemsPrompt.ts";
 import {
   findRootThreadId,
   REQUEST_LABEL,
@@ -39,7 +40,12 @@ import {
   PARKED_LABEL,
 } from "./projectIssues.logic.ts";
 import { ensureMilestone, setIssueMilestone } from "./giteaMilestones.ts";
-import { progressLineFor } from "./requestLedger.logic.ts";
+import {
+  formatFollowUpComment,
+  planRequestItem,
+  progressLineFor,
+  requestCandidates,
+} from "./requestLedger.logic.ts";
 import {
   fallbackRequestItem,
   formatRequestIssueBody,
@@ -155,7 +161,17 @@ export const make = (deps: {
         return names.map((name) => known!.get(name)!);
       });
 
-    const splitMessage = (input: { text: string; threadTitle: string; cwd: string }) =>
+    /**
+     * Split a message into its requests, each naming the open issue it continues.
+     * Without a model the whole message is one item with no `existing`, which
+     * later falls back to the thread's newest linked issue.
+     */
+    const splitMessage = (input: {
+      text: string;
+      threadTitle: string;
+      cwd: string;
+      candidates: ReadonlyArray<RequestCandidate>;
+    }) =>
       Effect.gen(function* () {
         const config = yield* settings.getSettings;
         const generate = Option.getOrUndefined(textGeneration)?.generateRequestItems;
@@ -164,9 +180,19 @@ export const make = (deps: {
           cwd: input.cwd,
           message: input.text,
           threadTitle: input.threadTitle,
+          candidates: input.candidates,
           modelSelection: config.textGenerationModelSelection,
         }).pipe(
-          Effect.map((result) => result.items),
+          Effect.map(
+            (
+              result,
+            ): ReadonlyArray<{
+              title: string;
+              kind: RequestKind;
+              excerpt: string;
+              existing?: number | null;
+            }> => result.items,
+          ),
           Effect.catch((error) =>
             Effect.logWarning("request ledger could not split a message; filing it whole", {
               detail: error.detail,
@@ -277,10 +303,40 @@ export const make = (deps: {
         }),
       );
 
+    /** Records a chat follow-up on the issue it continues and links the thread to it. */
+    const commentFollowUp = (
+      resolved: Resolved,
+      number: number,
+      item: { excerpt: string },
+      messageId: string,
+      itemIndex: number,
+    ) =>
+      Effect.gen(function* () {
+        const { target, thread } = resolved;
+        yield* api.send(
+          target.instance,
+          "POST",
+          `${GiteaApi.repositoryPath(target.repository)}/issues/${number}/comments`,
+          {
+            body: formatFollowUpComment({
+              excerpt: item.excerpt,
+              threadTitle: thread.title,
+              messageId,
+              item: itemIndex,
+            }),
+          },
+        );
+        const reference = `${target.instance.webOrigin.replace(/\/$/, "")}/${target.repository}/issues/${number}`;
+        yield* deps.threadIssues.link({ threadId: thread.id, reference }).pipe(Effect.ignore);
+        deps.projectIssues.invalidate(target);
+      });
+
     /**
      * File one queued message: split it once (the split is saved so a retry never
-     * re-asks the model), then file each request that is not already in the
-     * tracker. Fails when Gitea cannot be reached, leaving the entry queued.
+     * re-asks the model), then act on each item: the New request box files every
+     * item; a chat message's follow-ups become comments on the open issue they
+     * continue, questions are skipped, and only genuinely new work is filed.
+     * Fails when Gitea cannot be reached, leaving the entry queued.
      */
     const fileEntry = (entry: OutboxEntry) =>
       Effect.gen(function* () {
@@ -291,27 +347,8 @@ export const make = (deps: {
         const resolved = yield* resolveThread(entry.threadId);
         if (!resolved) return "drop";
 
-        let items = entry.items;
-        if (items === null) {
-          const split = yield* splitMessage({
-            text: entry.text,
-            threadTitle: resolved.thread.title,
-            cwd: resolved.thread.worktreePath ?? resolved.project.workspaceRoot,
-          });
-          const splitItems = split.slice(0, MAX_ITEMS_PER_MESSAGE).map((item) => ({
-            kind: item.kind,
-            title: item.title.trim() || entry.text,
-            excerpt: item.excerpt.trim() || entry.text,
-          }));
-          items = splitItems;
-          yield* modifyOutbox((outbox) =>
-            updateEntry(outbox, entry.messageId, (current) => ({ ...current, items: splitItems })),
-          );
-        }
-        if (items.length === 0) return "done";
-
-        // A fresh read of the tracker: anything already filed for this message is
-        // recognised by its marker, so a retry after a lost response files nothing twice.
+        // A fresh read of the tracker: the open issues a follow-up may continue, and
+        // the markers that keep a retry after a lost response from filing twice.
         deps.projectIssues.invalidate(resolved.target);
         const listing = yield* deps.projectIssues.list({ rootThreadId: entry.rootThreadId });
         const repository = listing.repositories.find(
@@ -320,10 +357,52 @@ export const make = (deps: {
         if (!repository || repository.error) {
           return yield* fail(repository?.error ?? "Gitea is unreachable.");
         }
+        const trackerIssues = listing.issues.filter(
+          (issue) => repositoryKey(issue) === repositoryKey(resolved.target),
+        );
+        const candidates = requestCandidates(trackerIssues, entry.threadId);
+
+        let items = entry.items;
+        if (items === null) {
+          const split = yield* splitMessage({
+            text: entry.text,
+            threadTitle: resolved.thread.title,
+            cwd: resolved.thread.worktreePath ?? resolved.project.workspaceRoot,
+            candidates: entry.explicit ? [] : candidates,
+          });
+          const splitItems = split.slice(0, MAX_ITEMS_PER_MESSAGE).map((item) => {
+            // Absent only for the unsplit fallback, which then follows the thread's issue.
+            const existing = (item as { existing?: number | null }).existing;
+            return {
+              kind: item.kind,
+              title: item.title.trim() || entry.text,
+              excerpt: item.excerpt.trim() || entry.text,
+              ...(existing === undefined ? {} : { existing }),
+            };
+          });
+          items = splitItems;
+          yield* modifyOutbox((outbox) =>
+            updateEntry(outbox, entry.messageId, (current) => ({ ...current, items: splitItems })),
+          );
+        }
+        if (items.length === 0) return "done";
+
         const filed = new Set(entry.filed);
         for (const [index, item] of items.entries()) {
           if (filed.has(index)) continue;
-          if (!isAlreadyFiled(listing.issues, entry.messageId, index)) {
+          const plan = planRequestItem(item, {
+            explicit: entry.explicit === true,
+            candidates,
+            unsplit: item.existing === undefined,
+          });
+          if (plan.action === "comment") {
+            yield* commentFollowUp(resolved, plan.number, item, entry.messageId, index).pipe(
+              Effect.mapError((error) => fail(error.detail)),
+            );
+          } else if (
+            plan.action === "file" &&
+            !isAlreadyFiled(listing.issues, entry.messageId, index)
+          ) {
             yield* fileRequest(resolved, item, entry.messageId, index).pipe(
               Effect.mapError((error) => fail(error.detail)),
             );
@@ -417,13 +496,11 @@ export const make = (deps: {
      * Queue one typed message durably, then file it. The message is written to the
      * outbox before any Gitea call, so an outage delays filing but never loses it.
      */
-    const capture = (input: { threadId: ThreadId; messageId: string; text: string }) =>
+    const queueMessage = (
+      input: { threadId: ThreadId; messageId: string; text: string },
+      explicit: boolean,
+    ) =>
       Effect.gen(function* () {
-        if (captured.has(input.messageId) || isObviouslyNotARequest(input.text)) return;
-        captured.add(input.messageId);
-        if (captured.size > RECENT_MESSAGE_LIMIT) {
-          captured.delete(captured.values().next().value!);
-        }
         const config = yield* settings.getSettings;
         if (!config.requestLedgerEnabled || config.giteaInstances.length === 0) return;
         const snapshot = yield* snapshots.getShellSnapshot();
@@ -441,14 +518,40 @@ export const make = (deps: {
             attempts: 0,
             lastError: null,
             nextAttemptAt: now,
+            ...(explicit ? { explicit: true } : {}),
           }),
         );
         yield* startDrain;
+      });
+
+    const capture = (input: { threadId: ThreadId; messageId: string; text: string }) =>
+      Effect.gen(function* () {
+        if (captured.has(input.messageId) || isObviouslyNotARequest(input.text)) return;
+        captured.add(input.messageId);
+        if (captured.size > RECENT_MESSAGE_LIMIT) {
+          captured.delete(captured.values().next().value!);
+        }
+        yield* queueMessage(input, false);
       }).pipe(
         Effect.catchCause((cause) =>
           Effect.logWarning("request ledger capture failed", { cause: String(cause) }),
         ),
       );
+
+    /**
+     * The New request box: Brad asked for a tracked request, so the message is
+     * queued as explicit before it is sent and every request in it is filed, even
+     * a question. The capture of the same message then finds it already queued.
+     */
+    const submit = (input: ProjectRequestSubmitInput) =>
+      queueMessage(
+        {
+          threadId: input.threadId,
+          messageId: input.messageId,
+          text: input.text.trim() || "Request with attached images",
+        },
+        true,
+      ).pipe(Effect.mapError(() => fail("Could not queue the request.")));
 
     const resolveOrFail = (threadId: ThreadId) =>
       resolveThread(threadId).pipe(
@@ -543,11 +646,10 @@ export const make = (deps: {
           input.status === undefined &&
           input.comment === undefined &&
           input.release === undefined;
-        if (!typeOnly && !names.has(REQUEST_LABEL)) {
-          return yield* fail("That issue is not a request.");
-        }
+        // Any open tracker issue can move through the stages: agents track work on
+        // the issue a thread is linked to, not only on captured requests.
         if (!typeOnly && issue.state === "closed") {
-          return yield* fail("That request is already settled.");
+          return yield* fail("That issue is already closed.");
         }
         if (input.kind !== undefined) {
           const wanted = requestKindLabel(input.kind);
@@ -664,17 +766,15 @@ export const make = (deps: {
         );
         if (!target) return yield* fail("That repository is not part of this project.");
         const path = `${GiteaApi.repositoryPath(target.repository)}/issues/${input.number}`;
-        const issue = yield* api
+        yield* api
           .request(target.instance, path, GiteaIssueLabels)
           .pipe(Effect.mapError((error) => fail(error.detail)));
-        if (!(issue.labels ?? []).some((label) => label.name.toLowerCase() === REQUEST_LABEL)) {
-          return yield* fail("Only requests can be settled here.");
-        }
+        // Settling closes any of the project's issues from its row; Reopen undoes it.
         yield* api
-          .send(target.instance, "PATCH", path, { state: "closed" })
+          .send(target.instance, "PATCH", path, { state: input.reopen ? "open" : "closed" })
           .pipe(Effect.mapError((error) => fail(error.detail)));
         deps.projectIssues.invalidate(target);
-        return { settled: true };
+        return { settled: !input.reopen };
       });
 
     /**
@@ -756,6 +856,7 @@ export const make = (deps: {
       observeDispatch,
       capture,
       settle,
+      submit,
       decorate,
       create,
       update,
