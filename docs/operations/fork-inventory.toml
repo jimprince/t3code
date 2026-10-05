@@ -1747,3 +1747,13 @@ depends_on = [
 ]
 roles = []
 note = "The decider rejects thread.auto-settle for a pinned thread or one with live children even when a sweep used a stale snapshot; manual settlement still clears pins. Unnesting clears the worker-only settle-on-complete setting. t3-thread auto-settle <thread> --off|--on sets the opt-out; the server refuses --on for a named agent's live top-level thread. t3-thread status no longer reports a running session as errored from an older failed turn. An unpinned childless top-level thread that already has settle-on-complete set still settles; run auto-settle --off on it. watch.ts still delivers a settled worker's final completion to its supervisor, so an orchestrator no longer misses a worker that settled on finishing."
+
+[[patch]]
+name = "fork-task-view"
+subject = "feat(projects): open a task in the app"
+class = "product"
+purpose = "Clicking a task title on the project page opens the task in a panel over the page (status, type, the answer, the latest progress, the parts of an epic, its threads, Settle or Reopen) instead of leaving for Gitea or the embedded Status Board."
+retire_when = "Upstream or another fork concern provides an equivalent task view, or the project page is retired."
+depends_on = ["fork-project-task-status", "fork-project-layout"]
+roles = []
+note = "projectIssues.get {rootThreadId, host, repository, number} (read scope, ProjectIssuesService.get) returns the ProjectIssue with its body, its last 10 comments (4000 characters each), and childNumbers: the project's cached issues whose body starts with 'Part of #N' (isPartOf, the horizon slice's convention); ws.ts decorates the issue with the thread answer through RequestLedger.withAnswers. The web keeps the open task in the page URL as ?task=host/owner/repo#N (parseTaskRef/encodeTaskRef in taskView.logic), so Back closes the panel and a link opens it. deriveTaskView picks the status from the shared task statuses, the answer (the last non-progress comment once For review or Complete, otherwise the thread's answer), the latest Progress line (only while Pending or Active), the children resolved against the issue list, and the working threads. TaskTitle (TaskLink) is the one click site on the Tasks board, Roadmap, Needs you, Requests, Release and Maintenance rows; outside a project page it stays a Gitea link. The panel keeps Open in Gitea and a Status Board link (when the embedded page exists), so the old routes stay reachable. The t3-thread CLI group is unchanged (projectIssues.list is not in it either)."
