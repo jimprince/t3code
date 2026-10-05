@@ -474,6 +474,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      if (command.parentThreadId != null && command.remoteParent != null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Choose a local or remote parent, not both.",
+        });
+      }
       const createParentThreadId = command.parentThreadId ?? null;
       const createNestingViolation =
         createParentThreadId === null
@@ -493,7 +499,8 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       // Named agents: one live top-level incarnation, replaced only by an
       // atomic handover from an idle predecessor.
       const agentName = project.permanentAgent?.name ?? null;
-      const isAgentRoot = agentName !== null && createParentThreadId === null;
+      const isAgentRoot =
+        agentName !== null && createParentThreadId === null && command.remoteParent == null;
       const handoverFromThreadId = command.handoverFromThreadId ?? null;
       if (handoverFromThreadId !== null && !isAgentRoot) {
         return yield* new OrchestrationCommandInvariantError({
@@ -561,6 +568,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           createdAt: command.createdAt,
           updatedAt: command.createdAt,
           ...(createParentThreadId !== null ? { parentThreadId: createParentThreadId } : {}),
+          ...(command.remoteParent != null ? { remoteParent: command.remoteParent } : {}),
           ...(command.settleOnComplete !== undefined
             ? { settleOnComplete: command.settleOnComplete }
             : {}),
@@ -657,7 +665,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
-      if ((archivedThread.parentThreadId ?? null) === null) {
+      if ((archivedThread.parentThreadId ?? null) === null && archivedThread.remoteParent == null) {
         const slotViolation = namedAgentSlotViolation({
           threads: readModel.threads,
           projects: readModel.projects,
@@ -1076,6 +1084,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       if (
         command.enabled &&
         (thread.parentThreadId ?? null) === null &&
+        thread.remoteParent == null &&
         namedAgentOf(readModel.projects, thread.projectId) !== null
       ) {
         return yield* new OrchestrationCommandInvariantError({
@@ -1178,6 +1187,12 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         command,
         threadId: command.threadId,
       });
+      if (command.parentThreadId !== null && command.remoteParent != null) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: "Choose a local or remote parent, not both.",
+        });
+      }
       if (command.parentThreadId !== null) {
         const violation = threadNestingViolation({
           threads: readModel.threads,
@@ -1191,7 +1206,11 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
             detail: violation,
           });
         }
-      } else if (thread.archivedAt === null && thread.deletedAt === null) {
+      } else if (
+        command.remoteParent == null &&
+        thread.archivedAt === null &&
+        thread.deletedAt === null
+      ) {
         const slotViolation = namedAgentSlotViolation({
           threads: readModel.threads,
           projects: readModel.projects,
@@ -1216,6 +1235,7 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
         payload: {
           threadId: command.threadId,
           parentThreadId: command.parentThreadId,
+          remoteParent: command.remoteParent ?? null,
           // Moving a thread between the sidebar and a parent is not activity.
           updatedAt: thread.updatedAt,
         },
