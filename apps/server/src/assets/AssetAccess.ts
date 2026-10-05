@@ -395,7 +395,8 @@ const finalizeWorkspaceFileAsset = Effect.fn("AssetAccess.finalizeWorkspaceFileA
         resource: input.resource,
       });
     }
-    const isModel = isWorkspaceModelPreviewPath(resolved.relativePath);
+    // Downloads bypass the preview size limit: they are the fallback for oversized models.
+    const isModel = !isDownload && isWorkspaceModelPreviewPath(resolved.relativePath);
     if (isModel) {
       const info = yield* fileSystem
         .stat(canonicalFile)
