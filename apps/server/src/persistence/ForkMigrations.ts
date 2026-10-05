@@ -15,6 +15,8 @@ import Migration0009 from "./ForkMigrations/009_ProjectionProjectsPermanentAgent
 import Migration0010 from "./ForkMigrations/010_ProjectionProjectAutomations.ts";
 import Migration0011 from "./ForkMigrations/011_ProjectionThreadsScope.ts";
 
+import Migration0012 from "./ForkMigrations/012_ProjectionThreadsRemoteParent.ts";
+
 export const FORK_MIGRATIONS_TABLE = "effect_sql_fork_migrations";
 
 export const forkMigrationEntries = [
@@ -29,6 +31,7 @@ export const forkMigrationEntries = [
   [9, "ProjectionProjectsPermanentAgent", Migration0009],
   [10, "ProjectionProjectAutomations", Migration0010],
   [11, "ProjectionThreadsScope", Migration0011],
+  [12, "ProjectionThreadsRemoteParent", Migration0012],
 ] as const;
 
 const makeForkMigrationLoader = (throughId?: number) =>
