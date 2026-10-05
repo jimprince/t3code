@@ -447,7 +447,13 @@ an old nightly tag:
 gh release list --repo jimprince/t3code --limit 10
 ```
 
-Install or update the remote VM from a release asset:
+For a running installation, use the canonical updater below. To select a
+particular release, run `t3code-headless-upgrade --tag <release-tag> --dry-run`,
+then repeat without `--dry-run`. An older release also requires
+`--allow-downgrade`; `--force` only permits interruption of active work.
+
+For the first installation, before a server exists, install a verified release
+asset manually:
 
 ```bash
 set -euo pipefail
@@ -489,9 +495,11 @@ The service command should run the current symlink:
 
 The canonical updater script is `scripts/headless-auto-upgrade.sh`. Install it
 on the VM as `~/.local/bin/t3code-headless-upgrade` and run it from a systemd
-timer. By default it tracks the latest stable GitHub release from
-`jimprince/t3code`; set `T3CODE_HEADLESS_CHANNEL=nightly` only for an explicit
-nightly host. New archives are self-contained. During the first upgrade from
+timer. By default `jimprince/t3code` tracks the newest fork nightly by version,
+including numeric nightly runs and fork suffixes, across all release pages.
+Other repositories default to stable. Set `T3CODE_HEADLESS_REPO` and
+`T3CODE_HEADLESS_CHANNEL=stable|nightly` explicitly when a different policy is
+needed. New archives are self-contained. During the first upgrade from
 the old Node-based archive, the updater keeps `~/.local/node/bin` on `PATH` and
 verifies that the current launcher still runs before promotion, because that
 one release may be needed for rollback. Later upgrades have no host-Node
@@ -505,6 +513,8 @@ worker CLI has queued sends. Configure the real database in
 
 ```sh
 T3CODE_HEADLESS_STATE_DB="$HOME/.local/share/t3code-dev/userdata/state.sqlite"
+T3CODE_HEADLESS_REPO=jimprince/t3code
+T3CODE_HEADLESS_CHANNEL=nightly
 ```
 
 The default is `$T3CODE_HOME/userdata/state.sqlite`, or `~/.t3/userdata/state.sqlite`.
@@ -514,11 +524,36 @@ before changing `current`. Deferred checks leave an `update-pending` marker. A
 five-minute cron entry can retry that marker without other network checks:
 
 ```cron
-*/5 * * * * T3CODE_HEADLESS_CHANNEL=nightly /home/brad/.local/bin/t3code-headless-upgrade --retry-pending 2>&1 | /usr/bin/logger -t t3code-headless-upgrade
+*/5 * * * * /home/brad/.local/bin/t3code-headless-upgrade --retry-pending 2>&1 | /usr/bin/logger -t t3code-headless-upgrade
 ```
 
 Only an explicit manual `t3code-headless-upgrade --force` bypasses the activity
 checks and permits SIGKILL escalation. Never put `--force` in cron or a timer.
+
+The updater compares the selected version with both the live
+`/.well-known/t3/environment` response and the installed release directory
+before downloading or changing installation state, and checks again before
+promotion. A changed `current` symlink alone never proves which build is running.
+An unreachable endpoint or an unknown/unparseable version refuses the update,
+including with `--force` or `--allow-downgrade`. Configure
+`T3CODE_HEADLESS_BASE_URL` for the actual service origin when it differs from
+the default tailnet IP on port 3773.
+
+Ordering uses semantic version precedence, numeric nightly date/run fields,
+then a numeric `-fork.N` suffix. A stable release follows prereleases of the
+same core version; an older stable core (such as `0.0.31`) cannot replace a
+newer nightly core. Build metadata does not affect precedence.
+`--allow-downgrade` separately permits an intentional older selection,
+including `--tag <release-tag>` or an explicitly configured stable channel.
+It does not bypass activity checks. Downgrades can encounter database/schema
+incompatibility, so keep a compatible state backup for deliberate rollback.
+
+`t3code-headless-upgrade --force --dry-run` exercises release selection and
+version checks without downloading, changing activity markers, installing or
+restarting. Keep repo/channel policy in the same local config file for manual,
+cron and systemd runs; remove duplicate channel overrides from cron/unit files
+when adopting that shared policy. The config file's values override inherited
+environment values.
 
 Recommended user timer:
 
@@ -529,7 +564,6 @@ Description=Update T3 Code headless server from GitHub Releases
 
 [Service]
 Type=oneshot
-Environment=T3CODE_HEADLESS_CHANNEL=stable
 Environment=T3CODE_HEADLESS_ROOT=%h/.local/share/t3code-server
 ExecStart=%h/.local/bin/t3code-headless-upgrade
 ```
