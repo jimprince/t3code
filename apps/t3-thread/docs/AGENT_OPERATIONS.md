@@ -1083,11 +1083,17 @@ the CLI with `t3-thread-deploy`.
 
 ## Brad's requests (request ledger)
 
-Every message Brad types in a T3 client is split into requests and filed as Gitea issues
-labeled `ask` plus `ask:<kind>` (bug, feature, question, deliverable, plan, change, test,
-maintenance) in the tracker
-repository of the thread's orchestrator project. The project page lists them by what Brad
-does next until he settles them; settling is Brad's action only, so there is no settle command.
+Brad's requests are Gitea issues labeled `ask` plus `ask:<kind>` (bug, feature, question,
+deliverable, plan, change, test, maintenance) in the tracker repository of the thread's
+orchestrator project. A new request is filed when Brad uses the project page's New request
+box, or when a chat message asks for genuinely new work no open issue covers. Everything else
+he types attaches to what is already tracked: a follow-up, status check or refinement becomes
+a comment ("Follow-up from Brad in <thread>") on the thread's linked issue (or the open issue
+it repeats), and questions and acknowledgements are conversation, never issues. So link your
+thread to the issue you work on (`request start` or `link_gitea_issue`) and his follow-ups
+land there. The project page lists requests by what Brad does next until he settles them;
+settling (and reopening) is Brad's action only, so there is no settle command. He can settle
+all open requests of a thread at once, for example once he settled the thread.
 
 ```bash
 t3-thread request list "$T3_THREAD_ID"
@@ -1120,7 +1126,8 @@ and posts the test step), settled (Brad only). `ready` and `shipped` post their 
 comment; the project page shows it as the answer or test step. Use `add` when Brad asked you
 for something the capture missed; when Gitea is unreachable it is queued and filed later
 (`"queued": true`). A request accepts an issue number in the tracker, `owner/repo#N`, or the
-issue URL.
+issue URL; `start`, `note`, `ready` and `shipped` work on any open tracker issue, not only
+captured requests.
 
 ## Project page widgets and tracker repository
 
