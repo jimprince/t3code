@@ -37,6 +37,7 @@ import * as ProviderRuntimeRecovery from "./orchestration-v2/ProviderRuntimeReco
 import * as ProviderSessionManager from "./orchestration-v2/ProviderSessionManager.ts";
 import * as ThreadLaunch from "./orchestration-v2/ThreadLaunchService.ts";
 import * as ThreadManagement from "./orchestration-v2/ThreadManagementService.ts";
+import { ensureChatProject } from "./forkProjects/GeneralChatService.ts";
 import * as ProjectService from "./project/ProjectService.ts";
 import * as GitVcsDriver from "./vcs/GitVcsDriver.ts";
 import * as ProjectStore from "./orchestration-v2/ProjectStore.ts";
@@ -504,6 +505,7 @@ const make = (options?: StartupOptions) =>
           },
         });
       }
+      yield* runStartupPhase("chat-project.ensure", ensureChatProject);
       const { recovery, bootstrap: bootstrapTargets } = yield* runOrderedV2StartupPhases({
         importLegacyShells: runStartupPhase(
           "orchestration-v2.legacy-v1.import-shells",
