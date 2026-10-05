@@ -26,6 +26,18 @@ const create = (overrides: Partial<Parameters<typeof resolveCreateParent>[0]> = 
   });
 
 describe("resolveCreateParent", () => {
+  it("records a remote parent without putting a foreign id in the local link", () => {
+    const remoteParent = { environmentId: "vm-id", threadId: "lead" };
+    expect(create({ threads: [], remoteParent })).toEqual({
+      parentThreadId: null,
+      remoteParent,
+      reason: "remote",
+    });
+    expect(create({ remoteParent, topLevel: true })).toEqual({
+      parentThreadId: null,
+      reason: "--top-level",
+    });
+  });
   it("nests a worker under the calling thread by default", () => {
     expect(create()).toEqual({ parentThreadId: "orchestrator", reason: "caller" });
   });
@@ -185,6 +197,23 @@ describe("RemoteEnvironmentClient.supportsThreadNesting", () => {
     serveDescriptor({ threadNesting: true });
     const client = new RemoteEnvironmentClient(environment, { rpcFactory });
     await expect(client.supportsThreadNesting()).resolves.toBe(true);
+  });
+
+  it("refuses remote creation and nesting on older servers before dispatch", async () => {
+    serveDescriptor({ threadNesting: true });
+    const client = new RemoteEnvironmentClient(environment, { rpcFactory });
+    const remoteParent = { environmentId: "vm", threadId: "parent" };
+    await expect(
+      client.createAgentThread({
+        projectId: "project",
+        title: "Worker",
+        initialMessage: "work",
+        remoteParent,
+      }),
+    ).rejects.toThrow("Update the child server");
+    await expect(client.setThreadParent("worker", null, remoteParent)).rejects.toThrow(
+      "Update the child server",
+    );
   });
 
   it("reports no nesting when the descriptor does not advertise it", async () => {
