@@ -56,6 +56,19 @@ export const ProjectMilestone = Schema.Struct({
 });
 export type ProjectMilestone = typeof ProjectMilestone.Type;
 
+/**
+ * How far an epic (an `ask:epic` issue, or an older `ask:plan`) has come: its
+ * children are the issues its body checklist names plus those whose body starts
+ * "Part of #N". A child is done when it is closed or ticked in the checklist.
+ */
+export const ProjectEpicProgress = Schema.Struct({
+  done: NonNegativeInt,
+  total: NonNegativeInt,
+  /** The children still open, in the epic's repository, for the phase word. */
+  remaining: Schema.Array(PositiveInt),
+});
+export type ProjectEpicProgress = typeof ProjectEpicProgress.Type;
+
 export const ProjectIssue = Schema.Struct({
   host: TrimmedNonEmptyString,
   repository: TrimmedNonEmptyString,
@@ -77,6 +90,8 @@ export const ProjectIssue = Schema.Struct({
   /** Set for requests (issues labeled ask). */
   stage: Schema.optionalKey(ProjectRequestStage),
   milestone: Schema.optionalKey(Schema.NullOr(ProjectMilestone)),
+  /** Set for epics. */
+  epic: Schema.optionalKey(ProjectEpicProgress),
   /** For a request waiting on Brad: the newest comment, usually the agent's answer or summary. */
   latestComment: Schema.optionalKey(
     Schema.NullOr(
