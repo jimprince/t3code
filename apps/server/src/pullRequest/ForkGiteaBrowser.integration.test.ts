@@ -4,6 +4,7 @@ import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
+import { ChildProcessSpawner } from "effect/unstable/process";
 import type { OrchestrationProjectShell } from "@t3tools/contracts";
 import { ProjectId } from "@t3tools/contracts";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
@@ -141,12 +142,14 @@ it.effect(
             },
           });
       const gitea = yield* GiteaPullRequestProvider.make.pipe(
-        Effect.provide(ServerSettings.layerTest({ giteaInstances: [instance] })),
         Effect.provide(
-          Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
-            resolveLink: () => undefined,
-            resolveHandle,
-          }),
+          Layer.mergeAll(
+            ServerSettings.layerTest({ giteaInstances: [instance] }),
+            Layer.mock(SourceControlProviderRegistry.SourceControlProviderRegistry)({
+              resolveLink: () => undefined,
+              resolveHandle,
+            }),
+          ),
         ),
         Effect.provideService(
           HttpClient.HttpClient,
@@ -171,7 +174,7 @@ it.effect(
                   html_url: "https://codeberg.org/brad/repo/pulls/42",
                 }),
                 stderr: "",
-                exitCode: 0,
+                exitCode: ChildProcessSpawner.ExitCode(0),
                 stdoutTruncated: false,
                 stderrTruncated: false,
               });
