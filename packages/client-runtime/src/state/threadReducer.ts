@@ -372,6 +372,23 @@ export function applyThreadDetailEvent(
         },
       };
 
+    case "thread.issue-synced":
+      if (!thread.issues?.some((issue) => threadIssueKeysEqual(issue, event.payload))) {
+        return { kind: "unchanged" };
+      }
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          issues: thread.issues.map((issue) =>
+            threadIssueKeysEqual(issue, event.payload)
+              ? { ...issue, url: event.payload.url, snapshot: event.payload.snapshot }
+              : issue,
+          ),
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     case "thread.runtime-mode-set":
       return {
         kind: "updated",

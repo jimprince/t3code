@@ -99,6 +99,28 @@ it.layer(NodeServices.layer)("thread issue links", (it) => {
       model = yield* projectEvent(model, { ...linked, sequence: 1 });
       expect(model.threads[0]?.issues).toEqual([link]);
 
+      const syncedSnapshot = {
+        title: "Updated issue title",
+        state: "closed" as const,
+        syncedAt: "2026-10-03T00:01:00.000Z",
+      };
+      const syncCommand = yield* decodeCommand({
+        type: "thread.issue.sync",
+        commandId: "sync-issue",
+        threadId: THREAD_ID,
+        host: link.host,
+        repository: link.repository,
+        number: link.number,
+        url: link.url,
+        snapshot: syncedSnapshot,
+      });
+      const synced = eventOf(
+        yield* decideOrchestrationCommand({ readModel: model, command: syncCommand }),
+        "thread.issue-synced",
+      );
+      model = yield* projectEvent(model, { ...synced, sequence: 2 });
+      expect(model.threads[0]?.issues).toEqual([{ ...link, snapshot: syncedSnapshot }]);
+
       const unlinkCommand = yield* decodeCommand({
         type: "thread.issue.unlink",
         commandId: "unlink-issue",
@@ -111,7 +133,7 @@ it.layer(NodeServices.layer)("thread issue links", (it) => {
         yield* decideOrchestrationCommand({ readModel: model, command: unlinkCommand }),
         "thread.issue-unlinked",
       );
-      model = yield* projectEvent(model, { ...unlinked, sequence: 2 });
+      model = yield* projectEvent(model, { ...unlinked, sequence: 3 });
       expect(model.threads[0]?.issues).toEqual([]);
     }),
   );

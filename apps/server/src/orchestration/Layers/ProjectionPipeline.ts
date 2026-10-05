@@ -38,6 +38,7 @@ import {
 } from "../../persistence/Services/ProjectionThreadProposedPlans.ts";
 import * as ProjectionThreadPullRequests from "../../persistence/ProjectionThreadPullRequests.ts";
 import * as ProjectionThreadIssues from "../../persistence/ProjectionThreadIssues.ts";
+import { threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import { ProjectionThreadSessionRepository } from "../../persistence/Services/ProjectionThreadSessions.ts";
 import {
   type ProjectionTurn,
@@ -1003,6 +1004,28 @@ const makeOrchestrationProjectionPipeline = Effect.fn("makeOrchestrationProjecti
             host: event.payload.host,
             repository: event.payload.repository,
             number: event.payload.number,
+          });
+          yield* projectionThreadRepository.upsert({
+            ...existingRow.value,
+            updatedAt: event.payload.updatedAt,
+          });
+          return;
+        }
+
+        case "thread.issue-synced": {
+          const existingRow = yield* projectionThreadRepository.getById({
+            threadId: event.payload.threadId,
+          });
+          if (Option.isNone(existingRow)) return;
+          const issues = yield* projectionThreadIssueRepository.listByThreadId({
+            threadId: event.payload.threadId,
+          });
+          const issue = issues.find((candidate) => threadIssueKeysEqual(candidate, event.payload));
+          if (issue === undefined) return;
+          yield* projectionThreadIssueRepository.upsert({
+            ...issue,
+            url: event.payload.url,
+            snapshot: event.payload.snapshot,
           });
           yield* projectionThreadRepository.upsert({
             ...existingRow.value,

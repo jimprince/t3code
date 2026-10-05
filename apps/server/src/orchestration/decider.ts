@@ -1557,6 +1557,34 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
       };
     }
 
+    case "thread.issue.sync": {
+      const thread = yield* requireThread({ readModel, command, threadId: command.threadId });
+      const key = normalizeThreadIssueKey(command);
+      if (findIssueLink(thread, key) === undefined) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `issue ${key.host}/${key.repository}#${key.number} is not linked to thread ${command.threadId}`,
+        });
+      }
+      const occurredAt = yield* nowIso;
+      return {
+        ...(yield* withEventBase({
+          aggregateKind: "thread",
+          aggregateId: command.threadId,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "thread.issue-synced",
+        payload: {
+          threadId: command.threadId,
+          ...key,
+          url: command.url,
+          snapshot: command.snapshot,
+          updatedAt: occurredAt,
+        },
+      };
+    }
+
     case "thread.pull-request.sync": {
       const thread = yield* requireThreadNotArchived({
         readModel,

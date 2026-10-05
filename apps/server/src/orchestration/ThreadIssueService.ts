@@ -6,6 +6,7 @@ import {
   type OrchestrationProjectShell,
   type ThreadIssueKey,
   type ThreadIssueLink,
+  type ThreadIssueSnapshot,
 } from "@t3tools/contracts";
 import { resolveGiteaRemote } from "@t3tools/shared/sourceControl";
 import { threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
@@ -20,13 +21,14 @@ import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import * as OrchestrationEngine from "./Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "./Services/ProjectionSnapshotQuery.ts";
 
-const GiteaIssue = Schema.Struct({
+export const GiteaIssue = Schema.Struct({
   number: Schema.Number,
   title: Schema.String,
   state: Schema.Literals(["open", "closed"]),
   html_url: Schema.String,
   pull_request: Schema.optional(Schema.Unknown),
 });
+export type GiteaIssue = typeof GiteaIssue.Type;
 const isThreadIssueOperationError = Schema.is(ThreadIssueOperationError);
 
 export interface ResolvedIssueTarget extends ThreadIssueKey {
@@ -47,7 +49,9 @@ export function buildThreadIssueLink(
     host: target.host,
     repository: target.repository,
     number: target.number,
-    url: issue?.html_url || target.url,
+    // Keep the URL the user linked. The configured API may be an internal alias
+    // whose html_url is not reachable from the client device.
+    url: target.url,
     linkedAt,
     snapshot: {
       title: issue?.title ?? `${target.repository} #${target.number}`,
@@ -56,6 +60,20 @@ export function buildThreadIssueLink(
     },
   };
 }
+
+export function isPullRequestIssue(issue: GiteaIssue): boolean {
+  return issue.pull_request != null;
+}
+
+type IssueApi = Pick<Effect.Success<typeof GiteaApi.make>, "request">;
+
+/** Metadata always travels through the matched instance, whose apiOrigin may be an internal alias. */
+export const fetchThreadIssueMetadata = (api: IssueApi, target: ResolvedIssueTarget) =>
+  api.request(
+    target.instance,
+    `${GiteaApi.repositoryPath(target.repository)}/issues/${target.number}`,
+    GiteaIssue,
+  );
 
 const fail = (message: string) => new ThreadIssueOperationError({ message });
 
@@ -155,6 +173,13 @@ export interface ThreadIssueService {
     threadId: ThreadId;
     reference: string;
   }) => Effect.Effect<{ unlinked: boolean; issue: ThreadIssueKey }, ThreadIssueOperationError>;
+  readonly sync: (input: {
+    threadId: ThreadId;
+    issue: ThreadIssueKey & {
+      readonly url: string;
+      readonly snapshot: ThreadIssueSnapshot;
+    };
+  }) => Effect.Effect<{ synced: boolean }, ThreadIssueOperationError>;
 }
 
 export const make = Effect.gen(function* () {
@@ -184,6 +209,50 @@ export const make = Effect.gen(function* () {
     return CommandId.make(`server:${tag}:${id}`);
   });
 
+  const sync: ThreadIssueService["sync"] = (input) =>
+    Effect.gen(function* () {
+      const state = yield* context(input.threadId);
+      const existing = state.thread.issues?.find((issue) =>
+        threadIssueKeysEqual(issue, input.issue),
+      );
+      if (!existing) return { synced: false };
+      if (
+        existing.url === input.issue.url &&
+        existing.snapshot.title === input.issue.snapshot.title &&
+        existing.snapshot.state === input.issue.snapshot.state
+      ) {
+        return { synced: false };
+      }
+      yield* engine
+        .dispatch({
+          type: "thread.issue.sync",
+          commandId: yield* commandId("issue-sync"),
+          threadId: input.threadId,
+          ...input.issue,
+        })
+        .pipe(Effect.mapError((error) => fail(error.message)));
+      return { synced: true };
+    });
+
+  const refresh = (threadId: ThreadId, target: ResolvedIssueTarget) =>
+    Effect.gen(function* () {
+      const issue = yield* fetchThreadIssueMetadata(api, target);
+      if (isPullRequestIssue(issue)) {
+        return yield* fail("That Gitea URL is a pull request, not an issue.");
+      }
+      const syncedAt = DateTime.formatIso(yield* DateTime.now);
+      yield* sync({
+        threadId,
+        issue: {
+          host: target.host,
+          repository: target.repository,
+          number: target.number,
+          url: target.url,
+          snapshot: { title: issue.title, state: issue.state, syncedAt },
+        },
+      });
+    });
+
   const link: ThreadIssueService["link"] = (input) =>
     Effect.gen(function* () {
       const state = yield* context(input.threadId);
@@ -193,23 +262,19 @@ export const make = Effect.gen(function* () {
           isThreadIssueOperationError(error) ? error : fail("Invalid Gitea issue reference."),
       });
       const existing = state.thread.issues?.find((issue) => threadIssueKeysEqual(issue, target));
-      if (existing) return { link: existing, changed: false };
-      const fetchedIssue = yield* api
-        .request(
-          target.instance,
-          `${GiteaApi.repositoryPath(target.repository)}/issues/${target.number}`,
-          GiteaIssue,
-        )
-        .pipe(
-          Effect.timeoutOption("1 second"),
-          Effect.orElseSucceed(() => Option.none()),
-        );
-      if (Option.isSome(fetchedIssue) && fetchedIssue.value.pull_request !== undefined) {
+      if (existing) {
+        yield* refresh(input.threadId, target).pipe(Effect.ignore, Effect.forkDetach);
+        return { link: existing, changed: false };
+      }
+      const fetchedIssue = yield* fetchThreadIssueMetadata(api, target).pipe(
+        Effect.timeoutOption("1 second"),
+        Effect.orElseSucceed(() => Option.none()),
+      );
+      if (Option.isSome(fetchedIssue) && isPullRequestIssue(fetchedIssue.value)) {
         return yield* fail("That Gitea URL is a pull request, not an issue.");
       }
       const now = DateTime.formatIso(yield* DateTime.now);
-      const issue = Option.getOrNull(fetchedIssue);
-      const link = buildThreadIssueLink(target, issue, now);
+      const link = buildThreadIssueLink(target, Option.getOrNull(fetchedIssue), now);
       yield* engine
         .dispatch({
           type: "thread.issue.link",
@@ -218,6 +283,9 @@ export const make = Effect.gen(function* () {
           link,
         })
         .pipe(Effect.mapError((error) => fail(error.message)));
+      if (Option.isNone(fetchedIssue)) {
+        yield* refresh(input.threadId, target).pipe(Effect.ignore, Effect.forkDetach);
+      }
       return { link, changed: true };
     });
 
@@ -243,5 +311,5 @@ export const make = Effect.gen(function* () {
       return { unlinked: true, issue };
     });
 
-  return { link, unlink } satisfies ThreadIssueService;
+  return { link, unlink, sync } satisfies ThreadIssueService;
 });

@@ -1631,6 +1631,15 @@ const ThreadIssueUnlinkCommand = Schema.Struct({
   ...ThreadIssueKey.fields,
 });
 
+const ThreadIssueSyncCommand = Schema.Struct({
+  type: Schema.Literal("thread.issue.sync"),
+  commandId: CommandId,
+  threadId: ThreadId,
+  ...ThreadIssueKey.fields,
+  url: TrimmedNonEmptyString,
+  snapshot: ThreadIssueSnapshot,
+});
+
 const ThreadRuntimeModeSetCommand = Schema.Struct({
   type: Schema.Literal("thread.runtime-mode.set"),
   commandId: CommandId,
@@ -2051,6 +2060,7 @@ const ThreadImportCommand = Schema.Struct({
 });
 
 const InternalOrchestrationCommand = Schema.Union([
+  ThreadIssueSyncCommand,
   ProjectAutomationInternalCommands,
   ThreadAutoSettleCommand,
   ThreadPullRequestSyncCommand,
@@ -2103,6 +2113,7 @@ export const OrchestrationEventType = Schema.Literals([
   "thread.pull-request-synced",
   "thread.issue-linked",
   "thread.issue-unlinked",
+  "thread.issue-synced",
   "thread.runtime-mode-set",
   "thread.interaction-mode-set",
   "thread.goal-set",
@@ -2321,6 +2332,15 @@ export const ThreadIssueUnlinkedPayload = Schema.Struct({
   updatedAt: IsoDateTime,
 });
 export type ThreadIssueUnlinkedPayload = typeof ThreadIssueUnlinkedPayload.Type;
+
+export const ThreadIssueSyncedPayload = Schema.Struct({
+  threadId: ThreadId,
+  ...ThreadIssueKey.fields,
+  url: TrimmedNonEmptyString,
+  snapshot: ThreadIssueSnapshot,
+  updatedAt: IsoDateTime,
+});
+export type ThreadIssueSyncedPayload = typeof ThreadIssueSyncedPayload.Type;
 
 export const ThreadRuntimeModeSetPayload = Schema.Struct({
   threadId: ThreadId,
@@ -2597,6 +2617,11 @@ export const OrchestrationEvent = Schema.Union([
     ...EventBaseFields,
     type: Schema.Literal("thread.issue-unlinked"),
     payload: ThreadIssueUnlinkedPayload,
+  }),
+  Schema.Struct({
+    ...EventBaseFields,
+    type: Schema.Literal("thread.issue-synced"),
+    payload: ThreadIssueSyncedPayload,
   }),
   Schema.Struct({
     ...EventBaseFields,

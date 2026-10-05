@@ -1,7 +1,23 @@
 import type { GiteaInstanceConfig, OrchestrationProjectShell } from "@t3tools/contracts";
-import { describe, expect, it } from "vite-plus/test";
+import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
+import * as Option from "effect/Option";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
+import { ThreadId } from "@t3tools/contracts";
+import { ServerSettingsService } from "../serverSettings.ts";
+import { OrchestrationEngineService } from "./Services/OrchestrationEngine.ts";
+import { ProjectionSnapshotQuery } from "./Services/ProjectionSnapshotQuery.ts";
+import { describe, expect, it, vi } from "vite-plus/test";
+import { it as effectIt } from "@effect/vitest";
 
-import { buildThreadIssueLink, resolveThreadIssueReference } from "./ThreadIssueService.ts";
+import {
+  buildThreadIssueLink,
+  fetchThreadIssueMetadata,
+  isPullRequestIssue,
+  resolveThreadIssueReference,
+  make,
+} from "./ThreadIssueService.ts";
 
 const instance: GiteaInstanceConfig = {
   id: "home",
@@ -106,4 +122,142 @@ describe("Gitea issue reference resolution", () => {
       snapshot: { title: "brad/gpu-transcriber #6", state: "open" },
     });
   });
+
+  effectIt.effect("fetches a public issue URL through the configured internal API origin", () =>
+    Effect.gen(function* () {
+      const target = resolveThreadIssueReference(
+        "https://git.bradleyprince.com/brad/gpu-transcriber/issues/6",
+        macProject,
+        [macInstance],
+      );
+      const response = {
+        number: 6,
+        title: "Fix transcription",
+        state: "open" as const,
+        html_url: "http://git.home:3000/brad/gpu-transcriber/issues/6",
+        pull_request: null,
+      };
+      const request = vi.fn(() => Effect.succeed(response)) as never;
+
+      expect(yield* fetchThreadIssueMetadata({ request }, target)).toEqual(response);
+      expect(request).toHaveBeenCalledWith(
+        expect.objectContaining({ apiOrigin: "http://git.home:3000" }),
+        "/repos/brad/gpu-transcriber/issues/6",
+        expect.anything(),
+      );
+    }),
+  );
+
+  it("uses the API pull_request value without mistaking null for a pull request", () => {
+    const issue = {
+      number: 6,
+      title: "Real issue",
+      state: "open" as const,
+      html_url: "http://git.home:3000/brad/gpu-transcriber/issues/6",
+    };
+    expect(isPullRequestIssue({ ...issue, pull_request: null })).toBe(false);
+    expect(isPullRequestIssue({ ...issue, pull_request: { url: "pulls/6" } })).toBe(true);
+  });
+
+  it("keeps the linked public URL when metadata came from an internal API alias", () => {
+    const target = resolveThreadIssueReference(
+      "https://git.bradleyprince.com/brad/gpu-transcriber/issues/6",
+      macProject,
+      [macInstance],
+    );
+    expect(
+      buildThreadIssueLink(
+        target,
+        {
+          title: "Fix transcription",
+          state: "open",
+          html_url: "http://git.home:3000/brad/gpu-transcriber/issues/6",
+        },
+        "2026-10-04T12:00:00.000Z",
+      ),
+    ).toMatchObject({
+      url: "https://git.bradleyprince.com/brad/gpu-transcriber/issues/6",
+      snapshot: { title: "Fix transcription", state: "open" },
+    });
+  });
+});
+
+describe("issue link service", () => {
+  effectIt.effect.each([null, { url: "http://git.home:3000/brad/gpu-transcriber/pulls/6" }])(
+    "persists ordinary issues and rejects actual PRs (pull_request=%j)",
+    (pull_request) =>
+      Effect.gen(function* () {
+        const requests: string[] = [];
+        const dispatched: unknown[] = [];
+        const threadId = ThreadId.make("issue-worker");
+        const result = yield* make.pipe(
+          Effect.flatMap((service) =>
+            service.link({
+              threadId,
+              reference: "https://git.bradleyprince.com/brad/gpu-transcriber/issues/6",
+            }),
+          ),
+          Effect.result,
+          Effect.provideService(ProjectionSnapshotQuery, {
+            getThreadShellById: () =>
+              Effect.succeed(Option.some({ id: threadId, projectId: "project", issues: [] })),
+            getProjectShellById: () => Effect.succeed(Option.some(macProject)),
+          } as never),
+          Effect.provideService(OrchestrationEngineService, {
+            dispatch: (command: unknown) => {
+              dispatched.push(command);
+              return Effect.succeed({});
+            },
+          } as never),
+          Effect.provideService(
+            HttpClient.HttpClient,
+            HttpClient.make((request) => {
+              requests.push(request.url);
+              return Effect.succeed(
+                HttpClientResponse.fromWeb(
+                  request,
+                  new Response(
+                    JSON.stringify({
+                      number: 6,
+                      title: "Fix transcription",
+                      state: "closed",
+                      html_url: "http://git.home:3000/brad/gpu-transcriber/issues/6",
+                      pull_request,
+                    }),
+                  ),
+                ),
+              );
+            }),
+          ),
+          Effect.provide(
+            Layer.mergeAll(
+              ServerSettingsService.layerTest({ giteaInstances: [macInstance] }),
+              NodeServices.layer,
+            ),
+          ),
+        );
+        expect(requests).toEqual([
+          "http://git.home:3000/api/v1/repos/brad/gpu-transcriber/issues/6",
+        ]);
+        if (pull_request === null) {
+          expect(result._tag).toBe("Success");
+          if (result._tag === "Success")
+            expect(result.success.link.snapshot).toMatchObject({
+              title: "Fix transcription",
+              state: "closed",
+            });
+          expect(dispatched).toMatchObject([
+            {
+              type: "thread.issue.link",
+              link: { snapshot: { title: "Fix transcription", state: "closed" } },
+            },
+          ]);
+        } else {
+          expect(result._tag).toBe("Failure");
+          if (result._tag === "Failure")
+            expect(result.failure.message).toBe("That Gitea URL is a pull request, not an issue.");
+          expect(dispatched).toEqual([]);
+        }
+      }),
+  );
 });

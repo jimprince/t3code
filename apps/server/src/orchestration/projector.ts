@@ -51,6 +51,7 @@ import {
   ThreadPullRequestSyncedPayload,
   ThreadPullRequestUnlinkedPayload,
   ThreadIssueLinkedPayload,
+  ThreadIssueSyncedPayload,
   ThreadIssueUnlinkedPayload,
   ThreadSnoozedPayload,
   ThreadUnpinnedPayload,
@@ -803,6 +804,27 @@ export function projectEvent(
             updatedAt: payload.updatedAt,
           }),
         })),
+      );
+
+    case "thread.issue-synced":
+      return decodeForEvent(ThreadIssueSyncedPayload, event.payload, event.type, "payload").pipe(
+        Effect.map((payload) => {
+          const thread = nextBase.threads.find((entry) => entry.id === payload.threadId);
+          if (!thread || !thread.issues?.some((issue) => threadIssueKeysEqual(issue, payload))) {
+            return nextBase;
+          }
+          return {
+            ...nextBase,
+            threads: updateThread(nextBase.threads, payload.threadId, {
+              issues: thread.issues.map((issue) =>
+                threadIssueKeysEqual(issue, payload)
+                  ? { ...issue, url: payload.url, snapshot: payload.snapshot }
+                  : issue,
+              ),
+              updatedAt: payload.updatedAt,
+            }),
+          };
+        }),
       );
 
     case "thread.runtime-mode-set":

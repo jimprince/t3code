@@ -24,6 +24,7 @@ import {
   ThreadPullRequestUnlinkedPayload as ContractsThreadPullRequestUnlinkedPayloadSchema,
   ThreadPullRequestSyncedPayload as ContractsThreadPullRequestSyncedPayloadSchema,
   ThreadIssueLinkedPayload as ContractsThreadIssueLinkedPayloadSchema,
+  ThreadIssueSyncedPayload as ContractsThreadIssueSyncedPayloadSchema,
   ThreadIssueUnlinkedPayload as ContractsThreadIssueUnlinkedPayloadSchema,
   ThreadMessageSentPayload as ContractsThreadMessageSentPayloadSchema,
   ThreadProposedPlanUpsertedPayload as ContractsThreadProposedPlanUpsertedPayloadSchema,
@@ -65,6 +66,7 @@ export const ThreadPullRequestLinkedPayload = ContractsThreadPullRequestLinkedPa
 export const ThreadPullRequestUnlinkedPayload = ContractsThreadPullRequestUnlinkedPayloadSchema;
 export const ThreadPullRequestSyncedPayload = ContractsThreadPullRequestSyncedPayloadSchema;
 export const ThreadIssueLinkedPayload = ContractsThreadIssueLinkedPayloadSchema;
+export const ThreadIssueSyncedPayload = ContractsThreadIssueSyncedPayloadSchema;
 export const ThreadIssueUnlinkedPayload = ContractsThreadIssueUnlinkedPayloadSchema;
 
 export const MessageSentPayloadSchema = ContractsThreadMessageSentPayloadSchema;
