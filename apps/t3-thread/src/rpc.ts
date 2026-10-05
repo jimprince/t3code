@@ -26,6 +26,9 @@ const RPC_METHODS = {
   projectDashboardGet: WS_METHODS.projectDashboardGet,
   projectDashboardSetWidgets: WS_METHODS.projectDashboardSetWidgets,
   projectDashboardSetTracker: WS_METHODS.projectDashboardSetTracker,
+  projectRoadmapGet: WS_METHODS.projectRoadmapGet,
+  projectRoadmapMove: WS_METHODS.projectRoadmapMove,
+  projectRoadmapSaveVersion: WS_METHODS.projectRoadmapSaveVersion,
 } as const;
 
 const makeT3RpcClient = RpcClient.make(WsRpcGroup);
@@ -69,7 +72,10 @@ export class T3RpcClient {
       | "projectRequestsList"
       | "projectDashboardGet"
       | "projectDashboardSetWidgets"
-      | "projectDashboardSetTracker",
+      | "projectDashboardSetTracker"
+      | "projectRoadmapGet"
+      | "projectRoadmapMove"
+      | "projectRoadmapSaveVersion",
     input: unknown,
   ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<
