@@ -59,10 +59,10 @@ export function classifyThread(
     };
   }
 
-  if (thread.session?.status === "error" || thread.latestTurn?.state === "error") {
+  if (thread.session?.status === "error") {
     return {
       state: "error",
-      reason: thread.session?.lastError || "turn failed",
+      reason: thread.session.lastError || "provider session errored",
     };
   }
 
@@ -75,6 +75,14 @@ export function classifyThread(
     return {
       state: "running",
       reason: "turn is running",
+    };
+  }
+
+  // A live session outranks an old failed turn, so only a settled session shows it.
+  if (thread.latestTurn?.state === "error") {
+    return {
+      state: "error",
+      reason: "latest turn ended in error and the provider recorded no detail",
     };
   }
 
