@@ -199,18 +199,13 @@ export function buildNotificationMessage(
   ]
     .filter(Boolean)
     .join(" ");
-  if (!includeOnboarding) return notice;
-  return `${notice}\n\n${[
-    "Thread communication quick start (shown once per subscriber):",
-    `This is an automatic watcher notice about worker ${sourceLabel}, routed to you as its supervisor.`,
-    `Read its full output: \`t3-thread result ${sourceLabel}\`.`,
-    `Reply or assign work: \`t3-thread send ${sourceLabel} "message"\`; busy sends queue until its turn ends; \`t3-thread queue\` lists pending sends.`,
-    `Questions/approvals: \`t3-thread pending ${sourceLabel}\`, \`t3-thread answer ${sourceLabel} "answer"\`, \`t3-thread approve ${sourceLabel}\` or \`t3-thread deny ${sourceLabel}\`.`,
-    `Notification level: \`t3-thread agent subscribe --watch ${sourceLabel} --level all|attention|none\`; input, approval and error notices always pass these levels.`,
-    `Stop this subscription: \`t3-thread agent unsubscribe --watch ${sourceLabel}\`. Make your own turn quiet by ending your final response with \`T3_NOTIFY: quiet\`.`,
-    `Finished worker: \`t3-thread settle ${sourceLabel}\`; give it more work with send if needed.`,
-    "Full guide: apps/t3-thread/docs/THREAD_COMMUNICATION.md (in the t3-thread checkout).",
-  ].join("\n")}`;
+  const guide = includeOnboarding
+    ? `Thread communication quick start: read output with \`t3-thread result ${sourceLabel}\`; inspect queued sends with \`t3-thread queue\`. Full guide: apps/t3-thread/docs/THREAD_COMMUNICATION.md.`
+    : null;
+  const controls = notification.isChildInput
+    ? null
+    : `Notifications: t3-thread agent subscribe --watch ${notification.sourceThreadId} --level attention|none · stop: t3-thread agent unsubscribe --watch ${notification.sourceThreadId}`;
+  return [notice, guide, controls].filter(Boolean).join("\n");
 }
 
 /** Required escalation bypasses both subscription filtering and quiet completion. */

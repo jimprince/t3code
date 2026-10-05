@@ -652,7 +652,10 @@ describe("notification onboarding", () => {
       expect(sent[0]?.text).toContain("t3-thread result worker-a");
       expect(sent[0]?.text).toContain("t3-thread queue");
       expect(sent[0]?.text).toContain("THREAD_COMMUNICATION.md");
-      expect(sent[0]!.text.split("\n").length).toBeLessThanOrEqual(15);
+      expect(sent[0]!.text.split("\n")).toHaveLength(3);
+      expect(sent[0]!.text.split("\n").at(-1)).toContain(
+        "agent unsubscribe --watch thread-worker-a",
+      );
       threads["thread-worker-a"] = makeCompletedThread({
         latestTurn: {
           ...threads["thread-worker-a"].latestTurn!,
@@ -667,6 +670,9 @@ describe("notification onboarding", () => {
       await deliverPendingNotifications({ env: "dev-vm", clientFactory });
       expect(sent).toHaveLength(2);
       expect(sent[1]?.text).not.toContain("Thread communication quick start");
+      expect(sent[1]!.text.split("\n").at(-1)).toContain(
+        "agent unsubscribe --watch thread-worker-a",
+      );
       const persisted = await loadState();
       // Replacing the route models unsubscribe/resubscribe; onboarding history
       // belongs to the subscriber, not this route or the watcher's process.

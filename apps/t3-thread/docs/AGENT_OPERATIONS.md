@@ -104,7 +104,7 @@ held events, at most the newest per source, go out on the next watcher pass.
 After an unsettle in the app, a running watcher finds them within a minute; if
 no watcher is running they wait for the next one.
 
-A notification for a completed worker ends by asking the supervisor to decide
+A notification for a completed worker asks the supervisor to decide
 whether that worker is finished, naming the exact `t3-thread settle <worker>`
 command. Settle a finished worker so it leaves the active list (and the parent's
 Agents panel) now instead of when automatic settlement reaches it days later;
@@ -548,7 +548,9 @@ a subscription, then send one reminder after 20 minutes, including the pending q
 on `create` or `subscribe`; zero disables the reminder. Answered, settled, archived or
 unnested workers stop reminders. See [Thread communication](THREAD_COMMUNICATION.md).
 
-The first delivered notice includes a short guide once per subscriber, across
+Ordinary watcher notices end with a one-line command to change or stop the
+subscription; mandatory child-input notices omit those controls.
+The first delivered notice includes a one-line guide link once per subscriber, across
 all workers. The receipt survives restarts and unsubscribe/resubscribe; failed
 or held deliveries do not consume it. See [Thread communication](THREAD_COMMUNICATION.md)
 for the full reply, approval and notification controls.

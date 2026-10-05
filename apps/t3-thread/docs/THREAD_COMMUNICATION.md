@@ -57,7 +57,11 @@ unseen. Turns started by the user's own messages never fold.
 
 ## First-delivery guide
 
-The short guide appears once per subscriber across all workers. Only a confirmed
+Ordinary watcher notices end with one line of commands to change or stop that
+worker’s subscription. Child-input notices omit those controls because a parent’s
+responsibility continues without a subscription.
+
+A one-line guide link appears once per subscriber across all workers. Only a confirmed
 successful notification delivery consumes it, so retries, held notices and filtered
 completions do not. The receipt is saved in notification history, survives watcher
 restarts and unsubscribe/resubscribe, and is retained when errors are recounted.
