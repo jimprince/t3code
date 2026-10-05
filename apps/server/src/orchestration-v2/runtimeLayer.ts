@@ -1,3 +1,4 @@
+import * as StartupResumePolicy from "../fork/recovery/StartupResumePolicy.ts";
 import * as UsageLimitRecoveryWorker from "./UsageLimitRecoveryWorker.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import * as Layer from "effect/Layer";
@@ -267,17 +268,22 @@ const providerContinuationWorkerProvided = providerContinuationWorkerLive.pipe(
 const threadTitleRegenerationProvided = threadTitleRegenerationServiceLayer.pipe(
   Layer.provide(Layer.mergeAll(threadManagementProvided, ProjectStore.layer, TextGeneration.layer)),
 );
-const effectExecutorProvided = effectExecutorLayer.pipe(
+const effectExecutorProvided = StartupResumePolicy.executorLayer.pipe(
+  Layer.provideMerge(StartupResumePolicy.layer),
   Layer.provide(
-    Layer.mergeAll(
-      runFinalizationServiceProvided,
-      checkpointRollbackServiceProvided,
-      providerSessionManagerProvided,
-      providerTurnControlServiceProvided,
-      providerTurnStartServiceProvided,
-      runtimeRequestServiceProvided,
-      threadTitleRegenerationProvided,
-      threadManagementProvided,
+    effectExecutorLayer.pipe(
+      Layer.provide(
+        Layer.mergeAll(
+          runFinalizationServiceProvided,
+          checkpointRollbackServiceProvided,
+          providerSessionManagerProvided,
+          providerTurnControlServiceProvided,
+          providerTurnStartServiceProvided,
+          runtimeRequestServiceProvided,
+          threadTitleRegenerationProvided,
+          threadManagementProvided,
+        ),
+      ),
     ),
   ),
 );
@@ -297,6 +303,7 @@ const providerRuntimeRecoveryProvided = providerRuntimeRecoveryLayer.pipe(
 );
 
 export const OrchestrationV2LayerLive = Layer.mergeAll(
+  StartupResumePolicy.layer,
   orchestratorProvided,
   threadManagementProvided,
   effectWorkerProvided,
