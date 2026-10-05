@@ -1716,7 +1716,11 @@ request
   .command("add")
   .argument("<thread>", "saved agent name or raw thread UUID that Brad asked")
   .argument("<title>", "the request in Brad's words")
-  .option("--kind <kind>", "question, deliverable, plan, change or test", "deliverable")
+  .option(
+    "--kind <kind>",
+    "bug, feature, question, deliverable, plan, change, test or maintenance",
+    "deliverable",
+  )
   .option("--detail <text>", "Brad's exact words or extra context")
   .action(async (reference, title, options: { kind: string; detail?: string }) => {
     const { agent: target, client } = await withAgent(reference);
@@ -1814,6 +1818,23 @@ request
         status: "needs-test",
         release: options.release,
         comment: `Test: ${options.test}`,
+      }),
+    );
+  });
+
+request
+  .command("type")
+  .description("Set a task's type (its ask:<kind> label); works on any tracker issue")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
+  .argument("<kind>", "bug, feature, question, deliverable, plan, change, test or maintenance")
+  .action(async (reference, requestReference, kind) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRequest("projectRequestsUpdate", {
+        threadId: target.threadId,
+        reference: requestReference,
+        kind,
       }),
     );
   });
