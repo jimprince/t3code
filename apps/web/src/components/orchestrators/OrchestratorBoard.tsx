@@ -51,6 +51,7 @@ import { OrchestratorStatus } from "./OrchestratorStatus";
 import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestratorVisit";
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
+import { ProjectRequestsSection } from "./ProjectRequestsSection";
 import { projectReturnState } from "./projectNavigation";
 
 function BoardSection({
@@ -361,6 +362,8 @@ export function OrchestratorBoard({
                   </ul>
                 )}
               </BoardSection>
+
+              <ProjectRequestsSection summary={summary} />
 
               <BoardSection title="Working" count={summary.working.length}>
                 {summary.working.length === 0 ? (
