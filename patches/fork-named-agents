@@ -1,6 +1,6 @@
-Bottom: 58ee5350a296f3f4a3bef63796f91c6e783ed43f
-Top:    ff551c6ae53ec47ac9f0ec9862329bf093b87930
+Bottom: 5507c510f228e87978ef25c50d695f456875e0f9
+Top:    50380e0a63232be2e1505edec4d10f9bb27b21ca
 Author: brad <bradprin@live.com>
-Date:   2026-10-05 06:37:29 +0000
+Date:   2026-10-05 15:51:12 +0000
 
 feat(threads): named agents with one live thread each
