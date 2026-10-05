@@ -1154,12 +1154,17 @@ t3-thread project tracker clear "$T3_THREAD_ID"
 
 Versions are open Gitea milestones on the project's tracker repository; the first (by due date,
 then creation) is the next release, and its items feed the project page's Next release list.
-Items with no milestone are Later. Ideas Brad saves for later carry the `parked` label and stay off the active Requests list; moving one into a version or starting it removes the label. Brad drags items between columns; agents use:
+The Roadmap tab's first column is the next version, filled automatically: the first version's
+items plus every open item without a milestone. Later holds parked items (the `parked` label):
+ideas Brad saves for later and anything moved to Later. Nothing in Later shows on the
+Dashboard; moving an item into a version, back to next, or starting it removes the label.
+Brad drags items between columns; agents use:
 
 ```bash
-t3-thread roadmap list "$T3_THREAD_ID"            # versions, their items, and Later
-t3-thread roadmap move "$T3_THREAD_ID" 12 "Next release"
-t3-thread roadmap move "$T3_THREAD_ID" 12 later
+t3-thread roadmap list "$T3_THREAD_ID"            # next, versions with their items, and Later
+t3-thread roadmap move "$T3_THREAD_ID" 12 fork.26
+t3-thread roadmap move "$T3_THREAD_ID" 12 next    # out of every version, unparked
+t3-thread roadmap move "$T3_THREAD_ID" 12 later   # parked
 t3-thread roadmap version "$T3_THREAD_ID" fork.26
 ```
 
