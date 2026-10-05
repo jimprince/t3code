@@ -22,7 +22,8 @@ export function liveNamedAgentThreads(
       thread.id !== exceptThreadId &&
       thread.archivedAt === null &&
       thread.deletedAt === null &&
-      (thread.parentThreadId ?? null) === null,
+      (thread.parentThreadId ?? null) === null &&
+      thread.remoteParent == null,
   );
 }
 

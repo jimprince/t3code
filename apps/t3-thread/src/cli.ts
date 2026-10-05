@@ -148,6 +148,35 @@ function resolveParentThreadId(
   return saved.threadId;
 }
 
+/** Resolves parent ownership without writing to the parent's server. */
+async function resolveParentLink(
+  state: Awaited<ReturnType<typeof loadState>>,
+  reference: string,
+  childEnvironment: string,
+): Promise<{
+  parentThreadId: string | null;
+  remoteParent?: { environmentId: string; threadId: string };
+  parentEnvironmentName?: string;
+}> {
+  const caller =
+    reference === resolveCallerThreadId()
+      ? resolveCallerEndpointFromLocalContext(state, reference, resolveCallerEnvironmentMetadata())
+      : null;
+  const target =
+    caller ??
+    (await resolveAgentTarget(state, reference, {
+      preferredEnvironment: childEnvironment,
+      clientFactory: (name) => new RemoteEnvironmentClient(requireEnvironment(state, name)),
+    }));
+  const parentEnvironment = requireEnvironment(state, target.environment);
+  if (target.environment === childEnvironment) return { parentThreadId: target.threadId };
+  return {
+    parentThreadId: null,
+    remoteParent: { environmentId: parentEnvironment.environmentId, threadId: target.threadId },
+    parentEnvironmentName: target.environment,
+  };
+}
+
 function toSubscriptionEndpoint(agent: SavedAgent): SubscriptionEndpoint {
   return {
     threadId: agent.threadId,
@@ -434,13 +463,18 @@ program
     if (options.recursive && !options.parent) {
       throw new Error("--recursive requires --parent");
     }
-    const parentThreadId = options.parent
-      ? resolveParentThreadId(state, options.parent, environment.name)
+    const parentLink = options.parent
+      ? await resolveParentLink(state, options.parent, environment.name)
       : null;
     const threads = await client.listThreads();
     const titles = new Map(threads.map((thread) => [thread.id, thread.title]));
-    const selected = parentThreadId
-      ? selectThreadChildren(threads, parentThreadId, Boolean(options.recursive))
+    const selected = parentLink
+      ? selectThreadChildren(
+          threads,
+          parentLink.remoteParent?.threadId ?? parentLink.parentThreadId!,
+          Boolean(options.recursive),
+          parentLink.remoteParent?.environmentId,
+        )
       : threads;
     printLines(
       selected.map((thread) => formatThreadLine(thread, titles.get(thread.parentThreadId ?? ""))),
@@ -765,10 +799,14 @@ agent
     const client = new RemoteEnvironmentClient(environment);
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
     const snapshot = await client.getShellSnapshot();
+    const parentReference = options.topLevel ? null : (options.parent ?? resolveCallerThreadId());
+    const parentLink =
+      parentReference === null
+        ? null
+        : await resolveParentLink(state, parentReference, options.env);
     const nesting = resolveCreateParent({
-      explicitParentThreadId: options.parent
-        ? resolveParentThreadId(state, options.parent, options.env)
-        : null,
+      explicitParentThreadId: options.parent ? (parentLink?.parentThreadId ?? null) : null,
+      remoteParent: parentLink?.remoteParent,
       topLevel: options.topLevel === true,
       serverSupportsNesting: await client.supportsThreadNesting(),
       callerThreadId: resolveCallerThreadId(),
@@ -778,6 +816,7 @@ agent
     const created = await client.createAgentThread({
       pin: options.pin === true,
       parentThreadId: nesting.parentThreadId,
+      remoteParent: "remoteParent" in nesting ? nesting.remoteParent : undefined,
       settleOnComplete: options.settleOnComplete,
       projectId: options.project,
       title: options.title,
@@ -808,7 +847,18 @@ agent
                       ?.title,
                     environment: environment.name,
                   }
-                : null,
+                : parentLink?.remoteParent
+                  ? {
+                      threadId: parentLink.remoteParent.threadId,
+                      name:
+                        state.agents.find(
+                          (agent) =>
+                            agent.threadId === parentLink.remoteParent?.threadId &&
+                            agent.environment === parentLink.parentEnvironmentName,
+                        )?.name ?? null,
+                      environment: parentLink.parentEnvironmentName ?? environment.name,
+                    }
+                  : null,
             },
           }),
     });
@@ -864,6 +914,7 @@ agent
       notifySubscriberThreadId: notifyCaller?.threadId ?? null,
       pinned: created.pinned,
       nestedUnder: nesting.parentThreadId,
+      remoteParent: "remoteParent" in nesting ? nesting.remoteParent : null,
       nesting: nesting.reason,
     });
   });
@@ -1567,6 +1618,7 @@ agent
       checkedEnvironments: target.checkedEnvironments,
       unreachableEnvironments: target.unreachableEnvironments,
       parentThreadId,
+      remoteParent: thread.remoteParent ?? null,
       parentTitle,
       pinned: thread.pinnedAt != null,
       pinnedAt: thread.pinnedAt ?? null,
@@ -1912,9 +1964,15 @@ agent
   .requiredOption("--parent <agent-or-thread>", "saved agent name or thread UUID to nest under")
   .action(async (name, options) => {
     const { state, agent: savedAgent, client } = await withAgent(name);
-    const parentThreadId = resolveParentThreadId(state, options.parent, savedAgent.environment);
-    await client.setThreadParent(savedAgent.threadId, parentThreadId);
-    printJson({ agent: savedAgent.name, threadId: savedAgent.threadId, parentThreadId });
+    const link = await resolveParentLink(state, options.parent, savedAgent.environment);
+    await client.setThreadParent(savedAgent.threadId, link.parentThreadId, link.remoteParent);
+    const thread = await client.getThreadDetail(savedAgent.threadId);
+    printJson({
+      agent: savedAgent.name,
+      threadId: savedAgent.threadId,
+      parentThreadId: thread.parentThreadId ?? null,
+      remoteParent: thread.remoteParent ?? null,
+    });
   });
 
 agent
@@ -1924,7 +1982,13 @@ agent
   .action(async (name) => {
     const { agent: savedAgent, client } = await withAgent(name);
     await client.setThreadParent(savedAgent.threadId, null);
-    printJson({ agent: savedAgent.name, threadId: savedAgent.threadId, parentThreadId: null });
+    const thread = await client.getThreadDetail(savedAgent.threadId);
+    printJson({
+      agent: savedAgent.name,
+      threadId: savedAgent.threadId,
+      parentThreadId: thread.parentThreadId ?? null,
+      remoteParent: thread.remoteParent ?? null,
+    });
   });
 
 agent

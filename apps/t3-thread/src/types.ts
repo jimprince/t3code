@@ -46,6 +46,7 @@ export interface ExecutionEnvironmentDescriptor {
     threadOrderReset?: boolean;
     sessionRefresh?: boolean;
     threadNesting?: boolean;
+    remoteThreadNesting?: boolean;
     threadIssues?: boolean;
   };
 }
