@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "324c44ae6f3930a78175d05adf15cd13bd457e91",
-  "head": "8c9215a690886829c5f6e59748735fb57a4bcce7",
+  "prev": "5f60fd15c90829c60115f0e2da48cbf6c78899a2",
+  "head": "83ae80bbcf090df59a3d85128f6ff8322f8c2751",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -98,7 +98,7 @@
       "oid": "e41629808c1974b24853ec647ac41c4bc59aa033"
     },
     "fork-attachment-compatibility": {
-      "oid": "8c9215a690886829c5f6e59748735fb57a4bcce7"
+      "oid": "83ae80bbcf090df59a3d85128f6ff8322f8c2751"
     },
     "fork-auth-session-refresh": {
       "oid": "867e71e319e1f98d7636b421526acb6cb4533d14"
