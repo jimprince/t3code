@@ -1,5 +1,6 @@
 import { THREAD_SUBSCRIPTION_METHODS, ThreadSubscriptionRpcs } from "./threadSubscriptions.ts";
 import { WorkspaceUploadRpc, WorkspaceUploadMethods } from "./workspaceUploadRpc.ts";
+import { HEADLESS_DELIVERY_METHODS, HeadlessDeliveryRpc } from "./forkHeadlessDeliveryRpc.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
   ChatGptReconnectProfileInput,
@@ -341,6 +342,7 @@ import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 export const WS_METHODS = {
   ...THREAD_SUBSCRIPTION_METHODS,
   ...WorkspaceUploadMethods,
+  ...HEADLESS_DELIVERY_METHODS,
   // Project registry methods
   projectsList: "projects.list",
   projectsAdd: "projects.add",
@@ -1628,7 +1630,8 @@ export const WsSubscribeServerConfigRpc = Rpc.make(WS_METHODS.subscribeServerCon
 });
 
 const WsSubscribeServerLifecycleRpc = Rpc.make(WS_METHODS.subscribeServerLifecycle, {
-  payload: Schema.Struct({}),
+  // Old clients cannot decode new event kinds. Updates are explicitly opted in.
+  payload: Schema.Struct({ includeUpdates: Schema.optionalKey(Schema.Boolean) }),
   success: ServerLifecycleStreamEvent,
   error: EnvironmentAuthorizationError,
   stream: true,
@@ -1706,6 +1709,7 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 export const WsRpcGroup = RpcGroup.make(
   ...ThreadSubscriptionRpcs,
   WorkspaceUploadRpc,
+  HeadlessDeliveryRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
