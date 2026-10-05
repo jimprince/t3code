@@ -1,6 +1,7 @@
-Bottom: 807565a12781d9b87e181f7df50590826bf1c614
-Top:    95fdc557eaee990d88f8df6931febdfd854a6828
+Bottom: 0be8ddeac5e13d3bbfbc15e34a06ed152ff60948
+Top:    0dcdb1459f6abe06c3bd85c32129441594271ae9
 Author: User <user@example.com>
-Date:   2026-10-05 01:03:10 +0000
+Date:   2026-10-05 22:15:36 +0000
 
-fix(server): skip PR status lookups for unsupported hosts
+fix(git): skip unsupported PR hosts with cached results
+
