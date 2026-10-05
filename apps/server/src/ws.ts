@@ -695,7 +695,11 @@ const makeWsRpcLayer = (
       const pullRequestSync = yield* PullRequestSyncReactor.PullRequestSyncReactor;
       const threadIssues = yield* ThreadIssueService.make;
       const projectIssues = yield* ProjectIssuesService.make;
-      const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
+      const requestLedger = yield* RequestLedger.make({
+        projectIssues,
+        threadIssues,
+        dispatch: orchestrationEngine.dispatch,
+      });
       const projectCanvas = yield* ProjectCanvasService.make;
       const requestIntake = yield* RequestIntake.make({
         engine: orchestrationEngine,
@@ -3159,6 +3163,10 @@ const makeWsRpcLayer = (
           }),
         [WS_METHODS.projectRequestsStartIntake]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsStartIntake, requestIntake.start(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsDecide]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsDecide, requestLedger.decide(input), {
             "rpc.aggregate": "project-issues",
           }),
         [WS_METHODS.projectRequestsSubmit]: (input) =>
