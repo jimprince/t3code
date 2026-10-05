@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "4c50350a8e78c0362054ce11aa2691aae8141a42",
-  "head": "0e6c5f483b15c204abb01255e143738d60c341f1",
+  "prev": "d03bb6877fc0420cb62777c1a8018d8ffe723645",
+  "head": "89d79c11a4e90f9c45d1224a4914cadc6099c478",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -82,10 +82,11 @@
     "fork-project-page-usability",
     "fork-request-answers",
     "fork-project-task-status",
-    "fork-project-layout",
+    "fork-project-layout"
+  ],
+  "unapplied": [
     "fork-request-intake"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
