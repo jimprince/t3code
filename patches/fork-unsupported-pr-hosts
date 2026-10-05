@@ -3,5 +3,4 @@ Top:    0dcdb1459f6abe06c3bd85c32129441594271ae9
 Author: User <user@example.com>
 Date:   2026-10-05 22:15:36 +0000
 
-fix(git): skip unsupported PR hosts with cached results
-
+fix(server): skip PR status lookups for unsupported hosts
