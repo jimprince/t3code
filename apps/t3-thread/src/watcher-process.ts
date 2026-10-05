@@ -163,8 +163,7 @@ export async function ensureWatcherProcess(input: {
   if (existing) return { status: "already-running", pid: existing.pid };
 
   const repoRoot = repoRootFromArgv();
-  const tsxPath = NodePath.join(repoRoot, "node_modules", ".bin", "tsx");
-  const cliEntry = NodePath.join(repoRoot, "src", "cli.ts");
+  const cliEntry = process.argv[1]!;
   const args = [
     cliEntry,
     "watch",
@@ -183,7 +182,7 @@ export async function ensureWatcherProcess(input: {
     args.push("--no-deliver");
   }
 
-  const child = NodeChildProcess.spawn(tsxPath, args, {
+  const child = NodeChildProcess.spawn(process.execPath, [...process.execArgv, ...args], {
     cwd: repoRoot,
     detached: true,
     stdio: "ignore",

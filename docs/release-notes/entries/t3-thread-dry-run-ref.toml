@@ -1,0 +1,4 @@
+id = "t3-thread-dry-run-ref"
+category = "fix"
+functionality = "worker operations"
+text = "Preview thread CLI deployment commands for a new snapshot using the requested source revision without creating runtime directories."

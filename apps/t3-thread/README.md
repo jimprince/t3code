@@ -293,6 +293,71 @@ contains only the wider decoding needed for old paired servers and the CLI's
 stable model-selection view; do not copy the main contract tree back into this
 package.
 
+## Prebuilt operator runtime
+
+Build once with `node scripts/build.mjs` from `apps/t3-thread` after installing
+workspace dependencies. `bin/t3-thread` and `pnpm run cli` then use one Node
+process to validate the source hash and load `dist/cli.cjs`; ordinary calls do
+not run tsx or esbuild. A missing or stale build fails with the explicit build
+command. For source development, use `T3_THREAD_DEV=1 bin/t3-thread` or
+`pnpm run cli:dev`.
+
+For reviewed deployment, copy `bin/t3-thread` and `bin/t3-thread-deploy` to the
+shared bin directory. The deploy helper builds and validates the pinned snapshot
+before changing `current`; the wrapper still accepts `T3_THREAD_REPO` and
+`T3_THREAD_NODE_BIN`. Updating the wrapper alone leaves old snapshots without a
+stamp unable to run until they are explicitly built or redeployed.
+
+Use `t3-thread-deploy --retain-snapshots --from <checkout> --ref <reviewed-ref>`
+when runtime directories must be preserved. Preview with `--dry-run`; dependency
+commands come from the requested Git ref even before its snapshot exists.
+It still builds, verifies, promotes
+and restarts the managed watcher, but skips pruning (including `--prune-only`)
+and retains a newly created snapshot if preparation fails. Inspect and repair
+an incomplete snapshot before retrying: a retained directory is not proof of a
+working build. Without the option, existing pruning and cleanup behavior applies.
+Keep exact unit, wrapper and `current` receipts for rollback; retained snapshots
+stay at their original paths, so no full runtime backup is required. Never remove
+one without explicit authorization.
+
+When a Linux user `t3-thread-watcher.service` is loaded, deployment restarts it
+through the user bus after promoting the verified snapshot and before pruning.
+It then checks the service PID against the boot/start lease and promoted runtime
+cwd; a live foreign watcher must not allow deletion of its old runtime.
+The service must run the shared wrapper, which follows `current`. A restart or
+service-health failure stops pruning and retains the previous runtime; repair
+the unit or atomically repoint `current` to the retained snapshot and restart
+only the watcher. `--dry-run` and `--prune-only` never restart it. An installed
+unit with an unavailable user bus fails closed. Hosts without this managed unit
+keep on-demand watcher behavior. Every pruning path, including `--prune-only`,
+checks the routing-state lease before deletion. On Linux a live boot/start lease
+whose cwd is inside any predecessor blocks all pruning; stop/relaunch that
+watcher explicitly before retrying. Unknown or live legacy leases fail closed.
+Provably stale Linux leases and live watchers in the retained current runtime
+do not block pruning; the guard never removes leases or signals their owners.
+On other platforms a present lease blocks pruning until the watcher is stopped
+and its lease released through normal CLI lifecycle. These are point-in-time
+checks, not a lock against concurrent watcher startup; serialize deployment and
+watcher launch. Never delete routing state or leases.
+
+For a persistent Linux watcher, use a user unit enabled under `default.target`
+with `ExecStart=<shared-bin>/t3-thread watch --interval 5 --idle-exit 0
+--max-lifetime 0`, an explicit Node/shared-bin PATH and HOME, `Restart=always`,
+`RestartSec=30s`, and `SendSIGKILL=no`. Enable user lingering for boot startup.
+Keep it outside the server's system cgroup and without `PartOf=t3code.service`.
+`Restart=always` retries when a live on-demand watcher wins the singleton lease
+and the managed command exits successfully. Verify the managed MainPID against
+`watch.pid` and its boot/start identity after cutover. A loaded service alone
+is not proof that it owns the lease or delivered a notification.
+
+`watch --interval 5` uses five seconds while work remains, and sixty seconds
+while idle. Each pass shares thread reads and uses HTTP/RPC within the watcher
+process. Unsubscribed sources are not scanned. Settled sources are checked once
+per minute; archived and confirmed missing sources are parked until the watcher
+restarts. `skippedMappings` flags these mappings without deleting local aliases.
+Use `t3-thread forget <name>` to remove an obsolete alias. `status` without a name
+reports missing aliases and continues showing the remaining threads.
+
 ## Notification ownership and handoff
 
 Nested `create` subscribes its caller by default. `create --top-level` does not;
