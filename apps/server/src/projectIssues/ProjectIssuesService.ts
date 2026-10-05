@@ -20,6 +20,7 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import * as ProjectDashboardStore from "../projectDashboard/ProjectDashboardStore.ts";
 import { resolveTrackerSetting } from "../projectDashboard/projectDashboard.logic.ts";
+import { epicProgress } from "./epicProgress.logic.ts";
 import {
   collectThreadTree,
   deriveProjectIssueStatus,
@@ -306,6 +307,14 @@ export const make = Effect.gen(function* () {
       );
       for (const { target, items, error } of results) {
         repositories.push({ host: target.host, repository: target.repository, error });
+        const epics = epicProgress(
+          items.map((issue) => ({
+            number: issue.number,
+            body: issue.body,
+            labels: (issue.labels ?? []).map((label) => label.name),
+            closed: issue.state === "closed",
+          })),
+        );
         for (const issue of items) {
           const issueKey = `${repositoryKey(target)}#${issue.number}`;
           // Refresh persisted badge snapshots from the board's existing API read.
@@ -342,7 +351,10 @@ export const make = Effect.gen(function* () {
                 .pipe(Effect.ignore);
             }
           }
-          issues.push(toProjectIssue(target, issue, project.linkedThreads.get(issueKey) ?? []));
+          issues.push({
+            ...toProjectIssue(target, issue, project.linkedThreads.get(issueKey) ?? []),
+            ...(epics.has(issue.number) ? { epic: epics.get(issue.number)! } : {}),
+          });
         }
       }
       return {
