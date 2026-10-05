@@ -18,6 +18,36 @@ const state = vi.hoisted(() => ({
   sessionError: false,
   turnError: false,
   parentThreadId: null as string | null,
+  threads: () => [
+    ...(state.parentThreadId === null
+      ? []
+      : [
+          {
+            id: state.parentThreadId,
+            title: "Orchestrator",
+            parentThreadId: null,
+            archivedAt: null,
+            hasPendingUserInput: false,
+            hasPendingApprovals: false,
+            session: null,
+            latestTurn: null,
+          },
+        ]),
+    {
+      id: "thread-1",
+      title: "Fix the login form",
+      parentThreadId: state.parentThreadId,
+      archivedAt: state.archivedAt,
+      hasPendingUserInput: state.input,
+      hasPendingApprovals: state.approval,
+      session: state.sessionError ? { status: "error" } : null,
+      latestTurn: {
+        turnId: "turn-1",
+        state: state.turnError ? "error" : state.completedAt ? "completed" : "running",
+        completedAt: state.completedAt,
+      },
+    },
+  ],
   add: vi.fn(
     (_toast: { title: string; description: string; actionProps: { onClick: () => void } }) =>
       "toast-1",
@@ -33,39 +63,12 @@ const state = vi.hoisted(() => ({
 vi.mock("@effect/atom-react", () => ({
   useAtomValue: () => ({
     status: state.live ? "live" : "disconnected",
-    snapshot: Option.some({
-      threads: [
-        ...(state.parentThreadId === null
-          ? []
-          : [
-              {
-                id: state.parentThreadId,
-                title: "Orchestrator",
-                parentThreadId: null,
-                archivedAt: null,
-                hasPendingUserInput: false,
-                hasPendingApprovals: false,
-                session: null,
-                latestTurn: null,
-              },
-            ]),
-        {
-          id: "thread-1",
-          title: "Fix the login form",
-          parentThreadId: state.parentThreadId,
-          archivedAt: state.archivedAt,
-          hasPendingUserInput: state.input,
-          hasPendingApprovals: state.approval,
-          session: state.sessionError ? { status: "error" } : null,
-          latestTurn: {
-            turnId: "turn-1",
-            state: state.turnError ? "error" : state.completedAt ? "completed" : "running",
-            completedAt: state.completedAt,
-          },
-        },
-      ],
-    }),
+    snapshot: Option.some({ threads: state.threads() }),
   }),
+}));
+vi.mock("../state/entities", () => ({
+  readThreadShells: () =>
+    state.threads().map((thread) => ({ ...thread, environmentId: "env-1", remoteParent: null })),
 }));
 vi.mock("@tanstack/react-router", () => ({
   useNavigate: () => state.navigate,
