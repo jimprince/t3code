@@ -291,6 +291,29 @@ contains only the wider decoding needed for old paired servers and the CLI's
 stable model-selection view; do not copy the main contract tree back into this
 package.
 
+## Prebuilt operator runtime
+
+Build once with `node scripts/build.mjs` from `apps/t3-thread` after installing
+workspace dependencies. `bin/t3-thread` and `pnpm run cli` then use one Node
+process to validate the source hash and load `dist/cli.cjs`; ordinary calls do
+not run tsx or esbuild. A missing or stale build fails with the explicit build
+command. For source development, use `T3_THREAD_DEV=1 bin/t3-thread` or
+`pnpm run cli:dev`.
+
+For reviewed deployment, copy `bin/t3-thread` and `bin/t3-thread-deploy` to the
+shared bin directory. The deploy helper builds and validates the pinned snapshot
+before changing `current`; the wrapper still accepts `T3_THREAD_REPO` and
+`T3_THREAD_NODE_BIN`. Updating the wrapper alone leaves old snapshots without a
+stamp unable to run until they are explicitly built or redeployed.
+
+`watch --interval 5` uses five seconds while work remains, and sixty seconds
+while idle. Each pass shares thread reads and uses HTTP/RPC within the watcher
+process. Unsubscribed sources are not scanned. Settled sources are checked once
+per minute; archived and confirmed missing sources are parked until the watcher
+restarts. `skippedMappings` flags these mappings without deleting local aliases.
+Use `t3-thread forget <name>` to remove an obsolete alias. `status` without a name
+reports missing aliases and continues showing the remaining threads.
+
 ## Notification ownership and handoff
 
 Nested `create` subscribes its caller by default. `create --top-level` does not;
