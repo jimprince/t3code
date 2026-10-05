@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 
-import { isProjectPullRequestDetail, projectReturnState } from "./projectNavigation";
+import { projectReturnState } from "./projectNavigation";
 
 describe("project navigation", () => {
-  it("records the project page for main-area thread, pull-request, and issue destinations", () => {
+  it("records only the project page that opened a thread", () => {
     expect(
       projectReturnState({
         environmentId: EnvironmentId.make("env-1"),
@@ -13,16 +13,5 @@ describe("project navigation", () => {
     ).toEqual({
       projectReturn: { environmentId: "env-1", threadId: "root-1" },
     });
-  });
-
-  it("uses the full-width PR detail only for a complete project-origin selection", () => {
-    const project = {
-      environmentId: EnvironmentId.make("env-1"),
-      threadId: ThreadId.make("root-1"),
-    };
-    expect(isProjectPullRequestDetail(project, "brad/t3code", 42)).toBe(true);
-    expect(isProjectPullRequestDetail(undefined, "brad/t3code", 42)).toBe(false);
-    expect(isProjectPullRequestDetail(project, undefined, 42)).toBe(false);
-    expect(isProjectPullRequestDetail(project, "brad/t3code", undefined)).toBe(false);
   });
 });

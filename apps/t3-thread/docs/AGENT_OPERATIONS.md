@@ -1038,3 +1038,22 @@ t3-thread automation resume <automation-id> --env <name> --project <id>
 t3-thread automation remove <automation-id> --env <name> --project <id>
 t3-thread automation run-now <automation-id> --env <name> --project <id>
 ```
+
+## Brad's requests (request ledger)
+
+Every message Brad types in a T3 client is split into requests and filed as Gitea issues
+labeled `ask` plus `ask:<kind>` (question, deliverable, plan, change, test) in the tracker
+repository of the thread's orchestrator project. The project page lists them by what Brad
+does next until he settles them; settling is Brad's action only, so there is no settle command.
+
+```bash
+t3-thread request list "$T3_THREAD_ID"
+t3-thread request add "$T3_THREAD_ID" "Measure the jaw pull force" --kind test --detail "<his words>"
+t3-thread request start "$T3_THREAD_ID" 12
+t3-thread request ready "$T3_THREAD_ID" 12 --summary "<the answer, or what to look at and where>"
+t3-thread request reopen "$T3_THREAD_ID" 12
+```
+
+`ready` moves the request to `needs-review` and posts the summary as a comment; the page shows
+that comment as the answer. Use `add` when Brad asked you for something the capture missed.
+A request accepts an issue number in the tracker, `owner/repo#N`, or the issue URL.
