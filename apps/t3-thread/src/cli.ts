@@ -61,7 +61,13 @@ import {
   upsertSubscription,
   upsertEnvironment,
 } from "./state.js";
-import { cancelQueuedSend, drainQueuedSends, hasQueuedWork, listQueuedSends } from "./sendQueue.js";
+import {
+  cancelQueuedSend,
+  drainQueuedSends,
+  hasQueuedWork,
+  listQueuedSends,
+  summarizeQueuedSends,
+} from "./sendQueue.js";
 import { withSenderHeader } from "./thread-identity.js";
 import {
   planExplicitThreadOrder,
@@ -2025,68 +2031,80 @@ agent
   .argument("<name>", "agent name or raw thread UUID")
   .argument("<message...>", "message text")
   .option("--no-queue", "fail instead of queueing when the target thread is still running")
-  .action(async (name, messageParts: string[], options: { queue: boolean }) => {
-    const rawText = messageParts.join(" ").trim();
-    // A name that is neither a saved alias nor a UUID may be a named agent; a
-    // dormant one starts with this message, so there is nothing left to send.
-    const routingState = await loadState();
-    const callerId = resolveCallerThreadId();
-    const sender = callerId
-      ? await resolveThreadEndpoint(
-          routingState,
-          callerId,
-          undefined,
-          resolveCallerEnvironmentMetadata(),
-        )
-      : null;
-    const text = withSenderHeader(
-      rawText,
-      callerSendOrigin(routingState),
-      sender?.environment ?? "unknown",
-    );
-    const routed = await routeToNamedAgent({
-      state: routingState,
+  .option(
+    "--coalesce <key>",
+    "replace your still-queued send to this thread that has the same key instead of queueing behind it",
+  )
+  .option("--progress", "status note: shorthand for --coalesce progress")
+  .action(
+    async (
       name,
-      message: text,
-      clientFactory: namedAgentClients(routingState),
-    });
-    if (routed?.started) {
-      printJson({ namedAgent: name, ...routed, dispatched: true, queued: false });
-      return;
-    }
-    const { agent: savedAgent, client, saved } = await withAgent(routed?.threadId ?? name);
-    const state = await loadState();
-    const outcome = await sendDirectResult({
-      callerThreadId: resolveCallerThreadId(),
-      subscriberThreadId: savedAgent.threadId,
-      getSourceTurn: async (route) =>
-        (
-          await new RemoteEnvironmentClient(
-            requireEnvironment(state, route.sourceEnvironment),
-          ).findThread(route.sourceThreadId)
-        ).latestTurn?.turnId ?? null,
-      send: () =>
-        client.sendMessage({
-          threadId: savedAgent.threadId,
-          text,
-          queueWhileRunning: options.queue,
-          agentName: saved ? savedAgent.name : null,
-          origin: callerSendOrigin(state),
-          senderEnvironment: sender?.environment,
-        }),
-    });
-    const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
-    if (outcome.queued || released.length > 0) {
-      await ensureNotificationWatcher();
-    }
-    printJson({
-      agent: saved ? savedAgent.name : null,
-      ...(routed ? { namedAgent: name } : {}),
-      threadId: savedAgent.threadId,
-      environment: savedAgent.environment,
-      ...outcome,
-    });
-  });
+      messageParts: string[],
+      options: { queue: boolean; coalesce?: string; progress?: boolean },
+    ) => {
+      const rawText = messageParts.join(" ").trim();
+      // A name that is neither a saved alias nor a UUID may be a named agent; a
+      // dormant one starts with this message, so there is nothing left to send.
+      const routingState = await loadState();
+      const callerId = resolveCallerThreadId();
+      const sender = callerId
+        ? await resolveThreadEndpoint(
+            routingState,
+            callerId,
+            undefined,
+            resolveCallerEnvironmentMetadata(),
+          )
+        : null;
+      const text = withSenderHeader(
+        rawText,
+        callerSendOrigin(routingState),
+        sender?.environment ?? "unknown",
+      );
+      const routed = await routeToNamedAgent({
+        state: routingState,
+        name,
+        message: text,
+        clientFactory: namedAgentClients(routingState),
+      });
+      if (routed?.started) {
+        printJson({ namedAgent: name, ...routed, dispatched: true, queued: false });
+        return;
+      }
+      const { agent: savedAgent, client, saved } = await withAgent(routed?.threadId ?? name);
+      const state = await loadState();
+      const outcome = await sendDirectResult({
+        callerThreadId: resolveCallerThreadId(),
+        subscriberThreadId: savedAgent.threadId,
+        getSourceTurn: async (route) =>
+          (
+            await new RemoteEnvironmentClient(
+              requireEnvironment(state, route.sourceEnvironment),
+            ).findThread(route.sourceThreadId)
+          ).latestTurn?.turnId ?? null,
+        send: () =>
+          client.sendMessage({
+            threadId: savedAgent.threadId,
+            text,
+            queueWhileRunning: options.queue,
+            coalesceKey: options.coalesce ?? (options.progress ? "progress" : null),
+            agentName: saved ? savedAgent.name : null,
+            origin: callerSendOrigin(state),
+            senderEnvironment: sender?.environment,
+          }),
+      });
+      const released = outcome.queued ? [] : await releaseHeldNotifications(savedAgent.threadId);
+      if (outcome.queued || released.length > 0) {
+        await ensureNotificationWatcher();
+      }
+      printJson({
+        agent: saved ? savedAgent.name : null,
+        ...(routed ? { namedAgent: name } : {}),
+        threadId: savedAgent.threadId,
+        environment: savedAgent.environment,
+        ...outcome,
+      });
+    },
+  );
 
 agent
   .command("queue")
@@ -2094,21 +2112,36 @@ agent
   .argument("[name]", "agent name or raw thread UUID")
   .option("--env <name>", "optional saved environment filter")
   .option("--open", "only sends that are still waiting to dispatch")
-  .action(async (name: string | undefined, options: { env?: string; open?: boolean }) => {
-    const threadId = name ? (await withAgent(name)).agent.threadId : undefined;
-    const state = await loadState();
-    printJson(
-      listQueuedSends(state, {
-        ...(options.env ? { env: options.env } : {}),
-        ...(threadId ? { threadId } : {}),
-        ...(options.open ? { openOnly: true } : {}),
-      }).map((send) => ({
-        ...send,
-        ageSeconds: Math.max(0, Math.floor((Date.now() - Date.parse(send.queuedAt)) / 1000)),
-        actionable: ["queued", "dispatching"].includes(send.status),
-      })),
-    );
-  });
+  .option("--summary", "count open sends by target thread and sender instead of listing them")
+  .action(
+    async (
+      name: string | undefined,
+      options: { env?: string; open?: boolean; summary?: boolean },
+    ) => {
+      const threadId = name ? (await withAgent(name)).agent.threadId : undefined;
+      const state = await loadState();
+      if (options.summary) {
+        printJson(
+          summarizeQueuedSends(state, {
+            ...(options.env ? { env: options.env } : {}),
+            ...(threadId ? { threadId } : {}),
+          }),
+        );
+        return;
+      }
+      printJson(
+        listQueuedSends(state, {
+          ...(options.env ? { env: options.env } : {}),
+          ...(threadId ? { threadId } : {}),
+          ...(options.open ? { openOnly: true } : {}),
+        }).map((send) => ({
+          ...send,
+          ageSeconds: Math.max(0, Math.floor((Date.now() - Date.parse(send.queuedAt)) / 1000)),
+          actionable: ["queued", "dispatching"].includes(send.status),
+        })),
+      );
+    },
+  );
 
 agent
   .command("dequeue")
