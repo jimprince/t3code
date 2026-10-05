@@ -130,6 +130,8 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.projectRoadmapGet]: AuthOrchestrationReadScope,
   [WS_METHODS.projectRoadmapMove]: AuthOrchestrationOperateScope,
   [WS_METHODS.projectRoadmapSaveVersion]: AuthOrchestrationOperateScope,
+  [WS_METHODS.projectCanvasRead]: AuthOrchestrationReadScope,
+  [WS_METHODS.projectCanvasAction]: AuthOrchestrationReadScope,
   [WS_METHODS.sourceControlLookupRepository]: AuthOrchestrationReadScope,
   [WS_METHODS.sourceControlCloneRepository]: AuthOrchestrationOperateScope,
   [WS_METHODS.sourceControlPublishRepository]: AuthOrchestrationOperateScope,
