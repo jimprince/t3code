@@ -8,8 +8,8 @@
     "dev": "vp dev",
     "build": "vp build",
     "preview": "vp preview",
-    "typecheck": "tsc --noEmit",
-    "test": "vp test run --passWithNoTests --project unit"
+    "typecheck": "node ../../scripts/ci/heavy-gate.ts tsc --noEmit",
+    "test": "node ../../scripts/ci/heavy-gate.ts vp test run --passWithNoTests --project unit"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
