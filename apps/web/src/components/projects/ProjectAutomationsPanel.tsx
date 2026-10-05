@@ -1,13 +1,9 @@
-import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import {
-  createEnvironmentRpcCommand,
   squashAtomCommandFailure,
+  type AtomCommandResult,
 } from "@t3tools/client-runtime/state/runtime";
 import {
-  CommandId,
-  ORCHESTRATION_WS_METHODS,
-  ProjectAutomationDefinition,
-  type ClientOrchestrationCommand,
+  AutomationDefinition,
   type EnvironmentId,
   type ProjectId,
   type ThreadId,
@@ -16,79 +12,77 @@ import { Link } from "@tanstack/react-router";
 import * as Schema from "effect/Schema";
 import { useState } from "react";
 import { randomUUID } from "../../lib/utils";
-import { connectionAtomRuntime } from "../../connection/runtime";
-import { useProject, useThreadShells } from "../../state/entities";
+import {
+  automationRunsQuery,
+  automationsQuery,
+  removeAutomation,
+  runAutomation,
+  saveAutomation,
+  setAutomationEnabled,
+} from "../../state/automations";
+import { useThreadShells } from "../../state/entities";
+import { useEnvironmentQuery } from "../../state/query";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
+import {
+  automationSummary,
+  belongsToRoot,
+  DAY_NAMES,
+  fromDraft,
+  toDraft,
+  type AutomationDraft,
+} from "./projectAutomations.logic";
 
-const automationCommand = createEnvironmentRpcCommand(connectionAtomRuntime, {
-  label: "project automation",
-  tag: ORCHESTRATION_WS_METHODS.dispatchCommand,
-});
-const decodeDefinition = Schema.decodeOption(ProjectAutomationDefinition);
-const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const decodeDefinition = Schema.decodeOption(AutomationDefinition);
 type Props = { environmentId: EnvironmentId; projectId: ProjectId; rootThreadId?: ThreadId };
 
 /** A project-scoped editor shared by project settings and the orchestrator Projects page. */
 export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId }: Props) {
-  const project = useProject(scopeProjectRef(environmentId, projectId));
   const threads = useThreadShells().filter(
     (thread) => thread.environmentId === environmentId && thread.projectId === projectId,
   );
-  const dispatch = useAtomCommand(automationCommand);
-  const [editing, setEditing] = useState<ProjectAutomationDefinition | null>(null);
+  const list = useEnvironmentQuery(automationsQuery({ environmentId, input: { projectId } }));
+  const runLog = useEnvironmentQuery(
+    automationRunsQuery({ environmentId, input: { projectId, limit: 100 } }),
+  );
+  const save = useAtomCommand(saveAutomation, "Save automation");
+  const remove = useAtomCommand(removeAutomation, "Delete automation");
+  const toggle = useAtomCommand(setAutomationEnabled, "Pause or resume automation");
+  const run = useAtomCommand(runAutomation, "Run automation");
+  const [editing, setEditing] = useState<AutomationDraft | null>(null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const automations = (project?.automations ?? []).filter(
-    (automation) =>
-      rootThreadId === undefined ||
-      automation.ownerThreadId === rootThreadId ||
-      (automation.target.kind === "existing-thread" &&
-        automation.target.threadId === rootThreadId) ||
-      (automation.ownerThreadId === undefined && automation.target.kind === "new-thread"),
+  const automations = (list.data?.automations ?? []).filter((automation) =>
+    belongsToRoot(automation, rootThreadId),
   );
-  const send = async (input: ClientOrchestrationCommand) => {
+  const runs = runLog.data?.runs ?? [];
+  const send = async (request: () => Promise<AtomCommandResult<unknown, unknown>>) => {
     setPending(true);
     setError(null);
     try {
-      const result = await dispatch({ environmentId, input });
+      const result = await request();
       if (result._tag === "Failure") {
         const failure = squashAtomCommandFailure(result);
         setError(failure instanceof Error ? failure.message : String(failure));
         return false;
       }
+      list.refresh();
+      runLog.refresh();
       return true;
     } finally {
       setPending(false);
     }
   };
-  const act = (
-    type:
-      | "project.automation.pause"
-      | "project.automation.resume"
-      | "project.automation.delete"
-      | "project.automation.run",
-    automationId: string,
-  ) => void send({ type, commandId: CommandId.make(randomUUID()), projectId, automationId });
-  const save = async () => {
+  const onSave = async () => {
     if (!editing) return;
-    const definition = decodeDefinition(editing);
+    const definition = decodeDefinition(fromDraft(editing, projectId));
     if (definition._tag === "None") {
-      setError("Enter a name, prompt, valid time, and timezone.");
+      setError("Enter a name, prompt, valid time, days, and timezone.");
       return;
     }
-    const exists = project?.automations?.some((automation) => automation.id === editing.id);
-    if (
-      await send({
-        type: exists ? "project.automation.update" : "project.automation.create",
-        commandId: CommandId.make(randomUUID()),
-        projectId,
-        automation: definition.value,
-      })
-    )
-      setEditing(null);
+    if (await send(() => save({ environmentId, input: definition.value }))) setEditing(null);
   };
   return (
     <section aria-label="Automations" className="space-y-2">
@@ -119,97 +113,110 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
           Add
         </Button>
       </div>
-      {automations.map((automation) => (
-        <div key={automation.id} className="space-y-1">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-            <span className="font-medium">{automation.name}</span>
-            <span>
-              {automation.schedule.kind === "hourly"
-                ? "Every hour"
-                : automation.schedule.kind === "daily"
-                  ? `Daily at ${automation.schedule.time}`
-                  : `${days[automation.schedule.day]} at ${automation.schedule.time}`}{" "}
-              ({automation.schedule.timeZone})
-            </span>
-            <span>
-              {automation.enabled
-                ? `Next ${new Date(automation.nextRunAt).toLocaleString()}`
-                : "Paused"}
-            </span>
-            <span>
-              {automation.target.kind === "new-thread"
-                ? "New thread each run"
-                : automation.target.threadId === rootThreadId
-                  ? "Orchestrator"
-                  : (threads.find(
-                      (thread) =>
-                        automation.target.kind === "existing-thread" &&
-                        thread.id === automation.target.threadId,
-                    )?.title ?? "Existing thread")}
-            </span>
-            <label className="flex items-center gap-1">
-              <input
-                aria-label={`Enable ${automation.name}`}
-                type="checkbox"
-                checked={automation.enabled}
+      {automations.map((automation) => {
+        const draft = toDraft(automation);
+        const first = automation.triggers[0];
+        const timeZone = first?.type === "schedule" ? first.schedule.timeZone : undefined;
+        const target = automation.actions[0]?.target;
+        return (
+          <div key={automation.id} className="space-y-1">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+              <span className="font-medium">{automation.name}</span>
+              <span>
+                {automationSummary(automation)}
+                {timeZone ? ` (${timeZone})` : ""}
+              </span>
+              <span>
+                {!automation.enabled
+                  ? "Paused"
+                  : automation.nextRunAt
+                    ? `Next ${new Date(automation.nextRunAt).toLocaleString()}`
+                    : null}
+              </span>
+              <span>
+                {target === undefined || target.kind === "new-thread"
+                  ? "New thread each run"
+                  : target.threadId === rootThreadId
+                    ? "Orchestrator"
+                    : (threads.find((thread) => thread.id === target.threadId)?.title ??
+                      "Existing thread")}
+              </span>
+              <label className="flex items-center gap-1">
+                <input
+                  aria-label={`Enable ${automation.name}`}
+                  type="checkbox"
+                  checked={automation.enabled}
+                  disabled={pending}
+                  onChange={() =>
+                    void send(() =>
+                      toggle({
+                        environmentId,
+                        input: { automationId: automation.id, enabled: !automation.enabled },
+                      }),
+                    )
+                  }
+                />
+                Enabled
+              </label>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={pending || draft === null}
+                title={draft === null ? "Edit this rule with t3-thread automation" : undefined}
+                onClick={() => setEditing(draft)}
+              >
+                Edit
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
                 disabled={pending}
-                onChange={() =>
-                  act(
-                    automation.enabled ? "project.automation.pause" : "project.automation.resume",
-                    automation.id,
-                  )
+                onClick={() =>
+                  void send(() => run({ environmentId, input: { automationId: automation.id } }))
                 }
-              />
-              Enabled
-            </label>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={pending}
-              onClick={() => setEditing(automation)}
-            >
-              Edit
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={pending}
-              onClick={() => act("project.automation.run", automation.id)}
-            >
-              Run now
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={pending}
-              onClick={() => act("project.automation.delete", automation.id)}
-            >
-              Delete
-            </Button>
-          </div>
-          {automation.runs.slice(0, 5).map((run) => (
-            <div key={run.id} className="flex flex-wrap gap-x-3 text-xs">
-              <time>{new Date(run.startedAt ?? run.scheduledAt).toLocaleString()}</time>
-              <span>{run.status}</span>
-              {threads.some((thread) => thread.id === run.threadId) ? (
-                <Link
-                  to="/$environmentId/$threadId"
-                  params={{ environmentId, threadId: run.threadId }}
-                >
-                  Open thread
-                </Link>
-              ) : null}
-              {run.result ? <span>{run.result}</span> : null}
+              >
+                Run now
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={pending}
+                onClick={() =>
+                  void send(() => remove({ environmentId, input: { automationId: automation.id } }))
+                }
+              >
+                Delete
+              </Button>
             </div>
-          ))}
-        </div>
-      ))}
+            {runs
+              .filter((entry) => entry.automationId === automation.id)
+              .slice(0, 5)
+              .map((entry) => {
+                const threadId = entry.steps[0]?.threadId;
+                return (
+                  <div key={entry.id} className="flex flex-wrap gap-x-3 text-xs">
+                    <time>
+                      {new Date(entry.steps[0]?.startedAt ?? entry.createdAt).toLocaleString()}
+                    </time>
+                    <span>{entry.dryRun ? `dry run` : entry.status}</span>
+                    {threadId && threads.some((thread) => thread.id === threadId) ? (
+                      <Link to="/$environmentId/$threadId" params={{ environmentId, threadId }}>
+                        Open thread
+                      </Link>
+                    ) : null}
+                    {entry.result ? <span>{entry.result}</span> : null}
+                  </div>
+                );
+              })}
+          </div>
+        );
+      })}
       {editing ? (
         <form
           className="grid max-w-2xl gap-2"
           onSubmit={(event) => {
             event.preventDefault();
-            void save();
+            void onSave();
           }}
         >
           <Input
@@ -231,28 +238,33 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
               onChange={(event) => {
                 const kind = event.target.value;
                 const timeZone = editing.schedule.timeZone;
+                const time = "time" in editing.schedule ? editing.schedule.time : "09:00";
                 setEditing({
                   ...editing,
                   schedule:
                     kind === "hourly"
                       ? { kind, timeZone }
                       : kind === "weekly"
-                        ? { kind, timeZone, time: "09:00", day: 1 }
-                        : { kind: "daily", timeZone, time: "09:00" },
+                        ? { kind, timeZone, time, day: 1 }
+                        : kind === "weekdays"
+                          ? { kind, timeZone, time, days: [1, 2, 3, 4, 5] }
+                          : { kind: "daily", timeZone, time },
                 });
               }}
             >
               <option value="daily">Daily</option>
+              <option value="weekdays">Selected days</option>
               <option value="hourly">Hourly</option>
               <option value="weekly">Weekly</option>
+              {editing.schedule.kind === "cron" ? <option value="cron">Cron</option> : null}
             </select>
-            {editing.schedule.kind !== "hourly" ? (
+            {"time" in editing.schedule ? (
               <input
                 aria-label="Run time"
                 type="time"
                 value={editing.schedule.time}
                 onChange={(event) => {
-                  if (editing.schedule.kind !== "hourly")
+                  if ("time" in editing.schedule)
                     setEditing({
                       ...editing,
                       schedule: { ...editing.schedule, time: event.target.value },
@@ -272,13 +284,39 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
                     });
                 }}
               >
-                {days.map((day, index) => (
+                {DAY_NAMES.map((day, index) => (
                   <option key={day} value={index}>
                     {day}
                   </option>
                 ))}
               </select>
             ) : null}
+            {editing.schedule.kind === "weekdays"
+              ? DAY_NAMES.map((day, index) => {
+                  const schedule = editing.schedule;
+                  if (schedule.kind !== "weekdays") return null;
+                  return (
+                    <label key={day} className="flex items-center gap-1 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={schedule.days.includes(index)}
+                        onChange={(event) =>
+                          setEditing({
+                            ...editing,
+                            schedule: {
+                              ...schedule,
+                              days: event.target.checked
+                                ? [...schedule.days, index]
+                                : schedule.days.filter((entry) => entry !== index),
+                            },
+                          })
+                        }
+                      />
+                      {day.slice(0, 3)}
+                    </label>
+                  );
+                })
+              : null}
             <Input
               aria-label="Timezone"
               value={editing.schedule.timeZone}
@@ -320,9 +358,9 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
           </div>
         </form>
       ) : null}
-      {error ? (
+      {(error ?? list.error) ? (
         <p role="alert" className="text-sm text-destructive">
-          {error}
+          {error ?? list.error}
         </p>
       ) : null}
     </section>
