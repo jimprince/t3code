@@ -52,4 +52,5 @@ export * from "./embeddedPages.ts";
 export * from "./threadIssue.ts";
 export * from "./projectIssues.ts";
 export * from "./projectDashboard.ts";
+export * from "./projectRoadmap.ts";
 export * from "./pageAgents.ts";
