@@ -58,6 +58,13 @@ export const PROJECT_WIDGET_TYPES: ReadonlyArray<ProjectWidgetType> = [
     fields: [],
   },
   {
+    type: "decisions",
+    title: "Decisions",
+    description:
+      "Decisions waiting on Brad (tracker issues labeled needs-brad): the question, its context, options with the recommended one marked, who is waiting and how long. One click answers with Undo, and the answer reaches the waiting thread.",
+    fields: [],
+  },
+  {
     type: "requests",
     title: "Requests",
     description: "Brad's requests still with the agents or waiting for a release.",
