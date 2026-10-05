@@ -3,6 +3,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { parseRequestMarker } from "./projectIssues.logic.ts";
 import {
+  answerToMessage,
   capturableMessage,
   clampTitle,
   fallbackRequestItem,
@@ -227,5 +228,57 @@ describe("follow-ups instead of an issue per message", () => {
     expect(prompt).toContain("#17 (this conversation): Live chat");
     expect(prompt).toContain("#30: Bed temperature");
     expect(buildRequestItemsPrompt({ message: "x" }).prompt).toContain("Open issues: none.");
+  });
+});
+
+describe("each question's own answer", () => {
+  const message = (
+    messageId: string,
+    role: string,
+    turnId: string | null,
+    minute: number,
+    text = messageId,
+    isStreaming = false,
+  ) => ({
+    messageId,
+    role,
+    turnId,
+    text,
+    isStreaming,
+    createdAt: `2026-10-05T07:${String(minute).padStart(2, "0")}:00.000Z`,
+  });
+
+  const thread = [
+    message("q1", "user", "t1", 0, "In Home Assistant, what does an automation run?"),
+    message("a1-start", "assistant", "t1", 1, "Let me check."),
+    message("a1", "assistant", "t1", 2, "Its actions: service calls or scripts."),
+    message("q2", "user", "t2", 3, "How is the release going?"),
+    message("a2", "assistant", "t2", 4, "1 of 4 complete."),
+    message("q3", "user", "t3", 5, "And the canvas?"),
+    message("a3", "assistant", "t3", 6, "Still writing", true),
+  ];
+
+  it("answers each question with the last reply of the turn it started", () => {
+    expect(answerToMessage(thread, "q1")).toEqual({
+      text: "Its actions: service calls or scripts.",
+      askedAt: "2026-10-05T07:00:00.000Z",
+      answeredAt: "2026-10-05T07:02:00.000Z",
+    });
+    expect(answerToMessage(thread, "q2")?.text).toBe("1 of 4 complete.");
+  });
+
+  it("waits while the reply streams, and has none for an unknown message", () => {
+    expect(answerToMessage(thread, "q3")).toBeNull();
+    expect(answerToMessage(thread, "missing")).toBeNull();
+  });
+
+  it("without a turn id, takes the reply before the next user message", () => {
+    const untracked = [
+      message("q", "user", null, 0),
+      message("a", "assistant", null, 1, "Yes."),
+      message("next", "user", null, 2),
+      message("later", "assistant", null, 3, "Something else."),
+    ];
+    expect(answerToMessage(untracked, "q")?.text).toBe("Yes.");
   });
 });

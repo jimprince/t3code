@@ -237,3 +237,44 @@ export function formatFollowUpComment(input: {
     "",
   ].join("\n");
 }
+
+interface AnswerMessage {
+  readonly messageId: string;
+  readonly turnId: string | null;
+  readonly role: string;
+  readonly text: string;
+  readonly isStreaming: boolean;
+  readonly createdAt: string;
+}
+
+/**
+ * The thread's reply to one request's message: the last finished assistant message
+ * of the turn that message started (or, without a turn id, before the next user
+ * message). Null while the reply is missing or still streaming, so each question
+ * shows its own answer and never another one's.
+ */
+export function answerToMessage(
+  messages: ReadonlyArray<AnswerMessage>,
+  messageId: string,
+): { text: string; askedAt: string; answeredAt: string } | null {
+  const index = messages.findIndex((message) => message.messageId === messageId);
+  if (index < 0) return null;
+  const asked = messages[index]!;
+  const after = messages.slice(index + 1);
+  const span =
+    asked.turnId === null
+      ? after.slice(
+          0,
+          (() => {
+            const next = after.findIndex((message) => message.role === "user");
+            return next < 0 ? after.length : next;
+          })(),
+        )
+      : after.filter((message) => message.turnId === asked.turnId);
+  const replies = span.filter((message) => message.role === "assistant");
+  if (replies.length === 0 || replies.some((message) => message.isStreaming)) return null;
+  const reply = replies.findLast((message) => message.text.trim().length > 0);
+  return reply
+    ? { text: reply.text.trim(), askedAt: asked.createdAt, answeredAt: reply.createdAt }
+    : null;
+}
