@@ -347,6 +347,8 @@ export interface SavedQueuedSend {
   text: string;
   /** Sender recorded at enqueue time; absent on sends queued by older CLIs. */
   origin?: MessageOrigin;
+  /** Opt-in: a newer open send with the same key, sender and target replaces this one. */
+  coalesceKey?: string;
   status: QueuedSendStatus;
   /** Turn that was running when the send was accepted, for operator diagnostics. */
   queuedDuringTurnId: string | null;
