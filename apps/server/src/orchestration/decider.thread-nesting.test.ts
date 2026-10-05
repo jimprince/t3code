@@ -1,5 +1,6 @@
 import {
   CommandId,
+  EnvironmentId,
   ProjectId,
   ProviderInstanceId,
   ThreadId,
@@ -72,7 +73,10 @@ function readModel(threads: ReadonlyArray<OrchestrationThread>): OrchestrationRe
   };
 }
 
-const setParent = (threadId: ThreadId, parentThreadId: ThreadId | null): OrchestrationCommand => ({
+const setParent = (
+  threadId: ThreadId,
+  parentThreadId: ThreadId | null,
+): Extract<OrchestrationCommand, { type: "thread.parent.set" }> => ({
   type: "thread.parent.set",
   commandId: CommandId.make(`cmd-${threadId}`),
   threadId,
@@ -96,6 +100,26 @@ const rejection = (command: OrchestrationCommand, model: OrchestrationReadModel)
   );
 
 it.layer(NodeServices.layer)("thread nesting", (it) => {
+  it.effect("stores a remote parent without requiring a local parent and clears it on unnest", () =>
+    Effect.gen(function* () {
+      const remoteParent = { environmentId: EnvironmentId.make("vm"), threadId: ORCHESTRATOR };
+      const nested = yield* decideAndProject(
+        { ...setParent(WORKER, null), remoteParent },
+        readModel([thread(WORKER)]),
+      );
+      expect(nested.threads[0]?.remoteParent).toEqual(remoteParent);
+      expect(nested.threads[0]?.parentThreadId).toBeNull();
+      const unnested = yield* decideAndProject(setParent(WORKER, null), nested);
+      expect(unnested.threads[0]?.remoteParent).toBeNull();
+      expect(
+        yield* rejection(
+          { ...setParent(WORKER, ORCHESTRATOR), remoteParent },
+          readModel([thread(WORKER), thread(ORCHESTRATOR)]),
+        ),
+      ).toContain("not both");
+    }),
+  );
+
   it.effect("creates nested threads in the same or a different project", () =>
     Effect.gen(function* () {
       for (const projectId of [PROJECT, OTHER_PROJECT]) {

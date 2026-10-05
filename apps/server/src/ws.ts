@@ -1457,6 +1457,9 @@ const makeWsRpcLayer = (
                 ...(bootstrap.createThread.settleOnComplete !== undefined
                   ? { settleOnComplete: bootstrap.createThread.settleOnComplete }
                   : {}),
+                ...(bootstrap.createThread.remoteParent != null
+                  ? { remoteParent: bootstrap.createThread.remoteParent }
+                  : {}),
                 ...(bootstrap.createThread.parentThreadId != null
                   ? { parentThreadId: bootstrap.createThread.parentThreadId }
                   : {}),
