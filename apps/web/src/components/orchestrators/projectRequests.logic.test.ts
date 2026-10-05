@@ -8,6 +8,8 @@ import {
   deriveNeedsYou,
   deriveProjectRequests,
   latestProgressLine,
+  needsYouDecision,
+  parseDecisionComment,
   nextReleaseRequests,
   requestKind,
   requestsByWorker,
@@ -444,5 +446,124 @@ describe("task status", () => {
     expect(formatStatusCounts(counts)).toBe(
       "16 · 12 complete · 1 active · 1 for review · 2 pending",
     );
+  });
+});
+
+describe("parseDecisionComment", () => {
+  it("lists the options a comment names and keeps the rest as the summary", () => {
+    const parsed = parseDecisionComment(
+      [
+        "The V2 port can land in one go or in steps. Pick how.",
+        "Option A: port everything in one patch",
+        "**Option B:** port in two steps",
+        "Recommendation: Option B, it keeps each patch reviewable.",
+      ].join("\n"),
+    );
+    expect(parsed.options).toEqual([
+      { label: "Option A", text: "port everything in one patch" },
+      { label: "Option B", text: "port in two steps" },
+    ]);
+    expect(parsed.recommendation).toBe("Option B, it keeps each patch reviewable.");
+    expect(parsed.summary).toBe("The V2 port can land in one go or in steps. Pick how.");
+  });
+
+  it("reads lettered lines too", () => {
+    const parsed = parseDecisionComment("Which database?\nA) SQLite\n(B) Postgres\nC: neither");
+    expect(parsed.options.map((option) => option.label)).toEqual([
+      "Option A",
+      "Option B",
+      "Option C",
+    ]);
+    expect(parsed.options[1]?.text).toBe("Postgres");
+  });
+
+  it("does not take a lone lettered line or a numbered list for choices", () => {
+    expect(parseDecisionComment("Steps:\nA: first thing").options).toEqual([]);
+    expect(parseDecisionComment("1) one\n2) two").options).toEqual([]);
+    expect(parseDecisionComment("A) once\nA) again").options).toEqual([]);
+  });
+
+  it("finds the recommendation without options", () => {
+    const parsed = parseDecisionComment("Ready to start.\nI recommend approving it now.");
+    expect(parsed.recommendation).toBe("approving it now.");
+    expect(parsed.summary).toBe("Ready to start.");
+  });
+});
+
+describe("needsYouDecision", () => {
+  const needsYou = (issue: ProjectIssue) =>
+    deriveNeedsYou([issue], deriveProjectRequests([issue], [thread()], tree, NOW))[0]!;
+  const ready = { status: "needs-review" as const, stage: "ready" as const };
+
+  it("asks for approval of a plan or epic marked ready", () => {
+    for (const label of ["ask:plan", "ask:epic"]) {
+      const decision = needsYouDecision(
+        needsYou(
+          request(1, {
+            ...ready,
+            labels: ["ask", label],
+            latestComment: {
+              author: "worker",
+              body: "Progress: M1 plan is ready. Review the milestones.",
+              createdAt: "2026-10-04T11:00:00.000Z",
+            },
+          }),
+        ),
+      );
+      expect(decision?.options).toEqual([]);
+      expect(decision?.summary).toBe("M1 plan is ready. Review the milestones.");
+    }
+  });
+
+  it("asks to choose when the ready comment lists options", () => {
+    const decision = needsYouDecision(
+      needsYou(
+        request(2, {
+          ...ready,
+          labels: ["ask", "ask:deliverable"],
+          latestComment: {
+            author: "worker",
+            body: "Option A: keep it\nOption B: remove it",
+            createdAt: "2026-10-04T11:00:00.000Z",
+          },
+        }),
+      ),
+    );
+    expect(decision?.options.map((option) => option.label)).toEqual(["Option A", "Option B"]);
+  });
+
+  it("leaves answers, shipped work and plain finished work as they are", () => {
+    expect(needsYouDecision(needsYou(request(3, { ...ready, answer })))).toBeNull();
+    expect(
+      needsYouDecision(needsYou(request(4, { ...ready, labels: ["ask", "ask:deliverable"] }))),
+    ).toBeNull();
+    expect(
+      needsYouDecision(
+        needsYou(
+          request(5, { status: "needs-review", stage: "needs-test", labels: ["ask", "ask:plan"] }),
+        ),
+      ),
+    ).toBeNull();
+  });
+
+  it("does not ask for a plan the thread merely answered", () => {
+    expect(
+      needsYouDecision(needsYou(request(6, { labels: ["ask", "ask:plan"], answer }))),
+    ).toBeNull();
+  });
+
+  it("covers an epic issue the tracker marked for review", () => {
+    const issue = request(7, {
+      isRequest: false,
+      requestSource: null,
+      status: "needs-review",
+      labels: ["ask:epic"],
+      linkedThreadIds: ["worker" as never],
+    });
+    expect(needsYouDecision(needsYou(issue))).toEqual({
+      summary: "",
+      recommendation: null,
+      options: [],
+    });
   });
 });
