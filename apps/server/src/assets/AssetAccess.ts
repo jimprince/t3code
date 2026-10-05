@@ -8,6 +8,7 @@ import {
   AssetAttachmentNotFoundError,
   AssetGitHubMediaUrlValidationError,
   AssetPreviewTypeValidationError,
+  AssetPreviewSizeValidationError,
   AssetProjectFaviconInspectionError,
   AssetProjectFaviconNotFoundError,
   AssetProjectFaviconResolutionError,
@@ -26,7 +27,10 @@ import {
   audioMimeTypeFromExtension,
   hostPreviewMimeTypeFromExtension,
   isWorkspaceImagePreviewPath,
+  isWorkspaceModelPreviewPath,
   isWorkspacePreviewEntryPath,
+  MODEL_PREVIEW_MAX_BYTES,
+  modelMimeTypeFromExtension,
   WORKSPACE_BROWSER_PREVIEW_EXTENSIONS,
   WORKSPACE_IMAGE_PREVIEW_EXTENSIONS,
 } from "@t3tools/shared/filePreview";
@@ -80,7 +84,10 @@ const INLINE_PREVIEW_MIME_TYPES: Record<string, string> = {
   htm: "text/html",
 };
 const inlinePreviewMimeTypeForExtension = (extension: string) =>
-  INLINE_PREVIEW_MIME_TYPES[extension] ?? audioMimeTypeFromExtension(`.${extension}`) ?? undefined;
+  INLINE_PREVIEW_MIME_TYPES[extension] ??
+  audioMimeTypeFromExtension(`.${extension}`) ??
+  modelMimeTypeFromExtension(`.${extension}`) ??
+  undefined;
 const PREVIEW_ASSET_EXTENSIONS = new Set([
   ...WORKSPACE_BROWSER_PREVIEW_EXTENSIONS,
   ...WORKSPACE_IMAGE_PREVIEW_EXTENSIONS,
@@ -128,6 +135,7 @@ const AssetClaimsSchema = Schema.Union([
         download filename and Content-Type. */
     fileName: Schema.optionalKey(Schema.String),
     mimeType: Schema.optionalKey(Schema.String),
+    modelPreview: Schema.optionalKey(Schema.Boolean),
     expiresAt: Schema.Number,
   }),
   Schema.Struct({
@@ -423,6 +431,20 @@ const finalizeWorkspaceFileAsset = Effect.fn("AssetAccess.finalizeWorkspaceFileA
         resource: input.resource,
       });
     }
+    // Downloads bypass the preview size limit: they are the fallback for oversized models.
+    const isModel = !isDownload && isWorkspaceModelPreviewPath(resolved.relativePath);
+    if (isModel) {
+      const info = yield* fileSystem
+        .stat(canonicalFile)
+        .pipe(
+          Effect.mapError(
+            (cause) => new AssetWorkspaceAssetInspectionError({ resource: input.resource, cause }),
+          ),
+        );
+      if (info.size > BigInt(MODEL_PREVIEW_MAX_BYTES)) {
+        return yield* new AssetPreviewSizeValidationError({ resource: input.resource });
+      }
+    }
     const canonicalWorkspaceRoot = yield* fileSystem.realPath(input.workspaceRoot).pipe(
       Effect.mapError(
         (cause) =>
@@ -445,7 +467,7 @@ const finalizeWorkspaceFileAsset = Effect.fn("AssetAccess.finalizeWorkspaceFileA
             path.basename(resolved.relativePath),
             input.expiresAt,
           )
-        : isWorkspaceImagePreviewPath(resolved.relativePath)
+        : isWorkspaceImagePreviewPath(resolved.relativePath) || isModel
           ? {
               version: 1 as const,
               kind: "workspace-file-exact" as const,
@@ -595,6 +617,19 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
         input.resource.disposition === "inline" && extension !== null
           ? inlinePreviewMimeTypeForExtension(extension)
           : undefined;
+      const isModelPreview =
+        inlinePreviewMimeType !== undefined &&
+        modelMimeTypeFromExtension(`.${extension ?? ""}`) !== null;
+      if (isModelPreview) {
+        const info = yield* fileSystem
+          .stat(attachmentPath)
+          .pipe(
+            Effect.mapError(() => new AssetAttachmentNotFoundError({ resource: input.resource })),
+          );
+        if (info.size > BigInt(MODEL_PREVIEW_MAX_BYTES)) {
+          return yield* new AssetPreviewSizeValidationError({ resource: input.resource });
+        }
+      }
       if (!isGenericFile) {
         imageDimensions = yield* readImageDimensionsFromHeader(attachmentPath);
       }
@@ -611,6 +646,7 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
           : input.resource.mimeType !== undefined
             ? { mimeType: isVideo ? videoMimeType : input.resource.mimeType }
             : {}),
+        ...(isModelPreview ? { modelPreview: true } : {}),
         expiresAt,
       };
       fileName = input.resource.fileName ?? path.basename(attachmentPath);
@@ -835,10 +871,25 @@ export const resolveAsset = Effect.fn("AssetAccess.resolveAsset")(function* (
       ),
       Effect.orElseSucceed(() => Option.none()),
     );
-    return Option.isSome(info) && info.value.type === "File"
+    if (Option.isNone(info) || info.value.type !== "File") return null;
+    const modelFile = claims.modelPreview
+      ? yield* openMediaFile(attachmentPath).pipe(
+          Effect.tapError((cause) =>
+            Effect.logError("Failed to open model attachment.", {
+              attachmentId: claims.attachmentId,
+              path: attachmentPath,
+              cause,
+            }),
+          ),
+          Effect.orElseSucceed(() => null),
+        )
+      : null;
+    return !claims.modelPreview ||
+      (modelFile !== null && modelFile.info.size <= BigInt(MODEL_PREVIEW_MAX_BYTES))
       ? ({
           kind: "file",
           path: attachmentPath,
+          ...(modelFile ? { file: modelFile } : {}),
           ...(claims.download ? { download: true } : {}),
           ...(claims.fileName !== undefined ? { fileName: claims.fileName } : {}),
           ...(claims.mimeType !== undefined ? { mimeType: claims.mimeType } : {}),
@@ -938,9 +989,26 @@ export const resolveAsset = Effect.fn("AssetAccess.resolveAsset")(function* (
       workspaceRoot: claims.workspaceRoot,
       relativePath: claims.relativePath,
     });
-    return exactWorkspaceFile
-      ? ({ kind: "file", path: exactWorkspaceFile } satisfies ResolvedAsset)
-      : null;
+    if (!exactWorkspaceFile) return null;
+    if (isWorkspaceModelPreviewPath(claims.relativePath)) {
+      const file = yield* openMediaFile(exactWorkspaceFile).pipe(
+        Effect.tapError((cause) =>
+          Effect.logError("Failed to open workspace model preview.", {
+            path: exactWorkspaceFile,
+            cause,
+          }),
+        ),
+        Effect.orElseSucceed(() => null),
+      );
+      if (!file || file.info.size > BigInt(MODEL_PREVIEW_MAX_BYTES)) return null;
+      return {
+        kind: "file",
+        path: exactWorkspaceFile,
+        mimeType: modelMimeTypeFromExtension(path.extname(exactWorkspaceFile))!,
+        file,
+      } satisfies ResolvedAsset;
+    }
+    return { kind: "file", path: exactWorkspaceFile } satisfies ResolvedAsset;
   }
   const segments = decodedPath.split(/[\\/]/);
   if (
