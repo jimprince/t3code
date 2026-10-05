@@ -37,8 +37,7 @@ import ChatView from "../ChatView";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
 import { getTriggerDisplayModelLabel } from "../chat/providerIconUtils";
 import { ProjectFavicon } from "../ProjectFavicon";
-import { PullRequestGlyph } from "../pullRequest/pullRequestIcons";
-import { Button, InlineButton } from "../ui/button";
+import { Button } from "../ui/button";
 import { Dialog, DialogFooter, DialogHeader, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -52,6 +51,7 @@ import { readOrchestratorLastVisit, recordOrchestratorVisit } from "./orchestrat
 import { ProjectAutomationsSlot } from "../projects/ProjectAutomationsSlot";
 import { ProjectIssuesBoard } from "./ProjectIssuesBoard";
 import { projectReturnState } from "./projectNavigation";
+import { ProjectPullRequestLink } from "./ProjectPullRequestLink";
 
 function BoardSection({
   title,
@@ -466,15 +466,11 @@ export function OrchestratorBoard({
                 <BoardSection title="Pull requests" count={summary.pullRequests.length}>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
                     {summary.pullRequests.map((pullRequest) => (
-                      <InlineButton
+                      <ProjectPullRequestLink
                         key={`${pullRequest.host}/${pullRequest.repository}#${pullRequest.number}`}
-                        render={
-                          <a href={pullRequest.url} target="_blank" rel="noopener noreferrer" />
-                        }
-                      >
-                        <PullRequestGlyph.pullRequest className="size-3.5" />
-                        {pullRequest.repository} #{pullRequest.number}
-                      </InlineButton>
+                        summary={summary}
+                        pullRequest={pullRequest}
+                      />
                     ))}
                   </div>
                 </BoardSection>
