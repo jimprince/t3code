@@ -1903,20 +1903,25 @@ roadmap
         title: string;
         stage: string | null;
         versionId: number | null;
+        parked: boolean;
       }>;
     }>("projectRoadmapGet", { threadId: target.threadId });
-    const column = (versionId: number | null) =>
+    const column = (versionId: number | null, parked: boolean) =>
       plan.items
-        .filter((item) => item.versionId === versionId)
+        .filter(
+          (item) => item.versionId === versionId && (versionId !== null || item.parked === parked),
+        )
         .map((item) => ({ number: item.number, title: item.title, stage: item.stage }));
     printJson({
       tracker: plan.tracker?.repository ?? null,
       nextRelease: plan.versions[0]?.title ?? null,
+      // Unversioned, not parked: the automatic next version.
+      next: column(null, false),
       versions: plan.versions.map((version) => ({
         title: version.title,
-        items: column(version.id),
+        items: column(version.id, false),
       })),
-      later: column(null),
+      later: column(null, true),
     });
   });
 
@@ -1924,14 +1929,19 @@ roadmap
   .command("move")
   .argument("<thread>", "saved agent name or raw thread UUID in the project")
   .argument("<item>", "issue number in the tracker, owner/repo#N, or issue URL")
-  .argument("<version>", "an open version's title, or 'later' to take it off the roadmap")
+  .argument(
+    "<version>",
+    "an open version's title, 'next' for the automatic next version, or 'later' to park it",
+  )
   .action(async (reference, item, version) => {
     const { agent: target, client } = await withAgent(reference);
     printJson(
       await client.projectRoadmap("projectRoadmapMove", {
         threadId: target.threadId,
         reference: item,
-        version: version.trim().toLowerCase() === "later" ? null : version,
+        ...(version.trim().toLowerCase() === "later"
+          ? { version: null, later: true }
+          : { version: version.trim().toLowerCase() === "next" ? null : version }),
       }),
     );
   });
