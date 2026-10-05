@@ -132,7 +132,7 @@ function parseCanonicalIssueUrl(reference: string) {
  * HTTPS alias of an internal instance. The host proves nothing, so each instance
  * is a candidate that the caller must confirm through its API.
  */
-export function aliasIssueCandidates(
+function aliasIssueCandidates(
   reference: string,
   instances: readonly GiteaInstanceConfig[],
 ): ResolvedIssueTarget[] {
