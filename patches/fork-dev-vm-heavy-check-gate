@@ -1,0 +1,6 @@
+Bottom: e321887f602f4e91988a7902b7602439d4093472
+Top:    e321887f602f4e91988a7902b7602439d4093472
+Author: brad <bradprin@live.com>
+Date:   2026-10-05 23:34:25 +0000
+
+build(fork): serialize heavyweight checks on the dev VM
