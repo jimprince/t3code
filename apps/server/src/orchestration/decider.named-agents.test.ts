@@ -1,5 +1,6 @@
 import {
   CommandId,
+  EnvironmentId,
   NamedAgentName,
   ProjectId,
   ProviderInstanceId,
@@ -116,7 +117,8 @@ const liveRoots = (model: OrchestrationReadModel) =>
       (entry) =>
         entry.projectId === AGENT_PROJECT &&
         entry.archivedAt === null &&
-        (entry.parentThreadId ?? null) === null,
+        (entry.parentThreadId ?? null) === null &&
+        entry.remoteParent == null,
     )
     .map((entry) => entry.id);
 
@@ -131,6 +133,15 @@ it.layer(NodeServices.layer)("named agents", (it) => {
       const withSub = yield* decideAndProject(create(SUB, { parentThreadId: LIVE }), started);
       expect(liveRoots(withSub)).toEqual([LIVE]);
       expect(withSub.threads.find((entry) => entry.id === SUB)?.autoSettleDisabledAt).toBeFalsy();
+      const remoteParent = { environmentId: EnvironmentId.make("vm"), threadId: LIVE };
+      const withRemote = yield* decideAndProject(create(NEXT, { remoteParent }), withSub);
+      expect(liveRoots(withRemote)).toEqual([LIVE]);
+      expect(withRemote.threads.find((entry) => entry.id === NEXT)?.remoteParent).toEqual(
+        remoteParent,
+      );
+      expect(
+        withRemote.threads.find((entry) => entry.id === NEXT)?.autoSettleDisabledAt,
+      ).toBeFalsy();
     }),
   );
 
