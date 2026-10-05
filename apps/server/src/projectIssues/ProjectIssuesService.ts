@@ -18,6 +18,7 @@ import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import {
   collectThreadTree,
   deriveProjectIssueStatus,
+  deriveRequestStage,
   giteaRepositoryForIdentity,
   instanceHost,
   parseRequestMarker,
@@ -40,6 +41,9 @@ const GiteaIssue = Schema.Struct({
   created_at: Schema.String,
   updated_at: Schema.String,
   closed_at: Schema.optional(Schema.NullOr(Schema.String)),
+  milestone: Schema.optional(
+    Schema.NullOr(Schema.Struct({ id: Schema.Number, title: Schema.String })),
+  ),
   pull_request: Schema.optional(Schema.Unknown),
 });
 type GiteaIssue = typeof GiteaIssue.Type;
@@ -246,6 +250,7 @@ export const make = Effect.gen(function* () {
         for (const issue of items) {
           const labels = (issue.labels ?? []).map((label) => label.name);
           const issueKey = `${repositoryKey(target)}#${issue.number}`;
+          const isRequest = labels.some((label) => label.toLowerCase() === REQUEST_LABEL);
           issues.push({
             host: target.host,
             repository: target.repository,
@@ -254,7 +259,12 @@ export const make = Effect.gen(function* () {
             url: issue.html_url,
             status: deriveProjectIssueStatus(issue.state, labels),
             labels,
-            isRequest: labels.some((label) => label.toLowerCase() === REQUEST_LABEL),
+            isRequest,
+            ...(isRequest ? { stage: deriveRequestStage(issue.state, labels) } : {}),
+            milestone:
+              issue.milestone && issue.milestone.id > 0 && issue.milestone.title.trim()
+                ? { id: issue.milestone.id, title: issue.milestone.title.trim() }
+                : null,
             requestSource: parseRequestMarker(issue.body),
             assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
             comments: Math.max(0, issue.comments ?? 0),

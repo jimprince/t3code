@@ -168,9 +168,7 @@ function isBlocked(thread: EnvironmentThreadShell): boolean {
     return false;
   }
   if (thread.session?.status === "error") return true;
-  if (thread.latestTurn?.state === "error" || thread.latestTurn?.state === "interrupted") {
-    return true;
-  }
+  if (thread.latestTurn?.state === "error") return true;
   return /^blocked\b/i.test(thread.agentPanelSummary?.latestOutput?.trim() ?? "");
 }
 

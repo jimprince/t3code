@@ -1632,8 +1632,7 @@ request
   });
 
 for (const [name, status, description] of [
-  ["start", "in-progress", "Mark a request as being worked on"],
-  ["ready", "needs-review", "Hand a request to Brad: answer, draft, plan or work is ready"],
+  ["start", "in-progress", "Mark a request as being worked on (links your thread to it)"],
   ["reopen", "pending", "Return a request to pending"],
 ] as const) {
   request
@@ -1641,7 +1640,7 @@ for (const [name, status, description] of [
     .description(description)
     .argument("<thread>", "saved agent name or raw thread UUID in the project")
     .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
-    .option("--summary <text>", "comment for Brad: the answer, or what to look at and where")
+    .option("--summary <text>", "comment for Brad")
     .action(async (reference, requestReference, options: { summary?: string }) => {
       const { agent: target, client } = await withAgent(reference);
       printJson(
@@ -1654,6 +1653,52 @@ for (const [name, status, description] of [
       );
     });
 }
+
+request
+  .command("ready")
+  .description(
+    "Hand a request to Brad: ready to review now, or --stage awaiting-release when the work is built and waits for the next release batch",
+  )
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
+  .option("--stage <stage>", "needs-review (default) or awaiting-release", "needs-review")
+  .option("--summary <text>", "comment for Brad: the answer, or what to look at and where")
+  .action(async (reference, requestReference, options: { stage: string; summary?: string }) => {
+    if (options.stage !== "needs-review" && options.stage !== "awaiting-release") {
+      throw new Error("--stage must be needs-review or awaiting-release.");
+    }
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRequest("projectRequestsUpdate", {
+        threadId: target.threadId,
+        reference: requestReference,
+        status: options.stage,
+        ...(options.summary ? { comment: options.summary } : {}),
+      }),
+    );
+  });
+
+request
+  .command("shipped")
+  .description(
+    "Mark a request as shipped in a release; it waits for Brad's test until he settles it",
+  )
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
+  .requiredOption("--release <tag>", "release it shipped in, for example fork.24 (its milestone)")
+  .requiredOption("--test <step>", "one-line test step for Brad")
+  .action(async (reference, requestReference, options: { release: string; test: string }) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRequest("projectRequestsUpdate", {
+        threadId: target.threadId,
+        reference: requestReference,
+        status: "needs-test",
+        release: options.release,
+        comment: `Test: ${options.test}`,
+      }),
+    );
+  });
 
 const issue = agent.command("issue").description("Manage Gitea issues linked to a thread");
 
