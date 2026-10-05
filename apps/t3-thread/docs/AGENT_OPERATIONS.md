@@ -1143,6 +1143,32 @@ for something the capture missed; when Gitea is unreachable it is queued and fil
 issue URL; `start`, `note`, `ready` and `shipped` work on any open tracker issue, not only
 captured requests.
 
+## Decisions waiting on Brad
+
+When you need Brad to choose or answer something, file one Gitea issue per question in the
+project's tracker repository with the labels `needs-brad` and `ask:question`. The title is the
+question on one line, phrased so an option answers it. The body is one to three sentences of
+context, then one fenced `decision` block:
+
+````markdown
+```decision
+waiting: chief-of-staff-inbox
+options:
+- Restart WSL now, reboot if that fails [recommended]
+- Reboot the desktop now
+- Leave it until tonight
+```
+````
+
+`waiting:` is optional (default `chief-of-staff-inbox`): a thread id, a permanent agent name or
+a thread title in slug form, resolved on the server. `options:` takes 2 to 5 lines and exactly
+one `[recommended]`; leave it out for an open question and the project page and the mobile app
+show an answer box. Several questions are several issues ("Part of #N" on the first body
+line). Brad answers on the Decisions widget (or in the mobile app): the answer is commented on
+the issue as `Brad chose: <option>` or `Brad answered: <text>`, sent to the waiting thread with
+the issue reference, and `needs-brad` is removed. The issue stays open: close it when the
+decision is carried out. There is no command to answer for him.
+
 ## Project page widgets and tracker repository
 
 A project (a Projects sidebar entry with its own page) is a top-level thread with workers, or a
