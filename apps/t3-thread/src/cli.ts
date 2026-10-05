@@ -61,7 +61,13 @@ import {
   upsertSubscription,
   upsertEnvironment,
 } from "./state.js";
-import { cancelQueuedSend, drainQueuedSends, hasQueuedWork, listQueuedSends } from "./sendQueue.js";
+import {
+  cancelQueuedSend,
+  drainQueuedSends,
+  hasQueuedWork,
+  listQueuedSends,
+  summarizeQueuedSends,
+} from "./sendQueue.js";
 import { withSenderHeader } from "./thread-identity.js";
 import {
   planExplicitThreadOrder,
@@ -252,6 +258,9 @@ async function resolveNotifyEndpoint(
 }
 
 /** Origin for a send made from inside a T3 thread; a send from a plain terminal has none. */
+type SendCommandOptions = { queue: boolean; coalesce?: string; progress?: boolean };
+type QueueCommandOptions = { env?: string; open?: boolean; summary?: boolean };
+
 function callerSendOrigin(state: Awaited<ReturnType<typeof loadState>>): MessageOrigin | null {
   const fromThreadId = resolveCallerThreadId();
   if (!fromThreadId) return null;
@@ -2025,7 +2034,12 @@ agent
   .argument("<name>", "agent name or raw thread UUID")
   .argument("<message...>", "message text")
   .option("--no-queue", "fail instead of queueing when the target thread is still running")
-  .action(async (name, messageParts: string[], options: { queue: boolean }) => {
+  .option(
+    "--coalesce <key>",
+    "replace your still-queued send to this thread that has the same key instead of queueing behind it",
+  )
+  .option("--progress", "status note: shorthand for --coalesce progress")
+  .action(async (name, messageParts: string[], options: SendCommandOptions) => {
     const rawText = messageParts.join(" ").trim();
     // A name that is neither a saved alias nor a UUID may be a named agent; a
     // dormant one starts with this message, so there is nothing left to send.
@@ -2070,6 +2084,7 @@ agent
           threadId: savedAgent.threadId,
           text,
           queueWhileRunning: options.queue,
+          coalesceKey: options.coalesce ?? (options.progress ? "progress" : null),
           agentName: saved ? savedAgent.name : null,
           origin: callerSendOrigin(state),
           senderEnvironment: sender?.environment,
@@ -2094,9 +2109,19 @@ agent
   .argument("[name]", "agent name or raw thread UUID")
   .option("--env <name>", "optional saved environment filter")
   .option("--open", "only sends that are still waiting to dispatch")
-  .action(async (name: string | undefined, options: { env?: string; open?: boolean }) => {
+  .option("--summary", "count open sends by target thread and sender instead of listing them")
+  .action(async (name: string | undefined, options: QueueCommandOptions) => {
     const threadId = name ? (await withAgent(name)).agent.threadId : undefined;
     const state = await loadState();
+    if (options.summary) {
+      printJson(
+        summarizeQueuedSends(state, {
+          ...(options.env ? { env: options.env } : {}),
+          ...(threadId ? { threadId } : {}),
+        }),
+      );
+      return;
+    }
     printJson(
       listQueuedSends(state, {
         ...(options.env ? { env: options.env } : {}),

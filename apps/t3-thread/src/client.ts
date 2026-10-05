@@ -54,7 +54,13 @@ type RpcFactory = (wsUrl: string) => RemoteRpcClient;
 /** Result of `RemoteEnvironmentClient.sendMessage`. Exactly one of the two shapes. */
 export type SendMessageOutcome =
   | { dispatched: true; queued: false }
-  | { dispatched: false; queued: true; queuedSendId: string; sequence: number };
+  | {
+      dispatched: false;
+      queued: true;
+      queuedSendId: string;
+      sequence: number;
+      supersededSendIds?: string[];
+    };
 
 function buildPlanImplementationPrompt(planMarkdown: string): string {
   return `PLEASE IMPLEMENT THIS PLAN:\n${planMarkdown.trim()}`;
@@ -626,6 +632,8 @@ export class RemoteEnvironmentClient {
     agentName?: string | null;
     /** Marks the message as sent on a thread's behalf; see `@t3tools/shared/messageOrigin`. */
     origin?: MessageOrigin | null;
+    /** Replace this sender's still-waiting queued send that carries the same key. */
+    coalesceKey?: string | null;
     senderEnvironment?: string;
   }): Promise<SendMessageOutcome> {
     const thread = await this.findThread(input.threadId);
@@ -642,12 +650,13 @@ export class RemoteEnvironmentClient {
         );
       }
 
-      const queued = await enqueueSend({
+      const { queued, superseded } = await enqueueSend({
         threadId: thread.id,
         agentName: input.agentName ?? null,
         environment: this.environment.name,
         text,
         origin: input.origin ?? null,
+        coalesceKey: input.coalesceKey ?? null,
         queuedDuringTurnId: thread.latestTurn?.turnId ?? null,
       });
       return {
@@ -655,6 +664,7 @@ export class RemoteEnvironmentClient {
         queued: true,
         queuedSendId: queued.id,
         sequence: queued.sequence,
+        ...(superseded.length > 0 ? { supersededSendIds: superseded.map(({ id }) => id) } : {}),
       };
     }
 
