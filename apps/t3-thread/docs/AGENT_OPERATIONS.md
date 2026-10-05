@@ -1105,7 +1105,16 @@ t3-thread request shipped "$T3_THREAD_ID" 12 --release fork.24 --test "<one-line
 t3-thread request reopen "$T3_THREAD_ID" 12
 t3-thread request note "$T3_THREAD_ID" 12 "blocked on the jaw pull force measurement"
 t3-thread request type "$T3_THREAD_ID" 12 maintenance
+t3-thread request title "$T3_THREAD_ID" 12 "Move the New request box to the top"
 ```
+
+Requests from the project page's New request box no longer go to the orchestrator. Each starts
+a short-lived intake thread nested under it (on Sonnet 5.5 when the server offers it) with a
+fixed brief. The intake finds its task, types and titles it, places it on the roadmap (next or
+later), then answers a simple question on the issue, starts one small worker under the
+orchestrator, sends the orchestrator one message when it needs starting now or needs its
+decision, or just catalogs it; it records a progress note and settles itself. An orchestrator
+hears about a box request only through that one message.
 
 Every task has one type, its `ask:<kind>` label: bug (broken, fix it), feature (new
 capability), question, deliverable, plan, change (adjust something that exists), test, or
