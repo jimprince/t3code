@@ -185,6 +185,7 @@ import * as ProjectDashboardService from "./projectDashboard/ProjectDashboardSer
 import * as ProjectDashboardStore from "./projectDashboard/ProjectDashboardStore.ts";
 import * as ProjectRoadmapService from "./projectRoadmap/ProjectRoadmapService.ts";
 import * as ProjectCanvasService from "./projectCanvas/ProjectCanvasService.ts";
+import * as AutomationEngine from "./automations/AutomationEngine.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
@@ -701,6 +702,7 @@ const makeWsRpcLayer = (
       const projectDashboard = yield* ProjectDashboardService.make(
         yield* ProjectDashboardStore.make,
       );
+      const automations = yield* AutomationEngine.AutomationEngine;
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
@@ -3182,6 +3184,60 @@ const makeWsRpcLayer = (
         [WS_METHODS.projectRequestsList]: (input) =>
           observeRpcEffect(WS_METHODS.projectRequestsList, requestLedger.listForThread(input), {
             "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.automationsList]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationsList,
+            automations.list(input.projectId).pipe(Effect.map((list) => ({ automations: list }))),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationsSave]: (input) =>
+          observeRpcEffect(WS_METHODS.automationsSave, automations.save(input), {
+            "rpc.aggregate": "automations",
+          }),
+        [WS_METHODS.automationsRemove]: (input) =>
+          observeRpcEffect(WS_METHODS.automationsRemove, automations.remove(input.automationId), {
+            "rpc.aggregate": "automations",
+          }),
+        [WS_METHODS.automationsSetEnabled]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationsSetEnabled,
+            automations.setEnabled(input.automationId, input.enabled),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationsRun]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationsRun,
+            automations.run(input.automationId, { dryRun: input.dryRun === true }),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationsRuns]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationsRuns,
+            automations.runs(input).pipe(Effect.map((runs) => ({ runs }))),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationScriptsList]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationScriptsList,
+            automations
+              .listScripts(input.projectId ?? null)
+              .pipe(Effect.map((scripts) => ({ scripts }))),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationScriptsSave]: (input) =>
+          observeRpcEffect(WS_METHODS.automationScriptsSave, automations.saveScript(input), {
+            "rpc.aggregate": "automations",
+          }),
+        [WS_METHODS.automationScriptsRemove]: (input) =>
+          observeRpcEffect(
+            WS_METHODS.automationScriptsRemove,
+            automations.removeScript(input.scriptId),
+            { "rpc.aggregate": "automations" },
+          ),
+        [WS_METHODS.automationScriptsRun]: (input) =>
+          observeRpcEffect(WS_METHODS.automationScriptsRun, automations.runScript(input), {
+            "rpc.aggregate": "automations",
           }),
         [WS_METHODS.pullRequestsListStats]: (input) =>
           observeRpcEffect(WS_METHODS.pullRequestsListStats, pullRequests.listStats(input), {
