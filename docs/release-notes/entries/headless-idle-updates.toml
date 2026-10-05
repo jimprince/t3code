@@ -1,0 +1,4 @@
+id = "headless-idle-updates"
+category = "fix"
+functionality = "server updates"
+text = "Defer automatic Linux server updates while threads are working; interrupting active work requires a manual force command."
