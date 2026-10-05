@@ -1,5 +1,12 @@
-import type { OrchestrationV2RuntimeRequest, OrchestrationV2ThreadProjection } from "@t3tools/contracts";
-export interface ProjectAutomation { id: string; name: string; [key: string]: unknown }
+import type {
+  OrchestrationV2RuntimeRequest,
+  OrchestrationV2ThreadProjection,
+} from "@t3tools/contracts";
+export interface ProjectAutomation {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
 export interface ServerAuthDescriptor {
   policy: string;
   bootstrapMethods: string[];
@@ -23,6 +30,8 @@ export interface AuthAccessTokenResult {
   scope?: string;
 }
 
+export type AuthSessionRefreshResult = AuthAccessTokenResult;
+
 export interface AuthWebSocketTicketResult {
   ticket: string;
   expiresAt: string;
@@ -38,6 +47,7 @@ export interface ExecutionEnvironmentDescriptor {
   };
   serverVersion: string;
   capabilities: {
+    sessionRefresh?: boolean;
     repositoryIdentity?: boolean;
     threadPinReorder?: boolean;
     threadActiveReorder?: boolean;
