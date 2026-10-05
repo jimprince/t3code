@@ -13,16 +13,22 @@ interface NestingThread {
 }
 
 export type CreateParentDecision =
+  | {
+      readonly parentThreadId: null;
+      readonly remoteParent: { environmentId: string; threadId: string };
+      readonly reason: "remote";
+    }
   | { readonly parentThreadId: string; readonly reason: "explicit" | "caller" }
   | { readonly parentThreadId: null; readonly reason: string };
 
 /**
  * Picks the thread a new worker nests under. By default a worker nests under
  * the calling thread, including when that caller is itself nested. Callers in
- * another environment get a top-level worker with the reason reported.
+ * another paired environment use a remote link when supported.
  */
 export function resolveCreateParent(input: {
   readonly explicitParentThreadId: string | null;
+  readonly remoteParent?: { environmentId: string; threadId: string } | null;
   readonly topLevel: boolean;
   /** False on servers that predate nesting; they would silently ignore a parent. */
   readonly serverSupportsNesting: boolean;
@@ -37,6 +43,8 @@ export function resolveCreateParent(input: {
       reason: "this environment's server does not support nesting yet",
     };
   }
+  if (input.remoteParent != null)
+    return { parentThreadId: null, remoteParent: input.remoteParent, reason: "remote" };
   if (input.explicitParentThreadId !== null) {
     return { parentThreadId: input.explicitParentThreadId, reason: "explicit" };
   }
