@@ -1,0 +1,4 @@
+id = "cli-status-bounded-memory"
+category = "fix"
+functionality = "worker CLI"
+text = "Listing all saved agents with agent status now streams results without loading every thread history at once."
