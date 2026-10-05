@@ -15,6 +15,8 @@ export function sendToOrchestrator(
   summary: OrchestratorSummary,
   prompt: string,
   images: ComposerImageAttachment[] = [],
+  /** Runs with the message id before it is dispatched, such as marking it a request. */
+  beforeSend?: (messageId: MessageId) => Promise<unknown>,
 ): { readonly messageId: MessageId; readonly queued: boolean } {
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
   const message = useQueuedMessageStore.getState().enqueue(scopedThreadKey(rootRef), {
@@ -35,6 +37,9 @@ export function sendToOrchestrator(
   });
   const running =
     summary.root.session?.status === "running" || summary.root.session?.status === "starting";
-  if (!running) void sendQueuedMessage(rootRef, message.id);
+  void (async () => {
+    await beforeSend?.(message.messageId);
+    if (!running) await sendQueuedMessage(rootRef, message.id);
+  })();
   return { messageId: message.messageId, queued: running };
 }

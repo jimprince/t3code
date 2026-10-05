@@ -8,7 +8,7 @@ import {
   type ProjectSidebarBucket,
   type StandaloneThreadStatus,
 } from "@t3tools/client-runtime/state/orchestrators";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import { ChevronDownIcon, ChevronRightIcon, CircleAlertIcon, UsersIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
@@ -17,7 +17,6 @@ import { useProjects, useThreadShells } from "../../state/entities";
 import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { useUiStateStore } from "../../uiStateStore";
-import { ThreadIssueBadges } from "../ThreadIssueBadges";
 import { ProjectFavicon } from "../ProjectFavicon";
 import { OrchestratorStatus } from "./OrchestratorStatus";
 import { useDeferredProjectSidebarBuckets } from "./projectSidebarOrder";
@@ -49,8 +48,31 @@ const BUCKET_RANK: Record<ProjectSidebarBucket, number> = {
 const threadKey = (thread: { readonly environmentId: string; readonly id: string }) =>
   `${thread.environmentId}:${thread.id}`;
 
-function ProjectRow({ summary }: { readonly summary: OrchestratorSummary }) {
+/**
+ * The project whose page or thread is open: its orchestrator, or any thread in
+ * its tree, matches the route's environment and thread.
+ */
+function useSelectedRoute() {
+  return useParams({
+    strict: false,
+    select: (params: { environmentId?: string; threadId?: string }) =>
+      params.environmentId && params.threadId ? `${params.environmentId}:${params.threadId}` : null,
+  });
+}
+
+const containsThread = (summary: OrchestratorSummary, key: string | null) =>
+  key !== null &&
+  [summary.root, ...summary.descendants].some((thread) => threadKey(thread) === key);
+
+function ProjectRow({
+  summary,
+  selected,
+}: {
+  readonly summary: OrchestratorSummary;
+  readonly selected: boolean;
+}) {
   const navigate = useNavigate();
+  const openIssues = summary.issues.filter((issue) => issue.snapshot?.state !== "closed").length;
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
   const rootProject =
     summary.projects.find(
@@ -59,10 +81,15 @@ function ProjectRow({ summary }: { readonly summary: OrchestratorSummary }) {
         project.id === summary.root.projectId,
     ) ?? summary.projects[0];
   return (
-    <li className="relative rounded-md hover:bg-sidebar-row-hover">
+    <li
+      className={`relative rounded-md ${
+        selected ? "bg-sidebar-row-active text-sidebar-foreground" : "hover:bg-sidebar-row-hover"
+      }`}
+    >
       <button
         type="button"
         aria-label={`Open ${summary.root.title} project`}
+        aria-current={selected ? "page" : undefined}
         className="absolute inset-0 z-0 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-ring"
         onClick={() =>
           void navigate({
@@ -77,15 +104,11 @@ function ProjectRow({ summary }: { readonly summary: OrchestratorSummary }) {
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
             {summary.root.title}
           </span>
-          <span className="pointer-events-auto flex items-center gap-1">
-            <ThreadIssueBadges
-              issues={summary.issues}
-              projectReturn={{
-                environmentId: summary.root.environmentId,
-                threadId: summary.root.id,
-              }}
-            />
-          </span>
+          {openIssues > 0 ? (
+            <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
+              {openIssues} {openIssues === 1 ? "issue" : "issues"}
+            </span>
+          ) : null}
         </span>
         <span className="flex min-w-0 w-full items-center gap-2 text-xs">
           <OrchestratorStatus status={summary.status} />
@@ -119,6 +142,7 @@ export function OrchestratorSidebarList() {
   const { environments } = useEnvironments();
   const navigate = useNavigate();
   const lastVisitedAtByThreadKey = useUiStateStore((state) => state.threadLastVisitedAtById);
+  const selectedRoute = useSelectedRoute();
   const [quietExpanded, setQuietExpanded] = useState(false);
   const [quietCutoff] = useState(() => Date.now() - QUIET_AFTER_MS);
   const summaries = useMemo(
@@ -185,6 +209,7 @@ export function OrchestratorSidebarList() {
               <ProjectRow
                 key={`${summary.root.environmentId}:${summary.root.id}`}
                 summary={summary}
+                selected={containsThread(summary, selectedRoute)}
               />
             ))}
           </ul>
@@ -209,6 +234,7 @@ export function OrchestratorSidebarList() {
                     <ProjectRow
                       key={`${summary.root.environmentId}:${summary.root.id}`}
                       summary={summary}
+                      selected={containsThread(summary, selectedRoute)}
                     />
                   ))}
                 </ul>

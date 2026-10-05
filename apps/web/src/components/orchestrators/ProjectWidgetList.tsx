@@ -1,6 +1,6 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import type { ProjectCanvasPage } from "@t3tools/contracts";
-import { ArrowDownIcon, ArrowUpIcon, SlidersHorizontalIcon } from "lucide-react";
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react";
 import { Fragment, useMemo, useState, type ReactNode } from "react";
 
 import { projectCanvasQuery } from "../../state/projectCanvas";
@@ -74,9 +74,14 @@ export function WorkerRequestTag({
 export function ProjectWidgetList({
   summary,
   views,
+  customizing,
+  onCustomizingChange,
 }: {
   readonly summary: OrchestratorSummary;
   readonly views: Partial<Record<ProjectWidgetId, ReactNode>>;
+  /** The Customize dialog, opened from the tab row. */
+  readonly customizing: boolean;
+  readonly onCustomizingChange: (open: boolean) => void;
 }) {
   const environmentId = summary.root.environmentId;
   const dashboard = useEnvironmentQuery(
@@ -101,15 +106,17 @@ export function ProjectWidgetList({
   const canvasNow = canvas.dataUpdatedAt ?? 0;
   const saved = dashboard.data?.widgets ?? null;
   const order = visibleWidgets(saved, canvasInfo);
-  const [editing, setEditing] = useState(false);
   const [choices, setChoices] = useState<WidgetChoice[]>([]);
   const [tracker, setTracker] = useState("");
-
-  const open = () => {
-    setChoices(widgetChoices(saved, canvasInfo));
-    setTracker(dashboard.data?.tracker ?? "");
-    setEditing(true);
-  };
+  // Start the dialog from the saved settings each time it opens.
+  const [openedWith, setOpenedWith] = useState(false);
+  if (customizing !== openedWith) {
+    setOpenedWith(customizing);
+    if (customizing) {
+      setChoices(widgetChoices(saved, canvasInfo));
+      setTracker(dashboard.data?.tracker ?? "");
+    }
+  }
   const save = async () => {
     const widgets = await saveWidgets({
       environmentId,
@@ -124,17 +131,13 @@ export function ProjectWidgetList({
             input: { threadId: summary.root.id, tracker: nextTracker },
           });
     dashboard.refresh();
-    if (widgets._tag === "Success" && trackerResult?._tag !== "Failure") setEditing(false);
+    if (widgets._tag === "Success" && trackerResult?._tag !== "Failure") {
+      onCustomizingChange(false);
+    }
   };
 
   return (
     <>
-      <div className="-mb-3 flex justify-end">
-        <Button size="xs" variant="ghost-muted" onClick={open}>
-          <SlidersHorizontalIcon />
-          Customize
-        </Button>
-      </div>
       {groupCanvases(order).map((group) => {
         if (!isCanvasWidget(group[0]!)) {
           const id = group[0] as ProjectWidgetId;
@@ -156,7 +159,7 @@ export function ProjectWidgetList({
           </div>
         );
       })}
-      <Dialog open={editing} onOpenChange={setEditing}>
+      <Dialog open={customizing} onOpenChange={onCustomizingChange}>
         <DialogPopup>
           <DialogHeader>
             <DialogTitle>Customize project page</DialogTitle>
@@ -210,7 +213,7 @@ export function ProjectWidgetList({
             </label>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setEditing(false)}>
+            <Button variant="outline" onClick={() => onCustomizingChange(false)}>
               Cancel
             </Button>
             <Button onClick={() => void save()}>Save</Button>
