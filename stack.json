@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "8de5bbdc50b3adfc6bb8705c173329b8c384f9f5",
-  "head": "d14fbd539445cd2e1cf90ab46e46f3bb07e385ec",
+  "prev": "63b985b2e200b93b7ff357a72173923d8fa289c0",
+  "head": "7b54aaf826b291fa7532d802e1162ff534113291",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -68,8 +68,7 @@
     "fork-orchestrators-view",
     "fork-project-issues-board",
     "fork-request-ledger",
-    "fork-cross-environment-nesting",
-    "refresh-temp"
+    "fork-cross-environment-nesting"
   ],
   "unapplied": [],
   "hidden": [],
@@ -108,7 +107,7 @@
       "oid": "40a64d515cf849fe803c52acfeca6cc0f2f1d5ee"
     },
     "fork-cross-environment-nesting": {
-      "oid": "71b502e8e302a8d0b3d9180d38e56685a53bc15d"
+      "oid": "7b54aaf826b291fa7532d802e1162ff534113291"
     },
     "fork-cross-project-thread-nesting": {
       "oid": "d8399136e111b05a92495333408157daa304cda0"
@@ -271,9 +270,6 @@
     },
     "fork-worktree-cleanup": {
       "oid": "b944a2751d8828af07f0b2402a53eeac5ad02a0c"
-    },
-    "refresh-temp": {
-      "oid": "d14fbd539445cd2e1cf90ab46e46f3bb07e385ec"
     }
   }
 }
