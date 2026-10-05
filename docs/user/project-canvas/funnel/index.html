@@ -5,15 +5,58 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Funnel</title>
     <style>
-      body { margin: 8px; background: #000; color: #fff; font: 12px/1.4 system-ui, sans-serif; }
-      .card { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid #222; }
-      .card img { width: 40px; height: 40px; border: 1px solid #333; }
-      .card .what { flex: 1; min-width: 0; }
-      .card .stage { color: #999; font-size: 11px; }
-      button { background: #000; color: #fff; border: 1px solid #444; font: inherit; font-size: 11px; padding: 2px 8px; }
-      #feedback { display: none; gap: 6px; margin-top: 6px; }
-      #feedback textarea { flex: 1; background: #000; color: #fff; border: 1px solid #444; font: inherit; }
-      #result { color: #999; font-size: 11px; }
+      body {
+        margin: 8px;
+        background: #000;
+        color: #fff;
+        font:
+          12px/1.4 system-ui,
+          sans-serif;
+      }
+      .card {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid #222;
+      }
+      .card img {
+        width: 40px;
+        height: 40px;
+        border: 1px solid #333;
+      }
+      .card .what {
+        flex: 1;
+        min-width: 0;
+      }
+      .card .stage {
+        color: #999;
+        font-size: 11px;
+      }
+      button {
+        background: #000;
+        color: #fff;
+        border: 1px solid #444;
+        font: inherit;
+        font-size: 11px;
+        padding: 2px 8px;
+      }
+      #feedback {
+        display: none;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      #feedback textarea {
+        flex: 1;
+        background: #000;
+        color: #fff;
+        border: 1px solid #444;
+        font: inherit;
+      }
+      #result {
+        color: #999;
+        font-size: 11px;
+      }
     </style>
   </head>
   <body>
@@ -41,9 +84,14 @@
       const item = `#${card.dataset.item} ${card.dataset.title}`;
       let next = 0;
       const ask = (intent, fields) =>
-        window.parent.postMessage({ type: "t3-canvas", id: String(++next), intent, ...fields }, "*");
+        window.parent.postMessage(
+          { type: "t3-canvas", id: String(++next), intent, ...fields },
+          "*",
+        );
       document.getElementById("advance").onclick = () =>
-        ask("send", { text: `Advance ${item} from ${card.dataset.stage} to ${card.dataset.next}.` });
+        ask("send", {
+          text: `Advance ${item} from ${card.dataset.stage} to ${card.dataset.next}.`,
+        });
       document.getElementById("feedback-open").onclick = () =>
         (document.getElementById("feedback").style.display = "flex");
       document.getElementById("feedback-send").onclick = () => {
