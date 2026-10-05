@@ -5,6 +5,7 @@ export type OrderableThread = Pick<
   OrchestrationThreadShell,
   | "id"
   | "parentThreadId"
+  | "remoteParent"
   | "pinnedAt"
   | "pinOrderKey"
   | "activeOrderKey"
@@ -46,7 +47,9 @@ export function sameThreadOrderGroup(left: OrderableThread, right: OrderableThre
   return (
     threadOrderSection(left) === threadOrderSection(right) &&
     threadOrderSection(left) !== null &&
-    (left.parentThreadId ?? null) === (right.parentThreadId ?? null)
+    (left.parentThreadId ?? null) === (right.parentThreadId ?? null) &&
+    (left.remoteParent?.environmentId ?? null) === (right.remoteParent?.environmentId ?? null) &&
+    (left.remoteParent?.threadId ?? null) === (right.remoteParent?.threadId ?? null)
   );
 }
 

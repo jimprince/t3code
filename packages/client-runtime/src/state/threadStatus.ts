@@ -38,12 +38,61 @@ type DescendantActivityThread = ThreadDisplayStatusInput & {
   readonly id: string;
   readonly environmentId: string;
   readonly parentThreadId?: string | null | undefined;
+  readonly remoteParent?:
+    | { readonly environmentId: string; readonly threadId: string }
+    | null
+    | undefined;
   readonly archivedAt?: string | null | undefined;
   readonly settledOverride?: string | null | undefined;
 };
 
 export function threadActivityKey(thread: Pick<DescendantActivityThread, "environmentId" | "id">) {
   return `${thread.environmentId}:${thread.id}`;
+}
+
+/** Resolves local and remote parent links to the same scoped client key. */
+export function threadParentKey(thread: {
+  readonly environmentId: string;
+  readonly parentThreadId?: string | null | undefined;
+  readonly remoteParent?:
+    | { readonly environmentId: string; readonly threadId: string }
+    | null
+    | undefined;
+}): string | null {
+  if (thread.remoteParent != null)
+    return `${thread.remoteParent.environmentId}:${thread.remoteParent.threadId}`;
+  return thread.parentThreadId == null ? null : `${thread.environmentId}:${thread.parentThreadId}`;
+}
+
+/** Parent links only hide a child when its parent is reachable and the chain is acyclic. */
+export function reachableNestedThreadKeys<
+  T extends {
+    readonly id: string;
+    readonly environmentId: string;
+    readonly archivedAt?: string | null | undefined;
+    readonly parentThreadId?: string | null | undefined;
+    readonly remoteParent?:
+      | { readonly environmentId: string; readonly threadId: string }
+      | null
+      | undefined;
+  },
+>(threads: ReadonlyArray<T>): Set<string> {
+  const byKey = new Map(threads.map((thread) => [threadActivityKey(thread), thread]));
+  const nested = new Set<string>();
+  for (const thread of threads) {
+    const parentKey = threadParentKey(thread);
+    const parent = parentKey === null ? undefined : byKey.get(parentKey);
+    if (parent === undefined || parent.archivedAt != null) continue;
+    const visited = new Set<string>();
+    let ancestor: T | undefined = thread;
+    while (ancestor !== undefined && !visited.has(threadActivityKey(ancestor))) {
+      visited.add(threadActivityKey(ancestor));
+      const key = threadParentKey(ancestor);
+      ancestor = key === null ? undefined : byKey.get(key);
+    }
+    if (ancestor === undefined) nested.add(threadActivityKey(thread));
+  }
+  return nested;
 }
 
 function hasOwnActiveStatus(thread: DescendantActivityThread): boolean {
@@ -64,8 +113,8 @@ export function countActiveDescendantsByThread(
 ): ReadonlyMap<string, number> {
   const childrenByParent = new Map<string, DescendantActivityThread[]>();
   for (const thread of threads) {
-    if (thread.archivedAt != null || thread.parentThreadId == null) continue;
-    const parentKey = `${thread.environmentId}:${thread.parentThreadId}`;
+    const parentKey = threadParentKey(thread);
+    if (thread.archivedAt != null || parentKey === null) continue;
     const children = childrenByParent.get(parentKey);
     if (children) children.push(thread);
     else childrenByParent.set(parentKey, [thread]);

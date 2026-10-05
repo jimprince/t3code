@@ -135,6 +135,7 @@ export function applyThreadDetailEvent(
           autoSettleDisabledAt: null,
           settleOnComplete: event.payload.settleOnComplete ?? null,
           ...(event.payload.parentThreadId ? { parentThreadId: event.payload.parentThreadId } : {}),
+          remoteParent: event.payload.remoteParent ?? null,
           snoozedUntil: null,
           snoozedAt: null,
           deletedAt: null,
@@ -299,6 +300,9 @@ export function applyThreadDetailEvent(
             : {}),
           ...(event.payload.settleOnComplete !== undefined
             ? { settleOnComplete: event.payload.settleOnComplete }
+            : {}),
+          ...(event.payload.remoteParent !== undefined
+            ? { remoteParent: event.payload.remoteParent }
             : {}),
           ...(event.payload.parentThreadId !== undefined
             ? { parentThreadId: event.payload.parentThreadId }
