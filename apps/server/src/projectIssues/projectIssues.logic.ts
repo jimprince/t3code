@@ -48,6 +48,9 @@ export function parseRequestMarker(
           threadId: value.threadId as ThreadId,
           rootThreadId: value.rootThreadId as ThreadId,
           messageId: value.messageId,
+          ...(Number.isInteger(value.item) && (value.item as number) >= 0
+            ? { item: value.item as number }
+            : {}),
         }
       : null;
   } catch {
