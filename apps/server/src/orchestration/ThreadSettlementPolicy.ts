@@ -127,9 +127,12 @@ export function resolveAutoSettlementAt(input: {
     : null;
 }
 
-/** Cheap checks that run before any source control lookup. */
+/** Cheap checks that run before any source control lookup. A pinned thread is
+ * one the user keeps in view, so no automatic path settles it. The decider also
+ * refuses threads that have children, which a shell row cannot show. */
 export function isAutoSettlementCandidate(thread: OrchestrationThreadShell, now: string): boolean {
   if (thread.archivedAt !== null || thread.settledOverride !== null) return false;
+  if (thread.pinnedAt != null) return false;
   if (thread.autoSettleDisabledAt != null) return false;
   if (thread.hasPendingApprovals || thread.hasPendingUserInput) return false;
   if (thread.session?.status === "starting" || thread.session?.status === "running") return false;
