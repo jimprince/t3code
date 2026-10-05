@@ -1,5 +1,6 @@
 import { THREAD_SUBSCRIPTION_METHODS, ThreadSubscriptionRpcs } from "./threadSubscriptions.ts";
 import { WorkspaceUploadRpc, WorkspaceUploadMethods } from "./workspaceUploadRpc.ts";
+import { HEADLESS_DELIVERY_METHODS, HeadlessDeliveryRpc } from "./forkHeadlessDeliveryRpc.ts";
 import { OrchestrationDispatchCommandError } from "./orchestrationDispatch.ts";
 import {
   ChatGptReconnectProfileInput,
@@ -341,6 +342,7 @@ import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 export const WS_METHODS = {
   ...THREAD_SUBSCRIPTION_METHODS,
   ...WorkspaceUploadMethods,
+  ...HEADLESS_DELIVERY_METHODS,
   // Project registry methods
   projectsList: "projects.list",
   projectsAdd: "projects.add",
@@ -1706,6 +1708,7 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 export const WsRpcGroup = RpcGroup.make(
   ...ThreadSubscriptionRpcs,
   WorkspaceUploadRpc,
+  HeadlessDeliveryRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
