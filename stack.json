@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "f83ee984f9414a3fdf44e2b059e060a5ffd0d0f8",
-  "head": "c1b36e531076dfcea780ce1b800d60f610e2085a",
+  "prev": "8243557b5c8e1d69605992acea27f928b19d6a9f",
+  "head": "2517d263eb2f389baea76acb14e782ca5339cdb0",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -26,7 +26,8 @@
     "fork-auth-session-refresh",
     "fork-inline-3d-objects",
     "fork-orcaslicer-handoff",
-    "fork-3mf-preview"
+    "fork-3mf-preview",
+    "fork-step-preview"
   ],
   "unapplied": [
     "fork-thread-client-recovery",
@@ -38,7 +39,6 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-codex-goal-visibility",
-    "fork-step-preview",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
     "fork-nested-threads",
@@ -281,7 +281,7 @@
       "oid": "3c0308091b5b5cd900dc5186198679e32e2efe98"
     },
     "fork-step-preview": {
-      "oid": "6589dbd13a69fd04fe77347862a0f9dfb363d161"
+      "oid": "2517d263eb2f389baea76acb14e782ca5339cdb0"
     },
     "fork-subthread-lifecycle": {
       "oid": "c97f6cdc0e21603de2e570d7aa33ffa8cadff867"
