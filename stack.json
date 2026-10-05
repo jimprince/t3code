@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e0d60f3483a72b38addb3dc16a074acacaf06ff1",
-  "head": "2f6b5ae462ca08e95d550cfd96f7168230fb278e",
+  "prev": "952e30da887c92476df6f82f01b2b09b89d2a3a0",
+  "head": "28b90a32ae84cba367650318d6a260d6cbffa248",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -87,10 +87,10 @@
     "fork-textgen-tempfile-cause",
     "fork-projects-pinned",
     "fork-project-health",
-    "fork-standing-agent-autosettle"
+    "fork-standing-agent-autosettle",
+    "fork-task-view"
   ],
   "unapplied": [
-    "fork-task-view",
     "fork-release-horizon"
   ],
   "hidden": [],
@@ -324,7 +324,7 @@
       "oid": "934385b74ee31165fc53fbd706b73e19343be723"
     },
     "fork-task-view": {
-      "oid": "574a555704d36f15801b1e3bdf6055b4662dbfbb"
+      "oid": "28b90a32ae84cba367650318d6a260d6cbffa248"
     },
     "fork-textgen-tempfile-cause": {
       "oid": "4b875aea5e47ca43662694961ff0d2437b562b55"
