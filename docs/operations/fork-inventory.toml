@@ -29,6 +29,12 @@ roles = ["lockfile-owner"]
 note = "Keep upstream and fork script entry points in one Knip workspace stanza. Removed the unrelated wall-clock assertion from activity-reuse coverage; the observable identity-reuse test and justified compression-test headroom remain. The replay driver removes the old generated lockfile delta before rebase and regenerates at the complete tip, then refreshes this owner. Published main retains a consistent frozen-install lockfile; mid-stack generation omits later workspaces. Pin dependencies with exact-version patches to that version; expo-audio 57.0.5 satisfies ~57.0.4 but still lacks the recorder failure-state fix in the 57.0.4 patch."
 
 [[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "narrow+adapt"
+rationale = "V2 port onto v0.0.46-nightly.20261005.2689: dropped the test budgets and lint ceilings for V1 test files V2 deletes, took upstream for the remaining conflicted test files, moved git-fixture.test.ts to its helper's owner (fork-release-publication), and regenerated the lockfile at the M1 tip. Re-add per-file headroom only if V2 CI shows a timeout."
+
+[[patch.decision]]
 id = "upstream14025-ci-job-split"
 date = "2026-10-01"
 decided = "narrow+adapt"
