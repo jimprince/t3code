@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "185736e1a8c74cfb4e1bea83c7351955275b3826",
-  "head": "ddffd8bbacb14cc650d58c5bc45e6804793ffb0f",
+  "prev": "3856bd8ceb46a0a9488eff0d7645de44cc1499f8",
+  "head": "dcc944fbec036a8b9b9d068652235ce49fc6a3df",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -35,10 +35,10 @@
     "fork-codex-goal-visibility",
     "fork-inline-3d-objects",
     "fork-orcaslicer-handoff",
-    "fork-3mf-preview"
+    "fork-3mf-preview",
+    "fork-step-preview"
   ],
   "unapplied": [
-    "fork-step-preview",
     "fork-enter-sends-queued",
     "fork-restart-when-idle",
     "fork-nested-threads",
@@ -225,7 +225,7 @@
       "oid": "9cdf3c54ceb0012751c2b1d8d9f4cfab1f5da069"
     },
     "fork-step-preview": {
-      "oid": "3615b778d5e31f4556c8be8479ff74de233c7540"
+      "oid": "dcc944fbec036a8b9b9d068652235ce49fc6a3df"
     },
     "fork-subthread-lifecycle": {
       "oid": "dd6c6620b5cfd424a4c3bf86fc14b29ef38c8e82"
