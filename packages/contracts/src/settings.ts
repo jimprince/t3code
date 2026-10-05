@@ -1349,6 +1349,8 @@ export const ServerSettings = Schema.Struct({
     ),
   ),
   giteaInstances: GiteaInstances.pipe(Schema.withDecodingDefault(Effect.succeed([]))),
+  /** File the requests typed in this server's threads as Gitea issues (the request ledger). */
+  requestLedgerEnabled: Schema.Boolean.pipe(Schema.withDecodingDefault(Effect.succeed(true))),
   sourceControlWritingStyle: SourceControlWritingStyleSettings.pipe(
     Schema.withDecodingDefault(Effect.succeed({})),
   ),
@@ -1648,6 +1650,7 @@ export const ServerSettingsPatch = Schema.Struct({
   addProjectBaseDirectory: Schema.optionalKey(TrimmedString),
   textGenerationModelSelection: Schema.optionalKey(ModelSelectionPatch),
   giteaInstances: Schema.optionalKey(GiteaInstances),
+  requestLedgerEnabled: Schema.optionalKey(Schema.Boolean),
   sourceControlWritingStyle: Schema.optionalKey(
     Schema.Struct({
       mode: Schema.optionalKey(SourceControlWritingStyleMode),
