@@ -1,70 +1,29 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  reachableNestedThreadKeys,
+  threadParentKey,
+} from "@t3tools/client-runtime/state/thread-status";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import type { ContextMenuItem, EnvironmentId, ThreadId } from "@t3tools/contracts";
 
 /**
  * Pure rules for nested threads on web and desktop. A nested thread leaves the
  * sidebar and is listed in its parent's Agents panel. The server enforces
- * same-environment acyclic parentage; these helpers only decide presentation and
+ * local acyclic parentage; these helpers only decide presentation and
  * which nesting actions to offer, and they never hide a thread whose direct
  * parent the user cannot reach.
  */
 type NestingThread = Pick<
   EnvironmentThreadShell,
-  "id" | "environmentId" | "projectId" | "parentThreadId" | "archivedAt"
+  "id" | "environmentId" | "projectId" | "parentThreadId" | "remoteParent" | "archivedAt"
 >;
 
 const threadKey = (thread: Pick<NestingThread, "environmentId" | "id">) =>
   scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
 
-/**
- * Ids of threads nested right now within one environment's thread list: the
- * direct parent is present, not archived, and the edge is
- * not part of a cycle.
- * A thread whose parent is archived, deleted, or unknown is not nested, so it
- * falls back to the sidebar instead of being stranded.
- */
-export function resolveNestedThreadIds(
-  threads: ReadonlyArray<Omit<NestingThread, "environmentId">>,
-): Set<ThreadId> {
-  const byId = new Map(threads.map((thread) => [thread.id, thread] as const));
-  const nested = new Set<ThreadId>();
-  for (const thread of threads) {
-    if (thread.parentThreadId == null) continue;
-    const parent = byId.get(thread.parentThreadId);
-    if (parent === undefined || parent.id === thread.id || parent.archivedAt !== null) continue;
-
-    const visited = new Set<ThreadId>();
-    let ancestor: (typeof threads)[number] | undefined = thread;
-    let cyclic = false;
-    while (ancestor?.parentThreadId != null) {
-      if (visited.has(ancestor.id)) {
-        cyclic = true;
-        break;
-      }
-      visited.add(ancestor.id);
-      ancestor = byId.get(ancestor.parentThreadId);
-    }
-    if (!cyclic) nested.add(thread.id);
-  }
-  return nested;
-}
-
-/** Scoped keys of nested threads across environments. Parents never match across environments. */
+/** Reachable, acyclic parents across all connected environments. */
 export function resolveNestedThreadKeys(threads: ReadonlyArray<NestingThread>): Set<string> {
-  const byEnvironment = new Map<EnvironmentId, NestingThread[]>();
-  for (const thread of threads) {
-    const group = byEnvironment.get(thread.environmentId);
-    if (group) group.push(thread);
-    else byEnvironment.set(thread.environmentId, [thread]);
-  }
-  const nested = new Set<string>();
-  for (const [environmentId, group] of byEnvironment) {
-    for (const threadId of resolveNestedThreadIds(group)) {
-      nested.add(scopedThreadKey(scopeThreadRef(environmentId, threadId)));
-    }
-  }
-  return nested;
+  return reachableNestedThreadKeys(threads);
 }
 
 /** Sidebar placement preserves each parent's own state; child attention is displayed separately. */
@@ -86,12 +45,12 @@ export function resolveViewedNestedThread<T extends NestingThread>(
 ): { readonly parentKey: string; readonly thread: T } | null {
   if (viewedThreadKey === null) return null;
   const viewed = threads.find((thread) => threadKey(thread) === viewedThreadKey);
-  if (viewed === undefined || viewed.parentThreadId == null || viewed.archivedAt !== null) {
+  if (viewed === undefined || threadParentKey(viewed) === null || viewed.archivedAt !== null) {
     return null;
   }
   if (!resolveNestedThreadKeys(threads).has(viewedThreadKey)) return null;
   return {
-    parentKey: scopedThreadKey(scopeThreadRef(viewed.environmentId, viewed.parentThreadId)),
+    parentKey: threadParentKey(viewed)!,
     thread: viewed,
   };
 }
@@ -99,9 +58,8 @@ export function resolveViewedNestedThread<T extends NestingThread>(
 /** Whether `thread` is nested under `parent` right now (same rules as the sidebar). */
 export function isNestedUnder(thread: NestingThread, parent: NestingThread): boolean {
   return (
-    thread.parentThreadId === parent.id &&
-    thread.environmentId === parent.environmentId &&
-    resolveNestedThreadIds([thread, parent]).has(thread.id)
+    threadParentKey(thread) === threadKey(parent) &&
+    resolveNestedThreadKeys([thread, parent]).has(threadKey(thread))
   );
 }
 
@@ -115,9 +73,8 @@ export function listNestedThreads<
   return threads
     .filter(
       (thread) =>
-        thread.environmentId === parent.environmentId &&
-        thread.parentThreadId === parent.threadId &&
-        thread.id !== parent.threadId &&
+        threadParentKey(thread) === scopedThreadKey(parent) &&
+        threadKey(thread) !== scopedThreadKey(parent) &&
         thread.archivedAt === null,
     )
     .toSorted(
@@ -226,7 +183,7 @@ export function resolveThreadNestingMenuState<
   if (!supported) return null;
   return {
     canStartNestedThread: canParentThreads(thread),
-    isNested: thread.parentThreadId != null,
+    isNested: threadParentKey(thread) !== null,
     parentCandidates:
       thread.archivedAt === null
         ? selectNestParentCandidates(thread, threads).map(({ id, title }) => ({ id, title }))
