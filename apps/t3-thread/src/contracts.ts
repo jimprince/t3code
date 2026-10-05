@@ -28,6 +28,11 @@ import {
   ProjectDashboardGetInput,
   ProjectDashboardSetTrackerInput,
   ProjectDashboardSetWidgetsInput,
+  ProjectRoadmap,
+  ProjectRoadmapError,
+  ProjectRoadmapGetInput,
+  ProjectRoadmapMoveInput,
+  ProjectRoadmapSaveVersionInput,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -484,6 +489,24 @@ const WsProjectDashboardSetTrackerRpc = Rpc.make(WS_METHODS.projectDashboardSetT
   error: projectDashboardError,
 });
 
+// Project roadmap.
+const projectRoadmapError = Schema.Union([ProjectRoadmapError, EnvironmentAuthorizationError]);
+const WsProjectRoadmapGetRpc = Rpc.make(WS_METHODS.projectRoadmapGet, {
+  payload: ProjectRoadmapGetInput,
+  success: ProjectRoadmap,
+  error: projectRoadmapError,
+});
+const WsProjectRoadmapMoveRpc = Rpc.make(WS_METHODS.projectRoadmapMove, {
+  payload: ProjectRoadmapMoveInput,
+  success: ProjectRoadmap,
+  error: projectRoadmapError,
+});
+const WsProjectRoadmapSaveVersionRpc = Rpc.make(WS_METHODS.projectRoadmapSaveVersion, {
+  payload: ProjectRoadmapSaveVersionInput,
+  success: ProjectRoadmap,
+  error: projectRoadmapError,
+});
+
 export const WsRpcGroup = RpcGroup.make(
   WsServerGetConfigRpc,
   WsOrchestrationDispatchCommandRpc,
@@ -503,4 +526,7 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectDashboardGetRpc,
   WsProjectDashboardSetWidgetsRpc,
   WsProjectDashboardSetTrackerRpc,
+  WsProjectRoadmapGetRpc,
+  WsProjectRoadmapMoveRpc,
+  WsProjectRoadmapSaveVersionRpc,
 );
