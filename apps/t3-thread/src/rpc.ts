@@ -29,7 +29,22 @@ const RPC_METHODS = {
   projectRoadmapGet: WS_METHODS.projectRoadmapGet,
   projectRoadmapMove: WS_METHODS.projectRoadmapMove,
   projectRoadmapSaveVersion: WS_METHODS.projectRoadmapSaveVersion,
+  automationsList: WS_METHODS.automationsList,
+  automationsSave: WS_METHODS.automationsSave,
+  automationsRemove: WS_METHODS.automationsRemove,
+  automationsSetEnabled: WS_METHODS.automationsSetEnabled,
+  automationsRun: WS_METHODS.automationsRun,
+  automationsRuns: WS_METHODS.automationsRuns,
+  automationScriptsList: WS_METHODS.automationScriptsList,
+  automationScriptsSave: WS_METHODS.automationScriptsSave,
+  automationScriptsRemove: WS_METHODS.automationScriptsRemove,
+  automationScriptsRun: WS_METHODS.automationScriptsRun,
 } as const;
+
+export type AutomationRpcMethod = Extract<
+  keyof typeof RPC_METHODS,
+  `automations${string}` | `automationScripts${string}`
+>;
 
 const makeT3RpcClient = RpcClient.make(WsRpcGroup);
 type RpcProtocolClient =
@@ -75,7 +90,8 @@ export class T3RpcClient {
       | "projectDashboardSetTracker"
       | "projectRoadmapGet"
       | "projectRoadmapMove"
-      | "projectRoadmapSaveVersion",
+      | "projectRoadmapSaveVersion"
+      | AutomationRpcMethod,
     input: unknown,
   ): Promise<T> {
     const client = (await this.clientPromise) as unknown as Record<
