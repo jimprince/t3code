@@ -1,5 +1,6 @@
 import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
+import { headlessDeliveryHandlers } from "./headlessDeliveryRpc.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -2644,6 +2645,7 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
           }),
+        ...headlessDeliveryHandlers(),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
             "rpc.aggregate": "cloud",
