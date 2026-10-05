@@ -317,6 +317,8 @@ export function createDevRunnerEnv({
 
     const output: NodeJS.ProcessEnv = {
       ...baseEnv,
+      // Copied dev state can retain provider sessions in real working directories.
+      T3CODE_DISABLE_STARTUP_RESUME: baseEnv.T3CODE_DISABLE_STARTUP_RESUME ?? "1",
       PORT: String(webPort),
       VITE_DEV_SERVER_URL:
         devUrl?.toString() ??
