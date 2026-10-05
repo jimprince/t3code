@@ -110,15 +110,24 @@ export function sortOrchestratorSummariesForSidebar(
   const bucketOf = (summary: OrchestratorSummary) =>
     displayedBuckets?.get(threadActivityKey(summary.root)) ??
     projectSidebarBucket(summary, quietCutoffMs);
+  // Pinned projects lead, in their pin order, whatever they are doing; the rest
+  // follow by what needs Brad first.
+  const pinned = (summary: OrchestratorSummary) => (summary.root.pinnedAt != null ? 0 : 1);
   return [...summaries].sort(
     (left, right) =>
-      PROJECT_SIDEBAR_BUCKET_PRIORITY[bucketOf(left)] -
-        PROJECT_SIDEBAR_BUCKET_PRIORITY[bucketOf(right)] ||
+      pinned(left) - pinned(right) ||
+      (pinned(left) === 0
+        ? 0
+        : PROJECT_SIDEBAR_BUCKET_PRIORITY[bucketOf(left)] -
+          PROJECT_SIDEBAR_BUCKET_PRIORITY[bucketOf(right)]) ||
       compareStableThreadOrder(left.root, right.root),
   );
 }
 
-/** Projects mode owns complete orchestrator trees; Threads keeps only standalone roots. */
+/**
+ * Projects mode owns complete orchestrator trees; Threads keeps standalone roots,
+ * plus each pinned project root's own row so a pin tops both lists in pin order.
+ */
 export function threadsVisibleInThreadsMode(
   threads: ReadonlyArray<EnvironmentThreadShell>,
   projectsViewEnabled: boolean,
@@ -138,11 +147,11 @@ export function threadsVisibleInThreadsMode(
     if (
       root.archivedAt !== null ||
       root.parentThreadId !== null ||
-      !childrenByParent.has(rootKey)
+      (!childrenByParent.has(rootKey) && root.pinnedAt == null)
     ) {
       continue;
     }
-    projectThreadKeys.add(rootKey);
+    if (root.pinnedAt == null) projectThreadKeys.add(rootKey);
     for (const descendant of collectDescendants(root, childrenByParent)) {
       projectThreadKeys.add(threadActivityKey(descendant));
     }
@@ -233,7 +242,10 @@ export function buildOrchestratorSummaries(
       (thread) =>
         thread.archivedAt == null &&
         !nestedKeys.has(threadActivityKey(thread)) &&
-        (childrenByParent.get(threadActivityKey(thread))?.length ?? 0) > 0,
+        // An orchestrator: it has workers, or it is pinned (the chief of staff
+        // reports to Brad without workers nested under it).
+        ((childrenByParent.get(threadActivityKey(thread))?.length ?? 0) > 0 ||
+          thread.pinnedAt != null),
     )
     .map((root) => {
       const descendants = collectDescendants(root, childrenByParent);
