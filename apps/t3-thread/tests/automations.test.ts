@@ -1,37 +1,22 @@
 import { Command } from "commander";
 import { describe, expect, it } from "vite-plus/test";
-import { registerAutomationCommands } from "../src/automations.js";
+import { parseDays, registerAutomationCommands } from "../src/automations.js";
 
-function harness() {
-  const commands: unknown[] = [];
-  const output: unknown[] = [];
+function harness(scripts: Array<{ id: string; name: string; projectId: string | null }> = []) {
+  const calls: Array<{ method: string; input: Record<string, unknown> }> = [];
   const program = new Command().exitOverride();
   registerAutomationCommands(program, {
     client: async () => ({
-      listAutomations: async () => [],
-      dispatchAutomation: async (command) => {
-        commands.push(command);
-        return [];
+      automationRpc: async <T>(method: string, input: Record<string, unknown>) => {
+        calls.push({ method, input });
+        return (method === "automationScriptsList" ? { scripts } : {}) as T;
       },
     }),
-    print: (value) => {
-      output.push(value);
-    },
+    print: () => {},
   });
   return {
-    commands,
-    output,
-    run: (args: string[]) =>
-      program.parseAsync([
-        "node",
-        "t3-thread",
-        "automation",
-        ...args,
-        "--env",
-        "test",
-        "--project",
-        "project-1",
-      ]),
+    calls,
+    run: (args: string[]) => program.parseAsync(["node", "t3-thread", ...args, "--env", "test"]),
   };
 }
 
@@ -39,7 +24,10 @@ describe("automation operator commands", () => {
   it("adds a weekly prompt to an existing thread with a saved timezone", async () => {
     const h = harness();
     await h.run([
+      "automation",
       "add",
+      "--project",
+      "project-1",
       "--name",
       "Digest",
       "--prompt",
@@ -57,50 +45,190 @@ describe("automation operator commands", () => {
       "--owner-thread",
       "root",
     ]);
-    expect(h.commands).toEqual([
-      expect.objectContaining({
-        type: "project.automation.create",
-        projectId: "project-1",
-        automation: expect.objectContaining({
+    expect(h.calls).toEqual([
+      {
+        method: "automationsSave",
+        input: expect.objectContaining({
+          projectId: "project-1",
           name: "Digest",
-          target: { kind: "existing-thread", threadId: "root" },
+          enabled: true,
           ownerThreadId: "root",
-          schedule: { kind: "weekly", day: 5, time: "08:15", timeZone: "America/Toronto" },
+          triggers: [
+            {
+              type: "schedule",
+              schedule: { kind: "weekly", day: 5, time: "08:15", timeZone: "America/Toronto" },
+            },
+          ],
+          actions: [
+            {
+              type: "agent",
+              prompt: "Summarize",
+              target: { kind: "existing-thread", threadId: "root" },
+            },
+          ],
         }),
-      }),
+      },
     ]);
   });
-  it("lists server-owned definitions without dispatch", async () => {
+
+  it("schedules a saved script on weekdays", async () => {
     const h = harness();
-    await h.run(["list"]);
-    expect(h.commands).toEqual([]);
-    expect(h.output).toEqual([[]]);
+    await h.run([
+      "automation",
+      "add",
+      "--project",
+      "project-1",
+      "--name",
+      "Standup",
+      "--script",
+      "review-prs",
+      "--schedule",
+      "weekdays",
+      "--days",
+      "mon-fri",
+      "--timezone",
+      "UTC",
+    ]);
+    expect(h.calls[0]?.input).toMatchObject({
+      triggers: [
+        {
+          schedule: { kind: "weekdays", days: [1, 2, 3, 4, 5], time: "09:00", timeZone: "UTC" },
+        },
+      ],
+      actions: [{ type: "agent", script: "review-prs", target: { kind: "new-thread" } }],
+    });
   });
+
+  it("adds an event trigger without a schedule", async () => {
+    const h = harness();
+    await h.run([
+      "automation",
+      "add",
+      "--project",
+      "p",
+      "--name",
+      "CI watch",
+      "--script",
+      "fix-ci",
+      "--on",
+      "ci.failed",
+      "--repository",
+      "brad/t3code-fork",
+    ]);
+    expect(h.calls[0]?.input).toMatchObject({
+      triggers: [{ type: "event", event: "ci.failed", filter: { repository: "brad/t3code-fork" } }],
+    });
+    await expect(
+      h.run([
+        "automation",
+        "add",
+        "--project",
+        "p",
+        "--name",
+        "x",
+        "--prompt",
+        "y",
+        "--on",
+        "push",
+      ]),
+    ).rejects.toThrow();
+  });
+
+  it("parses day lists and wrapping ranges", () => {
+    expect(parseDays("mon,wed,fri")).toEqual([1, 3, 5]);
+    expect(parseDays("fri-mon")).toEqual([0, 1, 5, 6]);
+    expect(() => parseDays("funday")).toThrow();
+  });
+
   it.each([
-    ["pause", "pause"],
-    ["resume", "resume"],
-    ["remove", "delete"],
-    ["run-now", "run"],
-  ])("%s uses the orchestration transition", async (action, type) => {
+    [["pause", "a1"], "automationsSetEnabled", { automationId: "a1", enabled: false }],
+    [["resume", "a1"], "automationsSetEnabled", { automationId: "a1", enabled: true }],
+    [["remove", "a1"], "automationsRemove", { automationId: "a1" }],
+    [["run-now", "a1", "--dry-run"], "automationsRun", { automationId: "a1", dryRun: true }],
+  ] as const)("%s maps to its server call", async (args, method, input) => {
     const h = harness();
-    await h.run([action, "automation-1"]);
-    expect(h.commands).toEqual([
-      expect.objectContaining({
-        type: `project.automation.${type}`,
-        automationId: "automation-1",
-        projectId: "project-1",
-      }),
-    ]);
+    await h.run(["automation", ...args, "--project", "project-1"]);
+    expect(h.calls).toEqual([{ method, input }]);
   });
+
   it.each([
     ["--time", "25:00"],
     ["--timezone", "Invalid/Zone"],
     ["--schedule", "events"],
-  ])("rejects invalid %s before dispatch", async (flag, value) => {
+    ["--cron", "* * *"],
+  ])("rejects invalid %s before calling the server", async (flag, value) => {
     const h = harness();
+    const schedule = flag === "--cron" ? ["--schedule", "cron"] : [];
     await expect(
-      h.run(["add", "--name", "Bad", "--prompt", "Prompt", flag, value]),
+      h.run([
+        "automation",
+        "add",
+        "--project",
+        "p",
+        "--name",
+        "Bad",
+        "--prompt",
+        "Prompt",
+        ...schedule,
+        flag,
+        value,
+      ]),
     ).rejects.toThrow();
-    expect(h.commands).toEqual([]);
+    expect(h.calls).toEqual([]);
+  });
+
+  it("replaces a same-named script in the same scope instead of duplicating it", async () => {
+    const h = harness([{ id: "s1", name: "review-prs", projectId: null }]);
+    await h.run(["script", "add", "--global", "--name", "review-prs", "--prompt", "Review"]);
+    expect(h.calls.at(-1)).toEqual({
+      method: "automationScriptsSave",
+      input: { id: "s1", projectId: null, name: "review-prs", prompt: "Review" },
+    });
+  });
+
+  it("carries result modes on scripts and per run", async () => {
+    const h = harness();
+    await h.run([
+      "script",
+      "add",
+      "--global",
+      "--name",
+      "audit",
+      "--prompt",
+      "Audit",
+      "--result-mode",
+      "file-only",
+    ]);
+    expect(h.calls.at(-1)?.input).toMatchObject({ resultMode: "file-only" });
+    await h.run(["script", "run", "audit", "--project", "p", "--mode", "file-and-settle"]);
+    expect(h.calls.at(-1)?.input).toMatchObject({ resultMode: "file-and-settle" });
+    await expect(
+      h.run([
+        "script",
+        "add",
+        "--global",
+        "--name",
+        "x",
+        "--prompt",
+        "y",
+        "--result-mode",
+        "later",
+      ]),
+    ).rejects.toThrow();
+  });
+
+  it("runs a script in an existing thread", async () => {
+    const h = harness();
+    await h.run(["script", "run", "check-logs", "--project", "p", "--thread", "t1"]);
+    expect(h.calls).toEqual([
+      {
+        method: "automationScriptsRun",
+        input: {
+          projectId: "p",
+          script: "check-logs",
+          target: { kind: "existing-thread", threadId: "t1" },
+        },
+      },
+    ]);
   });
 });

@@ -1,4 +1,4 @@
-import * as ProjectAutomationService from "../ProjectAutomationService.ts";
+import * as AutomationEngine from "../../automations/AutomationEngine.ts";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
 
@@ -24,7 +24,7 @@ export const makeOrchestrationReactor = Effect.gen(function* () {
   const checkpointReactor = yield* CheckpointReactor;
   const threadArchiveCleanupReactor = yield* ThreadArchiveCleanupReactor;
   const threadDeletionReactor = yield* ThreadDeletionReactor;
-  const automations = yield* ProjectAutomationService.ProjectAutomationService;
+  const automations = yield* AutomationEngine.AutomationEngine;
   const archiveSubthreads = yield* SettledSubthreadArchiveReactor.SettledSubthreadArchiveReactor;
   const threadSettlementReactor = yield* ThreadSettlementReactor.ThreadSettlementReactor;
   const pullRequestSyncReactor = yield* PullRequestSyncReactor.PullRequestSyncReactor;

@@ -33,6 +33,7 @@ import {
   ProjectRoadmapGetInput,
   ProjectRoadmapMoveInput,
   ProjectRoadmapSaveVersionInput,
+  AutomationError,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -506,6 +507,26 @@ const WsProjectRoadmapSaveVersionRpc = Rpc.make(WS_METHODS.projectRoadmapSaveVer
   success: ProjectRoadmap,
   error: projectRoadmapError,
 });
+// Scripts and automation rules. Payloads and results pass through untouched: the server
+// validates them, and an older CLI keeps working when newer servers add trigger or action kinds.
+const automationRpc = (
+  method:
+    | "automationsList"
+    | "automationsSave"
+    | "automationsRemove"
+    | "automationsSetEnabled"
+    | "automationsRun"
+    | "automationsRuns"
+    | "automationScriptsList"
+    | "automationScriptsSave"
+    | "automationScriptsRemove"
+    | "automationScriptsRun",
+) =>
+  Rpc.make(WS_METHODS[method], {
+    payload: Schema.Unknown,
+    success: Schema.Unknown,
+    error: Schema.Union([AutomationError, EnvironmentAuthorizationError]),
+  });
 
 export const WsRpcGroup = RpcGroup.make(
   WsServerGetConfigRpc,
@@ -529,4 +550,14 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectRoadmapGetRpc,
   WsProjectRoadmapMoveRpc,
   WsProjectRoadmapSaveVersionRpc,
+  automationRpc("automationsList"),
+  automationRpc("automationsSave"),
+  automationRpc("automationsRemove"),
+  automationRpc("automationsSetEnabled"),
+  automationRpc("automationsRun"),
+  automationRpc("automationsRuns"),
+  automationRpc("automationScriptsList"),
+  automationRpc("automationScriptsSave"),
+  automationRpc("automationScriptsRemove"),
+  automationRpc("automationScriptsRun"),
 );
