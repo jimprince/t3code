@@ -11,7 +11,11 @@ import { WorkspaceBreadcrumb, WorkspaceBreadcrumbItem } from "../WorkspaceBreadc
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { Button } from "../ui/button";
 import { SidebarInset } from "../ui/sidebar";
-import { findEmbeddedPage, resolveEmbeddedPageHost } from "./embeddedPages.logic";
+import {
+  findEmbeddedPage,
+  resolveEmbeddedPageHost,
+  statusBoardIssueUrl,
+} from "./embeddedPages.logic";
 import { PageAgentTray } from "./PageAgentTray";
 import { useEmbeddedPages } from "./useEmbeddedPages";
 import {
@@ -41,7 +45,7 @@ export function EmbeddedPageView({
   const page = findEmbeddedPage(useEmbeddedPages(), pageId);
   const targetUrl =
     page && issueTarget?.repo && issueTarget.issue
-      ? `${page.url.replace(/\/$/, "")}/?repo=${encodeURIComponent(issueTarget.repo)}&issue=${encodeURIComponent(issueTarget.issue)}`
+      ? statusBoardIssueUrl(page.url, issueTarget.repo, issueTarget.issue)
       : page?.url;
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   return page !== null && primaryEnvironmentId !== null ? (
