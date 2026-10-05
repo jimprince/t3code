@@ -17,6 +17,7 @@ export function ProjectPullRequestLink({
   const navigate = useNavigate();
   return (
     <InlineButton
+      aria-label={`${pullRequest.repository} #${pullRequest.number}`}
       onClick={() =>
         void navigate({
           to: "/pull-requests",
@@ -33,8 +34,7 @@ export function ProjectPullRequestLink({
         })
       }
     >
-      <PullRequestGlyph.pullRequest className="size-3.5" />
-      {pullRequest.repository} #{pullRequest.number}
+      <PullRequestGlyph.pullRequest className="size-3.5" />#{pullRequest.number}
     </InlineButton>
   );
 }
