@@ -1,0 +1,4 @@
+id = "headless-downgrade-guard"
+category = "fix"
+functionality = "server updates"
+text = "Headless updates select the newest fork nightly by default and refuse downgrades unless explicitly allowed, even during forced updates."
