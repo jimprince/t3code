@@ -1,3 +1,4 @@
+import { WorkspaceDropZone } from "./WorkspaceDropZone";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import type {
   ContextMenuItem as TreeContextMenuItem,
@@ -499,10 +500,12 @@ export default function FileBrowserPanel({
   }, [dragMention]);
 
   return (
-    <div
-      ref={panelRef}
-      className="flex min-h-0 flex-1 flex-col bg-background"
-      data-file-browser-panel={`${environmentId}:${cwd}`}
+    <WorkspaceDropZone
+      panelRef={panelRef}
+      environmentId={environmentId}
+      cwd={cwd}
+      projectName={projectName}
+      onUploaded={handleRefresh}
     >
       <div
         className="flex h-10 min-h-10 shrink-0 items-center gap-1 border-b border-border/60 bg-background px-2 in-data-[preview-panel-mode=inline]:mb-1 in-data-[preview-panel-mode=inline]:h-9 in-data-[preview-panel-mode=inline]:min-h-9 in-data-[preview-panel-mode=inline]:border-b-transparent"
@@ -569,6 +572,6 @@ export default function FileBrowserPanel({
         className="min-h-0 flex-1 overflow-hidden"
         style={pierreTreeStyle(resolvedTheme)}
       />
-    </div>
+    </WorkspaceDropZone>
   );
 }
