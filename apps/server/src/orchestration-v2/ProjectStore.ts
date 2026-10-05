@@ -16,6 +16,8 @@ import * as Schema from "effect/Schema";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as SqlSchema from "effect/sql/SqlSchema";
 
+import { initializeProjectKinds, writeProjectKind } from "../forkProjects/ProjectKinds.ts";
+
 export class ProjectStoreV2Error extends Schema.TaggedError<ProjectStoreV2Error>()(
   "ProjectStoreV2Error",
   {
@@ -30,6 +32,7 @@ export class ProjectStoreV2Error extends Schema.TaggedError<ProjectStoreV2Error>
 
 /** One row of `projection_projects`, the durable project read model. */
 export const ProjectRow = Schema.Struct({
+  kind: Schema.optional(Schema.Literals(["workspace", "chat"])),
   projectId: ProjectId,
   title: Schema.String,
   workspaceRoot: Schema.String,
@@ -57,6 +60,7 @@ const ProjectDbRow = Schema.Struct({
 function toShell(row: ProjectRow): OrchestrationProjectShell {
   return {
     id: row.projectId,
+    kind: row.kind ?? "workspace",
     title: row.title,
     workspaceRoot: row.workspaceRoot,
     repositoryIdentity: null,
@@ -102,6 +106,7 @@ export class ProjectStoreV2 extends Context.Service<
 /** @public Service construction is part of the canonical Effect module API. */
 export const make = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
+  yield* initializeProjectKinds(sql).pipe(Effect.orDie);
   const encodeRow = Schema.encodeEffect(ProjectDbRow);
 
   const selectRows = SqlSchema.findAll({
@@ -114,6 +119,7 @@ export const make = Effect.gen(function* () {
     Result: ProjectDbRow,
     execute: (request) => sql`
       SELECT
+        COALESCE((SELECT kind FROM fork_project_kinds WHERE project_id = projection_projects.project_id), 'workspace') AS "kind",
         project_id AS "projectId",
         title,
         workspace_root AS "workspaceRoot",
@@ -217,6 +223,9 @@ export const make = Effect.gen(function* () {
     function* (event) {
       if (event.type === "project.created") {
         const payload = event.payload;
+        yield* writeProjectKind(sql, payload.projectId, payload.kind ?? "workspace").pipe(
+          mapError("apply"),
+        );
         return yield* upsertRow({
           projectId: payload.projectId,
           title: payload.title,
