@@ -1,3 +1,8 @@
+import { useLocalPrVisibility } from "../components/pullRequest/localPrVisibility";
+import {
+  PullRequestSelectionToolbar,
+  PullRequestSelectionRow,
+} from "../components/pullRequest/PullRequestSelectionToolbar";
 import { RefreshIcon } from "~/components/ui/refresh-icon";
 import { Spinner } from "~/components/ui/spinner";
 import { useShortcutModifierState } from "~/shortcutModifierState";
@@ -617,6 +622,7 @@ function PullRequestsRouteView() {
     [menuFilters, typedParsed.filters],
   );
   const hasLocalFilters = Object.keys(localFilters).length > 0;
+  const localVisibility = useLocalPrVisibility(environmentIds);
   // Scoping to a project scopes to the server that owns it, saving every other server a read
   // that could only answer with nothing. Where an id is ambiguous — two servers holding the
   // same project id, with no server named — only the servers that actually hold that id are
@@ -1571,7 +1577,7 @@ function PullRequestsRouteView() {
     // for another sort. The readiness queue is the default browse order, not a way to bury a
     // closer text match.
     return sortPullRequestGroups(
-      enriched,
+      enriched.map((group) => ({ ...group, entries: localVisibility.filter(group.entries) })),
       sort,
       typedParsed.text,
       (entry) =>
@@ -1579,6 +1585,7 @@ function PullRequestsRouteView() {
       search.involvement,
     );
   }, [
+    localVisibility,
     groups,
     hasLocalFilters,
     localFilters,
@@ -1873,6 +1880,12 @@ function PullRequestsRouteView() {
     showingCarried && listQuery.isPending && shownCount === 0 && typedQuery.length === 0;
   const listBody = (
     <>
+      {pullRequestsSupported ? (
+        <PullRequestSelectionToolbar
+          entries={displayGroups.flatMap((group) => group.entries)}
+          visibility={localVisibility}
+        />
+      ) : null}
       {!capabilityKnown ? (
         <PullRequestListGhost rows={7} />
       ) : !pullRequestsSupported ? (
@@ -1917,36 +1930,41 @@ function PullRequestsRouteView() {
               {group.entries.map((entry) => {
                 const entryKey = pullRequestEntryKey(entry);
                 return (
-                  <PullRequestRow
+                  <PullRequestSelectionRow
                     key={entryKey}
-                    statsKey={entryKey}
-                    statsRef={registerStatsRow}
                     entry={entry}
-                    showProjectTitle
-                    showProvider={showProvider}
-                    {...(capableEnvironments.length > 1 &&
-                    environmentLabels.get(entry.environmentId) !== undefined
-                      ? { environmentLabel: environmentLabels.get(entry.environmentId)! }
-                      : {})}
-                    // Ten is the floor the ranking gives a row whose own fields say nothing
-                    // about the search: the host matched something this row cannot show.
-                    matchedElsewhere={
-                      typedParsed.text.length > 0 &&
-                      scorePullRequestMatch(entry, typedParsed.text) <= MATCHED_ELSEWHERE_SCORE
-                    }
-                    selected={
-                      selected?.environmentId === entry.environmentId &&
-                      selected.repository === entry.repository &&
-                      selected.host?.toLowerCase() === entry.host.toLowerCase() &&
-                      selected.number === entry.number
-                    }
-                    onSelect={selectEntry}
-                    speedMode={speedMode}
-                    onActed={onSpeedAction}
-                    closing={closingKeys.has(entryKey)}
-                    sweeping={closeSweepKeys.has(entryKey)}
-                    onCloseSweepStart={startCloseSweep}
-                  />
+                    visibility={localVisibility}
+                  >
+                    <PullRequestRow
+                      statsKey={entryKey}
+                      statsRef={registerStatsRow}
+                      entry={entry}
+                      showProjectTitle
+                      showProvider={showProvider}
+                      {...(capableEnvironments.length > 1 &&
+                      environmentLabels.get(entry.environmentId) !== undefined
+                        ? { environmentLabel: environmentLabels.get(entry.environmentId)! }
+                        : {})}
+                      // Ten is the floor the ranking gives a row whose own fields say nothing
+                      // about the search: the host matched something this row cannot show.
+                      matchedElsewhere={
+                        typedParsed.text.length > 0 &&
+                        scorePullRequestMatch(entry, typedParsed.text) <= MATCHED_ELSEWHERE_SCORE
+                      }
+                      selected={
+                        selected?.environmentId === entry.environmentId &&
+                        selected.repository === entry.repository &&
+                        selected.host?.toLowerCase() === entry.host.toLowerCase() &&
+                        selected.number === entry.number
+                      }
+                      onSelect={selectEntry}
+                      speedMode={speedMode}
+                      onActed={onSpeedAction}
+                      closing={closingKeys.has(entryKey)}
+                      sweeping={closeSweepKeys.has(entryKey)}
+                      onCloseSweepStart={startCloseSweep}
+                    />
+                  </PullRequestSelectionRow>
                 );
               })}
             </div>
