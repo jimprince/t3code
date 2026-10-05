@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e86717b13f92db67b4136367fbe69a8ec4da5bf3",
-  "head": "6a1c7312f1365e29d80948b86ed4f2ad4ae3dc0a",
+  "prev": "f83ee984f9414a3fdf44e2b059e060a5ffd0d0f8",
+  "head": "c1b36e531076dfcea780ce1b800d60f610e2085a",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -86,7 +86,7 @@
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
-      "oid": "6a1c7312f1365e29d80948b86ed4f2ad4ae3dc0a"
+      "oid": "c1b36e531076dfcea780ce1b800d60f610e2085a"
     },
     "fork-agent-panel-thread-details": {
       "oid": "a3dc42737257cb33831541ff06d2de0192433813"
