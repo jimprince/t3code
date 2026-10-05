@@ -1,20 +1,20 @@
 {
   "version": 5,
-  "prev": "044ffafe437c5132d852aed930df8bfe4b1db56c",
-  "head": "ac2702fa96bbe2870fff4230206758155f874571",
+  "prev": "44542dedb5072b6d009015189ec6bfc4d30e5b13",
+  "head": "b154edb8e814d683a25be6deff4bb551faabd21e",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
-    "fork-general-chat"
+    "fork-general-chat",
+    "fork-project-selection"
   ],
   "unapplied": [
     "fork-thread-client-recovery",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
-    "fork-project-selection",
     "fork-private-connection-defaults",
     "fork-resource-recovery",
     "fork-workspace-file-uploads",
@@ -227,7 +227,7 @@
       "oid": "fed464bc6112e57a62cea5afef5bed2d27eaa2d6"
     },
     "fork-project-selection": {
-      "oid": "5f3080ec7439cdb80020bdf035e911e39b3ae5be"
+      "oid": "b154edb8e814d683a25be6deff4bb551faabd21e"
     },
     "fork-project-task-types": {
       "oid": "737eae71a2d720b380576fdded30110832fd5daf"
