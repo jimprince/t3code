@@ -54,6 +54,31 @@ const thread = (
 });
 
 describe("buildOrchestratorSummaries", () => {
+  it("includes remote children in project sections, activity counts, and attention", () => {
+    const root = thread("root", null);
+    const laptop = "laptop" as EnvironmentThreadShell["environmentId"];
+    const child = thread("child", null, {
+      environmentId: laptop,
+      remoteParent: { environmentId: root.environmentId, threadId: root.id },
+      hasPendingUserInput: true,
+      session: { status: "running" } as EnvironmentThreadShell["session"],
+    });
+    const laptopProject = { ...project("project-a"), environmentId: laptop };
+    const [summary] = buildOrchestratorSummaries(
+      [root, child],
+      [project("project-a"), laptopProject],
+    );
+    expect(summary?.descendants).toEqual([child]);
+    expect(summary?.projects).toEqual([project("project-a"), laptopProject]);
+    expect(summary?.needsYou).toEqual([{ kind: "input", thread: child }]);
+    expect(summary?.activeWorkerCount).toBe(1);
+    expect(
+      buildStandaloneThreadGroups([root, child], [project("project-a"), laptopProject], {}),
+    ).toEqual([]);
+    expect(buildStandaloneThreadGroups([child], [laptopProject], {})[0]?.threads[0]?.thread).toBe(
+      child,
+    );
+  });
   it("finds top-level orchestrators and rolls nested activity, attention, projects, and links up", () => {
     const root = thread("root", null, {
       issues: [

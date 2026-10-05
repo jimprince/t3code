@@ -229,8 +229,12 @@ pin state. Dropping into the top-level **Pinned** or active section moves a nest
 thread back to the sidebar and pins or unpins it to match that section. Nested
 threads can also be reordered among siblings with the same pin state.
 
-Nesting can continue through multiple levels within an environment and can span
-projects. A child keeps its own repository, worktree, branch, and model defaults.
+Nesting can continue through multiple levels and span projects or connected
+environments. Use `t3-thread create --env <worker-environment> --parent <parent>`
+to place a worker on another machine under its orchestrator. The worker server
+must support cross-environment nesting. Connect both environments to see their
+combined sidebar, Agents panel, and Projects view; if the parent environment is
+disconnected, the worker appears at top level with a parent-environment note. A child keeps its own repository, worktree, branch, and model defaults.
 Cross-project children appear under their parent in the sidebar with their project
 label when its agent list is expanded. Project filters apply to each thread's own project. If the parent is hidden,
 filtered out, archived, or removed, the child appears at top level in its own

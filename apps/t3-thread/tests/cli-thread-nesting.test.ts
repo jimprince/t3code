@@ -6,6 +6,13 @@ const fixture = vi.hoisted(() => ({ state: null as StateFile | null }));
 vi.mock("../src/state.js", async (original) => ({
   ...(await original<typeof import("../src/state.js")>()),
   loadState: async () => fixture.state!,
+  updateState: async (
+    update: (state: StateFile) => Promise<{ state: StateFile; result: unknown }>,
+  ) => {
+    const changed = await update(fixture.state!);
+    fixture.state = changed.state;
+    return changed.result;
+  },
 }));
 const timestamp = "2026-10-02T00:00:00.000Z";
 const rootId = "11111111-1111-4111-8111-111111111111";
@@ -43,8 +50,9 @@ const originalArgv = process.argv;
 afterEach(() => {
   process.argv = originalArgv;
   vi.restoreAllMocks();
+  vi.unstubAllEnvs();
 });
-async function run(args: string[]) {
+async function run(args: string[], remote = false, caller = "") {
   fixture.state = {
     version: 1,
     environments: [
@@ -81,6 +89,15 @@ async function run(args: string[]) {
     threadId: childId,
     title: "Worker",
   });
+  if (remote) {
+    fixture.state.environments.push({
+      ...fixture.state.environments[0]!,
+      name: "laptop",
+      environmentId: "laptop-id",
+    });
+    fixture.state.agents[1]!.environment = "laptop";
+  }
+  vi.stubEnv("T3_THREAD_ID", caller);
   vi.resetModules();
   const { RemoteEnvironmentClient } = await import("../src/client.js");
   const list = vi
@@ -95,6 +112,38 @@ async function run(args: string[]) {
       checkpoints: [],
       proposedPlans: [],
     }));
+  const remoteParent = { environmentId: "local", threadId: rootId };
+  vi.spyOn(RemoteEnvironmentClient.prototype, "describe").mockResolvedValue({
+    environmentId: "local",
+    label: "Local",
+    platform: { os: "linux", arch: "x64" },
+    serverVersion: "test",
+    capabilities: { threadNesting: true, remoteThreadNesting: true },
+  });
+  vi.spyOn(RemoteEnvironmentClient.prototype, "supportsThreadNesting").mockResolvedValue(true);
+  vi.spyOn(RemoteEnvironmentClient.prototype, "getShellSnapshot").mockResolvedValue({
+    snapshotSequence: 0,
+    projects: [],
+    threads: [],
+  });
+  const create = vi
+    .spyOn(RemoteEnvironmentClient.prototype, "createAgentThread")
+    .mockResolvedValue({ threadId: childId, projectId: "project", title: "Worker", pinned: false });
+  let currentParent: typeof remoteParent | null = remoteParent;
+  const setParent = vi
+    .spyOn(RemoteEnvironmentClient.prototype, "setThreadParent")
+    .mockImplementation(async (_id, _local, parent) => {
+      currentParent = parent ?? null;
+    });
+  vi.spyOn(RemoteEnvironmentClient.prototype, "getThreadDetail").mockImplementation(async () => ({
+    ...threads[1]!,
+    parentThreadId: null,
+    remoteParent: currentParent,
+    messages: [],
+    activities: [],
+    checkpoints: [],
+    proposedPlans: [],
+  }));
   let finish!: (value: string) => void;
   const printed = new Promise<string>((resolve) => {
     finish = resolve;
@@ -105,10 +154,81 @@ async function run(args: string[]) {
   });
   process.argv = [process.execPath, "cli.ts", ...args];
   await import("../src/cli.js");
-  return { output: await printed, list, detail };
+  return { output: await printed, list, detail, create, setParent };
 }
 
 describe("CLI nesting readback", () => {
+  it("automatically nests a laptop worker under its VM caller", async () => {
+    const { output, create } = await run(
+      [
+        "create",
+        "--name",
+        "new-worker",
+        "--env",
+        "laptop",
+        "--project",
+        "project",
+        "--title",
+        "Worker",
+        "--message",
+        "work",
+        "--no-notify",
+      ],
+      true,
+      rootId,
+    );
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        parentThreadId: null,
+        remoteParent: { environmentId: "local", threadId: rootId },
+      }),
+    );
+    expect(JSON.parse(output)).toMatchObject({ nesting: "remote" });
+  });
+  it.each(["supervisor", rootId])(
+    "creates a laptop child under remote parent %s",
+    async (parent) => {
+      const { output, create } = await run(
+        [
+          "create",
+          "--name",
+          "new-worker",
+          "--env",
+          "laptop",
+          "--project",
+          "project",
+          "--title",
+          "Worker",
+          "--parent",
+          parent,
+          "--message",
+          "work",
+          "--no-notify",
+        ],
+        true,
+      );
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parentThreadId: null,
+          remoteParent: { environmentId: "local", threadId: rootId },
+        }),
+      );
+      expect(JSON.parse(output)).toMatchObject({
+        nesting: "remote",
+        remoteParent: { environmentId: "local", threadId: rootId },
+      });
+    },
+  );
+  it("nests an existing remote worker and clears the remote link on unnest", async () => {
+    const nested = await run(["nest", "worker", "--parent", "supervisor"], true);
+    expect(JSON.parse(nested.output)).toMatchObject({
+      parentThreadId: null,
+      remoteParent: { environmentId: "local", threadId: rootId },
+    });
+    const unnested = await run(["unnest", "worker"], true);
+    expect(unnested.setParent).toHaveBeenCalledWith(childId, null);
+    expect(JSON.parse(unnested.output)).toMatchObject({ parentThreadId: null, remoteParent: null });
+  });
   it("lists parent ids and available titles with state, settlement and pins from shells", async () => {
     const { output, detail } = await run(["threads", "--env", "local"]);
     expect(output).toContain(
@@ -151,6 +271,21 @@ describe("CLI nesting readback", () => {
       parentTitle: "Supervisor",
       pinned: true,
     });
+  });
+  it("lists remote children without confusing a same-id local parent", () => {
+    const remote = {
+      ...shell(childId, null, "Remote"),
+      remoteParent: { environmentId: "vm", threadId: rootId },
+    };
+    const local = shell("local-child", rootId, "Local");
+    const grandchild = shell(grandchildId, childId, "Grandchild");
+    expect(selectThreadChildren([remote, local, grandchild], rootId, false, "vm")).toEqual([
+      remote,
+    ]);
+    expect(selectThreadChildren([remote, local, grandchild], rootId, true, "vm")).toEqual([
+      remote,
+      grandchild,
+    ]);
   });
   it("terminates on malformed nesting cycles and excludes the requested root", () => {
     const cycle = [shell(rootId, childId, "Root"), shell(childId, rootId, "Child")];

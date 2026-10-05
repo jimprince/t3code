@@ -474,6 +474,7 @@ export function projectEvent(
             autoSettleDisabledAt: null,
             settleOnComplete: payload.settleOnComplete ?? null,
             ...(payload.parentThreadId ? { parentThreadId: payload.parentThreadId } : {}),
+            remoteParent: payload.remoteParent ?? null,
             snoozedUntil: null,
             snoozedAt: null,
             deletedAt: null,
@@ -676,6 +677,7 @@ export function projectEvent(
               ...(payload.settleOnComplete !== undefined
                 ? { settleOnComplete: payload.settleOnComplete }
                 : {}),
+              ...(payload.remoteParent !== undefined ? { remoteParent: payload.remoteParent } : {}),
               ...(payload.parentThreadId !== undefined
                 ? { parentThreadId: payload.parentThreadId }
                 : {}),
