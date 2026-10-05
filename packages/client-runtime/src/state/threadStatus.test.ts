@@ -11,6 +11,20 @@ const idle = {
 } as const;
 
 describe("resolveThreadDisplayStatus", () => {
+  it("counts active remote descendants using scoped parent identity", () => {
+    const root = { ...idle, id: "root", environmentId: "vm" };
+    const decoy = { ...root, environmentId: "laptop" };
+    const child = {
+      ...idle,
+      id: "child",
+      environmentId: "laptop",
+      remoteParent: { environmentId: "vm", threadId: "root" },
+      hasPendingUserInput: true,
+    };
+    const counts = countActiveDescendantsByThread([root, decoy, child]);
+    expect(counts.get("vm:root")).toBe(1);
+    expect(counts.get("laptop:root")).toBe(0);
+  });
   it("keeps own attention and work ahead of descendant activity", () => {
     expect(
       resolveThreadDisplayStatus({

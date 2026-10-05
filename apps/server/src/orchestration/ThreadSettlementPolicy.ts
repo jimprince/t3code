@@ -78,7 +78,8 @@ export function resolveAutoSettlementAt(input: {
   if (!isAutoSettlementCandidate(thread, input.now)) return null;
   const complete =
     thread.settleOnComplete ??
-    (thread.parentThreadId != null && input.subthreadSettleOnComplete === true);
+    ((thread.parentThreadId != null || thread.remoteParent != null) &&
+      input.subthreadSettleOnComplete === true);
   if (
     complete &&
     thread.latestTurn?.state === "completed" &&
