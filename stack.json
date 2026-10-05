@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "6b08685e915d938bff92635a8d8de726d2b54f51",
+  "prev": "5e5d238e50a1e5054995d547cfc2720a3a6d45f7",
   "head": "5554cd96b7b419f6d4f9e420677493343727f58f",
   "applied": [
     "fork-build-ci-compat",
@@ -55,7 +55,6 @@
     "fork-sidebar-drag-to-nest",
     "fork-worker-inactivity",
     "fork-thread-titles",
-    "fork-embedded-pages",
     "fork-subthread-lifecycle",
     "fork-orchestrator-focus",
     "fork-page-agent-tray",
@@ -126,9 +125,6 @@
     },
     "fork-desktop-delivery": {
       "oid": "6464fac5b3f74a94e45d6103564b70416e50d2a3"
-    },
-    "fork-embedded-pages": {
-      "oid": "183938e690503b22502734fc69a0cd31aac831a9"
     },
     "fork-enter-sends-queued": {
       "oid": "d851478183b81565100c8b76fd0976f9b41f5775"
