@@ -106,7 +106,7 @@ function ProjectRow({
           </span>
           {openIssues > 0 ? (
             <span className="shrink-0 text-xs tabular-nums text-sidebar-muted-foreground">
-              {openIssues} {openIssues === 1 ? "issue" : "issues"}
+              {openIssues} {openIssues === 1 ? "task" : "tasks"}
             </span>
           ) : null}
         </span>
