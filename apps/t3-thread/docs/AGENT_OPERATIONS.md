@@ -1102,14 +1102,15 @@ all open requests of a thread at once, for example once he settled the thread.
 
 ```bash
 t3-thread request list "$T3_THREAD_ID"
-t3-thread request add "$T3_THREAD_ID" "Measure the jaw pull force" --kind test --detail "<his words>"
+t3-thread request add "$T3_THREAD_ID" "Measure the jaw pull force" --kind task --detail "<his words>"
+t3-thread request add "$T3_THREAD_ID" "Fix the stuck wizard step" --kind task --bug
 t3-thread request start "$T3_THREAD_ID" 12
 t3-thread request ready "$T3_THREAD_ID" 12 --summary "<the answer, or what to look at and where>"
 t3-thread request ready "$T3_THREAD_ID" 12 --stage awaiting-release --summary "<what was built>"
 t3-thread request shipped "$T3_THREAD_ID" 12 --release fork.24 --test "<one-line test step>"
 t3-thread request reopen "$T3_THREAD_ID" 12
 t3-thread request note "$T3_THREAD_ID" 12 "blocked on the jaw pull force measurement"
-t3-thread request type "$T3_THREAD_ID" 12 maintenance
+t3-thread request type "$T3_THREAD_ID" 12 task --bug     # --no-bug removes the tag
 t3-thread request title "$T3_THREAD_ID" 12 "Move the New request box to the top"
 ```
 
@@ -1121,12 +1122,18 @@ orchestrator, sends the orchestrator one message when it needs starting now or n
 decision, or just catalogs it; it records a progress note and settles itself. An orchestrator
 hears about a box request only through that one message.
 
-Every task has one type, its `ask:<kind>` label: bug (broken, fix it), feature (new
-capability), question, deliverable, plan, change (adjust something that exists), test, or
-maintenance (upkeep with no new behavior: syncs, CI repair, cleanup, releases). `request type`
-sets or corrects it on any tracker issue, request or not. The Dashboard shows tasks that need
+Every item has one type, its `ask:<kind>` label: question (Brad wants information back and nothing
+changes), task (something to do, however it is phrased: fix, feature, change, upkeep, test,
+draft), or epic (too big for one worker turn: a plan, a port, phases). A task that fixes
+something broken also carries the plain `bug` label (`--bug`). The earlier labels (`ask:feature`,
+`ask:change`, `ask:maintenance`, `ask:test`, `ask:deliverable`, `ask:bug`, `ask:plan`) stay on old
+issues as history and are read as their successor when no new label is present (plan is an epic,
+`ask:bug` is a task with the bug tag, the rest are tasks); new items get only the new labels.
+`request type` swaps the type among the three (never removing a history label) and adds or
+removes the `bug` tag on any tracker issue, request or not. The Dashboard shows tasks that need
 Brad first, then completed tasks grouped by the release (milestone) that shipped them, then
-open maintenance tasks, which stay out of the Requests list while they are with the agents.
+open maintenance tasks (tasks that still carry the old `ask:maintenance` label), which stay out
+of the Requests list while they are with the agents.
 
 Record progress on the request's issue as you go with `request note` (one short line: started,
 blocked on X, ready for review, shipped in fork.N). Stage changes post a progress line on their

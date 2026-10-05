@@ -1,6 +1,7 @@
 import type { ProjectIssue, ThreadId } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
+import * as Schema from "effect/Schema";
 import { parseRequestMarker } from "./projectIssues.logic.ts";
 import {
   answerToMessage,
@@ -15,6 +16,7 @@ import {
   formatFollowUpComment,
   parseRequestReference,
   planDecision,
+  planKindLabelChange,
   planRequestItem,
   progressLineFor,
   requestCandidates,
@@ -69,12 +71,12 @@ describe("isObviouslyNotARequest", () => {
 });
 
 describe("fallbackRequestItem", () => {
-  it("files the first sentence as the title and guesses question vs deliverable", () => {
+  it("files the first sentence as the title and guesses question vs task", () => {
     expect(fallbackRequestItem("Can we connect the ReSpeaker? It would help.")).toMatchObject({
       title: "Can we connect the ReSpeaker?",
       kind: "question",
     });
-    expect(fallbackRequestItem("Draft 10 of these\nwith variety").kind).toBe("deliverable");
+    expect(fallbackRequestItem("Draft 10 of these\nwith variety").kind).toBe("task");
   });
 
   it("clamps long titles", () => {
@@ -99,6 +101,89 @@ describe("formatRequestIssueBody", () => {
     expect(body).toContain("> Can we connect the ReSpeaker?");
     expect(body).toContain("**Audio worker** (under **Printcell Orchestrator**)");
     expect(parseRequestMarker(body)).toEqual(source);
+  });
+});
+
+describe("formatRequestIssueBody bug tag", () => {
+  it("names a bug in the kind line", () => {
+    const source = { threadId: "w" as ThreadId, rootThreadId: "r" as ThreadId, messageId: "m" };
+    const input = {
+      excerpt: "It crashes",
+      kind: "task" as const,
+      threadTitle: "T",
+      rootTitle: null,
+      source,
+    };
+    expect(formatRequestIssueBody({ ...input, bug: true })).toContain("Kind: task (bug).");
+    expect(formatRequestIssueBody(input)).toContain("Kind: task.");
+  });
+});
+
+describe("planKindLabelChange", () => {
+  const names = (...labels: string[]) => new Set(labels);
+
+  it("swaps the type among the three labels", () => {
+    expect(planKindLabelChange(names("ask", "ask:question"), { kind: "task" })).toEqual({
+      add: ["ask:task"],
+      remove: ["ask:question"],
+    });
+    expect(planKindLabelChange(names("ask", "ask:task"), { kind: "task" })).toEqual({
+      add: [],
+      remove: [],
+    });
+  });
+
+  it("never strips an earlier history label", () => {
+    expect(
+      planKindLabelChange(names("ask", "ask:maintenance", "ask:plan"), { kind: "epic" }),
+    ).toEqual({ add: ["ask:epic"], remove: [] });
+  });
+
+  it("adds and removes the bug tag without touching the type", () => {
+    expect(planKindLabelChange(names("ask:task"), { bug: true })).toEqual({
+      add: ["bug"],
+      remove: [],
+    });
+    expect(planKindLabelChange(names("ask:task", "bug"), { bug: true })).toEqual({
+      add: [],
+      remove: [],
+    });
+    expect(planKindLabelChange(names("ask:task", "bug"), { bug: false })).toEqual({
+      add: [],
+      remove: ["bug"],
+    });
+    expect(planKindLabelChange(names("ask:task"), { bug: false })).toEqual({
+      add: [],
+      remove: [],
+    });
+  });
+
+  it("keeps an old ask:bug reading by tagging it when the issue is retyped", () => {
+    expect(planKindLabelChange(names("ask", "ask:bug"), { kind: "task" })).toEqual({
+      add: ["ask:task", "bug"],
+      remove: [],
+    });
+    expect(planKindLabelChange(names("ask", "ask:bug"), { kind: "task", bug: false })).toEqual({
+      add: ["ask:task"],
+      remove: [],
+    });
+  });
+});
+
+describe("request items model schema", () => {
+  const { outputSchema } = buildRequestItemsPrompt({ message: "x" });
+  const item = { title: "t", kind: "task", bug: true, excerpt: "e", existing: null };
+
+  it("classifies into question, task or epic with a bug flag", () => {
+    const decode = Schema.decodeUnknownSync(outputSchema);
+    expect(decode({ items: [item] }).items[0]).toMatchObject({ kind: "task", bug: true });
+    expect(decode({ items: [{ ...item, kind: "epic", bug: false }] }).items).toHaveLength(1);
+  });
+
+  it("rejects the earlier kinds and a missing bug flag", () => {
+    const decode = Schema.decodeUnknownSync(outputSchema);
+    expect(() => decode({ items: [{ ...item, kind: "deliverable" }] })).toThrow();
+    expect(() => decode({ items: [{ ...item, bug: undefined }] })).toThrow();
   });
 });
 
@@ -240,17 +325,17 @@ describe("follow-ups instead of an issue per message", () => {
 
   it("comments follow-ups on the issue they continue and files only new work", () => {
     const chat = { explicit: false, candidates, unsplit: false };
-    expect(planRequestItem({ kind: "change", existing: 17 }, chat)).toEqual({
+    expect(planRequestItem({ kind: "task", existing: 17 }, chat)).toEqual({
       action: "comment",
       number: 17,
     });
-    expect(planRequestItem({ kind: "deliverable", existing: 30 }, chat)).toEqual({
+    expect(planRequestItem({ kind: "task", existing: 30 }, chat)).toEqual({
       action: "comment",
       number: 30,
     });
-    expect(planRequestItem({ kind: "feature", existing: null }, chat)).toEqual({ action: "file" });
+    expect(planRequestItem({ kind: "task", existing: null }, chat)).toEqual({ action: "file" });
     // A number the model invented is not an open issue: new work.
-    expect(planRequestItem({ kind: "feature", existing: 99 }, chat)).toEqual({ action: "file" });
+    expect(planRequestItem({ kind: "task", existing: 99 }, chat)).toEqual({ action: "file" });
   });
 
   it("never files questions from chat, but files everything from the New request box", () => {
@@ -263,18 +348,18 @@ describe("follow-ups instead of an issue per message", () => {
 
   it("without a model, follows the thread's only linked issue and otherwise files nothing", () => {
     const unsplit = { explicit: false, candidates, unsplit: true };
-    expect(planRequestItem({ kind: "deliverable" }, unsplit)).toEqual({
+    expect(planRequestItem({ kind: "task" }, unsplit)).toEqual({
       action: "comment",
       number: 17,
     });
     // An orchestrator thread linked to many issues: the topic is unknown.
     const busy = [...candidates, { number: 18, title: "Another", inThread: true }];
-    expect(planRequestItem({ kind: "deliverable" }, { ...unsplit, candidates: busy })).toEqual({
+    expect(planRequestItem({ kind: "task" }, { ...unsplit, candidates: busy })).toEqual({
       action: "skip",
     });
-    expect(
-      planRequestItem({ kind: "deliverable" }, { ...unsplit, candidates: [candidates[1]!] }),
-    ).toEqual({ action: "skip" });
+    expect(planRequestItem({ kind: "task" }, { ...unsplit, candidates: [candidates[1]!] })).toEqual(
+      { action: "skip" },
+    );
   });
 
   it("quotes the follow-up with a hidden marker", () => {
