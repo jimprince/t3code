@@ -861,3 +861,25 @@ id = "upstream-mobile-production-delivery"
 date = "2026-09-16"
 decided = "retire"
 rationale = "Retire this patch's older production EAS workflow because upstream now preserves version overrides and preview profiles, auto-submits store builds, reconciles per-platform builds on push, and fingerprint-gates OTA publication. Retain the fork-specific identity, development lanes, runtime policy, tests, and deployment documentation."
+
+[[patch]]
+name = "fork-gitea-pr-browser"
+subject = "feat(pull-requests): browse Gitea reviews and CI checks"
+class = "upstream-bound"
+purpose = "Browse configured Gitea pull requests, descriptions, changed code, conversations, reviews, commits and CI checks through the shared pull-request browser."
+retire_when = "Upstream supports equivalent configured-instance Gitea browsing with truthful CI status and capability-gated actions."
+depends_on = ["fork-gitea-connections", "fork-gitea-pr-actions"]
+roles = []
+note = "Read-only browser; create and checkout remain in the source-control concern. Reuses the configured HTTP transport without redirects or credential-bearing errors. No checks is unknown, never success. Test services are provided together to preserve their shared lifecycle."
+
+[[patch.decision]]
+id = "upstream-forgejo-pr-provider"
+date = "2026-09-16"
+decided = "retain"
+rationale = "Upstream's native Forgejo provider is CLI-backed and does not replace browsing pull requests on configured Gitea instances through the fork's token-aware HTTP transport. Keep Gitea as a separate registry provider alongside Forgejo."
+
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Register token-aware configured Gitea in the native shared PR browser beside unconfigured Forgejo; retain common viewed-files and issue navigation."
