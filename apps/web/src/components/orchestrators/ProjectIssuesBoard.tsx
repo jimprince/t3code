@@ -1,6 +1,5 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
 import type { ProjectIssue } from "@t3tools/contracts";
-import { MessageSquareIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -15,7 +14,6 @@ import { RequestKindTag } from "./RequestKindTag";
 import {
   ReopenButton,
   SettleButton,
-  useOpenThread,
   useSettle,
   useTaskStatuses,
   type SettleControls,
@@ -25,18 +23,16 @@ import { TaskTitle } from "./TaskLink";
 const DONE_PREVIEW = 8;
 const PENDING_PREVIEW = 10;
 
+/** A card: the title, the item type, its age and Settle or Reopen. The lane is its status. */
 function IssueRow({
   issue,
   now,
   settle,
-  onOpenThread,
 }: {
   readonly issue: ProjectIssue;
   readonly now: number;
   readonly settle: SettleControls;
-  readonly onOpenThread: (threadId: string) => void;
 }) {
-  const thread = issue.requestSource?.threadId ?? issue.linkedThreadIds[0];
   const closed = issue.closedAt !== null || issue.status === "done";
   return (
     <li className="border-b border-border/60 py-1.5 last:border-b-0">
@@ -52,38 +48,15 @@ function IssueRow({
           Shipped{issue.milestone ? ` in ${issue.milestone.title}` : ""}, test it
         </span>
       ) : null}
-      {/* The same tags, in the same order, on every card; nothing is clipped. */}
       <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
-        <span className="break-all">
-          {issue.repository.split("/")[1]}#{issue.number}
-        </span>
-        {taskKind(issue.labels) === null && !isBug(issue.labels) ? (
-          <span className="text-foreground/70">{issue.isRequest ? "request" : "issue"}</span>
-        ) : (
-          <RequestKindTag
-            kind={taskKind(issue.labels)}
-            bug={isBug(issue.labels)}
-            className="text-foreground/70"
-          />
-        )}
-        {issue.comments > 0 ? (
-          <span className="inline-flex items-center gap-0.5 tabular-nums">
-            <MessageSquareIcon className="size-3" />
-            {issue.comments}
-          </span>
-        ) : null}
+        <RequestKindTag
+          kind={taskKind(issue.labels)}
+          bug={isBug(issue.labels)}
+          className="text-foreground/70"
+        />
         <span className="tabular-nums">
           {formatIssueAge(issue.closedAt ?? issue.updatedAt, now)}
         </span>
-        {thread ? (
-          <button
-            type="button"
-            className="hover:text-foreground"
-            onClick={() => onOpenThread(thread)}
-          >
-            thread
-          </button>
-        ) : null}
         <span className="ml-auto">
           {closed ? (
             <ReopenButton issue={issue} settle={settle} />
@@ -112,7 +85,6 @@ export function ProjectIssuesBoard({
 }) {
   const { statuses, query } = useTaskStatuses(summary);
   const settle = useSettle(summary, query.refresh);
-  const openThread = useOpenThread(summary);
   const [showBacklog, setShowBacklog] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<ProjectIssueLane>>(new Set());
   const grouped = useMemo(
@@ -132,13 +104,7 @@ export function ProjectIssuesBoard({
   }
 
   const row = (issue: ProjectIssue) => (
-    <IssueRow
-      key={issueKey(issue)}
-      issue={issue}
-      now={now}
-      settle={settle}
-      onOpenThread={openThread}
-    />
+    <IssueRow key={issueKey(issue)} issue={issue} now={now} settle={settle} />
   );
   return (
     <div className="flex flex-col gap-2">
