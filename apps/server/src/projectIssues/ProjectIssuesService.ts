@@ -18,6 +18,7 @@ import * as GiteaApi from "../sourceControl/GiteaApi.ts";
 import {
   collectThreadTree,
   deriveProjectIssueStatus,
+  deriveRequestStage,
   giteaRepositoryForIdentity,
   instanceHost,
   parseRequestMarker,
@@ -40,6 +41,9 @@ const GiteaIssue = Schema.Struct({
   created_at: Schema.String,
   updated_at: Schema.String,
   closed_at: Schema.optional(Schema.NullOr(Schema.String)),
+  milestone: Schema.optional(
+    Schema.NullOr(Schema.Struct({ id: Schema.Number, title: Schema.String })),
+  ),
   pull_request: Schema.optional(Schema.Unknown),
 });
 type GiteaIssue = typeof GiteaIssue.Type;
@@ -78,17 +82,23 @@ export const make = Effect.gen(function* () {
   const ownerCache = new Map<string, { at: number; login: string | null }>();
   const repoCache = new Map<string, { at: number; exists: boolean }>();
 
+  // Lookups cache answers, never outages: a transient failure fails the lookup so
+  // callers (the request ledger's retries, the next board refresh) try again.
+  const unreachable = fail("Gitea is unreachable.");
+  const isAnswer = (status: number | undefined) => status !== undefined && status < 500;
+
   const tokenOwner = (instance: GiteaInstanceConfig) =>
     Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
       const cached = ownerCache.get(instance.id);
       if (cached && now - cached.at < REPO_LOOKUP_TTL_MS) return cached.login;
-      const login = instance.token
-        ? yield* api.request(instance, "/user", GiteaUser).pipe(
-            Effect.map((user) => user.login.toLowerCase()),
-            Effect.orElseSucceed(() => null),
-          )
-        : null;
+      if (!instance.token) return null;
+      const login = yield* api.request(instance, "/user", GiteaUser).pipe(
+        Effect.map((user): string | null => user.login.toLowerCase()),
+        Effect.catch((error) =>
+          isAnswer(error.status) ? Effect.succeed(null) : Effect.fail(unreachable),
+        ),
+      );
       ownerCache.set(instance.id, { at: now, login });
       return login;
     });
@@ -103,13 +113,18 @@ export const make = Effect.gen(function* () {
         .request(instance, GiteaApi.repositoryPath(repository), GiteaRepo)
         .pipe(
           Effect.as(true),
-          Effect.orElseSucceed(() => false),
+          Effect.catch((error) =>
+            isAnswer(error.status) ? Effect.succeed(false) : Effect.fail(unreachable),
+          ),
         );
       repoCache.set(key, { at: now, exists });
       return exists;
     });
 
-  /** The tracker repository for one T3 project, or null when it has none on Gitea. */
+  /**
+   * The tracker repository for one T3 project, or null when it has none on Gitea.
+   * Fails with "Gitea is unreachable." when the answer is unknown.
+   */
   const repositoryForProject = (
     project: {
       readonly workspaceRoot: string;
@@ -154,7 +169,9 @@ export const make = Effect.gen(function* () {
         .toSorted((a, b) => Number(b.id === rootProjectId) - Number(a.id === rootProjectId));
       const targets = new Map<string, GiteaRepositoryTarget>();
       for (const project of projects) {
-        const target = yield* repositoryForProject(project, instances);
+        const target = yield* repositoryForProject(project, instances).pipe(
+          Effect.orElseSucceed(() => null),
+        );
         if (target) targets.set(repositoryKey(target), target);
       }
       const linkedThreads = new Map<string, ThreadId[]>();
@@ -233,6 +250,7 @@ export const make = Effect.gen(function* () {
         for (const issue of items) {
           const labels = (issue.labels ?? []).map((label) => label.name);
           const issueKey = `${repositoryKey(target)}#${issue.number}`;
+          const isRequest = labels.some((label) => label.toLowerCase() === REQUEST_LABEL);
           issues.push({
             host: target.host,
             repository: target.repository,
@@ -241,7 +259,12 @@ export const make = Effect.gen(function* () {
             url: issue.html_url,
             status: deriveProjectIssueStatus(issue.state, labels),
             labels,
-            isRequest: labels.some((label) => label.toLowerCase() === REQUEST_LABEL),
+            isRequest,
+            ...(isRequest ? { stage: deriveRequestStage(issue.state, labels) } : {}),
+            milestone:
+              issue.milestone && issue.milestone.id > 0 && issue.milestone.title.trim()
+                ? { id: issue.milestone.id, title: issue.milestone.title.trim() }
+                : null,
             requestSource: parseRequestMarker(issue.body),
             assignees: (issue.assignees ?? []).map((assignee) => assignee.login),
             comments: Math.max(0, issue.comments ?? 0),
