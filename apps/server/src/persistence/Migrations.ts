@@ -11,6 +11,7 @@
 import * as Migrator from "effect/sql/Migrator";
 import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/sql/SqlClient";
+import { forkV2MigrationEntries } from "./ForkV2Ledger.ts";
 import { reconcileV2PreviewMigration } from "./reconcileV2PreviewMigration.ts";
 
 // Import all migrations statically
@@ -85,7 +86,7 @@ import Migration0060 from "./Migrations/060_ThreadSnapshotWindowIndexes.ts";
  * Uses Migrator.fromRecord which parses the key format and
  * returns migrations sorted by ID.
  */
-export const migrationEntries = [
+const upstreamMigrationEntries = [
   [1, "OrchestrationEvents", Migration0001],
   [2, "OrchestrationCommandReceipts", Migration0002],
   [3, "CheckpointDiffBlobs", Migration0003],
@@ -140,7 +141,7 @@ export const migrationEntries = [
   [52, "ProjectionThreadTitleState", Migration0052],
   [53, "PullRequestFilesViewed", Migration0053],
   [54, "ProjectionThreadsAutoSettleDisabledAt", Migration0054],
-  // Released as 53 and 54 in V2 previews; reconcileV2PreviewMigration preserves their ledger.
+  // The fork ledger assigns these upstream migrations immutable fork ids.
   // Preserve this migration's schema. Future V2 schema changes need new migrations.
   [55, "OrchestrationV2", Migration0055],
   [56, "RemoveRedundantProjectionIndexes", Migration0056],
@@ -149,6 +150,8 @@ export const migrationEntries = [
   [59, "McpAppModelContext", Migration0059],
   [60, "ThreadSnapshotWindowIndexes", Migration0060],
 ] as const;
+
+export const migrationEntries = forkV2MigrationEntries(upstreamMigrationEntries);
 
 export const migrationManifest = migrationEntries.map(([id, name]) => [id, name] as const);
 
@@ -185,8 +188,8 @@ export const runMigrations = Effect.fn("runMigrations")(function* ({
   toMigrationInclusive,
 }: RunMigrationsOptions = {}) {
   const previewMigrations =
-    toMigrationInclusive === undefined || toMigrationInclusive >= 55
-      ? yield* reconcileV2PreviewMigration()
+    toMigrationInclusive === undefined || toMigrationInclusive >= 61
+      ? yield* reconcileV2PreviewMigration(migrationEntries)
       : [];
   const executedMigrations = [
     ...previewMigrations,
