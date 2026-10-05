@@ -218,6 +218,18 @@ and never verifies or publishes: the printed `next` command runs
 `scripts/ci/verify-stgit-replay` once for the whole batch, so a batch costs one
 candidate CI run and one lease claim.
 
+A conflict is not always a skip. When the `diff3` base of every conflict hunk in
+a file is empty (both sides only inserted lines at the same spot), the
+integrator keeps ours then theirs, but only if the union passes a gate at the
+stack tip: `vp fmt --check` on each touched file (which also catches syntax
+errors) and `vp run typecheck` in each owning package. A conflicted
+`fork-inventory.toml` is merged stanza by stanza (a stanza changed on one side
+wins, the same stanza changed on both sides refuses) and re-ordered by the
+resulting stack. Any other conflict, or a failed gate, rolls the concern back
+and reports it under `skipped`. Every union applied is printed to stderr as
+`union applied: <candidate> <file>: <detail>` and listed under `unions` in the
+JSON; review them before verifying. Pass `--no-union` to disable the merge.
+
 ## Reducing maintenance cost
 
 Use this surface-reduction ladder whenever a patch repeatedly conflicts:

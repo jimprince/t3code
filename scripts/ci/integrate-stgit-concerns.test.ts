@@ -137,7 +137,9 @@ describe.skipIf(!stgAvailable)("integrate-stgit-concerns with real StGit", () =>
     repo.writeFile("scripts/ci/check-fork-docs.ts", "process.exit(0);\n");
     repo.writeFile("docs/operations/fork-inventory.toml", "schema = 2\n\n");
     repo.writeFile("one.txt", "base\n");
-    repo.commitAll("chore: base");
+    repo.writeFile("pkg/package.json", '{"scripts":{"typecheck":"tsc"}}\n');
+    repo.writeFile("pkg/list.txt", "a\nz\n");
+    const baseOid = repo.commitAll("chore: base");
     repo.git("switch", "-c", "stgit/adopt");
     bash(repo.dir, "stg init");
     let inventory = "schema = 2\n\n";
@@ -152,7 +154,8 @@ describe.skipIf(!stgAvailable)("integrate-stgit-concerns with real StGit", () =>
       previous = [name];
       repo.writeFile("docs/operations/fork-inventory.toml", inventory);
       repo.writeFile(`${name}.txt`, `${name}\n`);
-      repo.git("add", "--", "docs/operations/fork-inventory.toml", `${name}.txt`);
+      if (name === "fork-one") repo.writeFile("pkg/list.txt", "a\none\nz\n");
+      repo.git("add", "--", "docs/operations/fork-inventory.toml", `${name}.txt`, "pkg/list.txt");
       bash(repo.dir, "stg refresh --index");
     }
     const remote = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-integrate-remote-"));
@@ -164,7 +167,7 @@ describe.skipIf(!stgAvailable)("integrate-stgit-concerns with real StGit", () =>
       "+refs/stacks/stgit/adopt:refs/stacks/stgit/adopt",
       "+refs/patches/stgit/adopt/*:refs/patches/stgit/adopt/*",
     );
-    return { repo, remote };
+    return { repo, remote, baseOid };
   };
 
   it("batches a refresh, a conflicting refresh and a new concern under one lease claim", () => {
@@ -180,7 +183,7 @@ describe.skipIf(!stgAvailable)("integrate-stgit-concerns with real StGit", () =>
         return oid;
       };
       const refreshOne = makeCandidate("fork-one.txt", "fork-one\nrefreshed\n");
-      const conflicting = makeCandidate("fork-one.txt", "fork-one\nconflicting\n");
+      const conflicting = makeCandidate("fork-one.txt", "conflicting\n");
       const brand = makeCandidate("three.txt", "three\n");
       const planPath = NodePath.join(work, "plan.json");
       NodeFS.writeFileSync(
@@ -245,6 +248,113 @@ describe.skipIf(!stgAvailable)("integrate-stgit-concerns with real StGit", () =>
       NodeFS.rmSync(work, { recursive: true, force: true });
       NodeFS.rmSync(remote, { recursive: true, force: true });
       repo.cleanup();
+    }
+  });
+
+  const runUnionScenario = (gateExit: number) => {
+    const { repo, remote, baseOid } = buildRemote();
+    const work = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-integrate-union-"));
+    const base = remoteMain(remote);
+    repo.git("switch", "--detach", baseOid);
+    repo.writeFile("pkg/list.txt", "a\ncand\nz\n");
+    const candidate = repo.commitAll("add cand");
+    repo.git("switch", "stgit/adopt");
+    const vpLog = NodePath.join(work, "vp.log");
+    const vp = NodePath.join(work, "vp");
+    NodeFS.writeFileSync(
+      vp,
+      `#!/usr/bin/env bash\necho "$PWD $*" >> ${JSON.stringify(vpLog)}\n[ "$1" = fmt ] && exit ${String(gateExit)}\nexit 0\n`,
+      { mode: 0o755 },
+    );
+    NodeFS.mkdirSync(NodePath.join(work, "unused"));
+    const planPath = NodePath.join(work, "plan.json");
+    NodeFS.writeFileSync(
+      planPath,
+      JSON.stringify({
+        contract: integrationContract,
+        concerns: [{ candidate, repo: repo.dir, owner: "fork-one" }],
+      }),
+    );
+    const output = NodePath.join(work, "clone");
+    const run = (extra: readonly string[]) =>
+      NodeChildProcess.spawnSync(
+        script,
+        [
+          "--plan",
+          planPath,
+          "--output",
+          output,
+          "--remote",
+          remote,
+          "--expected-main",
+          base,
+          ...extra,
+        ],
+        {
+          cwd: repo.dir,
+          encoding: "utf8",
+          env: { ...process.env, SYNC_GIT_BIN: "/usr/bin/git", HUSKY: "0", VP_BIN: vp },
+        },
+      );
+    const cleanup = () => {
+      NodeFS.rmSync(work, { recursive: true, force: true });
+      NodeFS.rmSync(remote, { recursive: true, force: true });
+      repo.cleanup();
+    };
+    return { candidate, output, vpLog, run, cleanup };
+  };
+
+  it("unions a purely additive conflict, gates it, and prints the union", () => {
+    const scenario = runUnionScenario(0);
+    try {
+      const result = scenario.run([]);
+      assert.strictEqual(result.status, 0, result.stderr);
+      const parsed = JSON.parse(result.stdout) as {
+        applied: string[];
+        skipped: unknown[];
+        unions: { candidate: string; file: string; detail: string }[];
+      };
+      assert.deepEqual(parsed.applied, [scenario.candidate]);
+      assert.deepEqual(parsed.skipped, []);
+      assert.strictEqual(parsed.unions.length, 1);
+      assert.strictEqual(parsed.unions[0]?.file, "pkg/list.txt");
+      assert.include(result.stderr, `union applied: ${scenario.candidate} pkg/list.txt`);
+      assert.strictEqual(bash(scenario.output, "cat pkg/list.txt"), "a\none\ncand\nz");
+      assert.strictEqual(bash(scenario.output, "git status --porcelain"), "");
+      const gateCalls = NodeFS.readFileSync(scenario.vpLog, "utf8");
+      assert.match(gateCalls, /fmt --check --no-error-on-unmatched-pattern -- pkg\/list\.txt/);
+      assert.match(gateCalls, /pkg run typecheck/);
+    } finally {
+      scenario.cleanup();
+    }
+  });
+
+  it("rolls back and reports a union that fails the gate", () => {
+    const scenario = runUnionScenario(1);
+    try {
+      const result = scenario.run([]);
+      assert.notStrictEqual(result.status, 0);
+      assert.include(result.stderr, "no concern could be integrated");
+      assert.strictEqual(bash(scenario.output, "cat pkg/list.txt"), "a\none\nz");
+      assert.strictEqual(bash(scenario.output, "git status --porcelain"), "");
+      assert.deepEqual(bash(scenario.output, "stg series --applied --noprefix").split("\n"), [
+        "fork-one",
+        "fork-two",
+      ]);
+    } finally {
+      scenario.cleanup();
+    }
+  });
+
+  it("leaves an additive conflict skipped when --no-union is set", () => {
+    const scenario = runUnionScenario(0);
+    try {
+      const result = scenario.run(["--no-union"]);
+      assert.notStrictEqual(result.status, 0);
+      assert.strictEqual(bash(scenario.output, "cat pkg/list.txt"), "a\none\nz");
+      assert.notInclude(result.stderr, "union applied");
+    } finally {
+      scenario.cleanup();
     }
   });
 });

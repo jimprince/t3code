@@ -149,7 +149,10 @@ scripts/ci/integrate-stgit-concerns --plan <plan.json> \
 ```
 
 A candidate that conflicts or fails a check is rolled back and reported as
-skipped; the command never verifies or publishes. Keep clones in
+skipped; the command never verifies or publishes. A conflict whose hunks are
+all pure insertions on both sides is unioned behind a format and typecheck gate
+(inventory stanzas merge by name); each union is printed, so review the
+`unions` list before verifying, or pass `--no-union`. Keep clones in
 `~/maintenance-work/<task>`, not `/tmp`.
 
 The manifest contains exact main and metadata leases, the candidate object,
