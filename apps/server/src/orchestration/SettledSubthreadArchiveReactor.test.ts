@@ -1,6 +1,7 @@
 import {
   DEFAULT_SERVER_SETTINGS,
   CommandId,
+  EnvironmentId,
   MessageId,
   ThreadId,
   ProjectId,
@@ -271,3 +272,17 @@ it.layer(NodeServices.layer)("automatic archive decider", (it) => {
     }),
   );
 });
+
+it.effect("archives settled remote workers with the same local retention rules", () =>
+  Effect.sync(() => {
+    const remote = thread("remote", {
+      parentThreadId: null,
+      remoteParent: { environmentId: EnvironmentId.make("vm"), threadId: ThreadId.make("parent") },
+    });
+    assert.strictEqual(isSettledSubthreadArchiveCandidate(remote, [remote], NOW), true);
+    assert.strictEqual(
+      isSettledSubthreadArchiveCandidate({ ...remote, remoteParent: null }, [remote], NOW),
+      false,
+    );
+  }),
+);

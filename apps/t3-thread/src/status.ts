@@ -102,25 +102,36 @@ export function selectThreadChildren(
   threads: readonly OrchestrationThreadShell[],
   parentThreadId: string,
   recursive: boolean,
+  parentEnvironmentId?: string,
 ): OrchestrationThreadShell[] {
-  const parents = new Set([parentThreadId]);
+  const rootKey =
+    parentEnvironmentId == null
+      ? `local:${parentThreadId}`
+      : `remote:${parentEnvironmentId}:${parentThreadId}`;
+  const parentKey = (thread: OrchestrationThreadShell) =>
+    thread.remoteParent
+      ? `remote:${thread.remoteParent.environmentId}:${thread.remoteParent.threadId}`
+      : thread.parentThreadId == null
+        ? null
+        : `local:${thread.parentThreadId}`;
+  const parents = new Set([rootKey]);
   if (recursive) {
     const children = new Map<string, OrchestrationThreadShell[]>();
     for (const thread of threads) {
-      if (thread.parentThreadId == null) continue;
-      const siblings = children.get(thread.parentThreadId) ?? [];
+      const key = parentKey(thread);
+      if (key === null) continue;
+      const siblings = children.get(key) ?? [];
       siblings.push(thread);
-      children.set(thread.parentThreadId, siblings);
+      children.set(key, siblings);
     }
-    for (const id of parents) {
-      for (const child of children.get(id) ?? []) parents.add(child.id);
+    for (const key of parents) {
+      for (const child of children.get(key) ?? []) parents.add(`local:${child.id}`);
     }
   }
   return threads.filter(
     (thread) =>
-      thread.id !== parentThreadId &&
-      thread.parentThreadId != null &&
-      parents.has(thread.parentThreadId),
+      (parentEnvironmentId != null || thread.id !== parentThreadId) &&
+      parents.has(parentKey(thread) ?? ""),
   );
 }
 
@@ -140,9 +151,11 @@ export function formatThreadLine(
     `order=${thread.pinnedAt != null ? "pinned" : "active"}:${
       (thread.pinnedAt != null ? thread.pinOrderKey : thread.activeOrderKey) ?? "automatic"
     }`,
-    thread.parentThreadId
-      ? `parent=${thread.parentThreadId}${parentTitle ? ` (${parentTitle})` : ""}`
-      : "parent=none",
+    thread.remoteParent
+      ? `parent=${thread.remoteParent.environmentId}:${thread.remoteParent.threadId}`
+      : thread.parentThreadId
+        ? `parent=${thread.parentThreadId}${parentTitle ? ` (${parentTitle})` : ""}`
+        : "parent=none",
     `issues=${(thread.issues ?? []).map((issue) => `${issue.repository}#${issue.number}:${issue.snapshot.state}`).join(",") || "none"}`,
     status.reason,
   ].join(" ");
