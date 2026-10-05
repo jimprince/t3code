@@ -8,7 +8,7 @@ import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstance
 import type { ProviderInstance } from "../provider/ProviderDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as ThreadTitleLinks from "./ThreadTitleLinks.ts";
-import type { RequestKind } from "./RequestItemsPrompt.ts";
+import type { RequestCandidate, RequestKind } from "./RequestItemsPrompt.ts";
 import type { TextGenerationPolicy } from "./TextGenerationPolicy.ts";
 
 export interface CommitMessageGenerationInput {
@@ -81,11 +81,18 @@ export interface RequestItemsGenerationInput {
   cwd: string;
   message: string;
   threadTitle?: string | undefined;
+  /** Open issues the message may continue; the model names one as `existing`. */
+  candidates?: ReadonlyArray<RequestCandidate> | undefined;
   modelSelection: ModelSelection;
 }
 
 export interface RequestItemsGenerationResult {
-  items: ReadonlyArray<{ title: string; kind: RequestKind; excerpt: string }>;
+  items: ReadonlyArray<{
+    title: string;
+    kind: RequestKind;
+    excerpt: string;
+    existing: number | null;
+  }>;
 }
 
 /**
