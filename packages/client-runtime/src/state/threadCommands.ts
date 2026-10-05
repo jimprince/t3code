@@ -363,6 +363,7 @@ export function createThreadEnvironmentAtoms<R, E>(
     setParent: optimistic.wrap(commands.setParent, (thread, input) => ({
       ...thread,
       parentThreadId: input.parentThreadId,
+      remoteParent: input.remoteParent ?? null,
     })),
   };
 }

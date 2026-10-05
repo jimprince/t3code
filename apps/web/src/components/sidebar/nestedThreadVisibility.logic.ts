@@ -1,4 +1,5 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import { threadParentKey } from "@t3tools/client-runtime/state/thread-status";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
 import { resolveNestedThreadKeys } from "../../threadNesting.logic";
 import { resolveSidebarThreadStatus, type SidebarThreadStatus } from "../Sidebar.logic";
@@ -10,6 +11,7 @@ export type SidebarChild = Pick<
   | "environmentId"
   | "projectId"
   | "parentThreadId"
+  | "remoteParent"
   | "archivedAt"
   | "createdAt"
   | "updatedAt"
@@ -89,8 +91,8 @@ export function groupSidebarChildren<T extends SidebarChild>(
   const groups = new Map<string, SidebarChildGroup<T>>();
   for (const thread of eligible) {
     const key = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
-    if (!nested.has(key) || thread.archivedAt !== null || thread.parentThreadId == null) continue;
-    const parentKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.parentThreadId));
+    const parentKey = threadParentKey(thread);
+    if (!nested.has(key) || thread.archivedAt !== null || parentKey === null) continue;
     const group = groups.get(parentKey) ?? { children: [], activeCount: 0, inputChildren: [] };
     group.children.push(thread);
     groups.set(parentKey, group);
@@ -187,10 +189,9 @@ export function sidebarPinnedPathKeys<T extends SidebarChild>(
       const currentKey = scopedThreadKey(scopeThreadRef(current.environmentId, current.id));
       if (path.has(currentKey)) break;
       path.add(currentKey);
-      if (current.parentThreadId == null) break;
-      current = byKey.get(
-        scopedThreadKey(scopeThreadRef(current.environmentId, current.parentThreadId)),
-      );
+      const parentKey = threadParentKey(current);
+      if (parentKey === null) break;
+      current = byKey.get(parentKey);
     }
   }
   return path;
@@ -222,10 +223,7 @@ export function sidebarNestedPathKeys<T extends SidebarChild>(
   while (currentKey !== null && nested.has(currentKey) && !path.has(currentKey)) {
     path.add(currentKey);
     const current = byKey.get(currentKey);
-    currentKey =
-      current?.parentThreadId == null
-        ? null
-        : scopedThreadKey(scopeThreadRef(current.environmentId, current.parentThreadId));
+    currentKey = current === undefined ? null : threadParentKey(current);
   }
   return path;
 }

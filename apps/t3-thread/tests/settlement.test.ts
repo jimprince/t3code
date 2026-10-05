@@ -108,6 +108,11 @@ function harness(settledOverride: "settled" | "active", failure?: Error) {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("thread settlement", () => {
+  it("preserves remote parent metadata in full and shell RPC decoding", () => {
+    const remoteParent = { environmentId: "vm", threadId: "parent" };
+    expect(decodeThread({ ...thread, remoteParent }).remoteParent).toEqual(remoteParent);
+    expect(decodeShell({ ...thread, remoteParent }).remoteParent).toEqual(remoteParent);
+  });
   it("dispatches settle through the real command codec and returns server timestamps", async () => {
     const h = harness("settled");
     expect(await h.client.settleThread(threadId)).toEqual({
