@@ -653,7 +653,7 @@ export function ProjectReleaseWidget({ summary }: { readonly summary: Orchestrat
             {versionOnly.map((item) => (
               <li key={item.number} className="flex items-center gap-3 py-1.5">
                 <span className="w-28 shrink-0 text-xs text-muted-foreground">
-                  {item.stage ? (STAGE_LABEL[item.stage] ?? item.stage) : "planned"}
+                  {item.stage ? STAGE_LABEL[item.stage] : TASK_STATUS_LABEL.pending}
                 </span>
                 <a
                   href={item.url}
