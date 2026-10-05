@@ -1,0 +1,4 @@
+id = "operator-session-renewal"
+category = "fix"
+functionality = "t3-thread authentication"
+text = "Paired operator sessions now renew before expiry so unattended thread handoffs and notifications keep working without monthly re-pairing."
