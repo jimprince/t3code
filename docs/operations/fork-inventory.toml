@@ -782,3 +782,24 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "keep-on-top"
 rationale = "Share fork-owned local visibility and selection toolbar. Narrow queries only after native repository ownership; filter late rows locally; explicit project scope overrides exclusion. Native filters and queued actions are unchanged."
+
+[[patch]]
+name = "fork-headless-delivery"
+subject = "feat(server): deliver and update the headless Linux server"
+class = "product"
+purpose = "Build the Linux headless artifact and provide service-managed update discovery, installation, health checks, restart, and rollback with an authenticated immediate update check."
+retire_when = "Upstream or maintained shared tooling provides an equivalent headless artifact and update workflow."
+depends_on = ["fork-build-ci-compat"]
+roles = []
+note = "The fork adapter delegates SEA and native dependency staging to upstream build-cli-archive, preserving the published asset name and bin/t3 service path. New archives need no host Node; the updater checks a transitional Node-based current release before promotion so rollback remains executable. Automatic upgrades check active and queued work before download and before promotion, defer with a retry marker, and require explicit manual --force to bypass activity checks or escalate SIGKILL. Health checks verify the selected release version and rollback verifies the previous version. Release smoke runs the unpacked launcher without PATH and verifies frozen historical migration, replay and restart. 2026-09-20: the adapter derives the node_modules it requires from upstream's runtime-external dependency list instead of a fixed set, after upstream 2005 dropped msgpackr-extract."
+[[patch.decision]]
+id = "v2-port-2689"
+date = "2026-10-05"
+decided = "reconcile-smaller"
+rationale = "Register the authenticated update RPC in a fork module, retain native V2 startup and protocol checks, inspect V2 activity, and snapshot state before one-way promotion. Binary rollback is not data rollback."
+
+[[patch.decision]]
+id = "upstream-headless-delivery"
+date = "2026-09-16"
+decided = "retain"
+rationale = "Upstream does not provide the fork's service-managed headless Linux artifact, authenticated update check, idle-aware promotion and rollback workflow, or historical-database release smoke coverage."
