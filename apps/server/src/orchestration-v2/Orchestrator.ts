@@ -76,6 +76,7 @@ import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Stream from "effect/Stream";
 
+import { validateChatThreadWorkspace } from "../forkProjects/ChatThreadWorkspace.ts";
 import * as ProjectStore from "./ProjectStore.ts";
 import {
   isCheckpointRestoreIsolated,
@@ -2191,6 +2192,9 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       "orchestration_v2.driver": command.modelSelection.instanceId,
     });
 
+    yield* validateChatThreadWorkspace(projects, command.projectId, command.worktreePath).pipe(
+      mapDispatchError(command),
+    );
     const now = yield* DateTime.now;
     const emitEvent = emit(events, command);
     const thread: OrchestrationV2AppThread = {
@@ -2468,6 +2472,11 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
           cause: `Thread ${command.threadId} was stopped.`,
         });
       }
+    }
+    if (command.type === "thread.metadata.update") {
+      yield* validateChatThreadWorkspace(projects, thread.projectId, command.worktreePath).pipe(
+        mapDispatchError(command),
+      );
     }
     if (
       command.type === "thread.metadata.update" &&
