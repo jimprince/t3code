@@ -1,7 +1,15 @@
-import { CommandId, EventId, ProjectId, ProviderInstanceId, ThreadId } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  CommandId,
+  EventId,
+  ProjectId,
+  ProviderInstanceId,
+  ThreadId,
+} from "@t3tools/contracts";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Layer from "effect/Layer";
 
 import { ServerConfig } from "../../config.ts";
@@ -101,10 +109,46 @@ it.layer(Layer.fresh(TestLayer))("thread nesting projection", (it) => {
       yield* append("thread.meta-updated", {
         threadId: WORKER,
         parentThreadId: null,
+        remoteParent: { environmentId: EnvironmentId.make("laptop"), threadId: ORCHESTRATOR },
         updatedAt: NOW,
       });
       yield* pipeline.bootstrap;
       assert.deepEqual(yield* parentOf, { shell: null, readModel: null });
+      const remoteParent = { environmentId: EnvironmentId.make("laptop"), threadId: ORCHESTRATOR };
+      const remoteOf = Effect.gen(function* () {
+        return {
+          shell: (yield* snapshots.getShellSnapshot()).threads.find((t) => t.id === WORKER)
+            ?.remoteParent,
+          snapshot: (yield* snapshots.getSnapshot()).threads.find((t) => t.id === WORKER)
+            ?.remoteParent,
+          detail: Option.getOrThrow(yield* snapshots.getThreadDetailById(WORKER)).remoteParent,
+        };
+      });
+      assert.deepEqual(yield* remoteOf, {
+        shell: remoteParent,
+        snapshot: remoteParent,
+        detail: remoteParent,
+      });
+      yield* append("thread.unsettled", {
+        threadId: WORKER,
+        unsettledAt: NOW,
+        updatedAt: NOW,
+        reason: "user",
+      });
+      yield* pipeline.bootstrap;
+      assert.deepEqual(yield* remoteOf, {
+        shell: remoteParent,
+        snapshot: remoteParent,
+        detail: remoteParent,
+      });
+      yield* append("thread.meta-updated", {
+        threadId: WORKER,
+        parentThreadId: null,
+        remoteParent: null,
+        updatedAt: NOW,
+      });
+      yield* pipeline.bootstrap;
+      assert.deepEqual(yield* remoteOf, { shell: null, snapshot: null, detail: null });
     }),
   );
 });

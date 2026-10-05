@@ -18,6 +18,7 @@ import {
   ThreadLinkedPullRequest,
   ThreadTitleState,
   ThreadId,
+  RemoteThreadParent,
   TurnId,
 } from "@t3tools/contracts";
 import * as Option from "effect/Option";
@@ -55,6 +56,7 @@ export const ProjectionThread = Schema.Struct({
   autoSettleDisabledAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
+  remoteParent: Schema.optionalKey(Schema.NullOr(RemoteThreadParent)),
   titleRegenerationRequestId: Schema.optional(Schema.NullOr(CommandId)),
   titleRegenerationStartedAt: Schema.optional(Schema.NullOr(IsoDateTime)),
   latestUserMessageAt: Schema.NullOr(IsoDateTime),
