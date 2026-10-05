@@ -17,6 +17,7 @@ import type { UnsequencedProjectEvent } from "../persistence/OrchestrationEventS
 import type { ProjectRow } from "./ProjectStore.ts";
 
 export interface ProjectCreateCommand {
+  readonly kind?: "workspace" | "chat";
   readonly type: "project.create";
   readonly commandId: CommandId;
   readonly projectId: ProjectId;
@@ -165,6 +166,7 @@ export function planProjectCommand(input: {
         ...base,
         type: "project.created",
         payload: {
+          ...(command.kind === "chat" ? { kind: "chat" as const } : {}),
           projectId: command.projectId,
           title: command.title,
           workspaceRoot: command.workspaceRoot,
