@@ -65,6 +65,9 @@ function markStandaloneImages(node: MarkdownImageHastNode) {
   if (node.type === "root" || (node.tagName && STANDALONE_IMAGE_BLOCKS.has(node.tagName))) {
     const image = soleImageDescendant(node);
     if (image) image.properties = { ...image.properties, dataStandalone: true };
+    const children = meaningfulHastChildren(node);
+    const link = children.length === 1 && children[0]?.tagName === "a" ? children[0] : undefined;
+    if (link) link.properties = { ...link.properties, dataStandalone: true };
   }
   node.children?.forEach((child) => {
     if (child.type === "element") markStandaloneImages(child);
@@ -148,7 +151,7 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
     code: [...(defaultSchema.attributes?.code ?? []), "dataCodeMeta", "dataInlineCode"],
     blockquote: [...(defaultSchema.attributes?.blockquote ?? []), "dataAlert"],
     div: [...(defaultSchema.attributes?.div ?? []), ...CODEX_ARTIFACT_TEMPLATE_HAST_PROPERTIES],
-    a: [...(defaultSchema.attributes?.a ?? []), "dataPullRequestAutolink"],
+    a: [...(defaultSchema.attributes?.a ?? []), "dataPullRequestAutolink", "dataStandalone"],
     img: [
       ...(defaultSchema.attributes?.img ?? []),
       "dataLocalSrc",
