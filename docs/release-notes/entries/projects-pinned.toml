@@ -1,0 +1,4 @@
+id = "projects-pinned"
+category = "feature"
+functionality = "projects"
+text = "Pinned top-level threads now appear in the Projects sidebar first, with their own project page, so the chief of staff sits at the top even though the other orchestrators are not nested under it."
