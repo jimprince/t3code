@@ -41,6 +41,19 @@ const BUSY_RECIPIENT_RETRY_MS = 30_000;
 
 /** How often a running watcher rechecks settlement and quota holds. */
 const SETTLED_RECIPIENT_RECHECK_MS = 60_000;
+/**
+ * A worker that settles itself at close-out is settled seconds after its final
+ * turn, often before any poll saw that turn complete. A settled source still
+ * reports a turn that finished this recently; older settled threads stay skipped.
+ */
+const SETTLED_COMPLETION_WINDOW_MS = 60 * 60_000;
+/** Keeps the watcher awake just long enough to record a completion that settled before the next pass. */
+const SETTLED_COMPLETION_GRACE_MS = 2 * 60_000;
+
+function finishedWithin(thread: OrchestrationThread, nowMs: number, windowMs: number): boolean {
+  const finishedAt = Date.parse(thread.latestTurn?.completedAt ?? thread.settledAt ?? "");
+  return Number.isFinite(finishedAt) && nowMs - finishedAt <= windowMs;
+}
 
 /**
  * When this process started. A claim stamped before that cannot be ours, even if
@@ -436,7 +449,8 @@ async function scanAttentionState(
       if (
         sourceThread.archivedAt ||
         sourceThread.deletedAt ||
-        sourceThread.settledOverride === "settled"
+        (sourceThread.settledOverride === "settled" &&
+          !finishedWithin(sourceThread, Date.parse(now()), SETTLED_COMPLETION_WINDOW_MS))
       )
         continue;
       if (
@@ -608,8 +622,9 @@ export async function hasActiveWork(
       const thread = await clientFactory(environment).findThread(agent.threadId);
       if (
         !thread.deletedAt &&
-        thread.settledOverride !== "settled" &&
-        IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)
+        (thread.settledOverride !== "settled"
+          ? IN_FLIGHT_SOURCE_STATES.has(classifyThread(thread).state)
+          : !thread.archivedAt && finishedWithin(thread, Date.now(), SETTLED_COMPLETION_GRACE_MS))
       ) {
         return true;
       }
