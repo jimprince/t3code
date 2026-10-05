@@ -10,6 +10,7 @@ import {
   buildOrchestratorSummaries,
   type OrchestratorSummary,
 } from "@t3tools/client-runtime/state/orchestrators";
+import { MobileProjectRequests } from "./MobileProjectRequests";
 import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
@@ -319,6 +320,7 @@ function MobileOrchestratorList({
                 {summary.projects.map((project) => project.title).join(" · ")}
               </Text>
             ) : null}
+            <MobileProjectRequests summary={summary} />
           </Pressable>
         );
       })}
