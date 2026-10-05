@@ -42,6 +42,10 @@
     "./projectAutomations": {
       "types": "./src/projectAutomations.ts",
       "import": "./src/projectAutomations.ts"
+    },
+    "./automations": {
+      "types": "./src/automations.ts",
+      "import": "./src/automations.ts"
     }
   },
   "scripts": {
