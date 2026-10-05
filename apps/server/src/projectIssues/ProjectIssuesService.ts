@@ -35,6 +35,7 @@ import {
   workspaceRepositoryName,
   type GiteaRepositoryTarget,
 } from "./projectIssues.logic.ts";
+import { NEEDS_BRAD_LABEL, parseDecisionIssue } from "./decisions.logic.ts";
 
 const GiteaLabel = Schema.Struct({ name: Schema.String });
 const GiteaIssue = Schema.Struct({
@@ -267,6 +268,8 @@ export const make = Effect.gen(function* () {
     const labels = (issue.labels ?? []).map((label) => label.name);
     const isRequest = labels.some((label) => label.toLowerCase() === REQUEST_LABEL);
     const blockedBy = parseBlockedBy(issue.body);
+    const asksBrad =
+      issue.state === "open" && labels.some((label) => label.toLowerCase() === NEEDS_BRAD_LABEL);
     return {
       host: target.host,
       repository: target.repository,
@@ -278,6 +281,7 @@ export const make = Effect.gen(function* () {
       isRequest,
       ...(isRequest ? { stage: deriveRequestStage(issue.state, labels) } : {}),
       ...(blockedBy.length > 0 ? { blockedBy } : {}),
+      ...(asksBrad ? { decision: parseDecisionIssue(issue.body) } : {}),
       milestone:
         issue.milestone && issue.milestone.id > 0 && issue.milestone.title.trim()
           ? { id: issue.milestone.id, title: issue.milestone.title.trim() }
