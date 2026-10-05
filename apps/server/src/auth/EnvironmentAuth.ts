@@ -449,7 +449,7 @@ export class EnvironmentAuth extends Context.Service<
       ServerAuthInvalidCredentialError | ServerAuthInvalidRequestError | ServerAuthInternalError
     >;
     readonly refreshSession: (
-      session: AuthenticatedSession,
+      session: Pick<AuthenticatedSession, "sessionId" | "method" | "proofKeyThumbprint">,
     ) => Effect.Effect<
       AuthSessionRefreshResult,
       ServerAuthInvalidCredentialError | ServerAuthInternalError

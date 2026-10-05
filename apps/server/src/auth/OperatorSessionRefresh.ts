@@ -80,7 +80,7 @@ export const operatorSessionRefreshHandler = (
           }),
         ),
       );
-      return yield* serverAuth.refreshSession({ ...session, scopes: [...session.scopes] });
+      return yield* serverAuth.refreshSession(session);
     },
     Effect.catchIf(EnvironmentAuth.isServerAuthCredentialError, (error) =>
       failEnvironmentAuthInvalid(EnvironmentAuth.serverAuthCredentialReason(error)),

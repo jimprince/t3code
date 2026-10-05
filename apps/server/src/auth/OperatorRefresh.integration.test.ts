@@ -1,4 +1,5 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import * as NodeCrypto from "@effect/platform-node/NodeCrypto";
 import { EnvironmentHttpApi } from "@t3tools/contracts";
 import { expect, it } from "@effect/vitest";
 import * as Context from "effect/Context";
@@ -44,6 +45,13 @@ const environmentAuthLayer = EnvironmentAuth.layer.pipe(
 );
 const routesLayer = HttpApiBuilder.layer(AuthTestApi).pipe(
   Layer.provide(authHttpApiLayer),
+  // The token-exchange route resolves Crypto and the secret store per request.
+  HttpRouter.provideRequest(
+    Layer.mergeAll(
+      NodeCrypto.layer,
+      ServerSecretStore.layer.pipe(Layer.provide(configLayer), Layer.provide(NodeServices.layer)),
+    ),
+  ),
   Layer.provide(environmentAuthenticatedAuthLayer),
   Layer.provideMerge(environmentAuthLayer),
   Layer.provideMerge(
@@ -128,7 +136,7 @@ it.effect("rotates scoped operator credentials through V2 HTTP with old-token ov
       } as never);
       expect(authenticated.subject).toBe("operator");
       expect(authenticated.scopes).toEqual(["orchestration:read"]);
-      expect(authenticated.client.label).toBe("cli-device");
+      expect(authenticated.client?.label).toBe("cli-device");
       const old = yield* auth.authenticateHttpRequest({
         cookies: {},
         headers: { authorization: `Bearer ${nearExpiry.token}` },

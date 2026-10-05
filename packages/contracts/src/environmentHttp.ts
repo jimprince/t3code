@@ -12,7 +12,6 @@ import {
   AuthAccessTokenResult,
   AuthBrowserSessionRequest,
   AuthBrowserSessionResult,
-  type AuthClientMetadata,
   AuthClientSession,
   AuthCreatePairingCredentialInput,
   AuthPairingCredentialResult,
@@ -371,7 +370,6 @@ export interface EnvironmentSessionPrincipalShape {
   readonly subject: string;
   readonly method: ServerAuthSessionMethod;
   readonly scopes: ReadonlySet<AuthEnvironmentScope>;
-  readonly client: AuthClientMetadata;
   readonly proofKeyThumbprint?: string;
   readonly expiresAt?: DateTime.DateTime;
 }

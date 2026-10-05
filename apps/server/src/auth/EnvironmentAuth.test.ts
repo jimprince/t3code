@@ -408,7 +408,9 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
         const auth = yield* EnvironmentAuth.EnvironmentAuth;
         const issued = yield* auth.issueSession({ scopes: ["orchestration:read"] });
         const principal = yield* auth.authenticateHttpRequest(makeBearerRequest(issued.token));
-        const replacement = yield* auth.refreshSession({ ...principal, scopes: ["access:write"] });
+        // A caller-supplied scope list must be ignored in favor of the persisted session's scopes.
+        const forged = { ...principal, scopes: ["access:write"] };
+        const replacement = yield* auth.refreshSession(forged);
         const verified = yield* auth.authenticateHttpRequest(
           makeBearerRequest(replacement.access_token),
         );
