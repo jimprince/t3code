@@ -1221,6 +1221,18 @@ t3-thread roadmap move "$T3_THREAD_ID" 12 later   # parked
 t3-thread roadmap version "$T3_THREAD_ID" fork.26
 ```
 
+The Dashboard's "Where we're going" reads the next release first: the milestone description's
+first line is its outcome, so write the outcome there, then "N of M done" and the task to deliver
+next. Everything after the next release shows as one "Later (N)" line.
+
+An epic is an issue labeled `ask:epic` (an older `ask:plan` reads as an epic). Its body holds a
+checklist of children, `- [ ] #141 M1: rebase`, and each child's body starts with `Part of #140`.
+The server counts the checklist refs plus the "Part of" children (a child is done when closed or
+ticked) and shows "1 of 4 · Building" on the Dashboard and the Roadmap tab. Phase: Planning (no
+child started), Building (some Active), Review (every child left is For review), Complete.
+`roadmap list` carries each epic's `epic: {done, total, remaining}` and each version's
+`description`.
+
 `request shipped --release fork.24` closes that release's milestone, so the next open version
 becomes the next release.
 
