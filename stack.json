@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "29e19acc74040cdbce426eb253b053ddcb2bade2",
-  "head": "7a30d59c9b3dd2e5f02ac78802f4bc7560142d4a",
+  "prev": "caa817ae1c7159847565e9205e4fddb1aa1b8a93",
+  "head": "c4b8b3fd034114e19be446eff90937bfaa3ddae3",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -75,11 +75,10 @@
     "fork-project-canvas",
     "fork-project-task-types",
     "fork-project-request-box-pinned",
-    "fork-scripts-automations"
-  ],
-  "unapplied": [
+    "fork-scripts-automations",
     "fork-queue-coalesced-notes"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -230,7 +229,7 @@
       "oid": "4b0ef4c2ba9c23fbcc4775830e7232aa7074aebf"
     },
     "fork-queue-coalesced-notes": {
-      "oid": "bd2e211816408571fed6337eca43b9400f1467b9"
+      "oid": "c4b8b3fd034114e19be446eff90937bfaa3ddae3"
     },
     "fork-release-publication": {
       "oid": "09e3f234998283f5a249afc031eaa360e5495bff"
