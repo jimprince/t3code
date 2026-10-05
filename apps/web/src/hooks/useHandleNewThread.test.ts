@@ -10,6 +10,7 @@ const testState = vi.hoisted(() => {
     defaultModelSelection: null,
     defaultRuntimeMode: "full-access" as RuntimeMode,
   };
+  let projectKind: "workspace" | "chat" = "workspace";
   let storedDraft: {
     readonly draftId: string;
     readonly environmentId: string;
@@ -37,6 +38,12 @@ const testState = vi.hoisted(() => {
   };
 
   return {
+    get projectKind() {
+      return projectKind;
+    },
+    setProjectKind: (kind: "workspace" | "chat") => {
+      projectKind = kind;
+    },
     completeProjectFileRead: (value: null) => completeProjectFileRead(value),
     draftStore,
     get projectFileRead() {
@@ -52,6 +59,7 @@ const testState = vi.hoisted(() => {
         startFromOrigin: false,
       },
     ) {
+      projectKind = "workspace";
       storedDraft = nextStoredDraft;
       targetSettings = {
         defaultThreadEnvMode: workspaceDefaults.envMode,
@@ -159,6 +167,7 @@ vi.mock("../state/entities", () => ({
   readProjects: () => [
     {
       id: "project-remote",
+      kind: testState.projectKind,
       environmentId: "environment-ssh",
       workspaceRoot: "/remote/project",
       defaultThreadEnvMode: null,
@@ -285,5 +294,28 @@ describe.each([
         expect.objectContaining({ envMode: "worktree", startFromOrigin }),
       );
     },
+  );
+});
+
+it("General Chat opens its server workspace despite sticky worktree or carried branch defaults", async () => {
+  testState.reset(null, { envMode: "worktree", startFromOrigin: true });
+  testState.setProjectKind("chat");
+  const projectRef = { environmentId: "environment-ssh", projectId: "project-remote" } as never;
+  const opened = await useNewThreadHandler()(projectRef, {
+    envMode: "worktree",
+    branch: "old-branch",
+    worktreePath: "/old-worktree",
+    startFromOrigin: true,
+  });
+  expect(testState.draftStore.setLogicalProjectDraftThreadId).toHaveBeenCalledWith(
+    "remote-project",
+    projectRef,
+    opened!.draftId,
+    expect.objectContaining({
+      envMode: "local",
+      branch: null,
+      worktreePath: null,
+      startFromOrigin: false,
+    }),
   );
 });
