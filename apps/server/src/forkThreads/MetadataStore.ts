@@ -1,24 +1,45 @@
-import { ForkThreadMetadata, ThreadId } from "@t3tools/contracts";
+import { ForkThreadMetadata, ForkRemoteParent, ThreadId } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
 
 export const metadataJson = Schema.fromJsonString(ForkThreadMetadata);
+const decodeMetadata = Schema.decodeUnknownEffect(metadataJson);
+const encodeMetadata = Schema.encodeEffect(metadataJson);
+const decodeRemoteParent = Schema.decodeUnknownEffect(Schema.fromJsonString(ForkRemoteParent));
 /** Import once, including null/missing parents. Existing V2 edits win on every restart. */
-export const initializeMetadata = (sql: SqlClient.SqlClient) => Effect.gen(function* () {
-  yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata (thread_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
-  yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata_receipts (command_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
-  const columns = yield* sql<{ name: string }>`PRAGMA table_info(projection_threads)`;
-  if (!columns.some(c => c.name === "parent_thread_id")) return;
-  const rows = yield* sql<{ thread_id: string; parent_thread_id: string | null; scope?: string | null }>`SELECT * FROM projection_threads`;
-  for (const row of rows) {
-    const metadata: ForkThreadMetadata = { threadId: ThreadId.make(row.thread_id), parentThreadId: row.parent_thread_id === null ? null : ThreadId.make(row.parent_thread_id), ...(row.scope !== undefined ? { scope: row.scope } : {}) };
-    const payload = yield* Schema.encodeEffect(metadataJson)(metadata);
-    yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${row.thread_id}, ${payload})`;
-  }
-});
-export const listMetadata = (sql: SqlClient.SqlClient) => sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata ORDER BY thread_id`.pipe(Effect.flatMap(rows => Effect.forEach(rows, row => Schema.decodeUnknownEffect(metadataJson)(row.payload))));
-export const writeMetadata = (sql: SqlClient.SqlClient, value: ForkThreadMetadata) => Effect.gen(function* () {
- const payload = yield* Schema.encodeEffect(metadataJson)(value);
- yield* sql`INSERT INTO fork_thread_metadata (thread_id, payload) VALUES (${value.threadId}, ${payload}) ON CONFLICT(thread_id) DO UPDATE SET payload = excluded.payload`;
-});
+export const initializeMetadata = (sql: SqlClient.SqlClient) =>
+  Effect.gen(function* () {
+    yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata (thread_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
+    yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata_receipts (command_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
+    const columns = yield* sql<{ name: string }>`PRAGMA table_info(projection_threads)`;
+    if (!columns.some((c) => c.name === "parent_thread_id")) return;
+    const rows = yield* sql<{
+      thread_id: string;
+      parent_thread_id: string | null;
+      scope?: string | null;
+      remote_parent_json?: string | null;
+    }>`SELECT t.* FROM projection_threads t LEFT JOIN fork_thread_metadata m ON m.thread_id = t.thread_id WHERE m.thread_id IS NULL`;
+    for (const row of rows) {
+      const metadata: ForkThreadMetadata = {
+        threadId: ThreadId.make(row.thread_id),
+        parentThreadId: row.parent_thread_id === null ? null : ThreadId.make(row.parent_thread_id),
+        ...(row.scope !== undefined ? { scope: row.scope } : {}),
+      };
+      if (row.remote_parent_json) {
+        const remoteParent = yield* decodeRemoteParent(row.remote_parent_json);
+        Object.assign(metadata, { remoteParent });
+      }
+      const payload = yield* encodeMetadata(metadata);
+      yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${row.thread_id}, ${payload})`;
+    }
+  });
+export const listMetadata = (sql: SqlClient.SqlClient) =>
+  sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata ORDER BY thread_id`.pipe(
+    Effect.flatMap((rows) => Effect.forEach(rows, (row) => decodeMetadata(row.payload))),
+  );
+export const writeMetadata = (sql: SqlClient.SqlClient, value: ForkThreadMetadata) =>
+  Effect.gen(function* () {
+    const payload = yield* encodeMetadata(value);
+    yield* sql`INSERT INTO fork_thread_metadata (thread_id, payload) VALUES (${value.threadId}, ${payload}) ON CONFLICT(thread_id) DO UPDATE SET payload = excluded.payload`;
+  });
