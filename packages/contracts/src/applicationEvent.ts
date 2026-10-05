@@ -41,6 +41,7 @@ export const ApplicationEventMetadata = Schema.Struct({
 export type ApplicationEventMetadata = typeof ApplicationEventMetadata.Type;
 
 export const ApplicationProjectCreatedPayload = Schema.Struct({
+  kind: Schema.optional(Schema.Literals(["workspace", "chat"])),
   projectId: ProjectId,
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
