@@ -4,6 +4,7 @@ import { describe, expect, it } from "vite-plus/test";
 import {
   collectThreadTree,
   deriveProjectIssueStatus,
+  deriveRequestStage,
   findRootThreadId,
   formatRequestMarker,
   giteaRepositoryForIdentity,
@@ -30,6 +31,22 @@ describe("deriveProjectIssueStatus", () => {
     expect(deriveProjectIssueStatus("open", ["backlog"])).toBe("backlog");
     expect(deriveProjectIssueStatus("closed", ["in-progress"])).toBe("done");
     expect(deriveProjectIssueStatus("closed", ["archived"])).toBe("archived");
+  });
+});
+
+describe("request stages", () => {
+  it("derives the stage Brad sees from state and labels", () => {
+    expect(deriveRequestStage("open", ["ask"])).toBe("requested");
+    expect(deriveRequestStage("open", ["ask", "in-progress"])).toBe("in-progress");
+    expect(deriveRequestStage("open", ["ask", "needs-review"])).toBe("ready");
+    expect(deriveRequestStage("open", ["ask", "awaiting-release"])).toBe("awaiting-release");
+    expect(deriveRequestStage("open", ["ask", "needs-test", "in-progress"])).toBe("needs-test");
+    expect(deriveRequestStage("closed", ["ask", "needs-test"])).toBe("settled");
+  });
+
+  it("puts the release stages in the board lane of whoever acts next", () => {
+    expect(deriveProjectIssueStatus("open", ["needs-test"])).toBe("needs-review");
+    expect(deriveProjectIssueStatus("open", ["awaiting-release"])).toBe("in-progress");
   });
 });
 
