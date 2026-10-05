@@ -4,6 +4,8 @@ import type { EnvironmentProject, EnvironmentThreadShell } from "./models.ts";
 import {
   resolveThreadDisplayStatus,
   threadActivityKey,
+  threadParentKey,
+  reachableNestedThreadKeys,
   type ThreadDisplayStatus,
 } from "./threadStatus.ts";
 
@@ -213,10 +215,11 @@ export function buildOrchestratorSummaries(
   threads: ReadonlyArray<EnvironmentThreadShell>,
   projects: ReadonlyArray<EnvironmentProject>,
 ): ReadonlyArray<OrchestratorSummary> {
+  const nestedKeys = reachableNestedThreadKeys(threads);
   const childrenByParent = new Map<string, EnvironmentThreadShell[]>();
   for (const thread of threads) {
-    if (thread.archivedAt != null || thread.parentThreadId == null) continue;
-    const key = `${thread.environmentId}:${thread.parentThreadId}`;
+    const key = threadParentKey(thread);
+    if (thread.archivedAt != null || key === null) continue;
     const children = childrenByParent.get(key);
     if (children) children.push(thread);
     else childrenByParent.set(key, [thread]);
@@ -229,7 +232,7 @@ export function buildOrchestratorSummaries(
     .filter(
       (thread) =>
         thread.archivedAt == null &&
-        thread.parentThreadId == null &&
+        !nestedKeys.has(threadActivityKey(thread)) &&
         (childrenByParent.get(threadActivityKey(thread))?.length ?? 0) > 0,
     )
     .map((root) => {
@@ -290,9 +293,10 @@ export function buildStandaloneThreadGroups(
   projects: ReadonlyArray<EnvironmentProject>,
   lastVisitedAtByThreadKey: Readonly<Record<string, string>>,
 ): ReadonlyArray<StandaloneThreadGroup> {
+  const nestedKeys = reachableNestedThreadKeys(threads);
   const parentKeys = new Set(
     threads.flatMap((thread) =>
-      thread.parentThreadId == null ? [] : [`${thread.environmentId}:${thread.parentThreadId}`],
+      threadParentKey(thread) === null ? [] : [threadParentKey(thread)!],
     ),
   );
   const statusOf = (thread: EnvironmentThreadShell): StandaloneThreadStatus | null => {
@@ -314,7 +318,7 @@ export function buildStandaloneThreadGroups(
   for (const thread of threads) {
     if (
       thread.archivedAt != null ||
-      thread.parentThreadId != null ||
+      nestedKeys.has(threadActivityKey(thread)) ||
       parentKeys.has(threadActivityKey(thread))
     ) {
       continue;
