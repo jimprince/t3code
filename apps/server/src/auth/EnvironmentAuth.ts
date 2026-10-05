@@ -11,6 +11,7 @@ import {
   type AuthEnvironmentScope,
   type AuthPairingLink,
   type AuthPairingCredentialResult,
+  type AuthSessionRefreshResult,
   type AuthSessionId,
   type AuthSessionState,
   type ServerAuthDescriptor,
@@ -30,6 +31,7 @@ import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as HttpServerRequest from "effect/unstable/http/HttpServerRequest";
 
+import { makeOperatorSessionRefresh } from "./OperatorSessionRefresh.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as ServerConfig from "../config.ts";
 import * as EnvironmentAuthPolicy from "./EnvironmentAuthPolicy.ts";
@@ -68,6 +70,7 @@ export interface AuthenticatedSession {
   readonly subject: string;
   readonly method: ServerAuthSessionMethod;
   readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
+  readonly client: AuthClientMetadata;
   readonly proofKeyThumbprint?: string;
   readonly expiresAt?: DateTime.DateTime;
 }
@@ -445,6 +448,12 @@ export class EnvironmentAuth extends Context.Service<
       AuthAccessTokenResult,
       ServerAuthInvalidCredentialError | ServerAuthInvalidRequestError | ServerAuthInternalError
     >;
+    readonly refreshSession: (
+      session: Pick<AuthenticatedSession, "sessionId" | "method" | "proofKeyThumbprint">,
+    ) => Effect.Effect<
+      AuthSessionRefreshResult,
+      ServerAuthInvalidCredentialError | ServerAuthInternalError
+    >;
     readonly createPairingLink: (input?: {
       readonly ttl?: Duration.Duration;
       readonly label?: string;
@@ -629,6 +638,7 @@ export const make = Effect.gen(function* () {
         subject: session.subject,
         method: session.method,
         scopes: session.scopes,
+        client: session.client,
         ...(session.proofKeyThumbprint ? { proofKeyThumbprint: session.proofKeyThumbprint } : {}),
         ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
       })),
@@ -858,6 +868,8 @@ export const make = Effect.gen(function* () {
         Effect.withSpan("EnvironmentAuth.exchangeBootstrapCredentialForAccessToken"),
       );
 
+  const refreshSession = makeOperatorSessionRefresh(sessions);
+
   const issuePairingCredentialForSubject = (input: {
     readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
     readonly subject: string;
@@ -1084,6 +1096,7 @@ export const make = Effect.gen(function* () {
               subject: session.subject,
               method: session.method,
               scopes: session.scopes,
+              client: session.client,
               ...(session.expiresAt ? { expiresAt: session.expiresAt } : {}),
             })),
             mapSessionVerificationErrors,
@@ -1100,6 +1113,7 @@ export const make = Effect.gen(function* () {
     getSessionState,
     createBrowserSession,
     exchangeBootstrapCredentialForAccessToken,
+    refreshSession,
     createPairingLink,
     issuePairingCredential,
     issueStartupPairingCredential,
