@@ -470,3 +470,79 @@ export const formatStatusCounts = (counts: StatusCounts) =>
     `${counts.forReview} for review`,
     `${counts.pending} pending`,
   ].join(" · ");
+
+export interface DecisionOption {
+  /** "Option A": the button's label. */
+  readonly label: string;
+  readonly text: string;
+}
+
+/** A Needs you row that asks Brad to choose or approve, with what the buttons need. */
+export interface NeedsYouDecision {
+  /** One or two whole sentences of what the agent asks. */
+  readonly summary: string;
+  readonly recommendation: string | null;
+  /** The choices a ready comment lists, at least two; empty when it is a plain approval. */
+  readonly options: ReadonlyArray<DecisionOption>;
+}
+
+const OPTION_LINE =
+  /^(?:[-*]\s+)?(?:[Oo]ption\s+([A-Za-z]|\d{1,2})\s*[:.)–—-]|\(?([A-Z])[:)])\s*(.+)$/;
+const RECOMMENDATION_LINE =
+  /^(?:[-*]\s+)?(?:(?:my|our)\s+recommendation|recommendation|recommended|i\s+recommend|we\s+recommend)\b\s*[:-]?\s*(.+)$/i;
+
+/**
+ * What a ready comment asks of Brad: the choices it lists as lines starting
+ * "Option A:" or "A)" (two or more, else they are not choices), its recommendation
+ * line, and the rest as the summary.
+ */
+export function parseDecisionComment(body: string): NeedsYouDecision {
+  const lines = body
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .split("\n")
+    .map((line) => line.replace(/\*\*|__|`/g, "").trim())
+    .filter((line) => line.length > 0);
+  const options: DecisionOption[] = [];
+  let recommendation: string | null = null;
+  const rest: string[] = [];
+  for (const line of lines) {
+    const option = OPTION_LINE.exec(line);
+    if (option) {
+      options.push({
+        label: `Option ${(option[1] ?? option[2]!).toUpperCase()}`,
+        text: option[3]!.trim().slice(0, 200),
+      });
+      continue;
+    }
+    const recommended = RECOMMENDATION_LINE.exec(line);
+    if (recommended && recommendation === null) {
+      recommendation = recommended[1]!.trim();
+      continue;
+    }
+    rest.push(line);
+  }
+  const named = new Set(options.map((option) => option.label));
+  const choices = options.length >= 2 && named.size === options.length ? options : [];
+  return {
+    summary: answerSentences(rest.join(" ").replace(/^\s*(progress|test):\s*/i, ""), 2),
+    recommendation,
+    options: choices,
+  };
+}
+
+const isEpic = (labels: ReadonlyArray<string>) =>
+  labels.some((label) => label.toLowerCase() === "ask:epic");
+
+/**
+ * The decision a Needs you item asks of Brad, or null when it does not: an epic or
+ * plan its agent marked ready (Approve, Not yet), or a ready comment listing options
+ * (a button per option). Answers and shipped work to test are other row kinds.
+ */
+export function needsYouDecision(item: NeedsYouItem): NeedsYouDecision | null {
+  if (item.group === "answers" || item.group === "test") return null;
+  if (item.request !== null && item.request.stage !== "ready") return null;
+  const parsed = parseDecisionComment(item.issue.latestComment?.body ?? "");
+  if (parsed.options.length === 0 && item.group !== "approve" && !isEpic(item.issue.labels))
+    return null;
+  return parsed;
+}
