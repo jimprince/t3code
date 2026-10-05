@@ -21,6 +21,18 @@ vi.mock("@tanstack/react-router", () => ({
 }));
 vi.mock("./ui/toast", () => ({ toastManager: { add: state.toast } }));
 vi.mock("../state/shell", () => ({ environmentShell: { stateValueAtom: (id: string) => id } }));
+vi.mock("../state/entities", () => ({
+  readThreadShells: () =>
+    [...state.shells.entries()].flatMap(([environmentId, shell]) =>
+      shell.snapshot._tag === "Some"
+        ? shell.snapshot.value.threads.map((thread: object) => ({
+            ...thread,
+            environmentId,
+            remoteParent: null,
+          }))
+        : [],
+    ),
+}));
 vi.mock("../state/environments", () => ({
   useEnvironments: () => ({
     environments: state.environmentIds.map((environmentId) => ({ environmentId })),

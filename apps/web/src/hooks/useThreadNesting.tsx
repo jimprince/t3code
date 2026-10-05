@@ -5,7 +5,12 @@ import {
   squashAtomCommandFailure,
 } from "@t3tools/client-runtime/state/runtime";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import type { EnvironmentId, ScopedThreadRef, ThreadId } from "@t3tools/contracts";
+import type {
+  EnvironmentId,
+  RemoteThreadParent,
+  ScopedThreadRef,
+  ThreadId,
+} from "@t3tools/contracts";
 import { CornerDownRightIcon, PanelLeftIcon, SquarePenIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
 import { create } from "zustand";
@@ -158,10 +163,13 @@ export function useThreadNestingActions() {
         );
         return false;
       }
-      const dispatch = async (nextParentThreadId: ThreadId | null) => {
+      const dispatch = async (
+        nextParentThreadId: ThreadId | null,
+        remoteParent: RemoteThreadParent | null = null,
+      ) => {
         const result = await setParent({
           environmentId: threadRef.environmentId,
-          input: { threadId: threadRef.threadId, parentThreadId: nextParentThreadId },
+          input: { threadId: threadRef.threadId, parentThreadId: nextParentThreadId, remoteParent },
         });
         if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
           failureToast(
@@ -173,7 +181,9 @@ export function useThreadNestingActions() {
         }
         return result._tag === "Success";
       };
-      const previousParentThreadId = readThreadShell(threadRef)?.parentThreadId ?? null;
+      const previous = readThreadShell(threadRef);
+      const previousParentThreadId = previous?.parentThreadId ?? null;
+      const previousRemoteParent = previous?.remoteParent ?? null;
       if (!(await dispatch(parentThreadId))) return false;
       if (parentThreadId === null) return true;
       // The row leaves the sidebar, so say where it went and offer the way back.
@@ -188,7 +198,7 @@ export function useThreadNestingActions() {
           children: "Undo",
           onClick: () => {
             toastManager.close(toastId);
-            void dispatch(previousParentThreadId);
+            void dispatch(previousParentThreadId, previousRemoteParent);
           },
         },
       });
@@ -258,7 +268,7 @@ export function useThreadNestingActions() {
 export function useThreadNestingPaletteItems(
   thread: Pick<
     EnvironmentThreadShell,
-    "id" | "environmentId" | "projectId" | "parentThreadId" | "archivedAt"
+    "id" | "environmentId" | "projectId" | "parentThreadId" | "remoteParent" | "archivedAt"
   > | null,
 ): ReadonlyArray<CommandPaletteActionItem> {
   const { setThreadParent, startNestedThread } = useThreadNestingActions();
@@ -281,7 +291,7 @@ export function useThreadNestingPaletteItems(
       run: () => startNestedThread(threadRef),
     });
   }
-  if (thread.parentThreadId != null) {
+  if (thread.parentThreadId != null || thread.remoteParent != null) {
     items.push({
       kind: "action",
       value: "action:move-thread-to-sidebar",

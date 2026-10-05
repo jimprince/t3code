@@ -28,6 +28,7 @@ interface TestThread {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;
   readonly parentThreadId?: ThreadId | null;
+  readonly remoteParent?: { environmentId: EnvironmentId; threadId: ThreadId } | null;
   readonly archivedAt: string | null;
   readonly hasPendingApprovals: boolean;
   readonly hasPendingUserInput: boolean;
@@ -58,6 +59,32 @@ const parentId = ThreadId.make("parent");
 const ids = (threads: ReadonlyArray<TestThread>) => threads.map((entry) => entry.id);
 
 describe("resolveNestedThreadKeys", () => {
+  it("merges remote workers under their scoped parent and restores disconnected or cyclic children", () => {
+    const parent = thread("parent");
+    const child = thread("child", {
+      environmentId: envB,
+      remoteParent: { environmentId: envA, threadId: parentId },
+    });
+    const decoy = thread("parent", { environmentId: envB });
+    expect(applySidebarThreadNesting([parent, child, decoy])).toEqual([parent, decoy]);
+    expect(
+      listNestedThreads([parent, child, decoy], { environmentId: envA, threadId: parentId }),
+    ).toEqual([child]);
+    expect(
+      listNestedThreads([parent, child, decoy], { environmentId: envB, threadId: parentId }),
+    ).toEqual([]);
+    expect(
+      resolveViewedNestedThread([parent, child], scopedThreadKey(scopeThreadRef(envB, child.id)))
+        ?.parentKey,
+    ).toBe(scopedThreadKey(scopeThreadRef(envA, parentId)));
+    expect(applySidebarThreadNesting([child, decoy])).toEqual([child, decoy]);
+    expect(
+      applySidebarThreadNesting([
+        { ...parent, remoteParent: { environmentId: envB, threadId: child.id } },
+        child,
+      ]),
+    ).toHaveLength(2);
+  });
   it("nests through live parent chains in the same environment", () => {
     const keys = resolveNestedThreadKeys([
       thread("root"),
