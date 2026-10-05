@@ -30,9 +30,9 @@ export interface ProjectRequest {
   readonly servedBy: ReadonlyArray<EnvironmentThreadShell>;
   /** The one-line test step posted when the request shipped. */
   readonly testStep: string | null;
-  /** Brad owns the next action: the agent marked it ready, or the thread replied since he asked. */
+  /** Brad owns the next action: the agent marked it ready, or the thread answered this request. */
   readonly forYou: ForYouGroup | null;
-  /** The thread answered after the request without the agent marking the issue ready. */
+  /** The thread answered this request's message without the agent marking the issue ready. */
   readonly replied: boolean;
   /** Open, not ready, and nothing has moved for a day while its thread sits idle. */
   readonly leftBehind: boolean;
@@ -92,13 +92,6 @@ function isWorking(thread: EnvironmentThreadShell): boolean {
   );
 }
 
-function repliedSince(thread: EnvironmentThreadShell | null, since: string): boolean {
-  if (!thread || isWorking(thread)) return false;
-  const completedAt =
-    thread.latestTurn?.state === "completed" ? thread.latestTurn.completedAt : null;
-  return completedAt !== null && completedAt !== undefined && completedAt > since;
-}
-
 /**
  * The project's open requests with who acts next. Settling is only Brad's action,
  * so a request stays listed until he settles it, however done the work looks.
@@ -126,10 +119,13 @@ export function deriveProjectRequests(
     // A reply after the request counts as an answer only while nobody has picked it
     // up; the orchestrator's own replies usually mean "on it", so from it only a
     // question counts as answered.
+    // Answered when the server found the thread's reply to this request's own
+    // message: stored data, so the request never flips between groups as the
+    // thread starts and finishes other turns.
     const replied =
       stage === "requested" &&
       (thread?.id !== rootThreadId || kind === "question") &&
-      repliedSince(thread, issue.createdAt);
+      issue.answer !== undefined;
     const forYou: ForYouGroup | null =
       stage === "needs-test" ? "test" : stage === "ready" || replied ? groupForKind(kind) : null;
     const leftBehind =
@@ -365,4 +361,22 @@ export function requestsOfSettledThreads(
     byThread.set(thread.id, group);
   }
   return [...byThread.values()];
+}
+
+/**
+ * An answer shown under its question: the first one to three sentences of the
+ * reply, whole (never cut mid-sentence), without markdown markers.
+ */
+export function answerSentences(text: string, limit = 3): string {
+  const plain = text
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/\*\*|__|`|^#+\s*|^>\s*|^[-*]\s+/gm, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const sentences = plain.match(/[^.!?]+[.!?]+(?=\s|$)|[^.!?]+$/g) ?? [plain];
+  return sentences
+    .slice(0, limit)
+    .map((sentence) => sentence.trim())
+    .join(" ");
 }
