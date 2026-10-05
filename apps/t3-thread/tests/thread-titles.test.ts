@@ -20,6 +20,7 @@ const environment: SavedEnvironment = {
 };
 function harness(failRename = false) {
   let title = "Original";
+  let scope: string | null = null;
   const commands: Array<typeof ClientOrchestrationCommand.Type> = [];
   const dispose = vi.fn(async () => {});
   const client = new RemoteEnvironmentClient(environment, {
@@ -30,6 +31,9 @@ function harness(failRename = false) {
         if (command.type === "thread.meta.update" && command.title) {
           if (failRename) throw new Error("rename rejected");
           title = command.title;
+        }
+        if (command.type === "thread.meta.update" && command.scope !== undefined) {
+          scope = command.scope;
         }
         return { sequence: commands.length };
       },
@@ -50,6 +54,7 @@ function harness(failRename = false) {
             id: threadId,
             projectId: "project-1",
             title,
+            scope,
             modelSelection: { provider: "codex", model: "gpt-6.1-sol" },
             runtimeMode: "full-access",
             interactionMode: "default",
@@ -82,6 +87,7 @@ describe("operator thread titles", () => {
     expect(await h.client.renameThread({ threadId, title: " Supervisor A " })).toEqual({
       threadId,
       title: "Supervisor A",
+      scope: null,
     });
     expect(h.commands).toHaveLength(1);
     expect(h.commands[0]).toMatchObject({
@@ -89,6 +95,28 @@ describe("operator thread titles", () => {
       threadId,
       title: "Supervisor A",
     });
+  });
+  it("sets and clears project scope through the same metadata command", async () => {
+    const h = harness();
+    await expect(
+      h.client.renameThread({ threadId, scope: " Coordinates the entire repo " }),
+    ).resolves.toEqual({ threadId, title: "Original", scope: "Coordinates the entire repo" });
+    await expect(h.client.renameThread({ threadId, scope: null })).resolves.toEqual({
+      threadId,
+      title: "Original",
+      scope: null,
+    });
+    expect(h.commands).toMatchObject([
+      { type: "thread.meta.update", threadId, scope: "Coordinates the entire repo" },
+      { type: "thread.meta.update", threadId, scope: null },
+    ]);
+  });
+  it("requires at least one metadata change", async () => {
+    const h = harness();
+    await expect(h.client.renameThread({ threadId })).rejects.toThrow(
+      "Thread title or scope must be provided",
+    );
+    expect(h.commands).toEqual([]);
   });
   it.each(["", "   "])("rejects empty title %j before dispatch", async (title) => {
     const h = harness();
