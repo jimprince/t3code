@@ -1090,3 +1090,19 @@ t3-thread project tracker set "$T3_THREAD_ID" brad/t3code-fork
 t3-thread project tracker show "$T3_THREAD_ID"
 t3-thread project tracker clear "$T3_THREAD_ID"
 ```
+
+## Project roadmap
+
+Versions are open Gitea milestones on the project's tracker repository; the first (by due date,
+then creation) is the next release, and its items feed the project page's Next release list.
+Items with no milestone are Later. Brad drags items between columns; agents use:
+
+```bash
+t3-thread roadmap list "$T3_THREAD_ID"            # versions, their items, and Later
+t3-thread roadmap move "$T3_THREAD_ID" 12 "Next release"
+t3-thread roadmap move "$T3_THREAD_ID" 12 later
+t3-thread roadmap version "$T3_THREAD_ID" fork.26
+```
+
+`request shipped --release fork.24` closes that release's milestone, so the next open version
+becomes the next release.
