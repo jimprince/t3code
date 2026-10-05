@@ -1,0 +1,4 @@
+id = "codex-account-writer-handoff"
+category = "fix"
+functionality = "providers"
+text = "Switch compatible Codex accounts without opening the same conversation before its previous session releases it."
