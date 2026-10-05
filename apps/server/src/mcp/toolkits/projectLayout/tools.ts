@@ -52,7 +52,7 @@ const GetProjectLayoutTool = Tool.make("project_layout_get", {
 
 const UpdateProjectLayoutTool = Tool.make("project_layout_update", {
   description:
-    "Change this project's page layout when Brad asks (add, remove, rename or reorder tabs; add, remove, move, retitle, resize or configure widgets). Only the project's orchestrator can do this. Ops address tabs and widgets by id and apply in order on top of the current layout; if one fails nothing changes and the error carries the current layout. The change shows in every client at once with an Undo chip naming you and your reason, so always give a short reason. Example: {\"op\":\"setWidgetConfig\",\"widgetId\":\"requests\",\"config\":{\"includeLater\":false}}.",
+    'Change this project\'s page layout when Brad asks (add, remove, rename or reorder tabs; add, remove, move, retitle, resize or configure widgets). Only the project\'s orchestrator can do this. Ops address tabs and widgets by id and apply in order on top of the current layout; if one fails nothing changes and the error carries the current layout. The change shows in every client at once with an Undo chip naming you and your reason, so always give a short reason. Example: {"op":"setWidgetConfig","widgetId":"requests","config":{"includeLater":false}}.',
   parameters: Schema.Struct({
     baseRevision: NonNegativeInt.annotate({
       description: "The revision you read with project_layout_get.",
