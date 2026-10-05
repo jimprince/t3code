@@ -162,6 +162,8 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadPullRequests: Schema.optionalKey(Schema.Boolean),
   /** Server persists and resolves Gitea issue links on threads. */
   threadIssues: Schema.optionalKey(Schema.Boolean),
+  /** Server lists a project tree's Gitea issues for the project board. */
+  projectIssues: Schema.optionalKey(Schema.Boolean),
   pullRequestStackActions: Schema.optionalKey(Schema.Boolean),
   /** The update path clients should offer for this server. Absent on
       servers that must be relaunched manually (dev checkouts, Windows
