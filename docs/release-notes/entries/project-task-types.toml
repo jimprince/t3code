@@ -1,0 +1,4 @@
+id = "project-task-types"
+category = "feature"
+functionality = "projects"
+text = "Requests and issues are typed tasks: bug, feature, question, deliverable, plan, change, test or maintenance. The project Dashboard shows what needs you first, then completed tasks grouped by the release that shipped them, then maintenance."
