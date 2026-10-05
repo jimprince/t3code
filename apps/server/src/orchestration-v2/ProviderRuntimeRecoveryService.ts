@@ -1,3 +1,4 @@
+import { automaticStartupResumeAllowed } from "../fork/recovery/StartupResumePolicy.ts";
 import { runRanAfter } from "@t3tools/shared/orchestrationV2ThreadError";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
@@ -713,6 +714,7 @@ export const make = Effect.gen(function* () {
 
   const reconcile = (trigger: "startup" | "shutdown") =>
     Effect.gen(function* () {
+      const allowAutomaticResume = yield* automaticStartupResumeAllowed;
       const continueAfterRestart = yield* settings.getSettings.pipe(
         Effect.orElseSucceed(() => null),
       );
@@ -739,7 +741,7 @@ export const make = Effect.gen(function* () {
           ),
         );
         const enabled =
-          continueAfterRestart !== null &&
+          allowAutomaticResume && continueAfterRestart !== null &&
           resolveProjectSettings(continueAfterRestart, projection.thread.projectId).settings
             .continueThreadsAfterServerUpdate;
         const result = yield* reconcileProjection(projection, trigger, enabled);
