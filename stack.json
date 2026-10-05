@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "7b5b2266365a0ecf4cfb45e091e905cb73fc3c7c",
-  "head": "aad9c8088547fbc378d4c1b125052200514b398f",
+  "prev": "f87017d660ea220df0a53ad000e2907a90025486",
+  "head": "4838805b1c83569cbc49221c7525ffaa34e24404",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -179,7 +179,7 @@
       "oid": "ed5483647974f6a17a903825115edef03a81cd9d"
     },
     "fork-orcaslicer-handoff": {
-      "oid": "aad9c8088547fbc378d4c1b125052200514b398f"
+      "oid": "4838805b1c83569cbc49221c7525ffaa34e24404"
     },
     "fork-orchestrator-focus": {
       "oid": "92cb59dd97150f3203dcde5ac3ebe39321fbe1d2"
