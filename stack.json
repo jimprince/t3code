@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "dee8c588d31cd13252646525f2261568821a5089",
-  "head": "4973c875e5de5a84819be2d916df6cf428885d36",
+  "prev": "686faf9dc088893d41b185a648caf9fb20af95c3",
+  "head": "0d4cd7bc42fec8f0b037ff1a89d06b392a420625",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -64,10 +64,10 @@
     "fork-agent-thread-ordering",
     "fork-named-agents",
     "fork-project-automations",
-    "fork-gitea-issue-links"
+    "fork-gitea-issue-links",
+    "fork-orchestrators-view"
   ],
   "unapplied": [
-    "fork-orchestrators-view",
     "fork-project-issues-board",
     "fork-request-ledger",
     "fork-cross-environment-nesting"
