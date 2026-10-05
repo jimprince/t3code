@@ -7,6 +7,7 @@ import {
   type ThreadIssueKey,
   type ThreadIssueLink,
 } from "@t3tools/contracts";
+import { resolveGiteaRemote } from "@t3tools/shared/sourceControl";
 import { threadIssueKeysEqual } from "@t3tools/shared/threadIssues";
 import * as Crypto from "effect/Crypto";
 import * as DateTime from "effect/DateTime";
@@ -28,15 +29,44 @@ const GiteaIssue = Schema.Struct({
 });
 const isThreadIssueOperationError = Schema.is(ThreadIssueOperationError);
 
-interface ResolvedIssueTarget extends ThreadIssueKey {
+export interface ResolvedIssueTarget extends ThreadIssueKey {
   readonly instance: GiteaInstanceConfig;
   readonly url: string;
+}
+
+export function buildThreadIssueLink(
+  target: ResolvedIssueTarget,
+  issue: {
+    readonly title: string;
+    readonly state: "open" | "closed";
+    readonly html_url: string;
+  } | null,
+  linkedAt: string,
+): ThreadIssueLink {
+  return {
+    host: target.host,
+    repository: target.repository,
+    number: target.number,
+    url: issue?.html_url || target.url,
+    linkedAt,
+    snapshot: {
+      title: issue?.title ?? `${target.repository} #${target.number}`,
+      state: issue?.state ?? "open",
+      syncedAt: linkedAt,
+    },
+  };
 }
 
 const fail = (message: string) => new ThreadIssueOperationError({ message });
 
 function instanceForUrl(instances: readonly GiteaInstanceConfig[], url: URL) {
-  return instances.find((instance) => new URL(instance.webOrigin).origin === url.origin);
+  const hostname = url.hostname.toLowerCase();
+  const matches = instances.filter((instance) =>
+    [instance.host, ...instance.sshAliases, new URL(instance.webOrigin).hostname].some(
+      (candidate) => candidate.toLowerCase() === hostname,
+    ),
+  );
+  return matches.length === 1 ? matches[0]! : null;
 }
 
 function parseIssuePath(pathname: string): { repository: string; number: number } | null {
@@ -60,11 +90,14 @@ function projectTarget(
       ? `${identity.owner}/${identity.name}`
       : identity.canonicalKey.split("/").slice(1).join("/");
   const host = identity.canonicalKey.split("/")[0]?.toLowerCase();
-  const instance = instances.find(
-    (candidate) =>
-      candidate.host.toLowerCase() === host ||
-      new URL(candidate.webOrigin).host.toLowerCase() === host,
-  );
+  const remoteMatch = resolveGiteaRemote(identity.locator.remoteUrl, instances);
+  const instance =
+    remoteMatch?.instance ??
+    instances.find(
+      (candidate) =>
+        candidate.host.toLowerCase() === host ||
+        new URL(candidate.webOrigin).host.toLowerCase() === host,
+    );
   return instance && repository.includes("/") ? { instance, repository } : null;
 }
 
@@ -78,8 +111,12 @@ export function resolveThreadIssueReference(
     if (url.username || url.password || url.search || url.hash) {
       throw fail("Expected a canonical Gitea issue URL without credentials, query, or fragment.");
     }
-    const instance = instanceForUrl(instances, url);
     const parsed = parseIssuePath(url.pathname);
+    const projectIssue = projectTarget(project, instances);
+    const projectHost = project.repositoryIdentity?.canonicalKey.split("/")[0]?.toLowerCase();
+    const instance =
+      instanceForUrl(instances, url) ??
+      (projectIssue && projectHost === url.hostname.toLowerCase() ? projectIssue.instance : null);
     if (!instance || !parsed) {
       throw fail("Only issue URLs from a configured Gitea host can be linked.");
     }
@@ -88,7 +125,7 @@ export function resolveThreadIssueReference(
       host: new URL(instance.webOrigin).host.toLowerCase(),
       repository: parsed.repository.toLowerCase(),
       number: parsed.number,
-      url: `${instance.webOrigin.replace(/\/$/, "")}/${parsed.repository}/issues/${parsed.number}`,
+      url: `${url.origin}/${parsed.repository}/issues/${parsed.number}`,
     };
   }
 
@@ -157,25 +194,22 @@ export const make = Effect.gen(function* () {
       });
       const existing = state.thread.issues?.find((issue) => threadIssueKeysEqual(issue, target));
       if (existing) return { link: existing, changed: false };
-      const issue = yield* api
+      const fetchedIssue = yield* api
         .request(
           target.instance,
           `${GiteaApi.repositoryPath(target.repository)}/issues/${target.number}`,
           GiteaIssue,
         )
-        .pipe(Effect.mapError((error) => fail(error.detail)));
-      if (issue.pull_request !== undefined) {
+        .pipe(
+          Effect.timeoutOption("1 second"),
+          Effect.orElseSucceed(() => Option.none()),
+        );
+      if (Option.isSome(fetchedIssue) && fetchedIssue.value.pull_request !== undefined) {
         return yield* fail("That Gitea URL is a pull request, not an issue.");
       }
       const now = DateTime.formatIso(yield* DateTime.now);
-      const link: ThreadIssueLink = {
-        host: target.host,
-        repository: target.repository,
-        number: target.number,
-        url: issue.html_url || target.url,
-        linkedAt: now,
-        snapshot: { title: issue.title, state: issue.state, syncedAt: now },
-      };
+      const issue = Option.getOrNull(fetchedIssue);
+      const link = buildThreadIssueLink(target, issue, now);
       yield* engine
         .dispatch({
           type: "thread.issue.link",

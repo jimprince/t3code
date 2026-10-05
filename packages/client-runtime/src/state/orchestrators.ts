@@ -53,6 +53,101 @@ export interface OrchestratorSummary {
   readonly pullRequests: ReadonlyArray<ThreadPullRequestLink>;
 }
 
+export type ProjectSidebarBucket = "needs-you" | "working" | "idle" | "quiet";
+
+const PROJECT_SIDEBAR_BUCKET_PRIORITY: Record<ProjectSidebarBucket, number> = {
+  "needs-you": 0,
+  working: 1,
+  idle: 2,
+  quiet: 3,
+};
+
+export function projectSidebarBucket(
+  summary: OrchestratorSummary,
+  quietCutoffMs: number,
+): ProjectSidebarBucket {
+  if (summary.needsYou.length > 0) return "needs-you";
+  if (
+    summary.activeWorkerCount > 0 ||
+    summary.status === "working" ||
+    summary.status === "monitoring" ||
+    summary.status === "supervising"
+  ) {
+    return "working";
+  }
+  return Date.parse(summary.latestActivityAt) >= quietCutoffMs ? "idle" : "quiet";
+}
+
+function compareStableThreadOrder(
+  left: EnvironmentThreadShell,
+  right: EnvironmentThreadShell,
+): number {
+  const leftOrder =
+    left.pinnedAt != null ? (left.pinOrderKey ?? null) : (left.activeOrderKey ?? null);
+  const rightOrder =
+    right.pinnedAt != null ? (right.pinOrderKey ?? null) : (right.activeOrderKey ?? null);
+  if (leftOrder !== null || rightOrder !== null) {
+    if (leftOrder === null) return 1;
+    if (rightOrder === null) return -1;
+    const order = leftOrder.localeCompare(rightOrder);
+    if (order !== 0) return order;
+  }
+  return (
+    left.title.localeCompare(right.title, undefined, { sensitivity: "base" }) ||
+    Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+    threadActivityKey(left).localeCompare(threadActivityKey(right))
+  );
+}
+
+/** Stable project ordering: live timestamps never reshuffle peers inside one status bucket. */
+export function sortOrchestratorSummariesForSidebar(
+  summaries: ReadonlyArray<OrchestratorSummary>,
+  quietCutoffMs: number,
+  displayedBuckets?: ReadonlyMap<string, ProjectSidebarBucket>,
+): ReadonlyArray<OrchestratorSummary> {
+  const bucketOf = (summary: OrchestratorSummary) =>
+    displayedBuckets?.get(threadActivityKey(summary.root)) ??
+    projectSidebarBucket(summary, quietCutoffMs);
+  return [...summaries].sort(
+    (left, right) =>
+      PROJECT_SIDEBAR_BUCKET_PRIORITY[bucketOf(left)] -
+        PROJECT_SIDEBAR_BUCKET_PRIORITY[bucketOf(right)] ||
+      compareStableThreadOrder(left.root, right.root),
+  );
+}
+
+/** Projects mode owns complete orchestrator trees; Threads keeps only standalone roots. */
+export function threadsVisibleInThreadsMode(
+  threads: ReadonlyArray<EnvironmentThreadShell>,
+  projectsViewEnabled: boolean,
+): ReadonlyArray<EnvironmentThreadShell> {
+  if (!projectsViewEnabled) return threads;
+  const childrenByParent = new Map<string, EnvironmentThreadShell[]>();
+  for (const thread of threads) {
+    if (thread.archivedAt !== null || thread.parentThreadId === null) continue;
+    const parentKey = `${thread.environmentId}:${thread.parentThreadId}`;
+    const children = childrenByParent.get(parentKey);
+    if (children) children.push(thread);
+    else childrenByParent.set(parentKey, [thread]);
+  }
+  const projectThreadKeys = new Set<string>();
+  for (const root of threads) {
+    const rootKey = threadActivityKey(root);
+    if (
+      root.archivedAt !== null ||
+      root.parentThreadId !== null ||
+      !childrenByParent.has(rootKey)
+    ) {
+      continue;
+    }
+    projectThreadKeys.add(rootKey);
+    for (const descendant of collectDescendants(root, childrenByParent)) {
+      projectThreadKeys.add(threadActivityKey(descendant));
+    }
+  }
+  return threads.filter((thread) => !projectThreadKeys.has(threadActivityKey(thread)));
+}
+
 function hasPlanReady(thread: EnvironmentThreadShell): boolean {
   return (
     thread.interactionMode === "plan" &&
@@ -188,12 +283,6 @@ export function buildOrchestratorSummaries(
         issues,
         pullRequests,
       };
-    })
-    .sort((left, right) => {
-      const attention = Number(right.needsYou.length > 0) - Number(left.needsYou.length > 0);
-      if (attention !== 0) return attention;
-      const working = Number(right.activeWorkerCount > 0) - Number(left.activeWorkerCount > 0);
-      return working || Date.parse(right.latestActivityAt) - Date.parse(left.latestActivityAt);
     });
 }
 
@@ -255,7 +344,7 @@ export function buildStandaloneThreadGroups(
         threads: [...rows].sort(
           (left, right) =>
             priority[right.status] - priority[left.status] ||
-            Date.parse(right.thread.updatedAt) - Date.parse(left.thread.updatedAt),
+            compareStableThreadOrder(left.thread, right.thread),
         ),
       },
     ];

@@ -40,6 +40,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { AppText as Text } from "../../components/AppText";
 import { SegmentedControl } from "../../components/SegmentedControl";
 import { MaterialFloatingActionButton } from "../../components/MaterialFloatingActionButton";
+import { ProjectFavicon } from "../../components/ProjectFavicon";
 import type { WorkspaceEnvironment, WorkspaceState } from "../../state/workspaceModel";
 import type { SavedRemoteConnection } from "../../lib/connection";
 import { scopedProjectKey } from "../../lib/scopedEntities";
@@ -250,59 +251,77 @@ function MobileOrchestratorList({
   }
   return (
     <ScrollView className="flex-1" contentContainerClassName="px-3 pb-24">
-      {summaries.map((summary) => (
-        <Pressable
-          key={`${summary.root.environmentId}:${summary.root.id}`}
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${summary.root.title}`}
-          className="border-b border-border px-2 py-3 active:bg-card"
-          onPress={() => onSelectThread(summary.root)}
-        >
-          <View className="flex-row items-center gap-2">
-            <Text
-              className="min-w-0 flex-1 text-sm font-t3-medium text-foreground"
-              numberOfLines={1}
-            >
-              {summary.root.title}
-            </Text>
-            {summary.needsYou.length > 0 ? (
-              <Text className="text-xs text-warning-foreground">
-                {summary.needsYou.length} need you
+      {summaries.map((summary) => {
+        const project =
+          summary.projects.find(
+            (candidate) =>
+              candidate.environmentId === summary.root.environmentId &&
+              candidate.id === summary.root.projectId,
+          ) ?? summary.projects[0];
+        return (
+          <Pressable
+            key={`${summary.root.environmentId}:${summary.root.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${summary.root.title}`}
+            className="border-b border-border px-2 py-3 active:bg-card"
+            onPress={() => onSelectThread(summary.root)}
+          >
+            <View className="flex-row items-center gap-2">
+              {project ? (
+                <ProjectFavicon
+                  environmentId={project.environmentId}
+                  projectTitle={project.title}
+                  workspaceRoot={project.workspaceRoot}
+                  faviconPath={project.faviconPath}
+                  projectIcon={project.projectIcon}
+                  size={20}
+                />
+              ) : null}
+              <Text
+                className="min-w-0 flex-1 text-sm font-t3-medium text-foreground"
+                numberOfLines={1}
+              >
+                {summary.root.title}
+              </Text>
+              {summary.needsYou.length > 0 ? (
+                <Text className="text-xs text-warning-foreground">
+                  {summary.needsYou.length} need you
+                </Text>
+              ) : null}
+            </View>
+            <View className="mt-1.5 flex-row items-center gap-2">
+              <Text
+                className={cn(
+                  "text-xs",
+                  summary.status === "working" || summary.status === "supervising"
+                    ? "text-adaptive-sky-600-400"
+                    : summary.status === "approval" || summary.status === "input"
+                      ? "text-warning-foreground"
+                      : "text-foreground-muted",
+                )}
+              >
+                {summary.status === "supervising"
+                  ? "◌ Supervising"
+                  : summary.status === "working"
+                    ? "◌ Working"
+                    : summary.status === "approval"
+                      ? "Needs approval"
+                      : summary.status === "input"
+                        ? "Needs input"
+                        : "Idle"}
+              </Text>
+              <Text className="text-xs text-foreground-muted">
+                {summary.activeWorkerCount} active
+              </Text>
+            </View>
+            {summary.projects.length > 0 ? (
+              <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
+                {summary.projects.map((project) => project.title).join(" · ")}
               </Text>
             ) : null}
-          </View>
-          <View className="mt-1.5 flex-row items-center gap-2">
-            <Text
-              className={cn(
-                "text-xs",
-                summary.status === "working" || summary.status === "supervising"
-                  ? "text-adaptive-sky-600-400"
-                  : summary.status === "approval" || summary.status === "input"
-                    ? "text-warning-foreground"
-                    : "text-foreground-muted",
-              )}
-            >
-              {summary.status === "supervising"
-                ? "◌ Supervising"
-                : summary.status === "working"
-                  ? "◌ Working"
-                  : summary.status === "approval"
-                    ? "Needs approval"
-                    : summary.status === "input"
-                      ? "Needs input"
-                      : "Idle"}
-            </Text>
-            <Text className="text-xs text-foreground-muted">
-              {summary.activeWorkerCount} active
-            </Text>
-          </View>
-          {summary.projects.length > 0 ? (
-            <Text className="mt-1 text-xs text-foreground-muted" numberOfLines={1}>
-              {summary.projects.map((project) => project.title).join(" · ")}
-            </Text>
-          ) : null}
-        </Pressable>
-      ))}
+          </Pressable>
+        );
+      })}
     </ScrollView>
   );
 }

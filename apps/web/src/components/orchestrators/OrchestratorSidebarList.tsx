@@ -2,7 +2,10 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   buildOrchestratorSummaries,
   buildStandaloneThreadGroups,
+  projectSidebarBucket,
+  sortOrchestratorSummariesForSidebar,
   type OrchestratorSummary,
+  type ProjectSidebarBucket,
   type StandaloneThreadStatus,
 } from "@t3tools/client-runtime/state/orchestrators";
 import { useNavigate } from "@tanstack/react-router";
@@ -14,7 +17,9 @@ import { formatRelativeTimeLabel } from "../../timestampFormat";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { useUiStateStore } from "../../uiStateStore";
 import { ThreadIssueBadges } from "../ThreadIssueBadges";
+import { ProjectFavicon } from "../ProjectFavicon";
 import { OrchestratorStatus } from "./OrchestratorStatus";
+import { useDeferredProjectSidebarBuckets } from "./projectSidebarOrder";
 
 const QUIET_AFTER_MS = 7 * 24 * 60 * 60 * 1_000;
 const STANDALONE_STATUS: Record<
@@ -27,10 +32,31 @@ const STANDALONE_STATUS: Record<
   working: { label: "Working", className: "bg-info" },
   completed: { label: "Completed", className: "bg-success" },
 };
+const STANDALONE_BUCKET: Record<StandaloneThreadStatus, ProjectSidebarBucket> = {
+  approval: "needs-you",
+  input: "needs-you",
+  plan: "needs-you",
+  working: "working",
+  completed: "idle",
+};
+const BUCKET_RANK: Record<ProjectSidebarBucket, number> = {
+  "needs-you": 0,
+  working: 1,
+  idle: 2,
+  quiet: 3,
+};
+const threadKey = (thread: { readonly environmentId: string; readonly id: string }) =>
+  `${thread.environmentId}:${thread.id}`;
 
 function ProjectRow({ summary }: { readonly summary: OrchestratorSummary }) {
   const navigate = useNavigate();
   const rootRef = scopeThreadRef(summary.root.environmentId, summary.root.id);
+  const rootProject =
+    summary.projects.find(
+      (project) =>
+        project.environmentId === summary.root.environmentId &&
+        project.id === summary.root.projectId,
+    ) ?? summary.projects[0];
   return (
     <li className="relative rounded-md hover:bg-sidebar-row-hover">
       <button
@@ -46,6 +72,7 @@ function ProjectRow({ summary }: { readonly summary: OrchestratorSummary }) {
       />
       <div className="pointer-events-none relative z-10 flex w-full flex-col gap-1.5 px-2.5 py-2 text-left">
         <span className="flex min-w-0 w-full items-center gap-2">
+          {rootProject ? <ProjectFavicon project={rootProject} className="size-4" /> : null}
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-sidebar-foreground">
             {summary.root.title}
           </span>
@@ -94,13 +121,48 @@ export function OrchestratorSidebarList() {
     () => buildStandaloneThreadGroups(threads, projects, lastVisitedAtByThreadKey),
     [lastVisitedAtByThreadKey, projects, threads],
   );
-  const active = summaries.filter(
-    (summary) =>
-      summary.needsYou.length > 0 ||
-      summary.activeWorkerCount > 0 ||
-      Date.parse(summary.latestActivityAt) >= quietCutoff,
+  const desiredBuckets = useMemo(
+    () => [
+      ...summaries.map(
+        (summary) => [threadKey(summary.root), projectSidebarBucket(summary, quietCutoff)] as const,
+      ),
+      ...standaloneGroups.flatMap((group) =>
+        group.threads.map(
+          ({ thread, status }) => [threadKey(thread), STANDALONE_BUCKET[status]] as const,
+        ),
+      ),
+    ],
+    [quietCutoff, standaloneGroups, summaries],
   );
-  const quiet = summaries.filter((summary) => !active.includes(summary));
+  const displayedBuckets = useDeferredProjectSidebarBuckets(desiredBuckets);
+  const orderedSummaries = useMemo(
+    () => sortOrchestratorSummariesForSidebar(summaries, quietCutoff, displayedBuckets),
+    [displayedBuckets, quietCutoff, summaries],
+  );
+  const active = orderedSummaries.filter(
+    (summary) => displayedBuckets.get(threadKey(summary.root)) !== "quiet",
+  );
+  const quiet = orderedSummaries.filter(
+    (summary) => displayedBuckets.get(threadKey(summary.root)) === "quiet",
+  );
+  const orderedStandaloneGroups = useMemo(
+    () =>
+      standaloneGroups
+        .map((group) => ({
+          ...group,
+          threads: [...group.threads].sort(
+            (left, right) =>
+              BUCKET_RANK[
+                displayedBuckets.get(threadKey(left.thread)) ?? STANDALONE_BUCKET[left.status]
+              ] -
+                BUCKET_RANK[
+                  displayedBuckets.get(threadKey(right.thread)) ?? STANDALONE_BUCKET[right.status]
+                ] || left.thread.title.localeCompare(right.thread.title),
+          ),
+        }))
+        .sort((left, right) => left.project.title.localeCompare(right.project.title)),
+    [displayedBuckets, standaloneGroups],
+  );
 
   return (
     <div className="flex flex-col gap-3">
@@ -148,12 +210,12 @@ export function OrchestratorSidebarList() {
         </>
       )}
 
-      {standaloneGroups.length > 0 ? (
+      {orderedStandaloneGroups.length > 0 ? (
         <section aria-label="Standalone threads">
           <h2 className="px-2.5 py-1 text-xs font-semibold tracking-wide text-sidebar-muted-foreground uppercase">
             Threads
           </h2>
-          {standaloneGroups.map((group) => (
+          {orderedStandaloneGroups.map((group) => (
             <div key={`${group.project.environmentId}:${group.project.id}`}>
               <h3 className="px-3 py-1 text-3xs font-medium text-sidebar-muted-foreground">
                 {group.project.title}

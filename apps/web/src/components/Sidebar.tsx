@@ -28,6 +28,7 @@ import {
   resolveSettledThreadTimestamp,
   sortSettledThreads,
 } from "@t3tools/client-runtime/state/thread-sort";
+import { threadsVisibleInThreadsMode } from "@t3tools/client-runtime/state/orchestrators";
 import {
   threadSearchMatchKey,
   type EnvironmentThreadSearchMatch,
@@ -2441,7 +2442,7 @@ export default function Sidebar() {
     [projects],
   );
   const projectOrder = useUiStateStore((store) => store.projectOrder);
-  const threads = useThreadShells();
+  const allThreads = useThreadShells();
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
@@ -2451,6 +2452,10 @@ export default function Sidebar() {
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
   const workingShelfEnabled = useClientSettings((s) => s.sidebarWorkingShelfEnabled);
   const orchestratorsEnabled = useClientSettings((s) => s.sidebarOrchestratorsEnabled);
+  const threads = useMemo(
+    () => threadsVisibleInThreadsMode(allThreads, orchestratorsEnabled),
+    [allThreads, orchestratorsEnabled],
+  );
   const [sidebarMode, setSidebarMode] = useLocalStorage(
     "t3code:sidebar:mode",
     "threads" as const,

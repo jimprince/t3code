@@ -6,6 +6,8 @@ import {
   buildOrchestratorSummaries,
   buildStandaloneThreadGroups,
   orchestratorDoneSince,
+  sortOrchestratorSummariesForSidebar,
+  threadsVisibleInThreadsMode,
 } from "./orchestrators.ts";
 
 const project = (id: string): EnvironmentProject => ({
@@ -133,6 +135,56 @@ describe("buildOrchestratorSummaries", () => {
     const cycle = thread("cycle", "cycle");
     const [summary] = buildOrchestratorSummaries([root, child, cycle], [project("project-a")]);
     expect(summary?.status).toBe("ready");
+  });
+
+  it("keeps project rows stable when activity timestamps change inside one bucket", () => {
+    const zebra = thread("zebra", null, { title: "Zebra" });
+    const alpha = thread("alpha", null, { title: "Alpha" });
+    const zebraChild = thread("zebra-child", "zebra", {
+      updatedAt: "2026-10-04T05:00:00.000Z",
+    });
+    const alphaChild = thread("alpha-child", "alpha", {
+      updatedAt: "2026-10-04T04:00:00.000Z",
+    });
+    const before = buildOrchestratorSummaries(
+      [zebra, zebraChild, alpha, alphaChild],
+      [project("project-a")],
+    );
+    const after = buildOrchestratorSummaries(
+      [zebra, { ...zebraChild, updatedAt: "2026-10-04T06:00:00.000Z" }, alpha, alphaChild],
+      [project("project-a")],
+    );
+    const cutoff = Date.parse("2026-10-01T00:00:00.000Z");
+    expect(sortOrchestratorSummariesForSidebar(before, cutoff).map((item) => item.root.id)).toEqual(
+      ["alpha", "zebra"],
+    );
+    expect(sortOrchestratorSummariesForSidebar(after, cutoff).map((item) => item.root.id)).toEqual([
+      "alpha",
+      "zebra",
+    ]);
+  });
+
+  it("keeps project trees in Threads only when Projects is disabled", () => {
+    const root = thread("root", null, { pinnedAt: "2026-10-01T00:00:00.000Z" });
+    const child = thread("child", "root", { pinnedAt: "2026-10-01T00:00:00.000Z" });
+    const standalone = thread("standalone", null);
+    const archivedParent = thread("archived-parent", null, {
+      archivedAt: "2026-10-01T00:00:00.000Z",
+    });
+    const orphan = thread("orphan", "archived-parent");
+    const finishedOnlyRoot = thread("finished-only-root", null);
+    const archivedChild = thread("archived-child", "finished-only-root", {
+      archivedAt: "2026-10-01T00:00:00.000Z",
+    });
+    const all = [root, child, standalone, archivedParent, orphan, finishedOnlyRoot, archivedChild];
+    expect(threadsVisibleInThreadsMode(all, true).map((item) => item.id)).toEqual([
+      "standalone",
+      "archived-parent",
+      "orphan",
+      "finished-only-root",
+      "archived-child",
+    ]);
+    expect(threadsVisibleInThreadsMode(all, false)).toEqual(all);
   });
 });
 
