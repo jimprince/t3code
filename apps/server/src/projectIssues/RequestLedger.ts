@@ -537,8 +537,36 @@ export const make = (deps: {
           .request(target.instance, path, GiteaIssueLabels)
           .pipe(Effect.mapError((error) => fail(error.detail)));
         const names = new Set((issue.labels ?? []).map((label) => label.name.toLowerCase()));
-        if (!names.has(REQUEST_LABEL)) return yield* fail("That issue is not a request.");
-        if (issue.state === "closed") return yield* fail("That request is already settled.");
+        // Typing a task is the one change that applies to any tracker issue, open or closed.
+        const typeOnly =
+          input.kind !== undefined &&
+          input.status === undefined &&
+          input.comment === undefined &&
+          input.release === undefined;
+        if (!typeOnly && !names.has(REQUEST_LABEL)) {
+          return yield* fail("That issue is not a request.");
+        }
+        if (!typeOnly && issue.state === "closed") {
+          return yield* fail("That request is already settled.");
+        }
+        if (input.kind !== undefined) {
+          const wanted = requestKindLabel(input.kind);
+          const others = [...names].filter((name) => name.startsWith("ask:") && name !== wanted);
+          const [wantedId, ...otherIds] = yield* ensureLabels(target.instance, target.repository, [
+            wanted,
+            ...others,
+          ]).pipe(Effect.mapError((error) => fail(error.detail)));
+          if (!names.has(wanted)) {
+            yield* api
+              .send(target.instance, "POST", `${path}/labels`, { labels: [wantedId] })
+              .pipe(Effect.mapError((error) => fail(error.detail)));
+          }
+          for (const id of otherIds) {
+            yield* api
+              .send(target.instance, "DELETE", `${path}/labels/${id}`)
+              .pipe(Effect.mapError((error) => fail(error.detail)));
+          }
+        }
         const stageLabels = [...STATUS_LABELS, AWAITING_RELEASE_LABEL, NEEDS_TEST_LABEL];
         // Starting work on a parked idea takes it off the shelf.
         if (input.status === "in-progress" && names.has(PARKED_LABEL)) {
@@ -596,7 +624,7 @@ export const make = (deps: {
             .send(target.instance, "POST", `${path}/comments`, { body: note })
             .pipe(Effect.mapError((error) => fail(error.detail)));
         }
-        if (input.status === "in-progress" || input.status === undefined) {
+        if (!typeOnly && (input.status === "in-progress" || input.status === undefined)) {
           const url = `${target.instance.webOrigin.replace(/\/$/, "")}/${target.repository}/issues/${reference.number}`;
           yield* deps.threadIssues
             .link({ threadId: input.threadId, reference: url })
