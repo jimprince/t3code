@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Funnel</title>
+    <style>
+      body {
+        margin: 8px;
+        background: #000;
+        color: #fff;
+        font:
+          12px/1.4 system-ui,
+          sans-serif;
+      }
+      .card {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid #222;
+      }
+      .card img {
+        width: 40px;
+        height: 40px;
+        border: 1px solid #333;
+      }
+      .card .what {
+        flex: 1;
+        min-width: 0;
+      }
+      .card .stage {
+        color: #999;
+        font-size: 11px;
+      }
+      button {
+        background: #000;
+        color: #fff;
+        border: 1px solid #444;
+        font: inherit;
+        font-size: 11px;
+        padding: 2px 8px;
+      }
+      #feedback {
+        display: none;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      #feedback textarea {
+        flex: 1;
+        background: #000;
+        color: #fff;
+        border: 1px solid #444;
+        font: inherit;
+      }
+      #result {
+        color: #999;
+        font-size: 11px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Example: one funnel card with Advance and Feedback; a script generates one per item.
+     Assets must sit in this page's own folder (thumbs/...); they are inlined read-only, and
+     anything outside the folder is not, so copy canvas.css next to a page that needs it. -->
+    <div class="card" data-item="42" data-title="Bracket v2" data-stage="render" data-next="print">
+      <img src="thumbs/bracket.svg" alt="Bracket v2 render" />
+      <div class="what">
+        <div>#42 Bracket v2</div>
+        <div class="stage">render, revision 2</div>
+      </div>
+      <button id="advance">Advance</button>
+      <button id="feedback-open">Feedback</button>
+    </div>
+    <div id="feedback">
+      <textarea id="feedback-text" rows="2" aria-label="Feedback"></textarea>
+      <button id="feedback-send">Send</button>
+    </div>
+    <div id="result"></div>
+    <script>
+      // The action bridge: post a whitelisted intent to the T3 page. "send" shows Brad the
+      // exact text and waits for his confirmation; the result comes back as t3-canvas-result.
+      const card = document.querySelector(".card");
+      const item = `#${card.dataset.item} ${card.dataset.title}`;
+      let next = 0;
+      const ask = (intent, fields) =>
+        window.parent.postMessage(
+          { type: "t3-canvas", id: String(++next), intent, ...fields },
+          "*",
+        );
+      document.getElementById("advance").onclick = () =>
+        ask("send", {
+          text: `Advance ${item} from ${card.dataset.stage} to ${card.dataset.next}.`,
+        });
+      document.getElementById("feedback-open").onclick = () =>
+        (document.getElementById("feedback").style.display = "flex");
+      document.getElementById("feedback-send").onclick = () => {
+        const text = document.getElementById("feedback-text").value.trim();
+        if (text) ask("send", { text: `Feedback on ${item}: ${text}` });
+      };
+      window.addEventListener("message", (event) => {
+        if (event.data?.type !== "t3-canvas-result") return;
+        document.getElementById("result").textContent = event.data.ok
+          ? "Sent to the orchestrator"
+          : `Not sent: ${event.data.reason}`;
+      });
+    </script>
+  </body>
+</html>
