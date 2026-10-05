@@ -150,6 +150,7 @@ export const ExecutionEnvironmentCapabilities = Schema.Struct({
   threadAutoSettleOptOut: Schema.optionalKey(Schema.Boolean),
   /** Server stores parentThreadId and understands thread.parent.set. */
   threadNesting: Schema.optionalKey(Schema.Boolean),
+  remoteThreadNesting: Schema.optionalKey(Schema.Boolean),
   /** Server understands regenerateTitle on thread.meta.update. Absent on
       older servers, so clients hide the action instead of sending it. */
   threadTitleRegeneration: Schema.optionalKey(Schema.Boolean),

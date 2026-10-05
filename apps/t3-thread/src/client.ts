@@ -505,9 +505,13 @@ export class RemoteEnvironmentClient {
     initialMessage?: string;
     workerContext?: WorkerContext;
     parentThreadId?: string | null;
+    remoteParent?: { environmentId: string; threadId: string } | null;
     settleOnComplete?: boolean;
     pin?: boolean;
   }): Promise<{ threadId: string; projectId: string; title: string; pinned: boolean }> {
+    if (input.remoteParent && (await this.describe()).capabilities.remoteThreadNesting !== true) {
+      throw new Error("Update the child server to support cross-environment nesting.");
+    }
     const snapshot = await this.getShellSnapshot();
     const project = snapshot.projects.find((candidate) => candidate.id === input.projectId);
     if (!project) {
@@ -582,6 +586,7 @@ export class RemoteEnvironmentClient {
             createdAt,
             settleOnComplete,
             ...(input.parentThreadId ? { parentThreadId: input.parentThreadId } : {}),
+            ...(input.remoteParent ? { remoteParent: input.remoteParent } : {}),
           },
           ...(input.branch
             ? {
@@ -872,7 +877,14 @@ export class RemoteEnvironmentClient {
   }
 
   /** Nests a thread under an orchestrating thread, or with null returns it to the sidebar. */
-  async setThreadParent(threadId: string, parentThreadId: string | null): Promise<void> {
+  async setThreadParent(
+    threadId: string,
+    parentThreadId: string | null,
+    remoteParent?: { environmentId: string; threadId: string } | null,
+  ): Promise<void> {
+    if (remoteParent && (await this.describe()).capabilities.remoteThreadNesting !== true) {
+      throw new Error("Update the child server to support cross-environment nesting.");
+    }
     if (!(await this.supportsThreadNesting())) {
       throw new Error(
         `'${this.environment.name}' runs a server without thread nesting. Update T3 Code there first.`,
@@ -883,6 +895,7 @@ export class RemoteEnvironmentClient {
       commandId: NodeCrypto.randomUUID(),
       threadId,
       parentThreadId,
+      remoteParent: remoteParent ?? null,
     });
   }
 
