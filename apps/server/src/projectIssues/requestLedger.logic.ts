@@ -191,8 +191,9 @@ export type RequestItemPlan =
 /**
  * What one split item becomes. The New request box always files. A chat
  * message's question is conversation and is skipped; anything else continues
- * the open issue the split named (or, without a model, the thread's newest
- * linked issue) as a comment; only genuinely new work becomes a new issue.
+ * the open issue the split named (or, without a model, the thread's only linked
+ * issue) as a comment; only genuinely new work becomes a new issue. Without a
+ * model and without a single thread issue, a chat message files nothing.
  */
 export function planRequestItem(
   item: { readonly kind: RequestKind; readonly existing?: number | null },
@@ -207,10 +208,15 @@ export function planRequestItem(
   if (item.kind === "question") return { action: "skip" };
   const named = context.candidates.find((candidate) => candidate.number === item.existing);
   if (named) return { action: "comment", number: named.number };
-  const threadIssue = context.unsplit
-    ? context.candidates.find((candidate) => candidate.inThread)
-    : undefined;
-  return threadIssue ? { action: "comment", number: threadIssue.number } : { action: "file" };
+  if (!context.unsplit) return { action: "file" };
+  // Without a model the message's topic is unknown: it follows the thread's issue
+  // only when the thread has exactly one, and otherwise stays conversation. An
+  // orchestrator thread linked to many issues must not pile every message onto
+  // whichever one changed last (seen on fork.26).
+  const threadIssues = context.candidates.filter((candidate) => candidate.inThread);
+  return threadIssues.length === 1
+    ? { action: "comment", number: threadIssues[0]!.number }
+    : { action: "skip" };
 }
 
 const FOLLOW_UP_MARKER = "t3-request-followup";

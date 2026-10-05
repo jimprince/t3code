@@ -200,15 +200,20 @@ describe("follow-ups instead of an issue per message", () => {
     expect(planRequestItem({ kind: "question", existing: 17 }, box)).toEqual({ action: "file" });
   });
 
-  it("without a model, follows the thread's newest linked issue", () => {
+  it("without a model, follows the thread's only linked issue and otherwise files nothing", () => {
     const unsplit = { explicit: false, candidates, unsplit: true };
     expect(planRequestItem({ kind: "deliverable" }, unsplit)).toEqual({
       action: "comment",
       number: 17,
     });
+    // An orchestrator thread linked to many issues: the topic is unknown.
+    const busy = [...candidates, { number: 18, title: "Another", inThread: true }];
+    expect(planRequestItem({ kind: "deliverable" }, { ...unsplit, candidates: busy })).toEqual({
+      action: "skip",
+    });
     expect(
       planRequestItem({ kind: "deliverable" }, { ...unsplit, candidates: [candidates[1]!] }),
-    ).toEqual({ action: "file" });
+    ).toEqual({ action: "skip" });
   });
 
   it("quotes the follow-up with a hidden marker", () => {
