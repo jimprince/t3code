@@ -993,3 +993,13 @@ id = "v2-port-2689"
 date = "2026-10-05"
 decided = "keep-on-top"
 rationale = "Keep local lazy STEP worker and original-byte handoff while preserving V2 native web dependencies and exact model assets."
+
+[[patch]]
+name = "fork-t3-thread-prebuilt"
+subject = "perf(t3-thread): run prebuilt commands and back off idle watchers"
+class = "divergence"
+purpose = "Reduce operator CLI launches through explicit prebuilt JavaScript, restart managed watchers on verified snapshot promotion, preview dependency commands from the exact deployment ref, optionally retain predecessor and failed snapshots for rollback, protect runtimes still used by leased watchers during pruning, and reduce watcher reads through shared polling, parked stale sources, and idle backoff."
+retire_when = "The worker operator CLI supplies equivalent prebuilt launch and adaptive polling behavior."
+depends_on = ["fork-worker-operations"]
+roles = []
+note = "#222: Unscoped agent status reads one saved-agent projection at a time and streams each unchanged summary with stdout backpressure, avoiding aggregate history retention. #220: The exact Perl flock-helper/no-loader guard test is maintained in earlier fork-worker-operations; preserve that tested guard during replay while keeping prebuilt launcher and watcher behavior here."
