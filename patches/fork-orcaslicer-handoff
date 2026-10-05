@@ -1,6 +1,6 @@
-Bottom: d7a7cc7ae0ceee3d354da556afba58ba64f126ca
-Top:    8080c58bb13a06ae232868551d62c647822433d8
+Bottom: 94d64d38ff11cba30158487cf20ed8988fae6e75
+Top:    bc175f1e3c41d19efd89b38d1d52870e1d700a16
 Author: brad <bradprin@live.com>
-Date:   2026-10-05 22:51:39 +0000
+Date:   2026-10-05 22:51:40 +0000
 
 feat(desktop): open model previews in OrcaSlicer
