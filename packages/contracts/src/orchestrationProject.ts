@@ -7,6 +7,7 @@ import { ProjectScript, ReceivedProjectIcon } from "./project.ts";
 
 /** Project summary shared by the V2 shell and application project APIs. */
 export const OrchestrationProjectShell = Schema.Struct({
+  kind: Schema.optional(Schema.Literals(["workspace", "chat"])),
   id: ProjectId,
   title: TrimmedNonEmptyString,
   workspaceRoot: TrimmedNonEmptyString,
