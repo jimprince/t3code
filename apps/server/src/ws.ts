@@ -1,4 +1,5 @@
 import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
+import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
 import { OrchestrationDispatchCommandError } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
@@ -2653,6 +2654,7 @@ const layerWsRpc = (
                 }),
             ),
           ),
+        ...(yield* makeWorkspaceUploadHandlers),
         [WS_METHODS.projectsWriteFile]: (input) =>
           workspaceFileSystem.writeFile(input).pipe(
             Effect.mapError(
