@@ -2532,6 +2532,7 @@ const layerWsRpc = (
         [WS_METHODS.projectDashboardGet]: (input) => projectDashboard.get(input),
         [WS_METHODS.projectDashboardSetWidgets]: (input) => projectDashboard.setWidgets(input),
         [WS_METHODS.projectDashboardSetTracker]: (input) => projectDashboard.setTracker(input),
+        [WS_METHODS.projectDashboardSetHealth]: (input) => projectDashboard.setHealth(input),
         [WS_METHODS.projectLayoutGet]: (input) => projectLayout.get(input.threadId),
         [WS_METHODS.projectLayoutApply]: (input) => projectLayout.apply(input, { kind: "user", threadId: null, reason: null }),
         [WS_METHODS.projectLayoutRevert]: (input) => projectLayout.revert(input, { kind: "user", threadId: null, reason: null }),
