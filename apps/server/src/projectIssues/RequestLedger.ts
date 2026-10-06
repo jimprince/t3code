@@ -676,7 +676,7 @@ export const make = (deps: {
         const names = new Set((issue.labels ?? []).map((label) => label.name.toLowerCase()));
         // Typing a task is the one change that applies to any tracker issue, open or closed.
         const typeOnly =
-          input.kind !== undefined &&
+          (input.kind !== undefined || input.title !== undefined) &&
           input.status === undefined &&
           input.comment === undefined &&
           input.release === undefined;
@@ -684,6 +684,11 @@ export const make = (deps: {
         // the issue a thread is linked to, not only on captured requests.
         if (!typeOnly && issue.state === "closed") {
           return yield* fail("That issue is already closed.");
+        }
+        if (input.title !== undefined) {
+          yield* api
+            .send(target.instance, "PATCH", path, { title: input.title })
+            .pipe(Effect.mapError((error) => fail(error.detail)));
         }
         if (input.kind !== undefined) {
           const wanted = requestKindLabel(input.kind);
