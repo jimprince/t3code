@@ -1,0 +1,4 @@
+id = "projects-stable-sidebar"
+category = "feature"
+functionality = "projects"
+text = "Projects and standalone threads keep a stable status-grouped order, show the active model and provider account on project work, and no longer duplicate project trees in the Threads tab while Projects is enabled."
