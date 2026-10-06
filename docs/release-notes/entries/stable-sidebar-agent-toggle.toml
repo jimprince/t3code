@@ -1,0 +1,4 @@
+id = "stable-sidebar-agent-toggle"
+category = "fix"
+functionality = "web sidebar"
+text = "Keep the nested-agent toggle in place when sidebar row actions appear on hover."
