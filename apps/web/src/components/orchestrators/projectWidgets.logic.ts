@@ -3,6 +3,7 @@ const PROJECT_WIDGETS = [
   { id: "requests", title: "Requests" },
   { id: "needs-you", title: "Needs you" },
   { id: "release", title: "Release" },
+  { id: "maintenance", title: "Maintenance" },
   { id: "roadmap", title: "Roadmap" },
   { id: "working", title: "Working" },
   { id: "blocked", title: "Blocked" },
