@@ -23,9 +23,6 @@ let renderer: ReactTestRenderer;
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   vi.unstubAllGlobals();
-  state.metadata = children.map((child) => ({
-    environmentId: env, threadId: child.id, parentThreadId: ThreadId.make("parent"),
-  }));
   state.shells = [];
   state.metadata = [];
 });
