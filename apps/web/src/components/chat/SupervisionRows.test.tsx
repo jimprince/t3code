@@ -2,15 +2,20 @@ import { act } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { afterEach, expect, it, vi } from "vite-plus/test";
+import { supervisionForest, type ScopedSupervisionMetadata } from "@t3tools/client-runtime/state/fork-nesting";
 import { makeThreadFixture } from "../../test-fixtures";
 const state = vi.hoisted(() => ({
   shells: [] as ReturnType<typeof makeThreadFixture>[],
   navigate: vi.fn(),
+  metadata: [] as ScopedSupervisionMetadata[],
 }));
 vi.mock("../../state/entities", () => ({
   useThreadShells: () => state.shells,
   useServerConfigs: () => new Map(),
   useProjects: () => [],
+}));
+vi.mock("../../state/forkSupervision", () => ({
+  useSupervisionForest: () => supervisionForest(state.shells, state.metadata),
 }));
 vi.mock("@tanstack/react-router", () => ({ useNavigate: () => state.navigate }));
 import { SupervisionRows } from "./SupervisionRows";
@@ -18,7 +23,11 @@ let renderer: ReactTestRenderer;
 afterEach(async () => {
   await act(async () => renderer?.unmount());
   vi.unstubAllGlobals();
+  state.metadata = children.map((child) => ({
+    environmentId: env, threadId: child.id, parentThreadId: ThreadId.make("parent"),
+  }));
   state.shells = [];
+  state.metadata = [];
 });
 it("updates output and attention without reordering completed workers or reading child histories", async () => {
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
@@ -29,7 +38,6 @@ it("updates output and attention without reordering completed workers or reading
       ...shell,
       source: {
         ...shell.source,
-        parentThreadId: ThreadId.make("parent"),
         workerSummary: {
           output: "Checking",
           messageCount: 2,
@@ -41,6 +49,9 @@ it("updates output and attention without reordering completed workers or reading
       },
     };
   });
+  state.metadata = children.map((child) => ({
+    environmentId: env, threadId: child.id, parentThreadId: ThreadId.make("parent"),
+  }));
   state.shells = [
     makeThreadFixture({ id: ThreadId.make("parent"), environmentId: env }),
     ...children,
