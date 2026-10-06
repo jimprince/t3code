@@ -29,6 +29,7 @@ export const projectMutationOperation = Effect.fn("projectMutationOperation")(fu
       return yield* projects.update({
         commandId: mutation.commandId,
         projectId: mutation.projectId,
+        ...(mutation.automations === undefined ? {} : { automations: mutation.automations }),
         ...(mutation.permanentAgent === undefined
           ? {}
           : { permanentAgent: mutation.permanentAgent }),
