@@ -28,6 +28,7 @@ describe("default layout", () => {
     expect(tabs[0]!.widgets.map((widget) => widget.type)).toEqual([
       "requests",
       "needs-you",
+      "decisions",
       "release",
       "maintenance",
       "roadmap-summary",
