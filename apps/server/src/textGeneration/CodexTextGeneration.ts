@@ -29,6 +29,7 @@ import {
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "./TextGenerationPrompts.ts";
+import { buildRequestItemsPrompt } from "./RequestItemsPrompt.ts";
 import {
   normalizeCliError,
   sanitizeCommitSubject,
@@ -124,7 +125,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateRequestItems",
     value: unknown,
   ): Effect.Effect<string, TextGenerationError> =>
     encodeJsonString(value).pipe(
@@ -143,7 +145,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle",
+      | "generateThreadTitle"
+      | "generateRequestItems",
     attachments: TextGeneration.BranchNameGenerationInput["attachments"],
   ): Effect.fn.Return<MaterializedImageAttachments, TextGenerationError> {
     if (!attachments || attachments.length === 0) {
@@ -185,7 +188,8 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       | "generateCommitMessage"
       | "generatePrContent"
       | "generateBranchName"
-      | "generateThreadTitle";
+      | "generateThreadTitle"
+      | "generateRequestItems";
     cwd: string;
     prompt: string;
     outputSchemaJson: S;
@@ -459,10 +463,24 @@ export const makeCodexTextGeneration = Effect.fn("makeCodexTextGeneration")(func
       } satisfies TextGeneration.ThreadTitleGenerationResult;
     });
 
+  const generateRequestItems: NonNullable<
+    TextGeneration.TextGeneration["Service"]["generateRequestItems"]
+  > = Effect.fn("CodexTextGeneration.generateRequestItems")(function* (input) {
+    const { prompt, outputSchema } = buildRequestItemsPrompt(input);
+    return yield* runCodexJson({
+      operation: "generateRequestItems",
+      cwd: input.cwd,
+      prompt,
+      outputSchemaJson: outputSchema,
+      modelSelection: input.modelSelection,
+    });
+  });
+
   return {
     generateCommitMessage,
     generatePrContent,
     generateBranchName,
     generateThreadTitle,
+    generateRequestItems,
   } satisfies TextGeneration.TextGeneration["Service"];
 });
