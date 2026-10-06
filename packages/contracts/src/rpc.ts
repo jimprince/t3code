@@ -3,6 +3,11 @@ import {
   OrchestrationV2SearchThreadInput,
   OrchestrationV2SearchThreadResult,
 } from "./orchestrationV2.ts";
+import {
+  RESOURCE_RECOVERY_METHODS,
+  ResourceRecoveryPreviewRpc,
+  ResourceRecoveryExecuteRpc,
+} from "./forkResourceRecoveryRpc.ts";
 import { THREAD_SUBSCRIPTION_METHODS, ThreadSubscriptionRpcs } from "./threadSubscriptions.ts";
 import { WorkspaceUploadRpc, WorkspaceUploadMethods } from "./workspaceUploadRpc.ts";
 import { HEADLESS_DELIVERY_METHODS, HeadlessDeliveryRpc } from "./forkHeadlessDeliveryRpc.ts";
@@ -361,6 +366,7 @@ import { VcsError } from "./vcs.ts";
 import { Project, ProjectMutation, ProjectMutationError } from "./project.ts";
 
 export const WS_METHODS = {
+  ...RESOURCE_RECOVERY_METHODS,
   ...THREAD_SUBSCRIPTION_METHODS,
   ...WorkspaceUploadMethods,
   ...HEADLESS_DELIVERY_METHODS,
@@ -1819,6 +1825,8 @@ export const WsRpcGroup = RpcGroup.make(
   ...ThreadSubscriptionRpcs,
   WorkspaceUploadRpc,
   HeadlessDeliveryRpc,
+  ResourceRecoveryPreviewRpc,
+  ResourceRecoveryExecuteRpc,
   WsServerProbeRpc,
   WsServerGetConfigRpc,
   WsServerRefreshProvidersRpc,
