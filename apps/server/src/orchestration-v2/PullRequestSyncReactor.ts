@@ -27,12 +27,17 @@ import * as Semaphore from "effect/Semaphore";
 import * as Stream from "effect/Stream";
 
 import * as PullRequestService from "../pullRequest/PullRequestService.ts";
+import { ProviderRefinementScope } from "../sourceControl/ForkProviderRefinementCache.ts";
+import { BackgroundProcessWork } from "../fork/process/LaunchBudget.ts";
 import { forkParked } from "../serverActivation.ts";
 import * as Orchestrator from "./Orchestrator.ts";
 import * as ProjectionStore from "./ProjectionStore.ts";
 import { isTerminalRunStatus } from "./ThreadManagementService.ts";
 
 const SLOW_SYNC_INTERVAL_MS = 15 * 60 * 1_000;
+// A host no checkout here can read stays unreadable until projects or source-control settings
+// change. Each failed read resolves every project's provider, so it is not retried every sweep.
+const UNSUPPORTED_HOST_RETRY_MS = 30 * 60 * 1_000;
 /** Shell commands that can merge or close a pull request without a merge notification. */
 const PULL_REQUEST_CLOSE_COMMAND = /\b(?:gh\s+pr|glab\s+mr)\s+(?:merge|close)\b/u;
 
@@ -141,6 +146,8 @@ export const make = Effect.gen(function* () {
   // linking dozens of pull requests) is read together and shares the summary batches.
   let requestedSweepQueued = false;
   const retryStacks = new Set<string>();
+  // Host -> when its links may be read again, after a read said no checkout here can serve it.
+  const unsupportedHostsUntil = new Map<string, number>();
 
   const isDue = (key: string, entries: ReadonlyArray<LinkEntry>, nowMs: number): boolean => {
     if (requested.has(key) || retryStacks.has(key)) return true;
@@ -178,6 +185,8 @@ export const make = Effect.gen(function* () {
     for (const key of lastSyncedAt.keys()) if (!groups.has(key)) lastSyncedAt.delete(key);
     for (const key of retryStacks) if (!groups.has(key)) retryStacks.delete(key);
     for (const key of requested.keys()) if (!groups.has(key)) requested.delete(key);
+    for (const [host, until] of unsupportedHostsUntil)
+      if (nowMs >= until) unsupportedHostsUntil.delete(host);
 
     // Layers auto-linked this sweep, so two links of one thread that share a
     // stack do not both try to add the same sibling.
@@ -256,7 +265,24 @@ export const make = Effect.gen(function* () {
       };
       const generation = requested.get(key);
       if (generation !== undefined) yield* pullRequests.invalidate({ reference: ref });
-      const summary = yield* pullRequests.summary(ref, { recoverTransientFailure: false });
+      const summary = yield* pullRequests.summary(ref, { recoverTransientFailure: false }).pipe(
+        Effect.tapError((error) =>
+          error._tag === "PullRequestUnavailableError" &&
+          error.reason === "provider-unsupported" &&
+          !unsupportedHostsUntil.has(ref.host)
+            ? Effect.sync(() =>
+                unsupportedHostsUntil.set(ref.host, nowMs + UNSUPPORTED_HOST_RETRY_MS),
+              ).pipe(
+                Effect.andThen(
+                  Effect.logWarning("pull request host cannot be read; retrying later", {
+                    host: ref.host,
+                    retryInMs: UNSUPPORTED_HOST_RETRY_MS,
+                  }),
+                ),
+              )
+            : Effect.void,
+        ),
+      );
       const fields = snapshotFieldsOf(summary);
       const needsStack =
         generation !== undefined ||
@@ -318,14 +344,26 @@ export const make = Effect.gen(function* () {
     yield* Effect.forEach(
       groups,
       ([key, entries]) =>
-        (scope === "all" || requested.has(key)) && isDue(key, entries, nowMs)
+        (scope === "all" || requested.has(key)) &&
+        !unsupportedHostsUntil.has(normalizeThreadPullRequestKey(entries[0]!.link).host) &&
+        isDue(key, entries, nowMs)
           ? syncGroup(key, entries).pipe(
-              Effect.catchCause(logSkipped("pull request sync skipped", { key })),
+              Effect.catchCause((cause) =>
+                // The host was just set aside and said so once; its other links stay quiet.
+                unsupportedHostsUntil.has(normalizeThreadPullRequestKey(entries[0]!.link).host)
+                  ? Cause.hasInterruptsOnly(cause)
+                    ? Effect.failCause(cause)
+                    : Effect.void
+                  : logSkipped("pull request sync skipped", { key })(cause),
+              ),
             )
           : Effect.void,
       // As wide as one batched summary read, so the sweep's reads on a host arrive together and
       // GitHub answers them in one request rather than one `gh pr view` apiece.
       { concurrency: 25, discard: true },
+    ).pipe(
+      Effect.provideService(ProviderRefinementScope, new Map()),
+      Effect.provideService(BackgroundProcessWork, true),
     );
   });
 
