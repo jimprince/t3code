@@ -1,0 +1,4 @@
+id = "project-pull-requests-stale-alias"
+category = "fix"
+functionality = "projects"
+text = "The project Pull requests widget now refreshes pull requests linked through a public alias of your Gitea server, so merged and closed ones leave Open, and Needs you counts only pull requests awaiting your review."
