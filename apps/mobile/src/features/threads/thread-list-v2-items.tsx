@@ -1,3 +1,4 @@
+import { useSupervisionStatus } from "./useSupervisionStatus";
 import type { ThreadRowProviderInstance } from "./thread-provider-instance";
 import {
   THREAD_LIST_V2_MONO_FONT as MONO_FONT,
@@ -626,6 +627,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
   const selected = props.selected === true;
   const rowAppearance = getThreadListV2RowAppearance(theme, sidebarPane, selected);
 
+  const supervision = useSupervisionStatus(thread);
   const status = resolveThreadListV2Status(thread);
   // "Done" marks a completion the user has not opened yet — same emerald
   // label as the web sidebar, sourced from the server-side visited watermark
@@ -1020,6 +1022,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
               )}
             >
               {statusLabel.label}
+              {supervision.count > 0 ? ` · ${supervision.count} workers` : ""}
             </Text>
           </View>
         ) : (
@@ -1031,7 +1034,8 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
                 : rowAppearance.tertiaryForegroundClassName,
             )}
           >
-            {timeLabel}
+            {supervision.supervising && status === "ready" ? "Supervising" : timeLabel}
+            {supervision.count > 0 ? ` · ${supervision.count} workers` : ""}
           </Text>
         )}
       </View>
