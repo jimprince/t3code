@@ -8,7 +8,7 @@
     "dev": "node scripts/stage-install-scripts.mjs && astro dev",
     "build": "node scripts/stage-install-scripts.mjs && astro build",
     "preview": "astro preview",
-    "typecheck": "astro check"
+    "typecheck": "node ../../scripts/ci/heavy-gate.ts astro check"
   },
   "dependencies": {
     "@t3tools/shared": "workspace:*",
