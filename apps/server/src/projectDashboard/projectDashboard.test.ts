@@ -69,4 +69,20 @@ it.layer(
       expect(file.trackers["project-1"]).toBe("brad/t3code-fork");
     }),
   );
+
+  it.effect("persists the health line per root thread", () =>
+    Effect.gen(function* () {
+      const health = {
+        status: "at-risk",
+        sentence: "V2 port waiting on plan approval",
+        updatedAt: "2026-10-05T12:00:00.000Z",
+        threadId: "root-2",
+      };
+      const writer = yield* ProjectDashboardStore.make;
+      yield* writer.modify((file) => ({ ...file, health: { "root-2": health } }));
+      const file = yield* (yield* ProjectDashboardStore.make).read;
+      expect(file.health["root-2"]).toEqual(health);
+      expect(parseDashboardFile('{"version":1}').health).toEqual({});
+    }),
+  );
 });
