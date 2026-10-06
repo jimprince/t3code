@@ -290,6 +290,29 @@ workspace. A project badge identifies workers in a different project. Token
 counts labeled `ctx tok` describe occupied context when the provider does not
 report a cumulative processed-token count.
 
+### Named agents
+
+Some resources must have exactly one owner: a 3D printer, a production
+deployment, a home automation system. A named agent is that owner. It lives in a
+folder (for example `~/.shared/agents/printer`) holding `AGENT.md`, its charter:
+what it owns, how to operate it and its safety rules, and `BRIEFING.md`, its
+current state, open items and memories. The folder is the agent's project, so it
+needs no git repository.
+
+A named agent has at most one live top-level thread at a time. T3 Code refuses a
+second one from any path, including unarchiving, moving a nested thread out, or
+importing a thread. The agent can still start sub-agents. Its live thread never
+settles automatically.
+
+Create one with `t3-thread agents add <name> --env <environment> --path <folder>`,
+adding `--scope "<one line>"` to write starter `AGENT.md` and `BRIEFING.md` files.
+`t3-thread agents` lists agents with their scope, live thread and status. Send it
+work with `t3-thread send <name> "<request>"`: the request goes to the live
+thread, or starts a fresh one built from the charter and briefing when the agent
+is idle with no live thread. `t3-thread agents handover <name>` replaces an idle
+live thread with a fresh one and archives the old one; ask the agent to rewrite
+`BRIEFING.md` first. Handover is refused while the agent is working.
+
 ## Snooze until later
 
 Choose **Snooze → Custom…** from a thread's menu to pick a date and time in your
@@ -301,13 +324,14 @@ A parent's status describes its own work and requests. A separate sub-agent inpu
 marker counts waiting, unsettled children; select it to expand the children and
 open the first waiting child. Answering, settling or archiving a child clears its
 marker. Child work remains visible through the active sub-agent count.
+
 ## Supervising workers
 
 Use the Workers section in thread details to choose a parent or return a thread
- to the top level. Workers keep their own project, model and workspace. Settling
- or archiving a supervisor does not settle or archive its workers; a worker with
- an unavailable parent stays reachable in its own project. Mobile project lists
- remain flat.
+to the top level. Workers keep their own project, model and workspace. Settling
+or archiving a supervisor does not settle or archive its workers; a worker with
+an unavailable parent stays reachable in its own project. Mobile project lists
+remain flat.
 
 The operator CLI nests new workers under the caller by default. Use `create
 --parent <thread>` to select a supervisor, `--top-level` to create independently,
