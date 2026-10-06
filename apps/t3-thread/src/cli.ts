@@ -355,6 +355,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "ack",
   "request",
   "decision",
+  "orchestrator",
   "dashboard",
   "roadmap",
 ]);
@@ -1007,6 +1008,7 @@ agent
     "--no-notify",
     "disable automatic completion/attention notifications for the created worker",
   )
+  .option("--subproject", "make the new thread a subproject with its own page data")
   .option("--top-level", "create without an organizational parent or automatic caller subscription")
   .option("--parent <agent-or-thread>", "organizational parent; defaults to the current caller")
   .option("--pin", "pin the new thread (default: unpinned)")
@@ -1111,6 +1113,12 @@ agent
     };
     await updateState(async (currentState) => {
       let subscriptions = currentState.subscriptions;
+      if (options.subproject)
+        await client.setThreadSubproject(created.threadId, "on").catch((error: unknown) => {
+          throw new Error(
+            `Created '${options.name}' (${created.threadId}) but could not mark it as a subproject: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        });
       if (notifyCaller) {
         assertNotSelfSubscription(notifyCaller, savedAgent);
         const existing = currentState.subscriptions.find(
@@ -2184,6 +2192,25 @@ dashboard
       ),
     );
   });
+
+const orchestrator = agent
+  .command("orchestrator")
+  .description("Choose whether a nested thread is a subproject with its own page data");
+
+for (const [verb, mode, description] of [
+  ["mark", "on", "Make a nested thread a subproject"],
+  ["unmark", "off", "Keep a thread a plain worker; auto-promotion never applies"],
+  ["auto", "auto", "Let the server promote the thread when it gets its own workers"],
+] as const) {
+  orchestrator
+    .command(verb)
+    .description(description)
+    .argument("<thread>", "saved agent name or raw thread UUID")
+    .action(async (reference) => {
+      const { agent: target, client } = await withAgent(reference);
+      printJson(await client.setThreadSubproject(target.threadId, mode));
+    });
+}
 
 const decision = agent
   .command("decision")
