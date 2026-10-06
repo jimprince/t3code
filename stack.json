@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "d09702c6aa53a2eaefadc1b054db14bff59b422f",
-  "head": "5c2e1bb707000fd23f3aa2274d3d730f7ead10a9",
+  "prev": "96fefa6e930ee77dcf10574b8cb82935aa2ccad4",
+  "head": "80efae1005740121297f0d40176108fcb38867da",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -72,7 +72,8 @@
     "fork-project-roadmap",
     "fork-project-page-workflow",
     "fork-project-canvas",
-    "fork-project-task-types"
+    "fork-project-task-types",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-conversation-fork",
@@ -335,6 +336,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "fb183eabc152c47c795cd29ed7c1494731164abc"
+    },
+    "refresh-temp": {
+      "oid": "80efae1005740121297f0d40176108fcb38867da"
     }
   }
 }
