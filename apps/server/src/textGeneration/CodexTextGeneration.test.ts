@@ -219,6 +219,24 @@ it.layer(CodexTextGenerationTestLayer)("CodexTextGeneration", (it) => {
       }),
     ),
   );
+  // fork.29 dev VM (#144): the request ledger's detached split inherited a closed
+  // request scope, so the temp folder was removed as soon as it was made.
+  it.effect("writes its temp files even when the caller's scope is already closed", () =>
+    withFakeCodexEnv({ output: JSON.stringify({ title: "Scoped title" }) }, (textGeneration) =>
+      Effect.gen(function* () {
+        const closed = yield* Scope.make();
+        yield* Scope.close(closed, Exit.void);
+        const result = yield* textGeneration
+          .generateThreadTitle({
+            cwd: process.cwd(),
+            message: "Describe this change",
+            modelSelection: createModelSelection(ProviderInstanceId.make("codex"), "gpt-5.6-luna"),
+          })
+          .pipe(Effect.provideService(Scope.Scope, closed));
+        expect(result.title).toBe("Scoped title");
+      }),
+    ),
+  );
   it.effect("generates and sanitizes commit messages without branch by default", () =>
     withFakeCodexEnv(
       {
