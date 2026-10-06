@@ -344,6 +344,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "ack",
   "request",
   "dashboard",
+  "roadmap",
 ]);
 
 if (AGENT_COMMAND_ALIASES.has(process.argv[2] ?? "")) {
@@ -1919,6 +1920,75 @@ dashboard
               .widgets!.split(",")
               .map((widget) => widget.trim())
               .filter(Boolean),
+      }),
+    );
+  });
+
+const roadmap = agent
+  .command("roadmap")
+  .description(
+    "The project roadmap: versions are open Gitea milestones on the tracker; the first is the next release",
+  );
+
+roadmap
+  .command("list")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .action(async (reference) => {
+    const { agent: target, client } = await withAgent(reference);
+    const plan = await client.projectRoadmap<{
+      tracker: { repository: string } | null;
+      versions: ReadonlyArray<{ id: number; title: string }>;
+      items: ReadonlyArray<{
+        number: number;
+        title: string;
+        stage: string | null;
+        versionId: number | null;
+      }>;
+    }>("projectRoadmapGet", { threadId: target.threadId });
+    const column = (versionId: number | null) =>
+      plan.items
+        .filter((item) => item.versionId === versionId)
+        .map((item) => ({ number: item.number, title: item.title, stage: item.stage }));
+    printJson({
+      tracker: plan.tracker?.repository ?? null,
+      nextRelease: plan.versions[0]?.title ?? null,
+      versions: plan.versions.map((version) => ({
+        title: version.title,
+        items: column(version.id),
+      })),
+      later: column(null),
+    });
+  });
+
+roadmap
+  .command("move")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<item>", "issue number in the tracker, owner/repo#N, or issue URL")
+  .argument("<version>", "an open version's title, or 'later' to take it off the roadmap")
+  .action(async (reference, item, version) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRoadmap("projectRoadmapMove", {
+        threadId: target.threadId,
+        reference: item,
+        version: version.trim().toLowerCase() === "later" ? null : version,
+      }),
+    );
+  });
+
+roadmap
+  .command("version")
+  .description("Add a version, or rename one with --id")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<title>", "version title, for example fork.25")
+  .option("--id <milestone>", "existing version id to rename")
+  .action(async (reference, title, options: { id?: string }) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRoadmap("projectRoadmapSaveVersion", {
+        threadId: target.threadId,
+        title,
+        ...(options.id ? { id: Number(options.id) } : {}),
       }),
     );
   });
