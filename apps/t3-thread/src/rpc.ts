@@ -12,6 +12,8 @@ import {
 } from "./contracts.js";
 
 const RPC_METHODS = {
+  threadIssuesLink: "threadIssues.link",
+  threadIssuesUnlink: "threadIssues.unlink",
   threadMetadataList: "fork.threads.metadata.list",
   threadMetadataUpdate: "fork.threads.metadata.update",
   threadOrderReset: "fork.threads.order.reset",
