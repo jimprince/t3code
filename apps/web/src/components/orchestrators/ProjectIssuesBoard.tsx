@@ -10,7 +10,8 @@ import {
   type ProjectIssueLane,
 } from "./projectIssuesBoard.logic";
 import { ProjectQueryState } from "./ProjectQueryState";
-import { issueKey, taskKind } from "./projectRequests.logic";
+import { isBug, issueKey, taskKind } from "./projectRequests.logic";
+import { RequestKindTag } from "./RequestKindTag";
 import {
   ReopenButton,
   SettleButton,
@@ -56,9 +57,15 @@ function IssueRow({
         <span className="break-all">
           {issue.repository.split("/")[1]}#{issue.number}
         </span>
-        <span className="text-foreground/70">
-          {taskKind(issue.labels) ?? (issue.isRequest ? "request" : "issue")}
-        </span>
+        {taskKind(issue.labels) === null && !isBug(issue.labels) ? (
+          <span className="text-foreground/70">{issue.isRequest ? "request" : "issue"}</span>
+        ) : (
+          <RequestKindTag
+            kind={taskKind(issue.labels)}
+            bug={isBug(issue.labels)}
+            className="text-foreground/70"
+          />
+        )}
         {issue.comments > 0 ? (
           <span className="inline-flex items-center gap-0.5 tabular-nums">
             <MessageSquareIcon className="size-3" />
