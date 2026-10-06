@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "b812a27ce46c1366844c51903b189a75675a91c8",
+  "prev": "9db123d7250730736843dd749946887afa2bb024",
   "head": "6084ee5390be8341e3affe5a271b807daeac42d8",
   "applied": [
     "fork-build-ci-compat",
@@ -85,8 +85,7 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-page-agent-tray",
-    "fork-antigravity-errors",
-    "fork-project-page-usability"
+    "fork-antigravity-errors"
   ],
   "hidden": [],
   "patches": {
@@ -221,9 +220,6 @@
     },
     "fork-project-issues-board": {
       "oid": "1e213d5a2963deeaed6e0463a8d2b9cae85a55e2"
-    },
-    "fork-project-page-usability": {
-      "oid": "409385a5b3f06acc8fe219102c93a9e32b2ebaa1"
     },
     "fork-project-page-workflow": {
       "oid": "e0fc2976f807d2216004908041b372fec91fad10"
