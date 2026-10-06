@@ -3,20 +3,50 @@ import { withInputReminder } from "../src/inputReminders.js";
 import { matchesCurrentParent } from "../src/parentRouting.js";
 import type { SavedNotification } from "../src/types.js";
 it("pending input follows the current local or descriptor-scoped remote parent", () => {
-  expect(matchesCurrentParent({ parentThreadId: "new" }, { subscriberThreadId: "old", subscriberEnvironment: "local", sourceThreadId: "child", sourceEnvironment: "local" })).toBe(
-    false,
-  );
-  expect(matchesCurrentParent({ parentThreadId: "new" }, { subscriberThreadId: "new", subscriberEnvironment: "local", sourceThreadId: "child", sourceEnvironment: "local" })).toBe(true);
+  expect(
+    matchesCurrentParent(
+      { parentThreadId: "new" },
+      {
+        subscriberThreadId: "old",
+        subscriberEnvironment: "local",
+        sourceThreadId: "child",
+        sourceEnvironment: "local",
+      },
+    ),
+  ).toBe(false);
+  expect(
+    matchesCurrentParent(
+      { parentThreadId: "new" },
+      {
+        subscriberThreadId: "new",
+        subscriberEnvironment: "local",
+        sourceThreadId: "child",
+        sourceEnvironment: "local",
+      },
+    ),
+  ).toBe(true);
   expect(
     matchesCurrentParent(
       { remoteParent: { environmentId: "remote", threadId: "new" } },
-      { subscriberThreadId: "new", subscriberEnvironmentId: "elsewhere", subscriberEnvironment: "paired", sourceThreadId: "child", sourceEnvironment: "local" },
+      {
+        subscriberThreadId: "new",
+        subscriberEnvironmentId: "elsewhere",
+        subscriberEnvironment: "paired",
+        sourceThreadId: "child",
+        sourceEnvironment: "local",
+      },
     ),
   ).toBe(false);
   expect(
     matchesCurrentParent(
       { remoteParent: { environmentId: "remote", threadId: "new" } },
-      { subscriberThreadId: "new", subscriberEnvironmentId: "remote", subscriberEnvironment: "paired", sourceThreadId: "child", sourceEnvironment: "local" },
+      {
+        subscriberThreadId: "new",
+        subscriberEnvironmentId: "remote",
+        subscriberEnvironment: "paired",
+        sourceThreadId: "child",
+        sourceEnvironment: "local",
+      },
     ),
   ).toBe(true);
 });

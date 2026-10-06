@@ -7,7 +7,9 @@ export function groupSupervisionChildInputAttention(
   parents: ReadonlyMap<string, string | null>,
 ) {
   const groups = new Map<string, EnvironmentThreadShell[]>();
-  const byKey = new Map(threads.map((thread) => [supervisionKey(thread.environmentId, thread.id), thread]));
+  const byKey = new Map(
+    threads.map((thread) => [supervisionKey(thread.environmentId, thread.id), thread]),
+  );
   for (const child of threads) {
     if (
       !child.hasPendingUserInput ||
