@@ -46,6 +46,7 @@ const RPC_METHODS = {
   projectDashboardGet: "projectDashboard.get",
   projectDashboardSetWidgets: "projectDashboard.setWidgets",
   projectDashboardSetTracker: "projectDashboard.setTracker",
+  projectDashboardSetHealth: "projectDashboard.setHealth",
   projectRoadmapGet: "projectRoadmap.get",
   projectRoadmapMove: "projectRoadmap.move",
   projectRoadmapSaveVersion: "projectRoadmap.saveVersion",
