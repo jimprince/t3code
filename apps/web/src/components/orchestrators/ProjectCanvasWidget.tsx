@@ -2,7 +2,7 @@ import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestr
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectCanvas, ProjectCanvasPage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { usePrimarySettings } from "../../hooks/useSettings";
 import { logProjectCanvasAction } from "../../state/projectCanvas";
@@ -14,9 +14,12 @@ import { useProjectRequests } from "./ProjectRequestsSection";
 import {
   allowedIssueUrl,
   allowedUrl,
+  canvasHeightKey,
   CANVAS_RESULT_TYPE,
   hostsOf,
   parseCanvasMessage,
+  readStoredCanvasHeight,
+  RESIZE_RATE_LIMIT,
   takeRateSlot,
 } from "./projectCanvasBridge.logic";
 import { useSendToOrchestrator } from "./sendToOrchestrator";
@@ -33,6 +36,34 @@ const CANVAS_SPAN: Record<ProjectCanvasPage["size"], string> = {
   medium: "col-span-6 md:col-span-3",
   full: "col-span-6",
 };
+
+/**
+ * The frame height a canvas chose with the resize intent, kept per device so a
+ * collapsed page stays collapsed after a reload. Null until one is set, which
+ * leaves the size preset in charge.
+ */
+function useCanvasHeight(summary: OrchestratorSummary, canvasId: string) {
+  const key = canvasHeightKey(summary.root.environmentId, summary.root.id, canvasId);
+  const [height, setHeight] = useState<number | null>(() => {
+    try {
+      return readStoredCanvasHeight(window.localStorage.getItem(key));
+    } catch {
+      return null;
+    }
+  });
+  const apply = useCallback(
+    (next: number) => {
+      setHeight(next);
+      try {
+        window.localStorage.setItem(key, String(next));
+      } catch {
+        // Storage unavailable or full: the height still applies for this visit.
+      }
+    },
+    [key],
+  );
+  return { height, apply };
+}
 
 /** Hosts a canvas may open: GitHub, the configured Gitea web origins, and the tree's links. */
 function useKnownHosts(summary: OrchestratorSummary): ReadonlySet<string> {
@@ -59,11 +90,14 @@ function useKnownHosts(summary: OrchestratorSummary): ReadonlySet<string> {
  * window with the sandbox's opaque origin count; the intent must be on the
  * whitelist, each frame gets a few intents per 10 seconds, every outcome is
  * logged on the server, and a send waits for Brad to confirm the exact text.
+ * Resizes are the exception: they are cosmetic, so they have a separate, lighter
+ * limit (the latest height wins) and are neither logged nor confirmed.
  */
 function useCanvasBridge(
   summary: OrchestratorSummary,
   canvasId: string,
   frame: React.RefObject<HTMLIFrameElement | null>,
+  applyHeight: (height: number) => void,
 ) {
   const navigate = useNavigate();
   const knownHosts = useKnownHosts(summary);
@@ -71,6 +105,9 @@ function useCanvasBridge(
   const [pending, setPending] = useState<{ id: string | null; text: string } | null>(null);
   const [status, setStatus] = useState<string | null>(null);
   const history = useRef<number[]>([]);
+  const resizeHistory = useRef<number[]>([]);
+  const deferredHeight = useRef<number | null>(null);
+  const resizeTimer = useRef<number | null>(null);
   const statusTimer = useRef<number | null>(null);
   const reply = (id: string | null, ok: boolean, reason?: string) =>
     frame.current?.contentWindow?.postMessage(
@@ -100,10 +137,24 @@ function useCanvasBridge(
     statusTimer.current = window.setTimeout(() => setStatus(null), 3_000);
   };
   const sendToOrchestrator = useSendToOrchestrator();
+  // Over the resize limit, the newest height waits for the window to pass.
+  const resize = (height: number) => {
+    if (takeRateSlot(resizeHistory.current, Date.now(), RESIZE_RATE_LIMIT)) {
+      deferredHeight.current = null;
+      applyHeight(height);
+      return;
+    }
+    deferredHeight.current = height;
+    resizeTimer.current ??= window.setTimeout(() => {
+      resizeTimer.current = null;
+      if (deferredHeight.current !== null) applyHeight(deferredHeight.current);
+      deferredHeight.current = null;
+    }, RESIZE_RATE_LIMIT.windowMs);
+  };
   // The listener is installed once per frame and reads the latest values from here.
-  const latest = useRef({ summary, knownHosts, pending, record, reply, flash });
+  const latest = useRef({ summary, knownHosts, pending, record, reply, flash, resize });
   useEffect(() => {
-    latest.current = { summary, knownHosts, pending, record, reply, flash };
+    latest.current = { summary, knownHosts, pending, record, reply, flash, resize };
   });
 
   useEffect(() => {
@@ -111,7 +162,16 @@ function useCanvasBridge(
       if (event.source !== frame.current?.contentWindow || event.origin !== "null") return;
       const parsed = parseCanvasMessage(event.data);
       if (!parsed) return;
-      const { summary, knownHosts, pending, record, reply, flash } = latest.current;
+      const { summary, knownHosts, pending, record, reply, flash, resize } = latest.current;
+      if (!parsed.ok && parsed.intent === "resize") {
+        reply(parsed.id, false, parsed.reason);
+        return;
+      }
+      if (parsed.ok && parsed.action.intent === "resize") {
+        resize(parsed.action.height);
+        reply(parsed.id, true);
+        return;
+      }
       if (!takeRateSlot(history.current, Date.now())) {
         record(parsed.ok ? parsed.action.intent : parsed.intent, "", "rejected", "rate limited");
         reply(parsed.id, false, "rate limited");
@@ -167,6 +227,7 @@ function useCanvasBridge(
   useEffect(
     () => () => {
       if (statusTimer.current !== null) window.clearTimeout(statusTimer.current);
+      if (resizeTimer.current !== null) window.clearTimeout(resizeTimer.current);
     },
     [],
   );
@@ -204,7 +265,8 @@ export function ProjectCanvasWidget({
   readonly now: number;
 }) {
   const frame = useRef<HTMLIFrameElement | null>(null);
-  const bridge = useCanvasBridge(summary, canvas.id, frame);
+  const canvasHeight = useCanvasHeight(summary, canvas.id);
+  const bridge = useCanvasBridge(summary, canvas.id, frame, canvasHeight.apply);
   return (
     <section className={`min-w-0 ${CANVAS_SPAN[canvas.size]}`}>
       <h2 className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
@@ -240,7 +302,8 @@ export function ProjectCanvasWidget({
         </p>
       ) : (
         <div
-          className={`${FRAME_HEIGHT[canvas.size]} resize-y overflow-hidden border border-border`}
+          className={`${canvasHeight.height === null ? FRAME_HEIGHT[canvas.size] : ""} resize-y overflow-hidden border border-border`}
+          style={canvasHeight.height === null ? undefined : { height: canvasHeight.height }}
         >
           <iframe
             ref={frame}
