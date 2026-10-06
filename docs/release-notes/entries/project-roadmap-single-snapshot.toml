@@ -1,0 +1,4 @@
+id = "project-roadmap-single-snapshot"
+category = "performance"
+functionality = "projects"
+text = "Reuse the resolved project tree when loading roadmap issues and versions."
