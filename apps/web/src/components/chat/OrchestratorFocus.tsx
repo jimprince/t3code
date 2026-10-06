@@ -1,9 +1,10 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
+import { useSupervisionForest } from "../../state/forkSupervision";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { useThreadShells, useThreadProjection } from "../../state/entities";
-import { supervisionForest, supervisionKey } from "@t3tools/client-runtime/state/forkNesting";
+import { useThreadProjection } from "../../state/entities";
+import { supervisionThreadKey } from "@t3tools/client-runtime/state/fork-nesting";
 import {
   deriveBackgroundTraffic,
   resolveBackgroundFolds,
@@ -93,9 +94,8 @@ export function useOrchestratorFocus(input: {
   rows: ReadonlyArray<MessagesTimelineRow>;
   liveRunId: string | null;
 }) {
-  const shells = useThreadShells();
   const projection = useThreadProjection(parseScopedThreadKey(input.threadKey))?.projection;
-  const forest = useMemo(() => supervisionForest(shells), [shells]);
+  const forest = useSupervisionForest();
   const allTraffic = useAtomValue(allTrafficAtom(input.threadKey));
   const setAllTraffic = useAtomSet(allTrafficAtom(input.threadKey));
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
@@ -106,7 +106,7 @@ export function useOrchestratorFocus(input: {
     while (pending.length) {
       for (const child of forest.children.get(pending.pop()!) ?? []) {
         lines.push(`${child.id}\t${child.title}`);
-        pending.push(supervisionKey(child));
+        pending.push(supervisionThreadKey(child));
       }
     }
     return lines.join("\n");
