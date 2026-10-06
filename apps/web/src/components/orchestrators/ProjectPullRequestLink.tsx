@@ -34,7 +34,7 @@ export function ProjectPullRequestLink({
       }
     >
       <PullRequestGlyph.pullRequest className="size-3.5" />
-      {pullRequest.repository} #{pullRequest.number}
+      {pullRequest.repository.split("/").at(-1)}#{pullRequest.number}
     </InlineButton>
   );
 }
