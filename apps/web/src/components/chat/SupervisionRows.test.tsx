@@ -2,7 +2,10 @@ import { act } from "react";
 import { create, type ReactTestRenderer } from "react-test-renderer";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { afterEach, expect, it, vi } from "vite-plus/test";
-import { supervisionForest, type ScopedSupervisionMetadata } from "@t3tools/client-runtime/state/fork-nesting";
+import {
+  supervisionForest,
+  type ScopedSupervisionMetadata,
+} from "@t3tools/client-runtime/state/fork-nesting";
 import { makeThreadFixture } from "../../test-fixtures";
 const state = vi.hoisted(() => ({
   shells: [] as ReturnType<typeof makeThreadFixture>[],
@@ -47,7 +50,9 @@ it("updates output and attention without reordering completed workers or reading
     };
   });
   state.metadata = children.map((child) => ({
-    environmentId: env, threadId: child.id, parentThreadId: ThreadId.make("parent"),
+    environmentId: env,
+    threadId: child.id,
+    parentThreadId: ThreadId.make("parent"),
   }));
   state.shells = [
     makeThreadFixture({ id: ThreadId.make("parent"), environmentId: env }),
