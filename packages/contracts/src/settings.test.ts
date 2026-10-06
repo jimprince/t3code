@@ -7,6 +7,7 @@ import {
   ClientSettingsSchema,
   ClientSettingsPatch,
   ClaudeSettings,
+  CodexSettings,
   DEFAULT_SERVER_SETTINGS,
   resolveProviderInstanceEnabled,
   ServerSettings,
@@ -1099,5 +1100,15 @@ describe("process launch warning settings", () => {
       expect(() =>
         decodeServerSettingsPatch({ processLaunchWarnings: { syspolicydRssMb: value } }),
       ).toThrow();
+  });
+});
+
+describe("Codex skill extra roots", () => {
+  it("defaults old settings to no extra roots and preserves configured order and duplicates", () => {
+    const decode = Schema.decodeSync(CodexSettings);
+    expect(decode({}).skillExtraRoots).toEqual([]);
+    const roots = ["/skills/B", "/skills/A", "/skills/B"];
+    expect(decode({ skillExtraRoots: roots }).skillExtraRoots).toEqual(roots);
+    expect(() => decode({ skillExtraRoots: [""] })).toThrow();
   });
 });
