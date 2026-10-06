@@ -6,6 +6,7 @@ import Migration0001 from "./ForkMigrations/001_ProviderSessionRuntimeBootGenera
 import Migration0002 from "./ForkMigrations/002_ProviderSessionRuntimeActiveTurn.ts";
 import Migration0003 from "./ForkMigrations/003_ProjectionThreadMessageFileAttachments.ts";
 
+import Migration0005 from "./ForkMigrations/005_MigrateSidebarOrderEvents.ts";
 import Migration0006 from "./ForkMigrations/006_ProjectionThreadsParentThread.ts";
 import Migration0007 from "./ForkMigrations/007_ThreadBackgroundWork.ts";
 import Migration0008 from "./ForkMigrations/008_ProjectionThreadsSettleOnComplete.ts";
@@ -17,6 +18,7 @@ export const forkMigrationEntries = [
   [2, "ProviderSessionRuntimeActiveTurn", Migration0002],
   [3, "ProjectionThreadMessageFileAttachments", Migration0003],
   // ID 4 was shipped as ProjectionThreadsSidebarOrderKey; never reuse it.
+  [5, "MigrateSidebarOrderEvents", Migration0005],
   [6, "ProjectionThreadsParentThread", Migration0006],
   [7, "ThreadBackgroundWork", Migration0007],
   // ID 4 was published as ProjectionThreadsSidebarOrderKey; do not reuse it.
