@@ -23,6 +23,10 @@
       "types": "./src/orchestrationV2.ts",
       "import": "./src/orchestrationV2.ts"
     },
+    "./projectAutomations": {
+      "types": "./src/projectAutomations.ts",
+      "import": "./src/projectAutomations.ts"
+    },
     "./namedAgents": {
       "types": "./src/namedAgents.ts",
       "import": "./src/namedAgents.ts"
