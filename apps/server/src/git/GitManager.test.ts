@@ -770,6 +770,7 @@ function makeManager(input?: {
   serverSettings?: Parameters<typeof ServerSettings.layerTest>[0];
   setupScriptRunner?: ProjectSetupScriptRunner.ProjectSetupScriptRunner["Service"];
   gitConfigReads?: string[];
+  gitPreflightLaunches?: string[];
   /** Seeds the V2 stores the per-project settings lookup reads. */
   seed?: Effect.Effect<
     void,
@@ -785,30 +786,41 @@ function makeManager(input?: {
 
   const serverSettingsLayer = ServerSettings.ServerSettingsService.layerTest(input?.serverSettings);
 
-  const vcsDriverLayer = input?.gitConfigReads
-    ? Layer.effect(
-        GitVcsDriver.GitVcsDriver,
-        GitVcsDriver.make.pipe(
-          Effect.map((service) =>
-            GitVcsDriver.GitVcsDriver.of({
-              ...service,
-              readConfigValue: (cwd, key) =>
-                Effect.sync(() => input.gitConfigReads?.push(key)).pipe(
-                  Effect.andThen(service.readConfigValue(cwd, key)),
-                ),
-            }),
+  const vcsDriverLayer =
+    input?.gitConfigReads || input?.gitPreflightLaunches
+      ? Layer.effect(
+          GitVcsDriver.GitVcsDriver,
+          GitVcsDriver.make.pipe(
+            Effect.map((service) =>
+              GitVcsDriver.GitVcsDriver.of({
+                ...service,
+                execute: (command) =>
+                  Effect.sync(() => {
+                    if (command.operation.startsWith("GitManager.branchPullRequest.")) {
+                      input?.gitPreflightLaunches?.push(command.args.join(" "));
+                    }
+                  }).pipe(Effect.andThen(service.execute(command))),
+                resolveDefaultBranchName: (cwd, remoteName) =>
+                  Effect.sync(() => input?.gitPreflightLaunches?.push("symbolic-ref")).pipe(
+                    Effect.andThen(service.resolveDefaultBranchName(cwd, remoteName)),
+                  ),
+                readConfigValue: (cwd, key) =>
+                  Effect.sync(() => input.gitConfigReads?.push(key)).pipe(
+                    Effect.andThen(service.readConfigValue(cwd, key)),
+                  ),
+              }),
+            ),
           ),
-        ),
-      ).pipe(
-        Layer.provideMerge(VcsProcess.layer),
-        Layer.provideMerge(NodeServices.layer),
-        Layer.provideMerge(serverConfigLayer),
-      )
-    : GitVcsDriver.layer.pipe(
-        Layer.provideMerge(VcsProcess.layer),
-        Layer.provideMerge(NodeServices.layer),
-        Layer.provideMerge(serverConfigLayer),
-      );
+        ).pipe(
+          Layer.provideMerge(VcsProcess.layer),
+          Layer.provideMerge(NodeServices.layer),
+          Layer.provideMerge(serverConfigLayer),
+        )
+      : GitVcsDriver.layer.pipe(
+          Layer.provideMerge(VcsProcess.layer),
+          Layer.provideMerge(NodeServices.layer),
+          Layer.provideMerge(serverConfigLayer),
+        );
   const sourceControlProvider = input?.sourceControl ?? input?.sourceControlProvider;
   const sourceControlRegistryLayer =
     input?.sourceControlRegistryLayer ??
@@ -1793,6 +1805,116 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
         detail: "Multiple remotes track feature/ambiguous-remote. Its pull request is ambiguous.",
       });
       expect(ghCalls).toHaveLength(0);
+    }),
+  );
+
+  it.effect(
+    "branch PR preflight shares one launch trio across repeated and concurrent sweeps",
+    () =>
+      Effect.gen(function* () {
+        const repoDir = yield* makeTempDir("t3code-git-manager-");
+        yield* initRepo(repoDir);
+        const remoteDir = yield* createBareRemote();
+        yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+        yield* runGit(repoDir, ["checkout", "-b", "feature/preflight-cache"]);
+        yield* runGit(repoDir, ["push", "-u", "origin", "feature/preflight-cache"]);
+        const launches: string[] = [];
+        const configReads: string[] = [];
+        const { manager } = yield* makeManager({
+          gitPreflightLaunches: launches,
+          gitConfigReads: configReads,
+        });
+        const lookup = manager.branchPullRequest({
+          cwd: repoDir,
+          branch: "feature/preflight-cache",
+        });
+
+        yield* Effect.all(
+          Array.from({ length: 5 }, () => lookup),
+          { concurrency: "unbounded" },
+        );
+        const initialConfigReads = configReads.length;
+        for (let sweep = 0; sweep < 5; sweep++) expect(yield* lookup).toBeNull();
+        expect(launches).toHaveLength(3);
+        expect(configReads).toHaveLength(12);
+        // A warm update only launches one fresh identity config read. Before
+        // caching/coalescing it launched the trio plus two identical URL reads.
+        expect(configReads.slice(initialConfigReads)).toEqual(
+          Array.from({ length: 5 }, () => "remote.origin.url"),
+        );
+      }),
+  );
+
+  it.effect(
+    "branch PR preflight rereads after branch switch, full invalidation, refresh and expiry",
+    () =>
+      Effect.gen(function* () {
+        const repoDir = yield* makeTempDir("t3code-git-manager-");
+        yield* initRepo(repoDir);
+        const remoteDir = yield* createBareRemote();
+        yield* runGit(repoDir, ["remote", "add", "origin", remoteDir]);
+        for (const branch of ["feature/first", "feature/second"]) {
+          yield* runGit(repoDir, ["checkout", "-b", branch]);
+          yield* runGit(repoDir, ["push", "-u", "origin", branch]);
+        }
+        const launches: string[] = [];
+        const { manager } = yield* makeManager({ gitPreflightLaunches: launches });
+        const first = { cwd: repoDir, branch: "feature/first" };
+        expect(yield* manager.branchPullRequest(first)).toBeNull();
+        expect(launches).toHaveLength(3);
+        yield* runGit(repoDir, ["checkout", "feature/second"]);
+        yield* manager.invalidateStatus(repoDir);
+        expect(
+          yield* manager.branchPullRequest({ cwd: repoDir, branch: "feature/second" }),
+        ).toBeNull();
+        expect(launches).toHaveLength(6);
+        expect(yield* manager.branchPullRequest(first)).toBeNull();
+        expect(launches).toHaveLength(9);
+        yield* manager.invalidateLocalStatus(repoDir);
+        yield* manager.invalidateRemoteStatus(repoDir);
+        expect(yield* manager.branchPullRequest(first)).toBeNull();
+        expect(launches).toHaveLength(9);
+        expect(yield* manager.branchPullRequest(first, { refresh: true })).toBeNull();
+        expect(launches).toHaveLength(12);
+        yield* TestClock.adjust("31 seconds");
+        expect(yield* manager.branchPullRequest(first)).toBeNull();
+        expect(launches).toHaveLength(15);
+      }),
+  );
+
+  it.effect("branch PR lookup replays a git failure until its backoff expires", () =>
+    Effect.gen(function* () {
+      const repoDir = yield* makeTempDir("t3code-git-manager-");
+      yield* initRepo(repoDir);
+      const originDir = yield* createBareRemote();
+      const forkDir = yield* createBareRemote();
+      yield* runGit(repoDir, ["remote", "add", "origin", originDir]);
+      yield* runGit(repoDir, ["remote", "add", "fork", forkDir]);
+      yield* runGit(repoDir, ["checkout", "-b", "feature/backoff"]);
+      yield* runGit(repoDir, ["push", "origin", "feature/backoff"]);
+      yield* runGit(repoDir, ["push", "fork", "feature/backoff"]);
+      yield* runGit(repoDir, ["checkout", "main"]);
+      yield* runGit(repoDir, ["branch", "-D", "feature/backoff"]);
+      const launches: string[] = [];
+      const { manager } = yield* makeManager({ gitPreflightLaunches: launches });
+      const lookup = manager.branchPullRequest({ cwd: repoDir, branch: "feature/backoff" });
+
+      expect((yield* Effect.flip(lookup))._tag).toBe("GitManagerError");
+      const failedLaunches = launches.length;
+      // Fixed on disk, but background sweeps keep the failure until the backoff ends
+      // rather than re-running git for it on every pass, refreshes included.
+      yield* runGit(repoDir, ["remote", "remove", "fork"]);
+      expect((yield* Effect.flip(lookup))._tag).toBe("GitManagerError");
+      expect(
+        (yield* Effect.flip(
+          manager.branchPullRequest({ cwd: repoDir, branch: "feature/backoff" }, { refresh: true }),
+        ))._tag,
+      ).toBe("GitManagerError");
+
+      expect(launches).toHaveLength(failedLaunches);
+      yield* TestClock.adjust("21 seconds");
+      expect(yield* lookup).toBeNull();
+      expect(launches.length).toBeGreaterThan(failedLaunches);
     }),
   );
 
@@ -3168,11 +3290,18 @@ it.layer(GitManagerTestLayer)("GitManager", (it) => {
       const first = yield* manager.status({ cwd: repoDir });
       expect(first.pr?.number).toBe(216);
 
+      // First populate the failed-provider backoff while retaining the old PR.
+      yield* manager.invalidateStatus(repoDir);
+      expect((yield* manager.status({ cwd: repoDir })).pr?.number).toBe(216);
+
       const replacementRemoteDir = yield* createBareRemote();
       yield* runGit(repoDir, ["remote", "add", "replacement", replacementRemoteDir]);
       yield* runGit(repoDir, ["push", "replacement", "feature/pr-repointed"]);
       yield* runGit(repoDir, ["remote", "set-url", "origin", replacementRemoteDir]);
-      yield* manager.invalidateStatus(repoDir);
+      // A periodic poll keeps the failed provider answer, but its last-known
+      // fallback must verify the new identity with fresh config.
+      yield* manager.invalidateLocalStatus(repoDir);
+      yield* manager.invalidateRemoteStatus(repoDir);
 
       const second = yield* manager.status({ cwd: repoDir });
       expect(second.pr).toBeNull();
