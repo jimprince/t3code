@@ -1,3 +1,4 @@
+import { ThreadIssueLink, ThreadIssueKey, ThreadIssueSnapshot } from "./threadIssue.ts";
 import { ForkWorkerSummary } from "./forkWorkerSummary.ts";
 import { workerArchiveFields, workerCompletionFields } from "./forkWorkerLifecycle.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
@@ -418,6 +419,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Counts fork sidecar nesting writes on this thread. */
   forkMetadataRevision: Schema.optional(NonNegativeInt),
+  issues: Schema.optionalKey(Schema.Array(ThreadIssueLink)),
   lastVisitedAt: Schema.NullOr(Schema.DateTimeUtc).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
   ),
@@ -1919,6 +1921,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Bumped by each fork sidecar nesting write; omitted by servers that predate it. */
   forkMetadataRevision: Schema.optional(NonNegativeInt),
+  issues: Schema.optionalKey(Schema.Array(ThreadIssueLink)),
   /**
    * Omitted by servers that predate server-side visited tracking; clients fall
    * back to their local visited state when the field is absent.
@@ -2765,6 +2768,26 @@ export const OrchestrationV2Command = Schema.Union([
     linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
     /** Fork nesting service only: bump `forkMetadataRevision`. Off when absent. */
     bumpForkMetadataRevision: Schema.optional(Schema.Boolean),
+  }),
+  Schema.Struct({
+    type: Schema.Literal("thread.issue.link"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    link: ThreadIssueLink,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("thread.issue.unlink"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    ...ThreadIssueKey.fields,
+  }),
+  Schema.Struct({
+    type: Schema.Literal("thread.issue.sync"),
+    commandId: CommandId,
+    threadId: ThreadId,
+    ...ThreadIssueKey.fields,
+    url: TrimmedNonEmptyString,
+    snapshot: ThreadIssueSnapshot,
   }),
   Schema.Struct({
     type: Schema.Literal("thread.pull-request.link"),
