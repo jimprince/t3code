@@ -54,7 +54,6 @@ export const ThreadMoveBundleV3 = Schema.Struct({
   legacyBundle: Schema.NullOr(raw),
   attachments: Schema.Array(ThreadMoveAttachment),
 });
-export const THREAD_MOVE_BUNDLE_VERSION = 3;
 export const ThreadMoveBundle = Schema.Union([
   ThreadMoveBundleV1,
   ThreadMoveBundleV2,

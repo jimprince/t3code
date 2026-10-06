@@ -15,7 +15,7 @@ import * as GitWorkflow from "../git/GitWorkflowService.ts";
 
 const isTransferError = Schema.is(ThreadTransferError);
 const MAX_BYTES = 64 * 1024 * 1024;
-export function isSafeTransferPath(file: string): boolean {
+function isSafeTransferPath(file: string): boolean {
   return (
     file.length > 0 &&
     !file.startsWith("/") &&
