@@ -115,6 +115,7 @@ import {
   type CodexFeedbackSubmission,
 } from "@t3tools/client-runtime/state/threads";
 import { resolveThreadLastVisitedAt } from "./Sidebar.logic";
+import { ProjectReturnButton } from "./orchestrators/ProjectReturnButton";
 import { derivePendingThreadRequests } from "@t3tools/client-runtime/state/thread-requests";
 import {
   parseScopedThreadKey,
@@ -552,6 +553,7 @@ import {
   codexArtifactTemplatePromptToAppend,
   waitForStartedServerThread,
   shouldRefocusComposerOnWindowFocus,
+  shouldShowTimelineMinimap,
 } from "./ChatView.logic";
 import { useLocalStorage } from "~/hooks/useLocalStorage";
 import { useComposerHandleContext } from "../composerHandleContext";
@@ -822,7 +824,13 @@ function isCompactCommandMessage(message: ChatMessage): boolean {
   return message.role === "user" && text === "/compact" && !message.attachments?.length;
 }
 
-type ChatViewProps =
+type ChatViewPresentationProps = {
+  readonly presentation?: "full" | "project-panel" | "project-request";
+  readonly revealMessageId?: MessageId | null;
+  readonly onMessageSent?: ((messageId: MessageId) => void) | undefined;
+};
+
+type ChatViewProps = (
   | {
       environmentId: EnvironmentId;
       threadId: ThreadId;
@@ -840,7 +848,9 @@ type ChatViewProps =
       forceExpandedMobileComposer?: boolean;
       routeKind: "draft";
       draftId: DraftId;
-    };
+    }
+) &
+  ChatViewPresentationProps;
 
 interface TerminalLaunchContext {
   threadId: ThreadId;
@@ -1575,6 +1585,9 @@ export default function ChatView(props: ChatViewProps) {
     onDiffPanelOpen,
     reserveTitleBarControlInset = true,
     forceExpandedMobileComposer = false,
+    presentation = "full",
+    revealMessageId = null,
+    onMessageSent,
   } = props;
   const canOperateThread = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
@@ -1784,6 +1797,7 @@ export default function ChatView(props: ChatViewProps) {
     select: (location) => ({
       href: location.href,
       key: location.state.assistantCitationActivation ?? location.state.__TSR_key,
+      projectReturn: location.state.projectReturn,
     }),
   });
   const citationRequest = useMemo<AssistantCitationRequest | null>(() => {
@@ -2277,6 +2291,10 @@ export default function ChatView(props: ChatViewProps) {
     setTimelineAnchor({ threadKey: activeThreadKey, messageId: null });
   }
   const timelineAnchorMessageId = timelineAnchor.messageId;
+  useEffect(() => {
+    if (revealMessageId === null || activeThreadKey === null) return;
+    setTimelineAnchor({ threadKey: activeThreadKey, messageId: revealMessageId });
+  }, [activeThreadKey, revealMessageId]);
   // Release the turn anchor once its run finishes. LegendList sizes the
   // anchored end-space filler for the geometry at anchor time and never
   // recomputes it, so a lingering anchor leaves stale filler height behind
@@ -2381,7 +2399,7 @@ export default function ChatView(props: ChatViewProps) {
     activeThreadKey,
     panelAnimationDurationMs,
   );
-  const rightPanelPresent = rightPanelPresence.present;
+  const rightPanelPresent = rightPanelPresence.present && presentation === "full";
   const rightPanelControlsInPanel =
     shouldUsePlanSidebarSheet && rightPanelPresent && rightPanelOpen;
   const rightPanelControlsAtRoot = rightPanelPresent && !shouldUsePlanSidebarSheet;
@@ -2442,9 +2460,9 @@ export default function ChatView(props: ChatViewProps) {
     setMountedTerminalThreadKeys((currentThreadIds) => {
       const nextThreadIds = reconcileMountedTerminalThreadIds({
         currentThreadIds,
-        openThreadIds: existingOpenTerminalThreadKeys,
+        openThreadIds: presentation === "full" ? existingOpenTerminalThreadKeys : [],
         activeThreadId: activeThreadKey,
-        activeThreadTerminalOpen: activeTerminalDrawerPresence.present,
+        activeThreadTerminalOpen: presentation === "full" && activeTerminalDrawerPresence.present,
         maxHiddenThreadCount: MAX_HIDDEN_MOUNTED_TERMINAL_THREADS,
       });
       return currentThreadIds.length === nextThreadIds.length &&
@@ -2452,7 +2470,12 @@ export default function ChatView(props: ChatViewProps) {
         ? currentThreadIds
         : nextThreadIds;
     });
-  }, [activeTerminalDrawerPresence.present, activeThreadKey, existingOpenTerminalThreadKeys]);
+  }, [
+    activeTerminalDrawerPresence.present,
+    activeThreadKey,
+    existingOpenTerminalThreadKeys,
+    presentation,
+  ]);
   const latestRunSettled = isLatestRunSettled(activeLatestRun, activeRuntime);
   const activePlan = useMemo(
     () => deriveActivePlanState(serverProjection, activeActivityRun?.runId),
@@ -10014,6 +10037,8 @@ export default function ChatView(props: ChatViewProps) {
       } else {
         turnStartSucceeded = true;
         setKeepFullHistory(routeThreadKey, false);
+        onMessageSent?.(messageIdForSend);
+
         if (draftId !== null && isLocalDraftThread) {
           void attachNestedDraft(draftId, scopeThreadRef(environmentId, threadIdForSend));
         }
@@ -11325,6 +11350,7 @@ export default function ChatView(props: ChatViewProps) {
                 )
               : "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center pl-(--workspace-gutter-start) pr-(--workspace-gutter-end)",
             COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+            presentation !== "full" && "hidden",
           )}
         >
           {isElectron && rightPanelControlsAtRoot ? (
@@ -11335,6 +11361,11 @@ export default function ChatView(props: ChatViewProps) {
           ) : null}
           {!rightPanelControlsAtRoot && !rightPanelControlsInPanel ? panelLayoutControls : null}
           {inlineRightPanelOwnsTitleBar ? threadPanelHeaderControl : null}
+          <ProjectReturnButton
+            environmentId={activeThread.environmentId}
+            threadId={activeThread.id}
+            recorded={citationLocation.projectReturn}
+          />
           <ChatHeader
             activeThreadEnvironmentId={activeThread.environmentId}
             activeThreadId={activeThread.id}
@@ -11411,9 +11442,16 @@ export default function ChatView(props: ChatViewProps) {
               />
             </div>
             {/* Messages Wrapper */}
-            <div className="relative flex min-h-0 flex-1 flex-col bg-background">
+            <div
+              className={cn(
+                "relative flex min-h-0 flex-1 flex-col bg-background",
+                presentation === "project-request" && "hidden",
+              )}
+            >
               {/* Messages — LegendList handles virtualization and scrolling internally */}
+              {presentation !== "project-request" ? (
               <MessagesTimeline
+                showMinimap={shouldShowTimelineMinimap(presentation)}
                 citationRequest={paintOnlyDisplayedTimeline ? null : citationRequest}
                 citationHistoryLoading={threadDetailLoading}
                 {...(!paintOnlyDisplayedTimeline
@@ -11514,6 +11552,8 @@ export default function ChatView(props: ChatViewProps) {
                   ? {}
                   : { historyControls: threadHistoryControls })}
               />
+              ) : null}
+
 
               {/* scroll to end pill — shown when user has scrolled away from the live edge */}
               {showScrollToBottom && !isThreadFindActive && (

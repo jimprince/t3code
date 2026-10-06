@@ -1,4 +1,5 @@
-import { ExternalLinkIcon } from "lucide-react";
+import { useLocation, useNavigate } from "@tanstack/react-router";
+import { ArrowLeftIcon, ExternalLinkIcon } from "lucide-react";
 
 import { usePreviewWebviewConfig } from "~/browser/previewWebviewConfigState";
 import { isElectron } from "~/env";
@@ -16,6 +17,7 @@ import {
   statusBoardIssueUrl,
 } from "./embeddedPages.logic";
 import { useEmbeddedPages } from "./useEmbeddedPages";
+import "../orchestrators/projectNavigation";
 
 /**
  * Everything a normal tab allows except navigating T3 Code itself away. Pages
@@ -34,6 +36,8 @@ export function EmbeddedPageView({
   readonly pageId: string;
   readonly issueTarget?: { readonly repo?: string; readonly issue?: string };
 }) {
+  const navigate = useNavigate();
+  const projectReturn = useLocation({ select: (location) => location.state.projectReturn });
   const page = findEmbeddedPage(useEmbeddedPages(), pageId);
   const targetUrl =
     page && issueTarget?.repo && issueTarget.issue
@@ -51,6 +55,21 @@ export function EmbeddedPageView({
     <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none isolate">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-background text-foreground">
         <WorkspacePageHeader electron={isElectron}>
+          {projectReturn ? (
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              aria-label="Back to project"
+              onClick={() =>
+                void navigate({
+                  to: "/orchestrators/$environmentId/$threadId",
+                  params: projectReturn,
+                })
+              }
+            >
+              <ArrowLeftIcon />
+            </Button>
+          ) : null}
           <WorkspaceBreadcrumb ariaLabel="Page breadcrumb" className="min-w-0 flex-1">
             <WorkspaceBreadcrumbItem current>
               <h1 className="truncate">{page?.name ?? "Page not found"}</h1>
