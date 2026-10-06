@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { CommandId, ProjectId, ThreadId } from "@t3tools/contracts";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
+import { listMetadata } from "./MetadataStore.ts";
 import { makeNestingService } from "./NestingService.ts";
 
 const id = ThreadId.make;
@@ -142,7 +143,7 @@ it.effect(
       const before = (yield* management.getThreadShell(id("native-child")))!;
       const nativeEvents: string[] = [];
       const service = yield* makeNestingService(sql, management.getThreadShell, command => management.dispatch(command).pipe(Effect.tap(receipt => Effect.sync(() => {
-        nativeEvents.push(...receipt.storedEvents.map(event => event.type));
+        nativeEvents.push(...receipt.storedEvents.map(event => event.event.type));
       }))));
       yield* service.update(input("native-child", "native-parent", "native-nest"));
       yield* service.update(input("native-grandchild", "native-child", "native-deep"));
@@ -177,8 +178,7 @@ it.effect("CLI-originated sidecar writes dispatch a stable native shell refresh 
   const sql = yield* SqlClient.SqlClient;
   const events: string[] = [];
   const service = yield* makeNestingService(sql, threadId => Effect.succeed(shells.get(threadId) ?? null), command => Effect.gen(function* () {
-    const rows = yield* sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata WHERE thread_id = ${command.threadId}`;
-    assert.equal(JSON.parse(rows[0]!.payload).parentThreadId, "parent");
+    assert.equal((yield* listMetadata(sql)).find(row => row.threadId === command.threadId)?.parentThreadId, "parent");
     events.push(`${command.type}:${command.commandId}`);
   }));
   yield* service.update(input("child", "parent", "cli-nest"));
