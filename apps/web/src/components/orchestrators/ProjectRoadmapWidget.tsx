@@ -241,7 +241,7 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
   if (!tracker) {
     return (
       <p className="py-2 text-sm text-muted-foreground">
-        Name the project's Gitea tracker repository under Customize to plan versions.
+        No task repository yet. Set one under Edit to plan versions.
       </p>
     );
   }
@@ -278,6 +278,24 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
 
   return (
     <section className="flex flex-col gap-2">
+      <form
+        className="flex items-center gap-1 self-end"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void addVersion();
+        }}
+      >
+        <Input
+          size="sm"
+          value={newVersion}
+          aria-label="New version"
+          placeholder="Add a version"
+          onChange={(event) => setNewVersion(event.target.value)}
+        />
+        <Button size="icon-xs" variant="ghost" type="submit" aria-label="Add version">
+          <PlusIcon />
+        </Button>
+      </form>
       <div className="grid auto-cols-[minmax(220px,1fr)] grid-flow-col gap-px overflow-x-auto border border-border bg-border">
         {columns.map((column, index) => (
           <section
@@ -366,29 +384,7 @@ export function ProjectRoadmapWidget({ summary }: { readonly summary: Orchestrat
             ) : null}
           </section>
         ))}
-        <section aria-label="Add version" className="min-w-0 bg-background px-2.5 py-2">
-          <form
-            className="flex items-center gap-1"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void addVersion();
-            }}
-          >
-            <Input
-              value={newVersion}
-              aria-label="New version"
-              placeholder="Add a version"
-              onChange={(event) => setNewVersion(event.target.value)}
-            />
-            <Button size="icon-xs" variant="ghost" type="submit" aria-label="Add version">
-              <PlusIcon />
-            </Button>
-          </form>
-        </section>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {roadmap.data.tracker.repository} · Later items stay off the Dashboard.
-      </p>
     </section>
   );
 }
