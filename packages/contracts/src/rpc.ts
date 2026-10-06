@@ -75,6 +75,15 @@ import {
   ProjectDashboardSetWidgetsInput,
 } from "./projectDashboard.ts";
 import {
+  ProjectLayout,
+  ProjectLayoutApplyInput,
+  ProjectLayoutError,
+  ProjectLayoutGetInput,
+  ProjectLayoutHistory,
+  ProjectLayoutHistoryInput,
+  ProjectLayoutRevertInput,
+} from "./projectLayout.ts";
+import {
   ProjectRoadmap,
   ProjectRoadmapError,
   ProjectRoadmapGetInput,
@@ -612,6 +621,11 @@ export const WS_METHODS = {
   projectDashboardGet: "projectDashboard.get",
   projectDashboardSetWidgets: "projectDashboard.setWidgets",
   projectDashboardSetTracker: "projectDashboard.setTracker",
+  projectLayoutGet: "projectLayout.get",
+  projectLayoutApply: "projectLayout.apply",
+  projectLayoutRevert: "projectLayout.revert",
+  projectLayoutHistory: "projectLayout.history",
+  subscribeProjectLayout: "projectLayout.subscribe",
   projectRoadmapGet: "projectRoadmap.get",
   projectRoadmapMove: "projectRoadmap.move",
   projectRoadmapSaveVersion: "projectRoadmap.saveVersion",
@@ -1058,6 +1072,40 @@ const WsProjectDashboardSetTrackerRpc = Rpc.make(WS_METHODS.projectDashboardSetT
   payload: ProjectDashboardSetTrackerInput,
   success: ProjectDashboard,
   error: projectDashboardError,
+});
+
+const projectLayoutError = Schema.Union([ProjectLayoutError, EnvironmentAuthorizationError]);
+
+const WsProjectLayoutGetRpc = Rpc.make(WS_METHODS.projectLayoutGet, {
+  payload: ProjectLayoutGetInput,
+  success: ProjectLayout,
+  error: projectLayoutError,
+});
+
+const WsProjectLayoutApplyRpc = Rpc.make(WS_METHODS.projectLayoutApply, {
+  payload: ProjectLayoutApplyInput,
+  success: ProjectLayout,
+  error: projectLayoutError,
+});
+
+const WsProjectLayoutRevertRpc = Rpc.make(WS_METHODS.projectLayoutRevert, {
+  payload: ProjectLayoutRevertInput,
+  success: ProjectLayout,
+  error: projectLayoutError,
+});
+
+const WsProjectLayoutHistoryRpc = Rpc.make(WS_METHODS.projectLayoutHistory, {
+  payload: ProjectLayoutHistoryInput,
+  success: ProjectLayoutHistory,
+  error: projectLayoutError,
+});
+
+/** The project's layout now, then every new revision, until the client unsubscribes. */
+const WsSubscribeProjectLayoutRpc = Rpc.make(WS_METHODS.subscribeProjectLayout, {
+  payload: ProjectLayoutGetInput,
+  success: ProjectLayout,
+  error: projectLayoutError,
+  stream: true,
 });
 
 const projectRoadmapError = Schema.Union([ProjectRoadmapError, EnvironmentAuthorizationError]);
@@ -2089,6 +2137,11 @@ export const WsRpcGroup = RpcGroup.make(
   WsProjectDashboardGetRpc,
   WsProjectDashboardSetWidgetsRpc,
   WsProjectDashboardSetTrackerRpc,
+  WsProjectLayoutGetRpc,
+  WsProjectLayoutApplyRpc,
+  WsProjectLayoutRevertRpc,
+  WsProjectLayoutHistoryRpc,
+  WsSubscribeProjectLayoutRpc,
   WsProjectRoadmapGetRpc,
   WsProjectRoadmapMoveRpc,
   WsProjectRoadmapSaveVersionRpc,
