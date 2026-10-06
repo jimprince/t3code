@@ -237,6 +237,7 @@ import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/sql/SqlClient";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
+import * as RequestLedger from "./projectIssues/RequestLedger.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as SourceControlBuiltInDrivers from "./sourceControl/builtInDrivers.ts";
@@ -1333,6 +1334,7 @@ const layerWsRpc = (
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const projectIssues = yield* ProjectIssuesService.make;
+      const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
@@ -1866,6 +1868,7 @@ const layerWsRpc = (
                 )
                 .pipe(
                   Effect.tap(() => recordClientCommandAnalytics(command)),
+                  Effect.tap(() => requestLedger.observeDispatch(command, clientOrigin.surface)),
                   Effect.map((result) => ({ sequence: result.sequence })),
                   Effect.mapError((cause) => {
                     const detail = userFacingDispatchErrorMessage(cause);
@@ -2484,7 +2487,11 @@ const layerWsRpc = (
                 Effect.forkScoped,
               ),
           ),
-        [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input),
+        [WS_METHODS.projectIssuesList]: (input) => projectIssues.list(input).pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
+        [WS_METHODS.projectRequestsSettle]: (input) => requestLedger.settle(input),
+        [WS_METHODS.projectRequestsCreate]: (input) => requestLedger.create(input),
+        [WS_METHODS.projectRequestsUpdate]: (input) => requestLedger.update(input),
+        [WS_METHODS.projectRequestsList]: (input) => requestLedger.listForThread(input),
         [WS_METHODS.pullRequestsList]: (input) => pullRequests.list(input),
         [WS_METHODS.pullRequestsListStats]: (input) => pullRequests.listStats(input),
         [WS_METHODS.pullRequestsRoutingIdentity]: (input) => pullRequests.routingIdentity(input),
