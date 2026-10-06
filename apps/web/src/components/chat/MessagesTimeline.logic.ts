@@ -391,7 +391,6 @@ export function resolveTimelineMinimapHasPersistentGutter(
 
 const TIMELINE_MINIMAP_HIT_STRIP_LEFT = 12;
 const TIMELINE_MINIMAP_HIT_STRIP_MAX_WIDTH = 40;
-const TIMELINE_MINIMAP_EXPANDED_HIT_STRIP_WIDTH = "22rem";
 
 /**
  * The minimap overlays the viewport's left edge while the content column is
@@ -428,15 +427,15 @@ export function resolveTimelineMinimapNavigationInteractive(collapsedWidth: numb
 }
 
 /**
- * Once the preview is open, keep the full preview and the space leading to it
- * interactive. The collapsed strip remains gutter-capped so it cannot block
- * selecting message text.
+ * Keep the rail's hover target gutter-capped even while its preview is open.
+ * The preview remains interactive as a child, while empty space beside it must
+ * not trap the pointer or block selecting message text.
  */
 export function resolveTimelineMinimapInteractiveWidth(
   collapsedWidth: number,
-  expanded: boolean,
+  _expanded: boolean,
 ): number | string {
-  return expanded ? TIMELINE_MINIMAP_EXPANDED_HIT_STRIP_WIDTH : collapsedWidth;
+  return collapsedWidth;
 }
 
 function computeElapsedMs(startIso: string, endIso: string): number | null {
