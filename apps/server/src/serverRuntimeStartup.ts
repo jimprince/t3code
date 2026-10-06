@@ -1,3 +1,4 @@
+import { recoverLegacyBackgroundWork } from "./fork/recovery/LegacyBackgroundWorkImport.ts";
 import * as StartupResumePolicy from "./fork/recovery/StartupResumePolicy.ts";
 import * as Option from "effect/Option";
 import {
@@ -541,6 +542,7 @@ const make = (options?: StartupOptions) =>
         ).pipe(Effect.map((targets): AutoBootstrapWelcomeTargets => targets)),
       });
       yield* Effect.logInfo("V2 orchestration recovery completed", recovery);
+      yield* recoverLegacyBackgroundWork;
       yield* runStartupPhase(
         "projects.auto-pull",
         Effect.gen(function* () {
