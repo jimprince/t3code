@@ -1,0 +1,4 @@
+id = "queue-coalesced-status-notes"
+category = "feature"
+functionality = "worker threads"
+text = "Workers can send status notes that replace their own still-queued note instead of piling up, and the queue can be summarized by sender."
