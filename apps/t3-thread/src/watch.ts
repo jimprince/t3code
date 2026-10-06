@@ -863,6 +863,7 @@ export async function deliverPendingNotifications(
             requireEnvironment(state, notification.sourceEnvironment),
           ).findThread(notification.sourceThreadId);
           if (
+            !matchesCurrentParent(source, notification, state) ||
             !inputNotificationStillCurrent(notification, source) ||
             (notification.reminderOfEventKey && subscription.inputReminderMinutes === 0)
           ) {
