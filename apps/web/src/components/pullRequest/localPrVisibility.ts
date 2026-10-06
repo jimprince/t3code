@@ -62,7 +62,7 @@ export function writeRemovedPullRequestKeys(
 }
 
 /** New keys include the provider; legacy host/repository keys remain readable in their own environment. */
-export function localPullRequestKey(entry: EnvironmentPullRequestEntry): string {
+function localPullRequestKey(entry: EnvironmentPullRequestEntry): string {
   return JSON.stringify([
     entry.provider,
     entry.host.toLowerCase(),
