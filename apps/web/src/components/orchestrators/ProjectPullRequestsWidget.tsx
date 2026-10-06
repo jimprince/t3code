@@ -33,7 +33,7 @@ function Row({
 }) {
   const parts = [
     row.superseded ? "superseded" : null,
-    row.state,
+    row.state === "unconfirmed" ? "not refreshed" : row.state,
     row.checks ? CHECKS[row.checks] : null,
     row.review ? REVIEW[row.review] : null,
     row.conflicting ? "conflicts" : null,
