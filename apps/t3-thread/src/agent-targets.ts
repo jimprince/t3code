@@ -1,3 +1,5 @@
+import { isPageAgentThreadId } from "@t3tools/contracts/pageAgents";
+
 import { findAgentByThreadId, requireEnvironment } from "./state.js";
 
 import type { RemoteEnvironmentClient } from "./client.js";
@@ -14,7 +16,9 @@ export type ResolvedAgentTarget = {
   unreachableEnvironments: string[];
 };
 
-export type ThreadShellClient = Pick<RemoteEnvironmentClient, "listThreads">;
+/** `findThread` resolves page-agent threads, which no shell list contains. */
+export type ThreadShellClient = Pick<RemoteEnvironmentClient, "listThreads"> &
+  Partial<Pick<RemoteEnvironmentClient, "findThread">>;
 
 export type ThreadSearchResult = {
   threadId: string;
@@ -132,7 +136,8 @@ export async function resolveAgentTarget(
     };
   }
 
-  if (!isRawThreadUuid(input)) {
+  const pageAgent = isPageAgentThreadId(input.trim());
+  if (!isRawThreadUuid(input) && !pageAgent) {
     throw new Error(`Unknown agent '${input}'.`);
   }
 
@@ -142,18 +147,25 @@ export async function resolveAgentTarget(
   for (const environmentName of orderedEnvironmentNames(state, options)) {
     checkedEnvironments.push(environmentName);
     requireEnvironment(state, environmentName);
-    let threads: OrchestrationThreadShell[];
-    try {
-      threads = await options.clientFactory(environmentName).listThreads();
-    } catch {
-      unreachableEnvironments.push(environmentName);
-      continue;
+    let thread: Pick<OrchestrationThreadShell, "id" | "projectId" | "title"> | undefined;
+    const client = options.clientFactory(environmentName);
+    if (pageAgent) {
+      // Hidden from shell lists, so read it directly; a miss means another environment.
+      thread = await client.findThread?.(input.trim()).catch(() => undefined);
+    } else {
+      let threads: OrchestrationThreadShell[];
+      try {
+        threads = await client.listThreads();
+      } catch {
+        unreachableEnvironments.push(environmentName);
+        continue;
+      }
+      thread = threads.find((candidate) =>
+        THREAD_UUID_PATTERN.test(input.trim())
+          ? candidate.id.toLowerCase() === input.trim().toLowerCase()
+          : candidate.id === input.trim(),
+      );
     }
-    const thread = threads.find((candidate) =>
-      THREAD_UUID_PATTERN.test(input.trim())
-        ? candidate.id.toLowerCase() === input.trim().toLowerCase()
-        : candidate.id === input.trim(),
-    );
     if (thread) {
       const match = {
         input,
