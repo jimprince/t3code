@@ -1,5 +1,8 @@
 import { useSupervisionForest } from "../state/forkSupervision";
-import { supervisionKey, supervisionSoundEligible } from "@t3tools/client-runtime/state/fork-nesting";
+import {
+  supervisionKey,
+  supervisionSoundEligible,
+} from "@t3tools/client-runtime/state/fork-nesting";
 import { presentThreadShell } from "@t3tools/client-runtime/state/models";
 import { useAtomValue } from "@effect/atom-react";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -154,7 +157,10 @@ function EnvironmentNotifications({
               : status === "failed"
                 ? "Thread failed"
                 : "Input needed";
-      if (hasNotificationSound(mode) && supervisionSoundEligible(forest.parentByKey, supervisionKey(environmentId, thread.id))) {
+      if (
+        hasNotificationSound(mode) &&
+        supervisionSoundEligible(forest.parentByKey, supervisionKey(environmentId, thread.id))
+      ) {
         void playNotificationSound(kind, () =>
           hasNotificationSound(getClientSettings().notificationMode),
         );

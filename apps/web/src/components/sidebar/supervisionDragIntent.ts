@@ -1,5 +1,8 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { supervisionForest, supervisionThreadKey } from "@t3tools/client-runtime/state/fork-nesting";
+import {
+  supervisionForest,
+  supervisionThreadKey,
+} from "@t3tools/client-runtime/state/fork-nesting";
 
 export type SupervisionDragIntent = { kind: "reorder" } | { kind: "nest"; parentKey: string };
 export function canSupervise(

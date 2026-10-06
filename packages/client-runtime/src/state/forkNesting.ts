@@ -45,10 +45,7 @@ export function supervisionParents<T extends SupervisionThread>(
     new Map(metadata.map((row) => [row.threadId, row.parentThreadId])),
   );
 }
-export function supervisionDescendants<K>(
-  parents: ReadonlyMap<K, K | null>,
-  parentId: K,
-) {
+export function supervisionDescendants<K>(parents: ReadonlyMap<K, K | null>, parentId: K) {
   const children = new Map<K, K[]>();
   for (const [id, parent] of parents) {
     if (parent === null) continue;
@@ -76,10 +73,8 @@ export function supervisionAttention<K>(
 ) {
   return supervisionDescendants(parents, parentId).some((id) => attention.has(id));
 }
-export const supervisionSoundEligible = <K>(
-  parents: ReadonlyMap<K, K | null>,
-  id: K,
-) => (parents.get(id) ?? null) === null;
+export const supervisionSoundEligible = <K>(parents: ReadonlyMap<K, K | null>, id: K) =>
+  (parents.get(id) ?? null) === null;
 
 export interface ScopedSupervisionThread extends SupervisionThread {
   readonly environmentId: string;
@@ -111,8 +106,9 @@ export function connectedSupervisionParents(
 }
 import type { EnvironmentThreadShell } from "./models.ts";
 
-export const supervisionThreadKey = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
-  supervisionKey(thread.environmentId, thread.id);
+export const supervisionThreadKey = (
+  thread: Pick<EnvironmentThreadShell, "environmentId" | "id">,
+) => supervisionKey(thread.environmentId, thread.id);
 
 export function supervisionNeedsAttention(thread: EnvironmentThreadShell): boolean {
   return (
@@ -130,7 +126,10 @@ export function supervisionIsActive(thread: EnvironmentThreadShell): boolean {
 }
 
 /** A missing, archived, deleted or cyclic parent leaves the child reachable as a root. */
-export function supervisionForest(threads: ReadonlyArray<EnvironmentThreadShell>, metadata: readonly ScopedSupervisionMetadata[] = []) {
+export function supervisionForest(
+  threads: ReadonlyArray<EnvironmentThreadShell>,
+  metadata: readonly ScopedSupervisionMetadata[] = [],
+) {
   const byKey = new Map(
     threads
       .filter((t) => t.archivedAt === null && t.deletedAt === null)

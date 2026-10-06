@@ -22,7 +22,11 @@ export function useSupervisionSidebar(
   openedKey: string | null,
 ) {
   const projects = useProjects();
-  const projectTitles = useMemo(() => new Map(projects.map(project => [`${project.environmentId}:${project.id}`, project.title])), [projects]);
+  const projectTitles = useMemo(
+    () =>
+      new Map(projects.map((project) => [`${project.environmentId}:${project.id}`, project.title])),
+    [projects],
+  );
   const metadata = useSupervisionMetadata();
   const forest = useMemo(() => supervisionForest(threads, metadata), [threads, metadata]);
   const paths = useMemo(() => supervisionVisiblePaths(forest, openedKey), [forest, openedKey]);
@@ -64,7 +68,10 @@ export function SupervisionThreadRows(props: {
       renderRow={props.renderRow}
     >
       {supervisionProjectLabel(child, props.thread) ? (
-        <span className="px-2 text-xs">{props.supervision.projectTitles.get(`${child.environmentId}:${child.projectId}`) ?? supervisionProjectLabel(child, props.thread)}</span>
+        <span className="px-2 text-xs">
+          {props.supervision.projectTitles.get(`${child.environmentId}:${child.projectId}`) ??
+            supervisionProjectLabel(child, props.thread)}
+        </span>
       ) : null}
       {props.renderRow(child)}
     </SupervisionThreadRows>

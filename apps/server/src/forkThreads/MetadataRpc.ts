@@ -15,7 +15,11 @@ export const makeMetadataHandlers = Effect.gen(function* () {
   const environmentId = String(yield* environment.getEnvironmentId);
   const sql = yield* SqlClient.SqlClient;
   const management = yield* ThreadManagement.ThreadManagementService;
-  const service = yield* makeNestingService(sql, management.getThreadShell, management.dispatch).pipe(Effect.orDie);
+  const service = yield* makeNestingService(
+    sql,
+    management.getThreadShell,
+    management.dispatch,
+  ).pipe(Effect.orDie);
   const mapError = (cause: unknown) =>
     isMetadataError(cause) ? cause : new ForkThreadMetadataError({ message: String(cause) });
   return {

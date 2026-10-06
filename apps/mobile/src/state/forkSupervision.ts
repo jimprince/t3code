@@ -3,6 +3,9 @@ import { createSupervisionAtoms } from "@t3tools/client-runtime/state/fork-nesti
 import { connectionAtomRuntime } from "../connection/runtime";
 import { environmentThreadShells } from "./threads";
 
-export const supervision = createSupervisionAtoms(connectionAtomRuntime, environmentThreadShells.threadShellsAtom);
+export const supervision = createSupervisionAtoms(
+  connectionAtomRuntime,
+  environmentThreadShells.threadShellsAtom,
+);
 export const useSupervisionForest = () => useAtomValue(supervision.forest);
 export const useSupervisionMetadata = () => useAtomValue(supervision.metadata);

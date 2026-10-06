@@ -6,7 +6,7 @@ import { makeThreadFixture } from "../../test-fixtures";
 
 it("requires explicit nesting intent and rejects cycles", () => {
   const threads = ["a", "b"].map((id) =>
-    makeThreadFixture({environmentId: EnvironmentId.make("env"), id: ThreadId.make(id)}),
+    makeThreadFixture({ environmentId: EnvironmentId.make("env"), id: ThreadId.make(id) }),
   );
   const forest = supervisionForest(threads);
   const input = { sourceKey: "env:a", overKey: "env:b", forest };

@@ -74,25 +74,28 @@ export function ForkSupervisionControl(props: {
       },
     });
   };
-  const renderRow = (thread: (typeof threads)[number]) => props.renderWorkerRow ? props.renderWorkerRow(thread) : (
-    <button
-      type="button"
-      key={supervisionKey(thread.environmentId, thread.id)}
-      onClick={() => {
-        void navigate({
-          to: "/$environmentId/$threadId",
-          params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
-        });
-      }}
-      className="block w-full truncate px-1.5 py-1 text-left text-xs"
-    >
-      {thread.title} ·{" "}
-      {projects.find(
-        (project) =>
-          project.environmentId === thread.environmentId && project.id === thread.projectId,
-      )?.title ?? thread.projectId}
-    </button>
-  );
+  const renderRow = (thread: (typeof threads)[number]) =>
+    props.renderWorkerRow ? (
+      props.renderWorkerRow(thread)
+    ) : (
+      <button
+        type="button"
+        key={supervisionKey(thread.environmentId, thread.id)}
+        onClick={() => {
+          void navigate({
+            to: "/$environmentId/$threadId",
+            params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+          });
+        }}
+        className="block w-full truncate px-1.5 py-1 text-left text-xs"
+      >
+        {thread.title} ·{" "}
+        {projects.find(
+          (project) =>
+            project.environmentId === thread.environmentId && project.id === thread.projectId,
+        )?.title ?? thread.projectId}
+      </button>
+    );
   const active = [
     ...sortPinnedThreadsByOrderKey(rows.filter((thread) => thread.pinnedAt !== null)),
     ...sortActiveThreadsByOrderKey(

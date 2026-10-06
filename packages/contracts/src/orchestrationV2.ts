@@ -1,8 +1,5 @@
 import { ForkWorkerSummary } from "./forkWorkerSummary.ts";
-import {
-  workerArchiveFields,
-  workerCompletionFields,
-} from "./forkWorkerLifecycle.ts";
+import { workerArchiveFields, workerCompletionFields } from "./forkWorkerLifecycle.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";

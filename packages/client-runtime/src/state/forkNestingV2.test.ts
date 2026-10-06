@@ -15,7 +15,15 @@ function thread(id: string, parentThreadId: string | null = null) {
   links.set(id, parentThreadId);
   return presentThreadShell(env, { ...v2ThreadShell, id: ThreadId.make(id) });
 }
-const supervisionForest = (threads: Parameters<typeof buildForest>[0]) => buildForest(threads, threads.map(t => ({ environmentId: t.environmentId, threadId: t.id, parentThreadId: links.get(t.id) ? ThreadId.make(links.get(t.id)!) : null })));
+const supervisionForest = (threads: Parameters<typeof buildForest>[0]) =>
+  buildForest(
+    threads,
+    threads.map((t) => ({
+      environmentId: t.environmentId,
+      threadId: t.id,
+      parentThreadId: links.get(t.id) ? ThreadId.make(links.get(t.id)!) : null,
+    })),
+  );
 
 describe("V2 organizational supervision", () => {
   it("keeps all depths and pinned/open ancestor paths, without exposing execution lineage as nesting", () => {
