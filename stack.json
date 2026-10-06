@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "9ab68f120240475ff15248e20d46623ee1e7dd5c",
+  "prev": "d4fb885509b1d94a641230a97387a426eb5ebc47",
   "head": "ddd099a385b93e3391f8230947233d6858949f12",
   "applied": [
     "fork-build-ci-compat",
@@ -73,7 +73,6 @@
     "fork-antigravity-errors",
     "fork-named-agents",
     "fork-project-automations",
-    "fork-orchestrators-view",
     "fork-project-issues-board",
     "fork-request-ledger",
     "fork-project-dashboard-widgets",
@@ -187,9 +186,6 @@
     },
     "fork-orchestrator-focus": {
       "oid": "bd10e1b21b4f4716940c72b44f3a15678a11d1cf"
-    },
-    "fork-orchestrators-view": {
-      "oid": "85c8c8dd5e6475a99dac07c161c120ddffae6718"
     },
     "fork-overnight-updates": {
       "oid": "184137b5fc65314294a1fd05fb924b62bbe4b03d"
