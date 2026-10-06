@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "39776dd73ad2e2903d7440c9eed9c05d76fb5d35",
-  "head": "d34c545f6d4fb94f52abf4caf824dc85119ca80f",
+  "prev": "398787572c69219192623a7fc4f6676675dcabbe",
+  "head": "8c3ad5e255da56d2bd987de423bf3bb32923bb1f",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -50,13 +50,13 @@
     "fork-worker-inactivity",
     "fork-thread-titles",
     "fork-subthread-lifecycle",
-    "fork-orchestrator-focus"
-  ],
-  "unapplied": [
+    "fork-orchestrator-focus",
     "fork-sidebar-nested-tidiness",
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
-    "fork-cross-environment-nesting",
+    "fork-cross-environment-nesting"
+  ],
+  "unapplied": [
     "fork-queue-coalesced-notes",
     "fork-standing-agent-autosettle",
     "fork-queue-idle-dispatch",
@@ -124,7 +124,7 @@
       "oid": "e22027d40f0be5f650708d62aa31087ab3c7d9b0"
     },
     "fork-agent-thread-ordering": {
-      "oid": "fc86686297b56565ab301d18a0ebab4c566debae"
+      "oid": "5903befcd6af7fbc2c1fafe1508389b3a210ae4c"
     },
     "fork-antigravity-errors": {
       "oid": "7a84c0d8b0eec6f5ab675e00a66fee874b3d6120"
@@ -166,7 +166,7 @@
       "oid": "3015c1d64adafef8290fa6145ce97e090702d825"
     },
     "fork-cross-environment-nesting": {
-      "oid": "12bd88391e6edb3c179394852c20a2532e5d0cfe"
+      "oid": "8c3ad5e255da56d2bd987de423bf3bb32923bb1f"
     },
     "fork-cross-project-thread-nesting": {
       "oid": "9645b4c6388fe363b39bdc24e5b5bf71f1c3a349"
@@ -223,7 +223,7 @@
       "oid": "67361e9b1d74b8897551cbd36c4b3640db699f01"
     },
     "fork-interrupted-turn-rewind": {
-      "oid": "e2f0d1367aba95856541df6920ba82eadd20e8c2"
+      "oid": "34f32dbd374ab10b8260b24640e8d47212952e3d"
     },
     "fork-item-types": {
       "oid": "c11fb22819932e30606881123c3fe206f9f8c6df"
@@ -388,7 +388,7 @@
       "oid": "5724023ff3b12194c541b945bfa6f023d5b1bd11"
     },
     "fork-sidebar-nested-tidiness": {
-      "oid": "c55307face97805a4fb002a5d4dd854ac4d4b2e1"
+      "oid": "83ba08379e58be7087eed8366bab051a21e71e16"
     },
     "fork-spawn-budget": {
       "oid": "2bdcf2afb84cf372c8bac1ea8a130f12f676a8d0"
