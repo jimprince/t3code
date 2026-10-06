@@ -73,10 +73,7 @@ function harness(pages: ReadonlyArray<unknown>, status = 200, instances = [insta
         }),
       ),
       Effect.provide(
-        Layer.mergeAll(
-          ServerSettings.layerTest({ giteaInstances: instances }),
-          runtimeLayer,
-        ),
+        Layer.mergeAll(ServerSettings.layerTest({ giteaInstances: instances }), runtimeLayer),
       ),
     );
   return { requests, run };
@@ -149,10 +146,7 @@ describe("Gitea branch pull requests", () => {
           ),
         ),
         Effect.provide(
-          Layer.mergeAll(
-            ServerSettings.layerTest({ giteaInstances: [instance] }),
-            runtimeLayer,
-          ),
+          Layer.mergeAll(ServerSettings.layerTest({ giteaInstances: [instance] }), runtimeLayer),
         ),
       );
       expect(error.detail).toBe("Gitea API returned HTTP 302.");
