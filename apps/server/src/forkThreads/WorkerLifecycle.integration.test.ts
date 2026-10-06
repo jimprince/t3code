@@ -162,7 +162,7 @@ it.effect(
         settledOverride: null,
         status: "running" as const,
       };
-      assert.equal(archiveEligible(childShell, [childShell, descendant], Infinity, metadata, new Map([[threadId, metadata], [descendant.id, { threadId: descendant.id, parentThreadId: threadId }]])), false);
+      assert.equal(archiveEligible(childShell, [childShell, descendant], Infinity, metadata, new Map([[threadId, metadata], [descendant.id, { threadId: descendant.id, parentThreadId: threadId, settleOnComplete: true }]])), false);
       assert.equal(
         archiveEligible(childShell, [childShell], Infinity, { ...metadata, settleOnComplete: false }),
         false,
