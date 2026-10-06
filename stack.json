@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "abede37905c96bb06b04f48e6fe05b7d56303d6e",
+  "prev": "d93d575b48a61a3b7c4b3d1d1e4ea01c76b060f9",
   "head": "69733f7b75ad5928c706d1b2e3ae1d1633e19d21",
   "applied": [
     "fork-build-ci-compat",
@@ -58,7 +58,6 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-codex-goal-visibility",
-    "fork-orchestrator-focus",
     "fork-page-agent-tray",
     "fork-sidebar-nested-tidiness",
     "fork-antigravity-errors",
@@ -180,9 +179,6 @@
     },
     "fork-orcaslicer-handoff": {
       "oid": "8dbb85915bbcd8be9fc5579ac95dc0868122c414"
-    },
-    "fork-orchestrator-focus": {
-      "oid": "92cb59dd97150f3203dcde5ac3ebe39321fbe1d2"
     },
     "fork-orchestrators-view": {
       "oid": "85c8c8dd5e6475a99dac07c161c120ddffae6718"
