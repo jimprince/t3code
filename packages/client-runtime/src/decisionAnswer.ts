@@ -1,3 +1,4 @@
+// @effect-diagnostics globalDate:off - sentDelivery stamps the time on the React side, outside an Effect runtime.
 /** What Brad picked on a decision: a listed option, his own words under Other, or an open question's answer. */
 export type DecisionPick =
   | { readonly kind: "option"; readonly option: string }
