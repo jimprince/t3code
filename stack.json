@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "54506d6fdfc843f8d3fa83bacd365fb43e8689e2",
-  "head": "68c61888cde498a65debcd772ceb21ffc3164025",
+  "prev": "68a3a353c773458af04efc1d0d36eb6784c02c21",
+  "head": "a3b3dd3df30520804dba34416708ed15c75a087d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -90,11 +90,11 @@
     "fork-needs-you-decisions",
     "fork-project-workstreams",
     "fork-canvas-resize",
-    "fork-pr-widget-refresh"
+    "fork-pr-widget-refresh",
+    "fork-decisions-other",
+    "fork-cli-project-layout"
   ],
   "unapplied": [
-    "fork-decisions-other",
-    "fork-cli-project-layout",
     "fork-item-types",
     "fork-board-declutter",
     "fork-project-skew-gate",
@@ -146,7 +146,7 @@
       "oid": "a2d9ddcc19576af960ec7514cd2c0d4311d900fc"
     },
     "fork-cli-project-layout": {
-      "oid": "e92d06d1c449e6f9cdd48ede4c3973724b89e502"
+      "oid": "a3b3dd3df30520804dba34416708ed15c75a087d"
     },
     "fork-codex-goal-visibility": {
       "oid": "1160e713f6b9382f935403c1a7b54fd200868a60"
@@ -161,7 +161,7 @@
       "oid": "2830b93978d89cc6a569c59009a0fa8b53a8cb20"
     },
     "fork-decisions-other": {
-      "oid": "f5146a3fa12927995ef14bf10511f01aea3348dc"
+      "oid": "44d6c906d2cd98cd599222422c199c1cabd2d85e"
     },
     "fork-desktop-delivery": {
       "oid": "4ae0a8a86b4eadee83f1596f876b89c616e63203"
