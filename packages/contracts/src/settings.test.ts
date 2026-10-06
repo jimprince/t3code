@@ -1142,3 +1142,23 @@ describe("Gitea instance settings", () => {
     expect(() => decodeServerSettingsPatch({ giteaInstances: [instance, instance] })).toThrow();
   });
 });
+
+describe("process launch warning settings", () => {
+  it("loads defaults from old settings and accepts partial threshold updates", () => {
+    expect(decodeServerSettings({}).processLaunchWarnings).toEqual({
+      syspolicydRssMb: 1024,
+      syspolicydGrowthMb: 300,
+      spawnAttemptsPerMinute: 600,
+    });
+    expect(
+      decodeServerSettingsPatch({ processLaunchWarnings: { spawnAttemptsPerMinute: 1200 } })
+        .processLaunchWarnings,
+    ).toEqual({ spawnAttemptsPerMinute: 1200 });
+  });
+  it("rejects nonpositive or fractional thresholds", () => {
+    for (const value of [0, -1, 1.5])
+      expect(() =>
+        decodeServerSettingsPatch({ processLaunchWarnings: { syspolicydRssMb: value } }),
+      ).toThrow();
+  });
+});
