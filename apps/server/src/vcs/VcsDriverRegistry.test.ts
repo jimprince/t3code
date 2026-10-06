@@ -2,6 +2,7 @@ import { assert, it, describe } from "@effect/vitest";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
+import { TestClock } from "effect/testing";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
 import * as VcsProcess from "./VcsProcess.ts";
@@ -90,6 +91,44 @@ describe("VcsDriverRegistry", () => {
           "rev-parse --git-common-dir",
         ],
       );
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("reuses a detected repository for thirty seconds", () => {
+    let detections = 0;
+    const layer = Layer.effect(VcsDriverRegistry.VcsDriverRegistry, VcsDriverRegistry.make).pipe(
+      Layer.provide(NodeServices.layer),
+      Layer.provide(
+        Layer.mock(VcsProjectConfig.VcsProjectConfig)({
+          resolveKind: (input) => Effect.succeed(input.requestedKind ?? "auto"),
+        }),
+      ),
+      Layer.provide(
+        Layer.mock(VcsProcess.VcsProcess)({
+          run: (input) =>
+            Effect.sync(() => {
+              const command = normalizeGitArgs(input.args).join(" ");
+              if (command === "rev-parse --is-inside-work-tree") {
+                detections += 1;
+                return processOutput("true\n");
+              }
+              if (command === "rev-parse --show-toplevel") return processOutput("/repo\n");
+              if (command === "rev-parse --git-common-dir") return processOutput("/repo/.git\n");
+              return processOutput("");
+            }),
+        }),
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const registry = yield* VcsDriverRegistry.VcsDriverRegistry;
+      yield* registry.detect({ cwd: "/repo" });
+      yield* TestClock.adjust("29 seconds");
+      yield* registry.detect({ cwd: "/repo" });
+      assert.equal(detections, 1);
+      yield* TestClock.adjust("2 seconds");
+      yield* registry.detect({ cwd: "/repo" });
+      assert.equal(detections, 2);
     }).pipe(Effect.provide(layer));
   });
 
