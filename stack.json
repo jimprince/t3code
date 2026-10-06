@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "ce0a2872d10d4a7cb9ef1ee99017c7f2b85dc652",
+  "prev": "096f72c0848e23bc27645c4746198566d7217434",
   "head": "b0b8fdeabef53307840d2ed357b9b2b2db59e046",
   "applied": [
     "fork-build-ci-compat",
@@ -81,7 +81,6 @@
     "fork-maintenance-automation",
     "fork-page-agent-tray",
     "fork-antigravity-errors",
-    "fork-project-task-types",
     "fork-project-request-box-pinned",
     "fork-scripts-automations",
     "fork-request-followups",
@@ -236,9 +235,6 @@
     },
     "fork-project-selection": {
       "oid": "b60c65b855319070aa2740521ede7b84b5187f80"
-    },
-    "fork-project-task-types": {
-      "oid": "737eae71a2d720b380576fdded30110832fd5daf"
     },
     "fork-provider-turn-safety": {
       "oid": "48eb16b974fed644c631e28d4dda41fad647efe9"
