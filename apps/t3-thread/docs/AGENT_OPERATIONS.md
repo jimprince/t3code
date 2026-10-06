@@ -990,7 +990,8 @@ On protocol 2 environments advertising `sessionRefresh`, the CLI rotates valid b
 ## Brad's requests (request ledger)
 
 Every message Brad types in a T3 client is split into requests and filed as Gitea issues
-labeled `ask` plus `ask:<kind>` (question, deliverable, plan, change, test) in the tracker
+labeled `ask` plus `ask:<kind>` (bug, feature, question, deliverable, plan, change, test,
+maintenance) in the tracker
 repository of the thread's orchestrator project. The project page lists them by what Brad
 does next until he settles them; settling is Brad's action only, so there is no settle command.
 
@@ -1003,7 +1004,15 @@ t3-thread request ready "$T3_THREAD_ID" 12 --stage awaiting-release --summary "<
 t3-thread request shipped "$T3_THREAD_ID" 12 --release fork.24 --test "<one-line test step>"
 t3-thread request reopen "$T3_THREAD_ID" 12
 t3-thread request note "$T3_THREAD_ID" 12 "blocked on the jaw pull force measurement"
+t3-thread request type "$T3_THREAD_ID" 12 maintenance
 ```
+
+Every task has one type, its `ask:<kind>` label: bug (broken, fix it), feature (new
+capability), question, deliverable, plan, change (adjust something that exists), test, or
+maintenance (upkeep with no new behavior: syncs, CI repair, cleanup, releases). `request type`
+sets or corrects it on any tracker issue, request or not. The Dashboard shows tasks that need
+Brad first, then completed tasks grouped by the release (milestone) that shipped them, then
+open maintenance tasks, which stay out of the Requests list while they are with the agents.
 
 Record progress on the request's issue as you go with `request note` (one short line: started,
 blocked on X, ready for review, shipped in fork.N). Stage changes post a progress line on their
