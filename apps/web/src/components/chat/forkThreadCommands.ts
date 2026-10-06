@@ -16,3 +16,9 @@ export const readForkOrderResetSupported = (environmentId: EnvironmentId) =>
   appAtomRegistry.get(supervision.readyHosts).has(environmentId) &&
   appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
     .threadOrderReset === true;
+
+/** Nesting needs the capability and a loaded sidecar, in every surface that offers it. */
+export const readForkNestingSupported = (environmentId: EnvironmentId) =>
+  appAtomRegistry.get(supervision.readyHosts).has(environmentId) &&
+  appAtomRegistry.get(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
+    .threadNesting === true;
