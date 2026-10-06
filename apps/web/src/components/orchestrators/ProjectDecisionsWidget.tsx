@@ -16,8 +16,9 @@ import { Fragment, useMemo, useRef, useState } from "react";
 
 import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
+import { DecisionContext } from "./DecisionContext";
 import { deriveDecisions } from "./decisions.logic";
-import { LinkifiedText, OptionLinks } from "./LinkifiedText";
+import { OptionLinks } from "./LinkifiedText";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { issueKey } from "./projectRequests.logic";
 import { ProjectSection } from "./ProjectSection";
@@ -318,9 +319,11 @@ export function ProjectDecisionsWidget({ summary }: { readonly summary: Orchestr
               <span>
                 <span className="block text-sm">{issue.title}</span>
                 {decision.context ? (
-                  <span className="mt-1 block text-sm whitespace-pre-line wrap-anywhere text-foreground/85">
-                    <LinkifiedText text={decision.context} />
-                  </span>
+                  <DecisionContext
+                    environmentId={summary.root.environmentId}
+                    text={decision.context}
+                    issueUrl={issue.url}
+                  />
                 ) : null}
                 <span className="mt-1 block text-xs text-muted-foreground">
                   For {waiting} · {formatIssueAge(issue.createdAt, now)}
