@@ -1,0 +1,4 @@
+id = "project-roadmap"
+category = "feature"
+functionality = "projects"
+text = "Plan versions on a project's roadmap: drag requests and issues from Later into a version (Gitea milestones), add or rename versions, and save ideas for later without waking the orchestrator. The first version feeds Next release."
