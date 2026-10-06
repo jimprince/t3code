@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "50dcdd2c86c9b0ff43225cc52c92d5db51be027e",
-  "head": "f8e45af3145690cc40ec2fc1b64f4cf216684ff6",
+  "prev": "fc9f9a3ea10893362c451eb546cc80ca4d92ee67",
+  "head": "70013d05f073c6dc4ffd0fd5b850b38b46042146",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -44,7 +44,8 @@
     "fork-launch-health",
     "fork-notification-preferences",
     "fork-sidebar-agent-visibility",
-    "fork-child-input-attention"
+    "fork-child-input-attention",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-agent-panel-thread-details",
@@ -315,6 +316,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "0c06ba85df0caa7c87c395025a892ad06a542525"
+    },
+    "refresh-temp": {
+      "oid": "70013d05f073c6dc4ffd0fd5b850b38b46042146"
     }
   }
 }
