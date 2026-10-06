@@ -1,0 +1,4 @@
+id = "subprojects-server"
+category = "feature"
+functionality = "projects"
+text = "A nested orchestrator thread can now be a subproject with its own health line, layout, tracker and Decisions, set with t3-thread orchestrator mark; its sidebar entry and page come in a later release."
