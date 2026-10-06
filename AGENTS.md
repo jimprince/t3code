@@ -1,5 +1,9 @@
 # T3 Code
 
+> **Maintained fork:** Before changing this tree, read
+> [LLM_INSTRUCTIONS.md](./LLM_INSTRUCTIONS.md); it determines whether the work
+> refreshes an existing StGit patch or creates a new one.
+
 T3 Code is a minimal GUI for coding agents. A Node WebSocket server wraps provider CLIs and agents (Codex, Claude Code, Cursor, Grok, OpenCode, Antigravity) and serves web, desktop, and mobile clients.
 
 You can think of T3 Code as an open source "bring-your-own-subscription" alternative to apps like Claude Desktop, Codex App, Cursor Glass and Conductor.
@@ -95,9 +99,9 @@ An empty database is a bad test. Seed your worktree's `.t3` with a copy of real 
 
 ## Verifying
 
-- Smallest proof that the change works. `vp test run <files>` for the tests you touched, targeted lint and typecheck for the scope you changed.
+- Workers run `vp test run <files>` for the changed behavior, lint/format on touched files, and `vp run typecheck` in each changed package. When public behavior or types change, include affected direct and transitive consumers in those typechecks and focused tests, including shared contracts, migrations, protocol joins, and cross-platform changes. For example, trace a contracts change through client-runtime to server, web, mobile, and desktop. Documentation-only changes need supported touched-file format/lint checks and changed-link review.
 - Test meaningful logic or observable behavior. Do not render components to static markup to assert props or attributes, or add tests that merely assert callback wiring or mirror the implementation.
-- **Do not run repo-wide checks.** No `vp check`, no `vp run -r test`, no `vp run -r typecheck` unless I ask. CI owns the full suite.
+- **CI owns the broad gates.** CI runs the full check, workspace typechecks, tests, build, and mobile gates once on the integrated exact-SHA candidate; the publisher stages it and waits through `scripts/ci/verify-stgit-replay` before publication. Reuse successful candidate evidence through the [candidate verification contract](docs/operations/fork-maintenance.md#one-candidate-verification-contract). Run broad checks locally only to diagnose a failure or when explicitly requested; local results and exceptions never waive CI.
 - Backend behavior changes ship with focused tests for that behavior.
 - The server is event-sourced, and side effects run after the command commits. In tests, drain the effect worker (`OrchestrationEffectWorkerV2.drain`) or await the specific persisted event or `Deferred` that marks the milestone. Never wait on sleeps or polling. A test that needs a timeout to pass is wrong.
 - Upon request, user-visible frontend changes should get one integrated pass in a real client: `test-t3-app` for web, `test-t3-mobile` for mobile. The primary agent does this once after integrating. Subagents do not launch their own dev servers. Ask permission before doing computer use or spinning up browsers.
