@@ -1,0 +1,4 @@
+id = "deep-thread-nesting"
+category = "feature"
+functionality = "thread organization"
+text = "Nest worker threads through multiple levels while preventing parent cycles."
