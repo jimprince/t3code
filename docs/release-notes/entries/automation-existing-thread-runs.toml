@@ -1,4 +1,0 @@
-id = "automation-existing-thread-runs"
-category = "fix"
-functionality = "projects"
-text = "Automation runs sent into an existing thread are no longer recorded as failed with \"Provider session stopped before completion\" when the turn actually completed."

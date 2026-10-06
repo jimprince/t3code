@@ -1,4 +1,0 @@
-id = "automation-act-result-mode"
-category = "fix"
-functionality = "projects"
-text = "Scripts and automation rules can choose an \"act\" result mode that adds no filing or settling instructions, so a run whose job is to act directly is not told to change nothing; automations targeting an existing thread default to it, and `t3-thread automation edit` changes an existing automation's result mode or, with `--owner-thread`, the orchestrator it belongs to."
