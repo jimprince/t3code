@@ -3,6 +3,7 @@ import type {
   GiteaInstanceConfig,
   ProjectIssueRequestSource,
   ProjectIssueStatus,
+  ProjectRequestStage,
   RepositoryIdentity,
   ThreadId,
 } from "@t3tools/contracts";
@@ -13,15 +14,40 @@ const ARCHIVED_LABEL = "archived";
 /** Marks an issue as a request Brad made (the request ledger). */
 export const REQUEST_LABEL = "ask";
 
-/** Same derivation as the Agent Status Board's `/api/items`. */
+/** Request-ledger stage labels: handed over for the next release, and shipped and waiting for Brad's test. */
+export const AWAITING_RELEASE_LABEL = "awaiting-release";
+export const NEEDS_TEST_LABEL = "needs-test";
+
+/**
+ * Same derivation as the Agent Status Board's `/api/items`. The ledger's two
+ * release stages land in the lane that matches who acts next: a shipped
+ * request waiting for Brad's test is his to review, and handed-over work
+ * waiting for the release batch is still in progress.
+ */
 export function deriveProjectIssueStatus(
   state: "open" | "closed",
   labels: ReadonlyArray<string>,
 ): ProjectIssueStatus {
   const names = new Set(labels.map((label) => label.toLowerCase()));
   if (state === "closed") return names.has(ARCHIVED_LABEL) ? "archived" : "done";
+  if (names.has(NEEDS_TEST_LABEL)) return "needs-review";
+  if (names.has(AWAITING_RELEASE_LABEL)) return "in-progress";
   for (const status of STATUS_LABELS) if (names.has(status)) return status;
   return "pending";
+}
+
+/** Where a request is in its life, from Brad's point of view. */
+export function deriveRequestStage(
+  state: "open" | "closed",
+  labels: ReadonlyArray<string>,
+): ProjectRequestStage {
+  const names = new Set(labels.map((label) => label.toLowerCase()));
+  if (state === "closed") return "settled";
+  if (names.has(NEEDS_TEST_LABEL)) return "needs-test";
+  if (names.has(AWAITING_RELEASE_LABEL)) return "awaiting-release";
+  if (names.has("needs-review")) return "ready";
+  if (names.has("in-progress")) return "in-progress";
+  return "requested";
 }
 
 const REQUEST_MARKER = /<!--\s*t3-request\s+(\{[^\n]*?\})\s*-->/;
@@ -48,6 +74,9 @@ export function parseRequestMarker(
           threadId: value.threadId as ThreadId,
           rootThreadId: value.rootThreadId as ThreadId,
           messageId: value.messageId,
+          ...(Number.isInteger(value.item) && (value.item as number) >= 0
+            ? { item: value.item as number }
+            : {}),
         }
       : null;
   } catch {
