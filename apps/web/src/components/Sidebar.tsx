@@ -7,7 +7,11 @@ import { useSupervisionDrag } from "./sidebar/useSupervisionDrag";
 import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
 import { groupChildInputAttention } from "@t3tools/client-runtime/child-attention";
 import { SidebarChildInputAttention } from "./sidebar/SidebarChildInputAttention";
-import { newForkCommandId, resetForkThreadOrder } from "./chat/forkThreadCommands";
+import {
+  newForkCommandId,
+  readForkOrderResetSupported,
+  resetForkThreadOrder,
+} from "./chat/forkThreadCommands";
 import { SidebarProjectSelection, useSidebarProjectSelection } from "./SidebarProjectSelection";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
 import { CollapsibleSectionHeader } from "./ui/collapsible-section-header";
@@ -4469,9 +4473,7 @@ export default function Sidebar() {
                 autoSettleOptOut: supportsAutoSettleOptOut,
                 snooze: supportsSnooze,
                 pinning: supportsPinning,
-                orderReset:
-                  orderReadyHosts.has(thread.environmentId) && serverConfigs.get(thread.environmentId)?.environment.capabilities
-                    .threadOrderReset === true,
+                orderReset: readForkOrderResetSupported(thread.environmentId),
                 titleRegeneration: supportsTitleRegeneration,
               },
               move: (isPinned ? serverConfigs.get(thread.environmentId)?.environment.capabilities.threadPinReorder : serverConfigs.get(thread.environmentId)?.environment.capabilities.threadActiveReorder) === true && (isPinned || !isSettled) ? {
