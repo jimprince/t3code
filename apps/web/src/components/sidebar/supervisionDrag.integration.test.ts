@@ -1,5 +1,5 @@
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
-import { supervisionForest } from "@t3tools/client-runtime/state/forkNesting";
+import { supervisionForest } from "@t3tools/client-runtime/state/fork-nesting";
 import { expect, it } from "vite-plus/test";
 import { supervisionDragIntent, canSupervise } from "./supervisionDragIntent";
 import { makeThreadFixture } from "../../test-fixtures";

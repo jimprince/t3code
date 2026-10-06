@@ -25,11 +25,8 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { ThreadDetailsSection } from "./ThreadDetailsSection";
 
-const metadataQuery = createEnvironmentRpcQueryAtomFamily(connectionAtomRuntime, {
-  label: "fork-supervision",
-  tag: "fork.threads.metadata.list",
-  refreshIntervalMs: 30000,
-});
+import { supervision, useSupervisionMetadata } from "../../state/forkSupervision";
+const metadataQuery = supervision.query;
 const updateMetadata = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "fork-supervision-update",
   tag: "fork.threads.metadata.update",
@@ -43,29 +40,9 @@ export function ForkSupervisionControl(props: {
 }) {
   const threads = useThreadShells();
   const projects = useProjects();
-  const environmentIds = useMemo(
-    () => [...new Set([props.environmentId, ...threads.map((thread) => thread.environmentId)])],
-    [props.environmentId, threads],
-  );
-  const combinedQuery = useMemo(
-    () =>
-      Atom.make((get) =>
-        environmentIds.map((environmentId) => ({
-          environmentId,
-          result: get(metadataQuery({ environmentId, input: {} })),
-        })),
-      ),
-    [environmentIds],
-  );
-  const queries = useAtomValue(combinedQuery);
-  const metadata = queries.flatMap(({ environmentId, result }) =>
-    AsyncResult.isSuccess(result) ? result.value.map((row) => ({ ...row, environmentId })) : [],
-  );
-  const available = new Set(
-    queries
-      .filter((query) => AsyncResult.isSuccess(query.result))
-      .map((query) => query.environmentId),
-  );
+  const metadata = useSupervisionMetadata();
+  const available = new Set(metadata.map((row) => row.environmentId));
+  available.add(props.environmentId);
   const navigate = useNavigate();
   const update = useAtomCommand(updateMetadata);
   const [visibleCount, setVisibleCount] = useState(24);

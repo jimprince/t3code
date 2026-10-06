@@ -45,19 +45,19 @@ export function supervisionParents<T extends SupervisionThread>(
     new Map(metadata.map((row) => [row.threadId, row.parentThreadId])),
   );
 }
-export function supervisionDescendants(
-  parents: ReadonlyMap<ThreadId, ThreadId | null>,
-  parentId: ThreadId,
+export function supervisionDescendants<K>(
+  parents: ReadonlyMap<K, K | null>,
+  parentId: K,
 ) {
-  const children = new Map<ThreadId, ThreadId[]>();
+  const children = new Map<K, K[]>();
   for (const [id, parent] of parents) {
     if (parent === null) continue;
     const siblings = children.get(parent);
     if (siblings) siblings.push(id);
     else children.set(parent, [id]);
   }
-  const result: ThreadId[] = [];
-  const seen = new Set<ThreadId>([parentId]);
+  const result: K[] = [];
+  const seen = new Set<K>([parentId]);
   const pending = [...(children.get(parentId) ?? [])];
   for (let i = 0; i < pending.length; i++) {
     const id = pending[i]!;
@@ -69,16 +69,16 @@ export function supervisionDescendants(
   return result;
 }
 /** Roll up attention without treating a child's execution as a parent result or sound. */
-export function supervisionAttention(
-  parents: ReadonlyMap<ThreadId, ThreadId | null>,
-  attention: ReadonlySet<ThreadId>,
-  parentId: ThreadId,
+export function supervisionAttention<K>(
+  parents: ReadonlyMap<K, K | null>,
+  attention: ReadonlySet<K>,
+  parentId: K,
 ) {
   return supervisionDescendants(parents, parentId).some((id) => attention.has(id));
 }
-export const supervisionSoundEligible = (
-  parents: ReadonlyMap<ThreadId, ThreadId | null>,
-  id: ThreadId,
+export const supervisionSoundEligible = <K>(
+  parents: ReadonlyMap<K, K | null>,
+  id: K,
 ) => (parents.get(id) ?? null) === null;
 
 export interface ScopedSupervisionThread extends SupervisionThread {
@@ -109,24 +109,10 @@ export function connectedSupervisionParents(
   );
   return reachableParents(visible, raw);
 }
-export const supervisionSoundEligible = (parents: ReadonlyMap<ThreadId, ThreadId | null>, id: ThreadId) => (parents.get(id) ?? null) === null;
 import type { EnvironmentThreadShell } from "./models.ts";
 
-export const supervisionKey = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
-  `${thread.environmentId}:${thread.id}`;
-
-/** Organizational parentage never substitutes provider execution lineage. */
-export function supervisionParentKey(thread: EnvironmentThreadShell): string | null {
-  const source = thread.source as EnvironmentThreadShell["source"] & {
-    parentThreadId?: string | null;
-    parentEnvironmentId?: string | null;
-  };
-  if (thread.source.remoteParent)
-    return `${thread.source.remoteParent.environmentId}:${thread.source.remoteParent.threadId}`;
-  return source.parentThreadId == null
-    ? null
-    : `${source.parentEnvironmentId ?? thread.environmentId}:${source.parentThreadId}`;
-}
+export const supervisionThreadKey = (thread: Pick<EnvironmentThreadShell, "environmentId" | "id">) =>
+  supervisionKey(thread.environmentId, thread.id);
 
 export function supervisionNeedsAttention(thread: EnvironmentThreadShell): boolean {
   return (
@@ -144,24 +130,15 @@ export function supervisionIsActive(thread: EnvironmentThreadShell): boolean {
 }
 
 /** A missing, archived, deleted or cyclic parent leaves the child reachable as a root. */
-export function supervisionForest(threads: ReadonlyArray<EnvironmentThreadShell>) {
+export function supervisionForest(threads: ReadonlyArray<EnvironmentThreadShell>, metadata: readonly ScopedSupervisionMetadata[] = []) {
   const byKey = new Map(
     threads
       .filter((t) => t.archivedAt === null && t.deletedAt === null)
-      .map((t) => [supervisionKey(t), t]),
+      .map((t) => [supervisionThreadKey(t), t]),
   );
   const parentByKey = new Map<string, string>();
-  for (const [key, thread] of byKey) {
-    const parent = supervisionParentKey(thread);
-    if (parent === null || !byKey.has(parent)) continue;
-    const seen = new Set([key]);
-    let ancestor: string | null = parent;
-    while (ancestor !== null && byKey.has(ancestor) && !seen.has(ancestor)) {
-      seen.add(ancestor);
-      ancestor = supervisionParentKey(byKey.get(ancestor)!);
-    }
-    if (ancestor !== null && seen.has(ancestor)) continue;
-    parentByKey.set(key, parent);
+  for (const [key, parent] of connectedSupervisionParents([...byKey.values()], metadata)) {
+    if (parent !== null) parentByKey.set(key, parent);
   }
   const children = new Map<string, EnvironmentThreadShell[]>();
   for (const [key, parent] of parentByKey) {
@@ -174,7 +151,7 @@ export function supervisionForest(threads: ReadonlyArray<EnvironmentThreadShell>
     const cached = activeCounts.get(key);
     if (cached !== undefined) return cached;
     const total = (children.get(key) ?? []).reduce(
-      (n, t) => n + Number(supervisionIsActive(t)) + count(supervisionKey(t)),
+      (n, t) => n + Number(supervisionIsActive(t)) + count(supervisionThreadKey(t)),
       0,
     );
     activeCounts.set(key, total);
@@ -188,8 +165,8 @@ export function supervisionForest(threads: ReadonlyArray<EnvironmentThreadShell>
         (a.pinnedAt !== null && b.pinnedAt !== null
           ? (a.pinOrderKey ?? "~").localeCompare(b.pinOrderKey ?? "~")
           : 0) ||
-        Number(supervisionIsActive(b) || count(supervisionKey(b)) > 0) -
-          Number(supervisionIsActive(a) || count(supervisionKey(a)) > 0) ||
+        Number(supervisionIsActive(b) || count(supervisionThreadKey(b)) > 0) -
+          Number(supervisionIsActive(a) || count(supervisionThreadKey(a)) > 0) ||
         (a.activeOrderKey ?? "~").localeCompare(b.activeOrderKey ?? "~") ||
         a.createdAt.localeCompare(b.createdAt) ||
         a.id.localeCompare(b.id),
@@ -221,7 +198,7 @@ export function supervisionRoots(
 ) {
   const roots = new Map<string, EnvironmentThreadShell>();
   for (const thread of visible) {
-    let key = supervisionKey(thread);
+    let key = supervisionThreadKey(thread);
     while (forest.parentByKey.has(key)) key = forest.parentByKey.get(key)!;
     const root = forest.byKey.get(key) ?? thread;
     roots.set(key, root);
