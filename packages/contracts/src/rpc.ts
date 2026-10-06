@@ -1,3 +1,4 @@
+import { ThreadTransferRpcs } from "./threadTransfer.ts";
 import { ForkConversationRpc } from "./forkConversation.ts";
 import {
   ThreadIssueLinkResult,
@@ -2271,6 +2272,7 @@ export const WsCoreRpcGroup = RpcGroup.make(
 // types resolve to any in R.
 export const WsForkRpcGroup = RpcGroup.make(
   ForkConversationRpc,
+  ...ThreadTransferRpcs,
   WsProjectIssuesGetRpc,
   WsProjectRequestsSubmitRpc,
   WsProjectRequestsStartIntakeRpc,

@@ -1,3 +1,6 @@
+import * as ThreadTransfer from "../forkThreads/TransferService.ts";
+import * as TransferWorkspace from "../forkThreads/TransferWorkspace.ts";
+import * as TransferAttachments from "../forkThreads/TransferAttachments.ts";
 import * as ForkWorkspace from "../forkThreads/ForkWorkspaceService.ts";
 import * as PortableHistory from "../forkThreads/PortableHistory.ts";
 import * as StartupResumePolicy from "../fork/recovery/StartupResumePolicy.ts";
@@ -48,7 +51,10 @@ import { layer as runExecutionServiceLayer } from "./RunExecutionService.ts";
 import { layer as runFinalizationServiceLayer } from "./RunFinalizationService.ts";
 import * as RuntimePolicy from "./RuntimePolicy.ts";
 import { layer as runtimeRequestServiceLayer } from "./RuntimeRequestService.ts";
-import { layerWithLegacyImporter as threadManagementServiceLayer } from "./ThreadManagementService.ts";
+import {
+  layerWithLegacyImporter as threadManagementServiceLayer,
+  legacyHistoryLayer,
+} from "./ThreadManagementService.ts";
 import { layer as threadLaunchServiceLayer } from "./ThreadLaunchService.ts";
 import { layer as threadLifecycleServiceLayer } from "./ThreadLifecycleService.ts";
 import { layer as threadForkServiceLayer } from "./ThreadForkService.ts";
@@ -316,7 +322,25 @@ export const OrchestrationV2LayerLive = Layer.mergeAll(
   legacyV1ThreadImporterProvided,
 );
 
+const portableHistoryProvided = PortableHistory.layer.pipe(
+  Layer.provide(Layer.mergeAll(storesLayer, eventSinkProvided)),
+);
+const forkTransferProvided = ThreadTransfer.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      threadManagementProvided,
+      legacyHistoryLayer.pipe(Layer.provide(storesLayer)),
+      ProjectServiceLayerLive,
+      storesLayer,
+      eventSinkProvided,
+      portableHistoryProvided,
+      TransferWorkspace.layer.pipe(Layer.provide(storesLayer)),
+      TransferAttachments.layer,
+    ),
+  ),
+);
 export const OrchestrationV2ProductionLayerLive = Layer.mergeAll(
+  forkTransferProvided,
   ForkWorkspace.layer.pipe(
     Layer.provide(
       Layer.mergeAll(
