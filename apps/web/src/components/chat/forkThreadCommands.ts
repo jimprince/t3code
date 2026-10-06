@@ -6,6 +6,10 @@ import { connectionAtomRuntime } from "../../connection/runtime";
 import { supervision } from "../../state/forkSupervision";
 
 export { newForkCommandId } from "@t3tools/client-runtime/state/fork-thread-ids";
+export const forkConversation = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "fork-conversation",
+  tag: "orchestration.forkThread",
+});
 export const resetForkThreadOrder = createEnvironmentRpcCommand(connectionAtomRuntime, {
   label: "fork-order-reset",
   tag: "fork.threads.order.reset",
