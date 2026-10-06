@@ -18,3 +18,9 @@ export const mobileDecideProjectRequest = createEnvironmentRpcCommand(connection
   label: "mobile:project-requests:decide",
   tag: WS_METHODS.projectRequestsDecide,
 });
+
+/** Opens (or reuses) a thread to talk a decision through before answering it. */
+export const mobileDiscussProjectRequest = createEnvironmentRpcCommand(connectionAtomRuntime, {
+  label: "mobile:project-requests:discuss",
+  tag: WS_METHODS.projectRequestsDiscuss,
+});
