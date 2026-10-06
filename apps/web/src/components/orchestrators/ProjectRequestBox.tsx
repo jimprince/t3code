@@ -15,6 +15,7 @@ import { Textarea } from "../ui/textarea";
 import { sentRequestStatus } from "./projectRequests.logic";
 import { useProjectRequests } from "./ProjectRequestsSection";
 import { sendToOrchestrator, sendToThread } from "./sendToOrchestrator";
+import { TaskTitle } from "./TaskLink";
 
 /** How long the sent line stays, and when to look again for the filed request. */
 const SENT_LINE_MS = 120_000;
@@ -36,9 +37,9 @@ const imageFiles = (files: FileList | null | undefined) =>
   [...(files ?? [])].filter((file) => file.type.startsWith("image/"));
 
 /**
- * The project page's New request box, above the tabs so every tab has it: a
- * support box where the work actually gets done; it files a new request. Send gives the text (and pasted or
- * dropped images) verbatim to the project's orchestrator in the background,
+ * The project page's New request box, above the tabs so every tab has it. Send
+ * files a new request and gives the text (and pasted or dropped images) verbatim
+ * to the project's intake thread, or its orchestrator, in the background,
  * through the normal send path where the request ledger captures it, and says
  * which request tracks it once filed. Save for later files it straight into the
  * roadmap's Later column without waking the orchestrator. One line until focused;
@@ -101,7 +102,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
     const environmentId = summary.root.environmentId;
     reset();
     setExpanded(false);
-    setStatus("Starting triage...");
+    setStatus("Sending...");
     // A short-lived intake thread triages the request (type, title, roadmap, and
     // then answer, catalog, start a worker or hand it on), so the orchestrator is
     // not woken for every request.
@@ -158,7 +159,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
     });
     if (result._tag === "Success") {
       reset();
-      flash(result.value.queued ? "Saved; filing when Gitea is back" : "Saved for later");
+      flash("Saved for later");
     }
   };
 
@@ -181,7 +182,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
           aria-label="New request"
           value=""
           readOnly
-          placeholder="New request: ask the orchestrator, or save an idea for later"
+          placeholder="New request"
           onFocus={() => setExpanded(true)}
           onPaste={(event: ClipboardEvent) => {
             const files = imageFiles(event.clipboardData.files);
@@ -197,7 +198,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
           value={text}
           rows={3}
           autoFocus
-          placeholder="New request: ask the orchestrator, or save an idea for later"
+          placeholder="New request"
           onBlur={() => setExpanded(false)}
           onChange={(event) => setText(event.target.value)}
           onPaste={(event: ClipboardEvent) => {
@@ -266,10 +267,7 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
             </>
           ) : null}
           <span role="status" className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            {status ??
-              (sent && sentStatus ? (
-                <SentLine queued={sent.queued} intake={sent.intake} status={sentStatus} />
-              ) : null)}
+            {status ?? (sent && sentStatus ? <SentLine status={sentStatus} /> : null)}
           </span>
         </div>
       ) : null}
@@ -277,37 +275,22 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
   );
 }
 
-/** "Sent to the orchestrator · tracked as request #N", or why there is no link yet. */
-function SentLine({
-  queued,
-  intake,
-  status,
-}: {
-  readonly queued: boolean;
-  readonly intake: boolean;
-  readonly status: ReturnType<typeof sentRequestStatus>;
-}) {
-  const lead = intake
-    ? "Sent for triage"
-    : queued
-      ? "Queued for the orchestrator"
-      : "Sent to the orchestrator";
-  if (status.state === "pending") return <>{lead} · pending filing</>;
-  if (status.state === "filing") return <>{lead}</>;
+/** "Sent · <the filed task's title>", which opens the task; the title once it is filed. */
+function SentLine({ status }: { readonly status: ReturnType<typeof sentRequestStatus> }) {
+  if (status.state !== "tracked") return <>Sent</>;
   return (
     <>
-      {lead} · tracked as{" "}
+      Sent ·{" "}
       {status.issues.map((issue, index) => (
         <span key={issue.url}>
           {index > 0 ? ", " : ""}
-          <a
-            href={issue.url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <TaskTitle
+            task={{ host: issue.host, repository: issue.repository, number: issue.number }}
+            url={issue.url}
             className="text-foreground/90 hover:underline"
           >
-            request #{issue.number}
-          </a>
+            {issue.title}
+          </TaskTitle>
         </span>
       ))}
     </>

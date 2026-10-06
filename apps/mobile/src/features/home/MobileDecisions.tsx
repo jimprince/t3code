@@ -2,6 +2,7 @@ import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestr
 import {
   decisionAnswerInput,
   decisionSendStrip,
+  waitingLabel,
   type DecisionAnswerInput,
   type DecisionPick,
 } from "@t3tools/client-runtime/decision-answer";
@@ -23,10 +24,13 @@ type Selection = { readonly kind: "option"; readonly option: string } | { readon
 
 function DecisionCard({
   issue,
+  waiting,
   sent,
   onSend,
 }: {
   readonly issue: ProjectIssue;
+  /** Who the answer goes to, in words. */
+  readonly waiting: string;
   readonly sent: boolean;
   readonly onSend: (input: DecisionAnswerInput) => Promise<boolean>;
 }) {
@@ -48,22 +52,21 @@ function DecisionCard({
   const send = async () => {
     if (!input || sending) return;
     setSending(true);
-    await onSend(input);
-    setSending(false);
+    try {
+      await onSend(input);
+    } finally {
+      setSending(false);
+    }
   };
   const showText = open || selected?.kind === "other";
   return (
     <View className="gap-1 border-t border-border pt-2">
       <Text className="text-sm text-foreground">{issue.title}</Text>
       {decision.context ? (
-        <Text className="text-xs text-foreground-muted" numberOfLines={4}>
-          {decision.context}
-        </Text>
+        <Text className="text-xs text-foreground-muted">{decision.context}</Text>
       ) : null}
       {sent ? (
-        <Text className="text-sm text-foreground">
-          {decisionSendStrip("sent", decision.waiting).text}
-        </Text>
+        <Text className="text-sm text-foreground">{decisionSendStrip("sent", waiting).text}</Text>
       ) : (
         <>
           {open
@@ -76,12 +79,12 @@ function DecisionCard({
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                     onPress={() => setSelected({ kind: "option", option: option.text })}
-                    className={`rounded-md border px-2 py-1.5 ${active ? "border-foreground" : "border-border"}`}
+                    className={`min-h-11 flex-row items-center gap-2 rounded-md border px-2 py-2 ${active ? "border-foreground" : "border-border"}`}
                   >
-                    <Text className="text-sm text-foreground">
-                      {option.text}
-                      {option.recommended ? "  (recommended)" : ""}
-                    </Text>
+                    <Text className="min-w-0 flex-1 text-sm text-foreground">{option.text}</Text>
+                    {option.recommended ? (
+                      <Text className="text-xs text-foreground-muted">Recommended</Text>
+                    ) : null}
                   </Pressable>
                 );
               })}
@@ -90,7 +93,7 @@ function DecisionCard({
               accessibilityRole="button"
               accessibilityState={{ selected: selected?.kind === "other" }}
               onPress={() => setSelected({ kind: "other" })}
-              className={`rounded-md border px-2 py-1.5 ${selected?.kind === "other" ? "border-foreground" : "border-border"}`}
+              className={`min-h-11 justify-center rounded-md border px-2 py-2 ${selected?.kind === "other" ? "border-foreground" : "border-border"}`}
             >
               <Text className="text-sm text-foreground">Other...</Text>
             </Pressable>
@@ -103,7 +106,7 @@ function DecisionCard({
               placeholder={open ? "Answer" : "Your answer"}
               placeholderTextColorClassName="accent-placeholder"
               maxLength={2000}
-              className="rounded-md border border-border px-2 py-1 text-sm font-sans text-foreground"
+              className="min-h-11 rounded-md border border-border px-2 py-2 text-sm font-sans text-foreground"
             />
           ) : null}
           {noteOpen ? (
@@ -114,7 +117,7 @@ function DecisionCard({
               placeholder="Note"
               placeholderTextColorClassName="accent-placeholder"
               maxLength={MAX_NOTE}
-              className="rounded-md border border-border px-2 py-1 text-sm font-sans text-foreground"
+              className="min-h-11 rounded-md border border-border px-2 py-2 text-sm font-sans text-foreground"
             />
           ) : null}
           <View className="flex-row items-center gap-3">
@@ -122,18 +125,20 @@ function DecisionCard({
               accessibilityRole="button"
               disabled={!input || sending}
               onPress={() => void send()}
-              className={`rounded-md border border-foreground px-3 py-1.5 ${!input || sending ? "opacity-40" : ""}`}
+              className={`min-h-11 justify-center rounded-md border border-foreground px-4 ${!input || sending ? "opacity-40" : ""}`}
             >
               <Text className="text-sm text-foreground">{sending ? "Sending" : "Send"}</Text>
             </Pressable>
             {noteOpen ? null : (
-              <Pressable accessibilityRole="button" onPress={() => setNoteOpen(true)}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setNoteOpen(true)}
+                className="min-h-11 justify-center"
+              >
                 <Text className="text-xs text-foreground-muted">Add note</Text>
               </Pressable>
             )}
-            <Text className="flex-1 text-xs text-foreground-muted" numberOfLines={1}>
-              {decision.waiting} · #{issue.number}
-            </Text>
+            <Text className="flex-1 text-xs text-foreground-muted">For {waiting}</Text>
           </View>
         </>
       )}
@@ -167,11 +172,14 @@ export function MobileDecisions({ summary }: { readonly summary: OrchestratorSum
   if (decisions.length === 0) return null;
   return (
     <View className="mt-2 gap-2">
-      <Text className="text-xs text-foreground-muted">{decisions.length} decisions waiting</Text>
+      <Text className="text-xs font-semibold tracking-wide text-foreground-muted uppercase">
+        Decisions {decisions.length}
+      </Text>
       {decisions.map((issue) => (
         <DecisionCard
           key={issueKey(issue)}
           issue={issue}
+          waiting={waitingLabel(issue.decision!.waiting, [summary.root, ...summary.descendants])}
           sent={sent.has(issueKey(issue))}
           onSend={async (input) => {
             const result = await decide({
