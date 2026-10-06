@@ -1,6 +1,0 @@
-Bottom: be029f9491f2e75900522da5dead1f3622e0187d
-Top:    4b1b1556ad1ca738b5ca38aa7413fdf38ff1c3ca
-Author: User <user@example.com>
-Date:   2026-10-05 06:37:29 +0000
-
-feat(threads): nest threads under an orchestrating thread
