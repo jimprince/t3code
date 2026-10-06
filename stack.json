@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "df05e4f92366954ed5b43d160eed3610bec6aaea",
-  "head": "7d663da6f3c4ad9850641326ee21c7de9cddd84b",
+  "prev": "f974657cd6fc6b5102361bf37a763c6ea7fde034",
+  "head": "e6ef4c0ed7a43dfe74c204680a83c627ab477ea9",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -54,10 +54,10 @@
     "fork-sidebar-nested-tidiness",
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
-    "fork-cross-environment-nesting"
+    "fork-cross-environment-nesting",
+    "fork-queue-coalesced-notes"
   ],
   "unapplied": [
-    "fork-queue-coalesced-notes",
     "fork-conversation-fork",
     "fork-thread-transfer",
     "fork-thread-history-compatibility",
@@ -236,7 +236,7 @@
       "oid": "bbc5738db211bb812350cf220faecad8827a9b6b"
     },
     "fork-queue-coalesced-notes": {
-      "oid": "491766131106b1e93aa76e56c09164e8424e96a8"
+      "oid": "e6ef4c0ed7a43dfe74c204680a83c627ab477ea9"
     },
     "fork-release-publication": {
       "oid": "09e3f234998283f5a249afc031eaa360e5495bff"
