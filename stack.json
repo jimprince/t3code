@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "e02d2600eeba2b8c1d924e726b5a5c07d7434b1f",
-  "head": "359bc6c4dabea1eae26d940251e5d10fb1532c34",
+  "prev": "663aed64c50429c5d27b1d598092e2530e4b8ae8",
+  "head": "4368b6514f03a642def81833fc53bd28330872ed",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -32,7 +32,8 @@
     "fork-embedded-pages",
     "fork-sandbox-session-recovery",
     "fork-thread-client-recovery",
-    "fork-resource-recovery"
+    "fork-resource-recovery",
+    "fork-worktree-cleanup"
   ],
   "unapplied": [
     "fork-conversation-fork",
@@ -311,6 +312,9 @@
     },
     "fork-workspace-file-uploads": {
       "oid": "6b13fad36b9c64177a72956543b1f7a51587a0e4"
+    },
+    "fork-worktree-cleanup": {
+      "oid": "4368b6514f03a642def81833fc53bd28330872ed"
     }
   }
 }
