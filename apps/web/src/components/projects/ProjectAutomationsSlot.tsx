@@ -1,11 +1,21 @@
 import type { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 
-export function ProjectAutomationsSlot(_props: {
+import { ProjectAutomationsPanel } from "./ProjectAutomationsPanel";
+
+export function ProjectAutomationsSlot({
+  project,
+}: {
   readonly project: {
     readonly environmentId: EnvironmentId;
     readonly rootThreadId: ThreadId;
     readonly rootProjectId: ProjectId;
   };
 }) {
-  return null;
+  return (
+    <ProjectAutomationsPanel
+      environmentId={project.environmentId}
+      projectId={project.rootProjectId}
+      rootThreadId={project.rootThreadId}
+    />
+  );
 }
