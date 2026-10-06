@@ -1,0 +1,8 @@
+name = "fork-roadmap-next-later"
+subject = "feat(projects): automatic next version and a Later bucket on the roadmap"
+class = "product"
+purpose = "Make the Roadmap tab plan by default (brad/t3code-fork#119): a next version that exists and fills itself with current work, an add-version action, and a Later bucket kept off the Dashboard; never an empty pane while it loads."
+retire_when = "Upstream provides equivalent milestone planning, or the project page is retired."
+depends_on = ["fork-project-roadmap", "fork-project-page-workflow", "fork-request-followups"]
+roles = []
+note = "Columns: the next version (the first open milestone, or a virtual Next version when none exists) holds that milestone's items plus every open unversioned item that is not parked; then each later milestone; then Later, unversioned parked items. ProjectRoadmapItem gains parked; projectRoadmap.move takes later (clear the milestone and add the parked label) and version null now means the automatic next version (clear the milestone and unpark). CLI roadmap move accepts next and later; roadmap list reports next, versions and later. ProjectQueryState shows Loading, or the error with Retry, wherever a project view waits on a query, so a failed Gitea call no longer leaves a blank Roadmap or a Loading line forever. Integration fork.6: adapted replay to preserve UI theme/owner notes alongside BE authoritative contract and helpers. Fork.6 integration: adapt: union inventory, retain earlier integrated owner notes and later stanza (docs/operations/fork-inventory.toml). Retire/narrow/relocate do not apply to these retained UI behaviors or inventory insertions."
