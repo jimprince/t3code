@@ -6,9 +6,13 @@ import { EnvironmentAuthorizationError } from "./auth.ts";
 export const ForkRemoteParent = Schema.Struct({ environmentId: Schema.String, threadId: ThreadId });
 export type ForkRemoteParent = typeof ForkRemoteParent.Type;
 
+export const ThreadSubprojectMode = Schema.Literals(["auto", "on", "off"]);
+export type ThreadSubprojectMode = typeof ThreadSubprojectMode.Type;
+
 /** Organizational supervision is independent of provider execution lineage. */
 export const ForkThreadMetadata = Schema.Struct({
   threadId: ThreadId,
+  subproject: Schema.optionalKey(Schema.NullOr(ThreadSubprojectMode)),
   parentThreadId: Schema.NullOr(ThreadId),
   scope: Schema.optionalKey(Schema.NullOr(Schema.String)),
   settleOnComplete: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
@@ -18,6 +22,7 @@ export type ForkThreadMetadata = typeof ForkThreadMetadata.Type;
 export const ForkThreadMetadataUpdate = Schema.Struct({
   commandId: CommandId,
   threadId: ThreadId,
+  subproject: Schema.optionalKey(Schema.NullOr(ThreadSubprojectMode)),
   parentThreadId: Schema.optional(Schema.NullOr(ThreadId)),
   scope: Schema.optional(Schema.NullOr(Schema.String)),
   settleOnComplete: Schema.optional(Schema.NullOr(Schema.Boolean)),
