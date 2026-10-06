@@ -1,0 +1,4 @@
+id = "release-draft-recovery"
+category = "fix"
+functionality = "updates"
+text = "Recover interrupted update publication so completed builds become available to the updater."
