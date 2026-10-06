@@ -52,6 +52,12 @@ export function deriveRequestStage(
   return "requested";
 }
 
+/** Whether an issue body opens with "Part of #<parent>", the way an epic's child issues do. */
+export function isPartOf(body: string | null | undefined, parent: number): boolean {
+  const match = /^\s*part of #(\d+)\b/i.exec(body ?? "");
+  return match !== null && Number(match[1]) === parent;
+}
+
 const REQUEST_MARKER = /<!--\s*t3-request\s+(\{[^\n]*?\})\s*-->/;
 
 /** Hidden provenance line appended to a captured request's issue body. */
