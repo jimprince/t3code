@@ -373,3 +373,90 @@ export function answerSentences(text: string, limit = 3): string {
     .map((sentence) => sentence.trim())
     .join(" ");
 }
+
+/** The one status vocabulary of the project page: Tasks, Roadmap and Needs you share it. */
+export type TaskStatus = "for-review" | "active" | "pending" | "complete";
+
+export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
+  "for-review": "For review",
+  active: "Active",
+  pending: "Pending",
+  complete: "Complete",
+};
+
+/**
+ * Every task's status, from the same sources everywhere: Complete when closed;
+ * For review when it waits on Brad (deriveNeedsYou, shipped work to test
+ * included); Active when it is marked in progress or a worker thread linked to
+ * it is working (the orchestrator alone does not count); Pending otherwise.
+ */
+export function taskStatuses(
+  issues: ReadonlyArray<ProjectIssue>,
+  needsYou: ReadonlyArray<NeedsYouItem>,
+  threads: ReadonlyArray<EnvironmentThreadShell>,
+  rootThreadId: string,
+): Map<string, TaskStatus> {
+  const forReview = new Set(needsYou.map((item) => issueKey(item.issue)));
+  const working = new Set(
+    threads.filter((thread) => thread.id !== rootThreadId && isWorking(thread)).map((t) => t.id),
+  );
+  const statuses = new Map<string, TaskStatus>();
+  for (const issue of issues) {
+    const key = issueKey(issue);
+    statuses.set(
+      key,
+      issue.closedAt !== null || issue.status === "done"
+        ? "complete"
+        : forReview.has(key)
+          ? "for-review"
+          : issue.status === "in-progress" || issue.linkedThreadIds.some((id) => working.has(id))
+            ? "active"
+            : "pending",
+    );
+  }
+  return statuses;
+}
+
+/** A request's status from its stage, for rows that have no issue list at hand. */
+export const STAGE_STATUS: Record<ProjectRequestStage, TaskStatus> = {
+  requested: "pending",
+  "in-progress": "active",
+  // Built and handed over: still being shipped, not Brad's yet.
+  "awaiting-release": "active",
+  ready: "for-review",
+  "needs-test": "for-review",
+  settled: "complete",
+};
+
+export interface StatusCounts {
+  readonly total: number;
+  readonly complete: number;
+  readonly active: number;
+  readonly forReview: number;
+  readonly pending: number;
+}
+
+/** "63 · 12 complete · 3 active · 2 for review · 46 pending" for a set of tasks. */
+export function countStatuses(
+  statuses: ReadonlyArray<TaskStatus>,
+  extraComplete = 0,
+): StatusCounts {
+  const count = (status: TaskStatus) => statuses.filter((value) => value === status).length;
+  const complete = count("complete") + extraComplete;
+  return {
+    total: statuses.length + extraComplete,
+    complete,
+    active: count("active"),
+    forReview: count("for-review"),
+    pending: count("pending"),
+  };
+}
+
+export const formatStatusCounts = (counts: StatusCounts) =>
+  [
+    `${counts.total}`,
+    `${counts.complete} complete`,
+    `${counts.active} active`,
+    `${counts.forReview} for review`,
+    `${counts.pending} pending`,
+  ].join(" · ");
