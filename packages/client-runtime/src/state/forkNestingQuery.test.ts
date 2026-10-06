@@ -1,6 +1,8 @@
 import { expect, it } from "vite-plus/test";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
 import { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
+import * as Cause from "effect/Cause";
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import { createHostThreadIdsKey, supervisionMetadataReady } from "./forkNestingQuery.ts";
 import { presentThreadShell, type EnvironmentThreadShell } from "./models.ts";
@@ -12,6 +14,15 @@ it("requires a connected host and a completed successful sidecar load, including
   expect(supervisionMetadataReady(false, loaded)).toBe(false);
   expect(supervisionMetadataReady(true, AsyncResult.initial())).toBe(false);
   expect(supervisionMetadataReady(true, AsyncResult.waiting(loaded))).toBe(false);
+});
+
+it("keeps the last good sidecar through a failed refresh, but a host that never loaded stays not ready", () => {
+  const loaded = AsyncResult.success([]);
+  const failedRefresh = AsyncResult.failure(Cause.fail("offline"), {
+    previousSuccess: Option.some(loaded),
+  });
+  expect(supervisionMetadataReady(true, failedRefresh)).toBe(true);
+  expect(supervisionMetadataReady(true, AsyncResult.failure(Cause.fail("offline")))).toBe(false);
 });
 
 it("refreshes the sidecar on a claim and on a sidecar write, never on shell churn", () => {

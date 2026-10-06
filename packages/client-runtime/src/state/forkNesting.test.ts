@@ -113,3 +113,19 @@ it("cuts cached unavailable parents and keeps reachable descendants", () => {
   expect(parents.get("online:child")).toBeNull();
   expect(parents.get("online:grandchild")).toBe("online:child");
 });
+
+import { supervisionWorkerLines } from "./forkNesting.ts";
+it("lists every descendant of a thread as id and title lines", () => {
+  const shell = (environmentId: string, threadId: string, title: string) =>
+    ({ environmentId, id: ThreadId.make(threadId), title }) as never;
+  const children = new Map([
+    ["env:root", [shell("env", "a", "First"), shell("env", "b", "Second")]],
+    ["env:a", [shell("env", "c", "Grandchild")]],
+  ]);
+  const lines = supervisionWorkerLines({ children }, "env:root");
+  expect(lines.split("\n").toSorted()).toEqual(["a\tFirst", "b\tSecond", "c\tGrandchild"]);
+  expect(supervisionWorkerLines({ children }, "env:b")).toBe("");
+  // Unrelated shells changing leaves the string, and so any subscriber to it, unchanged.
+  const unrelated = new Map(children).set("env:other", [shell("env", "z", "Elsewhere")]);
+  expect(supervisionWorkerLines({ children: unrelated }, "env:root")).toBe(lines);
+});

@@ -177,6 +177,25 @@ export function supervisionForest(
   return { byKey, parentByKey, children, activeCounts };
 }
 
+/**
+ * A thread's descendants as "id\ttitle" lines. A string stays equal across unrelated shell
+ * churn, so a subscriber derived from it does not re-render when other threads change.
+ */
+export function supervisionWorkerLines(
+  forest: Pick<ReturnType<typeof supervisionForest>, "children">,
+  threadKey: string,
+): string {
+  const lines: string[] = [];
+  const pending = [threadKey];
+  while (pending.length) {
+    for (const child of forest.children.get(pending.pop()!) ?? []) {
+      lines.push(`${child.id}\t${child.title}`);
+      pending.push(supervisionThreadKey(child));
+    }
+  }
+  return lines.join("\n");
+}
+
 export function supervisionVisiblePaths(
   forest: ReturnType<typeof supervisionForest>,
   openedKey: string | null,

@@ -1,10 +1,9 @@
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
-import { useSupervisionForest } from "../../state/forkSupervision";
+import { useSupervisionWorkerLines } from "../../state/forkSupervision";
 import { parseScopedThreadKey } from "@t3tools/client-runtime/environment";
 import { Atom } from "effect/unstable/reactivity";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useThreadProjection } from "../../state/entities";
-import { supervisionThreadKey } from "@t3tools/client-runtime/state/fork-nesting";
 import {
   deriveBackgroundTraffic,
   resolveBackgroundFolds,
@@ -95,22 +94,10 @@ export function useOrchestratorFocus(input: {
   liveRunId: string | null;
 }) {
   const projection = useThreadProjection(parseScopedThreadKey(input.threadKey))?.projection;
-  const forest = useSupervisionForest();
   const allTraffic = useAtomValue(allTrafficAtom(input.threadKey));
   const setAllTraffic = useAtomSet(allTrafficAtom(input.threadKey));
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  // "id\ttitle" lines: a string keeps unrelated shell churn from re-deriving traffic.
-  const workerLines = useMemo(() => {
-    const lines: string[] = [];
-    const pending = [input.threadKey];
-    while (pending.length) {
-      for (const child of forest.children.get(pending.pop()!) ?? []) {
-        lines.push(`${child.id}\t${child.title}`);
-        pending.push(supervisionThreadKey(child));
-      }
-    }
-    return lines.join("\n");
-  }, [forest, input.threadKey]);
+  const workerLines = useSupervisionWorkerLines(input.threadKey);
   const workers = useMemo(() => {
     const titles = new Map<string, string>();
     for (const line of workerLines.length > 0 ? workerLines.split("\n") : []) {

@@ -1,19 +1,22 @@
 import type { EnvironmentId } from "@t3tools/contracts";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 import * as Stream from "effect/Stream";
 import * as SubscriptionRef from "effect/SubscriptionRef";
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import type * as EnvironmentRegistry from "../connection/registry.ts";
 import type { EnvironmentThreadShell } from "./models.ts";
-import { supervisionForest } from "./forkNesting.ts";
+import { supervisionForest, supervisionWorkerLines } from "./forkNesting.ts";
 import { createEnvironmentRpcQueryAtomFamily, followStreamInEnvironment } from "./runtime.ts";
 
 export function supervisionMetadataReady<A, E>(
   connected: boolean,
   result: AsyncResult.AsyncResult<A, E>,
 ) {
-  return connected && AsyncResult.isSuccess(result) && !result.waiting;
+  // A failed refresh keeps the last good metadata (`AsyncResult.value` reads it), so one dropped
+  // request does not empty a host's tree; a host that never loaded stays not ready.
+  return connected && Option.isSome(AsyncResult.value(result)) && !result.waiting;
 }
 
 /**
@@ -85,11 +88,15 @@ export function createSupervisionAtoms<R, ER>(
     const environments = new Set(get(shells).map((thread) => thread.environmentId));
     return [...environments].flatMap((environmentId) => {
       const result = get(query({ environmentId, input: {} }));
-      return AsyncResult.isSuccess(result)
-        ? result.value.map((row) => ({ ...row, environmentId }))
-        : [];
+      return Option.match(AsyncResult.value(result), {
+        onNone: () => [],
+        onSome: (rows) => rows.map((row) => ({ ...row, environmentId })),
+      });
     });
   });
   const forest = Atom.make((get) => supervisionForest(get(joinedShells), get(metadata)));
-  return { query, metadata, forest, readyHosts };
+  const workerLines = Atom.family((threadKey: string) =>
+    Atom.make((get) => supervisionWorkerLines(get(forest), threadKey)),
+  );
+  return { query, metadata, forest, readyHosts, workerLines };
 }

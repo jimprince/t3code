@@ -10,6 +10,9 @@ export const supervision = createSupervisionAtoms(
   environmentThreadShells.threadShellsAtom,
 );
 export const useSupervisionForest = () => useAtomValue(supervision.forest);
+/** One thread's descendants as "id\ttitle" lines; a string, so unrelated shell churn is silent. */
+export const useSupervisionWorkerLines = (threadKey: string) =>
+  useAtomValue(supervision.workerLines(threadKey));
 export const useSupervisionMetadata = () => useAtomValue(supervision.metadata);
 
 export const useSupervisionReadyHosts = () => useAtomValue(supervision.readyHosts);
