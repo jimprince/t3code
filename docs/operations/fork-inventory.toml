@@ -1649,3 +1649,13 @@ retire_when = "Upstream or maintained shared tooling provides server-side after-
 depends_on = ["fork-worker-operations", "fork-queue-coalesced-notes"]
 roles = []
 note = "Fixes brad/t3code-fork#150. Dispatch eligibility is unchanged (running and starting hold; completed, interrupted, stopped dispatch); only when and how often the drain runs changed. An unreachable server never marks a send undeliverable; only failed dispatches count against the attempt cap. The revival runs as a postAction hook, after a successful command, because its liveness check rewrites the state file and a refused command (env forget without --force) must leave that file unchanged."
+
+[[patch]]
+name = "fork-textgen-tempfile-cause"
+subject = "fix(server): say why a text-generation temp file could not be written"
+class = "product"
+purpose = "Make the Codex text-generation temp-file failure diagnosable: the dev VM logged 'request ledger could not split a message' with only 'Failed to write temp file', six times on 2026-10-05, hiding why request splitting fell back."
+retire_when = "Upstream reports the underlying file-system error in its text-generation temp-file failures."
+depends_on = []
+roles = []
+note = "The prefix t3code-<prefix>-<pid>- is a plain basename, so the failure is not the prefix. The detail now reads 'Failed to write temp file in <os.tmpdir()>: <reason>' (for example 'NotFound: FileSystem.makeTempFile (<path>)'); the request ledger's split warning logs the detail, so the next occurrence names its cause. A test points TMPDIR at a missing folder."
