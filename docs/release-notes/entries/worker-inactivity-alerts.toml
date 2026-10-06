@@ -1,0 +1,4 @@
+id = "worker-inactivity-alerts"
+category = "feature"
+functionality = "worker notifications"
+text = "Enable per-worker inactivity monitoring to receive one attention alert when an active worker stops showing progress, while keeping routine completions quiet."
