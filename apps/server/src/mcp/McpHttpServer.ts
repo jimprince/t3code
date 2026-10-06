@@ -52,6 +52,8 @@ import { WorktreeToolkit } from "./toolkits/worktree/tools.ts";
 import * as WorktreeMcpService from "./WorktreeMcpService.ts";
 import { PullRequestsToolkitHandlersLive } from "./toolkits/pullRequests/handlers.ts";
 import { PullRequestsToolkit } from "./toolkits/pullRequests/tools.ts";
+import { ProjectLayoutToolkitHandlersLive } from "./toolkits/projectLayout/handlers.ts";
+import { ProjectLayoutToolkit } from "./toolkits/projectLayout/tools.ts";
 import {
   DeviceScreenshotToolkitHandlersLive,
   DeviceStandardToolkitHandlersLive,
@@ -702,6 +704,10 @@ const ThreadIssuesToolkitRegistrationLive = McpServer.toolkit(ThreadIssuesToolki
   Layer.provide(ThreadIssuesToolkitHandlersLive),
 );
 
+const ProjectLayoutToolkitRegistrationLive = McpServer.toolkit(ProjectLayoutToolkit).pipe(
+  Layer.provide(ProjectLayoutToolkitHandlersLive),
+);
+
 const DeviceStandardToolkitRegistrationLive = McpServer.toolkit(DeviceStandardToolkit).pipe(
   Layer.provide(DeviceStandardToolkitHandlersLive),
 );
@@ -734,5 +740,6 @@ export const layer = Layer.mergeAll(
   WorktreeToolkitRegistrationLive,
   PullRequestsToolkitRegistrationLive,
   ThreadIssuesToolkitRegistrationLive,
+  ProjectLayoutToolkitRegistrationLive,
   DeviceToolkitRegistrationLive,
 ).pipe(Layer.provideMerge(McpTransportLive));
