@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import type { QueuedSendOrigin } from "./types.js";
 import { registerAutomationCommands } from "./automations.js";
 
 import { parseInactivityMinutes } from "./inactivity.js";
@@ -62,7 +63,13 @@ import {
   upsertSubscription,
   upsertEnvironment,
 } from "./state.js";
-import { cancelQueuedSend, drainQueuedSends, hasQueuedWork, listQueuedSends } from "./sendQueue.js";
+import {
+  cancelQueuedSend,
+  drainQueuedSends,
+  hasQueuedWork,
+  listQueuedSends,
+  summarizeQueuedSends,
+} from "./sendQueue.js";
 import {
   planExplicitThreadOrder,
   planThreadMove,
@@ -226,6 +233,21 @@ async function resolveNotifyEndpoint(
     throw new Error("Internal error: caller notification was selected without a caller thread.");
   }
   return resolveThreadEndpoint(state, threadId, preferredEnvironment, callerEnvironment);
+}
+
+/** Origin for a send made from inside a T3 thread; a send from a plain terminal has none. */
+type SendCommandOptions = { queue: boolean; coalesce?: string; progress?: boolean };
+type QueueCommandOptions = { env?: string; open?: boolean; summary?: boolean };
+
+function callerSendOrigin(state: Awaited<ReturnType<typeof loadState>>): QueuedSendOrigin | null {
+  const fromThreadId = resolveCallerThreadId();
+  if (!fromThreadId) return null;
+  const fromName = resolveCallerEndpointFromLocalContext(
+    state,
+    fromThreadId,
+    resolveCallerEnvironmentMetadata(),
+  )?.name;
+  return { source: "thread-send", fromThreadId, ...(fromName ? { fromName } : {}) };
 }
 
 async function withCallerFromEnv(): Promise<{
@@ -1150,7 +1172,6 @@ for (const operation of ["pin", "unpin"] as const) {
     });
 }
 
-
 agent
   .command("order")
   .description("Put listed sibling threads first; unlisted siblings retain their relative order")
@@ -1770,7 +1791,9 @@ agent
   .argument("<name>", "agent name or raw thread UUID")
   .argument("<message...>", "message text")
   .option("--no-queue", "fail instead of queueing when the target thread is still running")
-  .action(async (name, messageParts: string[], options: { queue: boolean }) => {
+  .option("--coalesce <key>", "replace your own still-waiting keyed note")
+  .option("--progress", "shorthand for --coalesce progress")
+  .action(async (name, messageParts: string[], options: SendCommandOptions) => {
     const { agent: savedAgent, client, saved } = await withAgent(name);
     const state = await loadState();
     const outcome = await sendDirectResult({
@@ -1787,9 +1810,11 @@ agent
           threadId: savedAgent.threadId,
           text: messageParts.join(" ").trim(),
           queueWhileRunning: options.queue,
-          origin: process.env.T3_THREAD_ID
-            ? { source: "thread-send", fromThreadId: process.env.T3_THREAD_ID }
-            : null,
+          origin: callerSendOrigin(state),
+          senderEnvironment:
+            resolveCallerEnvironmentMetadata()?.environmentName ??
+            resolveCallerEnvironmentMetadata()?.environmentId,
+          coalesceKey: options.coalesce ?? (options.progress ? "progress" : null),
           agentName: saved ? savedAgent.name : null,
         }),
     });
@@ -1811,9 +1836,19 @@ agent
   .argument("[name]", "agent name or raw thread UUID")
   .option("--env <name>", "optional saved environment filter")
   .option("--open", "only sends that are still waiting to dispatch")
-  .action(async (name: string | undefined, options: { env?: string; open?: boolean }) => {
+  .option("--summary", "count open sends by target thread and sender instead of listing them")
+  .action(async (name: string | undefined, options: QueueCommandOptions) => {
     const threadId = name ? (await withAgent(name)).agent.threadId : undefined;
     const state = await loadState();
+    if (options.summary) {
+      printJson(
+        summarizeQueuedSends(state, {
+          ...(options.env ? { env: options.env } : {}),
+          ...(threadId ? { threadId } : {}),
+        }),
+      );
+      return;
+    }
     printJson(
       listQueuedSends(state, {
         ...(options.env ? { env: options.env } : {}),
