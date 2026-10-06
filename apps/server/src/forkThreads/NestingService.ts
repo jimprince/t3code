@@ -19,7 +19,6 @@ export const makeNestingService = <E, R, DispatchError = never, DispatchContext 
     if (parentThreadId !== null) {
       const parent = yield* getShell(parentThreadId);
       if (!parent || parent.archivedAt !== null) return yield* new ForkThreadMetadataError({ message: "Parent thread is missing or archived." });
-      if (parent.projectId !== child.projectId) return yield* new ForkThreadMetadataError({ message: "Parent belongs to another project." });
       const parents = new Map(rows.map(row => [row.threadId, row.parentThreadId]));
       const seen = new Set<ThreadId>([input.threadId]);
       let cursor: ThreadId | null = parentThreadId;
