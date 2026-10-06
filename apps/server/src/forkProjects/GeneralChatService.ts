@@ -10,7 +10,7 @@ import * as ProjectService from "../project/ProjectService.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as WorkspacePaths from "../workspace/WorkspacePaths.ts";
 
-export const getChatProjectStorageKey = (environmentId: string): string =>
+const getChatProjectStorageKey = (environmentId: string): string =>
   `env-${NodeCrypto.createHash("sha256").update(environmentId).digest("hex").slice(0, 32)}`;
 export const getChatProjectId = (environmentId: string): ProjectId =>
   ProjectId.make(`chat-${getChatProjectStorageKey(environmentId)}`);
