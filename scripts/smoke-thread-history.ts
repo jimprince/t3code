@@ -274,8 +274,7 @@ function verify(databasePath: string, before: Awaited<ReturnType<typeof seed>>) 
       );
       NodeAssert.equal(message.attachments[0]?.sizeBytes, 12);
     }
-    // TODO(fork-thread-history-compatibility): after the threads lane is integrated,
-    // assert the historical achieved/cleared goals through its read-only history RPC.
+    // Historical goals are asserted through the read-only history RPC in importPackagedHistory.
     NodeAssert.deepEqual(
       database.prepare("SELECT * FROM projection_thread_messages ORDER BY message_id").all(),
       before.legacyMessages,
@@ -346,17 +345,20 @@ async function importPackagedHistory(
   const socket = new WebSocket(
     `ws://127.0.0.1:${port}/ws?wsTicket=${encodeURIComponent(ticket.ticket)}&orchestrationProtocol=2`,
   );
-  const pending = new Map<string, { resolve: () => void; reject: (error: Error) => void }>();
+  const pending = new Map<
+    string,
+    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+  >();
   socket.addEventListener("message", (event) => {
     const decoded: unknown = JSON.parse(String(event.data));
     for (const message of (Array.isArray(decoded) ? decoded : [decoded]) as Array<{
       _tag: string;
       requestId: string;
-      exit?: { _tag: string };
+      exit?: { _tag: string; value?: unknown };
     }>) {
       if (message._tag !== "Exit") continue;
       const receipt = pending.get(String(message.requestId));
-      if (message.exit?._tag === "Success") receipt?.resolve();
+      if (message.exit?._tag === "Success") receipt?.resolve(message.exit.value);
       else receipt?.reject(new Error("Packaged history projection RPC failed"));
     }
   });
@@ -373,7 +375,7 @@ async function importPackagedHistory(
     });
     for (const [index, threadId] of ["upgrade-ordered", "upgrade-cleared"].entries()) {
       const id = String(index + 1);
-      await new Promise<void>((resolve, reject) => {
+      await new Promise<unknown>((resolve, reject) => {
         pending.set(id, { resolve, reject });
         socket.send(
           JSON.stringify({
@@ -386,6 +388,35 @@ async function importPackagedHistory(
         );
       });
       pending.delete(id);
+    }
+    // V1 goals stay readable (never restorable) after the upgrade: achieved survives, cleared stays gone.
+    for (const [index, [threadId, expected]] of [
+      ["upgrade-ordered", "achieved"],
+      ["upgrade-cleared", null],
+    ].entries()) {
+      const id = String(index + 3);
+      const history = (await new Promise<unknown>((resolve, reject) => {
+        pending.set(id, { resolve, reject });
+        socket.send(
+          JSON.stringify({
+            _tag: "Request",
+            id,
+            tag: "orchestration.getLegacyHistory",
+            payload: { threadId, section: "goals", limit: 100 },
+            headers: [],
+          }),
+        );
+      })) as { readOnly: boolean; restoreAllowed: boolean; records: Array<{ goalJson?: string }> };
+      pending.delete(id);
+      NodeAssert.equal(history.readOnly, true);
+      NodeAssert.equal(history.restoreAllowed, false);
+      if (expected === null) {
+        NodeAssert.equal(history.records.length, 0, "Cleared historical goal came back");
+      } else {
+        NodeAssert.equal(history.records.length, 1, "Historical goal is not readable");
+        const goal = JSON.parse(String(history.records[0]?.goalJson)) as { status: string };
+        NodeAssert.equal(goal.status, expected);
+      }
     }
   } finally {
     socket.close();
