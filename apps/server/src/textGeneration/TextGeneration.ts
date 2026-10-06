@@ -13,6 +13,7 @@ import * as ProviderInstanceRegistry from "../provider/Services/ProviderInstance
 import type { ProviderInstance } from "../provider/ProviderDriver.ts";
 import * as SourceControlProviderRegistry from "../sourceControl/SourceControlProviderRegistry.ts";
 import * as ThreadTitleLinks from "./ThreadTitleLinks.ts";
+import type { RequestKind } from "./RequestItemsPrompt.ts";
 import type { TextGenerationPolicy } from "./TextGenerationPolicy.ts";
 
 export interface CommitMessageGenerationInput {
@@ -81,6 +82,18 @@ export interface ThreadTitleGenerationResult {
   needsRefinement?: boolean | undefined;
 }
 
+/** Split one user message into the requests it makes (fork: request ledger). */
+export interface RequestItemsGenerationInput {
+  cwd: string;
+  message: string;
+  threadTitle?: string | undefined;
+  modelSelection: ModelSelection;
+}
+
+export interface RequestItemsGenerationResult {
+  items: ReadonlyArray<{ title: string; kind: RequestKind; excerpt: string }>;
+}
+
 /**
  * TextGeneration - Service tag for commit and change request text generation.
  */
@@ -112,6 +125,11 @@ export class TextGeneration extends Context.Service<
     readonly generateThreadTitle: (
       input: ThreadTitleGenerationInput,
     ) => Effect.Effect<ThreadTitleGenerationResult, TextGenerationError>;
+
+    /** Split a message into tracked requests. Optional: providers without it skip splitting. */
+    readonly generateRequestItems?: (
+      input: RequestItemsGenerationInput,
+    ) => Effect.Effect<RequestItemsGenerationResult, TextGenerationError>;
   }
 >()("t3/textGeneration/TextGeneration") {}
 
@@ -119,7 +137,8 @@ type TextGenerationOp =
   | "generateCommitMessage"
   | "generatePrContent"
   | "generateBranchName"
-  | "generateThreadTitle";
+  | "generateThreadTitle"
+  | "generateRequestItems";
 
 const resolveInstance = (
   registry: ProviderInstanceRegistry.ProviderInstanceRegistry["Service"],
@@ -170,6 +189,19 @@ export const make = Effect.gen(function* () {
               ));
             return yield* textGeneration.generateThreadTitle({ ...input, linkedContext });
           }),
+        ),
+      ),
+    generateRequestItems: (input) =>
+      resolveInstance(registry, "generateRequestItems", input.modelSelection.instanceId).pipe(
+        Effect.flatMap((textGeneration) =>
+          textGeneration.generateRequestItems
+            ? textGeneration.generateRequestItems(input)
+            : Effect.fail(
+                new TextGenerationError({
+                  operation: "generateRequestItems",
+                  detail: "This provider cannot split requests.",
+                }),
+              ),
         ),
       ),
   });
