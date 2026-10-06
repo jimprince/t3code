@@ -1101,12 +1101,30 @@ read the layout and its history but not change it:
   Always give a short reason: Brad sees "Layout changed by <you>: <reason> · Undo".
 - `project_layout_history` and `project_layout_revert { revision }` (0 is the default layout).
 
-The CLI still sets the first tab's widgets by their older ids (requests, needs-you, release,
-maintenance, roadmap, working, blocked, done, new-request, issues, prs, canvas, automations):
+The CLI reaches the same layout through the same ops. `project layout get` lists every tab and
+every widget (id, type, size, config) with the revision; `project layout apply` takes a JSON array
+of the ops above (`--base-revision N`, default the current one; `--reason "..."`), all or none;
+`project layout add` adds one widget of a registered type to the end of a tab (`--tab`, default
+`dashboard`):
+
+```bash
+t3-thread project layout get "$T3_THREAD_ID"
+t3-thread project layout add "$T3_THREAD_ID" decisions --tab dashboard --reason "Brad asked for decisions"
+t3-thread project layout apply "$T3_THREAD_ID" --reason "Put Release first" \
+  --ops '[{"op":"moveWidget","widgetId":"release","tabId":"dashboard","index":0}]'
+```
+
+`dashboard set` replaces the first tab's widgets with an ordered list. Each id is any registered
+widget type (`decisions`, `markdown`, `links`, `canvas-slot`, ...), an older id (requests,
+needs-you, release, maintenance, roadmap, working, blocked, done, new-request, issues, prs, canvas,
+automations), or `canvas:<id>`. An id it does not know is an error naming it and nothing changes;
+it never drops one silently. It keeps the id and settings of a widget already on the tab, and
+removes the ones you leave out. `dashboard show` prints every widget on every tab (`tabs`), and
+the first tab's older ids as `widgets` for scripts:
 
 ```bash
 t3-thread dashboard show "$T3_THREAD_ID"
-t3-thread dashboard set "$T3_THREAD_ID" --widgets requests,release,needs-you,working,canvas
+t3-thread dashboard set "$T3_THREAD_ID" --widgets requests,decisions,release,needs-you,working,canvas
 t3-thread dashboard set "$T3_THREAD_ID" --reset
 ```
 
