@@ -1,3 +1,4 @@
+import * as LegacyBackgroundWorkImport from "./fork/recovery/LegacyBackgroundWorkImport.ts";
 import * as RecoveryProcessAccess from "./diagnostics/RecoveryProcessAccess.ts";
 import { configuredGiteaIdentity } from "./sourceControl/ForkGiteaLinkAdapter.ts";
 import type { RelayManagedEndpointRuntimeConfig } from "@t3tools/contracts/relay";
@@ -629,7 +630,9 @@ const RuntimeDependenciesLive = SystemRecovery.layer.pipe(
   Layer.provide(RecoveryProcessAccess.layer),
   Layer.provide(ProjectionStoreV2.layer),
   // Recovery uses the memoized V2 provider runtime and projection services.
-  Layer.provideMerge(RuntimeCoreDependenciesLive),
+  Layer.provideMerge(
+    LegacyBackgroundWorkImport.layer.pipe(Layer.provideMerge(RuntimeCoreDependenciesLive)),
+  ),
   // Misc.
   Layer.provideMerge(BackgroundLayerLive),
   Layer.provideMerge(ResourceDiagnosticsLayerLive),
