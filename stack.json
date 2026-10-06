@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "449c0fa09833f9cc96f89d6111a9227d93fff41f",
-  "head": "d094759ad661c215f31280a9e168302d4340b070",
+  "prev": "fac50630022d93a60b9ebbe25e7d41bf2c59bda4",
+  "head": "ab5f253981ed953b98c0f1be6208ff84564a015d",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -99,14 +99,13 @@
     "fork-textgen-own-scope",
     "fork-project-skew-gate",
     "fork-queue-idle-dispatch",
-    "fork-canvas-resize"
-  ],
-  "unapplied": [
+    "fork-canvas-resize",
     "fork-request-titles",
     "fork-pr-widget-refresh",
     "fork-decisions-other",
     "fork-cli-project-layout"
   ],
+  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
@@ -146,7 +145,7 @@
       "oid": "b30a3c8888f0c8b896832c5588af0d5954f7261c"
     },
     "fork-cli-project-layout": {
-      "oid": "a1570a6d554b8838eafa0d15103965ea5a9c533b"
+      "oid": "ab5f253981ed953b98c0f1be6208ff84564a015d"
     },
     "fork-codex-goal-visibility": {
       "oid": "c72dee2610d865bd89e9900244fed37db9488a86"
@@ -161,7 +160,7 @@
       "oid": "84834109c33d3a9b37655215e1bd55fa9921d544"
     },
     "fork-decisions-other": {
-      "oid": "915492493a5b31832e117086e24bfcc1356c953f"
+      "oid": "4fdcafa9d348aa415e916b1ade9fd5fd38f9f02f"
     },
     "fork-desktop-delivery": {
       "oid": "750221f7edd591ce0da5dbb7efe5bffb2bbab6f1"
@@ -248,7 +247,7 @@
       "oid": "05f3d000d46880e092085a1e2a3a97298475427c"
     },
     "fork-pr-widget-refresh": {
-      "oid": "7d7307dfb180ec54eca17a485d2fadfa6d33e804"
+      "oid": "2c817ba05d7a72b65c672746582b9dae4af405f9"
     },
     "fork-private-connection-defaults": {
       "oid": "8b323f2be26a72f1c6edf56564829e30b57910e2"
@@ -332,7 +331,7 @@
       "oid": "c9cc02bdcc6a09a484661ee3238f5a285a83ecaa"
     },
     "fork-request-titles": {
-      "oid": "1d4683f5844924f621e480ea860a250e405d08d2"
+      "oid": "f669f6d30ce7fe68e212d0daeef5aed68eeae141"
     },
     "fork-resource-recovery": {
       "oid": "aded63b3d85fe6040feacbf7710d122e63dffdf3"
