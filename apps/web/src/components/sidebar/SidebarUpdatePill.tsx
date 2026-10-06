@@ -14,6 +14,7 @@ import {
   getDesktopUpdateActionError,
   getDesktopUpdateButtonTooltip,
   getDesktopUpdateInstallConfirmationMessage,
+  getDesktopUpdateVersionLabel,
   isDesktopUpdateButtonDisabled,
   resolveDesktopUpdateButtonAction,
   shouldShowArm64IntelBuildWarning,
@@ -172,6 +173,7 @@ function SidebarUpdateControl() {
     showUpdateDetails,
     state,
   );
+  const versionLabel = state ? getDesktopUpdateVersionLabel(state.currentVersion) : null;
 
   useEffect(() => {
     if (!showReleaseNotesPopover) {
@@ -417,6 +419,12 @@ function SidebarUpdateControl() {
               variant={showUpdateDetails ? "glass" : "default"}
             >
               {tooltip}
+              {versionLabel ? (
+                <>
+                  <br />
+                  <span className="text-muted-foreground">{versionLabel}</span>
+                </>
+              ) : null}
             </TooltipPopup>
           ) : null}
         </Tooltip>
