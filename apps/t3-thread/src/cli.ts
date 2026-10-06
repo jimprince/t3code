@@ -343,6 +343,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "result",
   "ack",
   "request",
+  "dashboard",
 ]);
 
 if (AGENT_COMMAND_ALIASES.has(process.argv[2] ?? "")) {
@@ -634,6 +635,51 @@ worktree
   });
 
 const project = program.command("project").description("Manage T3 Code projects");
+
+const projectTracker = project
+  .command("tracker")
+  .description(
+    "The project's Gitea tracker repository for requests and issues, when its code is not on Gitea",
+  );
+
+projectTracker
+  .command("show")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .action(async (reference) => {
+    const { agent: target, client } = await withAgent(reference);
+    const result = await client.projectDashboard<{ tracker: string | null }>(
+      "projectDashboardGet",
+      { threadId: target.threadId },
+    );
+    printJson({ tracker: result.tracker });
+  });
+
+projectTracker
+  .command("set")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .argument("<repository>", "owner/repo on the first Gitea instance, or the repository URL")
+  .action(async (reference, repository) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectDashboard("projectDashboardSetTracker", {
+        threadId: target.threadId,
+        tracker: repository,
+      }),
+    );
+  });
+
+projectTracker
+  .command("clear")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .action(async (reference) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectDashboard("projectDashboardSetTracker", {
+        threadId: target.threadId,
+        tracker: null,
+      }),
+    );
+  });
 
 project
   .command("list")
@@ -1837,6 +1883,42 @@ request
         status: "needs-test",
         release: options.release,
         comment: `Test: ${options.test}`,
+      }),
+    );
+  });
+
+const dashboard = agent
+  .command("dashboard")
+  .description("Show or change which widgets a project page shows, in order");
+
+dashboard
+  .command("show")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .action(async (reference) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(await client.projectDashboard("projectDashboardGet", { threadId: target.threadId }));
+  });
+
+dashboard
+  .command("set")
+  .argument("<thread>", "saved agent name or raw thread UUID in the project")
+  .option(
+    "--widgets <ids>",
+    "comma-separated widget ids in order, e.g. requests,release,needs-you,working,roadmap,canvas",
+  )
+  .option("--reset", "restore the default widgets and order")
+  .action(async (reference, options: { widgets?: string; reset?: boolean }) => {
+    if (!options.reset && !options.widgets) throw new Error("Pass --widgets <ids> or --reset.");
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectDashboard("projectDashboardSetWidgets", {
+        threadId: target.threadId,
+        widgets: options.reset
+          ? null
+          : options
+              .widgets!.split(",")
+              .map((widget) => widget.trim())
+              .filter(Boolean),
       }),
     );
   });
