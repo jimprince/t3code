@@ -5,23 +5,21 @@ export const makeWorkspaceUploadHandlers = Effect.gen(function* () {
   const uploads = yield* WorkspaceUploads.WorkspaceUploads;
   return {
     [WS_METHODS.projectsUploadFile]: (input: Parameters<typeof uploads.uploadFile>[0]) =>
-      uploads
-        .uploadFile(input)
-        .pipe(
-          Effect.mapError(
-            (cause) =>
-              new ProjectUploadFileError({
-                cwd: input.cwd,
-                relativePath: input.fileName,
-                failure:
-                  cause._tag === "WorkspacePathOutsideRootError"
-                    ? "workspace_path_outside_root"
-                    : cause._tag === "WorkspaceFilePathEscapeError"
-                      ? "resolved_path_outside_root"
-                      : "operation_failed",
-                cause,
-              }),
-          ),
+      uploads.uploadFile(input).pipe(
+        Effect.mapError(
+          (cause) =>
+            new ProjectUploadFileError({
+              cwd: input.cwd,
+              relativePath: input.fileName,
+              failure:
+                cause._tag === "WorkspacePathOutsideRootError"
+                  ? "workspace_path_outside_root"
+                  : cause._tag === "WorkspaceFilePathEscapeError"
+                    ? "resolved_path_outside_root"
+                    : "operation_failed",
+              cause,
+            }),
         ),
+      ),
   };
 });
