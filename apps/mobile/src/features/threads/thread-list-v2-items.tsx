@@ -1,4 +1,4 @@
-import { supervision, useSupervisionReadyHosts } from "../../state/forkSupervision";
+import { supervision as forkSupervision, useSupervisionReadyHosts } from "../../state/forkSupervision";
 import { useSupervisionStatus } from "./useSupervisionStatus";
 import {
   newForkCommandId,
@@ -640,11 +640,11 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
     [onSetThreadAutoSettle, thread],
   );
   const handleMoveUp = useCallback(() => {
-    if (appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId))
+    if (appAtomRegistry.get(forkSupervision.readyHosts).has(thread.environmentId))
       return onMoveThread?.(thread, "up");
   }, [onMoveThread, thread]);
   const handleMoveDown = useCallback(() => {
-    if (appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId))
+    if (appAtomRegistry.get(forkSupervision.readyHosts).has(thread.environmentId))
       return onMoveThread?.(thread, "down");
   }, [onMoveThread, thread]);
   const handleArchive = useCallback(() => onArchiveThread(thread), [onArchiveThread, thread]);
@@ -844,7 +844,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "arrange") appAtomRegistry.set(threadArrangementOpenAtom, true);
       if (
         nativeEvent.event === "order-reset" &&
-        appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId)
+        appAtomRegistry.get(forkSupervision.readyHosts).has(thread.environmentId)
       )
         void resetOrder({
           environmentId: thread.environmentId,
