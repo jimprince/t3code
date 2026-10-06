@@ -7,12 +7,15 @@ import type { ComposerImageAttachment } from "../../composerDraftStore";
 import { randomUUID } from "../../lib/utils";
 import { startRequestIntake, submitProjectRequest } from "../../state/projectIssues";
 import { saveRequestForLater } from "../../state/projectRoadmap";
+import { threadEnvironment } from "../../state/threads";
 import { useAtomCommand } from "../../state/use-atom-command";
+import { ATTACHMENT_ONLY_BOOTSTRAP_PROMPT } from "../chat/composerPromptHistory";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import { sentRequestStatus } from "./projectRequests.logic";
 import { useProjectRequests } from "./ProjectRequestsSection";
+import { failureReason, sendRequest } from "./sendOutcome.logic";
 import { useSendToOrchestrator, useSendToThread } from "./sendToOrchestrator";
 
 /** How long the sent line stays, and when to look again for the filed request. */
@@ -48,6 +51,8 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
   const [expanded, setExpanded] = useState(false);
   const submit = useAtomCommand(submitProjectRequest, { reportFailure: false });
   const startIntake = useAtomCommand(startRequestIntake, { reportFailure: false });
+  const archiveThread = useAtomCommand(threadEnvironment.archive, { reportFailure: false });
+  const sending = useRef(false);
   const [images, setImages] = useState<ComposerImageAttachment[]>([]);
   const [status, setStatus] = useState<string | null>(null);
   const [sent, setSent] = useState<{
@@ -90,56 +95,78 @@ export function ProjectRequestBox({ summary }: { readonly summary: OrchestratorS
     if (files.length > 0) setImages((current) => [...current, ...files.map(imageAttachment)]);
   };
   const reset = () => {
+    for (const image of imagesRef.current) URL.revokeObjectURL(image.previewUrl);
     setText("");
     setImages([]);
   };
   const open = expanded || text.length > 0 || images.length > 0;
 
   const send = async () => {
-    if (!text.trim() && images.length === 0) return;
+    if ((!text.trim() && images.length === 0) || sending.current) return;
     const prompt = text;
     const attached = images;
     const environmentId = summary.root.environmentId;
-    reset();
-    setExpanded(false);
+    // Image-only requests still need a message body, as in the chat composer.
+    const messageText = prompt.trim() ? prompt : ATTACHMENT_ONLY_BOOTSTRAP_PROMPT;
+    sending.current = true;
+    setSent(null);
     setStatus("Starting triage...");
-    // A short-lived intake thread triages the request (type, title, roadmap, and
-    // then answer, catalog, start a worker or hand it on), so the orchestrator is
-    // not woken for every request.
-    const intake = await startIntake({
-      environmentId,
-      input: { threadId: summary.root.id, title: prompt.trim() || "Request with images" },
-    });
-    // The request is marked explicit before its message is sent, so the ledger
-    // files it as a new task instead of folding it into an existing one.
-    const result =
-      intake._tag === "Success"
-        ? sendToThread(
-            { environmentId, threadId: intake.value.threadId },
+    // The text and images stay in the box until the server has taken the message, so
+    // a failed send loses nothing. A short-lived intake thread triages the request
+    // (type, title, roadmap, and then answer, catalog, start a worker or hand it
+    // on), so the orchestrator is not woken for every request.
+    let result: Awaited<ReturnType<typeof sendRequest>>;
+    try {
+      result = await sendRequest({
+        startIntake: () =>
+          startIntake({
+            environmentId,
+            input: { threadId: summary.root.id, title: prompt.trim() || "Request with images" },
+          }),
+        // The request is marked explicit before its message is sent, so the ledger
+        // files it as a new task instead of folding it into an existing one.
+        sendToIntake: (intake) =>
+          sendToThread(
+            { environmentId, threadId: intake.threadId },
             {
-              modelSelection: intake.value.modelSelection,
+              modelSelection: intake.modelSelection,
               runtimeMode: "full-access",
               interactionMode: "default",
             },
-            `${intake.value.brief}\n\n${prompt}`,
+            `${intake.brief}\n\n${messageText}`,
             attached,
             {
               beforeSend: (messageId) =>
                 submit({
                   environmentId,
-                  input: { threadId: intake.value.threadId, messageId, text: prompt },
+                  input: { threadId: intake.threadId, messageId, text: messageText },
                 }),
             },
-          )
-        : // A server without intake threads: the orchestrator gets it, as before.
-          sendToOrchestrator(summary, prompt, attached, (messageId) =>
+          ),
+        // A server without intake threads: the orchestrator gets it, as before.
+        sendToOrchestrator: () =>
+          sendToOrchestrator(summary, messageText, attached, (messageId) =>
             submit({
               environmentId,
-              input: { threadId: summary.root.id, messageId, text: prompt },
+              input: { threadId: summary.root.id, messageId, text: messageText },
             }),
-          );
+          ),
+        archiveIntake: (threadId) => archiveThread({ environmentId, input: { threadId } }),
+      });
+    } catch (error) {
+      result = { ok: false, reason: failureReason(error) };
+    } finally {
+      sending.current = false;
+    }
+    if (!result.ok) {
+      setStatus(`Not sent: ${result.reason}`);
+      setExpanded(true);
+      return;
+    }
+    reset();
+    setExpanded(false);
     setStatus(null);
-    setSent({ ...result, intake: intake._tag === "Success" });
+    setSent({ messageId: result.messageId, queued: result.queued, intake: result.intake });
     // The ledger files the request a few seconds after the send; look for it, then
     // let the line go.
     for (const timer of sentTimers.current) window.clearTimeout(timer);
