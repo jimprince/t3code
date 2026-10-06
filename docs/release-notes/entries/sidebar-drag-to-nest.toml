@@ -1,0 +1,4 @@
+id = "sidebar-drag-to-nest"
+category = "feature"
+functionality = "thread organization"
+text = "Drag a sidebar thread onto another thread to nest it while keeping row-edge reordering."
