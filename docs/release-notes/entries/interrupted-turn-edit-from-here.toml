@@ -1,0 +1,4 @@
+id = "interrupted-turn-edit-from-here"
+category = "fix"
+functionality = "conversation editing"
+text = "Edit from here is available after an interrupted turn even when the agent produced no reply or usable checkpoint."
