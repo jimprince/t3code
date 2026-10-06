@@ -1,0 +1,4 @@
+id = "orchestrator-brief-me-removed"
+category = "removal"
+functionality = "orchestrator threads"
+text = "Removed Brief me from orchestrator threads; the folded worker traffic view and its All traffic switch are unchanged."
