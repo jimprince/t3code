@@ -25,6 +25,7 @@ import { SidebarInput, SidebarMenuButton } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 
 export interface SidebarThreadHeaderProps {
+  hidden?: boolean;
   /** Lands on the search field so a popup can anchor to its width. */
   searchFieldRef?: RefObject<HTMLDivElement | null>;
   /** Without projects there is nothing to scope, so those controls stay out. */
@@ -50,6 +51,7 @@ export interface SidebarThreadHeaderProps {
 }
 
 export function SidebarThreadHeader({
+  hidden = false,
   searchFieldRef,
   hasProjects,
   projectScope,
@@ -78,7 +80,7 @@ export function SidebarThreadHeader({
     : "New thread";
 
   return (
-    <div className="flex items-center gap-1">
+    <div className={hidden ? "hidden" : "flex items-center gap-1"}>
       <div
         ref={searchFieldRef}
         className="flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-sm font-medium text-sidebar-muted-foreground hover:bg-sidebar-row-hover hover:text-sidebar-foreground"
