@@ -1939,6 +1939,12 @@ agent
     });
   });
 
+function assertItemKind(kind: string): void {
+  if (kind !== "question" && kind !== "task" && kind !== "epic") {
+    throw new Error("Kind must be question, task or epic.");
+  }
+}
+
 const request = agent
   .command("request")
   .description(
@@ -1970,19 +1976,18 @@ request
   .command("add")
   .argument("<thread>", "saved agent name or raw thread UUID that Brad asked")
   .argument("<title>", "the request in Brad's words")
-  .option(
-    "--kind <kind>",
-    "bug, feature, question, deliverable, plan, change, test or maintenance",
-    "deliverable",
-  )
+  .option("--kind <kind>", "question, task or epic", "task")
+  .option("--bug", "tag a task as a bug")
   .option("--detail <text>", "Brad's exact words or extra context")
-  .action(async (reference, title, options: { kind: string; detail?: string }) => {
+  .action(async (reference, title, options: { kind: string; bug?: boolean; detail?: string }) => {
+    assertItemKind(options.kind);
     const { agent: target, client } = await withAgent(reference);
     printJson(
       await client.projectRequest("projectRequestsCreate", {
         threadId: target.threadId,
         title,
         kind: options.kind,
+        ...(options.bug ? { bug: true } : {}),
         ...(options.detail ? { detail: options.detail } : {}),
       }),
     );
@@ -2078,17 +2083,23 @@ request
 
 request
   .command("type")
-  .description("Set a task's type (its ask:<kind> label); works on any tracker issue")
+  .description(
+    "Set an item's type (ask:question, ask:task or ask:epic, keeping any older ask:* label as history) and its bug tag; works on any tracker issue",
+  )
   .argument("<thread>", "saved agent name or raw thread UUID in the project")
   .argument("<request>", "issue number in the project tracker, owner/repo#N, or issue URL")
-  .argument("<kind>", "bug, feature, question, deliverable, plan, change, test or maintenance")
-  .action(async (reference, requestReference, kind) => {
+  .argument("<kind>", "question, task or epic")
+  .option("--bug", "tag the item as a bug")
+  .option("--no-bug", "remove the bug tag")
+  .action(async (reference, requestReference, kind, options: { bug?: boolean }) => {
+    assertItemKind(kind);
     const { agent: target, client } = await withAgent(reference);
     printJson(
       await client.projectRequest("projectRequestsUpdate", {
         threadId: target.threadId,
         reference: requestReference,
         kind,
+        ...(options.bug === undefined ? {} : { bug: options.bug }),
       }),
     );
   });
