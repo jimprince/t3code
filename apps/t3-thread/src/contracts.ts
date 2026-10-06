@@ -20,6 +20,11 @@ import {
   ProjectDashboardGetInput,
   ProjectDashboardSetTrackerInput,
   ProjectDashboardSetWidgetsInput,
+  ProjectRoadmap,
+  ProjectRoadmapError,
+  ProjectRoadmapGetInput,
+  ProjectRoadmapMoveInput,
+  ProjectRoadmapSaveVersionInput,
 } from "@t3tools/contracts";
 import { NestingRpcs } from "./v2/nesting.js";
 import * as Effect from "effect/Effect";
@@ -237,5 +242,20 @@ export const WsRpcGroup = RpcGroup.make(
     payload: ProjectDashboardSetTrackerInput,
     success: ProjectDashboard,
     error: Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectRoadmap.get", {
+    payload: ProjectRoadmapGetInput,
+    success: ProjectRoadmap,
+    error: Schema.Union([ProjectRoadmapError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectRoadmap.move", {
+    payload: ProjectRoadmapMoveInput,
+    success: ProjectRoadmap,
+    error: Schema.Union([ProjectRoadmapError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectRoadmap.saveVersion", {
+    payload: ProjectRoadmapSaveVersionInput,
+    success: ProjectRoadmap,
+    error: Schema.Union([ProjectRoadmapError, EnvironmentAuthorizationError]),
   }),
 );
