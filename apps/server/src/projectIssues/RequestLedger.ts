@@ -501,6 +501,18 @@ export const make = (deps: {
 
     const startDrain = drain.pipe(Effect.forkDetach, Effect.asVoid);
 
+    /** Saves an issue for later: the parked label keeps it off the Dashboard. */
+    const park = (target: Resolved["target"], number: number) =>
+      Effect.gen(function* () {
+        const [parkedId] = yield* ensureLabels(target.instance, target.repository, [PARKED_LABEL]);
+        yield* api.send(
+          target.instance,
+          "POST",
+          `${GiteaApi.repositoryPath(target.repository)}/issues/${number}/labels`,
+          { labels: [parkedId] },
+        );
+      });
+
     /** Removes the parked label from an issue, when it has one. */
     const unpark = (target: Resolved["target"], number: number) =>
       Effect.gen(function* () {
@@ -878,6 +890,7 @@ export const make = (deps: {
       update,
       listForThread,
       resolveThread,
+      park,
       unpark,
     };
   });
