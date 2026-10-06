@@ -150,17 +150,13 @@ it.effect("minted URLs contain instance and upload only, validate signatures, an
         Layer.mock(WorkspacePaths.WorkspacePaths)({}),
         Layer.mock(NativeAppIconResolver.NativeAppIconResolver)({}),
         Layer.mock(ProjectFaviconResolver.ProjectFaviconResolver)({}),
-      ),
-    ),
-    Effect.provide(
-      Layer.mock(ServerSecretStore.ServerSecretStore)({
-        getOrCreateRandom: () => Effect.succeed(new Uint8Array(32).fill(7)),
-        get: () => Effect.succeed(Option.some(new Uint8Array(32).fill(7))),
-      }),
-    ),
-    Effect.provide(
-      ServerConfig.layerTest(process.cwd(), { prefix: "decision-media-" }).pipe(
-        Layer.provideMerge(NodeServices.layer),
+        Layer.mock(ServerSecretStore.ServerSecretStore)({
+          getOrCreateRandom: () => Effect.succeed(new Uint8Array(32).fill(7)),
+          get: () => Effect.succeed(Option.some(new Uint8Array(32).fill(7))),
+        }),
+        ServerConfig.layerTest(process.cwd(), { prefix: "decision-media-" }).pipe(
+          Layer.provideMerge(NodeServices.layer),
+        ),
       ),
     ),
   ),
