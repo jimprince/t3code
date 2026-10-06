@@ -1,0 +1,4 @@
+id = "dev-vm-heavy-check-gate"
+category = "maintenance"
+functionality = "development tooling"
+text = "On the shared dev VM, package typecheck and test scripts now queue for the single heavy-check slot, so parallel agents no longer exhaust memory."
