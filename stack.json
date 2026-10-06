@@ -1,15 +1,13 @@
 {
   "version": 5,
-  "prev": "9c6b11574b2092e9cbd1de8515b87571f0e17843",
-  "head": "58b654802f9e2fbca3539ef2e286594ba36dd4e5",
+  "prev": "d043fb9daa89be4f295a8799c4078c4ca4f8b3fa",
+  "head": "ae2ed6dd5ed896017b39d520e159291d8d389e0a",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
     "fork-provider-turn-safety",
     "fork-bounded-diagnostics",
-    "fork-general-chat"
-  ],
-  "unapplied": [
+    "fork-general-chat",
     "fork-project-selection",
     "fork-private-connection-defaults",
     "fork-workspace-file-uploads",
@@ -76,7 +74,9 @@
     "fork-project-canvas",
     "fork-project-task-types",
     "fork-project-request-box-pinned",
-    "fork-scripts-automations",
+    "fork-scripts-automations"
+  ],
+  "unapplied": [
     "fork-request-followups",
     "fork-roadmap-next-later",
     "fork-project-page-usability",
