@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect } from "vite-plus/test";
+import { it } from "@effect/vitest";
 import {
   CommandId,
   ProviderDriverKind,
@@ -19,8 +20,9 @@ import {
 } from "../../orchestration-v2/RunExecutionService.ts";
 import type { ProviderAdapterV2Event } from "../../orchestration-v2/ProviderAdapter.ts";
 
-for (const driverName of ["codex", "claudeAgent", "cursor", "grok", "opencode", "antigravity"]) {
-  describe(driverName, () => {
+describe.each(["codex", "claudeAgent", "cursor", "grok", "opencode", "antigravity"])(
+  "%s",
+  (driverName) => {
     it("rejects old completion after a replacement owns the turn and accepts the replacement", () => {
       const driver = ProviderDriverKind.make(driverName);
       const identity = {
@@ -47,11 +49,12 @@ for (const driverName of ["codex", "claudeAgent", "cursor", "grok", "opencode", 
       expect(accepted).toBe(true);
       expect(next.rootTurnEnded).toBe(true);
     });
-  });
-}
+  },
+);
 
-it("retains an accepted continuation once across process loss and completion/retry ownership", async () => {
-  await Effect.runPromise(
+it.effect(
+  "retains an accepted continuation once across process loss and completion/retry ownership",
+  () =>
     Effect.gen(function* () {
       const outbox = yield* Outbox.EffectOutboxV2;
       const pending = {
@@ -87,5 +90,4 @@ it("retains an accepted continuation once across process loss and completion/ret
       Effect.provide(Outbox.layer.pipe(Layer.provide(SqlitePersistenceMemory))),
       Effect.scoped,
     ),
-  );
-});
+);
