@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "test": "vp test run --config ../vite.config.ts --dir ."
+    "typecheck": "node ./ci/heavy-gate.ts tsc --noEmit",
+    "test": "node ./ci/heavy-gate.ts vp test run --config ../vite.config.ts --dir ."
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
