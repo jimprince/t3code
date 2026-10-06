@@ -31,6 +31,10 @@
       "types": "./src/decisionAnswer.ts",
       "default": "./src/decisionAnswer.ts"
     },
+    "./linkify": {
+      "types": "./src/linkify.ts",
+      "default": "./src/linkify.ts"
+    },
     "./pending-requests": {
       "types": "./src/pendingRequests.ts",
       "default": "./src/pendingRequests.ts"

@@ -3,7 +3,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ProjectIssue, ProjectRequestStage } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import { CheckIcon, RotateCcwIcon } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import {
   decideProjectRequest,
@@ -15,6 +15,7 @@ import { useAtomCommand } from "../../state/use-atom-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
+import { LinkifiedText, OptionLinks } from "./LinkifiedText";
 import { projectReturnState } from "./projectNavigation";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { useNextReleaseItems } from "./ProjectRoadmapWidget";
@@ -489,11 +490,13 @@ function NeedsYouRowBody({
       <span className="min-w-0 flex-1">
         <span className="text-sm">{issue.title}</span>
         {decision.summary ? (
-          <span className="mt-1 block text-sm text-foreground/85">{decision.summary}</span>
+          <span className="mt-1 block text-sm wrap-anywhere text-foreground/85">
+            <LinkifiedText text={decision.summary} />
+          </span>
         ) : null}
         {decision.recommendation ? (
-          <span className="mt-0.5 block text-xs text-foreground/90">
-            Recommended: {decision.recommendation}
+          <span className="mt-0.5 block text-xs wrap-anywhere text-foreground/90">
+            Recommended: <LinkifiedText text={decision.recommendation} />
           </span>
         ) : null}
       </span>
@@ -664,16 +667,18 @@ function DecisionActions({
         </Button>
       ) : (
         decision.options.map((option) => (
-          <Button
-            key={option.label}
-            size="sm-multiline"
-            variant="outline"
-            onClick={() => onDecide("option", { option: `${option.label}: ${option.text}` })}
-          >
-            <span className="min-w-0 flex-1 text-left">
-              {option.label}: {option.text}
-            </span>
-          </Button>
+          <Fragment key={option.label}>
+            <Button
+              size="sm-multiline"
+              variant="outline"
+              onClick={() => onDecide("option", { option: `${option.label}: ${option.text}` })}
+            >
+              <span className="min-w-0 flex-1 text-left wrap-anywhere">
+                {option.label}: {option.text}
+              </span>
+            </Button>
+            <OptionLinks text={option.text} />
+          </Fragment>
         ))
       )}
       <span className="flex items-center gap-3 text-xs">
