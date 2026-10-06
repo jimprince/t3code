@@ -304,7 +304,11 @@ export function buildSubscriptionRecord(
   source: SubscriptionEndpoint,
   now: string,
   existing?: SavedSubscription | null,
-  options: { baselineTurnId?: string | null; level?: NotificationLevel } = {},
+  options: {
+    baselineTurnId?: string | null;
+    level?: NotificationLevel;
+    inputReminderMinutes?: number;
+  } = {},
 ): SavedSubscription {
   return {
     ...existing,
