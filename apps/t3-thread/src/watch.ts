@@ -560,9 +560,8 @@ export async function detectAttentionEvents(
       // Another detector may have established this episode while our source
       // snapshot was in flight. Select its key and count under the state lock.
       if (notification.sourceState === "error") {
-        const route = currentState.subscriptions.find(
-          (subscription) =>
-            sameNotificationRoute(subscription, notification, currentState),
+        const route = currentState.subscriptions.find((subscription) =>
+          sameNotificationRoute(subscription, notification, currentState),
         );
         if (
           route?.observedState === "error" &&
@@ -570,9 +569,8 @@ export async function detectAttentionEvents(
           route.errorEventKey
         ) {
           notification = { ...notification, eventKey: route.errorEventKey };
-          const observed = observedSubscriptions.find(
-            (subscription) =>
-              sameNotificationRoute(subscription, notification, currentState),
+          const observed = observedSubscriptions.find((subscription) =>
+            sameNotificationRoute(subscription, notification, currentState),
           );
           if (observed) observed.errorEventKey = route.errorEventKey;
         }
@@ -580,9 +578,8 @@ export async function detectAttentionEvents(
       notification = withInputReminder(
         notification,
         notifications,
-        currentState.subscriptions.find(
-          (route) =>
-            sameNotificationRoute(route, notification, currentState),
+        currentState.subscriptions.find((route) =>
+          sameNotificationRoute(route, notification, currentState),
         ),
       );
       const existing =
