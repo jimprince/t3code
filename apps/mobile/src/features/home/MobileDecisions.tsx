@@ -10,12 +10,13 @@ import {
   type DecisionPick,
 } from "@t3tools/client-runtime/decision-answer";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
-import type { ProjectIssue, ThreadId } from "@t3tools/contracts";
+import type { EnvironmentId, ProjectIssue, ThreadId } from "@t3tools/contracts";
 import { useMemo, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { MobileLinkifiedText } from "./MobileLinkifiedText";
+import { MobileDecisionContext } from "./MobileDecisionContext";
 import {
   mobileDecideProjectRequest,
   mobileDiscussProjectRequest,
@@ -31,6 +32,7 @@ const issueKey = (issue: ProjectIssue) => `${issue.repository}#${issue.number}`;
 type Selection = { readonly kind: "option"; readonly option: string } | { readonly kind: "other" };
 
 function DecisionCard({
+  environmentId,
   issue,
   waiting,
   answer,
@@ -40,6 +42,7 @@ function DecisionCard({
   discussing,
   onDiscuss,
 }: {
+  readonly environmentId: EnvironmentId;
   readonly issue: ProjectIssue;
   /** Who the answer goes to, in words. */
   readonly waiting: string;
@@ -76,9 +79,11 @@ function DecisionCard({
     <View className="gap-1 border-t border-border pt-2">
       <Text className="text-sm text-foreground">{issue.title}</Text>
       {decision.context ? (
-        <Text className="text-xs text-foreground-muted">
-          <MobileLinkifiedText text={decision.context} />
-        </Text>
+        <MobileDecisionContext
+          environmentId={environmentId}
+          text={decision.context}
+          issueUrl={issue.url}
+        />
       ) : null}
       {answer && strip ? (
         <>
@@ -300,6 +305,7 @@ export function MobileDecisions({
         return (
           <DecisionCard
             key={issueKey(issue)}
+            environmentId={summary.root.environmentId}
             issue={issue}
             waiting={waitingLabel(issue.decision!.waiting, [summary.root, ...summary.descendants])}
             answer={answer}
