@@ -5,6 +5,7 @@ import {
   type ThreadSnapshotRow,
 } from "./threadSnapshot.js";
 import { openRpcConnection } from "./openRpc.js";
+import type { NamedAgentSummary } from "./namedAgents.js";
 import { withThreadMetadata, type ThreadMetadata } from "./v2/nesting.js";
 import { projectionHasWork } from "./v2/workState.js";
 import { threadShell as gcThreadShell } from "./v2/reads.js";
@@ -322,6 +323,63 @@ export class RemoteEnvironmentClient {
         write,
         options,
       );
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** Named agents on this environment: singleton owners of one resource each. */
+  async listNamedAgents(): Promise<NamedAgentSummary[]> {
+    const rpc = await this.openRpc();
+    try {
+      return (await rpc.request<{ agents: NamedAgentSummary[] }>("listNamedAgents", {})).agents;
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** The agent's live thread; a dormant agent starts with `message` as its first request. */
+  async resolveNamedAgent(
+    name: string,
+    message?: string,
+  ): Promise<{ threadId: string; started: boolean }> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request("resolveNamedAgent", {
+        name,
+        ...(message !== undefined ? { message } : {}),
+      });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** Replace the idle live incarnation with a fresh one seeded from the agent folder. */
+  async handOverNamedAgent(
+    name: string,
+    message?: string,
+  ): Promise<{ threadId: string; started: boolean }> {
+    const rpc = await this.openRpc();
+    try {
+      return await rpc.request("handOverNamedAgent", {
+        name,
+        ...(message !== undefined ? { message } : {}),
+      });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
+  /** Make a project the home of a named agent, or (null) stop it being one. */
+  async setPermanentAgent(projectId: string, name: string | null): Promise<void> {
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("projectsMutate", {
+        type: "project.update",
+        commandId: NodeCrypto.randomUUID(),
+        projectId,
+        permanentAgent: name === null ? null : { name },
+      });
     } finally {
       await rpc.dispose();
     }
@@ -753,7 +811,7 @@ export class RemoteEnvironmentClient {
       },
     };
     try {
-      // Claim an empty thread first so parenting and policy exist before any provider turn.
+      // Claim an empty thread before applying worker metadata and starting its first turn.
       await rpc.request("launchThread", {
         commandId: NodeCrypto.randomUUID(),
         threadId,
