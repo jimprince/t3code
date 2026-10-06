@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "144fe082715c422420ace9b1c6a57d6ced193730",
-  "head": "1b40926ecf4adf1db6665bca3c92abc3441590c9",
+  "prev": "33f7b9c988a005fcfb28d944b759a18b41a5ac69",
+  "head": "4155fcf0294cef0c97d2e45db694e4cbb2bbe042",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -99,10 +99,10 @@
     "fork-textgen-own-scope",
     "fork-project-skew-gate",
     "fork-queue-idle-dispatch",
-    "fork-canvas-resize"
+    "fork-canvas-resize",
+    "fork-request-titles"
   ],
   "unapplied": [
-    "fork-request-titles",
     "fork-pr-widget-refresh",
     "fork-decisions-other",
     "fork-cli-project-layout",
@@ -349,7 +349,7 @@
       "oid": "58f2469c2489fc7187f6ae319d384cf029ffdb77"
     },
     "fork-request-titles": {
-      "oid": "e93128eac553c7da833ae187e3308fbc958c4cc0"
+      "oid": "4155fcf0294cef0c97d2e45db694e4cbb2bbe042"
     },
     "fork-resource-recovery": {
       "oid": "aded63b3d85fe6040feacbf7710d122e63dffdf3"
