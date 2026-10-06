@@ -88,8 +88,16 @@ export function deriveProjectRequests(
     const thread = (sourceId ? byId.get(sourceId as EnvironmentThreadShell["id"]) : null) ?? null;
     const kind = requestKind(issue.labels);
     const stage = issue.stage ?? "requested";
+    // Saved for later: it waits on the roadmap, not in Brad's request list.
+    if (stage === "requested" && isParked(issue)) continue;
     const withAgents = stage === "requested" || stage === "in-progress";
-    const replied = withAgents && repliedSince(thread, issue.createdAt);
+    // A reply after the request counts as an answer only while nobody has picked it
+    // up; the orchestrator's own replies usually mean "on it", so from it only a
+    // question counts as answered.
+    const replied =
+      stage === "requested" &&
+      (thread?.id !== rootThreadId || kind === "question") &&
+      repliedSince(thread, issue.createdAt);
     const forYou: ForYouGroup | null =
       stage === "needs-test" ? "test" : stage === "ready" || replied ? groupForKind(kind) : null;
     const leftBehind =
@@ -163,4 +171,34 @@ export function deriveRelease(requests: ReadonlyArray<ProjectRequest>): ReleaseV
       .map(([release, items]) => ({ release, items }))
       .toSorted((a, b) => b.release.localeCompare(a.release, undefined, { numeric: true })),
   };
+}
+
+/** First line of a comment, without its "Progress:" or "Test:" prefix and markdown. */
+export function latestProgressLine(body: string | null | undefined): string | null {
+  const line = (body ?? "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .split("\n")
+    .map((part) => part.trim())
+    .find((part) => part.length > 0);
+  if (!line) return null;
+  return line
+    .replace(/^(progress|test):\s*/i, "")
+    .replace(/\*\*|__|`/g, "")
+    .slice(0, 160);
+}
+
+const isParked = (issue: Pick<ProjectIssue, "labels">) =>
+  issue.labels.some((label) => label.toLowerCase() === "parked");
+
+/** Open requests saved for later in this project, shown as a count under Requests. */
+export function countParked(issues: ReadonlyArray<ProjectIssue>, rootThreadId: string): number {
+  return issues.filter(
+    (issue) =>
+      issue.isRequest &&
+      issue.closedAt === null &&
+      (issue.stage ?? "requested") === "requested" &&
+      isParked(issue) &&
+      (issue.requestSource?.rootThreadId === rootThreadId ||
+        issue.linkedThreadIds.some((id) => id === rootThreadId)),
+  ).length;
 }
