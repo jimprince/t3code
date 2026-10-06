@@ -25,6 +25,15 @@ import { serverEnvironment } from "../../state/server";
 import { shellEnvironment } from "../../state/shell";
 import { useCopyToClipboard } from "../../hooks/useCopyToClipboard";
 import { usePrimarySettings, useUpdatePrimarySettings } from "../../hooks/useSettings";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
 import { Checkbox } from "../ui/checkbox";
@@ -791,6 +800,7 @@ export function DiagnosticsSettingsPanel() {
     ReadonlySet<string>
   >(new Set());
   const [isExecutingRecovery, setIsExecutingRecovery] = useState(false);
+  const [isConfirmingRecovery, setIsConfirmingRecovery] = useState(false);
 
   useEffect(() => {
     processDataRef.current = processData;
@@ -953,14 +963,12 @@ export function DiagnosticsSettingsPanel() {
     if (
       environmentId === null ||
       recoveryPreview === null ||
-      selectedRecoveryCandidateIds.size === 0 ||
-      !window.confirm(
-        `Attempt recovery for ${selectedRecoveryCandidateIds.size} selected item(s)? Active turns and macOS system services will not be stopped.`,
-      )
+      selectedRecoveryCandidateIds.size === 0
     ) {
       return;
     }
 
+    setIsConfirmingRecovery(false);
     setIsExecutingRecovery(true);
     void (async () => {
       const result = await executeRecoveryCommand({
@@ -990,7 +998,7 @@ export function DiagnosticsSettingsPanel() {
       toastManager.add({
         type: failed === 0 ? "success" : "info",
         title: "Recovery attempt complete",
-        description: `${completed} item(s) handled${failed > 0 ? `; ${failed} skipped or failed` : ""}.`,
+        description: `${completed} ${completed === 1 ? "item" : "items"} handled${failed > 0 ? `; ${failed} skipped or failed` : ""}.`,
       });
       refreshRecoveryPreview();
       refreshProcesses();
@@ -1123,11 +1131,30 @@ export function DiagnosticsSettingsPanel() {
                 isRecoveryPreviewPending ||
                 selectedRecoveryCandidateIds.size === 0
               }
-              onClick={executeRecovery}
+              onClick={() => setIsConfirmingRecovery(true)}
             >
-              {isExecutingRecovery ? "Attempting recovery..." : "Attempt selected recovery"}
+              {isExecutingRecovery ? "Attempting recovery…" : "Attempt selected recovery"}
             </Button>
           </div>
+          <AlertDialog open={isConfirmingRecovery} onOpenChange={setIsConfirmingRecovery}>
+            <AlertDialogPopup>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Attempt recovery for {selectedRecoveryCandidateIds.size}{" "}
+                  {selectedRecoveryCandidateIds.size === 1 ? "item" : "items"}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  Active turns and macOS system services will not be stopped.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
+                <Button variant="destructive" onClick={executeRecovery}>
+                  Attempt recovery
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogPopup>
+          </AlertDialog>
         </div>
       </SettingsSection>
 
