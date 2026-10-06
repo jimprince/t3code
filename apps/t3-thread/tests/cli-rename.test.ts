@@ -176,3 +176,112 @@ describe("rename command", () => {
     expect(fixture.state.agents[0]?.title).toBe("Original");
   });
 });
+
+describe("worker creation supervision", () => {
+  it.each([
+    { environment: "local", extra: [], parentThreadId: threadId, remoteParent: undefined },
+    { environment: "local", extra: ["--top-level"], parentThreadId: null, remoteParent: undefined },
+    {
+      environment: "remote",
+      extra: [],
+      parentThreadId: null,
+      remoteParent: { environmentId: "descriptor-local", threadId },
+    },
+  ])(
+    "creates with caller-default parenting or an explicit top-level override: %j",
+    async ({ environment, extra, parentThreadId, remoteParent }) => {
+      fixture.state = {
+        version: 1,
+        environments: ["local", "remote"].map((name) => ({
+          name,
+          httpBaseUrl: "http://127.0.0.1:1",
+          wsBaseUrl: "ws://127.0.0.1:1",
+          environmentId: `descriptor-${name}`,
+          label: name,
+          serverVersion: "test",
+          bearerToken: "test",
+          expiresAt: "2099-01-01T00:00:00.000Z",
+          pairedAt: "2026-10-02T00:00:00.000Z",
+        })),
+        agents: [
+          {
+            name: "owner",
+            environment: "local",
+            threadId,
+            projectId: "parent-project",
+            title: "Owner",
+            createdAt: "2026-10-02T00:00:00.000Z",
+            lastSeenAssistantMessageId: null,
+          },
+        ],
+        subscriptions: [],
+        notifications: [],
+        queuedSends: [],
+      };
+      fixture.state.agents.unshift({
+        ...fixture.state.agents[0]!,
+        name: "colliding-remote",
+        environment: "remote",
+      });
+      vi.stubEnv("T3_THREAD_ID", threadId);
+      vi.stubEnv("T3_ENVIRONMENT_ID", "descriptor-local");
+      vi.stubEnv("T3_ENVIRONMENT_NAME", "local");
+      vi.resetModules();
+      const { RemoteEnvironmentClient } = await import("../src/client.js");
+      const create = vi
+        .spyOn(RemoteEnvironmentClient.prototype, "createAgentThread")
+        .mockResolvedValue({
+          threadId: "33333333-3333-4333-8333-333333333333",
+          projectId: "child-project",
+          title: "Worker",
+          pinned: false,
+        });
+      let finish!: () => void;
+      const printed = new Promise<void>((resolve) => {
+        finish = resolve;
+      });
+      vi.spyOn(process.stdout, "write").mockImplementation(() => {
+        finish();
+        return true;
+      });
+      process.argv = [
+        process.execPath,
+        "cli.ts",
+        "agent",
+        "create",
+        "--name",
+        "worker",
+        "--env",
+        environment,
+        "--project",
+        "child-project",
+        "--title",
+        "Worker",
+        "--message",
+        "Raw brief",
+        "--no-notify",
+        ...extra,
+      ];
+      await import("../src/cli.js");
+      await printed;
+      expect(create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: "child-project",
+          parentThreadId,
+          remoteParent,
+          initialMessage: "Raw brief",
+          workerContext: expect.objectContaining({
+            name: "worker",
+            parent:
+              parentThreadId || remoteParent
+                ? expect.objectContaining({ threadId, name: "owner", environment: "local" })
+                : null,
+          }),
+        }),
+      );
+      expect(fixture.state.agents.find((agent) => agent.name === "worker")?.environment).toBe(
+        environment,
+      );
+    },
+  );
+});
