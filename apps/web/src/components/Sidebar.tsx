@@ -1,7 +1,7 @@
 import { useSupervisionForest } from "../state/forkSupervision";
 import { supervisionRoots } from "@t3tools/client-runtime/state/forkNesting";
 import { SupervisionThreadRows, useSupervisionSidebar } from "./sidebar/SupervisionThreadRows";
-import { groupChildInputAttention } from "@t3tools/client-runtime/child-attention";
+import { groupSupervisionChildInputAttention } from "@t3tools/client-runtime/child-attention";
 import { SidebarChildInputAttention } from "./sidebar/SidebarChildInputAttention";
 import { SidebarProjectSelection, useSidebarProjectSelection } from "./SidebarProjectSelection";
 import { ThreadHoverCard, ThreadHoverCardPopup } from "./ThreadHoverCard";
@@ -2330,7 +2330,7 @@ export default function Sidebar() {
   const threads = useThreadShells();
 
   const attentionForest = useSupervisionForest();
-  const childInputAttention = useMemo(() => groupChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey), [threads, attentionForest]);
+  const childInputAttention = useMemo(() => groupSupervisionChildInputAttention([...attentionForest.byKey.values()], attentionForest.parentByKey), [threads, attentionForest]);
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);

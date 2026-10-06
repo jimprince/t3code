@@ -42,4 +42,3 @@ export function groupSupervisionChildInputAttention(
 }
 
 /** Existing sidebar consumers share the organizational traversal. */
-export const groupChildInputAttention = groupSupervisionChildInputAttention;
