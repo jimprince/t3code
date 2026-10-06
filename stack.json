@@ -1,6 +1,6 @@
 {
   "version": 5,
-  "prev": "ec2b6853c3733ab46c601a41e25f09b9dec3d954",
+  "prev": "449c2415d3e34e0c9d3d40f7974a4f0e88437c46",
   "head": "6770e5252aa367dea26380c444928e7b9ab2ef75",
   "applied": [
     "fork-build-ci-compat",
@@ -49,7 +49,6 @@
     "fork-release-publication",
     "fork-maintenance-automation",
     "fork-codex-goal-visibility",
-    "fork-launch-health",
     "fork-notification-preferences",
     "fork-sidebar-agent-visibility",
     "fork-child-input-attention",
@@ -159,9 +158,6 @@
     },
     "fork-interrupted-turn-rewind": {
       "oid": "d2632aadcb88fc240e62ae6e96a435cbb213dfd6"
-    },
-    "fork-launch-health": {
-      "oid": "f4260ce8701e0baf14fbb385e4011b490c9d02d5"
     },
     "fork-maintenance-automation": {
       "oid": "3d67cfb0d982af403106e82d136691b3b1954ce2"
