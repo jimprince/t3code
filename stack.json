@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "a5ba370b32a99bd035a94db1092d567abd154993",
-  "head": "fbcfeb2921903a9b53b4c4aa02191a7b26a01eda",
+  "prev": "b8ca3e6c0025239c9c1f7ad04b89bcf68c72dd09",
+  "head": "c43b1b42d7c00060c916d0764d558bcc8acc4e46",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -74,7 +74,9 @@
     "fork-project-canvas",
     "fork-project-task-types",
     "fork-project-request-box-pinned",
-    "fork-scripts-automations",
+    "fork-scripts-automations"
+  ],
+  "unapplied": [
     "fork-request-followups",
     "fork-roadmap-next-later",
     "fork-project-page-usability",
@@ -110,7 +112,6 @@
     "fork-phone-side-panels",
     "fork-decision-links"
   ],
-  "unapplied": [],
   "hidden": [],
   "patches": {
     "fork-3mf-preview": {
