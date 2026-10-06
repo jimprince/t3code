@@ -3,11 +3,9 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/sql/SqlClient";
 
-const decode = Schema.decodeUnknownSync(ForkThreadMetadata);
 export const metadataJson = Schema.fromJsonString(ForkThreadMetadata);
 const decodeMetadata = Schema.decodeUnknownEffect(metadataJson);
 const encodeMetadata = Schema.encodeEffect(metadataJson);
-
 /** Import once, including null/missing parents. Existing V2 edits win on every restart. */
 export const initializeMetadata = (sql: SqlClient.SqlClient) => Effect.gen(function* () {
   yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata (thread_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
@@ -17,7 +15,8 @@ export const initializeMetadata = (sql: SqlClient.SqlClient) => Effect.gen(funct
   const rows = yield* sql<{ thread_id: string; parent_thread_id: string | null; scope?: string | null; settle_on_complete?: number | null }>`SELECT * FROM projection_threads`;
   for (const row of rows) {
     const metadata: ForkThreadMetadata = { threadId: ThreadId.make(row.thread_id), parentThreadId: row.parent_thread_id === null ? null : ThreadId.make(row.parent_thread_id), ...(row.scope !== undefined ? { scope: row.scope } : {}), ...(row.settle_on_complete !== undefined ? { settleOnComplete: row.settle_on_complete === null ? null : row.settle_on_complete === 1 } : {}) };
-    yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${row.thread_id}, ${JSON.stringify(metadata)})`;
+    const payload = yield* Schema.encodeEffect(metadataJson)(metadata);
+    yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${row.thread_id}, ${payload})`;
   }
   if (columns.some(column => column.name === "settle_on_complete")) {
     const existing = yield* listMetadata(sql);
@@ -30,8 +29,12 @@ export const initializeMetadata = (sql: SqlClient.SqlClient) => Effect.gen(funct
     }
   }
 });
-export const listMetadata = (sql: SqlClient.SqlClient) => sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata ORDER BY thread_id`.pipe(Effect.map(rows => rows.map(row => decode(JSON.parse(row.payload)))));
-export const writeMetadata = (sql: SqlClient.SqlClient, value: ForkThreadMetadata) => sql`INSERT INTO fork_thread_metadata (thread_id, payload) VALUES (${value.threadId}, ${JSON.stringify(value)}) ON CONFLICT(thread_id) DO UPDATE SET payload = excluded.payload`;
+export const listMetadata = (sql: SqlClient.SqlClient) => sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata ORDER BY thread_id`.pipe(Effect.flatMap(rows => Effect.forEach(rows, row => Schema.decodeUnknownEffect(metadataJson)(row.payload))));
+export const writeMetadata = (sql: SqlClient.SqlClient, value: ForkThreadMetadata) => Effect.gen(function* () {
+ const payload = yield* Schema.encodeEffect(metadataJson)(value);
+ yield* sql`INSERT INTO fork_thread_metadata (thread_id, payload) VALUES (${value.threadId}, ${payload}) ON CONFLICT(thread_id) DO UPDATE SET payload = excluded.payload`;
+});
+
 /** Seed delegation ownership in the creation transaction; later organizational edits always win. */
 export const seedDelegatedMetadata = (
   sql: SqlClient.SqlClient,
