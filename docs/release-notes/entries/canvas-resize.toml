@@ -1,0 +1,4 @@
+id = "canvas-resize"
+category = "feature"
+functionality = "projects"
+text = "Dashboard canvases can set their own height, so a collapsed section like the meeting minutes no longer leaves a tall empty frame. The height is remembered per device, so a collapsed canvas stays collapsed after a reload."
