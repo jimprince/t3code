@@ -359,7 +359,7 @@ subject = "feat(projects): add repository-independent General Chat projects"
 class = "product"
 purpose = "Provide server-owned General Chat projects: the project kind contract and migrations, startup creation, decider guards, projection handling, sidebar grouping, and default compose behavior."
 retire_when = "Upstream ships an equivalent repository-independent chat project kind."
-depends_on = []
+depends_on = ["fork-thread-client-recovery"]
 roles = []
 note = "Reorganized 2026-09-06 from fork-general-chat-projects. Upstream ordering fixtures include the owning project required by General Chat metadata guards. Copied-state tests use T3_LIFECYCLE_FIXTURES, preserve the shipped migration ledger through the production runner, and create scoped disposable copies before writes."
 
@@ -509,7 +509,12 @@ subject = "fix(chat): preserve legacy attachment history and older clients"
 class = "divergence"
 purpose = "Read historical file handoff records and accept legacy fork clients while current clients use upstream attachment uploads and display once."
 retire_when = "Support for legacy file handoff clients and their persisted message metadata has explicitly ended or been losslessly migrated."
-depends_on = ["fork-provider-turn-safety", "fork-workspace-file-uploads"]
+depends_on = [
+  "fork-provider-turn-safety",
+  "fork-thread-transfer",
+  "fork-resource-recovery",
+  "fork-workspace-file-uploads",
+]
 roles = []
 note = "Legacy uploads use native durable storage, retention and provider file input while keeping the parallel path-bearing field for old clients and historical messages. Available historical temporary objects materialize lazily into durable storage; no old metadata or migration IDs are removed. Partial upload/dispatch failures clean newly created files, and revert preserves referenced legacy objects. Current clients retain one upload and one display entry. The narrow turn-start query preserves legacy file handoffs. Legacy handoffs join the provider attachment list on dispatch, so they are budgeted with upstream's shared attachment-limit helper against decoded bytes rather than a fork-local cap."
 
@@ -1009,7 +1014,7 @@ subject = "fix(server): keep copied sandbox sessions stopped on startup"
 class = "divergence"
 purpose = "Disable automatic provider session and background-work recovery in dev and test launchers while preserving installed-server recovery at every live home."
 retire_when = "Upstream guards automatic startup continuation in copied sandbox state."
-depends_on = ["fork-provider-turn-safety"]
+depends_on = ["fork-provider-turn-safety", "fork-resume-background-work"]
 roles = []
 
 [[patch.decision]]
@@ -1523,7 +1528,11 @@ subject = "feat(threads): nest workers across environments"
 class = "product"
 purpose = "Store remote parent links on child environments and merge connected thread trees in clients and the operator CLI."
 retire_when = "Upstream supports environment-scoped thread parent links, client tree merging, and remote nesting through its operator interface."
-depends_on = ["fork-cross-project-thread-nesting", "fork-worker-operations"]
+depends_on = [
+  "fork-cross-project-thread-nesting",
+  "fork-worker-operations",
+  "fork-orchestrators-view",
+]
 roles = []
 note = "Remote parents are optional metadata, persisted only by the child server. Disconnected, archived, missing, or cyclic parents do not hide the child. Servers do not traverse or mutate remote descendants; client presentation combines connected environments. Fork migration 12 reserves the nullable JSON column independently of the V1 core replacement. Copied-state metadata tests discover all three packaged fixtures through T3_LIFECYCLE_FIXTURES and create scoped copies before writes, with explicit skips when absent."
 
@@ -1600,7 +1609,7 @@ subject = "fix(server): give each Codex text generation its own scope"
 class = "product"
 purpose = "Fix the request ledger split that failed on the dev VM with 'Failed to write temp file in /tmp: NotFound: FileSystem.writeFile (...t3code-codex-schema-...)' and filed every message whole (brad/t3code-fork#144)."
 retire_when = "Upstream scopes its Codex text-generation temp files per call."
-depends_on = ["fork-textgen-tempfile-cause"]
+depends_on = ["fork-textgen-tempfile-cause", "fork-request-ledger"]
 roles = []
 note = "runCodexJson registered its temp files in whatever Scope the caller's fiber carried. The request ledger captures in a forkDetach fiber that inherits the RPC's request scope, which closes once the RPC replies; acquireRelease on a closed scope runs the release at once, so the temp folder was removed right after mkdtemp. runCodexJson now runs under Effect.scoped (Effect.fn pipe), so each call owns its scope. V2 already allocates unscoped temp files with explicit failure and success cleanup; retain that cleanup and isolate the invocation scope as well. Regression test: generateThreadTitle with an already closed Scope provided."
 
