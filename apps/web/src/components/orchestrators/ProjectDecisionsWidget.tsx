@@ -12,11 +12,12 @@ import {
 } from "@t3tools/client-runtime/decision-answer";
 import type { ProjectIssue } from "@t3tools/contracts";
 import { RotateCcwIcon, SendIcon } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useRef, useState } from "react";
 
 import { Button, InlineButton } from "../ui/button";
 import { Input } from "../ui/input";
 import { deriveDecisions } from "./decisions.logic";
+import { LinkifiedText, OptionLinks } from "./LinkifiedText";
 import { formatIssueAge } from "./projectIssuesBoard.logic";
 import { issueKey } from "./projectRequests.logic";
 import { ProjectSection } from "./ProjectSection";
@@ -157,20 +158,22 @@ function DecisionAnswer({
         <>
           <span className="flex flex-col gap-1">
             {decision.options.map((option) => (
-              <Button
-                key={option.text}
-                size="sm-multiline"
-                variant="outline"
-                onClick={() => answer({ kind: "option", option: option.text })}
-              >
-                <span className="min-w-0 flex-1 text-left">{option.text}</span>
-                {option.recommended ? (
-                  <span className="shrink-0 text-xs font-normal text-muted-foreground">
-                    Recommended
-                  </span>
-                ) : null}
-                <SendIcon className="shrink-0 text-muted-foreground" />
-              </Button>
+              <Fragment key={option.text}>
+                <Button
+                  size="sm-multiline"
+                  variant="outline"
+                  onClick={() => answer({ kind: "option", option: option.text })}
+                >
+                  <span className="min-w-0 flex-1 text-left wrap-anywhere">{option.text}</span>
+                  {option.recommended ? (
+                    <span className="shrink-0 text-xs font-normal text-muted-foreground">
+                      Recommended
+                    </span>
+                  ) : null}
+                  <SendIcon className="shrink-0 text-muted-foreground" />
+                </Button>
+                <OptionLinks text={option.text} />
+              </Fragment>
             ))}
             <span className="text-xs">
               <InlineButton
@@ -299,8 +302,8 @@ export function ProjectDecisionsWidget({ summary }: { readonly summary: Orchestr
               <span>
                 <span className="block text-sm">{issue.title}</span>
                 {decision.context ? (
-                  <span className="mt-1 block text-sm whitespace-pre-line text-foreground/85">
-                    {decision.context}
+                  <span className="mt-1 block text-sm whitespace-pre-line wrap-anywhere text-foreground/85">
+                    <LinkifiedText text={decision.context} />
                   </span>
                 ) : null}
                 <span className="mt-1 block text-xs text-muted-foreground">
