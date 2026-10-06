@@ -2,7 +2,10 @@ import { randomUUID } from "../../lib/utils";
 import { useRef, useState } from "react";
 import type { DragMoveEvent, DragEndEvent, DragStartEvent } from "@dnd-kit/core";
 import { CommandId } from "@t3tools/contracts";
-import { supervisionKey, type supervisionForest } from "@t3tools/client-runtime/state/forkNesting";
+import {
+  supervisionThreadKey,
+  type supervisionForest,
+} from "@t3tools/client-runtime/state/fork-nesting";
 import { planPinnedReorder } from "@t3tools/client-runtime/state/thread-sort";
 import { createEnvironmentRpcCommand } from "@t3tools/client-runtime/state/runtime";
 import { connectionAtomRuntime } from "../../connection/runtime";
@@ -66,14 +69,14 @@ export function useSupervisionDrag(forest: ReturnType<typeof supervisionForest>)
     if (over) {
       const siblings = directSiblingBucket(forest, source);
       if (!siblings.includes(over)) return true;
-      const ordered = siblings.map(supervisionKey);
+      const ordered = siblings.map(supervisionThreadKey);
       ordered.splice(ordered.indexOf(sourceKey), 1);
       ordered.splice(ordered.indexOf(overKey), 0, sourceKey);
       const assignments = planPinnedReorder({
         orderedIds: ordered,
         keysById: new Map(
           siblings.map((t) => [
-            supervisionKey(t),
+            supervisionThreadKey(t),
             source.pinnedAt !== null ? t.pinOrderKey : t.activeOrderKey,
           ]),
         ),
