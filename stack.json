@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "730923c734a9b4ccb4d33badf1b9e796359c060b",
-  "head": "c001a66167f6f5ba3232ca2a454f1003de228e2f",
+  "prev": "dcbbab2393b67ceca6a0211399d616bdddbff0a4",
+  "head": "bbfd762ed8577561aad39677fe696f9eacc13874",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -55,9 +55,7 @@
     "fork-interrupted-turn-rewind",
     "fork-agent-thread-ordering",
     "fork-cross-environment-nesting",
-    "fork-queue-coalesced-notes"
-  ],
-  "unapplied": [
+    "fork-queue-coalesced-notes",
     "fork-standing-agent-autosettle",
     "fork-queue-idle-dispatch",
     "fork-textgen-tempfile-cause",
@@ -76,7 +74,9 @@
     "fork-project-canvas",
     "fork-project-task-types",
     "fork-project-request-box-pinned",
-    "fork-scripts-automations",
+    "fork-scripts-automations"
+  ],
+  "unapplied": [
     "fork-request-followups",
     "fork-roadmap-next-later",
     "fork-project-page-usability",
