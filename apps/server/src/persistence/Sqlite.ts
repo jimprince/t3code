@@ -1,3 +1,4 @@
+import { initializeSidebarOrderImport } from "../forkLegacy/SidebarOrderImport.ts";
 import * as Migrator from "effect/sql/Migrator";
 import { initializeMetadata } from "../forkThreads/MetadataStore.ts";
 import * as Effect from "effect/Effect";
@@ -25,6 +26,7 @@ const layerSetup = Layer.effectDiscard(
     // PASSIVE checkpoints never shrink the -wal file, so it otherwise keeps its
     // largest size until the last connection closes.
     yield* sql.unsafe(`PRAGMA journal_size_limit = ${WAL_SIZE_LIMIT_BYTES};`);
+    yield* initializeSidebarOrderImport(sql);
     yield* runMigrations();
     yield* runForkMigrations();
     // Import sidecar metadata once per persistence environment.

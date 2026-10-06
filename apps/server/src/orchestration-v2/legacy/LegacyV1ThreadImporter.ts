@@ -1,4 +1,5 @@
 import { readLegacyAutomationOutcome } from "./ForkAutomationRead.ts";
+import { initializeSidebarOrderImport } from "../../forkLegacy/SidebarOrderImport.ts";
 import { makeHistoricalAttachmentRecovery } from "../../forkLegacy/AttachmentImport.ts";
 import { decodeHistoricalAttachments } from "../../forkLegacy/AttachmentDecoder.ts";
 import {
@@ -454,6 +455,20 @@ const make = Effect.gen(function* () {
 
   const reconcileShellsBase = Effect.gen(function* () {
     const now = DateTime.formatIso(yield* DateTime.now);
+    const columns = yield* sql<{ readonly name: string }>`PRAGMA table_info(projection_threads)`;
+    const hasColumn = (name: string) => columns.some((column) => column.name === name);
+    const needsLegacyOrder = yield* initializeSidebarOrderImport(sql);
+    // V2 imports projections without replaying the sidebar events canonicalized by fork 5.
+    // Read the retired key as a fallback only; never backfill or rewrite historical rows.
+    const activeOrderKey = sql.unsafe(
+      hasColumn("active_order_key")
+        ? needsLegacyOrder && hasColumn("sidebar_order_key")
+          ? "COALESCE(thread.active_order_key, thread.sidebar_order_key)"
+          : "thread.active_order_key"
+        : hasColumn("sidebar_order_key")
+          ? "thread.sidebar_order_key"
+          : "NULL",
+    );
     const repairRows = yield* sql<LegacyRepairRow>`
       SELECT
         thread.thread_id,
@@ -479,7 +494,7 @@ const make = Effect.gen(function* () {
         (SELECT json_group_array(json_object('host', i.host, 'repository', i.repository, 'number', i.number, 'url', i.url, 'linkedAt', i.linked_at, 'snapshot', json(i.snapshot_json))) FROM (SELECT * FROM projection_thread_issues ORDER BY linked_at ASC, number ASC) i WHERE i.thread_id = thread.thread_id) AS issues_json,
         thread.linked_pull_request_json,
         thread.branch_pull_request_json,
-        thread.active_order_key,
+        ${activeOrderKey} AS active_order_key,
         thread.deleted_at,
         projection.payload_json
       FROM orchestration_v2_legacy_imports AS legacy_import
@@ -586,7 +601,7 @@ const make = Effect.gen(function* () {
         (SELECT json_group_array(json_object('host', i.host, 'repository', i.repository, 'number', i.number, 'url', i.url, 'linkedAt', i.linked_at, 'snapshot', json(i.snapshot_json))) FROM (SELECT * FROM projection_thread_issues ORDER BY linked_at ASC, number ASC) i WHERE i.thread_id = thread.thread_id) AS issues_json,
         thread.linked_pull_request_json,
         thread.branch_pull_request_json,
-        thread.active_order_key,
+        ${activeOrderKey} AS active_order_key,
         thread.deleted_at
       FROM projection_threads AS thread
       WHERE NOT EXISTS (
