@@ -1,3 +1,5 @@
+import { useMobileBackgroundFeed } from "./backgroundFeed";
+import { applyBackgroundFolds } from "./backgroundFeed.logic";
 import { ThreadContextDivider } from "./thread-context-divider";
 import { ThreadHandoffRow } from "./thread-handoff-row";
 import {
@@ -1520,6 +1522,7 @@ function renderFeedEntry(
     readonly onToggleWorkGroup: (groupId: string, anchorKey?: string) => void;
     readonly onToggleWorkRow: (rowId: string, anchorKey?: string) => void;
     readonly onToggleTurnFold: (runId: RunId) => void;
+    readonly onToggleBackgroundFold: (runId: string) => void;
     readonly onPressPreview: (source: FilePreviewSource) => void;
     readonly onPressVideo: (attachment: ChatFileAttachment, sourceIdentifier: string) => void;
     readonly markdownLinkHandlers: MarkdownLinkHandlers;
@@ -1541,6 +1544,37 @@ function renderFeedEntry(
 ) {
   const entry = info.item;
   const { markdownStyles, iconSubtleColor, userBubbleColor } = props;
+
+  if (entry.type === "background-fold") {
+    const { run } = entry;
+    const count = `${run.turnCount} background ${run.turnCount === 1 ? "turn" : "turns"}`;
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: entry.expanded }}
+        onPress={() => props.onToggleBackgroundFold(run.id)}
+        hitSlop={4}
+        className="mb-1 min-h-11 flex-row items-center gap-2 border-y border-border-subtle px-2"
+        style={{
+          minHeight: Math.max(TURN_FOLD_HEIGHT - 3.5, props.workRowSizing.estimatedRowHeight),
+        }}
+      >
+        <ThreadDisclosureChevron
+          expanded={entry.expanded}
+          collapsedDirection="right"
+          size={15}
+          tintColor={iconSubtleColor}
+        />
+        <Text
+          key={props.workRowSizing.textSizeKey}
+          numberOfLines={1}
+          className="flex-1 font-t3-medium text-sm tabular-nums text-foreground-muted"
+        >
+          {run.senderLabels.length > 0 ? `${count} with ${run.senderLabels.join(", ")}` : count}
+        </Text>
+      </Pressable>
+    );
+  }
 
   if (entry.type === "run-fold") {
     return (
@@ -2614,23 +2648,31 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     reportHeaderMaterialVisibility(false);
   }, [feedThreadKey, reportHeaderMaterialVisibility]);
 
+  const background = useMobileBackgroundFeed({
+    feed: props.feed,
+    rootKey: `${props.environmentId}:${props.threadId}`,
+    liveRunId: unsettledTurnId,
+  });
   const presentedFeed = useMemo(
     () =>
-      appendPendingThreadMessages(
-        deriveThreadFeedPresentation(
-          props.feed,
-          props.latestRun,
-          expandedTurnIds,
-          new Set(
-            Object.entries(expandedWorkGroups)
-              .filter(([, expanded]) => expanded)
-              .map(([groupId]) => groupId),
+      applyBackgroundFolds(
+        appendPendingThreadMessages(
+          deriveThreadFeedPresentation(
+            props.feed,
+            props.latestRun,
+            expandedTurnIds,
+            new Set(
+              Object.entries(expandedWorkGroups)
+                .filter(([, expanded]) => expanded)
+                .map(([groupId]) => groupId),
+            ),
+            props.activeWorkStartedAt,
+            props.runlessWorkActive ?? false,
           ),
-          props.activeWorkStartedAt,
-          props.runlessWorkActive ?? false,
+          props.feed,
+          props.queuedMessages,
         ),
-        props.feed,
-        props.queuedMessages,
+        background.folds,
       ),
     [
       props.queuedMessages,
@@ -2638,6 +2680,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       expandedWorkGroups,
       props.activeWorkStartedAt,
       props.runlessWorkActive,
+      background.folds,
       props.feed,
       props.latestRun,
     ],
@@ -2829,6 +2872,15 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
     [suspendEndScrollMaintenanceForDisclosure],
   );
 
+  const backgroundToggleFold = background.toggleFold;
+  const onToggleBackgroundFold = useCallback(
+    (runId: string) => {
+      suspendEndScrollMaintenanceForDisclosure(runId);
+      backgroundToggleFold(runId);
+    },
+    [suspendEndScrollMaintenanceForDisclosure, backgroundToggleFold],
+  );
+
   const onToggleTurnFold = useCallback(
     (runId: RunId) => {
       suspendEndScrollMaintenanceForDisclosure(`run-fold:${runId}`);
@@ -2874,6 +2926,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       }
       switch (entry.type) {
         case "run-fold":
+        case "background-fold":
           return resolveThreadFeedFixedItemSize(entry.type);
         case "work-toggle":
         case "thinking":
@@ -2931,6 +2984,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             onToggleWorkGroup,
             onToggleWorkRow,
             onToggleTurnFold,
+            onToggleBackgroundFold,
             onPressPreview,
             onPressVideo,
             markdownLinkHandlers,
@@ -2987,6 +3041,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
       onPressPreview,
       onPressVideo,
       onToggleTurnFold,
+      onToggleBackgroundFold,
       onToggleWorkGroup,
       onToggleWorkRow,
       props.environmentId,
@@ -3136,6 +3191,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
                 {setupAnchorIndex < 0 && props.worktreeSetup ? (
                   <WorktreeSetupCard key={props.threadId} {...props.worktreeSetup} />
                 ) : null}
+                {background.control}
                 {props.historyControls ? (
                   <ThreadFeedLoadEarlierControl {...props.historyControls} />
                 ) : null}
