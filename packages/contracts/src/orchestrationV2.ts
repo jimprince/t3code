@@ -2640,13 +2640,13 @@ export const OrchestrationV2Command = Schema.Union([
     // keys, so a drag writes one key to one thread — neighbors are never
     // touched. Clients compute a key that sorts between the dropped
     // position's neighbors.
-    orderKey: TrimmedNonEmptyString,
+    orderKey: Schema.NullOr(TrimmedNonEmptyString),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.active.reorder"),
     commandId: CommandId,
     threadId: ThreadId,
-    orderKey: TrimmedNonEmptyString,
+    orderKey: Schema.NullOr(TrimmedNonEmptyString),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.visit"),
