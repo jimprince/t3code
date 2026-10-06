@@ -1,3 +1,5 @@
+import type { ThreadIssueLink } from "@t3tools/contracts";
+export type { ThreadIssueLink } from "@t3tools/contracts";
 export type QueuedSendOrigin = import("@t3tools/shared/messageOrigin").MessageOrigin & {
   senderEnvironment?: string;
 };
@@ -56,6 +58,7 @@ export interface ExecutionEnvironmentDescriptor {
     threadActiveReorder?: boolean;
     threadOrderReset?: boolean;
     threadNesting?: boolean;
+    threadIssues?: boolean;
     remoteThreadNesting?: boolean;
   };
 }
@@ -124,6 +127,7 @@ export interface OrchestrationThread {
   interactionMode: string;
   branch: string | null;
   worktreePath: string | null;
+  issues?: readonly ThreadIssueLink[];
   latestTurn: OrchestrationLatestTurn | null;
   createdAt: string;
   updatedAt: string;
@@ -164,6 +168,7 @@ export interface OrchestrationThreadShell {
   interactionMode: string;
   branch: string | null;
   worktreePath: string | null;
+  issues?: readonly ThreadIssueLink[];
   latestTurn: OrchestrationLatestTurn | null;
   createdAt: string;
   updatedAt: string;
