@@ -101,6 +101,9 @@ it("restarts only after local agents have stayed idle for the grace period", () 
 
   act(() => vi.advanceTimersByTime(1));
   expect(installUpdate).toHaveBeenCalledTimes(1);
+  expect(installUpdate).toHaveBeenCalledWith({
+    expectedVersion: mocks.updateState?.downloadedVersion,
+  });
   expect(useIdleRestartStore.getState().scheduled).toBe(false);
 });
 
