@@ -1,0 +1,4 @@
+id = "legacy-history-stable-pages"
+category = "fix"
+functionality = "thread history"
+text = "Keep historical thread evidence in a consistent order across pages."
