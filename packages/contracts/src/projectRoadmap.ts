@@ -12,7 +12,11 @@ export const ProjectRoadmapVersion = Schema.Struct({
 });
 export type ProjectRoadmapVersion = typeof ProjectRoadmapVersion.Type;
 
-/** An open request or issue on the tracker: in a version, or Later when `versionId` is null. */
+/**
+ * An open request or issue on the tracker: in a version, or unversioned when
+ * `versionId` is null. Unversioned work belongs to the next version unless it
+ * is parked (saved for later), which keeps it off the Dashboard.
+ */
 export const ProjectRoadmapItem = Schema.Struct({
   number: PositiveInt,
   title: TrimmedNonEmptyString,
@@ -20,6 +24,7 @@ export const ProjectRoadmapItem = Schema.Struct({
   isRequest: Schema.Boolean,
   stage: Schema.NullOr(ProjectRequestStage),
   versionId: Schema.NullOr(PositiveInt),
+  parked: Schema.Boolean,
 });
 export type ProjectRoadmapItem = typeof ProjectRoadmapItem.Type;
 
@@ -37,12 +42,16 @@ export type ProjectRoadmap = typeof ProjectRoadmap.Type;
 export const ProjectRoadmapGetInput = Schema.Struct({ threadId: ThreadId });
 export type ProjectRoadmapGetInput = typeof ProjectRoadmapGetInput.Type;
 
-/** Moves a request or issue into a version (by title), or back to Later with `null`. */
+/**
+ * Moves a request or issue into a version (by title); with `null`, out of every
+ * version into the automatic next version; with `later`, into Later (parked).
+ */
 export const ProjectRoadmapMoveInput = Schema.Struct({
   threadId: ThreadId,
   /** Issue number in the tracker repository, owner/repo#N, or the issue URL. */
   reference: TrimmedNonEmptyString,
   version: Schema.NullOr(TrimmedNonEmptyString),
+  later: Schema.optionalKey(Schema.Boolean),
 });
 export type ProjectRoadmapMoveInput = typeof ProjectRoadmapMoveInput.Type;
 
