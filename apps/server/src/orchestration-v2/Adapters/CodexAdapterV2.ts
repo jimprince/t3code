@@ -1,3 +1,5 @@
+import { toCodexNativeGoalSummary } from "../../provider/CodexNativeGoal.ts";
+import type { CodexNativeGoalSummary } from "@t3tools/contracts";
 import { withT3ThreadIdentityEnv } from "../../provider/t3ThreadIdentityEnv.ts";
 import { revertCodexThread } from "../../provider/CodexThreadRevert.ts";
 import { historyResponseItems } from "@t3tools/provider-core/server/handoffBudget";
@@ -1891,8 +1893,65 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         const latestGoalTurnId = (providerTurnId: ProviderTurnId) =>
           goalRuns.get(providerTurnId)?.at(-1)?.providerTurnId ?? providerTurnId;
 
-        const emitProviderEvent = (event: ProviderAdapter.ProviderAdapterV2Event) =>
-          Queue.offer(events, event).pipe(Effect.asVoid);
+
+        const goalThreads = new Map<string, OrchestrationV2ProviderThread>();
+        const goalRevisions = new Map<string, number>();
+        const emitProviderEvent = (event: ProviderAdapter.ProviderAdapterV2Event) => {
+          if (event.type === "provider_thread.updated") {
+            const nativeId = event.providerThread.nativeThreadRef?.nativeId;
+            const known = nativeId == null ? undefined : goalThreads.get(nativeId);
+            if (known) {
+              const providerThread = {
+                ...event.providerThread,
+                codexNativeGoal: known.codexNativeGoal ?? null,
+              };
+              goalThreads.set(nativeId!, providerThread);
+              event = { ...event, providerThread };
+            }
+          }
+          return Queue.offer(events, event).pipe(Effect.asVoid);
+        };
+        const hydrateGoal = Effect.fn("CodexAdapterV2.hydrateGoal")(function* (
+          thread: OrchestrationV2ProviderThread,
+        ) {
+          const nativeId = yield* getNativeThreadId(thread);
+          goalThreads.set(nativeId, {
+            ...thread,
+            codexNativeGoal: goalThreads.get(nativeId)?.codexNativeGoal ?? null,
+          });
+          const revision = goalRevisions.get(nativeId) ?? 0;
+          const goal = yield* client.request("thread/goal/get", { threadId: nativeId }).pipe(
+            Effect.map(({ goal }) =>
+              goal == null ? null : (toCodexNativeGoalSummary(goal) ?? null),
+            ),
+            Effect.catch(() => Effect.succeed(null)),
+          );
+          const hydrated = {
+            ...thread,
+            codexNativeGoal:
+              (goalRevisions.get(nativeId) ?? 0) === revision
+                ? goal
+                : (goalThreads.get(nativeId)?.codexNativeGoal ?? null),
+          };
+          goalThreads.set(nativeId, hydrated);
+          return hydrated;
+        });
+        const updateGoal = Effect.fn("CodexAdapterV2.updateGoal")(function* (
+          nativeId: string,
+          goal: CodexNativeGoalSummary | null,
+        ) {
+          // Only native roots registered by ensure/resume belong to the app shell.
+          const thread = goalThreads.get(nativeId);
+          if (!thread) return;
+          goalRevisions.set(nativeId, (goalRevisions.get(nativeId) ?? 0) + 1);
+          const updated = { ...thread, codexNativeGoal: goal, updatedAt: yield* DateTime.now };
+          goalThreads.set(nativeId, updated);
+          yield* emitProviderEvent({
+            type: "provider_thread.updated",
+            driver: CODEX_PROVIDER,
+            providerThread: updated,
+          });
+        });
 
         /** Writes the thread's current native goal onto its root provider thread. */
         const emitGoalUpdate = Effect.fnUntraced(function* (nativeThreadId: string) {
@@ -4462,6 +4521,8 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         // A goal that stops being active ends any run held open for its next turn.
         yield* client.handleServerNotification("thread/goal/updated", (payload) =>
           Effect.gen(function* () {
+            const summary = toCodexNativeGoalSummary(payload.goal);
+            if (summary !== undefined) yield* updateGoal(payload.threadId, summary);
             goalsByNativeThread.set(payload.threadId, providerGoalFromCodex(payload.goal));
             yield* emitGoalUpdate(payload.threadId);
             if (payload.goal.status !== "active") yield* releaseGoalHold(payload.threadId);
@@ -4469,6 +4530,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
         );
         yield* client.handleServerNotification("thread/goal/cleared", (payload) =>
           Effect.gen(function* () {
+            yield* updateGoal(payload.threadId, null);
             goalsByNativeThread.set(payload.threadId, null);
             yield* emitGoalUpdate(payload.threadId);
             yield* releaseGoalHold(payload.threadId);
@@ -6411,6 +6473,12 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           // against a long-delayed resume. Codex emits no resume-expected
           // signal to pin on.
           hasPendingBackgroundWork: Effect.gen(function* () {
+            if (
+              Array.from(goalThreads.values()).some(
+                (thread) => thread.codexNativeGoal?.status === "active",
+              )
+            )
+              return true;
             for (const items of (yield* Ref.get(runningCommandItemsByTurn)).values()) {
               if (items.size > 0) {
                 return true;
@@ -6433,6 +6501,12 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
           }),
           hasPendingBackgroundWorkForThread: (providerThread) =>
             Effect.gen(function* () {
+              const nativeId = providerThread.nativeThreadRef?.nativeId;
+              if (
+                nativeId != null &&
+                goalThreads.get(nativeId)?.codexNativeGoal?.status === "active"
+              )
+                return true;
               const contexts = [
                 ...(yield* Ref.get(activeTurns)).values(),
                 ...(yield* Ref.get(settledTurns)).values(),
@@ -6475,6 +6549,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                   thread: response.thread,
                 }),
               ),
+              Effect.flatMap(hydrateGoal),
               Effect.mapError(
                 (cause) =>
                   new ProviderAdapter.ProviderAdapterEnsureThreadError({
@@ -6525,9 +6600,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 ),
                 Effect.flatMap(decodeCodexResumeMetadata),
               );
-              // Codex follows a resume with a goal snapshot notification; the
-              // run's first turn writes it if it differs from the stored goal.
-              return {
+              return yield* hydrateGoal({
                 ...threadInput.providerThread,
                 providerSessionId: input.providerSessionId,
                 providerInstanceId: adapterOptions.instanceId,
@@ -6539,7 +6612,7 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
                 },
                 nativeConversationHeadRef: threadInput.providerThread.nativeConversationHeadRef,
                 updatedAt: codexTimestamp(response.thread.updatedAt),
-              } satisfies OrchestrationV2ProviderThread;
+              } satisfies OrchestrationV2ProviderThread);
             }).pipe(
               Effect.mapError(
                 (cause) =>
@@ -6678,6 +6751,8 @@ export const makeCodexAdapterV2 = Effect.fn("makeCodexAdapterV2")(function* (
             Effect.gen(function* () {
               const nativeThreadId = yield* getNativeThreadId(unloadInput.providerThread);
               yield* client.request("thread/unsubscribe", { threadId: nativeThreadId });
+              goalThreads.delete(nativeThreadId);
+              goalRevisions.delete(nativeThreadId);
             }).pipe(
               Effect.mapError((cause) =>
                 cause._tag === "ProviderAdapterProtocolError"

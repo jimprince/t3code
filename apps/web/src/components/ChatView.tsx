@@ -1,5 +1,7 @@
 import { ThreadFind, ThreadFindCanvas, type ThreadFindControls } from "./chat/ThreadFindProvider";
 import { THREAD_FIND_BAR_RESERVED_HEIGHT } from "./chat/ThreadFindBar";
+import { CodexNativeGoalLine } from "./chat/CodexNativeGoalLine";
+
 import { usageLimitRecoveryBannerItem } from "./chat/UsageLimitRecoveryBanner";
 import {
   resolveBackgroundDraftWorkspaceOptions,
@@ -7570,30 +7572,30 @@ export default function ChatView(props: ChatViewProps) {
     };
   }, [activeGoal, activeThread, isWorking, sendStandaloneCommand]);
 
+  // Upstream's native goal row also provides resume/clear. Keep the fork
+  // read-only row as the fallback for servers exposing only codexNativeGoal.
+  const activeCodexNativeGoal = activeGoal === null ? activeThreadShell?.codexNativeGoal ?? null : null;
+
   const backgroundWorkBannerItem = useMemo<ComposerBannerStackItem | null>(() => {
     const presentation = presentPendingBackgroundWork(activeBackgroundTasks);
-    if (presentation === null || !activeThread) {
+    if ((presentation === null && activeCodexNativeGoal === null) || !activeThread) {
       return null;
     }
     return {
       id: `background-work:${activeThread.id}`,
       variant: "default",
       priority: "activity",
-      // A dev server can run for hours after the agent is done, so only work
-      // that will wake the agent pulses.
-      icon: (
-        <span
-          className={cn(
-            "size-1.5 rounded-full bg-foreground",
-            presentation.waiting && "animate-status-pulse",
-          )}
-          aria-hidden="true"
-        />
+      // Native goals share the background-work banner and keep their status visible.
+      icon: <span className="size-1.5 rounded-full bg-foreground" aria-hidden="true" />,
+      title: activeCodexNativeGoal ? (
+        <CodexNativeGoalLine goal={activeCodexNativeGoal} />
+      ) : (
+        presentation?.title
       ),
-      title: presentation.title,
       // A single named item is already in the title.
       description:
-        presentation.items.length === 1 && presentation.items[0]?.childThreadId === undefined
+        presentation === null ||
+        (presentation.items.length === 1 && presentation.items[0]?.childThreadId === undefined)
           ? undefined
           : presentation.items.map((item, index) => {
               const childThreadId = item.childThreadId;
@@ -7614,19 +7616,22 @@ export default function ChatView(props: ChatViewProps) {
                 </Fragment>
               );
             }),
-      actions: (
-        <Button
-          size="xs"
-          variant="ghost"
-          disabled={!canOperateThread || isStoppingBackgroundWork}
-          onClick={() => void handleStopBackgroundWork()}
-        >
-          {isStoppingBackgroundWork ? "Stopping..." : "Stop"}
-        </Button>
-      ),
+      actions:
+        presentation === null ? undefined : (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={!canOperateThread || isStoppingBackgroundWork}
+            onClick={() => void handleStopBackgroundWork()}
+          >
+            {isStoppingBackgroundWork ? "Stopping..." : "Stop"}
+          </Button>
+        ),
+
     };
   }, [
     activeBackgroundTasks,
+    activeCodexNativeGoal,
     activeThread,
     canOperateThread,
     handleStopBackgroundWork,
