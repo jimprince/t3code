@@ -1278,7 +1278,7 @@ export interface DesktopBridge {
   /** Run check, download and install after the renderer's interruption confirmation. */
   startUpdate?: () => Promise<DesktopUpdateActionResult>;
   downloadUpdate: () => Promise<DesktopUpdateActionResult>;
-  installUpdate: () => Promise<DesktopUpdateActionResult>;
+  installUpdate: (options?: { readonly expectedVersion: string }) => Promise<DesktopUpdateActionResult>;
   onUpdateState: (listener: (state: DesktopUpdateState) => void) => () => void;
   /** Present when the desktop shell accepts `t3 app` activation requests. */
   appActivation?: {
