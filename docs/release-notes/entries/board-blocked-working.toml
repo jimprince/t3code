@@ -1,0 +1,4 @@
+id = "board-blocked-working"
+category = "feature"
+functionality = "projects"
+text = "The project page now shows what is stuck and why: Blocked lists failed workers, tasks waiting on an open task, and Active tasks untouched for three days, each with its owner and next step. Working now reads as outcomes (task, next step, worker) instead of agent chatter."
