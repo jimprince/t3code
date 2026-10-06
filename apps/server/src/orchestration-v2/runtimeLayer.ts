@@ -1,3 +1,6 @@
+import * as ThreadTransfer from "../forkThreads/TransferService.ts";
+import * as TransferWorkspace from "../forkThreads/TransferWorkspace.ts";
+import * as TransferAttachments from "../forkThreads/TransferAttachments.ts";
 import * as ForkWorkspace from "../forkThreads/ForkWorkspaceService.ts";
 import * as PortableHistory from "../forkThreads/PortableHistory.ts";
 import * as StartupResumePolicy from "../fork/recovery/StartupResumePolicy.ts";
@@ -349,7 +352,25 @@ export const layer = Layer.mergeAll(
   layerLegacyV1ThreadImporterProvided,
 );
 
+const layerPortableHistoryProvided = PortableHistory.layer.pipe(
+  Layer.provide(Layer.mergeAll(layerStores, layerEventSinkProvided)),
+);
+const layerForkTransferProvided = ThreadTransfer.layer.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      layerThreadManagementProvided,
+      ThreadManagementService.legacyHistoryLayer.pipe(Layer.provide(layerStores)),
+      layerProjectService,
+      layerStores,
+      layerEventSinkProvided,
+      layerPortableHistoryProvided,
+      TransferWorkspace.layer.pipe(Layer.provide(layerStores)),
+      TransferAttachments.layer,
+    ),
+  ),
+);
 export const layerProduction = Layer.mergeAll(
+  layerForkTransferProvided,
   ForkWorkspace.layer.pipe(Layer.provide(Layer.mergeAll(layerThreadManagementProvided, layerProjectService, layerStores, PortableHistory.layer.pipe(Layer.provide(Layer.mergeAll(layerStores, layerEventSinkProvided)))))),
   layer.pipe(Layer.provide(layerProjectService)),
   layerProjectService,
