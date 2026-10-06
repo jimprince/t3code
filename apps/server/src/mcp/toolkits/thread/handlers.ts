@@ -1,5 +1,7 @@
+import { makeNestingService } from "../../../forkThreads/NestingService.ts";
+import * as SqlClient from "effect/unstable/sql/SqlClient";
 import {
-  type CommandId,
+  CommandId,
   type RuntimeRequestId,
   ThreadId,
   type OrchestrationV2ThreadProjection,
@@ -281,7 +283,35 @@ export const ThreadToolkitHandlersLive = ThreadToolkit.toLayer({
     })),
   t3_thread_organize: (input) =>
     Effect.gen(function* () {
-      const { threads, projection } = yield* readWritableThread(input.threadId);
+      const { threads, projection, scope } = yield* readWritableThread(input.threadId);
+      if (input.action === "nest" || input.action === "unnest") {
+        if (input.action === "nest" && input.parentThreadId === undefined)
+          return yield* new OrchestratorMcpFailure({
+            code: "invalid_request",
+            message: "nest requires parentThreadId.",
+          });
+        if (input.action === "nest") yield* readWritableThread(input.parentThreadId);
+        const sql = yield* SqlClient.SqlClient;
+        const nesting = yield* makeNestingService(sql, threads.getThreadShell, threads.dispatch);
+        const commandId =
+          input.clientRequestId === undefined
+            ? yield* newCommandId()
+            : CommandId.make(`mcp:${scope.requestNamespace}:organize:${input.clientRequestId}`);
+        const metadata = yield* nesting
+          .update({
+            commandId,
+            threadId: projection.thread.id,
+            parentThreadId: input.action === "nest" ? input.parentThreadId! : null,
+            remoteParent: null,
+          })
+          .pipe(
+            Effect.mapError(
+              (cause) =>
+                new OrchestratorMcpFailure({ code: "invalid_request", message: String(cause) }),
+            ),
+          );
+        return { metadata };
+      }
       const common = { commandId: yield* newCommandId(), threadId: projection.thread.id };
       let command: OrchestrationV2Command;
       switch (input.action) {
