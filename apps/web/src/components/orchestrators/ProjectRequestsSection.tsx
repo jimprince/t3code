@@ -733,7 +733,7 @@ export function ProjectRequestsSection({
           <ul className="divide-y divide-border">
             {settledThreads.map((group) => (
               <li key={group.thread.id} className="flex items-center gap-3 py-1.5">
-                <span className="min-w-0 flex-1 truncate text-sm">{group.thread.title}</span>
+                <span className="min-w-0 flex-1 truncate text-sm">{group.title}</span>
                 <span className="text-xs text-muted-foreground">{group.requests.length} open</span>
                 <SettleButton
                   issues={group.requests.map((request) => request.issue)}
