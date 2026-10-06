@@ -1,0 +1,4 @@
+id = "legacy-sidebar-startup"
+category = "fix"
+functionality = "startup"
+text = "Fixed startup failures after updating installations with older manual thread-ordering history; saved ordering events are migrated automatically without deleting history."
