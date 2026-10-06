@@ -235,6 +235,7 @@ import { pullRequestSyncKey } from "./pullRequest/pullRequestSyncKey.ts";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import * as PullRequestSyncReactor from "./orchestration-v2/PullRequestSyncReactor.ts";
 import * as ProjectIssuesService from "./projectIssues/ProjectIssuesService.ts";
+import * as RequestLedger from "./projectIssues/RequestLedger.ts";
 import * as SourceControlDiscovery from "./sourceControl/SourceControlDiscovery.ts";
 import * as SourceControlRepositoryService from "./sourceControl/SourceControlRepositoryService.ts";
 import * as AzureDevOpsCli from "./sourceControl/AzureDevOpsCli.ts";
@@ -1327,6 +1328,7 @@ const makeWsRpcLayer = (
         yield* SourceControlRepositoryService.SourceControlRepositoryService;
       const withPullRequestViewer = pullRequests.withRoutingCredential;
       const projectIssues = yield* ProjectIssuesService.make;
+      const requestLedger = yield* RequestLedger.make({ projectIssues, threadIssues });
       const bootstrapCredentials = yield* PairingGrantStore.PairingGrantStore;
       const sessions = yield* SessionStore.SessionStore;
       const processDiagnostics = yield* ProcessDiagnostics.ProcessDiagnostics;
@@ -1833,6 +1835,7 @@ const makeWsRpcLayer = (
               )
               .pipe(
                 Effect.tap(() => recordClientCommandAnalytics(command)),
+                Effect.tap(() => requestLedger.observeDispatch(command, clientOrigin.surface)),
                 Effect.map((result) => ({ sequence: result.sequence })),
                 Effect.mapError((cause) => {
                   const detail = userFacingDispatchErrorMessage(cause);
@@ -2707,7 +2710,27 @@ const makeWsRpcLayer = (
             "rpc.aggregate": "pull-requests",
           }),
         [WS_METHODS.projectIssuesList]: (input) =>
-          observeRpcEffect(WS_METHODS.projectIssuesList, projectIssues.list(input), {
+          observeRpcEffect(
+            WS_METHODS.projectIssuesList,
+            projectIssues
+              .list(input)
+              .pipe(Effect.flatMap((result) => requestLedger.decorate(result, input.rootThreadId))),
+            { "rpc.aggregate": "project-issues" },
+          ),
+        [WS_METHODS.projectRequestsSettle]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsSettle, requestLedger.settle(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsCreate]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsCreate, requestLedger.create(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsUpdate]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsUpdate, requestLedger.update(input), {
+            "rpc.aggregate": "project-issues",
+          }),
+        [WS_METHODS.projectRequestsList]: (input) =>
+          observeRpcEffect(WS_METHODS.projectRequestsList, requestLedger.listForThread(input), {
             "rpc.aggregate": "project-issues",
           }),
         [WS_METHODS.pullRequestsListStats]: (input) =>
