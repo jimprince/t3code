@@ -90,8 +90,8 @@ export function needsAttention(overview: AgentOverview): boolean {
   return (
     overview.hasNewOutput ||
     overview.state === "needs-plan" ||
-    overview.state === "needs-approval" ||
     overview.state === "needs-input" ||
+    overview.state === "needs-approval" ||
     overview.state === "error" ||
     overview.state === "interrupted"
   );

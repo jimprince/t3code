@@ -5,6 +5,9 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { RemoteEnvironmentClient } from "../src/client.js";
 import { loadState, saveState } from "../src/state.js";
+import { buildSubscriptionRecord } from "../src/state.js";
+import { sendDirectResult } from "../src/directResult.js";
+import { parseNotificationLevel } from "../src/notifications.js";
 import type {
   OrchestrationThread,
   SavedAgent,
@@ -765,7 +768,7 @@ describe("notification ownership and attention", () => {
     await withTempState(async () => {
       const state = await loadState();
       state.subscriptions.push(
-        makeSubscription({ subscriberThreadId: "attention-supervisor", events: "attention" }),
+        makeSubscription({ subscriberThreadId: "attention-supervisor", level: "attention" }),
       );
       await saveState(state);
       const source = makeThread();
@@ -874,5 +877,411 @@ describe("watch polling cost", () => {
     expect(nextWatchInterval(5000, false)).toBe(60_000);
     expect(nextWatchInterval(5000, true)).toBe(5000);
     expect(nextWatchInterval(120_000, false)).toBe(120_000);
+  });
+});
+
+describe("notification preferences", () => {
+  it("validates levels and preserves route receipts when changing preference", () => {
+    expect(parseNotificationLevel("attention")).toBe("attention");
+    expect(() => parseNotificationLevel("quiet")).toThrow("all, attention, or none");
+    const existing = makeSubscription({
+      lastDirectMessageTurnId: "turn-1",
+      baselineTurnId: "old-turn",
+    });
+    const next = buildSubscriptionRecord(
+      {
+        threadId: existing.subscriberThreadId,
+        name: existing.subscriberAgentName,
+        environment: existing.subscriberEnvironment,
+      },
+      {
+        threadId: existing.sourceThreadId,
+        name: existing.sourceAgentName,
+        environment: existing.sourceEnvironment,
+      },
+      "2026-10-01T00:00:00Z",
+      existing,
+      { level: "attention" },
+    );
+    expect(next.level).toBe("attention");
+    expect(next.baselineTurnId).toBe("old-turn");
+    expect(next.lastDirectMessageTurnId).toBe("turn-1");
+  });
+
+  it.each([false, true])(
+    "records a successful direct result (queued=%s) only for its recipient and turn",
+    async (queued) => {
+      await withTempState(async () => {
+        const state = await loadState();
+        state.subscriptions.push(makeSubscription({ subscriberThreadId: "other-subscriber" }));
+        await saveState(state);
+        const result = await sendDirectResult({
+          callerThreadId: "thread-worker-a",
+          subscriberThreadId: "thread-coordinator-a",
+          getSourceTurn: async (route) => {
+            expect(route.sourceEnvironment).toBe("dev-vm");
+            return "turn-1";
+          },
+          send: async () => ({ queued }),
+        });
+        expect(result).toEqual({ queued });
+        const saved = await loadState();
+        expect(saved.subscriptions[0]!.lastDirectMessageTurnId).toBe("turn-1");
+        expect(saved.subscriptions[1]!.lastDirectMessageTurnId).toBeUndefined();
+      });
+    },
+  );
+
+  it("does not suppress completion for a rejected direct send", async () => {
+    await withTempState(async () => {
+      await expect(
+        sendDirectResult({
+          callerThreadId: "thread-worker-a",
+          subscriberThreadId: "thread-coordinator-a",
+          getSourceTurn: async () => "turn-1",
+          send: async () => {
+            throw new Error("send failed");
+          },
+        }),
+      ).rejects.toThrow("send failed");
+      expect((await loadState()).subscriptions[0]!.lastDirectMessageTurnId).toBeUndefined();
+    });
+  });
+  it("defaults to all and changes a subscription without losing its direct-send receipt", async () => {
+    await withTempState(async () => {
+      const { clientFactory, sentMessages } = createClientFactory({});
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(1);
+    });
+  });
+
+  it.each(["all", "attention", "none"] as const)(
+    "always delivers required approval at %s even without assistant output",
+    async (level) => {
+      await withTempState(async () => {
+        const state = await loadState();
+        state.subscriptions[0]!.level = level;
+        await saveState(state);
+        const sourceThread = makeThread({
+          messages: [],
+          activities: [
+            {
+              kind: "approval.requested",
+              createdAt: "2026-10-01T00:00:00Z",
+              payload: { requestId: "approve-1", requestType: "command" },
+            },
+          ],
+        });
+        const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+        await detectAttentionEvents({ clientFactory });
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(1);
+        expect(sentMessages[0]!.text).toContain("needs-approval");
+      });
+    },
+  );
+
+  it.each(["all", "attention", "none"] as const)(
+    "delivers input and errors despite quiet completion at %s",
+    async (level) => {
+      await withTempState(async () => {
+        const state = await loadState();
+        state.subscriptions[0]!.level = level;
+        state.subscriptions[0]!.baselineTurnId = "turn-1";
+        await saveState(state);
+        const sourceThread = makeThread();
+        sourceThread.messages[0]!.text = "T3_NOTIFY: quiet";
+        sourceThread.activities = [
+          {
+            kind: "user-input.requested",
+            createdAt: "2026-10-01T00:00:00Z",
+            payload: {
+              requestId: "input-1",
+              questions: [{ id: "q1", question: "Choose", header: "Choice", options: [] }],
+            },
+          },
+        ];
+        const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+        await detectAttentionEvents({ clientFactory });
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(1);
+        expect(sentMessages[0]!.text).toContain("needs-input");
+        sourceThread.activities = [];
+        sourceThread.latestTurn!.state = "error";
+        await detectAttentionEvents({ clientFactory });
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(2);
+        expect(sentMessages[1]!.text).toContain("error");
+      });
+    },
+  );
+
+  it.each([
+    ["all", 1],
+    ["attention", 1],
+    ["none", 0],
+  ] as const)("interruption at %s sends %s notices", async (level, count) => {
+    await withTempState(async () => {
+      const state = await loadState();
+      state.subscriptions[0]!.level = level;
+      await saveState(state);
+      const sourceThread = makeThread();
+      sourceThread.latestTurn!.state = "interrupted";
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(count);
+    });
+  });
+
+  it("rechecks a direct result recorded after detection before sending completion", async () => {
+    await withTempState(async () => {
+      const state = await loadState();
+      state.subscriptions[0]!.level = "attention";
+      await saveState(state);
+      const sourceThread = makeThread();
+      sourceThread.messages[0]!.text = "T3_NOTIFY: attention";
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+      await detectAttentionEvents({ clientFactory });
+      await sendDirectResult({
+        callerThreadId: sourceThread.id,
+        subscriberThreadId: "thread-coordinator-a",
+        getSourceTurn: async () => "turn-1",
+        send: async () => ({ queued: true }),
+      });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(0);
+      expect((await loadState()).notifications[0]!.status).toBe("superseded");
+    });
+  });
+
+  it.each([
+    ["all", undefined, "ordinary", 1],
+    ["attention", undefined, "ordinary", 0],
+    ["none", undefined, "ordinary", 0],
+    ["all", undefined, "T3_NOTIFY: quiet", 0],
+    ["attention", undefined, "T3_NOTIFY: attention", 1],
+    ["attention", "turn-1", "T3_NOTIFY: attention", 0],
+    ["attention", "old-turn", "T3_NOTIFY: attention", 1],
+    ["all", "turn-1", "T3_NOTIFY: attention", 1],
+    ["none", undefined, "T3_NOTIFY: attention", 0],
+  ] as const)(
+    "completion %s direct=%s result=%s sends %s notices",
+    async (level, receipt, text, count) => {
+      await withTempState(async () => {
+        const state = await loadState();
+        state.subscriptions[0]!.level = level;
+        state.subscriptions[0]!.lastDirectMessageTurnId = receipt;
+        await saveState(state);
+        const sourceThread = makeThread();
+        sourceThread.messages[0]!.text = text;
+        const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+        await detectAttentionEvents({ clientFactory });
+        await deliverPendingNotifications({ clientFactory });
+        expect(sentMessages).toHaveLength(count);
+      });
+    },
+  );
+
+  it("merges concurrent detectors into one error episode and one delivery", async () => {
+    await withTempState(async () => {
+      const sourceThread = makeThread();
+      sourceThread.latestTurn!.state = "error";
+      const { clientFactory: factory, sentMessages } = createClientFactory({ sourceThread });
+      let arrivals = 0;
+      let release!: () => void;
+      const bothLoaded = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const clientFactory: WatchClientFactory = (environment) => {
+        const client = factory(environment);
+        return {
+          ...client,
+          async findThread(id) {
+            if (id === sourceThread.id) {
+              if (++arrivals === 2) release();
+              await bothLoaded;
+            }
+            return client.findThread(id);
+          },
+        };
+      };
+      await Promise.all([
+        detectAttentionEvents({ clientFactory }),
+        detectAttentionEvents({ clientFactory }),
+      ]);
+      const state = await loadState();
+      expect(state.notifications).toHaveLength(1);
+      expect(state.notifications[0]!.occurrences).toBe(1);
+      await deliverPendingNotifications({ clientFactory: factory });
+      expect(sentMessages).toHaveLength(1);
+    });
+  });
+
+  it("does not overwrite another environment's newer error episode with a stale snapshot", async () => {
+    await withTempState(async () => {
+      const state = await loadState();
+      state.environments.push(makeEnvironment({ name: "other", environmentId: "env-2" }));
+      state.agents.push(
+        makeAgent({ name: "worker-b", threadId: "thread-worker-b", environment: "other" }),
+      );
+      state.subscriptions.push(
+        makeSubscription({
+          sourceThreadId: "thread-worker-b",
+          sourceAgentName: "worker-b",
+          sourceEnvironment: "other",
+        }),
+      );
+      await saveState(state);
+      const sourceThread = makeThread();
+      sourceThread.latestTurn!.state = "error";
+      const second = makeThread({ id: "thread-worker-b" });
+      second.latestTurn!.state = "error";
+      const { clientFactory: factory } = createClientFactory({ sourceThread });
+      let resume!: () => void;
+      let observed!: () => void;
+      const held = new Promise<void>((resolve) => {
+        resume = resolve;
+      });
+      const loaded = new Promise<void>((resolve) => {
+        observed = resolve;
+      });
+      const clientFactory: WatchClientFactory = (environment) => ({
+        ...factory(environment),
+        async findThread(id) {
+          if (id === second.id) {
+            observed();
+            await held;
+            return second;
+          }
+          return factory(environment).findThread(id);
+        },
+      });
+      const otherScan = detectAttentionEvents({ env: "other", clientFactory });
+      await loaded;
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      const episode = (await loadState()).subscriptions[0]!.errorEventKey;
+      expect(episode).toBeTruthy();
+      resume();
+      await otherScan;
+      expect((await loadState()).subscriptions[0]!.errorEventKey).toBe(episode);
+      await detectAttentionEvents({ env: "dev-vm", clientFactory });
+      expect((await loadState()).notifications).toHaveLength(2);
+    });
+  });
+
+  it("collapses identical errors across turns, counts distinct failures rather than scans, and resets after recovery", async () => {
+    await withTempState(async () => {
+      const sourceThread = makeThread();
+      sourceThread.latestTurn!.state = "error";
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      sourceThread.latestTurn!.turnId = "turn-2";
+      sourceThread.messages[0]!.id = "assistant-2";
+      await detectAttentionEvents({ clientFactory });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(1);
+      expect((await loadState()).notifications[0]!.occurrences).toBe(2);
+      sourceThread.latestTurn!.state = "running";
+      await detectAttentionEvents({ clientFactory });
+      sourceThread.latestTurn!.state = "error";
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(2);
+    });
+  });
+
+  it("delivers a new input request in the same turn after an earlier notification", async () => {
+    await withTempState(async () => {
+      const sourceThread = makeThread();
+      const request = (id: string) => ({
+        kind: "user-input.requested",
+        createdAt: "2026-10-01T00:00:00Z",
+        payload: {
+          requestId: id,
+          questions: [{ id: "q1", question: "Choose", header: "Choice", options: [] }],
+        },
+      });
+      sourceThread.activities = [request("input-1")];
+      const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      sourceThread.activities.push(
+        {
+          kind: "user-input.resolved",
+          createdAt: "2026-10-01T00:01:00Z",
+          payload: { requestId: "input-1" },
+        },
+        request("input-2"),
+      );
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(2);
+      expect(sentMessages[1]!.text).toContain("needs-input");
+    });
+  });
+
+  it("delivers collapsed error counts after a busy subscriber and resets on a different reason", async () => {
+    await withTempState(async () => {
+      const sourceThread = makeThread();
+      sourceThread.latestTurn!.state = "error";
+      const subscriberThread = makeThread({
+        id: "thread-coordinator-a",
+        latestTurn: { ...sourceThread.latestTurn!, state: "running" },
+        messages: [],
+      });
+      const { clientFactory, sentMessages } = createClientFactory({
+        sourceThread,
+        subscriberThread,
+      });
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      sourceThread.latestTurn!.turnId = "second-failure";
+      await detectAttentionEvents({ clientFactory });
+      subscriberThread.latestTurn = null;
+      await deliverPendingNotifications({ clientFactory, now: () => "2090-01-01T00:00:00Z" });
+      expect(sentMessages).toHaveLength(1);
+      expect(sentMessages[0]!.text).toContain("Occurrences: 2.");
+      sourceThread.session = {
+        threadId: sourceThread.id,
+        status: "error",
+        providerName: "codex",
+        runtimeMode: "full-access",
+        activeTurnId: null,
+        lastError: "Different failure",
+        updatedAt: "2026-10-01T00:00:00Z",
+      };
+      await detectAttentionEvents({ clientFactory });
+      await deliverPendingNotifications({ clientFactory });
+      expect(sentMessages).toHaveLength(2);
+      expect(sentMessages[1]!.text).toContain("Different failure");
+      expect(
+        (await loadState()).notifications.map((notification) => notification.occurrences),
+      ).toEqual([2, 1]);
+    });
+  });
+});
+
+
+it("keeps completion receipts and error episodes separate for identical thread IDs on two hosts", async () => {
+  for (const state of ["completed", "error"] as const) await withTempState(async () => {
+    const saved = await loadState();
+    await saveState({ ...saved,
+      environments: [...saved.environments, makeEnvironment({ name: "other", environmentId: "env-2" })],
+      agents: [...saved.agents, makeAgent({ name: "other-worker", environment: "other" })],
+      subscriptions: [...saved.subscriptions, makeSubscription({ sourceEnvironment: "other", subscriberEnvironment: "other", sourceAgentName: "other-worker" })],
+    });
+    const sourceThread = makeThread();
+    sourceThread.latestTurn!.state = state;
+    const { clientFactory, sentMessages } = createClientFactory({ sourceThread });
+    await detectAttentionEvents({ clientFactory });
+    await deliverPendingNotifications({ clientFactory });
+    expect(sentMessages).toHaveLength(2);
+    await detectAttentionEvents({ clientFactory });
+    expect((await loadState()).notifications).toHaveLength(2);
+    expect(new Set((await loadState()).notifications.map(n => n.sourceEnvironment))).toEqual(new Set(["dev-vm", "other"]));
   });
 });
