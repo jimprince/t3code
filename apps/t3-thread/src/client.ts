@@ -1036,6 +1036,15 @@ export class RemoteEnvironmentClient {
     }
   }
 
+  async reconcileSession(threadId: string): Promise<void> {
+    const rpc = await this.openRpc();
+    try {
+      await rpc.request("sessionReconcile", { commandId: NodeCrypto.randomUUID(), threadId });
+    } finally {
+      await rpc.dispose();
+    }
+  }
+
   async setThreadPinned(threadId: string, pinned: boolean) {
     const previouslyPinned = pinned && (await this.findThread(threadId)).pinnedAt != null;
     const rpc = await this.openRpc();
