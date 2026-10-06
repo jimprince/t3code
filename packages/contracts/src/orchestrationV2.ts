@@ -414,7 +414,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Fractional-index slot in the user-arranged active order. */
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
-  /** Counts sidecar nesting writes that touched this thread; see `forkMetadataRevision` in the shell. */
+  /** Counts fork sidecar nesting writes on this thread. */
   forkMetadataRevision: Schema.optional(NonNegativeInt),
   lastVisitedAt: Schema.NullOr(Schema.DateTimeUtc).pipe(
     Schema.withDecodingDefault(Effect.succeed(null)),
@@ -1835,12 +1835,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   pinOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
   /** Slot in the user-arranged active order; omitted by pre-reorder servers. */
   activeOrderKey: Schema.optional(Schema.NullOr(TrimmedNonEmptyString)),
-  /**
-   * Bumped by every fork sidecar nesting write on this thread. It is the only
-   * shell signal that separates a nesting change from status or timestamp
-   * churn, so clients refetch sidecar metadata when it moves. Omitted by
-   * servers that predate it.
-   */
+  /** Bumped by each fork sidecar nesting write; omitted by servers that predate it. */
   forkMetadataRevision: Schema.optional(NonNegativeInt),
   /**
    * Omitted by servers that predate server-side visited tracking; clients fall
@@ -2681,7 +2676,7 @@ export const OrchestrationV2Command = Schema.Union([
     limitRecovery: Schema.optional(Schema.NullOr(OrchestrationV2LimitRecoveryUpdate)),
     /** Link (object) or unlink (null) a pull request (#8160); absent leaves it unchanged. */
     linkedPullRequest: Schema.optional(Schema.NullOr(ThreadLinkedPullRequest)),
-    /** Set by the fork nesting service after a sidecar write so clients see a shell change. */
+    /** Fork nesting service only: bump `forkMetadataRevision`. Off when absent. */
     bumpForkMetadataRevision: Schema.optional(Schema.Boolean),
   }),
   Schema.Struct({

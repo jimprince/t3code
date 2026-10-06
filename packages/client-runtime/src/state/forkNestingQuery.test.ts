@@ -1,8 +1,10 @@
 import { expect, it } from "vite-plus/test";
 import { AsyncResult, Atom, AtomRegistry } from "effect/unstable/reactivity";
-import { EnvironmentId } from "@t3tools/contracts";
+import { EnvironmentId, OrchestrationV2ThreadShell, ThreadId } from "@t3tools/contracts";
+import * as Schema from "effect/Schema";
 import { createHostThreadIdsKey, supervisionMetadataReady } from "./forkNestingQuery.ts";
-import type { EnvironmentThreadShell } from "./models.ts";
+import { presentThreadShell, type EnvironmentThreadShell } from "./models.ts";
+import { v2ThreadShell } from "./orchestrationV2TestFixtures.ts";
 
 it("requires a connected host and a completed successful sidecar load, including an empty response", () => {
   const loaded = AsyncResult.success([]);
@@ -58,5 +60,29 @@ it("refreshes the sidecar on a claim and on a sidecar write, never on shell chur
   expect(emissions).toBe(2);
   registry.set(shells, [shell("a", host, "7"), shell("w", host, "9", 2), shell("c", other, "11")]);
   expect(emissions).toBe(3);
+  cancel();
+});
+
+it("falls back to the host id set when the server predates forkMetadataRevision", () => {
+  const host = EnvironmentId.make("host");
+  const wire = Schema.decodeUnknownSync(OrchestrationV2ThreadShell)(
+    Schema.encodeSync(OrchestrationV2ThreadShell)(v2ThreadShell),
+  );
+  expect(wire.forkMetadataRevision).toBeUndefined();
+  const shell = (id: string, title: string) =>
+    presentThreadShell(host, { ...wire, id: ThreadId.make(id), title });
+  expect("forkMetadataRevision" in shell("a", "1")).toBe(false);
+  const shells = Atom.make<ReadonlyArray<EnvironmentThreadShell>>([shell("a", "1")]);
+  const registry = AtomRegistry.make();
+  const key = createHostThreadIdsKey(shells)(host);
+  let emissions = 0;
+  const cancel = registry.subscribe(key, () => (emissions += 1));
+  expect(registry.get(key)).toBe("a:0");
+  emissions = 0;
+
+  registry.set(shells, [shell("a", "2"), shell("w", "2")]);
+  expect(emissions).toBe(1);
+  registry.set(shells, [shell("a", "3"), shell("w", "4")]);
+  expect(emissions).toBe(1);
   cancel();
 });
