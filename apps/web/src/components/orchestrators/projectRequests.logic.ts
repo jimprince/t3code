@@ -522,6 +522,8 @@ export interface DecisionOption {
 export interface NeedsYouDecision {
   /** One or two whole sentences of what the agent asks. */
   readonly summary: string;
+  /** Everything the comment says besides its options, line by line, for More. */
+  readonly detail: string;
   readonly recommendation: string | null;
   /** The choices a ready comment lists, at least two; empty when it is a plain approval. */
   readonly options: ReadonlyArray<DecisionOption>;
@@ -566,6 +568,7 @@ export function parseDecisionComment(body: string): NeedsYouDecision {
   const choices = options.length >= 2 && named.size === options.length ? options : [];
   return {
     summary: answerSentences(rest.join(" ").replace(/^\s*(progress|test):\s*/i, ""), 2),
+    detail: rest.join("\n").replace(/^\s*(progress|test):\s*/i, ""),
     recommendation,
     options: choices,
   };

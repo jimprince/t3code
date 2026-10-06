@@ -281,6 +281,9 @@ and its options. When you settle on an answer there, the agent records it exactl
 had picked it; you can still answer from the decision itself. Discuss again returns to the
 same thread until you archive it.
 
+A decision's links open in a new tab and its pictures show as thumbnails; click one for
+the full size. Long context folds to a few lines; choose **More** to read all of it.
+
 ### Named agents
 
 Some resources must have exactly one owner: a 3D printer, a production
