@@ -276,6 +276,8 @@ const AGENT_COMMAND_ALIASES = new Set([
   "nest",
   "unnest",
   "rename",
+  "nest",
+  "unnest",
   "attach",
   "list",
   "archive",
@@ -824,7 +826,8 @@ agent
     // `options.preamble` is false only when `--no-preamble` was passed (Commander convention).
     const initialMessage = options.message;
     const created = await client.createAgentThread({
-      parentThreadId: options.topLevel ? null : options.parent ? resolveParentThreadId(state, options.parent, environment.name) : (resolveCallerThreadId(process.env) ?? null),
+      parentThreadId: nesting ? (localParent ?? null) : null,
+      remoteParent: nesting ? remoteParent : undefined,
       pin: options.pin === true,
       settleOnComplete: options.settleOnComplete,
       projectId: options.project,
@@ -836,7 +839,6 @@ agent
       runtimeMode: options.runtimeMode,
       interactionMode: options.interactionMode,
       initialMessage,
-      ...(nesting ? { parentThreadId: localParent, remoteParent } : {}),
       workerContext:
         options.preamble === false
           ? undefined
