@@ -2,6 +2,7 @@ import { findRecordedWorktreeSetup, resolveVisibleWorktreeSetup } from "./ChatVi
 import {
   recallCheckoutIsRepo,
   rememberCheckoutIsRepo,
+  shouldShowTimelineMinimap,
   threadShellHasStarted,
 } from "./ChatView.logic";
 import {
@@ -97,6 +98,14 @@ const helloWorldTemplate: CodexArtifactTemplate = {
   skillDirectory: "/Users/test/.codex/skills/artifact-template-hello-world",
   skillName: "artifact-template-hello-world",
 };
+
+describe("shouldShowTimelineMinimap", () => {
+  it("keeps the message rail out of the narrow project chat panel", () => {
+    expect(shouldShowTimelineMinimap("full")).toBe(true);
+    expect(shouldShowTimelineMinimap("project-request")).toBe(true);
+    expect(shouldShowTimelineMinimap("project-panel")).toBe(false);
+  });
+});
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
   return makeThreadFixture({
