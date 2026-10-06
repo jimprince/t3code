@@ -55,11 +55,17 @@ it.effect("legacy edges import once, including missing parents and nulls", () =>
     const sql = yield* SqlClient.SqlClient;
 
     // Only fields required by the retained V1 table are populated through the fixture test below.
-    const service = yield* makeNestingService(sql, (threadId) =>
-      Effect.succeed(shells.get(threadId) ?? null), () => Effect.void);
+    const service = yield* makeNestingService(
+      sql,
+      (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+      () => Effect.void,
+    );
     yield* service.update(input("child", "parent", "import-edit"));
-    const restart = yield* makeNestingService(sql, (threadId) =>
-      Effect.succeed(shells.get(threadId) ?? null), () => Effect.void);
+    const restart = yield* makeNestingService(
+      sql,
+      (threadId) => Effect.succeed(shells.get(threadId) ?? null),
+      () => Effect.void,
+    );
     assert.equal(
       (yield* restart.list()).find((row) => row.threadId === id("child"))?.parentThreadId,
       id("parent"),
@@ -84,8 +90,12 @@ it.effect(
         worktreePath: "/worker",
         modelSelection: "worker-default",
       };
-      const service = yield* makeNestingService(sql, (threadId) =>
-        Effect.succeed(threadId === parent.id ? parent : threadId === child.id ? child : null), () => Effect.void);
+      const service = yield* makeNestingService(
+        sql,
+        (threadId) =>
+          Effect.succeed(threadId === parent.id ? parent : threadId === child.id ? child : null),
+        () => Effect.void,
+      );
       yield* service.update(input("worker", "supervisor", "cross-project"));
       parent.archivedAt = DateTime.makeUnsafe(0);
       assert.equal(
