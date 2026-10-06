@@ -1,4 +1,8 @@
 import { ForkWorkerSummary } from "./forkWorkerSummary.ts";
+import {
+  workerArchiveFields,
+  workerCompletionFields,
+} from "./forkWorkerLifecycle.ts";
 import { OrchestrationMessageContext } from "./composerContext.ts";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
@@ -2556,6 +2560,7 @@ export const OrchestrationV2Command = Schema.Union([
   }),
   Schema.Struct({
     type: Schema.Literal("thread.archive"),
+    ...workerArchiveFields,
     commandId: CommandId,
     threadId: ThreadId,
   }),
@@ -2583,6 +2588,7 @@ export const OrchestrationV2Command = Schema.Union([
    */
   Schema.Struct({
     type: Schema.Literal("thread.auto-settle"),
+    ...workerCompletionFields,
     commandId: CommandId,
     threadId: ThreadId,
     snapshotAt: Schema.DateTimeUtc,
