@@ -282,7 +282,29 @@ describe("buildOrchestratorSummaries", () => {
     ]);
   });
 
-  it("keeps project trees in Threads only when Projects is disabled", () => {
+  it("makes a pinned top-level thread a project, listed first, and keeps its row in Threads", () => {
+    const chief = thread("chief", null, {
+      pinnedAt: "2026-10-05T00:00:00.000Z",
+      pinOrderKey: "a",
+    });
+    const busy = thread("busy", null, { hasPendingApprovals: true });
+    const busyWorker = thread("busy-worker", "busy", { hasPendingApprovals: true });
+    const chiefWorker = thread("chief-worker", "chief");
+    const lone = thread("lone", null);
+    const summaries = buildOrchestratorSummaries([busy, busyWorker, chief, lone], []);
+    expect(summaries.map((item) => item.root.id).toSorted()).toEqual(["busy", "chief"]);
+    expect(sortOrchestratorSummariesForSidebar(summaries, 0).map((item) => item.root.id)).toEqual([
+      "chief",
+      "busy",
+    ]);
+    expect(
+      threadsVisibleInThreadsMode([busy, busyWorker, chief, chiefWorker, lone], true).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["chief", "lone"]);
+  });
+
+  it("keeps project trees in Threads only when Projects is disabled, except a pinned root's row", () => {
     const root = thread("root", null, { pinnedAt: "2026-10-01T00:00:00.000Z" });
     const child = thread("child", "root", { pinnedAt: "2026-10-01T00:00:00.000Z" });
     const standalone = thread("standalone", null);
@@ -296,6 +318,7 @@ describe("buildOrchestratorSummaries", () => {
     });
     const all = [root, child, standalone, archivedParent, orphan, finishedOnlyRoot, archivedChild];
     expect(threadsVisibleInThreadsMode(all, true).map((item) => item.id)).toEqual([
+      "root",
       "standalone",
       "archived-parent",
       "orphan",
