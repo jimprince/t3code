@@ -8,7 +8,6 @@ import {
   type GiteaInstanceConfig,
   CommandId,
   ProjectId,
-
 } from "@t3tools/contracts";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
@@ -23,7 +22,6 @@ import { ServerConfig } from "../config.ts";
 import * as McpInvocationContext from "../mcp/McpInvocationContext.ts";
 import { DecisionsToolkitHandlersLive } from "../mcp/toolkits/decisions/handlers.ts";
 import { DecisionsToolkit } from "../mcp/toolkits/decisions/tools.ts";
-import * as DateTime from "effect/DateTime";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 import { SqlitePersistenceMemory } from "../persistence/Layers/Sqlite.ts";
 import { makeOrchestratorV2ReplayLayerWithRegistry } from "../orchestration-v2/testkit/ProviderReplayHarness.ts";
@@ -47,7 +45,9 @@ import { ServerSettingsService } from "../serverSettings.ts";
 import * as ProjectIssuesService from "./ProjectIssuesService.ts";
 import * as RequestLedger from "./RequestLedger.ts";
 
-type RecordedCommand = Parameters<ThreadManagement.ThreadManagementService["Service"]["dispatch"]>[0];
+type RecordedCommand = Parameters<
+  ThreadManagement.ThreadManagementService["Service"]["dispatch"]
+>[0];
 
 const NOW = "2026-10-06T00:00:00.000Z";
 const REPO = "brad/t3code-fork";
@@ -404,7 +404,10 @@ describe("discussing a decision", () => {
       yield* ledger.discuss({ threadId: ROOT, reference: `${REPO}#7` });
       expect(commands[0]).toMatchObject({ type: "thread.create" });
       expect(
-        (yield* parents()).find((row) => row.threadId === commands.find((command) => command.type === "thread.create")?.threadId)?.parentThreadId,
+        (yield* parents()).find(
+          (row) =>
+            row.threadId === commands.find((command) => command.type === "thread.create")?.threadId,
+        )?.parentThreadId,
       ).toBe(WORKER);
       const [seed] = turnStarts(commands);
       expect(seed?.text).toContain("Option A: Rework the jaw now");
