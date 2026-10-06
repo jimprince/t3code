@@ -2,7 +2,7 @@ import { CommandId, type OrchestrationV2ServerCommand, ForkThreadMetadataError, 
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
-import { listMetadata, writeMetadata } from "./MetadataStore.ts";
+import { listMetadata, writeMetadata, metadataJson } from "./MetadataStore.ts";
 
 type NestingShell = Pick<OrchestrationV2ThreadShell, "id" | "projectId" | "archivedAt">;
 /** Only the supervision sidecar changes. Native runs, lineage and workspaces remain owned by V2. */
@@ -10,7 +10,7 @@ export const makeNestingService = <E, R, DispatchError = never, DispatchContext 
   const list = () => listMetadata(sql);
   const update = (input: ForkThreadMetadataUpdate) => sql.withTransaction(Effect.gen(function* () {
     const receipts = yield* sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata_receipts WHERE command_id = ${input.commandId}`;
-    if (receipts[0]) return Schema.decodeUnknownSync(ForkThreadMetadata)(JSON.parse(receipts[0].payload));
+    if (receipts[0]) return yield* Schema.decodeUnknownEffect(metadataJson)(receipts[0].payload);
     const child = yield* getShell(input.threadId);
     if (!child || child.archivedAt !== null) return yield* new ForkThreadMetadataError({ message: "Child thread is missing or archived." });
     const rows = yield* list();
@@ -30,7 +30,8 @@ export const makeNestingService = <E, R, DispatchError = never, DispatchContext 
     }
     const value: ForkThreadMetadata = { ...existing, parentThreadId, ...(input.scope !== undefined ? { scope: input.scope?.trim() || null } : {}) };
     yield* writeMetadata(sql, value);
-    yield* sql`INSERT INTO fork_thread_metadata_receipts (command_id, payload) VALUES (${input.commandId}, ${JSON.stringify(value)})`;
+    const payload = yield* Schema.encodeEffect(metadataJson)(value);
+    yield* sql`INSERT INTO fork_thread_metadata_receipts (command_id, payload) VALUES (${input.commandId}, ${payload})`;
     return value;
   })).pipe(Effect.tap(() => refreshShell({
     type: "thread.metadata.update",
