@@ -1,4 +1,5 @@
 import * as ThreadIssueService from "./forkThreads/ThreadIssueService.ts";
+import { makeNamedAgents } from "./forkThreads/NamedAgents.ts";
 import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
 import { makeMetadataHandlers } from "./forkThreads/MetadataRpc.ts";
 import { makeSupervisionDragHandlers } from "./forkThreads/SupervisionDrag.ts";
@@ -1205,6 +1206,7 @@ const makeWsRpcLayer = (
 ) =>
   ServerWsRpcGroup.toLayer(
     Effect.gen(function* () {
+      const namedAgents = yield* makeNamedAgents;
       const currentSessionId = currentSession.sessionId;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* withWorkerSummaries(
@@ -2663,6 +2665,9 @@ const makeWsRpcLayer = (
           observeRpcEffect(WS_METHODS.serverGetBackgroundPolicy, backgroundPolicy.snapshot, {
             "rpc.aggregate": "server",
           }),
+        "orchestration.listNamedAgents": () => namedAgents.list(),
+        "orchestration.resolveNamedAgent": (input) => namedAgents.resolve(input),
+        "orchestration.handOverNamedAgent": (input) => namedAgents.handOver(input),
         ...(yield* makeMetadataHandlers),
         [WS_METHODS.threadIssuesLink]: (input) => threadIssues.link(input),
         [WS_METHODS.threadIssuesUnlink]: (input) => threadIssues.unlink(input),
