@@ -206,6 +206,7 @@ export interface RevertThreadCheckpointInput extends ThreadCommandInput {
   readonly checkpointId?: string;
   readonly scopeId?: string;
   readonly turnCount?: number;
+  readonly messageId?: MessageId;
 }
 
 export type StopThreadSessionInput = ThreadCommandInput;
@@ -873,6 +874,24 @@ export const revertThreadCheckpoint = Effect.fn("EnvironmentCommands.revertThrea
           ? candidate.ordinalWithinScope === 0 && candidate.appRunOrdinal === null
           : candidate.appRunOrdinal === input.turnCount,
       );
+    if (
+      checkpoint === undefined &&
+      input.turnCount === 0 &&
+      input.restoreFiles === false &&
+      input.messageId !== undefined
+    ) {
+      const run = projection.runs.find((run) => run.userMessageId === input.messageId);
+      if (run !== undefined)
+        return yield* dispatch({
+          type: "conversation.rewind",
+          commandId: yield* allocateCommandId(input),
+          threadId: input.threadId,
+          messageId: input.messageId,
+          runId: run.id,
+          providerInstanceId: projection.thread.modelSelection.instanceId,
+          providerThreadId: projection.thread.activeProviderThreadId,
+        });
+    }
     if (checkpoint === undefined || checkpoint.status !== "ready") {
       const target =
         input.checkpointId === undefined
