@@ -1,3 +1,4 @@
+import { supervision } from "../../state/forkSupervision";
 import { useSupervisionStatus } from "./useSupervisionStatus";
 import {
   newForkCommandId,
@@ -832,7 +833,7 @@ export const ThreadListV2Row = memo(function ThreadListV2Row(props: {
       if (nativeEvent.event === "auto-settle:enabled") handleSetAutoSettle(true);
       if (nativeEvent.event === "auto-settle:disabled") handleSetAutoSettle(false);
       if (nativeEvent.event === "arrange") appAtomRegistry.set(threadArrangementOpenAtom, true);
-      if (nativeEvent.event === "order-reset")
+      if (nativeEvent.event === "order-reset" && appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId))
         void resetOrder({
           environmentId: thread.environmentId,
           input: { threadId: thread.id, commandId: newForkCommandId() },

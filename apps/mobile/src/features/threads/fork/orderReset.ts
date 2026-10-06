@@ -1,3 +1,4 @@
+import { useSupervisionReadyHosts } from "../../../state/forkSupervision";
 import { useAtomValue } from "@effect/atom-react";
 import type { EnvironmentId } from "@t3tools/contracts";
 import { environmentServerConfigsAtom } from "../../../state/server";
@@ -10,7 +11,9 @@ export const resetForkThreadOrder = createEnvironmentRpcCommand(connectionAtomRu
 });
 
 export function useForkOrderResetSupported(environmentId: EnvironmentId) {
+  const readyHosts = useSupervisionReadyHosts();
   return (
+    readyHosts.has(environmentId) &&
     useAtomValue(environmentServerConfigsAtom).get(environmentId)?.environment.capabilities
       .threadOrderReset === true
   );

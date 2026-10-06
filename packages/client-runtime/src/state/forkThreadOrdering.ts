@@ -10,12 +10,15 @@ import {
 type Metadata = ForkThreadMetadata & { readonly environmentId: string };
 const key = (thread: EnvironmentThreadShell) =>
   scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+export const supervisionOrderReady = (thread: EnvironmentThreadShell, readyHosts: ReadonlySet<string>) => readyHosts.has(thread.environmentId);
 /** Orders only direct siblings on the child's host, even when their parent is disconnected. */
 export function supervisionOrderSiblings(
   threads: readonly EnvironmentThreadShell[],
   metadata: readonly Metadata[],
   source: EnvironmentThreadShell,
+  readyHosts: ReadonlySet<string>,
 ) {
+  if (!supervisionOrderReady(source, readyHosts)) return [];
   const rows = new Map(metadata.map((row) => [`${row.environmentId}:${row.threadId}`, row]));
   const parent = (thread: EnvironmentThreadShell) => {
     const row = rows.get(`${thread.environmentId}:${thread.id}`);
@@ -43,8 +46,9 @@ export function planSupervisionMove(
   metadata: readonly Metadata[],
   source: EnvironmentThreadShell,
   direction: "up" | "down",
+  readyHosts: ReadonlySet<string>,
 ) {
-  const siblings = supervisionOrderSiblings(threads, metadata, source);
+  const siblings = supervisionOrderSiblings(threads, metadata, source, readyHosts);
   return planPinnedMove({
     orderedIds: siblings.map(key),
     keysById: new Map(
@@ -62,10 +66,12 @@ export function planSupervisionMove(
 export function supervisionMoveAvailability(
   ordered: readonly EnvironmentThreadShell[],
   metadata: readonly Metadata[],
+  readyHosts: ReadonlySet<string>,
 ) {
   const rows = new Map(metadata.map((row) => [`${row.environmentId}:${row.threadId}`, row]));
   const buckets = new Map<string, EnvironmentThreadShell[]>();
   for (const thread of ordered) {
+    if (!supervisionOrderReady(thread, readyHosts)) continue;
     const row = rows.get(`${thread.environmentId}:${thread.id}`);
     const bucket = JSON.stringify([
       thread.environmentId,

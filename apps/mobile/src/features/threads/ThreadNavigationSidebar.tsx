@@ -1,5 +1,5 @@
 import { supervisionMoveAvailability } from "@t3tools/client-runtime/state/fork-thread-ordering";
-import { useSupervisionMetadata } from "../../state/forkSupervision";
+import { useSupervisionReadyHosts, useSupervisionMetadata } from "../../state/forkSupervision";
 import { useAndroidControlSizing } from "../../components/useAndroidControlSizing";
 import { useAppearancePreferences } from "../settings/appearance/AppearancePreferencesProvider";
 import type {
@@ -140,6 +140,7 @@ function ThreadNavigationSidebarPane(
   const projects = useProjects();
   const threads = useNavigationThreadShells();
   const orderMetadata = useSupervisionMetadata();
+  const orderReadyHosts = useSupervisionReadyHosts();
   const { environments: workspaceEnvironments, state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const searchInputRef = useRef<TextInputInstance>(null);
@@ -348,6 +349,7 @@ function ThreadNavigationSidebarPane(
       return supervisionMoveAvailability(
         ordered.filter((thread) => environments.has(thread.environmentId)),
         orderMetadata,
+        orderReadyHosts,
       );
     };
     // The Working beta orders the inbox by time, so only pins can move.
@@ -357,6 +359,7 @@ function ThreadNavigationSidebarPane(
     ]);
   }, [
     orderMetadata,
+    orderReadyHosts,
     workingShelfEnabled,
     pinReorderEnvironmentIds,
     activeReorderEnvironmentIds,
@@ -391,6 +394,7 @@ function ThreadNavigationSidebarPane(
     });
   }, [
     orderMetadata,
+    orderReadyHosts,
     workingShelfEnabled,
     workingShelfExpanded,
     pendingOrder,

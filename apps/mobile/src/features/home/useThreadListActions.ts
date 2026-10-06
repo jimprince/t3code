@@ -626,6 +626,7 @@ export function useThreadListActions(): {
   });
   const moveThread = useCallback(
     async (thread: EnvironmentThreadShell, direction: ThreadMoveDestination) => {
+      if (typeof direction === "string" && !appAtomRegistry.get(supervision.readyHosts).has(thread.environmentId)) return false;
       if (getPendingThreadOrder() !== null || appAtomRegistry.get(threadDropBusyAtom)) return false;
       const shells = appAtomRegistry.get(environmentThreadShells.threadShellsAtom);
       const current = shells.find(
@@ -684,6 +685,7 @@ export function useThreadListActions(): {
               orderedSection,
               appAtomRegistry.get(supervision.metadata),
               thread,
+              appAtomRegistry.get(supervision.readyHosts),
             )
           : orderedSection;
       const assignments = createThreadMovePlanner({
