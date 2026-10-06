@@ -1645,3 +1645,14 @@ retire_when = "Upstream reports the underlying file-system error in its text-gen
 depends_on = []
 roles = []
 note = "The prefix t3code-<prefix>-<pid>- is a plain basename, so the failure is not the prefix. The detail now reads 'Failed to write temp file in <os.tmpdir()>: <reason>' (for example 'NotFound: FileSystem.makeTempFile (<path>)'); the request ledger's split warning logs the detail, so the next occurrence names its cause. A test points TMPDIR at a missing folder."
+
+[[patch]]
+name = "fork-textgen-own-scope"
+subject = "fix(server): give each Codex text generation its own scope"
+class = "product"
+purpose = "Fix the request ledger split that failed on the dev VM with 'Failed to write temp file in /tmp: NotFound: FileSystem.writeFile (...t3code-codex-schema-...)' and filed every message whole (brad/t3code-fork#144)."
+retire_when = "Upstream scopes its Codex text-generation temp files per call."
+depends_on = ["fork-textgen-tempfile-cause"]
+roles = []
+note = "runCodexJson registered its temp files in whatever Scope the caller's fiber carried. The request ledger captures in a forkDetach fiber that inherits the RPC's request scope, which closes once the RPC replies; acquireRelease on a closed scope runs the release at once, so the temp folder was removed right after mkdtemp. runCodexJson now runs under Effect.scoped (Effect.fn pipe), so each call owns its scope. V2 already allocates unscoped temp files with explicit failure and success cleanup; retain that cleanup and isolate the invocation scope as well. Regression test: generateThreadTitle with an already closed Scope provided."
+
