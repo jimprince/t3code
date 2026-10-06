@@ -29,6 +29,7 @@ import * as Stream from "effect/Stream";
 import * as SqlClient from "effect/unstable/sql/SqlClient";
 
 import * as ThreadLaunchService from "../orchestration-v2/ThreadLaunchService.ts";
+import * as Orchestrator from "../orchestration-v2/Orchestrator.ts";
 import * as ThreadManagementService from "../orchestration-v2/ThreadManagementService.ts";
 import * as Scheduler from "../scheduling/Scheduler.ts";
 import { isMissedFixedTimeRun, isSameSchedule, nextScheduledRunAt } from "./Schedule.ts";
@@ -201,6 +202,8 @@ export const listDueTasks = Effect.fn("ScheduledTaskService.listDueTasks")(funct
   }
   return tasks;
 });
+
+const isOrchestratorDispatchError = Schema.is(Orchestrator.OrchestratorDispatchError);
 
 export const layer = Layer.effect(
   ScheduledTaskService,
@@ -402,7 +405,7 @@ export const layer = Layer.effect(
       readonly id: ScheduledTaskId;
       readonly completedAtIso: string;
       readonly nextRunAtIso: string | null;
-      readonly status: "succeeded" | "failed";
+      readonly status: "succeeded" | "failed" | "skipped";
       readonly error: string | null;
       readonly startedAtIso: string;
     }) =>
@@ -454,6 +457,28 @@ export const layer = Layer.effect(
           }),
         ),
       );
+
+    // Run now is an explicit action, so it reopens a settled bound thread the
+    // way a user's own message does; only scheduled occurrences skip it.
+    const reopenForManualRun = (
+      trigger: "scheduled" | "manual",
+      threadId: ThreadId,
+      commandId: CommandId,
+    ) =>
+      trigger === "scheduled"
+        ? Effect.void
+        : threadManagement.getThreadShell(threadId).pipe(
+            Effect.flatMap((shell) =>
+              shell?.settledOverride === "settled"
+                ? threadManagement.dispatch({
+                    type: "thread.unsettle",
+                    commandId: CommandId.make(`${commandId}:reopen`),
+                    threadId,
+                    reason: "user",
+                  })
+                : Effect.void,
+            ),
+          );
 
     const runTask = Effect.fn("ScheduledTaskService.runTask")(function* (
       task: ScheduledTask,
@@ -517,44 +542,56 @@ export const layer = Layer.effect(
         const result =
           active.threadId === null
             ? yield* Effect.exit(
-                threadLaunch.launch({
-                  commandId,
-                  projectId: active.projectId,
-                  title: active.title,
-                  modelSelection: active.modelSelection,
-                  runtimeMode: active.runtimeMode,
-                  interactionMode: active.interactionMode,
-                  workspaceStrategy: active.workspaceStrategy,
-                  initialMessage: {
-                    messageId,
-                    scheduledTaskId: active.id,
-                    text: prompt,
-                    attachments: [],
-                  },
-                  createdBy: active.createdBy,
-                  creationSource: active.creationSource,
-                }),
+                threadLaunch
+                  .launch({
+                    commandId,
+                    projectId: active.projectId,
+                    title: active.title,
+                    modelSelection: active.modelSelection,
+                    runtimeMode: active.runtimeMode,
+                    interactionMode: active.interactionMode,
+                    workspaceStrategy: active.workspaceStrategy,
+                    initialMessage: {
+                      messageId,
+                      scheduledTaskId: active.id,
+                      text: prompt,
+                      attachments: [],
+                    },
+                    createdBy: active.createdBy,
+                    creationSource: active.creationSource,
+                  })
+                  .pipe(Effect.as("succeeded" as const)),
               )
             : yield* Effect.exit(
-                threadManagement.sendToThread({
-                  projectId: active.projectId,
-                  commandId,
-                  threadId: ThreadId.make(active.threadId),
-                  messageId,
-                  scheduledTaskId: active.id,
-                  text: prompt,
-                  attachments: [],
-                  modelSelection: active.modelSelection,
-                  // Scheduled prompts must not interrupt tools in the bound thread.
-                  mode: "queue",
-                  createdBy: active.createdBy,
-                  creationSource: active.creationSource,
-                }),
+                reopenForManualRun(trigger, ThreadId.make(active.threadId), commandId).pipe(
+                  Effect.andThen(
+                    threadManagement.sendToThread({
+                      projectId: active.projectId,
+                      commandId,
+                      threadId: ThreadId.make(active.threadId),
+                      messageId,
+                      scheduledTaskId: active.id,
+                      text: prompt,
+                      attachments: [],
+                      modelSelection: active.modelSelection,
+                      // Scheduled prompts must not interrupt tools in the bound thread.
+                      mode: "queue",
+                      createdBy: active.createdBy,
+                      creationSource: active.creationSource,
+                    }),
+                  ),
+                  Effect.as("succeeded" as const),
+                  Effect.catchIf(
+                    (error) =>
+                      isOrchestratorDispatchError(error) && error.reasonCode === "thread_settled",
+                    () => Effect.succeed("skipped" as const),
+                  ),
+                ),
               );
 
         const completedAt = yield* localNow;
         const runSucceeded = result._tag === "Success";
-        const lastRunStatus = runSucceeded ? ("succeeded" as const) : ("failed" as const);
+        const lastRunStatus = runSucceeded ? result.value : ("failed" as const);
         const lastRunError = runSucceeded ? null : errorMessage(result.cause);
         // Re-read the task so the next run is computed from the schedule as it
         // is *now* (the user may have edited or deleted it while we ran).
