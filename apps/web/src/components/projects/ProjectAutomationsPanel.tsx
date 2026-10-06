@@ -116,7 +116,10 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
   return (
     <section aria-label="Automations" className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-xs font-medium uppercase">Automations</h2>
+        {/* The project-page widget heading, so the panel reads the same there and in Settings. */}
+        <h2 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+          Automations
+        </h2>
         <Button
           variant="ghost"
           size="sm"
