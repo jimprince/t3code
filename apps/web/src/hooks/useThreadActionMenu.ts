@@ -1,6 +1,7 @@
 import {
   newForkCommandId,
   resetForkThreadOrder,
+  readForkNestingSupported,
   readForkOrderResetSupported,
 } from "../components/chat/forkThreadCommands";
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
@@ -26,7 +27,15 @@ import {
   threadActionRequiresOperate,
   type ThreadActionMenuId,
 } from "../components/threadActionMenu.logic";
+import {
+  isThreadNestingMenuId,
+  resolveThreadNestingMenuState,
+  withThreadNestingMenuItems,
+} from "../components/threadNestingMenu.logic";
 import { stackedThreadToast, toastManager } from "../components/ui/toast";
+import { appAtomRegistry } from "../rpc/atomRegistry";
+import { supervision } from "../state/forkSupervision";
+import { useThreadNestingActions } from "./useThreadNesting";
 import { threadEnvironment } from "../state/threads";
 import { useOrchestrationCommand } from "../state/use-orchestration-command";
 import { readEnvironmentScope } from "../state/session";
@@ -80,6 +89,8 @@ export function useThreadActionMenu(input: {
   readonly onStartRename: () => void;
 }) {
   const resetOrder = useOrchestrationCommand(resetForkThreadOrder);
+  const { runNestingMenuAction } = useThreadNestingActions();
+
   const { threadRef, projectCwd, onStartRename } = input;
   const router = useRouter();
   const projects = useProjects();
@@ -154,11 +165,19 @@ export function useThreadActionMenu(input: {
         };
         const isRegeneratingTitle = thread.titleRegeneration != null;
         const snoozePresets = resolveSnoozePresets(now, timestampFormat);
-        const items = buildThreadActionMenuItems({
+        const nestingState = resolveThreadNestingMenuState({
+          thread,
+          forest: appAtomRegistry.get(supervision.forest),
+          supported: readForkNestingSupported(threadRef.environmentId),
+        });
+        const baseItems = buildThreadActionMenuItems({
           canOperate: readEnvironmentScope(threadRef.environmentId, AuthOrchestrationOperateScope),
+
           branch: thread.branch ?? null,
           projectFilter: null,
           isPinned: thread.pinnedAt != null,
+          orderIsManual:
+            (thread.pinnedAt != null ? thread.pinOrderKey : thread.activeOrderKey) != null,
           isSettled: supports.settlement && thread.settledOverride === "settled",
           autoSettleEnabled: thread.autoSettleDisabledAt == null,
           isSnoozed: supports.snooze && effectiveSnoozed(thread, { now: now.toISOString() }),
@@ -168,8 +187,13 @@ export function useThreadActionMenu(input: {
           supports,
           snoozePresets,
         });
+        const items = withThreadNestingMenuItems(baseItems, nestingState);
         const clicked = await settlePromise(() => api.contextMenu.show(items, position));
         if (clicked._tag === "Failure" || clicked.value === null) return;
+        if (isThreadNestingMenuId(clicked.value)) {
+          await runNestingMenuAction(threadRef, clicked.value, nestingState);
+          return;
+        }
         const action: ThreadActionMenuId = clicked.value;
         if (
           threadActionRequiresOperate(action) &&
@@ -372,6 +396,7 @@ export function useThreadActionMenu(input: {
       projectGroupingSettings,
       projects,
       router,
+      runNestingMenuAction,
       setThreadAutoSettle,
       settleThread,
       snoozeThread,
