@@ -3,6 +3,7 @@ import { DEFAULT_SIGNAL_EXPORT } from "@t3tools/shared/observability";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { type ProviderReplayTranscript } from "@t3tools/contracts";
 import * as CodexClient from "effect-codex-app-server/client";
+import type * as CodexRpc from "effect-codex-app-server/rpc";
 import type * as CodexError from "effect-codex-app-server/errors";
 import * as CodexReplay from "effect-codex-app-server/replay";
 import * as Effect from "effect/Effect";
@@ -66,18 +67,55 @@ export function withCodexReplayChildMetadata(
         : [];
     }),
   );
+  // Older transcripts omit the fork's hydration read after start/resume.
+  // Native /goal commands still replay their own recorded get/set requests.
+  const pendingGoalHydrations = new Set<string>();
+  const markGoalHydration = (response: unknown) =>
+    Effect.sync(() => {
+      if (
+        Predicate.isObject(response) &&
+        Predicate.isObject(response.thread) &&
+        typeof response.thread.id === "string"
+      ) {
+        pendingGoalHydrations.add(response.thread.id);
+      }
+    });
   return {
     ...client,
+    request: <M extends CodexRpc.ClientRequestMethod>(
+      method: M,
+      params: CodexRpc.ClientRequestParamsByMethod[M],
+    ) =>
+      Effect.gen(function* () {
+        if (
+          method === "thread/goal/get" &&
+          Predicate.isObject(params) &&
+          "threadId" in params &&
+          typeof params.threadId === "string" &&
+          pendingGoalHydrations.delete(params.threadId)
+        ) {
+          return { goal: null } as CodexRpc.ClientRequestResponsesByMethod[M];
+        }
+        const response = yield* client.request(method, params);
+        if (method === "thread/start" || method === "thread/resume")
+          yield* markGoalHydration(response);
+        return response;
+      }),
     raw: {
       ...client.raw,
       request: (method, params) =>
-        (method === "thread/read" || method === "thread/resume") &&
+        ((method === "thread/read" || method === "thread/resume") &&
         Predicate.isObject(params) &&
         (method === "thread/read" ? params.includeTurns === false : params.excludeTurns === true) &&
         typeof params.threadId === "string" &&
         childThreadIds.has(params.threadId)
           ? readMetadata(params.threadId, method)
-          : client.raw.request(method, params),
+          : client.raw.request(method, params)
+        ).pipe(
+          Effect.tap((response) =>
+            method === "thread/resume" ? markGoalHydration(response) : Effect.void,
+          ),
+        ),
     },
   };
 }
