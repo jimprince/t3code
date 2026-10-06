@@ -2,7 +2,9 @@ import {
   AuthOrchestrationOperateScope,
   type EnvironmentId,
   type ThreadId,
+  type ThreadIssueLink,
 } from "@t3tools/contracts";
+
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentProject } from "@t3tools/client-runtime/state/shell";
 import {
@@ -26,7 +28,6 @@ import { toastManager } from "../ui/toast";
 import { useThreadActionMenu } from "~/hooks/useThreadActionMenu";
 import { readLocalApi } from "~/localApi";
 import { threadEnvironment } from "../../state/threads";
-import { useAtomCommand } from "../../state/use-atom-command";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { readEnvironmentScope, useEnvironmentScope } from "../../state/session";
 import { ProjectFavicon } from "../ProjectFavicon";
@@ -38,11 +39,13 @@ import {
 } from "../WorkspaceBreadcrumb";
 import { cn } from "~/lib/utils";
 import { useClientSettings } from "../../hooks/useSettings";
+import { ThreadIssueBadges } from "../ThreadIssueBadges";
 
 interface ChatHeaderProps {
   activeThreadEnvironmentId: EnvironmentId;
   activeThreadId: ThreadId;
   activeThreadTitle: string;
+  issues: readonly ThreadIssueLink[];
   /** Drafts have no server thread yet, so the title carries no action menu. */
   isServerThread: boolean;
   activeProject: EnvironmentProject | null;
@@ -78,6 +81,7 @@ export const ChatHeader = memo(function ChatHeader({
   activeThreadEnvironmentId,
   activeThreadId,
   activeThreadTitle,
+  issues,
   isServerThread,
   activeProject,
   parentThreadLink,
@@ -435,6 +439,11 @@ export const ChatHeader = memo(function ChatHeader({
             </Tooltip>
           )}
         </WorkspaceBreadcrumbItem>
+        {issues.length > 0 ? (
+          <WorkspaceBreadcrumbItem className="flex shrink-0 items-center gap-1">
+            <ThreadIssueBadges issues={issues} />
+          </WorkspaceBreadcrumbItem>
+        ) : null}
       </WorkspaceBreadcrumb>
     </div>
   );
