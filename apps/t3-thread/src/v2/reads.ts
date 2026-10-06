@@ -68,6 +68,7 @@ export function threadShell(thread: OrchestrationV2ThreadShell): OrchestrationTh
     settledAt: nullableIso(thread.settledAt),
     unsettledAt: nullableIso(thread.unsettledAt),
     pinnedAt: nullableIso(thread.pinnedAt),
+    autoSettleDisabledAt: nullableIso(thread.autoSettleDisabledAt),
     latestTurn: latestRun(
       thread.latestRunId,
       thread.status,
@@ -106,6 +107,7 @@ export function threadDetail(projection: OrchestrationV2ThreadProjection): Orche
     settledAt: nullableIso(thread.settledAt),
     unsettledAt: nullableIso(thread.unsettledAt),
     pinnedAt: nullableIso(thread.pinnedAt),
+    autoSettleDisabledAt: nullableIso(thread.autoSettleDisabledAt),
     latestTurn: latestRun(
       run?.id ?? null,
       run?.status ?? "idle",
