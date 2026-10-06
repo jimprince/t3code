@@ -1,6 +1,6 @@
-Bottom: 8fa746a92f116b9d3c36a6eecda370eb90c15a6d
-Top:    3e14564ead92076dbdc0a730081564e00fdb6154
+Bottom: 820e203365177a64ef7a5e0d32e015d4f1f1acb5
+Top:    abd8c479a5d61b73d17d5154f1d90f04d563876d
 Author: brad <bradprin@live.com>
-Date:   2026-10-06 01:08:36 +0000
+Date:   2026-10-06 01:08:50 +0000
 
 feat(desktop): install updates overnight and roll back failed ones
