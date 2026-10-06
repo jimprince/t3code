@@ -184,7 +184,7 @@ export interface OrchestrationThreadShell {
 export interface OrchestrationMessage {
   attachments?: readonly import("@t3tools/contracts").ChatAttachment[];
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "reasoning";
   text: string;
   turnId: string | null;
   streaming: boolean;
@@ -380,6 +380,7 @@ export interface StateFile {
 }
 
 export type AgentState =
+  | "inactive"
   | "needs-approval"
   | "needs-input"
   | "needs-plan"
