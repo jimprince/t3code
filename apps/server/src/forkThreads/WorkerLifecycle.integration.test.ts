@@ -74,7 +74,11 @@ it.effect(
         createdBy: "user",
         creationSource: "web",
       });
-      const metadata = { threadId, parentThreadId: ThreadId.make("parent"), settleOnComplete: true };
+      const metadata = {
+        threadId,
+        parentThreadId: ThreadId.make("parent"),
+        settleOnComplete: true,
+      };
       yield* writeMetadata(sql, metadata);
       const runId = RunId.make("completed");
       yield* store.apply({
@@ -124,16 +128,15 @@ it.effect(
         false,
       );
       assert.equal(
-        completionEligible(
-          projection,
-          runId,
-          { ...metadata, settleOnComplete: false },
-        ),
+        completionEligible(projection, runId, { ...metadata, settleOnComplete: false }),
         false,
       );
       const unpinned = yield* store.getThreadProjection(threadId);
       assert.equal(completionEligible(unpinned, runId, metadata), true);
-      assert.equal(completionEligible(unpinned, runId, { ...metadata, settleOnComplete: false }), false);
+      assert.equal(
+        completionEligible(unpinned, runId, { ...metadata, settleOnComplete: false }),
+        false,
+      );
       yield* lifecycle.drain;
       yield* lifecycle.drain;
 
@@ -148,11 +151,21 @@ it.effect(
         pinnedAt: null,
       };
       assert.equal(
-        archiveEligible(childShell, [childShell], DateTime.toEpochMillis(now) + 86_400_000, metadata),
+        archiveEligible(
+          childShell,
+          [childShell],
+          DateTime.toEpochMillis(now) + 86_400_000,
+          metadata,
+        ),
         true,
       );
       assert.equal(
-        archiveEligible({ ...childShell, autoSettleDisabledAt: now }, [childShell], Infinity, metadata),
+        archiveEligible(
+          { ...childShell, autoSettleDisabledAt: now },
+          [childShell],
+          Infinity,
+          metadata,
+        ),
         false,
       );
       const descendant = {
@@ -162,9 +175,27 @@ it.effect(
         settledOverride: null,
         status: "running" as const,
       };
-      assert.equal(archiveEligible(childShell, [childShell, descendant], Infinity, metadata, new Map([[threadId, metadata], [descendant.id, { threadId: descendant.id, parentThreadId: threadId, settleOnComplete: true }]])), false);
       assert.equal(
-        archiveEligible(childShell, [childShell], Infinity, { ...metadata, settleOnComplete: false }),
+        archiveEligible(
+          childShell,
+          [childShell, descendant],
+          Infinity,
+          metadata,
+          new Map([
+            [threadId, metadata],
+            [
+              descendant.id,
+              { threadId: descendant.id, parentThreadId: threadId, settleOnComplete: true },
+            ],
+          ]),
+        ),
+        false,
+      );
+      assert.equal(
+        archiveEligible(childShell, [childShell], Infinity, {
+          ...metadata,
+          settleOnComplete: false,
+        }),
         false,
       );
       yield* orchestrator.dispatch({

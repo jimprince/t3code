@@ -55,7 +55,8 @@ const make = Effect.gen(function* () {
         const onComplete =
           metadata.get(thread.id)?.settleOnComplete ??
           ((metadata.get(thread.id)?.parentThreadId != null ||
-            metadata.get(thread.id)?.remoteParent != null) && policy.subthreadSettleOnComplete);
+            metadata.get(thread.id)?.remoteParent != null) &&
+            policy.subthreadSettleOnComplete);
         if (
           onComplete &&
           thread.settledOverride == null &&
@@ -87,7 +88,8 @@ const make = Effect.gen(function* () {
           }
         }
         const days = policy.settledSubthreadArchiveAfterDays;
-        if (days == null || !archiveEligible(thread, all, now, metadata.get(thread.id), metadata)) continue;
+        if (days == null || !archiveEligible(thread, all, now, metadata.get(thread.id), metadata))
+          continue;
         const deadline = archiveDeadline(thread, days);
         if (deadline == null) continue;
         if (deadline > now) {

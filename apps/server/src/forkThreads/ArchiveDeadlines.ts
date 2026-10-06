@@ -40,7 +40,10 @@ export function archiveEligible(
     Math.max(epoch(thread.settledAt), epoch(thread.updatedAt)) > before
   )
     return false;
-  const children = Map.groupBy(threads, (child) => organization.get(child.id)?.parentThreadId ?? null);
+  const children = Map.groupBy(
+    threads,
+    (child) => organization.get(child.id)?.parentThreadId ?? null,
+  );
   const pending = [...(children.get(thread.id) ?? [])];
   const visited = new Set([thread.id]);
   while (pending.length) {
