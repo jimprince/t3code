@@ -1,7 +1,7 @@
 {
   "version": 5,
-  "prev": "a5875c7d305bcaeee128dac701d9b52ff8ea5c42",
-  "head": "899972f37611f65e379d8d9d4d3322c925b43726",
+  "prev": "74700df23b91ca7db49ccf6dd421f17794c8e94c",
+  "head": "b65d193f324234523505f066c75b2ecf83953240",
   "applied": [
     "fork-build-ci-compat",
     "fork-worker-operations",
@@ -61,7 +61,8 @@
     "fork-textgen-tempfile-cause",
     "fork-textgen-own-scope",
     "fork-dev-vm-heavy-check-gate",
-    "fork-gitea-issue-links"
+    "fork-gitea-issue-links",
+    "refresh-temp"
   ],
   "unapplied": [
     "fork-orchestrators-view",
@@ -335,6 +336,9 @@
     },
     "fork-worktree-cleanup": {
       "oid": "fb183eabc152c47c795cd29ed7c1494731164abc"
+    },
+    "refresh-temp": {
+      "oid": "b65d193f324234523505f066c75b2ecf83953240"
     }
   }
 }
