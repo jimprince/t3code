@@ -28,6 +28,7 @@ import * as VcsStatusBroadcaster from "./VcsStatusBroadcaster.ts";
 import * as BackgroundPolicy from "../background/BackgroundPolicy.ts";
 import * as GitWorkflowService from "../git/GitWorkflowService.ts";
 import { symlinksSupported } from "@t3tools/shared/testing/symlinks";
+import { BackgroundProcessWork } from "../processRunner.ts";
 
 const TEST_EPOCH = DateTime.makeUnsafe("1970-01-01T00:00:00.000Z");
 
@@ -80,6 +81,7 @@ function layerTestFor(state: {
   backgroundWorkEnabled?: boolean;
   /** Runs before each remote status read, e.g. to hold a fetch open. */
   beforeRemoteStatus?: Effect.Effect<void>;
+  backgroundModes?: Array<boolean>;
 }) {
   return VcsStatusBroadcaster.layer.pipe(
     Layer.provideMerge(NodeServices.layer),
@@ -92,15 +94,14 @@ function layerTestFor(state: {
             return state.currentLocalStatus;
           }),
         remoteStatus: (_input, options) =>
-          Effect.suspend(() => state.beforeRemoteStatus ?? Effect.void).pipe(
-            Effect.andThen(
-              Effect.sync(() => {
-                state.remoteStatusCalls += 1;
-                state.remoteStatusRefreshUpstreamValues?.push(options?.refreshUpstream);
-                return state.currentRemoteStatus;
-              }),
-            ),
-          ),
+          Effect.gen(function* () {
+            yield* Effect.suspend(() => state.beforeRemoteStatus ?? Effect.void);
+            const background = yield* BackgroundProcessWork;
+            state.remoteStatusCalls += 1;
+            state.backgroundModes?.push(background);
+            state.remoteStatusRefreshUpstreamValues?.push(options?.refreshUpstream);
+            return state.currentRemoteStatus;
+          }),
         invalidateLocalStatus: () =>
           Effect.sync(() => {
             state.localInvalidationCalls += 1;
@@ -658,6 +659,7 @@ describe("VcsStatusBroadcaster", () => {
       localInvalidationCalls: 0,
       remoteInvalidationCalls: 0,
       remoteStatusRefreshUpstreamValues: [] as Array<boolean | undefined>,
+      backgroundModes: [] as Array<boolean>,
     };
 
     return Effect.gen(function* () {
@@ -696,11 +698,14 @@ describe("VcsStatusBroadcaster", () => {
       assert.equal(state.remoteStatusCalls, 1);
       assert.equal(state.remoteInvalidationCalls, 0);
       assert.deepStrictEqual(state.remoteStatusRefreshUpstreamValues, [false]);
+      assert.deepStrictEqual(state.backgroundModes, [true]);
 
       yield* TestClock.adjust(Duration.minutes(2));
       assert.equal(state.remoteStatusCalls, 1);
       assert.equal(state.remoteInvalidationCalls, 0);
 
+      yield* broadcaster.refreshStatus("/repo");
+      assert.deepStrictEqual(state.backgroundModes, [true, false]);
       yield* Scope.close(scope, Exit.void);
     }).pipe(Effect.provide(Layer.merge(layerTestFor(state), TestClock.layer())));
   });
