@@ -15,6 +15,11 @@ import {
   ProjectRequestRef,
   ProjectRequestsListInput,
   ProjectRequestUpdateInput,
+  ProjectDashboard,
+  ProjectDashboardError,
+  ProjectDashboardGetInput,
+  ProjectDashboardSetTrackerInput,
+  ProjectDashboardSetWidgetsInput,
 } from "@t3tools/contracts";
 import { NestingRpcs } from "./v2/nesting.js";
 import * as Effect from "effect/Effect";
@@ -222,5 +227,20 @@ export const WsRpcGroup = RpcGroup.make(
     payload: ProjectRequestsListInput,
     success: ProjectIssuesListResult,
     error: Schema.Union([ProjectIssuesError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectDashboard.get", {
+    payload: ProjectDashboardGetInput,
+    success: ProjectDashboard,
+    error: Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectDashboard.setWidgets", {
+    payload: ProjectDashboardSetWidgetsInput,
+    success: ProjectDashboard,
+    error: Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectDashboard.setTracker", {
+    payload: ProjectDashboardSetTrackerInput,
+    success: ProjectDashboard,
+    error: Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]),
   }),
 );
