@@ -132,17 +132,13 @@ export function useOrchestratorFocus(input: {
         if (runId) attention.add(runId);
       }
     }
-    for (const run of projection?.runs ?? []) {
-      if (run.status === "failed" || run.status === "interrupted") attention.add(run.id);
-    }
     for (const entry of input.entries) {
       if (entry.kind === "proposed-plan" && entry.proposedPlan.runId)
         attention.add(entry.proposedPlan.runId);
       if (
         entry.kind === "work" &&
         entry.entry.runId &&
-        (entry.entry.toolLifecycleStatus === "inProgress" ||
-          entry.entry.itemType === "approval_request" ||
+        (entry.entry.itemType === "approval_request" ||
           entry.entry.itemType === "user_input_request")
       )
         attention.add(entry.entry.runId);
