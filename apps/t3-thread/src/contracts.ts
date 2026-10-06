@@ -38,6 +38,7 @@ import {
   ProjectDashboardError,
   ProjectDashboardGetInput,
   ProjectDashboardSetTrackerInput,
+  ProjectDashboardSetHealthInput,
   ProjectDashboardSetWidgetsInput,
   ProjectRoadmap,
   ProjectRoadmapError,
@@ -322,6 +323,11 @@ export const WsRpcGroup = RpcGroup.make(
   }),
   Rpc.make("projectDashboard.setTracker", {
     payload: ProjectDashboardSetTrackerInput,
+    success: ProjectDashboard,
+    error: Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]),
+  }),
+  Rpc.make("projectDashboard.setHealth", {
+    payload: ProjectDashboardSetHealthInput,
     success: ProjectDashboard,
     error: Schema.Union([ProjectDashboardError, EnvironmentAuthorizationError]),
   }),
