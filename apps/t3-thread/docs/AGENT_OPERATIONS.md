@@ -1351,3 +1351,7 @@ for busy targets, archived targets fail, and restart coalesces missed occurrence
 `runs` is the run log: trigger, every step with its thread, status and result. A dry run is
 recorded the same way but starts nothing. Run-now works while paused. V2 imports saved legacy project automation records once into the automation store.
 The V2 CLI uses the scripts and automation RPCs; update it with `t3-thread-deploy`.
+
+### Subprojects
+
+A nested thread can keep its own project page data. `t3-thread orchestrator mark <thread>` sets it on, `unmark` opts out, and `auto` restores the default. `create --subproject` marks the new thread. Auto-promotion ships disabled until every client can navigate subprojects. A top-level thread's stored mode has no effect.
