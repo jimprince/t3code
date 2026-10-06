@@ -10,10 +10,20 @@ export const initializeMetadata = (sql: SqlClient.SqlClient) => Effect.gen(funct
   yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata_receipts (command_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
   const columns = yield* sql<{ name: string }>`PRAGMA table_info(projection_threads)`;
   if (!columns.some(c => c.name === "parent_thread_id")) return;
-  const rows = yield* sql<{ thread_id: string; parent_thread_id: string | null; scope?: string | null }>`SELECT * FROM projection_threads`;
+  const rows = yield* sql<{ thread_id: string; parent_thread_id: string | null; scope?: string | null; settle_on_complete?: number | null }>`SELECT * FROM projection_threads`;
   for (const row of rows) {
-    const metadata: ForkThreadMetadata = { threadId: ThreadId.make(row.thread_id), parentThreadId: row.parent_thread_id === null ? null : ThreadId.make(row.parent_thread_id), ...(row.scope !== undefined ? { scope: row.scope } : {}) };
+    const metadata: ForkThreadMetadata = { threadId: ThreadId.make(row.thread_id), parentThreadId: row.parent_thread_id === null ? null : ThreadId.make(row.parent_thread_id), ...(row.scope !== undefined ? { scope: row.scope } : {}), ...(row.settle_on_complete !== undefined ? { settleOnComplete: row.settle_on_complete === null ? null : row.settle_on_complete === 1 } : {}) };
     yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${row.thread_id}, ${JSON.stringify(metadata)})`;
+  }
+  if (columns.some(column => column.name === "settle_on_complete")) {
+    const existing = yield* listMetadata(sql);
+    const byId = new Map(existing.map(row => [String(row.threadId), row]));
+    for (const row of rows) {
+      const metadata = byId.get(row.thread_id);
+      if (metadata && metadata.settleOnComplete === undefined) yield* writeMetadata(sql, {
+        ...metadata, settleOnComplete: row.settle_on_complete == null ? null : row.settle_on_complete === 1,
+      });
+    }
   }
 });
 export const listMetadata = (sql: SqlClient.SqlClient) => sql<{ payload: string }>`SELECT payload FROM fork_thread_metadata ORDER BY thread_id`.pipe(Effect.map(rows => rows.map(row => decode(JSON.parse(row.payload)))));
