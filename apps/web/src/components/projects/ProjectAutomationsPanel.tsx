@@ -296,7 +296,7 @@ export function ProjectAutomationsPanel({ environmentId, projectId, rootThreadId
       </AlertDialog>
       {editing ? (
         <form
-          className="grid max-w-2xl gap-2"
+          className="grid max-w-2xl grid-cols-[minmax(0,1fr)] gap-2"
           onSubmit={(event) => {
             event.preventDefault();
             void onSave();
