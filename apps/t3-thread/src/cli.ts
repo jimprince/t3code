@@ -119,6 +119,7 @@ function resolveParentThreadId(
   return reference;
 }
 import type { ProjectLayout } from "@t3tools/contracts";
+import { decisionAnswerPayload, type DecisionAnswerFlags } from "./decisions.js";
 
 function printJson(value: unknown): void {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
@@ -353,6 +354,7 @@ const AGENT_COMMAND_ALIASES = new Set([
   "result",
   "ack",
   "request",
+  "decision",
   "dashboard",
   "roadmap",
 ]);
@@ -2140,6 +2142,53 @@ dashboard
           reason: "dashboard set",
         }),
       ),
+    );
+  });
+
+const decision = agent
+  .command("decision")
+  .description(
+    "Decisions waiting on Brad (needs-brad issues and Needs you items): open a thread to discuss one, or record the answer he settled on.",
+  );
+
+decision
+  .command("discuss")
+  .description(
+    "Open a thread nested under the thread waiting on a decision, seeded with its question and options; reuses a live discussion of it",
+  )
+  .argument("<thread>", "saved agent name or raw thread UUID in the decision's project")
+  .argument("<decision>", "issue number in the project tracker, owner/repo#N, or issue URL")
+  .action(async (reference, decisionReference) => {
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRequest("projectRequestsDiscuss", {
+        threadId: target.threadId,
+        reference: decisionReference,
+      }),
+    );
+  });
+
+decision
+  .command("answer")
+  .description(
+    "Record the answer Brad settled on, exactly like answering from the Decisions widget or Needs you: comments it on the issue and tells the waiting thread",
+  )
+  .argument("<thread>", "saved agent name or raw thread UUID in the decision's project")
+  .argument("<decision>", "issue number in the project tracker, owner/repo#N, or issue URL")
+  .option("--option <text>", "the option Brad chose, as listed")
+  .option("--answer <text>", "Brad's own answer to a needs-brad decision")
+  .option("--approve", "approve a Needs you plan")
+  .option("--not-yet", "return a Needs you item to Pending")
+  .option("--note <text>", "one line of why (the reason, with --not-yet)")
+  .action(async (reference, decisionReference, options: DecisionAnswerFlags) => {
+    const payload = decisionAnswerPayload(options);
+    const { agent: target, client } = await withAgent(reference);
+    printJson(
+      await client.projectRequest("projectRequestsDecide", {
+        threadId: target.threadId,
+        reference: decisionReference,
+        ...payload,
+      }),
     );
   });
 

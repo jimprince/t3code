@@ -55,6 +55,8 @@ const RPC_METHODS = {
   projectRequestsCreate: "projectRequests.create",
   projectRequestsUpdate: "projectRequests.update",
   projectRequestsList: "projectRequests.list",
+  projectRequestsDecide: "projectRequests.decide",
+  projectRequestsDiscuss: "projectRequests.discuss",
   projectDashboardGet: "projectDashboard.get",
   projectDashboardSetWidgets: "projectDashboard.setWidgets",
   projectDashboardSetTracker: "projectDashboard.setTracker",
