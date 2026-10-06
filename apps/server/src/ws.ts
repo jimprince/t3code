@@ -1,3 +1,4 @@
+import { resourceRecoveryHandlers } from "./resourceRecoveryRpc.ts";
 import { threadSubscriptionHandlers } from "./threadSubscriptionHandlers.ts";
 import { makeWorkspaceUploadHandlers } from "./workspace/WorkspaceUploadRpc.ts";
 import { headlessDeliveryHandlers } from "./headlessDeliveryRpc.ts";
@@ -2646,6 +2647,7 @@ const makeWsRpcLayer = (
             "rpc.aggregate": "server",
           }),
         ...headlessDeliveryHandlers(),
+        ...resourceRecoveryHandlers(),
         [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
           observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
             "rpc.aggregate": "cloud",
