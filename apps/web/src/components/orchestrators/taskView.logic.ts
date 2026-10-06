@@ -1,6 +1,7 @@
 import type { ProjectIssue, ProjectIssuesGetResult } from "@t3tools/contracts";
 
 import {
+  isNotAnswer,
   issueKey,
   latestProgressLine,
   STAGE_STATUS,
@@ -83,14 +84,14 @@ export function taskViewStatus(
 /**
  * The answer or decision: the agent's summary comment once the task is for review
  * or complete, otherwise the thread's reply to the message that filed it. A
- * progress note is never the answer.
+ * progress or curator note, or Brad's own follow-up, is never the answer.
  */
 export function pickAnswer(
   issue: ProjectIssue,
   comments: ReadonlyArray<{ readonly body: string }>,
   status: TaskStatus,
 ): string | null {
-  const summary = comments.findLast((comment) => !isProgress(comment.body) && comment.body.trim());
+  const summary = comments.findLast((comment) => !isNotAnswer(comment.body) && comment.body.trim());
   const reviewing = status === "for-review" || status === "complete" || !issue.isRequest;
   const text = reviewing ? (summary?.body ?? issue.answer?.text) : (issue.answer?.text ?? null);
   return text?.replace(/<!--[\s\S]*?-->/g, "").trim() || null;
