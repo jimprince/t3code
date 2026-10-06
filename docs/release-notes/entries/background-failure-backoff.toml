@@ -1,0 +1,4 @@
+id = "background-failure-backoff"
+category = "performance"
+functionality = "source-control"
+text = "Stop retrying pull requests on unreadable hosts and failing branch lookups every minute, which could saturate the server and drop client connections."
