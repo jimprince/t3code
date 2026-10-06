@@ -1,24 +1,32 @@
-import type { ReactNode } from "react";
-import type { SupervisionGroup } from "./nestedThreadVisibility.logic";
+import { ChevronDownIcon } from "lucide-react";
+import { cn } from "~/lib/utils";
+import { SIDEBAR_NESTED_INDENT_PX } from "../Sidebar.drag";
 
 export function SupervisionGroupRow(props: {
-  group: SupervisionGroup;
+  label: string;
+  kind: "quiet" | "burst";
+  depth: number;
   expanded: boolean;
   onToggle: () => void;
-  children: ReactNode;
 }) {
   return (
-    <div>
+    <li
+      className="list-none"
+      style={{ paddingInlineStart: props.depth * SIDEBAR_NESTED_INDENT_PX }}
+    >
       <button
         type="button"
+        data-testid={`sidebar-nested-${props.kind === "burst" ? "burst" : "done"}-group`}
         aria-expanded={props.expanded}
         onClick={props.onToggle}
-        className="w-full px-2 py-1 text-left text-xs"
+        className="flex h-7 w-full cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-left text-xs text-sidebar-muted-foreground/70 outline-none hover:bg-sidebar-row-hover hover:text-sidebar-foreground focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
-        {props.group.children.length}{" "}
-        {props.group.kind === "burst" ? "created together" : "quiet threads"}
+        <ChevronDownIcon
+          aria-hidden
+          className={cn("size-3 shrink-0", !props.expanded && "-rotate-90")}
+        />
+        <span className="min-w-0 flex-1 truncate">{props.label}</span>
       </button>
-      {props.expanded ? props.children : null}
-    </div>
+    </li>
   );
 }
