@@ -28,6 +28,7 @@ const STATUS_DOT_CLASS: Record<ScheduledTask["lastRunStatus"], string> = {
   running: "animate-pulse bg-sky-500",
   succeeded: "bg-emerald-500",
   failed: "bg-destructive",
+  skipped: "bg-muted-foreground/40",
 };
 
 /**
@@ -158,6 +159,7 @@ export function ThreadAutomationsPanel(props: {
               </span>
               <p className="truncate text-2xs text-muted-foreground">
                 {scheduleLabel(task.schedule)}
+                {task.lastRunStatus === "skipped" ? " · skipped: thread settled" : ""}
                 {task.enabled && task.nextRunAt !== null
                   ? ` · next ${relativeLabel(task.nextRunAt)}`
                   : task.enabled
