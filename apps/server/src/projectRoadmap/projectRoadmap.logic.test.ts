@@ -37,6 +37,7 @@ describe("roadmap items", () => {
       stage: "requested",
       closedAt: null,
       milestone: null,
+      labels: [],
       ...overrides,
     }) as never;
 
@@ -49,14 +50,16 @@ describe("roadmap items", () => {
         issue(4, { status: "done", closedAt: "2026-10-05T00:00:00Z" }),
         issue(5, { repository: "brad/other" }),
         issue(6, { isRequest: false, stage: undefined }),
+        issue(7, { labels: ["ask", "Parked"] }),
       ],
       { host: "git.example", repository: "brad/t3code-fork" },
       [{ id: 3, title: "Next release" }],
     );
-    expect(items.map((item) => [item.number, item.versionId, item.stage])).toEqual([
-      [1, null, "requested"],
-      [2, 3, "requested"],
-      [6, null, null],
+    expect(items.map((item) => [item.number, item.versionId, item.stage, item.parked])).toEqual([
+      [1, null, "requested", false],
+      [2, 3, "requested", false],
+      [6, null, null, false],
+      [7, null, "requested", true],
     ]);
   });
 });
