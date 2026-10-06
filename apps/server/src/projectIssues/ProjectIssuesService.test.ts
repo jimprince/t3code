@@ -6,6 +6,7 @@ import * as Layer from "effect/Layer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { ThreadId, type GiteaInstanceConfig } from "@t3tools/contracts";
+import { ServerConfig } from "../config.ts";
 import { ServerSettingsService } from "../serverSettings.ts";
 import { ThreadManagementService } from "../orchestration-v2/ThreadManagementService.ts";
 import { ProjectService } from "../project/ProjectService.ts";
@@ -86,8 +87,10 @@ describe("project issue metadata refresh", () => {
         ),
         Effect.provide(
           Layer.mergeAll(
-            NodeServices.layer,
             ServerSettingsService.layerTest({ giteaInstances: [instance] }),
+            ServerConfig.layerTest(process.cwd(), { prefix: "t3-project-issues-" }).pipe(
+              Layer.provideMerge(NodeServices.layer),
+            ),
           ),
         ),
       );
