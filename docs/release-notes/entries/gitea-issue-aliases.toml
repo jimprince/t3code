@@ -1,0 +1,4 @@
+id = "gitea-issue-aliases"
+category = "fix"
+functionality = "threads"
+text = "Gitea issue links now accept configured public and internal host aliases even while the Gitea API is unavailable."

@@ -70,3 +70,5 @@ export * from "./embeddedPages.ts";
 export * from "./forkThreadMetadata.ts";
 export * from "./forkSupervisionDrag.ts";
 export * from "./forkThreadOrder.ts";
+
+export * from "./threadIssue.ts";

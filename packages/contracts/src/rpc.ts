@@ -4,6 +4,12 @@ import {
   OrchestrationV2SearchThreadResult,
 } from "./orchestrationV2.ts";
 import {
+  ThreadIssueLinkResult,
+  ThreadIssueOperationError,
+  ThreadIssueReferenceInput,
+  ThreadIssueUnlinkResult,
+} from "./threadIssue.ts";
+import {
   RESOURCE_RECOVERY_METHODS,
   ResourceRecoveryPreviewRpc,
   ResourceRecoveryExecuteRpc,
@@ -557,6 +563,9 @@ export const WS_METHODS = {
   pullRequestsLabelCandidates: "pullRequests.labelCandidates",
   pullRequestsSetLabels: "pullRequests.setLabels",
 
+  threadIssuesLink: "threadIssues.link",
+  threadIssuesUnlink: "threadIssues.unlink",
+
   // Source control methods
   sourceControlLookupRepository: "sourceControl.lookupRepository",
   sourceControlCloneRepository: "sourceControl.cloneRepository",
@@ -938,6 +947,18 @@ const WsPullRequestsListRpc = Rpc.make(WS_METHODS.pullRequestsList, {
   payload: PullRequestListInput,
   success: PullRequestListResult,
   error: PullRequestRpcError,
+});
+
+const WsThreadIssuesLinkRpc = Rpc.make(WS_METHODS.threadIssuesLink, {
+  payload: ThreadIssueReferenceInput,
+  success: ThreadIssueLinkResult,
+  error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
+});
+
+const WsThreadIssuesUnlinkRpc = Rpc.make(WS_METHODS.threadIssuesUnlink, {
+  payload: ThreadIssueReferenceInput,
+  success: ThreadIssueUnlinkResult,
+  error: Schema.Union([ThreadIssueOperationError, EnvironmentAuthorizationError]),
 });
 
 /**
@@ -1924,6 +1945,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsPullRequestsRequestReviewersRpc,
   WsPullRequestsLabelCandidatesRpc,
   WsPullRequestsSetLabelsRpc,
+  WsThreadIssuesLinkRpc,
+  WsThreadIssuesUnlinkRpc,
   WsSourceControlLookupRepositoryRpc,
   WsSourceControlCloneRepositoryRpc,
   WsSourceControlPublishRepositoryRpc,
