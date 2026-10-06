@@ -1,0 +1,4 @@
+id = "canvas-follows-app-theme"
+category = "fix"
+functionality = "project canvas"
+text = "Canvas pages follow the app theme instead of a black background."
