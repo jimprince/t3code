@@ -105,6 +105,15 @@ describe("buildThreadActionMenuItems", () => {
     expect(allowed.every((item) => !item.disabled)).toBe(true);
   });
 
+  it("offers automatic order only in a supported orderable section", () => {
+    const supports = { ...baseState.supports, orderReset: true };
+    expect(ids({ ...baseState, supports })).toContain("order-reset");
+    expect(ids({ ...baseState, supports, isSettled: true })).not.toContain("order-reset");
+    expect(ids({ ...baseState, supports, isSettled: true, isPinned: true })).toContain(
+      "order-reset",
+    );
+    expect(ids(baseState)).not.toContain("order-reset");
+  });
   it("hides lifecycle items when the environment lacks the capabilities", () => {
     expect(
       ids({
