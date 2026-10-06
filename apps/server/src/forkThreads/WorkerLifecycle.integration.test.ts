@@ -74,7 +74,7 @@ it.effect(
         createdBy: "user",
         creationSource: "web",
       });
-      const metadata = { threadId, parentThreadId: null, settleOnComplete: true };
+      const metadata = { threadId, parentThreadId: ThreadId.make("parent"), settleOnComplete: true };
       yield* writeMetadata(sql, metadata);
       const runId = RunId.make("completed");
       yield* store.apply({
@@ -144,25 +144,25 @@ it.effect(
       assert.ok(shell);
       const childShell = {
         ...shell,
-        lineage: { ...shell.lineage, parentThreadId: ThreadId.make("parent") },
+        lineage: shell.lineage,
         pinnedAt: null,
       };
       assert.equal(
-        archiveEligible(childShell, [childShell], DateTime.toEpochMillis(now) + 86_400_000),
+        archiveEligible(childShell, [childShell], DateTime.toEpochMillis(now) + 86_400_000, metadata),
         true,
       );
       assert.equal(
-        archiveEligible({ ...childShell, autoSettleDisabledAt: now }, [childShell], Infinity),
+        archiveEligible({ ...childShell, autoSettleDisabledAt: now }, [childShell], Infinity, metadata),
         false,
       );
       const descendant = {
         ...childShell,
         id: ThreadId.make("child"),
-        lineage: { ...childShell.lineage, parentThreadId: threadId },
+        lineage: childShell.lineage,
         settledOverride: null,
         status: "running" as const,
       };
-      assert.equal(archiveEligible(childShell, [childShell, descendant], Infinity), false);
+      assert.equal(archiveEligible(childShell, [childShell, descendant], Infinity, metadata, new Map([[threadId, metadata], [descendant.id, { threadId: descendant.id, parentThreadId: threadId }]])), false);
       assert.equal(
         archiveEligible(childShell, [childShell], Infinity, { ...metadata, settleOnComplete: false }),
         false,
