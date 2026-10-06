@@ -1,0 +1,4 @@
+id = "request-intake"
+category = "feature"
+functionality = "projects"
+text = "Requests from the project page's New request box no longer interrupt the orchestrator. A short intake agent types and titles each request, puts it on the roadmap, answers simple questions, starts small jobs, and only passes on what needs starting now or needs a decision."

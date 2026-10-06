@@ -288,3 +288,66 @@ export function answerToMessage(
     ? { text: reply.text.trim(), askedAt: asked.createdAt, answeredAt: reply.createdAt }
     : null;
 }
+
+/** The model an intake thread triages with: Sonnet 5.5 when the server offers it. */
+const INTAKE_MODEL = "claude-sonnet-5-5";
+
+export function intakeModelSelection<
+  Selection extends { readonly instanceId: string; readonly model: string },
+>(
+  providers: ReadonlyArray<{
+    readonly instanceId: string;
+    readonly driver: string;
+    readonly enabled: boolean;
+    readonly installed: boolean;
+    readonly models: ReadonlyArray<{ readonly slug: string }>;
+  }>,
+  fallback: Selection,
+): Selection | { instanceId: string; model: string } {
+  const usable = providers.filter((provider) => provider.enabled && provider.installed);
+  const exact = usable.find((provider) =>
+    provider.models.some((model) => model.slug === INTAKE_MODEL),
+  );
+  if (exact) return { instanceId: exact.instanceId, model: INTAKE_MODEL };
+  for (const provider of usable.filter((candidate) => candidate.driver === "claude")) {
+    const sonnet = provider.models.find((model) => /sonnet/i.test(model.slug));
+    if (sonnet) return { instanceId: provider.instanceId, model: sonnet.slug };
+  }
+  return fallback;
+}
+
+/**
+ * The fixed brief an intake thread starts with: triage one request from the New
+ * request box (type, title, place, then answer, catalog, start a worker or hand
+ * it to the orchestrator) and settle, so the orchestrator is only woken when the
+ * request needs starting now or needs its decision.
+ */
+export function buildIntakeBrief(input: {
+  readonly projectTitle: string;
+  readonly orchestratorThreadId: string;
+  readonly orchestratorTitle: string;
+  readonly projectId: string;
+}): string {
+  const root = input.orchestratorThreadId;
+  return [
+    `You are a T3 intake thread for the project "${input.projectTitle}", nested under its orchestrator "${input.orchestratorTitle}" (thread ${root}). Brad sent the request below from the project page's New request box. Triage it quickly and cheaply, then settle yourself. Do the work yourself only when it is a simple question you can answer.`,
+    "",
+    'The request is filed as a task on the project tracker and linked to this thread. Find its number with `t3-thread request list "$T3_THREAD_ID"` (the open item asked in this thread; if it is still pending filing, wait 30 seconds and look again).',
+    "",
+    'Dashboard guidelines: a question shows its answer first, in 1-3 plain sentences. Work gets an imperative title ("Move the New request box to the top"); a request worded as a question is still a task. Statuses are only Pending, Active, For review and Complete. If ~/maintenance-work/dashboard-guidelines/ exists, follow display.md and taxonomy.md there.',
+    "",
+    "Steps (N is the task number):",
+    '1. Type it: `t3-thread request type "$T3_THREAD_ID" N <bug|feature|question|deliverable|plan|change|test|maintenance>`.',
+    '2. Title it: `t3-thread request title "$T3_THREAD_ID" N "<imperative title, or the question>"`.',
+    '3. Place it: `t3-thread roadmap move "$T3_THREAD_ID" N next`, or `later` when it is an idea for later.',
+    "4. Choose exactly one:",
+    '   a. A simple question you can answer from what you know or a quick look: `t3-thread request ready "$T3_THREAD_ID" N --summary "<the answer in 1-3 sentences>"`.',
+    `   b. Clearly small, self-contained work: start one worker under the orchestrator with \`t3-thread create --env <this environment> --project ${input.projectId} --parent ${root} --notify ${root} --notify-level attention --name <short-name> --title "<title>" --message "<the task, the issue link and when it is done>"\`, then \`t3-thread request start <short-name> N\`.`,
+    `   c. It needs starting now, or needs the orchestrator's decision: send it one short message, \`t3-thread send ${root} "<what Brad asked, task #N, why it cannot wait>"\`.`,
+    "   d. Otherwise catalog it: it waits on the roadmap. Do not message the orchestrator.",
+    '5. Record what you did: `t3-thread request note "$T3_THREAD_ID" N "<one line>"`.',
+    '6. Settle yourself: `t3-thread settle "$T3_THREAD_ID" --self`, and end with one line saying what you did.',
+    "",
+    "Brad's request:",
+  ].join("\n");
+}
