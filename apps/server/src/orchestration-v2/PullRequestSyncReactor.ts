@@ -166,7 +166,9 @@ export const make = Effect.gen(function* () {
   const logSkipped =
     (message: string, fields: Record<string, unknown>) =>
     <E>(cause: Cause.Cause<E>): Effect.Effect<void, E> =>
-      Cause.hasInterruptsOnly(cause) ? Effect.failCause(cause) : Effect.logWarning(message, fields);
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.failCause(cause)
+        : Effect.logWarning(message, { ...fields, cause: Cause.pretty(cause) });
 
   /** `requested` reads only keys asked for through `requestSync`; `all` is the periodic pass. */
   const sweep = Effect.fn("PullRequestSyncReactor.sweep")(function* (scope: "all" | "requested") {
