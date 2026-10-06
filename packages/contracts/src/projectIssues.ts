@@ -277,6 +277,27 @@ export const ProjectRequestDecideResult = Schema.Struct({
 export type ProjectRequestDecideResult = typeof ProjectRequestDecideResult.Type;
 
 /**
+ * Talk a decision through before answering it: opens a thread nested under the
+ * thread waiting on the decision, seeded with the question, its options and how
+ * to record the answer. A live discussion of the same decision is reused.
+ */
+export const ProjectRequestDiscussInput = Schema.Struct({
+  /** A thread of the project tree, as in `ProjectRequestDecideInput`. */
+  threadId: ThreadId,
+  /** Issue number in the project's tracker repository, `owner/repo#N`, or a full issue URL. */
+  reference: TrimmedNonEmptyString,
+});
+export type ProjectRequestDiscussInput = typeof ProjectRequestDiscussInput.Type;
+
+export const ProjectRequestDiscussResult = Schema.Struct({
+  /** The discussion thread to open. */
+  threadId: ThreadId,
+  /** False when an existing discussion was reused. */
+  created: Schema.Boolean,
+});
+export type ProjectRequestDiscussResult = typeof ProjectRequestDiscussResult.Type;
+
+/**
  * A message from the New request box, queued as an explicit request just before it
  * is sent, so the ledger files it instead of folding it into an existing issue.
  */
