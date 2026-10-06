@@ -337,3 +337,20 @@ describe("hasQueuedWork (watcher idle-exit guard)", () => {
     });
   });
 });
+
+
+it("preserves queued send provenance through durable state and delivery", async () => {
+  await withTempState(async () => {
+    const origin = { source: "thread-send" as const, fromThreadId: "child" };
+    await enqueueSend({ threadId: "thread-worker-a", agentName: null, environment: "dev-vm", text: "Please continue", queuedDuringTurnId: "turn-1", origin });
+    expect((await loadState()).queuedSends[0]?.origin).toEqual(origin);
+    const delivered: unknown[] = [];
+    const clientFactory: QueueClientFactory = () => ({
+      async findThread() { return makeThread(); },
+      async sendMessage(message) { delivered.push(message.origin); return { dispatched: true, queued: false }; },
+    });
+    await drainQueuedSends({ clientFactory });
+    expect(delivered).toEqual([origin]);
+    expect((await loadState()).queuedSends[0]?.status).toBe("dispatched");
+  });
+});
