@@ -12,6 +12,9 @@ import * as Schema from "effect/Schema";
 import type * as SqlClient from "effect/unstable/sql/SqlClient";
 import { initializeMetadata, listMetadata, writeMetadata, metadataJson } from "./MetadataStore.ts";
 
+/** Inert until all clients can navigate promoted subprojects. */
+const AUTO_PROMOTE_SUBPROJECTS = false;
+
 type NestingShell = Pick<OrchestrationV2ThreadShell, "id" | "projectId" | "archivedAt">;
 /** Commit supervision metadata, then publish a native shell refresh with replay-safe receipts. */
 export const makeNestingService = <E, R, DispatchError, DispatchContext>(
@@ -77,6 +80,7 @@ export const makeNestingService = <E, R, DispatchError, DispatchContext>(
             }
             const value: ForkThreadMetadata = {
               ...existing,
+              ...(input.subproject !== undefined ? { subproject: input.subproject } : {}),
               ...(input.settleOnComplete !== undefined
                 ? { settleOnComplete: input.settleOnComplete }
                 : {}),
@@ -96,6 +100,11 @@ export const makeNestingService = <E, R, DispatchError, DispatchContext>(
                 );
             }
             yield* writeMetadata(sql, value);
+            if (AUTO_PROMOTE_SUBPROJECTS && input.parentThreadId) {
+              const parent = rows.find((row) => row.threadId === input.parentThreadId);
+              if (parent?.parentThreadId && (parent.subproject ?? "auto") === "auto")
+                yield* writeMetadata(sql, { ...parent, subproject: "on" });
+            }
             const payload = yield* Schema.encodeEffect(metadataJson)(value);
             yield* sql`INSERT INTO fork_thread_metadata_receipts (command_id, payload) VALUES (${input.commandId}, ${payload})`;
             return value;
@@ -104,7 +113,20 @@ export const makeNestingService = <E, R, DispatchError, DispatchContext>(
       );
     const update = (input: ForkThreadMetadataUpdate) =>
       Effect.gen(function* () {
+        const before =
+          input.subproject === undefined
+            ? undefined
+            : (yield* list()).find((row) => row.threadId === input.threadId);
         const value = yield* persist(input);
+        if (
+          input.subproject !== undefined &&
+          (before?.subproject ?? "auto") === (value.subproject ?? "auto") &&
+          input.parentThreadId === undefined &&
+          input.remoteParent === undefined &&
+          input.scope === undefined &&
+          input.settleOnComplete === undefined
+        )
+          return value;
         // Dispatch outside the SQL transaction. Retry also repairs an interrupted refresh.
         yield* dispatch({
           type: "thread.metadata.update",
