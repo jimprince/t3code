@@ -2458,3 +2458,19 @@ note = "V2 has runs and shared runtime session records, not V1 session summaries
 id = "v2-ci4-native-terminal-before-reconcile"
 decision = "adapt"
 note = "Stop ACK records acknowledgement without terminalizing the run. Native finalization retains upstream ordering for rollback refs, usage and terminal receipts across all drivers. A replay-safe durable outbox fallback settles the exact run after ten seconds if native finalization never arrives; newer work wins. This replaces the OpenCode replay drain, leaving upstream testkit files unchanged. V1 ACK-to-ready remains bounded rather than waiting indefinitely for ingestion."
+
+[[patch]]
+name = "fork-codex-extra-skill-roots"
+subject = "feat(codex): configure extra skill roots for runtime and picker"
+class = "upstream-bound"
+purpose = "Apply instance-configured Codex extra skill roots after initialize in per-thread runtimes and independent picker/status probes, including managed configuration retention."
+retire_when = "Upstream applies instance-configured extra roots to both Codex runtime and picker/status processes with equivalent identity and compatibility behavior."
+depends_on = []
+roles = []
+note = "Empty roots preserve default startup. Exact skill order and name/path duplicates remain intact. Typed method-not-found falls back with a warning that roots were not applied; actual older-binary error responses remain untested. No home, auth, session, or cached-path migration."
+
+
+[[patch.decision]]
+id = "v2-m5-codex-extra-roots"
+decision = "adapt"
+note = "Apply the same extraRoots handshake at the V2 Codex adapter's initialization boundary before thread start/resume and in the existing skill/status probe. V2 deleted the V1 adapter and session runtime, so their integration tests follow the native V2 adapter seam. Settings, ordering, duplicates and unsupported-method warning match V1."
