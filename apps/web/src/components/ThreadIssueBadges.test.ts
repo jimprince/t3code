@@ -40,4 +40,20 @@ describe("thread issue badge target", () => {
       url: issue.url,
     });
   });
+
+  it("resolves project-board issues without requiring a thread-link snapshot", () => {
+    expect(
+      resolveThreadIssueBadgeTarget(
+        [
+          {
+            id: "board",
+            name: "Agent Status Board",
+            url: "https://control.bradleyprince.com:8450/",
+            icon: "activity",
+          },
+        ] as readonly EmbeddedPage[],
+        { repository: issue.repository, number: issue.number, url: issue.url },
+      ),
+    ).toMatchObject({ kind: "embedded", repo: "t3code-fork", issue: "73" });
+  });
 });
