@@ -23,6 +23,8 @@ const RPC_METHODS = {
   projectRequestsCreate: WS_METHODS.projectRequestsCreate,
   projectRequestsUpdate: WS_METHODS.projectRequestsUpdate,
   projectRequestsList: WS_METHODS.projectRequestsList,
+  projectRequestsDecide: WS_METHODS.projectRequestsDecide,
+  projectRequestsDiscuss: WS_METHODS.projectRequestsDiscuss,
   projectDashboardGet: WS_METHODS.projectDashboardGet,
   projectDashboardSetWidgets: WS_METHODS.projectDashboardSetWidgets,
   projectDashboardSetTracker: WS_METHODS.projectDashboardSetTracker,
@@ -88,6 +90,8 @@ export class T3RpcClient {
       | "projectRequestsCreate"
       | "projectRequestsUpdate"
       | "projectRequestsList"
+      | "projectRequestsDecide"
+      | "projectRequestsDiscuss"
       | "projectDashboardGet"
       | "projectDashboardSetWidgets"
       | "projectDashboardSetTracker"

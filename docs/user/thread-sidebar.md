@@ -273,6 +273,14 @@ to it says how many worker turns asked for you since your last message. On
 mobile, folded rows expand on tap; the switch and the count are web and desktop
 only.
 
+### Talk a decision through
+
+On a project page, **Discuss** on a decision (in Decisions or Needs you, or in the mobile
+app) opens a thread nested under the agent waiting on it, already briefed with the question
+and its options. When you settle on an answer there, the agent records it exactly as if you
+had picked it; you can still answer from the decision itself. Discuss again returns to the
+same thread until you archive it.
+
 ### Named agents
 
 Some resources must have exactly one owner: a 3D printer, a production
