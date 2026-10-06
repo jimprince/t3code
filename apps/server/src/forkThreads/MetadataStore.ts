@@ -14,9 +14,9 @@ export const initializeMetadata = (sql: SqlClient.SqlClient) => Effect.gen(funct
   yield* sql`CREATE TABLE IF NOT EXISTS fork_thread_metadata_receipts (command_id TEXT PRIMARY KEY, payload TEXT NOT NULL)`;
   const columns = yield* sql<{ name: string }>`PRAGMA table_info(projection_threads)`;
   if (!columns.some(c => c.name === "parent_thread_id")) return;
-  const rows = yield* sql<{ thread_id: string; parent_thread_id: string | null }>`SELECT thread_id, parent_thread_id FROM projection_threads`;
+  const rows = yield* sql<{ thread_id: string; parent_thread_id: string | null; scope?: string | null }>`SELECT * FROM projection_threads`;
   for (const row of rows) {
-    const metadata: ForkThreadMetadata = { threadId: ThreadId.make(row.thread_id), parentThreadId: row.parent_thread_id === null ? null : ThreadId.make(row.parent_thread_id) };
+    const metadata: ForkThreadMetadata = { threadId: ThreadId.make(row.thread_id), parentThreadId: row.parent_thread_id === null ? null : ThreadId.make(row.parent_thread_id), ...(row.scope !== undefined ? { scope: row.scope } : {}) };
     yield* sql`INSERT OR IGNORE INTO fork_thread_metadata (thread_id, payload) VALUES (${row.thread_id}, ${JSON.stringify(metadata)})`;
   }
 });
