@@ -139,6 +139,68 @@ export function parseRequestReference(
     : null;
 }
 
+export interface DecisionPlan {
+  /** Posted on the issue; for Not yet it is Brad's reason. */
+  readonly comment: string;
+  /** The stage the issue moves to; `pending` drops needs-review and in-progress. */
+  readonly status: "in-progress" | "pending";
+  /** The one message sent to the thread doing the work; null for Not yet. */
+  readonly message: string | null;
+}
+
+/**
+ * What a decision from Needs you does to the issue and the thread: Approve and an
+ * option start the work and tell its thread to go ahead; Not yet (Brad's default)
+ * returns the item to Pending with his reason and says nothing to any thread.
+ * Null when an option decision names no option.
+ */
+export function planDecision(input: {
+  readonly decision: "approve" | "not-yet" | "option";
+  readonly option?: string | undefined;
+  readonly reason?: string | undefined;
+  readonly title: string;
+  readonly url: string;
+}): DecisionPlan | null {
+  const subject = `"${input.title}" (${input.url})`;
+  switch (input.decision) {
+    case "approve":
+      return {
+        comment: "Approved by Brad",
+        status: "in-progress",
+        message: `Brad approved ${subject}. Go ahead.`,
+      };
+    case "option": {
+      const option = input.option?.trim().replace(/\s+/g, " ");
+      if (!option) return null;
+      return {
+        comment: `Brad chose: ${option}`,
+        status: "in-progress",
+        message: `Brad chose ${option} for ${subject}. Go ahead with it.`,
+      };
+    }
+    case "not-yet": {
+      const reason = input.reason?.trim().replace(/\s+/g, " ");
+      return {
+        comment: reason ? `Not yet: ${reason}` : "Not yet",
+        status: "pending",
+        message: null,
+      };
+    }
+  }
+}
+
+/**
+ * The thread an approved item goes to: the first live thread linked to it that is
+ * not the orchestrator, else the orchestrator itself.
+ */
+export function decisionThreadId(
+  linkedThreadIds: ReadonlyArray<string>,
+  rootThreadId: string,
+  liveThreadIds: ReadonlySet<string>,
+): string {
+  return linkedThreadIds.find((id) => id !== rootThreadId && liveThreadIds.has(id)) ?? rootThreadId;
+}
+
 /** The progress line a stage change posts when the agent gave no text of its own. */
 export function progressLineFor(
   status:
