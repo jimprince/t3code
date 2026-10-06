@@ -45,7 +45,7 @@ export function supervisionParents<T extends SupervisionThread>(
     new Map(metadata.map((row) => [row.threadId, row.parentThreadId])),
   );
 }
-export function supervisionDescendants<K>(parents: ReadonlyMap<K, K | null>, parentId: K) {
+function supervisionDescendants<K>(parents: ReadonlyMap<K, K | null>, parentId: K) {
   const children = new Map<K, K[]>();
   for (const [id, parent] of parents) {
     if (parent === null) continue;
