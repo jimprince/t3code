@@ -8,6 +8,7 @@ import {
   ResourceRecoveryPreviewRpc,
   ResourceRecoveryExecuteRpc,
 } from "./forkResourceRecoveryRpc.ts";
+import { ForkThreadMetadataRpcs } from "./forkThreadMetadata.ts";
 import { THREAD_SUBSCRIPTION_METHODS, ThreadSubscriptionRpcs } from "./threadSubscriptions.ts";
 import { WorkspaceUploadRpc, WorkspaceUploadMethods } from "./workspaceUploadRpc.ts";
 import { HEADLESS_DELIVERY_METHODS, HeadlessDeliveryRpc } from "./forkHeadlessDeliveryRpc.ts";
@@ -1824,6 +1825,7 @@ export class RpcScopeAuthorization extends RpcMiddleware.Service<RpcScopeAuthori
 export const WsRpcGroup = RpcGroup.make(
   ...ThreadSubscriptionRpcs,
   WorkspaceUploadRpc,
+  ...ForkThreadMetadataRpcs,
   HeadlessDeliveryRpc,
   ResourceRecoveryPreviewRpc,
   ResourceRecoveryExecuteRpc,
