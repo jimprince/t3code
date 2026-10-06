@@ -1,6 +1,16 @@
 import type { OrchestratorSummary } from "@t3tools/client-runtime/state/orchestrators";
+import {
+  decisionAnswerInput,
+  decisionSendStrip,
+  keptDecisionAnswers,
+  sentDelivery,
+  type DecisionAnswerInput,
+  type DecisionAnswerRecord,
+  type DecisionPick,
+} from "@t3tools/client-runtime/decision-answer";
+import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import type { ProjectIssue } from "@t3tools/contracts";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
@@ -10,26 +20,45 @@ import { useAtomCommand } from "../../state/use-atom-command";
 
 const MAX_NOTE = 500;
 
+const issueKey = (issue: ProjectIssue) => `${issue.repository}#${issue.number}`;
+
+type Selection = { readonly kind: "option"; readonly option: string } | { readonly kind: "other" };
+
 function DecisionCard({
   issue,
+  answer,
   onSend,
+  onRetry,
+  onDrop,
 }: {
   readonly issue: ProjectIssue;
-  readonly onSend: (pick: { option: string } | { answer: string }, note: string) => Promise<void>;
+  /** The answer given on this card, shown instead of the options until the card leaves. */
+  readonly answer: DecisionAnswerRecord<ProjectIssue> | null;
+  readonly onSend: (answered: string, input: DecisionAnswerInput) => void;
+  readonly onRetry: () => void;
+  /** Gives up on a failed answer and shows the options again. */
+  readonly onDrop: () => void;
 }) {
   const decision = issue.decision!;
   const open = decision.options.length === 0;
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Selection | null>(null);
   const [text, setText] = useState("");
   const [note, setNote] = useState("");
-  const [sending, setSending] = useState(false);
-  const answer = open ? text.trim() : (selected ?? "");
-  const send = async () => {
-    if (!answer || sending) return;
-    setSending(true);
-    await onSend(open ? { answer } : { option: answer }, note.trim());
-    setSending(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const pick: DecisionPick | null = open
+    ? { kind: "open", text }
+    : selected?.kind === "option"
+      ? { kind: "option", option: selected.option }
+      : selected?.kind === "other"
+        ? { kind: "other", text }
+        : null;
+  const input = pick ? decisionAnswerInput(pick, note) : null;
+  const send = () => {
+    if (!pick || !input) return;
+    onSend(`Answered: ${(pick.kind === "option" ? pick.option : pick.text).trim()}`, input);
   };
+  const strip = answer ? decisionSendStrip(answer.delivery, decision.waiting) : null;
+  const showText = open || selected?.kind === "other";
   return (
     <View className="gap-1 border-t border-border pt-2">
       <Text className="text-sm text-foreground">{issue.title}</Text>
@@ -38,62 +67,112 @@ function DecisionCard({
           {decision.context}
         </Text>
       ) : null}
-      {open ? (
-        <TextInput
-          accessibilityLabel="Answer"
-          value={text}
-          onChangeText={setText}
-          placeholder="Answer"
-          placeholderTextColorClassName="accent-placeholder"
-          maxLength={2000}
-          className="rounded-md border border-border px-2 py-1 text-sm font-sans text-foreground"
-        />
-      ) : (
-        decision.options.map((option) => (
-          <Pressable
-            key={option.text}
-            accessibilityRole="button"
-            accessibilityState={{ selected: selected === option.text }}
-            onPress={() => setSelected(option.text)}
-            className={`rounded-md border px-2 py-1.5 ${selected === option.text ? "border-foreground" : "border-border"}`}
+      {answer && strip ? (
+        <>
+          <Text className="text-sm text-foreground">{answer.answered}</Text>
+          <Text
+            className={`text-xs ${strip.retryable ? "text-danger-foreground" : "text-foreground-muted"}`}
           >
-            <Text className="text-sm text-foreground">
-              {option.text}
-              {option.recommended ? "  (recommended)" : ""}
+            {strip.text}
+          </Text>
+          {strip.retryable ? (
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                accessibilityRole="button"
+                onPress={onRetry}
+                className="rounded-md border border-foreground px-3 py-1.5"
+              >
+                <Text className="text-sm text-foreground">Retry</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={onDrop}>
+                <Text className="text-xs text-foreground-muted">Choose again</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {open
+            ? null
+            : decision.options.map((option) => {
+                const active = selected?.kind === "option" && selected.option === option.text;
+                return (
+                  <Pressable
+                    key={option.text}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    onPress={() => setSelected({ kind: "option", option: option.text })}
+                    className={`rounded-md border px-2 py-1.5 ${active ? "border-foreground" : "border-border"}`}
+                  >
+                    <Text className="text-sm text-foreground">
+                      {option.text}
+                      {option.recommended ? "  (recommended)" : ""}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+          {open ? null : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: selected?.kind === "other" }}
+              onPress={() => setSelected({ kind: "other" })}
+              className={`rounded-md border px-2 py-1.5 ${selected?.kind === "other" ? "border-foreground" : "border-border"}`}
+            >
+              <Text className="text-sm text-foreground">Other...</Text>
+            </Pressable>
+          )}
+          {showText ? (
+            <TextInput
+              accessibilityLabel={open ? "Answer" : "Other answer"}
+              value={text}
+              onChangeText={setText}
+              placeholder={open ? "Answer" : "Your answer"}
+              placeholderTextColorClassName="accent-placeholder"
+              maxLength={2000}
+              className="rounded-md border border-border px-2 py-1 text-sm font-sans text-foreground"
+            />
+          ) : null}
+          {noteOpen ? (
+            <TextInput
+              accessibilityLabel="Note"
+              value={note}
+              onChangeText={setNote}
+              placeholder="Note"
+              placeholderTextColorClassName="accent-placeholder"
+              maxLength={MAX_NOTE}
+              className="rounded-md border border-border px-2 py-1 text-sm font-sans text-foreground"
+            />
+          ) : null}
+          <View className="flex-row items-center gap-3">
+            <Pressable
+              accessibilityRole="button"
+              disabled={!input}
+              onPress={send}
+              className={`rounded-md border border-foreground px-3 py-1.5 ${!input ? "opacity-40" : ""}`}
+            >
+              <Text className="text-sm text-foreground">Send</Text>
+            </Pressable>
+            {noteOpen ? null : (
+              <Pressable accessibilityRole="button" onPress={() => setNoteOpen(true)}>
+                <Text className="text-xs text-foreground-muted">Add note</Text>
+              </Pressable>
+            )}
+            <Text className="flex-1 text-xs text-foreground-muted" numberOfLines={1}>
+              {decision.waiting} · #{issue.number}
             </Text>
-          </Pressable>
-        ))
+          </View>
+        </>
       )}
-      <TextInput
-        accessibilityLabel="Note"
-        value={note}
-        onChangeText={setNote}
-        placeholder="Note (optional)"
-        placeholderTextColorClassName="accent-placeholder"
-        maxLength={MAX_NOTE}
-        className="rounded-md border border-border px-2 py-1 text-sm font-sans text-foreground"
-      />
-      <View className="flex-row items-center gap-3">
-        <Pressable
-          accessibilityRole="button"
-          disabled={!answer || sending}
-          onPress={() => void send()}
-          className={`rounded-md border border-foreground px-3 py-1.5 ${!answer || sending ? "opacity-40" : ""}`}
-        >
-          <Text className="text-sm text-foreground">{sending ? "Sending" : "Send"}</Text>
-        </Pressable>
-        <Text className="flex-1 text-xs text-foreground-muted" numberOfLines={1}>
-          {decision.waiting} · #{issue.number}
-        </Text>
-      </View>
     </View>
   );
 }
 
 /**
  * Decisions waiting on Brad (open needs-brad issues) under a project: pick an
- * option or type an answer, add an optional note and send. The answer is commented
- * on the issue and sent to the waiting thread.
+ * option, Other... or type an answer, optionally add a note, and Send. The answer is
+ * commented on the issue and sent to the waiting thread; the card shows the answer
+ * until a list read after it was sent no longer has the issue, and a failure stays on
+ * the card with the server's reason and Retry.
  */
 export function MobileDecisions({ summary }: { readonly summary: OrchestratorSummary }) {
   const query = useEnvironmentQuery(
@@ -103,32 +182,77 @@ export function MobileDecisions({ summary }: { readonly summary: OrchestratorSum
     }),
   );
   const decide = useAtomCommand(mobileDecideProjectRequest, "Decide");
-  const decisions = (query.data?.issues ?? [])
-    .filter((issue) => issue.decision !== undefined && issue.closedAt === null)
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const [answers, setAnswers] = useState<ReadonlyMap<string, DecisionAnswerRecord<ProjectIssue>>>(
+    new Map(),
+  );
+  const waiting = useMemo(
+    () =>
+      (query.data?.issues ?? []).filter(
+        (issue) => issue.decision !== undefined && issue.closedAt === null,
+      ),
+    [query.data],
+  );
+  const live = useMemo(() => new Set(waiting.map(issueKey)), [waiting]);
+  const readAt = query.dataUpdatedAt ?? 0;
+  // Answers whose card has left are forgotten on each new list read, so a question
+  // asked again shows its options.
+  const [prunedAt, setPrunedAt] = useState(readAt);
+  if (prunedAt !== readAt) {
+    setPrunedAt(readAt);
+    setAnswers((current) => keptDecisionAnswers(current, live, readAt));
+  }
+  const kept = keptDecisionAnswers(answers, live, readAt);
+  const record = (key: string, entry: DecisionAnswerRecord<ProjectIssue> | null) =>
+    setAnswers((current) => {
+      const next = new Map(current);
+      if (entry) next.set(key, entry);
+      else next.delete(key);
+      return next;
+    });
+  const send = async (entry: Omit<DecisionAnswerRecord<ProjectIssue>, "delivery">) => {
+    const key = issueKey(entry.issue);
+    record(key, { ...entry, delivery: { phase: "sending" } });
+    const result = await decide({
+      environmentId: summary.root.environmentId,
+      input: { threadId: summary.root.id, reference: key, ...entry.input },
+    });
+    query.refresh();
+    const error = result._tag === "Success" ? null : squashAtomCommandFailure(result);
+    record(key, {
+      ...entry,
+      delivery:
+        result._tag === "Success"
+          ? sentDelivery(result.value.notifiedThreadId !== null)
+          : {
+              phase: "failed",
+              error:
+                error instanceof Error && error.message
+                  ? error.message
+                  : "Could not reach the server.",
+            },
+    });
+  };
+  const decisions = [
+    ...waiting,
+    ...[...kept].filter(([key]) => !live.has(key)).map(([, entry]) => entry.issue),
+  ].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   if (decisions.length === 0) return null;
   return (
     <View className="mt-2 gap-2">
       <Text className="text-xs text-foreground-muted">{decisions.length} decisions waiting</Text>
-      {decisions.map((issue) => (
-        <DecisionCard
-          key={`${issue.repository}#${issue.number}`}
-          issue={issue}
-          onSend={async (pick, note) => {
-            await decide({
-              environmentId: summary.root.environmentId,
-              input: {
-                threadId: summary.root.id,
-                reference: `${issue.repository}#${issue.number}`,
-                decision: "option" in pick ? "option" : "answer",
-                ...pick,
-                ...(note ? { reason: note } : {}),
-              },
-            });
-            query.refresh();
-          }}
-        />
-      ))}
+      {decisions.map((issue) => {
+        const answer = kept.get(issueKey(issue)) ?? null;
+        return (
+          <DecisionCard
+            key={issueKey(issue)}
+            issue={issue}
+            answer={answer}
+            onSend={(answered, input) => void send({ issue, answered, input })}
+            onRetry={() => answer && void send(answer)}
+            onDrop={() => record(issueKey(issue), null)}
+          />
+        );
+      })}
     </View>
   );
 }

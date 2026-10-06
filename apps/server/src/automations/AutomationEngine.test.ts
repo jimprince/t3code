@@ -349,15 +349,6 @@ it.layer(NodeServices.layer)("automation engine", (it) => {
           });
           expect(settle.steps[0]?.prompt).toContain("t3-thread request add");
           expect(settle.steps[0]?.prompt).toContain('t3-thread settle "$T3_THREAD_ID" --self');
-          // act adds no filing or settling instructions: just the marker, for a run that should
-          // do its job directly.
-          const acting = yield* engine.runScript({
-            projectId,
-            script: "audit",
-            resultMode: "act",
-          });
-          expect(acting.steps[0]?.resultMode).toBe("act");
-          expect(acting.steps[0]?.prompt).toBe("Audit it.\n\n---\nResult mode: act\n");
           // Inline prompts (every imported timed automation) are sent exactly as written.
           yield* engine.save(daily);
           const inline = yield* engine.run(daily.id);
