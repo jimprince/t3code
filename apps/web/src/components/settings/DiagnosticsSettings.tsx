@@ -41,6 +41,13 @@ import {
 import { Button } from "../ui/button";
 import { MorphIcon } from "~/components/MorphIcon";
 import { Checkbox } from "../ui/checkbox";
+import {
+  NumberField,
+  NumberFieldDecrement,
+  NumberFieldGroup,
+  NumberFieldIncrement,
+  NumberFieldInput,
+} from "../ui/number-field";
 import { ScrollArea } from "../ui/scroll-area";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Switch } from "../ui/switch";
@@ -756,7 +763,6 @@ export function DiagnosticsSettingsPanel() {
   });
   const canReadDiagnostics = diagnosticsAccess.canReadDiagnostics;
   const signalServerProcess = useAtomCommand(serverEnvironment.signalProcess, {
-
     reportFailure: false,
   });
   const executeRecoveryCommand = useAtomCommand(serverEnvironment.executeRecovery, {
@@ -1074,6 +1080,45 @@ export function DiagnosticsSettingsPanel() {
     <SettingsPageContainer width="expanded" className="gap-10">
       <ResourceTelemetryDiagnostics environmentId={environmentId} />
       <SettingsSection title="Performance Protection">
+        {(
+          [
+            ["syspolicydRssMb", "syspolicyd memory warning (MiB)"],
+            ["syspolicydGrowthMb", "syspolicyd growth within ten minutes (MiB)"],
+            ["spawnAttemptsPerMinute", "Sustained runner attempts per minute"],
+          ] as const
+        ).map(([key, label], index) => (
+          <SettingsRow
+            key={key}
+            title={label}
+            description={
+              index === 0
+                ? "Early-warning thresholds, sampled once per minute in server diagnostics logs."
+                : undefined
+            }
+            control={
+              <NumberField
+                value={settings.processLaunchWarnings[key]}
+                min={1}
+                step={1}
+                size="sm"
+                className="w-32"
+                onValueChange={(value) => {
+                  if (value !== null)
+                    updateSettings({
+                      processLaunchWarnings: { [key]: Math.max(1, Math.round(value)) },
+                    });
+                }}
+              >
+                <NumberFieldGroup>
+                  <NumberFieldDecrement aria-label={`Decrease ${label}`} />
+                  <NumberFieldInput aria-label={label} />
+                  <NumberFieldIncrement aria-label={`Increase ${label}`} />
+                </NumberFieldGroup>
+              </NumberField>
+            }
+          />
+        ))}
+
         <SettingsRow
           title="System pressure notifications"
           description="Monitor sustained macOS CPU pressure in a lightweight login helper and offer a recovery preview. Recovery is never run automatically."
@@ -1183,7 +1228,11 @@ export function DiagnosticsSettingsPanel() {
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogClose render={<Button variant="outline" />}>Cancel</AlertDialogClose>
-                <Button variant="destructive" disabled={!canMaintainEnvironment} onClick={executeRecovery}>
+                <Button
+                  variant="destructive"
+                  disabled={!canMaintainEnvironment}
+                  onClick={executeRecovery}
+                >
                   Attempt recovery
                 </Button>
               </AlertDialogFooter>
